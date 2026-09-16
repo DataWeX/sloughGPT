@@ -1,7 +1,12 @@
 """Tests for MessageFeedback — in-memory feedback and session context."""
+
 from __future__ import annotations
 
-from domain.feedback._internal.message_feedback import MessageData, MessageFeedback, get_message_feedback
+from domain.feedback._internal.message_feedback import (
+    MessageData,
+    MessageFeedback,
+    get_message_feedback,
+)
 
 
 class TestMessageData:
@@ -53,7 +58,10 @@ class TestMessageFeedback:
     def test_list_conversations(self):
         fb = MessageFeedback()
         fb.store_session_context("s1", [MessageData(role="user", content="a")])
-        fb.store_session_context("s2", [MessageData(role="user", content="b"), MessageData(role="assistant", content="c")])
+        fb.store_session_context(
+            "s2",
+            [MessageData(role="user", content="b"), MessageData(role="assistant", content="c")],
+        )
         convs = fb.list_conversations()
         assert len(convs) == 2
         assert convs[0]["message_count"] == 1

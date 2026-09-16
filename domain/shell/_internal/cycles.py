@@ -34,6 +34,7 @@ RR_START = 3
 
 # ── Vector math (pure numpy, no dependencies) ────────────────────────────────
 
+
 def _normalize(v: np.ndarray) -> np.ndarray:
     n = np.linalg.norm(v, axis=-1, keepdims=True)
     return np.where(n > EPSILON, v / n, 0.0)
@@ -53,7 +54,7 @@ def _reflect(I: np.ndarray, N: np.ndarray) -> np.ndarray:
 
 def _refract(I: np.ndarray, N: np.ndarray, eta: float) -> tuple[np.ndarray, np.ndarray]:
     cos_i = -_dot(I, N)
-    sin2_t = eta ** 2 * (1.0 - cos_i ** 2)
+    sin2_t = eta**2 * (1.0 - cos_i**2)
     mask = sin2_t < 1.0
     cos_t = np.sqrt(np.clip(1.0 - sin2_t, 0, 1))
     result = eta * I + (eta * cos_i - cos_t)[..., np.newaxis] * N
@@ -62,9 +63,11 @@ def _refract(I: np.ndarray, N: np.ndarray, eta: float) -> tuple[np.ndarray, np.n
 
 # ── Data structures ──────────────────────────────────────────────────────────
 
+
 @dataclass
 class Material:
     """PBR material with multiple lobes."""
+
     name: str = "default"
     base_color: np.ndarray = field(default_factory=lambda: np.array([0.8, 0.8, 0.8]))
     metallic: float = 0.0
@@ -88,8 +91,8 @@ class Material:
         if NdotL < EPSILON or NdotV < EPSILON:
             return np.zeros(3)
 
-        alpha = self.roughness ** 2
-        alpha2 = alpha ** 2
+        alpha = self.roughness**2
+        alpha2 = alpha**2
 
         D = _ggx_distribution(NdotH, alpha2)
         G = _ggx_geometry(NdotV, NdotL, alpha2)
@@ -109,8 +112,9 @@ class Material:
 @dataclass
 class Mesh:
     """Triangle mesh geometry."""
+
     vertices: np.ndarray  # (V, 3)
-    faces: np.ndarray     # (F, 3) indices
+    faces: np.ndarray  # (F, 3) indices
     normals: np.ndarray | None = None  # (V, 3) or None = compute
     material_idx: np.ndarray | None = None  # (F,) per-face material index
     _aabb_min: np.ndarray | None = None
@@ -138,6 +142,7 @@ class Mesh:
 @dataclass
 class Light:
     """Area or point light."""
+
     position: np.ndarray = field(default_factory=lambda: np.zeros(3))
     color: np.ndarray = field(default_factory=lambda: np.ones(3))
     strength: float = 1.0
@@ -147,6 +152,7 @@ class Light:
 @dataclass
 class Camera:
     """Pinhole camera."""
+
     origin: np.ndarray = field(default_factory=lambda: np.array([0.0, 0.0, 3.0]))
     look_at: np.ndarray = field(default_factory=lambda: np.zeros(3))
     up: np.ndarray = field(default_factory=lambda: np.array([0.0, 1.0, 0.0]))
@@ -171,9 +177,11 @@ class Camera:
         v = np.linspace(half_h, -half_h, height)
         uu, vv = np.meshgrid(u, v)
 
-        dirs = (forward[np.newaxis, np.newaxis, :]
-                + uu[..., np.newaxis] * right[np.newaxis, np.newaxis, :]
-                + vv[..., np.newaxis] * up[np.newaxis, np.newaxis, :])
+        dirs = (
+            forward[np.newaxis, np.newaxis, :]
+            + uu[..., np.newaxis] * right[np.newaxis, np.newaxis, :]
+            + vv[..., np.newaxis] * up[np.newaxis, np.newaxis, :]
+        )
         dirs = _normalize(dirs)
         origins = np.broadcast_to(self.origin, dirs.shape)
         return origins, dirs
@@ -181,14 +189,16 @@ class Camera:
 
 # ── GGX BSDF helpers ─────────────────────────────────────────────────────────
 
+
 def _ggx_distribution(NdotH: np.ndarray, alpha2: float) -> np.ndarray:
-    denom = NdotH ** 2 * (alpha2 - 1.0) + 1.0
-    return alpha2 / (math.pi * denom ** 2 + EPSILON)
+    denom = NdotH**2 * (alpha2 - 1.0) + 1.0
+    return alpha2 / (math.pi * denom**2 + EPSILON)
 
 
 def _ggx_geometry(NdotV: float, NdotL: float, alpha2: float) -> float:
     def _smith(n: float) -> float:
-        return 2.0 * n / (n + math.sqrt(alpha2 + (1 - alpha2) * n ** 2))
+        return 2.0 * n / (n + math.sqrt(alpha2 + (1 - alpha2) * n**2))
+
     return _smith(NdotV) * _smith(NdotL)
 
 
@@ -197,6 +207,7 @@ def _fresnel_schlick(cos: float, F0: np.ndarray) -> np.ndarray:
 
 
 # ── BVH (bounding volume hierarchy) ──────────────────────────────────────────
+
 
 @dataclass
 class BVHNode:
@@ -227,8 +238,11 @@ class BVH:
         aabb_min = all_verts.min(axis=0)
         aabb_max = all_verts.max(axis=0)
 
-        self.nodes.append(BVHNode(aabb_min=aabb_min, aabb_max=aabb_max,
-                                   primitive_start=node_idx, primitive_count=0))
+        self.nodes.append(
+            BVHNode(
+                aabb_min=aabb_min, aabb_max=aabb_max, primitive_start=node_idx, primitive_count=0
+            )
+        )
 
         if len(indices) <= max_prims:
             self.nodes[node_idx].primitive_start = len(self._prim_indices)
@@ -255,7 +269,9 @@ class BVH:
         indices = np.arange(n_faces)
         self._root = self._build_recursive(indices, max_prims)
 
-    def intersect(self, orig: np.ndarray, dire: np.ndarray, t_max: float = 1e30) -> tuple[float, int]:
+    def intersect(
+        self, orig: np.ndarray, dire: np.ndarray, t_max: float = 1e30
+    ) -> tuple[float, int]:
         """Ray-BVH intersection. Returns (t_hit, face_index) or (inf, -1)."""
         t_min = np.float32(1e30)
         hit_face = -1
@@ -268,8 +284,7 @@ class BVH:
                 continue
 
             if node.primitive_count > 0:
-                for i in range(node.primitive_start,
-                               node.primitive_start + node.primitive_count):
+                for i in range(node.primitive_start, node.primitive_start + node.primitive_count):
                     fi = self._prim_indices[i]
                     t = self._ray_triangle(orig, dire, fi)
                     if EPSILON < t < t_min:
@@ -320,6 +335,7 @@ class BVH:
 
 # ── Scene ────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Scene:
     meshes: list[Mesh] = field(default_factory=list)
@@ -339,11 +355,11 @@ class Scene:
 
 # ── Path tracer ──────────────────────────────────────────────────────────────
 
+
 class CyclesRenderer:
     """RAM-resident path tracer. All state lives in numpy arrays."""
 
-    def __init__(self, scene: Scene, width: int = 640, height: int = 480,
-                 samples: int = 64):
+    def __init__(self, scene: Scene, width: int = 640, height: int = 480, samples: int = 64):
         self.scene = scene
         self.width = width
         self.height = height
@@ -362,7 +378,7 @@ class CyclesRenderer:
 
         origins, dirs = self.scene.camera.generate_rays(self.width, self.height)
 
-        for s in range(self.samples):
+        for _s in range(self.samples):
             offset = self._rng.uniform(-0.5, 0.5, size=(self.height, self.width, 2))
             # Jitter subpixel
             u = np.linspace(-0.5, 0.5, self.width)
@@ -379,9 +395,11 @@ class CyclesRenderer:
             right = _normalize(_cross(forward, self.scene.camera.up))
             up = _cross(right, forward)
 
-            dirs_jit = (forward[np.newaxis, np.newaxis, :]
-                        + jitter_u[..., np.newaxis] * right[np.newaxis, np.newaxis, :]
-                        + jitter_v[..., np.newaxis] * up[np.newaxis, np.newaxis, :])
+            dirs_jit = (
+                forward[np.newaxis, np.newaxis, :]
+                + jitter_u[..., np.newaxis] * right[np.newaxis, np.newaxis, :]
+                + jitter_v[..., np.newaxis] * up[np.newaxis, np.newaxis, :]
+            )
             dirs_jit = _normalize(dirs_jit)
 
             contrib = self._trace_batch(origins, dirs_jit)
@@ -406,8 +424,9 @@ class CyclesRenderer:
 
             act_orig = orig[alive]
             act_dire = dire[alive]
-            t_hit, face_idx, hit_point, hit_normal, hit_mesh_idx, hit_mat_idx = \
+            t_hit, face_idx, hit_point, hit_normal, hit_mesh_idx, hit_mat_idx = (
                 self._intersect_scene(act_orig, act_dire)
+            )
             act_orig.shape[0]
 
             # Map results back to full arrays
@@ -520,7 +539,7 @@ class CyclesRenderer:
         d21 = _dot(w, e2)
         denom = d00 * d11 - d01 * d01
         if abs(denom) < EPSILON:
-            return np.array([1/3, 1/3, 1/3])
+            return np.array([1 / 3, 1 / 3, 1 / 3])
         w1 = (d11 * d20 - d01 * d21) / denom
         w2 = (d00 * d21 - d01 * d20) / denom
         bary = np.array([1.0 - w1 - w2, w1, w2])
@@ -540,7 +559,7 @@ class CyclesRenderer:
         # Diffuse + glossy mix
         if self._rng.random() < mat.metallic:
             # Glossy GGX sample
-            alpha = mat.roughness ** 2
+            alpha = mat.roughness**2
             h = self._sample_ggx(r1, r2, alpha)
             wi = _reflect(-wo, h)
         else:
@@ -558,7 +577,7 @@ class CyclesRenderer:
 
     def _sample_ggx(self, r1, r2, alpha) -> np.ndarray:
         """GGX importance sample half-vector."""
-        a2 = alpha ** 2
+        a2 = alpha**2
         cos2 = (1 - r2) / (1 + (a2 - 1) * r2)
         sin = math.sqrt(max(1 - cos2, 0))
         phi = 2 * math.pi * r1
@@ -578,9 +597,9 @@ class CyclesRenderer:
 
         if self._rng.random() < mat.metallic:
             H = _normalize(wo + wi)
-            alpha = mat.roughness ** 2
+            alpha = mat.roughness**2
             NdotH = max(_dot(N, H), 0)
-            alpha2 = alpha ** 2
+            alpha2 = alpha**2
             D = _ggx_distribution(NdotH, alpha2)
             return D * max(_dot(N, H), 0) / (4 * max(_dot(H, wo), 0) + EPSILON)
 
@@ -620,10 +639,14 @@ class CyclesRenderer:
 
                 mesh = self.scene.meshes[mesh_i]
                 face = mesh.faces[fi]
-                bary = self._triangle_barycentric(flat_orig[i], flat_dir[i], t,
-                                                    mesh.vertices[face[0]],
-                                                    mesh.vertices[face[1]],
-                                                    mesh.vertices[face[2]])
+                bary = self._triangle_barycentric(
+                    flat_orig[i],
+                    flat_dir[i],
+                    t,
+                    mesh.vertices[face[0]],
+                    mesh.vertices[face[1]],
+                    mesh.vertices[face[2]],
+                )
                 n0, n1, n2 = mesh.normals[face]
                 normal[h, w] = _normalize(bary[0] * n0 + bary[1] * n1 + bary[2] * n2)
 
@@ -632,12 +655,12 @@ class CyclesRenderer:
                 emission[h, w] = mat.emission()
 
         return {
-            'image': image,
-            'depth': depth,
-            'normal': normal,
-            'albedo': albedo,
-            'emission': emission,
-            'mask': mask,
+            "image": image,
+            "depth": depth,
+            "normal": normal,
+            "albedo": albedo,
+            "emission": emission,
+            "mask": mask,
         }
 
     def _trace_single(self, orig, dire) -> tuple[float, int, int]:
@@ -656,20 +679,20 @@ class CyclesRenderer:
 
 # ── Primitive builders ───────────────────────────────────────────────────────
 
+
 def create_plane(size: float = 2.0, y: float = -1.0, mat_idx: int = 0) -> Mesh:
     """Create a ground plane mesh."""
     s = size / 2
-    vertices = np.array([
-        [-s, y, -s], [s, y, -s], [s, y, s], [-s, y, s]
-    ])
+    vertices = np.array([[-s, y, -s], [s, y, -s], [s, y, s], [-s, y, s]])
     faces = np.array([[0, 1, 2], [0, 2, 3]])
     normals = np.array([[0, 1, 0]] * 4)
     material_idx = np.array([mat_idx, mat_idx])
     return Mesh(vertices=vertices, faces=faces, normals=normals, material_idx=material_idx)
 
 
-def create_sphere(radius: float = 0.5, center: np.ndarray = None,
-                  segments: int = 16, mat_idx: int = 0) -> Mesh:
+def create_sphere(
+    radius: float = 0.5, center: np.ndarray = None, segments: int = 16, mat_idx: int = 0
+) -> Mesh:
     """Create a UV sphere mesh."""
     if center is None:
         center = np.zeros(3)
@@ -687,9 +710,9 @@ def create_sphere(radius: float = 0.5, center: np.ndarray = None,
             y = radius * math.cos(theta) + center[1]
             z = radius * math.sin(theta) * math.sin(phi) + center[2]
             verts.append([x, y, z])
-            norms.append([math.sin(theta) * math.cos(phi),
-                          math.cos(theta),
-                          math.sin(theta) * math.sin(phi)])
+            norms.append(
+                [math.sin(theta) * math.cos(phi), math.cos(theta), math.sin(theta) * math.sin(phi)]
+            )
 
     for i in range(rings):
         for j in range(sectors):
@@ -705,30 +728,48 @@ def create_sphere(radius: float = 0.5, center: np.ndarray = None,
                 faces.append([i0, i3, i2])
 
     mat_idx_arr = np.full(len(faces), mat_idx, dtype=np.int32)
-    return Mesh(vertices=np.array(verts, dtype=np.float64),
-                faces=np.array(faces, dtype=np.int32),
-                normals=np.array(norms, dtype=np.float64),
-                material_idx=mat_idx_arr)
+    return Mesh(
+        vertices=np.array(verts, dtype=np.float64),
+        faces=np.array(faces, dtype=np.int32),
+        normals=np.array(norms, dtype=np.float64),
+        material_idx=mat_idx_arr,
+    )
 
 
-def create_cube(size: float = 1.0, center: np.ndarray = None,
-                mat_idx: int = 0) -> Mesh:
+def create_cube(size: float = 1.0, center: np.ndarray = None, mat_idx: int = 0) -> Mesh:
     """Create a unit cube mesh."""
     if center is None:
         center = np.zeros(3)
     s = size / 2
     c = center
-    vertices = np.array([
-        [c[0]-s, c[1]-s, c[2]-s], [c[0]+s, c[1]-s, c[2]-s],
-        [c[0]+s, c[1]+s, c[2]-s], [c[0]-s, c[1]+s, c[2]-s],
-        [c[0]-s, c[1]-s, c[2]+s], [c[0]+s, c[1]-s, c[2]+s],
-        [c[0]+s, c[1]+s, c[2]+s], [c[0]-s, c[1]+s, c[2]+s],
-    ])
-    faces = np.array([
-        [0,1,2],[0,2,3], [4,6,5],[4,7,6],
-        [0,4,5],[0,5,1], [2,6,7],[2,7,3],
-        [0,3,7],[0,7,4], [1,5,6],[1,6,2],
-    ])
+    vertices = np.array(
+        [
+            [c[0] - s, c[1] - s, c[2] - s],
+            [c[0] + s, c[1] - s, c[2] - s],
+            [c[0] + s, c[1] + s, c[2] - s],
+            [c[0] - s, c[1] + s, c[2] - s],
+            [c[0] - s, c[1] - s, c[2] + s],
+            [c[0] + s, c[1] - s, c[2] + s],
+            [c[0] + s, c[1] + s, c[2] + s],
+            [c[0] - s, c[1] + s, c[2] + s],
+        ]
+    )
+    faces = np.array(
+        [
+            [0, 1, 2],
+            [0, 2, 3],
+            [4, 6, 5],
+            [4, 7, 6],
+            [0, 4, 5],
+            [0, 5, 1],
+            [2, 6, 7],
+            [2, 7, 3],
+            [0, 3, 7],
+            [0, 7, 4],
+            [1, 5, 6],
+            [1, 6, 2],
+        ]
+    )
     mat_idx_arr = np.full(len(faces), mat_idx, dtype=np.int32)
     mesh = Mesh(vertices=vertices, faces=faces, material_idx=mat_idx_arr)
     return mesh

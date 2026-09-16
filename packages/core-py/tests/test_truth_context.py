@@ -1,24 +1,35 @@
 """Tests for domain.infrastructure.truth_labeler — LabelResult, TruthLabeler; domain.infrastructure.context_core — ContextLayer, ContextFrame."""
 
+from domain.infrastructure._internal.context_core import ContextFrame, ContextLayer
 from domain.infrastructure._internal.truth_labeler import (
-    LabelResult, TruthLabeler,
-    get_truth_labeler, reset_truth_labeler,
-    _rule_interrogative, _rule_directive, _rule_descriptive,
-    _rule_analytical, _rule_procedural, _rule_conceptual, _rule_factual,
+    LabelResult,
+    TruthLabeler,
+    _rule_analytical,
+    _rule_conceptual,
+    _rule_descriptive,
+    _rule_directive,
+    _rule_factual,
+    _rule_interrogative,
+    _rule_procedural,
+    get_truth_labeler,
+    reset_truth_labeler,
 )
-from domain.infrastructure._internal.context_core import ContextLayer, ContextFrame
-
 
 # ── LabelResult ──────────────────────────────────────────────────────
 
+
 class TestLabelResult:
     def test_fields(self):
-        lr = LabelResult(label="question", confidence=0.9, reason="has question mark", scores={"question": 0.9})
+        lr = LabelResult(
+            label="question", confidence=0.9, reason="has question mark", scores={"question": 0.9}
+        )
         assert lr.label == "question"
         assert lr.confidence == 0.9
 
     def test_to_dict(self):
-        lr = LabelResult(label="statement", confidence=0.8, reason="declarative", scores={"statement": 0.8})
+        lr = LabelResult(
+            label="statement", confidence=0.8, reason="declarative", scores={"statement": 0.8}
+        )
         d = lr.to_dict()
         assert isinstance(d, dict)
         assert d["label"] == "statement"
@@ -36,6 +47,7 @@ class TestLabelResult:
 
 # ── TruthLabeler init ────────────────────────────────────────────────
 
+
 class TestTruthLabelerInit:
     def test_init(self):
         tl = TruthLabeler()
@@ -50,6 +62,7 @@ class TestTruthLabelerInit:
 
 
 # ── Question labeling ────────────────────────────────────────────────
+
 
 class TestLabelInterrogative:
     def test_label_question(self):
@@ -112,6 +125,7 @@ class TestLabelInterrogative:
 
 # ── Directive labeling ───────────────────────────────────────────────
 
+
 class TestLabelDirective:
     def test_label_directive(self):
         tl = TruthLabeler()
@@ -162,6 +176,7 @@ class TestLabelDirective:
 
 # ── Statement / factual labeling ─────────────────────────────────────
 
+
 class TestLabelFactual:
     def test_label_statement(self):
         tl = TruthLabeler()
@@ -192,6 +207,7 @@ class TestLabelFactual:
 
 # ── Descriptive labeling ─────────────────────────────────────────────
 
+
 class TestLabelDescriptive:
     def test_descriptive_the(self):
         tl = TruthLabeler()
@@ -210,6 +226,7 @@ class TestLabelDescriptive:
 
 
 # ── Analytical labeling ─────────────────────────────────────────────
+
 
 class TestLabelAnalytical:
     def test_analytical_because(self):
@@ -240,6 +257,7 @@ class TestLabelAnalytical:
 
 # ── Procedural labeling ─────────────────────────────────────────────
 
+
 class TestLabelProcedural:
     def test_procedural_numbered_steps(self):
         tl = TruthLabeler()
@@ -264,6 +282,7 @@ class TestLabelProcedural:
 
 # ── Conceptual labeling ─────────────────────────────────────────────
 
+
 class TestLabelConceptual:
     def test_conceptual_definition_pattern(self):
         tl = TruthLabeler()
@@ -287,6 +306,7 @@ class TestLabelConceptual:
 
 
 # ── Empty / edge cases ──────────────────────────────────────────────
+
 
 class TestLabelEdgeCases:
     def test_label_empty(self):
@@ -320,6 +340,7 @@ class TestLabelEdgeCases:
 
 
 # ── Rule functions directly ──────────────────────────────────────────
+
 
 class TestRulesDirect:
     def test_rule_interrogative_qmark(self):
@@ -365,9 +386,12 @@ class TestRulesDirect:
 
 # ── ContextLayer ─────────────────────────────────────────────────────
 
+
 class TestContextLayer:
     def test_fields(self):
-        cl = ContextLayer(layer_type="session", content="hello", tokens=1, source="user", timestamp="t")
+        cl = ContextLayer(
+            layer_type="session", content="hello", tokens=1, source="user", timestamp="t"
+        )
         assert cl.layer_type == "session"
         assert cl.content == "hello"
         assert cl.tokens == 1
@@ -378,7 +402,9 @@ class TestContextLayer:
         assert cl.priority == 1.0
 
     def test_custom_priority(self):
-        cl = ContextLayer(layer_type="rag", content="x", tokens=5, source="s", timestamp="t", priority=0.7)
+        cl = ContextLayer(
+            layer_type="rag", content="x", tokens=5, source="s", timestamp="t", priority=0.7
+        )
         assert cl.priority == 0.7
 
     def test_layer_types(self):
@@ -389,45 +415,98 @@ class TestContextLayer:
 
 # ── ContextFrame ─────────────────────────────────────────────────────
 
+
 class TestContextFrame:
     def test_fields(self):
         cl = ContextLayer(layer_type="session", content="hi", tokens=1, source="u", timestamp="t")
-        cf = ContextFrame(id="f1", system_prompt="sys", layers=[cl], total_tokens=10, max_tokens=100, created_at="t")
+        cf = ContextFrame(
+            id="f1",
+            system_prompt="sys",
+            layers=[cl],
+            total_tokens=10,
+            max_tokens=100,
+            created_at="t",
+        )
         assert cf.id == "f1"
         assert cf.system_prompt == "sys"
         assert cf.total_tokens == 10
 
     def test_to_prompt(self):
-        cl = ContextLayer(layer_type="session", content="hello", tokens=1, source="u", timestamp="t")
-        cf = ContextFrame(id="f1", system_prompt="sys", layers=[cl], total_tokens=10, max_tokens=100, created_at="t")
+        cl = ContextLayer(
+            layer_type="session", content="hello", tokens=1, source="u", timestamp="t"
+        )
+        cf = ContextFrame(
+            id="f1",
+            system_prompt="sys",
+            layers=[cl],
+            total_tokens=10,
+            max_tokens=100,
+            created_at="t",
+        )
         prompt = cf.to_prompt()
         assert isinstance(prompt, str)
         assert "sys" in prompt
 
     def test_to_prompt_includes_layers(self):
-        cl = ContextLayer(layer_type="session", content="user msg", tokens=1, source="u", timestamp="t")
-        cf = ContextFrame(id="f1", system_prompt="sys", layers=[cl], total_tokens=10, max_tokens=100, created_at="t")
+        cl = ContextLayer(
+            layer_type="session", content="user msg", tokens=1, source="u", timestamp="t"
+        )
+        cf = ContextFrame(
+            id="f1",
+            system_prompt="sys",
+            layers=[cl],
+            total_tokens=10,
+            max_tokens=100,
+            created_at="t",
+        )
         prompt = cf.to_prompt()
         assert "user msg" in prompt
 
     def test_to_prompt_sorted_by_priority(self):
-        cl1 = ContextLayer(layer_type="rag", content="rag stuff", tokens=1, source="s", timestamp="t", priority=0.5)
-        cl2 = ContextLayer(layer_type="session", content="session stuff", tokens=1, source="s", timestamp="t", priority=1.0)
-        cf = ContextFrame(id="f1", system_prompt="sys", layers=[cl1, cl2], total_tokens=10, max_tokens=100, created_at="t")
+        cl1 = ContextLayer(
+            layer_type="rag", content="rag stuff", tokens=1, source="s", timestamp="t", priority=0.5
+        )
+        cl2 = ContextLayer(
+            layer_type="session",
+            content="session stuff",
+            tokens=1,
+            source="s",
+            timestamp="t",
+            priority=1.0,
+        )
+        cf = ContextFrame(
+            id="f1",
+            system_prompt="sys",
+            layers=[cl1, cl2],
+            total_tokens=10,
+            max_tokens=100,
+            created_at="t",
+        )
         prompt = cf.to_prompt()
         idx_session = prompt.index("session stuff")
         idx_rag = prompt.index("rag stuff")
         assert idx_session < idx_rag
 
     def test_to_prompt_no_layers(self):
-        cf = ContextFrame(id="f1", system_prompt="sys", layers=[], total_tokens=0, max_tokens=100, created_at="t")
+        cf = ContextFrame(
+            id="f1", system_prompt="sys", layers=[], total_tokens=0, max_tokens=100, created_at="t"
+        )
         prompt = cf.to_prompt()
         assert "sys" in prompt
 
     def test_max_tokens(self):
-        cf = ContextFrame(id="f1", system_prompt="sys", layers=[], total_tokens=0, max_tokens=2048, created_at="t")
+        cf = ContextFrame(
+            id="f1", system_prompt="sys", layers=[], total_tokens=0, max_tokens=2048, created_at="t"
+        )
         assert cf.max_tokens == 2048
 
     def test_created_at(self):
-        cf = ContextFrame(id="f1", system_prompt="sys", layers=[], total_tokens=0, max_tokens=100, created_at="2025-01-01")
+        cf = ContextFrame(
+            id="f1",
+            system_prompt="sys",
+            layers=[],
+            total_tokens=0,
+            max_tokens=100,
+            created_at="2025-01-01",
+        )
         assert cf.created_at == "2025-01-01"

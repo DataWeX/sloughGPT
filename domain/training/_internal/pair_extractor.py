@@ -50,8 +50,11 @@ def extract_pairs_from_sessions(
         Deduplicated by content hash. Newest first.
     """
     if not _SESSIONS_DIR.exists():
-        logger.info("Sessions directory not found: %s", _SESSIONS_DIR,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Sessions directory not found: %s",
+            _SESSIONS_DIR,
+            extra={"tag": "TRAIN"},
+        )
         return []
 
     seen_hashes: set = set()
@@ -72,8 +75,12 @@ def extract_pairs_from_sessions(
         try:
             data = json.loads(sf.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as e:
-            logger.warning("Failed to read session %s: %s", sid, e,
-                extra={"tag": "TRAIN"},)
+            logger.warning(
+                "Failed to read session %s: %s",
+                sid,
+                e,
+                extra={"tag": "TRAIN"},
+            )
             continue
 
         messages = data.get("messages", [])
@@ -103,17 +110,23 @@ def extract_pairs_from_sessions(
                 continue
             seen_hashes.add(h)
 
-            pairs.append({
-                "user_msg": user_msg,
-                "assistant_msg": assistant_msg,
-                "session_id": sid,
-            })
+            pairs.append(
+                {
+                    "user_msg": user_msg,
+                    "assistant_msg": assistant_msg,
+                    "session_id": sid,
+                }
+            )
 
         if len(pairs) >= limit:
             break
 
-    logger.info("Extracted %d pairs from %d session files", len(pairs), len(session_files),
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Extracted %d pairs from %d session files",
+        len(pairs),
+        len(session_files),
+        extra={"tag": "TRAIN"},
+    )
     return pairs
 
 
@@ -142,6 +155,7 @@ def extract_pairs_from_logs(
     # Try MogDB first
     try:
         from domain.feedback._internal.response_tracker import get_response_tracker
+
         tracker = get_response_tracker()
         if tracker._coll is not None:
             query = {}
@@ -164,12 +178,14 @@ def extract_pairs_from_logs(
                     continue
                 seen_hashes.add(pair_hash)
 
-                pairs.append({
-                    "user_msg": user_msg,
-                    "assistant_msg": assistant_msg,
-                    "session_id": entry.get("session_id", ""),
-                    "model": entry.get("model", ""),
-                })
+                pairs.append(
+                    {
+                        "user_msg": user_msg,
+                        "assistant_msg": assistant_msg,
+                        "session_id": entry.get("session_id", ""),
+                        "model": entry.get("model", ""),
+                    }
+                )
 
             if pairs:
                 logger.info("Extracted %d pairs from MogDB", len(pairs), extra={"tag": "TRAIN"})
@@ -180,8 +196,11 @@ def extract_pairs_from_logs(
 
     # Fallback: read from JSONL files
     if not _RESPONSE_LOGS_DIR.exists():
-        logger.info("Response logs directory not found: %s", _RESPONSE_LOGS_DIR,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Response logs directory not found: %s",
+            _RESPONSE_LOGS_DIR,
+            extra={"tag": "TRAIN"},
+        )
         return []
 
     # Get log files, newest first
@@ -221,22 +240,32 @@ def extract_pairs_from_logs(
                         continue
                     seen_hashes.add(h)
 
-                    pairs.append({
-                        "user_msg": user_msg,
-                        "assistant_msg": assistant_msg,
-                        "session_id": entry.get("session_id", ""),
-                        "model": entry.get("model", ""),
-                    })
+                    pairs.append(
+                        {
+                            "user_msg": user_msg,
+                            "assistant_msg": assistant_msg,
+                            "session_id": entry.get("session_id", ""),
+                            "model": entry.get("model", ""),
+                        }
+                    )
         except OSError as e:
-            logger.warning("Failed to read log %s: %s", lf, e,
-                extra={"tag": "TRAIN"},)
+            logger.warning(
+                "Failed to read log %s: %s",
+                lf,
+                e,
+                extra={"tag": "TRAIN"},
+            )
             continue
 
         if len(pairs) >= limit:
             break
 
-    logger.info("Extracted %d pairs from %d log files", len(pairs), len(log_files),
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Extracted %d pairs from %d log files",
+        len(pairs),
+        len(log_files),
+        extra={"tag": "TRAIN"},
+    )
     return pairs
 
 
@@ -263,8 +292,11 @@ def extract_pairs_from_corpus(
     """
     corpus_file = _CAPTURED_DIR / "corpus.jsonl"
     if not corpus_file.exists():
-        logger.info("Captured corpus not found: %s", corpus_file,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Captured corpus not found: %s",
+            corpus_file,
+            extra={"tag": "TRAIN"},
+        )
         return []
 
     seen_hashes: set = set()
@@ -305,18 +337,27 @@ def extract_pairs_from_corpus(
                     continue
                 seen_hashes.add(h)
 
-                pairs.append({
-                    "user_msg": user_msg,
-                    "assistant_msg": assistant_msg,
-                    "session_id": meta.get("session_id", ""),
-                    "model": meta.get("model", ""),
-                })
+                pairs.append(
+                    {
+                        "user_msg": user_msg,
+                        "assistant_msg": assistant_msg,
+                        "session_id": meta.get("session_id", ""),
+                        "model": meta.get("model", ""),
+                    }
+                )
     except OSError as e:
-        logger.warning("Failed to read captured corpus %s: %s", corpus_file, e,
-            extra={"tag": "TRAIN"},)
+        logger.warning(
+            "Failed to read captured corpus %s: %s",
+            corpus_file,
+            e,
+            extra={"tag": "TRAIN"},
+        )
 
-    logger.info("Extracted %d pairs from captured corpus", len(pairs),
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Extracted %d pairs from captured corpus",
+        len(pairs),
+        extra={"tag": "TRAIN"},
+    )
     return pairs
 
 
@@ -339,6 +380,7 @@ def write_training_text(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     import time
+
     ts = int(time.time())
     text_file = output_dir / f"sessions_{ts}.txt"
 
@@ -346,8 +388,12 @@ def write_training_text(
         for pair in pairs:
             f.write(f"User: {pair['user_msg']}\nAssistant: {pair['assistant_msg']}\n\n")
 
-    logger.info("Wrote %d pairs to %s", len(pairs), text_file,
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Wrote %d pairs to %s",
+        len(pairs),
+        text_file,
+        extra={"tag": "TRAIN"},
+    )
     return text_file
 
 

@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-import pytest
 from domain.cognitive._internal.grounding import (
-    KnowledgeGrounding,
     CurriculumLearner,
     Document,
+    KnowledgeGrounding,
     RAGGrounder,
 )
 from domain.cognitive._internal.rag import (
-    TextChunk,
     BM25Indexer,
     CitationTracker,
     HallucinationDetector,
     HybridRetriever,
+    TextChunk,
 )
-
 
 # ── KnowledgeGrounding ────────────────────────────────────────────────────
 
@@ -157,6 +155,7 @@ class TestRAGGrounder:
 
     def test_retrieve_returns_empty_for_empty_store(self):
         import asyncio
+
         rag = RAGGrounder()
         results = asyncio.run(rag.retrieve("query"))
         assert results == []
@@ -257,8 +256,16 @@ class TestCitationTracker:
 
     def test_cite_with_sources(self):
         ct = CitationTracker()
-        claim = {"text": "Einstein is a physicist", "subject": "Einstein", "predicate": "is a physicist"}
-        chunks = [TextChunk(id="c1", content="Einstein was a theoretical physicist", metadata={"source": "wiki"})]
+        claim = {
+            "text": "Einstein is a physicist",
+            "subject": "Einstein",
+            "predicate": "is a physicist",
+        }
+        chunks = [
+            TextChunk(
+                id="c1", content="Einstein was a theoretical physicist", metadata={"source": "wiki"}
+            )
+        ]
         result = ct.cite(claim, chunks)
         assert result["supported"] is True
         assert len(result["sources"]) == 1
@@ -266,7 +273,11 @@ class TestCitationTracker:
 
     def test_cite_without_sources(self):
         ct = CitationTracker()
-        claim = {"text": "Einstein is a physicist", "subject": "Einstein", "predicate": "is a physicist"}
+        claim = {
+            "text": "Einstein is a physicist",
+            "subject": "Einstein",
+            "predicate": "is a physicist",
+        }
         result = ct.cite(claim, [])
         assert result["supported"] is False
         assert result["sources"] == []

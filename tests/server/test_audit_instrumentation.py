@@ -9,27 +9,26 @@ underlying operation.
 
 import json
 import struct
-import threading
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from apps.api.server.routers.models import ModelsRouter
-from apps.api.server.routers.souls import SoulsRouter
-from apps.api.server.routers.datasets import DatasetsRouter
-from apps.api.server.routers.kb import KBRouter
-from apps.api.server.routers.agents import AgentsRouter
-from apps.api.server.routers.multimodal import MultimodalRouter
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
+from apps.api.server.routers.agents import AgentsRouter
 from apps.api.server.routers.config import ConfigRouter
+from apps.api.server.routers.datasets import DatasetsRouter
 from apps.api.server.routers.experiments import ExperimentsRouter
-from apps.api.server.routers.user_adapters import UserAdaptersRouter
+from apps.api.server.routers.kb import KBRouter
 from apps.api.server.routers.lora_eval import LoraEvalRouter
-from apps.api.server.routers.tokenizer import TokenizerRouter
-from apps.api.server.routers.system import SystemRouter
+from apps.api.server.routers.models import ModelsRouter
+from apps.api.server.routers.multimodal import MultimodalRouter
 from apps.api.server.routers.self_train import SelfTrainRouter
+from apps.api.server.routers.souls import SoulsRouter
+from apps.api.server.routers.system import SystemRouter
+from apps.api.server.routers.tokenizer import TokenizerRouter
+from apps.api.server.routers.user_adapters import UserAdaptersRouter
 
 
 @pytest.fixture
@@ -129,12 +128,19 @@ class TestModelAudit:
         assert kwargs["resource"] == "gpt2"
         assert kwargs["user"] == "anonymous"
         assert kwargs["detail"] == "bits=8 mode=symmetric"
-        assert kwargs["extra"] == {"bits": 8, "mode": "symmetric", "layers_quantized": 0, "model_type": "slonet"}
+        assert kwargs["extra"] == {
+            "bits": 8,
+            "mode": "symmetric",
+            "layers_quantized": 0,
+            "model_type": "slonet",
+        }
 
     @patch("domains.infrastructure.quantization.walk_slo_linears", return_value={})
     @patch("domains.models.provider.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_dequantize_model_logs_event(self, mock_logger, mock_provider, mock_walk, models_client):
+    def test_dequantize_model_logs_event(
+        self, mock_logger, mock_provider, mock_walk, models_client
+    ):
         provider = MagicMock()
         provider._model = MagicMock()
         provider._quant_engine = MagicMock()
@@ -177,7 +183,9 @@ class TestModelAudit:
         mgr.is_downloading.return_value = False
         mgr.download = AsyncMock(return_value={"status": "in_progress"})
         mock_mgr.return_value = mgr
-        resp = models_client.post("/models/download", json={"model_id": "gpt2", "total_bytes_hint": 1000})
+        resp = models_client.post(
+            "/models/download", json={"model_id": "gpt2", "total_bytes_hint": 1000}
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["model_id"] == "gpt2"
         logger = mock_logger.return_value
@@ -370,17 +378,25 @@ class TestTrainingRouterAudit:
         assert args[0] == "training.start"
         assert kwargs["resource"] == "ds1"
         assert kwargs["detail"] == "char"
-        assert kwargs["extra"] == {"job_id": job_id, "model": "gpt2", "epochs": 3, "source_kind": "dataset"}
+        assert kwargs["extra"] == {
+            "job_id": job_id,
+            "model": "gpt2",
+            "epochs": 3,
+            "source_kind": "dataset",
+        }
 
     @patch("apps.api.server.training.router.get_training_executor")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_start_hf_training_logs_event(self, mock_logger, mock_executor, training_router_client, tmp_path):
+    def test_start_hf_training_logs_event(
+        self, mock_logger, mock_executor, training_router_client, tmp_path
+    ):
         text_file = tmp_path / "input.txt"
         text_file.write_text("hello world\n")
         mock_executor.return_value = MagicMock()
         model_file = tmp_path / "model.slnc"
         model_file.write_bytes(b"\x00" * 16)
         from pathlib import Path as RealPath
+
         repo_root = RealPath(__file__).resolve().parents[2]
         ds_dir = repo_root / "datasets" / "audit_test_ds"
         ds_dir.mkdir(parents=True, exist_ok=True)
@@ -393,6 +409,7 @@ class TestTrainingRouterAudit:
             assert resp.status_code == 200, resp.text[:200]
         finally:
             import shutil
+
             shutil.rmtree(ds_dir, ignore_errors=True)
         job_id = resp.json()["job_id"]
         logger = mock_logger.return_value
@@ -445,7 +462,10 @@ class TestTrainingRouterAudit:
     def test_register_webhook_logs_event(self, mock_logger, training_router_client):
         resp = training_router_client.post(
             "/training/webhooks",
-            params={"url": "https://example.com/hook", "events": '["training.completed","training.failed"]'},
+            params={
+                "url": "https://example.com/hook",
+                "events": '["training.completed","training.failed"]',
+            },
         )
         assert resp.status_code == 200
         logger = mock_logger.return_value
@@ -505,7 +525,11 @@ class TestKnowledgeAudit:
         memory.add_fact.return_value = True
         resp = kb_client.post(
             "/knowledge",
-            json={"content": "SloNet is a numpy autograd engine", "topic": "tech", "source": "manual"},
+            json={
+                "content": "SloNet is a numpy autograd engine",
+                "topic": "tech",
+                "source": "manual",
+            },
         )
         assert resp.status_code == 200
         logger = mock_logger.return_value
@@ -531,7 +555,15 @@ class TestKnowledgeAudit:
     @patch("infrastructure.auth.get_audit_logger")
     def test_update_logs_event(self, mock_logger, mock_memory, kb_client):
         memory = mock_memory.return_value
-        memory.list_all.return_value = [{"id": "fact_1", "content": "old", "topic": "tech", "source": "manual", "timestamp": 0.0}]
+        memory.list_all.return_value = [
+            {
+                "id": "fact_1",
+                "content": "old",
+                "topic": "tech",
+                "source": "manual",
+                "timestamp": 0.0,
+            }
+        ]
         memory.delete_by_id.return_value = True
         memory.add_fact.return_value = True
         resp = kb_client.patch("/knowledge/fact_1", json={"content": "new"})
@@ -547,7 +579,9 @@ class TestKnowledgeAudit:
     def test_batch_ingest_logs_event(self, mock_logger, mock_memory, kb_client):
         memory = mock_memory.return_value
         memory.add_fact.return_value = True
-        resp = kb_client.post("/knowledge/batch", json={"items": [{"content": "a"}, {"content": "b"}]})
+        resp = kb_client.post(
+            "/knowledge/batch", json={"items": [{"content": "a"}, {"content": "b"}]}
+        )
         assert resp.status_code == 200
         logger = mock_logger.return_value
         args, kwargs = logger.log.call_args
@@ -610,8 +644,14 @@ class TestAgentsAudit:
         system = mock_system.return_value
         system.get.return_value = None
         system.create.return_value = {
-            "id": "researcher", "name": "Researcher", "description": "", "instructions": "",
-            "tools": [], "avatar": "", "created_at": 0.0, "updated_at": 0.0,
+            "id": "researcher",
+            "name": "Researcher",
+            "description": "",
+            "instructions": "",
+            "tools": [],
+            "avatar": "",
+            "created_at": 0.0,
+            "updated_at": 0.0,
         }
         resp = agents_client.post("/agents", json={"name": "Researcher"})
         assert resp.status_code == 201
@@ -627,8 +667,14 @@ class TestAgentsAudit:
     def test_update_logs_event(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
         system.update.return_value = {
-            "id": "researcher", "name": "Renamed", "description": "", "instructions": "",
-            "tools": [], "avatar": "", "created_at": 0.0, "updated_at": 0.0,
+            "id": "researcher",
+            "name": "Renamed",
+            "description": "",
+            "instructions": "",
+            "tools": [],
+            "avatar": "",
+            "created_at": 0.0,
+            "updated_at": 0.0,
         }
         resp = agents_client.put("/agents/researcher", json={"name": "Renamed"})
         assert resp.status_code == 200
@@ -689,7 +735,9 @@ class TestMultimodalAudit:
     @patch("domains.training.video_trainer.VideoCaptionTrainer")
     @patch("domains.training.video_trainer.list_video_checkpoints")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_load_checkpoint_logs_event(self, mock_logger, mock_list, mock_trainer, multimodal_client):
+    def test_load_checkpoint_logs_event(
+        self, mock_logger, mock_list, mock_trainer, multimodal_client
+    ):
         mock_list.return_value = [{"name": "video1", "path": "/tmp/video1.slnc"}]
         resp = multimodal_client.post("/multimodal/checkpoints/video1/load")
         assert resp.status_code == 200
@@ -799,8 +847,13 @@ class TestExperimentsAudit:
         resp = experiments_client.delete(f"/experiments/{exp_id}")
         assert resp.status_code == 200
         logger = mock_logger.return_value
-        logger.log.assert_called_with("experiment.delete", user="anonymous", resource=exp_id, detail="", extra=None)
-        assert [c.args[0] for c in logger.log.call_args_list] == ["experiment.create", "experiment.delete"]
+        logger.log.assert_called_with(
+            "experiment.delete", user="anonymous", resource=exp_id, detail="", extra=None
+        )
+        assert [c.args[0] for c in logger.log.call_args_list] == [
+            "experiment.create",
+            "experiment.delete",
+        ]
 
 
 # ── User adapters ─────────────────────────────────────────────────────
@@ -820,8 +873,9 @@ class TestUserAdaptersAudit:
     @patch("domains.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_update_logs_event(self, mock_logger, mock_store, user_adapters_client):
-        store = mock_store.return_value
-        resp = user_adapters_client.post("/user-adapters/user1/update", json={"rating": "thumbs_up"})
+        resp = user_adapters_client.post(
+            "/user-adapters/user1/update", json={"rating": "thumbs_up"}
+        )
         assert resp.status_code == 200
         logger = mock_logger.return_value
         logger.log.assert_called_once()
@@ -833,7 +887,6 @@ class TestUserAdaptersAudit:
     @patch("domains.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_reset_logs_event(self, mock_logger, mock_store, user_adapters_client):
-        store = mock_store.return_value
         resp = user_adapters_client.post("/user-adapters/user1/reset")
         assert resp.status_code == 200
         logger = mock_logger.return_value
@@ -844,7 +897,6 @@ class TestUserAdaptersAudit:
     @patch("domains.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_merge_logs_event(self, mock_logger, mock_store, user_adapters_client):
-        store = mock_store.return_value
         resp = user_adapters_client.post("/user-adapters/merge")
         assert resp.status_code == 200
         logger = mock_logger.return_value
@@ -857,10 +909,14 @@ class TestUserAdaptersAudit:
     def test_aggregate_best_logs_event(self, mock_logger, mock_store, user_adapters_client):
         store = mock_store.return_value
         store.aggregate_best_adapters.return_value = {
-            "user_count": 3, "total_feedback": 10, "output_path": "/tmp/best.sou",
+            "user_count": 3,
+            "total_feedback": 10,
+            "output_path": "/tmp/best.sou",
             "eval": {"delta": {"verdict": "better"}},
         }
-        resp = user_adapters_client.post("/user-adapters/aggregate-best", json={"output_name": "best"})
+        resp = user_adapters_client.post(
+            "/user-adapters/aggregate-best", json={"output_name": "best"}
+        )
         assert resp.status_code == 200
         logger = mock_logger.return_value
         args, kwargs = logger.log.call_args
@@ -871,7 +927,6 @@ class TestUserAdaptersAudit:
     @patch("domains.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_delete_logs_event(self, mock_logger, mock_store, user_adapters_client):
-        store = mock_store.return_value
         resp = user_adapters_client.delete("/user-adapters/user1")
         assert resp.status_code == 200
         logger = mock_logger.return_value
@@ -914,7 +969,8 @@ class TestLoraEvalAudit:
         store = mock_store.return_value
         store.aggregate_best_adapters.return_value = {
             "output_path": "/tmp/best.sou",
-            "user_count": 1, "total_feedback": 3,
+            "user_count": 1,
+            "total_feedback": 3,
             "eval": {"delta": {"verdict": "better"}},
         }
         resp = lora_eval_client.post("/lora-eval/aggregate")
@@ -1028,7 +1084,9 @@ class TestSelfTrainAudit:
         proc = mock_popen.return_value
         proc.pid = 4242
         proc.poll.return_value = None
-        resp = self_train_client.post("/self-train/start", json={"model": "gpt2", "temperature": 0.8})
+        resp = self_train_client.post(
+            "/self-train/start", json={"model": "gpt2", "temperature": 0.8}
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "started"
         logger = mock_logger.return_value
@@ -1140,7 +1198,11 @@ class TestDatasetMutationsAudit:
         client = TestClient(app, raise_server_exceptions=False)
         ctrl = mock_ctrl.return_value
         ctrl.list_datasets.return_value = [{"id": "ds1", "name": "ds1", "path": str(ds_dir)}]
-        ctrl.create_dataset.return_value = {"id": "ds1-messages", "name": "ds1-messages", "path": str(ds_dir)}
+        ctrl.create_dataset.return_value = {
+            "id": "ds1-messages",
+            "name": "ds1-messages",
+            "path": str(ds_dir),
+        }
         resp = client.post("/datasets/convert-to-messages?dataset_id=ds1")
         assert resp.status_code == 200
         logger = mock_logger.return_value

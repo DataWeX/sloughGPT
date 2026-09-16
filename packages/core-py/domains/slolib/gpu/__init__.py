@@ -15,13 +15,13 @@ Usage:
 
 from __future__ import annotations
 
+import logging
+import math
 import os  # noqa: F401 — used in function bodies below
 import sys
 import time
-import math
-from typing import Optional, List, Tuple, Any, Dict
+from typing import Any, Dict, List, Optional, Tuple
 
-import logging
 import numpy as np
 
 logger = logging.getLogger("slo.gpu")
@@ -30,6 +30,7 @@ logger = logging.getLogger("slo.gpu")
 # =============================================================================
 # BUFFER POOL — reuse numpy arrays to reduce allocation overhead
 # =============================================================================
+
 
 class _BufferPool:
     """Simple memory pool that reuses numpy arrays of matching shape/dtype.
@@ -41,13 +42,14 @@ class _BufferPool:
         # ... use buf ...
         pool.put(buf)  # returns to pool
     """
+
     def __init__(self, max_pool_size: int = 64):
-        self._pool: Dict[Tuple, List[np.ndarray]] = {}
+        self._pool: dict[tuple, list[np.ndarray]] = {}
         self._max_pool_size = max_pool_size
         self._hits = 0
         self._misses = 0
 
-    def get(self, shape: Tuple[int, ...], dtype=np.float32) -> np.ndarray:
+    def get(self, shape: tuple[int, ...], dtype=np.float32) -> np.ndarray:
         key = (shape, np.dtype(dtype))
         bucket = self._pool.get(key)
         if bucket:
@@ -62,7 +64,7 @@ class _BufferPool:
         if len(bucket) < self._max_pool_size:
             bucket.append(arr)
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         return {"hits": self._hits, "misses": self._misses}
 
     def clear(self) -> None:
@@ -78,10 +80,10 @@ _POOL = _BufferPool()
 # DEVICE DETECTION
 # =============================================================================
 
-_BACKEND: Optional["_Accelerator"] = None
+_BACKEND: _Accelerator | None = None
 
 
-def get_accelerator() -> "_Accelerator":
+def get_accelerator() -> _Accelerator:
     global _BACKEND
     if _BACKEND is not None:
         return _BACKEND
@@ -111,8 +113,8 @@ def set_accelerator_precision(mode: str = "auto") -> str:
     return acc.set_precision(mode)
 
 
-def _detect_best_backend() -> "_Accelerator":
-    candidates: List[Tuple[str, "_Accelerator", int]] = []
+def _detect_best_backend() -> _Accelerator:
+    candidates: list[tuple[str, _Accelerator, int]] = []
 
     # --- Metal (macOS) ---
     if sys.platform == "darwin":
@@ -133,7 +135,7 @@ def _detect_best_backend() -> "_Accelerator":
             priority = 200 + vram  # CUDA is the fastest GPU path
             candidates.append(("cuda", cuda, priority))
     except Exception as e:
-            logger.debug("CUDA detection failed: %s", e)
+        logger.debug("CUDA detection failed: %s", e)
 
     # --- OpenCL (Intel iGPU / AMD dGPU / integrated) ---
     try:
@@ -143,7 +145,7 @@ def _detect_best_backend() -> "_Accelerator":
             priority = 50 + vram
             candidates.append(("opencl", opencl, priority))
     except Exception as e:
-            logger.debug("OpenCL detection failed: %s", e)
+        logger.debug("OpenCL detection failed: %s", e)
 
     # --- CPU with SIMD ---
     cpu = _CPUBackend()
@@ -221,8 +223,11 @@ class _Accelerator:
             speedup = t_fp32 / max(t_fp16, 1e-10)
             choice = "fp16" if speedup > 1.1 else "fp32"
             logger.info(
-                "Accelerator precision benchmark: fp32=%.2fms, fp16=%.2fms, "
-                "speedup=%.2fx → %s", t_fp32 * 1000, t_fp16 * 1000, speedup, choice,
+                "Accelerator precision benchmark: fp32=%.2fms, fp16=%.2fms, speedup=%.2fx → %s",
+                t_fp32 * 1000,
+                t_fp16 * 1000,
+                speedup,
+                choice,
                 extra={"tag": "GPU"},
             )
             if choice == "fp16":
@@ -239,7 +244,7 @@ class _Accelerator:
     def vram_gb(self) -> float:
         return 0.0
 
-    def memory_hint(self) -> Dict[str, Any]:
+    def memory_hint(self) -> dict[str, Any]:
         return {"tier": self.compute_tier}
 
     def sync(self) -> None:
@@ -267,7 +272,7 @@ class _Accelerator:
         return a / b
 
     def pow(self, a: np.ndarray, p: float) -> np.ndarray:
-        return a ** p
+        return a**p
 
     def sqrt(self, a: np.ndarray) -> np.ndarray:
         return np.sqrt(a)
@@ -278,16 +283,16 @@ class _Accelerator:
     def log(self, a: np.ndarray) -> np.ndarray:
         return np.log(a)
 
-    def sum(self, a: np.ndarray, axis: Optional[int] = None) -> np.ndarray:
+    def sum(self, a: np.ndarray, axis: int | None = None) -> np.ndarray:
         return a.sum(axis=axis)
 
-    def mean(self, a: np.ndarray, axis: Optional[int] = None) -> np.ndarray:
+    def mean(self, a: np.ndarray, axis: int | None = None) -> np.ndarray:
         return a.mean(axis=axis)
 
-    def max(self, a: np.ndarray, axis: Optional[int] = None) -> np.ndarray:
+    def max(self, a: np.ndarray, axis: int | None = None) -> np.ndarray:
         return a.max(axis=axis)
 
-    def min(self, a: np.ndarray, axis: Optional[int] = None) -> np.ndarray:
+    def min(self, a: np.ndarray, axis: int | None = None) -> np.ndarray:
         return a.min(axis=axis)
 
     def abs(self, a: np.ndarray) -> np.ndarray:
@@ -310,7 +315,9 @@ class _Accelerator:
         np.put_along_axis(result, index.astype(int), src, axis=dim)
         return result
 
-    def pad(self, a: np.ndarray, pad_width, mode: str = "constant", constant_values: float = 0.0) -> np.ndarray:
+    def pad(
+        self, a: np.ndarray, pad_width, mode: str = "constant", constant_values: float = 0.0
+    ) -> np.ndarray:
         return np.pad(a, pad_width, mode=mode, constant_values=constant_values)
 
     def softmax(self, a: np.ndarray, axis: int = -1) -> np.ndarray:
@@ -322,17 +329,19 @@ class _Accelerator:
         a_max = a.max(axis=axis, keepdims=True)
         return a - a_max - np.log(np.exp(a - a_max).sum(axis=axis, keepdims=True))
 
-    def layer_norm(self, x: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5) -> np.ndarray:
+    def layer_norm(
+        self, x: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5
+    ) -> np.ndarray:
         mean = x.mean(axis=-1, keepdims=True)
         var = x.var(axis=-1, keepdims=True)
         return ((x - mean) / np.sqrt(var + eps)) * weight + bias
 
     def rms_norm(self, x: np.ndarray, weight: np.ndarray, eps: float = 1e-5) -> np.ndarray:
-        rms = np.sqrt(np.mean(x ** 2, axis=-1, keepdims=True) + eps)
+        rms = np.sqrt(np.mean(x**2, axis=-1, keepdims=True) + eps)
         return (x / rms) * weight
 
     def gelu(self, x: np.ndarray) -> np.ndarray:
-        return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x ** 3)))
+        return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x**3)))
 
     def silu(self, x: np.ndarray) -> np.ndarray:
         return x / (1 + np.exp(-x))
@@ -348,17 +357,19 @@ class _Accelerator:
         """Fused a * b + c — common in linear layers (weight @ input + bias)."""
         return a * b + c
 
-    def fused_layernorm_gelu(self, x: np.ndarray, weight: np.ndarray,
-                              bias: np.ndarray, eps: float = 1e-5) -> np.ndarray:
+    def fused_layernorm_gelu(
+        self, x: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5
+    ) -> np.ndarray:
         """Fused layer_norm + gelu — one pass over x instead of two."""
         mean = x.mean(axis=-1, keepdims=True)
         var = x.var(axis=-1, keepdims=True)
         normed = (x - mean) / np.sqrt(var + eps)
         scaled = normed * weight + bias
-        return 0.5 * scaled * (1 + np.tanh(np.sqrt(2 / np.pi) * (scaled + 0.044715 * scaled ** 3)))
+        return 0.5 * scaled * (1 + np.tanh(np.sqrt(2 / np.pi) * (scaled + 0.044715 * scaled**3)))
 
-    def fused_layernorm_silu(self, x: np.ndarray, weight: np.ndarray,
-                              bias: np.ndarray, eps: float = 1e-5) -> np.ndarray:
+    def fused_layernorm_silu(
+        self, x: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5
+    ) -> np.ndarray:
         """Fused layer_norm + silu — one pass."""
         mean = x.mean(axis=-1, keepdims=True)
         var = x.var(axis=-1, keepdims=True)
@@ -376,7 +387,9 @@ class _Accelerator:
         """Compute Q @ K^T with shape [B, H, N, S] using matmul (faster than einsum)."""
         B, H, N, E = q.shape
         S = k.shape[2]
-        return (q.reshape(B * H, N, E) @ k.reshape(B * H, S, E).transpose(0, 2, 1)).reshape(B, H, N, S)
+        return (q.reshape(B * H, N, E) @ k.reshape(B * H, S, E).transpose(0, 2, 1)).reshape(
+            B, H, N, S
+        )
 
     def _apply_attn(self, attn: np.ndarray, v: np.ndarray) -> np.ndarray:
         """Apply attention weights to V with shape [B, H, N, E] using matmul."""
@@ -384,10 +397,15 @@ class _Accelerator:
         E = v.shape[3]
         return (attn.reshape(B * H, N, S) @ v.reshape(B * H, S, E)).reshape(B, H, N, E)
 
-    def scaled_dot_attention(self, q: np.ndarray, k: np.ndarray, v: np.ndarray,
-                             mask: Optional[np.ndarray] = None,
-                             scale: Optional[float] = None,
-                             causal: bool = False) -> np.ndarray:
+    def scaled_dot_attention(
+        self,
+        q: np.ndarray,
+        k: np.ndarray,
+        v: np.ndarray,
+        mask: np.ndarray | None = None,
+        scale: float | None = None,
+        causal: bool = False,
+    ) -> np.ndarray:
         """Scaled dot-product attention with optimizations.
 
         Uses matmul (BLAS) instead of einsum for 3-9x speedup on common sizes.
@@ -417,9 +435,15 @@ class _Accelerator:
         attn = exp_s / exp_s.sum(axis=-1, keepdims=True)
         return self._apply_attn(attn, v)
 
-    def multi_head_attention(self, q: np.ndarray, k: np.ndarray, v: np.ndarray,
-                             num_heads: int, mask: Optional[np.ndarray] = None,
-                             causal: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+    def multi_head_attention(
+        self,
+        q: np.ndarray,
+        k: np.ndarray,
+        v: np.ndarray,
+        num_heads: int,
+        mask: np.ndarray | None = None,
+        causal: bool = False,
+    ) -> tuple[np.ndarray, np.ndarray]:
         B, N, C = q.shape
         E = C // num_heads
         q = q.reshape(B, N, num_heads, E).transpose(0, 2, 1, 3)  # [B, H, N, E]
@@ -430,12 +454,19 @@ class _Accelerator:
         out = out.transpose(0, 2, 1, 3).reshape(B, N, C)
         return out, attn_weights
 
-    def conv2d(self, x: np.ndarray, weight: np.ndarray, bias: Optional[np.ndarray] = None,
-               stride: int = 1, padding: int = 0, groups: int = 1) -> np.ndarray:
+    def conv2d(
+        self,
+        x: np.ndarray,
+        weight: np.ndarray,
+        bias: np.ndarray | None = None,
+        stride: int = 1,
+        padding: int = 0,
+        groups: int = 1,
+    ) -> np.ndarray:
         n, c, h, w = x.shape
         oc, ic, kh, kw = weight.shape
         if padding > 0:
-            x = np.pad(x, [(0,0),(0,0),(padding,padding),(padding,padding)], mode='constant')
+            x = np.pad(x, [(0, 0), (0, 0), (padding, padding), (padding, padding)], mode="constant")
         oh = (x.shape[2] - kh) // stride + 1
         ow = (x.shape[3] - kw) // stride + 1
 
@@ -453,8 +484,17 @@ class _Accelerator:
         ow = (w - kw) // stride + 1
         strides = x.strides
         view_shape = (n, c, oh, ow, kh, kw)
-        view_strides = (strides[0], strides[1], strides[2] * stride, strides[3] * stride, strides[2], strides[3])
-        view = np.lib.stride_tricks.as_strided(x, shape=view_shape, strides=view_strides, writeable=False)
+        view_strides = (
+            strides[0],
+            strides[1],
+            strides[2] * stride,
+            strides[3] * stride,
+            strides[2],
+            strides[3],
+        )
+        view = np.lib.stride_tricks.as_strided(
+            x, shape=view_shape, strides=view_strides, writeable=False
+        )
         return view.transpose(0, 2, 3, 1, 4, 5).reshape(n * oh * ow, c * kh * kw)
 
     def max_pool2d(self, x: np.ndarray, kernel_size: int, stride: int) -> np.ndarray:
@@ -463,8 +503,17 @@ class _Accelerator:
         ow = (w - kernel_size) // stride + 1
         strides = x.strides
         view_shape = (n, c, oh, ow, kernel_size, kernel_size)
-        view_strides = (strides[0], strides[1], strides[2] * stride, strides[3] * stride, strides[2], strides[3])
-        view = np.lib.stride_tricks.as_strided(x, shape=view_shape, strides=view_strides, writeable=False)
+        view_strides = (
+            strides[0],
+            strides[1],
+            strides[2] * stride,
+            strides[3] * stride,
+            strides[2],
+            strides[3],
+        )
+        view = np.lib.stride_tricks.as_strided(
+            x, shape=view_shape, strides=view_strides, writeable=False
+        )
         return view.max(axis=(4, 5))
 
     def avg_pool2d(self, x: np.ndarray, kernel_size: int, stride: int) -> np.ndarray:
@@ -473,14 +522,28 @@ class _Accelerator:
         ow = (w - kernel_size) // stride + 1
         strides = x.strides
         view_shape = (n, c, oh, ow, kernel_size, kernel_size)
-        view_strides = (strides[0], strides[1], strides[2] * stride, strides[3] * stride, strides[2], strides[3])
-        view = np.lib.stride_tricks.as_strided(x, shape=view_shape, strides=view_strides, writeable=False)
+        view_strides = (
+            strides[0],
+            strides[1],
+            strides[2] * stride,
+            strides[3] * stride,
+            strides[2],
+            strides[3],
+        )
+        view = np.lib.stride_tricks.as_strided(
+            x, shape=view_shape, strides=view_strides, writeable=False
+        )
         return view.mean(axis=(4, 5))
 
-    def fused_softmax_attention(self, q: np.ndarray, k: np.ndarray, v: np.ndarray,
-                                 mask: Optional[np.ndarray] = None,
-                                 scale: Optional[float] = None,
-                                 causal: bool = False) -> np.ndarray:
+    def fused_softmax_attention(
+        self,
+        q: np.ndarray,
+        k: np.ndarray,
+        v: np.ndarray,
+        mask: np.ndarray | None = None,
+        scale: float | None = None,
+        causal: bool = False,
+    ) -> np.ndarray:
         """Fused softmax(QK^T)V with online-softmax tiling for large sequences.
         All einsums replaced with matmul for 3-9x speedup.
         """
@@ -513,7 +576,7 @@ class _Accelerator:
             if causal:
                 cm = np.triu(np.full((N, T), -1e9, dtype=np.float32), k=1 - t_start)
                 scores_tile = scores_tile + cm[None, None, :, :]
-            m_prev = getattr(self, '_fus_attn_m', np.full((B, H, N, 1), -1e9, dtype=np.float32))
+            m_prev = getattr(self, "_fus_attn_m", np.full((B, H, N, 1), -1e9, dtype=np.float32))
             if t_start == 0:
                 m_prev[:] = -1e9
             m_new = np.maximum(m_prev, scores_tile.max(axis=-1, keepdims=True))
@@ -535,14 +598,15 @@ class _Accelerator:
             self._fus_attn_m = m_new
         return self._fus_attn_o / self._fus_attn_s
 
-    def fused_layer_norm_gelu(self, x: np.ndarray, weight: np.ndarray,
-                               bias: np.ndarray, eps: float = 1e-5) -> np.ndarray:
+    def fused_layer_norm_gelu(
+        self, x: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5
+    ) -> np.ndarray:
         """Fused layer_norm + gelu — one pass over x instead of two."""
         mean = x.mean(axis=-1, keepdims=True)
         var = x.var(axis=-1, keepdims=True)
         normed = (x - mean) / np.sqrt(var + eps)
         scaled = normed * weight + bias
-        return 0.5 * scaled * (1 + np.tanh(np.sqrt(2 / np.pi) * (scaled + 0.044715 * scaled ** 3)))
+        return 0.5 * scaled * (1 + np.tanh(np.sqrt(2 / np.pi) * (scaled + 0.044715 * scaled**3)))
 
     def embedding_lookup(self, indices: np.ndarray, weight: np.ndarray) -> np.ndarray:
         flat = np.clip(indices.astype(int).flatten(), 0, weight.shape[0] - 1)
@@ -569,24 +633,26 @@ class _Accelerator:
         result[np.arange(n)[valid], flat[valid]] = 1.0
         return result.reshape(list(indices.shape) + [num_classes])
 
-    def concat(self, arrays: List[np.ndarray], axis: int = 0) -> np.ndarray:
+    def concat(self, arrays: list[np.ndarray], axis: int = 0) -> np.ndarray:
         return np.concatenate(arrays, axis=axis)
 
-    def stack(self, arrays: List[np.ndarray], axis: int = 0) -> np.ndarray:
+    def stack(self, arrays: list[np.ndarray], axis: int = 0) -> np.ndarray:
         return np.stack(arrays, axis=axis)
 
-    def permute(self, a: np.ndarray, axes: Tuple[int, ...]) -> np.ndarray:
+    def permute(self, a: np.ndarray, axes: tuple[int, ...]) -> np.ndarray:
         return np.transpose(a, axes)
 
-    def reshape(self, a: np.ndarray, shape: Tuple[int, ...]) -> np.ndarray:
+    def reshape(self, a: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
         return a.reshape(shape)
 
-    def transpose(self, a: np.ndarray, axes: Optional[Tuple[int, ...]] = None) -> np.ndarray:
+    def transpose(self, a: np.ndarray, axes: tuple[int, ...] | None = None) -> np.ndarray:
         if axes:
             return np.transpose(a, axes)
         return a.T
 
-    def topk(self, a: np.ndarray, k: int, dim: int = -1, largest: bool = True) -> Tuple[np.ndarray, np.ndarray]:
+    def topk(
+        self, a: np.ndarray, k: int, dim: int = -1, largest: bool = True
+    ) -> tuple[np.ndarray, np.ndarray]:
         sorted_idx = np.argsort(a, axis=dim)
         if largest:
             sorted_idx = sorted_idx[..., ::-1]
@@ -594,7 +660,9 @@ class _Accelerator:
         values = np.take_along_axis(a, indices, axis=dim)
         return values, indices
 
-    def multinomial(self, probs: np.ndarray, num_samples: int, replacement: bool = False) -> np.ndarray:
+    def multinomial(
+        self, probs: np.ndarray, num_samples: int, replacement: bool = False
+    ) -> np.ndarray:
         flat = probs.flatten().astype(np.float64)
         flat = np.maximum(flat, 0)
         total = flat.sum()
@@ -609,10 +677,17 @@ class _Accelerator:
         mask = (np.random.rand(*x.shape) > p).astype(np.float32)
         return x * mask / (1 - p)
 
-    def batch_norm_2d(self, x: np.ndarray, gamma: np.ndarray, beta: np.ndarray,
-                      running_mean: np.ndarray, running_var: np.ndarray,
-                      eps: float = 1e-5, momentum: float = 0.1,
-                      training: bool = True) -> np.ndarray:
+    def batch_norm_2d(
+        self,
+        x: np.ndarray,
+        gamma: np.ndarray,
+        beta: np.ndarray,
+        running_mean: np.ndarray,
+        running_var: np.ndarray,
+        eps: float = 1e-5,
+        momentum: float = 0.1,
+        training: bool = True,
+    ) -> np.ndarray:
         if training:
             mean = x.mean(axis=(0, 2, 3), keepdims=True)
             var = x.var(axis=(0, 2, 3), keepdims=True)
@@ -623,10 +698,17 @@ class _Accelerator:
             var = running_var.reshape(1, -1, 1, 1)
         return ((x - mean) / np.sqrt(var + eps)) * gamma[:, None, None] + beta[:, None, None]
 
-    def batch_norm_1d(self, x: np.ndarray, gamma: np.ndarray, beta: np.ndarray,
-                      running_mean: np.ndarray, running_var: np.ndarray,
-                      eps: float = 1e-5, momentum: float = 0.1,
-                      training: bool = True) -> np.ndarray:
+    def batch_norm_1d(
+        self,
+        x: np.ndarray,
+        gamma: np.ndarray,
+        beta: np.ndarray,
+        running_mean: np.ndarray,
+        running_var: np.ndarray,
+        eps: float = 1e-5,
+        momentum: float = 0.1,
+        training: bool = True,
+    ) -> np.ndarray:
         if training:
             mean = x.mean(axis=0, keepdims=True)
             var = x.var(axis=0, keepdims=True)
@@ -644,14 +726,18 @@ class _CPUBackend(_Accelerator):
     Detects: OpenBLAS (MKL/OpenBLAS multi-threaded), AVX2/AVX512 intrinsics,
     Apple Accelerate framework (macOS), or plain NumPy fallback.
     """
+
     name = "cpu"
     device_type = "cpu"
-    _openblas_threads_cache: Optional[int] = None
+    _openblas_threads_cache: int | None = None
 
     def has_openblas(self) -> bool:
         try:
             import ctypes.util
-            return bool(ctypes.util.find_library("openblas") or ctypes.util.find_library("libopenblas"))
+
+            return bool(
+                ctypes.util.find_library("openblas") or ctypes.util.find_library("libopenblas")
+            )
         except Exception as e:
             logger.debug("OpenBLAS detection failed: %s", e)
             return False
@@ -659,6 +745,7 @@ class _CPUBackend(_Accelerator):
     def has_simd(self) -> bool:
         try:
             import platform
+
             arch = platform.machine()
             # x86_64 almost always has SSE/AVX
             if arch in ("x86_64", "AMD64"):
@@ -675,6 +762,7 @@ class _CPUBackend(_Accelerator):
             return self._openblas_threads_cache
         try:
             import os  # noqa: F401 — used in function bodies below
+
             # Check OMP_NUM_THREADS / OPENBLAS_NUM_THREADS
             n = int(os.environ.get("OPENBLAS_NUM_THREADS", os.environ.get("OMP_NUM_THREADS", "0")))
             if n > 0:
@@ -683,6 +771,7 @@ class _CPUBackend(_Accelerator):
             # Try ResourceManager first, then cpu count - 1
             try:
                 from domain.infrastructure._internal.resource_manager import get_resource_manager
+
                 n = get_resource_manager().omp_num_threads
             except Exception as e:
                 logger.debug("ResourceManager thread count failed: %s", e)
@@ -697,7 +786,8 @@ class _CPUBackend(_Accelerator):
     def vram_gb(self) -> float:
         try:
             import psutil
-            return psutil.virtual_memory().total / (1024 ** 3) * 0.5  # 50% for compute
+
+            return psutil.virtual_memory().total / (1024**3) * 0.5  # 50% for compute
         except Exception as e:
             logger.debug("psutil VRAM detection failed: %s", e)
 
@@ -707,38 +797,48 @@ class _CPUBackend(_Accelerator):
                 for line in f:
                     if line.startswith("MemTotal:"):
                         kb = int(line.split()[1])
-                        return (kb / (1024 ** 2)) * 0.5
+                        return (kb / (1024**2)) * 0.5
         except Exception as exc:
             import logging
+
             logging.getLogger("slo.gpu").debug(
-                "Failed to read /proc/meminfo for GPU memory fallback: %s", exc)
+                "Failed to read /proc/meminfo for GPU memory fallback: %s", exc
+            )
 
         # Fallback 2: sysctl (macOS / BSD)
         try:
             import subprocess
+
             result = subprocess.run(
                 ["sysctl", "-n", "hw.memsize"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
-                return int(result.stdout.strip()) / (1024 ** 3) * 0.5
+                return int(result.stdout.strip()) / (1024**3) * 0.5
         except Exception as exc:
             import logging
+
             logging.getLogger("slo.gpu").debug(
-                "Failed to read sysctl hw.memsize for GPU memory fallback: %s", exc)
+                "Failed to read sysctl hw.memsize for GPU memory fallback: %s", exc
+            )
 
         # Fallback 3: wmic (Windows)
         try:
             import subprocess
+
             result = subprocess.run(
                 ["wmic", "os", "get", "TotalVisibleMemorySize", "/Value"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 for line in result.stdout.splitlines():
                     if line.startswith("TotalVisibleMemorySize="):
                         kb = int(line.split("=")[1])
-                        return (kb / (1024 ** 2)) * 0.5
+                        return (kb / (1024**2)) * 0.5
         except Exception:
             pass
 
@@ -755,7 +855,7 @@ class _CPUBackend(_Accelerator):
             return "medium"
         return "lite"
 
-    def memory_hint(self) -> Dict[str, Any]:
+    def memory_hint(self) -> dict[str, Any]:
         tier = self.compute_tier
         threads = self.openblas_threads()
         return {
@@ -782,6 +882,7 @@ class _MetalBackend(_Accelerator):
     ``training/gpu/accelerator.py`` Metal accelerator, which computes in numpy.
     Ops not overridden here fall through to the base _Accelerator numpy impl.
     """
+
     name = "metal"
     device_type = "gpu"
     _fp16_available = False
@@ -789,6 +890,7 @@ class _MetalBackend(_Accelerator):
     def is_available(self) -> bool:
         try:
             from domain.infrastructure._internal.ml_types import _mps_available
+
             return _mps_available()
         except Exception as e:
             logger.debug("Metal availability check failed: %s", e)
@@ -810,12 +912,12 @@ class _MetalBackend(_Accelerator):
 
 
 class _CUDABackend(_Accelerator):
-
     """CUDA (NVIDIA GPU) backend via CuPy.
 
     Install: pip install cupy-cuda12x
     Provides the fastest GPU compute path for NVIDIA cards.
     """
+
     name = "cuda"
     device_type = "gpu"
     _fp16_available = True
@@ -826,6 +928,7 @@ class _CUDABackend(_Accelerator):
     def is_available(self) -> bool:
         try:
             import cupy as cp
+
             self._cp = cp
             return True
         except Exception as e:
@@ -840,7 +943,7 @@ class _CUDABackend(_Accelerator):
         if self._cp:
             try:
                 mem = self._cp.cuda.Device().mem_info()
-                return mem[1] / (1024 ** 3)
+                return mem[1] / (1024**3)
             except Exception as e:
                 logger.debug("CUDA VRAM detection failed: %s", e)
         return 4.0
@@ -854,7 +957,7 @@ class _CUDABackend(_Accelerator):
             return "medium"
         return "lite"
 
-    def memory_hint(self) -> Dict[str, Any]:
+    def memory_hint(self) -> dict[str, Any]:
         vram = self.vram_gb()
         tier = self.compute_tier
         return {
@@ -882,20 +985,27 @@ class _CUDABackend(_Accelerator):
 
     def matmul(self, a: Any, b: Any) -> np.ndarray:
         if self._cp and not self._fp16_mode:
-            return self._cp.asnumpy(self._cp.matmul(
-                self._cp.asarray(a) if not hasattr(a, "device") else a,
-                self._cp.asarray(b) if not hasattr(b, "device") else b
-            ))
+            return self._cp.asnumpy(
+                self._cp.matmul(
+                    self._cp.asarray(a) if not hasattr(a, "device") else a,
+                    self._cp.asarray(b) if not hasattr(b, "device") else b,
+                )
+            )
         if self._cp:
             a_arr = self._cp.asarray(a, dtype=self._dtype()) if not hasattr(a, "device") else a
             b_arr = self._cp.asarray(b, dtype=self._dtype()) if not hasattr(b, "device") else b
             return self._cp.asnumpy(self._cp.matmul(a_arr, b_arr)).astype(np.float32)
         return np.matmul(np.asarray(a), np.asarray(b))
 
-    def scaled_dot_attention(self, q: np.ndarray, k: np.ndarray, v: np.ndarray,
-                             mask: Optional[np.ndarray] = None,
-                             scale: Optional[float] = None,
-                             causal: bool = False) -> np.ndarray:
+    def scaled_dot_attention(
+        self,
+        q: np.ndarray,
+        k: np.ndarray,
+        v: np.ndarray,
+        mask: np.ndarray | None = None,
+        scale: float | None = None,
+        causal: bool = False,
+    ) -> np.ndarray:
         if self._cp:
             q_c, k_c, v_c = self._cp.asarray(q), self._cp.asarray(k), self._cp.asarray(v)
             m_c = self._cp.asarray(mask) if mask is not None else None
@@ -906,14 +1016,18 @@ class _CUDABackend(_Accelerator):
                 scores = scores + m_c
             if causal:
                 n, s = q_c.shape[2], k_c.shape[2]
-                scores = self._cp.where(self._cp.triu(self._cp.ones((n, s)), k=1) == 0, scores, -1e9)
+                scores = self._cp.where(
+                    self._cp.triu(self._cp.ones((n, s)), k=1) == 0, scores, -1e9
+                )
             attn = self._cp.exp(scores - scores.max(axis=-1, keepdims=True))
             attn = attn / attn.sum(axis=-1, keepdims=True)
             out = self._cp.einsum("bhnk,bhkd->bhnd", attn, v_c)
             return self._cp.asnumpy(out)
         return super().scaled_dot_attention(q, k, v, mask=mask, scale=scale, causal=causal)
 
-    def layer_norm(self, x: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5) -> np.ndarray:
+    def layer_norm(
+        self, x: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5
+    ) -> np.ndarray:
         if self._cp:
             x_c, w_c, b_c = self._cp.asarray(x), self._cp.asarray(weight), self._cp.asarray(bias)
             mean = x_c.mean(axis=-1, keepdims=True)
@@ -924,15 +1038,18 @@ class _CUDABackend(_Accelerator):
     def gelu(self, x: np.ndarray) -> np.ndarray:
         if self._cp:
             x_c = self._cp.asarray(x)
-            return self._cp.asnumpy(0.5 * x_c * (1 + self._cp.tanh(self._cp.sqrt(2 / self._cp.pi) * (x_c + 0.044715 * x_c ** 3))))
+            return self._cp.asnumpy(
+                0.5
+                * x_c
+                * (1 + self._cp.tanh(self._cp.sqrt(2 / self._cp.pi) * (x_c + 0.044715 * x_c**3)))
+            )
         return super().gelu(x)
-
-
 
 
 # =============================================================================
 # OpenCL BACKEND (Intel iGPU, AMD dGPU, integrated GPUs on Linux/Windows)
 # =============================================================================
+
 
 class _OpenCLBackend(_Accelerator):
     """OpenCL backend for Intel/AMD GPUs on non-Apple platforms.
@@ -945,6 +1062,7 @@ class _OpenCLBackend(_Accelerator):
     Install: pip install pyopencl
     Falls back to CPU if pyopencl is unavailable.
     """
+
     name = "opencl"
     device_type = "gpu"
 
@@ -958,6 +1076,7 @@ class _OpenCLBackend(_Accelerator):
     def is_available(self) -> bool:
         try:
             import pyopencl as cl
+
             cl.create_some_context(interactive=False)
             self._cl = cl
             return True
@@ -974,7 +1093,7 @@ class _OpenCLBackend(_Accelerator):
             return 0.0
         try:
             dev = self._cl.get_platforms()[0].get_devices()[0]
-            return dev.global_mem_size / (1024 ** 3)
+            return dev.global_mem_size / (1024**3)
         except Exception as e:
             logger.debug("OpenCL VRAM detection failed: %s", e)
             return 1.0
@@ -988,7 +1107,7 @@ class _OpenCLBackend(_Accelerator):
             return "medium"
         return "lite"
 
-    def memory_hint(self) -> Dict[str, Any]:
+    def memory_hint(self) -> dict[str, Any]:
         vram = self.vram_gb()
         tier = self.compute_tier
         return {
@@ -1010,7 +1129,9 @@ class _OpenCLBackend(_Accelerator):
     def to_device(self, arr: np.ndarray) -> Any:
         self._ensure_context()
         mf = self._cl.mem_flags
-        buf = self._cl.Buffer(self._queue.context, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=arr.astype(np.float32))
+        buf = self._cl.Buffer(
+            self._queue.context, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=arr.astype(np.float32)
+        )
         return buf
 
     def from_device(self, arr: Any) -> np.ndarray:
@@ -1027,6 +1148,7 @@ class _OpenCLBackend(_Accelerator):
 # =============================================================================
 # CONVENIENCE FUNCTIONS
 # =============================================================================
+
 
 def to_gpu(arr: np.ndarray) -> Any:
     """Move array to accelerator device (GPU if available)."""
@@ -1050,13 +1172,14 @@ def softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
     return get_accelerator().softmax(x, axis=axis)
 
 
-def benchmark_accelerators() -> Dict[str, Dict[str, Any]]:
+def benchmark_accelerators() -> dict[str, dict[str, Any]]:
     """Benchmark all available backends: matmul + layernorm + gelu.
 
     Returns dict of backend_name -> {gflops, memory_gb, tier, status}.
     """
     import time
-    results: Dict[str, Dict[str, Any]] = {}
+
+    results: dict[str, dict[str, Any]] = {}
 
     A = np.random.randn(256, 256).astype(np.float32)
     B = np.random.randn(256, 256).astype(np.float32)
@@ -1064,7 +1187,7 @@ def benchmark_accelerators() -> Dict[str, Dict[str, Any]]:
     W = np.random.randn(256).astype(np.float32)
     Bv = np.random.randn(256).astype(np.float32)
 
-    backends: List[Tuple[str, "_Accelerator"]] = [
+    backends: list[tuple[str, _Accelerator]] = [
         ("cpu", _CPUBackend()),
         ("metal", _MetalBackend()),
         ("cuda", _CUDABackend()),
@@ -1086,11 +1209,7 @@ def benchmark_accelerators() -> Dict[str, Dict[str, Any]]:
                 backend.sync()
             elapsed = time.perf_counter() - t0
 
-            flops = 20 * (
-                2 * 256 * 256 * 256 +
-                2 * 128 * 256 +
-                2 * 128 * 256
-            )
+            flops = 20 * (2 * 256 * 256 * 256 + 2 * 128 * 256 + 2 * 128 * 256)
             gflops = flops / elapsed / 1e9
 
             results[name] = {
@@ -1107,6 +1226,15 @@ def benchmark_accelerators() -> Dict[str, Dict[str, Any]]:
         bar = "=" * int(r.get("gflops", 0) * 2)
         tier = r.get("tier", "?")
         vram = f"{r['vram_gb']}GB" if r.get("vram_gb") else ""
-        logger.info("  %s %6.1f GF/s %s %s %s [%s]", name, r['gflops'], bar, tier, vram, r['status'], extra={"tag": "INFRA"})
+        logger.info(
+            "  %s %6.1f GF/s %s %s %s [%s]",
+            name,
+            r["gflops"],
+            bar,
+            tier,
+            vram,
+            r["status"],
+            extra={"tag": "INFRA"},
+        )
 
     return results

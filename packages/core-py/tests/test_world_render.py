@@ -4,37 +4,44 @@ Covers: dataclass defaults, diff computation, history CRUD, series analysis,
 significant change detection, summary, diff summary text. Pure numpy tests,
 no rendering dependencies.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
 from domain.shell._internal.world_render import (
+    MATERIAL_AIR,
+    MATERIAL_FOOD,
+    MATERIAL_GROUND,
+    MATERIAL_NEST,
+    MATERIAL_SIGNAL,
+    MATERIAL_TOXIC,
+    MATERIAL_WATER,
+    RenderAnalyzer,
     RenderConfig,
     RenderDiff,
     RenderHistory,
-    RenderAnalyzer,
-    MATERIAL_AIR,
-    MATERIAL_GROUND,
-    MATERIAL_FOOD,
-    MATERIAL_TOXIC,
-    MATERIAL_SIGNAL,
-    MATERIAL_NEST,
-    MATERIAL_WATER,
 )
 
 
 class TestMaterialConstants:
     def test_values_are_distinct(self):
-        mats = [MATERIAL_AIR, MATERIAL_GROUND, MATERIAL_FOOD,
-                MATERIAL_TOXIC, MATERIAL_SIGNAL, MATERIAL_NEST, MATERIAL_WATER]
+        mats = [
+            MATERIAL_AIR,
+            MATERIAL_GROUND,
+            MATERIAL_FOOD,
+            MATERIAL_TOXIC,
+            MATERIAL_SIGNAL,
+            MATERIAL_NEST,
+            MATERIAL_WATER,
+        ]
         assert len(set(mats)) == 7
 
     def test_air_is_zero(self):
@@ -57,8 +64,15 @@ class TestRenderConfig:
 
     def test_color_map_has_all_materials(self):
         c = RenderConfig()
-        for mat in [MATERIAL_AIR, MATERIAL_GROUND, MATERIAL_FOOD,
-                    MATERIAL_TOXIC, MATERIAL_SIGNAL, MATERIAL_NEST, MATERIAL_WATER]:
+        for mat in [
+            MATERIAL_AIR,
+            MATERIAL_GROUND,
+            MATERIAL_FOOD,
+            MATERIAL_TOXIC,
+            MATERIAL_SIGNAL,
+            MATERIAL_NEST,
+            MATERIAL_WATER,
+        ]:
             assert mat in c.material_color_map
 
     def test_emission_map(self):

@@ -7,14 +7,18 @@ module under test can be exercised without the real dependency.
 
 import importlib
 import sys
-import types
 import threading
 import time
+import types
 
 import pytest
 
-import domain.infrastructure.metrics as _metrics
-from domain.infrastructure._internal.metrics import MetricsCollector, get_metrics_collector, reset_metrics_collector
+import domain.infrastructure._internal.metrics as _metrics
+from domain.infrastructure._internal.metrics import (
+    MetricsCollector,
+    get_metrics_collector,
+    reset_metrics_collector,
+)
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -125,7 +129,7 @@ class TestMetricsCollector:
         c.record_inference(0.7)
         text = c.render()
         assert "sloughgpt_inference_duration_seconds" in text
-        assert 'sloughgpt_inference_duration_seconds_count 2' in text
+        assert "sloughgpt_inference_duration_seconds_count 2" in text
         assert "sloughgpt_inference_duration_seconds_sum 1.0000" in text
 
     def test_render_model_loaded_gauge(self):

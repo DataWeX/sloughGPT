@@ -3,6 +3,7 @@
 Self-contained n-gram TF-IDF embedding and cosine similarity.
 No external dependencies beyond numpy.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -40,7 +41,7 @@ def ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
     ngrams: list[str] = []
     for n in (1, 2, 3):
         for i in range(max(0, len(tokens) - n + 1)):
-            ngrams.append(" ".join(tokens[i:i + n]))
+            ngrams.append(" ".join(tokens[i : i + n]))
 
     for ng in ngrams:
         h = int(hashlib.md5(ng.encode()).hexdigest()[:8], 16)

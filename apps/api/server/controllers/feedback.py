@@ -9,7 +9,7 @@ instead of raw JSON/JSONL files.
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -158,7 +158,7 @@ class FeedbackController:
             "message_content": message_content,
             "user_message": user_message,
             "assistant_response": assistant_response,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         self._feedback.insert_one(feedback)
@@ -240,7 +240,7 @@ class FeedbackController:
             Dict with id, name, session_id, created_at, updated_at, pinned, starred, message_count.
         """
         conv_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conv = {
             "id": conv_id,
             "name": name,
@@ -289,7 +289,7 @@ class FeedbackController:
         Returns:
             Updated conversation dict, or None if not found.
         """
-        updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+        updates["updated_at"] = datetime.now(UTC).isoformat()
         return self._conversations.find_one_and_update(
             {"id": conv_id},
             {"$set": updates},

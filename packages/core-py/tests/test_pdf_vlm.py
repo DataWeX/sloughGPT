@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
+
 pytestmark = pytest.mark.slow
 from domain.inference._internal.pdf_vlm import PDFVLMProcessor
 

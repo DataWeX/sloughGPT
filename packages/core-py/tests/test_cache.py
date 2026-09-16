@@ -2,7 +2,9 @@
 
 import asyncio
 import time
+
 import pytest
+
 from domain.infrastructure._internal.cache import CacheEntry, CacheManager
 
 
@@ -10,8 +12,12 @@ class TestCacheEntry:
     def test_fields(self):
         now = time.time()
         entry = CacheEntry(
-            key="k", value="v", ttl=60,
-            created_at=now, accessed_count=1, last_accessed=now,
+            key="k",
+            value="v",
+            ttl=60,
+            created_at=now,
+            accessed_count=1,
+            last_accessed=now,
         )
         assert entry.key == "k"
         assert entry.value == "v"
@@ -20,135 +26,208 @@ class TestCacheEntry:
 
     def test_none_ttl(self):
         entry = CacheEntry(
-            key="k", value=42, ttl=None,
-            created_at=0.0, accessed_count=0, last_accessed=0.0,
+            key="k",
+            value=42,
+            ttl=None,
+            created_at=0.0,
+            accessed_count=0,
+            last_accessed=0.0,
         )
         assert entry.ttl is None
 
     def test_value_types(self):
         entry = CacheEntry(
-            key="k", value={"a": [1, 2]}, ttl=10,
-            created_at=0.0, accessed_count=0, last_accessed=0.0,
+            key="k",
+            value={"a": [1, 2]},
+            ttl=10,
+            created_at=0.0,
+            accessed_count=0,
+            last_accessed=0.0,
         )
         assert entry.value["a"] == [1, 2]
 
     def test_string_value(self):
         entry = CacheEntry(
-            key="k", value="hello world", ttl=60,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="k",
+            value="hello world",
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         assert entry.value == "hello world"
 
     def test_integer_value(self):
         entry = CacheEntry(
-            key="k", value=12345, ttl=60,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="k",
+            value=12345,
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         assert entry.value == 12345
 
     def test_list_value(self):
         entry = CacheEntry(
-            key="k", value=[1, 2, 3], ttl=60,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="k",
+            value=[1, 2, 3],
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         assert entry.value == [1, 2, 3]
 
     def test_nested_dict_value(self):
         entry = CacheEntry(
-            key="k", value={"outer": {"inner": [1, 2]}}, ttl=60,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="k",
+            value={"outer": {"inner": [1, 2]}},
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         assert entry.value["outer"]["inner"] == [1, 2]
 
     def test_zero_ttl(self):
         entry = CacheEntry(
-            key="k", value="v", ttl=0,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="k",
+            value="v",
+            ttl=0,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         assert entry.ttl == 0
 
     def test_large_accessed_count(self):
         entry = CacheEntry(
-            key="k", value="v", ttl=60,
-            created_at=1.0, accessed_count=1000000, last_accessed=1.0,
+            key="k",
+            value="v",
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1000000,
+            last_accessed=1.0,
         )
         assert entry.accessed_count == 1000000
 
     def test_negative_ttl(self):
         entry = CacheEntry(
-            key="k", value="v", ttl=-5,
-            created_at=1.0, accessed_count=0, last_accessed=1.0,
+            key="k",
+            value="v",
+            ttl=-5,
+            created_at=1.0,
+            accessed_count=0,
+            last_accessed=1.0,
         )
         assert entry.ttl == -5
 
     def test_float_value(self):
         entry = CacheEntry(
-            key="k", value=3.14159, ttl=60,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="k",
+            value=3.14159,
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         assert entry.value == pytest.approx(3.14159)
 
     def test_bool_value(self):
         entry = CacheEntry(
-            key="k", value=True, ttl=60,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="k",
+            value=True,
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         assert entry.value is True
 
     def test_set_value(self):
         entry = CacheEntry(
-            key="k", value="old", ttl=60,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="k",
+            value="old",
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         entry.value = "new"
         assert entry.value == "new"
 
     def test_set_key(self):
         entry = CacheEntry(
-            key="old", value="v", ttl=60,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="old",
+            value="v",
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         entry.key = "new"
         assert entry.key == "new"
 
     def test_large_key(self):
         entry = CacheEntry(
-            key="k" * 10000, value="v", ttl=60,
-            created_at=1.0, accessed_count=0, last_accessed=1.0,
+            key="k" * 10000,
+            value="v",
+            ttl=60,
+            created_at=1.0,
+            accessed_count=0,
+            last_accessed=1.0,
         )
         assert len(entry.key) == 10000
 
     def test_tuple_value(self):
         entry = CacheEntry(
-            key="k", value=(1, 2, 3), ttl=60,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="k",
+            value=(1, 2, 3),
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         assert entry.value == (1, 2, 3)
 
     def test_set_value_none(self):
         entry = CacheEntry(
-            key="k", value="v", ttl=60,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="k",
+            value="v",
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         entry.value = None
         assert entry.value is None
 
     def test_zero_accessed_count(self):
         entry = CacheEntry(
-            key="k", value="v", ttl=60,
-            created_at=1.0, accessed_count=0, last_accessed=1.0,
+            key="k",
+            value="v",
+            ttl=60,
+            created_at=1.0,
+            accessed_count=0,
+            last_accessed=1.0,
         )
         assert entry.accessed_count == 0
 
     def test_zero_last_accessed(self):
         entry = CacheEntry(
-            key="k", value="v", ttl=60,
-            created_at=1.0, accessed_count=0, last_accessed=0.0,
+            key="k",
+            value="v",
+            ttl=60,
+            created_at=1.0,
+            accessed_count=0,
+            last_accessed=0.0,
         )
         assert entry.last_accessed == 0.0
 
     def test_dataclass_fields(self):
         from dataclasses import fields
+
         field_names = [f.name for f in fields(CacheEntry)]
         assert "key" in field_names
         assert "value" in field_names
@@ -159,23 +238,35 @@ class TestCacheEntry:
 
     def test_none_value(self):
         entry = CacheEntry(
-            key="k", value=None, ttl=60,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="k",
+            value=None,
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         assert entry.value is None
 
     def test_set_ttl(self):
         entry = CacheEntry(
-            key="k", value="v", ttl=60,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="k",
+            value="v",
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         entry.ttl = 120
         assert entry.ttl == 120
 
     def test_set_created_at(self):
         entry = CacheEntry(
-            key="k", value="v", ttl=60,
-            created_at=1.0, accessed_count=1, last_accessed=1.0,
+            key="k",
+            value="v",
+            ttl=60,
+            created_at=1.0,
+            accessed_count=1,
+            last_accessed=1.0,
         )
         entry.created_at = 99.0
         assert entry.created_at == 99.0
@@ -325,8 +416,12 @@ class TestCacheManager:
     @pytest.mark.asyncio
     async def test_cleanup_expired(self):
         self.mgr.cache["expired"] = CacheEntry(
-            key="expired", value="v", ttl=1,
-            created_at=time.time() - 10, accessed_count=0, last_accessed=0.0,
+            key="expired",
+            value="v",
+            ttl=1,
+            created_at=time.time() - 10,
+            accessed_count=0,
+            last_accessed=0.0,
         )
         await self.mgr._cleanup_expired_entries()
         assert "expired" not in self.mgr.cache
@@ -412,8 +507,12 @@ class TestCacheManager:
         now = time.time()
         for i in range(5):
             self.mgr.cache[f"exp{i}"] = CacheEntry(
-                key=f"exp{i}", value=i, ttl=1,
-                created_at=now - 10, accessed_count=0, last_accessed=0.0,
+                key=f"exp{i}",
+                value=i,
+                ttl=1,
+                created_at=now - 10,
+                accessed_count=0,
+                last_accessed=0.0,
             )
         await self.mgr._cleanup_expired_entries()
         assert len(self.mgr.cache) == 0
@@ -423,12 +522,20 @@ class TestCacheManager:
     async def test_cleanup_mixed_expired_and_valid(self):
         now = time.time()
         self.mgr.cache["expired"] = CacheEntry(
-            key="expired", value="v", ttl=1,
-            created_at=now - 10, accessed_count=0, last_accessed=0.0,
+            key="expired",
+            value="v",
+            ttl=1,
+            created_at=now - 10,
+            accessed_count=0,
+            last_accessed=0.0,
         )
         self.mgr.cache["valid"] = CacheEntry(
-            key="valid", value="v", ttl=3600,
-            created_at=now, accessed_count=0, last_accessed=now,
+            key="valid",
+            value="v",
+            ttl=3600,
+            created_at=now,
+            accessed_count=0,
+            last_accessed=now,
         )
         await self.mgr._cleanup_expired_entries()
         assert "expired" not in self.mgr.cache

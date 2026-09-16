@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-import pytest
+from unittest.mock import MagicMock
+
 import numpy as np
-from unittest.mock import MagicMock, patch, PropertyMock
 
 from domain.core._internal.soul import GenerationContext, SloEngine
-
 
 # ── GenerationContext ───────────────────────────────────────────────────────
 
 
 class TestGenerationContext:
-
     def test_defaults(self):
         ctx = GenerationContext(prompt="hello", prompt_tokens=np.array([[1]]))
         assert ctx.prompt == "hello"
@@ -49,7 +47,6 @@ class TestGenerationContext:
 
 
 class TestSloEngine:
-
     def test_init(self):
         engine = SloEngine()
         assert engine._model is None
@@ -59,6 +56,7 @@ class TestSloEngine:
 
     def test_init_custom_soul(self):
         from domain.inference import SloProfile
+
         soul = SloProfile(name="custom")
         engine = SloEngine(soul=soul)
         assert engine.soul.name == "custom"
@@ -97,6 +95,7 @@ class TestSloEngine:
     def test_set_soul(self):
         engine = SloEngine()
         from domain.inference import SloProfile
+
         soul = SloProfile(name="new")
         result = engine.set_soul(soul)
         assert engine.soul.name == "new"
@@ -128,7 +127,6 @@ class TestSloEngine:
 
 
 class TestReasoningTypeMap:
-
     def test_balanced(self):
         assert SloEngine.REASONING_TYPE_MAP["balanced"] == "deductive"
 
@@ -152,7 +150,6 @@ class TestReasoningTypeMap:
 
 
 class TestBuildSystemPrompt:
-
     def test_basic(self):
         engine = SloEngine()
         prompt = engine._build_system_prompt()
@@ -205,7 +202,6 @@ class TestBuildSystemPrompt:
 
 
 class TestBuildReasoningChainText:
-
     def test_basic(self):
         engine = SloEngine()
         text = engine._build_reasoning_chain_text("hello")
@@ -226,7 +222,6 @@ class TestBuildReasoningChainText:
 
 
 class TestGetGenerationParams:
-
     def test_defaults(self):
         engine = SloEngine()
         ctx = GenerationContext(prompt="t", prompt_tokens=np.array([[0]]))
@@ -243,7 +238,9 @@ class TestGetGenerationParams:
 
     def test_creative_reasoning(self):
         engine = SloEngine()
-        ctx = GenerationContext(prompt="t", prompt_tokens=np.array([[0]]), reasoning_depth="creative")
+        ctx = GenerationContext(
+            prompt="t", prompt_tokens=np.array([[0]]), reasoning_depth="creative"
+        )
         params = engine._get_generation_params(ctx)
         assert params["temperature"] > 0.8
 
@@ -257,8 +254,7 @@ class TestGetGenerationParams:
     def test_soul_overrides(self):
         engine = SloEngine()
         ctx = GenerationContext(
-            prompt="t", prompt_tokens=np.array([[0]]),
-            soul_overrides={"temperature": 1.5}
+            prompt="t", prompt_tokens=np.array([[0]]), soul_overrides={"temperature": 1.5}
         )
         params = engine._get_generation_params(ctx)
         assert params["temperature"] == 1.5
@@ -268,7 +264,6 @@ class TestGetGenerationParams:
 
 
 class TestHebbianLearning:
-
     def test_basic(self):
         engine = SloEngine()
         engine._apply_hebbian_learning(["hello", "world"], ["response"])
@@ -291,7 +286,6 @@ class TestHebbianLearning:
 
 
 class TestGenerateNoModel:
-
     def test_generate_no_model(self):
         engine = SloEngine()
         result = engine.generate("hello")
@@ -303,7 +297,6 @@ class TestGenerateNoModel:
 
 
 class TestBuildFullPrompt:
-
     def test_basic(self):
         engine = SloEngine()
         prompt = engine._build_full_prompt("hello", include_reasoning=False)

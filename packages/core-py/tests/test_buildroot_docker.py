@@ -1,4 +1,5 @@
 """Tests for Buildroot Docker configuration."""
+
 import os
 import stat
 
@@ -37,16 +38,16 @@ class TestBuildrootDocker:
         build_script = os.path.join(_BUILDROOT, "build.sh")
         with open(build_script) as f:
             content = f.read()
-        assert "docker" in content.lower() or "buildroot" in content.lower(), \
+        assert "docker" in content.lower() or "buildroot" in content.lower(), (
             "build.sh should reference docker or buildroot"
+        )
 
     def test_build_script_references_correct_image(self):
         """build.sh references correct Docker image name."""
         build_script = os.path.join(_BUILDROOT, "build.sh")
         with open(build_script) as f:
             content = f.read()
-        assert "buildroot" in content.lower(), \
-            "build.sh should reference buildroot image"
+        assert "buildroot" in content.lower(), "build.sh should reference buildroot image"
 
     def test_dockerfile_has_workdir(self):
         """Dockerfile has a WORKDIR instruction."""

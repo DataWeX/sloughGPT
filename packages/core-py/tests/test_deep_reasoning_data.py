@@ -1,9 +1,16 @@
 """Tests for domain.cognitive.reasoning.deep — RetrievalSource, RetrievedKnowledge, DeepReasoningContext, Term, Predicate, WellFormedFormula, Substitution, FormalLogicEngine, WorkingMemory."""
 
 from domain.cognitive._internal.reasoning.deep import (
-    RetrievalSource, RetrievedKnowledge, DeepReasoningContext,
-    Term, Predicate, WellFormedFormula, Substitution, LogicalOperator,
-    FormalLogicEngine, WorkingMemory,
+    DeepReasoningContext,
+    FormalLogicEngine,
+    LogicalOperator,
+    Predicate,
+    RetrievalSource,
+    RetrievedKnowledge,
+    Substitution,
+    Term,
+    WellFormedFormula,
+    WorkingMemory,
 )
 
 
@@ -37,7 +44,7 @@ class TestRetrievalSource:
         assert len(values) == len(set(values))
 
     def test_member_count(self):
-        assert len([m for m in RetrievalSource]) == 4
+        assert len(list(RetrievalSource)) == 4
 
     def test_membership(self):
         assert RetrievalSource.VECTOR_STORE in RetrievalSource
@@ -59,7 +66,9 @@ class TestRetrievedKnowledge:
         assert rk.source_id is None
 
     def test_source_id_set(self):
-        rk = RetrievedKnowledge(content="x", source=RetrievalSource.MEMORY, relevance=0.5, source_id="doc1")
+        rk = RetrievedKnowledge(
+            content="x", source=RetrievalSource.MEMORY, relevance=0.5, source_id="doc1"
+        )
         assert rk.source_id == "doc1"
 
     def test_relevance_zero(self):

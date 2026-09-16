@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from domains import (
-    DomainException,
     BaseDomain,
+    DomainException,
     ICognitiveProcessor,
     IMemoryManager,
     IMetacognitiveMonitor,
@@ -31,10 +31,10 @@ class CognitiveDomain(BaseDomain):
         self.logger = logging.getLogger(f"slo.{self.domain_name}")
 
         # Core components
-        self.memory_manager: Optional[IMemoryManager] = None
-        self.reasoning_engine: Optional[IReasoningEngine] = None
-        self.metacognitive_monitor: Optional[IMetacognitiveMonitor] = None
-        self.cognitive_processor: Optional[ICognitiveProcessor] = None
+        self.memory_manager: IMemoryManager | None = None
+        self.reasoning_engine: IReasoningEngine | None = None
+        self.metacognitive_monitor: IMetacognitiveMonitor | None = None
+        self.cognitive_processor: ICognitiveProcessor | None = None
 
         # Background tasks
         self._background_tasks: list[asyncio.Task] = []
@@ -191,7 +191,7 @@ class CognitiveDomain(BaseDomain):
 
     async def process_thought(
         self, thought_content: str, thought_type: str = "analytical"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Process a thought through the cognitive pipeline"""
         if not self.cognitive_processor:
             raise CognitiveException("Cognitive processor not initialized")
@@ -239,7 +239,7 @@ class CognitiveDomain(BaseDomain):
         memory_id = await self.memory_manager.store_memory(memory)
         return memory_id
 
-    async def retrieve_memory(self, memory_id: str) -> Optional[Dict[str, Any]]:
+    async def retrieve_memory(self, memory_id: str) -> dict[str, Any] | None:
         """Retrieve a memory by ID"""
         if not self.memory_manager:
             raise CognitiveException("Memory manager not initialized")
@@ -255,14 +255,14 @@ class CognitiveDomain(BaseDomain):
             }
         return None
 
-    async def reason(self, premise: str, context: Dict[str, Any]) -> str:
+    async def reason(self, premise: str, context: dict[str, Any]) -> str:
         """Perform reasoning on a premise"""
         if not self.reasoning_engine:
             raise CognitiveException("Reasoning engine not initialized")
 
         return await self.reasoning_engine.reason(premise, context)
 
-    async def get_cognitive_state(self) -> Dict[str, Any]:
+    async def get_cognitive_state(self) -> dict[str, Any]:
         """Get current cognitive state"""
         return {
             "state": self.cognitive_state,

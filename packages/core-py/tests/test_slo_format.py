@@ -1,8 +1,13 @@
 """Tests for domain.inference._internal.slo_format — GenerationParams, ContextParams, PersonalityCore, BehavioralTraits, CognitiveSignature, EmotionalRange, SloProfile."""
 
 from domain.inference._internal.slo_format import (
-    GenerationParams, ContextParams, PersonalityCore, BehavioralTraits,
-    CognitiveSignature, EmotionalRange, SloProfile,
+    BehavioralTraits,
+    CognitiveSignature,
+    ContextParams,
+    EmotionalRange,
+    GenerationParams,
+    PersonalityCore,
+    SloProfile,
 )
 
 

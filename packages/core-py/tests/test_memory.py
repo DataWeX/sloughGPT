@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from domain.shell._internal.memory import EpisodicMemory, Episode, WorldEpisode, WorldMemory
+from domain.shell._internal.memory import EpisodicMemory, WorldMemory
 from domain.shell._internal.simulation import (
     SimBaby,
     SimScene,
@@ -175,13 +175,12 @@ class TestSimBabyMemory:
 
     def test_surprise_scales_weight_updates(self):
         def fresh():
-            b = SimBaby(initial_energy=100.0,
-                        position=np.array([8.0, 4.0, 8.0]))
+            b = SimBaby(initial_energy=100.0, position=np.array([8.0, 4.0, 8.0]))
             b.perceptron_body.W[:] = 0.05  # identical deterministic weights
             return b
 
-        surprising = fresh()   # empty memory → baseline 0, surprise 5
-        expected = fresh()     # established +5 baseline → surprise 0
+        surprising = fresh()  # empty memory → baseline 0, surprise 5
+        expected = fresh()  # established +5 baseline → surprise 0
         for _ in range(5):
             expected.memory.record(_feat(), (0.0, 0.0, 0.0), 5.0)
 
@@ -205,7 +204,7 @@ class TestSimBabyMemory:
         assert learning["scale"] == pytest.approx(1.5)
 
     def test_simulation_fills_memory_over_ticks(self):
-        from domain.shell._internal.simulation import SimScene, Simulation
+        from domain.shell._internal.simulation import Simulation
 
         params = WorldParams(grid_size=(8, 4, 8), start_agents=1, memory_capacity=16)
         scene = SimScene(params=params)
@@ -246,8 +245,7 @@ class TestWorldMemoryReservoir:
     def test_consolidate_deposits_top_reward_episodes(self):
         donor = EpisodicMemory(capacity=8)
         for i, reward in enumerate((1.0, 5.0, 3.0, 2.0, 4.0)):
-            donor.record(np.full(4, float(i), np.float32),
-                         (0.5, 0.5, 0.5), reward, tick=i)
+            donor.record(np.full(4, float(i), np.float32), (0.5, 0.5, 0.5), reward, tick=i)
         m = WorldMemory()
         deposited = m.consolidate(donor, k=3, group_id=1, donor_id=9)
         assert deposited == 3
@@ -302,12 +300,17 @@ class TestWorldMemoryReservoir:
     def test_serialization_roundtrip_is_lossless(self):
         m = WorldMemory()
         for i, reward in enumerate((1.0, 5.0, 3.0)):
-            m.record(np.full(4, float(i), np.float32),
-                     (0.5, 0.5, 0.5), reward, tick=i,
-                     group_id=i % 2, donor_id=100 + i)
+            m.record(
+                np.full(4, float(i), np.float32),
+                (0.5, 0.5, 0.5),
+                reward,
+                tick=i,
+                group_id=i % 2,
+                donor_id=100 + i,
+            )
         restored = WorldMemory.from_dict(m.to_dict())
         assert len(restored) == 3
-        for a, b in zip(m._episodes, restored._episodes):
+        for a, b in zip(m._episodes, restored._episodes, strict=False):
             assert np.array_equal(a.features, b.features)
             assert a.action == b.action
             assert a.reward == b.reward
@@ -323,14 +326,12 @@ class TestWorldMemoryScene:
     """SimScene wiring: off by default, reservoir on demand, seed + deposit."""
 
     def test_scene_reservoir_off_by_default(self):
-        from domain.shell._internal.simulation import SimScene
 
         scene = SimScene(params=WorldParams(grid_size=(8, 4, 8)))
         assert scene.world_memory is None
         assert scene.deposit_memory(SimBaby(initial_energy=100.0)) == 0
 
     def test_scene_creates_reservoir_when_enabled(self):
-        from domain.shell._internal.simulation import SimScene
 
         params = WorldParams(grid_size=(8, 4, 8), memory_enabled=True)
         scene = SimScene(params=params)
@@ -339,10 +340,8 @@ class TestWorldMemoryScene:
         assert scene.memory_seeds_given == 0
 
     def test_deposit_memory_consolidates_baby_best_episodes(self):
-        from domain.shell._internal.simulation import SimScene
 
-        params = WorldParams(grid_size=(8, 4, 8), memory_enabled=True,
-                             memory_deposit=3)
+        params = WorldParams(grid_size=(8, 4, 8), memory_enabled=True, memory_deposit=3)
         scene = SimScene(params=params)
         baby = SimBaby(initial_energy=100.0, params=params)
         for reward in (1.0, 5.0, 3.0, 2.0, 4.0):
@@ -350,14 +349,11 @@ class TestWorldMemoryScene:
         deposited = scene.deposit_memory(baby)
         assert deposited == 3
         assert len(scene.world_memory) == 3
-        assert [e.reward for e in scene.world_memory.recall(k=3)] == \
-               [5.0, 4.0, 3.0]
+        assert [e.reward for e in scene.world_memory.recall(k=3)] == [5.0, 4.0, 3.0]
 
     def test_add_baby_seeds_newborn_from_reservoir(self):
-        from domain.shell._internal.simulation import SimScene
 
-        params = WorldParams(grid_size=(8, 4, 8), memory_enabled=True,
-                             memory_seed=2)
+        params = WorldParams(grid_size=(8, 4, 8), memory_enabled=True, memory_seed=2)
         scene = SimScene(params=params)
         scene.world_memory.record(_feat(), (0.0, 0.0, 0.0), 1.0, group_id=0)
         scene.world_memory.record(_feat(), (0.0, 0.0, 0.0), 9.0, group_id=0)
@@ -369,7 +365,6 @@ class TestWorldMemoryScene:
         assert scene.memory_seeds_given == 2
 
     def test_add_baby_seeds_nothing_without_reservoir(self):
-        from domain.shell._internal.simulation import SimScene
 
         params = WorldParams(grid_size=(8, 4, 8), memory_seed=4)
         scene = SimScene(params=params)  # memory_enabled False → no reservoir
@@ -379,12 +374,10 @@ class TestWorldMemoryScene:
         assert scene.memory_seeds_given == 0
 
     def test_scene_serialization_preserves_reservoir(self):
-        from domain.shell._internal.simulation import SimScene
 
         params = WorldParams(grid_size=(8, 4, 8), memory_enabled=True)
         scene = SimScene(params=params)
-        scene.world_memory.record(_feat(), (0.0, 0.0, 0.0), 7.0, tick=2,
-                                  group_id=1, donor_id=5)
+        scene.world_memory.record(_feat(), (0.0, 0.0, 0.0), 7.0, tick=2, group_id=1, donor_id=5)
         data = scene.to_dict()
         restored = SimScene.from_dict(data)
         assert restored.world_memory is not None
@@ -396,10 +389,8 @@ class TestWorldMemoryScene:
         assert ep.donor_id == 5
 
     def test_dead_baby_deposits_before_removal(self):
-        from domain.shell._internal.simulation import SimScene
 
-        params = WorldParams(grid_size=(8, 4, 8), memory_enabled=True,
-                             memory_deposit=8)
+        params = WorldParams(grid_size=(8, 4, 8), memory_enabled=True, memory_deposit=8)
         scene = SimScene(params=params)
         baby = SimBaby(initial_energy=1.0, params=params)
         for reward in (1.0, 5.0, 3.0, 2.0, 4.0):
@@ -411,16 +402,13 @@ class TestWorldMemoryScene:
         sim.step()
         assert len(scene.entities) == 0  # corpse swept from the world
         assert len(scene.world_memory) == 5  # episodes survived the death
-        assert [e.reward for e in scene.world_memory.recall(k=3)] == \
-               [5.0, 4.0, 3.0]
+        assert [e.reward for e in scene.world_memory.recall(k=3)] == [5.0, 4.0, 3.0]
         ep = scene.world_memory.recall()[0]
         assert ep.donor_id == baby.entity.id
 
     def test_dead_deposit_respects_deposit_cap(self):
-        from domain.shell._internal.simulation import SimScene
 
-        params = WorldParams(grid_size=(8, 4, 8), memory_enabled=True,
-                             memory_deposit=2)
+        params = WorldParams(grid_size=(8, 4, 8), memory_enabled=True, memory_deposit=2)
         scene = SimScene(params=params)
         baby = SimBaby(initial_energy=1.0, params=params)
         for reward in (1.0, 5.0, 3.0, 2.0, 4.0):
@@ -431,5 +419,4 @@ class TestWorldMemoryScene:
         sim = Simulation(scene, max_ticks=10)
         sim.step()
         assert len(scene.world_memory) == 2  # only the best episodes kept
-        assert [e.reward for e in scene.world_memory.recall(k=3)] == \
-               [5.0, 4.0]
+        assert [e.reward for e in scene.world_memory.recall(k=3)] == [5.0, 4.0]

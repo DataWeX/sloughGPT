@@ -50,15 +50,16 @@ import logging
 import os
 import time
 from collections import Counter
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any
 
 import numpy as np
 
 from domain.infrastructure._internal.pugqeep import Point, PointCompressor, PointLibrary
-from domain.training._internal.tokenizer import gpt2_pretokenize, default_pretokenize
+from domain.training._internal.tokenizer import default_pretokenize, gpt2_pretokenize
 
 logger = logging.getLogger("slo.token_tree")
 
@@ -78,11 +79,12 @@ class TrieNode:
         freq: corpus frequency of the token ending here.
         left_id / right_id: merge lineage parents (None for base tokens).
     """
-    children: Dict[str, "TrieNode"] = field(default_factory=dict)
-    token_id: Optional[int] = None
+
+    children: dict[str, TrieNode] = field(default_factory=dict)
+    token_id: int | None = None
     freq: int = 0
-    left_id: Optional[int] = None
-    right_id: Optional[int] = None
+    left_id: int | None = None
+    right_id: int | None = None
 
 
 class TokenTree:
@@ -94,11 +96,11 @@ class TokenTree:
 
     def __init__(self, pretokenizer: str = "gpt2") -> None:
         self.root = TrieNode()
-        self.vocab: List[str] = []
-        self.stoi: Dict[str, int] = {}
-        self.itos: Dict[int, str] = {}
-        self.merges: List[Tuple[str, str]] = []
-        self._lineage: Dict[int, Tuple[Optional[int], Optional[int]]] = {}
+        self.vocab: list[str] = []
+        self.stoi: dict[str, int] = {}
+        self.itos: dict[int, str] = {}
+        self.merges: list[tuple[str, str]] = []
+        self._lineage: dict[int, tuple[int | None, int | None]] = {}
         self._freqs: Counter = Counter()
         self._word_suffix: str = WORD_SUFFIX
         self._pretokenizer: str = pretokenizer
@@ -146,7 +148,7 @@ class TokenTree:
         lowercase: bool = True,
         embed_dim: int = 16,
         verbose: bool = False,
-    ) -> "TokenTree":
+    ) -> TokenTree:
         """Learn BPE merges from a corpus and materialize them as a tree.
 
         Args:
@@ -204,7 +206,7 @@ class TokenTree:
             for word in self._pretokenize(doc, lowercase):
                 word_freqs[word + self._word_suffix] += 1
 
-        word_splits: Dict[str, List[str]] = {}
+        word_splits: dict[str, list[str]] = {}
         for word in word_freqs:
             raw = word.replace(self._word_suffix, "")
             word_splits[word] = list(raw) + [self._word_suffix]
@@ -232,8 +234,11 @@ class TokenTree:
             if verbose:
                 logger.debug(
                     "merge #%d: %r + %r -> %r (count=%d)",
-                    len(self.merges) + 1, best_pair[0], best_pair[1],
-                    new_token, best_count,
+                    len(self.merges) + 1,
+                    best_pair[0],
+                    best_pair[1],
+                    new_token,
+                    best_count,
                 )
 
             self.merges.append(best_pair)
@@ -248,10 +253,14 @@ class TokenTree:
                 split = word_splits[word]
                 if len(split) < 2:
                     continue
-                new_split: List[str] = []
+                new_split: list[str] = []
                 i = 0
                 while i < len(split):
-                    if i < len(split) - 1 and split[i] == best_pair[0] and split[i + 1] == best_pair[1]:
+                    if (
+                        i < len(split) - 1
+                        and split[i] == best_pair[0]
+                        and split[i + 1] == best_pair[1]
+                    ):
                         new_split.append(new_token)
                         i += 2
                     else:
@@ -267,7 +276,7 @@ class TokenTree:
     # Encoding — the tree's query handlers
     # ------------------------------------------------------------------
 
-    def query(self, text: str) -> Tuple[int, int]:
+    def query(self, text: str) -> tuple[int, int]:
         """Greedy longest-prefix-match query against the encoding trie.
 
         Args:
@@ -279,13 +288,13 @@ class TokenTree:
         """
         node = self.root
         i = 0
-        best_id: Optional[int] = None
+        best_id: int | None = None
         best_end = 0
         n = len(text)
         while i < n:
             ch = text[i]
             if ch == "<":
-                nxt: Optional[TrieNode] = None
+                nxt: TrieNode | None = None
                 for piece in _MULTI_PIECES:
                     if text.startswith(piece, i) and piece in node.children:
                         nxt = node.children[piece]
@@ -307,7 +316,7 @@ class TokenTree:
             return self.unk_id, 1
         return best_id, best_end
 
-    def encode(self, text: str, add_bos: bool = False, add_eos: bool = False) -> List[int]:
+    def encode(self, text: str, add_bos: bool = False, add_eos: bool = False) -> list[int]:
         """Encode text into token ids by walking the tree.
 
         Args:
@@ -319,7 +328,7 @@ class TokenTree:
             list of integer token ids.
         """
         text = self._normalize(text, lowercase=True)
-        ids: List[int] = []
+        ids: list[int] = []
         if add_bos:
             ids.append(self.bos_id)
         for word in self._pretokenize(text, lowercase=True):
@@ -333,7 +342,7 @@ class TokenTree:
             ids.append(self.eos_id)
         return ids
 
-    def trace_path(self, text: str) -> List[dict]:
+    def trace_path(self, text: str) -> list[dict]:
         """Trace the greedy longest-prefix walk ``encode`` performs over text.
 
         Mirrors ``encode`` step by step: text is normalized and pretokenized
@@ -351,7 +360,7 @@ class TokenTree:
             ``id`` values is exactly ``encode(text)``.
         """
         normalized = self._normalize(text, lowercase=True)
-        steps: List[dict] = []
+        steps: list[dict] = []
         for word in self._pretokenize(normalized, lowercase=True):
             s = word + self._word_suffix
             i = 0
@@ -365,10 +374,10 @@ class TokenTree:
     def encode_batch(
         self,
         texts: Sequence[str],
-        max_workers: Optional[int] = None,
+        max_workers: int | None = None,
         add_bos: bool = False,
         add_eos: bool = False,
-    ) -> List[List[int]]:
+    ) -> list[list[int]]:
         """Encode many texts in parallel over the shared read-only tree.
 
         The trie is immutable after training, so concurrent descents are
@@ -394,10 +403,12 @@ class TokenTree:
         if workers <= 1:
             return [self.encode(t, add_bos=add_bos, add_eos=add_eos) for t in items]
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            return list(pool.map(
-                lambda t: self.encode(t, add_bos=add_bos, add_eos=add_eos),
-                items,
-            ))
+            return list(
+                pool.map(
+                    lambda t: self.encode(t, add_bos=add_bos, add_eos=add_eos),
+                    items,
+                )
+            )
 
     def decode(self, ids: Sequence[int], skip_special: bool = True) -> str:
         """Decode token ids back into text.
@@ -410,7 +421,7 @@ class TokenTree:
         Returns:
             reconstructed string.
         """
-        pieces: List[str] = []
+        pieces: list[str] = []
         for tid in ids:
             token = self.itos.get(tid)
             if token is None:
@@ -464,7 +475,7 @@ class TokenTree:
     # Token points — embeddings are generated, not stored
     # ------------------------------------------------------------------
 
-    def _learn_embeddings(self, corpus: List[str], embed_dim: int) -> None:
+    def _learn_embeddings(self, corpus: list[str], embed_dim: int) -> None:
         """Learn co-occurrence embeddings and store them as cluster Points.
 
         Builds a token-by-token co-occurrence matrix by encoding the
@@ -498,9 +509,7 @@ class TokenTree:
         col_sum = cooc.sum(axis=0, keepdims=True)
         total = cooc.sum()
         with np.errstate(divide="ignore", invalid="ignore"):
-            pmi = np.log(
-                (cooc * total) / np.maximum(row_sum * col_sum, 1.0)
-            )
+            pmi = np.log((cooc * total) / np.maximum(row_sum * col_sum, 1.0))
         pmi = np.clip(pmi, 0.0, None)
 
         if vocab_n >= embed_dim:
@@ -518,19 +527,23 @@ class TokenTree:
                 point = Point(
                     identity=f"token_emb::{tid}",
                     function_type="raw",
-                    params={"data_b64": _b64(row.tobytes()), "shape": list(row.shape),
-                            "dtype": "float32"},
+                    params={
+                        "data_b64": _b64(row.tobytes()),
+                        "shape": list(row.shape),
+                        "dtype": "float32",
+                    },
                     accuracy=1.0,
                 )
             else:
                 point = self._compressor().compress_cluster(
-                    row, identity=f"token_emb::{tid}", n_clusters=n_clusters)
+                    row, identity=f"token_emb::{tid}", n_clusters=n_clusters
+                )
                 # percentile/Lloyd refit produce float64 centroids; embeddings
                 # are float32, so store them at native precision
                 point.params["centroids"] = point.params["centroids"].astype(np.float32)
             self._library.add(point)
 
-    def embedding(self, token_id: int) -> Optional[np.ndarray]:
+    def embedding(self, token_id: int) -> np.ndarray | None:
         """Generate a token's embedding vector from its pugqeep Point.
 
         Args:
@@ -557,7 +570,7 @@ class TokenTree:
         comp = stats.get("total_compressed_bytes", 0)
         return raw / max(comp, 1)
 
-    def embedding_matrix(self) -> Optional[np.ndarray]:
+    def embedding_matrix(self) -> np.ndarray | None:
         """Generate the full embedding matrix from the token Points.
 
         Each row is produced by ``Point.generate`` (embeddings are not
@@ -569,16 +582,13 @@ class TokenTree:
         """
         if self._embed_dim <= 0:
             return None
-        rows: List[np.ndarray] = []
+        rows: list[np.ndarray] = []
         for tid in range(len(self.vocab)):
             v = self.embedding(tid)
-            rows.append(
-                v if v is not None
-                else np.zeros(self._embed_dim, dtype=np.float32)
-            )
+            rows.append(v if v is not None else np.zeros(self._embed_dim, dtype=np.float32))
         return np.stack(rows)
 
-    def embedding_matrix_stats(self, top_n: int = 8) -> Dict[str, Any]:
+    def embedding_matrix_stats(self, top_n: int = 8) -> dict[str, Any]:
         """Summarize the full embedding matrix in one shot.
 
         Rows are L2-normalized generated embeddings (see
@@ -612,11 +622,8 @@ class TokenTree:
         dead = int(len(norms) - len(live))
         k = min(top_n, len(live))
 
-        def energy_rows(ids: np.ndarray) -> List[List[Any]]:
-            return [
-                [self.itos[int(tid)], int(tid), float(norms[tid])]
-                for tid in ids
-            ]
+        def energy_rows(ids: np.ndarray) -> list[list[Any]]:
+            return [[self.itos[int(tid)], int(tid), float(norms[tid])] for tid in ids]
 
         top_ids = live[np.argsort(-norms[live])][:k]
         bottom_ids = live[np.argsort(norms[live])][:k]
@@ -631,7 +638,7 @@ class TokenTree:
             "least_energetic": energy_rows(bottom_ids),
         }
 
-    def similar(self, token_id: int, top_k: int = 5) -> List[Tuple[int, float]]:
+    def similar(self, token_id: int, top_k: int = 5) -> list[tuple[int, float]]:
         """Query the Point-generated embeddings for nearest-neighbor tokens.
 
         Ranks every token by cosine similarity between its generated
@@ -650,7 +657,7 @@ class TokenTree:
         if mat is None:
             return []
         scores = mat @ mat[token_id]
-        results: List[Tuple[int, float]] = []
+        results: list[tuple[int, float]] = []
         for other in np.argsort(-scores):
             if int(other) == token_id:
                 continue
@@ -668,7 +675,7 @@ class TokenTree:
     # Merge lineage — decompose a token down the tree to its leaves
     # ------------------------------------------------------------------
 
-    def decompose(self, token_id: int) -> List[str]:
+    def decompose(self, token_id: int) -> list[str]:
         """Walk a token's merge lineage down to its character leaves.
 
         Args:
@@ -714,7 +721,7 @@ class TokenTree:
         }
 
     @classmethod
-    def from_dict(cls, meta: dict) -> "TokenTree":
+    def from_dict(cls, meta: dict) -> TokenTree:
         """Reconstruct a token tree from :meth:`to_dict` output.
 
         Args:
@@ -730,18 +737,15 @@ class TokenTree:
         tree._embed_dim = meta.get("embed_dim", 0)
         tree.vocab = list(meta.get("vocab", []))
         tree.stoi = {t: i for i, t in enumerate(tree.vocab)}
-        tree.itos = {i: t for i, t in enumerate(tree.vocab)}
+        tree.itos = dict(enumerate(tree.vocab))
         tree.merges = [tuple(m) for m in meta.get("merges", [])]
-        tree._lineage = {
-            int(k): (int(v[0]), int(v[1]))
-            for k, v in meta.get("lineage", {}).items()
-        }
+        tree._lineage = {int(k): (int(v[0]), int(v[1])) for k, v in meta.get("lineage", {}).items()}
         tree._freqs = Counter({int(k): int(v) for k, v in meta.get("freqs", {}).items()})
         tree.root = _node_from_dict(meta.get("trie", {}))
         tree._trained = bool(meta.get("trained", False))
         return tree
 
-    def save(self, path: str) -> Tuple[Path, Path]:
+    def save(self, path: str) -> tuple[Path, Path]:
         """Persist the token tree.
 
         Writes ``<path>.meta.json`` (vocabulary, merges, trie, lineage) and
@@ -766,7 +770,7 @@ class TokenTree:
         return meta_path, points_path
 
     @classmethod
-    def load(cls, path: str) -> "TokenTree":
+    def load(cls, path: str) -> TokenTree:
         """Load a previously saved token tree.
 
         Args:
@@ -830,26 +834,31 @@ class TokenTree:
         entries = []
         for tid in range(lo, hi):
             token = self.vocab[tid]
-            entries.append({
-                "id": tid,
-                "token": token,
-                "freq": self._freqs.get(tid, 0),
-                "is_special": token in SPECIAL_TOKENS,
-                "is_merged": tid in self._lineage,
-            })
+            entries.append(
+                {
+                    "id": tid,
+                    "token": token,
+                    "freq": self._freqs.get(tid, 0),
+                    "is_special": token in SPECIAL_TOKENS,
+                    "is_merged": tid in self._lineage,
+                }
+            )
         return {"total": total, "entries": entries}
 
     def show_merges(self, top_n: int = 20) -> None:
         """Log the most frequent merge rules (parent pair -> merged token)."""
         ranked = sorted(
-            ((i, m, self._freqs.get(self.stoi.get(m[0] + m[1]), 0)) for i, m in enumerate(self.merges)),
+            (
+                (i, m, self._freqs.get(self.stoi.get(m[0] + m[1]), 0))
+                for i, m in enumerate(self.merges)
+            ),
             key=lambda x: x[2],
             reverse=True,
         )
         for _, (left, right), cnt in ranked[:top_n]:
             logger.info("  %r + %r -> %r  (count=%d)", left, right, left + right, cnt)
 
-    def _ranked_merges(self) -> List[dict]:
+    def _ranked_merges(self) -> list[dict]:
         """Return all merge rules sorted by corpus frequency descending.
 
         Returns:
@@ -860,10 +869,7 @@ class TokenTree:
         if not self._trained:
             return []
         ranked = sorted(
-            (
-                (m, self._freqs.get(self.stoi.get(m[0] + m[1]), 0))
-                for m in self.merges
-            ),
+            ((m, self._freqs.get(self.stoi.get(m[0] + m[1]), 0)) for m in self.merges),
             key=lambda x: x[1],
             reverse=True,
         )
@@ -878,7 +884,7 @@ class TokenTree:
             for i, ((left, right), count) in enumerate(ranked)
         ]
 
-    def top_merges(self, top_n: int = 20) -> List[dict]:
+    def top_merges(self, top_n: int = 20) -> list[dict]:
         """Return the most frequent merge rules as data.
 
         Args:
@@ -890,7 +896,7 @@ class TokenTree:
         """
         return self._ranked_merges()[:top_n]
 
-    def search_merges(self, query: str, limit: int = 20) -> List[dict]:
+    def search_merges(self, query: str, limit: int = 20) -> list[dict]:
         """Return merge rules whose left, right, or merged token match a query.
 
         Matching is case-insensitive substring search over the rule parts.
@@ -911,9 +917,7 @@ class TokenTree:
         matches = [
             m
             for m in self._ranked_merges()
-            if q in m["left"].lower()
-            or q in m["right"].lower()
-            or q in m["token"].lower()
+            if q in m["left"].lower() or q in m["right"].lower() or q in m["token"].lower()
         ]
         return matches[:limit]
 
@@ -925,8 +929,9 @@ class TokenTree:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _add_token(self, token: str, freq: int,
-                   left_id: Optional[int] = None, right_id: Optional[int] = None) -> int:
+    def _add_token(
+        self, token: str, freq: int, left_id: int | None = None, right_id: int | None = None
+    ) -> int:
         if token in self.stoi:
             if freq:
                 self._freqs[self.stoi[token]] += freq
@@ -949,7 +954,7 @@ class TokenTree:
         node.right_id = right_id
         return tid
 
-    def _pretokenize(self, text: str, lowercase: bool = True) -> List[str]:
+    def _pretokenize(self, text: str, lowercase: bool = True) -> list[str]:
         if self._pretokenizer == "whitespace":
             return default_pretokenize(text)
         return gpt2_pretokenize(text)
@@ -965,14 +970,15 @@ class TokenTree:
 # Piece helpers
 # ----------------------------------------------------------------------
 
-def _split_pieces(token: str) -> List[str]:
+
+def _split_pieces(token: str) -> list[str]:
     """Split a token string into trie edge pieces.
 
     A piece is one character, or the multi-character "</w>" marker, or a
     special-token string. Multi-character markers are kept whole so they
     form single trie edges.
     """
-    pieces: List[str] = []
+    pieces: list[str] = []
     i = 0
     n = len(token)
     while i < n:
@@ -1005,14 +1011,13 @@ def _node_from_dict(d: dict) -> TrieNode:
     if "l" in d:
         node.left_id = d["l"]
         node.right_id = d["r"]
-    node.children = {
-        k: _node_from_dict(v) for k, v in d.get("c", {}).items()
-    }
+    node.children = {k: _node_from_dict(v) for k, v in d.get("c", {}).items()}
     return node
 
 
 def _b64(data: bytes) -> str:
     import base64
+
     return base64.b64encode(data).decode()
 
 

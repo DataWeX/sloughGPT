@@ -2,18 +2,24 @@
 
 All tests use SloNet natively (no PyTorch dependency).
 """
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import numpy as np
-import pytest
 
-from domain.training._internal.slonet import Tensor, no_grad
 from domain.training._internal.distillation import (
-    DistillationConfig, DistillationLoss, DistillationTrainer,
-    ProgressiveDistiller, create_distillation_trainer,
-    _to_np, _to_tensor,
+    DistillationConfig,
+    DistillationLoss,
+    DistillationTrainer,
+    ProgressiveDistiller,
+    _to_np,
+    _to_tensor,
+    create_distillation_trainer,
 )
+from domain.training._internal.slonet import Tensor
 
 
 class TestDistillationConfig:
@@ -98,8 +104,6 @@ class TestDistillationLoss:
         total, losses = loss_fn.forward(s_logits, t_logits, labels)
         assert isinstance(total, float)
 
-
-
     def test_zero_weights_produce_zero_total(self):
         config = DistillationConfig(alpha=0.0, beta=0.0, gamma=0.0)
         loss_fn = DistillationLoss(config)
@@ -123,6 +127,7 @@ class TestDistillationLoss:
 
 class _MockModel:
     """Minimal SloNet model stub for distillation trainer tests."""
+
     def __init__(self, vocab_size=10):
         self.vocab_size = vocab_size
         self._params = []
@@ -146,6 +151,7 @@ class _MockModel:
 
 class _FakeParam:
     """Parameter stub with grad/requires_grad attributes (no tensor math)."""
+
     def __init__(self):
         self.requires_grad = True
         self.grad = None
@@ -153,6 +159,7 @@ class _FakeParam:
 
 class _TeacherWithGradParams:
     """Teacher whose parameters expose requires_grad for freezing."""
+
     def __init__(self):
         self._params = [_FakeParam(), _FakeParam()]
 
@@ -175,6 +182,7 @@ class _TeacherWithGradParams:
 
 class _FixedShapeModel:
     """Model returning a fixed-shape logits array regardless of input."""
+
     def __init__(self, shape):
         self.shape = shape
         self._params = []
@@ -197,6 +205,7 @@ class _FixedShapeModel:
 
 class _CpuLike:
     """Object mimicking a torch tensor (detach/cpu/numpy)."""
+
     def detach(self):
         return self
 
@@ -233,6 +242,7 @@ class _BlockRaises:
 
 class _LayeredModel:
     """Model exposing named_modules with 'layer'/'block' submodules."""
+
     def __init__(self, n_blocks=2):
         self._params = []
         self._modules = []
@@ -273,12 +283,14 @@ class TestDistillationTrainer:
         teacher = _MockModel(vocab_size=10)
         student = _MockModel(vocab_size=10)
         trainer = DistillationTrainer(teacher, student, DistillationConfig())
-        assert not any(hasattr(p, 'requires_grad') and p.requires_grad for p in trainer.teacher.parameters())
+        assert not any(
+            hasattr(p, "requires_grad") and p.requires_grad for p in trainer.teacher.parameters()
+        )
 
     def test_trainer_freezes_teacher_grads(self):
         teacher = _TeacherWithGradParams()
         student = _MockModel(vocab_size=10)
-        trainer = DistillationTrainer(teacher, student, DistillationConfig())
+        DistillationTrainer(teacher, student, DistillationConfig())
         assert all(not p.requires_grad for p in teacher.parameters())
 
     def test_step_size_mismatch_trims_sequence(self):
@@ -325,7 +337,7 @@ class TestDistillationTrainer:
         labels = Tensor(np.array([[2, 3]], dtype=np.int64))
         trainer.step(inputs, labels)
         for p in student.parameters():
-            if hasattr(p, 'grad'):
+            if hasattr(p, "grad"):
                 assert p.grad is None
 
     def test_distill_logits_returns_loss(self):

@@ -4,14 +4,12 @@ Covers: connect, disconnect, health, reload, chat, chat_stream, reconnect,
 restart callback, send/recv, message framing.
 Socket is mocked to avoid real network calls.
 """
+
 from __future__ import annotations
 
-import asyncio
-import json
 import sys
 from pathlib import Path
-from threading import Event
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -19,8 +17,8 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domain.infrastructure._internal.inference_protocol import HEADER_SIZE, encode_message
 from domain.infrastructure._internal.inference_client import InferenceClient
+from domain.infrastructure._internal.inference_protocol import HEADER_SIZE, encode_message
 
 
 def _make_health_ok(model_id="m1", loaded=True):

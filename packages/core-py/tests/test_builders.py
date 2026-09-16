@@ -1,13 +1,20 @@
 """Meaningful tests for CollectorBuilder, DataSource, DataSink, DataTransformer — builder pattern, source/sink wiring, transforms."""
 
-import pytest
 from pathlib import Path
-from domain.collections._internal.builders import CollectorBuilder, DataSource, DataSink, DataTransformer
-from domain.collections._internal.sources import Record, GeneratorSource
+
+import pytest
+
+from domain.collections._internal.builders import (
+    CollectorBuilder,
+    DataSink,
+    DataSource,
+    DataTransformer,
+)
+from domain.collections._internal.sources import GeneratorSource, Record
 from domain.collections._internal.stores import MemoryStore, StatsStore
 
-
 # ── CollectorBuilder ───────────────────────────────────────────────────
+
 
 class TestCollectorBuilder:
     def test_build_requires_source(self):
@@ -30,6 +37,7 @@ class TestCollectorBuilder:
         path = str(tmp_path / "out.jsonl")
         # FileStore doesn't accept 'append' kwarg — use store() directly
         from domain.collections._internal.stores import FileStore
+
         store = FileStore(path)
         collector = CollectorBuilder().generator_source(gen).store(store).build()
         collector.collect()
@@ -45,10 +53,16 @@ class TestCollectorBuilder:
 
     def test_build_with_callback_store(self):
         captured = []
+
         def gen():
             yield Record("cb")
 
-        collector = CollectorBuilder().generator_source(gen).callback_store(lambda r: captured.append(r)).build()
+        collector = (
+            CollectorBuilder()
+            .generator_source(gen)
+            .callback_store(lambda r: captured.append(r))
+            .build()
+        )
         collector.collect()
         assert len(captured) == 1
         assert captured[0].content == "cb"
@@ -73,7 +87,9 @@ class TestCollectorBuilder:
             for i in range(5):
                 yield Record(f"r{i}")
 
-        collector = CollectorBuilder().generator_source(gen).memory_store().batch(batch_size=2).build()
+        collector = (
+            CollectorBuilder().generator_source(gen).memory_store().batch(batch_size=2).build()
+        )
         assert collector.batch_size == 2
 
     def test_stats_store_wraps(self):
@@ -137,11 +153,7 @@ class TestCollectorBuilder:
             return r
 
         collector = (
-            CollectorBuilder()
-            .generator_source(gen)
-            .memory_store()
-            .transform_filter(upper)
-            .build()
+            CollectorBuilder().generator_source(gen).memory_store().transform_filter(upper).build()
         )
         count = collector.collect()
         assert count == 1
@@ -167,11 +179,7 @@ class TestCollectorBuilder:
             yield Record("hello")
 
         collector = (
-            CollectorBuilder()
-            .generator_source(gen)
-            .memory_store()
-            .prefix_filter(">>> ")
-            .build()
+            CollectorBuilder().generator_source(gen).memory_store().prefix_filter(">>> ").build()
         )
         collector.collect()
         records = list(collector.store.read_all())
@@ -188,6 +196,7 @@ class TestCollectorBuilder:
 
 
 # ── DataSource ─────────────────────────────────────────────────────────
+
 
 class TestDataSource:
     def test_add_source(self):
@@ -238,6 +247,7 @@ class TestDataSource:
 
 # ── DataSink ───────────────────────────────────────────────────────────
 
+
 class TestDataSink:
     def test_write_single(self):
         store = MemoryStore()
@@ -272,6 +282,7 @@ class TestDataSink:
 
 
 # ── DataTransformer ────────────────────────────────────────────────────
+
 
 class TestDataTransformer:
     def test_transform_single(self):

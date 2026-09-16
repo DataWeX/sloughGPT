@@ -2,6 +2,7 @@
 
 import threading
 import time
+
 from domain.infrastructure._internal.model_server import CircuitBreaker, CircuitBreakerState
 
 

@@ -11,7 +11,11 @@ Usage:
     python train_tokenizer.py sample --tokenizer my_tokenizer.json
 """
 
-import sys, os, json, argparse, time
+import argparse
+import os
+import sys
+import time
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages", "core-py"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "apps", "api", "server"))
 
@@ -23,7 +27,7 @@ def cmd_train(args):
     texts = []
     for path in args.files:
         print(f"Loading {path}...", file=sys.stderr)
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             text = f.read()
         lines = [l.strip() for l in text.split("\n") if l.strip()]
         print(f"  {len(lines)} lines, {len(text)} chars", file=sys.stderr)
@@ -33,15 +37,26 @@ def cmd_train(args):
         print("Error: no text loaded", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Training BPE: vocab_size={args.vocab_size}, min_freq={args.min_frequency}...", file=sys.stderr)
+    print(
+        f"Training BPE: vocab_size={args.vocab_size}, min_freq={args.min_frequency}...",
+        file=sys.stderr,
+    )
     start = time.perf_counter()
     mgr = get_tokenizer_manager()
-    stats = mgr.train(texts, vocab_size=args.vocab_size, min_frequency=args.min_frequency, lowercase=args.lowercase)
+    stats = mgr.train(
+        texts,
+        vocab_size=args.vocab_size,
+        min_frequency=args.min_frequency,
+        lowercase=args.lowercase,
+    )
     elapsed = time.perf_counter() - start
 
     print(f"Trained in {elapsed:.2f}s", file=sys.stderr)
     print(f"  Vocab: {stats['vocab_size']} tokens", file=sys.stderr)
-    print(f"  Chars: {stats['base_chars']} | Subwords: {stats['merged_subwords']} | Merges: {stats['total_merges_learned']}", file=sys.stderr)
+    print(
+        f"  Chars: {stats['base_chars']} | Subwords: {stats['merged_subwords']} | Merges: {stats['total_merges_learned']}",
+        file=sys.stderr,
+    )
 
     output = args.output
     if not output:
@@ -55,9 +70,9 @@ def cmd_train(args):
     test = "the quick brown fox jumps over the lazy dog"
     ids = mgr.tokenize(test)
     rec = mgr.detokenize(ids)
-    print(f"\nSample: \"{test}\"", file=sys.stderr)
+    print(f'\nSample: "{test}"', file=sys.stderr)
     print(f"  Tokens: {len(ids)} (chars: {len(test)})", file=sys.stderr)
-    print(f"  Ratio: {len(test)/max(len(ids),1):.1f}x compression", file=sys.stderr)
+    print(f"  Ratio: {len(test) / max(len(ids), 1):.1f}x compression", file=sys.stderr)
     print(f"  Roundtrip: {'OK' if test == rec else 'FAIL'}", file=sys.stderr)
 
 
@@ -87,7 +102,9 @@ def cmd_encode(args):
     print(f"Text:   {args.text}")
     print(f"IDs:    {ids}")
     print(f"Tokens: {tokens}")
-    print(f"Count:  {len(ids)} tokens ({len(args.text)} chars, {len(args.text)/max(len(ids),1):.1f}x)")
+    print(
+        f"Count:  {len(ids)} tokens ({len(args.text)} chars, {len(args.text) / max(len(ids), 1):.1f}x)"
+    )
 
 
 def cmd_decode(args):
@@ -103,10 +120,33 @@ def cmd_sample(args):
     """Show sample tokenizations for common words."""
     mgr = _load_manager(args.tokenizer)
     tok = mgr.get_tokenizer()
-    words = ["the", "and", "to", "of", "a", "in", "that", "is",
-             "was", "he", "for", "it", "with", "as", "his", "on",
-             "hello", "world", "machine", "learning", "neural", "network",
-             "artificial", "intelligence", "transformer"]
+    words = [
+        "the",
+        "and",
+        "to",
+        "of",
+        "a",
+        "in",
+        "that",
+        "is",
+        "was",
+        "he",
+        "for",
+        "it",
+        "with",
+        "as",
+        "his",
+        "on",
+        "hello",
+        "world",
+        "machine",
+        "learning",
+        "neural",
+        "network",
+        "artificial",
+        "intelligence",
+        "transformer",
+    ]
 
     print(f"{'Word':<20} {'Tokens':<30} {'Count'}")
     print("-" * 60)
@@ -134,7 +174,9 @@ def main():
     p_train.add_argument("--vocab-size", type=int, default=1024, help="Target vocabulary size")
     p_train.add_argument("--min-frequency", type=int, default=2, help="Minimum pair frequency")
     p_train.add_argument("--output", "-o", help="Output file path")
-    p_train.add_argument("--no-lowercase", dest="lowercase", action="store_false", help="Don't lowercase text")
+    p_train.add_argument(
+        "--no-lowercase", dest="lowercase", action="store_false", help="Don't lowercase text"
+    )
     p_train.set_defaults(func=cmd_train)
 
     p_inspect = sub.add_parser("inspect", help="Show tokenizer info")

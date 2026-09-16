@@ -15,31 +15,34 @@ Architecture:
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import os
 import re
-import asyncio
-import logging
 import tempfile
-from typing import Optional, List, Dict, Any, Callable
+from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from contextlib import contextmanager
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("slo.agents")
 
 
 # ============ Security & Safety ============
 
+
 @dataclass
 class SecurityConfig:
     """Security configuration for tool execution."""
+
     max_execution_time: int = 30
     max_memory_mb: int = 512
     max_file_size_mb: int = 100
     allow_network: bool = False
-    allowed_directories: List[str] = field(default_factory=list)
-    blocked_patterns: List[str] = field(default_factory=list)
+    allowed_directories: list[str] = field(default_factory=list)
+    blocked_patterns: list[str] = field(default_factory=list)
     rate_limit_per_minute: int = 60
 
 
@@ -66,7 +69,7 @@ class SecurityBoundary:
         "temp",
     ]
 
-    def __init__(self, config: Optional[SecurityConfig] = None):
+    def __init__(self, config: SecurityConfig | None = None):
         self.config = config or SecurityConfig()
         self._blocked_re = [re.compile(p) for p in self.BLOCKED_PATTERNS]
 
@@ -88,8 +91,10 @@ class SecurityBoundary:
 
 # ============ Tool System ============
 
+
 class ToolCapability(Enum):
     """Tool capability levels."""
+
     CODE_EXECUTION = "code_execution"
     FILE_READ = "file_read"
     FILE_SEARCH = "file_search"
@@ -103,9 +108,10 @@ class ToolCapability(Enum):
 @dataclass
 class ToolDefinition:
     """Definition of a tool for the agent."""
+
     name: str
     description: str
-    parameters: Dict[str, Any]
+    parameters: dict[str, Any]
     capability: ToolCapability
     requires_approval: bool = False
 
@@ -113,10 +119,11 @@ class ToolDefinition:
 @dataclass
 class ToolExecutionContext:
     """Context for tool execution."""
+
     session_id: str
     user_id: str
     timestamp: float
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class ToolRunner:
@@ -126,7 +133,7 @@ class ToolRunner:
     This is the core infrastructure that agent uses internally.
     """
 
-    def __init__(self, security: Optional[SecurityBoundary] = None):
+    def __init__(self, security: SecurityBoundary | None = None):
         self.security = security or SecurityBoundary()
         self._executed_count = 0
         self._last_reset = asyncio.get_event_loop().time()
@@ -134,9 +141,9 @@ class ToolRunner:
     async def execute(
         self,
         tool_name: str,
-        args: Dict[str, Any],
+        args: dict[str, Any],
         context: ToolExecutionContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute tool internally (called by agent, not API)."""
         # Rate limit check
         if not self._check_rate_limit():
@@ -176,9 +183,9 @@ class ToolRunner:
 
     async def _run_code(
         self,
-        args: Dict[str, Any],
+        args: dict[str, Any],
         context: ToolExecutionContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute code internally."""
         code = args.get("code", "")
         language = args.get("language", "python")
@@ -195,7 +202,7 @@ class ToolRunner:
                 timeout=self.security.config.max_execution_time,
             )
             return {"success": True, **result}
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {"error": "Execution timed out", "success": False}
         except Exception as e:
             return {"error": str(e), "success": False}
@@ -204,7 +211,7 @@ class ToolRunner:
         self,
         code: str,
         language: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute code in subprocess."""
         suffix = ".py" if language == "python" else ".js"
 
@@ -236,9 +243,9 @@ class ToolRunner:
 
     async def _run_file_search(
         self,
-        args: Dict[str, Any],
+        args: dict[str, Any],
         context: ToolExecutionContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Search files internally."""
         query = args.get("query", "")
         path = args.get("path", ".")
@@ -258,10 +265,14 @@ class ToolRunner:
         query: str,
         path: str,
         limit: int,
-    ) -> List[str]:
+    ) -> list[str]:
         """Search files using grep."""
         proc = await asyncio.create_subprocess_exec(
-            "grep", "-r", "-l", query, path,
+            "grep",
+            "-r",
+            "-l",
+            query,
+            path,
             "--max-count=0",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -273,9 +284,9 @@ class ToolRunner:
 
     async def _run_web_search(
         self,
-        args: Dict[str, Any],
+        args: dict[str, Any],
         context: ToolExecutionContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Search web using libraries."""
         query = args.get("query", "")
 
@@ -292,7 +303,7 @@ class ToolRunner:
         self,
         query: str,
         limit: int = 10,
-    ) -> List[Dict[str, str]]:
+    ) -> list[dict[str, str]]:
         """Search web using httpx + BeautifulSoup."""
         import httpx
         from bs4 import BeautifulSoup
@@ -309,18 +320,20 @@ class ToolRunner:
                 title = result.select_one(".result__title")
                 snippet = result.select_one(".result__snippet")
 
-                results.append({
-                    "title": title.get_text(strip=True) if title else "",
-                    "snippet": snippet.get_text(strip=True) if snippet else "",
-                })
+                results.append(
+                    {
+                        "title": title.get_text(strip=True) if title else "",
+                        "snippet": snippet.get_text(strip=True) if snippet else "",
+                    }
+                )
 
             return results
 
     async def _run_citation(
         self,
-        args: Dict[str, Any],
+        args: dict[str, Any],
         context: ToolExecutionContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate citations internally."""
         text = args.get("text", "")
         sources = args.get("sources", [])
@@ -334,8 +347,8 @@ class ToolRunner:
     def _generate_citations(
         self,
         text: str,
-        sources: List[Dict[str, str]],
-    ) -> List[Dict[str, Any]]:
+        sources: list[dict[str, str]],
+    ) -> list[dict[str, Any]]:
         """Generate citation objects."""
         words = set(text.lower().split())
         citations = []
@@ -346,20 +359,22 @@ class ToolRunner:
             overlap = words & source_words
 
             if overlap:
-                citations.append({
-                    "id": f"source_{i}",
-                    "text": source.get("text", "")[:200],
-                    "url": source.get("url", ""),
-                    "relevance": len(overlap) / len(source_words) if source_words else 0,
-                })
+                citations.append(
+                    {
+                        "id": f"source_{i}",
+                        "text": source.get("text", "")[:200],
+                        "url": source.get("url", ""),
+                        "relevance": len(overlap) / len(source_words) if source_words else 0,
+                    }
+                )
 
         return sorted(citations, key=lambda x: x["relevance"], reverse=True)
 
     async def _run_file_read(
         self,
-        args: Dict[str, Any],
+        args: dict[str, Any],
         context: ToolExecutionContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Read a file's contents."""
         path = args.get("path", "")
         if not path:
@@ -369,7 +384,7 @@ class ToolRunner:
                 return {"error": f"File not found: {path}", "success": False}
             if os.path.getsize(path) > 1_000_000:
                 return {"error": "File too large (>1MB)", "success": False}
-            with open(path, "r", errors="replace") as f:
+            with open(path, errors="replace") as f:
                 content = f.read()
             return {"success": True, "content": content}
         except Exception as e:
@@ -377,15 +392,16 @@ class ToolRunner:
 
     async def _run_knowledge_retrieval(
         self,
-        args: Dict[str, Any],
+        args: dict[str, Any],
         context: ToolExecutionContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Search knowledge base for relevant information."""
         query = args.get("query", "")
         if not query:
             return {"error": "query required", "success": False}
         try:
             import glob as globmod
+
             workspace = os.environ.get("WORKSPACE_ROOT", ".")
             patterns = ["docs/**/*.md", "README*", "*.md"]
             files = []
@@ -395,13 +411,15 @@ class ToolRunner:
             query_lower = query.lower()
             for fp in files[:50]:
                 try:
-                    with open(fp, "r", errors="replace") as f:
+                    with open(fp, errors="replace") as f:
                         text = f.read(8192)
                     if query_lower in text.lower():
-                        matches.append({
-                            "file": os.path.relpath(fp, workspace),
-                            "snippet": text[:500].strip(),
-                        })
+                        matches.append(
+                            {
+                                "file": os.path.relpath(fp, workspace),
+                                "snippet": text[:500].strip(),
+                            }
+                        )
                 except Exception:
                     continue
             return {"success": True, "matches": matches, "count": len(matches)}
@@ -410,9 +428,9 @@ class ToolRunner:
 
     async def _run_image_analysis(
         self,
-        args: Dict[str, Any],
+        args: dict[str, Any],
         context: ToolExecutionContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Analyze an image using VisionCNN — embedding, caption, and object detection."""
         image_path = args.get("image_path", "")
         if not image_path:
@@ -426,6 +444,7 @@ class ToolRunner:
 
             try:
                 from domains.multimodal.vision import VisionCNN
+
                 vision = VisionCNN()
                 caption_result = vision.caption(image_path)
                 objects = vision.detect(image_path)
@@ -446,7 +465,7 @@ class ToolRunner:
                     "embedding_stats": {
                         "mean": round(float(embedding.mean()), 4),
                         "std": round(float(embedding.std()), 4),
-                        "l2_norm": round(float((embedding ** 2).sum() ** 0.5), 4),
+                        "l2_norm": round(float((embedding**2).sum() ** 0.5), 4),
                     },
                 }
             except ImportError:
@@ -469,9 +488,9 @@ class ToolRunner:
 
     async def _run_data_analysis(
         self,
-        args: Dict[str, Any],
+        args: dict[str, Any],
         context: ToolExecutionContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Analyze a data file (CSV/JSON/JSONL)."""
         data_path = args.get("data_path", "")
         if not data_path:
@@ -479,15 +498,21 @@ class ToolRunner:
         try:
             if not os.path.exists(data_path):
                 return {"error": f"Data file not found: {data_path}", "success": False}
-            with open(data_path, "r", errors="replace") as f:
+            with open(data_path, errors="replace") as f:
                 raw = f.read(500_000)
             ext = os.path.splitext(data_path)[1].lower()
             if ext == ".csv":
                 lines = raw.strip().split("\n")
                 headers = lines[0].split(",") if lines else []
-                return {"success": True, "rows": len(lines) - 1, "columns": len(headers), "headers": headers}
+                return {
+                    "success": True,
+                    "rows": len(lines) - 1,
+                    "columns": len(headers),
+                    "headers": headers,
+                }
             elif ext in (".json", ".jsonl"):
                 import json
+
                 data = (
                     json.loads(raw)
                     if ext == ".json"
@@ -504,10 +529,12 @@ class ToolRunner:
 
 # ============ Agent ============
 
+
 @dataclass
 class AgentConfig:
     """Configuration for agent."""
-    tools: List[ToolCapability] = field(
+
+    tools: list[ToolCapability] = field(
         default_factory=lambda: [
             ToolCapability.CODE_EXECUTION,
             ToolCapability.FILE_READ,
@@ -515,7 +542,7 @@ class AgentConfig:
             ToolCapability.KNOWLEDGE_RETRIEVAL,
         ]
     )
-    security: Optional[SecurityConfig] = None
+    security: SecurityConfig | None = None
     max_iterations: int = 10
     timeout: int = 120
     instructions: str = ""
@@ -533,13 +560,14 @@ class Agent:
     reasoning to plan tool usage. Falls back to keyword matching otherwise.
     """
 
-    def __init__(self, config: Optional[AgentConfig] = None,
-                 inference_fn: Optional[Callable] = None):
+    def __init__(
+        self, config: AgentConfig | None = None, inference_fn: Callable | None = None
+    ):
         self.config = config or AgentConfig()
         security = SecurityBoundary(self.config.security)
         self._runner = ToolRunner(security)
         self._inference_fn = inference_fn
-        self._sessions: Dict[str, Dict[str, Any]] = {}
+        self._sessions: dict[str, dict[str, Any]] = {}
 
     def set_inference_fn(self, fn: Callable) -> None:
         """Set or replace the inference function for LLM planning."""
@@ -550,7 +578,7 @@ class Agent:
         user_request: str,
         session_id: str,
         user_id: str = "default",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute agent on user request.
 
@@ -571,10 +599,12 @@ class Agent:
                 args,
                 context,
             )
-            results.append({
-                "tool": tool_name,
-                "result": result,
-            })
+            results.append(
+                {
+                    "tool": tool_name,
+                    "result": result,
+                }
+            )
 
         # Generate response (use inference if no tools ran)
         if not results and self._inference_fn:
@@ -591,8 +621,12 @@ class Agent:
     def _generate_response(self, request: str, context: ToolExecutionContext) -> str:
         """Generate a response via LLM when no tools are needed."""
         try:
-            agent_instructions = getattr(self.config, 'instructions', '')
-            system = f"You are an AI assistant.\n{agent_instructions}" if agent_instructions else "You are an AI assistant."
+            agent_instructions = getattr(self.config, "instructions", "")
+            system = (
+                f"You are an AI assistant.\n{agent_instructions}"
+                if agent_instructions
+                else "You are an AI assistant."
+            )
             prompt = f"{system}\n\nUser: {request}\nAssistant:"
             result = self._inference_fn(prompt)
             if isinstance(result, dict) and "text" in result:
@@ -611,6 +645,7 @@ class Agent:
     ) -> ToolExecutionContext:
         """Get or create session context."""
         import time
+
         return ToolExecutionContext(
             session_id=f"{user_id}:{session_id}",
             user_id=user_id,
@@ -621,7 +656,7 @@ class Agent:
         self,
         request: str,
         context: ToolExecutionContext,
-    ) -> List[tuple[str, Dict[str, Any]]]:
+    ) -> list[tuple[str, dict[str, Any]]]:
         """
         Plan which tools to use.
 
@@ -635,7 +670,7 @@ class Agent:
     def _plan_with_keywords(
         self,
         request: str,
-    ) -> List[tuple[str, Dict[str, Any]]]:
+    ) -> list[tuple[str, dict[str, Any]]]:
         """Plan tools using simple keyword matching."""
         plan = []
         lower = request.lower()
@@ -643,73 +678,89 @@ class Agent:
         if "code" in lower or "execute" in lower or "run" in lower:
             code_match = re.search(r"```(\w+)?\n(.+?)```", request, re.DOTALL)
             if code_match:
-                plan.append((
-                    ToolCapability.CODE_EXECUTION.value,
-                    {"code": code_match.group(2), "language": "python"},
-                ))
+                plan.append(
+                    (
+                        ToolCapability.CODE_EXECUTION.value,
+                        {"code": code_match.group(2), "language": "python"},
+                    )
+                )
 
         if "search" in lower or "find" in lower:
             query = re.search(r"(?:search|find)\s+(?:for\s+)?['\"](.+?)['\"]", lower)
             if query:
-                plan.append((
-                    ToolCapability.FILE_SEARCH.value,
-                    {"query": query.group(1)},
-                ))
+                plan.append(
+                    (
+                        ToolCapability.FILE_SEARCH.value,
+                        {"query": query.group(1)},
+                    )
+                )
 
         if "web" in lower or "online" in lower or "internet" in lower or "browser" in lower:
             query = re.search(r"['\"](.+?)['\"]", lower)
             if query:
-                plan.append((
-                    ToolCapability.WEB_SEARCH.value,
-                    {"query": query.group(1)},
-                ))
+                plan.append(
+                    (
+                        ToolCapability.WEB_SEARCH.value,
+                        {"query": query.group(1)},
+                    )
+                )
 
         if "cite" in lower or "citation" in lower or "source" in lower:
             cite_match = re.search(r"(?:cite|citation)\s+(?:your\s+)?(?:sources?\s+)?(.+)$", lower)
             if cite_match:
-                plan.append((
-                    ToolCapability.CITATION.value,
-                    {"text": cite_match.group(1).strip()},
-                ))
+                plan.append(
+                    (
+                        ToolCapability.CITATION.value,
+                        {"text": cite_match.group(1).strip()},
+                    )
+                )
 
         if "read" in lower or "open" in lower or "show" in lower:
             path_match = re.search(r"(?:read|open|show)\s+(?:file\s+)?['\"](.+?)['\"]", lower)
             if path_match:
-                plan.append((
-                    ToolCapability.FILE_READ.value,
-                    {"path": path_match.group(1)},
-                ))
+                plan.append(
+                    (
+                        ToolCapability.FILE_READ.value,
+                        {"path": path_match.group(1)},
+                    )
+                )
 
         if "knowledge" in lower or "recall" in lower:
             query_match = re.search(r"(?:knowledge|recall)\s+(.+)$", lower)
             if query_match:
-                plan.append((
-                    ToolCapability.KNOWLEDGE_RETRIEVAL.value,
-                    {"query": query_match.group(1).strip()},
-                ))
+                plan.append(
+                    (
+                        ToolCapability.KNOWLEDGE_RETRIEVAL.value,
+                        {"query": query_match.group(1).strip()},
+                    )
+                )
 
         if "analyze" in lower or "data" in lower or "stats" in lower:
             data_match = re.search(r"(?:analyze|stats|data)\s+(.+)$", lower)
             if data_match:
-                plan.append((
-                    ToolCapability.DATA_ANALYSIS.value,
-                    {"data_path": data_match.group(1).strip()},
-                ))
+                plan.append(
+                    (
+                        ToolCapability.DATA_ANALYSIS.value,
+                        {"data_path": data_match.group(1).strip()},
+                    )
+                )
 
         if "image" in lower or "photo" in lower or "picture" in lower:
             img_match = re.search(r"(?:image|photo|picture)\s+(.+)$", lower)
             if img_match:
-                plan.append((
-                    ToolCapability.IMAGE_ANALYSIS.value,
-                    {"image_path": img_match.group(1).strip()},
-                ))
+                plan.append(
+                    (
+                        ToolCapability.IMAGE_ANALYSIS.value,
+                        {"image_path": img_match.group(1).strip()},
+                    )
+                )
 
         return plan
 
     async def _plan_with_llm(
         self,
         request: str,
-    ) -> List[tuple[str, Dict[str, Any]]]:
+    ) -> list[tuple[str, dict[str, Any]]]:
         """Plan tools using LLM reasoning."""
         tool_names = [c.value for c in ToolCapability]
         prompt = (
@@ -742,7 +793,7 @@ class Agent:
     def _compose_response(
         self,
         request: str,
-        tool_results: List[Dict[str, Any]],
+        tool_results: list[dict[str, Any]],
     ) -> str:
         """Compose final response from tool results."""
         outputs = []
@@ -766,8 +817,8 @@ class Agent:
 
 # ============ Singleton Instances ============
 
-_agent: Optional[Agent] = None
-_runner: Optional[ToolRunner] = None
+_agent: Agent | None = None
+_runner: ToolRunner | None = None
 
 
 def get_agent() -> Agent:
@@ -808,13 +859,23 @@ __all__ = [
 
 # Lazy import multi-agent components
 def __getattr__(name: str) -> Any:
-    if name in ("MultiAgentOrchestrator", "SpecializedAgent", "AgentTask",
-                 "TaskStatus", "get_orchestrator", "reset_orchestrator"):
+    if name in (
+        "MultiAgentOrchestrator",
+        "SpecializedAgent",
+        "AgentTask",
+        "TaskStatus",
+        "get_orchestrator",
+        "reset_orchestrator",
+    ):
         from .multi import (  # noqa: F401
-            MultiAgentOrchestrator, SpecializedAgent,
-            AgentTask, TaskStatus,
-            get_orchestrator, reset_orchestrator,
+            AgentTask,
+            MultiAgentOrchestrator,
+            SpecializedAgent,
+            TaskStatus,
+            get_orchestrator,
+            reset_orchestrator,
         )
+
         globals().update(locals())
         return globals()[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

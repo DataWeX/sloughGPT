@@ -98,14 +98,13 @@ class HealthRouter:
                 asyncio.to_thread(ctrl.get_basic_health),
                 timeout=5.0,
             )
-        except (asyncio.TimeoutError, Exception):
+        except (TimeoutError, Exception):
             # Fast fallback during cold start — read lightweight sources only
             import state as server_state
 
             data = {
                 "status": "healthy",
-                "model_loaded": server_state.model is not None
-                or server_state.provider is not None,
+                "model_loaded": server_state.model is not None or server_state.provider is not None,
                 "model_type": getattr(server_state, "model_type", None),
                 "lifecycle": {"phase": STARTUP_PHASE.get("phase", "initializing")},
                 "model_loading": STARTUP_PHASE.get("phase") == "loading_model",
@@ -192,8 +191,8 @@ class HealthRouter:
             Envelope with detailed startup diagnostics.
         """
         from infrastructure.staged_loader import get_staged_loader
-        from infrastructure.startup_preloader import get_preload_status
         from infrastructure.startup_cache import get_startup_cache
+        from infrastructure.startup_preloader import get_preload_status
 
         loader = get_staged_loader()
         status = loader.get_status()
@@ -226,14 +225,16 @@ class HealthRouter:
         from infrastructure.startup_history import get_startup_history
 
         history = get_startup_history()
-        return success_response(data={
-            "records": history.get_records(limit=10),
-            "stats": history.get_stats(),
-            "stage_stats": history.get_stage_stats(),
-            "slow_startups": history.get_slow_startups(threshold_seconds=60.0),
-            "alerts": history.get_alerts(),
-            "suggestions": history.get_optimization_suggestions(),
-        })
+        return success_response(
+            data={
+                "records": history.get_records(limit=10),
+                "stats": history.get_stats(),
+                "stage_stats": history.get_stage_stats(),
+                "slow_startups": history.get_slow_startups(threshold_seconds=60.0),
+                "alerts": history.get_alerts(),
+                "suggestions": history.get_optimization_suggestions(),
+            }
+        )
 
     @endpoint("health.startup_diagnostics")
     async def startup_diagnostics(self) -> dict:
@@ -263,6 +264,7 @@ class HealthRouter:
 
         # Get environment config
         import os
+
         env_config = {
             "autoload_model": os.environ.get("SLO_AUTOLOAD_MODEL", ""),
             "autoload_device": os.environ.get("SLO_AUTOLOAD_DEVICE", ""),
@@ -270,22 +272,21 @@ class HealthRouter:
             "log_level": os.environ.get("SLO_LOG_LEVEL", "INFO"),
         }
 
-        return success_response(data={
-            "stage": loader.stage_name,
-            "stage_value": int(loader.stage),
-            "elapsed_seconds": round(loader.elapsed, 1),
-            "model_progress": round(loader._model_progress, 2),
-            "model_progress_message": loader._model_progress_message,
-            "hooks": {
-                name: info.to_dict()
-                for name, info in loader._hook_infos.items()
-            },
-            "errors": dict(loader._errors),
-            "memory_mb": round(mem_info.rss / 1024 / 1024, 1),
-            "pid": process.pid,
-            "env_config": env_config,
-            "history_stats": history.get_stats(),
-        })
+        return success_response(
+            data={
+                "stage": loader.stage_name,
+                "stage_value": int(loader.stage),
+                "elapsed_seconds": round(loader.elapsed, 1),
+                "model_progress": round(loader._model_progress, 2),
+                "model_progress_message": loader._model_progress_message,
+                "hooks": {name: info.to_dict() for name, info in loader._hook_infos.items()},
+                "errors": dict(loader._errors),
+                "memory_mb": round(mem_info.rss / 1024 / 1024, 1),
+                "pid": process.pid,
+                "env_config": env_config,
+                "history_stats": history.get_stats(),
+            }
+        )
 
     @endpoint("health.startup_config")
     async def startup_config(self) -> dict:
@@ -332,12 +333,14 @@ class HealthRouter:
             status = "initializing"
             message = "Server starting"
 
-        return success_response(data={
-            "status": status,
-            "message": message,
-            "stage": loader.stage_name,
-            "elapsed_seconds": round(loader.elapsed, 1),
-        })
+        return success_response(
+            data={
+                "status": status,
+                "message": message,
+                "stage": loader.stage_name,
+                "elapsed_seconds": round(loader.elapsed, 1),
+            }
+        )
 
     @endpoint("health.startup_compare")
     async def startup_compare(self, run_a: int = 0, run_b: int = 1) -> dict:
@@ -363,10 +366,12 @@ class HealthRouter:
 
         comparison = history.compare_runs(run_a, run_b)
         if comparison is None:
-            return success_response(data={
-                "error": "Invalid run indices",
-                "available_runs": len(records),
-            })
+            return success_response(
+                data={
+                    "error": "Invalid run indices",
+                    "available_runs": len(records),
+                }
+            )
 
         return success_response(data=comparison)
 
@@ -395,8 +400,8 @@ class HealthRouter:
         Returns:
             Envelope with benchmark results.
         """
-        from infrastructure.startup_history import get_startup_history
         from infrastructure.staged_loader import get_staged_loader
+        from infrastructure.startup_history import get_startup_history
 
         history = get_startup_history()
         loader = get_staged_loader()
@@ -433,16 +438,18 @@ class HealthRouter:
         if stats.get("failure_rate", 0) > 0.1:
             recommendations.append("High failure rate detected - check system resources")
 
-        return success_response(data={
-            "current_duration": round(current_duration, 2),
-            "avg_duration": round(avg_duration, 2),
-            "p50_duration": round(p50_duration, 2),
-            "p95_duration": round(p95_duration, 2),
-            "grade": grade,
-            "percentile": percentile,
-            "recommendations": recommendations,
-            "sample_size": stats.get("count", 0),
-        })
+        return success_response(
+            data={
+                "current_duration": round(current_duration, 2),
+                "avg_duration": round(avg_duration, 2),
+                "p50_duration": round(p50_duration, 2),
+                "p95_duration": round(p95_duration, 2),
+                "grade": grade,
+                "percentile": percentile,
+                "recommendations": recommendations,
+                "sample_size": stats.get("count", 0),
+            }
+        )
 
     @endpoint("health.startup_health")
     async def startup_health_check(self) -> dict:
@@ -455,9 +462,9 @@ class HealthRouter:
             Envelope with aggregated startup health.
         """
         from infrastructure.staged_loader import get_staged_loader
+        from infrastructure.startup_cache import get_startup_cache
         from infrastructure.startup_history import get_startup_history
         from infrastructure.startup_preloader import get_preload_status
-        from infrastructure.startup_cache import get_startup_cache
         from infrastructure.startup_rollback import get_startup_rollback
 
         loader = get_staged_loader()
@@ -499,22 +506,24 @@ class HealthRouter:
         if rollback_status.get("failure_count", 0) > 0:
             issues.append(f"Rollback recorded {rollback_status['failure_count']} failures")
 
-        return success_response(data={
-            "status": status,
-            "stage": loader.current_stage.name,
-            "elapsed": round(loader.elapsed, 2),
-            "model_progress": round(loader.model_progress, 2),
-            "preloader_running": preload.running,
-            "cache_entries": cache_stats.entries,
-            "issues": issues,
-            "components": {
-                "loader": "ok" if not errors else "error",
-                "history": "ok",
-                "preloader": "ok" if preload.finished or not preload.running else "running",
-                "cache": "ok",
-                "rollback": "ok" if not rollback_status.get("failure_count") else "warning",
-            },
-        })
+        return success_response(
+            data={
+                "status": status,
+                "stage": loader.current_stage.name,
+                "elapsed": round(loader.elapsed, 2),
+                "model_progress": round(loader.model_progress, 2),
+                "preloader_running": preload.running,
+                "cache_entries": cache_stats.entries,
+                "issues": issues,
+                "components": {
+                    "loader": "ok" if not errors else "error",
+                    "history": "ok",
+                    "preloader": "ok" if preload.finished or not preload.running else "running",
+                    "cache": "ok",
+                    "rollback": "ok" if not rollback_status.get("failure_count") else "warning",
+                },
+            }
+        )
 
     @endpoint("health.startup_export")
     async def startup_export(self) -> dict:
@@ -526,21 +535,23 @@ class HealthRouter:
         Returns:
             Envelope with exported startup data.
         """
+        from infrastructure.startup_cache import get_startup_cache
         from infrastructure.startup_history import get_startup_history
         from infrastructure.startup_profiler import get_profiler
-        from infrastructure.startup_cache import get_startup_cache
 
         history = get_startup_history()
         profiler = get_profiler()
         cache = get_startup_cache()
 
-        return success_response(data={
-            "records": history.export_history(),
-            "stats": history.get_stats(),
-            "profile": profiler.get_profile().to_dict(),
-            "cache_stats": cache.get_stats().to_dict(),
-            "exported_at": time.time(),
-        })
+        return success_response(
+            data={
+                "records": history.export_history(),
+                "stats": history.get_stats(),
+                "profile": profiler.get_profile().to_dict(),
+                "cache_stats": cache.get_stats().to_dict(),
+                "exported_at": time.time(),
+            }
+        )
 
     @endpoint("health.startup_webhooks")
     async def startup_webhooks(self) -> dict:
@@ -566,7 +577,7 @@ class HealthRouter:
         Returns:
             SSE stream with startup progress events.
         """
-        from infrastructure.staged_loader import Stage, get_staged_loader
+        from infrastructure.staged_loader import get_staged_loader
 
         async def generate():
             loader = get_staged_loader()
@@ -582,38 +593,42 @@ class HealthRouter:
                 stage = status.get("stage", "unknown")
 
                 # Send event
-                data = json.dumps({
-                    "stream": "startup",
-                    "data": {
-                        "stage": stage,
-                        "stage_value": status.get("stage_value", 0),
-                        "elapsed_seconds": status.get("elapsed_seconds", 0),
-                        "model_progress": status.get("model_progress", 0),
-                        "model_progress_message": status.get("model_progress_message", ""),
-                        "hooks": status.get("hooks", {}),
-                        "errors": status.get("errors", {}),
-                    },
-                    "event": f"startup_{stage}",
-                    "id": event_count,
-                })
+                data = json.dumps(
+                    {
+                        "stream": "startup",
+                        "data": {
+                            "stage": stage,
+                            "stage_value": status.get("stage_value", 0),
+                            "elapsed_seconds": status.get("elapsed_seconds", 0),
+                            "model_progress": status.get("model_progress", 0),
+                            "model_progress_message": status.get("model_progress_message", ""),
+                            "hooks": status.get("hooks", {}),
+                            "errors": status.get("errors", {}),
+                        },
+                        "event": f"startup_{stage}",
+                        "id": event_count,
+                    }
+                )
                 yield f"data: {data}\n\n"
                 event_count += 1
 
                 # Stop pushing once we reach BACKGROUND stage
                 if stage in ("background", "ready"):
                     # Send final event
-                    final_data = json.dumps({
-                        "stream": "startup",
-                        "data": {
-                            "stage": "complete",
-                            "stage_value": 3,
-                            "elapsed_seconds": status.get("elapsed_seconds", 0),
-                            "model_progress": 1.0,
-                            "model_progress_message": "Startup complete",
-                        },
-                        "event": "startup_complete",
-                        "id": event_count,
-                    })
+                    final_data = json.dumps(
+                        {
+                            "stream": "startup",
+                            "data": {
+                                "stage": "complete",
+                                "stage_value": 3,
+                                "elapsed_seconds": status.get("elapsed_seconds", 0),
+                                "model_progress": 1.0,
+                                "model_progress_message": "Startup complete",
+                            },
+                            "event": "startup_complete",
+                            "id": event_count,
+                        }
+                    )
                     yield f"data: {final_data}\n\n"
                     break
 
@@ -644,10 +659,12 @@ class HealthRouter:
 
         profiler = get_profiler()
         profile = profiler.get_profile()
-        return success_response(data={
-            "profile": profile.to_dict(),
-            "summary": profiler.get_summary(),
-        })
+        return success_response(
+            data={
+                "profile": profile.to_dict(),
+                "summary": profiler.get_summary(),
+            }
+        )
 
     @endpoint("health.debug_info")
     async def debug_info(self) -> dict:
@@ -757,7 +774,7 @@ class HealthRouter:
                 "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
                 "memory_percent": detailed.get("system", {}).get("memory_percent"),
             }
-        except (asyncio.TimeoutError, Exception):
+        except (TimeoutError, Exception):
             # Fast fallback during cold start
             import state as server_state
 
@@ -766,8 +783,7 @@ class HealthRouter:
                 "status": "starting",
                 "summary": "Server is starting up.",
                 "diagnoses": [],
-                "model_loaded": server_state.model is not None
-                or server_state.provider is not None,
+                "model_loaded": server_state.model is not None or server_state.provider is not None,
                 "model_loading": STARTUP_PHASE.get("phase") == "loading_model",
                 "model_type": getattr(server_state, "model_type", None),
                 "soul": None,
@@ -893,6 +909,7 @@ class HealthRouter:
         # Training
         try:
             from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
+
             tracker = TrainingOutcomeTracker()
             stats = tracker.get_stats()
             services["training"] = {"status": "ok", "total_runs": stats.get("total_runs", 0)}
@@ -901,6 +918,7 @@ class HealthRouter:
         # Settings
         try:
             from domain.settings._internal.persistent import get_settings
+
             ps = get_settings()
             services["settings"] = {"status": "ok", "sections": list(vars(ps.settings).keys())}
         except Exception as e:
@@ -908,6 +926,7 @@ class HealthRouter:
         # Plugins
         try:
             from domain.plugins import PluginManager
+
             pm = PluginManager()
             services["plugins"] = {"status": "ok", "loaded": len(pm.list_plugins())}
         except Exception as e:
@@ -915,12 +934,15 @@ class HealthRouter:
         # Adaptive engine
         try:
             from domain.training._internal.adaptive_config import AdaptiveConfigEngine
+
             AdaptiveConfigEngine()
             services["adaptive"] = {"status": "ok"}
         except Exception as e:
             services["adaptive"] = {"status": "error", "error": str(e)}
         healthy = all(s["status"] == "ok" for s in services.values())
-        return success_response(data={"status": "healthy" if healthy else "degraded", "services": services})
+        return success_response(
+            data={"status": "healthy" if healthy else "degraded", "services": services}
+        )
 
 
 router = HealthRouter().router

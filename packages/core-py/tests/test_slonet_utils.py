@@ -2,38 +2,36 @@
 
 from __future__ import annotations
 
-import math
-import pytest
 import numpy as np
+import pytest
+
 from domain.training._internal.slonet import (
     Tensor,
-    topk,
-    multinomial,
-    stack,
-    concatenate,
-    randint,
-    exp,
-    isfinite,
-    where,
-    no_grad,
-    is_cuda,
-    is_mps,
-    cpu,
+    _apply_repetition_penalty,
     _apply_temperature,
     _apply_top_k,
     _apply_top_p,
-    _apply_repetition_penalty,
-    _to_np,
     _broadcast_back,
     _broadcast_forward,
+    _to_np,
+    concatenate,
+    cpu,
+    exp,
+    is_cuda,
+    is_mps,
+    isfinite,
+    multinomial,
+    no_grad,
+    randint,
+    stack,
+    topk,
+    where,
 )
-
 
 # ── _to_np ──────────────────────────────────────────────────────────────────
 
 
 class TestToNp:
-
     def test_tensor(self):
         t = Tensor(np.array([1.0, 2.0]))
         result = _to_np(t)
@@ -49,7 +47,6 @@ class TestToNp:
 
 
 class TestBroadcastBack:
-
     def test_same_shape(self):
         g = np.ones((2, 3))
         result = _broadcast_back(g, (2, 3))
@@ -75,7 +72,6 @@ class TestBroadcastBack:
 
 
 class TestBroadcastForward:
-
     def test_same_shape(self):
         t = np.ones((2, 3))
         result = _broadcast_forward(t, (2, 3))
@@ -91,7 +87,6 @@ class TestBroadcastForward:
 
 
 class TestTopk:
-
     def test_basic(self):
         t = Tensor(np.array([3.0, 1.0, 4.0, 1.0, 5.0]))
         values, indices = topk(t, k=2)
@@ -109,7 +104,6 @@ class TestTopk:
 
 
 class TestMultinomial:
-
     def test_basic(self):
         t = Tensor(np.array([0.1, 0.5, 0.4]))
         out = multinomial(t, num_samples=1)
@@ -125,7 +119,6 @@ class TestMultinomial:
 
 
 class TestStackConcat:
-
     def test_stack(self):
         t1 = Tensor(np.array([1.0, 2.0]))
         t2 = Tensor(np.array([3.0, 4.0]))
@@ -143,7 +136,6 @@ class TestStackConcat:
 
 
 class TestUtilities:
-
     def test_randint(self):
         out = randint(0, 10, (2, 3))
         assert out.shape == (2, 3)
@@ -172,7 +164,6 @@ class TestUtilities:
 
 
 class TestDeviceUtils:
-
     def test_is_cuda(self):
         assert is_cuda(Tensor([1.0])) is False
 
@@ -188,7 +179,6 @@ class TestDeviceUtils:
 
 
 class TestLogitProcessors:
-
     def test_temperature(self):
         logits = np.array([[1.0, 2.0, 3.0]])
         out = _apply_temperature(logits, 2.0)
@@ -235,9 +225,9 @@ class TestLogitProcessors:
 
 
 class TestNoGrad:
-
     def test_context_manager(self):
         import domain.training._internal.slonet as mod
+
         old = mod._NO_GRAD
         with no_grad():
             assert mod._NO_GRAD is True
@@ -245,6 +235,7 @@ class TestNoGrad:
 
     def test_decorator(self):
         import domain.training._internal.slonet as mod
+
         old = mod._NO_GRAD
 
         @no_grad()

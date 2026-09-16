@@ -4,16 +4,14 @@ Tests pure logic of tensor primitives, weight lookup, generation, and metadata
 without requiring a GPU or SLNC model file.
 """
 
-import math
-import os
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.gpu.wgpu_be import WgpuBE, _load_spirv, _load_metallib
-from domain.infrastructure._internal.arch_config import ArchConfig, LLAMA_WEIGHT_MAP
-
+from domain.infrastructure._internal.arch_config import LLAMA_WEIGHT_MAP, ArchConfig
+from domain.infrastructure._internal.gpu.wgpu_be import WgpuBE, _load_metallib, _load_spirv
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_arch(
     n_head=4,
@@ -58,14 +56,30 @@ def _make_tiny_llama_weights(arch: ArchConfig, vocab_size=16, seq_len=4):
     w["model.embed_tokens.weight"] = np.random.randn(vocab_size, n.n_embed).astype(np.float32)
     for i in range(n.n_layers):
         w[f"model.layers.{i}.input_layernorm.weight"] = np.ones(n.n_embed, dtype=np.float32)
-        w[f"model.layers.{i}.self_attn.q_proj.weight"] = np.random.randn(n.n_embed, n.n_embed).astype(np.float32)
-        w[f"model.layers.{i}.self_attn.k_proj.weight"] = np.random.randn(n.n_embed, n.n_embed).astype(np.float32)
-        w[f"model.layers.{i}.self_attn.v_proj.weight"] = np.random.randn(n.n_embed, n.n_embed).astype(np.float32)
-        w[f"model.layers.{i}.self_attn.o_proj.weight"] = np.random.randn(n.n_embed, n.n_embed).astype(np.float32)
-        w[f"model.layers.{i}.post_attention_layernorm.weight"] = np.ones(n.n_embed, dtype=np.float32)
-        w[f"model.layers.{i}.mlp.gate_proj.weight"] = np.random.randn(ffn_dim, n.n_embed).astype(np.float32)
-        w[f"model.layers.{i}.mlp.up_proj.weight"] = np.random.randn(ffn_dim, n.n_embed).astype(np.float32)
-        w[f"model.layers.{i}.mlp.down_proj.weight"] = np.random.randn(n.n_embed, ffn_dim).astype(np.float32)
+        w[f"model.layers.{i}.self_attn.q_proj.weight"] = np.random.randn(
+            n.n_embed, n.n_embed
+        ).astype(np.float32)
+        w[f"model.layers.{i}.self_attn.k_proj.weight"] = np.random.randn(
+            n.n_embed, n.n_embed
+        ).astype(np.float32)
+        w[f"model.layers.{i}.self_attn.v_proj.weight"] = np.random.randn(
+            n.n_embed, n.n_embed
+        ).astype(np.float32)
+        w[f"model.layers.{i}.self_attn.o_proj.weight"] = np.random.randn(
+            n.n_embed, n.n_embed
+        ).astype(np.float32)
+        w[f"model.layers.{i}.post_attention_layernorm.weight"] = np.ones(
+            n.n_embed, dtype=np.float32
+        )
+        w[f"model.layers.{i}.mlp.gate_proj.weight"] = np.random.randn(ffn_dim, n.n_embed).astype(
+            np.float32
+        )
+        w[f"model.layers.{i}.mlp.up_proj.weight"] = np.random.randn(ffn_dim, n.n_embed).astype(
+            np.float32
+        )
+        w[f"model.layers.{i}.mlp.down_proj.weight"] = np.random.randn(n.n_embed, ffn_dim).astype(
+            np.float32
+        )
     w["model.norm.weight"] = np.ones(n.n_embed, dtype=np.float32)
     return w
 
@@ -78,7 +92,9 @@ def _make_tiny_gpt2_weights(arch: ArchConfig, vocab_size=16):
     w["wpe.weight"] = np.random.randn(128, n.n_embed).astype(np.float32)
     for i in range(n.n_layers):
         w[f"h.{i}.ln_1.weight"] = np.ones(n.n_embed, dtype=np.float32)
-        w[f"h.{i}.attn.c_attn.weight"] = np.random.randn(n.n_embed, n.n_embed * 3).astype(np.float32)
+        w[f"h.{i}.attn.c_attn.weight"] = np.random.randn(n.n_embed, n.n_embed * 3).astype(
+            np.float32
+        )
         w[f"h.{i}.attn.c_proj.weight"] = np.random.randn(n.n_embed, n.n_embed).astype(np.float32)
         w[f"h.{i}.ln_2.weight"] = np.ones(n.n_embed, dtype=np.float32)
         w[f"h.{i}.mlp.c_fc.weight"] = np.random.randn(n.n_embed, n.n_embed * 4).astype(np.float32)
@@ -89,8 +105,8 @@ def _make_tiny_gpt2_weights(arch: ArchConfig, vocab_size=16):
 
 # ── _build_flat_lookup ──────────────────────────────────────────────────────
 
-class TestBuildFlatLookup:
 
+class TestBuildFlatLookup:
     def test_identity_map_no_template(self):
         wm = {"embed.token": "embed.token"}
         weights = {"embed.token": np.zeros(10)}
@@ -158,8 +174,8 @@ class TestBuildFlatLookup:
 
 # ── softmax ──────────────────────────────────────────────────────────────────
 
-class TestSoftmax:
 
+class TestSoftmax:
     def test_basic(self):
         backend = WgpuBE({}, _make_arch())
         x = np.array([1.0, 2.0, 3.0])
@@ -212,14 +228,14 @@ class TestSoftmax:
 
 # ── rmsnorm ──────────────────────────────────────────────────────────────────
 
-class TestRmsnorm:
 
+class TestRmsnorm:
     def test_unit_weight(self):
         backend = WgpuBE({}, _make_arch())
         x = np.array([1.0, 2.0, 3.0, 4.0])
         w = np.ones(4, dtype=np.float32)
         result = backend.rmsnorm(x, w)
-        rms = np.sqrt(np.mean(x ** 2))
+        rms = np.sqrt(np.mean(x**2))
         np.testing.assert_allclose(result, x / rms, atol=1e-5)
 
     def test_scaled_weight(self):
@@ -227,7 +243,7 @@ class TestRmsnorm:
         x = np.array([2.0, 4.0, 6.0, 8.0])
         w = np.array([2.0, 2.0, 2.0, 2.0], dtype=np.float32)
         result = backend.rmsnorm(x, w)
-        rms = np.sqrt(np.mean(x ** 2))
+        rms = np.sqrt(np.mean(x**2))
         np.testing.assert_allclose(result, (x / rms) * 2.0, atol=1e-5)
 
     def test_zero_input(self):
@@ -261,8 +277,8 @@ class TestRmsnorm:
 
 # ── layer_norm ───────────────────────────────────────────────────────────────
 
-class TestLayerNorm:
 
+class TestLayerNorm:
     def test_unit_weight_no_bias(self):
         backend = WgpuBE({}, _make_arch())
         x = np.random.randn(4, 8).astype(np.float32)
@@ -313,8 +329,8 @@ class TestLayerNorm:
 
 # ── silu ─────────────────────────────────────────────────────────────────────
 
-class TestSilu:
 
+class TestSilu:
     def test_basic(self):
         backend = WgpuBE({}, _make_arch())
         x = np.array([0.0, 1.0, -1.0])
@@ -358,8 +374,8 @@ class TestSilu:
 
 # ── gelu ─────────────────────────────────────────────────────────────────────
 
-class TestGelu:
 
+class TestGelu:
     def test_basic(self):
         backend = WgpuBE({}, _make_arch())
         x = np.array([0.0, 1.0, -1.0])
@@ -397,8 +413,8 @@ class TestGelu:
 
 # ── rope ─────────────────────────────────────────────────────────────────────
 
-class TestRope:
 
+class TestRope:
     def test_basic(self):
         backend = WgpuBE({}, _make_arch())
         x = np.ones((1, 2, 4, 8))
@@ -444,8 +460,8 @@ class TestRope:
 
 # ── repeat_kv ────────────────────────────────────────────────────────────────
 
-class TestRepeatKv:
 
+class TestRepeatKv:
     def test_n_reps_1_passthrough(self):
         backend = WgpuBE({}, _make_arch())
         x = np.random.randn(1, 4, 3, 8)
@@ -481,8 +497,8 @@ class TestRepeatKv:
 
 # ── argmax ───────────────────────────────────────────────────────────────────
 
-class TestArgmax:
 
+class TestArgmax:
     def test_basic(self):
         backend = WgpuBE({}, _make_arch())
         x = np.array([1.0, 5.0, 3.0])
@@ -510,8 +526,8 @@ class TestArgmax:
 
 # ── clip ─────────────────────────────────────────────────────────────────────
 
-class TestClip:
 
+class TestClip:
     def test_basic(self):
         backend = WgpuBE({}, _make_arch())
         x = np.array([1.0, 5.0, 10.0])
@@ -549,8 +565,8 @@ class TestClip:
 
 # ── matmul ───────────────────────────────────────────────────────────────────
 
-class TestMatmul:
 
+class TestMatmul:
     def test_basic(self):
         backend = WgpuBE({}, _make_arch())
         a = np.array([[1.0, 2.0], [3.0, 4.0]])
@@ -582,8 +598,8 @@ class TestMatmul:
 
 # ── from_numpy / to_numpy ───────────────────────────────────────────────────
 
-class TestArrayConversion:
 
+class TestArrayConversion:
     def test_from_numpy_identity(self):
         backend = WgpuBE({}, _make_arch())
         x = np.array([1.0, 2.0, 3.0])
@@ -609,8 +625,8 @@ class TestArrayConversion:
 
 # ── warmup ───────────────────────────────────────────────────────────────────
 
-class TestWarmup:
 
+class TestWarmup:
     def test_noop(self):
         backend = WgpuBE({}, _make_arch())
         # Should not raise
@@ -620,8 +636,8 @@ class TestWarmup:
 
 # ── backend_name ─────────────────────────────────────────────────────────────
 
-class TestBackendName:
 
+class TestBackendName:
     def test_fallback_name(self):
         # GPU import will fail, so _has_gpu is False
         backend = WgpuBE({}, _make_arch())
@@ -632,8 +648,8 @@ class TestBackendName:
 
 # ── vocab_size ───────────────────────────────────────────────────────────────
 
-class TestVocabSize:
 
+class TestVocabSize:
     def test_with_embed_token(self):
         wm = {"embed.token": "model.embed_tokens.weight"}
         w = {"model.embed_tokens.weight": np.zeros((100, 32))}
@@ -660,8 +676,8 @@ class TestVocabSize:
 
 # ── n_layers ─────────────────────────────────────────────────────────────────
 
-class TestNLayers:
 
+class TestNLayers:
     def test_from_arch(self):
         arch = _make_arch(n_layers=6)
         backend = WgpuBE({}, arch)
@@ -675,8 +691,8 @@ class TestNLayers:
 
 # ── _load_spirv / _load_metallib ────────────────────────────────────────────
 
-class TestShaderLoading:
 
+class TestShaderLoading:
     def test_load_spirv_missing(self):
         with pytest.raises(FileNotFoundError):
             _load_spirv("nonexistent_shader")
@@ -688,16 +704,31 @@ class TestShaderLoading:
 
 # ── Forward pass (tiny model) ───────────────────────────────────────────────
 
-class TestForwardPass:
 
-    def _make_backend(self, n_embed=16, n_head=2, n_kv_head=2, n_layers=1,
-                      vocab_size=8, head_dim=8, norm="rms_norm",
-                      positional="rope", activation="swiglu"):
+class TestForwardPass:
+    def _make_backend(
+        self,
+        n_embed=16,
+        n_head=2,
+        n_kv_head=2,
+        n_layers=1,
+        vocab_size=8,
+        head_dim=8,
+        norm="rms_norm",
+        positional="rope",
+        activation="swiglu",
+    ):
         from domain.infrastructure._internal.arch_config import LLAMA_WEIGHT_MAP
+
         arch = _make_arch(
-            n_head=n_head, n_kv_head=n_kv_head, n_embed=n_embed,
-            n_layers=n_layers, head_dim=head_dim, norm=norm,
-            positional=positional, activation=activation,
+            n_head=n_head,
+            n_kv_head=n_kv_head,
+            n_embed=n_embed,
+            n_layers=n_layers,
+            head_dim=head_dim,
+            norm=norm,
+            positional=positional,
+            activation=activation,
             weight_map=LLAMA_WEIGHT_MAP,
         )
         weights = _make_tiny_llama_weights(arch, vocab_size=vocab_size)
@@ -736,7 +767,7 @@ class TestForwardPass:
 
     def test_forward_gpt2_style(self):
         """Test GPT-2 style (absolute pos, layer_norm, gelu) with minimal weights."""
-        from domain.infrastructure._internal.arch_config import GPT2_WEIGHT_MAP
+
         # Use a minimal weight map that maps canonical → same key (identity)
         # so the forward pass's .T convention works with our test weights.
         wm = {}
@@ -752,9 +783,15 @@ class TestForwardPass:
         wm["layers.{i}.ffn.down.weight"] = "layers.{i}.ffn.down.weight"
         wm["final_norm.weight"] = "final_norm.weight"
         arch = _make_arch(
-            n_head=2, n_kv_head=2, n_embed=16, n_layers=1,
-            head_dim=8, norm="layer_norm", positional="absolute",
-            activation="gelu", weight_map=wm,
+            n_head=2,
+            n_kv_head=2,
+            n_embed=16,
+            n_layers=1,
+            head_dim=8,
+            norm="layer_norm",
+            positional="absolute",
+            activation="gelu",
+            weight_map=wm,
         )
         n, d = 16, 64
         w = {
@@ -781,9 +818,15 @@ class TestForwardPass:
         n_head, head_dim, n_embed = 4, 4, 16
         n_kv_head = 2
         arch = _make_arch(
-            n_head=n_head, n_kv_head=n_kv_head, n_embed=n_embed, n_layers=1,
-            head_dim=head_dim, norm="rms_norm", positional="rope",
-            activation="swiglu", weight_map=LLAMA_WEIGHT_MAP,
+            n_head=n_head,
+            n_kv_head=n_kv_head,
+            n_embed=n_embed,
+            n_layers=1,
+            head_dim=head_dim,
+            norm="rms_norm",
+            positional="rope",
+            activation="swiglu",
+            weight_map=LLAMA_WEIGHT_MAP,
         )
         ffn_dim = n_embed * 4
         kv_dim = n_kv_head * head_dim
@@ -791,15 +834,29 @@ class TestForwardPass:
         w["model.embed_tokens.weight"] = np.random.randn(8, n_embed).astype(np.float32)
         i = 0
         w[f"model.layers.{i}.input_layernorm.weight"] = np.ones(n_embed, dtype=np.float32)
-        w[f"model.layers.{i}.self_attn.q_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
+        w[f"model.layers.{i}.self_attn.q_proj.weight"] = np.random.randn(n_embed, n_embed).astype(
+            np.float32
+        )
         # GQA: k/v proj output to kv_dim, not n_embed
-        w[f"model.layers.{i}.self_attn.k_proj.weight"] = np.random.randn(kv_dim, n_embed).astype(np.float32)
-        w[f"model.layers.{i}.self_attn.v_proj.weight"] = np.random.randn(kv_dim, n_embed).astype(np.float32)
-        w[f"model.layers.{i}.self_attn.o_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
+        w[f"model.layers.{i}.self_attn.k_proj.weight"] = np.random.randn(kv_dim, n_embed).astype(
+            np.float32
+        )
+        w[f"model.layers.{i}.self_attn.v_proj.weight"] = np.random.randn(kv_dim, n_embed).astype(
+            np.float32
+        )
+        w[f"model.layers.{i}.self_attn.o_proj.weight"] = np.random.randn(n_embed, n_embed).astype(
+            np.float32
+        )
         w[f"model.layers.{i}.post_attention_layernorm.weight"] = np.ones(n_embed, dtype=np.float32)
-        w[f"model.layers.{i}.mlp.gate_proj.weight"] = np.random.randn(ffn_dim, n_embed).astype(np.float32)
-        w[f"model.layers.{i}.mlp.up_proj.weight"] = np.random.randn(ffn_dim, n_embed).astype(np.float32)
-        w[f"model.layers.{i}.mlp.down_proj.weight"] = np.random.randn(n_embed, ffn_dim).astype(np.float32)
+        w[f"model.layers.{i}.mlp.gate_proj.weight"] = np.random.randn(ffn_dim, n_embed).astype(
+            np.float32
+        )
+        w[f"model.layers.{i}.mlp.up_proj.weight"] = np.random.randn(ffn_dim, n_embed).astype(
+            np.float32
+        )
+        w[f"model.layers.{i}.mlp.down_proj.weight"] = np.random.randn(n_embed, ffn_dim).astype(
+            np.float32
+        )
         w["model.norm.weight"] = np.ones(n_embed, dtype=np.float32)
         backend = WgpuBE(w, arch)
         tokens = np.array([[1, 2]], dtype=np.int64)
@@ -810,13 +867,19 @@ class TestForwardPass:
 
 # ── generate_stream ──────────────────────────────────────────────────────────
 
-class TestGenerateStream:
 
+class TestGenerateStream:
     def _make_backend(self):
         arch = _make_arch(
-            n_head=2, n_kv_head=2, n_embed=16, n_layers=1,
-            head_dim=8, norm="rms_norm", positional="rope",
-            activation="swiglu", weight_map=LLAMA_WEIGHT_MAP,
+            n_head=2,
+            n_kv_head=2,
+            n_embed=16,
+            n_layers=1,
+            head_dim=8,
+            norm="rms_norm",
+            positional="rope",
+            activation="swiglu",
+            weight_map=LLAMA_WEIGHT_MAP,
         )
         weights = _make_tiny_llama_weights(arch, vocab_size=8)
         return WgpuBE(weights, arch)
@@ -850,9 +913,7 @@ class TestGenerateStream:
     def test_extra_stop_ids(self):
         backend = self._make_backend()
         tokens = np.array([[1]], dtype=np.int64)
-        generated = list(backend.generate_stream(
-            tokens, max_new_tokens=100, extra_stop_ids=[2, 3]
-        ))
+        generated = list(backend.generate_stream(tokens, max_new_tokens=100, extra_stop_ids=[2, 3]))
         assert all(t not in [2, 3] or len(generated) < 100 for t in generated)
 
     def test_temperature_zero_greedy(self):
@@ -877,9 +938,7 @@ class TestGenerateStream:
     def test_repetition_penalty(self):
         backend = self._make_backend()
         tokens = np.array([[1]], dtype=np.int64)
-        generated = list(backend.generate_stream(
-            tokens, max_new_tokens=5, repetition_penalty=1.5
-        ))
+        generated = list(backend.generate_stream(tokens, max_new_tokens=5, repetition_penalty=1.5))
         assert len(generated) == 5
 
     def test_1d_input_reshaped(self):
@@ -897,13 +956,19 @@ class TestGenerateStream:
 
 # ── generate ─────────────────────────────────────────────────────────────────
 
-class TestGenerate:
 
+class TestGenerate:
     def _make_backend(self):
         arch = _make_arch(
-            n_head=2, n_kv_head=2, n_embed=16, n_layers=1,
-            head_dim=8, norm="rms_norm", positional="rope",
-            activation="swiglu", weight_map=LLAMA_WEIGHT_MAP,
+            n_head=2,
+            n_kv_head=2,
+            n_embed=16,
+            n_layers=1,
+            head_dim=8,
+            norm="rms_norm",
+            positional="rope",
+            activation="swiglu",
+            weight_map=LLAMA_WEIGHT_MAP,
         )
         weights = _make_tiny_llama_weights(arch, vocab_size=8)
         return WgpuBE(weights, arch)
@@ -952,8 +1017,8 @@ class TestGenerate:
 
 # ── from_weights classmethod ─────────────────────────────────────────────────
 
-class TestFromWeights:
 
+class TestFromWeights:
     def test_creates_instance(self):
         arch = _make_arch()
         backend = WgpuBE.from_weights({}, arch)

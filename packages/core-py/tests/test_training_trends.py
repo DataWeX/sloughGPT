@@ -1,9 +1,9 @@
 """Tests for training trends endpoint logic."""
 
-import json
 import time
+
 import pytest
-from pathlib import Path
+
 from domain.training._internal.outcome_tracker import (
     TrainingOutcome,
     TrainingOutcomeTracker,
@@ -114,7 +114,17 @@ class TestTrendsLogic:
         outcomes.sort(key=lambda o: o.timestamp)
 
         if not outcomes:
-            return {"runs": [], "models": [], "summary": {"total_runs": 0, "avg_quality": 0, "best_quality": 0, "avg_loss": 0, "trend": "stable"}}
+            return {
+                "runs": [],
+                "models": [],
+                "summary": {
+                    "total_runs": 0,
+                    "avg_quality": 0,
+                    "best_quality": 0,
+                    "avg_loss": 0,
+                    "trend": "stable",
+                },
+            }
 
         runs = [
             {
@@ -136,12 +146,14 @@ class TestTrendsLogic:
         models = []
         for model_name, model_runs in model_map.items():
             qualities = [r["quality_score"] for r in model_runs]
-            models.append({
-                "model": model_name,
-                "total_runs": len(model_runs),
-                "avg_quality": sum(qualities) / len(qualities),
-                "best_quality": max(qualities),
-            })
+            models.append(
+                {
+                    "model": model_name,
+                    "total_runs": len(model_runs),
+                    "avg_quality": sum(qualities) / len(qualities),
+                    "best_quality": max(qualities),
+                }
+            )
 
         all_qualities = [r["quality_score"] for r in runs]
         summary = {
@@ -179,12 +191,8 @@ class TestTrendsLogic:
 
     def test_filter_by_model(self, tmp_tracker):
         for i in range(3):
-            tmp_tracker.record(
-                TrainingOutcome(run_id=f"run_{i}", model="gpt2", final_loss=2.0)
-            )
-        tmp_tracker.record(
-            TrainingOutcome(run_id="run_x", model="llama", final_loss=1.0)
-        )
+            tmp_tracker.record(TrainingOutcome(run_id=f"run_{i}", model="gpt2", final_loss=2.0))
+        tmp_tracker.record(TrainingOutcome(run_id="run_x", model="llama", final_loss=1.0))
         result = self._build_trends(tmp_tracker, model="gpt2")
         assert result["summary"]["total_runs"] == 3
         assert all(r["model"] == "gpt2" for r in result["runs"])

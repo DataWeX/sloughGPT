@@ -21,19 +21,19 @@ Env overrides:
     SLO_FF_NATIVE_C_INFERENCE=0   → disable
 """
 
-import os
 import json
 import logging
+import os
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
-from typing import Dict, Optional
-from enum import Enum
 
 logger = logging.getLogger("slo.feature_flags")
 
 
-class FlagStatus(str, Enum):
+class FlagStatus(StrEnum):
     """Feature flag status."""
+
     ENABLED = "enabled"
     DISABLED = "disabled"
     EXPERIMENTAL = "experimental"  # enabled but not guaranteed
@@ -42,6 +42,7 @@ class FlagStatus(str, Enum):
 @dataclass
 class FeatureFlag:
     """A single feature flag."""
+
     name: str
     description: str
     status: FlagStatus = FlagStatus.DISABLED
@@ -63,8 +64,8 @@ class FeatureFlag:
 class FeatureFlags:
     """Feature flag registry."""
 
-    _flags: Dict[str, FeatureFlag] = {}
-    _config_path: Optional[Path] = None
+    _flags: dict[str, FeatureFlag] = {}
+    _config_path: Path | None = None
 
     @classmethod
     def register(
@@ -97,7 +98,7 @@ class FeatureFlags:
         cls._flags[name].status = status
 
     @classmethod
-    def list_all(cls) -> Dict[str, dict]:
+    def list_all(cls) -> dict[str, dict]:
         """List all registered feature flags."""
         return {
             name: {
@@ -110,7 +111,7 @@ class FeatureFlags:
         }
 
     @classmethod
-    def load_config(cls, path: Optional[Path] = None) -> None:
+    def load_config(cls, path: Path | None = None) -> None:
         """Load feature flag statuses from JSON config file."""
         if path is None:
             path = Path(__file__).parent.parent.parent.parent / "config" / "feature_flags.json"
@@ -132,10 +133,13 @@ class FeatureFlags:
             logger.warning("Failed to load feature flags: %s", e)
 
     @classmethod
-    def save_config(cls, path: Optional[Path] = None) -> None:
+    def save_config(cls, path: Path | None = None) -> None:
         """Save current flag statuses to JSON config file."""
         if path is None:
-            path = cls._config_path or Path(__file__).parent.parent.parent.parent / "config" / "feature_flags.json"
+            path = (
+                cls._config_path
+                or Path(__file__).parent.parent.parent.parent / "config" / "feature_flags.json"
+            )
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {name: flag.status.value for name, flag in cls._flags.items()}
         with open(path, "w") as f:
@@ -151,6 +155,7 @@ def is_enabled(name: str) -> bool:
 # =============================================================================
 # REGISTER ALL KNOWN FEATURES
 # =============================================================================
+
 
 def _register_defaults():
     """Register all known features from FEATURE tags in the codebase."""

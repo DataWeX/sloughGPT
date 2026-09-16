@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -16,9 +15,9 @@ class MetaCognitiveReport:
     """Report on the quality of a thought process."""
 
     attention_focus: str
-    reasoning_quality: float    # 0-1
-    confidence_level: float     # 0-1
-    curiosity_level: float      # 0-1
+    reasoning_quality: float  # 0-1
+    confidence_level: float  # 0-1
+    curiosity_level: float  # 0-1
     understanding_level: float  # 0-1
     insight: str
 

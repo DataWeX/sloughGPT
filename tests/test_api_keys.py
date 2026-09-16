@@ -1,10 +1,10 @@
 """Tests for API key management (CRUD, rotation, expiry, revocation)."""
+
 from __future__ import annotations
 
 import sys
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.api_keys import ApiKeyManager, ApiKeysRouter
+
 from tests.conftest import build_test_app
 
 

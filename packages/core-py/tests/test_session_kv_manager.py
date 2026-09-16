@@ -1,8 +1,8 @@
 """Tests for SessionKVManager."""
 
-import time
 import threading
-import pytest
+import time
+
 from domain.inference._internal.session_kv_manager import SessionKVManager
 
 
@@ -79,6 +79,7 @@ class TestSessionKVManager:
         class MockKVState:
             def __init__(self):
                 import numpy as np
+
                 self.k = np.zeros((1, 4, 8))
                 self.v = np.zeros((1, 4, 8))
 

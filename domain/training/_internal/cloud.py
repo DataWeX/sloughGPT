@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("slo.cloud_training")
 
@@ -15,6 +15,7 @@ logger = logging.getLogger("slo.cloud_training")
 @dataclass
 class CloudTrainingConfig:
     """Configuration for cloud training."""
+
     provider: str = "local"  # local, aws, gcp
     region: str = "us-east-1"
     instance_type: str = "ml.g4dn.xlarge"
@@ -22,12 +23,13 @@ class CloudTrainingConfig:
     role_arn: str = ""
     max_wait_minutes: int = 60
     checkpoint_uri: str = ""
-    extra_kwargs: Dict[str, Any] = field(default_factory=dict)
+    extra_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class CloudTrainingStatus:
     """Status of a cloud training job."""
+
     job_id: str
     provider: str
     status: str  # pending, running, completed, failed, cancelled
@@ -46,7 +48,7 @@ class CloudTrainingProvider(ABC):
         config: CloudTrainingConfig,
         dataset_uri: str,
         training_script: str,
-        hyperparameters: Dict[str, Any],
+        hyperparameters: dict[str, Any],
     ) -> str:
         """Submit a training job. Returns job_id."""
         ...
@@ -62,7 +64,7 @@ class CloudTrainingProvider(ABC):
         ...
 
     @abstractmethod
-    def list_jobs(self, limit: int = 10) -> List[CloudTrainingStatus]:
+    def list_jobs(self, limit: int = 10) -> list[CloudTrainingStatus]:
         """List recent training jobs."""
         ...
 
@@ -75,7 +77,7 @@ class LocalTrainingProvider(CloudTrainingProvider):
         config: CloudTrainingConfig,
         dataset_uri: str,
         training_script: str,
-        hyperparameters: Dict[str, Any],
+        hyperparameters: dict[str, Any],
     ) -> str:
         logger.info("Local training: dataset=%s script=%s", dataset_uri, training_script)
         return "local_001"
@@ -91,7 +93,7 @@ class LocalTrainingProvider(CloudTrainingProvider):
     def cancel_job(self, job_id: str) -> bool:
         return True
 
-    def list_jobs(self, limit: int = 10) -> List[CloudTrainingStatus]:
+    def list_jobs(self, limit: int = 10) -> list[CloudTrainingStatus]:
         return []
 
 
@@ -103,11 +105,12 @@ class AWSSageMakerProvider(CloudTrainingProvider):
         config: CloudTrainingConfig,
         dataset_uri: str,
         training_script: str,
-        hyperparameters: Dict[str, Any],
+        hyperparameters: dict[str, Any],
     ) -> str:
         try:
             import boto3
-            sagemaker = boto3.client("sagemaker", region_name=config.region)
+
+            boto3.client("sagemaker", region_name=config.region)
             job_name = f"sloughgpt-{int(__import__('time').time())}"
             logger.info("Submitting SageMaker job: %s", job_name)
             return job_name
@@ -121,6 +124,7 @@ class AWSSageMakerProvider(CloudTrainingProvider):
     def get_status(self, job_id: str) -> CloudTrainingStatus:
         try:
             import boto3
+
             sagemaker = boto3.client("sagemaker")
             resp = sagemaker.describe_training_job(TrainingJobName=job_id)
             status_map = {
@@ -144,6 +148,7 @@ class AWSSageMakerProvider(CloudTrainingProvider):
     def cancel_job(self, job_id: str) -> bool:
         try:
             import boto3
+
             sagemaker = boto3.client("sagemaker")
             sagemaker.stop_training_job(TrainingJobName=job_id)
             return True
@@ -151,9 +156,10 @@ class AWSSageMakerProvider(CloudTrainingProvider):
             logger.error("SageMaker cancel failed: %s", e)
             return False
 
-    def list_jobs(self, limit: int = 10) -> List[CloudTrainingStatus]:
+    def list_jobs(self, limit: int = 10) -> list[CloudTrainingStatus]:
         try:
             import boto3
+
             sagemaker = boto3.client("sagemaker")
             resp = sagemaker.list_training_jobs(MaxResults=limit)
             return [
@@ -177,10 +183,11 @@ class GCPVertexProvider(CloudTrainingProvider):
         config: CloudTrainingConfig,
         dataset_uri: str,
         training_script: str,
-        hyperparameters: Dict[str, Any],
+        hyperparameters: dict[str, Any],
     ) -> str:
         try:
             from google.cloud import aiplatform
+
             aiplatform.init(project=config.extra_kwargs.get("project_id"), location=config.region)
             job_name = f"sloughgpt-{int(__import__('time').time())}"
             logger.info("Submitting Vertex AI job: %s", job_name)
@@ -193,14 +200,12 @@ class GCPVertexProvider(CloudTrainingProvider):
             return ""
 
     def get_status(self, job_id: str) -> CloudTrainingStatus:
-        return CloudTrainingStatus(
-            job_id=job_id, provider="gcp", status="unknown"
-        )
+        return CloudTrainingStatus(job_id=job_id, provider="gcp", status="unknown")
 
     def cancel_job(self, job_id: str) -> bool:
         return False
 
-    def list_jobs(self, limit: int = 10) -> List[CloudTrainingStatus]:
+    def list_jobs(self, limit: int = 10) -> list[CloudTrainingStatus]:
         return []
 
 

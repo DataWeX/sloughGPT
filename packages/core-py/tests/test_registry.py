@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
-import pytest
-
-from domain.collections._internal.registry import CollectionRegistry, get_registry
-from domain.collections._internal.sources import Source, Record
-from domain.collections._internal.stores import MemoryStore
 from domain.collections._internal.filters import Filter
-
+from domain.collections._internal.registry import CollectionRegistry, get_registry
+from domain.collections._internal.sources import Record, Source
+from domain.collections._internal.stores import MemoryStore
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 class DummySource(Source):
     def __init__(self, records=None, name="test_source"):
         self.name = name
         self._records = records or [Record(content="test")]
+
     def collect(self):
         return self._records
+
     def read(self):
         return iter(self._records)
 
@@ -28,6 +28,7 @@ class DummyFilter(Filter):
 
 
 # ── CollectionRegistry ────────────────────────────────────────────────────────
+
 
 class TestCollectionRegistry:
     def test_register_source(self):
@@ -142,6 +143,7 @@ class TestCollectionRegistry:
 
 
 # ── get_registry ──────────────────────────────────────────────────────────────
+
 
 class TestGetRegistry:
     def test_returns_singleton(self):

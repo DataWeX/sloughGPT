@@ -131,7 +131,7 @@ class TruncateFilter:
 
     def accept(self, record: Record) -> bool:
         if len(record.content) > self.max_length:
-            record.content = record.content[:self.max_length]
+            record.content = record.content[: self.max_length]
         return True
 
 

@@ -13,15 +13,16 @@ import logging
 import threading
 import time as _time
 
-from domain.shell._internal.io import MemoryIO
-from domain.shell._internal.repl import ShellREPL
-from domain.shell._internal.runtime import DaitRuntime
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.shell_sandbox import ShellSecurityError, validate_command
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log
+
+from domain.shell._internal.io import MemoryIO
+from domain.shell._internal.repl import ShellREPL
+from domain.shell._internal.runtime import DaitRuntime
 
 logger = logging.getLogger("slo.api.shell")
 

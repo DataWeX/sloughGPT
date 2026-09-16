@@ -15,8 +15,8 @@ import types
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.numpy_engine import KVCache, NumpyEngine, _load_weights
 from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
+from domain.infrastructure._internal.numpy_engine import KVCache, NumpyEngine, _load_weights
 
 VOCAB = 64
 N_EMBD = 16
@@ -52,7 +52,9 @@ def _weights():
     for i in range(N_LAYER):
         w[f"h.{i}.ln_1.weight"] = rng.standard_normal(N_EMBD).astype(np.float32) + 1.0
         w[f"h.{i}.ln_1.bias"] = rng.standard_normal(N_EMBD).astype(np.float32)
-        w[f"h.{i}.attn.c_attn.weight"] = rng.standard_normal((N_EMBD, 3 * N_EMBD)).astype(np.float32)
+        w[f"h.{i}.attn.c_attn.weight"] = rng.standard_normal((N_EMBD, 3 * N_EMBD)).astype(
+            np.float32
+        )
         w[f"h.{i}.attn.c_attn.bias"] = rng.standard_normal(3 * N_EMBD).astype(np.float32)
         w[f"h.{i}.attn.c_proj.weight"] = rng.standard_normal((N_EMBD, N_EMBD)).astype(np.float32)
         w[f"h.{i}.attn.c_proj.bias"] = rng.standard_normal(N_EMBD).astype(np.float32)
@@ -68,8 +70,9 @@ def _weights():
 
 
 def _tokenizer():
-    return MorphTokenizer(vocab={c: i for i, c in enumerate(CHARS)},
-                          merges=[], eos_token_id=EOS, byte_level=False)
+    return MorphTokenizer(
+        vocab={c: i for i, c in enumerate(CHARS)}, merges=[], eos_token_id=EOS, byte_level=False
+    )
 
 
 def _write_safetensors(path, tensors, dtype="F32"):
@@ -84,8 +87,11 @@ def _write_safetensors(path, tensors, dtype="F32"):
             raw = f32.astype(np.float16).tobytes()
         else:
             raw = f32.tobytes()
-        header[name] = {"dtype": dtype, "shape": list(f32.shape),
-                        "data_offsets": [offset, offset + len(raw)]}
+        header[name] = {
+            "dtype": dtype,
+            "shape": list(f32.shape),
+            "data_offsets": [offset, offset + len(raw)],
+        }
         blobs[name] = raw
         offset += len(raw)
     header_bytes = json.dumps(header).encode()
@@ -125,9 +131,16 @@ def _read_safetensors(path):
 
 def _write_tokenizer_json(path):
     with open(path, "w") as f:
-        json.dump({"model": {"vocab": {c: i for i, c in enumerate(CHARS)},
-                             "merges": [], "eos_token_id": EOS}},
-                  f)
+        json.dump(
+            {
+                "model": {
+                    "vocab": {c: i for i, c in enumerate(CHARS)},
+                    "merges": [],
+                    "eos_token_id": EOS,
+                }
+            },
+            f,
+        )
 
 
 class _FakeSafeFile:
@@ -274,14 +287,16 @@ class TestNumpyEngineConstructor:
             engine._get_weight("does.not.exist")
 
     def test_forward_returns_logits(self):
-        engine = NumpyEngine(config=_config(), weights=_weights(),
-                             tokenizer=_tokenizer(), compress=False)
+        engine = NumpyEngine(
+            config=_config(), weights=_weights(), tokenizer=_tokenizer(), compress=False
+        )
         logits = engine._forward([0, 1, 2])
         assert logits.shape == (VOCAB,)
 
     def test_forward_with_kv_cache(self):
-        engine = NumpyEngine(config=_config(), weights=_weights(),
-                             tokenizer=_tokenizer(), compress=False)
+        engine = NumpyEngine(
+            config=_config(), weights=_weights(), tokenizer=_tokenizer(), compress=False
+        )
         cache = KVCache(engine.arch.n_layers)
         logits = engine._forward([0, 1, 2], kv_cache=cache, start_pos=0)
         assert logits.shape == (VOCAB,)
@@ -299,8 +314,9 @@ class TestNumpyEngineConstructor:
 
     def test_compression_linear_centroids(self):
         smooth = np.linspace(0, 1, 4000, dtype=np.float32).reshape(80, 50)
-        engine = NumpyEngine(config=_config(), weights={"smooth.linear": smooth},
-                             compress=True, n_clusters=16)
+        engine = NumpyEngine(
+            config=_config(), weights={"smooth.linear": smooth}, compress=True, n_clusters=16
+        )
         cw = engine._compressed_weights["smooth.linear"]
         assert cw.centroid_fn == "linear"
         decomp = engine._get_weight("smooth.linear")
@@ -308,8 +324,7 @@ class TestNumpyEngineConstructor:
         assert engine._cache.get("smooth.linear") is not None
 
     def test_get_weight_decompresses_compressed(self):
-        engine = NumpyEngine(config=_config(), weights=_weights(),
-                             compress=True, n_clusters=16)
+        engine = NumpyEngine(config=_config(), weights=_weights(), compress=True, n_clusters=16)
         name = "h.0.attn.c_attn.weight"
         w = engine._get_weight(name)
         assert w.shape == (N_EMBD, 3 * N_EMBD)
@@ -317,10 +332,10 @@ class TestNumpyEngineConstructor:
 
     def test_get_weight_via_model_tree(self, tmp_path):
         from domain.infrastructure._internal.point_compressor import ModelTree, PointLibrary
+
         library = PointLibrary(name="tiny-lib", storage_dir=tmp_path / "lib")
         tree = ModelTree(MODEL_ID, library, n_clusters=16)
-        engine = NumpyEngine(config=_config(), weights=_weights(),
-                             compress=False, model_tree=tree)
+        engine = NumpyEngine(config=_config(), weights=_weights(), compress=False, model_tree=tree)
         w = engine._get_weight("wte.weight")
         assert w.shape == (VOCAB, N_EMBD)
 
@@ -340,16 +355,17 @@ class TestFromPretrained:
     def test_use_points(self, hf_cache, monkeypatch, tmp_path):
         _install_fake_safetensors(monkeypatch, fail=False)
         from domain.infrastructure._internal.point_compressor import PointLibrary
+
         library = PointLibrary(name="tiny-lib", storage_dir=tmp_path / "lib")
-        engine = NumpyEngine.from_pretrained(MODEL_ID, tokenizer=_tokenizer(),
-                                             use_points=True, library=library)
+        engine = NumpyEngine.from_pretrained(
+            MODEL_ID, tokenizer=_tokenizer(), use_points=True, library=library
+        )
         assert engine._model_tree is not None
         assert library.stats()["total_points"] > 0
 
     def test_use_points_default_library(self, hf_cache, monkeypatch):
         _install_fake_safetensors(monkeypatch, fail=False)
-        engine = NumpyEngine.from_pretrained(MODEL_ID, tokenizer=_tokenizer(),
-                                             use_points=True)
+        engine = NumpyEngine.from_pretrained(MODEL_ID, tokenizer=_tokenizer(), use_points=True)
         assert engine._model_tree is not None
         assert engine._model_tree.library.name == MODEL_ID.replace("/", "_")
 
@@ -357,6 +373,7 @@ class TestFromPretrained:
 class TestFromSlnc:
     def test_from_slnc_with_tokenizer(self, tmp_path):
         from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
+
         slnc = tmp_path / "tiny.slnc"
         SLNCCompiler().compile_from_dict(_config(), _weights(), str(slnc))
         engine = NumpyEngine.from_slnc(str(slnc), tokenizer=_tokenizer())
@@ -366,6 +383,7 @@ class TestFromSlnc:
 
     def test_from_slnc_default_tokenizer(self, hf_cache, tmp_path):
         from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
+
         slnc = tmp_path / "tiny.slnc"
         SLNCCompiler().compile_from_dict(_config(), _weights(), str(slnc))
         engine = NumpyEngine.from_slnc(str(slnc))
@@ -379,32 +397,36 @@ class TestGenerate:
             engine.generate("hello")
 
     def test_generate_greedy_kv_cache(self):
-        engine = NumpyEngine(config=_config(), weights=_weights(),
-                             tokenizer=_tokenizer(), compress=False)
+        engine = NumpyEngine(
+            config=_config(), weights=_weights(), tokenizer=_tokenizer(), compress=False
+        )
         result = engine.generate("hello", max_new_tokens=5, temperature=0.0, top_k=5)
         assert isinstance(result, str)
         assert result.startswith("hello")
 
     def test_generate_no_kv_cache(self):
-        engine = NumpyEngine(config=_config(), weights=_weights(),
-                             tokenizer=_tokenizer(), compress=False)
-        result = engine.generate("hello", max_new_tokens=5, temperature=0.0,
-                                 use_kv_cache=False)
+        engine = NumpyEngine(
+            config=_config(), weights=_weights(), tokenizer=_tokenizer(), compress=False
+        )
+        result = engine.generate("hello", max_new_tokens=5, temperature=0.0, use_kv_cache=False)
         assert isinstance(result, str)
 
     def test_generate_sampling(self):
-        engine = NumpyEngine(config=_config(), weights=_weights(),
-                             tokenizer=_tokenizer(), compress=False)
+        engine = NumpyEngine(
+            config=_config(), weights=_weights(), tokenizer=_tokenizer(), compress=False
+        )
         result = engine.generate("hello", max_new_tokens=5, temperature=1.0, top_k=5)
         assert isinstance(result, str)
 
     def test_generate_eos_stops(self, monkeypatch):
-        engine = NumpyEngine(config=_config(), weights=_weights(),
-                             tokenizer=_tokenizer(), compress=False)
+        engine = NumpyEngine(
+            config=_config(), weights=_weights(), tokenizer=_tokenizer(), compress=False
+        )
         logits = np.full(VOCAB, -1e9, dtype=np.float32)
         logits[EOS] = 10.0
-        monkeypatch.setattr(engine, "_forward",
-                            lambda token_ids, kv_cache=None, start_pos=0: logits)
+        monkeypatch.setattr(
+            engine, "_forward", lambda token_ids, kv_cache=None, start_pos=0: logits
+        )
         result = engine.generate("hello", max_new_tokens=10, temperature=0.0)
         assert result == "hello"
         assert engine._kv_cache is None
@@ -418,8 +440,9 @@ class TestGenerateStream:
                 pass
 
     async def test_stream_yields_tokens(self):
-        engine = NumpyEngine(config=_config(), weights=_weights(),
-                             tokenizer=_tokenizer(), compress=False)
+        engine = NumpyEngine(
+            config=_config(), weights=_weights(), tokenizer=_tokenizer(), compress=False
+        )
         tokens = []
         async for t in engine.generate_stream("hello", max_new_tokens=3, temperature=0.0):
             tokens.append(t)
@@ -428,21 +451,23 @@ class TestGenerateStream:
         assert engine._kv_cache is None
 
     async def test_stream_sampling(self):
-        engine = NumpyEngine(config=_config(), weights=_weights(),
-                             tokenizer=_tokenizer(), compress=False)
+        engine = NumpyEngine(
+            config=_config(), weights=_weights(), tokenizer=_tokenizer(), compress=False
+        )
         tokens = []
-        async for t in engine.generate_stream("hello", max_new_tokens=2,
-                                              temperature=1.0, top_k=5):
+        async for t in engine.generate_stream("hello", max_new_tokens=2, temperature=1.0, top_k=5):
             tokens.append(t)
         assert len(tokens) == 2
 
     async def test_stream_eos_stops(self, monkeypatch):
-        engine = NumpyEngine(config=_config(), weights=_weights(),
-                             tokenizer=_tokenizer(), compress=False)
+        engine = NumpyEngine(
+            config=_config(), weights=_weights(), tokenizer=_tokenizer(), compress=False
+        )
         logits = np.full(VOCAB, -1e9, dtype=np.float32)
         logits[EOS] = 10.0
-        monkeypatch.setattr(engine, "_forward",
-                            lambda token_ids, kv_cache=None, start_pos=0: logits)
+        monkeypatch.setattr(
+            engine, "_forward", lambda token_ids, kv_cache=None, start_pos=0: logits
+        )
         tokens = []
         async for t in engine.generate_stream("hello", max_new_tokens=10, temperature=0.0):
             tokens.append(t)

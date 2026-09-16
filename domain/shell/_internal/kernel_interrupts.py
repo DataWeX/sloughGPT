@@ -8,29 +8,32 @@ when an asynchronous operation completes or needs attention.
 from __future__ import annotations
 
 import threading
-from enum import IntEnum
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Any
+from enum import IntEnum
+from typing import Any
 
 
 class InterruptType(IntEnum):
     """AI-native interrupt types."""
-    TIMER = 0         # scheduler tick
-    INFERENCE_DONE = 1   # model inference completed
-    TRAINING_STEP = 2    # one training step completed
-    DATA_READY = 3       # data loaded and ready
+
+    TIMER = 0  # scheduler tick
+    INFERENCE_DONE = 1  # model inference completed
+    TRAINING_STEP = 2  # one training step completed
+    DATA_READY = 3  # data loaded and ready
     GRADIENT_UPDATE = 4  # gradient computed, ready for optimizer step
-    DEVICE_ERROR = 5     # device/driver error
-    MEMORY_FULL = 6      # out of tensor memory
-    PROCESS_DONE = 7     # process completed
-    USER_INPUT = 8       # user sent input
-    NETWORK_IO = 9       # network data arrived
-    CUSTOM = 10          # user-defined interrupt
+    DEVICE_ERROR = 5  # device/driver error
+    MEMORY_FULL = 6  # out of tensor memory
+    PROCESS_DONE = 7  # process completed
+    USER_INPUT = 8  # user sent input
+    NETWORK_IO = 9  # network data arrived
+    CUSTOM = 10  # user-defined interrupt
 
 
 @dataclass
 class Interrupt:
     """A single interrupt event."""
+
     vector: InterruptType
     source_pid: int | None = None
     data: Any = None
@@ -53,8 +56,7 @@ class InterruptVector:
         self._history: list[Interrupt] = []
         self._max_history = 1000
 
-    def register(self, vector: InterruptType,
-                 handler: Callable[[Interrupt], None]) -> None:
+    def register(self, vector: InterruptType, handler: Callable[[Interrupt], None]) -> None:
         """Register a handler for an interrupt type."""
         with self._lock:
             self._handlers[vector] = handler
@@ -101,7 +103,7 @@ class InterruptVector:
         with self._lock:
             self._history.append(interrupt)
             if len(self._history) > self._max_history:
-                self._history = self._history[-self._max_history:]
+                self._history = self._history[-self._max_history :]
 
         return handled
 
@@ -175,25 +177,31 @@ class InterruptManager:
         self.vector.register(InterruptType.MEMORY_FULL, handler)
 
     def signal_inference_done(self, pid: int, result: Any = None) -> None:
-        self.vector.fire(Interrupt(
-            vector=InterruptType.INFERENCE_DONE,
-            source_pid=pid,
-            data=result,
-        ))
+        self.vector.fire(
+            Interrupt(
+                vector=InterruptType.INFERENCE_DONE,
+                source_pid=pid,
+                data=result,
+            )
+        )
 
     def signal_process_done(self, pid: int, result: Any = None) -> None:
-        self.vector.fire(Interrupt(
-            vector=InterruptType.PROCESS_DONE,
-            source_pid=pid,
-            data=result,
-        ))
+        self.vector.fire(
+            Interrupt(
+                vector=InterruptType.PROCESS_DONE,
+                source_pid=pid,
+                data=result,
+            )
+        )
 
     def signal_device_error(self, pid: int, error: str) -> None:
-        self.vector.fire(Interrupt(
-            vector=InterruptType.DEVICE_ERROR,
-            source_pid=pid,
-            data=error,
-        ))
+        self.vector.fire(
+            Interrupt(
+                vector=InterruptType.DEVICE_ERROR,
+                source_pid=pid,
+                data=error,
+            )
+        )
 
     def stats(self) -> dict:
         return self.vector.stats()

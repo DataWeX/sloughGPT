@@ -1,9 +1,18 @@
 """Tests for domain.collections._internal.filters — LengthFilter, DedupFilter, KeywordFilter, RegexFilter, LanguageFilter, SamplerFilter, TransformFilter, TruncateFilter, PrefixFilter, MetadataFilter, FilterChain; domain.collections._internal.sources — Record."""
 
 from domain.collections._internal.filters import (
-    LengthFilter, DedupFilter, KeywordFilter, RegexFilter, LanguageFilter,
-    SamplerFilter, TransformFilter, TruncateFilter, PrefixFilter,
-    MetadataFilter, FilterChain, Filter,
+    DedupFilter,
+    Filter,
+    FilterChain,
+    KeywordFilter,
+    LanguageFilter,
+    LengthFilter,
+    MetadataFilter,
+    PrefixFilter,
+    RegexFilter,
+    SamplerFilter,
+    TransformFilter,
+    TruncateFilter,
 )
 from domain.collections._internal.sources import Record
 
@@ -15,6 +24,7 @@ def _record(content: str, metadata=None) -> Record:
 
 
 # ── Record ────────────────────────────────────────────────────────────────────
+
 
 class TestRecord:
     def test_defaults(self):
@@ -55,6 +65,7 @@ class TestRecord:
 
 # ── Filter protocol ──────────────────────────────────────────────────────────
 
+
 class TestFilterProtocol:
     def test_length_filter_is_filter(self):
         assert isinstance(LengthFilter(), Filter)
@@ -70,6 +81,7 @@ class TestFilterProtocol:
 
 
 # ── LengthFilter ──────────────────────────────────────────────────────────────
+
 
 class TestLengthFilter:
     def test_within_range(self):
@@ -121,6 +133,7 @@ class TestLengthFilter:
 
 # ── DedupFilter ───────────────────────────────────────────────────────────────
 
+
 class TestDedupFilter:
     def test_unique(self):
         df = DedupFilter()
@@ -167,6 +180,7 @@ class TestDedupFilter:
 
 
 # ── KeywordFilter ─────────────────────────────────────────────────────────────
+
 
 class TestKeywordFilter:
     def test_include(self):
@@ -220,6 +234,7 @@ class TestKeywordFilter:
 
 # ── RegexFilter ───────────────────────────────────────────────────────────────
 
+
 class TestRegexFilter:
     def test_include(self):
         rf = RegexFilter(pattern=r"\b\d{3}\b", mode="include")
@@ -263,6 +278,7 @@ class TestRegexFilter:
 
 # ── LanguageFilter ────────────────────────────────────────────────────────────
 
+
 class TestLanguageFilter:
     def test_ascii_text(self):
         lf = LanguageFilter()
@@ -295,6 +311,7 @@ class TestLanguageFilter:
 
 # ── SamplerFilter ─────────────────────────────────────────────────────────────
 
+
 class TestSamplerFilter:
     def test_rate_1_always_accepts(self):
         sf = SamplerFilter(rate=1.0)
@@ -320,6 +337,7 @@ class TestSamplerFilter:
 
 
 # ── TransformFilter ──────────────────────────────────────────────────────────
+
 
 class TestTransformFilter:
     def test_always_accepts(self):
@@ -358,6 +376,7 @@ class TestTransformFilter:
 
 # ── TruncateFilter ───────────────────────────────────────────────────────────
 
+
 class TestTruncateFilter:
     def test_within_limit(self):
         tf = TruncateFilter(max_length=100)
@@ -389,6 +408,7 @@ class TestTruncateFilter:
 
 
 # ── PrefixFilter ─────────────────────────────────────────────────────────────
+
 
 class TestPrefixFilter:
     def test_adds_prefix(self):
@@ -423,6 +443,7 @@ class TestPrefixFilter:
 
 
 # ── MetadataFilter ───────────────────────────────────────────────────────────
+
 
 class TestMetadataFilter:
     def test_include_match(self):
@@ -465,9 +486,12 @@ class TestMetadataFilter:
 
 # ── FilterChain ──────────────────────────────────────────────────────────────
 
+
 class TestFilterChain:
     def test_chain(self):
-        fc = FilterChain([LengthFilter(min_length=3), KeywordFilter(keywords=["hi"], mode="include")])
+        fc = FilterChain(
+            [LengthFilter(min_length=3), KeywordFilter(keywords=["hi"], mode="include")]
+        )
         assert fc.accept(_record("hi there")) is True
         assert fc.accept(_record("lo")) is False
 
@@ -515,24 +539,30 @@ class TestFilterChain:
         assert len(checked) == 0
 
     def test_chain_all_pass(self):
-        fc = FilterChain([
-            LengthFilter(min_length=1),
-            KeywordFilter(keywords=["hello"], mode="include"),
-        ])
+        fc = FilterChain(
+            [
+                LengthFilter(min_length=1),
+                KeywordFilter(keywords=["hello"], mode="include"),
+            ]
+        )
         assert fc.accept(_record("hello world")) is True
 
     def test_chain_reject_first(self):
-        fc = FilterChain([
-            LengthFilter(min_length=100),
-            KeywordFilter(keywords=["hello"], mode="include"),
-        ])
+        fc = FilterChain(
+            [
+                LengthFilter(min_length=100),
+                KeywordFilter(keywords=["hello"], mode="include"),
+            ]
+        )
         assert fc.accept(_record("hi")) is False
 
     def test_chain_reject_second(self):
-        fc = FilterChain([
-            LengthFilter(min_length=1),
-            KeywordFilter(keywords=["spam"], mode="exclude"),
-        ])
+        fc = FilterChain(
+            [
+                LengthFilter(min_length=1),
+                KeywordFilter(keywords=["spam"], mode="exclude"),
+            ]
+        )
         assert fc.accept(_record("this is spam")) is False
 
     def test_filter_records_empty(self):

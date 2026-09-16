@@ -5,14 +5,13 @@ GPT-2 generates → that becomes input → generate again → repeat
 """
 
 import sys
-import os
 import time
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(_REPO_ROOT / "packages" / "core-py"))
 
-from domain.training.huggingface.local_loader import HuggingFaceLocalLoader, HFLocalConfig
+from domain.training.huggingface.local_loader import HFLocalConfig, HuggingFaceLocalLoader
 
 
 def self_train(
@@ -48,13 +47,13 @@ def self_train(
 
         # Extract new text
         if len(generated) > len(current_text):
-            new_text = generated[len(current_text):].strip()
+            new_text = generated[len(current_text) :].strip()
         else:
             new_text = generated
 
         if not new_text:
             new_text = seed  # Reset if empty
-        print(f"[{step+1}] {new_text[:80]}")
+        print(f"[{step + 1}] {new_text[:80]}")
 
         # Save to history
         Path("data/self_train_history.txt").open("a").write(f"{new_text}\n")
@@ -75,6 +74,7 @@ def self_train(
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Self-training loop")
     parser.add_argument("--seed", default="Hello", help="Initial seed text")
     parser.add_argument("--steps", type=int, default=1000, help="Max steps")
@@ -85,10 +85,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
 self_train(
-        seed=args.seed,
-        max_steps=args.steps,
-        model=args.model,
-        temperature=args.temperature,
-        max_new_tokens=args.max_tokens,
-        forever=args.forever,
-    )
+    seed=args.seed,
+    max_steps=args.steps,
+    model=args.model,
+    temperature=args.temperature,
+    max_new_tokens=args.max_tokens,
+    forever=args.forever,
+)

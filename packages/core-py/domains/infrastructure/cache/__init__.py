@@ -17,6 +17,7 @@ from ...__init__ import BaseComponent, ComponentException
 try:
     from ...__init__ import ICacheManager
 except ImportError:
+
     class ICacheManager:
         pass
 
@@ -27,7 +28,7 @@ class CacheEntry:
 
     key: str
     value: Any
-    ttl: Optional[int]
+    ttl: int | None
     created_at: float
     accessed_count: int
     last_accessed: float
@@ -41,16 +42,16 @@ class CacheManager(BaseComponent, ICacheManager):
         self.logger = logging.getLogger(f"slo.{self.component_name}")
 
         # Cache storage
-        self.cache: Dict[str, CacheEntry] = {}
+        self.cache: dict[str, CacheEntry] = {}
 
         # Configuration
         self.max_size = 10000
         self.default_ttl = 3600  # 1 hour
-        self.cleanup_task: Optional[asyncio.Task[Any]] = None
+        self.cleanup_task: asyncio.Task[Any] | None = None
         self.cleanup_interval = 300  # 5 minutes
 
         # Statistics
-        stats_dict: Dict[str, Any] = {
+        stats_dict: dict[str, Any] = {
             "hits": 0,
             "misses": 0,
             "sets": 0,
@@ -71,26 +72,22 @@ class CacheManager(BaseComponent, ICacheManager):
     async def initialize(self) -> None:
         """Initialize cache manager"""
         try:
-            self.logger.info("Initializing Cache Manager...",
-                extra={"tag": "INFRA"})
+            self.logger.info("Initializing Cache Manager...", extra={"tag": "INFRA"})
 
             # Start cleanup task
             self.cleanup_task = asyncio.create_task(self._cleanup_loop())
 
             self.is_initialized = True
-            self.logger.info("Cache Manager initialized successfully",
-                extra={"tag": "INFRA"})
+            self.logger.info("Cache Manager initialized successfully", extra={"tag": "INFRA"})
 
         except Exception as e:
-            self.logger.error("Failed to initialize Cache Manager: %s",
-                e, extra={"tag": "INFRA"})
+            self.logger.error("Failed to initialize Cache Manager: %s", e, extra={"tag": "INFRA"})
             raise ComponentException(f"Cache Manager initialization failed: {e}")
 
     async def shutdown(self) -> None:
         """Shutdown cache manager"""
         try:
-            self.logger.info("Shutting down Cache Manager...",
-                extra={"tag": "INFRA"})
+            self.logger.info("Shutting down Cache Manager...", extra={"tag": "INFRA"})
 
             # Cancel cleanup task
             if self.cleanup_task:
@@ -101,15 +98,13 @@ class CacheManager(BaseComponent, ICacheManager):
                     pass
 
             self.is_initialized = False
-            self.logger.info("Cache Manager shutdown successfully",
-                extra={"tag": "INFRA"})
+            self.logger.info("Cache Manager shutdown successfully", extra={"tag": "INFRA"})
 
         except Exception as e:
-            self.logger.error("Failed to shutdown Cache Manager: %s",
-                e, extra={"tag": "INFRA"})
+            self.logger.error("Failed to shutdown Cache Manager: %s", e, extra={"tag": "INFRA"})
             raise ComponentException(f"Cache Manager shutdown failed: {e}")
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """Get value from cache"""
         try:
             if key not in self.cache:
@@ -133,12 +128,11 @@ class CacheManager(BaseComponent, ICacheManager):
             return entry.value
 
         except Exception as e:
-            self.logger.error("Failed to get cache key %s: %s",
-                key, e, extra={"tag": "INFRA"})
+            self.logger.error("Failed to get cache key %s: %s", key, e, extra={"tag": "INFRA"})
             self.stats["misses"] += 1
             return None
 
-    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """Set value in cache with optional TTL"""
         try:
             # Check cache size limit
@@ -161,8 +155,7 @@ class CacheManager(BaseComponent, ICacheManager):
             return True
 
         except Exception as e:
-            self.logger.error("Failed to set cache key %s: %s",
-                key, e, extra={"tag": "INFRA"})
+            self.logger.error("Failed to set cache key %s: %s", key, e, extra={"tag": "INFRA"})
             return False
 
     async def delete(self, key: str) -> bool:
@@ -176,24 +169,21 @@ class CacheManager(BaseComponent, ICacheManager):
             return False
 
         except Exception as e:
-            self.logger.error("Failed to delete cache key %s: %s",
-                key, e, extra={"tag": "INFRA"})
+            self.logger.error("Failed to delete cache key %s: %s", key, e, extra={"tag": "INFRA"})
             return False
 
     async def clear(self) -> bool:
         """Clear all cache"""
         try:
             self.cache.clear()
-            self.logger.info("Cache cleared",
-                extra={"tag": "INFRA"})
+            self.logger.info("Cache cleared", extra={"tag": "INFRA"})
             return True
 
         except Exception as e:
-            self.logger.error("Failed to clear cache: %s",
-                e, extra={"tag": "INFRA"})
+            self.logger.error("Failed to clear cache: %s", e, extra={"tag": "INFRA"})
             return False
 
-    async def get_cache_statistics(self) -> Dict[str, Any]:
+    async def get_cache_statistics(self) -> dict[str, Any]:
         """Get cache statistics"""
         stats = self.stats.copy()
 
@@ -232,8 +222,7 @@ class CacheManager(BaseComponent, ICacheManager):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error("Cache cleanup error: %s",
-                    e, extra={"tag": "INFRA"})
+                self.logger.error("Cache cleanup error: %s", e, extra={"tag": "INFRA"})
                 await asyncio.sleep(60)
 
     async def _cleanup_expired_entries(self) -> None:

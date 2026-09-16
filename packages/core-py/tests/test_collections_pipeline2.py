@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import pytest
 from collections.abc import Iterator
 
+from domain.collections._internal.filters import KeywordFilter, LengthFilter
 from domain.collections._internal.pipeline import CollectionPipeline
-from domain.collections._internal.sources import Record, Source
+from domain.collections._internal.sources import Record
 from domain.collections._internal.stores import MemoryStore
-from domain.collections._internal.filters import LengthFilter, KeywordFilter
 
 
 class StubSource:
@@ -20,6 +19,7 @@ class StubSource:
 
 class FailingSource:
     """Always raises on read."""
+
     name = "failing_src"
 
     def read(self) -> Iterator[Record]:
@@ -29,6 +29,7 @@ class FailingSource:
 
 class RecordCounter:
     """Counts how many records were yielded across calls."""
+
     def __init__(self, records: list[Record], name: str = "counter_src"):
         self.name = name
         self._records = records
@@ -42,6 +43,7 @@ class RecordCounter:
 # ---------------------------------------------------------------------------
 # Construction
 # ---------------------------------------------------------------------------
+
 
 class TestPipelineConstruction:
     def test_default_name(self):
@@ -87,6 +89,7 @@ class TestPipelineConstruction:
 # ---------------------------------------------------------------------------
 # collect()
 # ---------------------------------------------------------------------------
+
 
 class TestPipelineCollect:
     def test_collect_empty_source(self):
@@ -141,16 +144,17 @@ class TestPipelineCollect:
 
     def test_collect_with_multiple_filters(self):
         recs = [
-            Record(content="hello world"),           # passes length + keyword
-            Record(content="goodbye world"),          # passes length, fails keyword
-            Record(content="hi"),                     # fails length
-            Record(content="hello there you"),        # passes both
+            Record(content="hello world"),  # passes length + keyword
+            Record(content="goodbye world"),  # passes length, fails keyword
+            Record(content="hi"),  # fails length
+            Record(content="hello there you"),  # passes both
         ]
         src = StubSource(recs)
         store = MemoryStore()
         p = CollectionPipeline(
-            src, store,
-            filters=[LengthFilter(min_length=5), KeywordFilter(keywords=["hello"], mode="include")]
+            src,
+            store,
+            filters=[LengthFilter(min_length=5), KeywordFilter(keywords=["hello"], mode="include")],
         )
         delta = p.collect()
         assert delta == 2
@@ -176,6 +180,7 @@ class TestPipelineCollect:
 # ---------------------------------------------------------------------------
 # read()
 # ---------------------------------------------------------------------------
+
 
 class TestPipelineRead:
     def test_read_empty(self):
@@ -213,6 +218,7 @@ class TestPipelineRead:
 # ---------------------------------------------------------------------------
 # stats
 # ---------------------------------------------------------------------------
+
 
 class TestPipelineStats:
     def test_stats_keys(self):
@@ -277,6 +283,7 @@ class TestPipelineStats:
 # collect_continuous (mock-free: just verify it calls collect the right number)
 # ---------------------------------------------------------------------------
 
+
 class TestPipelineCollectContinuous:
     def test_collect_continuous_max_rounds(self):
         src = StubSource([Record(content="r")])
@@ -305,6 +312,7 @@ class TestPipelineCollectContinuous:
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestPipelineEdgeCases:
     def test_collect_source_that_yields_nothing(self):

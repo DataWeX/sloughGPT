@@ -88,5 +88,8 @@ class TestRecommendProfile:
         assert "detected_ram_gb" in data
         assert "has_gpu" in data
         assert data["recommended_profile_id"] in [
-            "cpu_only", "cpu_optimized", "balanced", "gpu_performance"
+            "cpu_only",
+            "cpu_optimized",
+            "balanced",
+            "gpu_performance",
         ]

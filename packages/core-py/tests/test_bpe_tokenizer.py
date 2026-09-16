@@ -57,6 +57,7 @@ class TestStatsAndMerge:
     def test_get_stats_counts_adjacent(self):
         t = BPETokenizer()
         from collections import Counter
+
         stats = t._get_stats(Counter({"a b a b": 3, "a b": 1}))
         assert stats[("a", "b")] == 7  # 2 per word × 3, plus 1
         assert stats[("b", "a")] == 3
@@ -64,6 +65,7 @@ class TestStatsAndMerge:
     def test_merge_vocab_combines_pair(self):
         t = BPETokenizer()
         from collections import Counter
+
         out = t._merge_vocab(("a", "b"), Counter({"a b a b": 2}))
         assert out == Counter({"ab ab": 2})
 

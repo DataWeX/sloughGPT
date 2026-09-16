@@ -1,8 +1,9 @@
 """Tests for domain.infrastructure.compression — CompressedWeight, LRUCache."""
 
-import numpy as np
 import threading
-import pytest
+
+import numpy as np
+
 from domain.infrastructure._internal.compression import CompressedWeight, LRUCache
 
 
@@ -22,8 +23,13 @@ class TestCompressedWeight:
         assignments = np.array([0, 1, 2], dtype=np.int32)
         shape = (3,)
         cw = CompressedWeight(
-            centroids, assignments, None, shape, np.dtype("float32"),
-            centroid_fn="linear", centroid_fn_params={"a": 1.0, "b": 0.0},
+            centroids,
+            assignments,
+            None,
+            shape,
+            np.dtype("float32"),
+            centroid_fn="linear",
+            centroid_fn_params={"a": 1.0, "b": 0.0},
         )
         result = cw.decompress()
         np.testing.assert_array_almost_equal(result, [0.0, 1.0, 2.0])
@@ -67,8 +73,13 @@ class TestCompressedWeight:
         assignments = np.array([0, 1, 2], dtype=np.int32)
         shape = (3,)
         cw = CompressedWeight(
-            centroids, assignments, None, shape, np.dtype("float32"),
-            centroid_fn="linear", centroid_fn_params={"a": 1.0, "b": 0.0},
+            centroids,
+            assignments,
+            None,
+            shape,
+            np.dtype("float32"),
+            centroid_fn="linear",
+            centroid_fn_params={"a": 1.0, "b": 0.0},
         )
         assert cw.compressed_bytes == 8 + assignments.nbytes
 
@@ -85,8 +96,13 @@ class TestCompressedWeight:
         assignments = np.array([0, 1, 2], dtype=np.int32)
         shape = (3,)
         cw = CompressedWeight(
-            centroids, assignments, None, shape, np.dtype("float32"),
-            centroid_fn="linear", centroid_fn_params={"a": 2.0, "b": 5.0},
+            centroids,
+            assignments,
+            None,
+            shape,
+            np.dtype("float32"),
+            centroid_fn="linear",
+            centroid_fn_params={"a": 2.0, "b": 5.0},
         )
         result = cw.decompress()
         expected = np.array([5.0, 7.0, 9.0], dtype=np.float32)
@@ -114,8 +130,8 @@ class TestCompressedWeight:
         assignments = np.array([0], dtype=np.int32)
         shape = (1,)
         cw = CompressedWeight(centroids, assignments, None, shape, np.dtype("float32"))
-        assert hasattr(cw, '__slots__')
-        assert not hasattr(cw, '__dict__')
+        assert hasattr(cw, "__slots__")
+        assert not hasattr(cw, "__dict__")
 
     def test_decompress_3d_shape(self):
         centroids = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], dtype=np.float32)
@@ -148,8 +164,11 @@ class TestCompressedWeight:
         cw = CompressedWeight(
             np.zeros(3, dtype=np.float32),
             np.array([0, 1, 2], dtype=np.int32),
-            None, (3,), np.dtype("float32"),
-            centroid_fn="linear", centroid_fn_params=params,
+            None,
+            (3,),
+            np.dtype("float32"),
+            centroid_fn="linear",
+            centroid_fn_params=params,
         )
         assert cw.centroid_fn == "linear"
         assert cw.centroid_fn_params == params
@@ -158,8 +177,11 @@ class TestCompressedWeight:
         cw = CompressedWeight(
             np.zeros(3, dtype=np.float32),
             np.array([0, 1, 2], dtype=np.int32),
-            None, (3,), np.dtype("float32"),
-            centroid_fn="linear", centroid_fn_params={"a": 0.0, "b": 99.0},
+            None,
+            (3,),
+            np.dtype("float32"),
+            centroid_fn="linear",
+            centroid_fn_params={"a": 0.0, "b": 99.0},
         )
         result = cw.decompress()
         np.testing.assert_array_almost_equal(result, [99.0, 99.0, 99.0])
@@ -168,8 +190,11 @@ class TestCompressedWeight:
         cw = CompressedWeight(
             np.zeros(3, dtype=np.float32),
             np.array([0, 1, 2], dtype=np.int32),
-            None, (3,), np.dtype("float32"),
-            centroid_fn="linear", centroid_fn_params={"a": -1.0, "b": 10.0},
+            None,
+            (3,),
+            np.dtype("float32"),
+            centroid_fn="linear",
+            centroid_fn_params={"a": -1.0, "b": 10.0},
         )
         result = cw.decompress()
         expected = np.array([10.0, 9.0, 8.0], dtype=np.float32)
@@ -223,8 +248,13 @@ class TestCompressedWeight:
         c = np.zeros(n, dtype=np.float32)
         a = np.arange(n, dtype=np.int32)
         cw = CompressedWeight(
-            c, a, None, (n,), np.dtype("float32"),
-            centroid_fn="linear", centroid_fn_params={"a": 1.0, "b": 0.0},
+            c,
+            a,
+            None,
+            (n,),
+            np.dtype("float32"),
+            centroid_fn="linear",
+            centroid_fn_params={"a": 1.0, "b": 0.0},
         )
         result = cw.decompress()
         np.testing.assert_array_almost_equal(result, np.arange(n, dtype=np.float32))
@@ -233,8 +263,13 @@ class TestCompressedWeight:
         c = np.zeros(5, dtype=np.float32)
         a = np.array([0, 1, 2, 3, 4], dtype=np.int32)
         cw = CompressedWeight(
-            c, a, None, (5,), np.dtype("float32"),
-            centroid_fn="linear", centroid_fn_params={"a": 1.0, "b": 0.0},
+            c,
+            a,
+            None,
+            (5,),
+            np.dtype("float32"),
+            centroid_fn="linear",
+            centroid_fn_params={"a": 1.0, "b": 0.0},
         )
         assert cw.compressed_bytes == 8 + a.nbytes
 
@@ -347,8 +382,13 @@ class TestCompressedWeight:
         c = np.zeros(3, dtype=np.float32)
         a = np.array([0, 1, 2], dtype=np.int32)
         cw = CompressedWeight(
-            c, a, None, (3,), np.dtype("float32"),
-            centroid_fn="linear", centroid_fn_params={"a": 1e6, "b": 0.0},
+            c,
+            a,
+            None,
+            (3,),
+            np.dtype("float32"),
+            centroid_fn="linear",
+            centroid_fn_params={"a": 1e6, "b": 0.0},
         )
         result = cw.decompress()
         np.testing.assert_array_almost_equal(result, [0, 1e6, 2e6])
@@ -540,9 +580,11 @@ class TestLRUCache:
 
     def test_concurrent_writes(self):
         lru = LRUCache(max_size=50)
+
         def write_range(start):
             for i in range(20):
                 lru.put(f"t{start}_{i}", np.array([i]))
+
         threads = [threading.Thread(target=write_range, args=(i,)) for i in range(4)]
         for t in threads:
             t.start()

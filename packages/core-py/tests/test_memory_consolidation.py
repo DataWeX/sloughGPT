@@ -1,6 +1,6 @@
 """Tests for domain.memory._internal.consolidation — plan_consolidation, _embed_cache."""
 
-from domain.memory._internal.consolidation import plan_consolidation, _embed_cache
+from domain.memory._internal.consolidation import _embed_cache, plan_consolidation
 
 
 class TestEmbedCache:
@@ -37,6 +37,7 @@ class TestEmbedCache:
         facts = [{"id": "x", "content": "test"}]
         cache = _embed_cache(facts)
         import numpy as np
+
         assert isinstance(cache["x"], np.ndarray)
 
     def test_same_content_same_embedding(self):
@@ -46,6 +47,7 @@ class TestEmbedCache:
         ]
         cache = _embed_cache(facts)
         import numpy as np
+
         np.testing.assert_array_equal(cache["a"], cache["b"])
 
     def test_different_content_different_embedding(self):
@@ -55,6 +57,7 @@ class TestEmbedCache:
         ]
         cache = _embed_cache(facts)
         import numpy as np
+
         assert not np.array_equal(cache["a"], cache["b"])
 
     def test_content_key_used(self):
@@ -104,6 +107,7 @@ class TestEmbedCache:
         c1 = _embed_cache(facts)
         c2 = _embed_cache(facts)
         import numpy as np
+
         np.testing.assert_array_equal(c1["a"], c2["a"])
 
     def test_fact_with_false_id(self):
@@ -147,7 +151,11 @@ class TestPlanConsolidation:
     def test_keep_longest(self):
         facts = [
             {"id": "short", "content": "likes Zed", "topic": "editor"},
-            {"id": "long", "content": "The user strongly prefers Zed editor over all others", "topic": "editor"},
+            {
+                "id": "long",
+                "content": "The user strongly prefers Zed editor over all others",
+                "topic": "editor",
+            },
         ]
         result = plan_consolidation(facts, threshold=0.2)
         assert "long" in result["keep_ids"]
@@ -280,13 +288,19 @@ class TestPlanConsolidation:
         assert result["removed_count"] == 1
 
     def test_many_facts_no_merge(self):
-        facts = [{"id": f"f{i}", "content": f"unique fact {i} about topic {i}", "topic": f"t{i}"} for i in range(20)]
+        facts = [
+            {"id": f"f{i}", "content": f"unique fact {i} about topic {i}", "topic": f"t{i}"}
+            for i in range(20)
+        ]
         result = plan_consolidation(facts, threshold=0.80)
         assert result["removed_count"] == 0
         assert len(result["keep_ids"]) == 20
 
     def test_groups_are_list(self):
-        facts = [{"id": "a", "content": "same", "topic": "t"}, {"id": "b", "content": "same", "topic": "t"}]
+        facts = [
+            {"id": "a", "content": "same", "topic": "t"},
+            {"id": "b", "content": "same", "topic": "t"},
+        ]
         result = plan_consolidation(facts, threshold=0.5)
         assert isinstance(result["groups"], list)
 

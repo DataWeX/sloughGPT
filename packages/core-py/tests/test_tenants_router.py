@@ -1,6 +1,7 @@
 """
 Tenants Router Tests
 """
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -43,14 +44,18 @@ def _make_tenant(tid="t1", name="Acme", slug="acme", plan="free"):
 def app_with_repos():
     app = FastAPI()
     from infrastructure.exception_handlers import register_app_error_handler
+
     register_app_error_handler(app)
 
     mock_tenant_repo = MagicMock()
     mock_user_repo = MagicMock()
 
-    with patch("routers.tenants.TenantRepository", return_value=mock_tenant_repo), \
-         patch("routers.tenants.UserRepository", return_value=mock_user_repo):
+    with (
+        patch("routers.tenants.TenantRepository", return_value=mock_tenant_repo),
+        patch("routers.tenants.UserRepository", return_value=mock_user_repo),
+    ):
         from routers.tenants import TenantsRouter
+
         router_obj = TenantsRouter()
         app.include_router(router_obj.router)
 
@@ -140,10 +145,13 @@ class TestCreateTenant:
         tenant_repo.get_by_slug.return_value = None
 
         client = _make_client(app)
-        resp = client.post("/tenants", json={
-            "name": "New Org",
-            "slug": "new-org",
-        })
+        resp = client.post(
+            "/tenants",
+            json={
+                "name": "New Org",
+                "slug": "new-org",
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["name"] == "New Org"
         tenant_repo.create.assert_called_once()
@@ -156,10 +164,13 @@ class TestCreateTenant:
         tenant_repo.get_by_slug.return_value = _make_tenant("t1", "Existing", "existing")
 
         client = _make_client(app)
-        resp = client.post("/tenants", json={
-            "name": "New Org",
-            "slug": "existing",
-        })
+        resp = client.post(
+            "/tenants",
+            json={
+                "name": "New Org",
+                "slug": "existing",
+            },
+        )
         assert resp.status_code == 409
 
 

@@ -3,13 +3,12 @@
 Covers: list, get_current, switch, weight snapshots.
 SloManager is mocked.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -18,7 +17,8 @@ if _server_dir not in sys.path:
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
-from routers.souls import SoulsRouter, SloRouterState  # noqa: E402
+from routers.souls import SloRouterState, SoulsRouter  # noqa: E402
+
 from conftest import build_test_app
 
 
@@ -42,7 +42,11 @@ def _mock_manager(**overrides) -> MagicMock:
     current.description = "Helpful assistant"
     current.traits = ["helpful"]
     mgr.get_current_soul.return_value = current
-    mgr.switch_soul.return_value = {"success": True, "name": "creative", "description": "Creative soul"}
+    mgr.switch_soul.return_value = {
+        "success": True,
+        "name": "creative",
+        "description": "Creative soul",
+    }
     mgr.get_soul.return_value = soul2
     mgr.get_soul_prompt.return_value = "You are a helpful assistant."
     mgr.get_trait_weights.return_value = {"warmth": 0.8, "creativity": 0.5}

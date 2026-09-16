@@ -8,8 +8,8 @@ Both SlonetChatProvider (numpy) and CTransformProvider (C/NativeEngine) satisfy 
 from __future__ import annotations
 
 import logging
+
 import numpy as np
-from typing import Dict, List
 
 logger = logging.getLogger("slo.inference.ct_transform")
 
@@ -27,6 +27,7 @@ class CTransformProvider:
 
     def __init__(self, engine, model_id: str = "c-model"):
         from .native.engine import NativeEngine
+
         self._engine: NativeEngine = engine
         self._model_id = model_id
         self._model = engine  # NPU accesses provider._model.forward_pass()
@@ -38,16 +39,19 @@ class CTransformProvider:
         # Try to load a tokenizer for encode/decode
         try:
             from .tokenizer import get_tokenizer
+
             self._tokenizer = get_tokenizer()
         except Exception:
             self._tokenizer = None
 
     @classmethod
-    def from_slnc(cls, slnc_path: str, model_id: str = "c-model",
-                  seq_capacity: int = 2048) -> "CTransformProvider":
+    def from_slnc(
+        cls, slnc_path: str, model_id: str = "c-model", seq_capacity: int = 2048
+    ) -> CTransformProvider:
         """Load from .slnc file via the NativeEngine."""
-        from .native.engine import NativeEngine
         from domains.infrastructure.slnc.parser import SLNCParser
+
+        from .native.engine import NativeEngine
 
         parser = SLNCParser(slnc_path)
         config = parser.config
@@ -60,47 +64,60 @@ class CTransformProvider:
         return cls(engine, model_id=model_id)
 
     @classmethod
-    def from_slo(cls, slo_model, model_id: str = "slo-model",
-                 seq_capacity: int = 2048) -> "CTransformProvider":  # pragma: no cover — NativeEngine has no load_from_slo
+    def from_slo(
+        cls, slo_model, model_id: str = "slo-model", seq_capacity: int = 2048
+    ) -> CTransformProvider:  # pragma: no cover — NativeEngine has no load_from_slo
         """Bridge: load SloTransformer into NativeEngine for C acceleration."""
         from .native.engine import NativeEngine  # pragma: no cover
 
         engine = NativeEngine()  # pragma: no cover
         info = engine.load_from_slo(slo_model, seq_capacity=seq_capacity)  # pragma: no cover
 
-        logger.info("CTransformProvider bridged %s via NativeEngine: %s", model_id, info)  # pragma: no cover
+        logger.info(
+            "CTransformProvider bridged %s via NativeEngine: %s", model_id, info
+        )  # pragma: no cover
         return cls(engine, model_id=model_id)  # pragma: no cover
 
-    def generate(self, prompt: str, max_tokens: int = 50, temperature: float = 1.0,
-                 top_k: int = None, top_p: float = None, repetition_penalty: float = 1.0,
-                 **kwargs) -> str:
+    def generate(
+        self,
+        prompt: str,
+        max_tokens: int = 50,
+        temperature: float = 1.0,
+        top_k: int = None,
+        top_p: float = None,
+        repetition_penalty: float = 1.0,
+        **kwargs,
+    ) -> str:
         """Generate text via NativeEngine."""
         messages = [{"role": "user", "content": prompt}]
         return self._engine.generate(
-            messages, max_tokens=max_tokens,
+            messages,
+            max_tokens=max_tokens,
             temperature=temperature,
             top_p=top_p if top_p is not None else 0.9,
             top_k=top_k if top_k is not None else 50,
         )
 
-    def tokenize(self, text: str) -> List[int]:
+    def tokenize(self, text: str) -> list[int]:
         if self._tokenizer is not None:
             return self._tokenizer.encode(text)
         return self._engine._tokenize_simple(text)
 
-    def detokenize(self, token_ids: List[int]) -> str:
+    def detokenize(self, token_ids: list[int]) -> str:
         if self._tokenizer is not None:
             return self._tokenizer.decode(token_ids)
         return self._engine._detokenize_simple(token_ids)
 
-    def embed(self, text: str, layer: int = -1) -> np.ndarray:  # pragma: no cover — NativeEngine has no forward_pass
+    def embed(
+        self, text: str, layer: int = -1
+    ) -> np.ndarray:  # pragma: no cover — NativeEngine has no forward_pass
         """Embed via forward pass — returns last-position logits as a rough embedding."""
         tokens = self.tokenize(text)  # pragma: no cover
         input_ids = np.array([tokens], dtype=np.int64)  # pragma: no cover
         result = self._engine.forward_pass(input_ids)  # pragma: no cover
         return result.logits[0, -1, :]  # pragma: no cover
 
-    def metadata(self) -> Dict:
+    def metadata(self) -> dict:
         config = self._engine._config or {}
         return {
             "model_id": self._model_id,

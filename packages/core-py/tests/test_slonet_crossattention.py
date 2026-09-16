@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
-import math
-import pytest
 import numpy as np
+
 from domain.training._internal.slonet import (
-    Tensor,
-    SloCrossAttention,
     NumpyKVState,
+    SloCrossAttention,
+    Tensor,
     no_grad,
 )
-
 
 # ── SloCrossAttention ───────────────────────────────────────────────────────
 
 
 class TestSloCrossAttention:
-
     def test_init(self):
         attn = SloCrossAttention(d_model=64, n_heads=4)
         assert attn.d_model == 64
@@ -69,7 +66,6 @@ class TestSloCrossAttention:
 
 
 class TestNumpyKVState:
-
     def test_init(self):
         state = NumpyKVState()
         assert state.kv_buf_k == []
@@ -119,7 +115,6 @@ class TestNumpyKVState:
 
 
 class TestCrossAttentionIntegration:
-
     def test_different_seq_lengths(self):
         attn = SloCrossAttention(d_model=64, n_heads=4)
         q = Tensor(np.ones((1, 3, 64)))

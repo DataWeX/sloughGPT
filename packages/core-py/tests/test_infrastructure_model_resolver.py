@@ -1,8 +1,8 @@
 """Tests for model_resolver — find models in HuggingFace cache."""
+
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
 
 from domain.infrastructure._internal.model_resolver import find_safetensors, get_model_dir
 

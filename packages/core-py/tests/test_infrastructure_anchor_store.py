@@ -1,4 +1,5 @@
 """Tests for MeaningTags — semantic reference vector store."""
+
 from __future__ import annotations
 
 import numpy as np

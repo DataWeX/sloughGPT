@@ -1,24 +1,25 @@
 """Tests for pugqeep generic pluggable architecture."""
 
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
-import tempfile
 
 from domain.infrastructure._internal.pugqeep.generic import (
-    PGQGeneric,
-    CompressionStrategy,
-    StorageBackend,
-    FunctionType,
-    registry,
-    _FunctionTypeRegistry,
-    ClusterStrategy,
-    FunctionStrategy,
-    RawStrategy,
     AutoStrategy,
-    MemoryStorage,
-    JSONStorage,
+    ClusterStrategy,
+    CompressionStrategy,
     DirectoryStorage,
+    FunctionStrategy,
+    FunctionType,
+    JSONStorage,
+    MemoryStorage,
+    PGQGeneric,
+    RawStrategy,
+    StorageBackend,
+    _FunctionTypeRegistry,
+    registry,
 )
 from domain.infrastructure._internal.pugqeep.point import Point
 
@@ -50,8 +51,12 @@ class _CustomCompressor(CompressionStrategy):
     name = "custom_comp"
 
     def compress(self, data, identity="unknown", **kwargs):
-        return Point(identity=identity, function_type=_CustomFunctionType.type_name,
-                     params={"fill": 3.0}, accuracy=1.0)
+        return Point(
+            identity=identity,
+            function_type=_CustomFunctionType.type_name,
+            params={"fill": 3.0},
+            accuracy=1.0,
+        )
 
     def decompress(self, point, n):
         return point.generate(n)
@@ -61,6 +66,7 @@ class _CustomCompressor(CompressionStrategy):
 # Built-in strategies
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestCompressionStrategyDefaults:
     def test_nbytes_default_delegates_to_point(self):
         strategy = ClusterStrategy()
@@ -69,9 +75,14 @@ class TestCompressionStrategyDefaults:
 
     def test_nbytes_default_function_type(self):
         strategy = FunctionStrategy()
-        point = Point(identity="w", function_type="cluster",
-                      params={"centroids": np.zeros(4, dtype=np.float32),
-                              "assignments": np.zeros(8, dtype=np.uint8)})
+        point = Point(
+            identity="w",
+            function_type="cluster",
+            params={
+                "centroids": np.zeros(4, dtype=np.float32),
+                "assignments": np.zeros(8, dtype=np.uint8),
+            },
+        )
         assert strategy.nbytes(point) == point.nbytes()
 
     def test_nbytes_block_q4(self):
@@ -79,8 +90,11 @@ class TestCompressionStrategyDefaults:
         mins = np.zeros(4, dtype=np.float32)
         scales = np.ones(4, dtype=np.float32)
         packed = np.zeros(64, dtype=np.uint8)
-        point = Point(identity="q4", function_type="block_q4",
-                      params={"mins": mins, "scales": scales, "packed": packed})
+        point = Point(
+            identity="q4",
+            function_type="block_q4",
+            params={"mins": mins, "scales": scales, "packed": packed},
+        )
         assert strategy.nbytes(point) == point.nbytes()
 
     def test_nbytes_block_q8(self):
@@ -88,8 +102,11 @@ class TestCompressionStrategyDefaults:
         mins = np.zeros(4, dtype=np.float32)
         scales = np.ones(4, dtype=np.float32)
         values = np.zeros(128, dtype=np.uint8)
-        point = Point(identity="q8", function_type="block_q8",
-                      params={"mins": mins, "scales": scales, "values": values})
+        point = Point(
+            identity="q8",
+            function_type="block_q8",
+            params={"mins": mins, "scales": scales, "values": values},
+        )
         assert strategy.nbytes(point) == point.nbytes()
 
 
@@ -216,6 +233,7 @@ class TestAutoStrategy:
 # Storage backends
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestMemoryStorage:
     def test_save_load(self):
         s = MemoryStorage()
@@ -227,7 +245,12 @@ class TestMemoryStorage:
 
     def test_remove(self):
         s = MemoryStorage()
-        p = Point(identity="a", function_type="raw", params={"data_b64": "", "shape": [], "dtype": "float32"}, accuracy=1.0)
+        p = Point(
+            identity="a",
+            function_type="raw",
+            params={"data_b64": "", "shape": [], "dtype": "float32"},
+            accuracy=1.0,
+        )
         s.save(p)
         assert s.remove("a") is True
         assert s.load("a") is None
@@ -236,13 +259,27 @@ class TestMemoryStorage:
     def test_list_all(self):
         s = MemoryStorage()
         for i in range(5):
-            s.save(Point(identity=f"p{i}", function_type="raw", params={"data_b64": "", "shape": [], "dtype": "float32"}, accuracy=1.0))
+            s.save(
+                Point(
+                    identity=f"p{i}",
+                    function_type="raw",
+                    params={"data_b64": "", "shape": [], "dtype": "float32"},
+                    accuracy=1.0,
+                )
+            )
         assert s.count() == 5
         assert len(s.list_all()) == 5
 
     def test_clear(self):
         s = MemoryStorage()
-        s.save(Point(identity="a", function_type="raw", params={"data_b64": "", "shape": [], "dtype": "float32"}, accuracy=1.0))
+        s.save(
+            Point(
+                identity="a",
+                function_type="raw",
+                params={"data_b64": "", "shape": [], "dtype": "float32"},
+                accuracy=1.0,
+            )
+        )
         s.clear()
         assert s.count() == 0
 
@@ -262,7 +299,11 @@ class TestJSONStorage:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "test.json"
             s1 = JSONStorage(path)
-            s1.save(Point(identity="x", function_type="linear", params={"a": 1.0, "b": 0.0}, accuracy=0.9))
+            s1.save(
+                Point(
+                    identity="x", function_type="linear", params={"a": 1.0, "b": 0.0}, accuracy=0.9
+                )
+            )
             # New instance loads from same file
             s2 = JSONStorage(path)
             assert s2.load("x") is not None
@@ -300,7 +341,14 @@ class TestDirectoryStorage:
     def test_remove(self):
         with tempfile.TemporaryDirectory() as tmp:
             s = DirectoryStorage(Path(tmp))
-            s.save(Point(identity="a", function_type="raw", params={"data_b64": "", "shape": [], "dtype": "float32"}, accuracy=1.0))
+            s.save(
+                Point(
+                    identity="a",
+                    function_type="raw",
+                    params={"data_b64": "", "shape": [], "dtype": "float32"},
+                    accuracy=1.0,
+                )
+            )
             assert s.remove("a") is True
             assert s.load("a") is None
 
@@ -320,6 +368,7 @@ class TestDirectoryStorage:
 # Registry
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestRegistry:
     def test_builtin_compressors(self):
         assert "cluster" in registry.compressors
@@ -333,9 +382,15 @@ class TestRegistry:
     def test_register_custom_compressor(self):
         class Q8(CompressionStrategy):
             name = "q8"
+
             def compress(self, data, identity="unknown", **kwargs):
-                return Point(identity=identity, function_type="raw",
-                             params={"data_b64": "", "shape": list(data.shape), "dtype": str(data.dtype)}, accuracy=1.0)
+                return Point(
+                    identity=identity,
+                    function_type="raw",
+                    params={"data_b64": "", "shape": list(data.shape), "dtype": str(data.dtype)},
+                    accuracy=1.0,
+                )
+
             def decompress(self, point, n):
                 return np.zeros(n)
 
@@ -348,12 +403,24 @@ class TestRegistry:
     def test_register_custom_storage(self):
         class NullStorage(StorageBackend):
             name = "null"
-            def save(self, point): pass
-            def load(self, identity): return None
-            def remove(self, identity): return False
-            def list_all(self): return []
-            def clear(self): pass
-            def count(self): return 0
+
+            def save(self, point):
+                pass
+
+            def load(self, identity):
+                return None
+
+            def remove(self, identity):
+                return False
+
+            def list_all(self):
+                return []
+
+            def clear(self):
+                pass
+
+            def count(self):
+                return 0
 
         registry.storages.register(NullStorage())
         assert "null" in registry.storages
@@ -390,6 +457,7 @@ class TestFunctionTypeRegistry:
 # ══════════════════════════════════════════════════════════════════════════════
 # PGQGeneric facade
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPGQGeneric:
     def test_put_get_cluster(self):
@@ -469,13 +537,18 @@ class TestPGQGeneric:
     def test_custom_compressor(self):
         class HalveStrategy(CompressionStrategy):
             name = "halve"
+
             def compress(self, data, identity="unknown", **kwargs):
                 flat = data.flatten().astype(np.float32)
                 centroids = np.array([flat.mean()], dtype=np.float32)
                 assignments = np.zeros(len(flat), dtype=np.uint8)
-                return Point(identity=identity, function_type="cluster",
-                             params={"centroids": centroids, "assignments": assignments},
-                             accuracy=0.5)
+                return Point(
+                    identity=identity,
+                    function_type="cluster",
+                    params={"centroids": centroids, "assignments": assignments},
+                    accuracy=0.5,
+                )
+
             def decompress(self, point, n):
                 return np.full(n, point.params["centroids"][0])
 
@@ -497,13 +570,15 @@ class TestPGQGeneric:
 
     def test_json_storage(self):
         with tempfile.TemporaryDirectory() as tmp:
-            sys = PGQGeneric(name="test", compressor="cluster",
-                             storage=JSONStorage(Path(tmp) / "lib.json"))
+            sys = PGQGeneric(
+                name="test", compressor="cluster", storage=JSONStorage(Path(tmp) / "lib.json")
+            )
             data = np.random.randn(100).astype(np.float32)
             sys.put("w1", data)
             # Reload from disk
-            sys2 = PGQGeneric(name="test", compressor="cluster",
-                              storage=JSONStorage(Path(tmp) / "lib.json"))
+            sys2 = PGQGeneric(
+                name="test", compressor="cluster", storage=JSONStorage(Path(tmp) / "lib.json")
+            )
             result = sys2.get("w1")
             assert result is not None
 
@@ -544,8 +619,12 @@ class TestPGQGeneric:
         del registry.function_types._code_map[b"CUST"]
 
     def test_get_custom_function_type_branch(self):
-        sys = PGQGeneric(name="test", compressor=_CustomCompressor(),
-                         storage=MemoryStorage(), function_types=[_CustomFunctionType()])
+        sys = PGQGeneric(
+            name="test",
+            compressor=_CustomCompressor(),
+            storage=MemoryStorage(),
+            function_types=[_CustomFunctionType()],
+        )
         sys.put("w1", np.arange(10, dtype=np.float32))
         result = sys.get("w1")
         np.testing.assert_array_equal(result, np.full(10, 3.0))

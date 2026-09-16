@@ -244,6 +244,7 @@ def migrate_rag_documents() -> dict:
     if docs:
         # Write to temp file for sync
         import tempfile
+
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as tmp:
             for doc in docs:
                 tmp.write(json.dumps(doc) + "\n")

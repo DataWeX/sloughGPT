@@ -220,7 +220,10 @@ def set_memory_pressure_thresholds(
     emergency: float | None = None,
 ) -> None:
     """Set runtime memory pressure thresholds (persists until restart)."""
-    global _runtime_memory_pressure_warning, _runtime_memory_pressure_critical, _runtime_memory_pressure_emergency
+    global \
+        _runtime_memory_pressure_warning, \
+        _runtime_memory_pressure_critical, \
+        _runtime_memory_pressure_emergency
     if warning is not None:
         _runtime_memory_pressure_warning = warning
     if critical is not None:

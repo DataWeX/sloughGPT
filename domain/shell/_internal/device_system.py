@@ -14,7 +14,7 @@ Architecture:
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from domain.shell._internal.vm import Device, DeviceBus, DeviceFault
 
@@ -33,8 +33,7 @@ class DeviceSystem:
         self._devices: dict[str, Device] = {}
         self._metadata: dict[str, dict] = {}
 
-    def register(self, name: str, device: Device, *,
-                 registered_by: str = "", **meta) -> None:
+    def register(self, name: str, device: Device, *, registered_by: str = "", **meta) -> None:
         """Register a device. Also registers on internal VM DeviceBus.
 
         Args:
@@ -126,7 +125,7 @@ class DeviceSystem:
 
 # ── Singleton ────────────────────────────────────────────────────────────────
 
-_instance: Optional[DeviceSystem] = None
+_instance: DeviceSystem | None = None
 
 
 def get_device_system() -> DeviceSystem:

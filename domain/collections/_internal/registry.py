@@ -31,7 +31,9 @@ class CollectionRegistry:
     def get_filter(self, name: str) -> Filter | None:
         return self._filters.get(name)
 
-    def create_pipeline(self, name: str, source_name: str, store_name: str, filter_names: list[str] | None = None) -> CollectionPipeline | None:
+    def create_pipeline(
+        self, name: str, source_name: str, store_name: str, filter_names: list[str] | None = None
+    ) -> CollectionPipeline | None:
         source = self._sources.get(source_name)
         store = self._stores.get(store_name)
         if source is None or store is None:

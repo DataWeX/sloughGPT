@@ -3,31 +3,25 @@
 from __future__ import annotations
 
 import os
-import io
-import sys
-import json
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 from domain.shell._internal.repl import (
-    _color,
     _COLOR_ENABLED,
+    _COMMAND_CACHE_FETCHERS,
     _CaptureOutput,
-    _get_file_handler,
-    _get_log_buffer_handler,
+    _color,
+    _fetch_checkpoint_names,
+    _fetch_dataset_names,
     _fetch_model_names,
     _fetch_soul_names,
-    _fetch_dataset_names,
-    _fetch_checkpoint_names,
-    _COMMAND_CACHE_FETCHERS,
+    _get_file_handler,
+    _get_log_buffer_handler,
 )
-
 
 # ── _color ──────────────────────────────────────────────────────────────────
 
 
 class TestColor:
-
     def test_color_enabled(self):
         with patch.dict(os.environ, {}, clear=False):
             result = _color("hello", "\033[36m")
@@ -43,6 +37,7 @@ class TestColor:
     def test_color_no_color_env(self):
         with patch.dict(os.environ, {"NO_COLOR": "1"}, clear=False):
             import domain.shell._internal.repl as mod
+
             old = mod._COLOR_ENABLED
             mod._COLOR_ENABLED = False
             try:
@@ -56,7 +51,6 @@ class TestColor:
 
 
 class TestCaptureOutput:
-
     def test_capture_stdout(self):
         with _CaptureOutput():
             print("test output")
@@ -75,9 +69,9 @@ class TestCaptureOutput:
 
 
 class TestGetFileHandler:
-
     def test_returns_handler(self):
         import domain.shell._internal.repl as mod
+
         old = mod._file_handler
         mod._file_handler = None
         try:
@@ -88,6 +82,7 @@ class TestGetFileHandler:
 
     def test_caches_handler(self):
         import domain.shell._internal.repl as mod
+
         old = mod._file_handler
         mock_handler = MagicMock()
         mock_handler.closed = False
@@ -103,9 +98,9 @@ class TestGetFileHandler:
 
 
 class TestGetLogBufferHandler:
-
     def test_returns_handler(self):
         import domain.shell._internal.repl as mod
+
         old = mod._buf_handler
         mod._buf_handler = None
         try:
@@ -117,6 +112,7 @@ class TestGetLogBufferHandler:
 
     def test_caches_handler(self):
         import domain.shell._internal.repl as mod
+
         old = mod._buf_handler
         mock_handler = MagicMock()
         mock_handler.closed = False
@@ -132,7 +128,6 @@ class TestGetLogBufferHandler:
 
 
 class TestFetchFunctions:
-
     def test_fetch_model_names_error(self):
         with patch("requests.get", side_effect=Exception("network error")):
             result = _fetch_model_names()
@@ -167,7 +162,6 @@ class TestFetchFunctions:
 
 
 class TestCommandCacheFetchers:
-
     def test_has_all_keys(self):
         assert "load" in _COMMAND_CACHE_FETCHERS
         assert "unload" in _COMMAND_CACHE_FETCHERS
@@ -184,10 +178,12 @@ class TestCommandCacheFetchers:
 
 
 class TestAnsiConstants:
-
     def test_color_codes_defined(self):
-        from domain.shell._internal.repl import _C_CYAN, _C_GREEN, _C_YELLOW, _C_RED
-        from domain.shell._internal.repl import _C_DIM, _C_BOLD, _C_RESET
+        from domain.shell._internal.repl import (
+            _C_CYAN,
+            _C_RESET,
+        )
+
         assert isinstance(_C_CYAN, str)
         assert isinstance(_C_RESET, str)
 
@@ -196,7 +192,7 @@ class TestAnsiConstants:
 
 
 class TestReadline:
-
     def test_has_readline_defined(self):
         from domain.shell._internal.repl import _HAS_READLINE
+
         assert isinstance(_HAS_READLINE, bool)

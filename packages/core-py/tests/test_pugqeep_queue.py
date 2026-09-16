@@ -5,10 +5,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from domain.infrastructure._internal.pugqeep.queue import ModelQueue
-from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
-from domain.infrastructure._internal.pugqeep.library import PointLibrary
+
 from domain.infrastructure._internal.pugqeep.config import QueueConfig, TreeConfig
+from domain.infrastructure._internal.pugqeep.library import PointLibrary
+from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+from domain.infrastructure._internal.pugqeep.queue import ModelQueue
 
 
 @pytest.fixture
@@ -233,7 +234,7 @@ class TestModelQueueCompress:
     def test_compress_stores_in_library(self, queue):
         tree = queue.add_tree("t1")
         weights = np.random.randn(128)
-        point = tree.library.compress_and_store(weights, identity="w1")
+        tree.library.compress_and_store(weights, identity="w1")
         assert tree.library.get("w1") is not None
 
     def test_compress_cluster_method(self, queue):

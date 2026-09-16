@@ -2,44 +2,43 @@
 
 from __future__ import annotations
 
-import time
 import math
+import time
 
 import numpy as np
 import pytest
 
-from domain.shell._internal.kernel_process import Process, ProcessState
-from domain.shell._internal.kernel_devices import DeviceDriver, DeviceType
-from domain.shell._internal.kernel_interrupts import Interrupt, InterruptType
-from domain.shell._internal.kernel_syscall import SyscallResult
-
 from domain.shell._internal.addons.neural import (
-    NeuralOp,
-    NeuralState,
-    NeuralProcessType,
-    NeuralMemoryType,
-    CacheStrategy,
-    NeuralProcess,
-    KVCacheEntry,
-    NeuralKVCache,
-    EmbeddingEntry,
-    NeuralEmbeddingStore,
-    GradientAccumulator,
+    BatchProcessor,
     BatchRequest,
     BatchResult,
-    BatchProcessor,
-    NeuralInterrupt,
-    NeuralSyscall,
-    NeuralEngineDevice,
-    TokenizerDevice,
+    CacheStrategy,
+    EmbeddingEntry,
     EmbeddingStoreDevice,
+    GradientAccumulator,
+    KVCacheEntry,
     MultiHeadAttentionDevice,
+    NeuralEmbeddingStore,
+    NeuralEngineDevice,
+    NeuralInterrupt,
+    NeuralKVCache,
+    NeuralMemoryType,
+    NeuralOp,
+    NeuralProcess,
+    NeuralProcessType,
+    NeuralState,
+    NeuralSyscall,
+    TokenizerDevice,
 )
-
+from domain.shell._internal.kernel_devices import DeviceType
+from domain.shell._internal.kernel_interrupts import InterruptType
+from domain.shell._internal.kernel_process import Process, ProcessState
+from domain.shell._internal.kernel_syscall import SyscallResult
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_process(pid: int = 1, name: str = "test") -> Process:
     return Process(pid=pid, name=name)
@@ -52,6 +51,7 @@ def _make_neural_proc(**kwargs) -> NeuralProcess:
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
+
 
 class TestEnums:
     def test_neural_op_members(self):
@@ -84,6 +84,7 @@ class TestEnums:
 # ---------------------------------------------------------------------------
 # NeuralProcess dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestNeuralProcess:
     def test_defaults(self):
@@ -234,6 +235,7 @@ class TestNeuralProcess:
 # KVCacheEntry dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestKVCacheEntry:
     def test_defaults(self):
         entry = KVCacheEntry(layer_idx=0)
@@ -247,6 +249,7 @@ class TestKVCacheEntry:
 # ---------------------------------------------------------------------------
 # NeuralKVCache
 # ---------------------------------------------------------------------------
+
 
 class TestNeuralKVCache:
     def test_init_defaults(self):
@@ -339,6 +342,7 @@ class TestNeuralKVCache:
 # EmbeddingEntry dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestEmbeddingEntry:
     def test_fields(self):
         vec = np.array([1.0, 2.0, 3.0])
@@ -353,6 +357,7 @@ class TestEmbeddingEntry:
 # ---------------------------------------------------------------------------
 # NeuralEmbeddingStore
 # ---------------------------------------------------------------------------
+
 
 class TestNeuralEmbeddingStore:
     def test_init_defaults(self):
@@ -449,6 +454,7 @@ class TestNeuralEmbeddingStore:
 # GradientAccumulator
 # ---------------------------------------------------------------------------
 
+
 class TestGradientAccumulator:
     def test_init(self):
         ga = GradientAccumulator(max_grad_norm=2.0, accumulation_steps=4)
@@ -498,6 +504,7 @@ class TestGradientAccumulator:
 # BatchRequest / BatchResult dataclasses
 # ---------------------------------------------------------------------------
 
+
 class TestDataclasses:
     def test_batch_request_defaults(self):
         req = BatchRequest(id="r1", inputs={"x": np.array([1])})
@@ -514,6 +521,7 @@ class TestDataclasses:
 # ---------------------------------------------------------------------------
 # BatchProcessor
 # ---------------------------------------------------------------------------
+
 
 class TestBatchProcessor:
     def test_submit(self):
@@ -552,6 +560,7 @@ class TestBatchProcessor:
     def test_process_batch_with_error(self):
         def bad_fn(inputs):
             raise ValueError("boom")
+
         bp = BatchProcessor(max_batch_size=1, process_fn=bad_fn)
         bp.submit(BatchRequest(id="r1", inputs={}))
         results = bp.process_batch()
@@ -576,6 +585,7 @@ class TestBatchProcessor:
 # ---------------------------------------------------------------------------
 # NeuralInterrupt static methods
 # ---------------------------------------------------------------------------
+
 
 class TestNeuralInterrupt:
     def test_inference_done(self):
@@ -604,6 +614,7 @@ class TestNeuralInterrupt:
 # ---------------------------------------------------------------------------
 # NeuralEngineDevice
 # ---------------------------------------------------------------------------
+
 
 class TestNeuralEngineDevice:
     def test_init(self):
@@ -677,6 +688,7 @@ class TestNeuralEngineDevice:
 # TokenizerDevice
 # ---------------------------------------------------------------------------
 
+
 class TestTokenizerDevice:
     def test_init(self):
         dev = TokenizerDevice()
@@ -717,6 +729,7 @@ class TestTokenizerDevice:
 # ---------------------------------------------------------------------------
 # EmbeddingStoreDevice
 # ---------------------------------------------------------------------------
+
 
 class TestEmbeddingStoreDevice:
     def test_init(self):
@@ -778,6 +791,7 @@ class TestEmbeddingStoreDevice:
 # MultiHeadAttentionDevice
 # ---------------------------------------------------------------------------
 
+
 class TestMultiHeadAttentionDevice:
     def test_init(self):
         dev = MultiHeadAttentionDevice(num_heads=8, head_dim=64)
@@ -835,6 +849,7 @@ class TestMultiHeadAttentionDevice:
 # ---------------------------------------------------------------------------
 # NeuralSyscall static methods
 # ---------------------------------------------------------------------------
+
 
 class TestNeuralSyscall:
     def test_constants(self):

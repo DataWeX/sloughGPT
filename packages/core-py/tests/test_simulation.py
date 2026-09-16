@@ -14,7 +14,6 @@ from domain.shell._internal.simulation import (
     MATERIAL_SIGNAL,
     MATERIAL_STONE,
     MATERIAL_WATER,
-    NUM_MATERIALS,
     BabyAction,
     CellWrite,
     Entity,
@@ -30,20 +29,19 @@ from domain.shell._internal.simulation import (
     WorldParams,
     cell_update_combustion,
     cell_update_conduction,
-    cell_update_default,
     cell_update_diffusion,
     cell_update_ember,
     cell_update_energy_conservation,
     cell_update_living,
     cell_update_metabolism,
     cell_update_temperature,
-    cell_update_waves,
     cell_update_water,
+    cell_update_waves,
     generate_world,
 )
 
-
 # ── WorldCell ────────────────────────────────────────────────────────────────
+
 
 class TestWorldCell:
     def test_defaults(self):
@@ -60,6 +58,7 @@ class TestWorldCell:
 
 
 # ── WorldGrid ────────────────────────────────────────────────────────────────
+
 
 class TestWorldGrid:
     def test_init_default(self):
@@ -186,6 +185,7 @@ class TestWorldGrid:
 
 # ── Cell update functions ───────────────────────────────────────────────────
 
+
 class TestCellUpdateDiffusion:
     def test_conserves_total_energy(self):
         g = WorldGrid((4, 4, 4))
@@ -203,9 +203,12 @@ class TestCellUpdateDiffusion:
         params = WorldParams(grid_size=(8, 8, 8), diffusion_rate=0.1)
         cell_update_diffusion(g, params)
         assert g.energy[center] < 100.0
-        total_nearby = sum(g.energy[g.idx(4+dx, 4+dy, 4+dz)]
-                          for dx in (-1, 0, 1) for dy in (-1, 0, 1)
-                          for dz in (-1, 0, 1))
+        total_nearby = sum(
+            g.energy[g.idx(4 + dx, 4 + dy, 4 + dz)]
+            for dx in (-1, 0, 1)
+            for dy in (-1, 0, 1)
+            for dz in (-1, 0, 1)
+        )
         assert total_nearby > 0.0
 
 
@@ -270,8 +273,10 @@ class TestCellUpdateEmber:
         g.energy[i] = 100.0
         g.temperature[i] = 200.0
         params = WorldParams(
-            ember_heat_rate=0.5, ember_energy_fraction=0.5,
-            heat_to_temp=1.0, burn_temp=150.0,
+            ember_heat_rate=0.5,
+            ember_energy_fraction=0.5,
+            heat_to_temp=1.0,
+            burn_temp=150.0,
         )
         cell_update_ember(g, params)
         assert g.energy[i] < 100.0
@@ -295,13 +300,13 @@ class TestCellUpdateLiving:
         g.material[li] = MATERIAL_LIVING
         g.energy[li] = 200.0
         params = WorldParams(
-            living_growth_rate=0.1, living_growth_cost=2.0,
+            living_growth_rate=0.1,
+            living_growth_cost=2.0,
             growth_transfer_fraction=0.8,
         )
         cell_update_living(g, params)
         grew = False
-        for dx, dy, dz in [(-1, 0, 0), (1, 0, 0), (0, -1, 0),
-                           (0, 1, 0), (0, 0, -1), (0, 0, 1)]:
+        for dx, dy, dz in [(-1, 0, 0), (1, 0, 0), (0, -1, 0), (0, 1, 0), (0, 0, -1), (0, 0, 1)]:
             nx = (4 + dx) % 8
             ny = (4 + dy) % 8
             nz = (4 + dz) % 8
@@ -318,8 +323,7 @@ class TestCellUpdateWater:
         i = g.idx(1, 1, 1)
         g.material[i] = MATERIAL_WATER
         g.signal[i] = 10.0
-        params = WorldParams(water_signal_dampen=0.5, water_cool_rate=0.0,
-                             ambient_temp=20.0)
+        params = WorldParams(water_signal_dampen=0.5, water_cool_rate=0.0, ambient_temp=20.0)
         cell_update_water(g, params)
         assert g.signal[i] == pytest.approx(5.0)
 
@@ -328,8 +332,7 @@ class TestCellUpdateWater:
         i = g.idx(1, 1, 1)
         g.material[i] = MATERIAL_WATER
         g.temperature[i] = 80.0
-        params = WorldParams(water_signal_dampen=0.0, water_cool_rate=0.1,
-                             ambient_temp=20.0)
+        params = WorldParams(water_signal_dampen=0.0, water_cool_rate=0.1, ambient_temp=20.0)
         cell_update_water(g, params)
         assert g.temperature[i] == pytest.approx(80.0 + (20.0 - 80.0) * 0.1)
 
@@ -343,8 +346,7 @@ class TestCellUpdateConduction:
         g.material[j] = MATERIAL_STONE
         g.energy[i] = 100.0
         g.energy[j] = 0.0
-        params = WorldParams(grid_size=(8, 8, 8), metal_conduction_boost=3.0,
-                             diffusion_rate=0.1)
+        params = WorldParams(grid_size=(8, 8, 8), metal_conduction_boost=3.0, diffusion_rate=0.1)
         cell_update_conduction(g, params)
         assert g.energy[i] < 100.0
         assert g.energy[j] > 0.0
@@ -414,6 +416,7 @@ class TestGenerateWorld:
 
 # ── Entity ──────────────────────────────────────────────────────────────────
 
+
 class TestEntity:
     def test_defaults(self):
         e = Entity()
@@ -431,8 +434,13 @@ class TestEntity:
         assert e.distance_to_point(np.array([4.0, 0.0, 0.0])) == pytest.approx(3.0)
 
     def test_to_dict_from_dict(self):
-        e = Entity(id=7, position=np.array([1.0, 2.0, 3.0]),
-                   energy=50.0, entity_type=EntityType.AGENT, alive=True)
+        e = Entity(
+            id=7,
+            position=np.array([1.0, 2.0, 3.0]),
+            energy=50.0,
+            entity_type=EntityType.AGENT,
+            alive=True,
+        )
         d = e.to_dict()
         e2 = Entity.from_dict(d)
         assert e2.id == 7
@@ -444,15 +452,20 @@ class TestEntity:
 
 # ── Nest ────────────────────────────────────────────────────────────────────
 
+
 class TestNest:
     def test_distance_to_point(self):
-        n = Nest(id=1, position=np.array([0.0, 0.0, 0.0]),
-                 stored_energy=50.0, owner_group_id=0)
+        n = Nest(id=1, position=np.array([0.0, 0.0, 0.0]), stored_energy=50.0, owner_group_id=0)
         assert n.distance_to_point(np.array([3.0, 4.0, 0.0])) == pytest.approx(5.0)
 
     def test_to_dict_from_dict(self):
-        n = Nest(id=5, position=np.array([1.0, 2.0, 3.0]),
-                 stored_energy=100.0, owner_group_id=2, alive=True)
+        n = Nest(
+            id=5,
+            position=np.array([1.0, 2.0, 3.0]),
+            stored_energy=100.0,
+            owner_group_id=2,
+            alive=True,
+        )
         d = n.to_dict()
         n2 = Nest.from_dict(d)
         assert n2.id == 5
@@ -463,6 +476,7 @@ class TestNest:
 
 
 # ── Perceptron ──────────────────────────────────────────────────────────────
+
 
 class TestPerceptron:
     def test_forward_shape(self):
@@ -524,6 +538,7 @@ class TestPerceptron:
 
 # ── SimBaby ─────────────────────────────────────────────────────────────────
 
+
 class TestSimBaby:
     def test_init_defaults(self):
         b = SimBaby(position=np.array([5.0, 5.0, 5.0]), initial_energy=100.0)
@@ -540,9 +555,14 @@ class TestSimBaby:
         assert b.perceptron_move is not None
 
     def test_perceptrons_with_optional_channels(self):
-        p = WorldParams(message_enabled=True, teaching_enabled=True,
-                        predation_enabled=True, territoriality_enabled=True,
-                        lifecycle_enabled=True, specialization_enabled=True)
+        p = WorldParams(
+            message_enabled=True,
+            teaching_enabled=True,
+            predation_enabled=True,
+            territoriality_enabled=True,
+            lifecycle_enabled=True,
+            specialization_enabled=True,
+        )
         b = SimBaby(params=p)
         assert b.perceptron_message is not None
         assert b.perceptron_teach is not None
@@ -580,10 +600,16 @@ class TestSimBaby:
     def test_react_energy_below_threshold_no_writes(self):
         b = SimBaby(initial_energy=5.0)
         p = Perception(
-            nearby_cells={"material": np.zeros(1), "energy": np.zeros(1),
-                          "temperature": np.full(1, 20.0), "signal": np.zeros(1),
-                          "distance": np.zeros(1), "count": 1},
-            nearby_entities=[], agent_body={"position": [0, 0, 0], "energy": 5.0},
+            nearby_cells={
+                "material": np.zeros(1),
+                "energy": np.zeros(1),
+                "temperature": np.full(1, 20.0),
+                "signal": np.zeros(1),
+                "distance": np.zeros(1),
+                "count": 1,
+            },
+            nearby_entities=[],
+            agent_body={"position": [0, 0, 0], "energy": 5.0},
         )
         action = b.react(p, 0.0)
         assert len(action.writes) == 0
@@ -591,10 +617,12 @@ class TestSimBaby:
     def test_apply_action(self):
         g = WorldGrid((8, 8, 8))
         b = SimBaby(position=np.array([4.0, 4.0, 4.0]))
-        action = BabyAction(writes=[
-            CellWrite(4, 4, 4, MATERIAL_ORGANIC, 5.0),
-            CellWrite(5, 4, 4, MATERIAL_WATER, 3.0),
-        ])
+        action = BabyAction(
+            writes=[
+                CellWrite(4, 4, 4, MATERIAL_ORGANIC, 5.0),
+                CellWrite(5, 4, 4, MATERIAL_WATER, 3.0),
+            ]
+        )
         written = b.apply_action(action, g)
         assert written == 2
         assert g.energy[g.idx(4, 4, 4)] == pytest.approx(5.0)
@@ -676,8 +704,12 @@ class TestSimBaby:
         assert "ticks" in info
 
     def test_to_dict_from_dict(self):
-        b = SimBaby(position=np.array([3.0, 2.0, 1.0]), initial_energy=80.0,
-                    params=WorldParams(), group_id=2)
+        b = SimBaby(
+            position=np.array([3.0, 2.0, 1.0]),
+            initial_energy=80.0,
+            params=WorldParams(),
+            group_id=2,
+        )
         d = b.to_dict()
         b2 = SimBaby.from_dict(d, params=WorldParams())
         assert b2.energy == pytest.approx(80.0)
@@ -685,8 +717,7 @@ class TestSimBaby:
         np.testing.assert_array_almost_equal(b2.position, [3.0, 2.0, 1.0])
 
     def test_spawn_child(self):
-        parent = SimBaby(position=np.array([4.0, 4.0, 4.0]), initial_energy=200.0,
-                         group_id=1)
+        parent = SimBaby(position=np.array([4.0, 4.0, 4.0]), initial_energy=200.0, group_id=1)
         child = parent.spawn_child(np.array([5.0, 4.0, 4.0]))
         assert child.energy == pytest.approx(parent.params.birth_cost)
         assert child.group_id == 1
@@ -700,13 +731,18 @@ class TestSimBaby:
         assert direction.shape == (3,)
 
     def test_decide_move_below_threshold(self):
-        b = SimBaby(initial_energy=1.0,
-                    params=WorldParams(move_threshold=10.0))
+        b = SimBaby(initial_energy=1.0, params=WorldParams(move_threshold=10.0))
         p = Perception(
-            nearby_cells={"material": np.zeros(1), "energy": np.zeros(1),
-                          "temperature": np.full(1, 20.0), "signal": np.zeros(1),
-                          "distance": np.zeros(1), "count": 1},
-            nearby_entities=[], agent_body={"position": [0, 0, 0], "energy": 1.0},
+            nearby_cells={
+                "material": np.zeros(1),
+                "energy": np.zeros(1),
+                "temperature": np.full(1, 20.0),
+                "signal": np.zeros(1),
+                "distance": np.zeros(1),
+                "count": 1,
+            },
+            nearby_entities=[],
+            agent_body={"position": [0, 0, 0], "energy": 1.0},
         )
         assert b.decide_move(p) is None
 
@@ -763,6 +799,7 @@ class TestSimBaby:
 
 # ── SimScene ────────────────────────────────────────────────────────────────
 
+
 class TestSimScene:
     def test_init(self):
         scene = SimScene(params=WorldParams(grid_size=(8, 8, 8)))
@@ -799,42 +836,46 @@ class TestSimScene:
 
     def test_nearest_nest(self):
         scene = SimScene(params=WorldParams(grid_size=(16, 16, 16)))
-        scene.nests.append(Nest(id=1, position=np.array([8.0, 8.0, 8.0]),
-                                stored_energy=50.0, owner_group_id=0))
+        scene.nests.append(
+            Nest(id=1, position=np.array([8.0, 8.0, 8.0]), stored_energy=50.0, owner_group_id=0)
+        )
         nest = scene.nearest_nest(np.array([7.0, 8.0, 8.0]), radius=2.0)
         assert nest is not None
         assert nest.id == 1
 
     def test_nearest_nest_filters_by_group(self):
         scene = SimScene(params=WorldParams(grid_size=(16, 16, 16)))
-        scene.nests.append(Nest(id=1, position=np.array([8.0, 8.0, 8.0]),
-                                stored_energy=50.0, owner_group_id=0))
+        scene.nests.append(
+            Nest(id=1, position=np.array([8.0, 8.0, 8.0]), stored_energy=50.0, owner_group_id=0)
+        )
         nest = scene.nearest_nest(np.array([8.0, 8.0, 8.0]), radius=2.0, group_id=1)
         assert nest is None
 
     def test_deposit_memory(self):
-        scene = SimScene(params=WorldParams(grid_size=(8, 8, 8),
-                                            memory_enabled=True, memory_deposit=2))
+        scene = SimScene(
+            params=WorldParams(grid_size=(8, 8, 8), memory_enabled=True, memory_deposit=2)
+        )
         b = SimBaby(initial_energy=100.0)
         scene.add_baby(b)
         deposited = scene.deposit_memory(b)
         assert deposited >= 0
 
     def test_draw_nest(self):
-        scene = SimScene(params=WorldParams(grid_size=(16, 16, 16),
-                                            structure_enabled=True,
-                                            nest_draw_rate=1.0))
-        scene.nests.append(Nest(id=1, position=np.array([8.0, 8.0, 8.0]),
-                                stored_energy=50.0, owner_group_id=0))
+        scene = SimScene(
+            params=WorldParams(grid_size=(16, 16, 16), structure_enabled=True, nest_draw_rate=1.0)
+        )
+        scene.nests.append(
+            Nest(id=1, position=np.array([8.0, 8.0, 8.0]), stored_energy=50.0, owner_group_id=0)
+        )
         b = SimBaby(position=np.array([8.0, 8.0, 8.0]), initial_energy=50.0)
         drawn = scene.draw_nest(b)
         assert drawn > 0.0
 
     def test_draw_nest_full_energy(self):
-        scene = SimScene(params=WorldParams(grid_size=(16, 16, 16),
-                                            structure_enabled=True))
-        scene.nests.append(Nest(id=1, position=np.array([8.0, 8.0, 8.0]),
-                                stored_energy=50.0, owner_group_id=0))
+        scene = SimScene(params=WorldParams(grid_size=(16, 16, 16), structure_enabled=True))
+        scene.nests.append(
+            Nest(id=1, position=np.array([8.0, 8.0, 8.0]), stored_energy=50.0, owner_group_id=0)
+        )
         b = SimBaby(position=np.array([8.0, 8.0, 8.0]), initial_energy=200.0)
         assert scene.draw_nest(b) == 0.0
 
@@ -844,11 +885,12 @@ class TestSimScene:
         assert scene.raid_nest(b) == 0.0
 
     def test_update_nests(self):
-        scene = SimScene(params=WorldParams(grid_size=(8, 8, 8),
-                                            structure_enabled=True,
-                                            nest_decay=0.1))
-        scene.nests.append(Nest(id=1, position=np.array([4.0, 4.0, 4.0]),
-                                stored_energy=10.0, owner_group_id=0))
+        scene = SimScene(
+            params=WorldParams(grid_size=(8, 8, 8), structure_enabled=True, nest_decay=0.1)
+        )
+        scene.nests.append(
+            Nest(id=1, position=np.array([4.0, 4.0, 4.0]), stored_energy=10.0, owner_group_id=0)
+        )
         scene.update_nests()
         assert scene.nests[0].stored_energy == pytest.approx(9.0)
 
@@ -871,11 +913,11 @@ class TestSimScene:
 
 # ── Simulation ──────────────────────────────────────────────────────────────
 
+
 class TestSimulation:
     def test_step_runs(self):
         scene = SimScene(params=WorldParams(grid_size=(8, 8, 8)))
-        scene.add_baby(SimBaby(position=np.array([4.0, 4.0, 4.0]),
-                               initial_energy=100.0))
+        scene.add_baby(SimBaby(position=np.array([4.0, 4.0, 4.0]), initial_energy=100.0))
         sim = Simulation(scene, max_ticks=1)
         results = sim.step()
         assert len(results) == 1
@@ -883,24 +925,21 @@ class TestSimulation:
 
     def test_run_multiple_ticks(self):
         scene = SimScene(params=WorldParams(grid_size=(8, 8, 8)))
-        scene.add_baby(SimBaby(position=np.array([4.0, 4.0, 4.0]),
-                               initial_energy=100.0))
+        scene.add_baby(SimBaby(position=np.array([4.0, 4.0, 4.0]), initial_energy=100.0))
         sim = Simulation(scene, max_ticks=5)
         results = sim.run()
         assert len(results) > 0
 
     def test_no_ticks(self):
         scene = SimScene(params=WorldParams(grid_size=(8, 8, 8)))
-        scene.add_baby(SimBaby(position=np.array([4.0, 4.0, 4.0]),
-                               initial_energy=100.0))
+        scene.add_baby(SimBaby(position=np.array([4.0, 4.0, 4.0]), initial_energy=100.0))
         sim = Simulation(scene, max_ticks=0)
         results = sim.run()
         assert len(results) == 0
 
     def test_summary(self):
         scene = SimScene(params=WorldParams(grid_size=(8, 8, 8)))
-        scene.add_baby(SimBaby(position=np.array([4.0, 4.0, 4.0]),
-                               initial_energy=100.0))
+        scene.add_baby(SimBaby(position=np.array([4.0, 4.0, 4.0]), initial_energy=100.0))
         sim = Simulation(scene, max_ticks=3)
         sim.run()
         s = sim.summary()

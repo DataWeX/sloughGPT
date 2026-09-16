@@ -3,15 +3,12 @@
 Covers: metrics, info, disk, lifecycle, executor, tail, output, inference-pool.
 psutil and domain deps are mocked; only HTTP-level behavior is tested.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, PropertyMock
-
-import asyncio
-import pytest
+from unittest.mock import MagicMock, patch
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -21,11 +18,13 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.system import SystemRouter  # noqa: E402
+
 from conftest import build_test_app
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_system_router() -> SystemRouter:
     return SystemRouter()
@@ -38,6 +37,7 @@ def _app(sr: SystemRouter):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestMetrics:
     def test_metrics_returns_cpu_memory(self):
@@ -91,7 +91,9 @@ class TestLifecycle:
         sr = _make_system_router()
         mock_mgr = MagicMock()
         mock_mgr.get_results.return_value = {"phase": "ready", "profile": "default"}
-        with patch("domain.infrastructure.lifecycle.get_lifecycle_manager", return_value=mock_mgr):
+        with patch(
+            "domain.infrastructure._internal.lifecycle.get_lifecycle_manager", return_value=mock_mgr
+        ):
             client = TestClient(_app(sr))
             resp = client.get("/system/lifecycle")
         assert resp.status_code == 200
@@ -99,7 +101,10 @@ class TestLifecycle:
 
     def test_lifecycle_unavailable(self):
         sr = _make_system_router()
-        with patch("domain.infrastructure.lifecycle.get_lifecycle_manager", side_effect=RuntimeError("not init")):
+        with patch(
+            "domain.infrastructure._internal.lifecycle.get_lifecycle_manager",
+            side_effect=RuntimeError("not init"),
+        ):
             client = TestClient(_app(sr), raise_server_exceptions=False)
             resp = client.get("/system/lifecycle")
         assert resp.status_code == 200
@@ -219,7 +224,9 @@ class TestTailOutput:
         mock_buf.tail_dicts.return_value = [{"text": "line1"}]
         mock_buf.count = 1
         mock_buf.seq = 1
-        with patch("domain.infrastructure.output_buffer.get_server_buffer", return_value=mock_buf):
+        with patch(
+            "domain.infrastructure._internal.output_buffer.get_server_buffer", return_value=mock_buf
+        ):
             client = TestClient(_app(sr))
             resp = client.get("/system/output")
         assert resp.status_code == 200
@@ -231,8 +238,10 @@ class TestTailOutput:
 class TestInferencePool:
     def test_pool_not_initialized(self):
         sr = _make_system_router()
+
         async def _raise():
             raise RuntimeError("no pool")
+
         with patch("infrastructure.inference_pool.InferencePool.get_instance", _raise):
             client = TestClient(_app(sr), raise_server_exceptions=False)
             resp = client.get("/system/inference-pool")
@@ -244,8 +253,10 @@ class TestInferencePool:
         mock_pool = MagicMock()
         mock_pool._max_workers = 4
         mock_pool._queue_timeout = 30
+
         async def _get():
             return mock_pool
+
         with patch("infrastructure.inference_pool.InferencePool.get_instance", _get):
             client = TestClient(_app(sr))
             resp = client.get("/system/inference-pool")

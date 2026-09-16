@@ -14,6 +14,7 @@ Covers all 10 endpoints:
 """
 
 import time
+
 import pytest
 from test_support import get_test_client
 
@@ -33,6 +34,7 @@ def _traits(resp):
 def _fresh_companion():
     """Reset the companion singleton before each test."""
     import routers.companion as comp_mod
+
     import domain.companion as dom_mod
 
     comp_mod._companion_router._companion = None
@@ -67,7 +69,14 @@ class TestResetCompanion:
     def test_reset_restores_defaults(self):
         self.client.post(
             "/companion/personality",
-            json={"name": "Changed", "warmth": 0.1, "curiosity": 0.1, "creativity": 0.1, "confidence": 0.1, "humor": 0.1},
+            json={
+                "name": "Changed",
+                "warmth": 0.1,
+                "curiosity": 0.1,
+                "creativity": 0.1,
+                "confidence": 0.1,
+                "humor": 0.1,
+            },
         )
         self.client.delete("/companion/")
         resp = self.client.get("/companion/")
@@ -83,7 +92,14 @@ class TestSetPersonality:
     def test_set_full_personality(self):
         resp = self.client.post(
             "/companion/personality",
-            json={"name": "Buddy", "warmth": 0.9, "curiosity": 0.8, "creativity": 0.7, "confidence": 0.6, "humor": 0.5},
+            json={
+                "name": "Buddy",
+                "warmth": 0.9,
+                "curiosity": 0.8,
+                "creativity": 0.7,
+                "confidence": 0.6,
+                "humor": 0.5,
+            },
         )
         assert resp.status_code == 200
         t = _traits(resp)
@@ -124,9 +140,7 @@ class TestPatchPersonality:
         assert t["name"] == "Friend"
 
     def test_patch_multiple_fields(self):
-        resp = self.client.patch(
-            "/companion/personality", json={"name": "Multi", "humor": 0.99}
-        )
+        resp = self.client.patch("/companion/personality", json={"name": "Multi", "humor": 0.99})
         assert resp.status_code == 200
         t = _traits(resp)
         assert t["name"] == "Multi"
@@ -186,7 +200,13 @@ class TestChat:
     def test_chat_with_options(self):
         resp = self.client.post(
             "/companion/chat",
-            json={"message": "hi", "user_name": "Test", "user_mood": "happy", "max_tokens": 128, "temperature": 0.5},
+            json={
+                "message": "hi",
+                "user_name": "Test",
+                "user_mood": "happy",
+                "max_tokens": 128,
+                "temperature": 0.5,
+            },
         )
         assert resp.status_code == 200
         assert "response" in _d(resp)
@@ -236,7 +256,12 @@ class TestCreatePreset:
         pid = f"test-{int(time.time() * 1000)}"
         resp = self.client.post(
             "/companion/presets",
-            json={"id": pid, "name": "Test Preset", "description": "A test", "traits": {"warmth": 0.8}},
+            json={
+                "id": pid,
+                "name": "Test Preset",
+                "description": "A test",
+                "traits": {"warmth": 0.8},
+            },
         )
         assert resp.status_code == 200
         data = _d(resp)

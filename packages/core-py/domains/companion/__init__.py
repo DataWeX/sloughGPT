@@ -1,12 +1,12 @@
 """Backward-compatibility shim — imports from the new ``domain.companion`` package."""
 
 from domain.companion import (
-    ResponseStyle,
+    CompanionSystem,
     CompanionTraits,
     ConversationContext,
-    CompanionSystem,
-    get_companion,
+    ResponseStyle,
     create_companion,
+    get_companion,
 )
 
 __all__ = [

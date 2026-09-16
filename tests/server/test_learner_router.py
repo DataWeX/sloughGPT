@@ -2,12 +2,13 @@
 Tests for the learner router — search, feed, ingest, train, deploy, evaluate, status.
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from infrastructure.exception_handlers import register_all_handlers
+
 from apps.api.server.routers.learner import router
 
 
@@ -28,7 +29,12 @@ class TestLearnSearch:
     @patch("domains.learner.get_learner")
     def test_searches_and_learns(self, mock_get_learner, client):
         learner = mock_get_learner.return_value
-        learner.search_and_learn.return_value = {"tokens_ingested": 100, "new_facts": 5, "rejected": 0, "filter_stats": {}}
+        learner.search_and_learn.return_value = {
+            "tokens_ingested": 100,
+            "new_facts": 5,
+            "rejected": 0,
+            "filter_stats": {},
+        }
         learner.status.return_value = {"current_loss": 0.5}
         resp = client.post("/learn/search", json={"query": "AI safety", "max_results": 3})
         assert resp.status_code == 200
@@ -42,7 +48,12 @@ class TestLearnSearch:
     @patch("domains.learner.get_learner")
     def test_search_rejected_facts(self, mock_get_learner, client):
         learner = mock_get_learner.return_value
-        learner.search_and_learn.return_value = {"tokens_ingested": 50, "new_facts": 0, "rejected": 10, "filter_stats": {"low_quality": 10}}
+        learner.search_and_learn.return_value = {
+            "tokens_ingested": 50,
+            "new_facts": 0,
+            "rejected": 10,
+            "filter_stats": {"low_quality": 10},
+        }
         learner.status.return_value = {}
         resp = client.post("/learn/search", json={"query": "spam query"})
         assert resp.status_code == 200
@@ -62,19 +73,16 @@ class TestLearnFeed:
 
     @patch("domains.learner.get_learner")
     def test_feed_subscribe_missing_url(self, mock_get_learner, client):
-        learner = mock_get_learner.return_value
         resp = client.post("/learn/feed?action=subscribe")
         assert resp.status_code == 422
 
     @patch("domains.learner.get_learner")
     def test_feed_unknown_action(self, mock_get_learner, client):
-        learner = mock_get_learner.return_value
         resp = client.post("/learn/feed?action=invalid_action")
         assert resp.status_code == 422
 
     @patch("domains.learner.get_learner")
     def test_feed_unsubscribe_missing_url(self, mock_get_learner, client):
-        learner = mock_get_learner.return_value
         resp = client.post("/learn/feed?action=unsubscribe")
         assert resp.status_code == 422
 
@@ -90,7 +98,6 @@ class TestLearnKnowledge:
 
     @patch("domains.learner.get_learner")
     def test_knowledge_no_params_returns_empty(self, mock_get_learner, client):
-        learner = mock_get_learner.return_value
         resp = client.get("/learn/knowledge")
         assert resp.status_code == 200
         data = resp.json()["data"]
@@ -233,19 +240,29 @@ class TestLearnIngestConversations:
     def test_ingests_conversation_pairs(self, mock_get_learner, client):
         learner = mock_get_learner.return_value
         learner.status.return_value = {"current_loss": 0.5}
-        resp = client.post("/learn/ingest", json=[
-            ["hi", "hello"], ["what is ai", "ai is..."],
-        ])
+        resp = client.post(
+            "/learn/ingest",
+            json=[
+                ["hi", "hello"],
+                ["what is ai", "ai is..."],
+            ],
+        )
         assert resp.status_code == 200
-        learner.ingest_conversation.assert_called_once_with([("hi", "hello"), ("what is ai", "ai is...")])
+        learner.ingest_conversation.assert_called_once_with(
+            [("hi", "hello"), ("what is ai", "ai is...")]
+        )
 
     @patch("domains.learner.get_learner")
     def test_ingest_skips_short_pairs(self, mock_get_learner, client):
         learner = mock_get_learner.return_value
         learner.status.return_value = {"current_loss": 0.5}
-        resp = client.post("/learn/ingest", json=[
-            ["only_one"], ["a", "b"],
-        ])
+        resp = client.post(
+            "/learn/ingest",
+            json=[
+                ["only_one"],
+                ["a", "b"],
+            ],
+        )
         assert resp.status_code == 200
         learner.ingest_conversation.assert_called_once_with([("a", "b")])
 

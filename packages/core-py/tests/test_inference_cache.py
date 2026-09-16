@@ -2,27 +2,37 @@
 domain.inference._internal.forward_pass — ForwardPassResult, timed_forward, ForwardPassable."""
 
 import time
+
 import numpy as np
 import pytest
 
-from domain.inference._internal.semantic_cache import CacheEntry, SemanticCache, CachedSoulEngine
 from domain.inference._internal.forward_pass import ForwardPassResult, timed_forward
-
+from domain.inference._internal.semantic_cache import CachedSoulEngine, CacheEntry, SemanticCache
 
 # ---------------------------------------------------------------------------
 # CacheEntry
 # ---------------------------------------------------------------------------
 
+
 class TestCacheEntry:
     def test_fields(self):
-        ce = CacheEntry(id="c1", query="hello", response="world", hypervector=[0.1, 0.2], metadata={}, timestamp=1.0)
+        ce = CacheEntry(
+            id="c1",
+            query="hello",
+            response="world",
+            hypervector=[0.1, 0.2],
+            metadata={},
+            timestamp=1.0,
+        )
         assert ce.id == "c1"
         assert ce.query == "hello"
         assert ce.response == "world"
         assert ce.hit_count == 0
 
     def test_defaults(self):
-        ce = CacheEntry(id="c1", query="q", response="r", hypervector=[], metadata={}, timestamp=0.0)
+        ce = CacheEntry(
+            id="c1", query="q", response="r", hypervector=[], metadata={}, timestamp=0.0
+        )
         assert ce.last_accessed == 0
 
     def test_metadata_is_mutable(self):
@@ -55,18 +65,28 @@ class TestCacheEntry:
 
     def test_large_hypervector(self):
         hv = [0.001] * 10000
-        ce = CacheEntry(id="big", query="q", response="r", hypervector=hv, metadata={}, timestamp=0.0)
+        ce = CacheEntry(
+            id="big", query="q", response="r", hypervector=hv, metadata={}, timestamp=0.0
+        )
         assert len(ce.hypervector) == 10000
 
     def test_multiple_cache_entries_independent(self):
-        ce1 = CacheEntry(id="1", query="q1", response="r1", hypervector=[1.0], metadata={}, timestamp=1.0)
-        ce2 = CacheEntry(id="2", query="q2", response="r2", hypervector=[2.0], metadata={}, timestamp=2.0)
+        ce1 = CacheEntry(
+            id="1", query="q1", response="r1", hypervector=[1.0], metadata={}, timestamp=1.0
+        )
+        ce2 = CacheEntry(
+            id="2", query="q2", response="r2", hypervector=[2.0], metadata={}, timestamp=2.0
+        )
         ce1.hit_count = 5
         assert ce2.hit_count == 0
 
     def test_cache_entry_equality(self):
-        ce1 = CacheEntry(id="a", query="q", response="r", hypervector=[], metadata={}, timestamp=1.0)
-        ce2 = CacheEntry(id="a", query="q", response="r", hypervector=[], metadata={}, timestamp=1.0)
+        ce1 = CacheEntry(
+            id="a", query="q", response="r", hypervector=[], metadata={}, timestamp=1.0
+        )
+        ce2 = CacheEntry(
+            id="a", query="q", response="r", hypervector=[], metadata={}, timestamp=1.0
+        )
         assert ce1.id == ce2.id
         assert ce1.query == ce2.query
 
@@ -74,6 +94,7 @@ class TestCacheEntry:
 # ---------------------------------------------------------------------------
 # SemanticCache
 # ---------------------------------------------------------------------------
+
 
 class TestSemanticCache:
     def test_init(self):
@@ -232,11 +253,13 @@ class TestSemanticCache:
 # CachedSoulEngine
 # ---------------------------------------------------------------------------
 
+
 class TestCachedSoulEngine:
     def _make_engine(self, response="generated"):
         class FakeEngine:
             def generate(self, prompt, **kwargs):
                 return response
+
         return FakeEngine()
 
     def test_init_default_cache(self):
@@ -288,10 +311,12 @@ class TestCachedSoulEngine:
 
     def test_generate_passes_kwargs(self):
         received = {}
+
         class CaptureEngine:
             def generate(self, prompt, **kwargs):
                 received.update(kwargs)
                 return "ok"
+
         cse = CachedSoulEngine(CaptureEngine())
         cse.generate("prompt", temperature=0.5, max_tokens=100)
         assert received["temperature"] == 0.5
@@ -301,6 +326,7 @@ class TestCachedSoulEngine:
         class EmptyEngine:
             def generate(self, prompt, **kwargs):
                 return ""
+
         cse = CachedSoulEngine(EmptyEngine(), cache_responses=True)
         cse.generate("q")
         assert len(cse.cache.entries) == 0
@@ -312,9 +338,11 @@ class TestCachedSoulEngine:
     def test_engine_generate_called(self):
         class CountEngine:
             call_count = 0
+
             def generate(self, prompt, **kwargs):
                 CountEngine.call_count += 1
                 return "r"
+
         eng = CountEngine()
         cse = CachedSoulEngine(eng)
         cse.generate("q1")
@@ -326,10 +354,13 @@ class TestCachedSoulEngine:
 # ForwardPassResult
 # ---------------------------------------------------------------------------
 
+
 class TestForwardPassResult:
     def test_fields(self):
         logits = np.random.randn(1, 10, 100).astype(np.float32)
-        fpr = ForwardPassResult(logits=logits, forward_time_ms=1.5, model_name="gpt2", engine="numpy")
+        fpr = ForwardPassResult(
+            logits=logits, forward_time_ms=1.5, model_name="gpt2", engine="numpy"
+        )
         assert fpr.model_name == "gpt2"
         assert fpr.engine == "numpy"
         assert fpr.forward_time_ms == 1.5
@@ -412,11 +443,13 @@ class TestForwardPassResult:
 # timed_forward
 # ---------------------------------------------------------------------------
 
+
 class TestTimedForward:
     def test_timing(self):
         class FakeModel:
             def forward_pass(self, input_ids):
                 return ForwardPassResult(logits=np.zeros((1, 1, 10)))
+
         result = timed_forward(FakeModel(), np.zeros((1, 1), dtype=np.int64), model_name="test")
         assert result.forward_time_ms >= 0.0
         assert result.model_name == "test"
@@ -425,6 +458,7 @@ class TestTimedForward:
         class FakeModel:
             def forward_pass(self, input_ids):
                 return ForwardPassResult(logits=np.zeros((1, 1, 10)))
+
         result = timed_forward(FakeModel(), np.zeros((1, 1), dtype=np.int64), model_name="my_model")
         assert result.model_name == "my_model"
 
@@ -432,6 +466,7 @@ class TestTimedForward:
         class FakeModel:
             def forward_pass(self, input_ids):
                 return ForwardPassResult(logits=np.zeros((1, 1, 10)))
+
         result = timed_forward(FakeModel(), np.zeros((1, 1), dtype=np.int64))
         assert result.model_name == ""
 
@@ -439,16 +474,20 @@ class TestTimedForward:
         class SlowModel:
             def forward_pass(self, input_ids):
                 import time
+
                 time.sleep(0.001)
                 return ForwardPassResult(logits=np.zeros((1, 1, 5)))
+
         result = timed_forward(SlowModel(), np.zeros((1, 1), dtype=np.int64))
         assert result.forward_time_ms >= 0.0
 
     def test_preserves_logits(self):
         arr = np.ones((1, 2, 3), dtype=np.float32)
+
         class IdModel:
             def forward_pass(self, input_ids):
                 return ForwardPassResult(logits=arr)
+
         result = timed_forward(IdModel(), np.zeros((1, 1), dtype=np.int64))
         np.testing.assert_array_equal(result.logits, arr)
 
@@ -456,6 +495,7 @@ class TestTimedForward:
         class BadModel:
             def forward_pass(self, input_ids):
                 raise ValueError("boom")
+
         with pytest.raises(ValueError, match="boom"):
             timed_forward(BadModel(), np.zeros((1, 1), dtype=np.int64))
 
@@ -463,6 +503,7 @@ class TestTimedForward:
         class FakeModel:
             def forward_pass(self, input_ids):
                 return ForwardPassResult(logits=np.zeros((1, 1, 1)), forward_time_ms=999.0)
+
         result = timed_forward(FakeModel(), np.zeros((1, 1), dtype=np.int64))
         assert result.forward_time_ms != 999.0
         assert result.forward_time_ms >= 0.0
@@ -471,6 +512,7 @@ class TestTimedForward:
         class FakeModel:
             def forward_pass(self, input_ids):
                 return ForwardPassResult(logits=np.zeros((1, 1, 1)), model_name="old")
+
         result = timed_forward(FakeModel(), np.zeros((1, 1), dtype=np.int64), model_name="new")
         assert result.model_name == "new"
 
@@ -478,6 +520,7 @@ class TestTimedForward:
         class FakeModel:
             def forward_pass(self, input_ids):
                 return ForwardPassResult(logits=np.zeros((1, 1, 10)))
+
         r1 = timed_forward(FakeModel(), np.zeros((1, 1), dtype=np.int64))
         r2 = timed_forward(FakeModel(), np.zeros((1, 1), dtype=np.int64))
         assert r1.shape == r2.shape
@@ -486,6 +529,7 @@ class TestTimedForward:
         class FakeModel:
             def forward_pass(self, input_ids):
                 return ForwardPassResult(logits=np.zeros((1, input_ids.shape[1], 100)))
+
         ids = np.zeros((1, 512), dtype=np.int64)
         result = timed_forward(FakeModel(), ids, model_name="big")
         assert result.shape == [1, 512, 100]
@@ -494,6 +538,7 @@ class TestTimedForward:
 # ---------------------------------------------------------------------------
 # SemanticCache — advanced edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestSemanticCacheEdgeCases:
     def test_get_empty_cache_misses(self):

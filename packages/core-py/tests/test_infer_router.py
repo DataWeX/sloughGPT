@@ -4,12 +4,13 @@ Tests for the unified /infer router.
 Verifies all 7 endpoints: generate, stream, embed, tokenize, detokenize, health, info.
 Uses mocked providers and models — no real inference.
 """
-import json
+
 import pytest
 
 pytest.importorskip("fastapi")
 
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, patch
+
 from fastapi.testclient import TestClient
 
 pytestmark = pytest.mark.slow
@@ -26,6 +27,7 @@ class FakeModel:
 
     def generate(self, input_ids, max_new_tokens=50, temperature=1.0, **kwargs):
         import numpy as np
+
         return np.array([[1, 2, 3, 4, 5]])
 
     def generate_stream(self, prompt, max_new_tokens=100, temperature=0.8, **kwargs):
@@ -35,10 +37,12 @@ class FakeModel:
 
     def embed(self, text):
         import numpy as np
+
         return np.array([0.1, 0.2, 0.3, 0.4])
 
     def info(self):
         from types import SimpleNamespace
+
         return SimpleNamespace(
             model_id="test-model",
             model_type="MockModel",
@@ -54,6 +58,7 @@ class FakeModel:
 
     def forward(self, input_ids, targets=None, **kwargs):
         import numpy as np
+
         return np.random.randn(1, 256), None
 
     def state_dict(self):
@@ -85,7 +90,9 @@ class FakeModel:
 def app():
     """Create FastAPI app with the infer router."""
     from fastapi import FastAPI
+
     from apps.api.server.routers.infer import router
+
     app = FastAPI()
     app.include_router(router)
     return app
@@ -102,6 +109,7 @@ def client(app):
 def _patch_state(model=None, phase="ready"):
     """Return list of context managers that mock the router's model accessors."""
     import apps.api.server.routers.infer as infer_mod
+
     return [
         patch.object(infer_mod.InferRouter, "_get_model", return_value=model),
         patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=model),
@@ -245,6 +253,7 @@ class TestInferGenerate:
     def test_generate_no_model_returns_503(self, client):
         """Generate returns 503 when model not ready."""
         import apps.api.server.routers.infer as infer_mod
+
         patches = [
             patch.object(infer_mod.InferRouter, "_get_model", return_value=None),
             patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=None),
@@ -265,6 +274,7 @@ class TestInferGenerate:
         mock_provider.chat = AsyncMock(return_value="Hello world!")
 
         import apps.api.server.routers.infer as infer_mod
+
         patches = [
             patch.object(infer_mod.InferRouter, "_get_model", return_value=fake),
             patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=fake),

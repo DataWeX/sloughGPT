@@ -1,7 +1,8 @@
 """Tests for X86RBAC — role-based access control for x86 VM."""
+
 from __future__ import annotations
 
-from domain.shell._internal.vm_permissions import Permission, Role, X86RBAC
+from domain.shell._internal.vm_permissions import X86RBAC, Permission, Role
 
 
 class TestRole:

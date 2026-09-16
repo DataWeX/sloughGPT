@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.exception_handlers import register_app_error_handler
-
 
 _AUTH_USER = {"sub": "user1", "tenant_id": "t1"}
 
@@ -102,9 +100,7 @@ class TestReloadCheckpoint:
 class TestStartTraining:
     def test_start_training(self):
         _app = _build_app()
-        resp = TestClient(_app).post(
-            "/openwebui/training/start?dataset_id=ds1&method=lora"
-        )
+        resp = TestClient(_app).post("/openwebui/training/start?dataset_id=ds1&method=lora")
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "started"

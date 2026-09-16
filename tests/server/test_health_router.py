@@ -2,24 +2,21 @@
 Tests for the health router — health, liveness, readiness, startup-progress, debug, model, summary.
 """
 
-import sys
-import asyncio
 import json
+import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unittest.mock import patch, MagicMock, PropertyMock, AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from infrastructure.exception_handlers import register_all_handlers
+
 from apps.api.server.routers.health import router
 
 SERVER_DIR = str(Path(__file__).resolve().parents[2] / "apps/api/server")
 if SERVER_DIR not in sys.path:
     sys.path.insert(0, SERVER_DIR)
-
-import state as _server_state
 
 
 @pytest.fixture
@@ -74,7 +71,9 @@ class TestHealth:
     def test_health_returns_basic(self, mock_get_ctrl, client):
         ctrl = MagicMock()
         ctrl.get_basic_health.return_value = {
-            "status": "healthy", "model_loaded": True, "model_type": "gpt2",
+            "status": "healthy",
+            "model_loaded": True,
+            "model_type": "gpt2",
         }
         mock_get_ctrl.return_value = ctrl
         resp = client.get("/health")
@@ -87,7 +86,9 @@ class TestHealth:
     def test_health_model_not_loaded(self, mock_get_ctrl, client):
         ctrl = MagicMock()
         ctrl.get_basic_health.return_value = {
-            "status": "healthy", "model_loaded": False, "model_type": None,
+            "status": "healthy",
+            "model_loaded": False,
+            "model_type": None,
         }
         mock_get_ctrl.return_value = ctrl
         resp = client.get("/health")
@@ -237,6 +238,7 @@ class TestModelHealth:
     @patch("domains.feedback.model_health.get_health_monitor")
     def test_model_health_with_model(self, mock_get_mon, client):
         import state as _state
+
         _state.model = "gpt2"
         _state.tokenizer = "tok"
         mon = MagicMock()
@@ -263,6 +265,7 @@ class TestModelHealth:
         mon.get_stats.return_value = {"inference_count": 42, "latency_ms": 5}
         mock_get_mon.return_value = mon
         import state as _state
+
         _state.model = None
         _state.tokenizer = None
         resp = client.get("/health/model")
@@ -278,6 +281,7 @@ class TestModelHealth:
         mon.get_stats.return_value = {"inference_count": 0}
         mock_get_mon.return_value = mon
         import state as _state
+
         _state.model = "gpt2"
         _state.tokenizer = "tok"
         try:
@@ -327,7 +331,12 @@ class TestHealthSummary:
     def test_summary_has_diagnoses(self, mock_get_ctrl, client):
         ctrl = MagicMock()
         ctrl.get_detailed_health.return_value = _make_detailed(
-            health_score={"score": 60, "status": "degraded", "summary": "High CPU", "diagnoses": ["CPU at 95%"]}
+            health_score={
+                "score": 60,
+                "status": "degraded",
+                "summary": "High CPU",
+                "diagnoses": ["CPU at 95%"],
+            }
         )
         mock_get_ctrl.return_value = ctrl
         resp = client.get("/health/summary")
@@ -357,8 +366,10 @@ class TestHealthStream:
         ctrl.get_detailed_health.return_value["is_inferencing"] = True
         ctrl.get_detailed_health.return_value["inference_count"] = 7
         mock_get_ctrl.return_value = ctrl
-        with patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])), \
-             patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+        with (
+            patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])),
+            patch("asyncio.sleep", new=AsyncMock(return_value=None)),
+        ):
             with client.stream("GET", "/health/stream") as resp:
                 assert resp.status_code == 200
                 assert resp.headers["content-type"].startswith("text/event-stream")
@@ -379,8 +390,10 @@ class TestHealthStream:
         ctrl = MagicMock()
         ctrl.get_detailed_health.side_effect = RuntimeError("boom")
         mock_get_ctrl.return_value = ctrl
-        with patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])), \
-             patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+        with (
+            patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])),
+            patch("asyncio.sleep", new=AsyncMock(return_value=None)),
+        ):
             with client.stream("GET", "/health/stream") as resp:
                 assert resp.status_code == 200
                 body = resp.read()
@@ -426,6 +439,3 @@ class TestHealthMethodCoverage:
     def test_stream_wrong_method_405(self, client):
         resp = client.delete("/health/stream")
         assert resp.status_code == 405
-
-
-

@@ -1,20 +1,24 @@
 """Tests for LoRA module — config, LoRALinear, LoRAEmbedding, apply, count."""
 
-import math
-import pytest
 import numpy as np
+
 from domain.training._internal.lora import (
-    LoRAType, LoRAConfig, LoRALinear, LoRAEmbedding,
-    apply_lora_to_model, get_lora_parameters, count_lora_parameters,
-    _to_np, _to_tensor,
+    LoRAConfig,
+    LoRAEmbedding,
+    LoRALinear,
+    LoRAType,
+    _to_np,
+    _to_tensor,
+    apply_lora_to_model,
+    count_lora_parameters,
+    get_lora_parameters,
 )
 from domain.training._internal.slonet import Tensor
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-class TestToNp:
 
+class TestToNp:
     def test_from_tensor(self):
         t = Tensor(np.array([1.0, 2.0, 3.0]))
         result = _to_np(t)
@@ -33,7 +37,6 @@ class TestToNp:
 
 
 class TestToTensor:
-
     def test_from_ndarray(self):
         arr = np.array([1.0, 2.0], dtype=np.float32)
         t = _to_tensor(arr)
@@ -52,8 +55,8 @@ class TestToTensor:
 
 # ── LoRAConfig ─────────────────────────────────────────────────────────────
 
-class TestLoRAConfig:
 
+class TestLoRAConfig:
     def test_defaults(self):
         cfg = LoRAConfig()
         assert cfg.rank == 8
@@ -84,8 +87,8 @@ class TestLoRAConfig:
 
 # ── LoRAType ───────────────────────────────────────────────────────────────
 
-class TestLoRAType:
 
+class TestLoRAType:
     def test_values(self):
         assert LoRAType.LORA.value == "lora"
         assert LoRAType.LORA_PLUS.value == "lora_plus"
@@ -94,8 +97,8 @@ class TestLoRAType:
 
 # ── LoRALinear ─────────────────────────────────────────────────────────────
 
-class TestLoRALinear:
 
+class TestLoRALinear:
     def test_init_default(self):
         layer = LoRALinear(128, 64)
         assert layer.in_features == 128
@@ -149,7 +152,7 @@ class TestLoRALinear:
     def test_merge_weights_ia3_resets_lora_s(self):
         layer = LoRALinear(64, 32, lora_type=LoRAType.IA3)
         layer.lora_s.data[:] = 2.0
-        w_before = layer.weight.data.copy()
+        layer.weight.data.copy()
         layer.merge_weights()
         assert np.allclose(layer.lora_s.data, 1.0)
 
@@ -194,8 +197,8 @@ class TestLoRALinear:
 
 # ── LoRAEmbedding ──────────────────────────────────────────────────────────
 
-class TestLoRAEmbedding:
 
+class TestLoRAEmbedding:
     def test_init(self):
         emb = LoRAEmbedding(100, 32, rank=4)
         assert emb.num_embeddings == 100
@@ -212,7 +215,7 @@ class TestLoRAEmbedding:
 
     def test_merge_weights(self):
         emb = LoRAEmbedding(32, 32, rank=4)
-        w_before = emb.weight.weight.data.copy()
+        emb.weight.weight.data.copy()
         emb.merge_weights()
         assert emb.lora_A.data.shape == (4, 32)
         assert emb.lora_B.data.shape == (32, 4)
@@ -225,8 +228,8 @@ class TestLoRAEmbedding:
 
 # ── apply_lora_to_model ────────────────────────────────────────────────────
 
-class TestApplyLoRA:
 
+class TestApplyLoRA:
     def _make_simple_model(self):
         class SimpleLayer:
             def __init__(self):
@@ -265,8 +268,8 @@ class TestApplyLoRA:
 
 # ── count_lora_parameters ──────────────────────────────────────────────────
 
-class TestCountLoRAParameters:
 
+class TestCountLoRAParameters:
     def test_count(self):
         layer = LoRALinear(64, 32)
         count = count_lora_parameters(layer)
@@ -280,8 +283,8 @@ class TestCountLoRAParameters:
 
 # ── get_lora_parameters ────────────────────────────────────────────────────
 
-class TestGetLoRAParameters:
 
+class TestGetLoRAParameters:
     def test_empty_model_no_params(self):
         class NoParams:
             def named_parameters(self):

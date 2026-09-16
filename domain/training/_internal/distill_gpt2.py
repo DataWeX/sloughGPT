@@ -15,11 +15,13 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
+
 from domain.infrastructure._internal.arch_config import ArchConfig, build_arch
 from domain.infrastructure._internal.numpy_forward import forward_fast, pre_extract_weights
 from domain.infrastructure._internal.numpy_ops import softmax as _softmax
@@ -38,6 +40,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DistillConfig:
     """Configuration for GPT-2 → SloTransformer distillation."""
+
     # Student architecture
     n_embed: int = 128
     n_layer: int = 4
@@ -55,7 +58,7 @@ class DistillConfig:
     # Distillation
     temperature: float = 4.0
     alpha: float = 0.5  # weight for hard CE loss
-    beta: float = 0.5   # weight for soft KL loss
+    beta: float = 0.5  # weight for soft KL loss
 
     # Teacher
     teacher_model: str = "gpt2"
@@ -66,9 +69,9 @@ class DistillConfig:
     log_interval: int = 10
 
     # Resume from checkpoint
-    resume_checkpoint: Optional[str] = None  # path to .soul checkpoint to resume from
+    resume_checkpoint: str | None = None  # path to .soul checkpoint to resume from
     resume_epoch: int = 0  # starting epoch (overridden by checkpoint metadata)
-    resume_step: int = 0   # starting step (overridden by checkpoint metadata)
+    resume_step: int = 0  # starting step (overridden by checkpoint metadata)
 
     def __post_init__(self):
         if self.n_embed < 16:
@@ -78,7 +81,9 @@ class DistillConfig:
         if self.n_head < 1:
             raise ValueError(f"n_head must be >= 1, got {self.n_head}")
         if self.n_embed % self.n_head != 0:
-            raise ValueError(f"n_embed ({self.n_embed}) must be divisible by n_head ({self.n_head})")
+            raise ValueError(
+                f"n_embed ({self.n_embed}) must be divisible by n_head ({self.n_head})"
+            )
         if self.block_size < 8:
             raise ValueError(f"block_size must be >= 8, got {self.block_size}")
         if self.epochs < 1:
@@ -102,7 +107,7 @@ class DistillConfig:
 class TextDataset:
     """Simple character-level text dataset for distillation."""
 
-    def __init__(self, text: str, block_size: int, stoi: Dict[str, int]):
+    def __init__(self, text: str, block_size: int, stoi: dict[str, int]):
         self.text = text
         self.block_size = block_size
         self.stoi = stoi
@@ -112,7 +117,7 @@ class TextDataset:
     def __len__(self):
         return self.n_samples
 
-    def get_batch(self, batch_size: int, rng: np.random.Generator) -> Tuple[np.ndarray, np.ndarray]:
+    def get_batch(self, batch_size: int, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
         """Get random batch of (x, y) pairs.
 
         Uses vectorized advanced indexing instead of Python-level loops.
@@ -126,7 +131,7 @@ class TextDataset:
         return x.astype(np.int32), y.astype(np.int32)
 
 
-def _load_gpt2_numpy() -> Tuple[dict, ArchConfig, dict]:
+def _load_gpt2_numpy() -> tuple[dict, ArchConfig, dict]:
     """Load GPT-2 weights as numpy arrays + arch config + tokenizer vocab."""
     from domains.infrastructure.slnc.parser import SLNCParser
 
@@ -156,18 +161,16 @@ def _load_gpt2_numpy() -> Tuple[dict, ArchConfig, dict]:
         model = tok_data.get("model")
         vocab = model.get("vocab") if isinstance(model, dict) else None
         if not isinstance(vocab, dict):
-            raise RuntimeError(
-                f"tokenizer.json missing 'model.vocab' mapping in {tokenizer_path}"
-            )
+            raise RuntimeError(f"tokenizer.json missing 'model.vocab' mapping in {tokenizer_path}")
         itos = {i: s for s, i in vocab.items()}
-        stoi = {s: i for s, i in vocab.items()}
+        stoi = dict(vocab.items())
     else:
         raise RuntimeError(f"tokenizer.json not found in {snap}")
 
     return rw, arch, {"stoi": stoi, "itos": itos, "vocab_size": len(stoi)}
 
 
-def _teacher_forward(rw: dict, arch: ArchConfig, token_ids: List[int]) -> np.ndarray:
+def _teacher_forward(rw: dict, arch: ArchConfig, token_ids: list[int]) -> np.ndarray:
     """Run GPT-2 teacher forward pass, return logits as numpy."""
     return forward_fast(rw, arch, token_ids)
 
@@ -190,7 +193,9 @@ def _kl_div_loss(student_logits: np.ndarray, teacher_logits: np.ndarray) -> floa
     teacher_probs = _softmax(teacher_logits)
     # KL(teacher || student)
     mask = teacher_probs > 0
-    kl = np.where(mask, teacher_probs * (np.log(teacher_probs + 1e-12) - np.log(student_probs + 1e-12)), 0)
+    kl = np.where(
+        mask, teacher_probs * (np.log(teacher_probs + 1e-12) - np.log(student_probs + 1e-12)), 0
+    )
     return float(kl.sum(axis=-1).mean())
 
 
@@ -217,16 +222,15 @@ def _bleu_score(candidate: str, reference: str, max_n: int = 4) -> float:
     for n in range(1, min(max_n + 1, len(cand_tokens) + 1, len(ref_tokens) + 1)):
         cand_ngrams = {}
         for i in range(len(cand_tokens) - n + 1):
-            ng = tuple(cand_tokens[i:i + n])
+            ng = tuple(cand_tokens[i : i + n])
             cand_ngrams[ng] = cand_ngrams.get(ng, 0) + 1
 
         ref_ngrams = {}
         for i in range(len(ref_tokens) - n + 1):
-            ng = tuple(ref_tokens[i:i + n])
+            ng = tuple(ref_tokens[i : i + n])
             ref_ngrams[ng] = ref_ngrams.get(ng, 0) + 1
 
-        matches = sum(min(cand_ngrams.get(ng, 0), ref_ngrams.get(ng, 0))
-                      for ng in cand_ngrams)
+        matches = sum(min(cand_ngrams.get(ng, 0), ref_ngrams.get(ng, 0)) for ng in cand_ngrams)
         total = sum(cand_ngrams.values())
         precision = matches / total if total > 0 else 0
         if precision > 0:
@@ -247,15 +251,16 @@ def _bleu_score(candidate: str, reference: str, max_n: int = 4) -> float:
 @dataclass
 class DistillEvalResult:
     """Evaluation results after distillation."""
+
     perplexity: float
     bleu_vs_teacher: float
     avg_response_len: float
-    teacher_samples: List[str]
-    student_samples: List[str]
-    eval_prompts: List[str]
+    teacher_samples: list[str]
+    student_samples: list[str]
+    eval_prompts: list[str]
     inference_time_sec: float
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "perplexity": round(self.perplexity, 4),
             "bleu_vs_teacher": round(self.bleu_vs_teacher, 2),
@@ -268,7 +273,7 @@ class DistillEvalResult:
                     "teacher": t,
                     "student": s,
                 }
-                for p, t, s in zip(self.eval_prompts, self.teacher_samples, self.student_samples)
+                for p, t, s in zip(self.eval_prompts, self.teacher_samples, self.student_samples, strict=False)
             ],
         }
 
@@ -294,9 +299,9 @@ class DistillEvaluator:
         self,
         teacher_rw: dict,
         teacher_arch: ArchConfig,
-        itos: Dict[int, str],
-        stoi: Dict[str, int],
-        eval_prompts: Optional[List[str]] = None,
+        itos: dict[int, str],
+        stoi: dict[str, int],
+        eval_prompts: list[str] | None = None,
         max_tokens: int = 50,
     ):
         """Initialize evaluator with teacher weights.
@@ -346,7 +351,7 @@ class DistillEvaluator:
                 break
             tokens.append(next_token)
 
-        return "".join(self.itos.get(t, "") for t in tokens[len(prompt):])
+        return "".join(self.itos.get(t, "") for t in tokens[len(prompt) :])
 
     def _generate_student(
         self,
@@ -371,7 +376,7 @@ class DistillEvaluator:
         for _ in range(max_tokens):
             x = tensor([tokens], requires_grad=False)
             logits, _ = student.forward(x)
-            if hasattr(logits, 'data'):
+            if hasattr(logits, "data"):
                 logits_np = logits.data
             else:
                 logits_np = np.array(logits)
@@ -380,7 +385,7 @@ class DistillEvaluator:
                 break
             tokens.append(next_token)
 
-        return "".join(self.itos.get(t, "") for t in tokens[len(prompt):])
+        return "".join(self.itos.get(t, "") for t in tokens[len(prompt) :])
 
     def _compute_perplexity_from_model(
         self,
@@ -413,7 +418,7 @@ class DistillEvaluator:
             y = tensor([chunk[1:]], requires_grad=False)
 
             logits, _ = student.forward(x, y)
-            if hasattr(logits, 'data'):
+            if hasattr(logits, "data"):
                 logits_np = logits.data
             else:
                 logits_np = np.array(logits)
@@ -450,7 +455,8 @@ class DistillEvaluator:
         student_samples = []
 
         # Generate from both models
-        teacher_get_weight = lambda name: self.teacher_rw[name]
+        def teacher_get_weight(name):
+            return self.teacher_rw[name]
 
         for prompt in self.eval_prompts:
             t_text = self._generate_greedy(
@@ -462,7 +468,7 @@ class DistillEvaluator:
 
         # Compute BLEU (teacher vs student)
         bleu_scores = []
-        for t_out, s_out in zip(teacher_samples, student_samples):
+        for t_out, s_out in zip(teacher_samples, student_samples, strict=False):
             if t_out and s_out:
                 bleu_scores.append(_bleu_score(s_out, t_out))
         avg_bleu = float(np.mean(bleu_scores)) if bleu_scores else 0.0
@@ -472,7 +478,9 @@ class DistillEvaluator:
         perplexity = self._compute_perplexity_from_model(student, eval_text)
 
         # Average response length
-        avg_len = float(np.mean([len(s.split()) for s in student_samples])) if student_samples else 0.0
+        avg_len = (
+            float(np.mean([len(s.split()) for s in student_samples])) if student_samples else 0.0
+        )
 
         elapsed = _time.time() - start_time
 
@@ -489,10 +497,10 @@ class DistillEvaluator:
 
 def distill_gpt2_to_slo(
     text: str,
-    config: Optional[DistillConfig] = None,
-    on_step: Optional[Callable[[int, float, int], None]] = None,
+    config: DistillConfig | None = None,
+    on_step: Callable[[int, float, int], None] | None = None,
     cancel_event=None,
-) -> Tuple[SloTransformer, Dict[str, str]]:
+) -> tuple[SloTransformer, dict[str, str]]:
     """
     Distill GPT-2 into a smaller SloTransformer.
 
@@ -506,14 +514,20 @@ def distill_gpt2_to_slo(
         (trained_model, metadata_dict)
     """
     config = config or DistillConfig()
-    logger.info("Loading GPT-2 teacher...",
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Loading GPT-2 teacher...",
+        extra={"tag": "TRAIN"},
+    )
     rw, teacher_arch, tok_vocab = _load_gpt2_numpy()
     stoi = tok_vocab["stoi"]
     itos = tok_vocab["itos"]
     vocab_size = tok_vocab["vocab_size"]
-    logger.info("Teacher loaded: %d vocab, %d layers", vocab_size, teacher_arch.n_layers,
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Teacher loaded: %d vocab, %d layers",
+        vocab_size,
+        teacher_arch.n_layers,
+        extra={"tag": "TRAIN"},
+    )
 
     # Create or resume student
     start_epoch = 0
@@ -521,13 +535,17 @@ def distill_gpt2_to_slo(
     best_loss = float("inf")
 
     if config.resume_checkpoint and Path(config.resume_checkpoint).exists():
-        logger.info("Resuming from checkpoint: %s", config.resume_checkpoint,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Resuming from checkpoint: %s",
+            config.resume_checkpoint,
+            extra={"tag": "TRAIN"},
+        )
         from domain.training._internal.slonet import import_from_sou
+
         student = import_from_sou(config.resume_checkpoint)
 
         # Extract training state from checkpoint metadata
-        if hasattr(student, 'metadata') and student.metadata:
+        if hasattr(student, "metadata") and student.metadata:
             meta = student.metadata
             raw_epoch = meta.get("epoch", 0)
             raw_step = meta.get("step", 0)
@@ -536,24 +554,37 @@ def distill_gpt2_to_slo(
             if isinstance(raw_epoch, (int, float)) and 0 <= raw_epoch < config.epochs:
                 start_epoch = int(raw_epoch)
             else:
-                logger.warning("Checkpoint epoch=%s invalid for %d epochs, starting from 0",
-                    raw_epoch, config.epochs, extra={"tag": "TRAIN"})
+                logger.warning(
+                    "Checkpoint epoch=%s invalid for %d epochs, starting from 0",
+                    raw_epoch,
+                    config.epochs,
+                    extra={"tag": "TRAIN"},
+                )
             # Validate step: must be non-negative int
             if isinstance(raw_step, (int, float)) and raw_step >= 0:
                 start_step = int(raw_step)
             else:
-                logger.warning("Checkpoint step=%s invalid, starting from 0", raw_step,
-                    extra={"tag": "TRAIN"})
+                logger.warning(
+                    "Checkpoint step=%s invalid, starting from 0", raw_step, extra={"tag": "TRAIN"}
+                )
             # Validate best_loss: must be finite positive
             if isinstance(raw_best, (int, float)) and np.isfinite(raw_best) and raw_best > 0:
                 best_loss = float(raw_best)
-            logger.info("Resumed at epoch %d, step %d, best_loss=%.4f",
-                        start_epoch, start_step, best_loss,
-                        extra={"tag": "TRAIN"})
+            logger.info(
+                "Resumed at epoch %d, step %d, best_loss=%.4f",
+                start_epoch,
+                start_step,
+                best_loss,
+                extra={"tag": "TRAIN"},
+            )
     else:
-        logger.info("Creating student: n_embed=%d, n_layer=%d, n_head=%d",
-                    config.n_embed, config.n_layer, config.n_head,
-                    extra={"tag": "TRAIN"})
+        logger.info(
+            "Creating student: n_embed=%d, n_layer=%d, n_head=%d",
+            config.n_embed,
+            config.n_layer,
+            config.n_head,
+            extra={"tag": "TRAIN"},
+        )
         student = SloTransformer(
             vocab_size=vocab_size,
             n_embed=config.n_embed,
@@ -571,8 +602,12 @@ def distill_gpt2_to_slo(
 
     # Dataset
     dataset = TextDataset(text, config.block_size, stoi)
-    logger.info("Dataset: %d chars, %d samples", len(text), len(dataset),
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Dataset: %d chars, %d samples",
+        len(text),
+        len(dataset),
+        extra={"tag": "TRAIN"},
+    )
     optimizer = SloAdam(lr=config.lr)
     rng = np.random.default_rng(42)
 
@@ -585,20 +620,27 @@ def distill_gpt2_to_slo(
 
     # Build teacher token map for fast lookup
     # Teacher: forward_fast needs token_ids as a list
-    logger.info("Starting distillation: %d epochs, %d total steps (starting at epoch %d, step %d)",
-                config.epochs, total_steps, start_epoch, start_step,
-                extra={"tag": "TRAIN"})
+    logger.info(
+        "Starting distillation: %d epochs, %d total steps (starting at epoch %d, step %d)",
+        config.epochs,
+        total_steps,
+        start_epoch,
+        start_step,
+        extra={"tag": "TRAIN"},
+    )
 
     for epoch in range(start_epoch, config.epochs):
         if cancel_event and cancel_event.is_set():
-            logger.info("Training cancelled",
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "Training cancelled",
+                extra={"tag": "TRAIN"},
+            )
             break
 
         epoch_loss = 0.0
         epoch_steps = 0
 
-        for batch_idx in range(len(dataset) // config.batch_size):
+        for _batch_idx in range(len(dataset) // config.batch_size):
             if cancel_event and cancel_event.is_set():
                 break
 
@@ -618,8 +660,9 @@ def distill_gpt2_to_slo(
             s_logits, _ = student.forward(x_tensor, y_tensor)
 
             # Normalize to object with .data attribute
-            if not hasattr(s_logits, 'data'):
+            if not hasattr(s_logits, "data"):
                 from domain.training._internal.slonet import Tensor as _Tensor
+
                 s_logits = _Tensor(np.asarray(s_logits, dtype=np.float32))
 
             # Keep s_logits as Tensor for autograd — reshape to 2D (batch*seq, vocab)
@@ -643,20 +686,26 @@ def distill_gpt2_to_slo(
             s_data = s_logits_trunc.data
             s_scaled = s_data / T
             s_log_softmax = s_scaled - s_scaled.max(axis=-1, keepdims=True)
-            s_log_softmax = s_log_softmax - np.log(np.exp(s_log_softmax).sum(axis=-1, keepdims=True))
+            s_log_softmax = s_log_softmax - np.log(
+                np.exp(s_log_softmax).sum(axis=-1, keepdims=True)
+            )
             t_scaled = t_flat / T
             t_softmax = _softmax(t_scaled)
             # KL divergence: sum(teacher * (log(teacher) - student_log_probs))
-            kl_per_token = (t_softmax * (np.log(np.where(t_softmax < 1e-15, 1e-15, t_softmax)) - s_log_softmax)).sum(axis=-1)
-            soft_loss_val = float(kl_per_token.mean() * (T ** 2))
+            kl_per_token = (
+                t_softmax * (np.log(np.where(t_softmax < 1e-15, 1e-15, t_softmax)) - s_log_softmax)
+            ).sum(axis=-1)
+            soft_loss_val = float(kl_per_token.mean() * (T**2))
 
             # Create soft loss Tensor with backward through s_logits_trunc
             from domain.training._internal.slonet import Tensor as _Tensor
+
             soft_loss = _Tensor(soft_loss_val, requires_grad=True, _children=(s_logits_trunc,))
             if s_logits_trunc.requires_grad:
                 s_logits_trunc._consumers.append(soft_loss)
             _n = s_data.shape[0]
             _t_softmax = t_softmax.copy()
+
             def _soft_bk(g):
                 if s_logits_trunc.requires_grad:
                     # d(soft_loss)/d(s_logits) = -(1/T) * t_softmax (for KL w.r.t. student logits)
@@ -665,6 +714,7 @@ def distill_gpt2_to_slo(
                         s_logits_trunc.grad = _Tensor(grad_val, _copy=False)
                     else:
                         s_logits_trunc.grad.data += grad_val
+
             soft_loss._backward_fn = _soft_bk
 
             # Hard loss: CE(student, ground truth) — uses slonet's autograd-preserving cross_entropy
@@ -680,7 +730,7 @@ def distill_gpt2_to_slo(
 
             # Zero grads
             for p in student.parameters():
-                if hasattr(p, 'grad'):
+                if hasattr(p, "grad"):
                     p.grad = None
 
             epoch_loss += float(total_loss.data)
@@ -688,9 +738,15 @@ def distill_gpt2_to_slo(
             step += 1
 
             if step % config.log_interval == 0:
-                logger.info("step %d/%d loss=%.4f (hard=%.4f soft=%.4f)",
-                            step, total_steps, float(total_loss.data), float(hard_loss.data), float(soft_loss.data),
-                            extra={"tag": "TRAIN"})
+                logger.info(
+                    "step %d/%d loss=%.4f (hard=%.4f soft=%.4f)",
+                    step,
+                    total_steps,
+                    float(total_loss.data),
+                    float(hard_loss.data),
+                    float(soft_loss.data),
+                    extra={"tag": "TRAIN"},
+                )
                 if on_step:
                     on_step(step, float(total_loss.data), epoch)
 
@@ -699,15 +755,23 @@ def distill_gpt2_to_slo(
                 avg_loss = epoch_loss / epoch_steps
                 if avg_loss < best_loss:
                     best_loss = avg_loss
-                    logger.info("New best loss: %.4f", best_loss,
-                        extra={"tag": "TRAIN"},)
+                    logger.info(
+                        "New best loss: %.4f",
+                        best_loss,
+                        extra={"tag": "TRAIN"},
+                    )
 
         if cancel_event and cancel_event.is_set():
             break
 
         avg_epoch = epoch_loss / max(epoch_steps, 1)
-        logger.info("Epoch %d/%d avg_loss=%.4f", epoch + 1, config.epochs, avg_epoch,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Epoch %d/%d avg_loss=%.4f",
+            epoch + 1,
+            config.epochs,
+            avg_epoch,
+            extra={"tag": "TRAIN"},
+        )
 
     # Save checkpoint
     ckpt_dir = Path(config.checkpoint_dir)
@@ -730,8 +794,10 @@ def distill_gpt2_to_slo(
     )
 
     # Run evaluation
-    logger.info("Running evaluation...",
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Running evaluation...",
+        extra={"tag": "TRAIN"},
+    )
     evaluator = DistillEvaluator(
         teacher_rw=rw,
         teacher_arch=teacher_arch,
@@ -747,22 +813,31 @@ def distill_gpt2_to_slo(
         "epochs": str(epoch + 1),
         "steps": str(step),
         "teacher": config.teacher_model,
-        "student_config": json.dumps({
-            "n_embed": config.n_embed,
-            "n_layer": config.n_layer,
-            "n_head": config.n_head,
-            "block_size": config.block_size,
-        }),
+        "student_config": json.dumps(
+            {
+                "n_embed": config.n_embed,
+                "n_layer": config.n_layer,
+                "n_head": config.n_head,
+                "block_size": config.block_size,
+            }
+        ),
         "vocab_size": str(vocab_size),
         "eval": json.dumps(eval_result.to_dict()),
         "perplexity": str(eval_result.perplexity),
         "bleu_vs_teacher": str(eval_result.bleu_vs_teacher),
     }
 
-    logger.info("Distillation complete. Checkpoint: %s", ckpt_path,
-        extra={"tag": "TRAIN"},)
-    logger.info("Eval: perplexity=%.2f, bleu=%.1f%%", eval_result.perplexity, eval_result.bleu_vs_teacher,
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Distillation complete. Checkpoint: %s",
+        ckpt_path,
+        extra={"tag": "TRAIN"},
+    )
+    logger.info(
+        "Eval: perplexity=%.2f, bleu=%.1f%%",
+        eval_result.perplexity,
+        eval_result.bleu_vs_teacher,
+        extra={"tag": "TRAIN"},
+    )
     return student, metadata
 
 
@@ -772,9 +847,14 @@ if __name__ == "__main__":  # pragma: no cover (requires GPT-2 download)
     # Quick test with small text
     text = "The quick brown fox jumps over the lazy dog. " * 100
     config = DistillConfig(
-        n_embed=64, n_layer=2, n_head=4,
-        epochs=3, batch_size=4, block_size=64,
-        log_interval=5, eval_interval=25,
+        n_embed=64,
+        n_layer=2,
+        n_head=4,
+        epochs=3,
+        batch_size=4,
+        block_size=64,
+        log_interval=5,
+        eval_interval=25,
     )
     model, meta = distill_gpt2_to_slo(text, config)
     logger.info("%s", json.dumps(meta, indent=2))

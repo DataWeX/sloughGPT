@@ -1,11 +1,16 @@
 """Tests for domain.infrastructure.model_server — Priority, QueueMetrics, ModelStatus, ModelMetrics, CircuitBreakerState, CircuitBreaker, IdleManager, SessionKVCache."""
 
 import time
-from unittest.mock import MagicMock
 
 from domain.infrastructure._internal.model_server import (
-    Priority, QueueMetrics, ModelStatus, ModelMetrics, CircuitBreakerState, CircuitBreaker,
-    IdleManager, SessionKVCache,
+    CircuitBreaker,
+    CircuitBreakerState,
+    IdleManager,
+    ModelMetrics,
+    ModelStatus,
+    Priority,
+    QueueMetrics,
+    SessionKVCache,
 )
 
 
@@ -45,7 +50,7 @@ class TestPriority:
     def test_invalid_value_raises(self):
         try:
             Priority(99)
-            assert False, "Should have raised ValueError"
+            raise AssertionError("Should have raised ValueError")
         except ValueError:
             pass
 
@@ -101,6 +106,7 @@ class TestModelStatus:
 
     def test_is_enum(self):
         from enum import Enum
+
         assert issubclass(ModelStatus, Enum)
 
     def test_member_by_name(self):
@@ -291,6 +297,7 @@ class TestCircuitBreakerState:
 
     def test_is_enum(self):
         from enum import Enum
+
         assert issubclass(CircuitBreakerState, Enum)
 
     def test_member_by_name(self):
@@ -594,6 +601,7 @@ class TestSessionKVCache:
 # Extended ModelMetrics tests
 # ---------------------------------------------------------------------------
 
+
 class TestModelMetricsExtended:
     def test_requests_total_not_incremented_by_record(self):
         mm = ModelMetrics()
@@ -636,10 +644,19 @@ class TestModelMetricsExtended:
         mm = ModelMetrics()
         s = mm.snapshot()
         expected_keys = {
-            "requests_total", "requests_completed", "requests_failed",
-            "requests_timed_out", "consecutive_failures", "avg_generation_time_ms",
-            "max_generation_time_ms", "min_generation_time_ms", "last_generation_time_ms",
-            "tokens_generated_total", "last_error", "error_rate", "last_request_time",
+            "requests_total",
+            "requests_completed",
+            "requests_failed",
+            "requests_timed_out",
+            "consecutive_failures",
+            "avg_generation_time_ms",
+            "max_generation_time_ms",
+            "min_generation_time_ms",
+            "last_generation_time_ms",
+            "tokens_generated_total",
+            "last_error",
+            "error_rate",
+            "last_request_time",
         }
         assert expected_keys == set(s.keys())
 
@@ -676,6 +693,7 @@ class TestModelMetricsExtended:
 # ---------------------------------------------------------------------------
 # Extended CircuitBreaker tests
 # ---------------------------------------------------------------------------
+
 
 class TestCircuitBreakerExtended:
     def test_allow_request_when_half_open(self):
@@ -736,6 +754,7 @@ class TestCircuitBreakerExtended:
 # ---------------------------------------------------------------------------
 # Extended IdleManager tests
 # ---------------------------------------------------------------------------
+
 
 class TestIdleManagerExtended:
     def test_register_multiple(self):
@@ -829,6 +848,7 @@ class TestIdleManagerExtended:
 # Extended Priority tests
 # ---------------------------------------------------------------------------
 
+
 class TestPriorityExtended:
     def test_high_is_zero(self):
         assert Priority.HIGH == 0
@@ -854,6 +874,7 @@ class TestPriorityExtended:
 # Extended QueueMetrics tests
 # ---------------------------------------------------------------------------
 
+
 class TestQueueMetricsExtended:
     def test_default_avg_wait(self):
         qm = QueueMetrics()
@@ -865,8 +886,14 @@ class TestQueueMetricsExtended:
 
     def test_all_fields_settable(self):
         qm = QueueMetrics(
-            depth_high=1, depth_medium=2, depth_low=3, total_depth=6,
-            served=10, timed_out=1, avg_wait_ms=5.0, max_wait_ms=50.0
+            depth_high=1,
+            depth_medium=2,
+            depth_low=3,
+            total_depth=6,
+            served=10,
+            timed_out=1,
+            avg_wait_ms=5.0,
+            max_wait_ms=50.0,
         )
         assert qm.depth_high == 1
         assert qm.depth_medium == 2
@@ -886,6 +913,7 @@ class TestQueueMetricsExtended:
 # Extended ModelStatus tests
 # ---------------------------------------------------------------------------
 
+
 class TestModelStatusExtended:
     def test_all_members_present(self):
         members = [s.name for s in ModelStatus]
@@ -903,7 +931,7 @@ class TestModelStatusExtended:
     def test_invalid_value_raises(self):
         try:
             ModelStatus("nonexistent")
-            assert False, "Should have raised ValueError"
+            raise AssertionError("Should have raised ValueError")
         except ValueError:
             pass
 
@@ -919,6 +947,7 @@ class TestModelStatusExtended:
 # Extended CircuitBreakerState tests
 # ---------------------------------------------------------------------------
 
+
 class TestCircuitBreakerStateExtended:
     def test_all_members_present(self):
         members = [s.name for s in CircuitBreakerState]
@@ -933,7 +962,7 @@ class TestCircuitBreakerStateExtended:
     def test_invalid_value_raises(self):
         try:
             CircuitBreakerState("nonexistent")
-            assert False, "Should have raised ValueError"
+            raise AssertionError("Should have raised ValueError")
         except ValueError:
             pass
 

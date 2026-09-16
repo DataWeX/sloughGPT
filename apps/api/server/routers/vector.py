@@ -10,7 +10,13 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 
 class VectorStoreConfig(BaseModel):

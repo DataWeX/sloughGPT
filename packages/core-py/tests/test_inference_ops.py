@@ -1,8 +1,8 @@
 """Tests for inference ops — rmsnorm, layernorm, matmul, blas."""
+
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from domain.inference._internal.ops.blas import is_available, sgemm
 from domain.inference._internal.ops.layernorm import layernorm

@@ -22,4 +22,5 @@ def get_tokenizer() -> Any:
         - Creates a default ``SloBPE`` on first access if the manager has none.
     """
     from domain.training._internal.tokenizer_manager import get_tokenizer_manager
+
     return get_tokenizer_manager().get_tokenizer()

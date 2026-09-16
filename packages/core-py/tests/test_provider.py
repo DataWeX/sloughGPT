@@ -6,12 +6,12 @@ Covers: dataclass creation, router setup, processor detection, registry CRUD,
 attach_process_guard_to_provider, update_personality_traits, _server_from_provider,
 ProviderRouter.chat/chat_stream.
 """
+
 from __future__ import annotations
 
-import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -20,31 +20,31 @@ if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
 from domain.models._internal.provider import (
-    ModelCapabilities,
-    ProviderRouter,
-    VisionProcessor,
     KnowledgeProcessor,
-    ToolUseProcessor,
+    ModelCapabilities,
     PersonalityProcessor,
+    ProviderRouter,
     StyleProcessor,
     ToolDef,
-    register_provider,
-    get_provider,
-    list_providers,
-    clear_providers,
-    register_processor,
-    get_processor,
-    list_processors,
+    ToolUseProcessor,
+    VisionProcessor,
+    _server_from_provider,
     apply_processors,
     attach_process_guard_to_provider,
+    clear_providers,
+    get_processor,
+    get_provider,
+    list_processors,
+    list_providers,
+    register_processor,
+    register_provider,
     update_personality_traits,
-    _server_from_provider,
 )
-
 
 # =============================================================================
 # ModelCapabilities
 # =============================================================================
+
 
 class TestModelCapabilities:
     def test_defaults(self):
@@ -60,12 +60,16 @@ class TestModelCapabilities:
         assert c.vision is True
 
     def test_all_true(self):
-        c = ModelCapabilities(chat=True, streaming=True, embedding=True, vision=True, functions=True)
+        c = ModelCapabilities(
+            chat=True, streaming=True, embedding=True, vision=True, functions=True
+        )
         assert c.functions is True
         assert all([c.chat, c.streaming, c.embedding, c.vision, c.functions])
 
     def test_all_false_explicit(self):
-        c = ModelCapabilities(chat=False, streaming=False, embedding=False, vision=False, functions=False)
+        c = ModelCapabilities(
+            chat=False, streaming=False, embedding=False, vision=False, functions=False
+        )
         assert c.chat is False
         assert c.streaming is False
         assert c.embedding is False
@@ -108,6 +112,7 @@ class TestModelCapabilities:
 # =============================================================================
 # ProviderRouter
 # =============================================================================
+
 
 class TestProviderRouter:
     def test_creation(self):
@@ -213,6 +218,7 @@ class TestProviderRouter:
 # ProcessorRegistry
 # =============================================================================
 
+
 class TestProcessorRegistry:
     def test_register_and_get(self):
         register_processor("test_proc", "mock")
@@ -244,6 +250,7 @@ class TestProcessorRegistry:
 # =============================================================================
 # apply_processors
 # =============================================================================
+
 
 class TestApplyProcessors:
     @pytest.mark.asyncio
@@ -306,6 +313,7 @@ class TestApplyProcessors:
 # VisionProcessor
 # =============================================================================
 
+
 class TestVisionProcessor:
     def test_creation(self):
         p = VisionProcessor("multimodal")
@@ -321,10 +329,15 @@ class TestVisionProcessor:
 
     def test_extract_images_list_content(self):
         p = VisionProcessor("mm")
-        msgs = [{"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
-            {"type": "text", "text": "describe"},
-        ]}]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                    {"type": "text", "text": "describe"},
+                ],
+            }
+        ]
         imgs = p._extract_images(msgs)
         assert len(imgs) == 1
         assert "abc" in imgs[0]
@@ -359,9 +372,14 @@ class TestVisionProcessor:
     @pytest.mark.asyncio
     async def test_process_provider_unavailable_strips_images(self):
         p = VisionProcessor("nonexistent_provider_xyz")
-        msgs = [{"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
-        ]}]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                ],
+            }
+        ]
         result = await p.process(msgs)
         assert len(result) == 1
         assert result[0]["content"] == ""
@@ -369,10 +387,15 @@ class TestVisionProcessor:
     @pytest.mark.asyncio
     async def test_process_provider_unavailable_plain_text(self):
         p = VisionProcessor("nonexistent_provider_xyz")
-        msgs = [{"role": "user", "content": [
-            {"type": "text", "text": "describe this"},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
-        ]}]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "describe this"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                ],
+            }
+        ]
         result = await p.process(msgs)
         assert "describe this" in result[0]["content"]
         assert "[Image attached" in result[0]["content"]
@@ -380,9 +403,14 @@ class TestVisionProcessor:
     @pytest.mark.asyncio
     async def test_process_provider_unavailable_preserves_role(self):
         p = VisionProcessor("nonexistent_provider_xyz")
-        msgs = [{"role": "assistant", "content": [
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
-        ]}]
+        msgs = [
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                ],
+            }
+        ]
         result = await p.process(msgs)
         assert result[0]["role"] == "assistant"
         assert "Image attached" not in result[0].get("content", "")
@@ -400,6 +428,7 @@ class TestVisionProcessor:
 # =============================================================================
 # KnowledgeProcessor
 # =============================================================================
+
 
 class TestKnowledgeProcessor:
     @pytest.mark.asyncio
@@ -469,6 +498,7 @@ class TestKnowledgeProcessor:
 # ToolUseProcessor
 # =============================================================================
 
+
 class TestToolUseProcessor:
     def test_creation_default_tools(self):
         p = ToolUseProcessor()
@@ -481,7 +511,10 @@ class TestToolUseProcessor:
         assert p._tools[0].name == "my_tool"
 
     def test_has_image_string(self):
-        assert ToolUseProcessor._has_image([{"role": "user", "content": "data:image/png;base64,abc"}]) is True
+        assert (
+            ToolUseProcessor._has_image([{"role": "user", "content": "data:image/png;base64,abc"}])
+            is True
+        )
 
     def test_has_image_list(self):
         msgs = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "x"}}]}]
@@ -507,9 +540,14 @@ class TestToolUseProcessor:
     @pytest.mark.asyncio
     async def test_process_injects_tool_prompt(self):
         p = ToolUseProcessor()
-        msgs = [{"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
-        ]}]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                ],
+            }
+        ]
         result = await p.process(msgs)
         assert any("tools" in m.get("content", "").lower() for m in result)
 
@@ -575,6 +613,7 @@ class TestToolUseProcessor:
 # =============================================================================
 # PersonalityProcessor
 # =============================================================================
+
 
 class TestPersonalityProcessor:
     @pytest.mark.asyncio
@@ -693,6 +732,7 @@ class TestPersonalityProcessor:
 # StyleProcessor
 # =============================================================================
 
+
 class TestStyleProcessor:
     def test_defaults(self):
         p = StyleProcessor()
@@ -807,6 +847,7 @@ class TestStyleProcessor:
 # ProviderRegistry
 # =============================================================================
 
+
 class TestProviderRegistry:
     def test_register_and_get(self):
         register_provider("test_provider", "mock")
@@ -854,8 +895,10 @@ class TestProviderRegistry:
 # _softmax (inline implementation from provider module)
 # =============================================================================
 
+
 def _softmax_test(x, axis=-1):
     import numpy as np
+
     e = np.exp(x - np.max(x, axis=axis, keepdims=True))
     return e / (np.sum(e, axis=axis, keepdims=True) + 1e-10)
 
@@ -863,24 +906,28 @@ def _softmax_test(x, axis=-1):
 class TestSoftmax:
     def test_basic(self):
         import numpy as np
+
         x = np.array([1.0, 2.0, 3.0])
         result = _softmax_test(x)
         assert abs(result.sum() - 1.0) < 1e-6
 
     def test_uniform(self):
         import numpy as np
+
         x = np.array([1.0, 1.0, 1.0])
         result = _softmax_test(x)
         assert all(abs(v - 1.0 / 3.0) < 1e-6 for v in result)
 
     def test_large_values(self):
         import numpy as np
+
         x = np.array([1000.0, 1001.0, 1002.0])
         result = _softmax_test(x)
         assert abs(result.sum() - 1.0) < 1e-4
 
     def test_2d(self):
         import numpy as np
+
         x = np.array([[1.0, 2.0], [3.0, 4.0]])
         result = _softmax_test(x, axis=-1)
         assert result.shape == (2, 2)
@@ -890,6 +937,7 @@ class TestSoftmax:
 # =============================================================================
 # attach_process_guard_to_provider
 # =============================================================================
+
 
 class TestAttachProcessGuardToProvider:
     def test_returns_false_when_no_provider(self):
@@ -946,6 +994,7 @@ class TestAttachProcessGuardToProvider:
 # =============================================================================
 # update_personality_traits
 # =============================================================================
+
 
 class TestUpdatePersonalityTraits:
     def test_noop_when_no_default_router(self):
@@ -1006,6 +1055,7 @@ class TestUpdatePersonalityTraits:
 # =============================================================================
 # _server_from_provider
 # =============================================================================
+
 
 class TestServerFromProvider:
     def test_returns_none_when_no_to_server(self):

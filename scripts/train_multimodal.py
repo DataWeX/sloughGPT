@@ -12,16 +12,19 @@ Usage:
 
 import argparse
 import sys
-import os
 import time
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "core-py"))
 
 from domain.multimodal.engine import (
-    MultimodalEngine, get_multimodal_engine, ReplayBuffer,
-    replay_train_step, contrastive_step,
+    MultimodalEngine,
+    ReplayBuffer,
+    contrastive_step,
+    get_multimodal_engine,
+    replay_train_step,
 )
 
 # ── Synthetic vision data ─────────────────────────────────────────────
@@ -36,29 +39,40 @@ VISION_TEMPLATES = [
     "{color} {shape} over {bg} background",
 ]
 
+
 def _draw_shape(img: np.ndarray, shape: str, color: tuple, cx: int, cy: int, size: int):
     h, w, _ = img.shape
     rr, cc = np.ogrid[:h, :w]
     if shape == "circle":
-        mask = ((rr - cy) ** 2 + (cc - cx) ** 2) <= size ** 2
+        mask = ((rr - cy) ** 2 + (cc - cx) ** 2) <= size**2
     elif shape == "square":
         mask = (np.abs(rr - cy) <= size) & (np.abs(cc - cx) <= size)
     elif shape == "triangle":
-        mask = (rr >= cy - size) & (rr <= cy + size) & \
-               (np.abs(cc - cx) <= size * (1 - (rr - cy) / (2 * size + 1)))
+        mask = (
+            (rr >= cy - size)
+            & (rr <= cy + size)
+            & (np.abs(cc - cx) <= size * (1 - (rr - cy) / (2 * size + 1)))
+        )
     else:
         mask = np.zeros((h, w), dtype=bool)
     img[mask] = color
 
+
 def _color_to_rgb(name: str) -> tuple:
     palette = {
-        "red": (1.0, 0.2, 0.2), "green": (0.2, 0.8, 0.2),
-        "blue": (0.2, 0.2, 1.0), "yellow": (1.0, 0.9, 0.2),
-        "orange": (1.0, 0.6, 0.1), "purple": (0.7, 0.2, 0.8),
-        "white": (0.95, 0.95, 0.95), "black": (0.1, 0.1, 0.1),
-        "gray": (0.5, 0.5, 0.5), "beige": (0.86, 0.82, 0.74),
+        "red": (1.0, 0.2, 0.2),
+        "green": (0.2, 0.8, 0.2),
+        "blue": (0.2, 0.2, 1.0),
+        "yellow": (1.0, 0.9, 0.2),
+        "orange": (1.0, 0.6, 0.1),
+        "purple": (0.7, 0.2, 0.8),
+        "white": (0.95, 0.95, 0.95),
+        "black": (0.1, 0.1, 0.1),
+        "gray": (0.5, 0.5, 0.5),
+        "beige": (0.86, 0.82, 0.74),
     }
     return palette.get(name, (0.5, 0.5, 0.5))
+
 
 def generate_vision_sample(size: int = 224) -> tuple:
     img = np.zeros((size, size, 3), dtype=np.float32)
@@ -73,12 +87,19 @@ def generate_vision_sample(size: int = 224) -> tuple:
     caption = template.format(color=color_name, shape=shape, bg=bg_name)
     return img.reshape(1, size, size, 3), caption
 
+
 # ── Synthetic audio data ──────────────────────────────────────────────
 
 FREQUENCIES = [
-    (130.81, "low C"), (164.81, "low E"), (220.0, "low A"),
-    (261.63, "middle C"), (329.63, "middle E"), (440.0, "middle A"),
-    (523.25, "high C"), (659.25, "high E"), (880.0, "high A"),
+    (130.81, "low C"),
+    (164.81, "low E"),
+    (220.0, "low A"),
+    (261.63, "middle C"),
+    (329.63, "middle E"),
+    (440.0, "middle A"),
+    (523.25, "high C"),
+    (659.25, "high E"),
+    (880.0, "high A"),
 ]
 
 AUDIO_TEMPLATES = [
@@ -86,6 +107,7 @@ AUDIO_TEMPLATES = [
     "a {note} pitch",
     "sound at {note} frequency",
 ]
+
 
 def generate_audio_sample(sample_rate: int = 16000, duration: float = 2.0) -> tuple:
     freq_name = FREQUENCIES[np.random.randint(len(FREQUENCIES))]
@@ -99,7 +121,9 @@ def generate_audio_sample(sample_rate: int = 16000, duration: float = 2.0) -> tu
     caption = template.format(note=note)
     return waveform, caption
 
+
 # ── Dataset generation ────────────────────────────────────────────────
+
 
 def generate_vision_dataset(n: int) -> tuple:
     images, captions = [], []
@@ -109,6 +133,7 @@ def generate_vision_dataset(n: int) -> tuple:
         captions.append(cap)
     return np.concatenate(images, axis=0), captions
 
+
 def generate_audio_dataset(n: int, sample_rate: int = 16000) -> tuple:
     waveforms, captions = [], []
     for _ in range(n):
@@ -117,7 +142,9 @@ def generate_audio_dataset(n: int, sample_rate: int = 16000) -> tuple:
         captions.append(cap)
     return waveforms, captions
 
+
 # ── Training ──────────────────────────────────────────────────────────
+
 
 def train(args):
     np.random.seed(42)
@@ -131,8 +158,10 @@ def train(args):
         n_heads = engine.vision.n_heads
         n_decoder_layers = len(engine.decoder.blocks)
         n_audio_layers = len(engine.audio.blocks)
-        print(f"  Loaded: embed_dim={embed_dim}, hidden_dim={hidden_dim}, "
-              f"vit_layers={n_vit_layers}, decoder_layers={n_decoder_layers}")
+        print(
+            f"  Loaded: embed_dim={embed_dim}, hidden_dim={hidden_dim}, "
+            f"vit_layers={n_vit_layers}, decoder_layers={n_decoder_layers}"
+        )
         print(f"  Previously trained: {engine._trained}")
 
         # Regenerate data (same seed so deterministic)
@@ -162,9 +191,11 @@ def train(args):
             n_audio_layers = args.n_audio_layers or 2
 
         print("Initializing MultimodalEngine...")
-        print(f"  embed_dim={embed_dim}, hidden_dim={hidden_dim}, "
-              f"vit_layers={n_vit_layers}, decoder_layers={n_decoder_layers}, "
-              f"audio_layers={n_audio_layers}, heads={n_heads}")
+        print(
+            f"  embed_dim={embed_dim}, hidden_dim={hidden_dim}, "
+            f"vit_layers={n_vit_layers}, decoder_layers={n_decoder_layers}, "
+            f"audio_layers={n_audio_layers}, heads={n_heads}"
+        )
         engine = get_multimodal_engine(
             embed_dim=embed_dim,
             hidden_dim=hidden_dim,
@@ -201,8 +232,10 @@ def train(args):
     # Precompute audio patches to avoid STFT per epoch
     print("Precomputing audio patches (avoids STFT per epoch)...")
     t0 = time.time()
-    audio_patches_list = [engine.precompute_audio_patches(w.reshape(1, -1)) for w in train_waveforms]
-    print(f"  Precomputed {len(audio_patches_list)} patches in {time.time()-t0:.1f}s")
+    audio_patches_list = [
+        engine.precompute_audio_patches(w.reshape(1, -1)) for w in train_waveforms
+    ]
+    print(f"  Precomputed {len(audio_patches_list)} patches in {time.time() - t0:.1f}s")
 
     # Replay buffer
     buffer = ReplayBuffer(capacity=args.buffer_capacity)
@@ -228,16 +261,20 @@ def train(args):
         steps_v = 0
         if not args.audio_only:
             for i in range(0, n_v, args.batch_size):
-                batch_idx = idx_v[i:i + args.batch_size]
+                batch_idx = idx_v[i : i + args.batch_size]
                 for j in batch_idx:
                     tokens = engine.text.encode(train_captions_v[j])
                     if len(tokens) < 2:
                         continue
                     tokens_arr = np.array([tokens], dtype=np.int64)
-                    loss_val = engine.train_step(train_images[j:j+1], tokens_arr, lr=lr, temperature=temp)
+                    loss_val = engine.train_step(
+                        train_images[j : j + 1], tokens_arr, lr=lr, temperature=temp
+                    )
                     epoch_loss_v += loss_val
                     steps_v += 1
-                buffer.add(train_images[batch_idx[0]:batch_idx[0]+1], train_captions_v[batch_idx[0]])
+                buffer.add(
+                    train_images[batch_idx[0] : batch_idx[0] + 1], train_captions_v[batch_idx[0]]
+                )
 
         # ── Audio batch ──
         idx_a = np.random.permutation(n_a)
@@ -245,7 +282,7 @@ def train(args):
         steps_a = 0
         if not args.vision_only:
             for i in range(0, n_a, args.batch_size):
-                batch_idx = idx_a[i:i + args.batch_size]
+                batch_idx = idx_a[i : i + args.batch_size]
                 for j in batch_idx:
                     tokens = engine.text.encode(train_captions_a[j])
                     if len(tokens) < 2:
@@ -273,7 +310,7 @@ def train(args):
                     continue
                 tokens_arr = np.array([tokens], dtype=np.int64)
                 loss_val = engine.train_step(
-                    images_np=train_images[vi:vi+1],
+                    images_np=train_images[vi : vi + 1],
                     audio_patches=audio_patches_list[ai],
                     text_tokens=tokens_arr,
                     lr=lr,
@@ -289,7 +326,7 @@ def train(args):
             replay_loss = replay_train_step(engine, buffer, batch_size=4)
             sample_idx = np.random.randint(n_v)
             contrast_loss = contrastive_step(
-                engine, train_images[sample_idx:sample_idx+1], buffer
+                engine, train_images[sample_idx : sample_idx + 1], buffer
             )
 
         avg_loss_v = epoch_loss_v / max(steps_v, 1)
@@ -299,7 +336,7 @@ def train(args):
         losses_a.append(avg_loss_a)
 
         if (epoch + 1) % max(1, args.epochs // 10) == 0 or epoch == 0:
-            print(f"\nEpoch {epoch+1}/{args.epochs} (lr={lr:.1e}, temp={temp:.2f}):")
+            print(f"\nEpoch {epoch + 1}/{args.epochs} (lr={lr:.1e}, temp={temp:.2f}):")
             print(f"  Vision:  loss={avg_loss_v:.4f} ({steps_v} steps)")
             print(f"  Audio:   loss={avg_loss_a:.4f} ({steps_a} steps)")
             print(f"  V+A:     loss={avg_loss_c:.4f} ({combined_steps} steps)")
@@ -308,42 +345,56 @@ def train(args):
             # Generate vision sample
             if not args.audio_only:
                 test_idx = np.random.randint(n_v)
-                result = engine.generate(train_images[test_idx:test_idx+1], max_len=12, temperature=0.0)
+                result = engine.generate(
+                    train_images[test_idx : test_idx + 1], max_len=12, temperature=0.0
+                )
                 print(f"  Vision target:  {train_captions_v[test_idx]}")
                 print(f"  Vision gen:     {result.text}")
 
             # Generate audio sample
             if not args.vision_only:
                 test_ai = np.random.randint(n_a)
-                result_a = engine.generate(audio_patches=audio_patches_list[test_ai], max_len=12, temperature=0.0)
+                result_a = engine.generate(
+                    audio_patches=audio_patches_list[test_ai], max_len=12, temperature=0.0
+                )
                 print(f"  Audio target:   {train_captions_a[test_ai]}")
                 print(f"  Audio gen:      {result_a.text}")
 
     # Final evaluation
-    print(f"\n{'='*60}")
-    print(f"Training complete.")
+    print(f"\n{'=' * 60}")
+    print("Training complete.")
     if losses_v:
-        print(f"Vision loss:  {losses_v[0]:.4f} → {losses_v[-1]:.4f} ({(1-losses_v[-1]/max(losses_v[0],1e-8))*100:.1f}% reduction)")
+        print(
+            f"Vision loss:  {losses_v[0]:.4f} → {losses_v[-1]:.4f} ({(1 - losses_v[-1] / max(losses_v[0], 1e-8)) * 100:.1f}% reduction)"
+        )
     if losses_a:
-        print(f"Audio loss:   {losses_a[0]:.4f} → {losses_a[-1]:.4f} ({(1-losses_a[-1]/max(losses_a[0],1e-8))*100:.1f}% reduction)")
-    print(f"{'='*60}")
+        print(
+            f"Audio loss:   {losses_a[0]:.4f} → {losses_a[-1]:.4f} ({(1 - losses_a[-1] / max(losses_a[0], 1e-8)) * 100:.1f}% reduction)"
+        )
+    print(f"{'=' * 60}")
 
     if not args.audio_only:
         print("\nVision sample generations:")
         for i in range(min(5, n_v)):
-            result = engine.generate(train_images[i:i+1], max_len=15, temperature=0.3)
+            result = engine.generate(train_images[i : i + 1], max_len=15, temperature=0.3)
             print(f"  [{i}] Target: {train_captions_v[i]}")
             print(f"      Gen (greedy):    {result.text}")
-            result_beam = engine.generate(train_images[i:i+1], max_len=15, temperature=0.3, beam_width=3)
+            result_beam = engine.generate(
+                train_images[i : i + 1], max_len=15, temperature=0.3, beam_width=3
+            )
             print(f"      Gen (beam 3):    {result_beam.text}")
 
     if not args.vision_only:
         print("\nAudio sample generations:")
         for i in range(min(5, n_a)):
-            result = engine.generate(audio_patches=audio_patches_list[i], max_len=15, temperature=0.3)
+            result = engine.generate(
+                audio_patches=audio_patches_list[i], max_len=15, temperature=0.3
+            )
             print(f"  [{i}] Target: {train_captions_a[i]}")
             print(f"      Gen (greedy):    {result.text}")
-            result_beam = engine.generate(audio_patches=audio_patches_list[i], max_len=15, temperature=0.3, beam_width=3)
+            result_beam = engine.generate(
+                audio_patches=audio_patches_list[i], max_len=15, temperature=0.3, beam_width=3
+            )
             print(f"      Gen (beam 3):    {result_beam.text}")
 
     # Save
@@ -353,19 +404,33 @@ def train(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train SloNet multimodal engine (vision + audio + text)")
+    parser = argparse.ArgumentParser(
+        description="Train SloNet multimodal engine (vision + audio + text)"
+    )
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--samples", type=int, default=100)
     parser.add_argument("--buffer-capacity", type=int, default=50)
-    parser.add_argument("--tiny", action="store_true", help="Use tiny model for fast iteration (embed_dim=16, 1-layer)")
+    parser.add_argument(
+        "--tiny",
+        action="store_true",
+        help="Use tiny model for fast iteration (embed_dim=16, 1-layer)",
+    )
     parser.add_argument("--embed-dim", type=int, default=None, help="Override embed_dim")
     parser.add_argument("--hidden-dim", type=int, default=None, help="Override hidden_dim")
-    parser.add_argument("--n-vit-layers", type=int, default=None, help="Override vision transformer layers")
-    parser.add_argument("--n-decoder-layers", type=int, default=None, help="Override decoder layers")
-    parser.add_argument("--n-audio-layers", type=int, default=None, help="Override audio encoder layers")
+    parser.add_argument(
+        "--n-vit-layers", type=int, default=None, help="Override vision transformer layers"
+    )
+    parser.add_argument(
+        "--n-decoder-layers", type=int, default=None, help="Override decoder layers"
+    )
+    parser.add_argument(
+        "--n-audio-layers", type=int, default=None, help="Override audio encoder layers"
+    )
     parser.add_argument("--n-heads", type=int, default=None, help="Override attention heads")
-    parser.add_argument("--load", type=str, default="", help="Path to saved engine .npz to resume training")
+    parser.add_argument(
+        "--load", type=str, default="", help="Path to saved engine .npz to resume training"
+    )
     parser.add_argument("--vision-only", action="store_true", help="Train only vision (skip audio)")
     parser.add_argument("--audio-only", action="store_true", help="Train only audio (skip vision)")
     args = parser.parse_args()

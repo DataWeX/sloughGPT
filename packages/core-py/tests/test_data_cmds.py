@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import io
+
 import pytest
-from unittest.mock import MagicMock
 
 from domain.shell._internal.cmds import data_cmds
 
@@ -92,6 +92,7 @@ def _run(cmd, args=None, api=None, out=None):
 
 # ── datasets ──────────────────────────────────────────────────────────────────
 
+
 class TestDatasets:
     def test_empty(self, api, out):
         assert _run("datasets", api=api, out=out) == 0
@@ -129,6 +130,7 @@ class TestDatasets:
 
 # ── checkpoints ───────────────────────────────────────────────────────────────
 
+
 class TestCheckpoints:
     def test_empty(self, api, out):
         assert _run("checkpoints", api=api, out=out) == 0
@@ -147,13 +149,16 @@ class TestCheckpoints:
 
 # ── finetuned ─────────────────────────────────────────────────────────────────
 
+
 class TestFinetuned:
     def test_empty_list(self, api, out):
         assert _run("finetuned", api=api, out=out) == 0
         assert "No fine-tuned" in out.buf.getvalue()
 
     def test_list(self, api, out):
-        api._finetuned = [{"model_name": "my-model", "final_loss": 0.3, "epochs": 5, "size_bytes": 10485760}]
+        api._finetuned = [
+            {"model_name": "my-model", "final_loss": 0.3, "epochs": 5, "size_bytes": 10485760}
+        ]
         assert _run("finetuned", api=api, out=out) == 0
         assert "my-model" in out.buf.getvalue()
         assert "10.0 MB" in out.buf.getvalue()
@@ -195,6 +200,7 @@ class TestFinetuned:
 
 # ── knowledge ─────────────────────────────────────────────────────────────────
 
+
 class TestKnowledge:
     def test_stats(self, api, out):
         api._knowledge_stats = {"total_items": 42, "topics": {"python": 10, "rust": 5}}
@@ -222,6 +228,7 @@ class TestKnowledge:
 
 # ── remember ──────────────────────────────────────────────────────────────────
 
+
 class TestRemember:
     def test_store(self, api, out):
         assert _run("remember", ["the", "sky", "is", "blue"], api=api, out=out) == 0
@@ -237,6 +244,7 @@ class TestRemember:
 
 
 # ── recall ────────────────────────────────────────────────────────────────────
+
 
 class TestRecall:
     def test_no_args_empty(self, api, out):
@@ -257,6 +265,7 @@ class TestRecall:
 
 # ── tokenizer ─────────────────────────────────────────────────────────────────
 
+
 class TestTokenizer:
     def test_stats(self, api, out):
         assert _run("tokenizer", api=api, out=out) == 0
@@ -273,6 +282,7 @@ class TestTokenizer:
 
 
 # ── module metadata ───────────────────────────────────────────────────────────
+
 
 class TestModuleMeta:
     def test_names(self):

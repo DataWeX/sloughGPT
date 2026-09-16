@@ -7,9 +7,9 @@ All tests marked ``slow`` (deselected by default). Run with:
 """
 
 from __future__ import annotations
-from pathlib import Path
-import json
+
 import os
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -30,6 +30,7 @@ os.environ["SLO_AUTO_WORKFLOW"] = "false"
 
 try:
     from apps.api.server.main import app
+
     client = TestClient(app, raise_server_exceptions=False)
     # Trigger lifespan so routers are registered (they load during async startup)
     client.__enter__()
@@ -39,7 +40,12 @@ except Exception as exc:
 
 # ── config ──────────────────────────────────────────────────────────
 BASE_URL = ""
-ALLOWED_FAILURES = {404, 405, 422, 503}  # expected "not found", "method not allowed", "validation error", "unavailable"
+ALLOWED_FAILURES = {
+    404,
+    405,
+    422,
+    503,
+}  # expected "not found", "method not allowed", "validation error", "unavailable"
 
 
 def _data(response):
@@ -354,16 +360,23 @@ class TestEndpointRegistry:
         """POST /datasets/import/local can import seed dataset."""
         r = client.post(
             "/datasets/import/local",
-            json={"path": str(_TEST_SHAKESPEARE), "name": _TEST_IMPORT_NAME, "extensions": [".txt"]},
+            json={
+                "path": str(_TEST_SHAKESPEARE),
+                "name": _TEST_IMPORT_NAME,
+                "extensions": [".txt"],
+            },
         )
         if r.status_code == 200:
             data = _data(r)
             assert isinstance(data, dict)
             client.delete(f"/datasets/{_TEST_IMPORT_NAME}")
             import shutil
+
             shutil.rmtree(str(_TEST_SHAKESPEARE.parent / _TEST_IMPORT_NAME), ignore_errors=True)
         else:
-            assert r.status_code in {400, 429, 500, 503}, f"Unexpected status {r.status_code}: {r.text[:200]}"
+            assert r.status_code in {400, 429, 500, 503}, (
+                f"Unexpected status {r.status_code}: {r.text[:200]}"
+            )
 
     def test_datasets_list_includes_imported(self):
         """GET /datasets lists available datasets."""

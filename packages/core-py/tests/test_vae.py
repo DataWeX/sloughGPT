@@ -2,13 +2,15 @@
 
 import numpy as np
 import pytest
-from domain.training._internal.slonet import Tensor, tensor as _tensor
+
 from domain.multimodal._internal.vae import (
-    _group_norm,
-    SloVAEEncoder,
-    SloVAEDecoder,
     SloVAE,
+    SloVAEDecoder,
+    SloVAEEncoder,
+    _group_norm,
 )
+from domain.training._internal.slonet import Tensor
+from domain.training._internal.slonet import tensor as _tensor
 
 
 class TestGroupNorm:
@@ -418,6 +420,7 @@ class TestSloVAE:
 
 # ── VAE Extended Tests ───────────────────────────────────────────────────────
 
+
 class TestGroupNormExtended:
     def test_eps_larger(self):
         x = _tensor(np.random.randn(2, 16, 4, 4).astype(np.float32) * 10)
@@ -559,7 +562,7 @@ class TestSloVAEExtended:
         vae.train_step(images)
         params_after = [p.data for p in vae.parameters()]
         # At least one parameter should have changed
-        changed = any(not np.allclose(a, b) for a, b in zip(params_before, params_after))
+        changed = any(not np.allclose(a, b) for a, b in zip(params_before, params_after, strict=False))
         assert changed
 
     def test_encode_decode_different_shapes(self):
@@ -630,7 +633,7 @@ class TestSloVAEExtended:
 
     def test_vae_parameters_are_tensors(self):
         vae = SloVAE(latent_dim=8)
-        from domain.training._internal.slonet import Tensor
+
         for p in vae.parameters():
             assert isinstance(p, Tensor)
 
@@ -666,7 +669,7 @@ class TestSloVAEExtended:
         found = False
         for p in vae.encoder.parameters()[:5]:
             if p.grad is not None:
-                g = np.asarray(p.grad.data if hasattr(p.grad, 'data') else p.grad)
+                g = np.asarray(p.grad.data if hasattr(p.grad, "data") else p.grad)
                 assert np.all(np.isfinite(g))
                 found = True
                 break

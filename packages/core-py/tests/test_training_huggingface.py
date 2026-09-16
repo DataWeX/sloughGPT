@@ -4,30 +4,13 @@ Covers pure logic only: config parsing, data processing, model map,
 format helpers, and error paths. No external API calls or model loading.
 """
 
-import os
-from pathlib import Path
 
 import pytest
 
-from domain.training._internal.huggingface.model_map import (
-    ModelSize,
-    HFModelInfo,
-    HF_MODELS,
-    get_model_info,
-    search_models,
-    get_recommended_quantization,
-    get_model_requirements,
-    map_to_sloughgpt_config,
-)
-from domain.training._internal.huggingface.local_loader import (
-    HFLocalConfig,
-    HuggingFaceLocalLoader,
-    HuggingFaceLocalClient,
-)
 from domain.training._internal.huggingface.api_loader import (
     HFAPIConfig,
-    HuggingFaceAPILoader,
     HFInferenceClient,
+    HuggingFaceAPILoader,
     create_api_client,
 )
 from domain.training._internal.huggingface.client import (
@@ -35,11 +18,26 @@ from domain.training._internal.huggingface.client import (
     get_model_memory,
     list_models,
 )
-
+from domain.training._internal.huggingface.local_loader import (
+    HFLocalConfig,
+    HuggingFaceLocalClient,
+    HuggingFaceLocalLoader,
+)
+from domain.training._internal.huggingface.model_map import (
+    HF_MODELS,
+    HFModelInfo,
+    ModelSize,
+    get_model_info,
+    get_model_requirements,
+    get_recommended_quantization,
+    map_to_sloughgpt_config,
+    search_models,
+)
 
 # ---------------------------------------------------------------------------
 # model_map tests
 # ---------------------------------------------------------------------------
+
 
 class TestModelSize:
     def test_enum_values(self):
@@ -238,6 +236,7 @@ class TestMapToSloughgptConfig:
 # local_loader tests (pure logic — no transformer dependency)
 # ---------------------------------------------------------------------------
 
+
 class TestHFLocalConfig:
     def test_defaults(self):
         cfg = HFLocalConfig(model="gpt2")
@@ -358,13 +357,7 @@ class TestHuggingFaceLocalLoader:
             {"role": "user", "content": "bye"},
         ]
         result = loader._format_chat_prompt(messages)
-        assert result == (
-            "System: Be helpful\n"
-            "User: hi\n"
-            "Assistant: hello\n"
-            "User: bye\n"
-            "Assistant:"
-        )
+        assert result == ("System: Be helpful\nUser: hi\nAssistant: hello\nUser: bye\nAssistant:")
 
     def test_format_chat_prompt_missing_role_defaults_to_user(self):
         cfg = HFLocalConfig(model="gpt2")
@@ -400,6 +393,7 @@ class TestHuggingFaceLocalClient:
 # ---------------------------------------------------------------------------
 # api_loader tests (pure logic — no network calls)
 # ---------------------------------------------------------------------------
+
 
 class TestHFAPIConfig:
     def test_defaults(self):
@@ -505,6 +499,7 @@ class TestCreateApiClient:
 # client.py tests (pure logic)
 # ---------------------------------------------------------------------------
 
+
 class TestHFClient:
     def test_invalid_mode_raises(self):
         with pytest.raises(ValueError, match="Unknown mode"):
@@ -566,35 +561,30 @@ class TestListModels:
 # __init__ exports
 # ---------------------------------------------------------------------------
 
+
 class TestInitExports:
     def test_key_exports_importable(self):
         from domain.training._internal.huggingface import (
+            HF_MODELS,
             HFClient,
             HFLocalConfig,
-            HuggingFaceLocalLoader,
-            HuggingFaceLocalClient,
-            ModelSize,
-            HF_MODELS,
-            get_model_info,
-            search_models,
-            get_recommended_quantization,
-            get_model_requirements,
-            map_to_sloughgpt_config,
-            get_model_memory,
-            list_models,
         )
+
         assert HFClient is not None
         assert HFLocalConfig is not None
         assert HF_MODELS is not None
 
     def test_local_model_loader_alias(self):
         from domain.training._internal.huggingface import LocalModelLoader
+
         assert LocalModelLoader is HuggingFaceLocalLoader
 
     def test_model_registry_alias(self):
         from domain.training._internal.huggingface import MODEL_REGISTRY
+
         assert MODEL_REGISTRY is HF_MODELS
 
     def test_model_info_alias(self):
         from domain.training._internal.huggingface import ModelInfo
+
         assert ModelInfo is HFModelInfo

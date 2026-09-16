@@ -1,9 +1,12 @@
 import numpy as np
-import pytest
 
 from domain.collections._internal.baby_community import (
-    CommunityRole, RelationType, CommunityConfig, Relation, Member,
-    BabyCommunity, BabyCommunitySystem,
+    BabyCommunity,
+    BabyCommunitySystem,
+    CommunityConfig,
+    CommunityRole,
+    Relation,
+    RelationType,
 )
 
 

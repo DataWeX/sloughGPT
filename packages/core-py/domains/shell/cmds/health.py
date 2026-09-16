@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from ..console import Console
 from ..commands import ShellCommands
+from ..console import Console
 
 help = "Show API server status"
 
 
-def run(argv: list[str], out: Console, api: ShellCommands,
-        env: dict[str, str]) -> int:
+def run(argv: list[str], out: Console, api: ShellCommands, env: dict[str, str]) -> int:
     try:
         with out.spinner("Checking health"):
             h = api.health()
@@ -25,10 +24,11 @@ def run(argv: list[str], out: Console, api: ShellCommands,
         out.status("error", "API server is not responding")
         out.note("Use 'api start' to launch it.")
         return 1
-    out.status("ok" if status == "healthy" else "warn",
-               f"Status: {status}")
-    out.kvlist([
-        ("Model", h.get("model_type", "\u2014")),
-        ("Soul", h.get("soul_name", "\u2014")),
-    ])
+    out.status("ok" if status == "healthy" else "warn", f"Status: {status}")
+    out.kvlist(
+        [
+            ("Model", h.get("model_type", "\u2014")),
+            ("Soul", h.get("soul_name", "\u2014")),
+        ]
+    )
     return 0

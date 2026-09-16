@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -30,20 +29,33 @@ def tool():
 @pytest.fixture
 def data_file(tmp_path):
     p = tmp_path / "entries.json"
-    p.write_text(json.dumps([
-        {"id": "a", "name": "Alice"},
-        {"id": "b", "name": "Bob"},
-    ]))
+    p.write_text(
+        json.dumps(
+            [
+                {"id": "a", "name": "Alice"},
+                {"id": "b", "name": "Bob"},
+            ]
+        )
+    )
     return p
 
 
 def test_main_inserts_and_syncs(tmp_path, data_file, tool):
     db = tmp_path / "db"
     sync = tmp_path / "sync"
-    rc = tool.main([
-        str(data_file), "--db", str(db), "--collection", "entries",
-        "--key", "id", "--sync-dir", str(sync),
-    ])
+    rc = tool.main(
+        [
+            str(data_file),
+            "--db",
+            str(db),
+            "--collection",
+            "entries",
+            "--key",
+            "id",
+            "--sync-dir",
+            str(sync),
+        ]
+    )
     assert rc == 0
     assert (sync / "entries.json").exists()
     docs = json.loads((sync / "entries.json").read_text())
@@ -59,10 +71,18 @@ def test_main_is_idempotent(tmp_path, data_file, tool):
 
 def test_main_dry_run_writes_nothing(tmp_path, data_file, tool):
     db = tmp_path / "db"
-    rc = tool.main([
-        str(data_file), "--db", str(db), "--collection", "entries",
-        "--key", "id", "--dry-run",
-    ])
+    rc = tool.main(
+        [
+            str(data_file),
+            "--db",
+            str(db),
+            "--collection",
+            "entries",
+            "--key",
+            "id",
+            "--dry-run",
+        ]
+    )
     assert rc == 0
     assert not list(db.glob("*.jsonl"))
     assert not list(db.glob("*.mogdb"))

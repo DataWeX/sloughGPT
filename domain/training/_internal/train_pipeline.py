@@ -28,9 +28,10 @@ import os
 import threading
 import time
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -95,12 +96,12 @@ def validate_training_data(text: str, min_chars: int = 200) -> None:
         raise ValueError("Training data is empty")
 
     if len(text) < min_chars:
-        raise ValueError(
-            f"Training data too short: {len(text)} chars (minimum {min_chars})"
-        )
+        raise ValueError(f"Training data too short: {len(text)} chars (minimum {min_chars})")
 
     # Check for binary/non-printable content
-    printable_ratio = sum(1 for c in text[:1000] if c.isprintable() or c in '\n\r\t') / min(1000, len(text))
+    printable_ratio = sum(1 for c in text[:1000] if c.isprintable() or c in "\n\r\t") / min(
+        1000, len(text)
+    )
     if printable_ratio < 0.8:
         raise ValueError(
             f"Training data appears to be binary (only {printable_ratio:.0%} printable characters)"
@@ -109,9 +110,7 @@ def validate_training_data(text: str, min_chars: int = 200) -> None:
     # Check for sufficient diversity
     unique_chars = len(set(text))
     if unique_chars < 10:
-        raise ValueError(
-            f"Training data lacks diversity: only {unique_chars} unique characters"
-        )
+        raise ValueError(f"Training data lacks diversity: only {unique_chars} unique characters")
 
     # Check for minimum token count (rough estimate: 1 token ~ 4 chars)
     estimated_tokens = len(text) // 4
@@ -139,9 +138,8 @@ def validate_conversation_data(path: str, max_errors: int = 10) -> dict:
     valid_count = 0
     error_count = 0
     errors: list[str] = []
-    prev_role: str | None = None
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         for line_num, raw_line in enumerate(f, 1):
             line = raw_line.strip()
             if not line:
@@ -219,8 +217,11 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
                 all_texts.append((text, target_len))
                 total_len += target_len
             else:
-                logger.warning("dataset %s not found, skipping", ds_name,
-                    extra={"tag": "TRAIN"},)
+                logger.warning(
+                    "dataset %s not found, skipping",
+                    ds_name,
+                    extra={"tag": "TRAIN"},
+                )
 
         if not all_texts:
             raise ValueError("No valid datasets found")
@@ -229,8 +230,12 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         for text_chunk, target_len in all_texts:
             text += text_chunk[:target_len]
 
-        logger.info("Combined %d datasets: %d chars", len(datasets_with_ratios), total_len,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Combined %d datasets: %d chars",
+            len(datasets_with_ratios),
+            total_len,
+            extra={"tag": "TRAIN"},
+        )
 
     elif isinstance(data_path, list):
         datasets = data_path
@@ -240,15 +245,16 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
             if path.exists():
                 texts.append(path.read_text(encoding="utf-8"))
             else:
-                logger.warning("dataset %s not found, skipping", ds_name,
-                    extra={"tag": "TRAIN"},)
+                logger.warning(
+                    "dataset %s not found, skipping",
+                    ds_name,
+                    extra={"tag": "TRAIN"},
+                )
         text = "".join(texts)
 
     else:
         if data_path is None:
-            raise FileNotFoundError(
-                "No data_path provided and no default dataset found"
-            )
+            raise FileNotFoundError("No data_path provided and no default dataset found")
         path = Path(data_path)
         if not path.is_file():
             # Try as a dataset name under data/
@@ -259,7 +265,7 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
                 raise FileNotFoundError(
                     f"Data file not found: '{data_path}' (tried '{path}' and '{alt}')"
                 )
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             text = f.read()
 
     if tokenizer is not None:
@@ -268,19 +274,27 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         stoi = dict(tokenizer.stoi)
         itos = dict(tokenizer.itos)
         validate_training_data(text)
-        logger.info("Data: %d tokens, vocab %d (tokenized)", len(data), vocab_size,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Data: %d tokens, vocab %d (tokenized)",
+            len(data),
+            vocab_size,
+            extra={"tag": "TRAIN"},
+        )
         return data, vocab_size, stoi, itos
 
     validate_training_data(text)
 
     chars = sorted(set(text))
     stoi = {c: i for i, c in enumerate(chars)}
-    itos = {i: c for i, c in enumerate(chars)}
+    itos = dict(enumerate(chars))
     data = np.asarray([stoi[c] for c in text], dtype=np.int64)
 
-    logger.info("Data: %d tokens, %d chars", len(data), len(chars),
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Data: %d tokens, %d chars",
+        len(data),
+        len(chars),
+        extra={"tag": "TRAIN"},
+    )
     return data, len(chars), stoi, itos
 
 
@@ -305,7 +319,7 @@ class TrainerConfig:
     batch_size: int = 32
     gradient_accumulation_steps: int = 1
     epochs: int = 10
-    max_steps: Optional[int] = None
+    max_steps: int | None = None
     learning_rate: float = 3e-4
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
@@ -378,11 +392,14 @@ class TrainerConfig:
         if self.n_head > self.n_embed:
             raise ValueError(f"n_head ({self.n_head}) must be <= n_embed ({self.n_embed})")
         if self.n_embed % self.n_head != 0:
-            raise ValueError(f"n_embed ({self.n_embed}) must be divisible by n_head ({self.n_head})")
+            raise ValueError(
+                f"n_embed ({self.n_embed}) must be divisible by n_head ({self.n_head})"
+            )
         if self.block_size > self.n_embed * 4:
             import warnings
+
             warnings.warn(
-                f"block_size ({self.block_size}) > 4*n_embed ({self.n_embed*4}) may cause instability",
+                f"block_size ({self.block_size}) > 4*n_embed ({self.n_embed * 4}) may cause instability",
                 UserWarning,
                 stacklevel=2,
             )
@@ -410,7 +427,7 @@ def _make_json_safe(obj):
     return obj
 
 
-def _load_soul_checkpoint(path: str) -> Optional[Dict[str, Any]]:
+def _load_soul_checkpoint(path: str) -> dict[str, Any] | None:
     """Load a .soul checkpoint and return a dict compatible with _restore_from_checkpoint_bundle.
 
     Returns:
@@ -420,7 +437,7 @@ def _load_soul_checkpoint(path: str) -> Optional[Dict[str, Any]]:
     from domain.inference._internal.slo_format import load_soul
 
     soul_profile, state_dict = load_soul(path)
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "model_state_dict": state_dict,
         "step": 0,
         "epoch": 0,
@@ -443,8 +460,14 @@ def _load_soul_checkpoint(path: str) -> Optional[Dict[str, Any]]:
 
 
 def _build_training_state_metadata(
-    optimizer=None, scheduler=None, step=0, epoch=0, completed_epochs=0,
-    accumulation_step=0, params=None, include_optimizer_state=True,
+    optimizer=None,
+    scheduler=None,
+    step=0,
+    epoch=0,
+    completed_epochs=0,
+    accumulation_step=0,
+    params=None,
+    include_optimizer_state=True,
     initial_lr=None,
 ) -> dict:
     """Build a JSON-serializable dict of training state for embedding in .soul metadata.
@@ -473,12 +496,18 @@ def _build_training_state_metadata(
         Dict ready to embed in soul.metadata["training_state"].
     """
     state: dict = {
-        "step": step, "epoch": epoch, "completed_epochs": completed_epochs,
+        "step": step,
+        "epoch": epoch,
+        "completed_epochs": completed_epochs,
         "accumulation_step": accumulation_step,
     }
     if optimizer is not None:
         try:
-            opt_state = optimizer.state_dict(params=params) if params is not None else optimizer.state_dict()
+            opt_state = (
+                optimizer.state_dict(params=params)
+                if params is not None
+                else optimizer.state_dict()
+            )
             if not include_optimizer_state and isinstance(opt_state, dict):
                 # Momentum buffers dwarf the weights themselves; hyperparameters
                 # alone let resume recreate a working (fresh-momentum) optimizer.
@@ -492,9 +521,12 @@ def _build_training_state_metadata(
                     hyper["lr"] = initial_lr
             state["optimizer"] = _make_json_safe(opt_state)
         except Exception as e:
-            logger.warning("train_pipeline: optimizer state serialization failed", extra={
-                "error": str(e),
-            })
+            logger.warning(
+                "train_pipeline: optimizer state serialization failed",
+                extra={
+                    "error": str(e),
+                },
+            )
     if scheduler is not None:
         try:
             sched_state = scheduler.state_dict()
@@ -504,9 +536,12 @@ def _build_training_state_metadata(
                 sched_state["initial_lr"] = initial_lr
             state["scheduler"] = _make_json_safe(sched_state)
         except Exception as e:
-            logger.warning("train_pipeline: scheduler state serialization failed", extra={
-                "error": str(e),
-            })
+            logger.warning(
+                "train_pipeline: scheduler state serialization failed",
+                extra={
+                    "error": str(e),
+                },
+            )
     return state
 
 
@@ -570,7 +605,7 @@ class CheckpointManager:
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
-    def load_from_path(path: str) -> Optional[Dict[str, Any]]:
+    def load_from_path(path: str) -> dict[str, Any] | None:
         """Load a training checkpoint from an explicit path (.soul or .npz).
 
         Args:
@@ -585,15 +620,21 @@ class CheckpointManager:
         """
         p = Path(path).expanduser()
         if not p.is_file():
-            logger.warning("Checkpoint file not found: %s", p,
-                extra={"tag": "TRAIN"},)
+            logger.warning(
+                "Checkpoint file not found: %s",
+                p,
+                extra={"tag": "TRAIN"},
+            )
             return None
         if p.suffix == ".soul":
             return _load_soul_checkpoint(str(p))
         if p.suffix == ".npz":
             return load_checkpoint_npz(str(p))
-        logger.warning("Unsupported checkpoint format: %s (use .soul or .npz)", p,
-            extra={"tag": "TRAIN"},)
+        logger.warning(
+            "Unsupported checkpoint format: %s (use .soul or .npz)",
+            p,
+            extra={"tag": "TRAIN"},
+        )
         return None
 
     @staticmethod
@@ -611,7 +652,7 @@ class CheckpointManager:
         p = Path(path).expanduser()
         return p.is_file() and p.suffix in (".soul", ".npz")
 
-    def _candidates_newest_first(self) -> List[Path]:
+    def _candidates_newest_first(self) -> list[Path]:
         """Checkpoint files under ``checkpoint_dir``, newest modification first.
 
         In-progress temp artifacts (``*.tmp`` / ``*.tmp.npz``) written during an
@@ -629,7 +670,7 @@ class CheckpointManager:
             reverse=True,
         )
 
-    def latest_path(self) -> Optional[str]:
+    def latest_path(self) -> str | None:
         """Return the path of the most recently modified checkpoint, if any.
 
         This is a pure path lookup — it does not validate the file's contents.
@@ -644,7 +685,7 @@ class CheckpointManager:
         candidates = self._candidates_newest_first()
         return str(candidates[0]) if candidates else None
 
-    def load_latest_with_path(self) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    def load_latest_with_path(self) -> tuple[str | None, dict[str, Any] | None]:
         """Load the newest readable checkpoint and return its path and bundle.
 
         Single-load primitive: iterates checkpoints newest-first and returns
@@ -664,14 +705,18 @@ class CheckpointManager:
             try:
                 bundle = CheckpointManager.load_from_path(str(p))
             except Exception as exc:
-                logger.warning("Skipping unreadable checkpoint %s: %s", p, exc,
-                    extra={"tag": "TRAIN"},)
+                logger.warning(
+                    "Skipping unreadable checkpoint %s: %s",
+                    p,
+                    exc,
+                    extra={"tag": "TRAIN"},
+                )
                 continue
             if bundle is not None:
                 return str(p), bundle
         return None, None
 
-    def latest_valid_path(self) -> Optional[str]:
+    def latest_valid_path(self) -> str | None:
         """Path of the most recent checkpoint that actually loads.
 
         Iterates checkpoints newest-first and returns the first one that
@@ -689,7 +734,7 @@ class CheckpointManager:
         """
         return self.load_latest_with_path()[0]
 
-    def load_latest(self) -> Optional[Dict[str, Any]]:
+    def load_latest(self) -> dict[str, Any] | None:
         """Load the most recent readable ``.soul`` or ``.npz`` checkpoint.
 
         Unlike :meth:`latest_path`, this skips unreadable checkpoints and
@@ -739,9 +784,9 @@ class SloughGPTTrainer:
     def __init__(
         self,
         data_path: str,
-        config: Optional[TrainerConfig] = None,
+        config: TrainerConfig | None = None,
         # Legacy parameters (for backward compatibility)
-        vocab_size: Optional[int] = None,
+        vocab_size: int | None = None,
         n_embed: int = 64,
         n_layer: int = 2,
         n_head: int = 4,
@@ -750,7 +795,7 @@ class SloughGPTTrainer:
         batch_size: int = 32,
         epochs: int = 10,
         lr: float = 3e-4,
-        max_steps: Optional[int] = None,
+        max_steps: int | None = None,
         gradient_accumulation_steps: int = 1,
         max_grad_norm: float = 1.0,
         checkpoint_dir: str = "checkpoints",
@@ -764,13 +809,13 @@ class SloughGPTTrainer:
         use_lora: bool = False,
         lora_rank: int = 8,
         lora_alpha: int = 16,
-        device: Optional[str] = None,
-        soul_name: Optional[str] = None,
-        personality: Optional[dict] = None,
+        device: str | None = None,
+        soul_name: str | None = None,
+        personality: dict | None = None,
         log_interval: int = 10,
         eval_interval: int = 100,
-        experiment_tracker: Optional["ExperimentTracker"] = None,
-        tokenizer: Optional[Any] = None,
+        experiment_tracker: ExperimentTracker | None = None,
+        tokenizer: Any | None = None,
     ):
         # Handle both TrainerConfig and legacy parameters
         if config is not None:
@@ -820,14 +865,17 @@ class SloughGPTTrainer:
         self._best_model_path = None  # path to best checkpoint
         self._best_checkpoint_loss = float("inf")  # best train loss for save_best_only
         self._early_stopped = False  # True if early stopping triggered
-        self._quality_scores: List[float] = []  # rolling quality scores of training data
-        self._avg_quality: Optional[float] = None  # running average quality
+        self._quality_scores: list[float] = []  # rolling quality scores of training data
+        self._avg_quality: float | None = None  # running average quality
 
         self.device = self._setup_device()
         self.config.device = self.device
 
-        logger.info("Using device: %s", self.device,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Using device: %s",
+            self.device,
+            extra={"tag": "TRAIN"},
+        )
 
         # Prepare data — prefer corpus-derived vocab unless caller sets ``vocab_size`` (legacy path)
         # or supplies a full ``TrainerConfig`` (advanced; caller must match data).
@@ -859,18 +907,27 @@ class SloughGPTTrainer:
 
         # Compute data quality metrics
         try:
-            raw_text = "".join(self.itos.get(int(i), "") for i in self.data[:min(50000, len(self.data))])
+            raw_text = "".join(
+                self.itos.get(int(i), "") for i in self.data[: min(50000, len(self.data))]
+            )
             self._data_quality = compute_data_quality(raw_text)
             self._avg_quality = self._data_quality.get("avg_quality")
             tox_rate = self._data_quality.get("toxicity_rate", 0)
-            logger.info("Data quality: avg=%.2f repetition=%.2f diversity=%.2f language=%.2f toxicity=%.2f",
-                self._data_quality["avg_quality"], self._data_quality["repetition_rate"],
-                self._data_quality["diversity"], self._data_quality["language_quality"],
+            logger.info(
+                "Data quality: avg=%.2f repetition=%.2f diversity=%.2f language=%.2f toxicity=%.2f",
+                self._data_quality["avg_quality"],
+                self._data_quality["repetition_rate"],
+                self._data_quality["diversity"],
+                self._data_quality["language_quality"],
                 tox_rate,
-                extra={"tag": "TRAIN"})
+                extra={"tag": "TRAIN"},
+            )
             if tox_rate > 0.3:
-                logger.warning("High toxicity detected in training data (%.2f). Consider cleaning the data.", tox_rate,
-                    extra={"tag": "TRAIN"})
+                logger.warning(
+                    "High toxicity detected in training data (%.2f). Consider cleaning the data.",
+                    tox_rate,
+                    extra={"tag": "TRAIN"},
+                )
 
             # Enforce quality gates
             avg_q = self._data_quality.get("avg_quality", 0)
@@ -888,7 +945,13 @@ class SloughGPTTrainer:
             if "Data quality too low" in str(e) or "Data toxicity too high" in str(e):
                 raise
             logger.warning("Data quality computation failed, using defaults: %s", e)
-            self._data_quality = {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0, "toxicity_rate": 0.0}
+            self._data_quality = {
+                "avg_quality": 0.0,
+                "repetition_rate": 0.0,
+                "diversity": 0.0,
+                "language_quality": 0.0,
+                "toxicity_rate": 0.0,
+            }
 
         # Create model
         self._create_model()
@@ -905,8 +968,12 @@ class SloughGPTTrainer:
         self.current_epoch = 0
         self.accumulation_step = 0
 
-        logger.info("Train: %d, Val: %d", len(self.train_data), len(self.val_data),
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Train: %d, Val: %d",
+            len(self.train_data),
+            len(self.val_data),
+            extra={"tag": "TRAIN"},
+        )
 
     def _setup_device(self) -> str:
         """SloNet training is pure numpy and always runs on the CPU."""
@@ -914,8 +981,10 @@ class SloughGPTTrainer:
 
     def _create_model(self):
         """Create and setup the model (optionally wrapped with LoRA)."""
-        logger.info("=== Creating Model ===",
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "=== Creating Model ===",
+            extra={"tag": "TRAIN"},
+        )
         self.model = SloughGPTModel(
             vocab_size=self.vocab_size,
             n_embed=self.config.n_embed,
@@ -925,15 +994,22 @@ class SloughGPTTrainer:
             dropout=self.config.dropout,
         )
 
-        logger.info("Model: SloughGPTModel (RoPE, SwiGLU, RMSNorm, SDPA)",
-            extra={"tag": "TRAIN"},)
-        logger.info("Base model params: %d", self.model.num_parameters(),
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Model: SloughGPTModel (RoPE, SwiGLU, RMSNorm, SDPA)",
+            extra={"tag": "TRAIN"},
+        )
+        logger.info(
+            "Base model params: %d",
+            self.model.num_parameters(),
+            extra={"tag": "TRAIN"},
+        )
 
         # Apply LoRA
         if self.config.use_lora:
-            logger.info("=== Applying LoRA ===",
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "=== Applying LoRA ===",
+                extra={"tag": "TRAIN"},
+            )
             lora_config = LoRAConfig(
                 rank=self.config.lora_rank,
                 alpha=self.config.lora_alpha,
@@ -942,22 +1018,30 @@ class SloughGPTTrainer:
             self.model = apply_lora_to_model(self.model, config=lora_config)
             lora_params = sum(p.numel() for n, p in self.model.named_parameters() if "lora_" in n)
             total = sum(p.numel() for p in self.model.parameters())
-            logger.info("LoRA params: %d (%.1f%%)", lora_params, 100 * lora_params / total,
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "LoRA params: %d (%.1f%%)",
+                lora_params,
+                100 * lora_params / total,
+                extra={"tag": "TRAIN"},
+            )
 
         # Initialize EWC if enabled (prevents catastrophic forgetting)
         self._ewc = None
         if self.config.use_ewc:
             from domain.training._internal.ewc import EwcContinualLearner, EWCParameters
+
             ewc_params = EWCParameters(
                 lambda_ewc=self.config.ewc_lambda,
                 num_samples=self.config.ewc_num_samples,
                 ema_decay=self.config.ewc_ema_decay,
             )
             self._ewc = EwcContinualLearner(self.model, params=ewc_params)
-            logger.info("EWC enabled: lambda=%.1f samples=%d",
-                self.config.ewc_lambda, self.config.ewc_num_samples,
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "EWC enabled: lambda=%.1f samples=%d",
+                self.config.ewc_lambda,
+                self.config.ewc_num_samples,
+                extra={"tag": "TRAIN"},
+            )
 
     def _create_optimizer(self):
         """Create SloAdamW optimizer with decoupled weight decay."""
@@ -1027,7 +1111,7 @@ class SloughGPTTrainer:
         for _ in range(num_batches):
             yield self.get_batch("train")
 
-    def train_step(self) -> Dict[str, float]:
+    def train_step(self) -> dict[str, float]:
         """Execute a single training step on the pure numpy SloNet path."""
         model = self.training_model
         model.train()
@@ -1041,7 +1125,8 @@ class SloughGPTTrainer:
         loss_val = loss.item()
         if not np.isfinite(loss_val):
             logger.warning(
-                "train_step: non-finite loss (%s), skipping batch", loss_val,
+                "train_step: non-finite loss (%s), skipping batch",
+                loss_val,
                 extra={"tag": "TRAIN"},
             )
             self._nan_count = getattr(self, "_nan_count", 0) + 1
@@ -1054,8 +1139,11 @@ class SloughGPTTrainer:
         # Record loss to training monitor
         try:
             from domain.training._internal.monitor import get_training_monitor
+
             monitor = get_training_monitor()
-            monitor.record_loss(loss_val, epoch=getattr(self, "current_epoch", 0), step=self.global_step)
+            monitor.record_loss(
+                loss_val, epoch=getattr(self, "current_epoch", 0), step=self.global_step
+            )
         except Exception:
             pass
 
@@ -1084,15 +1172,18 @@ class SloughGPTTrainer:
                 total_norm = 0.0
                 for p in params:
                     if p.grad is not None:
-                        g = p.grad.data if hasattr(p.grad, 'data') else p.grad
-                        total_norm += float(np.sum(g ** 2))
-                total_norm = total_norm ** 0.5
+                        g = p.grad.data if hasattr(p.grad, "data") else p.grad
+                        total_norm += float(np.sum(g**2))
+                total_norm = total_norm**0.5
 
                 # Record gradient norm to training monitor
                 try:
                     from domain.training._internal.monitor import get_training_monitor
+
                     monitor = get_training_monitor()
-                    monitor.record_gradient(total_norm, epoch=getattr(self, "current_epoch", 0), step=self.global_step)
+                    monitor.record_gradient(
+                        total_norm, epoch=getattr(self, "current_epoch", 0), step=self.global_step
+                    )
                 except Exception:
                     pass
 
@@ -1100,7 +1191,7 @@ class SloughGPTTrainer:
                 if clip_coef < 1.0:
                     for p in params:
                         if p.grad is not None:
-                            g = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                            g = p.grad.data if hasattr(p.grad, "data") else p.grad
                             g *= clip_coef
             self.optimizer.step(params)
             for p in model.parameters():
@@ -1111,13 +1202,14 @@ class SloughGPTTrainer:
 
         return metrics
 
-    def evaluate(self, num_batches: int = 10) -> Dict[str, float]:
+    def evaluate(self, num_batches: int = 10) -> dict[str, float]:
         """Evaluate the model on the validation split.
 
         Uses 10 batches — sufficient for loss estimation while keeping the
         per-eval cost low.
         """
         import time as _time
+
         eval_start = _time.monotonic()
 
         model = self.training_model
@@ -1138,23 +1230,29 @@ class SloughGPTTrainer:
 
         avg_loss = total_loss / max(steps, 1)
         elapsed_ms = (_time.monotonic() - eval_start) * 1000
-        logger.info("train_pipeline: evaluate complete", extra={
-            "eval_loss": round(avg_loss, 4),
-            "eval_ppl": round(float(np.exp(avg_loss)), 2),
-            "batches": num_batches,
-            "elapsed_ms": round(elapsed_ms, 1),
-        })
+        logger.info(
+            "train_pipeline: evaluate complete",
+            extra={
+                "eval_loss": round(avg_loss, 4),
+                "eval_ppl": round(float(np.exp(avg_loss)), 2),
+                "batches": num_batches,
+                "elapsed_ms": round(elapsed_ms, 1),
+            },
+        )
         return {"eval_loss": avg_loss, "eval_ppl": float(np.exp(avg_loss))}
 
-    def _restore_from_checkpoint_bundle(self, checkpoint: Dict[str, Any]) -> None:
+    def _restore_from_checkpoint_bundle(self, checkpoint: dict[str, Any]) -> None:
         """Load weights (required) and best-effort training state from a loaded checkpoint dict."""
         normalized = normalize_raw_checkpoint(checkpoint)
         state = extract_state_dict(normalized)
         try:
             self.model.load_state_dict(state, strict=True)
         except RuntimeError as exc:
-            logger.warning("Strict state_dict load failed (%s); retrying with strict=False", exc,
-                extra={"tag": "TRAIN"},)
+            logger.warning(
+                "Strict state_dict load failed (%s); retrying with strict=False",
+                exc,
+                extra={"tag": "TRAIN"},
+            )
             incomp = self.model.load_state_dict(state, strict=False)
             if incomp is not None and (incomp.missing_keys or incomp.unexpected_keys):
                 logger.warning(
@@ -1167,19 +1265,27 @@ class SloughGPTTrainer:
         opt = normalized.get("optimizer_state_dict")
         if isinstance(opt, dict) and opt:
             try:
-                params = list(self.model.parameters()) if hasattr(self.model, "parameters") else None
+                params = (
+                    list(self.model.parameters()) if hasattr(self.model, "parameters") else None
+                )
                 self.optimizer.load_state_dict(opt, params=params)
             except Exception as exc:
-                logger.warning("Could not load optimizer_state_dict (fresh optimizer): %s", exc,
-                    extra={"tag": "TRAIN"},)
+                logger.warning(
+                    "Could not load optimizer_state_dict (fresh optimizer): %s",
+                    exc,
+                    extra={"tag": "TRAIN"},
+                )
 
         sched = normalized.get("scheduler_state_dict")
         if self.scheduler is not None and isinstance(sched, dict) and sched:
             try:
                 self.scheduler.load_state_dict(sched)
             except Exception as exc:
-                logger.warning("Could not load scheduler_state_dict (fresh LR schedule): %s", exc,
-                    extra={"tag": "TRAIN"},)
+                logger.warning(
+                    "Could not load scheduler_state_dict (fresh LR schedule): %s",
+                    exc,
+                    extra={"tag": "TRAIN"},
+                )
 
         self.global_step = int(normalized.get("step", 0))
         self.current_epoch = int(normalized.get("epoch", 0))
@@ -1192,8 +1298,12 @@ class SloughGPTTrainer:
             self.itos = it
             self.vocab_size = len(st)
 
-        logger.info("Resumed from step %s epoch %s", self.global_step, self.current_epoch,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Resumed from step %s epoch %s",
+            self.global_step,
+            self.current_epoch,
+            extra={"tag": "TRAIN"},
+        )
 
     def _progress_denominator(self, steps_per_epoch: int) -> int:
         """Estimated total optimizer steps for UI progress (caps ``max_steps`` vs epoch budget)."""
@@ -1235,7 +1345,7 @@ class SloughGPTTrainer:
             return 0.0
         return self.global_step / elapsed
 
-    def _eta_seconds(self, steps_per_epoch: int) -> Optional[float]:
+    def _eta_seconds(self, steps_per_epoch: int) -> float | None:
         """Estimated seconds until the final step, or None when speed is 0."""
         total = self._progress_denominator(steps_per_epoch)
         remaining = max(0, total - self.global_step)
@@ -1245,7 +1355,7 @@ class SloughGPTTrainer:
         return remaining / sps
 
     @staticmethod
-    def _format_eta(seconds: Optional[float]) -> str:
+    def _format_eta(seconds: float | None) -> str:
         """Render a seconds value as a human ETA string (``--`` when unknown)."""
         if seconds is None or seconds < 0:
             return "--"
@@ -1261,12 +1371,12 @@ class SloughGPTTrainer:
     def train(
         self,
         resume: bool = False,
-        resume_path: Optional[str] = None,
-        resume_checkpoint: Optional[Dict[str, Any]] = None,
-        on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
-        cancel_event: Optional[threading.Event] = None,
-        pause_event: Optional[threading.Event] = None,
-    ) -> Dict[str, Any]:
+        resume_path: str | None = None,
+        resume_checkpoint: dict[str, Any] | None = None,
+        on_progress: Callable[[dict[str, Any]], None] | None = None,
+        cancel_event: threading.Event | None = None,
+        pause_event: threading.Event | None = None,
+    ) -> dict[str, Any]:
         """Full training loop.
 
         Args:
@@ -1340,10 +1450,16 @@ class SloughGPTTrainer:
                     extra={"tag": "TRAIN"},
                 )
 
-        logger.info("Training config: %s", self.config,
-            extra={"tag": "TRAIN"},)
-        logger.info("Total parameters: %s", f"{sum(p.numel() for p in self.model.parameters()):,}",
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Training config: %s",
+            self.config,
+            extra={"tag": "TRAIN"},
+        )
+        logger.info(
+            "Total parameters: %s",
+            f"{sum(p.numel() for p in self.model.parameters()):,}",
+            extra={"tag": "TRAIN"},
+        )
         if self._experiment_tracker is not None:
             n_params = sum(p.numel() for p in self.model.parameters())
             self._experiment_tracker.log_metrics(
@@ -1354,10 +1470,10 @@ class SloughGPTTrainer:
         def _emit_progress(
             *,
             steps_per_epoch: int,
-            train_loss: Optional[float] = None,
-            eval_loss: Optional[float] = None,
+            train_loss: float | None = None,
+            eval_loss: float | None = None,
             done: bool = False,
-            done_reason: Optional[str] = None,
+            done_reason: str | None = None,
         ) -> None:
             if on_progress is None:
                 return
@@ -1387,11 +1503,18 @@ class SloughGPTTrainer:
                     }
                 )
             except Exception:
-                self._progress_fail_count = getattr(self, '_progress_fail_count', 0) + 1
+                self._progress_fail_count = getattr(self, "_progress_fail_count", 0) + 1
                 if self._progress_fail_count <= 3:
-                    logger.exception("on_progress callback failed (attempt %d)", self._progress_fail_count, extra={"tag": "TRAIN"})
+                    logger.exception(
+                        "on_progress callback failed (attempt %d)",
+                        self._progress_fail_count,
+                        extra={"tag": "TRAIN"},
+                    )
                 if self._progress_fail_count == 3:
-                    logger.warning("on_progress callback failed 3 times — UI may show stale progress", extra={"tag": "TRAIN"})
+                    logger.warning(
+                        "on_progress callback failed 3 times — UI may show stale progress",
+                        extra={"tag": "TRAIN"},
+                    )
 
         self._is_training = True
         self._training_start_time = time.time()
@@ -1399,6 +1522,7 @@ class SloughGPTTrainer:
         # Record dashboard event
         try:
             from domain.infrastructure._internal.event_buffer import get_event_buffer
+
             epochs = self.config.epochs
             max_steps = self.config.max_steps or "unlimited"
             get_event_buffer().record("TRAIN", f"started epochs={epochs} max_steps={max_steps}")
@@ -1409,12 +1533,19 @@ class SloughGPTTrainer:
             self.current_epoch = epoch
 
             if not self._is_training:
-                logger.info("Training stopped at epoch %d", epoch,
-                    extra={"tag": "TRAIN"},)
+                logger.info(
+                    "Training stopped at epoch %d",
+                    epoch,
+                    extra={"tag": "TRAIN"},
+                )
                 break
 
-            logger.info("Epoch %d/%d", epoch + 1, self.config.epochs,
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "Epoch %d/%d",
+                epoch + 1,
+                self.config.epochs,
+                extra={"tag": "TRAIN"},
+            )
 
             model = self.training_model
             model.train()
@@ -1434,16 +1565,22 @@ class SloughGPTTrainer:
             if on_progress and steps_per_epoch > 0:
                 _emit_progress(steps_per_epoch=steps_per_epoch, train_loss=None)
 
-            for step in range(steps_per_epoch):
+            for _step in range(steps_per_epoch):
                 if self.config.max_steps and self.global_step >= self.config.max_steps:
                     break
                 if cancel_event is not None and cancel_event.is_set():
-                    logger.info("Training cancelled at step %d", self.global_step,
-                        extra={"tag": "TRAIN"},)
+                    logger.info(
+                        "Training cancelled at step %d",
+                        self.global_step,
+                        extra={"tag": "TRAIN"},
+                    )
                     break
                 if pause_event is not None and pause_event.is_set():
-                    logger.info("Training paused at step %d — waiting for resume", self.global_step,
-                        extra={"tag": "TRAIN"},)
+                    logger.info(
+                        "Training paused at step %d — waiting for resume",
+                        self.global_step,
+                        extra={"tag": "TRAIN"},
+                    )
                     while pause_event.is_set():
                         if cancel_event is not None and cancel_event.is_set():
                             break
@@ -1467,7 +1604,13 @@ class SloughGPTTrainer:
                     eta = self._eta_seconds(steps_per_epoch)
                     logger.info(
                         "Step %d/%d | Loss: %.4f | LR: %.2e | %d%% | %.1f steps/s | ETA %s",
-                        self.global_step, denom, metrics['loss'], lr, pct, sps, self._format_eta(eta),
+                        self.global_step,
+                        denom,
+                        metrics["loss"],
+                        lr,
+                        pct,
+                        sps,
+                        self._format_eta(eta),
                         extra={"tag": "TRAIN"},
                     )
                     if self._experiment_tracker is not None:
@@ -1493,13 +1636,15 @@ class SloughGPTTrainer:
                     eval_metrics = self.evaluate()
                     logger.info(
                         "Eval | Loss: %.4f | PPL: %.2f",
-                        eval_metrics['eval_loss'], eval_metrics['eval_ppl'],
+                        eval_metrics["eval_loss"],
+                        eval_metrics["eval_ppl"],
                         extra={"tag": "TRAIN"},
                     )
 
                     # Check convergence
                     try:
                         from domain.training._internal.monitor import get_training_monitor
+
                         monitor = get_training_monitor()
                         monitor.check_convergence(epoch=getattr(self, "current_epoch", 0))
                     except Exception:
@@ -1523,18 +1668,20 @@ class SloughGPTTrainer:
                         self._patience_counter += 1
 
                     # Train loss plateau detection (independent of eval loss)
-                    if hasattr(self, '_recent_train_losses'):
+                    if hasattr(self, "_recent_train_losses"):
                         self._recent_train_losses.append(float(metrics["loss"]))
                         if len(self._recent_train_losses) > 10:
                             self._recent_train_losses.pop(0)
                         # Check if train loss has plateaued (std dev < 0.001 over last 10 evals)
                         if len(self._recent_train_losses) >= 5:
                             import numpy as _np
+
                             _std = float(_np.std(self._recent_train_losses[-10:]))
                             if _std < 0.001:
                                 logger.info(
                                     "Train loss plateau detected (std=%.6f over last %d evals)",
-                                    _std, min(len(self._recent_train_losses), 10),
+                                    _std,
+                                    min(len(self._recent_train_losses), 10),
                                     extra={"tag": "TRAIN"},
                                 )
                     else:
@@ -1573,11 +1720,11 @@ class SloughGPTTrainer:
                 # are skipped unless the loss is a new best; eval-improvement
                 # and final saves are never gated. checkpoint_interval=0
                 # disables periodic checkpoints entirely (final save remains).
-                if self.config.checkpoint_interval and self.global_step % self.config.checkpoint_interval == 0:
-                    if (
-                        self.config.save_best_only
-                        and metrics["loss"] >= self._best_checkpoint_loss
-                    ):
+                if (
+                    self.config.checkpoint_interval
+                    and self.global_step % self.config.checkpoint_interval == 0
+                ):
+                    if self.config.save_best_only and metrics["loss"] >= self._best_checkpoint_loss:
                         logger.info(
                             "Skipping periodic checkpoint (save_best_only; loss %.4f not a new best)",
                             float(metrics["loss"]),
@@ -1608,10 +1755,12 @@ class SloughGPTTrainer:
         # Save EWC snapshot after training (for continual learning)
         if self._ewc is not None:
             try:
+
                 def _loss_fn(model, batch):
                     x, y = batch
                     _, loss = model(x, y)
                     return loss
+
                 self._ewc.save_task_snapshot(
                     task_id=f"task_{int(time.time())}",
                     task_name=f"train_{getattr(self.config, 'dataset', 'unknown')}",
@@ -1630,8 +1779,11 @@ class SloughGPTTrainer:
         # Record dashboard event
         try:
             from domain.infrastructure._internal.event_buffer import get_event_buffer
+
             final_loss_str = f"{final_loss:.4f}" if final_loss is not None else "n/a"
-            get_event_buffer().record("TRAIN", f"completed step={self.global_step} loss={final_loss_str}")
+            get_event_buffer().record(
+                "TRAIN", f"completed step={self.global_step} loss={final_loss_str}"
+            )
         except Exception as exc:
             logger.debug("Failed to record training completion event: %s", exc)
         checkpoint_name = ""
@@ -1645,27 +1797,34 @@ class SloughGPTTrainer:
 
         # Record training outcome for adaptive learning
         try:
-            from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
             import time as _outcome_time
+
+            from domain.training._internal.outcome_tracker import (
+                TrainingOutcome,
+                TrainingOutcomeTracker,
+            )
+
             outcome = TrainingOutcome(
                 run_id=f"train_{int(_outcome_time.time() * 1000)}",
                 timestamp=_outcome_time.time(),
-                dataset=getattr(self.config, 'dataset', ''),
-                dataset_size=getattr(self, '_dataset_size', 0),
-                model=getattr(self.config, 'model', 'slnet'),
-                method="finetune" if getattr(self.config, 'use_lora', False) else "distill",
-                epochs=getattr(self.config, 'epochs', 0),
-                batch_size=getattr(self.config, 'batch_size', 0),
-                learning_rate=getattr(self.config, 'learning_rate', 0.0),
-                max_seq_length=getattr(self.config, 'block_size', 0),
-                warmup_steps=getattr(self.config, 'warmup_steps', 0),
-                weight_decay=getattr(self.config, 'weight_decay', 0.0),
-                use_lora=getattr(self.config, 'use_lora', False),
-                lora_rank=getattr(self.config, 'lora_rank', 0),
-                lora_alpha=getattr(self.config, 'lora_alpha', 0),
+                dataset=getattr(self.config, "dataset", ""),
+                dataset_size=getattr(self, "_dataset_size", 0),
+                model=getattr(self.config, "model", "slnet"),
+                method="finetune" if getattr(self.config, "use_lora", False) else "distill",
+                epochs=getattr(self.config, "epochs", 0),
+                batch_size=getattr(self.config, "batch_size", 0),
+                learning_rate=getattr(self.config, "learning_rate", 0.0),
+                max_seq_length=getattr(self.config, "block_size", 0),
+                warmup_steps=getattr(self.config, "warmup_steps", 0),
+                weight_decay=getattr(self.config, "weight_decay", 0.0),
+                use_lora=getattr(self.config, "use_lora", False),
+                lora_rank=getattr(self.config, "lora_rank", 0),
+                lora_alpha=getattr(self.config, "lora_alpha", 0),
                 final_loss=float(final_loss) if final_loss is not None else 0.0,
                 best_loss=float(self._best_val_loss) if self._best_val_loss is not None else 0.0,
-                training_time_s=time.time() - self._start_time if hasattr(self, '_start_time') else 0.0,
+                training_time_s=time.time() - self._start_time
+                if hasattr(self, "_start_time")
+                else 0.0,
                 converged=not self._early_stopped and self._last_train_loss is not None,
                 early_stopped=self._early_stopped,
             )
@@ -1684,10 +1843,10 @@ class SloughGPTTrainer:
             model_path=self._best_model_path or model_path,
             checkpoint_name=checkpoint_name,
             avg_quality=self._avg_quality,
-            data_quality=getattr(self, '_data_quality', None),
+            data_quality=getattr(self, "_data_quality", None),
         )
 
-    def save_checkpoint(self, metrics: Optional[Dict[str, float]] = None, is_final: bool = False):
+    def save_checkpoint(self, metrics: dict[str, float] | None = None, is_final: bool = False):
         """Save a checkpoint in ``.soul`` format with vocab.
 
         Periodic checkpoints (``is_final=False``) embed full optimizer state so
@@ -1709,22 +1868,26 @@ class SloughGPTTrainer:
         Returns:
             None.
         """
-        chars_list: Optional[List[str]] = None
+        chars_list: list[str] | None = None
         if self.itos is not None:
             try:
                 chars_list = [self.itos[i] for i in range(self.vocab_size)]
             except (KeyError, TypeError):
                 chars_list = None
 
-        checkpoint_dir = Path(self.config.checkpoint_dir if hasattr(self.config, 'checkpoint_dir') else "models/auto-training")  # pragma: no cover (TrainerConfig always has checkpoint_dir)
+        checkpoint_dir = Path(
+            self.config.checkpoint_dir
+            if hasattr(self.config, "checkpoint_dir")
+            else "models/auto-training"
+        )  # pragma: no cover (TrainerConfig always has checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate descriptive checkpoint name from dataset
         timestamp = int(time.time())
-        soul_name = getattr(self, 'soul_name', 'assistant')
+        soul_name = getattr(self, "soul_name", "assistant")
 
         # Extract dataset name from path for checkpoint name
-        data_path = getattr(self, 'data_path', '')
+        data_path = getattr(self, "data_path", "")
         if data_path:
             # e.g. "/Users/mac/sloughGPT/datasets/python_flask/corpus.jsonl" -> "python_flask"
             ds_name = Path(data_path).parent.name
@@ -1734,7 +1897,7 @@ class SloughGPTTrainer:
         checkpoint_path = checkpoint_dir / f"{ds_name}_{timestamp}"
 
         # Compute training duration
-        start_t = getattr(self, '_training_start_time', None)
+        start_t = getattr(self, "_training_start_time", None)
         training_duration = round(time.time() - start_t, 1) if start_t else None
 
         # Enforce MAX_CHECKPOINT_DISK_MB: prune oldest checkpoints if total size exceeds limit
@@ -1742,17 +1905,22 @@ class SloughGPTTrainer:
 
         # Save in .soul format with vocab; periodic checkpoints keep optimizer
         # state (accurate resume), final artifact strips momentum buffers.
-        self.save(str(checkpoint_path),
-                  stoi=self.stoi, itos=self.itos, chars=chars_list,
-                  training_duration=training_duration,
-                  include_optimizer_state=not is_final,
-                  avg_quality=self._avg_quality)
+        self.save(
+            str(checkpoint_path),
+            stoi=self.stoi,
+            itos=self.itos,
+            chars=chars_list,
+            training_duration=training_duration,
+            include_optimizer_state=not is_final,
+            avg_quality=self._avg_quality,
+        )
         self._last_checkpoint_path = str(checkpoint_path) + ".soul"
         self._prune_stale_checkpoints(keep_final=is_final)
 
     def _enforce_disk_limit(self, checkpoint_dir: Path) -> None:
         """Delete oldest checkpoints if total disk usage exceeds MAX_CHECKPOINT_DISK_MB."""
         from .state import MAX_CHECKPOINT_DISK_MB
+
         try:
             files = sorted(
                 checkpoint_dir.glob("*.soul"),
@@ -1767,7 +1935,9 @@ class SloughGPTTrainer:
             total_bytes -= oldest.stat().st_size
             try:
                 oldest.unlink()
-                logger.info("Pruned checkpoint %s (disk limit %dMB)", oldest.name, MAX_CHECKPOINT_DISK_MB)
+                logger.info(
+                    "Pruned checkpoint %s (disk limit %dMB)", oldest.name, MAX_CHECKPOINT_DISK_MB
+                )
             except OSError:
                 pass
 
@@ -1804,9 +1974,7 @@ class SloughGPTTrainer:
         except OSError:
             return
 
-        keep_count = 1 if keep_final else max(
-            1, int(getattr(self.config, "max_checkpoints", 5))
-        )
+        keep_count = 1 if keep_final else max(1, int(getattr(self.config, "max_checkpoints", 5)))
         keep = {str(p) for p in files[:keep_count]}
         for stale in files[keep_count:]:
             try:
@@ -1827,8 +1995,17 @@ class SloughGPTTrainer:
         elif self._best_model_path and self._best_model_path not in keep:
             self._best_model_path = None
 
-    def save(self, path: str, format: Optional[str] = None, stoi=None, itos=None, chars=None,
-             training_duration=None, include_optimizer_state: bool = True, avg_quality: Optional[float] = None):
+    def save(
+        self,
+        path: str,
+        format: str | None = None,
+        stoi=None,
+        itos=None,
+        chars=None,
+        training_duration=None,
+        include_optimizer_state: bool = True,
+        avg_quality: float | None = None,
+    ):
         """Save the model in ``.soul`` format (the only SloNet checkpoint format).
 
         Args:
@@ -1876,9 +2053,7 @@ class SloughGPTTrainer:
         # before any training step has neither a train loss nor an eval loss,
         # so both serialize as null rather than fabricated 0.0 values.
         final_train_loss = self._last_train_loss
-        final_val_loss = (
-            None if self._best_val_loss == float("inf") else self._best_val_loss
-        )
+        final_val_loss = None if self._best_val_loss == float("inf") else self._best_val_loss
 
         # Honest metadata: only claim what actually happened. A save before any
         # training step has no observed loss, so epochs serialize as 0 rather
@@ -1958,6 +2133,7 @@ class SloughGPTTrainer:
         # Auto-compress checkpoint into pugqeep Points for efficient inference
         try:
             from domain.training._internal.executor import compress_checkpoint
+
             result = compress_checkpoint(output_path, n_clusters=16)
             if result:
                 logger.info(

@@ -6,30 +6,33 @@ Enterprise-grade testing framework
 from __future__ import annotations
 
 import time
-from typing import Dict, List, Any, Optional, Callable
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
 class TestResult:
     """Container for test results."""
+
     __test__ = False
 
     name: str
     status: str
     execution_time: float
-    error_message: Optional[str] = None
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    details: Dict[str, Any] = field(default_factory=dict)
+    error_message: str | None = None
+    metrics: dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class TestSuite:
     """Container for test suite results."""
+
     __test__ = False
 
     name: str
-    tests: List[TestResult]
+    tests: list[TestResult]
     total_tests: int
     passed_tests: int
     failed_tests: int
@@ -40,12 +43,13 @@ class TestSuite:
 
 class TestFramework:
     """Comprehensive testing framework."""
+
     __test__ = False
 
     def __init__(self, name: str = "TestSuite"):
         self.name = name
-        self.tests: List[Callable] = []
-        self.results: List[TestResult] = []
+        self.tests: list[Callable] = []
+        self.results: list[TestResult] = []
 
     def register(self, test_func: Callable) -> None:
         """Register a test function."""
@@ -91,7 +95,7 @@ class TestFramework:
             total_execution_time=total_time,
         )
 
-    def get_summary(self, suite: TestSuite) -> Dict:
+    def get_summary(self, suite: TestSuite) -> dict:
         """Get test summary."""
         return {
             "name": suite.name,
@@ -114,9 +118,9 @@ class BenchmarkRunner:
     """Run performance benchmarks."""
 
     def __init__(self):
-        self.results: List[Dict] = []
+        self.results: list[dict] = []
 
-    def run_benchmark(self, name: str, func: Callable, iterations: int = 100) -> Dict:
+    def run_benchmark(self, name: str, func: Callable, iterations: int = 100) -> dict:
         """Run a benchmark."""
         times = []
 

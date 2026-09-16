@@ -11,16 +11,26 @@ Usage:
     python scripts/benchmark_inference_quality.py
 """
 
-import sys; sys.path.insert(0, "packages/core-py")
-import time, json, math, os, itertools
+import sys
+
+sys.path.insert(0, "packages/core-py")
+import json
+import math
+import os
+import time
+from dataclasses import asdict, dataclass
+
 import numpy as np
-from dataclasses import dataclass, asdict
-from typing import List, Dict, Optional, Tuple
 
 from domain.training._internal.slonet import (
-    SloNet, SloEmbedding, SloLSTM, SloAdam,
-    cross_entropy, tensor, zeros, no_grad,
+    SloAdam,
+    SloEmbedding,
+    SloLSTM,
+    SloNet,
     _sample_from_logits,
+    cross_entropy,
+    no_grad,
+    tensor,
 )
 
 TRAIN_TEXT = (
@@ -47,8 +57,8 @@ VAL_TEXT = (
 )
 
 CHARS = sorted(set(TRAIN_TEXT + VAL_TEXT))
-STOI = {c: i+1 for i, c in enumerate(CHARS)}
-ITOS = {i+1: c for i, c in enumerate(CHARS)}
+STOI = {c: i + 1 for i, c in enumerate(CHARS)}
+ITOS = {i + 1: c for i, c in enumerate(CHARS)}
 PAD_ID = 0
 VOCAB_SIZE = len(CHARS) + 1
 
@@ -63,9 +73,12 @@ def char_decode(ids: np.ndarray) -> str:
     return "".join(ITOS.get(int(i), "?") for i in valid)
 
 
-def train_model(epochs=60) -> Tuple[SloNet, SloLSTM]:
+def train_model(epochs=60) -> tuple[SloNet, SloLSTM]:
     net = SloNet(
-        layers=[SloEmbedding(VOCAB_SIZE, 32), SloLSTM(VOCAB_SIZE, 32, 64, num_layers=1, dropout=0.0)],
+        layers=[
+            SloEmbedding(VOCAB_SIZE, 32),
+            SloLSTM(VOCAB_SIZE, 32, 64, num_layers=1, dropout=0.0),
+        ],
         soul_name="qual_bench",
     )
     lstm = net.layers[1]
@@ -78,8 +91,8 @@ def train_model(epochs=60) -> Tuple[SloNet, SloLSTM]:
         ep_loss = 0.0
         steps = 0
         for pos in order[:30]:
-            x = tensor(data[pos:pos+chunk].reshape(1, -1), requires_grad=True)
-            y = tensor(data[pos+1:pos+chunk+1].reshape(1, -1))
+            x = tensor(data[pos : pos + chunk].reshape(1, -1), requires_grad=True)
+            y = tensor(data[pos + 1 : pos + chunk + 1].reshape(1, -1))
             h = lstm.init_hidden()
             logits, _ = lstm.forward(x, h)
             loss = cross_entropy(logits, y.reshape(-1))
@@ -100,13 +113,15 @@ def compute_perplexity(lstm: SloLSTM, text: str) -> float:
     total_nll = 0.0
     count = 0
     with no_grad():
-        for pos in range(0, len(ids) - chunk, chunk//2):
-            x = tensor(ids[pos:pos+chunk].reshape(1, -1))
-            y = tensor(ids[pos+1:pos+chunk+1].reshape(1, -1))
+        for pos in range(0, len(ids) - chunk, chunk // 2):
+            x = tensor(ids[pos : pos + chunk].reshape(1, -1))
+            y = tensor(ids[pos + 1 : pos + chunk + 1].reshape(1, -1))
             h = lstm.init_hidden()
             logits, _ = lstm.forward(x, h)
             loss = cross_entropy(logits, y.reshape(-1))
-            total_nll += float(loss.data) * (y.data.shape[0] * y.data.shape[1] if y.data.ndim > 1 else y.data.shape[0])
+            total_nll += float(loss.data) * (
+                y.data.shape[0] * y.data.shape[1] if y.data.ndim > 1 else y.data.shape[0]
+            )
             count += y.data.shape[0] * y.data.shape[1] if y.data.ndim > 1 else y.data.shape[0]
     return math.exp(total_nll / max(count, 1))
 
@@ -125,7 +140,7 @@ def generate_text(lstm: SloLSTM, prompt: str, max_tokens: int = 100, **gen_kwarg
             logits_2d = data.reshape(1, 1, -1)
         nid = _sample_from_logits(
             logits_2d,
-            generated_ids=np.array(ids[len(prompt):], dtype=np.int64),
+            generated_ids=np.array(ids[len(prompt) :], dtype=np.int64),
             **gen_kwargs,
         )
         ids.append(nid)
@@ -135,22 +150,22 @@ def generate_text(lstm: SloLSTM, prompt: str, max_tokens: int = 100, **gen_kwarg
 
 
 def repetition_rate(text: str, n: int = 2) -> float:
-    ng = [text[i:i+n] for i in range(len(text)-n)]
+    ng = [text[i : i + n] for i in range(len(text) - n)]
     if not ng:
         return 0.0
     return 1.0 - len(set(ng)) / len(ng)
 
 
-def diversity(text: str) -> Dict:
+def diversity(text: str) -> dict:
     tokens = list(text)
     ttr = len(set(tokens)) / max(len(tokens), 1)
-    bigrams = [text[i:i+2] for i in range(len(text)-1)]
-    trigrams = [text[i:i+3] for i in range(len(text)-2)]
+    bigrams = [text[i : i + 2] for i in range(len(text) - 1)]
+    trigrams = [text[i : i + 3] for i in range(len(text) - 2)]
     return {
         "type_token_ratio": round(ttr, 4),
         "unique_bigrams": len(set(bigrams)),
         "unique_trigrams": len(set(trigrams)),
-        "bigram_rep_rate": round(1.0 - len(set(bigrams))/max(len(bigrams),1), 4),
+        "bigram_rep_rate": round(1.0 - len(set(bigrams)) / max(len(bigrams), 1), 4),
     }
 
 
@@ -171,8 +186,8 @@ class QualityResult:
 class Config:
     name: str
     temperature: float = 1.0
-    top_k: Optional[int] = None
-    top_p: Optional[float] = None
+    top_k: int | None = None
+    top_p: float | None = None
     repetition_penalty: float = 1.0
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
@@ -183,12 +198,20 @@ def output_entropy(lstm: SloLSTM, prompt: str, num_samples: int = 5, num_tokens:
     texts = []
     with no_grad():
         for _ in range(num_samples):
-            t = generate_text(lstm, prompt, max_tokens=num_tokens, temperature=0.9, top_k=40, repetition_penalty=1.1)
+            t = generate_text(
+                lstm,
+                prompt,
+                max_tokens=num_tokens,
+                temperature=0.9,
+                top_k=40,
+                repetition_penalty=1.1,
+            )
             texts.append(t)
     all_tokens = "".join(texts)
     if not all_tokens:
         return 0.0
     from collections import Counter
+
     freq = Counter(all_tokens)
     probs = np.array([f / len(all_tokens) for f in freq.values()])
     return float(-np.sum(probs * np.log(probs + 1e-10)))
@@ -202,7 +225,7 @@ def main():
     print("Training model...", end=" ", flush=True)
     t0 = time.time()
     net, lstm = train_model()
-    print(f"done ({time.time()-t0:.1f}s)")
+    print(f"done ({time.time() - t0:.1f}s)")
     print()
 
     ppl = compute_perplexity(lstm, VAL_TEXT)
@@ -218,9 +241,20 @@ def main():
         Config(name="temp=0.8+topp0.9", temperature=0.8, top_p=0.9),
         Config(name="temp=0.8+topk40+topp0.9", temperature=0.8, top_k=40, top_p=0.9),
         Config(name="temp=0.8+rp1.2", temperature=0.8, repetition_penalty=1.2),
-        Config(name="temp=0.8+rp1.2+fp0.1", temperature=0.8, repetition_penalty=1.2, frequency_penalty=0.1),
+        Config(
+            name="temp=0.8+rp1.2+fp0.1",
+            temperature=0.8,
+            repetition_penalty=1.2,
+            frequency_penalty=0.1,
+        ),
         Config(name="temp=0.8+topk40+rp1.2", temperature=0.8, top_k=40, repetition_penalty=1.2),
-        Config(name="temp=0.8+topk40+topp0.9+rp1.2", temperature=0.8, top_k=40, top_p=0.9, repetition_penalty=1.2),
+        Config(
+            name="temp=0.8+topk40+topp0.9+rp1.2",
+            temperature=0.8,
+            top_k=40,
+            top_p=0.9,
+            repetition_penalty=1.2,
+        ),
         Config(name="temp=0.9+topk40+rp1.1", temperature=0.9, top_k=40, repetition_penalty=1.1),
     ]
 
@@ -241,30 +275,43 @@ def main():
         div = diversity(text)
         ent = output_entropy(lstm, prompt[:10], num_samples=3, num_tokens=40)
 
-        results.append(QualityResult(
-            config_name=cfg.name,
-            perplexity=ppl,
-            repetition_2=rep2,
-            repetition_3=rep3,
-            type_token_ratio=div["type_token_ratio"],
-            unique_bigrams=div["unique_bigrams"],
-            unique_trigrams=div["unique_trigrams"],
-            output_length=len(text),
-            entropy=ent,
-        ))
-        print(f"  [{cfg.name:40s}] rep2={rep2:.3f}  rep3={rep3:.3f}  ttr={div['type_token_ratio']:.3f}  ent={ent:.3f}")
+        results.append(
+            QualityResult(
+                config_name=cfg.name,
+                perplexity=ppl,
+                repetition_2=rep2,
+                repetition_3=rep3,
+                type_token_ratio=div["type_token_ratio"],
+                unique_bigrams=div["unique_bigrams"],
+                unique_trigrams=div["unique_trigrams"],
+                output_length=len(text),
+                entropy=ent,
+            )
+        )
+        print(
+            f"  [{cfg.name:40s}] rep2={rep2:.3f}  rep3={rep3:.3f}  ttr={div['type_token_ratio']:.3f}  ent={ent:.3f}"
+        )
         print(f"  {'':40s}  output: {text[:80]}...")
 
     print()
     print("=" * 60)
     print("SUMMARY")
     print("=" * 60)
-    print(f"{'Config':40s} {'Rep2':>6s} {'Rep3':>6s} {'TTR':>6s} {'Ent':>6s} {'Bigr':>5s} {'Trgr':>5s}")
+    print(
+        f"{'Config':40s} {'Rep2':>6s} {'Rep3':>6s} {'TTR':>6s} {'Ent':>6s} {'Bigr':>5s} {'Trgr':>5s}"
+    )
     print("-" * 80)
-    best = min(results, key=lambda r: r.repetition_2 + r.repetition_3 * 2 - r.entropy * 0.1 + r.type_token_ratio * 0.1)
+    best = min(
+        results,
+        key=lambda r: (
+            r.repetition_2 + r.repetition_3 * 2 - r.entropy * 0.1 + r.type_token_ratio * 0.1
+        ),
+    )
     for r in results:
         marker = " ←" if r is best else ""
-        print(f"{r.config_name:40s} {r.repetition_2:6.3f} {r.repetition_3:6.3f} {r.type_token_ratio:6.3f} {r.entropy:6.3f} {r.unique_bigrams:5d} {r.unique_trigrams:5d}{marker}")
+        print(
+            f"{r.config_name:40s} {r.repetition_2:6.3f} {r.repetition_3:6.3f} {r.type_token_ratio:6.3f} {r.entropy:6.3f} {r.unique_bigrams:5d} {r.unique_trigrams:5d}{marker}"
+        )
     print()
 
     out = {
@@ -276,7 +323,7 @@ def main():
     os.makedirs("data/eval_results", exist_ok=True)
     with open("data/eval_results/inference_quality.json", "w") as f:
         json.dump(out, f, indent=2)
-    print(f"Results saved to data/eval_results/inference_quality.json")
+    print("Results saved to data/eval_results/inference_quality.json")
     print(f"Best config: {best.config_name}")
 
 

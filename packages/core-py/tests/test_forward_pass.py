@@ -2,21 +2,21 @@
 
 Covers: dataclass fields, shape property, protocol compliance, timed wrapper, edge cases.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
 from domain.inference._internal.forward_pass import (
-    ForwardPassResult,
     ForwardPassable,
+    ForwardPassResult,
     timed_forward,
 )
 
@@ -38,7 +38,9 @@ class TestForwardPassResult:
 
     def test_custom_fields(self):
         logits = np.zeros((1, 1, 10))
-        r = ForwardPassResult(logits=logits, forward_time_ms=12.5, model_name="test", engine="numpy")
+        r = ForwardPassResult(
+            logits=logits, forward_time_ms=12.5, model_name="test", engine="numpy"
+        )
         assert r.forward_time_ms == 12.5
         assert r.model_name == "test"
         assert r.engine == "numpy"
@@ -137,6 +139,7 @@ class TestForwardPassable:
     def test_protocol_rejects_non_conforming(self):
         class Bad:
             pass
+
         assert not isinstance(Bad(), ForwardPassable)
 
     def test_rejects_no_forward_pass(self):
@@ -201,7 +204,7 @@ class TestTimedForward:
 
     def test_large_input_timing(self):
         model = MockForwardPass()
-        input_ids = np.array([[i for i in range(128)]])
+        input_ids = np.array([list(range(128))])
         result = timed_forward(model, input_ids)
         assert result.forward_time_ms >= 0
 

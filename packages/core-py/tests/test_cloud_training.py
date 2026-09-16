@@ -1,12 +1,13 @@
 """Tests for cloud training providers."""
 
 import pytest
+
 from domain.training._internal.cloud import (
+    AWSSageMakerProvider,
     CloudTrainingConfig,
     CloudTrainingStatus,
-    LocalTrainingProvider,
-    AWSSageMakerProvider,
     GCPVertexProvider,
+    LocalTrainingProvider,
     get_provider,
 )
 

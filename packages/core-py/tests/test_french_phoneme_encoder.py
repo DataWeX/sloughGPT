@@ -1,10 +1,12 @@
 """Tests for multimodal/french_phoneme_encoder.py — FrenchPhonemeEncoder."""
 
 import numpy as np
-import pytest
+
 from domain.multimodal._internal.french_phoneme_encoder import (
-    FrenchPhonemeEncoder, french_text_to_phonemes,
-    FRENCH_ID_TO_PHONEME, BOS, EOS, PAD, SPACE, NUM_FRENCH_PHONEMES,
+    BOS,
+    EOS,
+    NUM_FRENCH_PHONEMES,
+    FrenchPhonemeEncoder,
 )
 
 

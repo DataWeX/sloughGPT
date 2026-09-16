@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import io
 import json
-import os
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
-from domain.infrastructure._internal.external_download import ExternalDownloadBackend, _get_cache_root
+from domain.infrastructure._internal.download_backend import DownloadBackend
+from domain.infrastructure._internal.external_download import (
+    ExternalDownloadBackend,
+)
 
 
 class TestExternalDownloadBackend:
@@ -61,10 +58,12 @@ class TestExternalDownloadBackend:
         backend = ExternalDownloadBackend("http://localhost:8000")
         cache = tmp_path / "model"
         cache.mkdir()
-        manifest = {"files": [
-            {"path": "a.bin", "size": 500},
-            {"path": "b.bin", "size": 300},
-        ]}
+        manifest = {
+            "files": [
+                {"path": "a.bin", "size": 500},
+                {"path": "b.bin", "size": 300},
+            ]
+        }
         (cache / ".manifest.json").write_text(json.dumps(manifest))
 
         with patch.object(backend, "_cache_dir", return_value=cache):
@@ -75,9 +74,11 @@ class TestExternalDownloadBackend:
         backend = ExternalDownloadBackend("http://localhost:8000")
         cache = tmp_path / "model"
         cache.mkdir()
-        manifest = {"files": [
-            {"path": "model.bin", "size": 1024, "sha256": "abc123"},
-        ]}
+        manifest = {
+            "files": [
+                {"path": "model.bin", "size": 1024, "sha256": "abc123"},
+            ]
+        }
         (cache / ".manifest.json").write_text(json.dumps(manifest))
 
         with patch.object(backend, "_cache_dir", return_value=cache):
@@ -124,7 +125,9 @@ class TestExternalDownloadBackend:
         manifest2 = {"files": [{"path": "missing.bin", "size": 100}]}
         (incomplete / ".manifest.json").write_text(json.dumps(manifest2))
 
-        with patch("domain.infrastructure.external_download._get_cache_root", return_value=root):
+        with patch(
+            "domain.infrastructure._internal.external_download._get_cache_root", return_value=root
+        ):
             result = backend.list_incomplete()
             assert "incomplete-model" in result
             assert "complete-model" not in result
@@ -148,8 +151,14 @@ class TestExternalDownloadBackend:
         """URL construction."""
         backend = ExternalDownloadBackend("http://192.168.1.100:8000")
         assert backend._model_url("my-model") == "http://192.168.1.100:8000/models/my-model"
-        assert backend._file_url("my-model", "model.bin") == "http://192.168.1.100:8000/models/my-model/file/model.bin"
-        assert backend._manifest_url("my-model") == "http://192.168.1.100:8000/models/my-model/manifest.json"
+        assert (
+            backend._file_url("my-model", "model.bin")
+            == "http://192.168.1.100:8000/models/my-model/file/model.bin"
+        )
+        assert (
+            backend._manifest_url("my-model")
+            == "http://192.168.1.100:8000/models/my-model/manifest.json"
+        )
 
     def test_model_url_strips_trailing_slash(self):
         """Trailing slash in base URL is handled."""
@@ -164,9 +173,13 @@ class TestExternalDownloadDownload:
 
         manifest = {"files": [{"path": "model.bin", "size": 100, "sha256": "abc"}]}
 
-        with patch.object(backend, "_fetch_manifest", return_value=manifest), \
-             patch.object(backend, "_cache_dir", return_value=tmp_path / "out"), \
-             patch("domain.infrastructure.compressed_transfer.CompressedDownloader") as MockDL:
+        with (
+            patch.object(backend, "_fetch_manifest", return_value=manifest),
+            patch.object(backend, "_cache_dir", return_value=tmp_path / "out"),
+            patch(
+                "domain.infrastructure._internal.compressed_transfer.CompressedDownloader"
+            ) as MockDL,
+        ):
             mock_inst = MockDL.return_value
             mock_inst.download_from_url.return_value = MagicMock(success=True)
 

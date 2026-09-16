@@ -1,8 +1,9 @@
 """Tests for RequestCoalescer."""
 
 import asyncio
+
 import pytest
-import time
+
 from domain.infrastructure._internal.request_coalescer import (
     RequestCoalescer,
     _hash_key,

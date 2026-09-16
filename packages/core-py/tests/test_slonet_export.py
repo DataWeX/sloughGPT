@@ -3,27 +3,25 @@
 from __future__ import annotations
 
 import pytest
-import numpy as np
+
 from domain.training._internal.gguf_export import (
+    MOBILE_RECOMMENDED,
+    QUANTIZATION_TYPES,
+    FalconMapping,
     GGUFExportConfig,
-    TensorMapping,
-    SloughGPTMapping,
+    GPT2Mapping,
+    GPTNeoXMapping,
     LLaMAMapping,
     MistralMapping,
-    GPT2Mapping,
     OPTMapping,
-    FalconMapping,
-    GPTNeoXMapping,
-    QUANTIZATION_TYPES,
-    MOBILE_RECOMMENDED,
+    SloughGPTMapping,
+    TensorMapping,
 )
-
 
 # ── GGUFExportConfig ───────────────────────────────────────────────────────
 
 
 class TestGGUFExportConfig:
-
     def test_default(self):
         config = GGUFExportConfig()
         assert config.model_name == "sloughgpt"
@@ -40,7 +38,6 @@ class TestGGUFExportConfig:
 
 
 class TestQuantizationTypes:
-
     def test_types_exist(self):
         assert "F32" in QUANTIZATION_TYPES
         assert "F16" in QUANTIZATION_TYPES
@@ -54,7 +51,6 @@ class TestQuantizationTypes:
 
 
 class TestSloughGPTMapping:
-
     def test_init(self):
         mapping = SloughGPTMapping()
         assert mapping.name == "sloughgpt"
@@ -82,7 +78,6 @@ class TestSloughGPTMapping:
 
 
 class TestLLaMAMapping:
-
     def test_init(self):
         mapping = LLaMAMapping()
         assert mapping.name == "llama"
@@ -101,7 +96,6 @@ class TestLLaMAMapping:
 
 
 class TestMistralMapping:
-
     def test_init(self):
         mapping = MistralMapping()
         assert mapping.name == "mistral"
@@ -116,7 +110,6 @@ class TestMistralMapping:
 
 
 class TestGPT2Mapping:
-
     def test_init(self):
         mapping = GPT2Mapping()
         assert mapping.name == "gpt2"
@@ -139,7 +132,6 @@ class TestGPT2Mapping:
 
 
 class TestOPTMapping:
-
     def test_init(self):
         mapping = OPTMapping()
         assert mapping.name == "opt"
@@ -154,7 +146,6 @@ class TestOPTMapping:
 
 
 class TestFalconMapping:
-
     def test_init(self):
         mapping = FalconMapping()
         assert mapping.name == "falcon"
@@ -169,7 +160,6 @@ class TestFalconMapping:
 
 
 class TestGPTNeoXMapping:
-
     def test_init(self):
         mapping = GPTNeoXMapping()
         assert mapping.name == "gpt_neox"
@@ -184,7 +174,6 @@ class TestGPTNeoXMapping:
 
 
 class TestTensorMappingAbstract:
-
     def test_cannot_instantiate(self):
         with pytest.raises(TypeError):
             TensorMapping("test")

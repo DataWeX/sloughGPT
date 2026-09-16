@@ -3,6 +3,7 @@
 Stores training jobs in MogDB (the project's embedded document database)
 for crash recovery. Jobs persist across server restarts.
 """
+
 from __future__ import annotations
 
 import builtins
@@ -13,8 +14,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from domain.shared import find_repo_root
 from mogdb import MogDB
+
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.job_store")
 
@@ -463,7 +465,7 @@ class PersistentTrainingJobs:
 
     def update(self, other=None, **kwargs):
         if other:
-            for k, v in (other.items() if hasattr(other, "items") else other):
+            for k, v in other.items() if hasattr(other, "items") else other:
                 self[k] = v
         for k, v in kwargs.items():
             self[k] = v

@@ -2,24 +2,24 @@
 
 import numpy as np
 import pytest
+
 from domain.training._internal.performance import (
-    TrainingOptimizations,
-    InferenceOptimizations,
-    PerformanceConfig,
-    FastInferenceSampler,
-    PerformanceMonitor,
     CUDAGraphManager,
-    _NumpyBatchIterator,
+    FastInferenceSampler,
+    InferenceOptimizations,
+    OptimizedBatchCache,
+    PerformanceConfig,
+    PerformanceMonitor,
+    PreallocatedBatchDataset,
+    TrainingOptimizations,
+    _as_array,
     _collate,
+    _NumpyBatchIterator,
     _pad_last,
     _softmax,
-    _as_array,
     effective_dataloader_workers,
     effective_prefetch_factor,
-    PreallocatedBatchDataset,
-    OptimizedBatchCache,
 )
-
 
 # ── TrainingOptimizations ────────────────────────────────────────────────
 
@@ -80,11 +80,21 @@ class TestTrainingOptimizations:
 
     def test_all_fields_custom(self):
         to = TrainingOptimizations(
-            use_compile=False, compile_mode="max-autotune", compile_fullgraph=True,
-            use_cuda_graphs=True, channel_last=False, dataloader_workers=8,
-            dataloader_prefetch=4, dataloader_persistent=False, dataloader_pin_memory=False,
-            use_fused_optimizer=False, cudnn_benchmark=False, cudnn_deterministic=True,
-            use_flash_attention=False, gradient_checkpointing=False, batch_preallocation=False,
+            use_compile=False,
+            compile_mode="max-autotune",
+            compile_fullgraph=True,
+            use_cuda_graphs=True,
+            channel_last=False,
+            dataloader_workers=8,
+            dataloader_prefetch=4,
+            dataloader_persistent=False,
+            dataloader_pin_memory=False,
+            use_fused_optimizer=False,
+            cudnn_benchmark=False,
+            cudnn_deterministic=True,
+            use_flash_attention=False,
+            gradient_checkpointing=False,
+            batch_preallocation=False,
         )
         assert to.use_compile is False
         assert to.compile_mode == "max-autotune"
@@ -160,11 +170,16 @@ class TestInferenceOptimizations:
 
     def test_all_fields_custom(self):
         io = InferenceOptimizations(
-            use_compile=False, compile_mode="max-autotune",
-            use_cuda_graphs=False, channel_last=False,
-            use_flash_attention=False, use_sdpa=False,
-            max_batch_size=64, kv_cache_preallocate=False,
-            use_kv_cache=False, use_continuous_batching=False,
+            use_compile=False,
+            compile_mode="max-autotune",
+            use_cuda_graphs=False,
+            channel_last=False,
+            use_flash_attention=False,
+            use_sdpa=False,
+            max_batch_size=64,
+            kv_cache_preallocate=False,
+            use_kv_cache=False,
+            use_continuous_batching=False,
         )
         assert io.use_compile is False
         assert io.compile_mode == "max-autotune"
@@ -283,14 +298,20 @@ class TestFastInferenceSampler:
         logits = np.array([[1.0, 2.0, 3.0]])
         prev = np.array([2])
         result = FastInferenceSampler.sample(
-            logits, temperature=1.0, repetition_penalty=1.5, prev_tokens=prev,
+            logits,
+            temperature=1.0,
+            repetition_penalty=1.5,
+            prev_tokens=prev,
         )
         assert result.shape == (1, 1)
 
     def test_sample_repetition_penalty_no_prev(self):
         logits = np.array([[1.0, 2.0, 3.0]])
         result = FastInferenceSampler.sample(
-            logits, temperature=1.0, repetition_penalty=1.5, prev_tokens=None,
+            logits,
+            temperature=1.0,
+            repetition_penalty=1.5,
+            prev_tokens=None,
         )
         assert result.shape == (1, 1)
 
@@ -314,7 +335,9 @@ class TestFastInferenceSampler:
         logits = np.array([[1.0, 2.0, 3.0]])
         prev = np.array([0, 1])
         result = FastInferenceSampler._apply_repetition_penalty_vectorized(
-            logits, prev, penalty=2.0,
+            logits,
+            prev,
+            penalty=2.0,
         )
         assert result.shape == logits.shape
 
@@ -366,13 +389,15 @@ class TestPerformanceMonitor:
 
 class TestCUDAGraphManager:
     def test_capture_returns_false(self):
-        model = lambda x: x
+        def model(x):
+            return x
         config = InferenceOptimizations()
         mgr = CUDAGraphManager(model, config)
         assert mgr.capture(1, 128, 256) is False
 
     def test_replay_calls_model(self):
-        model = lambda x: np.zeros((1, 10))
+        def model(x):
+            return np.zeros((1, 10))
         config = InferenceOptimizations()
         mgr = CUDAGraphManager(model, config)
         result = mgr.replay(np.array([[1, 2, 3]]))

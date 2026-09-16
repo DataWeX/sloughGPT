@@ -1,4 +1,5 @@
 """Coverage for sloughgpt_sdk.client."""
+
 import json
 import sys
 from pathlib import Path
@@ -21,7 +22,7 @@ from sloughgpt_sdk.client import (  # noqa: E402
     _unwrap_response,
 )
 from sloughgpt_sdk.exceptions import SloughGPTError  # noqa: E402
-from sloughgpt_sdk.models import ChatMessage, ChatRequest  # noqa: E402
+from sloughgpt_sdk.models import ChatMessage  # noqa: E402
 
 
 def _resp(data=None, text="", status=200):
@@ -180,8 +181,10 @@ class TestGeneration:
         resp = Mock()
         resp.raise_for_status.return_value = None
         resp.iter_lines.return_value = [
-            "data: " + json.dumps({"stream": "generate", "status": "working", "data": {"token": "one"}}),
-            "data: " + json.dumps({"stream": "generate", "status": "working", "data": {"token": "two"}}),
+            "data: "
+            + json.dumps({"stream": "generate", "status": "working", "data": {"token": "one"}}),
+            "data: "
+            + json.dumps({"stream": "generate", "status": "working", "data": {"token": "two"}}),
             "data: [DONE]",
             "ignored",
         ]
@@ -196,7 +199,8 @@ class TestGeneration:
         resp.raise_for_status.return_value = None
         resp.iter_lines.return_value = [
             "data:",
-            "data: " + json.dumps({"stream": "generate", "status": "working", "data": {"token": "tok"}}),
+            "data: "
+            + json.dumps({"stream": "generate", "status": "working", "data": {"token": "tok"}}),
         ]
         c._session = Mock()
         c._session.request.return_value = resp
@@ -208,9 +212,12 @@ class TestGeneration:
         resp.raise_for_status.return_value = None
         resp.iter_lines.return_value = [
             "data: not-json",
-            "data: " + json.dumps({"stream": "generate", "status": "working", "data": {"token": "one"}}),
-            "data: " + json.dumps({"stream": "generate", "status": "error", "data": {"error": "boom"}}),
-            "data: " + json.dumps({"stream": "generate", "status": "working", "data": {"token": "two"}}),
+            "data: "
+            + json.dumps({"stream": "generate", "status": "working", "data": {"token": "one"}}),
+            "data: "
+            + json.dumps({"stream": "generate", "status": "error", "data": {"error": "boom"}}),
+            "data: "
+            + json.dumps({"stream": "generate", "status": "working", "data": {"token": "two"}}),
         ]
         c._session = Mock()
         c._session.request.return_value = resp
@@ -283,7 +290,9 @@ class TestChat:
         c = SloughGPTClient()
         resp = Mock()
         resp.raise_for_status.return_value = None
-        resp.iter_lines.return_value = ["data: " + json.dumps({"stream": "chat", "status": "working", "data": {"token": "z"}})]
+        resp.iter_lines.return_value = [
+            "data: " + json.dumps({"stream": "chat", "status": "working", "data": {"token": "z"}})
+        ]
         c._session = Mock()
         c._session.request.return_value = resp
         assert list(c.chat_stream([client_module.ChatMessage.user("q")])) == ["z"]
@@ -299,9 +308,7 @@ class TestModels:
         assert models[0].name == "GPT-2"
 
     def test_list_models_unwraps_envelope(self):
-        c, _ = _mock_client(
-            data={"status": "success", "data": [{"id": "gpt2", "name": "GPT-2"}]}
-        )
+        c, _ = _mock_client(data={"status": "success", "data": [{"id": "gpt2", "name": "GPT-2"}]})
         models = c.list_models()
         assert len(models) == 1
         assert models[0].id == "gpt2"
@@ -373,7 +380,10 @@ class TestSouls:
         assert session.request.call_args.kwargs["json"] == {"name": "warm"}
         c, session = _mock_client(data={"ok": True})
         c.switch_soul("warm", checkpoint_name="cp1")
-        assert session.request.call_args.kwargs["json"] == {"name": "warm", "checkpoint_name": "cp1"}
+        assert session.request.call_args.kwargs["json"] == {
+            "name": "warm",
+            "checkpoint_name": "cp1",
+        }
 
 
 class TestKnowledge:
@@ -557,7 +567,9 @@ class TestFeedbackWorkflow:
         c, session = _mock_client(data={"ok": True})
         c.record_feedback("s", "m", 1)
         assert session.request.call_args.kwargs["json"] == {
-            "session_id": "s", "message_id": "m", "score": 1
+            "session_id": "s",
+            "message_id": "m",
+            "score": 1,
         }
         c, session = _mock_client(data={"ok": True})
         c.record_feedback("s", "m", 1, tags=["a"])
@@ -586,7 +598,11 @@ class TestExperiments:
         assert session.request.call_args.kwargs["json"] == {"metric": "loss", "value": 0.1}
         c, session = _mock_client(data={"ok": True})
         c.log_metric("e1", "loss", 0.1, step=2)
-        assert session.request.call_args.kwargs["json"] == {"metric": "loss", "value": 0.1, "step": 2}
+        assert session.request.call_args.kwargs["json"] == {
+            "metric": "loss",
+            "value": 0.1,
+            "step": 2,
+        }
         c, session = _mock_client(data={"ok": True})
         c.log_param("e1", "lr", 1e-3)
         assert session.request.call_args.kwargs["json"] == {"param": "lr", "value": 1e-3}
@@ -872,9 +888,7 @@ class TestAsyncClient:
         fake_httpx = SimpleNamespace(AsyncClient=FakeAsyncClient)
         client = AsyncSloughGPTClient(api_key="k")
         with patch.dict(sys.modules, {"httpx": fake_httpx}):
-            data = await client._request(
-                "POST", "/x", json={"a": 1}, extra_headers={"X-A": "1"}
-            )
+            data = await client._request("POST", "/x", json={"a": 1}, extra_headers={"X-A": "1"})
         assert data == {"status": "success", "data": {"version": "1"}}
         inst = FakeAsyncClient.last
         assert inst.kw["headers"]["X-API-Key"] == "k"

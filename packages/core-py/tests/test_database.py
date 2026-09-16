@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import sqlite3
-import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from domain.feedback._internal.database import (
+    Feedback,
     FeedbackDB,
     Message,
-    Feedback,
     SimilarPattern,
     get_feedback_db,
 )
@@ -29,18 +27,20 @@ class TestDataclasses:
         assert fb.quality_score is None
 
     def test_similar_pattern(self):
-        sp = SimilarPattern(content="hello", rating="thumbs_up", similarity=0.9, pattern_type="exact")
+        sp = SimilarPattern(
+            content="hello", rating="thumbs_up", similarity=0.9, pattern_type="exact"
+        )
         assert sp.similarity == 0.9
 
 
 class TestFeedbackDBInit:
     def test_creates_db_file(self, tmp_path):
-        db = FeedbackDB(db_path=str(tmp_path / "test.db"))
+        FeedbackDB(db_path=str(tmp_path / "test.db"))
         assert Path(tmp_path / "test.db").exists()
 
     def test_creates_parent_dir(self, tmp_path):
         db_path = str(tmp_path / "subdir" / "feedback.db")
-        db = FeedbackDB(db_path=db_path)
+        FeedbackDB(db_path=db_path)
         assert Path(db_path).exists()
 
 
@@ -236,6 +236,7 @@ class TestConcurrency:
                 errors.append(e)
 
         import threading
+
         threads = [threading.Thread(target=writer, args=(n,)) for n in range(3)]
         for t in threads:
             t.start()

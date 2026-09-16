@@ -8,21 +8,23 @@ Install via:
     domain.shell._internal.addons import neural
     kernel.install_addon(neural)
 """
+
 from __future__ import annotations
 
-import time
-import math
 import logging
+import math
 import threading
-from enum import IntEnum
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from enum import IntEnum
+from typing import Any
 
 import numpy as np
 
-from ..kernel_process import Process, ProcessState
 from ..kernel_devices import DeviceDriver, DeviceType
-from ..kernel_interrupts import InterruptType, Interrupt
+from ..kernel_interrupts import Interrupt, InterruptType
+from ..kernel_process import Process, ProcessState
 from ..kernel_syscall import SyscallResult
 
 logger = logging.getLogger("slo.kernel.neural")
@@ -30,27 +32,59 @@ logger = logging.getLogger("slo.kernel.neural")
 
 # --- Neural enums ---
 
+
 class NeuralOp(IntEnum):
-    NONE = 0; EMBEDDING = 1; ATTENTION = 2; LINEAR = 3; NORM = 4
-    ACTIVATION = 5; POOLING = 6; CONVOLUTION = 7; LOSS = 8; OPTIMIZER_STEP = 9
+    NONE = 0
+    EMBEDDING = 1
+    ATTENTION = 2
+    LINEAR = 3
+    NORM = 4
+    ACTIVATION = 5
+    POOLING = 6
+    CONVOLUTION = 7
+    LOSS = 8
+    OPTIMIZER_STEP = 9
+
 
 class NeuralState(IntEnum):
-    IDLE = 0; LOADING_WEIGHTS = 1; COMPUTING = 2; WAITING_INPUT = 3
-    COMPLETE = 4; FAILED = 5; BACKPROPAGATING = 6; OPTIMIZING = 7
+    IDLE = 0
+    LOADING_WEIGHTS = 1
+    COMPUTING = 2
+    WAITING_INPUT = 3
+    COMPLETE = 4
+    FAILED = 5
+    BACKPROPAGATING = 6
+    OPTIMIZING = 7
+
 
 class NeuralProcessType(IntEnum):
-    INFERENCE = 0; TRAINING = 1; GENERATION = 2; ATTENTION = 3
+    INFERENCE = 0
+    TRAINING = 1
+    GENERATION = 2
+    ATTENTION = 3
+
 
 class NeuralMemoryType(IntEnum):
-    KV_CACHE = 0; EMBEDDING = 1; ACTIVATION = 2; GRADIENT = 3
-    WAITING_GRADIENT = 4; BACKPROPAGATING = 5; OPTIMIZING = 6
-    COMPLETE = 7; FAILED = 8
+    KV_CACHE = 0
+    EMBEDDING = 1
+    ACTIVATION = 2
+    GRADIENT = 3
+    WAITING_GRADIENT = 4
+    BACKPROPAGATING = 5
+    OPTIMIZING = 6
+    COMPLETE = 7
+    FAILED = 8
+
 
 class CacheStrategy(IntEnum):
-    LRU = 0; LFU = 1; FIFO = 2; PRIORITY = 3
+    LRU = 0
+    LFU = 1
+    FIFO = 2
+    PRIORITY = 3
 
 
 # --- Neural Process ---
+
 
 @dataclass
 class NeuralProcess:
@@ -92,7 +126,11 @@ class NeuralProcess:
 
     @property
     def is_computing(self) -> bool:
-        return self.neural_state in (NeuralState.COMPUTING, NeuralState.BACKPROPAGATING, NeuralState.OPTIMIZING)
+        return self.neural_state in (
+            NeuralState.COMPUTING,
+            NeuralState.BACKPROPAGATING,
+            NeuralState.OPTIMIZING,
+        )
 
     @property
     def compute_time_ms(self) -> float:
@@ -137,7 +175,7 @@ class NeuralProcess:
 
     def record_gradients(self, grads: dict[str, np.ndarray]) -> None:
         self.gradients.update(grads)
-        self.gradient_norm = math.sqrt(sum(float(np.sum(g ** 2)) for g in grads.values()))
+        self.gradient_norm = math.sqrt(sum(float(np.sum(g**2)) for g in grads.values()))
 
     def start_timing(self) -> None:
         self.process.transition(ProcessState.RUNNING)
@@ -148,7 +186,7 @@ class NeuralProcess:
 
     def store_gradient(self, name: str, grad: np.ndarray) -> None:
         self.gradients[name] = grad
-        self.gradient_norm += float(np.sum(grad ** 2))
+        self.gradient_norm += float(np.sum(grad**2))
 
     def clear_gradients(self) -> None:
         self.gradients.clear()
@@ -161,6 +199,7 @@ class NeuralProcess:
 
 # --- KV Cache ---
 
+
 @dataclass
 class KVCacheEntry:
     layer_idx: int
@@ -172,12 +211,13 @@ class KVCacheEntry:
 
 
 class NeuralKVCache:
-    def __init__(self, num_layers: int = 12, head_dim: int = 64,
-                 max_positions: int = 512, **kwargs):
+    def __init__(
+        self, num_layers: int = 12, head_dim: int = 64, max_positions: int = 512, **kwargs
+    ):
         self._num_layers = num_layers
         self._head_dim = head_dim
         self._max_positions = max_positions
-        self._num_heads = kwargs.get('num_heads', 8)
+        self._num_heads = kwargs.get("num_heads", 8)
         self._entries: dict[int, KVCacheEntry] = {}
         self._position = 0
         self._lock = threading.Lock()
@@ -200,7 +240,9 @@ class NeuralKVCache:
                     layer_idx=i,
                     keys=np.zeros((num_heads, self._max_positions, self._head_dim)),
                     values=np.zeros((num_heads, self._max_positions, self._head_dim)),
-                    seq_len=0, last_access=time.time())
+                    seq_len=0,
+                    last_access=time.time(),
+                )
 
     def get_position(self) -> int:
         return self._position
@@ -223,7 +265,8 @@ class NeuralKVCache:
                 self._entries[layer_idx] = KVCacheEntry(
                     layer_idx=layer_idx,
                     keys=np.zeros((nh, self._max_positions, self._head_dim)),
-                    values=np.zeros((nh, self._max_positions, self._head_dim)))
+                    values=np.zeros((nh, self._max_positions, self._head_dim)),
+                )
             entry = self._entries[layer_idx]
             pos = self._position
             if entry.keys is not None and pos < entry.keys.shape[1]:
@@ -237,8 +280,9 @@ class NeuralKVCache:
     def advance(self, n: int = 1) -> None:
         self._position += n
 
-    def get(self, layer_idx: int, start: int = 0,
-            end: int | None = None) -> tuple[np.ndarray | None, np.ndarray | None]:
+    def get(
+        self, layer_idx: int, start: int = 0, end: int | None = None
+    ) -> tuple[np.ndarray | None, np.ndarray | None]:
         with self._lock:
             entry = self._entries.get(layer_idx)
             if entry is None or entry.keys is None:
@@ -260,13 +304,19 @@ class NeuralKVCache:
 
     def stats(self) -> dict:
         with self._lock:
-            return {"layers_cached": len(self._entries), "total_tokens": self._total_tokens_cached,
-                    "evictions": self._evictions, "memory_bytes": self.memory_bytes(),
-                    "memory_mb": self.memory_bytes() / (1024 * 1024),
-                    "max_positions": self._max_positions, "position": self._position}
+            return {
+                "layers_cached": len(self._entries),
+                "total_tokens": self._total_tokens_cached,
+                "evictions": self._evictions,
+                "memory_bytes": self.memory_bytes(),
+                "memory_mb": self.memory_bytes() / (1024 * 1024),
+                "max_positions": self._max_positions,
+                "position": self._position,
+            }
 
 
 # --- Embedding Store ---
+
 
 @dataclass
 class EmbeddingEntry:
@@ -278,8 +328,13 @@ class EmbeddingEntry:
 
 
 class NeuralEmbeddingStore:
-    def __init__(self, vocab_size: int = 1000, embed_dim: int = 64,
-                 dim: int | None = None, max_entries: int = 100_000):
+    def __init__(
+        self,
+        vocab_size: int = 1000,
+        embed_dim: int = 64,
+        dim: int | None = None,
+        max_entries: int = 100_000,
+    ):
         self._vocab_size = vocab_size
         self._embed_dim = embed_dim
         self._dim = dim or embed_dim
@@ -336,12 +391,14 @@ class NeuralEmbeddingStore:
         order = np.lexsort((-np.arange(len(scores)), scores))
         return [(int(idx), float(scores[idx])) for idx in order[::-1][:k]]
 
-    def add(self, id: str, vector: np.ndarray, text: str,
-            metadata: dict | None = None) -> None:
+    def add(self, id: str, vector: np.ndarray, text: str, metadata: dict | None = None) -> None:
         with self._lock:
             self._entries[id] = EmbeddingEntry(
-                id=id, vector=vector / (np.linalg.norm(vector) + 1e-10),
-                text=text, metadata=metadata or {})
+                id=id,
+                vector=vector / (np.linalg.norm(vector) + 1e-10),
+                text=text,
+                metadata=metadata or {},
+            )
 
     def search(self, query: np.ndarray, top_k: int = 5) -> list[tuple[str, float, str]]:
         results = self.nearest(query, k=top_k)
@@ -355,11 +412,16 @@ class NeuralEmbeddingStore:
         return out
 
     def stats(self) -> dict:
-        return {"vocab_size": self._vocab_size, "embed_dim": self._embed_dim,
-                "entries": len(self._entries), "max_entries": self._max_entries}
+        return {
+            "vocab_size": self._vocab_size,
+            "embed_dim": self._embed_dim,
+            "entries": len(self._entries),
+            "max_entries": self._max_entries,
+        }
 
 
 # --- Neural Devices ---
+
 
 class NeuralEngineDevice(DeviceDriver):
     def __init__(self, name: str = "neural_engine"):
@@ -375,8 +437,12 @@ class NeuralEngineDevice(DeviceDriver):
         self._models.pop(name, None)
 
     def info(self) -> dict:
-        return {"name": self._name, "model_names": list(self._models.keys()),
-                "models_loaded": len(self._models), "request_count": self._request_count}
+        return {
+            "name": self._name,
+            "model_names": list(self._models.keys()),
+            "models_loaded": len(self._models),
+            "request_count": self._request_count,
+        }
 
     def read(self, offset: int = 0, size: int = -1) -> Any:
         with self._lock:
@@ -402,7 +468,11 @@ class NeuralEngineDevice(DeviceDriver):
             model = self._models.get(model_name)
             if model is None:
                 return SyscallResult(success=False, error=f"Model '{model_name}' not found")
-            tokens = model.generate_numpy(prompt, max_tokens=max_tokens) if hasattr(model, "generate_numpy") else []
+            tokens = (
+                model.generate_numpy(prompt, max_tokens=max_tokens)
+                if hasattr(model, "generate_numpy")
+                else []
+            )
             return SyscallResult(success=True, value={"token_count": len(tokens), "tokens": tokens})
         elif command == "attention":
             q, k, v = args[0], args[1], args[2]
@@ -411,7 +481,9 @@ class NeuralEngineDevice(DeviceDriver):
             scores = np.matmul(q, np.swapaxes(k, -2, -1)) * scale
             attn = np.exp(scores - np.max(scores, axis=-1, keepdims=True))
             attn = attn / (np.sum(attn, axis=-1, keepdims=True) + 1e-10)
-            return SyscallResult(success=True, value={"output": np.matmul(attn, v), "attention_weights": attn})
+            return SyscallResult(
+                success=True, value={"output": np.matmul(attn, v), "attention_weights": attn}
+            )
         elif command == "loss":
             pred, tgt = args[0], args[1]
             if kwargs.get("loss_fn") == "cross_entropy":
@@ -448,13 +520,22 @@ class TokenizerDevice(DeviceDriver):
         if command == "encode":
             text = args[0] if args else ""
             if self._tokenizer and hasattr(self._tokenizer, "encode"):
-                return SyscallResult(success=True, value={"tokens": self._tokenizer.encode(text), "encoding": "custom"})
-            return SyscallResult(success=True, value={"tokens": list(text.encode("utf-8")), "encoding": "byte-level"})
+                return SyscallResult(
+                    success=True,
+                    value={"tokens": self._tokenizer.encode(text), "encoding": "custom"},
+                )
+            return SyscallResult(
+                success=True, value={"tokens": list(text.encode("utf-8")), "encoding": "byte-level"}
+            )
         elif command == "decode":
             token_ids = args[0] if args else []
             if self._tokenizer and hasattr(self._tokenizer, "decode"):
-                return SyscallResult(success=True, value={"text": self._tokenizer.decode(token_ids)})
-            return SyscallResult(success=True, value={"text": bytes(token_ids).decode("utf-8", errors="replace")})
+                return SyscallResult(
+                    success=True, value={"text": self._tokenizer.decode(token_ids)}
+                )
+            return SyscallResult(
+                success=True, value={"text": bytes(token_ids).decode("utf-8", errors="replace")}
+            )
         return None
 
     def info(self) -> dict:
@@ -474,7 +555,9 @@ class EmbeddingStoreDevice(DeviceDriver):
     def get_store(self, name: str) -> NeuralEmbeddingStore | None:
         return self._stores.get(name)
 
-    def create_store(self, name: str, vocab_size: int = 1000, embed_dim: int = 64) -> NeuralEmbeddingStore:
+    def create_store(
+        self, name: str, vocab_size: int = 1000, embed_dim: int = 64
+    ) -> NeuralEmbeddingStore:
         store = NeuralEmbeddingStore(vocab_size=vocab_size, embed_dim=embed_dim)
         self._stores[name] = store
         return store
@@ -488,7 +571,9 @@ class EmbeddingStoreDevice(DeviceDriver):
     def ioctl(self, command: str, *args: Any, **kwargs: Any) -> Any:
         store_name = kwargs.get("store_name", "default")
         if command == "create":
-            self.create_store(store_name, kwargs.get("vocab_size", 1000), kwargs.get("embed_dim", 64))
+            self.create_store(
+                store_name, kwargs.get("vocab_size", 1000), kwargs.get("embed_dim", 64)
+            )
             return SyscallResult(success=True)
         store = self._stores.get(store_name)
         if store is None:
@@ -497,10 +582,14 @@ class EmbeddingStoreDevice(DeviceDriver):
             vecs = store.lookup(np.array(args[0] if args else []))
             return SyscallResult(success=True, value={"vectors": vecs, "shape": vecs.shape})
         elif command == "update":
-            count = store.update(np.array(args[0] if args else []), args[1] if len(args) > 1 else None)
+            count = store.update(
+                np.array(args[0] if args else []), args[1] if len(args) > 1 else None
+            )
             return SyscallResult(success=True, value={"updated": count})
         elif command == "nearest":
-            return SyscallResult(success=True, value={"nearest": store.nearest(args[0], k=kwargs.get("k", 5))})
+            return SyscallResult(
+                success=True, value={"nearest": store.nearest(args[0], k=kwargs.get("k", 5))}
+            )
         return None
 
     def info(self) -> dict:
@@ -516,8 +605,9 @@ class MultiHeadAttentionDevice(DeviceDriver):
         self._head_dim = head_dim
         self._compute_count = 0
 
-    def _compute_attention(self, q: np.ndarray, k: np.ndarray,
-                           v: np.ndarray, mask: np.ndarray | None = None) -> np.ndarray:
+    def _compute_attention(
+        self, q: np.ndarray, k: np.ndarray, v: np.ndarray, mask: np.ndarray | None = None
+    ) -> np.ndarray:
         self._compute_count += 1
         d_k = q.shape[-1]
         scores = np.matmul(q, np.swapaxes(k, -2, -1)) / math.sqrt(d_k)
@@ -535,7 +625,9 @@ class MultiHeadAttentionDevice(DeviceDriver):
 
     def ioctl(self, command: str, *args: Any, **kwargs: Any) -> Any:
         if command == "attention" and len(args) >= 3:
-            return self._compute_attention(args[0], args[1], args[2], args[3] if len(args) > 3 else None)
+            return self._compute_attention(
+                args[0], args[1], args[2], args[3] if len(args) > 3 else None
+            )
         return None
 
     def info(self) -> dict:
@@ -548,6 +640,7 @@ class MultiHeadAttentionDevice(DeviceDriver):
 
 # --- Neural Interrupts & Syscalls ---
 
+
 class NeuralInterrupt:
     @staticmethod
     def inference_done(pid: int, result: Any = None) -> Interrupt:
@@ -555,15 +648,21 @@ class NeuralInterrupt:
 
     @staticmethod
     def training_step(pid: int, loss: float = 0.0, step: int = 0) -> Interrupt:
-        return Interrupt(vector=InterruptType.TRAINING_STEP, source_pid=pid, data={"loss": loss, "step": step})
+        return Interrupt(
+            vector=InterruptType.TRAINING_STEP, source_pid=pid, data={"loss": loss, "step": step}
+        )
 
     @staticmethod
     def gradient_update(pid: int, grad_norm: float = 0.0) -> Interrupt:
-        return Interrupt(vector=InterruptType.GRADIENT_UPDATE, source_pid=pid, data={"grad_norm": grad_norm})
+        return Interrupt(
+            vector=InterruptType.GRADIENT_UPDATE, source_pid=pid, data={"grad_norm": grad_norm}
+        )
 
     @staticmethod
     def data_ready(pid: int, batch_size: int = 0) -> Interrupt:
-        return Interrupt(vector=InterruptType.DATA_READY, source_pid=pid, data={"batch_size": batch_size})
+        return Interrupt(
+            vector=InterruptType.DATA_READY, source_pid=pid, data={"batch_size": batch_size}
+        )
 
 
 class NeuralSyscall:
@@ -574,7 +673,11 @@ class NeuralSyscall:
     def forward(neural_proc: NeuralProcess, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         neural_proc.transition_neural(NeuralState.COMPUTING)
         try:
-            outputs = neural_proc.model_ref.forward(inputs) if neural_proc.model_ref and hasattr(neural_proc.model_ref, "forward") else inputs
+            outputs = (
+                neural_proc.model_ref.forward(inputs)
+                if neural_proc.model_ref and hasattr(neural_proc.model_ref, "forward")
+                else inputs
+            )
             neural_proc.output_tensors = outputs
             neural_proc.transition_neural(NeuralState.COMPLETE)
             return outputs
@@ -584,10 +687,16 @@ class NeuralSyscall:
             raise
 
     @staticmethod
-    def backward(neural_proc: NeuralProcess, grad_output: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    def backward(
+        neural_proc: NeuralProcess, grad_output: dict[str, np.ndarray]
+    ) -> dict[str, np.ndarray]:
         neural_proc.transition_neural(NeuralState.BACKPROPAGATING)
         try:
-            grads = neural_proc.model_ref.backward(grad_output) if neural_proc.model_ref and hasattr(neural_proc.model_ref, "backward") else {}
+            grads = (
+                neural_proc.model_ref.backward(grad_output)
+                if neural_proc.model_ref and hasattr(neural_proc.model_ref, "backward")
+                else {}
+            )
             for name, grad in grads.items():
                 neural_proc.store_gradient(name, grad)
             neural_proc.transition_neural(NeuralState.COMPLETE)
@@ -606,12 +715,18 @@ class NeuralSyscall:
         return np.zeros(384)
 
     @staticmethod
-    def attention(device: Any, q: np.ndarray, k: np.ndarray,
-                  v: np.ndarray, mask: np.ndarray | None = None) -> np.ndarray:
-        return device._compute_attention(q, k, v, mask) if hasattr(device, '_compute_attention') else np.zeros_like(q)
+    def attention(
+        device: Any, q: np.ndarray, k: np.ndarray, v: np.ndarray, mask: np.ndarray | None = None
+    ) -> np.ndarray:
+        return (
+            device._compute_attention(q, k, v, mask)
+            if hasattr(device, "_compute_attention")
+            else np.zeros_like(q)
+        )
 
 
 # --- Gradient Accumulator ---
+
 
 class GradientAccumulator:
     def __init__(self, max_grad_norm: float = 1.0, accumulation_steps: int = 1):
@@ -634,8 +749,13 @@ class GradientAccumulator:
         with self._lock:
             self._step_count += 1
             for name, grad in gradients.items():
-                self._accumulated[name] = self._accumulated.get(name, np.zeros_like(grad)) + grad / self._accumulation_steps
-            self._total_norm = math.sqrt(sum(float(np.sum(g ** 2)) for g in self._accumulated.values()))
+                self._accumulated[name] = (
+                    self._accumulated.get(name, np.zeros_like(grad))
+                    + grad / self._accumulation_steps
+                )
+            self._total_norm = math.sqrt(
+                sum(float(np.sum(g**2)) for g in self._accumulated.values())
+            )
             return self.ready
 
     def get_clipped_gradients(self) -> dict[str, np.ndarray]:
@@ -653,12 +773,18 @@ class GradientAccumulator:
 
     def stats(self) -> dict:
         with self._lock:
-            return {"step_count": self._step_count, "accumulation_steps": self._accumulation_steps,
-                    "total_norm": self._total_norm, "max_grad_norm": self._max_grad_norm,
-                    "ready": self.ready, "param_groups": len(self._accumulated)}
+            return {
+                "step_count": self._step_count,
+                "accumulation_steps": self._accumulation_steps,
+                "total_norm": self._total_norm,
+                "max_grad_norm": self._max_grad_norm,
+                "ready": self.ready,
+                "param_groups": len(self._accumulated),
+            }
 
 
 # --- Batch Processor ---
+
 
 @dataclass
 class BatchRequest:
@@ -678,8 +804,12 @@ class BatchResult:
 
 
 class BatchProcessor:
-    def __init__(self, max_batch_size: int = 32, max_wait_ms: float = 10.0,
-                 process_fn: Callable | None = None):
+    def __init__(
+        self,
+        max_batch_size: int = 32,
+        max_wait_ms: float = 10.0,
+        process_fn: Callable | None = None,
+    ):
         self._max_batch_size = max_batch_size
         self._max_wait_ms = max_wait_ms
         self._process_fn = process_fn
@@ -706,18 +836,24 @@ class BatchProcessor:
         with self._lock:
             if not self._queue:
                 return []
-            batch = self._queue[:self._max_batch_size]
-            self._queue = self._queue[self._max_batch_size:]
+            batch = self._queue[: self._max_batch_size]
+            self._queue = self._queue[self._max_batch_size :]
         results = []
         self._total_batches += 1
         start = time.time()
         for req in batch:
             try:
                 outputs = self._process_fn(req.inputs) if self._process_fn else req.inputs
-                results.append(BatchResult(id=req.id, outputs=outputs, elapsed_ms=(time.time() - start) * 1000))
+                results.append(
+                    BatchResult(id=req.id, outputs=outputs, elapsed_ms=(time.time() - start) * 1000)
+                )
             except Exception as e:
                 self._total_errors += 1
-                results.append(BatchResult(id=req.id, outputs={}, error=str(e), elapsed_ms=(time.time() - start) * 1000))
+                results.append(
+                    BatchResult(
+                        id=req.id, outputs={}, error=str(e), elapsed_ms=(time.time() - start) * 1000
+                    )
+                )
         for req in batch:
             if req.callback is not None:
                 try:
@@ -737,9 +873,13 @@ class BatchProcessor:
 
     def stats(self) -> dict:
         with self._lock:
-            return {"queue_size": len(self._queue), "max_batch_size": self._max_batch_size,
-                    "total_batches": self._total_batches, "total_requests": self._total_requests,
-                    "total_errors": self._total_errors}
+            return {
+                "queue_size": len(self._queue),
+                "max_batch_size": self._max_batch_size,
+                "total_batches": self._total_batches,
+                "total_requests": self._total_requests,
+                "total_errors": self._total_errors,
+            }
 
 
 # --- NeuralKernel convenience class ---
@@ -748,44 +888,57 @@ class BatchProcessor:
 def __getattr__(name: str):
     if name == "NeuralKernel":
         from ..kernel import NeuralKernel
+
         return NeuralKernel
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # --- Addon setup ---
 
+
 def _install_facade(kernel: Any) -> None:
     """Attach all neural facade functions and property descriptors to the kernel."""
+    from ..kernel import Kernel
     from .neural_bindings import (
-        engine as _engine_prop,
-        tokenizer_device as _tok_prop,
-        embedding_device as _emb_prop,
-        kv_caches as _kv_prop,
-        gradient_accumulator as _grad_prop,
-        batch_processor as _batch_prop,
-        embedding_store,
+        attention,
+        backward,
+        cleanup_pid,
+        create_embedding_store,
+        create_kv_cache,
         create_neural_process,
-        get_neural_process,
-        list_neural_processes,
-        tokenize,
         detokenize,
         embed,
         embed_text,
-        create_embedding_store,
-        create_kv_cache,
-        get_kv_cache,
-        remove_kv_cache,
-        generate,
+        embedding_store,
         forward,
-        backward,
-        attention,
+        generate,
+        get_kv_cache,
+        get_neural_process,
+        list_neural_processes,
+        neural_stats,
         neural_syscall,
         register_devices,
-        cleanup_pid,
-        neural_stats,
+        remove_kv_cache,
+        tokenize,
     )
-
-    from ..kernel import Kernel
+    from .neural_bindings import (
+        batch_processor as _batch_prop,
+    )
+    from .neural_bindings import (
+        embedding_device as _emb_prop,
+    )
+    from .neural_bindings import (
+        engine as _engine_prop,
+    )
+    from .neural_bindings import (
+        gradient_accumulator as _grad_prop,
+    )
+    from .neural_bindings import (
+        kv_caches as _kv_prop,
+    )
+    from .neural_bindings import (
+        tokenizer_device as _tok_prop,
+    )
 
     # Install property descriptors on the Kernel class (shared by all instances)
     for name, prop in [
@@ -840,16 +993,21 @@ def setup(kernel: Any) -> None:
 
     def _handle_tokenize(caller: Any, text: str, **kw: Any) -> dict:
         from .neural_bindings import tokenize as _tokenize
+
         return {"tokens": _tokenize(kernel, text)}
 
     def _handle_generate(caller: Any, text: str, model_name: str = "", **kw: Any) -> dict:
         result = kernel._engine.ioctl("generate", model_name, text, **kw)
-        if result and hasattr(result, 'value') and result.value:
+        if result and hasattr(result, "value") and result.value:
             return result.value
         return {"token_count": 0, "tokens": []}
 
-    kernel._syscall_table.register(NeuralSyscall.TOKENIZE, "neural_tokenize", _handle_tokenize, description="Neural tokenize")
-    kernel._syscall_table.register(NeuralSyscall.GENERATE, "neural_generate", _handle_generate, description="Neural generate")
+    kernel._syscall_table.register(
+        NeuralSyscall.TOKENIZE, "neural_tokenize", _handle_tokenize, description="Neural tokenize"
+    )
+    kernel._syscall_table.register(
+        NeuralSyscall.GENERATE, "neural_generate", _handle_generate, description="Neural generate"
+    )
     kernel.register_device(kernel._engine)
     kernel.register_device(kernel._tokenizer_device)
     kernel.register_device(kernel._embedding_device)

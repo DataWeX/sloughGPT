@@ -16,8 +16,9 @@ class TestArchConfigDefaults:
             ArchConfig()
 
     def test_defaults(self):
-        arch = ArchConfig(name="x", norm="rms_norm", positional="rope",
-                          activation="swiglu", attention="gqa")
+        arch = ArchConfig(
+            name="x", norm="rms_norm", positional="rope", activation="swiglu", attention="gqa"
+        )
         assert arch.weight_map == {}
         assert arch.transpose_weights is False
         assert arch.n_head == 0
@@ -30,10 +31,18 @@ class TestArchConfigDefaults:
 
     def test_constructor_args(self):
         arch = ArchConfig(
-            name="x", norm="layer_norm", positional="absolute",
-            activation="gelu", attention="mha",
-            weight_map={"a": "b"}, transpose_weights=True,
-            n_head=4, n_kv_head=4, n_embed=16, n_layers=2, head_dim=4,
+            name="x",
+            norm="layer_norm",
+            positional="absolute",
+            activation="gelu",
+            attention="mha",
+            weight_map={"a": "b"},
+            transpose_weights=True,
+            n_head=4,
+            n_kv_head=4,
+            n_embed=16,
+            n_layers=2,
+            head_dim=4,
         )
         assert arch.n_head == 4
         assert arch.head_dim == 4
@@ -42,26 +51,43 @@ class TestArchConfigDefaults:
 
 class TestResolve:
     def test_substitutes_layer(self):
-        arch = ArchConfig(name="x", norm="n", positional="p",
-                          activation="a", attention="m",
-                          weight_map={"layers.{i}.q.weight": "model.layers.{i}.self_attn.q_proj.weight"})
-        assert arch.resolve("layers.{i}.q.weight", layer_idx=3) == "model.layers.3.self_attn.q_proj.weight"
+        arch = ArchConfig(
+            name="x",
+            norm="n",
+            positional="p",
+            activation="a",
+            attention="m",
+            weight_map={"layers.{i}.q.weight": "model.layers.{i}.self_attn.q_proj.weight"},
+        )
+        assert (
+            arch.resolve("layers.{i}.q.weight", layer_idx=3)
+            == "model.layers.3.self_attn.q_proj.weight"
+        )
 
     def test_no_placeholder_key(self):
-        arch = ArchConfig(name="x", norm="n", positional="p",
-                          activation="a", attention="m",
-                          weight_map={"embed.token": "wte.weight"})
+        arch = ArchConfig(
+            name="x",
+            norm="n",
+            positional="p",
+            activation="a",
+            attention="m",
+            weight_map={"embed.token": "wte.weight"},
+        )
         assert arch.resolve("embed.token") == "wte.weight"
 
     def test_unmapped_key_passthrough(self):
-        arch = ArchConfig(name="x", norm="n", positional="p",
-                          activation="a", attention="m")
+        arch = ArchConfig(name="x", norm="n", positional="p", activation="a", attention="m")
         assert arch.resolve("something.else") == "something.else"
 
     def test_default_layer_zero(self):
-        arch = ArchConfig(name="x", norm="n", positional="p",
-                          activation="a", attention="m",
-                          weight_map={"layers.{i}.q.weight": "q.{i}"})
+        arch = ArchConfig(
+            name="x",
+            norm="n",
+            positional="p",
+            activation="a",
+            attention="m",
+            weight_map={"layers.{i}.q.weight": "q.{i}"},
+        )
         assert arch.resolve("layers.{i}.q.weight") == "q.0"
 
 
@@ -74,7 +100,10 @@ class TestWeightMaps:
 
     def test_llama_map_shape(self):
         assert LLAMA_WEIGHT_MAP["embed.token"] == "model.embed_tokens.weight"
-        assert LLAMA_WEIGHT_MAP["layers.{i}.ffn.gate.weight"] == "model.layers.{i}.mlp.gate_proj.weight"
+        assert (
+            LLAMA_WEIGHT_MAP["layers.{i}.ffn.gate.weight"]
+            == "model.layers.{i}.mlp.gate_proj.weight"
+        )
         assert LLAMA_WEIGHT_MAP["final_norm.weight"] == "model.norm.weight"
 
 
@@ -102,10 +131,19 @@ class TestBuildArch:
         assert arch.head_dim == 64
 
     def test_llama_detection_rms_swiglu_gqa(self):
-        config = {"architectures": ["LlamaForCausalLM"], "num_attention_heads": 8,
-                  "num_key_value_heads": 4, "hidden_size": 512, "num_hidden_layers": 2}
-        keys = {"model.embed_tokens.weight", "model.layers.0.self_attn.q_proj.weight",
-                "model.layers.0.input_layernorm.weight", "model.layers.0.mlp.gate_proj.weight"}
+        config = {
+            "architectures": ["LlamaForCausalLM"],
+            "num_attention_heads": 8,
+            "num_key_value_heads": 4,
+            "hidden_size": 512,
+            "num_hidden_layers": 2,
+        }
+        keys = {
+            "model.embed_tokens.weight",
+            "model.layers.0.self_attn.q_proj.weight",
+            "model.layers.0.input_layernorm.weight",
+            "model.layers.0.mlp.gate_proj.weight",
+        }
         arch = build_arch("llama", config, keys)
         assert arch.norm == "rms_norm"
         assert arch.positional == "rope"
@@ -118,25 +156,43 @@ class TestBuildArch:
         assert arch.n_layers == 2
 
     def test_llama_without_gate_uses_gelu(self):
-        config = {"architectures": ["MistralForCausalLM"], "num_attention_heads": 4,
-                  "num_key_value_heads": 4, "hidden_size": 256, "num_hidden_layers": 1}
-        keys = {"model.embed_tokens.weight", "model.layers.0.self_attn.q_proj.weight",
-                "model.layers.0.input_layernorm.weight"}
+        config = {
+            "architectures": ["MistralForCausalLM"],
+            "num_attention_heads": 4,
+            "num_key_value_heads": 4,
+            "hidden_size": 256,
+            "num_hidden_layers": 1,
+        }
+        keys = {
+            "model.embed_tokens.weight",
+            "model.layers.0.self_attn.q_proj.weight",
+            "model.layers.0.input_layernorm.weight",
+        }
         arch = build_arch("mistral", config, keys)
         assert arch.activation == "gelu"
         assert arch.attention == "mha"  # kv heads == q heads
 
     def test_llama_layer_norm_when_no_rms_key(self):
-        config = {"architectures": ["LlamaForCausalLM"], "num_attention_heads": 2,
-                  "num_key_value_heads": 2, "hidden_size": 64, "num_hidden_layers": 1}
+        config = {
+            "architectures": ["LlamaForCausalLM"],
+            "num_attention_heads": 2,
+            "num_key_value_heads": 2,
+            "hidden_size": 64,
+            "num_hidden_layers": 1,
+        }
         keys = {"model.embed_tokens.weight", "model.layers.0.self_attn.q_proj.weight"}
         arch = build_arch("qwen", config, keys)
         assert arch.norm == "layer_norm"
 
     def test_rope_base_from_config(self):
-        config = {"architectures": ["LlamaForCausalLM"], "num_attention_heads": 2,
-                  "num_key_value_heads": 2, "hidden_size": 64, "num_hidden_layers": 1,
-                  "rope_theta": 1000000.0}
+        config = {
+            "architectures": ["LlamaForCausalLM"],
+            "num_attention_heads": 2,
+            "num_key_value_heads": 2,
+            "hidden_size": 64,
+            "num_hidden_layers": 1,
+            "rope_theta": 1000000.0,
+        }
         keys = {"model.embed_tokens.weight", "model.layers.0.self_attn.q_proj.weight"}
         arch = build_arch("qwen", config, keys)
         assert arch.rope_base == 1000000.0

@@ -24,158 +24,166 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Optional
 
 from domain.infrastructure._internal.event_buffer import get_event_buffer
 
 logger = logging.getLogger(__name__)
 
 
-_WATCHED_TAGS = frozenset({
-    "TRAIN", "MODEL", "INFRA", "ERROR", "CHAT", "SOUL", "START", "IDLE",
-    "DOWNLOAD", "SLOW", "INFERENCE", "WORKFLOW", "UI",
-})
+_WATCHED_TAGS = frozenset(
+    {
+        "TRAIN",
+        "MODEL",
+        "INFRA",
+        "ERROR",
+        "CHAT",
+        "SOUL",
+        "START",
+        "IDLE",
+        "DOWNLOAD",
+        "SLOW",
+        "INFERENCE",
+        "WORKFLOW",
+        "UI",
+    }
+)
 
 # slo.log v1: op prefix → dashboard category
 _WATCHED_OPS = {
-    "train":     "TRAIN",
-    "model":     "MODEL",
-    "infer":     "INFERENCE",
-    "http":      "INFRA",
-    "rag":       "COG",
-    "download":  "DOWNLOAD",
-    "workflow":  "WORKFLOW",
-    "sys":       "SYSTEM",
-    "infra":     "INFRA",
-    "web":       "CHAT",
-    "ui":        "UI",
+    "train": "TRAIN",
+    "model": "MODEL",
+    "infer": "INFERENCE",
+    "http": "INFRA",
+    "rag": "COG",
+    "download": "DOWNLOAD",
+    "workflow": "WORKFLOW",
+    "sys": "SYSTEM",
+    "infra": "INFRA",
+    "web": "CHAT",
+    "ui": "UI",
 }
 
 _PATTERNS: list[tuple[re.Pattern, str, str]] = [
     # ── Training ───────────────────────────────────────────────────
     # Step with loss: "step 310/500 — loss 2.341"
-    (re.compile(r"step\s+(\d+)/(\d+).*?loss[:\s]+([\d.]+)", re.I),
-     "TRAIN", "Train step {1}/{2} — loss {3}"),
+    (
+        re.compile(r"step\s+(\d+)/(\d+).*?loss[:\s]+([\d.]+)", re.I),
+        "TRAIN",
+        "Train step {1}/{2} — loss {3}",
+    ),
     # Step without loss
-    (re.compile(r"step\s+(\d+)/(\d+)", re.I),
-     "TRAIN", "Train step {1}/{2}"),
+    (re.compile(r"step\s+(\d+)/(\d+)", re.I), "TRAIN", "Train step {1}/{2}"),
     # Epoch progress: "epoch 2/10"
-    (re.compile(r"epoch\s+(\d+)/(\d+)", re.I),
-     "TRAIN", "Epoch {1}/{2}"),
+    (re.compile(r"epoch\s+(\d+)/(\d+)", re.I), "TRAIN", "Epoch {1}/{2}"),
     # Training complete
-    (re.compile(r"train(?:ing)?\s+(?:complete|finished|done)", re.I),
-     "TRAIN", "Training complete"),
+    (re.compile(r"train(?:ing)?\s+(?:complete|finished|done)", re.I), "TRAIN", "Training complete"),
     # Training started
-    (re.compile(r"train(?:ing)?\s+started", re.I),
-     "TRAIN", "Training started"),
+    (re.compile(r"train(?:ing)?\s+started", re.I), "TRAIN", "Training started"),
     # Training failed
-    (re.compile(r"train(?:ing)?\s+(?:failed|error)", re.I),
-     "TRAIN", "Training failed"),
+    (re.compile(r"train(?:ing)?\s+(?:failed|error)", re.I), "TRAIN", "Training failed"),
     # Checkpoint saved: "checkpoint saved: ep3.soul"
-    (re.compile(r"checkpoint\s+saved[:\s]+(\S+)", re.I),
-     "TRAIN", "Checkpoint saved: {1}"),
+    (re.compile(r"checkpoint\s+saved[:\s]+(\S+)", re.I), "TRAIN", "Checkpoint saved: {1}"),
     # Distillation
-    (re.compile(r"distill(?:ation)?\s+(?:complete|finished)", re.I),
-     "TRAIN", "Distillation complete"),
+    (
+        re.compile(r"distill(?:ation)?\s+(?:complete|finished)", re.I),
+        "TRAIN",
+        "Distillation complete",
+    ),
     # Eval result
-    (re.compile(r"eval.*?loss[:\s]+([\d.]+)", re.I),
-     "TRAIN", "Eval loss: {1}"),
+    (re.compile(r"eval.*?loss[:\s]+([\d.]+)", re.I), "TRAIN", "Eval loss: {1}"),
     # Auto-train complete
-    (re.compile(r"auto.?train(?:ing)?\s+complete", re.I),
-     "TRAIN", "Auto-train complete"),
+    (re.compile(r"auto.?train(?:ing)?\s+complete", re.I), "TRAIN", "Auto-train complete"),
     # Auto-train started
-    (re.compile(r"auto.?train(?:ing)?\s+started", re.I),
-     "TRAIN", "Auto-train started"),
+    (re.compile(r"auto.?train(?:ing)?\s+started", re.I), "TRAIN", "Auto-train started"),
     # Self-train started
-    (re.compile(r"self.?train(?:ing)?\s+started.*?pid[=\s]+(\d+)", re.I),
-     "TRAIN", "Self-train started (pid {1})"),
+    (
+        re.compile(r"self.?train(?:ing)?\s+started.*?pid[=\s]+(\d+)", re.I),
+        "TRAIN",
+        "Self-train started (pid {1})",
+    ),
     # Self-train stopped
-    (re.compile(r"self.?train(?:ing)?\s+stopped", re.I),
-     "TRAIN", "Self-train stopped"),
-
+    (re.compile(r"self.?train(?:ing)?\s+stopped", re.I), "TRAIN", "Self-train stopped"),
     # ── Model ──────────────────────────────────────────────────────
     # Model loaded with params: "loaded gpt2 (124M params)"
-    (re.compile(r"(?:loaded|model loaded|loading model)[:\s]+(\S+).*?(\d+[MmKk]?\s*param)", re.I),
-     "MODEL", "Loaded {1} ({2})"),
+    (
+        re.compile(
+            r"(?:loaded|model loaded|loading model)[:\s]+(\S+).*?(\d+[MmKk]?\s*param)", re.I
+        ),
+        "MODEL",
+        "Loaded {1} ({2})",
+    ),
     # Model loaded simple
-    (re.compile(r"(?:loaded|model loaded)[:\s]+(\S+)", re.I),
-     "MODEL", "Loaded {1}"),
+    (re.compile(r"(?:loaded|model loaded)[:\s]+(\S+)", re.I), "MODEL", "Loaded {1}"),
     # Model unloaded
-    (re.compile(r"(?:unloaded|unloading)[:\s]+(\S+)", re.I),
-     "MODEL", "Unloaded {1}"),
+    (re.compile(r"(?:unloaded|unloading)[:\s]+(\S+)", re.I), "MODEL", "Unloaded {1}"),
     # Idle unload
-    (re.compile(r"unloading.*?idle|idle.*?unload", re.I),
-     "MODEL", "Model unloaded (idle)"),
+    (re.compile(r"unloading.*?idle|idle.*?unload", re.I), "MODEL", "Model unloaded (idle)"),
     # Model swap
-    (re.compile(r"model\s+sw(?:ap|itched)\s+(?:to|from)\s+(\S+)", re.I),
-     "MODEL", "Model swapped to {1}"),
+    (
+        re.compile(r"model\s+sw(?:ap|itched)\s+(?:to|from)\s+(\S+)", re.I),
+        "MODEL",
+        "Model swapped to {1}",
+    ),
     # Soul loaded
-    (re.compile(r"soul\s+loaded[:\s]+(\S+)", re.I),
-     "MODEL", "Soul loaded: {1}"),
+    (re.compile(r"soul\s+loaded[:\s]+(\S+)", re.I), "MODEL", "Soul loaded: {1}"),
     # Soul switched
-    (re.compile(r"soul\s+switched\s+to[:\s]+(\S+)", re.I),
-     "MODEL", "Soul switched: {1}"),
-
+    (re.compile(r"soul\s+switched\s+to[:\s]+(\S+)", re.I), "MODEL", "Soul switched: {1}"),
     # ── Inference ──────────────────────────────────────────────────
     # First token latency
-    (re.compile(r"first.?token.*?(\d+)\s*ms", re.I),
-     "INFERENCE", "First token: {1}ms"),
+    (re.compile(r"first.?token.*?(\d+)\s*ms", re.I), "INFERENCE", "First token: {1}ms"),
     # Generate complete
-    (re.compile(r"generate.*?(\d+)\s*tokens?\s*in\s*([\d.]+)\s*s", re.I),
-     "INFERENCE", "Generated {1} tokens in {2}s"),
+    (
+        re.compile(r"generate.*?(\d+)\s*tokens?\s*in\s*([\d.]+)\s*s", re.I),
+        "INFERENCE",
+        "Generated {1} tokens in {2}s",
+    ),
     # Stream stall
-    (re.compile(r"stream\s+stall", re.I),
-     "INFERENCE", "Stream stall detected"),
+    (re.compile(r"stream\s+stall", re.I), "INFERENCE", "Stream stall detected"),
     # Client disconnect
-    (re.compile(r"client\s+disconnect", re.I),
-     "INFERENCE", "Client disconnected"),
-
+    (re.compile(r"client\s+disconnect", re.I), "INFERENCE", "Client disconnected"),
     # ── System ─────────────────────────────────────────────────────
     # Server ready
-    (re.compile(r"server\s+ready|uvicorn\s+running|startup\s+complete", re.I),
-     "SYSTEM", "Server ready"),
+    (
+        re.compile(r"server\s+ready|uvicorn\s+running|startup\s+complete", re.I),
+        "SYSTEM",
+        "Server ready",
+    ),
     # Idle manager
-    (re.compile(r"idle\s+manager\s+active", re.I),
-     "SYSTEM", "Idle manager active"),
+    (re.compile(r"idle\s+manager\s+active", re.I), "SYSTEM", "Idle manager active"),
     # Cancel
-    (re.compile(r"cancel(?:led|ing)?", re.I),
-     "SYSTEM", "Operation cancelled"),
-
+    (re.compile(r"cancel(?:led|ing)?", re.I), "SYSTEM", "Operation cancelled"),
     # ── Download ───────────────────────────────────────────────────
     # Download progress: "downloaded 45%" or "45% — 120MB/267MB"
-    (re.compile(r"download.*?(\d+)%.*?(\d+\.?\d*)\s*[MmGg].*?/.*?(\d+\.?\d*)\s*[MmGg]", re.I),
-     "DOWNLOAD", "Download {1}% — {2}/{3}MB"),
-    (re.compile(r"download.*?(\d+)%", re.I),
-     "DOWNLOAD", "Download {1}%"),
+    (
+        re.compile(r"download.*?(\d+)%.*?(\d+\.?\d*)\s*[MmGg].*?/.*?(\d+\.?\d*)\s*[MmGg]", re.I),
+        "DOWNLOAD",
+        "Download {1}% — {2}/{3}MB",
+    ),
+    (re.compile(r"download.*?(\d+)%", re.I), "DOWNLOAD", "Download {1}%"),
     # Download complete
-    (re.compile(r"download\s+complete", re.I),
-     "DOWNLOAD", "Download complete"),
+    (re.compile(r"download\s+complete", re.I), "DOWNLOAD", "Download complete"),
     # Download failed
-    (re.compile(r"download\s+(?:failed|error)", re.I),
-     "DOWNLOAD", "Download failed"),
-
+    (re.compile(r"download\s+(?:failed|error)", re.I), "DOWNLOAD", "Download failed"),
     # ── Workflow ───────────────────────────────────────────────────
     # Feedback workflow
-    (re.compile(r"feedback\s+workflow\s+(?:started|stopped|complete)", re.I),
-     "WORKFLOW", "Feedback workflow {1}"),
+    (
+        re.compile(r"feedback\s+workflow\s+(?:started|stopped|complete)", re.I),
+        "WORKFLOW",
+        "Feedback workflow {1}",
+    ),
     # Webhook
-    (re.compile(r"webhook\s+(?:sent|failed|notification)", re.I),
-     "WORKFLOW", "Webhook {1}"),
-
+    (re.compile(r"webhook\s+(?:sent|failed|notification)", re.I), "WORKFLOW", "Webhook {1}"),
     # ── Errors (last — catch-all) ──────────────────────────────────
     # Memory pressure
-    (re.compile(r"memory\s+pressure|oom|out\s+of\s+memory", re.I),
-     "ERROR", "Memory pressure"),
+    (re.compile(r"memory\s+pressure|oom|out\s+of\s+memory", re.I), "ERROR", "Memory pressure"),
     # Generic error with context
-    (re.compile(r"(error|exception|failed)[:\s]+(.{8,60})", re.I),
-     "ERROR", "{1}: {2}"),
+    (re.compile(r"(error|exception|failed)[:\s]+(.{8,60})", re.I), "ERROR", "{1}: {2}"),
     # Slow request
-    (re.compile(r"slow\s+request|SLOW.*?(\d+\.?\d*)s", re.I),
-     "SLOW", "Slow request ({1}s)"),
+    (re.compile(r"slow\s+request|SLOW.*?(\d+\.?\d*)s", re.I), "SLOW", "Slow request ({1}s)"),
 ]
 
 
-def _summarize_from_op(record: logging.LogRecord, op: str) -> Optional[tuple[str, str]]:
+def _summarize_from_op(record: logging.LogRecord, op: str) -> tuple[str, str] | None:
     """Build a punchy summary from slo.log v1 structured fields.
 
     Returns (category, message) or None if no good summary can be built.
@@ -241,7 +249,7 @@ def _summarize_from_op(record: logging.LogRecord, op: str) -> Optional[tuple[str
     return category, msg
 
 
-def _format_punchy(record: logging.LogRecord) -> Optional[tuple[str, str]]:
+def _format_punchy(record: logging.LogRecord) -> tuple[str, str] | None:
     """Extract a punchy (category, message) from a log record."""
     # Check slo.log v1 op first
     op = getattr(record, "op", None)

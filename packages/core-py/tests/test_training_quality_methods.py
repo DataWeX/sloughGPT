@@ -6,6 +6,7 @@ Tests the quality scoring system and training method-specific functionality.
 Usage:
     .venv/bin/python -m pytest tests/test_training_quality_methods.py -x -v
 """
+
 import tempfile
 
 DATA_TEXT = "The quick brown fox jumps over the lazy dog. " * 50
@@ -154,10 +155,13 @@ class TestTrainingDataFormats:
     def test_jsonl_file_training(self):
         from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
-        jsonl_data = "\n".join([
-            '{"user": "What is AI?", "assistant": "AI is artificial intelligence."}',
-            '{"user": "What is ML?", "assistant": "ML is machine learning."}',
-        ] * 10)
+        jsonl_data = "\n".join(
+            [
+                '{"user": "What is AI?", "assistant": "AI is artificial intelligence."}',
+                '{"user": "What is ML?", "assistant": "ML is machine learning."}',
+            ]
+            * 10
+        )
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             f.write(jsonl_data)
             f.flush()
@@ -168,11 +172,14 @@ class TestTrainingDataFormats:
     def test_multiline_text_training(self):
         from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
-        multiline_text = "\n".join([
-            "The quick brown fox jumps over the lazy dog.",
-            "Pack my box with five dozen liquor jugs.",
-            "How vexingly quick daft zebras jump!",
-        ] * 20)
+        multiline_text = "\n".join(
+            [
+                "The quick brown fox jumps over the lazy dog.",
+                "Pack my box with five dozen liquor jugs.",
+                "How vexingly quick daft zebras jump!",
+            ]
+            * 20
+        )
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(multiline_text)
             f.flush()
@@ -228,8 +235,8 @@ class TestPresetSystem:
             assert config["default_learning_rate"] > 0
 
     def test_preset_training_works(self):
-        from domain.training._internal.presets import apply_preset
         from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.presets import apply_preset
 
         apply_preset("quick-finetune")
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:

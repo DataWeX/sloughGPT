@@ -1,11 +1,10 @@
 """Tests for production knowledge graph."""
 
-import pytest
 from domain.cognitive._internal.knowledge_graph_v2 import (
     Entity,
     Fact,
-    RelationType,
     KnowledgeGraph,
+    RelationType,
 )
 
 
@@ -17,8 +16,9 @@ class TestEntity:
         assert e.confidence == 1.0
 
     def test_with_properties_and_aliases(self):
-        e = Entity(id="e1", label="test", entity_type="concept",
-                   properties={"color": "red"}, aliases={"t"})
+        e = Entity(
+            id="e1", label="test", entity_type="concept", properties={"color": "red"}, aliases={"t"}
+        )
         assert e.properties["color"] == "red"
         assert "t" in e.aliases
 
@@ -40,7 +40,9 @@ class TestFact:
         assert repr(f) == "(s, p, o)"
 
     def test_custom_values(self):
-        f = Fact(subject="s", predicate="p", object="o", confidence=0.5, source="wiki", verified=True)
+        f = Fact(
+            subject="s", predicate="p", object="o", confidence=0.5, source="wiki", verified=True
+        )
         assert f.confidence == 0.5
         assert f.source == "wiki"
         assert f.verified is True
@@ -351,7 +353,7 @@ class TestKnowledgeGraph:
     def test_large_graph(self):
         kg = KnowledgeGraph()
         for i in range(100):
-            kg.add_fact(f"entity_{i}", "related_to", f"entity_{(i+1)%100}")
+            kg.add_fact(f"entity_{i}", "related_to", f"entity_{(i + 1) % 100}")
         assert kg.stats["entities"] == 100
         assert kg.stats["facts"] == 100
 

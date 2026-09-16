@@ -9,35 +9,29 @@ handling.
 
 from __future__ import annotations
 
-import os
-import io
-import sys
 import socket
-import tempfile
 import threading
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-from domain.shell._internal.tensor_device import TensorDevice
-from domain.shell._internal.npu_device import NPUDevice
-from domain.shell._internal.storage_device import StorageDevice
-from domain.shell._internal.network_device import NetworkDevice
 from domain.shell._internal.display_device import DisplayDevice
 from domain.shell._internal.input_device import InputDevice
+from domain.shell._internal.ioctl import IoctlCommand
 from domain.shell._internal.kernel_devices import (
-    DeviceType,
-    DeviceState,
-    DeviceHandle,
     DeviceDriver,
-    DeviceTable,
     DeviceManager,
+    DeviceState,
+    DeviceTable,
+    DeviceType,
     NullDevice,
 )
-from domain.shell._internal.ioctl import IoctlCommand
 from domain.shell._internal.kernel_syscall import SyscallResult
-
+from domain.shell._internal.network_device import NetworkDevice
+from domain.shell._internal.npu_device import NPUDevice
+from domain.shell._internal.storage_device import StorageDevice
+from domain.shell._internal.tensor_device import TensorDevice
 
 # =============================================================================
 # TensorDevice
@@ -510,6 +504,7 @@ class TestNPUDevice:
     def dev_with_model(self, tmp_path):
         """NPUDevice with a fake model loaded."""
         npu = NPUDevice(name="test_npu_models")
+
         # Manually inject a fake model provider
         class FakeProvider:
             def __init__(self):
@@ -1257,7 +1252,7 @@ class TestInputDevice:
             assert result.value is False
 
     def test_ioctl_flush(self, dev):
-        with patch("termios.tcflush") as mock_flush:
+        with patch("termios.tcflush"):
             result = dev.ioctl("FLUSH")
             assert result.success
             assert result.value is True
@@ -1331,7 +1326,7 @@ class TestDeviceTable:
 
     def test_alloc_after_free(self, table):
         fd0 = table._alloc_fd()
-        fd1 = table._alloc_fd()
+        table._alloc_fd()
         table._free_fd(fd0)
         fd_new = table._alloc_fd()
         assert fd_new == fd0  # reuses freed fd
@@ -1442,7 +1437,7 @@ class TestDeviceTable:
 
     def test_ioctl_device_not_found(self, table):
         # Manually set fd bitmap without device
-        table._fd_bitmap |= (1 << 0)
+        table._fd_bitmap |= 1 << 0
         result = table.ioctl(0, "CMD")
         assert not result.success
         assert "no device" in result.error
@@ -1456,7 +1451,7 @@ class TestDeviceTable:
 
     def test_stats_with_device(self, table, sample_device):
         table.register(sample_device)
-        fd = table.open("sample")
+        table.open("sample")
         stats = table.stats()
         assert stats["total_devices"] == 1
         assert stats["open_fds"] == 1
@@ -1622,6 +1617,7 @@ class TestDeviceTableIntegration:
     def test_tensor_device_in_table(self):
         table = DeviceTable()
         tensor = TensorDevice("tensor0")
+
         # Wrap TensorDevice as a DeviceDriver
         class TensorDriver(DeviceDriver):
             def __init__(self):

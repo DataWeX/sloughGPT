@@ -5,8 +5,8 @@ Uses a standalone FastAPI app with only the router under test to avoid
 lifespan / startup dependency issues.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -347,7 +347,9 @@ class TestRunEvalCompareFailure:
     @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
     @patch("apps.api.server.routers.lora_eval.Path")
     @patch("domains.feedback.lora_eval.get_lora_evaluator")
-    def test_adapter_exists_but_second_run_raises_returns_baseline(self, mock_get_eval, mock_path_cls):
+    def test_adapter_exists_but_second_run_raises_returns_baseline(
+        self, mock_get_eval, mock_path_cls
+    ):
         evaluator = MagicMock()
         evaluator.run.side_effect = [_mock_eval_result(), RuntimeError("load failed")]
         mock_get_eval.return_value = evaluator

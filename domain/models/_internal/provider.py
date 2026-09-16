@@ -18,10 +18,11 @@ Built-in processors:
 from __future__ import annotations
 
 import asyncio
-import re
-from typing import AsyncIterator, Optional, List, Dict, Any, Protocol, runtime_checkable, Tuple
-from dataclasses import dataclass
 import logging
+import re
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger("slo.models.provider")
 
@@ -30,12 +31,13 @@ logger = logging.getLogger("slo.models.provider")
 # Types
 # =============================================================================
 
-ChatMessage = Dict[str, str]  # {"role": "user"|"assistant"|"system", "content": str}
+ChatMessage = dict[str, str]  # {"role": "user"|"assistant"|"system", "content": str}
 
 
 @dataclass
 class ModelCapabilities:
     """What a model can do."""
+
     chat: bool = False
     streaming: bool = False
     embedding: bool = False
@@ -46,6 +48,7 @@ class ModelCapabilities:
 # =============================================================================
 # ModelProvider — protocol every backend must satisfy
 # =============================================================================
+
 
 @runtime_checkable
 class ModelProvider(Protocol):
@@ -71,34 +74,35 @@ class ModelProvider(Protocol):
 
     async def chat_stream(
         self,
-        messages: List[ChatMessage],
+        messages: list[ChatMessage],
         max_tokens: int = 512,
         temperature: float = 0.7,
         top_p: float = 0.85,
         top_k: int = 40,
         repetition_penalty: float = 1.15,
         cancel_event=None,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         **kwargs,
     ) -> AsyncIterator[str]: ...
 
     async def chat(
         self,
-        messages: List[ChatMessage],
+        messages: list[ChatMessage],
         max_tokens: int = 512,
         temperature: float = 0.7,
         **kwargs,
     ) -> str: ...
 
-    def embed(self, text: str) -> List[float]: ...
+    def embed(self, text: str) -> list[float]: ...
 
     @property
-    def metadata(self) -> Dict[str, Any]: ...
+    def metadata(self) -> dict[str, Any]: ...
 
 
 # =============================================================================
 # MessageProcessor — protocol for message transformers
 # =============================================================================
+
 
 @runtime_checkable
 class MessageProcessor(Protocol):
@@ -115,7 +119,7 @@ class MessageProcessor(Protocol):
 # Provider registry
 # =============================================================================
 
-_providers: Dict[str, Any] = {}
+_providers: dict[str, Any] = {}
 
 
 def register_provider(name: str, provider) -> None:
@@ -128,7 +132,7 @@ def get_provider(name: str):
     return _providers.get(name)
 
 
-def list_providers() -> List[str]:
+def list_providers() -> list[str]:
     """List all registered provider names."""
     return list(_providers.keys())
 
@@ -177,7 +181,7 @@ def attach_process_guard_to_provider(process_guard: Any) -> bool:
 # Processor registry
 # =============================================================================
 
-_processors: Dict[str, Any] = {}
+_processors: dict[str, Any] = {}
 
 
 def register_processor(name: str, processor) -> None:
@@ -190,7 +194,7 @@ def get_processor(name: str):
     return _processors.get(name)
 
 
-def list_processors() -> List[str]:
+def list_processors() -> list[str]:
     """List all registered processor names."""
     return list(_processors.keys())
 
@@ -201,13 +205,16 @@ async def apply_processors(messages: list, processors: list) -> list:
         try:
             messages = await proc.process(messages)
         except Exception as e:
-            logger.warning("Processor %s failed: %s", type(proc).__name__, e, extra={"tag": "MODEL"})
+            logger.warning(
+                "Processor %s failed: %s", type(proc).__name__, e, extra={"tag": "MODEL"}
+            )
     return messages
 
 
 # =============================================================================
 # VisionProcessor — caption images, inject as text
 # =============================================================================
+
 
 class VisionProcessor:
     """Extracts images from messages, captions via vision provider, injects as text.
@@ -236,10 +243,14 @@ class VisionProcessor:
         if get_provider(self._provider_name) is not None:
             return True
         try:
-            from domain.multimodal._internal.manager import get_multimodal_manager, initialize_multimodal
+            from domain.multimodal._internal.manager import (
+                get_multimodal_manager,
+                initialize_multimodal,
+            )
+
             initialize_multimodal()
             mgr = get_multimodal_manager()
-            if hasattr(mgr, 'initialize'):
+            if hasattr(mgr, "initialize"):
                 mgr.initialize(vision_model="slonet")
             return get_provider(self._provider_name) is not None
         except Exception as e:
@@ -250,7 +261,12 @@ class VisionProcessor:
         vision = get_provider(self._provider_name)
         if vision is not None:
             try:
-                msg = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": img_data}}]}]
+                msg = [
+                    {
+                        "role": "user",
+                        "content": [{"type": "image_url", "image_url": {"url": img_data}}],
+                    }
+                ]
                 text = ""
                 async for token in vision.chat_stream(msg, max_tokens=30, temperature=0.8):
                     text += token
@@ -260,11 +276,15 @@ class VisionProcessor:
                 logger.debug("Vision chat_stream caption failed: %s", e)
         try:
             import base64
+
             clean = img_data.split(",")[1] if "," in img_data else img_data
-            from PIL import Image
             import io
+
+            from PIL import Image
+
             img = Image.open(io.BytesIO(base64.b64decode(clean))).convert("RGB")
             from domain.multimodal._internal.manager import get_multimodal_manager
+
             mgr = get_multimodal_manager()
             return mgr.caption_image(img).text
         except Exception as e:
@@ -276,12 +296,19 @@ class VisionProcessor:
         if not images:
             return messages
         if not self._ensure_provider():
-            logger.warning("Vision provider unavailable, stripping images from messages", extra={"tag": "MODEL"})
+            logger.warning(
+                "Vision provider unavailable, stripping images from messages",
+                extra={"tag": "MODEL"},
+            )
             result = []
             for msg in messages:
                 content = msg.get("content", "")
                 if isinstance(content, list):
-                    text_parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
+                    text_parts = [
+                        p.get("text", "")
+                        for p in content
+                        if isinstance(p, dict) and p.get("type") == "text"
+                    ]
                     content = "\n".join(text_parts)
                     if text_parts and msg.get("role") == "user":
                         content = f"{content}\n[Image attached but model does not support vision]"
@@ -301,7 +328,11 @@ class VisionProcessor:
         for msg in messages:
             content = msg.get("content", "")
             if isinstance(content, list):
-                text_parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
+                text_parts = [
+                    p.get("text", "")
+                    for p in content
+                    if isinstance(p, dict) and p.get("type") == "text"
+                ]
                 content = "\n".join(text_parts)
 
             if not injected and msg.get("role") == "user":
@@ -317,13 +348,14 @@ class VisionProcessor:
 # KnowledgeProcessor — inject knowledge context
 # =============================================================================
 
+
 class KnowledgeProcessor:
     """Injects knowledge/context into system messages."""
 
-    def __init__(self, knowledge: Optional[List[str]] = None):
+    def __init__(self, knowledge: list[str] | None = None):
         self._knowledge = knowledge or []
 
-    def set_knowledge(self, knowledge: List[str]) -> None:
+    def set_knowledge(self, knowledge: list[str]) -> None:
         self._knowledge = knowledge
 
     async def process(self, messages: list) -> list:
@@ -337,6 +369,7 @@ class KnowledgeProcessor:
 # ToolUseProcessor — tool-call injection + detection
 # =============================================================================
 
+
 @dataclass
 class ToolDef:
     """A tool the text model can call during generation.
@@ -346,6 +379,7 @@ class ToolDef:
         provider_name: Provider to call when this tool is invoked.
         description: Prompt fragment telling the model how to use it.
     """
+
     name: str
     provider_name: str
     description: str = ""
@@ -370,9 +404,9 @@ class ToolUseProcessor:
     Works with any text model — no special function-calling support needed.
     """
 
-    TOOL_RE = re.compile(r'\[\[TOOL:\s*(\w+)\s*\]\]\s*(\S+)')
+    TOOL_RE = re.compile(r"\[\[TOOL:\s*(\w+)\s*\]\]\s*(\S+)")
 
-    def __init__(self, tools: Optional[List[ToolDef]] = None):
+    def __init__(self, tools: list[ToolDef] | None = None):
         self._tools = tools or _BUILTIN_TOOLS
 
     @staticmethod
@@ -391,13 +425,8 @@ class ToolUseProcessor:
     async def process(self, messages: list) -> list:
         if not self._has_image(messages):
             return messages
-        tool_descriptions = "\n".join(
-            f"- {t.description}" for t in self._tools
-        )
-        tool_prompt = (
-            "You have access to these tools:\n"
-            f"{tool_descriptions}\n"
-        )
+        tool_descriptions = "\n".join(f"- {t.description}" for t in self._tools)
+        tool_prompt = f"You have access to these tools:\n{tool_descriptions}\n"
 
         has_system = any(m.get("role") == "system" for m in messages)
         if has_system:
@@ -409,9 +438,9 @@ class ToolUseProcessor:
             messages.insert(0, {"role": "system", "content": tool_prompt})
         return messages
 
-    _PLACEHOLDER_ARG_RE = re.compile(r'^<[^>]*>$')
+    _PLACEHOLDER_ARG_RE = re.compile(r"^<[^>]*>$")
 
-    def match_tool(self, text: str) -> Optional[Tuple[str, str, str]]:
+    def match_tool(self, text: str) -> tuple[str, str, str] | None:
         """Check if generated text contains a tool call.
 
         Returns (tool_name, argument, full_match_text) or None.
@@ -434,6 +463,7 @@ class ToolUseProcessor:
 # PersonalityProcessor — inject soul/personality traits
 # =============================================================================
 
+
 class PersonalityProcessor:
     """Injects personality traits into the system prompt.
 
@@ -442,22 +472,82 @@ class PersonalityProcessor:
     """
 
     TRAIT_ADJECTIVES = {
-        "warmth": {0.0: "neutral", 0.3: "reserved", 0.5: "friendly", 0.7: "warm", 0.9: "very warm and empathetic"},
-        "creativity": {0.0: "factual", 0.3: "practical", 0.5: "balanced", 0.7: "creative", 0.9: "highly creative and imaginative"},
-        "empathy": {0.0: "detached", 0.3: "observant", 0.5: "understanding", 0.7: "empathetic", 0.9: "deeply empathetic and compassionate"},
-        "formality": {0.0: "casual", 0.3: "relaxed", 0.5: "professional", 0.7: "formal", 0.9: "highly formal and precise"},
-        "humor": {0.0: "serious", 0.3: "dry", 0.5: "witty", 0.7: "humorous", 0.9: "very humorous and playful"},
-        "patience": {0.0: "brisk", 0.3: "efficient", 0.5: "patient", 0.7: "thorough", 0.9: "extremely patient and methodical"},
-        "confidence": {0.0: "cautious", 0.3: "measured", 0.5: "confident", 0.7: "assertive", 0.9: "very confident and decisive"},
-        "curiosity": {0.0: "direct", 0.3: "interested", 0.5: "curious", 0.7: "inquisitive", 0.9: "deeply curious and exploratory"},
-        "directness": {0.0: "indirect", 0.3: "gentle", 0.5: "balanced", 0.7: "direct", 0.9: "very direct and to the point"},
-        "optimism": {0.0: "realistic", 0.3: "grounded", 0.5: "optimistic", 0.7: "positive", 0.9: "very optimistic and encouraging"},
+        "warmth": {
+            0.0: "neutral",
+            0.3: "reserved",
+            0.5: "friendly",
+            0.7: "warm",
+            0.9: "very warm and empathetic",
+        },
+        "creativity": {
+            0.0: "factual",
+            0.3: "practical",
+            0.5: "balanced",
+            0.7: "creative",
+            0.9: "highly creative and imaginative",
+        },
+        "empathy": {
+            0.0: "detached",
+            0.3: "observant",
+            0.5: "understanding",
+            0.7: "empathetic",
+            0.9: "deeply empathetic and compassionate",
+        },
+        "formality": {
+            0.0: "casual",
+            0.3: "relaxed",
+            0.5: "professional",
+            0.7: "formal",
+            0.9: "highly formal and precise",
+        },
+        "humor": {
+            0.0: "serious",
+            0.3: "dry",
+            0.5: "witty",
+            0.7: "humorous",
+            0.9: "very humorous and playful",
+        },
+        "patience": {
+            0.0: "brisk",
+            0.3: "efficient",
+            0.5: "patient",
+            0.7: "thorough",
+            0.9: "extremely patient and methodical",
+        },
+        "confidence": {
+            0.0: "cautious",
+            0.3: "measured",
+            0.5: "confident",
+            0.7: "assertive",
+            0.9: "very confident and decisive",
+        },
+        "curiosity": {
+            0.0: "direct",
+            0.3: "interested",
+            0.5: "curious",
+            0.7: "inquisitive",
+            0.9: "deeply curious and exploratory",
+        },
+        "directness": {
+            0.0: "indirect",
+            0.3: "gentle",
+            0.5: "balanced",
+            0.7: "direct",
+            0.9: "very direct and to the point",
+        },
+        "optimism": {
+            0.0: "realistic",
+            0.3: "grounded",
+            0.5: "optimistic",
+            0.7: "positive",
+            0.9: "very optimistic and encouraging",
+        },
     }
 
-    def __init__(self, traits: Optional[Dict[str, float]] = None):
+    def __init__(self, traits: dict[str, float] | None = None):
         self._traits = traits or {}
 
-    def set_traits(self, traits: Dict[str, float]) -> None:
+    def set_traits(self, traits: dict[str, float]) -> None:
         self._traits = traits
 
     def _describe_trait(self, name: str, value: float) -> str:
@@ -487,7 +577,10 @@ class PersonalityProcessor:
         if has_system:
             for i, m in enumerate(messages):
                 if m.get("role") == "system":
-                    messages[i] = {"role": "system", "content": f"{m['content']}\n\n{personality_line}"}
+                    messages[i] = {
+                        "role": "system",
+                        "content": f"{m['content']}\n\n{personality_line}",
+                    }
                     break
         else:
             messages.insert(0, personality_msg)
@@ -497,6 +590,7 @@ class PersonalityProcessor:
 # =============================================================================
 # StyleProcessor — adjust response style
 # =============================================================================
+
 
 class StyleProcessor:
     """Adjusts formality, directness, and verbosity of responses.
@@ -510,7 +604,9 @@ class StyleProcessor:
         self._directness = directness
         self._verbosity = verbosity
 
-    def set_style(self, formality: float = 0.5, directness: float = 0.5, verbosity: float = 0.5) -> None:
+    def set_style(
+        self, formality: float = 0.5, directness: float = 0.5, verbosity: float = 0.5
+    ) -> None:
         self._formality = formality
         self._directness = directness
         self._verbosity = verbosity
@@ -554,6 +650,7 @@ class StyleProcessor:
 # ProviderRouter — processor pipeline + text provider
 # =============================================================================
 
+
 class ProviderRouter:
     """Routes messages through a processor pipeline to a text provider.
 
@@ -575,12 +672,12 @@ class ProviderRouter:
     """
 
     def __init__(self):
-        self._processors: List[MessageProcessor] = []
-        self._text_name: Optional[str] = None
+        self._processors: list[MessageProcessor] = []
+        self._text_name: str | None = None
         self._model_id_str = "router-v1"
         self._max_tool_rounds = 3
 
-    def add_processor(self, processor: MessageProcessor) -> "ProviderRouter":
+    def add_processor(self, processor: MessageProcessor) -> ProviderRouter:
         self._processors.append(processor)
         return self
 
@@ -596,14 +693,14 @@ class ProviderRouter:
         return ModelCapabilities(chat=True, streaming=True, embedding=False, vision=True)
 
     @property
-    def metadata(self) -> Dict[str, Any]:
+    def metadata(self) -> dict[str, Any]:
         return {
             "processors": [type(p).__name__ for p in self._processors],
             "text_provider": self._text_name,
             "max_tool_rounds": self._max_tool_rounds,
         }
 
-    def _find_tool_processor(self) -> Optional[ToolUseProcessor]:
+    def _find_tool_processor(self) -> ToolUseProcessor | None:
         for p in self._processors:
             if isinstance(p, ToolUseProcessor):
                 return p
@@ -611,14 +708,14 @@ class ProviderRouter:
 
     async def chat_stream(
         self,
-        messages: List[ChatMessage],
+        messages: list[ChatMessage],
         max_tokens: int = 512,
         temperature: float = 0.7,
         top_p: float = 0.85,
         top_k: int = 40,
         repetition_penalty: float = 1.15,
         cancel_event=None,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         **kwargs,
     ) -> AsyncIterator[str]:
         """Run messages through processors, then stream from text provider."""
@@ -627,7 +724,9 @@ class ProviderRouter:
             try:
                 msgs = await processor.process(msgs)
             except Exception as e:
-                logger.warning("Processor %s failed: %s", type(processor).__name__, e, extra={"tag": "MODEL"})
+                logger.warning(
+                    "Processor %s failed: %s", type(processor).__name__, e, extra={"tag": "MODEL"}
+                )
 
         if not self._text_name:
             yield "No text model configured. Please load a model first."
@@ -646,9 +745,15 @@ class ProviderRouter:
 
             generated = ""
             async for token in text_provider.chat_stream(
-                msgs, max_tokens=max_tokens, temperature=temperature,
-                top_p=top_p, top_k=top_k, repetition_penalty=repetition_penalty,
-                cancel_event=cancel_event, session_id=session_id, **kwargs,
+                msgs,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                repetition_penalty=repetition_penalty,
+                cancel_event=cancel_event,
+                session_id=session_id,
+                **kwargs,
             ):
                 generated += token
                 yield token
@@ -664,11 +769,17 @@ class ProviderRouter:
                 return
 
             tool_name, tool_arg, match_text = match
-            logger.info("Tool call detected: %s(%s)", tool_name, tool_arg[:40], extra={"tag": "MODEL"})
+            logger.info(
+                "Tool call detected: %s(%s)", tool_name, tool_arg[:40], extra={"tag": "MODEL"}
+            )
             yield f"\n[Running tool: {tool_name}...]\n"
 
             tool_result = await self._execute_tool(tool_name, tool_arg, cancel_event=cancel_event)
-            logger.info("Tool result: %s", tool_result[:60] if tool_result else "empty", extra={"tag": "MODEL"})
+            logger.info(
+                "Tool result: %s",
+                tool_result[:60] if tool_result else "empty",
+                extra={"tag": "MODEL"},
+            )
 
             msgs.append({"role": "assistant", "content": generated.replace(match_text, "").strip()})
             msgs.append({"role": "system", "content": f"Tool {tool_name} returned: {tool_result}"})
@@ -685,6 +796,7 @@ class ProviderRouter:
             if provider is None:
                 try:
                     from domain.multimodal._internal.manager import get_multimodal_manager
+
                     mgr = get_multimodal_manager()
                     mgr.initialize(vision_model="slonet")
                     provider = get_provider("multimodal")
@@ -694,8 +806,14 @@ class ProviderRouter:
                 try:
                     result = ""
                     async for token in provider.chat_stream(
-                        [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": arg}}]}],
-                        max_tokens=30, temperature=0.8,
+                        [
+                            {
+                                "role": "user",
+                                "content": [{"type": "image_url", "image_url": {"url": arg}}],
+                            }
+                        ],
+                        max_tokens=30,
+                        temperature=0.8,
                         cancel_event=cancel_event,
                     ):
                         result += token
@@ -705,11 +823,14 @@ class ProviderRouter:
 
             try:
                 import base64
-                from PIL import Image
                 import io
+
+                from PIL import Image
+
                 clean = arg.split(",")[1] if "," in arg else arg
                 img = Image.open(io.BytesIO(base64.b64decode(clean))).convert("RGB")
                 from domain.multimodal._internal.manager import get_multimodal_manager
+
                 mgr = get_multimodal_manager()
                 return mgr.caption_image(img).text
             except Exception as e:
@@ -720,7 +841,7 @@ class ProviderRouter:
 
     async def chat(
         self,
-        messages: List[ChatMessage],
+        messages: list[ChatMessage],
         max_tokens: int = 512,
         temperature: float = 0.7,
         **kwargs,
@@ -731,7 +852,9 @@ class ProviderRouter:
             try:
                 msgs = await processor.process(msgs)
             except Exception as e:
-                logger.warning("Processor %s failed: %s", type(processor).__name__, e, extra={"tag": "MODEL"})
+                logger.warning(
+                    "Processor %s failed: %s", type(processor).__name__, e, extra={"tag": "MODEL"}
+                )
 
         if not self._text_name:
             return "No text model configured. Please load a model first."
@@ -741,15 +864,18 @@ class ProviderRouter:
 
         # Call text_provider.chat() directly (goes through guard when alive)
         # instead of chat_stream() which always runs in-process.
-        return await text_provider.chat(msgs, max_tokens=max_tokens, temperature=temperature, **kwargs)
+        return await text_provider.chat(
+            msgs, max_tokens=max_tokens, temperature=temperature, **kwargs
+        )
 
-    def embed(self, text: str) -> List[float]:
+    def embed(self, text: str) -> list[float]:
         return []
 
 
 # =============================================================================
 # SloTransformerProvider — pure NumPy SloTransformer inference
 # =============================================================================
+
 
 class SloTransformerProvider:
     """Wraps a pure NumPy SloTransformer as an async chat provider.
@@ -799,7 +925,7 @@ class SloTransformerProvider:
         max_tokens: int = 512,
         temperature: float = 0.7,
         cancel_event=None,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         **kwargs,
     ) -> AsyncIterator[str]:
         prompt = self._messages_to_prompt(messages)
@@ -807,6 +933,7 @@ class SloTransformerProvider:
         if not input_ids:
             input_ids = [self._bos]
         import numpy as np
+
         inp = np.array([input_ids], dtype=np.int64)
         loop = asyncio.get_event_loop()
 
@@ -815,9 +942,9 @@ class SloTransformerProvider:
                 inp,
                 max_new_tokens=max_tokens,
                 temperature=temperature,
-                top_k=kwargs.get('top_k', 40),
-                top_p=kwargs.get('top_p', 0.95),
-                repetition_penalty=kwargs.get('repetition_penalty', 1.1),
+                top_k=kwargs.get("top_k", 40),
+                top_p=kwargs.get("top_p", 0.95),
+                repetition_penalty=kwargs.get("repetition_penalty", 1.1),
                 eos_token=self._eos,
             )
 
@@ -830,7 +957,7 @@ class SloTransformerProvider:
             return
         out_ids = out.data.flatten().tolist()
         if self._eos in out_ids:
-            out_ids = out_ids[:out_ids.index(self._eos)]
+            out_ids = out_ids[: out_ids.index(self._eos)]
         text = self._decode(out_ids)
         if text:
             yield text
@@ -856,7 +983,7 @@ class SloTransformerProvider:
         }
 
     @classmethod
-    def load_from_sou(cls, path: str, model_id_str: str = "") -> "SloTransformerProvider":
+    def load_from_sou(cls, path: str, model_id_str: str = "") -> SloTransformerProvider:
         """Load a trained SloTransformer from a .slo checkpoint."""
         from domain.inference import load_soul
         from domain.infrastructure._internal.weight_loader import infer_arch_from_state_dict
@@ -869,14 +996,14 @@ class SloTransformerProvider:
 
         chars = ["<PAD>", "<UNK>"] + list(" abcdefghijklmnopqrstuvwxyz0123456789.,!?-'")
         stoi = {ch: i for i, ch in enumerate(chars)}
-        itos = {i: ch for i, ch in enumerate(chars)}
+        itos = dict(enumerate(chars))
 
         meta_vocab = getattr(soul, "vocab_size", None) or (soul.metadata or {}).get("vocab_size")
         if meta_vocab and meta_vocab > len(chars):
             extra = ["_"] * (meta_vocab - len(chars))
             chars = chars + extra
             stoi = {ch: i for i, ch in enumerate(chars)}
-            itos = {i: ch for i, ch in enumerate(chars)}
+            itos = dict(enumerate(chars))
 
         arch = infer_arch_from_state_dict(sd)
 
@@ -893,9 +1020,12 @@ class SloTransformerProvider:
         model.load_state_dict(sd, strict=False)
 
         logger.info(
-            "Loaded SloTransformer from %s (vocab=%d, "
-            "n_embed=%d, n_layer=%d, n_head=%d)",
-            path, arch["vocab_size"], arch["n_embed"], arch["n_layer"], arch["n_head"],
+            "Loaded SloTransformer from %s (vocab=%d, n_embed=%d, n_layer=%d, n_head=%d)",
+            path,
+            arch["vocab_size"],
+            arch["n_embed"],
+            arch["n_layer"],
+            arch["n_head"],
             extra={"tag": "MODEL"},
         )
         return cls(model, stoi, itos, model_id_str=model_id_str)
@@ -929,7 +1059,7 @@ def _server_from_provider(provider: Any, process_guard: Any) -> Any:
 
 
 def setup_providers(
-    slonet_hf_id: Optional[str] = None,
+    slonet_hf_id: str | None = None,
     slonet_provider=None,
     slonet_server=None,
     model_registry=None,
@@ -937,9 +1067,9 @@ def setup_providers(
     quantize: bool = False,
     quant_bits: int = 8,
     quant_mode: str = "symmetric",
-    personality_traits: Optional[Dict[str, float]] = None,
-    slonet_path: Optional[str] = None,
-    native_slnc_path: Optional[str] = None,
+    personality_traits: dict[str, float] | None = None,
+    slonet_path: str | None = None,
+    native_slnc_path: str | None = None,
 ) -> None:
     """Register providers and build the default processor pipeline.
 
@@ -986,16 +1116,25 @@ def setup_providers(
     # Try native C inference engine first (highest priority if enabled)
     try:
         from domain.shared._internal.feature_flags import is_enabled
+
         native_on = is_enabled("native_c_inference")
         if native_on or native_slnc_path:
-            from domain.inference._internal.native.engine import get_engine, NativeTransformerProvider
+            from domain.inference._internal.native.engine import (
+                NativeTransformerProvider,
+                get_engine,
+            )
+
             engine = get_engine()
             if not engine.loaded and native_slnc_path:
                 engine = engine.from_slnc_file(native_slnc_path)
             if engine.loaded:
-                register_provider("native-c", NativeTransformerProvider(engine, model_id="native-c"))
+                register_provider(
+                    "native-c", NativeTransformerProvider(engine, model_id="native-c")
+                )
                 text_provider_name = "native-c"
-                logger.info("Registered native-c provider (Apple Accelerate BLAS)", extra={"tag": "MODEL"})
+                logger.info(
+                    "Registered native-c provider (Apple Accelerate BLAS)", extra={"tag": "MODEL"}
+                )
     except Exception as e:
         logger.debug("Native C inference not available: %s", e, extra={"tag": "MODEL"})
 
@@ -1003,19 +1142,25 @@ def setup_providers(
         # Attach SloNetServer if provided, else build one from the guard
         if slonet_server is None and process_guard is not None:
             slonet_server = _server_from_provider(slonet_provider, process_guard)
-        if slonet_server is not None and hasattr(slonet_provider, 'set_server'):
+        if slonet_server is not None and hasattr(slonet_provider, "set_server"):
             slonet_provider.set_server(slonet_server)
-            logger.info("Attached SloNetServer to provider: %s",
-                        getattr(slonet_provider, '_model_id', '?'), extra={"tag": "MODEL"})
+            logger.info(
+                "Attached SloNetServer to provider: %s",
+                getattr(slonet_provider, "_model_id", "?"),
+                extra={"tag": "MODEL"},
+            )
         register_provider("slonet-native", slonet_provider)
         text_provider_name = "slonet-native"
-        logger.info("Registered slonet-native provider: %s (pre-loaded%s)",
-                    getattr(slonet_provider, '_model_id', '?'),
-                    ', server-backed' if slonet_server else '',
-                    extra={"tag": "MODEL"})
+        logger.info(
+            "Registered slonet-native provider: %s (pre-loaded%s)",
+            getattr(slonet_provider, "_model_id", "?"),
+            ", server-backed" if slonet_server else "",
+            extra={"tag": "MODEL"},
+        )
     elif slonet_path:
         try:
             from domain.inference._internal.slonet_provider import SloNetChatProvider
+
             slonet_provider = SloNetChatProvider.from_slnc(
                 slonet_path,
                 model_id=slonet_hf_id or "gpt2",
@@ -1027,22 +1172,31 @@ def setup_providers(
             # Attach SloNetServer if provided, else build one from the guard
             if slonet_server is None and process_guard is not None:
                 slonet_server = _server_from_provider(slonet_provider, process_guard)
-            if slonet_server is not None and hasattr(slonet_provider, 'set_server'):
+            if slonet_server is not None and hasattr(slonet_provider, "set_server"):
                 slonet_provider.set_server(slonet_server)
             register_provider("slonet-native", slonet_provider)
             text_provider_name = "slonet-native"
-            logger.info("Registered slonet-native provider from local .slnc: %s (quant=%s%s)",
-                        slonet_path,
-                        f"int{quant_bits}" if quantize else "none",
-                        ', server-backed' if slonet_server else '',
-                        extra={"tag": "MODEL"})
+            logger.info(
+                "Registered slonet-native provider from local .slnc: %s (quant=%s%s)",
+                slonet_path,
+                f"int{quant_bits}" if quantize else "none",
+                ", server-backed" if slonet_server else "",
+                extra={"tag": "MODEL"},
+            )
         except Exception as e:
-            logger.warning("Failed to load slonet-native provider from %s: %s",
-                           slonet_path, e, extra={"tag": "MODEL"})
+            logger.warning(
+                "Failed to load slonet-native provider from %s: %s",
+                slonet_path,
+                e,
+                extra={"tag": "MODEL"},
+            )
     elif slonet_hf_id:
         try:
             from domain.inference._internal.slonet_provider import SloNetChatProvider
-            from domain.infrastructure._internal.model_resolver import get_model_dir as _get_model_dir
+            from domain.infrastructure._internal.model_resolver import (
+                get_model_dir as _get_model_dir,
+            )
+
             _cache_dir = _get_model_dir(slonet_hf_id)
             _slnc = _cache_dir / "model.slnc"
             if not _slnc.exists():
@@ -1058,22 +1212,32 @@ def setup_providers(
             # Attach SloNetServer if provided, else build one from the guard
             if slonet_server is None and process_guard is not None:
                 slonet_server = _server_from_provider(slonet_provider, process_guard)
-            if slonet_server is not None and hasattr(slonet_provider, 'set_server'):
+            if slonet_server is not None and hasattr(slonet_provider, "set_server"):
                 slonet_provider.set_server(slonet_server)
             register_provider("slonet-native", slonet_provider)
             text_provider_name = "slonet-native"
-            logger.info("Registered slonet-native provider: %s (quant=%s%s)",
-                        slonet_hf_id,
-                        f"int{quant_bits}" if quantize else "none",
-                        ', server-backed' if slonet_server else '',
-                        extra={"tag": "MODEL"})
+            logger.info(
+                "Registered slonet-native provider: %s (quant=%s%s)",
+                slonet_hf_id,
+                f"int{quant_bits}" if quantize else "none",
+                ", server-backed" if slonet_server else "",
+                extra={"tag": "MODEL"},
+            )
         except Exception as e:
-            logger.warning("Failed to load slonet-native provider %s: %s", slonet_hf_id, e, extra={"tag": "MODEL"})
+            logger.warning(
+                "Failed to load slonet-native provider %s: %s",
+                slonet_hf_id,
+                e,
+                extra={"tag": "MODEL"},
+            )
     else:
         # Standalone SloNet mode: auto-detect a cached .slnc model
         try:
-            from domain.infrastructure._internal.model_resolver import get_model_dir as _get_model_dir
             from domain.infrastructure._internal.config import get_config
+            from domain.infrastructure._internal.model_resolver import (
+                get_model_dir as _get_model_dir,
+            )
+
             cfg = get_config()
             default_model = cfg.autoload_model
             if default_model:
@@ -1081,6 +1245,7 @@ def setup_providers(
                 _slnc = _cache_dir / "model.slnc"
                 if _slnc.exists():
                     from domain.inference._internal.slonet_provider import SloNetChatProvider
+
                     auto_provider = SloNetChatProvider.from_slnc(
                         str(_slnc),
                         model_id=default_model,
@@ -1089,19 +1254,29 @@ def setup_providers(
                         quant_mode=quant_mode,
                         free_quantized_originals=True,
                     )
-                    if slonet_server is not None and hasattr(auto_provider, 'set_server'):
+                    if slonet_server is not None and hasattr(auto_provider, "set_server"):
                         auto_provider.set_server(slonet_server)
                     register_provider("slonet-native", auto_provider)
                     text_provider_name = "slonet-native"
-                    logger.info("Auto-detected slonet-native provider: %s", default_model,
-                                extra={"tag": "MODEL"})
+                    logger.info(
+                        "Auto-detected slonet-native provider: %s",
+                        default_model,
+                        extra={"tag": "MODEL"},
+                    )
         except Exception as e:
-            logger.warning("Auto-detect slonet-native failed for %s: %s", default_model, e,
-                           extra={"tag": "MODEL"})
+            logger.warning(
+                "Auto-detect slonet-native failed for %s: %s",
+                default_model,
+                e,
+                extra={"tag": "MODEL"},
+            )
 
     # Build default ProviderRouter with full processor pipeline
     existing = _providers.get("default")
-    _is_slonet = existing is not None and type(existing).__name__ in ("SloTransformerProvider", "SloNetChatProvider")
+    _is_slonet = existing is not None and type(existing).__name__ in (
+        "SloTransformerProvider",
+        "SloNetChatProvider",
+    )
     # Rebuild the default router only when a text provider was successfully
     # registered, or when no default router exists yet. If the requested model
     # failed to load (text_provider_name is None) and a working default router
@@ -1125,14 +1300,19 @@ def setup_providers(
         register_processor("tool_use", tool_proc)
         register_processor("personality", personality_proc)
         register_processor("style", style_proc)
-        logger.info("Registered default router (processors=%s, text=%s)",
-                    [type(p).__name__ for p in router._processors],
-                    text_provider_name, extra={"tag": "MODEL"})
+        logger.info(
+            "Registered default router (processors=%s, text=%s)",
+            [type(p).__name__ for p in router._processors],
+            text_provider_name,
+            extra={"tag": "MODEL"},
+        )
     else:
-        logger.info("SloNet provider active as default — skipping router override", extra={"tag": "MODEL"})
+        logger.info(
+            "SloNet provider active as default — skipping router override", extra={"tag": "MODEL"}
+        )
 
 
-def update_personality_traits(traits: Dict[str, float]) -> None:
+def update_personality_traits(traits: dict[str, float]) -> None:
     """Update processors in the default router with new soul traits.
 
     PersonalityProcessor receives all traits.
@@ -1146,12 +1326,19 @@ def update_personality_traits(traits: Dict[str, float]) -> None:
     for proc in router._processors:
         if isinstance(proc, PersonalityProcessor):
             proc.set_traits(traits)
-            logger.info("Updated personality traits: %s", list(traits.keys()), extra={"tag": "MODEL"})
+            logger.info(
+                "Updated personality traits: %s", list(traits.keys()), extra={"tag": "MODEL"}
+            )
         elif isinstance(proc, StyleProcessor):
             formality = traits.get("formality", 0.5)
             directness = traits.get("directness", 0.5)
             proc.set_style(formality=formality, directness=directness)
-            logger.info("Updated style: formality=%.2f directness=%.2f", formality, directness, extra={"tag": "MODEL"})
+            logger.info(
+                "Updated style: formality=%.2f directness=%.2f",
+                formality,
+                directness,
+                extra={"tag": "MODEL"},
+            )
 
 
 __all__ = [

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,25 +12,23 @@ import pytest
 
 from domain.training._internal.helpers import (
     _finite_payload,
+    build_soul_prompt,
+    cross_entropy_loss,
+    describe_checkpoint,
+    get_soul_name,
+    get_soul_traits,
     log_experiment_metric,
     log_experiment_param,
     parse_subtitle_text,
-    resolve_dataset_path,
-    build_soul_prompt,
-    get_soul_name,
-    get_soul_traits,
     read_slo_json_header,
-    describe_checkpoint,
-    cross_entropy_loss,
+    resolve_dataset_path,
 )
 from domain.training._internal.state import SOU_MAGIC
-
 
 # ── _finite_payload ───────────────────────────────────────────────────────
 
 
 class TestFinitePayload:
-
     def test_float_normal(self):
         assert _finite_payload(1.5) == 1.5
 
@@ -67,6 +64,7 @@ class TestFinitePayload:
         class Point:
             x: float
             y: float
+
         p = Point(1.0, float("nan"))
         result = _finite_payload(p)
         assert result == {"x": 1.0, "y": None}
@@ -76,7 +74,6 @@ class TestFinitePayload:
 
 
 class TestLogExperimentMetric:
-
     def test_writes_metric_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr("domain.training._internal.helpers.REPO_ROOT", tmp_path)
         log_experiment_metric("exp1", "loss", 0.5, step=10)
@@ -93,7 +90,6 @@ class TestLogExperimentMetric:
 
 
 class TestLogExperimentParam:
-
     def test_writes_param_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr("domain.training._internal.helpers.REPO_ROOT", tmp_path)
         log_experiment_param("exp1", "lr", 0.001)
@@ -108,7 +104,6 @@ class TestLogExperimentParam:
 
 
 class TestParseSubtitleText:
-
     def test_plain_text(self):
         text = "Hello world\nThis is a test\n"
         result = parse_subtitle_text(text)
@@ -121,7 +116,9 @@ class TestParseSubtitleText:
         assert "Hello world" in result
 
     def test_srt_format(self):
-        text = "00:00:01,000 --> 00:00:02,000\nHello world\n\n00:00:03,000 --> 00:00:04,000\nGoodbye\n"
+        text = (
+            "00:00:01,000 --> 00:00:02,000\nHello world\n\n00:00:03,000 --> 00:00:04,000\nGoodbye\n"
+        )
         result = parse_subtitle_text(text)
         assert "Hello world" in result
         assert "Goodbye" in result
@@ -132,7 +129,9 @@ class TestParseSubtitleText:
         assert "Hello" in result
 
     def test_srt_skips_indices(self):
-        text = "00:00:01,000 --> 00:00:02,000\nFirst\n\n1\n\n00:00:03,000 --> 00:00:04,000\nSecond\n"
+        text = (
+            "00:00:01,000 --> 00:00:02,000\nFirst\n\n1\n\n00:00:03,000 --> 00:00:04,000\nSecond\n"
+        )
         result = parse_subtitle_text(text)
         assert "1" not in result
 
@@ -144,7 +143,6 @@ class TestParseSubtitleText:
 
 
 class TestResolveDatasetPath:
-
     def test_invalid_id(self):
         with pytest.raises(ValueError, match="Invalid dataset ID"):
             resolve_dataset_path("../etc/passwd")
@@ -157,7 +155,6 @@ class TestResolveDatasetPath:
 
 
 class TestBuildSoulPrompt:
-
     def test_known_souls(self):
         assert "helpful" in build_soul_prompt("assistant")
         assert "creative" in build_soul_prompt("creative")
@@ -174,20 +171,22 @@ class TestBuildSoulPrompt:
 
 
 class TestGetSoulName:
-
     def test_from_name_attr(self):
         class Soul:
             name = "alice"
+
         assert get_soul_name(Soul()) == "alice"
 
     def test_from_soul_name_attr(self):
         class Soul:
             soul_name = "bob"
+
         assert get_soul_name(Soul()) == "bob"
 
     def test_unknown(self):
         class Soul:
             pass
+
         assert get_soul_name(Soul()) == "unknown"
 
 
@@ -195,28 +194,32 @@ class TestGetSoulName:
 
 
 class TestGetSoulTraits:
-
     def test_from_soul_traits(self):
         class Soul:
             soul_traits = {"friendly": 0.8}
+
         assert get_soul_traits(Soul()) == {"friendly": 0.8}
 
     def test_from_personality_dict(self):
         class Soul:
             personality = {"curious": 0.9}
+
         assert get_soul_traits(Soul()) == {"curious": 0.9}
 
     def test_from_personality_object(self):
         class Personality:
             def to_dict(self):
                 return {"brave": 0.7}
+
         class Soul:
             personality = Personality()
+
         assert get_soul_traits(Soul()) == {"brave": 0.7}
 
     def test_empty(self):
         class Soul:
             pass
+
         assert get_soul_traits(Soul()) == {}
 
 
@@ -224,7 +227,6 @@ class TestGetSoulTraits:
 
 
 class TestReadSloJsonHeader:
-
     def test_valid_header(self, tmp_path):
         header = json.dumps({"model": "test"}).encode()
         padding = b"\x00" * 4
@@ -254,7 +256,6 @@ class TestReadSloJsonHeader:
 
 
 class TestDescribeCheckpoint:
-
     def test_with_dataset(self):
         desc = describe_checkpoint({"training_dataset": "mydata"})
         assert "mydata" in desc
@@ -304,7 +305,6 @@ class TestDescribeCheckpoint:
 
 
 class TestCrossEntropyLoss:
-
     def test_perfect_prediction(self):
         logits = np.array([[10.0, 0.0, 0.0]])
         targets = np.array([0])

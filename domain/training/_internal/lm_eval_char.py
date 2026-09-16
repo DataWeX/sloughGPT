@@ -9,13 +9,12 @@ from the eval file (may mismatch — a warning is recorded). See
 
 from __future__ import annotations
 
+import logging
 import math
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
-
-import logging
 
 logger = logging.getLogger("slo.lm_eval")
 
@@ -24,8 +23,8 @@ def evaluate_soul_char_lm(
     checkpoint_path: str,
     eval_text_path: str,
     *,
-    max_chars: Optional[int] = None,
-) -> Dict[str, Any]:
+    max_chars: int | None = None,
+) -> dict[str, Any]:
     """
     Mean cross-entropy and perplexity over non-overlapping ``block_size`` windows
     on ``eval_text_path`` for a SloNet-native ``.soul`` checkpoint.
@@ -54,7 +53,7 @@ def evaluate_soul_char_lm(
         raise FileNotFoundError(eval_text_path)
 
     text = path.read_text(encoding="utf-8")
-    trunc_warnings: List[str] = []
+    trunc_warnings: list[str] = []
     orig_len = len(text)
     if max_chars is not None and max_chars > 0 and orig_len > max_chars:
         text = text[:max_chars]
@@ -82,8 +81,8 @@ def evaluate_soul_char_lm(
     model.load_state_dict(state_dict)
     model.eval()
 
-    stoi: Optional[Dict[str, int]] = soul.metadata.get("stoi")
-    warnings: List[str] = []
+    stoi: dict[str, int] | None = soul.metadata.get("stoi")
+    warnings: list[str] = []
     if not stoi:
         itos = soul.metadata.get("itos")
         if isinstance(itos, dict) and itos:
@@ -100,7 +99,7 @@ def evaluate_soul_char_lm(
             "(perplexity is meaningless if training used a different charset)."
         )
 
-    ids: List[int] = []
+    ids: list[int] = []
     skipped = 0
     for ch in text:
         idx = stoi.get(ch)
@@ -112,9 +111,7 @@ def evaluate_soul_char_lm(
         warnings.append(f"Skipped {skipped} characters not in vocabulary.")
 
     if len(ids) < block + 1:
-        raise ValueError(
-            f"Need at least block_size+1 = {block + 1} known tokens; got {len(ids)}"
-        )
+        raise ValueError(f"Need at least block_size+1 = {block + 1} known tokens; got {len(ids)}")
 
     data = np.array(ids, dtype=np.int64)
     total_loss = 0.0
@@ -172,12 +169,12 @@ def main() -> None:
         payload["perplexity"] = pl if pl != float("inf") else None
         print(json_lib.dumps(payload, indent=2))
         return
-    logger.info("mean_loss: %.6f", out['mean_loss'])
+    logger.info("mean_loss: %.6f", out["mean_loss"])
     ppl = out["perplexity"]
     logger.info("perplexity: %.6f", ppl) if ppl != float("inf") else logger.info("perplexity: inf")
-    logger.info("tokens_scored: %d", out['num_token_positions'])
-    logger.info("chars_skipped: %d", out['num_chars_skipped'])
-    logger.info("block_size: %d  vocab_size: %d", out['block_size'], out['vocab_size'])
+    logger.info("tokens_scored: %d", out["num_token_positions"])
+    logger.info("chars_skipped: %d", out["num_chars_skipped"])
+    logger.info("block_size: %d  vocab_size: %d", out["block_size"], out["vocab_size"])
     for w in out.get("warnings") or []:
         logger.warning("warning: %s", w)
 

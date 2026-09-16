@@ -45,12 +45,14 @@ class TestModelHealthRepository:
     def test_add_and_get_latest(self, tmp_path: Path):
         repo = ModelHealthRepository(tmp_path / "health")
         now = time.time()
-        repo.add_snapshot(HealthSnapshot(
-            timestamp=now,
-            perplexity=42.0,
-            loss=3.8,
-            num_sentences=15,
-        ))
+        repo.add_snapshot(
+            HealthSnapshot(
+                timestamp=now,
+                perplexity=42.0,
+                loss=3.8,
+                num_sentences=15,
+            )
+        )
         latest = repo.get_latest()
         assert latest is not None
         assert latest.perplexity == 42.0
@@ -59,12 +61,14 @@ class TestModelHealthRepository:
         repo = ModelHealthRepository(tmp_path / "health")
         now = time.time()
         for i in range(5):
-            repo.add_snapshot(HealthSnapshot(
-                timestamp=now + i,
-                perplexity=40.0 + i,
-                loss=3.8 - i * 0.1,
-                num_sentences=15,
-            ))
+            repo.add_snapshot(
+                HealthSnapshot(
+                    timestamp=now + i,
+                    perplexity=40.0 + i,
+                    loss=3.8 - i * 0.1,
+                    num_sentences=15,
+                )
+            )
         all_snapshots = repo.list_snapshots()
         assert len(all_snapshots) == 5
         # Most recent first
@@ -74,12 +78,14 @@ class TestModelHealthRepository:
         repo = ModelHealthRepository(tmp_path / "health")
         now = time.time()
         for i in range(10):
-            repo.add_snapshot(HealthSnapshot(
-                timestamp=now + i,
-                perplexity=40.0 + i,
-                loss=3.8,
-                num_sentences=15,
-            ))
+            repo.add_snapshot(
+                HealthSnapshot(
+                    timestamp=now + i,
+                    perplexity=40.0 + i,
+                    loss=3.8,
+                    num_sentences=15,
+                )
+            )
         recent = repo.list_snapshots(limit=3)
         assert len(recent) == 3
 
@@ -87,20 +93,24 @@ class TestModelHealthRepository:
         repo = ModelHealthRepository(tmp_path / "health")
         now = time.time()
         # Add old snapshot (25 hours ago)
-        repo.add_snapshot(HealthSnapshot(
-            timestamp=now - 25 * 3600,
-            perplexity=40.0,
-            loss=3.8,
-            num_sentences=15,
-        ))
+        repo.add_snapshot(
+            HealthSnapshot(
+                timestamp=now - 25 * 3600,
+                perplexity=40.0,
+                loss=3.8,
+                num_sentences=15,
+            )
+        )
         # Add recent snapshots
         for i in range(3):
-            repo.add_snapshot(HealthSnapshot(
-                timestamp=now - i * 3600,
-                perplexity=42.0 + i,
-                loss=3.6,
-                num_sentences=15,
-            ))
+            repo.add_snapshot(
+                HealthSnapshot(
+                    timestamp=now - i * 3600,
+                    perplexity=42.0 + i,
+                    loss=3.6,
+                    num_sentences=15,
+                )
+            )
         trend = repo.get_trend(hours=24)
         assert len(trend) == 3
 
@@ -109,19 +119,23 @@ class TestModelHealthRepository:
         now = time.time()
         # Add baseline snapshots with stable perplexity
         for i in range(5):
-            repo.add_snapshot(HealthSnapshot(
-                timestamp=now - (5 - i) * 3600,
-                perplexity=40.0,
-                loss=3.8,
-                num_sentences=15,
-            ))
+            repo.add_snapshot(
+                HealthSnapshot(
+                    timestamp=now - (5 - i) * 3600,
+                    perplexity=40.0,
+                    loss=3.8,
+                    num_sentences=15,
+                )
+            )
         # Add latest with high perplexity (drift)
-        repo.add_snapshot(HealthSnapshot(
-            timestamp=now,
-            perplexity=60.0,  # 50% increase
-            loss=4.5,
-            num_sentences=15,
-        ))
+        repo.add_snapshot(
+            HealthSnapshot(
+                timestamp=now,
+                perplexity=60.0,  # 50% increase
+                loss=4.5,
+                num_sentences=15,
+            )
+        )
         drift = repo.detect_drift(threshold=0.15)
         assert drift is not None
         assert drift["drift_detected"] is True
@@ -131,12 +145,14 @@ class TestModelHealthRepository:
         repo = ModelHealthRepository(tmp_path / "health")
         now = time.time()
         for i in range(5):
-            repo.add_snapshot(HealthSnapshot(
-                timestamp=now - (5 - i) * 3600,
-                perplexity=40.0 + i * 0.1,  # Very small variation
-                loss=3.8,
-                num_sentences=15,
-            ))
+            repo.add_snapshot(
+                HealthSnapshot(
+                    timestamp=now - (5 - i) * 3600,
+                    perplexity=40.0 + i * 0.1,  # Very small variation
+                    loss=3.8,
+                    num_sentences=15,
+                )
+            )
         drift = repo.detect_drift(threshold=0.15)
         assert drift is None
 
@@ -144,12 +160,14 @@ class TestModelHealthRepository:
         repo = ModelHealthRepository(tmp_path / "health")
         now = time.time()
         for i in range(3):
-            repo.add_snapshot(HealthSnapshot(
-                timestamp=now + i,
-                perplexity=40.0 + i,
-                loss=3.8 - i * 0.1,
-                num_sentences=15,
-            ))
+            repo.add_snapshot(
+                HealthSnapshot(
+                    timestamp=now + i,
+                    perplexity=40.0 + i,
+                    loss=3.8 - i * 0.1,
+                    num_sentences=15,
+                )
+            )
         stats = repo.get_stats()
         assert stats["count"] == 3
         assert stats["avg_perplexity"] == pytest.approx(41.0, rel=0.01)
@@ -160,24 +178,28 @@ class TestModelHealthRepository:
         repo = ModelHealthRepository(tmp_path / "health")
         now = time.time()
         for i in range(5):
-            repo.add_snapshot(HealthSnapshot(
-                timestamp=now + i,
-                perplexity=40.0,
-                loss=3.8,
-                num_sentences=15,
-            ))
+            repo.add_snapshot(
+                HealthSnapshot(
+                    timestamp=now + i,
+                    perplexity=40.0,
+                    loss=3.8,
+                    num_sentences=15,
+                )
+            )
         count = repo.clear()
         assert count == 5
         assert repo.list_snapshots() == []
 
     def test_persistence(self, tmp_path: Path):
         repo1 = ModelHealthRepository(tmp_path / "health")
-        repo1.add_snapshot(HealthSnapshot(
-            timestamp=time.time(),
-            perplexity=42.0,
-            loss=3.8,
-            num_sentences=15,
-        ))
+        repo1.add_snapshot(
+            HealthSnapshot(
+                timestamp=time.time(),
+                perplexity=42.0,
+                loss=3.8,
+                num_sentences=15,
+            )
+        )
         repo2 = ModelHealthRepository(tmp_path / "health")
         latest = repo2.get_latest()
         assert latest is not None

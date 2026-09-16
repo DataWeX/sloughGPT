@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.exception_handlers import register_app_error_handler
 
-
 _AUTH_USER = {"sub": "user1", "tenant_id": "t1"}
 
 
@@ -30,9 +29,11 @@ def _mock_provider():
     provider.tokenize.return_value = [1, 2, 3]
     provider.detokenize.return_value = "hello"
     provider.embed.return_value = [0.1, 0.2, 0.3]
+
     # chat is async, needs to return an awaitable
     async def _chat(*args, **kwargs):
         return "Hello, world!"
+
     provider.chat = _chat
     return provider
 
@@ -71,9 +72,7 @@ class TestInferTokenize:
         _app, router = _build_app()
         provider = _mock_provider()
         with patch("domains.models.provider.get_provider", return_value=provider):
-            resp = TestClient(_app).post(
-                "/infer/tokenize", json={"text": "hello world"}
-            )
+            resp = TestClient(_app).post("/infer/tokenize", json={"text": "hello world"})
         assert resp.status_code == 200
         data = resp.json()
         assert "ids" in data
@@ -83,9 +82,7 @@ class TestInferTokenize:
         _app, router = _build_app()
         provider = _mock_provider()
         with patch("domains.models.provider.get_provider", return_value=provider):
-            resp = TestClient(_app).post(
-                "/infer/detokenize", json={"ids": [1, 2, 3]}
-            )
+            resp = TestClient(_app).post("/infer/detokenize", json={"ids": [1, 2, 3]})
         assert resp.status_code == 200
         data = resp.json()
         assert "text" in data
@@ -99,9 +96,7 @@ class TestInferEmbed:
         _app, router = _build_app()
         provider = _mock_provider()
         with patch("domains.models.provider.get_provider", return_value=provider):
-            resp = TestClient(_app).post(
-                "/infer/embed", json={"text": "hello world"}
-            )
+            resp = TestClient(_app).post("/infer/embed", json={"text": "hello world"})
         assert resp.status_code == 200
         data = resp.json()
         assert "embedding" in data
@@ -119,8 +114,10 @@ class TestInferGenerate:
         # The actual generation depends on model state which is complex to mock
         provider = _mock_provider()
         mock_model = MagicMock()
-        with patch.object(router, "_get_model", return_value=mock_model), \
-             patch("domains.models.provider.get_provider", return_value=provider):
+        with (
+            patch.object(router, "_get_model", return_value=mock_model),
+            patch("domains.models.provider.get_provider", return_value=provider),
+        ):
             resp = TestClient(_app).post(
                 "/infer",
                 json={"prompt": "Hello", "max_new_tokens": 10},

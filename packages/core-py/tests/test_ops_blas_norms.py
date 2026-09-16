@@ -9,13 +9,14 @@ Covers:
 
 import numpy as np
 import pytest
+
 from domain.inference._internal.ops import blas
 from domain.inference._internal.ops.layernorm import layernorm
 from domain.inference._internal.ops.matmul import matmul
 from domain.inference._internal.ops.rmsnorm import rmsnorm
 
-
 # ── BLAS ──────────────────────────────────────────────────────────
+
 
 class TestBLASSgemm:
     def test_basic(self):
@@ -52,6 +53,7 @@ class TestBLASSgemm:
 
 
 # ── LayerNorm ─────────────────────────────────────────────────────
+
 
 class TestLayerNorm:
     def test_output_shape(self):
@@ -104,6 +106,7 @@ class TestLayerNorm:
 
 # ── RMSNorm ───────────────────────────────────────────────────────
 
+
 class TestRMSNorm:
     def test_output_shape(self):
         x = np.random.randn(4, 16).astype(np.float32)
@@ -115,7 +118,7 @@ class TestRMSNorm:
         x = np.random.randn(8, 32).astype(np.float32) * 5
         w = np.ones(32, dtype=np.float32)
         out = rmsnorm(x, w)
-        rms = np.sqrt(np.mean(out ** 2, axis=-1))
+        rms = np.sqrt(np.mean(out**2, axis=-1))
         np.testing.assert_allclose(rms, 1.0, atol=1e-4)
 
     def test_preserves_direction(self):
@@ -139,7 +142,7 @@ class TestRMSNorm:
         w = np.ones(16, dtype=np.float32)
         out = rmsnorm(x, w)
         assert out.shape == (2, 4, 16)
-        rms = np.sqrt(np.mean(out ** 2, axis=-1))
+        rms = np.sqrt(np.mean(out**2, axis=-1))
         np.testing.assert_allclose(rms, 1.0, atol=1e-4)
 
     def test_zero_input(self):
@@ -150,6 +153,7 @@ class TestRMSNorm:
 
 
 # ── ops.matmul ────────────────────────────────────────────────────
+
 
 class TestOpsMatmul:
     def test_basic(self):

@@ -8,31 +8,30 @@ for advanced logical and creative reasoning.
 from __future__ import annotations
 
 from .advanced import (
-    advanced_reasoning,
-    ChainOfThought,
     CausalReasoning,
+    ChainOfThought,
     ConstitutionalAI,
+    ReActReasoning,
     ReasoningMode,
     ReasoningResult,
-    ReActReasoning,
     SelfConsistency,
     SyllogismReasoning,
     ThoughtStep,
     TreeOfThoughts,
+    advanced_reasoning,
 )
-
 from .deep import (
     DeepReasoning,
     DeepReasoningContext,
     FormalLogicEngine,
     LogicalOperator,
     Predicate,
+    RetrievalSource,
+    RetrievedKnowledge,
+    Substitution,
     Term,
     WellFormedFormula,
     WorkingMemory,
-    RetrievedKnowledge,
-    RetrievalSource,
-    Substitution,
 )
 
 __all__ = [
@@ -101,7 +100,10 @@ class ReasoningEngine:
     def query(self, predicate_name: str, *terms: str) -> bool:
         """Query the knowledge base."""
         from .deep import Predicate
-        return self.logic_engine.query(Predicate(name=predicate_name, terms=[Term(name=t) for t in terms]))
+
+        return self.logic_engine.query(
+            Predicate(name=predicate_name, terms=[Term(name=t) for t in terms])
+        )
 
     async def set_mode(self, mode: ReasoningMode) -> None:
         """Set reasoning mode."""

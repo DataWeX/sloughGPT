@@ -17,28 +17,28 @@ Features:
 
 from __future__ import annotations
 
+import glob
 import io
+import json
+import logging
+import logging.handlers
 import os
 import re
-import sys
-import json
-import time
 import shutil
-import logging
-import glob
+import sys
 import threading
-import logging.handlers
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .runtime import DaitRuntime
+from .cmds import CmdModule
+from .cmds.linux import LinuxCommandsMixin
 from .commands import ShellCommands
 from .console import Console
-from .cmds import CmdModule
 from .io import ShellIO
+from .runtime import DaitRuntime
 from .state import ShellState
-from .cmds.linux import LinuxCommandsMixin
 
 _EM = "\u2014"  # em dash
 logger = logging.getLogger("slo.shell.repl")
@@ -50,11 +50,11 @@ logger = logging.getLogger("slo.shell.repl")
 # leaks one fd per instance and multiplies log writes. Both handlers are
 # created once per process and attached idempotently.
 
-_file_handler: "logging.handlers.RotatingFileHandler | None" = None
-_buf_handler: "logging.Handler | None" = None
+_file_handler: logging.handlers.RotatingFileHandler | None = None
+_buf_handler: logging.Handler | None = None
 
 
-def _get_file_handler() -> "logging.handlers.RotatingFileHandler | None":
+def _get_file_handler() -> logging.handlers.RotatingFileHandler | None:
     """Return the process-wide shell_infra.log handler, creating it once.
 
     Returns:
@@ -74,9 +74,7 @@ def _get_file_handler() -> "logging.handlers.RotatingFileHandler | None":
             maxBytes=10 * 1024 * 1024,
             backupCount=3,
         )
-        handler.setFormatter(logging.Formatter(
-            "%(asctime)s %(levelname)-7s %(name)s  %(message)s"
-        ))
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-7s %(name)s  %(message)s"))
         handler.setLevel(logging.DEBUG)
         _file_handler = handler
     except Exception:
@@ -84,7 +82,7 @@ def _get_file_handler() -> "logging.handlers.RotatingFileHandler | None":
     return _file_handler
 
 
-def _get_log_buffer_handler() -> "logging.Handler | None":
+def _get_log_buffer_handler() -> logging.Handler | None:
     """Return the process-wide log-buffer handler, creating it once.
 
     Returns:
@@ -98,12 +96,14 @@ def _get_log_buffer_handler() -> "logging.Handler | None":
     if _buf_handler is not None and not getattr(_buf_handler, "closed", False):
         return _buf_handler
     try:
-        from .log_buffer import get_log_buffer, LogBufferHandler
+        from .log_buffer import LogBufferHandler, get_log_buffer
+
         _buf_handler = LogBufferHandler(get_log_buffer())
         _buf_handler.setLevel(logging.DEBUG)
     except Exception:
         return None
     return _buf_handler
+
 
 # ── ANSI color constants (disabled via NO_COLOR env var) ─────────────
 
@@ -124,11 +124,13 @@ def _color(text: str, code: str) -> str:
     """Wrap text in an ANSI color code, unless NO_COLOR is set."""
     return f"{code}{text}{_C_RESET}" if _COLOR_ENABLED and code else text
 
+
 # ── readline (optional) ──────────────────────────────────────────────
 
 _HAS_READLINE = False
 try:
     import readline  # noqa: F401
+
     _HAS_READLINE = True
 except ImportError:
     pass
@@ -136,61 +138,76 @@ except ImportError:
 
 # ── Completion cache fetchers (API-backed) ──────────────────────────
 
+
 def _fetch_model_names() -> list[str]:
     """Fetch available model names from the API for tab completion."""
     import requests
+
     try:
         from .commands import get_api_base
+
         r = requests.get(f"{get_api_base()}/models", timeout=3)
         if r.status_code == 200:
             data = r.json()
             models = data if isinstance(data, list) else data.get("models", [])
-            return sorted(set(m.get("name", m.get("id", "")) for m in models if isinstance(m, dict)))
+            return sorted(
+                {m.get("name", m.get("id", "")) for m in models if isinstance(m, dict)}
+            )
     except Exception as e:
         logger.debug("model names fetch failed: %s", e)
     return []
 
+
 def _fetch_soul_names() -> list[str]:
     """Fetch soul names from the API for tab completion."""
     import requests
+
     try:
         from .commands import get_api_base
+
         r = requests.get(f"{get_api_base()}/souls", timeout=3)
         if r.status_code == 200:
             data = r.json()
             souls = data if isinstance(data, list) else data.get("souls", [])
-            return sorted(set(s.get("name", "") for s in souls if isinstance(s, dict)))
+            return sorted({s.get("name", "") for s in souls if isinstance(s, dict)})
     except Exception as e:
         logger.debug("soul names fetch failed: %s", e)
     return []
 
+
 def _fetch_dataset_names() -> list[str]:
     """Fetch dataset names from the API for tab completion."""
     import requests
+
     try:
         from .commands import get_api_base
+
         r = requests.get(f"{get_api_base()}/datasets", timeout=3)
         if r.status_code == 200:
             data = r.json()
             datasets = data if isinstance(data, list) else data.get("datasets", [])
-            return sorted(set(d.get("name", "") for d in datasets if isinstance(d, dict)))
+            return sorted({d.get("name", "") for d in datasets if isinstance(d, dict)})
     except Exception as e:
         logger.debug("dataset names fetch failed: %s", e)
     return []
 
+
 def _fetch_checkpoint_names() -> list[str]:
     """Fetch checkpoint names from the API for tab completion."""
     import requests
+
     try:
         from .commands import get_api_base
+
         r = requests.get(f"{get_api_base()}/auto-train/checkpoints", timeout=3)
         if r.status_code == 200:
             data = r.json()
             cps = data if isinstance(data, list) else data.get("checkpoints", [])
-            return sorted(set(c.get("name", "") for c in cps if isinstance(c, dict)))
+            return sorted({c.get("name", "") for c in cps if isinstance(c, dict)})
     except Exception as e:
         logger.debug("checkpoint names fetch failed: %s", e)
     return []
+
 
 _COMMAND_CACHE_FETCHERS: dict[str, callable] = {
     "load": _fetch_model_names,
@@ -225,9 +242,10 @@ class _CaptureOutput:
     def __enter__(self):
         if self._repl is not None:
             from .io import MemoryIO
+
             self._mem = MemoryIO()
             self._old_io = self._repl.io
-            self._old_console_io = getattr(self._repl.console, '_io', None)
+            self._old_console_io = getattr(self._repl.console, "_io", None)
             self._repl.io = self._mem
             if self._old_console_io is not None:
                 self._repl.console._io = self._mem
@@ -264,9 +282,13 @@ class ShellREPL(LinuxCommandsMixin):
     the terminal.
     """
 
-
-    def __init__(self, os: DaitRuntime, cmds: ShellCommands | None = None,
-                 io: "ShellIO | None" = None, use_tui: bool | None = None):
+    def __init__(
+        self,
+        os: DaitRuntime,
+        cmds: ShellCommands | None = None,
+        io: ShellIO | None = None,
+        use_tui: bool | None = None,
+    ):
         self.os = os
         self.cmds = cmds or ShellCommands()
         self.state = ShellState()
@@ -276,6 +298,7 @@ class ShellREPL(LinuxCommandsMixin):
         # opt-in via MAN_TUI=1 or the `tui` command / --tui flag.
         if use_tui is None:
             import os as _os
+
             try:
                 use_tui = _os.environ.get("MAN_TUI") == "1"
             except (OSError, ValueError):
@@ -296,29 +319,37 @@ class ShellREPL(LinuxCommandsMixin):
 
         # I/O layer — swap for TUI via ``io=TuiIO()``
         from .io import ConsoleIO
+
         self.io = io or ConsoleIO()
 
         # Structured console output — tables, boxes, status, progress
         from .console import Console
+
         self.console = Console(self.io, has_readline=_HAS_READLINE)
 
         # Structured logger — inherit from domains.logging
-        from domain.logging import ShellLogger, LogLevel
+        from domain.logging import LogLevel, ShellLogger
+
         self.log = ShellLogger("slo.shell.repl", level=LogLevel.DEBUG)
 
         # Log buffer — captures infra + API server logs for the console panel
-        from .log_buffer import get_log_buffer, LogEntry
+        from .log_buffer import LogEntry, get_log_buffer
+
         self._log_buffer = get_log_buffer()
         _wrap_emit = self.log.emit
+
         def _buffered_emit(record):
             _wrap_emit(record)
-            self._log_buffer.append(LogEntry(
-                timestamp=record.timestamp,
-                level=record.level.value.upper(),
-                source=record.logger,
-                message=record.message,
-                context=dict(record.context),
-            ))
+            self._log_buffer.append(
+                LogEntry(
+                    timestamp=record.timestamp,
+                    level=record.level.value.upper(),
+                    source=record.logger,
+                    message=record.message,
+                    context=dict(record.context),
+                )
+            )
+
         self.log.emit = _buffered_emit
         _log_buf_handler = _get_log_buffer_handler()
         if _log_buf_handler is not None:
@@ -342,22 +373,29 @@ class ShellREPL(LinuxCommandsMixin):
 
         # Line-mode log display — status badge + ``logs`` command
         from .log_display import LineModeLogDisplay
+
         self._log_display = LineModeLogDisplay(self._log_buffer)
 
         # Audit logger — every command is logged to JSONL
         from .audit import get_shell_audit_logger
+
         self._audit = get_shell_audit_logger()
 
         # Permissions manager — gates destructive operations
         from .permissions import ShellPermissions
+
         self._perms = ShellPermissions()
 
         self._aliases: dict[str, str] = dict(self.state.aliases)
-        self._aliases.update({
-            "q": "exit", "quit": "exit", "h": "help",
-            "?": "help",
-            "jobs": "bg",
-        })
+        self._aliases.update(
+            {
+                "q": "exit",
+                "quit": "exit",
+                "h": "help",
+                "?": "help",
+                "jobs": "bg",
+            }
+        )
 
         self._last_exit_code = 0
         self._cmd_count = 0
@@ -368,6 +406,7 @@ class ShellREPL(LinuxCommandsMixin):
         # Dynamic completion cache — TTL-based, shared with completion.py
         try:
             from core.completion import get_cache
+
             self._completion_cache_obj = get_cache()
         except ImportError:
             self._completion_cache_obj = None
@@ -375,6 +414,7 @@ class ShellREPL(LinuxCommandsMixin):
 
         # External commands from commands/ directory
         from .cmds import discover as _discover
+
         self._ext_cmds = _discover()
 
         if _HAS_READLINE:
@@ -391,6 +431,7 @@ class ShellREPL(LinuxCommandsMixin):
         In programmatic mode (execute()), silently denies.
         """
         from .permissions import Risk
+
         try:
             self._perms.check(cmd, args_str)
             return True
@@ -398,7 +439,9 @@ class ShellREPL(LinuxCommandsMixin):
             risk = self._perms.classify(cmd, args_str)
             if not interactive:
                 self._print(f"  {_C_RED}Permission denied:{_C_RESET} {cmd} (risk={risk})")
-                self._print(f"  Use `permit {cmd}` to grant, or `permit --all-{risk}` for all {risk} commands.")
+                self._print(
+                    f"  Use `permit {cmd}` to grant, or `permit --all-{risk}` for all {risk} commands."
+                )
                 return False
             risk_colors = {
                 Risk.SAFE: _C_GREEN,
@@ -407,7 +450,9 @@ class ShellREPL(LinuxCommandsMixin):
                 Risk.CRITICAL: _C_RED,
             }
             color = risk_colors.get(risk, _C_RED)
-            self._print(f"  {_C_YELLOW}\u26a1 {cmd}{_C_RESET} requires {_C_BOLD}{color}{risk}{_C_RESET} permissions.")
+            self._print(
+                f"  {_C_YELLOW}\u26a1 {cmd}{_C_RESET} requires {_C_BOLD}{color}{risk}{_C_RESET} permissions."
+            )
             try:
                 self.io.write(f"  Allow this command? [y/N/always] [{_C_DIM}n{_C_RESET}]: ", end="")
                 answer = self.io.read("").strip().lower()
@@ -415,11 +460,15 @@ class ShellREPL(LinuxCommandsMixin):
                 answer = ""
             if answer == "always":
                 self._perms.grant(cmd, persist=True)
-                self._print(f"  {_C_GREEN}\u2713 Granted (persistent){_C_RESET} \u2014 {cmd} allowed for this and future sessions.")
+                self._print(
+                    f"  {_C_GREEN}\u2713 Granted (persistent){_C_RESET} \u2014 {cmd} allowed for this and future sessions."
+                )
                 return True
             elif answer in ("y", "yes"):
                 self._perms.grant(cmd)
-                self._print(f"  {_C_GREEN}\u2713 Granted{_C_RESET} \u2014 {cmd} allowed this session.")
+                self._print(
+                    f"  {_C_GREEN}\u2713 Granted{_C_RESET} \u2014 {cmd} allowed this session."
+                )
                 return True
             else:
                 self._print(f"  {_C_DIM}Denied{_C_RESET} \u2014 {cmd} skipped.")
@@ -434,6 +483,7 @@ class ShellREPL(LinuxCommandsMixin):
         Still audit-logs every execution.
         """
         import time as _time
+
         from .io import MemoryIO
 
         if not line.strip():
@@ -477,7 +527,14 @@ class ShellREPL(LinuxCommandsMixin):
                     self._execute_background_tuples(commands)
                 else:
                     self._execute_background(commands[0][0])
-                self._audit.command(line, commands[0][0].split()[0] if commands[0][0] else "", line, 0, is_background=True, is_pipeline=len(commands) > 1)
+                self._audit.command(
+                    line,
+                    commands[0][0].split()[0] if commands[0][0] else "",
+                    line,
+                    0,
+                    is_background=True,
+                    is_pipeline=len(commands) > 1,
+                )
                 self.io = old_io
                 self.console._io = old_console_io
                 self._print = old_print
@@ -496,7 +553,9 @@ class ShellREPL(LinuxCommandsMixin):
                 if handler or ext_mod:
                     if not self._check_permission(cmd, args_str, interactive=False):
                         self._last_exit_code = 126
-                        self._audit.command(line, cmd, args_str, 126, elapsed_ms=0, expanded=expanded)
+                        self._audit.command(
+                            line, cmd, args_str, 126, elapsed_ms=0, expanded=expanded
+                        )
                         self.io = old_io
                         self.console._io = old_console_io
                         self._print = old_print
@@ -507,7 +566,12 @@ class ShellREPL(LinuxCommandsMixin):
                             self._env["_piped_input"] = piped
                             self._env["_exec_fn"] = self._execute_single
                             c = Console(mem, has_readline=False)
-                            self._last_exit_code = ext_mod.run([cmd] + (args_str.split() if args_str else []), c, self.cmds, self._env)
+                            self._last_exit_code = ext_mod.run(
+                                [cmd] + (args_str.split() if args_str else []),
+                                c,
+                                self.cmds,
+                                self._env,
+                            )
                             self._env.pop("_piped_input", None)
                         else:
                             handler(self, args_str)
@@ -519,7 +583,14 @@ class ShellREPL(LinuxCommandsMixin):
                         self._last_exit_code = 1
                         self._audit.error(line, repr(e))
                     elapsed_ms = (_time.time() - t0) * 1000
-                    self._audit.command(line, cmd, args_str, self._last_exit_code, elapsed_ms=elapsed_ms, expanded=expanded)
+                    self._audit.command(
+                        line,
+                        cmd,
+                        args_str,
+                        self._last_exit_code,
+                        elapsed_ms=elapsed_ms,
+                        expanded=expanded,
+                    )
                 else:
                     suggestion = self._suggest_command(cmd)
                     msg = f"  Unknown command: {cmd}. Type `help`."
@@ -598,7 +669,9 @@ class ShellREPL(LinuxCommandsMixin):
                 return val
         try:
             import requests
+
             from .config import get_api_base
+
             r = requests.get(f"{get_api_base()}/health", timeout=2)
             if r.status_code == 200:
                 data = r.json()
@@ -621,7 +694,9 @@ class ShellREPL(LinuxCommandsMixin):
                 return val
         try:
             import requests
+
             from .config import get_api_base
+
             r = requests.get(f"{get_api_base()}/souls/current", timeout=2)
             if r.status_code == 200:
                 data = r.json()
@@ -655,6 +730,7 @@ class ShellREPL(LinuxCommandsMixin):
     def _setup_readline(self) -> None:
         try:
             import readline
+
             histfile = Path.home() / ".config" / "sloughgpt" / ".shell_history"
             histfile.parent.mkdir(parents=True, exist_ok=True)
 
@@ -685,7 +761,7 @@ class ShellREPL(LinuxCommandsMixin):
                                     if pos < 0:
                                         break
                                 # Rewrite file with only the tail
-                                kept = tail[pos + 1:] if pos >= 0 else tail
+                                kept = tail[pos + 1 :] if pos >= 0 else tail
                                 with open(histfile, "wb") as wf:
                                     wf.write(kept)
                             # If fewer newlines than needed but file is huge,
@@ -703,6 +779,7 @@ class ShellREPL(LinuxCommandsMixin):
                 pass
             readline.set_history_length(5000)
             import atexit
+
             atexit.register(lambda: readline.write_history_file(str(histfile)))
             readline.set_completer(self._complete)
             readline.parse_and_bind("tab: complete")
@@ -714,6 +791,7 @@ class ShellREPL(LinuxCommandsMixin):
     def _complete(self, text: str, state: int) -> str | None:
         try:
             import readline
+
             line = readline.get_line_buffer()
         except Exception:
             line = text
@@ -721,22 +799,33 @@ class ShellREPL(LinuxCommandsMixin):
         is_first_word = len(parts) <= 1 or line.endswith(" ")
 
         if is_first_word:
-            candidates = list(self._aliases.keys()) + list(self.COMMANDS.keys()) + list(self._ext_cmds.keys())
+            candidates = (
+                list(self._aliases.keys())
+                + list(self.COMMANDS.keys())
+                + list(self._ext_cmds.keys())
+            )
         else:
             cmd = parts[0].lower()
             if cmd == "note" and len(parts) >= 2:
                 sub = parts[1].lower() if len(parts) > 1 else ""
                 if sub in ("show", "edit", "delete", "rm") and line.endswith(" "):
                     from notes import get_note_store
+
                     store = get_note_store(backend="mogdb")
                     candidates = [n.short_id for n in store.list_notes(limit=9999)]
                 elif sub == "sprint" and line.endswith(" "):
                     from notes import get_note_store
+
                     store = get_note_store(backend="mogdb")
                     candidates = store.sprints()
                 else:
                     candidates = self._complete_args_for(cmd)
-            elif cmd == "finetuned" and len(parts) >= 2 and parts[1].lower() in ("load", "rm", "del", "delete") and line.endswith(" "):
+            elif (
+                cmd == "finetuned"
+                and len(parts) >= 2
+                and parts[1].lower() in ("load", "rm", "del", "delete")
+                and line.endswith(" ")
+            ):
                 ft = self.cmds.finetuned_models()
                 candidates = [m.get("model_name", "") for m in ft]
             else:
@@ -797,13 +886,27 @@ class ShellREPL(LinuxCommandsMixin):
             if cmd == "train":
                 return ["status", "follow", "stop", "distill", "hf", "auto", "load", "del"]
             if cmd in ("permit", "deny"):
-                from .permissions import _DANGEROUS, _CRITICAL
+                from .permissions import _CRITICAL, _DANGEROUS
+
                 candidates = sorted(_DANGEROUS | _CRITICAL) + ["--persist"]
                 if cmd == "permit":
                     candidates.append("--all-dangerous")
                 return candidates
             if cmd == "note":
-                return ["new", "list", "show", "edit", "delete", "search", "today", "export", "tags", "status", "sprint", "timeline"]
+                return [
+                    "new",
+                    "list",
+                    "show",
+                    "edit",
+                    "delete",
+                    "search",
+                    "today",
+                    "export",
+                    "tags",
+                    "status",
+                    "sprint",
+                    "timeline",
+                ]
         except Exception as e:
             logger.debug("command completion failed: %s", e)
         return self._complete_path("")
@@ -822,7 +925,11 @@ class ShellREPL(LinuxCommandsMixin):
                         partial = ""
                     entries = vfs.listdir(parent) if parent else vfs.listdir("/dev")
                     if entries is not None:
-                        matches = [e + "/" if vfs.isdir(parent + "/" + e if parent else "/dev/" + e) else e for e in entries if not e.startswith(".") and e.startswith(partial)]
+                        matches = [
+                            e + "/" if vfs.isdir(parent + "/" + e if parent else "/dev/" + e) else e
+                            for e in entries
+                            if not e.startswith(".") and e.startswith(partial)
+                        ]
                         return sorted(matches)
             except Exception as e:
                 logger.debug("vfs completion failed: %s", e)
@@ -859,8 +966,12 @@ class ShellREPL(LinuxCommandsMixin):
         text = " ".join(str(a) for a in args)
         self.console.write(text, end=end)
 
-    def _table(self, rows: list[list[str]], header: list[str] | None = None,
-               separator_after_header: bool = True) -> None:
+    def _table(
+        self,
+        rows: list[list[str]],
+        header: list[str] | None = None,
+        separator_after_header: bool = True,
+    ) -> None:
         self.console.table(rows, header, separator_after_header)
 
     def _box(self, text: str, width: int | None = None) -> None:
@@ -875,6 +986,7 @@ class ShellREPL(LinuxCommandsMixin):
     def _log_ok(self, msg: str, **ctx) -> None:
         """Log a success message (green checkmark)."""
         from domain.logging import LogLevel
+
         self.log.emit(self.log._make_record(LogLevel.INFO, msg, ctx))
 
     def _log_warn(self, msg: str, **ctx) -> None:
@@ -890,7 +1002,9 @@ class ShellREPL(LinuxCommandsMixin):
         self.log.info(msg, **ctx)
 
     def _print_header(self) -> None:
-        self._print(f"  Type {_C_YELLOW}`help`{_C_RESET} for commands, {_C_YELLOW}`exit`{_C_RESET} to quit, {_C_YELLOW}`ai <query>`{_C_RESET} for AI mode")
+        self._print(
+            f"  Type {_C_YELLOW}`help`{_C_RESET} for commands, {_C_YELLOW}`exit`{_C_RESET} to quit, {_C_YELLOW}`ai <query>`{_C_RESET} for AI mode"
+        )
 
     def _format_table(self, rows: list[list[str]], header: list[str] | None = None) -> str:
         if not rows:
@@ -908,7 +1022,7 @@ class ShellREPL(LinuxCommandsMixin):
                 if i < cols:
                     widths[i] = max(widths[i], len(str(cell)))
         lines = []
-        fmt = "  ".join("{{:<{}}}".format(w) for w in widths)
+        fmt = "  ".join(f"{{:<{w}}}" for w in widths)
         if header:
             lines.append(fmt.format(*header))
             lines.append("  ".join("─" * w for w in widths))
@@ -946,9 +1060,11 @@ class ShellREPL(LinuxCommandsMixin):
     def _expand_vars(self, text: str) -> str:
         """Replace $VAR, ${VAR}, and $? with values."""
         text = text.replace("$?", str(self._last_exit_code))
+
         def _repl(m: re.Match) -> str:
             name = m.group(1) or m.group(2) or ""
             return self._env.get(name, m.group(0))
+
         result = re.sub(r"\$\{(\w+)\}|\$(\w+)", _repl, text)
         return result
 
@@ -956,10 +1072,12 @@ class ShellREPL(LinuxCommandsMixin):
         """Replace $(command) with the captured output of that command."""
         pattern = r"\$\(([^()]+)\)"
         while re.search(pattern, text):
+
             def _repl(m: re.Match) -> str:
                 inner = m.group(1).strip()
                 out = self._execute_single(inner, "")
                 return out.rstrip("\n")
+
             text = re.sub(pattern, _repl, text, count=1)
         return text
 
@@ -968,7 +1086,9 @@ class ShellREPL(LinuxCommandsMixin):
         result = text
 
         # !! → last command
-        result = re.sub(r'(?<!\w)!!(?!\w)', lambda m: self._history[-1] if self._history else "!!", result)
+        result = re.sub(
+            r"(?<!\w)!!(?!\w)", lambda m: self._history[-1] if self._history else "!!", result
+        )
 
         # !$ → last arg of last command
         def _last_arg(m: re.Match) -> str:
@@ -976,7 +1096,8 @@ class ShellREPL(LinuxCommandsMixin):
                 return m.group(0)
             parts = self._history[-1].split()
             return parts[-1] if len(parts) > 1 else parts[0]
-        result = re.sub(r'(?<!\w)!\$(?!\w)', _last_arg, result)
+
+        result = re.sub(r"(?<!\w)!\$(?!\w)", _last_arg, result)
 
         # !:N → Nth arg of last command (0-indexed)
         def _nth_arg(m: re.Match) -> str:
@@ -985,7 +1106,8 @@ class ShellREPL(LinuxCommandsMixin):
                 return m.group(0)
             parts = self._history[-1].split()
             return parts[n] if n < len(parts) else m.group(0)
-        result = re.sub(r'!:(0|[1-9]\d*)', _nth_arg, result)
+
+        result = re.sub(r"!:(0|[1-9]\d*)", _nth_arg, result)
 
         # !* → all args of last command
         def _all_args(m: re.Match) -> str:
@@ -993,7 +1115,8 @@ class ShellREPL(LinuxCommandsMixin):
                 return m.group(0)
             parts = self._history[-1].split()
             return " ".join(parts[1:]) if len(parts) > 1 else ""
-        result = re.sub(r'(?<!\w)!\*(?!\w)', _all_args, result)
+
+        result = re.sub(r"(?<!\w)!\*(?!\w)", _all_args, result)
 
         # !-n → command n from end
         def _neg_history(m: re.Match) -> str:
@@ -1001,7 +1124,8 @@ class ShellREPL(LinuxCommandsMixin):
             if not self._history or n > len(self._history):
                 return m.group(0)
             return self._history[-n]
-        result = re.sub(r'!-(\d+)(?!\w)', _neg_history, result)
+
+        result = re.sub(r"!-(\d+)(?!\w)", _neg_history, result)
 
         # !n → command #n (must be after !-n so it doesn't match first)
         def _pos_history(m: re.Match) -> str:
@@ -1009,7 +1133,8 @@ class ShellREPL(LinuxCommandsMixin):
             if n < 1 or n > len(self._history):
                 return m.group(0)
             return self._history[n - 1]
-        result = re.sub(r'(?<!\w)!(\d+)(?!\w)', _pos_history, result)
+
+        result = re.sub(r"(?<!\w)!(\d+)(?!\w)", _pos_history, result)
 
         return result
 
@@ -1027,17 +1152,17 @@ class ShellREPL(LinuxCommandsMixin):
                 quote = text[i]
                 j = i + 1
                 while j < len(text) and text[j] != quote:
-                    if text[j] == '\\':
+                    if text[j] == "\\":
                         j += 1
                     j += 1
-                tokens.append(text[i:j+1])
+                tokens.append(text[i : j + 1])
                 i = j + 1
-            elif text[i] == ' ':
-                tokens.append(' ')
+            elif text[i] == " ":
+                tokens.append(" ")
                 i += 1
             else:
                 j = i
-                while j < len(text) and text[j] not in (' ', '"', "'"):
+                while j < len(text) and text[j] not in (" ", '"', "'"):
                     j += 1
                 tokens.append(text[i:j])
                 i = j
@@ -1045,7 +1170,7 @@ class ShellREPL(LinuxCommandsMixin):
         # Expand glob patterns (but not quoted tokens or commands)
         expanded = []
         for t in tokens:
-            if t == ' ':
+            if t == " ":
                 expanded.append(t)
             elif t.startswith(("'", '"')):
                 expanded.append(t)
@@ -1055,7 +1180,7 @@ class ShellREPL(LinuxCommandsMixin):
                     # Quote filenames with spaces
                     quoted = []
                     for m in matches:
-                        if ' ' in m:
+                        if " " in m:
                             quoted.append(f"'{m}'")
                         else:
                             quoted.append(m)
@@ -1095,22 +1220,22 @@ class ShellREPL(LinuxCommandsMixin):
             stripped = stripped[5:].lstrip()
 
         # Split by chaining operators (&&, ||, ;) and pipes
-        chain_re = re.compile(r'(&&|\|\||;|\|)')
+        chain_re = re.compile(r"(&&|\|\||;|\|)")
         tokens = []
         pos = 0
         depth = 0
         in_quote = None
         for i, ch in enumerate(stripped):
-            if ch in ('"', "'") and (i == 0 or stripped[i-1] != '\\'):
+            if ch in ('"', "'") and (i == 0 or stripped[i - 1] != "\\"):
                 if in_quote is None:
                     in_quote = ch
                 elif in_quote == ch:
                     in_quote = None
             if in_quote:
                 continue
-            if ch == '(':
+            if ch == "(":
                 depth += 1
-            elif ch == ')':
+            elif ch == ")":
                 depth -= 1
             if depth == 0:
                 m = chain_re.match(stripped, i)
@@ -1125,7 +1250,7 @@ class ShellREPL(LinuxCommandsMixin):
         for seg, op in tokens:
             pipe_parts = self._split_pipe(seg)
             for pp in pipe_parts[:-1]:
-                commands.append((pp, '|'))
+                commands.append((pp, "|"))
             commands.append((pipe_parts[-1], op))
 
         return commands, bg, should_time
@@ -1158,7 +1283,7 @@ class ShellREPL(LinuxCommandsMixin):
         if m:
             redirect_path = m.group(2)
             append_mode = m.group(1) == ">>"
-            stripped = stripped[:m.start()].rstrip()
+            stripped = stripped[: m.start()].rstrip()
         return stripped, redirect_path, append_mode
 
     def _parse_inline_env(self, raw: str):
@@ -1170,7 +1295,7 @@ class ShellREPL(LinuxCommandsMixin):
             m = re.match(r"(\w+)=(\S+)\s*", rest)
             if m and not self.COMMANDS.get(m.group(1)):
                 env_updates[m.group(1)] = m.group(2).strip("\"'")
-                rest = rest[m.end():]
+                rest = rest[m.end() :]
             else:
                 break
         return env_updates, rest.strip()
@@ -1202,10 +1327,14 @@ class ShellREPL(LinuxCommandsMixin):
 
         if handler is None and ext_mod is None:
             # Fallback: try as a system binary
-            import shutil, subprocess, shlex
+            import shlex
+            import shutil
+            import subprocess
+
             binary = shutil.which(cmd)
             if binary:
                 from .io import MemoryIO as _MemIO
+
                 cap = _MemIO()
                 old_io = self.io
                 old_console_io = self.console._io
@@ -1213,7 +1342,11 @@ class ShellREPL(LinuxCommandsMixin):
                 self.console._io = cap
                 try:
                     shell_args = shlex.split(args) if args else []
-                    stdin_data = piped_input if isinstance(piped_input, bytes) else (piped_input.encode() if piped_input else None)
+                    stdin_data = (
+                        piped_input
+                        if isinstance(piped_input, bytes)
+                        else (piped_input.encode() if piped_input else None)
+                    )
                     sub_env = {**os.environ, **self._env}
                     result = subprocess.run(
                         [binary] + shell_args,
@@ -1243,7 +1376,9 @@ class ShellREPL(LinuxCommandsMixin):
                 cap_out = cap.get_output()
                 if redirect_path:
                     vfs = self.os.vfs
-                    if vfs and (redirect_path.startswith("/dev/") or redirect_path.startswith("/proc/")):
+                    if vfs and (
+                        redirect_path.startswith("/dev/") or redirect_path.startswith("/proc/")
+                    ):
                         result = vfs.write(redirect_path, cap_out)
                         if result:
                             self._print(result)
@@ -1288,6 +1423,7 @@ class ShellREPL(LinuxCommandsMixin):
             return f"  Permission denied: {cmd} (use `permit {cmd}` to grant)\n"
 
         from .io import MemoryIO as _MemIO
+
         cap = _MemIO()
         old_io = self.io
         old_console_io = self.console._io
@@ -1345,6 +1481,7 @@ class ShellREPL(LinuxCommandsMixin):
     def _suggest_command(self, bad_cmd: str) -> str | None:
         """Suggest a close command match via difflib (excludes short aliases)."""
         import difflib
+
         all_cmds = list(self.COMMANDS.keys()) + list(self._ext_cmds.keys())
         matches = difflib.get_close_matches(bad_cmd, all_cmds, n=1, cutoff=0.6)
         return matches[0] if matches else None
@@ -1361,24 +1498,26 @@ class ShellREPL(LinuxCommandsMixin):
         t0 = None
         if should_time:
             import time as _time
+
             t0 = _time.time()
 
         for i, (raw, op) in enumerate(commands):
             is_last = i == len(commands) - 1
 
             # Check if we should skip based on previous exit code
-            if op == '&&' and self._last_exit_code != 0:
+            if op == "&&" and self._last_exit_code != 0:
                 continue
-            if op == '||' and self._last_exit_code == 0:
+            if op == "||" and self._last_exit_code == 0:
                 continue
 
             out = self._execute_single(raw, piped)
-            if is_last or op != '|':
+            if is_last or op != "|":
                 self._print(out, end="")
-            piped = out if op == '|' else ""
+            piped = out if op == "|" else ""
 
         if should_time and t0 is not None:
             import time as _time
+
             elapsed = _time.time() - t0
             self._print(f"{_C_DIM}  [{elapsed:.2f}s]{_C_RESET}")
 
@@ -1430,8 +1569,7 @@ class ShellREPL(LinuxCommandsMixin):
             items = [f"{name}={cmd}" for name, cmd in sorted(self._aliases.items())]
             if self.io._is_tty:
                 selected = self.console.select_with_details(
-                    "Aliases:", items,
-                    lambda x: x.split("=", 1)[1] if "=" in x else ""
+                    "Aliases:", items, lambda x: x.split("=", 1)[1] if "=" in x else ""
                 )
                 if selected:
                     name, _, cmd = selected.partition("=")
@@ -1480,8 +1618,7 @@ class ShellREPL(LinuxCommandsMixin):
             items = [f"{k}={v}" for k, v in sorted(self._env.items())]
             if self.io._is_tty:
                 selected = self.console.select_with_details(
-                    "Environment:", items,
-                    lambda x: x.split("=", 1)[1] if "=" in x else ""
+                    "Environment:", items, lambda x: x.split("=", 1)[1] if "=" in x else ""
                 )
                 if selected:
                     name, _, value = selected.partition("=")
@@ -1581,14 +1718,41 @@ class ShellREPL(LinuxCommandsMixin):
             return
 
         # Restricted __import__ — only safe stdlib modules
-        _SAFE_MODULES = frozenset({
-            "math", "json", "datetime", "time", "re", "collections",
-            "itertools", "functools", "operator", "string", "textwrap",
-            "statistics", "decimal", "fractions", "random", "uuid",
-            "hashlib", "base64", "binascii", "struct", "codecs",
-            "unicodedata", "enum", "dataclasses", "typing", "copy",
-            "pprint", "array", "heapq", "bisect", "graphlib",
-        })
+        _SAFE_MODULES = frozenset(
+            {
+                "math",
+                "json",
+                "datetime",
+                "time",
+                "re",
+                "collections",
+                "itertools",
+                "functools",
+                "operator",
+                "string",
+                "textwrap",
+                "statistics",
+                "decimal",
+                "fractions",
+                "random",
+                "uuid",
+                "hashlib",
+                "base64",
+                "binascii",
+                "struct",
+                "codecs",
+                "unicodedata",
+                "enum",
+                "dataclasses",
+                "typing",
+                "copy",
+                "pprint",
+                "array",
+                "heapq",
+                "bisect",
+                "graphlib",
+            }
+        )
 
         def _safe_import(name: str, *args: Any, **kwargs: Any) -> Any:
             root = name.split(".")[0]
@@ -1600,19 +1764,51 @@ class ShellREPL(LinuxCommandsMixin):
             return __import__(name, *args, **kwargs)
 
         safe_builtins = {
-            "abs": abs, "all": all, "any": any, "bool": bool,
-            "chr": chr, "dict": dict, "dir": dir, "enumerate": enumerate,
-            "filter": filter, "float": float, "format": format,
-            "frozenset": frozenset, "getattr": getattr,
-            "hasattr": hasattr, "hash": hash, "hex": hex,
-            "int": int, "isinstance": isinstance, "issubclass": issubclass,
-            "iter": iter, "len": len, "list": list, "map": map,
-            "max": max, "min": min, "next": next, "oct": oct, "ord": ord,
-            "pow": pow, "print": print, "property": property,
-            "range": range, "repr": repr, "reversed": reversed,
-            "round": round, "set": set, "slice": slice, "sorted": sorted,
-            "str": str, "sum": sum, "super": super, "tuple": tuple,
-            "type": type, "zip": zip, "__import__": _safe_import,
+            "abs": abs,
+            "all": all,
+            "any": any,
+            "bool": bool,
+            "chr": chr,
+            "dict": dict,
+            "dir": dir,
+            "enumerate": enumerate,
+            "filter": filter,
+            "float": float,
+            "format": format,
+            "frozenset": frozenset,
+            "getattr": getattr,
+            "hasattr": hasattr,
+            "hash": hash,
+            "hex": hex,
+            "int": int,
+            "isinstance": isinstance,
+            "issubclass": issubclass,
+            "iter": iter,
+            "len": len,
+            "list": list,
+            "map": map,
+            "max": max,
+            "min": min,
+            "next": next,
+            "oct": oct,
+            "ord": ord,
+            "pow": pow,
+            "print": print,
+            "property": property,
+            "range": range,
+            "repr": repr,
+            "reversed": reversed,
+            "round": round,
+            "set": set,
+            "slice": slice,
+            "sorted": sorted,
+            "str": str,
+            "sum": sum,
+            "super": super,
+            "tuple": tuple,
+            "type": type,
+            "zip": zip,
+            "__import__": _safe_import,
         }
 
         exit_code = 0
@@ -1717,7 +1913,7 @@ class ShellREPL(LinuxCommandsMixin):
             cmd_help = {
                 "help": "  help [cmd]  — Show this help or help for a specific command",
                 "exit": "  exit  — Exit the shell",
-                "cd": '  cd [dir]  — Change directory (default: ~, - for previous)',
+                "cd": "  cd [dir]  — Change directory (default: ~, - for previous)",
                 "pwd": "  pwd  — Print working directory",
                 "echo": "  echo [text...]  — Print text to stdout",
                 "ls": "  ls [dir]  — List directory contents",
@@ -1731,7 +1927,7 @@ class ShellREPL(LinuxCommandsMixin):
                 "unalias": "  unalias <name>  — Remove an alias",
                 "chat": "  chat [msg] | chat /reset  — Multi-turn chat session",
                 "gen": "  gen <prompt>  — Generate text via inference",
-                "ai": '  ai [--loop|--auto] <query>  — AI agent: single-shot or interactive loop',
+                "ai": "  ai [--loop|--auto] <query>  — AI agent: single-shot or interactive loop",
                 "models": "  models  — List available models",
                 "load": "  load <name>  — Load a model",
                 "train": "  train [dataset]  — Start training or list datasets",
@@ -1937,11 +2133,14 @@ Examples:
     def _cmd_permit(self, args: str = "") -> None:
         """permit <cmd> — grant permission for a command (session or persistent)."""
         from .permissions import Risk
+
         parts = args.strip().split()
         if not parts:
             self._print("  Usage: permit <cmd> [--persist]")
             self._print("         permit --all-<risk> [--persist]")
-            self._print(f"  Risk levels: {Risk.SAFE}, {Risk.ELEVATED}, {Risk.DANGEROUS}, {Risk.CRITICAL}")
+            self._print(
+                f"  Risk levels: {Risk.SAFE}, {Risk.ELEVATED}, {Risk.DANGEROUS}, {Risk.CRITICAL}"
+            )
             granted = self._perms.list_granted()
             if granted:
                 self._print(f"  Currently granted: {', '.join(granted)}")
@@ -1950,7 +2149,7 @@ Examples:
         targets = [p for p in parts if p != "--persist"]
         for t in targets:
             if t.startswith("--all-"):
-                risk = t[len("--all-"):]
+                risk = t[len("--all-") :]
                 if risk not in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
                     self._print(f"  Unknown risk level: {risk}")
                     continue
@@ -1965,6 +2164,7 @@ Examples:
     def _cmd_deny(self, args: str = "") -> None:
         """deny <cmd> — revoke permission for a command."""
         from .permissions import Risk
+
         parts = args.strip().split()
         if not parts:
             self._print("  Usage: deny <cmd> [--persist]")
@@ -1974,7 +2174,7 @@ Examples:
         targets = [p for p in parts if p != "--persist"]
         for t in targets:
             if t.startswith("--all-"):
-                risk = t[len("--all-"):]
+                risk = t[len("--all-") :]
                 if risk not in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
                     self._print(f"  Unknown risk level: {risk}")
                     continue
@@ -1990,10 +2190,13 @@ Examples:
     def _cmd_permissions(self, args: str = "") -> None:
         """permissions — show current permission policy and granted commands."""
         from .permissions import Risk
+
         self._print("  Risk policies:")
         for risk in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
             action = self._perms._policy.get(risk, "deny")
-            icon = f"{_C_GREEN}✓ allow{_C_RESET}" if action == "allow" else f"{_C_RED}✗ deny{_C_RESET}"
+            icon = (
+                f"{_C_GREEN}✓ allow{_C_RESET}" if action == "allow" else f"{_C_RED}✗ deny{_C_RESET}"
+            )
             self._print(f"    {risk:10s} {icon}")
         granted = self._perms.list_granted()
         if granted:
@@ -2009,12 +2212,14 @@ Examples:
           confirm off    Disable auto-download (persistent)
         """
         import yaml
+
         arg = args.strip().lower()
 
         if not arg:
             # Show current setting
             try:
                 from domain.infrastructure._internal.config import get_config
+
                 cfg = get_config()
                 current = cfg.features.auto_download
             except Exception:
@@ -2040,6 +2245,7 @@ Examples:
         # Update config file
         try:
             from domain.infrastructure._internal.config import _REPO_ROOT, get_config
+
             config_path = _REPO_ROOT / "config" / "defaults.yaml"
             if config_path.exists():
                 with open(config_path) as f:
@@ -2092,8 +2298,12 @@ Examples:
             self._print("  No kernel processes")
             return
         state_names = {
-            0: "CREATED", 1: "READY", 2: "RUNNING",
-            3: "WAITING", 4: "STOPPED", 5: "ZOMBIE",
+            0: "CREATED",
+            1: "READY",
+            2: "RUNNING",
+            3: "WAITING",
+            4: "STOPPED",
+            5: "ZOMBIE",
         }
         rows = []
         for p in procs:
@@ -2106,7 +2316,9 @@ Examples:
         if not args:
             self._print("  Usage: kill <job_id>")
             return
-        result = self._spinner_call("Killing job", lambda: self.cmds.kill(args.strip()), ok_msg=None)
+        result = self._spinner_call(
+            "Killing job", lambda: self.cmds.kill(args.strip()), ok_msg=None
+        )
         if isinstance(result, dict) and "error" in result:
             self._print(self._format_error(Exception(result["error"]), "kill"))
             return
@@ -2131,9 +2343,10 @@ Examples:
                 self._print(f"  ✗ {result.get('error', 'Unknown error')}")
 
         try:
-            from domain.infrastructure._internal.conversion_tracker import get_tracker
-            from apps.cli.src.utils.progress import ProgressBar
             import threading
+
+            from apps.cli.src.utils.progress import ProgressBar
+            from domain.infrastructure._internal.conversion_tracker import get_tracker
 
             tracker = get_tracker()
             result_holder = [None]
@@ -2188,7 +2401,9 @@ Examples:
     def _cmd_status(self, args: str = "") -> None:
         self._box(self.os.status_summary)
         try:
-            detailed = self._spinner_call("Fetching status", lambda: self.cmds.health_detailed(), ok_msg=None)
+            detailed = self._spinner_call(
+                "Fetching status", lambda: self.cmds.health_detailed(), ok_msg=None
+            )
             if isinstance(detailed, dict) and "registry" in detailed:
                 registry = detailed.get("registry", {})
                 models = registry.get("models", []) or registry.get("names", [])
@@ -2197,6 +2412,7 @@ Examples:
         except Exception as e:
             logger.debug("registry status fetch failed: %s", e)
         from .permissions import Risk
+
         granted = self._perms.list_granted()
         policies = []
         for risk in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
@@ -2216,6 +2432,7 @@ Examples:
         """
         try:
             from domain.infrastructure._internal.event_bus import get_event_bus
+
             bus = get_event_bus()
         except Exception:
             self._print("  EventBus not available")
@@ -2245,7 +2462,9 @@ Examples:
             return
 
         events = filtered[-limit:]
-        self._print(f"  Event history (last {len(events)} of {len(filtered)}, total {len(all_events)}):")
+        self._print(
+            f"  Event history (last {len(events)} of {len(filtered)}, total {len(all_events)}):"
+        )
         for e in events:
             t = time.strftime("%H:%M:%S", time.localtime(e.timestamp))
             src = f"[{e.source}]" if e.source else ""
@@ -2253,7 +2472,9 @@ Examples:
             self._print(f"  {t}  {e.name:35s} {src:15s} {data_str}")
 
     def _cmd_metrics(self, args: str = "") -> None:
-        metrics = self._spinner_call("Fetching metrics", lambda: self.cmds.system_metrics(), ok_msg=None)
+        metrics = self._spinner_call(
+            "Fetching metrics", lambda: self.cmds.system_metrics(), ok_msg=None
+        )
         if metrics.get("error"):
             self._print(f"  Error: {metrics['error']}")
             return
@@ -2265,6 +2486,7 @@ Examples:
         """Launch the split-panel TUI mode — console panel + shell output + input line."""
         try:
             from .tui_repl import TuiRepl
+
             tui = TuiRepl(self, self._log_buffer)
             tui.run()
         except ImportError as ex:
@@ -2275,7 +2497,7 @@ Examples:
 
     def _cmd_logs(self, args: str = "") -> None:
         """Show the console log panel — infrastructure and API server logs.
-        
+
         Flags:
           -l, --level LEVEL   filter by level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
           -s, --source SRC    filter by source substring
@@ -2341,18 +2563,27 @@ Examples:
                 self._print("  No log entries.")
                 return
             from collections import Counter as _Counter
+
             levels = _Counter(e.level for e in all_entries)
             sources = _Counter(e.source for e in all_entries)
             total = len(all_entries)
             sep = f"  {_C_DIM}{'─' * 40}{_C_RESET}"
-            self._print(f"  {_C_BOLD}Log Statistics{_C_RESET}  {_C_DIM}{total} total entries{_C_RESET}")
+            self._print(
+                f"  {_C_BOLD}Log Statistics{_C_RESET}  {_C_DIM}{total} total entries{_C_RESET}"
+            )
             self._print(sep)
             self._print(f"  {_C_BOLD}By Level:{_C_RESET}")
             for lvl in ("CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"):
                 n = levels.get(lvl, 0)
-                color = _C_RED if lvl in ("ERROR", "CRITICAL") else \
-                        _C_YELLOW if lvl == "WARNING" else \
-                        _C_GREEN if lvl == "INFO" else _C_CYAN
+                color = (
+                    _C_RED
+                    if lvl in ("ERROR", "CRITICAL")
+                    else _C_YELLOW
+                    if lvl == "WARNING"
+                    else _C_GREEN
+                    if lvl == "INFO"
+                    else _C_CYAN
+                )
                 bar = "█" * min(n, 40)
                 self._print(f"    {color}{lvl:<9s}{_C_RESET} {n:>5d}  {_C_DIM}{bar}{_C_RESET}")
             self._print()
@@ -2363,6 +2594,7 @@ Examples:
             self._print(f"  {_C_BOLD}Time Range:{_C_RESET}")
             if total > 0:
                 from datetime import datetime as _dt
+
                 t0_raw = all_entries[0].timestamp
                 t1_raw = all_entries[-1].timestamp
                 t0 = _dt.fromtimestamp(t0_raw).strftime("%Y-%m-%d %H:%M:%S")
@@ -2382,6 +2614,7 @@ Examples:
                 self._print("  API server not available — cannot analyze logs.")
                 return
             from datetime import datetime as _dt
+
             log_text = "\n".join(
                 f"[{_dt.fromtimestamp(e.timestamp).strftime('%H:%M:%S')}] [{e.level}] [{e.source}] {e.message}"
                 for e in err_entries[-20:]
@@ -2393,9 +2626,13 @@ Examples:
                 f"Logs:\n{log_text}\n\n"
                 "Analysis:"
             )
-            self._print(f"  {_C_BOLD}Log Analysis{_C_RESET} {_C_DIM}({len(err_entries)} errors/warnings){_C_RESET}")
+            self._print(
+                f"  {_C_BOLD}Log Analysis{_C_RESET} {_C_DIM}({len(err_entries)} errors/warnings){_C_RESET}"
+            )
             self._print(f"  {_C_DIM}{'─' * 40}{_C_RESET}")
-            result = self._spinner_call("Analyzing", lambda: self.cmds.generate(prompt, max_tokens=200))
+            result = self._spinner_call(
+                "Analyzing", lambda: self.cmds.generate(prompt, max_tokens=200)
+            )
             if isinstance(result, dict) and "text" in result:
                 analysis = result["text"].strip()
                 for line in analysis.split("\n"):
@@ -2416,6 +2653,7 @@ Examples:
                 return
             try:
                 from datetime import datetime as _dt
+
                 with open(export_path, "w") as f:
                     for e in entries:
                         ts = _dt.fromtimestamp(e.timestamp).strftime("%Y-%m-%d %H:%M:%S")
@@ -2461,6 +2699,7 @@ Examples:
             return
         try:
             from domain.infrastructure._internal.model_protector import protect_model
+
             result = protect_model(model_id)
             n = len(result["protected"])
             errs = result["errors"]
@@ -2482,6 +2721,7 @@ Examples:
             return
         try:
             from domain.infrastructure._internal.model_protector import unprotect_model
+
             result = unprotect_model(model_id)
             n = result["unprotected"]
             errs = result["errors"]
@@ -2500,7 +2740,16 @@ Examples:
         parts = args.strip().split()
         sub = parts[0] if parts else ""
 
-        if not sub or sub in ("status", "follow", "stop", "distill", "hf", "auto", "load-adapter", "unload-adapter"):
+        if not sub or sub in (
+            "status",
+            "follow",
+            "stop",
+            "distill",
+            "hf",
+            "auto",
+            "load-adapter",
+            "unload-adapter",
+        ):
             if not self._require_api("train"):
                 return
 
@@ -2549,7 +2798,10 @@ Examples:
             except ValueError:
                 self._print(f"  Invalid epochs: {parts[3]!r} — must be a positive integer")
                 return
-            r = self._spinner_call("Starting distillation", lambda: self.cmds.train_distill(dataset, teacher=teacher, epochs=epochs))
+            r = self._spinner_call(
+                "Starting distillation",
+                lambda: self.cmds.train_distill(dataset, teacher=teacher, epochs=epochs),
+            )
             if "error" in r:
                 self._print(f"  Error: {r['error']}")
             else:
@@ -2570,7 +2822,9 @@ Examples:
             except ValueError:
                 self._print(f"  Invalid epochs: {parts[3]!r} — must be a positive integer")
                 return
-            r = self._spinner_call("Starting fine-tune", lambda: self.cmds.train_hf(model, dataset, epochs=epochs))
+            r = self._spinner_call(
+                "Starting fine-tune", lambda: self.cmds.train_hf(model, dataset, epochs=epochs)
+            )
             if "error" in r:
                 self._print(f"  Error: {r['error']}")
             else:
@@ -2586,7 +2840,9 @@ Examples:
                 self._print("  Usage: train load-adapter <adapter.npz> [--merge]")
                 return
             merge = "--merge" in parts
-            r = self._spinner_call("Loading adapter", lambda: self.cmds.load_adapter(path, merge=merge))
+            r = self._spinner_call(
+                "Loading adapter", lambda: self.cmds.load_adapter(path, merge=merge)
+            )
             if "error" in r:
                 self._print(f"  Error: {r['error']}")
             else:
@@ -2615,7 +2871,10 @@ Examples:
             if not soul:
                 self._print("  Usage: train auto <soul_name> [teacher] [epochs]")
                 return
-            r = self._spinner_call("Starting auto-train", lambda: self.cmds.train_auto(soul_name=soul, teacher=teacher, epochs=epochs))
+            r = self._spinner_call(
+                "Starting auto-train",
+                lambda: self.cmds.train_auto(soul_name=soul, teacher=teacher, epochs=epochs),
+            )
             if "error" in r:
                 self._print(f"  Error: {r['error']}")
             else:
@@ -2660,7 +2919,9 @@ Examples:
             return
 
         name = parts[1] if len(parts) > 1 else ""
-        r = self._spinner_call("Starting training", lambda: self.cmds.train_quick(dataset, name=name))
+        r = self._spinner_call(
+            "Starting training", lambda: self.cmds.train_quick(dataset, name=name)
+        )
         if "error" in r:
             self._print(f"  Error: {r['error']}")
         else:
@@ -2678,7 +2939,9 @@ Examples:
             if len(parts) < 2:
                 self._print("  Usage: ops cancel <op_id>")
                 return
-            r = self._spinner_call("Cancelling operation", lambda: self.cmds.cancel_operation(parts[1]))
+            r = self._spinner_call(
+                "Cancelling operation", lambda: self.cmds.cancel_operation(parts[1])
+            )
             if "error" in r:
                 self._print(f"  Error: {r['error']}")
             else:
@@ -2688,7 +2951,9 @@ Examples:
 
         if sub == "cancel-all":
             op_type = parts[1] if len(parts) > 1 else ""
-            r = self._spinner_call("Cancelling all", lambda: self.cmds.cancel_all_operations(op_type))
+            r = self._spinner_call(
+                "Cancelling all", lambda: self.cmds.cancel_all_operations(op_type)
+            )
             if "error" in r:
                 self._print(f"  Error: {r['error']}")
             else:
@@ -2716,6 +2981,7 @@ Examples:
     def _stream_train_progress(self, job_id: str) -> None:
         """Stream training progress for a job with live progress bar."""
         import time
+
         from .commands import _api_get
 
         FILLED = "█"
@@ -2727,7 +2993,7 @@ Examples:
         self._print(f"  Following job {job_id} (Ctrl+C to detach)")
 
         max_polls = 200
-        for poll in range(max_polls):
+        for _poll in range(max_polls):
             try:
                 result = _api_get(f"/training/jobs/{job_id}")
                 if not result:
@@ -2757,7 +3023,7 @@ Examples:
                 line = f"  [{bar}] {progress:3d}%  epoch {epoch}/{epochs}  loss={loss or 0:.4f}  [{status}]"
 
                 # In-place update using stdio
-                if hasattr(self, '_stdio') and self._stdio:
+                if hasattr(self, "_stdio") and self._stdio:
                     self._stdio.progress(line, done=(status in ("completed", "failed", "error")))
                 else:
                     # Fallback: manual in-place update with space-padding
@@ -2788,11 +3054,11 @@ Examples:
 
     def _cmd_models(self, args: str = "") -> None:
         """Manage models. Subcommands:
-  models             — list available models
-  models list        — list available models
-  models load <name> — load a model
-  models unload      — unload current model
-  models status      — show current model status"""
+        models             — list available models
+        models list        — list available models
+        models load <name> — load a model
+        models unload      — unload current model
+        models status      — show current model status"""
         if not self._require_api("models"):
             return
         parts = args.strip().split(maxsplit=1)
@@ -2800,7 +3066,9 @@ Examples:
         model_name = parts[1].strip() if len(parts) > 1 else ""
         if subcmd == "list" or not subcmd:
             try:
-                models = self._spinner_call("Fetching models", lambda: self.cmds.models(), ok_msg=None)
+                models = self._spinner_call(
+                    "Fetching models", lambda: self.cmds.models(), ok_msg=None
+                )
                 if not models:
                     self._print("  No models available")
                     return
@@ -2818,7 +3086,9 @@ Examples:
                 self._print("  Usage: models load <model_name>")
                 return
             try:
-                result = self._spinner_call(f"Loading {model_name}", lambda: self.cmds.load_model(model_name), "Done")
+                result = self._spinner_call(
+                    f"Loading {model_name}", lambda: self.cmds.load_model(model_name), "Done"
+                )
                 if isinstance(result, dict) and "error" in result:
                     self._print(f"  Error: {result['error']}")
                 else:
@@ -2827,7 +3097,9 @@ Examples:
                 self._print(self._format_error(e, "models load"))
         elif subcmd == "unload":
             try:
-                result = self._spinner_call("Unloading model", lambda: self.cmds.unload_model(), "Done")
+                result = self._spinner_call(
+                    "Unloading model", lambda: self.cmds.unload_model(), "Done"
+                )
                 if isinstance(result, dict) and "error" in result:
                     self._print(f"  Error: {result['error']}")
                 else:
@@ -2836,7 +3108,9 @@ Examples:
                 self._print(self._format_error(e, "models unload"))
         elif subcmd == "status":
             try:
-                status = self._spinner_call("Checking status", lambda: self.cmds.model_status(), ok_msg=None)
+                status = self._spinner_call(
+                    "Checking status", lambda: self.cmds.model_status(), ok_msg=None
+                )
                 if isinstance(status, dict):
                     loaded = status.get("loaded", False)
                     model_type = status.get("type", "unknown")
@@ -2874,7 +3148,9 @@ Examples:
         if not self._require_api("datasets"):
             return
         try:
-            datasets = self._spinner_call("Fetching datasets", lambda: self.cmds.datasets(), ok_msg=None)
+            datasets = self._spinner_call(
+                "Fetching datasets", lambda: self.cmds.datasets(), ok_msg=None
+            )
             if not datasets:
                 self._print("  No datasets available")
                 return
@@ -2897,7 +3173,9 @@ Examples:
             return
         try:
             if args.strip():
-                results = self._spinner_call("Searching", lambda: self.cmds.list_knowledge(args.strip()), ok_msg=None)
+                results = self._spinner_call(
+                    "Searching", lambda: self.cmds.list_knowledge(args.strip()), ok_msg=None
+                )
                 if not results:
                     self._print("  No results found")
                     return
@@ -2908,7 +3186,9 @@ Examples:
                     text = r.get("text", r.get("content", ""))[:80]
                     self._print(f"  [{score:.3f}] {path}:{line}  {text}")
             else:
-                results = self._spinner_call("Fetching knowledge", lambda: self.cmds.list_knowledge(), ok_msg=None)
+                results = self._spinner_call(
+                    "Fetching knowledge", lambda: self.cmds.list_knowledge(), ok_msg=None
+                )
                 if not results:
                     self._print("  No knowledge entries")
                     return
@@ -2922,7 +3202,9 @@ Examples:
         if not self._require_api("checkpoints"):
             return
         try:
-            cps = self._spinner_call("Fetching checkpoints", lambda: self.cmds.checkpoints(), ok_msg=None)
+            cps = self._spinner_call(
+                "Fetching checkpoints", lambda: self.cmds.checkpoints(), ok_msg=None
+            )
             if not cps:
                 self._print("  No checkpoints available")
                 return
@@ -2951,7 +3233,7 @@ Examples:
         stream = True
         if args.startswith("--no-stream"):
             stream = False
-            args = args[len("--no-stream"):].lstrip()
+            args = args[len("--no-stream") :].lstrip()
 
         if not args:
             self._print("  Usage: gen <prompt>")
@@ -2990,15 +3272,16 @@ Examples:
         full = "".join(collected).strip()
         if full:
             from .markdown import render_markdown
+
             rendered = render_markdown(full)
             self._print(rendered)
 
     def _cmd_chat(self, args: str = "") -> None:
         """Multi-turn chat with streaming. Subcommands:
-  chat <message>       — send a message (streams token by token)
-  chat                 — enter interactive mode
-  chat /reset          — clear history and session
-  chat /status         — show session info"""
+        chat <message>       — send a message (streams token by token)
+        chat                 — enter interactive mode
+        chat /reset          — clear history and session
+        chat /status         — show session info"""
         if not self._require_api("chat"):
             return
         parts = args.strip().split(maxsplit=1)
@@ -3025,6 +3308,7 @@ Examples:
         """Interactive chat mode — type messages, /quit to exit."""
         if not self._chat_session_id:
             import uuid
+
             self._chat_session_id = str(uuid.uuid4())
             self._chat_history = []
             self._print("  [new session]")
@@ -3054,6 +3338,7 @@ Examples:
         """Send a single chat message with streaming and markdown rendering."""
         if not self._chat_session_id:
             import uuid
+
             self._chat_session_id = str(uuid.uuid4())
             self._chat_history = []
             self._print("  [new session]")
@@ -3076,6 +3361,7 @@ Examples:
         # Render markdown in the full response
         if full:
             from .markdown import render_markdown
+
             rendered = render_markdown(full)
             self._print(rendered)
         self._chat_history.append({"role": "assistant", "content": full})
@@ -3084,22 +3370,23 @@ Examples:
 
     def _cmd_render(self, args: str = "") -> None:
         """Path tracer + neural scene analysis. Subcommands:
-  render                       — show scene info
-  render sphere r x y z [mat]  — add sphere
-  render cube  s x y z [mat]   — add cube
-  render plane s y [mat]       — add plane
-  render light x y z [r g b s] — add light
-  render mat idx r g b m rough — set material
-  render cam ox oy oz lx ly lz — set camera
-  render go [w h spp]          — render image (prints stats)
-  render neural                — render + neural analysis
-  render clear                 — clear scene
-  render preset <name>         — load preset scene (demo, Cornell, spheres)"""
+        render                       — show scene info
+        render sphere r x y z [mat]  — add sphere
+        render cube  s x y z [mat]   — add cube
+        render plane s y [mat]       — add plane
+        render light x y z [r g b s] — add light
+        render mat idx r g b m rough — set material
+        render cam ox oy oz lx ly lz — set camera
+        render go [w h spp]          — render image (prints stats)
+        render neural                — render + neural analysis
+        render clear                 — clear scene
+        render preset <name>         — load preset scene (demo, Cornell, spheres)"""
         import numpy as _np
+
         from .cycles_device import CyclesDevice
         from .render_neural import RenderNeuralDevice
 
-        if not hasattr(self, '_render_device'):
+        if not hasattr(self, "_render_device"):
             self._render_device = CyclesDevice(width=80, height=60, samples=4)
             self._render_neural = RenderNeuralDevice(cycles_device=self._render_device)
 
@@ -3108,17 +3395,25 @@ Examples:
         verb = parts[0].lower() if parts else ""
 
         def _f(s, default=0.0):
-            try: return float(s)
-            except (ValueError, TypeError): return default
+            try:
+                return float(s)
+            except (ValueError, TypeError):
+                return default
 
         def _i(s, default=0):
-            try: return int(s)
-            except (ValueError, TypeError): return default
+            try:
+                return int(s)
+            except (ValueError, TypeError):
+                return default
 
         if not verb or verb == "info":
             info = dev.call("info")
-            self._print(f"  Scene: {info['meshes']} meshes, {info['materials']} materials, {info['lights']} lights")
-            self._print(f"  Resolution: {info['resolution'][0]}x{info['resolution'][1]}, Samples: {info['samples']}")
+            self._print(
+                f"  Scene: {info['meshes']} meshes, {info['materials']} materials, {info['lights']} lights"
+            )
+            self._print(
+                f"  Resolution: {info['resolution'][0]}x{info['resolution'][1]}, Samples: {info['samples']}"
+            )
 
         elif verb == "sphere":
             if len(parts) < 5:
@@ -3157,7 +3452,9 @@ Examples:
             b = _f(parts[6], 1.0) if len(parts) > 6 else 1.0
             s = _f(parts[7], 5.0) if len(parts) > 7 else 5.0
             idx = dev.call("add_light", x, y, z, r, g, b, s)
-            self._print(f"  Added light #{idx[0]}: ({x},{y},{z}) color=({r:.1f},{g:.1f},{b:.1f}) strength={s}")
+            self._print(
+                f"  Added light #{idx[0]}: ({x},{y},{z}) color=({r:.1f},{g:.1f},{b:.1f}) strength={s}"
+            )
 
         elif verb == "mat":
             if len(parts) < 7:
@@ -3167,11 +3464,15 @@ Examples:
             r, g, b = _f(parts[2]), _f(parts[3]), _f(parts[4])
             m, rough = _f(parts[5]), _f(parts[6])
             dev.call("set_material", idx, r, g, b, m, rough)
-            self._print(f"  Material {idx}: color=({r:.2f},{g:.2f},{b:.2f}) metallic={m:.2f} roughness={rough:.2f}")
+            self._print(
+                f"  Material {idx}: color=({r:.2f},{g:.2f},{b:.2f}) metallic={m:.2f} roughness={rough:.2f}"
+            )
 
         elif verb == "cam":
             if len(parts) < 7:
-                self._print("  Usage: render cam origin_x origin_y origin_z look_x look_y look_z [fov]")
+                self._print(
+                    "  Usage: render cam origin_x origin_y origin_z look_x look_y look_z [fov]"
+                )
                 return
             ox, oy, oz = _f(parts[1]), _f(parts[2]), _f(parts[3])
             lx, ly, lz = _f(parts[4]), _f(parts[5]), _f(parts[6])
@@ -3181,6 +3482,7 @@ Examples:
 
         elif verb == "go":
             import time as _time
+
             w = _i(parts[1], 80) if len(parts) > 1 else 80
             h = _i(parts[2], 60) if len(parts) > 2 else 60
             spp = _i(parts[3], 4) if len(parts) > 3 else 4
@@ -3191,11 +3493,14 @@ Examples:
             img = dev.call("render")
             dt = _time.time() - t0
             nz = int((img.sum(axis=-1) > 0.01).sum())
-            self._print(f"  Done in {dt:.1f}s — {nz}/{w*h} lit pixels ({100*nz/(w*h):.0f}%)")
+            self._print(
+                f"  Done in {dt:.1f}s — {nz}/{w * h} lit pixels ({100 * nz / (w * h):.0f}%)"
+            )
             self._print(f"  Pixel range: [{img.min():.4f}, {img.max():.4f}]")
 
         elif verb == "neural":
             import time as _time
+
             w, h, spp = 80, 60, 4
             dev.call("set_resolution", w, h)
             dev.call("set_samples", spp)
@@ -3206,13 +3511,23 @@ Examples:
             desc = self._render_neural.call("descriptor")
             emb = out["embedding"]
             probs = out["probabilities"]
-            cls_names = ["mat_unknown", "mat_diffuse", "mat_metallic", "mat_glass",
-                         "mat_emissive", "mat_dielectric", "mat_rough", "mat_smooth"]
+            cls_names = [
+                "mat_unknown",
+                "mat_diffuse",
+                "mat_metallic",
+                "mat_glass",
+                "mat_emissive",
+                "mat_dielectric",
+                "mat_rough",
+                "mat_smooth",
+            ]
             dom = desc["dominant_class"]
             self._print(f"  Done in {dt:.1f}s")
             self._print(f"  Embedding: {emb.shape} (norm={_np.linalg.norm(emb):.4f})")
             self._print(f"  Dominant class: {cls_names[dom] if dom < len(cls_names) else dom}")
-            self._print(f"  Class probs: {', '.join(f'{cls_names[i] if i < len(cls_names) else i}={p:.3f}' for i, p in enumerate(probs))}")
+            self._print(
+                f"  Class probs: {', '.join(f'{cls_names[i] if i < len(cls_names) else i}={p:.3f}' for i, p in enumerate(probs))}"
+            )
             self._print(f"  Entropy: {desc['neural_entropy']:.4f}")
             for k in ("image", "depth", "normal"):
                 if k in desc:
@@ -3228,7 +3543,9 @@ Examples:
             self._apply_render_preset(name)
         else:
             self._print(f"  Unknown render subcommand: {verb}")
-            self._print("  Try: render info | sphere | cube | plane | light | mat | cam | go | neural | clear | preset")
+            self._print(
+                "  Try: render info | sphere | cube | plane | light | mat | cam | go | neural | clear | preset"
+            )
 
     def _apply_render_preset(self, name: str) -> None:
         """Load a preset scene configuration."""
@@ -3268,7 +3585,15 @@ Examples:
             dev.call("clear")
             dev.call("set_material", 0, 0.3, 0.3, 0.35, 0.0, 0.8)
             for i in range(5):
-                dev.call("set_material", i + 1, 0.5 + i * 0.1, 0.1, 0.1, float(i) / 5.0, 1.0 - float(i) / 5.0)
+                dev.call(
+                    "set_material",
+                    i + 1,
+                    0.5 + i * 0.1,
+                    0.1,
+                    0.1,
+                    float(i) / 5.0,
+                    1.0 - float(i) / 5.0,
+                )
             dev.call("add_plane", 8.0, -1.0, 0)
             for i in range(5):
                 dev.call("add_sphere", 0.5, -2.0 + i, -0.5, 0.0, i + 1, 12)
@@ -3282,7 +3607,8 @@ Examples:
 
     def _cmd_agents(self, args: str = "") -> None:
         """Multi-agent orchestration: agents <goal> or agents list."""
-        from domain.agents._internal.multi import get_orchestrator, SpecializedAgent
+        from domain.agents._internal.multi import SpecializedAgent, get_orchestrator
+
         orch = get_orchestrator()
         parts = args.strip().split(maxsplit=1)
         verb = parts[0].lower() if parts else ""
@@ -3300,7 +3626,9 @@ Examples:
             add_parts = rest.split(maxsplit=2)
             if len(add_parts) < 3:
                 self._print("  Usage: agents add <name> <role> <system_prompt>")
-                self._print("  Example: agents add summarizer summarize text into concise bullet points")
+                self._print(
+                    "  Example: agents add summarizer summarize text into concise bullet points"
+                )
                 return
             a_name, a_role, a_prompt = add_parts
             agent_key = a_name.lower().replace(" ", "_")
@@ -3316,6 +3644,7 @@ Examples:
             try:
                 import json
                 from pathlib import Path
+
                 agents_file = Path.home() / ".config" / "sloughgpt" / "custom_agents.json"
                 agents_file.parent.mkdir(parents=True, exist_ok=True)
                 custom = {}
@@ -3338,9 +3667,11 @@ Examples:
                 self._print(result.get("response", "No response"))
                 tasks = result.get("tasks", [])
                 if tasks:
-                    self._print(f"\n  {_C_DIM}Tasks: {len(tasks)}, "
-                                f"completed: {sum(1 for t in tasks if t['status'] == 'completed')}"
-                                f"{_C_RESET}")
+                    self._print(
+                        f"\n  {_C_DIM}Tasks: {len(tasks)}, "
+                        f"completed: {sum(1 for t in tasks if t['status'] == 'completed')}"
+                        f"{_C_RESET}"
+                    )
             except Exception as e:
                 self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
 
@@ -3380,7 +3711,9 @@ Examples:
 
         status = self.os.api_status
         if not status.get("available"):
-            self._print(f"  {_C_RED}\u2717 API server is not connected.{_C_RESET} Use `api start` to launch it.")
+            self._print(
+                f"  {_C_RED}\u2717 API server is not connected.{_C_RESET} Use `api start` to launch it."
+            )
             return
 
         # Interactive agent loop mode
@@ -3394,8 +3727,7 @@ Examples:
     def _run_ai_single_shot(self, args: str) -> None:
         """Single-shot NL-to-command interpretation."""
         available_commands = "\n".join(
-            f"  {name} - {cmd.__doc__ or ''}"
-            for name, cmd in sorted(self.COMMANDS.items())
+            f"  {name} - {cmd.__doc__ or ''}" for name, cmd in sorted(self.COMMANDS.items())
         )
         for name, mod in sorted(self._ext_cmds.items()):
             h = getattr(mod, "help", "")
@@ -3415,6 +3747,7 @@ Examples:
             err_entries = self._log_buffer.get(level="ERROR", limit=5)
             if err_entries:
                 from datetime import datetime as _dt
+
                 err_lines = []
                 for e in err_entries:
                     ts = _dt.fromtimestamp(e.timestamp).strftime("%H:%M:%S")
@@ -3433,12 +3766,12 @@ Examples:
             "Command:"
         )
 
-        self._print(f"  \u2601\ufe0f Interpreting as LLM query...")
+        self._print("  \u2601\ufe0f Interpreting as LLM query...")
         result = self._spinner_call("Thinking", lambda: self.cmds.generate(prompt, max_tokens=60))
 
         if isinstance(result, dict) and "text" in result:
             generated = result["text"].strip().split("\n")[0].strip()
-            generated = generated.strip('`"\'')
+            generated = generated.strip("`\"'")
             self._print(f"  \u2192 {generated}")
             self._print("")
             bg = generated.rstrip().endswith("&")
@@ -3454,11 +3787,19 @@ Examples:
                 out = self._execute_single(cmds[0][0], "")
                 self._print(out, end="")
         else:
-            error = result.get("error", "unknown") if isinstance(result, dict) else "unexpected response"
+            error = (
+                result.get("error", "unknown")
+                if isinstance(result, dict)
+                else "unexpected response"
+            )
             if "timeout" in str(error).lower() or "timed out" in str(error).lower():
-                self._print(f"  {_C_YELLOW}\u26a0\ufe0f AI server is busy (timeout). Try again in a moment.{_C_RESET}")
+                self._print(
+                    f"  {_C_YELLOW}\u26a0\ufe0f AI server is busy (timeout). Try again in a moment.{_C_RESET}"
+                )
             elif "connect" in str(error).lower() or "refused" in str(error).lower():
-                self._print(f"  {_C_RED}\u274c AI server is not running.{_C_RESET} Start it with: api start")
+                self._print(
+                    f"  {_C_RED}\u274c AI server is not running.{_C_RESET} Start it with: api start"
+                )
             else:
                 self._print(f"  {_C_RED}\u274c AI interpretation failed: {error}{_C_RESET}")
 
@@ -3524,7 +3865,9 @@ Examples:
 
         status = self.os.api_status
         if not status.get("available"):
-            self._print(f"  {_C_RED}\u2717 API server is not connected.{_C_RESET} Use `api start` to launch it.")
+            self._print(
+                f"  {_C_RED}\u2717 API server is not connected.{_C_RESET} Use `api start` to launch it."
+            )
             return
 
         from .agent_loop import AgentLoop
@@ -3565,7 +3908,9 @@ Examples:
         w("    time load gpt2       Time a command")
         w("")
         w(f"  Type {_C_YELLOW}`tutorial`{_C_RESET} for an interactive walkthrough.")
-        w(f"  Type {_C_YELLOW}`help`{_C_RESET} for all commands, {_C_YELLOW}`exit`{_C_RESET} to quit.")
+        w(
+            f"  Type {_C_YELLOW}`help`{_C_RESET} for all commands, {_C_YELLOW}`exit`{_C_RESET} to quit."
+        )
         w(f"  {_C_DIM}{'─' * min(terminal, 50)}{_C_RESET}")
         w("")
         self.state.first_run = False
@@ -3583,74 +3928,107 @@ Examples:
                 w(f"  {_C_DIM}(press Enter to continue, or q to quit){_C_RESET}")
 
         steps = [
-            ("\u2728 Welcome to the tutorial!", [
-                "This will walk you through the shell features step by step.",
-                "Press Enter to advance to each step, or 'q' to quit anytime.",
-            ]),
-            ("\u2460 Health check", [
-                "  health  \u2014 Check if your AI server is running.",
-                "  Try it: `health` shows API status, loaded model, and soul.",
-            ]),
-            ("\u2461 Models", [
-                "  models  \u2014 List all available models.",
-                "  load <name>  \u2014 Load a model (tab-complete names).",
-                "  unload       \u2014 Unload the current model.",
-                "  gen <prompt> \u2014 Generate text with the loaded model.",
-            ]),
-            ("\u2462 Souls & personality", [
-                "  souls   \u2014 List available personality profiles.",
-                "  switch <name>  \u2014 Switch to a soul.",
-                "  whoami  \u2014 Show your current soul.",
-            ]),
-            ("\u2463 Pipelines", [
-                "  Chain commands with |  (like bash):",
-                "    models | head",
-                "    gen hello > output.txt",
-                "  Pipe to filters: head, tail, wc, sort, uniq",
-                "  Sort flags: -r (reverse), -u (unique), -n (numeric)",
-            ]),
-            ("\u2464 Background & timing", [
-                "  Append & to run in background:  health &",
-                "  bg / jobs  \u2014 List background processes",
-                "  fg <id>    \u2014 Wait for a background process",
-                "  Prefix with `time` to measure:  time health",
-            ]),
-            ("\u2465 Redirection & env vars", [
-                "  >  Redirect output to file:     gen hi > output.txt",
-                "  >> Append to file:             gen hi >> output.txt",
-                "  $VAR / ${VAR}  \u2014 Environment variables",
-                "  NAME=VALUE cmd \u2014 Inline env for one command",
-                "  set NAME=VALUE \u2014 Persistent env variables",
-                "  $(cmd)        \u2014 Command substitution",
-            ]),
-            ("\u2466 Aliases & history", [
-                "  alias ll=procs            \u2014 Create an alias",
-                "  unalias <name>            \u2014 Remove an alias",
-                "  history [n]               \u2014 Show command history",
-                "  fc <n>                    \u2014 Re-run command #n",
-                "  Ctrl+R / Ctrl+S           \u2014 Search history",
-            ]),
-            ("\u2467 PS1 & customization", [
-                "  set PS1='\\\\u@\\\\h \\\\w $ '  \u2014 Custom prompt",
-                "  \\\\h=host, \\\\w=cwd, \\\\t=time, \\\\u=user, \\\\s=shell, \\\\#=count",
-                "  set NO_COLOR=1            \u2014 Disable colors",
-                "  Source commands from file:  source setup.sh",
-            ]),
-            ("\u2468 AI mode & scripting", [
-                "  ai <query>   \u2014 Natural language to commands",
-                "    Example: ai show me running training jobs",
-                "  ai --loop    \u2014 Interactive agent loop with approval",
-                "    Example: ai --loop fix the bug in main.py",
-                "  agent <goal> \u2014 Full agent: plan, approve, execute, repeat",
-                "  py <expr>    \u2014 Evaluate Python inline",
-                "    Example: py 2 + 2",
-                "  Advanced: pipelines, watch, background jobs",
-            ]),
-            ("\u2469 All done!", [
-                "  You're ready to use Dait!",
-                "  Type `help` anytime for a full command reference.",
-                "  Happy hacking! \U0001f680",
-            ]),
+            (
+                "\u2728 Welcome to the tutorial!",
+                [
+                    "This will walk you through the shell features step by step.",
+                    "Press Enter to advance to each step, or 'q' to quit anytime.",
+                ],
+            ),
+            (
+                "\u2460 Health check",
+                [
+                    "  health  \u2014 Check if your AI server is running.",
+                    "  Try it: `health` shows API status, loaded model, and soul.",
+                ],
+            ),
+            (
+                "\u2461 Models",
+                [
+                    "  models  \u2014 List all available models.",
+                    "  load <name>  \u2014 Load a model (tab-complete names).",
+                    "  unload       \u2014 Unload the current model.",
+                    "  gen <prompt> \u2014 Generate text with the loaded model.",
+                ],
+            ),
+            (
+                "\u2462 Souls & personality",
+                [
+                    "  souls   \u2014 List available personality profiles.",
+                    "  switch <name>  \u2014 Switch to a soul.",
+                    "  whoami  \u2014 Show your current soul.",
+                ],
+            ),
+            (
+                "\u2463 Pipelines",
+                [
+                    "  Chain commands with |  (like bash):",
+                    "    models | head",
+                    "    gen hello > output.txt",
+                    "  Pipe to filters: head, tail, wc, sort, uniq",
+                    "  Sort flags: -r (reverse), -u (unique), -n (numeric)",
+                ],
+            ),
+            (
+                "\u2464 Background & timing",
+                [
+                    "  Append & to run in background:  health &",
+                    "  bg / jobs  \u2014 List background processes",
+                    "  fg <id>    \u2014 Wait for a background process",
+                    "  Prefix with `time` to measure:  time health",
+                ],
+            ),
+            (
+                "\u2465 Redirection & env vars",
+                [
+                    "  >  Redirect output to file:     gen hi > output.txt",
+                    "  >> Append to file:             gen hi >> output.txt",
+                    "  $VAR / ${VAR}  \u2014 Environment variables",
+                    "  NAME=VALUE cmd \u2014 Inline env for one command",
+                    "  set NAME=VALUE \u2014 Persistent env variables",
+                    "  $(cmd)        \u2014 Command substitution",
+                ],
+            ),
+            (
+                "\u2466 Aliases & history",
+                [
+                    "  alias ll=procs            \u2014 Create an alias",
+                    "  unalias <name>            \u2014 Remove an alias",
+                    "  history [n]               \u2014 Show command history",
+                    "  fc <n>                    \u2014 Re-run command #n",
+                    "  Ctrl+R / Ctrl+S           \u2014 Search history",
+                ],
+            ),
+            (
+                "\u2467 PS1 & customization",
+                [
+                    "  set PS1='\\\\u@\\\\h \\\\w $ '  \u2014 Custom prompt",
+                    "  \\\\h=host, \\\\w=cwd, \\\\t=time, \\\\u=user, \\\\s=shell, \\\\#=count",
+                    "  set NO_COLOR=1            \u2014 Disable colors",
+                    "  Source commands from file:  source setup.sh",
+                ],
+            ),
+            (
+                "\u2468 AI mode & scripting",
+                [
+                    "  ai <query>   \u2014 Natural language to commands",
+                    "    Example: ai show me running training jobs",
+                    "  ai --loop    \u2014 Interactive agent loop with approval",
+                    "    Example: ai --loop fix the bug in main.py",
+                    "  agent <goal> \u2014 Full agent: plan, approve, execute, repeat",
+                    "  py <expr>    \u2014 Evaluate Python inline",
+                    "    Example: py 2 + 2",
+                    "  Advanced: pipelines, watch, background jobs",
+                ],
+            ),
+            (
+                "\u2469 All done!",
+                [
+                    "  You're ready to use Dait!",
+                    "  Type `help` anytime for a full command reference.",
+                    "  Happy hacking! \U0001f680",
+                ],
+            ),
         ]
 
         total = len(steps)
@@ -3753,7 +4131,6 @@ Examples:
 
     # ── Init / Boot commands ────────────────────────────────────────
 
-
     def _cmd_api(self, args: str = "") -> None:
         """Manage the API server. Usage: api [start|stop|status|restart]"""
         parts = args.strip().split()
@@ -3767,9 +4144,9 @@ Examples:
             self._print("  Starting API server...")
             result = api.start()
             if result.get("ok"):
-                self._status("ok", result.get('message', 'started'))
+                self._status("ok", result.get("message", "started"))
             else:
-                self._status("error", result.get('error', 'failed to start'))
+                self._status("error", result.get("error", "failed to start"))
                 self._last_exit_code = 1
 
         elif cmd == "stop":
@@ -3778,7 +4155,7 @@ Examples:
                 return
             self._print("  Stopping API server...")
             result = api.stop()
-            self._status("ok", result.get('message', 'stopped'))
+            self._status("ok", result.get("message", "stopped"))
 
         elif cmd == "restart":
             if api.is_running:
@@ -3787,16 +4164,19 @@ Examples:
             self._print("  Starting API server...")
             result = api.start()
             if result.get("ok"):
-                self._status("ok", result.get('message', 'restarted'))
+                self._status("ok", result.get("message", "restarted"))
             else:
-                self._status("error", result.get('error', 'failed to restart'))
+                self._status("error", result.get("error", "failed to restart"))
                 self._last_exit_code = 1
 
         else:  # status (default)
             status = api.status()
             if status.get("available"):
                 model = status.get("model_id", "unknown") or "unknown"
-                self._status("ok", f"API connected — {model} ({status.get('engine_type', '').strip() or 'cpu'})")
+                self._status(
+                    "ok",
+                    f"API connected — {model} ({status.get('engine_type', '').strip() or 'cpu'})",
+                )
             else:
                 self._status("error", "API not connected")
                 self._print("  Use \u2018api start\u2019 to launch the API server.")
@@ -3816,6 +4196,7 @@ Examples:
     def _format_error(self, e: Exception, cmd: str = "") -> str:
         """Format an exception into a user-friendly error message."""
         from domain.shell._internal.error import format_error
+
         return format_error(e, cmd)
 
     def _cmd_boot(self, args: str = "") -> None:
@@ -3824,7 +4205,9 @@ Examples:
         Automatically starts the API server if not already running.
         """
         if self._running and self._piped_input is None:
-            self._print("  Already booted. Use 'shutdown' to halt, then 'sloughgpt shell' to restart.")
+            self._print(
+                "  Already booted. Use 'shutdown' to halt, then 'sloughgpt shell' to restart."
+            )
             return
         self._running = True
         # Auto-start API if not available
@@ -3935,6 +4318,7 @@ Examples:
 
         if file_path == "--test" or file_path == "--self-test":
             from domain.shell._internal.vm import self_test as _vm_self_test
+
             results = _vm_self_test()
             self._print("  VM Self-Test:")
             for line in results:
@@ -3965,7 +4349,8 @@ Examples:
             return
 
         try:
-            from domain.shell._internal.vm import VMRunner, VMFault
+            from domain.shell._internal.vm import VMFault, VMRunner
+
             runner = VMRunner(devices=self.os.devices)
             output = runner.assemble_and_run(source)
             for line in output:
@@ -3981,7 +4366,8 @@ Examples:
 
     def _cmd_vmperms(self, args: str = "") -> None:
         """Show x86 VM RBAC permission matrix."""
-        from domain.shell._internal.vm_permissions import Permission, Role, _ROLE_PERMISSIONS
+        from domain.shell._internal.vm_permissions import _ROLE_PERMISSIONS, Permission, Role
+
         perms = list(Permission)
         roles = [Role.USER, Role.ADMIN, Role.KERNEL]
         col_w = max(len(p.name) for p in perms) + 2
@@ -4100,21 +4486,21 @@ nl: db 10
         while rest:
             if rest.startswith("--admin"):
                 role = "admin"
-                rest = rest[len("--admin"):].lstrip()
+                rest = rest[len("--admin") :].lstrip()
             elif rest.startswith("--kernel"):
                 role = "kernel"
-                rest = rest[len("--kernel"):].lstrip()
+                rest = rest[len("--kernel") :].lstrip()
             elif rest.startswith("--steps="):
                 try:
-                    max_steps = int(rest[len("--steps="):].split()[0])
-                    rest = rest[len("--steps=") + len(str(max_steps)):].lstrip()
+                    max_steps = int(rest[len("--steps=") :].split()[0])
+                    rest = rest[len("--steps=") + len(str(max_steps)) :].lstrip()
                 except ValueError:
                     self._print("  vmrun: --steps=N requires an integer")
                     self._last_exit_code = 1
                     return
             elif rest.startswith("--debug"):
                 debug = True
-                rest = rest[len("--debug"):].lstrip()
+                rest = rest[len("--debug") :].lstrip()
             elif rest.startswith("--list"):
                 self._print("  Built-in x86 programs:")
                 self._print(f"    {'hello':15s} Print 'Hello from x86 VM!'")
@@ -4129,7 +4515,9 @@ nl: db 10
         max_idx = {"user": 0, "admin": 1, "kernel": 2}
         role_idx = {"user": 0, "admin": 1, "kernel": 2}
         if role_idx.get(role, 0) > max_idx.get(max_role, 2):
-            self._print(f"  vmrun: --{role} requires MAN_VM_ROLE={role} or higher (current: {max_role})")
+            self._print(
+                f"  vmrun: --{role} requires MAN_VM_ROLE={role} or higher (current: {max_role})"
+            )
             self._last_exit_code = 1
             return
 
@@ -4161,6 +4549,7 @@ nl: db 10
         try:
             from domain.shell._internal.vm import X86VirtualSystem
             from domain.shell._internal.vm_permissions import Role
+
             vs = X86VirtualSystem()
 
             pid = vs.spawn("user_prog", source)
@@ -4188,7 +4577,7 @@ nl: db 10
             def _captured_write(fd, buf_addr, count):
                 if fd in (1, 2):
                     data = bytes(vs.cpu._read8(buf_addr + i) for i in range(count))
-                    output_buffer.append(data.decode('ascii', errors='replace'))
+                    output_buffer.append(data.decode("ascii", errors="replace"))
                     return count
                 return original_write(fd, buf_addr, count)
 
@@ -4205,7 +4594,9 @@ nl: db 10
 
             if debug:
                 reg_names = ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"]
-                self._print(f"  Registers: {', '.join(f'{n}=0x{vs.cpu._regs[i]:08x}' for i, n in enumerate(reg_names))}")
+                self._print(
+                    f"  Registers: {', '.join(f'{n}=0x{vs.cpu._regs[i]:08x}' for i, n in enumerate(reg_names))}"
+                )
                 self._print(f"  EIP: 0x{vs.cpu._eip:08x}")
 
         except Exception as e:
@@ -4217,6 +4608,7 @@ nl: db 10
     def _cmd_note(self, args: str = "") -> None:
         """Development journal: note new/list/show/edit/delete/search/today/export."""
         from notes import get_note_store
+
         store = get_note_store(backend="mogdb")
         parts = args.split(None, 1)
         sub = parts[0].lower() if parts else "list"
@@ -4248,12 +4640,16 @@ nl: db 10
             self._note_timeline(store, rest)
         else:
             self._print(f"  note: unknown subcommand '{sub}'")
-            self._print("  Usage: note <new|list|show|edit|delete|search|today|export|tags|status|sprint|timeline> [args]")
+            self._print(
+                "  Usage: note <new|list|show|edit|delete|search|today|export|tags|status|sprint|timeline> [args]"
+            )
             self._last_exit_code = 1
 
     def _note_new(self, store, rest: str) -> None:
         if not rest:
-            self._print("  Usage: note new <title> [--tags tag1,tag2] [--status s] [--sprint S1] [--gh owner/repo#123]")
+            self._print(
+                "  Usage: note new <title> [--tags tag1,tag2] [--status s] [--sprint S1] [--gh owner/repo#123]"
+            )
             self._last_exit_code = 1
             return
 
@@ -4272,10 +4668,10 @@ nl: db 10
             if flag in title:
                 idx = title.index(flag)
                 before = title[:idx].strip()
-                after = title[idx + len(flag) + 1:].strip()
+                after = title[idx + len(flag) + 1 :].strip()
                 rest_val = after.split()[0] if after else ""
                 if rest_val:
-                    remainder = after[len(rest_val):].strip()
+                    remainder = after[len(rest_val) :].strip()
                     title = before + " " + remainder
                     if flag == "--tags":
                         tags = handler(rest_val)
@@ -4334,7 +4730,9 @@ nl: db 10
             self._print(f"\n  {date_str}")
             for n in day_notes:
                 tags_str = f"  [{', '.join(n.tags)}]" if n.tags else ""
-                status_icon = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}.get(n.status, "?")
+                status_icon = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}.get(
+                    n.status, "?"
+                )
                 self._print(f"    {status_icon} {n.short_id}  {n.title}{tags_str}")
         self._print(f"\n  {len(notes)} note(s)")
         self._last_exit_code = 0
@@ -4372,7 +4770,9 @@ nl: db 10
     def _note_edit(self, store, rest: str) -> None:
         parts = rest.split(None, 1)
         if not parts:
-            self._print("  Usage: note edit <note-id> [--title T] [--tags t1,t2] [--status s] [--sprint S1] [--gh owner/repo#123] [--body B]")
+            self._print(
+                "  Usage: note edit <note-id> [--title T] [--tags t1,t2] [--status s] [--sprint S1] [--gh owner/repo#123] [--body B]"
+            )
             self._last_exit_code = 1
             return
 
@@ -4385,17 +4785,25 @@ nl: db 10
             kwargs["title"] = flags[idx:].strip()
         if "--tags" in flags:
             idx = flags.index("--tags") + 6
-            tag_str = flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+            tag_str = (
+                flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+            )
             kwargs["tags"] = [t.strip() for t in tag_str.split(",") if t.strip()]
         if "--status" in flags:
             idx = flags.index("--status") + 8
-            kwargs["status"] = flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+            kwargs["status"] = (
+                flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+            )
         if "--sprint" in flags:
             idx = flags.index("--sprint") + 8
-            kwargs["sprint"] = flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+            kwargs["sprint"] = (
+                flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+            )
         if "--gh" in flags:
             idx = flags.index("--gh") + 4
-            kwargs["gh"] = flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+            kwargs["gh"] = (
+                flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+            )
         if "--body" in flags:
             idx = flags.index("--body") + 6
             kwargs["body"] = flags[idx:].strip()
@@ -4621,7 +5029,14 @@ nl: db 10
                     self._execute_background_tuples(commands)
                 else:
                     self._execute_background(commands[0][0])
-                self._audit.command(line, commands[0][0].split()[0] if commands[0][0] else "", line, 0, is_background=True, is_pipeline=len(commands) > 1)
+                self._audit.command(
+                    line,
+                    commands[0][0].split()[0] if commands[0][0] else "",
+                    line,
+                    0,
+                    is_background=True,
+                    is_pipeline=len(commands) > 1,
+                )
                 return
             if len(commands) > 1:
                 self._execute_pipeline(commands, should_time=should_time)
@@ -4645,10 +5060,13 @@ nl: db 10
                 try:
                     if ext_mod:
                         from .console import Console as _Console
+
                         c = _Console(self.io, has_readline=_HAS_READLINE)
                         self._last_exit_code = ext_mod.run(
                             [cmd] + (args_str.split() if args_str else []),
-                            c, self.cmds, self._env,
+                            c,
+                            self.cmds,
+                            self._env,
                         )
                     else:
                         handler(self, args_str)
@@ -4660,9 +5078,16 @@ nl: db 10
                     self._last_exit_code = 1
                     self._audit.error(line, repr(e))
                 elapsed_ms = (_time.time() - t0) * 1000 if t0 else None
-                self._audit.command(line, cmd, args_str, self._last_exit_code, elapsed_ms=elapsed_ms, expanded=expanded)
+                self._audit.command(
+                    line,
+                    cmd,
+                    args_str,
+                    self._last_exit_code,
+                    elapsed_ms=elapsed_ms,
+                    expanded=expanded,
+                )
                 if should_time and elapsed_ms is not None:
-                    self._print(f"{_C_DIM}  [{elapsed_ms/1000:.2f}s]{_C_RESET}")
+                    self._print(f"{_C_DIM}  [{elapsed_ms / 1000:.2f}s]{_C_RESET}")
             else:
                 suggestion = self._suggest_command(cmd)
                 msg = f"  {_C_RED}Unknown command:{_C_RESET} {cmd}. Type `help`."
@@ -4680,8 +5105,8 @@ nl: db 10
             self._audit.error(line, repr(e))
 
     def run(self) -> None:
-        import signal as _signal
         import logging as _logging
+        import signal as _signal
 
         # Suppress kernel logs from stderr during boot (captured by LogBufferHandler)
         _kernel_logger = _logging.getLogger("slo.kernel")
@@ -4702,13 +5127,19 @@ nl: db 10
         _kernel_logger.propagate = _prev_propagate
 
         self._running = True
-        self._status("ok", f"System ready  ({api_status.get('model_id') or 'no model'})" if api_status.get("available") else "API not connected")
+        self._status(
+            "ok",
+            f"System ready  ({api_status.get('model_id') or 'no model'})"
+            if api_status.get("available")
+            else "API not connected",
+        )
 
         # Split-panel TUI is opt-in: MAN_TUI=1, `sloughgpt shell --tui`, or
         # the `tui` command. Line mode is the default.
         if self._use_tui:
             try:
                 from .tui_repl import TuiRepl
+
                 TuiRepl(self, self._log_buffer).run()
             except Exception as e:
                 self._print(f"  {_C_RED}TUI unavailable, falling back to line mode:{_C_RESET} {e}")
@@ -4722,7 +5153,9 @@ nl: db 10
         self._audit.startup()
 
         def _graceful_shutdown(signum, frame):
-            self._print(f"\n  {_C_DIM}Signal {signum} received — shutting down gracefully{_C_RESET}")
+            self._print(
+                f"\n  {_C_DIM}Signal {signum} received — shutting down gracefully{_C_RESET}"
+            )
             self._running = False
 
         for _sig in (_signal.SIGTERM, _signal.SIGHUP):

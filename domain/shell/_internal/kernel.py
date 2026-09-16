@@ -15,17 +15,18 @@ source of the Kernel class.
 
 from __future__ import annotations
 
-import time
 import logging
 import threading
-from typing import Any, Callable
+import time
+from collections.abc import Callable
+from typing import Any
 
-from .kernel_process import Process, ProcessState, Priority
+from .kernel_devices import DeviceDriver, DeviceHandle, DeviceManager, NullDevice
+from .kernel_interrupts import Interrupt, InterruptManager, InterruptType
 from .kernel_memory import TensorMemory
+from .kernel_process import Priority, Process, ProcessState
 from .kernel_scheduler import Scheduler
-from .kernel_syscall import SyscallTable, SyscallResult, SyscallNumber, build_default_syscall_table
-from .kernel_devices import DeviceManager, DeviceDriver, DeviceHandle, NullDevice
-from .kernel_interrupts import InterruptManager, InterruptType, Interrupt
+from .kernel_syscall import SyscallNumber, SyscallResult, SyscallTable, build_default_syscall_table
 
 logger = logging.getLogger("slo.kernel")
 
@@ -33,6 +34,7 @@ logger = logging.getLogger("slo.kernel")
 # ---------------------------------------------------------------------------
 # Unified Kernel — core + neural
 # ---------------------------------------------------------------------------
+
 
 class Kernel:
     """
@@ -70,15 +72,9 @@ class Kernel:
         self._addons: dict[str, Any] = {}
 
         # Wire up default interrupt handlers
-        self._interrupts.vector.register(
-            InterruptType.PROCESS_DONE, self._handle_process_done
-        )
-        self._interrupts.vector.register(
-            InterruptType.MEMORY_FULL, self._handle_memory_full
-        )
-        self._interrupts.vector.register(
-            InterruptType.DEVICE_ERROR, self._handle_device_error
-        )
+        self._interrupts.vector.register(InterruptType.PROCESS_DONE, self._handle_process_done)
+        self._interrupts.vector.register(InterruptType.MEMORY_FULL, self._handle_memory_full)
+        self._interrupts.vector.register(InterruptType.DEVICE_ERROR, self._handle_device_error)
 
     # --- Addon API ---
 
@@ -120,6 +116,7 @@ class Kernel:
         if "neural" not in self._addons:
             try:
                 from .addons import neural
+
                 self.install_addon(neural)
             except Exception as e:
                 logger.debug("neural addon install skipped: %s", e)
@@ -128,6 +125,7 @@ class Kernel:
         if "shell_ui" not in self._addons:
             try:
                 from .addons import shell_ui
+
                 self.install_addon(shell_ui)
             except Exception as e:
                 logger.debug("shell_ui addon install skipped: %s", e)
@@ -185,9 +183,15 @@ class Kernel:
 
     # --- Process management ---
 
-    def spawn_process(self, name: str, priority: Priority = Priority.NORMAL,
-                      entry: Any = None, args: tuple = (), metadata: dict | None = None,
-                      depends_on: list[int] | None = None) -> Process:
+    def spawn_process(
+        self,
+        name: str,
+        priority: Priority = Priority.NORMAL,
+        entry: Any = None,
+        args: tuple = (),
+        metadata: dict | None = None,
+        depends_on: list[int] | None = None,
+    ) -> Process:
         """Create and register a new process.
 
         Args:
@@ -223,8 +227,9 @@ class Kernel:
         logger.debug("Spawned pid=%d name=%s priority=%s", pid, name, priority.name)
         return proc
 
-    def create_process(self, name: str, priority: Priority = Priority.NORMAL,
-                       depends_on: list[int] | None = None) -> int:
+    def create_process(
+        self, name: str, priority: Priority = Priority.NORMAL, depends_on: list[int] | None = None
+    ) -> int:
         """Create a process and return its PID. Backward-compatible wrapper."""
         proc = self.spawn_process(name, priority, depends_on=depends_on)
         return proc.pid
@@ -319,7 +324,9 @@ class Kernel:
             # Handle TENSOR_ALLOC directly
             if sn == SyscallNumber.TENSOR_ALLOC:
                 if not args:
-                    return SyscallResult(success=False, error="TENSOR_ALLOC requires at least a shape argument")
+                    return SyscallResult(
+                        success=False, error="TENSOR_ALLOC requires at least a shape argument"
+                    )
                 shape, dtype = args[0], args[1] if len(args) > 1 else "float32"
                 info = self.alloc_tensor(shape, dtype)
                 return SyscallResult(success=True, value=info)
@@ -372,15 +379,19 @@ class Kernel:
                         except Exception:
                             logger.debug("on_process_done callback failed", exc_info=True)
 
-            t = threading.Thread(target=_run_proc, args=(proc,), daemon=True, name=f"proc-{proc.pid}")
+            t = threading.Thread(
+                target=_run_proc, args=(proc,), daemon=True, name=f"proc-{proc.pid}"
+            )
             proc._thread = t
             t.start()
 
         # Fire timer interrupt
-        self._interrupts.vector.fire(Interrupt(
-            vector=InterruptType.TIMER,
-            data={"tick": self._tick_count},
-        ))
+        self._interrupts.vector.fire(
+            Interrupt(
+                vector=InterruptType.TIMER,
+                data={"tick": self._tick_count},
+            )
+        )
 
         # Process pending interrupts
         self._interrupts.vector.process_pending()
@@ -440,14 +451,17 @@ class Kernel:
     def run(self, max_ticks: int = 100) -> list[dict]:
         """Run the kernel for up to max_ticks, returning tick results."""
         from .kernel_process import ProcessState
+
         results = []
         for _ in range(max_ticks):
             if not self._running:
                 break
             result = self.tick()
             results.append(result)
-            if not any(p.state not in (ProcessState.ZOMBIE, ProcessState.STOPPED)
-                       for p in self._processes.values()):
+            if not any(
+                p.state not in (ProcessState.ZOMBIE, ProcessState.STOPPED)
+                for p in self._processes.values()
+            ):
                 break
         return results
 
@@ -504,7 +518,8 @@ def get_kernel() -> Kernel:
     global _kernel
     if _kernel is None:
         _kernel = Kernel()
-        from .addons import neural, filesystem, shell_ui
+        from .addons import filesystem, neural, shell_ui
+
         _kernel.install_addon(neural)
         _kernel.install_addon(filesystem)
         _kernel.install_addon(shell_ui)
@@ -516,7 +531,8 @@ def reset_kernel() -> Kernel:
     if _kernel is not None and _kernel.running:
         _kernel.shutdown()
     _kernel = Kernel()
-    from .addons import neural, filesystem, shell_ui
+    from .addons import filesystem, neural, shell_ui
+
     _kernel.install_addon(neural)
     _kernel.install_addon(filesystem)
     _kernel.install_addon(shell_ui)
@@ -528,9 +544,11 @@ class NeuralKernel(Kernel):
 
     def __init__(self):
         import warnings
+
         warnings.warn(
             "NeuralKernel is deprecated, use Kernel() instead. "
             "Kernel auto-installs the neural addon via boot().",
-            DeprecationWarning, stacklevel=2,
+            DeprecationWarning,
+            stacklevel=2,
         )
         super().__init__()

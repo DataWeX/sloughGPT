@@ -121,7 +121,9 @@ class TestConsoleIOReadline:
 
     def test_setup_completion_readline_error(self, monkeypatch):
         c = ConsoleIO()
-        monkeypatch.setattr("readline.set_completer", lambda *a: (_ for _ in ()).throw(RuntimeError("x")))
+        monkeypatch.setattr(
+            "readline.set_completer", lambda *a: (_ for _ in ()).throw(RuntimeError("x"))
+        )
         c.setup_completion(lambda text, state: None)
 
     def test_save_history_present(self, tmp_path):
@@ -136,7 +138,9 @@ class TestConsoleIOReadline:
 
     def test_save_history_error(self, monkeypatch, tmp_path):
         c = ConsoleIO()
-        monkeypatch.setattr("readline.write_history_file", lambda p: (_ for _ in ()).throw(OSError("x")))
+        monkeypatch.setattr(
+            "readline.write_history_file", lambda p: (_ for _ in ()).throw(OSError("x"))
+        )
         c.save_history(str(tmp_path / "hist"))
 
     def test_load_history_present(self, tmp_path):

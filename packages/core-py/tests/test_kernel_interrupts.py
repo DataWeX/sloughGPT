@@ -1,7 +1,5 @@
 """Coverage tests for domain.shell.kernel_interrupts.py."""
 
-import pytest
-
 from domain.shell._internal.kernel_interrupts import (
     Interrupt,
     InterruptManager,
@@ -44,7 +42,10 @@ def test_register_and_fire():
 def test_unregister():
     iv = InterruptVector()
     seen = []
-    handler = lambda i: seen.append(i)
+
+    def handler(i):
+        return seen.append(i)
+
     iv.register(InterruptType.TIMER, handler)
     iv.unregister(InterruptType.TIMER)
     assert iv.fire(Interrupt(InterruptType.TIMER)) is False

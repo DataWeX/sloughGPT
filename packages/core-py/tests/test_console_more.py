@@ -3,8 +3,6 @@
 import importlib
 import sys
 
-import pytest
-
 import domain.shell._internal.console as console_mod
 from domain.shell._internal.console import Console, _human_size, _render_inline
 from domain.shell._internal.io import MemoryIO
@@ -22,9 +20,9 @@ class TestHelpers:
         assert _human_size(500) == "500.0 B"
         assert _human_size(2048) == "2.0 KB"
         assert _human_size(2 * 1024 * 1024) == "2.0 MB"
-        assert _human_size(3 * 1024 ** 3) == "3.0 GB"
-        assert _human_size(4 * 1024 ** 4) == "4.0 TB"
-        assert _human_size(5 * 1024 ** 5) == "5.0 PB"
+        assert _human_size(3 * 1024**3) == "3.0 GB"
+        assert _human_size(4 * 1024**4) == "4.0 TB"
+        assert _human_size(5 * 1024**5) == "5.0 PB"
 
     def test_render_inline(self):
         out = _render_inline("**bold** *it* `code` [label](url)")
@@ -92,6 +90,7 @@ class TestWrite:
 
     def test_write_readline_buffer_save_restore(self, monkeypatch):
         import readline
+
         monkeypatch.setattr(readline, "get_line_buffer", lambda: "abc")
         io, c = _mk(has_readline=True)
         c.write("line1\nline2")

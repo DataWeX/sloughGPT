@@ -10,9 +10,10 @@ import threading
 import time
 from typing import Any
 
-from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter
 from schemas.common import raise_error
+
+from domain.training._internal.executor import get_training_executor
 
 from .helpers import _finish_job, _sloughgpt_trainer_kwds
 from .jobs import training_jobs

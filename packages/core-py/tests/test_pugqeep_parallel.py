@@ -1,15 +1,11 @@
 """Tests for parallel batch operations in pugqeep."""
 
-import time
 
 import numpy as np
-import pytest
 
+from domain.infrastructure._internal.pugqeep.facade import PGQ
 from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
 from domain.infrastructure._internal.pugqeep.tree import decompress_tree
-from domain.infrastructure._internal.pugqeep.library import PointLibrary
-from domain.infrastructure._internal.pugqeep.facade import PGQ
-
 
 # -- ModelTree parallel compression --
 

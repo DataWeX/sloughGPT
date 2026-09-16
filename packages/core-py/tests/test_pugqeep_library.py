@@ -4,52 +4,62 @@ Covers: CRUD, batch ops, search, validation, compression, persistence,
 PointView, stats, thread safety, and edge cases.
 """
 
-import numpy as np
 import tempfile
 import threading
 from pathlib import Path
 
+import numpy as np
 import pytest
+
+from domain.infrastructure._internal.pugqeep.config import LibraryConfig
 from domain.infrastructure._internal.pugqeep.library import PointLibrary
 from domain.infrastructure._internal.pugqeep.point import Point
-from domain.infrastructure._internal.pugqeep.point_interface import FunctionType, PointView
-from domain.infrastructure._internal.pugqeep.config import LibraryConfig
-
+from domain.infrastructure._internal.pugqeep.point_interface import PointView
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def _periodic_params():
     return {"a": 1.0, "b": 0.5, "w": 0.1}
 
+
 def _linear_params():
     return {"a": 0.5, "b": 0.1}
+
 
 def _polynomial_params():
     return {"a": 0.1, "b": 0.5, "c": 0.01}
 
+
 def _cluster_point(identity="c1"):
     centroids = np.random.randn(16).astype(np.float32)
     assignments = np.random.randint(0, 16, size=128).astype(np.uint8)
-    return Point(identity=identity, function_type="cluster",
-                 params={"centroids": centroids, "assignments": assignments},
-                 accuracy=0.85)
+    return Point(
+        identity=identity,
+        function_type="cluster",
+        params={"centroids": centroids, "assignments": assignments},
+        accuracy=0.85,
+    )
+
 
 def _periodic_point(identity="p1", accuracy=0.9):
-    return Point(identity=identity, function_type="periodic",
-                 params=_periodic_params(), accuracy=accuracy)
+    return Point(
+        identity=identity, function_type="periodic", params=_periodic_params(), accuracy=accuracy
+    )
+
 
 def _linear_point(identity="l1"):
-    return Point(identity=identity, function_type="linear",
-                 params=_linear_params())
+    return Point(identity=identity, function_type="linear", params=_linear_params())
+
 
 def _polynomial_point(identity="po1"):
-    return Point(identity=identity, function_type="polynomial",
-                 params=_polynomial_params())
+    return Point(identity=identity, function_type="polynomial", params=_polynomial_params())
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CRUD
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPointLibraryCRUD:
     def test_add_and_get(self):
@@ -157,6 +167,7 @@ class TestPointLibraryCRUD:
 # Batch Operations
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPointLibraryBatchOps:
     def test_add_many(self):
         lib = PointLibrary()
@@ -206,6 +217,7 @@ class TestPointLibraryBatchOps:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Search
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPointLibrarySearch:
     def test_search(self):
@@ -279,6 +291,7 @@ class TestPointLibrarySearch:
 # Compression & Decompression
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPointLibraryCompress:
     def test_compress_cluster_and_store(self):
         lib = PointLibrary()
@@ -310,6 +323,7 @@ class TestPointLibraryCompress:
 # ═══════════════════════════════════════════════════════════════════════════════
 # PointView
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPointLibraryView:
     def test_view_returns_pointview(self):
@@ -352,6 +366,7 @@ class TestPointLibraryView:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Statistics
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPointLibraryStats:
     def test_empty_stats(self):
@@ -410,6 +425,7 @@ class TestPointLibraryStats:
 # Persistence
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPointLibraryPersistence:
     def test_save_and_load(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -463,6 +479,7 @@ class TestPointLibraryPersistence:
 # Validation
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPointLibraryValidation:
     def test_empty_identity_raises(self):
         lib = PointLibrary()
@@ -478,8 +495,7 @@ class TestPointLibraryValidation:
 
     def test_invalid_accuracy_raises(self):
         lib = PointLibrary()
-        p = Point(identity="bad", function_type="periodic", params=_periodic_params(),
-                  accuracy=1.5)
+        p = Point(identity="bad", function_type="periodic", params=_periodic_params(), accuracy=1.5)
         with pytest.raises(ValueError, match="Accuracy must be 0-1"):
             lib.add(p)
 
@@ -492,32 +508,34 @@ class TestPointLibraryValidation:
     def test_cluster_missing_centroids_raises(self):
         lib = PointLibrary()
         assignments = np.random.randint(0, 16, size=100).astype(np.uint8)
-        p = Point(identity="bad", function_type="cluster",
-                  params={"assignments": assignments})
+        p = Point(identity="bad", function_type="cluster", params={"assignments": assignments})
         with pytest.raises(ValueError, match="centroids"):
             lib.add(p)
 
     def test_cluster_missing_assignments_raises(self):
         lib = PointLibrary()
         centroids = np.random.randn(16).astype(np.float32)
-        p = Point(identity="bad", function_type="cluster",
-                  params={"centroids": centroids})
+        p = Point(identity="bad", function_type="cluster", params={"centroids": centroids})
         with pytest.raises(ValueError, match="assignments"):
             lib.add(p)
 
     def test_cluster_non_numpy_centroids_raises(self):
         lib = PointLibrary()
-        p = Point(identity="bad", function_type="cluster",
-                  params={"centroids": [1, 2, 3],
-                          "assignments": np.array([0, 1, 2], dtype=np.uint8)})
+        p = Point(
+            identity="bad",
+            function_type="cluster",
+            params={"centroids": [1, 2, 3], "assignments": np.array([0, 1, 2], dtype=np.uint8)},
+        )
         with pytest.raises(ValueError, match="centroids must be numpy"):
             lib.add(p)
 
     def test_cluster_non_numpy_assignments_raises(self):
         lib = PointLibrary()
-        p = Point(identity="bad", function_type="cluster",
-                  params={"centroids": np.array([1.0, 2.0], dtype=np.float32),
-                          "assignments": [0, 1]})
+        p = Point(
+            identity="bad",
+            function_type="cluster",
+            params={"centroids": np.array([1.0, 2.0], dtype=np.float32), "assignments": [0, 1]},
+        )
         with pytest.raises(ValueError, match="assignments must be numpy"):
             lib.add(p)
 
@@ -529,11 +547,13 @@ class TestPointLibraryValidation:
 
     def test_accuracy_at_boundary(self):
         lib = PointLibrary()
-        p = Point(identity="zero", function_type="periodic", params=_periodic_params(),
-                  accuracy=0.0)
+        p = Point(
+            identity="zero", function_type="periodic", params=_periodic_params(), accuracy=0.0
+        )
         lib.add(p)
-        p2 = Point(identity="one", function_type="periodic", params=_periodic_params(),
-                   accuracy=1.0)
+        p2 = Point(
+            identity="one", function_type="periodic", params=_periodic_params(), accuracy=1.0
+        )
         lib.add(p2)
 
     def test_add_many_validation(self):
@@ -546,6 +566,7 @@ class TestPointLibraryValidation:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Iteration
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPointLibraryIteration:
     def test_iter(self):
@@ -568,6 +589,7 @@ class TestPointLibraryIteration:
 # Repr
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPointLibraryRepr:
     def test_repr(self):
         lib = PointLibrary(name="test")
@@ -581,6 +603,7 @@ class TestPointLibraryRepr:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Duplicate Identity
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPointLibraryDuplicateIdentity:
     def test_re_add_overwrites(self):
@@ -599,6 +622,7 @@ class TestPointLibraryDuplicateIdentity:
 # Thread Safety
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPointLibraryThreadSafety:
     def test_concurrent_add(self):
         lib = PointLibrary()
@@ -611,8 +635,7 @@ class TestPointLibraryThreadSafety:
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=add_points, args=(f"t{t}",))
-                   for t in range(4)]
+        threads = [threading.Thread(target=add_points, args=(f"t{t}",)) for t in range(4)]
         for t in threads:
             t.start()
         for t in threads:
@@ -641,8 +664,9 @@ class TestPointLibraryThreadSafety:
             except Exception as e:
                 errors.append(e)
 
-        threads = ([threading.Thread(target=reads) for _ in range(3)] +
-                   [threading.Thread(target=writes) for _ in range(2)])
+        threads = [threading.Thread(target=reads) for _ in range(3)] + [
+            threading.Thread(target=writes) for _ in range(2)
+        ]
         for t in threads:
             t.start()
         for t in threads:
@@ -653,6 +677,7 @@ class TestPointLibraryThreadSafety:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Config Integration
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPointLibraryConfig:
     def test_config_overrides(self):
@@ -675,6 +700,7 @@ class TestPointLibraryConfig:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Point Protocol Properties
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPointProtocolProperties:
     def test_is_lossless(self):
@@ -715,6 +741,7 @@ class TestPointProtocolProperties:
 # ═══════════════════════════════════════════════════════════════════════════════
 # PointView Properties
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPointViewProperties:
     def test_point_property(self):
@@ -824,6 +851,7 @@ class TestPointViewProperties:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Additional Coverage
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPointLibraryExtraCRUD:
     def test_remove_decrements_count(self):
@@ -950,8 +978,9 @@ class TestPointLibraryExtraIteration:
 class TestPointLibraryExtraValidation:
     def test_negative_accuracy_raises(self):
         lib = PointLibrary()
-        p = Point(identity="bad", function_type="periodic",
-                  params=_periodic_params(), accuracy=-0.1)
+        p = Point(
+            identity="bad", function_type="periodic", params=_periodic_params(), accuracy=-0.1
+        )
         with pytest.raises(ValueError, match="Accuracy must be 0-1"):
             lib.add(p)
 

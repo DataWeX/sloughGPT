@@ -6,8 +6,8 @@ completion, token completion, and reverse history search.
 completion/search helpers can be exercised without a terminal.
 """
 
-import curses
 import ctypes
+import curses
 import os
 import threading
 import time
@@ -38,6 +38,7 @@ def set_buf(repl, text, caret=None):
 
 
 # ── _complete_path ────────────────────────────────────────────────────────
+
 
 def test_complete_path_single_match(tmp_path):
     (tmp_path / "alpha.txt").write_text("")
@@ -71,6 +72,7 @@ def test_complete_path_expands_tilde():
 
 
 # ── token completion ──────────────────────────────────────────────────────
+
 
 def test_complete_single_command(repl):
     set_buf(repl, "ai")
@@ -125,6 +127,7 @@ def test_complete_path_token_multiple_distinct(repl, tmp_path):
 
 
 # ── reverse history search ────────────────────────────────────────────────
+
 
 def test_search_back_finds_match(repl):
     repl._cmd_history = ["models", "ai hello", "gen"]
@@ -269,6 +272,7 @@ def test_apply_search_switch_direction_from_reverse(repl):
 
 # ── line editing helpers ─────────────────────────────────────────────────
 
+
 def test_move_home_and_end(repl):
     set_buf(repl, "hello", caret=3)
     repl._move_home()
@@ -347,6 +351,7 @@ def test_delete_word_back_at_start_noop(repl):
 
 # ── delete word forward (Alt+D) ───────────────────────────────────────────
 
+
 def test_delete_word_forward_at_start(repl):
     set_buf(repl, "echo foo bar", caret=0)
     repl._delete_word_forward()
@@ -385,6 +390,7 @@ def test_delete_word_forward_pushes_ring(repl):
 
 
 # ── kill ring + yank (Ctrl+Y) ─────────────────────────────────────────────
+
 
 def test_kill_to_end_pushes_ring(repl):
     set_buf(repl, "abc def", caret=4)
@@ -470,6 +476,7 @@ def test_push_kill_resets_yank_cycle(repl):
 
 
 # ── word movement (Alt+F / Alt+B / Ctrl+arrows) ───────────────────────────
+
 
 def test_move_word_forward_next_word(repl):
     set_buf(repl, "one two three", caret=0)
@@ -577,6 +584,7 @@ def test_read_escape_remainder_restores_timeout():
 
 # ── transpose chars (Ctrl+T) ──────────────────────────────────────────────
 
+
 def test_transpose_chars_mid_word(repl):
     set_buf(repl, "abcd", caret=2)
     repl._transpose_chars()
@@ -619,6 +627,7 @@ def test_transpose_chars_advances_caret(repl):
 
 # ── search failed indicator ───────────────────────────────────────────────
 
+
 def test_apply_search_sets_failed_flag(repl):
     repl._cmd_history = ["models", "ai hello"]
     repl._search_q = "zzz"
@@ -647,6 +656,7 @@ def test_apply_search_empty_query_not_failed(repl):
 
 
 # ── input view (caret column + horizontal scroll) ────────────────────────
+
 
 def test_input_view_fits_window(repl):
     line, caret = repl._input_view(20, "hello", 3)
@@ -685,6 +695,7 @@ def test_input_view_caret_clamped(repl):
 
 
 # ── interrupt active command (Ctrl+C) ────────────────────────────────────
+
 
 def test_interrupt_active_kills_busy_thread(repl):
     import threading
@@ -739,6 +750,7 @@ def test_interrupt_active_main_thread_noop(repl):
 
 
 # ── output-pane content search ───────────────────────────────────────────
+
 
 def seed_output(repl, lines):
     repl._output_surface.clear()
@@ -883,6 +895,7 @@ def test_repeat_out_search_no_last_noop(repl):
 
 # ── curses event loop (_main) ────────────────────────────────────────────
 
+
 class _MainFakeRepl:
     COMMANDS = ["ai", "echo", "exit"]
 
@@ -899,7 +912,11 @@ class _MainFakeRepl:
 class _FakeLogBuffer:
     def __init__(self, entries=None):
         if entries is None:
-            entries = [types.SimpleNamespace(timestamp=1700000000.0, level="INFO", source="test", message="boot")]
+            entries = [
+                types.SimpleNamespace(
+                    timestamp=1700000000.0, level="INFO", source="test", message="boot"
+                )
+            ]
         self._entries = entries
 
     def get(self):
@@ -1001,17 +1018,31 @@ def _drive(tui, scr, term=None, escdelay_raise=False, term_error=False, resize_e
         if resize_error
         else patch.object(curses, "resizeterm")
     )
-    with patch.object(curses, "curs_set"), patch.object(curses, "raw"), esc, \
-         patch.object(curses, "color_pair", side_effect=lambda n: n), \
-         patch.object(curses, "has_colors", return_value=True), \
-         patch.object(curses, "newwin", side_effect=_newwin), \
-         resize, getsize, \
-         patch.object(tui_mod, "_init_pairs"):
+    with (
+        patch.object(curses, "curs_set"),
+        patch.object(curses, "raw"),
+        esc,
+        patch.object(curses, "color_pair", side_effect=lambda n: n),
+        patch.object(curses, "has_colors", return_value=True),
+        patch.object(curses, "newwin", side_effect=_newwin),
+        resize,
+        getsize,
+        patch.object(tui_mod, "_init_pairs"),
+    ):
         tui._main(scr)
 
 
-def _run_main(repl, keys, rows=24, cols=80, term=None, history=None, output=None,
-              term_error=False, resize_error=False):
+def _run_main(
+    repl,
+    keys,
+    rows=24,
+    cols=80,
+    term=None,
+    history=None,
+    output=None,
+    term_error=False,
+    resize_error=False,
+):
     tui = TuiRepl(repl, _FakeLogBuffer())
     if history is not None:
         tui._cmd_history = list(history)
@@ -1077,19 +1108,27 @@ def test_main_poll_tick_clears_finished_command():
 
 
 def test_main_history_back_fills_line():
-    tui = _run_main(_MainFakeRepl(), [curses.KEY_UP, curses.KEY_UP, 3], history=["echo hello", "ai test"])
+    tui = _run_main(
+        _MainFakeRepl(), [curses.KEY_UP, curses.KEY_UP, 3], history=["echo hello", "ai test"]
+    )
     assert "".join(tui._input_buf) == "echo hello"
     assert tui._history_pos == 0
 
 
 def test_main_history_up_down_clears_past_newest():
-    tui = _run_main(_MainFakeRepl(), [curses.KEY_UP, curses.KEY_UP, curses.KEY_DOWN, curses.KEY_DOWN, 3], history=["echo hello", "ai test"])
+    tui = _run_main(
+        _MainFakeRepl(),
+        [curses.KEY_UP, curses.KEY_UP, curses.KEY_DOWN, curses.KEY_DOWN, 3],
+        history=["echo hello", "ai test"],
+    )
     assert tui._input_buf == []
     assert tui._history_pos == len(tui._cmd_history)
 
 
 def test_main_ctrl_r_search_enter_keeps_match():
-    tui = _run_main(_MainFakeRepl(), [18, ord("h"), ord("e"), ord("\n"), 3], history=["echo hello", "ai test"])
+    tui = _run_main(
+        _MainFakeRepl(), [18, ord("h"), ord("e"), ord("\n"), 3], history=["echo hello", "ai test"]
+    )
     assert "".join(tui._input_buf) == "echo hello"
     assert not tui._searching
 
@@ -1112,7 +1151,9 @@ def test_main_ctrl_l_and_ctrl_o():
 
 
 def test_main_pgup_pgdn_scrolls_panes():
-    tui = _run_main(_MainFakeRepl(), [15, curses.KEY_PPAGE, 15, curses.KEY_NPAGE, curses.KEY_NPAGE, 3])
+    tui = _run_main(
+        _MainFakeRepl(), [15, curses.KEY_PPAGE, 15, curses.KEY_NPAGE, curses.KEY_NPAGE, 3]
+    )
     assert tui._log_scroll == 10
     assert tui._out_scroll == 0
     assert tui._scroll_target == 0
@@ -1145,7 +1186,9 @@ def test_main_backspace():
 
 
 def test_main_key_left_right():
-    tui = _run_main(_MainFakeRepl(), [ord("a"), ord("b"), curses.KEY_LEFT, ord("x"), curses.KEY_RIGHT, 3])
+    tui = _run_main(
+        _MainFakeRepl(), [ord("a"), ord("b"), curses.KEY_LEFT, ord("x"), curses.KEY_RIGHT, 3]
+    )
     assert "".join(tui._input_buf) == "axb"
     assert tui._input_cursor == 3
 
@@ -1156,13 +1199,33 @@ def test_main_key_delete_char():
 
 
 def test_main_alt_word_navigation_and_delete():
-    tui = _run_main(_MainFakeRepl(), [ord("a"), ord("a"), ord(" "), ord("b"), ord("b"), 1, 27, ord("f"), 27, ord("b"), 27, ord("d"), 3])
+    tui = _run_main(
+        _MainFakeRepl(),
+        [
+            ord("a"),
+            ord("a"),
+            ord(" "),
+            ord("b"),
+            ord("b"),
+            1,
+            27,
+            ord("f"),
+            27,
+            ord("b"),
+            27,
+            ord("d"),
+            3,
+        ],
+    )
     assert "".join(tui._input_buf) == " bb"
     assert tui._input_cursor == 0
 
 
 def test_main_seq_ctrl_arrows():
-    tui = _run_main(_MainFakeRepl(), [ord("a"), ord("a"), ord(" "), ord("b"), ord("b"), 1, 27, 91, 53, 67, 27, 91, 53, 68, 3])
+    tui = _run_main(
+        _MainFakeRepl(),
+        [ord("a"), ord("a"), ord(" "), ord("b"), ord("b"), 1, 27, 91, 53, 67, 27, 91, 53, 68, 3],
+    )
     assert tui._input_cursor == 0
 
 
@@ -1216,8 +1279,10 @@ def test_run_wraps_main_and_restores_io():
     def _fake_wrapper(main):
         _drive(tui, scr, term=term)
 
-    with patch.object(curses, "wrapper", side_effect=_fake_wrapper), \
-         patch("domain.logging.cli_logger.set_cli_terminal") as sct:
+    with (
+        patch.object(curses, "wrapper", side_effect=_fake_wrapper),
+        patch("domain.logging.cli_logger.set_cli_terminal") as sct,
+    ):
         tui.run()
     assert tui._running is False
     assert repl.io == "old-io"
@@ -1226,6 +1291,7 @@ def test_run_wraps_main_and_restores_io():
 
 
 # ── remaining uncovered branches ─────────────────────────────────────────
+
 
 def test_interrupt_active_async_exc_result_paths():
     tui = TuiRepl(_MainFakeRepl(), None)
@@ -1246,17 +1312,21 @@ def test_interrupt_active_async_exc_result_paths():
 
 
 def test_init_pairs_with_colors():
-    with patch.object(curses, "has_colors", return_value=True), \
-         patch.object(curses, "start_color"), \
-         patch.object(curses, "use_default_colors"), \
-         patch.object(curses, "init_pair") as ip:
+    with (
+        patch.object(curses, "has_colors", return_value=True),
+        patch.object(curses, "start_color"),
+        patch.object(curses, "use_default_colors"),
+        patch.object(curses, "init_pair") as ip,
+    ):
         tui_mod._init_pairs()
     assert ip.call_count == 7
 
 
 def test_init_pairs_without_colors():
-    with patch.object(curses, "has_colors", return_value=False), \
-         patch.object(curses, "init_pair") as ip:
+    with (
+        patch.object(curses, "has_colors", return_value=False),
+        patch.object(curses, "init_pair") as ip,
+    ):
         tui_mod._init_pairs()
     assert ip.call_count == 0
 
@@ -1344,15 +1414,19 @@ def test_render_status_out_searching_label():
 
 
 def test_main_search_direction_ctrl_s():
-    tui = _run_main(_MainFakeRepl(), [19, ord("a"), 19, ord("\n"), 3],
-                    history=["echo hello", "ai test"])
+    tui = _run_main(
+        _MainFakeRepl(), [19, ord("a"), 19, ord("\n"), 3], history=["echo hello", "ai test"]
+    )
     assert "".join(tui._input_buf) == "ai test"
     assert not tui._searching
 
 
 def test_main_search_backspace():
-    tui = _run_main(_MainFakeRepl(), [18, ord("a"), ord("b"), 8, ord("\n"), 3],
-                    history=["echo hello", "ai test"])
+    tui = _run_main(
+        _MainFakeRepl(),
+        [18, ord("a"), ord("b"), 8, ord("\n"), 3],
+        history=["echo hello", "ai test"],
+    )
     assert "".join(tui._input_buf) == "ai test"
 
 
@@ -1374,9 +1448,20 @@ def test_main_log_pane_pgdn():
 
 
 def test_main_ctrl_arrow_codes():
-    tui = _run_main(_MainFakeRepl(),
-                    [ord("a"), ord("a"), ord(" "), ord("b"), ord("b"), 1,
-                     tui_mod._KEY_CTRL_RIGHT, tui_mod._KEY_CTRL_LEFT, 3])
+    tui = _run_main(
+        _MainFakeRepl(),
+        [
+            ord("a"),
+            ord("a"),
+            ord(" "),
+            ord("b"),
+            ord("b"),
+            1,
+            tui_mod._KEY_CTRL_RIGHT,
+            tui_mod._KEY_CTRL_LEFT,
+            3,
+        ],
+    )
     assert tui._input_cursor == 0
 
 
@@ -1402,8 +1487,10 @@ def test_main_ctrl_c_interrupts_active_command():
     tui = _run_main(repl, keys)
     assert "^C" in "".join(tui._output_surface.capture)
     assert _wait_until(
-        lambda: repl.interrupts == 1
-        and (tui._active_thread is None or not tui._active_thread.is_alive())
+        lambda: (
+            repl.interrupts == 1
+            and (tui._active_thread is None or not tui._active_thread.is_alive())
+        )
     )
 
 
@@ -1446,8 +1533,9 @@ def test_main_detect_resize_resizeterm_error_on_change():
 
 
 def test_main_search_direction_backward():
-    tui = _run_main(_MainFakeRepl(), [18, ord("a"), 18, ord("\n"), 3],
-                    history=["echo hello", "ai test"])
+    tui = _run_main(
+        _MainFakeRepl(), [18, ord("a"), 18, ord("\n"), 3], history=["echo hello", "ai test"]
+    )
     assert not tui._searching
 
 
@@ -1468,8 +1556,10 @@ def test_run_handles_cli_logger_import_error():
     def _fake_wrapper(main):
         _drive(tui, scr, term=term)
 
-    with patch.object(curses, "wrapper", side_effect=_fake_wrapper), \
-         patch.dict(sys.modules, {"domain.logging.cli_logger": None}):
+    with (
+        patch.object(curses, "wrapper", side_effect=_fake_wrapper),
+        patch.dict(sys.modules, {"domain.logging.cli_logger": None}),
+    ):
         tui.run()
     assert tui._running is False
     assert repl.io == "old-io"
@@ -1486,6 +1576,7 @@ def test_module_async_exc_import_fallback():
 
 
 # ── _draw_borders ───────────────────────────────────────────────────────
+
 
 class _FakeStdscr:
     def __init__(self, rows=24, cols=80):
@@ -1509,7 +1600,8 @@ class _FakeStdscr:
 
 
 def test_draw_borders_horizontal():
-    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
+    from domain.shell._internal.pane import Border, Pane, PaneLayout
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
     layout.panes.append(Pane("console", 0.5, border=Border("all")))
@@ -1517,74 +1609,89 @@ def test_draw_borders_horizontal():
     tui._layout = layout
     regions = layout.compute(24, 80)
     scr = _FakeStdscr()
-    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
-         patch.object(curses, "has_colors", return_value=True):
+    with (
+        patch.object(curses, "color_pair", side_effect=lambda n: n),
+        patch.object(curses, "has_colors", return_value=True),
+    ):
         tui._draw_borders(scr, regions)
     horiz = [c for c in scr.addnstr_calls if c[2] and "\u2500" in c[2]]
     assert len(horiz) >= 2
 
 
 def test_draw_borders_vertical():
-    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
+    from domain.shell._internal.pane import Border, Pane, PaneLayout
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
     layout.panes.append(Pane("console", 1.0, border=Border("all")))
     tui._layout = layout
     regions = layout.compute(24, 80)
     scr = _FakeStdscr()
-    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
-         patch.object(curses, "has_colors", return_value=True):
+    with (
+        patch.object(curses, "color_pair", side_effect=lambda n: n),
+        patch.object(curses, "has_colors", return_value=True),
+    ):
         tui._draw_borders(scr, regions)
     vert = [c for c in scr.addch_calls if c[2] == "\u2502"]
     assert len(vert) >= 2
 
 
 def test_draw_borders_skips_empty_border():
-    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
+    from domain.shell._internal.pane import Border, Pane, PaneLayout
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
     layout.panes.append(Pane("console", 1.0, border=Border("none")))
     tui._layout = layout
     regions = layout.compute(24, 80)
     scr = _FakeStdscr()
-    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
-         patch.object(curses, "has_colors", return_value=True):
+    with (
+        patch.object(curses, "color_pair", side_effect=lambda n: n),
+        patch.object(curses, "has_colors", return_value=True),
+    ):
         tui._draw_borders(scr, regions)
     assert scr.addnstr_calls == []
     assert scr.addch_calls == []
 
 
 def test_draw_borders_skips_invisible_pane():
-    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
+    from domain.shell._internal.pane import Border, Pane, PaneLayout
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
     layout.panes.append(Pane("console", 1.0, border=Border("all"), visible=False))
     tui._layout = layout
     regions = layout.compute(24, 80)
     scr = _FakeStdscr()
-    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
-         patch.object(curses, "has_colors", return_value=True):
+    with (
+        patch.object(curses, "color_pair", side_effect=lambda n: n),
+        patch.object(curses, "has_colors", return_value=True),
+    ):
         tui._draw_borders(scr, regions)
     assert scr.addnstr_calls == []
 
 
 def test_draw_borders_custom_char():
-    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
+    from domain.shell._internal.pane import Border, Pane, PaneLayout
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
     layout.panes.append(Pane("console", 1.0, border=Border("horizontal", ch="#")))
     tui._layout = layout
     regions = layout.compute(24, 80)
     scr = _FakeStdscr()
-    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
-         patch.object(curses, "has_colors", return_value=True):
+    with (
+        patch.object(curses, "color_pair", side_effect=lambda n: n),
+        patch.object(curses, "has_colors", return_value=True),
+    ):
         tui._draw_borders(scr, regions)
     top_row = [c for c in scr.addnstr_calls if "#" in (c[2] or "")]
     assert len(top_row) >= 1
 
 
 def test_draw_borders_handles_curses_error():
-    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
+    from domain.shell._internal.pane import Border, Pane, PaneLayout
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
     layout.panes.append(Pane("console", 1.0, border=Border("all")))
@@ -1599,15 +1706,19 @@ def test_draw_borders_handles_curses_error():
             raise curses.error("fail")
 
     scr = _ErrorStdscr()
-    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
-         patch.object(curses, "has_colors", return_value=True):
+    with (
+        patch.object(curses, "color_pair", side_effect=lambda n: n),
+        patch.object(curses, "has_colors", return_value=True),
+    ):
         tui._draw_borders(scr, regions)
 
 
 # ── _render_confirm ────────────────────────────────────────────────────
 
+
 def test_render_confirm_yes_default():
     from domain.shell._internal.pane import Rect
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._confirm_message = "Delete file?"
     tui._confirm_default = True
@@ -1622,6 +1733,7 @@ def test_render_confirm_yes_default():
 
 def test_render_confirm_no_default():
     from domain.shell._internal.pane import Rect
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._confirm_message = "Proceed?"
     tui._confirm_default = False
@@ -1635,8 +1747,10 @@ def test_render_confirm_no_default():
 
 # ── _render_ask ─────────────────────────────────────────────────────────
 
+
 def test_render_ask_with_default():
     from domain.shell._internal.pane import Rect
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._ask_message = "Enter name"
     tui._ask_default = "anon"
@@ -1653,6 +1767,7 @@ def test_render_ask_with_default():
 
 def test_render_ask_without_default():
     from domain.shell._internal.pane import Rect
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._ask_message = "Type something"
     tui._ask_default = ""
@@ -1669,8 +1784,10 @@ def test_render_ask_without_default():
 
 # ── _render_select ──────────────────────────────────────────────────────
 
+
 def test_render_select_basic():
     from domain.shell._internal.pane import Rect
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._select_title = "Pick one"
     tui._select_options = ["alpha", "bravo", "charlie"]
@@ -1689,6 +1806,7 @@ def test_render_select_basic():
 
 def test_render_select_with_filter():
     from domain.shell._internal.pane import Rect
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._select_title = "Pick"
     tui._select_options = ["alpha", "bravo", "alpine"]
@@ -1707,6 +1825,7 @@ def test_render_select_with_filter():
 
 def test_render_select_overflow_shows_count():
     from domain.shell._internal.pane import Rect
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._select_title = "Big list"
     tui._select_options = [f"item-{i}" for i in range(20)]
@@ -1724,6 +1843,7 @@ def test_render_select_overflow_shows_count():
 
 # ── prompt_select / prompt_confirm / prompt_ask ────────────────────────
 
+
 def test_prompt_select_empty_returns_empty():
     tui = TuiRepl(_MainFakeRepl(), None)
     assert tui.prompt_select("Pick", []) == ""
@@ -1731,11 +1851,14 @@ def test_prompt_select_empty_returns_empty():
 
 def test_prompt_select_returns_result():
     import threading
+
     tui = TuiRepl(_MainFakeRepl(), None)
+
     def set_result():
         time.sleep(0.05)
         tui._select_result = "bravo"
         tui._select_event.set()
+
     t = threading.Thread(target=set_result)
     t.start()
     result = tui.prompt_select("Pick", ["alpha", "bravo", "charlie"])
@@ -1745,11 +1868,14 @@ def test_prompt_select_returns_result():
 
 def test_prompt_confirm_returns_result():
     import threading
+
     tui = TuiRepl(_MainFakeRepl(), None)
+
     def set_result():
         time.sleep(0.05)
         tui._confirm_result = True
         tui._confirm_event.set()
+
     t = threading.Thread(target=set_result)
     t.start()
     result = tui.prompt_confirm("OK?")
@@ -1759,10 +1885,13 @@ def test_prompt_confirm_returns_result():
 
 def test_prompt_confirm_timeout_returns_default():
     import threading
+
     tui = TuiRepl(_MainFakeRepl(), None)
+
     def release():
         time.sleep(0.05)
         tui._confirm_event.set()
+
     threading.Thread(target=release, daemon=True).start()
     result = tui.prompt_confirm("OK?", default=False)
     assert result is False
@@ -1770,11 +1899,14 @@ def test_prompt_confirm_timeout_returns_default():
 
 def test_prompt_ask_returns_result():
     import threading
+
     tui = TuiRepl(_MainFakeRepl(), None)
+
     def set_result():
         time.sleep(0.05)
         tui._ask_result = "hello"
         tui._ask_event.set()
+
     t = threading.Thread(target=set_result)
     t.start()
     result = tui.prompt_ask("Enter text")
@@ -1784,10 +1916,13 @@ def test_prompt_ask_returns_result():
 
 def test_prompt_ask_timeout_returns_default():
     import threading
+
     tui = TuiRepl(_MainFakeRepl(), None)
+
     def release():
         time.sleep(0.05)
         tui._ask_event.set()
+
     threading.Thread(target=release, daemon=True).start()
     result = tui.prompt_ask("Enter text", default="fallback")
     assert result == "fallback"
@@ -1795,9 +1930,11 @@ def test_prompt_ask_timeout_returns_default():
 
 # ── _render_all ─────────────────────────────────────────────────────────
 
+
 def test_render_all_draws_borders_and_content():
-    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
     from domain.shell._internal.log_buffer import LogBuffer, LogEntry
+    from domain.shell._internal.pane import Border, Pane, PaneLayout
+
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), LogBuffer()))
     tui._log_surface._buffer.append(LogEntry(time.time(), "INFO", "test", "log line"))
     layout = PaneLayout()
@@ -1814,7 +1951,9 @@ def test_render_all_draws_borders_and_content():
     win_output = _FakeWin(10, 40)
     win_status = _FakeWin(1, 80)
     win_input = _FakeWin(1, 80)
-    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
-         patch.object(curses, "has_colors", return_value=True):
+    with (
+        patch.object(curses, "color_pair", side_effect=lambda n: n),
+        patch.object(curses, "has_colors", return_value=True),
+    ):
         tui._render_all(scr, regions, win_console, win_output, win_status, win_input)
     assert scr.refreshed

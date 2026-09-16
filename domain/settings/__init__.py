@@ -6,13 +6,13 @@ Public API:
 """
 
 from domain.settings._internal.persistent import (
-    GenerationSettings,
-    TrainingSettings,
     AdaptiveSettings,
-    VoiceSettings,
-    UISettings,
     AppSettings,
+    GenerationSettings,
     PersistentSettings,
+    TrainingSettings,
+    UISettings,
+    VoiceSettings,
     get_settings,
 )
 

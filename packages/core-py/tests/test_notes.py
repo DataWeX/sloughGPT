@@ -21,6 +21,7 @@ def store(tmp_path):
 # Note data model
 # ---------------------------------------------------------------------------
 
+
 class TestNote:
     def test_to_markdown_roundtrip(self):
         note = Note(
@@ -68,6 +69,7 @@ class TestNote:
 # ---------------------------------------------------------------------------
 # NoteStore CRUD
 # ---------------------------------------------------------------------------
+
 
 class TestNoteStoreCRUD:
     def test_create_note(self, store):
@@ -140,6 +142,7 @@ class TestNoteStoreCRUD:
 # NoteStore listing and search
 # ---------------------------------------------------------------------------
 
+
 class TestNoteStoreSearch:
     def _populate(self, store):
         n1 = store.create("Fix kernel boot", tags=["kernel", "bugfix"], status="done")
@@ -206,6 +209,7 @@ class TestNoteStoreSearch:
 # NoteStore export
 # ---------------------------------------------------------------------------
 
+
 class TestNoteStoreExport:
     def test_export_returns_markdown(self, store):
         store.create("Export test", tags=["export"], body="## Hello")
@@ -228,6 +232,7 @@ class TestNoteStoreExport:
 # ---------------------------------------------------------------------------
 # NoteStore slug generation
 # ---------------------------------------------------------------------------
+
 
 class TestSlug:
     def test_simple_title(self):

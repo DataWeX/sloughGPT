@@ -1,11 +1,12 @@
 """
 Tests for new CLI commands - build and vm.
 """
-import pytest
+
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 
 # Paths
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -35,7 +36,7 @@ class TestBuildCommand:
     def test_build_command_has_commands_dict(self):
         build_cmd = REPO_ROOT / "apps" / "cli" / "src" / "commands" / "build.py"
         content = build_cmd.read_text()
-        assert 'COMMANDS = {' in content
+        assert "COMMANDS = {" in content
         assert '"build"' in content
 
     def test_build_command_has_subcommands(self):
@@ -75,7 +76,7 @@ class TestVMCommand:
     def test_vm_command_has_commands_dict(self):
         vm_cmd = REPO_ROOT / "apps" / "cli" / "src" / "commands" / "vm.py"
         content = vm_cmd.read_text()
-        assert 'COMMANDS = {' in content
+        assert "COMMANDS = {" in content
         assert '"vm"' in content
 
     def test_vm_command_has_subcommands(self):
@@ -120,6 +121,7 @@ class TestBuildrootBuildScript:
 
     def test_build_script_executable(self):
         import os
+
         script = REPO_ROOT / "buildroot" / "build.sh"
         assert os.access(script, os.X_OK), "build.sh must be executable"
 
@@ -141,7 +143,7 @@ class TestBuildrootBuildScript:
         script = REPO_ROOT / "buildroot" / "build.sh"
         content = script.read_text()
         assert "setup_build()" in content
-        assert 'setup)' in content
+        assert "setup)" in content
 
 
 class TestMakefileBuildrootTargets:
@@ -172,6 +174,7 @@ class TestDaitInitScript:
 
     def test_init_script_executable(self):
         import os
+
         init_script = REPO_ROOT / "buildroot" / "overlays" / "etc" / "init.d" / "S99dait"
         assert os.access(init_script, os.X_OK), "S99dait must be executable"
 
@@ -218,6 +221,7 @@ class TestDaitConfig:
 # Integration Tests — actually run CLI commands via subprocess
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.integration
 class TestVMRunFile:
     """vm run --file executes assembly correctly."""
@@ -226,16 +230,16 @@ class TestVMRunFile:
         """vm run --file executes assembly and produces output."""
         asm_file = tmp_path / "test.asm"
         asm_file.write_text(
-            'mov eax, 3\n'
-            'mov ebx, 1\n'
-            'push msg\n'
-            'mov ecx, esp\n'
-            'mov edx, 13\n'
-            'int 0x80\n'
-            'pop eax\n'
-            'mov eax, 1\n'
-            'mov ebx, 0\n'
-            'int 0x80\n'
+            "mov eax, 3\n"
+            "mov ebx, 1\n"
+            "push msg\n"
+            "mov ecx, esp\n"
+            "mov edx, 13\n"
+            "int 0x80\n"
+            "pop eax\n"
+            "mov eax, 1\n"
+            "mov ebx, 0\n"
+            "int 0x80\n"
             'msg: db "Hello, World!", 10, 0\n'
         )
 
@@ -334,10 +338,13 @@ class TestBuildInit:
     def test_build_init_function_exists(self):
         """cmd_build_init function is defined and importable."""
         result = subprocess.run(
-            [sys.executable, "-c",
-             "import sys; sys.path.insert(0, 'apps/cli/src'); "
-             "from commands.build import cmd_build_init; "
-             "print('OK')"],
+            [
+                sys.executable,
+                "-c",
+                "import sys; sys.path.insert(0, 'apps/cli/src'); "
+                "from commands.build import cmd_build_init; "
+                "print('OK')",
+            ],
             capture_output=True,
             text=True,
             cwd=str(REPO_ROOT),
@@ -355,14 +362,17 @@ class TestVMPrograms:
     def test_programs_dict_exists(self):
         """PROGRAMS dict is importable from vm_programs."""
         result = subprocess.run(
-            [sys.executable, "-c",
-             "import sys; sys.path.insert(0, 'packages/core-py'); "
-             "from domain.shell._internal.vm_programs import PROGRAMS; "
-             "print(f'Found {len(PROGRAMS)} programs'); "
-             "assert 'test_hello' in PROGRAMS; "
-             "assert 'hello' in PROGRAMS; "
-             "assert 'empty' in PROGRAMS; "
-             "print('OK')"],
+            [
+                sys.executable,
+                "-c",
+                "import sys; sys.path.insert(0, 'packages/core-py'); "
+                "from domain.shell._internal.vm_programs import PROGRAMS; "
+                "print(f'Found {len(PROGRAMS)} programs'); "
+                "assert 'test_hello' in PROGRAMS; "
+                "assert 'hello' in PROGRAMS; "
+                "assert 'empty' in PROGRAMS; "
+                "print('OK')",
+            ],
             capture_output=True,
             text=True,
             cwd=str(REPO_ROOT),
@@ -375,21 +385,33 @@ class TestVMPrograms:
     def test_programs_dict_has_all_required(self):
         """PROGRAMS dict contains all required program names."""
         required = [
-            "test_hello", "hello", "test_syscalls", "test_privilege",
-            "test_multiprocess", "test_fork", "test_pipe", "test_mmap",
-            "test_signal", "test_usermode", "test_ebx_ecx", "test_ergonomics",
-            "test_singlestep", "test_v86_dos", "empty", "hello_linux",
+            "test_hello",
+            "hello",
+            "test_syscalls",
+            "test_privilege",
+            "test_multiprocess",
+            "test_fork",
+            "test_pipe",
+            "test_mmap",
+            "test_signal",
+            "test_usermode",
+            "test_ebx_ecx",
+            "test_ergonomics",
+            "test_singlestep",
+            "test_v86_dos",
+            "empty",
+            "hello_linux",
         ]
 
         result = subprocess.run(
-            [sys.executable, "-c",
-             "import sys; sys.path.insert(0, 'packages/core-py'); "
-             "from domain.shell._internal.vm_programs import PROGRAMS; "
-             + "; ".join(
-                 f"assert '{name}' in PROGRAMS, 'Missing {name}'"
-                 for name in required
-             )
-             + "; print('OK')"],
+            [
+                sys.executable,
+                "-c",
+                "import sys; sys.path.insert(0, 'packages/core-py'); "
+                "from domain.shell._internal.vm_programs import PROGRAMS; "
+                + "; ".join(f"assert '{name}' in PROGRAMS, 'Missing {name}'" for name in required)
+                + "; print('OK')",
+            ],
             capture_output=True,
             text=True,
             cwd=str(REPO_ROOT),

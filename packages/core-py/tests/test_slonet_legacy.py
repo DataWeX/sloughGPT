@@ -8,13 +8,13 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from domains.training import slonet
+from domain.training._internal import slonet
 from domain.training._internal.slonet import (
     SloAdapterLayer,
     SloDataLoader,
     SloEmbedding,
-    SloLSTM,
     SloLinear,
+    SloLSTM,
     SloMultiHeadAttention,
     SloNet,
     SloTransformer,
@@ -233,13 +233,13 @@ class TestSloDataLoader:
     def test_basic_batching(self):
         loader = SloDataLoader(_ListDataset(list(range(7))), batch_size=3)
         assert len(loader) == 3
-        batches = [b for b in loader]
+        batches = list(loader)
         assert batches == [[0, 1, 2], [3, 4, 5], [6]]
 
     def test_drop_last(self):
         loader = SloDataLoader(_ListDataset(list(range(7))), batch_size=3, drop_last=True)
         assert len(loader) == 2
-        assert [b for b in loader] == [[0, 1, 2], [3, 4, 5]]
+        assert list(loader) == [[0, 1, 2], [3, 4, 5]]
 
     def test_len_exact_and_remainder(self):
         assert len(SloDataLoader(_ListDataset(list(range(6))), batch_size=3)) == 2
@@ -249,22 +249,20 @@ class TestSloDataLoader:
         data = list(range(20))
         np.random.seed(0)
         loader = SloDataLoader(_ListDataset(data), batch_size=5, shuffle=True)
-        batches = [b for b in loader]
+        batches = list(loader)
         flat = [x for b in batches for x in b]
         assert sorted(flat) == data
         assert flat != data
 
     def test_collate_fn(self):
-        loader = SloDataLoader(
-            _ListDataset([1, 2, 3]), batch_size=2, collate_fn=lambda b: sum(b)
-        )
-        assert [b for b in loader] == [3, 3]
+        loader = SloDataLoader(_ListDataset([1, 2, 3]), batch_size=2, collate_fn=lambda b: sum(b))
+        assert list(loader) == [3, 3]
 
     def test_reset(self):
         loader = SloDataLoader(_ListDataset(list(range(4))), batch_size=2)
-        first = [b for b in loader]
+        first = list(loader)
         loader.reset()
-        second = [b for b in loader]
+        second = list(loader)
         assert first == second == [[0, 1], [2, 3]]
 
     def test_empty_dataset(self):
@@ -434,7 +432,14 @@ class TestSloNetFit:
         y = Tensor(np.asarray(rng.integers(0, 2, 8), dtype=np.float32))
         opt = slonet.SloAdam(lr=0.05)
         calls = []
-        net.fit(X, y, opt, epochs=1, batch_size=4, on_step=lambda step, loss, ep: calls.append((step, ep)))
+        net.fit(
+            X,
+            y,
+            opt,
+            epochs=1,
+            batch_size=4,
+            on_step=lambda step, loss, ep: calls.append((step, ep)),
+        )
         assert len(calls) == 2
         assert calls[0] == (1, 0)
 
@@ -671,8 +676,13 @@ class TestSloCyclicLR:
     def test_down_phase_and_cycle_halving(self):
         opt = slonet.SloAdam(lr=0.1)
         sched = slonet.SloCyclicLR(
-            opt, base_lr=0.1, max_lr=0.5, step_size_up=4, step_size_down=6,
-            mode="triangular2", last_epoch=-1,
+            opt,
+            base_lr=0.1,
+            max_lr=0.5,
+            step_size_up=4,
+            step_size_down=6,
+            mode="triangular2",
+            last_epoch=-1,
         )
         sched.step(7)
         assert sched.get_last_lr()[0] == pytest.approx(0.3)
@@ -706,13 +716,18 @@ class TestInt4QuantUnpack:
         lin = SloLinear(4, 2, "quant")
         original = np.array([[-8, 2, 3, -4], [5, -6, 7, 1]], dtype=np.int8)
         flat = original.reshape(-1)
-        packed = np.array([
-            (flat[i] & 0x0F) | ((flat[i + 1] & 0x0F) << 4)
-            for i in range(0, len(flat), 2)
-        ], dtype=np.int8)
+        packed = np.array(
+            [(flat[i] & 0x0F) | ((flat[i + 1] & 0x0F) << 4) for i in range(0, len(flat), 2)],
+            dtype=np.int8,
+        )
         meta = QuantMeta(
-            scale=1.0, zero_point=0, bits=4, mode="symmetric",
-            dtype_code=0, original_shape=(2, 4), original_dtype="float32",
+            scale=1.0,
+            zero_point=0,
+            bits=4,
+            mode="symmetric",
+            dtype_code=0,
+            original_shape=(2, 4),
+            original_dtype="float32",
         )
         info = TensorInfo(name="w", array=packed, meta=meta)
         lin.set_quantized_weight(info)
@@ -730,7 +745,6 @@ class TestInt4QuantUnpack:
 class TestImportFromPoints:
     def test_points_fallback(self, tmp_path):
         import base64
-
         import json as _json
 
         from domain.infrastructure._internal.pugqeep.library import PointLibrary
@@ -739,15 +753,17 @@ class TestImportFromPoints:
         base = tmp_path / "soul_test.sou"
         arr = np.arange(256 * 64, dtype=np.float32).reshape(256, 64) / 1000.0
         lib = PointLibrary(name="soul_test")
-        lib.add(Point(
-            identity="soul_test.tok_emb.weight",
-            function_type="raw",
-            params={
-                "data_b64": base64.b64encode(arr.tobytes()).decode(),
-                "shape": (256, 64),
-                "dtype": "float32",
-            },
-        ))
+        lib.add(
+            Point(
+                identity="soul_test.tok_emb.weight",
+                function_type="raw",
+                params={
+                    "data_b64": base64.b64encode(arr.tobytes()).decode(),
+                    "shape": (256, 64),
+                    "dtype": "float32",
+                },
+            )
+        )
         lib.save(base.with_suffix(".points.json"))
         (base.with_suffix(".meta.json")).write_text(
             _json.dumps({"metadata": {"weight_shapes": {"tok_emb.weight": [256, 64]}}})
@@ -786,9 +802,7 @@ class TestFeedForward:
 
         ff = SloFeedForward(8, 32, name="test_ff", activation="silu")
         x = np.random.randn(3, 8).astype(np.float32)
-        manual = ff.w2.forward_numpy(
-            silu_np(ff.w1.forward_numpy(x)) * ff.w3.forward_numpy(x)
-        )
+        manual = ff.w2.forward_numpy(silu_np(ff.w1.forward_numpy(x)) * ff.w3.forward_numpy(x))
         assert np.allclose(ff.forward_numpy(x), manual)
 
     def test_forward_numpy_gelu_swiglu(self):
@@ -796,9 +810,7 @@ class TestFeedForward:
 
         ff = SloFeedForward(8, 32, name="test_ff", activation="gelu")
         x = np.random.randn(3, 8).astype(np.float32)
-        manual = ff.w2.forward_numpy(
-            gelu_np(ff.w1.forward_numpy(x)) * ff.w3.forward_numpy(x)
-        )
+        manual = ff.w2.forward_numpy(gelu_np(ff.w1.forward_numpy(x)) * ff.w3.forward_numpy(x))
         assert np.allclose(ff.forward_numpy(x), manual)
 
     def test_forward_numpy_unknown_activation_defaults_to_gelu(self):
@@ -806,9 +818,7 @@ class TestFeedForward:
 
         ff = SloFeedForward(8, 32, activation="relu")
         x = np.random.randn(3, 8).astype(np.float32)
-        manual = ff.w2.forward_numpy(
-            gelu_np(ff.w1.forward_numpy(x)) * ff.w3.forward_numpy(x)
-        )
+        manual = ff.w2.forward_numpy(gelu_np(ff.w1.forward_numpy(x)) * ff.w3.forward_numpy(x))
         assert np.allclose(ff.forward_numpy(x), manual)
 
     def test_forward_tensor_grad_flow(self):
@@ -836,7 +846,12 @@ class TestFeedForward:
         ff = SloFeedForward(8, 32, name="test_ff")
         assert len(ff.parameters()) == 6
         assert [p.data.shape for p in ff.parameters()] == [
-            (32, 8), (32,), (8, 32), (8,), (32, 8), (32,),
+            (32, 8),
+            (32,),
+            (8, 32),
+            (8,),
+            (32, 8),
+            (32,),
         ]
 
     def test_default_name(self):
@@ -1054,7 +1069,7 @@ class TestLRSchedulers:
             slonet.SloAdam(lr=1.0), warmup_steps=0, total_steps=100, last_epoch=-1
         )
         sched.step(50)
-        assert sched.get_last_lr()[0] == pytest.approx(0.5 * (1 + 2 ** -0.5))
+        assert sched.get_last_lr()[0] == pytest.approx(0.5 * (1 + 2**-0.5))
 
     def test_polynomial_decay_floor(self):
         sched = slonet.PolynomialDecayScheduler(
@@ -1067,8 +1082,14 @@ class TestLRSchedulers:
 
     def test_linear_warmup_hold_decay(self):
         sched = slonet.LinearWarmupScheduler(
-            slonet.SloAdam(lr=0.1), warmup_steps=5, base_lr=0.1, hold_steps=3,
-            decay_type="linear", min_lr=0.0, total_steps=15, last_epoch=-1,
+            slonet.SloAdam(lr=0.1),
+            warmup_steps=5,
+            base_lr=0.1,
+            hold_steps=3,
+            decay_type="linear",
+            min_lr=0.0,
+            total_steps=15,
+            last_epoch=-1,
         )
         sched.step(2)
         assert sched.get_last_lr()[0] == pytest.approx(0.04)
@@ -1079,8 +1100,14 @@ class TestLRSchedulers:
 
     def test_linear_warmup_cosine_decay(self):
         sched = slonet.LinearWarmupScheduler(
-            slonet.SloAdam(lr=0.1), warmup_steps=5, base_lr=0.1, hold_steps=0,
-            decay_type="cosine", min_lr=0.01, total_steps=15, last_epoch=-1,
+            slonet.SloAdam(lr=0.1),
+            warmup_steps=5,
+            base_lr=0.1,
+            hold_steps=0,
+            decay_type="cosine",
+            min_lr=0.01,
+            total_steps=15,
+            last_epoch=-1,
         )
         sched.step(10)
         lr = sched.get_last_lr()[0]
@@ -1088,8 +1115,12 @@ class TestLRSchedulers:
 
     def test_linear_warmup_no_decay_holds(self):
         sched = slonet.LinearWarmupScheduler(
-            slonet.SloAdam(lr=0.1), warmup_steps=5, base_lr=0.1, hold_steps=0,
-            decay_type="none", last_epoch=-1,
+            slonet.SloAdam(lr=0.1),
+            warmup_steps=5,
+            base_lr=0.1,
+            hold_steps=0,
+            decay_type="none",
+            last_epoch=-1,
         )
         sched.step(20)
         assert sched.get_last_lr()[0] == pytest.approx(0.1)
@@ -1101,16 +1132,24 @@ class TestLRSchedulers:
 
     def test_one_cycle_up_phase(self):
         sched = slonet.SloOneCycleLR(
-            slonet.SloAdam(lr=0.1), max_lr=1.0, total_steps=100,
-            pct_start=0.2, anneal_strategy="cos", last_epoch=-1,
+            slonet.SloAdam(lr=0.1),
+            max_lr=1.0,
+            total_steps=100,
+            pct_start=0.2,
+            anneal_strategy="cos",
+            last_epoch=-1,
         )
         sched.step(10)
         assert sched.get_last_lr()[0] == pytest.approx(1.25)
 
     def test_one_cycle_linear_anneal(self):
         sched = slonet.SloOneCycleLR(
-            slonet.SloAdam(lr=0.1), max_lr=1.0, total_steps=100,
-            pct_start=0.2, anneal_strategy="linear", last_epoch=-1,
+            slonet.SloAdam(lr=0.1),
+            max_lr=1.0,
+            total_steps=100,
+            pct_start=0.2,
+            anneal_strategy="linear",
+            last_epoch=-1,
         )
         sched.step(50)
         assert sched.get_last_lr()[0] == pytest.approx(1.5625, abs=1e-3)
@@ -1204,7 +1243,9 @@ class TestTensorUtilOps:
         assert out.data.tolist() == [[1.0, 2.0], [3.0, 4.0]]
 
     def test_exp(self):
-        assert slonet.exp(Tensor(np.array([0.0, np.log(2.0)]))).data.tolist() == pytest.approx([1.0, 2.0])
+        assert slonet.exp(Tensor(np.array([0.0, np.log(2.0)]))).data.tolist() == pytest.approx(
+            [1.0, 2.0]
+        )
 
     def test_where(self):
         cond = Tensor(np.array([True, False]))
@@ -1363,13 +1404,17 @@ class TestLSTMShapesAndAdapter:
 
     def test_skip_embed_3d(self):
         lstm = self._lstm()
-        out, (h, c) = lstm.forward_numpy(np.random.randn(2, 4, 16).astype(np.float32), skip_embed=True)
+        out, (h, c) = lstm.forward_numpy(
+            np.random.randn(2, 4, 16).astype(np.float32), skip_embed=True
+        )
         assert out.shape == (1, 32)
 
     def test_adapter_applied(self):
         lstm = self._lstm()
         adapter = SloAdapterLayer(dim=8, rank=2)
-        out, _ = lstm.forward_numpy(np.random.randn(4, 16).astype(np.float32), adapter=adapter, skip_embed=True)
+        out, _ = lstm.forward_numpy(
+            np.random.randn(4, 16).astype(np.float32), adapter=adapter, skip_embed=True
+        )
         assert out.shape == (1, 32)
 
     def test_zero_grad_clears_grads(self):
@@ -1399,10 +1444,12 @@ class TestCrossAttentionJvp:
         x = Tensor(rng.standard_normal((2, 3, 16)).astype(np.float32), requires_grad=True)
         ctx = Tensor(rng.standard_normal((2, 5, 16)).astype(np.float32), requires_grad=True)
         out = ca.forward(x, ctx)
-        tangents = out.forward_grad({
-            x.id: np.ones_like(x.data),
-            ctx.id: np.ones_like(ctx.data),
-        })
+        tangents = out.forward_grad(
+            {
+                x.id: np.ones_like(x.data),
+                ctx.id: np.ones_like(ctx.data),
+            }
+        )
         assert out.id in tangents
         assert np.all(np.isfinite(tangents[out.id]))
 
@@ -1428,8 +1475,12 @@ class TestKLDivGradBranch:
 class TestLayerNormTransformerGeneration:
     def _layer_norm_transformer(self):
         return SloTransformer(
-            vocab_size=16, n_embed=16, n_layer=1, n_head=2,
-            block_size=16, norm_type="layer_norm",
+            vocab_size=16,
+            n_embed=16,
+            n_layer=1,
+            n_head=2,
+            block_size=16,
+            norm_type="layer_norm",
         )
 
     def test_generate_numpy_layernorm(self):
@@ -1668,11 +1719,19 @@ class TestTensorCompatMethods:
         dst.copy_(Tensor(np.array([1.0, 2.0, 3.0])))
         np.testing.assert_array_equal(dst.data, [1, 2, 3])
         np.testing.assert_array_equal(Tensor(np.array([1.0, -2.0])).abs().data, [1, 2])
-        np.testing.assert_array_equal(Tensor(np.array([1.0, 2.0])).expand(2, 2).data, [[1, 2], [1, 2]])
-        np.testing.assert_array_equal(Tensor(np.arange(6.0).reshape(2, 3)).transpose(0, 1).data.shape, (3, 2))
-        np.testing.assert_array_equal(Tensor(np.arange(6.0).reshape(2, 3)).permute(1, 0).data.shape, (3, 2))
+        np.testing.assert_array_equal(
+            Tensor(np.array([1.0, 2.0])).expand(2, 2).data, [[1, 2], [1, 2]]
+        )
+        np.testing.assert_array_equal(
+            Tensor(np.arange(6.0).reshape(2, 3)).transpose(0, 1).data.shape, (3, 2)
+        )
+        np.testing.assert_array_equal(
+            Tensor(np.arange(6.0).reshape(2, 3)).permute(1, 0).data.shape, (3, 2)
+        )
         np.testing.assert_array_equal(Tensor(np.array([3.0, 1.0, 2.0])).argsort().data, [1, 2, 0])
-        np.testing.assert_array_equal(Tensor(np.array([3.0, 1.0, 2.0])).argsort(descending=True).data, [0, 2, 1])
+        np.testing.assert_array_equal(
+            Tensor(np.array([3.0, 1.0, 2.0])).argsort(descending=True).data, [0, 2, 1]
+        )
         rg = Tensor(np.ones(2))
         assert not rg.requires_grad
         assert rg.requires_grad_() is rg
@@ -1776,6 +1835,7 @@ class TestNormAccAndNd:
 class TestQuantizedLinearForward:
     def test_int8_quantized_forward(self):
         from domain.infrastructure._internal.quantization import Quantine
+
         lin = SloLinear(8, 4, "q8")
         info = Quantine(bits=8, mode="symmetric").quantize("w", lin.weight.data)
         lin.set_quantized_weight(info)
@@ -1787,6 +1847,7 @@ class TestQuantizedLinearForward:
 
     def test_int4_quantized_forward(self):
         from domain.infrastructure._internal.quantization import Quantine
+
         lin = SloLinear(8, 4, "q4")
         info = Quantine(bits=4, mode="symmetric").quantize("w", lin.weight.data)
         lin.set_quantized_weight(info)
@@ -1815,6 +1876,7 @@ class TestSloNetMiscMethods:
     def test_get_user_adapter_disk_error(self, monkeypatch, tmp_path):
         monkeypatch.chdir(tmp_path)
         import pathlib
+
         target = pathlib.Path("data/user_adapters")
         target.mkdir(parents=True, exist_ok=True)
         bad = target / "opencode_bad_adapter.npz"
@@ -1830,9 +1892,13 @@ class TestSloNetMiscMethods:
         class _HasClear:
             def clear_cache(self):
                 return None
-        monkeypatch.setattr("domain.slolib.gpu.get_accelerator", lambda: _HasClear())
+
+        monkeypatch.setattr("domain.slolib._internal.gpu.get_accelerator", lambda: _HasClear())
         slonet._invalidate_gpu_cache()
-        monkeypatch.setattr("domain.slolib.gpu.get_accelerator", lambda: (_ for _ in ()).throw(RuntimeError("no gpu")))
+        monkeypatch.setattr(
+            "domain.slolib._internal.gpu.get_accelerator",
+            lambda: (_ for _ in ()).throw(RuntimeError("no gpu")),
+        )
         slonet._invalidate_gpu_cache()
 
 
@@ -1850,8 +1916,15 @@ class TestTransformerCompatInputs:
         assert none3 is None
 
     def test_forward_pos_emb(self):
-        m = SloTransformer(vocab_size=32, n_embed=16, n_layer=1, n_head=2,
-                           block_size=16, max_seq_len=32, use_abs_pos_emb=True)
+        m = SloTransformer(
+            vocab_size=32,
+            n_embed=16,
+            n_layer=1,
+            n_head=2,
+            block_size=16,
+            max_seq_len=32,
+            use_abs_pos_emb=True,
+        )
         logits, _ = m.forward(np.array([[1, 2, 3]]))
         assert logits.data.shape == (1, 3, 32)
 
@@ -1867,8 +1940,15 @@ class TestTransformerCompatInputs:
         out = m.generate(_TorchLike(np.array([[1, 2, 3]])), max_new_tokens=2)
         assert isinstance(out, Tensor)
         assert out.data.shape[1] == 5
-        mp = SloTransformer(vocab_size=32, n_embed=16, n_layer=1, n_head=2,
-                            block_size=16, max_seq_len=32, use_abs_pos_emb=True)
+        mp = SloTransformer(
+            vocab_size=32,
+            n_embed=16,
+            n_layer=1,
+            n_head=2,
+            block_size=16,
+            max_seq_len=32,
+            use_abs_pos_emb=True,
+        )
         outp = mp.generate(np.array([[1, 2, 3]]), max_new_tokens=2)
         assert outp.data.shape[1] == 5
 
@@ -1877,10 +1957,18 @@ class TestTransformerCompatInputs:
         hidden, ff_dim = 32, 64
         sd["tok_emb.weight"] = np.random.RandomState(1).randn(16, hidden).astype(np.float32)
         sd["blocks.0.norm1.weight"] = np.ones(hidden, dtype=np.float32)
-        sd["blocks.0.q_proj.weight"] = np.random.RandomState(2).randn(hidden, hidden).astype(np.float32)
-        sd["blocks.0.k_proj.weight"] = np.random.RandomState(3).randn(hidden, hidden).astype(np.float32)
-        sd["blocks.0.v_proj.weight"] = np.random.RandomState(4).randn(hidden, hidden).astype(np.float32)
-        sd["blocks.0.proj.weight"] = np.random.RandomState(5).randn(hidden, hidden).astype(np.float32)
+        sd["blocks.0.q_proj.weight"] = (
+            np.random.RandomState(2).randn(hidden, hidden).astype(np.float32)
+        )
+        sd["blocks.0.k_proj.weight"] = (
+            np.random.RandomState(3).randn(hidden, hidden).astype(np.float32)
+        )
+        sd["blocks.0.v_proj.weight"] = (
+            np.random.RandomState(4).randn(hidden, hidden).astype(np.float32)
+        )
+        sd["blocks.0.proj.weight"] = (
+            np.random.RandomState(5).randn(hidden, hidden).astype(np.float32)
+        )
         sd["blocks.0.norm2.weight"] = np.ones(hidden, dtype=np.float32)
         sd["blocks.0.w1.weight"] = np.random.RandomState(6).randn(ff_dim, hidden).astype(np.float32)
         sd["blocks.0.w2.weight"] = np.random.RandomState(7).randn(hidden, ff_dim).astype(np.float32)
@@ -1897,48 +1985,88 @@ class TestTransformerCompatInputs:
 
 class TestGenerateNumpyNoKernels:
     def _ln_model(self):
-        return SloTransformer(vocab_size=32, n_embed=16, n_layer=1, n_head=2,
-                              block_size=16, norm_type="layer_norm")
+        return SloTransformer(
+            vocab_size=32, n_embed=16, n_layer=1, n_head=2, block_size=16, norm_type="layer_norm"
+        )
 
     def test_generate_numpy_layer_norm_fallback(self, monkeypatch):
         monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
-        out = self._ln_model().generate_numpy(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0)
+        out = self._ln_model().generate_numpy(
+            np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0
+        )
         assert out.shape == (1, 6)
 
     def test_generate_numpy_rms_norm_fallback(self, monkeypatch):
         monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
-        out = _small_transformer().generate_numpy(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0)
+        out = _small_transformer().generate_numpy(
+            np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0
+        )
         assert out.shape == (1, 6)
 
     def test_generate_numpy_pos_emb(self):
-        m = SloTransformer(vocab_size=32, n_embed=16, n_layer=1, n_head=2,
-                           block_size=16, max_seq_len=32, use_abs_pos_emb=True)
+        m = SloTransformer(
+            vocab_size=32,
+            n_embed=16,
+            n_layer=1,
+            n_head=2,
+            block_size=16,
+            max_seq_len=32,
+            use_abs_pos_emb=True,
+        )
         out = m.generate_numpy(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0)
         assert out.shape == (1, 6)
 
     def test_generate_numpy_stream_layer_norm_fallback(self, monkeypatch):
         monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
-        toks = list(self._ln_model().generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0))
+        toks = list(
+            self._ln_model().generate_numpy_stream(
+                np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0
+            )
+        )
         assert len(toks) == 3
 
     def test_generate_numpy_stream_rms_norm_fallback(self, monkeypatch):
         monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
-        toks = list(_small_transformer().generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0))
+        toks = list(
+            _small_transformer().generate_numpy_stream(
+                np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0
+            )
+        )
         assert len(toks) == 3
 
     def test_generate_numpy_stream_gqa_kernel_and_fallback(self, monkeypatch):
-        m = SloTransformer(vocab_size=32, n_embed=16, n_layer=1, n_head=4, n_kv_head=2,
-                           block_size=16, tie_weights=False)
-        toks = list(m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=4, temperature=0.0))
+        m = SloTransformer(
+            vocab_size=32,
+            n_embed=16,
+            n_layer=1,
+            n_head=4,
+            n_kv_head=2,
+            block_size=16,
+            tie_weights=False,
+        )
+        toks = list(
+            m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=4, temperature=0.0)
+        )
         assert len(toks) == 4
         monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
-        toks2 = list(m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=4, temperature=0.0))
+        toks2 = list(
+            m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=4, temperature=0.0)
+        )
         assert len(toks2) == 4
 
     def test_generate_numpy_stream_pos_emb(self):
-        m = SloTransformer(vocab_size=32, n_embed=16, n_layer=1, n_head=2,
-                           block_size=16, max_seq_len=32, use_abs_pos_emb=True)
-        toks = list(m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0))
+        m = SloTransformer(
+            vocab_size=32,
+            n_embed=16,
+            n_layer=1,
+            n_head=2,
+            block_size=16,
+            max_seq_len=32,
+            use_abs_pos_emb=True,
+        )
+        toks = list(
+            m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0)
+        )
         assert len(toks) == 3
 
 
@@ -2041,8 +2169,16 @@ class _FakeCPUTensor:
 
 class TestSloTransformerNoSoul:
     def _tiny(self, **kw):
-        cfg = dict(vocab_size=32, n_embed=16, n_layer=1, n_head=2,
-                   block_size=16, max_seq_len=32, dropout=0.0, tie_weights=True)
+        cfg = {
+            "vocab_size": 32,
+            "n_embed": 16,
+            "n_layer": 1,
+            "n_head": 2,
+            "block_size": 16,
+            "max_seq_len": 32,
+            "dropout": 0.0,
+            "tie_weights": True,
+        }
         cfg.update(kw)
         return SloTransformer(**cfg)
 
@@ -2105,8 +2241,9 @@ class TestSloTransformerNoSoul:
         m = self._tiny()
         logits, loss = m.forward(_FakeCPUTensor(np.array([[1, 2, 3]])))
         assert logits.data.shape == (1, 3, 32)
-        logits, loss = m.forward(np.array([[1, 2, 3]]),
-                                 targets=_FakeCPUTensor(np.array([[1, 2, 3]])))
+        logits, loss = m.forward(
+            np.array([[1, 2, 3]]), targets=_FakeCPUTensor(np.array([[1, 2, 3]]))
+        )
         assert loss is not None
 
     def test_forward_list_input_no_cpu(self):
@@ -2169,13 +2306,17 @@ class TestSloTransformerNoSoul:
         m = self._tiny()
         m.blocks[0].attn.W_q._quant_info = SimpleNamespace(is_quantized=False)
         monkeypatch.setattr(slonet, "_KERNELS_AVAILABLE", False)
-        out = list(m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0))
+        out = list(
+            m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0)
+        )
         assert len(out) == 3
 
     def test_quantized_kernel_stream_greedy(self):
         m = self._tiny()
         m.blocks[0].attn.W_q._quant_info = SimpleNamespace(is_quantized=False)
-        out = list(m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0))
+        out = list(
+            m.generate_numpy_stream(np.array([[1, 2, 3]]), max_new_tokens=3, temperature=0.0)
+        )
         assert len(out) == 3
 
     def test_quantized_int8_lm_head_argmax(self):
@@ -2203,6 +2344,7 @@ class TestSloTransformerNoSoul:
 class TestGetAcceleratorOldBackendFailure:
     def test_both_backends_fail_returns_none(self, monkeypatch):
         import domain.training._internal.gpu.accelerator as _old_acc_mod
+
         monkeypatch.setattr(slonet, "_ACCELERATOR", None)
         monkeypatch.setattr(
             _old_acc_mod,
@@ -2241,7 +2383,9 @@ class TestPointWeightLayerMethods:
 
 class TestLstmForwardAdapterAndSkipEmbed1D:
     def _lstm(self, layers, hidden):
-        return SloLSTM(vocab_size=32, embed_dim=16, hidden_dim=hidden, num_layers=layers, dropout=0.0)
+        return SloLSTM(
+            vocab_size=32, embed_dim=16, hidden_dim=hidden, num_layers=layers, dropout=0.0
+        )
 
     def test_tensor_forward_with_adapter(self):
         lstm = self._lstm(layers=2, hidden=16)
@@ -2333,8 +2477,12 @@ class TestImportFromSouVariants:
         mj = json.dumps(meta).encode()
         wj = json.dumps({"tok_emb.weight": [[0.1, 0.2], [0.3, 0.4]]}).encode()
         raw = (
-            b"SOUL" + struct.pack("<I", 2) + struct.pack("<I", len(mj)) + mj
-            + struct.pack("<I", len(wj)) + wj
+            b"SOUL"
+            + struct.pack("<I", 2)
+            + struct.pack("<I", len(mj))
+            + mj
+            + struct.pack("<I", len(wj))
+            + wj
         )
         p = tmp_path / "tok.soul"
         p.write_bytes(raw)

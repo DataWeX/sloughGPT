@@ -2,18 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-import time
-import tempfile
-import os
 from domain.training._internal.auto_trainer import AutoTrainer
-
 
 # ── AutoTrainer ─────────────────────────────────────────────────────────────
 
 
 class TestAutoTrainer:
-
     def test_init(self):
         trainer = AutoTrainer()
         assert trainer.threshold == 10
@@ -44,5 +38,5 @@ class TestAutoTrainer:
 
     def test_stats(self):
         trainer = AutoTrainer()
-        assert hasattr(trainer, 'threshold')
-        assert hasattr(trainer, '_total_trains')
+        assert hasattr(trainer, "threshold")
+        assert hasattr(trainer, "_total_trains")

@@ -9,9 +9,10 @@ Tests the full pipeline:
   - Measure memory savings
 """
 
+import time
+
 import numpy as np
 import pytest
-import time
 
 from domain.infrastructure._internal.quantization import Quantine
 from domain.training._internal.slonet import SloTransformer, SloTransformerBlock
@@ -20,6 +21,7 @@ from domain.training._internal.slonet import SloTransformer, SloTransformerBlock
 def _walk_linear_layers(model):
     """Find all SloLinear layers — delegates to shared utility."""
     from domain.infrastructure._internal.quantization import walk_slo_linears
+
     return walk_slo_linears(model)
 
 
@@ -28,7 +30,7 @@ def _count_linear_params(model):
     total = 0
     for _, module in _walk_linear_layers(model).items():
         total += module.weight.data.nbytes
-        if hasattr(module, 'bias') and module.use_bias:
+        if hasattr(module, "bias") and module.use_bias:
             total += module.bias.data.nbytes
     return total
 
@@ -39,7 +41,7 @@ def _count_quantized_bytes(model):
     for _, module in _walk_linear_layers(model).items():
         if module._quant_info is not None:
             total += module._quant_info.array.nbytes
-            if hasattr(module, 'bias') and module.use_bias:
+            if hasattr(module, "bias") and module.use_bias:
                 total += module.bias.data.nbytes
     return total
 
@@ -49,7 +51,7 @@ def _run_model(model, inp):
     out = model(inp)
     if isinstance(out, tuple):
         return out[0].data
-    return out.data if hasattr(out, 'data') else out
+    return out.data if hasattr(out, "data") else out
 
 
 @pytest.fixture
@@ -85,10 +87,10 @@ class TestQuantizationIntegration:
         """Verify _walk_linear_layers finds all SloLinear modules."""
         layers = _walk_linear_layers(tiny_model)
         assert len(layers) > 0
-        assert 'lm_head' in layers, "Should include output projection"
-        assert any('attn.W_q' in name for name in layers)
-        assert any('attn.W_o' in name for name in layers)
-        assert any('ff.w1' in name or 'ff.w2' in name or 'ff.w3' in name for name in layers)
+        assert "lm_head" in layers, "Should include output projection"
+        assert any("attn.W_q" in name for name in layers)
+        assert any("attn.W_o" in name for name in layers)
+        assert any("ff.w1" in name or "ff.w2" in name or "ff.w3" in name for name in layers)
 
     def test_quantize_all_linears_int8(self, tiny_model, sample_input):
         """Quantize all SloLinear layers to int8 and verify inference works."""
@@ -101,7 +103,7 @@ class TestQuantizationIntegration:
         layers = _walk_linear_layers(tiny_model)
         quantized_count = 0
         for name, module in layers.items():
-            if 'norm' in name:
+            if "norm" in name:
                 continue  # skip norms
             info = engine.quantize(f"{name}.weight", module.weight.data.copy())
             if info.is_quantized:
@@ -134,7 +136,7 @@ class TestQuantizationIntegration:
         layers = _walk_linear_layers(tiny_model)
         quantized_count = 0
         for name, module in layers.items():
-            if 'norm' in name:
+            if "norm" in name:
                 continue
             info = engine.quantize(f"{name}.weight", module.weight.data.copy())
             if info.is_quantized:
@@ -161,7 +163,7 @@ class TestQuantizationIntegration:
         # Quantize mid-stream
         layers = _walk_linear_layers(tiny_model)
         for name, module in layers.items():
-            if 'norm' in name:
+            if "norm" in name:
                 continue
             info = engine.quantize(name, module.weight.data.copy())
             if info.is_quantized:
@@ -179,7 +181,7 @@ class TestQuantizationIntegration:
         engine = Quantine(bits=8, mode="symmetric")
         layers = _walk_linear_layers(tiny_model)
         for name, module in layers.items():
-            if 'norm' in name:
+            if "norm" in name:
                 continue
             info = engine.quantize(f"{name}.weight", module.weight.data.copy())
             if info.is_quantized:
@@ -197,7 +199,7 @@ class TestQuantizationIntegration:
         engine = Quantine(bits=4, mode="symmetric")
         layers = _walk_linear_layers(tiny_model)
         for name, module in layers.items():
-            if 'norm' in name:
+            if "norm" in name:
                 continue
             info = engine.quantize(f"{name}.weight", module.weight.data.copy())
             if info.is_quantized:
@@ -212,7 +214,7 @@ class TestQuantizationIntegration:
         logits_fp32 = _run_model(tiny_model, sample_input)
 
         layers = _walk_linear_layers(tiny_model)
-        norm_names = {n for n in layers if 'norm' in n}
+        norm_names = {n for n in layers if "norm" in n}
 
         # int8
         engine8 = Quantine(bits=8, mode="symmetric")
@@ -258,17 +260,25 @@ class TestQuantizationIntegration:
           - Response rate: 100%
         """
         model = SloTransformer(
-            vocab_size=100, n_embed=64, n_layer=2, n_head=4,
-            intermediate_size=128, block_size=32, max_seq_len=32,
-            use_rope=False, dropout=0.0, tie_weights=True,
-            use_abs_pos_emb=True, norm_type="layer_norm",
+            vocab_size=100,
+            n_embed=64,
+            n_layer=2,
+            n_head=4,
+            intermediate_size=128,
+            block_size=32,
+            max_seq_len=32,
+            use_rope=False,
+            dropout=0.0,
+            tie_weights=True,
+            use_abs_pos_emb=True,
+            norm_type="layer_norm",
         )
 
         # Quantize all SloLinear layers int8
         engine = Quantine(bits=8, mode="symmetric")
         layers = _walk_linear_layers(model)
         for name, module in layers.items():
-            if 'norm' in name:
+            if "norm" in name:
                 continue
             info = engine.quantize(f"{name}.weight", module.weight.data.copy())
             if info.is_quantized:
@@ -312,7 +322,7 @@ class TestQuantizationIntegration:
             avg_latency = np.mean(latencies)
             # Sanity: all latencies should be < 100ms (tiny model, no GPU needed)
             assert avg_latency < 0.1, (
-                f"Average latency {avg_latency*1000:.1f}ms — expected < 100ms for tiny model"
+                f"Average latency {avg_latency * 1000:.1f}ms — expected < 100ms for tiny model"
             )
 
         # Length CV ≤ 0.30
@@ -332,8 +342,8 @@ class TestQuantizeEndpoint:
         # Walk layers
         layers = walk_slo_linears(tiny_model)
         assert len(layers) >= 14  # 2 blocks × 7 linears + lm_head
-        assert 'lm_head' in layers
-        assert layers['lm_head'].weight.data.shape[0] == 100  # vocab_size
+        assert "lm_head" in layers
+        assert layers["lm_head"].weight.data.shape[0] == 100  # vocab_size
 
         # Quantize all layers int8
         engine = Quantine(bits=8, mode="symmetric")
@@ -445,8 +455,10 @@ class TestGenerateNumpyPackedInt4:
     def _int4_unpacked_layers(self, model):
         """Names of int4 linears whose lazy int8 unpack cache got materialized."""
         return [
-            name for name, module in _walk_linear_layers(model).items()
-            if module._quant_info is not None and module._quant_info.meta.bits == 4
+            name
+            for name, module in _walk_linear_layers(model).items()
+            if module._quant_info is not None
+            and module._quant_info.meta.bits == 4
             and module._quant_unpacked is not None
         ]
 
@@ -470,7 +482,9 @@ class TestGenerateNumpyPackedInt4:
         assert zp == 0
         assert Sp.shape[0] == Wp.shape[0]
 
-    def test_int4_generate_matches_perlinear_without_unpack(self, tiny_model, sample_input, monkeypatch):
+    def test_int4_generate_matches_perlinear_without_unpack(
+        self, tiny_model, sample_input, monkeypatch
+    ):
         """generate_numpy uses the packed fused path and never unpacks int4."""
         from domains.training import slonet as S
 
@@ -492,7 +506,9 @@ class TestGenerateNumpyPackedInt4:
         """generate_numpy_stream uses the packed fused path, no unpack."""
         self._quantize(tiny_model, 4, "symmetric")
         out = tiny_model.generate_numpy(sample_input, max_new_tokens=8, temperature=0.0)
-        toks = list(tiny_model.generate_numpy_stream(sample_input, max_new_tokens=8, temperature=0.0))
+        toks = list(
+            tiny_model.generate_numpy_stream(sample_input, max_new_tokens=8, temperature=0.0)
+        )
         assert len(toks) == 8
         assert list(out[0, 8:]) == toks, "stream tokens differ from generate_numpy"
         assert self._int4_unpacked_layers(tiny_model) == [], (
@@ -586,14 +602,14 @@ class TestInt8QuantizedKvCache:
     def test_quantized_model_auto_enables_kvq(self, tiny_model, sample_input):
         """Auto (None) on an int4 model matches explicit True, bit-exact."""
         _quantize_all_linears(tiny_model, 4, "symmetric")
-        G = dict(temperature=0.0, max_new_tokens=16)
+        G = {"temperature": 0.0, "max_new_tokens": 16}
         auto = tiny_model.generate_numpy(sample_input, **G)
         explicit = tiny_model.generate_numpy(sample_input, quantize_kv=True, **G)
         assert np.array_equal(auto, explicit)
 
     def test_fp32_model_kvq_agrees_with_fp32_cache(self, tiny_model, sample_input):
         """int8 KV cache on a float32 model keeps greedy output nearly identical."""
-        G = dict(temperature=0.0, max_new_tokens=20)
+        G = {"temperature": 0.0, "max_new_tokens": 20}
         fp32 = tiny_model.generate_numpy(sample_input, quantize_kv=False, **G)
         kvq = tiny_model.generate_numpy(sample_input, quantize_kv=True, **G)
         agree = np.mean(fp32 == kvq)
@@ -602,7 +618,7 @@ class TestInt8QuantizedKvCache:
     def test_stream_matches_generate_numpy_with_kvq(self, tiny_model, sample_input):
         """Stream and batch paths produce identical tokens with int8 cache."""
         _quantize_all_linears(tiny_model, 4, "symmetric")
-        G = dict(temperature=0.0, max_new_tokens=12, quantize_kv=True)
+        G = {"temperature": 0.0, "max_new_tokens": 12, "quantize_kv": True}
         out = tiny_model.generate_numpy(sample_input, **G)
         toks = list(tiny_model.generate_numpy_stream(sample_input, **G))
         assert len(toks) == 12
@@ -610,7 +626,7 @@ class TestInt8QuantizedKvCache:
 
     def test_kvq_deterministic(self, tiny_model, sample_input):
         """Two kvq runs with greedy sampling are bit-identical."""
-        G = dict(temperature=0.0, max_new_tokens=16, quantize_kv=True)
+        G = {"temperature": 0.0, "max_new_tokens": 16, "quantize_kv": True}
         a = tiny_model.generate_numpy(sample_input, **G)
         b = tiny_model.generate_numpy(sample_input, **G)
         assert np.array_equal(a, b)

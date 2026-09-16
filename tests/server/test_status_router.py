@@ -2,8 +2,9 @@
 Tests for the status router — /status, /ready, /live.
 """
 
-import pytest
 import time
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -170,6 +171,7 @@ class TestTimestampFormat:
 
     def test_timestamp_parseable(self, client):
         from datetime import datetime
+
         ts = client.get("/status").json()["data"]["timestamp"]
         parsed = datetime.fromisoformat(ts)
         assert parsed.year >= 2026

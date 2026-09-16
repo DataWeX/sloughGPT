@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+
 from domain.infrastructure._internal.quant_core.wrapper import _fallback, _fallback_int4
 
 

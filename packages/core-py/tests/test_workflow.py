@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import threading
-import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -108,9 +107,7 @@ class TestFeedbackWorkflowManager:
 
     def test_record_feedback_calls_lora_store(self, manager):
         manager.record_feedback("Hello", "Hi", "thumbs_up", user_id="u1")
-        manager.lora_store.update_adapter.assert_called_once_with(
-            user_id="u1", feedback_signal=1.0
-        )
+        manager.lora_store.update_adapter.assert_called_once_with(user_id="u1", feedback_signal=1.0)
 
     def test_record_feedback_thumbs_down_negative_signal(self, manager):
         manager.record_feedback("Hello", "Hi", "thumbs_down", user_id="u1")
@@ -158,8 +155,10 @@ class TestFeedbackWorkflowManagerConcurrency:
         mock_updater = MagicMock()
         mock_updater.get_stats.return_value = {}
         mgr = FeedbackWorkflowManager(
-            feedback_db=mock_db, meta_manager=mock_meta,
-            lora_store=mock_lora, lora_updater=mock_updater,
+            feedback_db=mock_db,
+            meta_manager=mock_meta,
+            lora_store=mock_lora,
+            lora_updater=mock_updater,
         )
         errors = []
 

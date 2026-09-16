@@ -9,14 +9,29 @@ instruction loops.
 import pytest
 
 from domain.shell._internal.vm import (
-    Memory, InsFault, Device, DeviceFault,
-    ConsoleDevice, FileDevice, IRQDevice,
-    VGADevice, PS2KeyboardDevice, BlockDevice, SerialDevice,
-    MouseDevice, CMOSDevice, DiskDevice, NICDevice, ClockDevice,
-    FlatFS, DeviceBus, PageFrameAllocator,
-    X86VirtualSystem, X86CPU, X86Assembler,
+    X86CPU,
+    BlockDevice,
+    ClockDevice,
+    CMOSDevice,
+    ConsoleDevice,
+    Device,
+    DeviceBus,
+    DeviceFault,
+    DiskDevice,
+    FileDevice,
+    FlatFS,
+    InsFault,
+    IRQDevice,
+    Memory,
+    MouseDevice,
+    NICDevice,
+    PageFrameAllocator,
+    PS2KeyboardDevice,
+    SerialDevice,
+    VGADevice,
+    X86Assembler,
+    X86VirtualSystem,
 )
-
 
 # ── Memory ────────────────────────────────────────────────────────────────
 
@@ -479,6 +494,7 @@ class TestDeviceBus:
 class TestVirtualSystem:
     def test_reset(self):
         from domain.shell._internal.vm import VirtualSystem
+
         vs = VirtualSystem()
         vs.load_program("NOP\nHALT")
         vs.run()

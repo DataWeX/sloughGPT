@@ -20,9 +20,8 @@ Run: PYTHONPATH=packages/core-py python3 scripts/simulate_pgq_training.py
 import logging
 import random
 import time
-from typing import Dict
 
-from domain.infrastructure._internal.pugqeep.engine import Engine, Process
+from domain.infrastructure._internal.pugqeep.engine import Engine
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,11 +33,12 @@ logger = logging.getLogger("pgq.sim")
 
 # ── Simulated Model ──────────────────────────────────────────────
 
+
 class FakeModel:
     def __init__(self, name: str):
         self.name = name
         self.loaded = False
-        self.weights: Dict = {}
+        self.weights: dict = {}
 
     def load_weights(self):
         logger.info("[%s] Loading weights...", self.name)
@@ -51,6 +51,7 @@ class FakeModel:
 
 # ── Process Functions ────────────────────────────────────────────
 
+
 def load_model(model: FakeModel) -> dict:
     """Load model weights (runs on 'data' tree)."""
     model.load_weights()
@@ -60,7 +61,7 @@ def load_model(model: FakeModel) -> dict:
 def train_epoch(model: FakeModel, epoch: int) -> dict:
     """Train one epoch (runs on 'training' tree)."""
     time.sleep(random.uniform(0.1, 0.3))
-    loss = 5.0 * (0.9 ** epoch)
+    loss = 5.0 * (0.9**epoch)
     logger.info("[train] epoch %d loss=%.4f", epoch, round(loss, 4))
     return {"epoch": epoch, "loss": round(loss, 4)}
 
@@ -73,6 +74,7 @@ def inference(model: FakeModel, prompt: str) -> dict:
 
 
 # ── Simulation ───────────────────────────────────────────────────
+
 
 def simulate():
     logger.info("=" * 60)
@@ -130,8 +132,7 @@ def simulate():
     logger.info("")
     logger.info("Completed processes: %d", len(completed))
     for p in completed:
-        logger.info("  [%s] %s → %s", p.name, p.status.value,
-                     "OK" if p.result else p.error)
+        logger.info("  [%s] %s → %s", p.name, p.status.value, "OK" if p.result else p.error)
 
     logger.info("")
     logger.info("Engine stats:")
@@ -141,8 +142,7 @@ def simulate():
     logger.info("  Pending: %d", stats["pending"])
     logger.info("  Routing: %s", stats["routing"])
     for name, info in stats["trees"].items():
-        logger.info("  Tree '%s': stems=%d status=%s",
-                     name, info["active_stems"], info["status"])
+        logger.info("  Tree '%s': stems=%d status=%s", name, info["active_stems"], info["status"])
 
     logger.info("")
     logger.info("Model loaded: %s", model.loaded)

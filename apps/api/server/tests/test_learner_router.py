@@ -13,8 +13,9 @@ Covers all 10 endpoints:
   GET  /learn/status       — learn_status
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from test_support import get_test_client
 
 
@@ -49,7 +50,13 @@ def _mock_learner():
     m.ingest_text.return_value = None
     m.ingest_conversation.return_value = None
     m.train_now.return_value = {"status": "trained"}
-    m.deploy.return_value = {"path": "/tmp/test.soul", "soul_name": "test", "steps": 0, "loss": 0.0, "file_size": 1024}
+    m.deploy.return_value = {
+        "path": "/tmp/test.soul",
+        "soul_name": "test",
+        "steps": 0,
+        "loss": 0.0,
+        "file_size": 1024,
+    }
     m.evaluate.return_value = {"loss": 0.5, "perplexity": 1.65, "eval_tokens": 100}
     return m
 

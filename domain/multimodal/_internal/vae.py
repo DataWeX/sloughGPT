@@ -8,15 +8,25 @@ in the latent space, not pixel space).
 
 from __future__ import annotations
 
-from typing import Tuple
-import numpy as np
 import logging
+
+import numpy as np
 
 logger = logging.getLogger("slo.multimodal.vae")
 
 from domain.training._internal.slonet import (
-    Tensor, SloNet, SloConv2D,
-    SloAdam, relu as _relu, sigmoid as _sigmoid,
+    SloAdam,
+    SloConv2D,
+    SloNet,
+    Tensor,
+)
+from domain.training._internal.slonet import (
+    relu as _relu,
+)
+from domain.training._internal.slonet import (
+    sigmoid as _sigmoid,
+)
+from domain.training._internal.slonet import (
     tensor as _tensor,
 )
 
@@ -46,33 +56,30 @@ class SloVAEEncoder:
     def __init__(self, latent_dim=64):
         self.latent_dim = latent_dim
         # Encoder: 3x224x224 -> 64x8x8 (32x compression)
-        self.model = SloNet(layers=[
-            # Block 1: 224 -> 112
-            SloConv2D(3, 32, kernel_size=4, stride=2, padding=1),
-            _relu,
-
-            # Block 2: 112 -> 56
-            SloConv2D(32, 64, kernel_size=4, stride=2, padding=1),
-            _relu,
-
-            # Block 3: 56 -> 28
-            SloConv2D(64, 128, kernel_size=4, stride=2, padding=1),
-            _relu,
-
-            # Block 4: 28 -> 14
-            SloConv2D(128, 256, kernel_size=4, stride=2, padding=1),
-            _relu,
-
-            # Block 5: 14 -> 7
-            SloConv2D(256, 512, kernel_size=4, stride=2, padding=1),
-            _relu,
-
-            # Project to latent (mean + log_var)
-            SloConv2D(512, latent_dim * 2, kernel_size=3, padding=1),
-        ])
+        self.model = SloNet(
+            layers=[
+                # Block 1: 224 -> 112
+                SloConv2D(3, 32, kernel_size=4, stride=2, padding=1),
+                _relu,
+                # Block 2: 112 -> 56
+                SloConv2D(32, 64, kernel_size=4, stride=2, padding=1),
+                _relu,
+                # Block 3: 56 -> 28
+                SloConv2D(64, 128, kernel_size=4, stride=2, padding=1),
+                _relu,
+                # Block 4: 28 -> 14
+                SloConv2D(128, 256, kernel_size=4, stride=2, padding=1),
+                _relu,
+                # Block 5: 14 -> 7
+                SloConv2D(256, 512, kernel_size=4, stride=2, padding=1),
+                _relu,
+                # Project to latent (mean + log_var)
+                SloConv2D(512, latent_dim * 2, kernel_size=3, padding=1),
+            ]
+        )
         self.optimizer = SloAdam(lr=1e-4)
 
-    def forward(self, images_np: np.ndarray) -> Tuple[Tensor, Tensor]:
+    def forward(self, images_np: np.ndarray) -> tuple[Tensor, Tensor]:
         """
         Args:
             images_np: (B, C, H, W) images
@@ -90,8 +97,8 @@ class SloVAEEncoder:
         # Split into mean and log_var
         out_data = x.data
         out_data.shape[0]
-        mean_data = out_data[:, :self.latent_dim, :, :]
-        log_var_data = out_data[:, self.latent_dim:, :, :]
+        mean_data = out_data[:, : self.latent_dim, :, :]
+        log_var_data = out_data[:, self.latent_dim :, :, :]
 
         mean = Tensor(mean_data, requires_grad=True, _children=(x,))
         log_var = Tensor(log_var_data, requires_grad=True, _children=(x,))
@@ -118,31 +125,28 @@ class SloVAEDecoder:
         self.latent_dim = latent_dim
         # Decoder: 7x7 -> 14x14 -> 28x28 -> 56x56 -> 112x112 -> 224x224
         # Pattern: conv(keep size) -> upsample(2x) -> conv(keep size) -> upsample -> ... -> final conv(keep size)
-        self.model = SloNet(layers=[
-            # Block 1: 7x7 -> conv -> upsample -> 14x14
-            SloConv2D(latent_dim, 256, kernel_size=3, padding=1),
-            _relu,
-
-            # Block 2: 14x14 -> conv -> upsample -> 28x28
-            SloConv2D(256, 128, kernel_size=3, padding=1),
-            _relu,
-
-            # Block 3: 28x28 -> conv -> upsample -> 56x56
-            SloConv2D(128, 64, kernel_size=3, padding=1),
-            _relu,
-
-            # Block 4: 56x56 -> conv -> upsample -> 112x112
-            SloConv2D(64, 32, kernel_size=3, padding=1),
-            _relu,
-
-            # Block 5: 112x112 -> conv -> upsample -> 224x224
-            SloConv2D(32, 16, kernel_size=3, padding=1),
-            _relu,
-
-            # Final: 224x224 -> conv -> 224x224
-            SloConv2D(16, 3, kernel_size=3, padding=1),
-            _sigmoid,  # Output in [0, 1]
-        ])
+        self.model = SloNet(
+            layers=[
+                # Block 1: 7x7 -> conv -> upsample -> 14x14
+                SloConv2D(latent_dim, 256, kernel_size=3, padding=1),
+                _relu,
+                # Block 2: 14x14 -> conv -> upsample -> 28x28
+                SloConv2D(256, 128, kernel_size=3, padding=1),
+                _relu,
+                # Block 3: 28x28 -> conv -> upsample -> 56x56
+                SloConv2D(128, 64, kernel_size=3, padding=1),
+                _relu,
+                # Block 4: 56x56 -> conv -> upsample -> 112x112
+                SloConv2D(64, 32, kernel_size=3, padding=1),
+                _relu,
+                # Block 5: 112x112 -> conv -> upsample -> 224x224
+                SloConv2D(32, 16, kernel_size=3, padding=1),
+                _relu,
+                # Final: 224x224 -> conv -> 224x224
+                SloConv2D(16, 3, kernel_size=3, padding=1),
+                _sigmoid,  # Output in [0, 1]
+            ]
+        )
         self.optimizer = SloAdam(lr=1e-4)
 
     def _upsample(self, x: Tensor) -> Tensor:
@@ -167,7 +171,7 @@ class SloVAEDecoder:
         # Wait, that's 7 layers with 6 convs... let me recount
 
         # Layers: [conv0, relu0, conv1, relu1, conv2, relu2, conv3, relu3, conv4, relu4, conv5, relu5, conv6, sigmoid]
-        #conv0(7), conv1(14), conv2(28), conv3(56), conv4(112), conv5(224) -> output 224
+        # conv0(7), conv1(14), conv2(28), conv3(56), conv4(112), conv5(224) -> output 224
         # Actually simpler: conv(7) -> upsample -> conv(14) -> upsample -> conv(28) -> upsample -> conv(56) -> upsample -> conv(112) -> upsample -> conv(224)
         # conv indices: 0, 2, 4, 6, 8, 10
         # upsample after conv 0,1,2,3,4 (indices 0,2,4,6,8)
@@ -198,7 +202,7 @@ class SloVAE:
         self.decoder = SloVAEDecoder(latent_dim)
         self.optimizer = SloAdam(lr=1e-4)
 
-    def forward(self, images_np: np.ndarray) -> Tuple[Tensor, Tensor, Tensor]:
+    def forward(self, images_np: np.ndarray) -> tuple[Tensor, Tensor, Tensor]:
         """
         Args:
             images_np: (B, C, H, W) images in [0, 1]
@@ -221,7 +225,7 @@ class SloVAE:
         recon_tensor = Tensor(recon_loss, requires_grad=True, _children=(reconstructed,))
 
         # KL divergence: -0.5 * sum(1 + log_var - mean^2 - exp(log_var))
-        kl_loss = -0.5 * np.mean(1 + log_var.data - mean.data ** 2 - np.exp(log_var.data))
+        kl_loss = -0.5 * np.mean(1 + log_var.data - mean.data**2 - np.exp(log_var.data))
         kl_tensor = Tensor(kl_loss, requires_grad=True, _children=(mean, log_var))
 
         total_loss = recon_tensor + kl_tensor * 0.001  # KL weight

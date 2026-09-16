@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone
+from typing import Any
 
 logger = logging.getLogger("slo.context.managers")
 import threading
@@ -27,26 +27,43 @@ _lock = threading.Lock()
 
 # ── Trait schema (canonical trait list) ──────────────────────────────────
 
-TRAIT_SCHEMA: Dict[str, List[str]] = {
+TRAIT_SCHEMA: dict[str, list[str]] = {
     "personality": [
-        "warmth", "creativity", "empathy", "formality", "humor",
-        "patience", "confidence", "curiosity", "directness", "optimism",
+        "warmth",
+        "creativity",
+        "empathy",
+        "formality",
+        "humor",
+        "patience",
+        "confidence",
+        "curiosity",
+        "directness",
+        "optimism",
     ],
     "cognition": [
-        "pattern_recognition", "long_context_handling", "abstract_reasoning",
-        "factual_precision", "creative_divergence", "systematic_planning",
-        "metacognitive_awareness", "learning_adaptability",
+        "pattern_recognition",
+        "long_context_handling",
+        "abstract_reasoning",
+        "factual_precision",
+        "creative_divergence",
+        "systematic_planning",
+        "metacognitive_awareness",
+        "learning_adaptability",
     ],
     "emotion": [
-        "empathy_depth", "mood_responsiveness", "tone_flexibility",
-        "sentiment_awareness", "distress_handling",
+        "empathy_depth",
+        "mood_responsiveness",
+        "tone_flexibility",
+        "sentiment_awareness",
+        "distress_handling",
     ],
 }
 
-ALL_TRAITS: List[str] = [t for traits in TRAIT_SCHEMA.values() for t in traits]
+ALL_TRAITS: list[str] = [t for traits in TRAIT_SCHEMA.values() for t in traits]
 
 
 # ── Trait Weights Config ─────────────────────────────────────────────────
+
 
 class TraitWeightsConfig:
     """Key-value store for trait weights (0.0–1.0). Persisted as JSON.
@@ -61,7 +78,7 @@ class TraitWeightsConfig:
     def __init__(self, path: str = "data/trait_weights.json"):
         self._path = Path(path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._weights: Dict[str, float] = {}
+        self._weights: dict[str, float] = {}
         self._snapshots_dir = self._path.parent / "trait_snapshots"
         self._snapshots_dir.mkdir(exist_ok=True)
         self._snapshot_repo = FileRepository[dict](
@@ -76,7 +93,9 @@ class TraitWeightsConfig:
     def _init_mogdb(self):
         """Initialize MogDB with JSON sync for trait weights."""
         import os
+
         from mogdb import MogDB
+
         repo_root = self._path.parent.parent.parent
         db_path = os.path.join(repo_root, "data", "trait_weights_mogdb")
         sync_path = os.path.join(repo_root, "data", "trait_weights_json")
@@ -95,7 +114,7 @@ class TraitWeightsConfig:
             self._weights[key] = max(0.0, min(1.0, float(value)))
             self._save()
 
-    def all(self) -> Dict[str, Dict[str, float]]:
+    def all(self) -> dict[str, dict[str, float]]:
         """Return all weights grouped by trait category.
 
         Unset traits return 0.5. Structure matches get_trait_weights().
@@ -106,7 +125,7 @@ class TraitWeightsConfig:
                 result[group] = {t: self._weights.get(t, 0.5) for t in traits}
             return result
 
-    def update(self, deltas: Dict[str, float]) -> None:
+    def update(self, deltas: dict[str, float]) -> None:
         """Apply delta updates (e.g. from feedback: warmth += 0.05)."""
         with _lock:
             for key, delta in deltas.items():
@@ -114,7 +133,7 @@ class TraitWeightsConfig:
                 self._weights[key] = max(0.0, min(1.0, current + float(delta)))
             self._save()
 
-    def set_many(self, values: Dict[str, float]) -> None:
+    def set_many(self, values: dict[str, float]) -> None:
         """Batch set weights (replaces values, does not touch others)."""
         with _lock:
             for key, value in values.items():
@@ -130,26 +149,124 @@ class TraitWeightsConfig:
 
     # ── Trait profile word sets for content-aware feedback ──────────
 
-    _TRAIT_PROFILES: Dict[str, set] = {
-        "humor": {"funny", "joke", "lol", "humor", "comedy", "wit", "hilarious", "amusing", "haha", "lmao"},
-        "warmth": {"warm", "kind", "gentle", "nice", "friendly", "caring", "compassionate", "sweet", "lovely"},
-        "creative_divergence": {"creative", "imaginative", "novel", "unique", "different", "original", "fresh", "inventive"},
-        "abstract_reasoning": {"deep", "explain", "why", "how", "analyze", "complex", "nuance", "detailed", "theoretical", "philosophical"},
-        "directness": {"short", "quick", "concise", "direct", "tl;dr", "brief", "summarize", "summary", "blunt"},
-        "formality": {"formal", "professional", "proper", "academic", "polished", "sophisticated", "business"},
-        "empathy": {"empathy", "understand", "feel", "emotion", "support", "care", "sympathy", "compassion"},
-        "curiosity": {"curious", "wonder", "explore", "learn", "discover", "interesting", "fascinating"},
-        "patience": {"patient", "step", "guide", "walk through", "thorough", "detailed explanation"},
+    _TRAIT_PROFILES: dict[str, set] = {
+        "humor": {
+            "funny",
+            "joke",
+            "lol",
+            "humor",
+            "comedy",
+            "wit",
+            "hilarious",
+            "amusing",
+            "haha",
+            "lmao",
+        },
+        "warmth": {
+            "warm",
+            "kind",
+            "gentle",
+            "nice",
+            "friendly",
+            "caring",
+            "compassionate",
+            "sweet",
+            "lovely",
+        },
+        "creative_divergence": {
+            "creative",
+            "imaginative",
+            "novel",
+            "unique",
+            "different",
+            "original",
+            "fresh",
+            "inventive",
+        },
+        "abstract_reasoning": {
+            "deep",
+            "explain",
+            "why",
+            "how",
+            "analyze",
+            "complex",
+            "nuance",
+            "detailed",
+            "theoretical",
+            "philosophical",
+        },
+        "directness": {
+            "short",
+            "quick",
+            "concise",
+            "direct",
+            "tl;dr",
+            "brief",
+            "summarize",
+            "summary",
+            "blunt",
+        },
+        "formality": {
+            "formal",
+            "professional",
+            "proper",
+            "academic",
+            "polished",
+            "sophisticated",
+            "business",
+        },
+        "empathy": {
+            "empathy",
+            "understand",
+            "feel",
+            "emotion",
+            "support",
+            "care",
+            "sympathy",
+            "compassion",
+        },
+        "curiosity": {
+            "curious",
+            "wonder",
+            "explore",
+            "learn",
+            "discover",
+            "interesting",
+            "fascinating",
+        },
+        "patience": {
+            "patient",
+            "step",
+            "guide",
+            "walk through",
+            "thorough",
+            "detailed explanation",
+        },
         "optimism": {"optimistic", "bright", "positive", "hope", "encouraging", "uplifting"},
-        "factual_precision": {"accurate", "precise", "exact", "data", "source", "reference", "cite", "evidence"},
-        "systematic_planning": {"plan", "strategy", "systematic", "method", "framework", "approach", "step by step"},
+        "factual_precision": {
+            "accurate",
+            "precise",
+            "exact",
+            "data",
+            "source",
+            "reference",
+            "cite",
+            "evidence",
+        },
+        "systematic_planning": {
+            "plan",
+            "strategy",
+            "systematic",
+            "method",
+            "framework",
+            "approach",
+            "step by step",
+        },
     }
 
     # ── Feedback-driven update ───────────────────────────────────────
 
-    def update_from_feedback(
-        self, rating: str, user_message: str = "", response: str = ""
-    ) -> int:
+    def update_from_feedback(self, rating: str, user_message: str = "", response: str = "") -> int:
         """Update trait weights based on feedback direction and content.
 
         Uses trait profile word sets for content-aware boosting:
@@ -169,7 +286,7 @@ class TraitWeightsConfig:
         """
         base_delta = 0.03 if rating == "thumbs_up" else -0.03
 
-        shifts: Dict[str, float] = {}
+        shifts: dict[str, float] = {}
         for trait in ALL_TRAITS:
             shifts[trait] = base_delta
 
@@ -208,7 +325,7 @@ class TraitWeightsConfig:
 
     # ── Snapshots ─────────────────────────────────────────────────══
 
-    def list_snapshots(self) -> List[Dict[str, Any]]:
+    def list_snapshots(self) -> list[dict[str, Any]]:
         """Return sorted snapshots with name and metadata."""
         results = []
         for sid in self._snapshot_repo.keys():
@@ -227,7 +344,7 @@ class TraitWeightsConfig:
         safe = name.replace(" ", "_").replace("/", "_")
         with _lock:
             data = {**self._weights}
-            data["_meta"] = {"saved_at": datetime.now(timezone.utc).isoformat(), "label": name}
+            data["_meta"] = {"saved_at": datetime.now(UTC).isoformat(), "label": name}
         self._snapshot_repo.save(safe, data)
         return str(self._snapshots_dir / f"{safe}.json")
 
@@ -308,7 +425,7 @@ class TraitWeightsConfig:
 
 # ── Global config instance ─────────────────────────────────────────────
 
-_trait_config: Optional[TraitWeightsConfig] = None
+_trait_config: TraitWeightsConfig | None = None
 
 
 def get_trait_config() -> TraitWeightsConfig:
@@ -324,6 +441,7 @@ def reset_trait_config() -> None:
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
+
 
 def _describe_trait(value: float, high: str, low: str, mid: str = "") -> str:
     """Map a trait weight to a descriptive phrase."""
@@ -341,6 +459,7 @@ def _if_above(value: float, threshold: float, text: str) -> str:
 
 # ── Personality Manager ────────────────────────────────────────────────
 
+
 class PersonalityManager:
     """Biases emotional tone and social behavior via system prompt injection.
 
@@ -348,7 +467,7 @@ class PersonalityManager:
            formality, patience, optimism, creativity
     """
 
-    def __init__(self, config: Optional[TraitWeightsConfig] = None):
+    def __init__(self, config: TraitWeightsConfig | None = None):
         self._config = config or get_trait_config()
 
     def apply(self, base_prompt: str = "") -> str:
@@ -357,17 +476,43 @@ class PersonalityManager:
 
         lines = []
 
-        warmth_desc = _describe_trait(w["warmth"], "warm and nurturing", "reserved and distant", "pleasantly cordial")
-        creativity_desc = _describe_trait(w["creativity"], "highly creative and imaginative", "literal and practical", "moderately creative")
-        empathy_depth = _describe_trait(w["empathy"], "deeply empathetic", "matter-of-fact and detached", "reasonably empathetic")
-        directness = _describe_trait(w["directness"], "direct and candid", "tactful and diplomatic", "mostly straightforward")
+        warmth_desc = _describe_trait(
+            w["warmth"], "warm and nurturing", "reserved and distant", "pleasantly cordial"
+        )
+        creativity_desc = _describe_trait(
+            w["creativity"],
+            "highly creative and imaginative",
+            "literal and practical",
+            "moderately creative",
+        )
+        empathy_depth = _describe_trait(
+            w["empathy"],
+            "deeply empathetic",
+            "matter-of-fact and detached",
+            "reasonably empathetic",
+        )
+        directness = _describe_trait(
+            w["directness"], "direct and candid", "tactful and diplomatic", "mostly straightforward"
+        )
         humor = _if_above(w["humor"], 0.5, "Use appropriate humor and wit when suitable. ")
         patience = _if_above(w["patience"], 0.6, "Take time to explain thoroughly. ")
-        curiosity = _if_above(w["curiosity"], 0.6, "Be intellectually curious — explore tangents and ask follow-up questions. ")
-        confidence = _if_above(w["confidence"], 0.6, "Speak with authority and conviction. ") if w["confidence"] > 0.6 else _if_above(w["confidence"] < 0.4, True, "Be tentative and hedge when uncertain. ")
+        curiosity = _if_above(
+            w["curiosity"],
+            0.6,
+            "Be intellectually curious — explore tangents and ask follow-up questions. ",
+        )
+        confidence = (
+            _if_above(w["confidence"], 0.6, "Speak with authority and conviction. ")
+            if w["confidence"] > 0.6
+            else _if_above(w["confidence"] < 0.4, True, "Be tentative and hedge when uncertain. ")
+        )
 
-        lines.append(f"Personality: {warmth_desc}, {_describe_trait(w['formality'], 'formal and polished', 'casual and relaxed')}.")
-        lines.append(f"Communication style: {directness}. {_describe_trait(w['optimism'], 'upbeat and optimistic', 'neutral and realistic')}.")
+        lines.append(
+            f"Personality: {warmth_desc}, {_describe_trait(w['formality'], 'formal and polished', 'casual and relaxed')}."
+        )
+        lines.append(
+            f"Communication style: {directness}. {_describe_trait(w['optimism'], 'upbeat and optimistic', 'neutral and realistic')}."
+        )
         lines.append(f"Cognitive style: {creativity_desc}, {empathy_depth}.")
 
         traits = humor + patience + curiosity + confidence
@@ -377,10 +522,10 @@ class PersonalityManager:
         block = "\n".join(f"- {l}" for l in lines)
         return f"\n\n[PERSONALITY INSTRUCTIONS]\n{block}\n"
 
-    def get_weights_snapshot(self) -> Dict[str, float]:
+    def get_weights_snapshot(self) -> dict[str, float]:
         return self._config.all()["personality"]
 
-    def get_mode(self) -> Dict[str, Any]:
+    def get_mode(self) -> dict[str, Any]:
         """Derive the current personality mode from weighted trait composites.
 
         Each mode label (Analytical, Warm, Playful, Confident, Reserved,
@@ -391,39 +536,39 @@ class PersonalityManager:
 
         modes = {
             "Analytical": (
-                w.get("formality", 0.5) * 0.35 +
-                w.get("directness", 0.5) * 0.25 +
-                w.get("patience", 0.5) * 0.20 +
-                w.get("curiosity", 0.5) * 0.20
+                w.get("formality", 0.5) * 0.35
+                + w.get("directness", 0.5) * 0.25
+                + w.get("patience", 0.5) * 0.20
+                + w.get("curiosity", 0.5) * 0.20
             ),
             "Warm": (
-                w.get("warmth", 0.5) * 0.40 +
-                w.get("empathy", 0.5) * 0.30 +
-                w.get("optimism", 0.5) * 0.20 +
-                w.get("patience", 0.5) * 0.10
+                w.get("warmth", 0.5) * 0.40
+                + w.get("empathy", 0.5) * 0.30
+                + w.get("optimism", 0.5) * 0.20
+                + w.get("patience", 0.5) * 0.10
             ),
             "Playful": (
-                w.get("humor", 0.5) * 0.45 +
-                w.get("creativity", 0.5) * 0.25 +
-                w.get("optimism", 0.5) * 0.20 +
-                (1.0 - w.get("formality", 0.5)) * 0.10
+                w.get("humor", 0.5) * 0.45
+                + w.get("creativity", 0.5) * 0.25
+                + w.get("optimism", 0.5) * 0.20
+                + (1.0 - w.get("formality", 0.5)) * 0.10
             ),
             "Confident": (
-                w.get("confidence", 0.5) * 0.50 +
-                w.get("directness", 0.5) * 0.30 +
-                w.get("optimism", 0.5) * 0.20
+                w.get("confidence", 0.5) * 0.50
+                + w.get("directness", 0.5) * 0.30
+                + w.get("optimism", 0.5) * 0.20
             ),
             "Reserved": (
-                (1.0 - w.get("warmth", 0.5)) * 0.30 +
-                (1.0 - w.get("humor", 0.5)) * 0.25 +
-                (1.0 - w.get("confidence", 0.5)) * 0.25 +
-                (1.0 - w.get("optimism", 0.5)) * 0.20
+                (1.0 - w.get("warmth", 0.5)) * 0.30
+                + (1.0 - w.get("humor", 0.5)) * 0.25
+                + (1.0 - w.get("confidence", 0.5)) * 0.25
+                + (1.0 - w.get("optimism", 0.5)) * 0.20
             ),
             "Creative": (
-                w.get("creativity", 0.5) * 0.40 +
-                w.get("curiosity", 0.5) * 0.30 +
-                w.get("humor", 0.5) * 0.15 +
-                (1.0 - w.get("formality", 0.5)) * 0.15
+                w.get("creativity", 0.5) * 0.40
+                + w.get("curiosity", 0.5) * 0.30
+                + w.get("humor", 0.5) * 0.15
+                + (1.0 - w.get("formality", 0.5)) * 0.15
             ),
         }
 
@@ -437,13 +582,14 @@ class PersonalityManager:
 
 # ── Memory Manager ─────────────────────────────────────────────────────
 
+
 class MemoryManager:
     """Controls memory retention thresholds and working capacity.
 
     Reads: pattern_recognition, long_context_handling, learning_adaptability
     """
 
-    def __init__(self, config: Optional[TraitWeightsConfig] = None):
+    def __init__(self, config: TraitWeightsConfig | None = None):
         self._config = config or get_trait_config()
 
     @property
@@ -468,7 +614,7 @@ class MemoryManager:
         """Whether an item should be consolidated to episodic memory."""
         return importance >= self.memory_importance_threshold
 
-    def apply_memory_context(self, episodes: List[Dict]) -> List[Dict]:
+    def apply_memory_context(self, episodes: list[dict]) -> list[dict]:
         """Filter and score episodic memories based on current weights."""
         if not episodes:
             return []
@@ -480,7 +626,7 @@ class MemoryManager:
                 scored.append(ep)
         return scored
 
-    def get_mode(self) -> Dict[str, Any]:
+    def get_mode(self) -> dict[str, Any]:
         """Derive memory mode from weighted trait composites.
 
         Labels: Deep Context (broad retention + high capacity),
@@ -493,29 +639,29 @@ class MemoryManager:
 
         modes = {
             "Deep Context": (
-                cog.get("long_context_handling", 0.5) * 0.40 +
-                (1.0 - self.retention_decay) * 0.30 +
-                (self.working_capacity / 11.0) * 0.30
+                cog.get("long_context_handling", 0.5) * 0.40
+                + (1.0 - self.retention_decay) * 0.30
+                + (self.working_capacity / 11.0) * 0.30
             ),
             "Focused": (
-                (1.0 - cog.get("long_context_handling", 0.5)) * 0.30 +
-                self.memory_importance_threshold * 0.35 +
-                (1.0 - cog.get("pattern_recognition", 0.5)) * 0.35
+                (1.0 - cog.get("long_context_handling", 0.5)) * 0.30
+                + self.memory_importance_threshold * 0.35
+                + (1.0 - cog.get("pattern_recognition", 0.5)) * 0.35
             ),
             "Adaptive": (
-                cog.get("learning_adaptability", 0.5) * 0.50 +
-                cog.get("pattern_recognition", 0.5) * 0.30 +
-                cog.get("long_context_handling", 0.5) * 0.20
+                cog.get("learning_adaptability", 0.5) * 0.50
+                + cog.get("pattern_recognition", 0.5) * 0.30
+                + cog.get("long_context_handling", 0.5) * 0.20
             ),
             "Stable": (
-                (1.0 - self.retention_decay) * 0.40 +
-                cog.get("pattern_recognition", 0.5) * 0.30 +
-                (1.0 - cog.get("learning_adaptability", 0.5)) * 0.30
+                (1.0 - self.retention_decay) * 0.40
+                + cog.get("pattern_recognition", 0.5) * 0.30
+                + (1.0 - cog.get("learning_adaptability", 0.5)) * 0.30
             ),
             "Expansive": (
-                (self.working_capacity / 11.0) * 0.35 +
-                (1.0 - self.memory_importance_threshold) * 0.35 +
-                cog.get("learning_adaptability", 0.5) * 0.30
+                (self.working_capacity / 11.0) * 0.35
+                + (1.0 - self.memory_importance_threshold) * 0.35
+                + cog.get("learning_adaptability", 0.5) * 0.30
             ),
         }
 
@@ -530,13 +676,14 @@ class MemoryManager:
 
 # ── Style Manager ──────────────────────────────────────────────────────
 
+
 class StyleManager:
     """Controls formality, verbosity, and explanation depth.
 
     Reads: formality, directness, tone_flexibility, factual_precision
     """
 
-    def __init__(self, config: Optional[TraitWeightsConfig] = None):
+    def __init__(self, config: TraitWeightsConfig | None = None):
         self._config = config or get_trait_config()
 
     def apply(self, base_prompt: str = "") -> str:
@@ -562,7 +709,9 @@ class StyleManager:
 
         precision = cog.get("factual_precision", 0.5)
         if precision >= 0.7:
-            lines.append("Prioritize factual accuracy. When uncertain, express the confidence level explicitly.")
+            lines.append(
+                "Prioritize factual accuracy. When uncertain, express the confidence level explicitly."
+            )
         elif precision <= 0.3:
             lines.append("Prioritize fluency and engagement over strict factual precision.")
 
@@ -573,7 +722,7 @@ class StyleManager:
         block = "\n".join(f"- {l}" for l in lines)
         return f"\n\n[STYLE INSTRUCTIONS]\n{block}\n"
 
-    def get_mode(self) -> Dict[str, Any]:
+    def get_mode(self) -> dict[str, Any]:
         """Derive style mode from weighted trait composites.
 
         Labels: Formal (high formality, precise),
@@ -588,34 +737,34 @@ class StyleManager:
 
         modes = {
             "Formal": (
-                w.get("formality", 0.5) * 0.45 +
-                cog.get("factual_precision", 0.5) * 0.35 +
-                (1.0 - w.get("directness", 0.5)) * 0.20
+                w.get("formality", 0.5) * 0.45
+                + cog.get("factual_precision", 0.5) * 0.35
+                + (1.0 - w.get("directness", 0.5)) * 0.20
             ),
             "Casual": (
-                (1.0 - w.get("formality", 0.5)) * 0.40 +
-                w.get("directness", 0.5) * 0.30 +
-                self._config.get("tone_flexibility", 0.5) * 0.30
+                (1.0 - w.get("formality", 0.5)) * 0.40
+                + w.get("directness", 0.5) * 0.30
+                + self._config.get("tone_flexibility", 0.5) * 0.30
             ),
             "Direct": (
-                w.get("directness", 0.5) * 0.50 +
-                (1.0 - w.get("formality", 0.5)) * 0.25 +
-                (1.0 - cog.get("factual_precision", 0.5)) * 0.25
+                w.get("directness", 0.5) * 0.50
+                + (1.0 - w.get("formality", 0.5)) * 0.25
+                + (1.0 - cog.get("factual_precision", 0.5)) * 0.25
             ),
             "Diplomatic": (
-                (1.0 - w.get("directness", 0.5)) * 0.40 +
-                w.get("formality", 0.5) * 0.30 +
-                self._config.get("tone_flexibility", 0.5) * 0.30
+                (1.0 - w.get("directness", 0.5)) * 0.40
+                + w.get("formality", 0.5) * 0.30
+                + self._config.get("tone_flexibility", 0.5) * 0.30
             ),
             "Precise": (
-                cog.get("factual_precision", 0.5) * 0.50 +
-                w.get("formality", 0.5) * 0.25 +
-                w.get("patience", 0.5) * 0.25
+                cog.get("factual_precision", 0.5) * 0.50
+                + w.get("formality", 0.5) * 0.25
+                + w.get("patience", 0.5) * 0.25
             ),
             "Flexible": (
-                self._config.get("tone_flexibility", 0.5) * 0.50 +
-                w.get("directness", 0.5) * 0.25 +
-                w.get("empathy", 0.5) * 0.25
+                self._config.get("tone_flexibility", 0.5) * 0.50
+                + w.get("directness", 0.5) * 0.25
+                + w.get("empathy", 0.5) * 0.25
             ),
         }
 
@@ -629,6 +778,7 @@ class StyleManager:
 
 # ── Task Manager ───────────────────────────────────────────────────────
 
+
 class TaskManager:
     """Controls reasoning depth and analytical vs creative approach.
 
@@ -636,7 +786,7 @@ class TaskManager:
            metacognitive_awareness
     """
 
-    def __init__(self, config: Optional[TraitWeightsConfig] = None):
+    def __init__(self, config: TraitWeightsConfig | None = None):
         self._config = config or get_trait_config()
 
     def apply(self, base_prompt: str = "") -> str:
@@ -670,7 +820,7 @@ class TaskManager:
         block = "\n".join(f"- {l}" for l in lines)
         return f"\n\n[TASK APPROACH]\n{block}\n"
 
-    def get_mode(self) -> Dict[str, Any]:
+    def get_mode(self) -> dict[str, Any]:
         """Derive task mode from weighted trait composites.
 
         Labels: Analytical (abstract reasoning + metacognition),
@@ -685,34 +835,34 @@ class TaskManager:
 
         modes = {
             "Analytical": (
-                cog.get("abstract_reasoning", 0.5) * 0.40 +
-                cog.get("metacognitive_awareness", 0.5) * 0.30 +
-                cog.get("systematic_planning", 0.5) * 0.30
+                cog.get("abstract_reasoning", 0.5) * 0.40
+                + cog.get("metacognitive_awareness", 0.5) * 0.30
+                + cog.get("systematic_planning", 0.5) * 0.30
             ),
             "Creative": (
-                cog.get("creative_divergence", 0.5) * 0.45 +
-                (1.0 - cog.get("systematic_planning", 0.5)) * 0.25 +
-                w.get("curiosity", 0.5) * 0.30
+                cog.get("creative_divergence", 0.5) * 0.45
+                + (1.0 - cog.get("systematic_planning", 0.5)) * 0.25
+                + w.get("curiosity", 0.5) * 0.30
             ),
             "Methodical": (
-                cog.get("systematic_planning", 0.5) * 0.40 +
-                cog.get("abstract_reasoning", 0.5) * 0.25 +
-                w.get("patience", 0.5) * 0.35
+                cog.get("systematic_planning", 0.5) * 0.40
+                + cog.get("abstract_reasoning", 0.5) * 0.25
+                + w.get("patience", 0.5) * 0.35
             ),
             "Exploratory": (
-                w.get("curiosity", 0.5) * 0.40 +
-                cog.get("creative_divergence", 0.5) * 0.35 +
-                (1.0 - cog.get("systematic_planning", 0.5)) * 0.25
+                w.get("curiosity", 0.5) * 0.40
+                + cog.get("creative_divergence", 0.5) * 0.35
+                + (1.0 - cog.get("systematic_planning", 0.5)) * 0.25
             ),
             "Structured": (
-                cog.get("systematic_planning", 0.5) * 0.45 +
-                cog.get("abstract_reasoning", 0.5) * 0.30 +
-                cog.get("metacognitive_awareness", 0.5) * 0.25
+                cog.get("systematic_planning", 0.5) * 0.45
+                + cog.get("abstract_reasoning", 0.5) * 0.30
+                + cog.get("metacognitive_awareness", 0.5) * 0.25
             ),
             "Reflective": (
-                cog.get("metacognitive_awareness", 0.5) * 0.40 +
-                w.get("patience", 0.5) * 0.30 +
-                cog.get("abstract_reasoning", 0.5) * 0.30
+                cog.get("metacognitive_awareness", 0.5) * 0.40
+                + w.get("patience", 0.5) * 0.30
+                + cog.get("abstract_reasoning", 0.5) * 0.30
             ),
         }
 
@@ -725,6 +875,7 @@ class TaskManager:
 
 
 # ── Consciousness Manager ──────────────────────────────────────────────
+
 
 class ConsciousnessManager:
     """Injects consciousness narrative into the system prompt.

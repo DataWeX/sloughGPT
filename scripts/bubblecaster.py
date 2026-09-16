@@ -23,9 +23,8 @@ import sys
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 # --- Tunables ---------------------------------------------------------------
 
@@ -33,11 +32,11 @@ SKY_W = 60
 SKY_H = 16
 CASTER_X = SKY_W // 2
 CASTER_Y = SKY_H - 1
-GRAVITY = 0.09          # downward acceleration per simulation step
+GRAVITY = 0.09  # downward acceleration per simulation step
 STAR_RADIUS = 1.5
 MIN_POWER, MAX_POWER = 2, 12
 MIN_ANGLE, MAX_ANGLE = 12, 82
-MAX_BRIGHTNESS = 3      # casts to fully light a star
+MAX_BRIGHTNESS = 3  # casts to fully light a star
 MAX_STEPS = 320
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "datasets" / "bubblecaster"
@@ -55,6 +54,7 @@ WISHES = [
 
 # --- Core data --------------------------------------------------------------
 
+
 @dataclass
 class Star:
     x: float
@@ -71,10 +71,10 @@ class Star:
 
 @dataclass
 class Cast:
-    angle: float          # degrees from horizontal, launcher looks up away from ground
-    power: float          # launch speed, scaled by / MAX_POWER
-    sigil: str            # visual / narrative token carried by the bubble
-    target_index: int     # which star the caster was aiming at
+    angle: float  # degrees from horizontal, launcher looks up away from ground
+    power: float  # launch speed, scaled by / MAX_POWER
+    sigil: str  # visual / narrative token carried by the bubble
+    target_index: int  # which star the caster was aiming at
 
 
 @dataclass
@@ -124,7 +124,7 @@ def simulate_cast(stars: list[Star], cast: Cast) -> dict:
 
     coords = [(x, y)]
     hit = False
-    hit_index: Optional[int] = None
+    hit_index: int | None = None
     steps = 0
 
     for _ in range(MAX_STEPS):
@@ -134,9 +134,9 @@ def simulate_cast(stars: list[Star], cast: Cast) -> dict:
         steps += 1
         coords.append((x, y))
 
-        if y >= CASTER_Y:                # landed back on the ground
+        if y >= CASTER_Y:  # landed back on the ground
             break
-        if x < 0 or x > SKY_W:           # drifted out of the sky
+        if x < 0 or x > SKY_W:  # drifted out of the sky
             break
 
         for i, s in enumerate(stars):
@@ -155,7 +155,7 @@ def append_record(state: GameState, cast: Cast, result: dict, score_delta: int) 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     record = {
         "event": "cast",
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "session": state.session_id,
         "sky": [asdict(s) for s in state.stars],
         "cast": asdict(cast),
@@ -209,7 +209,7 @@ def fit_aim_model(records=None):
     denom = sum((x - mx) ** 2 for x in xs)
     if denom == 0:
         return None
-    a = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / denom
+    a = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=False)) / denom
     b = my - a * mx
     return a, b
 
@@ -225,6 +225,7 @@ def _iter_records():
 
 
 # --- Rendering --------------------------------------------------------------
+
 
 def render_sky(stars: list[Star], bubble=None):
     grid = [[" " for _ in range(SKY_W)] for _ in range(SKY_H)]
@@ -262,7 +263,7 @@ def get_number(prompt: str, lo: int, hi: int) -> int:
                 return n
             print(f"  \033[31mEnter {lo}-{hi}\033[0m")
         except ValueError:
-            print(f"  \033[31mEnter a number\033[0m")
+            print("  \033[31mEnter a number\033[0m")
 
 
 def choice_menu(options: list[str]) -> int:
@@ -274,11 +275,11 @@ def choice_menu(options: list[str]) -> int:
 
 def status_line(state: GameState):
     lit = sum(1 for s in state.stars if s.lit)
-    total = sum(1 for s in state.stars if s.lit) + sum(
-        1 for s in state.stars if not s.lit
+    total = sum(1 for s in state.stars if s.lit) + sum(1 for s in state.stars if not s.lit)
+    print(
+        f"  \033[90mcasts:\033[0m {state.casts}   \033[90mscore:\033[0m {state.score:>4}   "
+        f"\033[90mstars lit:\033[0m {lit}/{total}"
     )
-    print(f"  \033[90mcasts:\033[0m {state.casts}   \033[90mscore:\033[0m {state.score:>4}   "
-          f"\033[90mstars lit:\033[0m {lit}/{total}")
 
 
 def animate_cast(stars: list[Star], cast: Cast):
@@ -294,13 +295,14 @@ def animate_cast(stars: list[Star], cast: Cast):
 
 # --- Game flow --------------------------------------------------------------
 
+
 def reveal_echo(state: GameState, star: Star):
     wish = WISHES[star.wish_id % len(WISHES)]
     state.echoes.append(wish)
     if len(state.echoes) > 6:
         state.echoes = state.echoes[-6:]
-    print(f"\n  \033[1;36m*\033[0m A star lights up and lets a wish be heard:")
-    print(f"    \033[90m\"{wish}\"\033[0m")
+    print("\n  \033[1;36m*\033[0m A star lights up and lets a wish be heard:")
+    print(f'    \033[90m"{wish}"\033[0m')
 
 
 def cast_turn(state: GameState) -> None:
@@ -349,9 +351,11 @@ def main_loop():
     clear()
     header("BUBBLE CASTER")
     divider()
-    print("  Cast wishes up to the stars.\n"
-          "  A star that drinks {n} bubbles lights up and\n"
-          "  lets one of its wishes be heard.\n".format(n=MAX_BRIGHTNESS))
+    print(
+        "  Cast wishes up to the stars.\n"
+        f"  A star that drinks {MAX_BRIGHTNESS} bubbles lights up and\n"
+        "  lets one of its wishes be heard.\n"
+    )
     print("  Every cast is written to")
     print(f"  \033[90m  {DATA_PATH}\033[0m")
     print(f"  \033[90m  ({stream_count()} casts already gathered)\033[0m")
@@ -383,8 +387,10 @@ def main_loop():
 
     header("NIGHTFALL")
     print(f"\n  \033[1;36mAll {len(state.stars)} stars are lit.\033[0m")
-    print(f"  \033[90m{state.casts} casts, score {state.score}, "
-          f"{stream_count()} samples in the dataset.\033[0m")
+    print(
+        f"  \033[90m{state.casts} casts, score {state.score}, "
+        f"{stream_count()} samples in the dataset.\033[0m"
+    )
     print("\n  \033[90mOne day the model will read those samples and learn to aim.\033[0m")
 
 
@@ -400,9 +406,11 @@ def suggest(state: GameState):
     s = stars[0]
     power = a * abs(s.x - CASTER_X) + b
     power = max(MIN_POWER, min(MAX_POWER, round(power)))
-    print(f"\n  \033[90mThe sky whispers:\033[0m \"aim at ({s.x:.0f},{s.y:.0f}) "
-          f"with power \033[1;33m{power}\033[0m\".\n"
-          "  (it learned this from your own casts)\033[0m")
+    print(
+        f'\n  \033[90mThe sky whispers:\033[0m "aim at ({s.x:.0f},{s.y:.0f}) '
+        f'with power \033[1;33m{power}\033[0m".\n'
+        "  (it learned this from your own casts)\033[0m"
+    )
     input("\n  \033[32mPress Enter\033[0m")
 
 

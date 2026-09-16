@@ -2,12 +2,12 @@
 Model Schemas - Data models for model management
 """
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class ModelStatus(str, Enum):
+class ModelStatus(StrEnum):
     UNLOADED = "unloaded"
     LOADED = "loaded"
     LOADING = "loading"
@@ -15,7 +15,7 @@ class ModelStatus(str, Enum):
     AVAILABLE = "available"
 
 
-class Device(str, Enum):
+class Device(StrEnum):
     CPU = "cpu"
     MPS = "mps"
     CUDA = "cuda"

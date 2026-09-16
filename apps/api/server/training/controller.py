@@ -8,13 +8,13 @@ import logging
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger("slo.training")
 
 
-class TrainingState(str, Enum):
+class TrainingState(StrEnum):
     """Training state machine states."""
 
     IDLE = "idle"

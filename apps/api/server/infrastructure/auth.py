@@ -8,21 +8,21 @@ All config is derived from ``ServerConfig``.
 from __future__ import annotations
 
 import hashlib
-import threading
 import hmac
 import json
 import logging
 import os
+import threading
 import time
 from collections import deque
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from domain.infrastructure._internal.errors import AppError
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from schemas.common import raise_error
 
 from config import ServerConfig
+from domain.infrastructure._internal.errors import AppError
 
 logger = logging.getLogger("slo.auth")
 
@@ -164,7 +164,7 @@ class APIKeyAuth:
         Returns:
             (timestamp, signature) tuple.
         """
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
         sig = hmac.new(self._key.encode(), body + ts.encode(), hashlib.sha256).hexdigest()
         return ts, sig
 
@@ -286,7 +286,7 @@ class AuditLogger:
             workspace_id: Workspace scope for the event.
         """
         record = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "event_type": event,
             "user": user,
             "resource": resource,

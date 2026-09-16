@@ -7,12 +7,13 @@ Users can select a preset and customize from there.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
 class TrainingPreset:
     """A named training configuration preset."""
+
     name: str
     description: str
     model: str
@@ -26,9 +27,9 @@ class TrainingPreset:
     use_lora: bool = False
     lora_rank: int = 16
     lora_alpha: int = 32
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "description": self.description,
@@ -49,7 +50,7 @@ class TrainingPreset:
 
 # ── Built-in Presets ──────────────────────────────────────────────
 
-PRESETS: Dict[str, TrainingPreset] = {
+PRESETS: dict[str, TrainingPreset] = {
     "quick-finetune": TrainingPreset(
         name="Quick Fine-Tune",
         description="Fast fine-tuning for small datasets. Good for prototyping.",
@@ -160,18 +161,18 @@ PRESETS: Dict[str, TrainingPreset] = {
 }
 
 
-def list_presets() -> List[Dict[str, Any]]:
+def list_presets() -> list[dict[str, Any]]:
     """List all available presets."""
     return [p.to_dict() for p in PRESETS.values()]
 
 
-def get_preset(name: str) -> Optional[Dict[str, Any]]:
+def get_preset(name: str) -> dict[str, Any] | None:
     """Get a preset by name."""
     preset = PRESETS.get(name)
     return preset.to_dict() if preset else None
 
 
-def apply_preset(name: str) -> Optional[Dict[str, Any]]:
+def apply_preset(name: str) -> dict[str, Any] | None:
     """Get a preset config ready to be applied to training settings."""
     preset = PRESETS.get(name)
     if not preset:

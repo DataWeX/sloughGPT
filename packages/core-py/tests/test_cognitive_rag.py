@@ -1,21 +1,22 @@
 """Comprehensive tests for domain.cognitive._internal.rag.py — pure logic only."""
 
-import pytest
 import numpy as np
+import pytest
+
 from domain.cognitive._internal.rag import (
-    TextChunk,
-    RetrievalResult,
     BM25Indexer,
-    HybridRetriever,
     CitationTracker,
     HallucinationDetector,
+    HybridRetriever,
     ProductionRAG,
+    RetrievalResult,
+    TextChunk,
 )
-
 
 # ---------------------------------------------------------------------------
 # TextChunk
 # ---------------------------------------------------------------------------
+
 
 class TestTextChunk:
     def test_auto_token_count(self):
@@ -45,10 +46,13 @@ class TestTextChunk:
 # RetrievalResult
 # ---------------------------------------------------------------------------
 
+
 class TestRetrievalResult:
     def test_all_fields(self):
         chunk = TextChunk(id="c1", content="text", metadata={})
-        rr = RetrievalResult(chunk=chunk, dense_score=0.9, sparse_score=0.6, combined_score=0.8, rank=2)
+        rr = RetrievalResult(
+            chunk=chunk, dense_score=0.9, sparse_score=0.6, combined_score=0.8, rank=2
+        )
         assert rr.chunk is chunk
         assert rr.dense_score == 0.9
         assert rr.sparse_score == 0.6
@@ -59,6 +63,7 @@ class TestRetrievalResult:
 # ---------------------------------------------------------------------------
 # BM25Indexer
 # ---------------------------------------------------------------------------
+
 
 class TestBM25Indexer:
     def _make_chunks(self, texts):
@@ -108,20 +113,28 @@ class TestBM25Indexer:
 
     def test_score_prefers_doc_with_more_term_occurrences(self):
         bm25 = BM25Indexer()
-        bm25.index(self._make_chunks([
-            "cat cat cat cat cat",
-            "cat dog bird",
-        ]))
+        bm25.index(
+            self._make_chunks(
+                [
+                    "cat cat cat cat cat",
+                    "cat dog bird",
+                ]
+            )
+        )
         results = bm25.score("cat")
         assert results[0][0] == 0
 
     def test_score_multiple_docs(self):
         bm25 = BM25Indexer()
-        bm25.index(self._make_chunks([
-            "python is great",
-            "java is also great",
-            "python java both good",
-        ]))
+        bm25.index(
+            self._make_chunks(
+                [
+                    "python is great",
+                    "java is also great",
+                    "python java both good",
+                ]
+            )
+        )
         results = bm25.score("python")
         doc_ids = [r[0] for r in results]
         assert 0 in doc_ids
@@ -158,6 +171,7 @@ class TestBM25Indexer:
 # ---------------------------------------------------------------------------
 # HybridRetriever
 # ---------------------------------------------------------------------------
+
 
 class TestHybridRetriever:
     def _make_retriever(self, texts):
@@ -283,6 +297,7 @@ class TestHybridRetriever:
 # CitationTracker
 # ---------------------------------------------------------------------------
 
+
 class TestCitationTracker:
     def test_initial_empty(self):
         ct = CitationTracker()
@@ -393,6 +408,7 @@ class TestCitationTracker:
 # HallucinationDetector
 # ---------------------------------------------------------------------------
 
+
 class TestHallucinationDetector:
     def _make_detector_with_docs(self, texts):
         hr = HybridRetriever()
@@ -416,8 +432,15 @@ class TestHallucinationDetector:
     def test_returns_required_keys(self):
         hd = self._make_detector_with_docs([])
         result = hd.detect("hello")
-        for key in ("text", "total_claims", "grounded_claims", "hallucinations",
-                     "overall_confidence", "hallucination_rate", "formatted_citations"):
+        for key in (
+            "text",
+            "total_claims",
+            "grounded_claims",
+            "hallucinations",
+            "overall_confidence",
+            "hallucination_rate",
+            "formatted_citations",
+        ):
             assert key in result
 
     def test_hallucination_rate_calculation(self):
@@ -452,6 +475,7 @@ class TestHallucinationDetector:
 # ---------------------------------------------------------------------------
 # ProductionRAG
 # ---------------------------------------------------------------------------
+
 
 class TestProductionRAG:
     def test_default_config(self):

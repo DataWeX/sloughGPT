@@ -6,7 +6,6 @@ import threading
 import time
 
 import pytest
-
 from training.job_store import JobStore
 from training.runtime import TrainingRuntime
 

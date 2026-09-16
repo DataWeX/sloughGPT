@@ -12,13 +12,14 @@ Provides an interactive debugger with:
 
 from __future__ import annotations
 
-import re
 import logging
+import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from .vm_engine import (
-    VMEngine, ExecutionTrace,
+    ExecutionTrace,
+    VMEngine,
 )
 
 logger = logging.getLogger("slo.vm.debugger")
@@ -26,9 +27,11 @@ logger = logging.getLogger("slo.vm.debugger")
 
 # ── Symbol Table ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Symbol:
     """A named address in the VM."""
+
     name: str
     address: int
     size: int = 0
@@ -74,9 +77,11 @@ class SymbolTable:
 
 # ── Watchpoint ────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Watchpoint:
     """Watches a memory address for changes."""
+
     address: int
     size: int = 4
     label: str = ""
@@ -86,6 +91,7 @@ class Watchpoint:
 
 
 # ── Debugger ──────────────────────────────────────────────────────────────────
+
 
 class Debugger:
     """
@@ -138,7 +144,7 @@ class Debugger:
             if not line or line.startswith(";"):
                 continue
             # Detect label (ends with ':')
-            label_match = re.match(r'^([a-zA-Z_][a-zA-Z0-9_]*)\s*:', line)
+            label_match = re.match(r"^([a-zA-Z_][a-zA-Z0-9_]*)\s*:", line)
             if label_match:
                 name = label_match.group(1)
                 self._symbols.add(name, addr, kind="label")
@@ -197,8 +203,14 @@ class Debugger:
     def wp_list(self) -> list[dict]:
         """List all watchpoints."""
         return [
-            {"id": wp_id, "address": wp.address, "size": wp.size,
-             "label": wp.label, "enabled": wp.enabled, "hit_count": wp.hit_count}
+            {
+                "id": wp_id,
+                "address": wp.address,
+                "size": wp.size,
+                "label": wp.label,
+                "enabled": wp.enabled,
+                "hit_count": wp.hit_count,
+            }
             for wp_id, wp in self._watchpoints.items()
         ]
 
@@ -213,8 +225,9 @@ class Debugger:
             elif current != wp.last_value:
                 wp.hit_count += 1
                 name = self._symbols.name_for(wp.address) or f"0x{wp.address:08x}"
-                self._out(f"Watchpoint {wp_id} hit: {name} "
-                          f"0x{wp.last_value:08x} -> 0x{current:08x}")
+                self._out(
+                    f"Watchpoint {wp_id} hit: {name} 0x{wp.last_value:08x} -> 0x{current:08x}"
+                )
                 wp.last_value = current
 
     # ── Execution ─────────────────────────────────────────────────────────
@@ -238,8 +251,7 @@ class Debugger:
             call_target = eip + 5 + offset
             return_addr = eip + 5
             self._step_over_addr = return_addr
-            self._out(f"Step over: call 0x{call_target:08x}, "
-                      f"return at 0x{return_addr:08x}")
+            self._out(f"Step over: call 0x{call_target:08x}, return at 0x{return_addr:08x}")
             return self.run_until(return_addr)
         elif opcode == 0xFF:
             # Indirect CALL — just step into
@@ -349,8 +361,7 @@ class Debugger:
                 addr_counts[step.eip] = addr_counts.get(step.eip, 0) + 1
             top_addrs = sorted(addr_counts.items(), key=lambda x: -x[1])[:10]
             analysis["hot_addresses"] = [
-                {"address": addr, "count": count,
-                 "symbol": self._symbols.name_for(addr) or ""}
+                {"address": addr, "count": count, "symbol": self._symbols.name_for(addr) or ""}
                 for addr, count in top_addrs
             ]
 
@@ -360,8 +371,7 @@ class Debugger:
             for sc in trace.syscalls:
                 syscall_counts[sc.number] = syscall_counts.get(sc.number, 0) + 1
             analysis["syscall_summary"] = [
-                {"number": num, "count": count}
-                for num, count in sorted(syscall_counts.items())
+                {"number": num, "count": count} for num, count in sorted(syscall_counts.items())
             ]
 
         return analysis
@@ -369,7 +379,6 @@ class Debugger:
     def list_symbols(self) -> list[dict]:
         """List all symbols."""
         return [
-            {"name": sym.name, "address": sym.address,
-             "size": sym.size, "kind": sym.kind}
+            {"name": sym.name, "address": sym.address, "size": sym.size, "kind": sym.kind}
             for sym in self._symbols.all()
         ]

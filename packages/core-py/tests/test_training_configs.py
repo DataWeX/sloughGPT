@@ -1,14 +1,24 @@
 """Tests for domain.training — DistillConfig, TextDataset, DistillEvalResult; domain.training._internal.lr_schedulers — SchedulerConfig, CosineAnnealingConfig, WarmupConfig, OneCycleConfig, CyclicConfig."""
 
 import numpy as np
+
 from domain.training._internal.distill_gpt2 import (
-    DistillConfig, TextDataset, DistillEvalResult,
-    _softmax, _kl_div_loss, _cross_entropy_loss, _compute_perplexity, _bleu_score,
+    DistillConfig,
+    DistillEvalResult,
+    TextDataset,
+    _bleu_score,
+    _compute_perplexity,
+    _cross_entropy_loss,
+    _kl_div_loss,
+    _softmax,
 )
 from domain.training._internal.lr_schedulers import (
-    SchedulerConfig, CosineAnnealingConfig, WarmupConfig, OneCycleConfig, CyclicConfig,
+    CosineAnnealingConfig,
+    CyclicConfig,
+    OneCycleConfig,
+    SchedulerConfig,
+    WarmupConfig,
 )
-
 
 # ── DistillConfig ────────────────────────────────────────────────────────────
 
@@ -24,11 +34,23 @@ class TestDistillConfig:
 
     def test_custom_values(self):
         cfg = DistillConfig(
-            n_embed=256, n_layer=6, n_head=8, block_size=256,
-            dropout=0.2, epochs=20, lr=1e-3, batch_size=16,
-            grad_clip=2.0, warmup_steps=200, temperature=2.0,
-            alpha=0.3, beta=0.7, teacher_model="gpt2-medium",
-            checkpoint_dir="/tmp/ckpts", eval_interval=25, log_interval=5,
+            n_embed=256,
+            n_layer=6,
+            n_head=8,
+            block_size=256,
+            dropout=0.2,
+            epochs=20,
+            lr=1e-3,
+            batch_size=16,
+            grad_clip=2.0,
+            warmup_steps=200,
+            temperature=2.0,
+            alpha=0.3,
+            beta=0.7,
+            teacher_model="gpt2-medium",
+            checkpoint_dir="/tmp/ckpts",
+            eval_interval=25,
+            log_interval=5,
         )
         assert cfg.n_embed == 256
         assert cfg.n_layer == 6
@@ -97,7 +119,11 @@ class TestDistillConfig:
 
 class TestTextDataset:
     def test_init(self):
-        ds = TextDataset("hello world", block_size=4, stoi={"h": 0, "e": 1, "l": 2, "o": 3, " ": 4, "w": 5, "r": 6, "d": 7})
+        ds = TextDataset(
+            "hello world",
+            block_size=4,
+            stoi={"h": 0, "e": 1, "l": 2, "o": 3, " ": 4, "w": 5, "r": 6, "d": 7},
+        )
         assert len(ds) >= 1
 
     def test_len(self):
@@ -175,8 +201,12 @@ class TestTextDataset:
 class TestDistillEvalResult:
     def test_fields(self):
         er = DistillEvalResult(
-            perplexity=5.0, bleu_vs_teacher=0.7, avg_response_len=10.0,
-            teacher_samples=[], student_samples=[], eval_prompts=[],
+            perplexity=5.0,
+            bleu_vs_teacher=0.7,
+            avg_response_len=10.0,
+            teacher_samples=[],
+            student_samples=[],
+            eval_prompts=[],
             inference_time_sec=1.0,
         )
         assert er.perplexity == 5.0
@@ -184,8 +214,12 @@ class TestDistillEvalResult:
 
     def test_to_dict(self):
         er = DistillEvalResult(
-            perplexity=5.0, bleu_vs_teacher=0.7, avg_response_len=10.0,
-            teacher_samples=[], student_samples=[], eval_prompts=[],
+            perplexity=5.0,
+            bleu_vs_teacher=0.7,
+            avg_response_len=10.0,
+            teacher_samples=[],
+            student_samples=[],
+            eval_prompts=[],
             inference_time_sec=1.0,
         )
         d = er.to_dict()
@@ -194,8 +228,12 @@ class TestDistillEvalResult:
 
     def test_to_dict_rounds_values(self):
         er = DistillEvalResult(
-            perplexity=3.14159, bleu_vs_teacher=0.678, avg_response_len=12.345,
-            teacher_samples=[], student_samples=[], eval_prompts=[],
+            perplexity=3.14159,
+            bleu_vs_teacher=0.678,
+            avg_response_len=12.345,
+            teacher_samples=[],
+            student_samples=[],
+            eval_prompts=[],
             inference_time_sec=2.999,
         )
         d = er.to_dict()
@@ -206,18 +244,26 @@ class TestDistillEvalResult:
 
     def test_to_dict_num_samples(self):
         er = DistillEvalResult(
-            perplexity=1.0, bleu_vs_teacher=0.5, avg_response_len=5.0,
-            teacher_samples=["a", "b", "c"], student_samples=["d", "e", "f"],
-            eval_prompts=["p1", "p2", "p3"], inference_time_sec=0.1,
+            perplexity=1.0,
+            bleu_vs_teacher=0.5,
+            avg_response_len=5.0,
+            teacher_samples=["a", "b", "c"],
+            student_samples=["d", "e", "f"],
+            eval_prompts=["p1", "p2", "p3"],
+            inference_time_sec=0.1,
         )
         d = er.to_dict()
         assert d["num_samples"] == 3
 
     def test_to_dict_samples_structure(self):
         er = DistillEvalResult(
-            perplexity=1.0, bleu_vs_teacher=0.5, avg_response_len=5.0,
-            teacher_samples=["t1", "t2"], student_samples=["s1", "s2"],
-            eval_prompts=["p1", "p2"], inference_time_sec=0.1,
+            perplexity=1.0,
+            bleu_vs_teacher=0.5,
+            avg_response_len=5.0,
+            teacher_samples=["t1", "t2"],
+            student_samples=["s1", "s2"],
+            eval_prompts=["p1", "p2"],
+            inference_time_sec=0.1,
         )
         d = er.to_dict()
         assert len(d["samples"]) == 2
@@ -227,9 +273,13 @@ class TestDistillEvalResult:
 
     def test_all_fields_stored(self):
         er = DistillEvalResult(
-            perplexity=2.0, bleu_vs_teacher=0.8, avg_response_len=15.0,
-            teacher_samples=["t"], student_samples=["s"],
-            eval_prompts=["p"], inference_time_sec=3.0,
+            perplexity=2.0,
+            bleu_vs_teacher=0.8,
+            avg_response_len=15.0,
+            teacher_samples=["t"],
+            student_samples=["s"],
+            eval_prompts=["p"],
+            inference_time_sec=3.0,
         )
         assert er.perplexity == 2.0
         assert er.bleu_vs_teacher == 0.8
@@ -241,8 +291,12 @@ class TestDistillEvalResult:
 
     def test_to_dict_empty_samples(self):
         er = DistillEvalResult(
-            perplexity=1.0, bleu_vs_teacher=0.0, avg_response_len=0.0,
-            teacher_samples=[], student_samples=[], eval_prompts=[],
+            perplexity=1.0,
+            bleu_vs_teacher=0.0,
+            avg_response_len=0.0,
+            teacher_samples=[],
+            student_samples=[],
+            eval_prompts=[],
             inference_time_sec=0.0,
         )
         d = er.to_dict()
@@ -551,7 +605,9 @@ class TestCyclicConfig:
         assert isinstance(cfg, SchedulerConfig)
 
     def test_custom_values(self):
-        cfg = CyclicConfig(base_lr=1e-4, max_lr=5e-3, step_size_up=500, step_size_down=500, mode="exp_range")
+        cfg = CyclicConfig(
+            base_lr=1e-4, max_lr=5e-3, step_size_up=500, step_size_down=500, mode="exp_range"
+        )
         assert cfg.base_lr == 1e-4
         assert cfg.max_lr == 5e-3
         assert cfg.step_size_up == 500
@@ -643,7 +699,13 @@ class TestSchedulerInheritance:
         assert issubclass(CyclicConfig, SchedulerConfig)
 
     def test_all_have_name(self):
-        for cls in [SchedulerConfig, CosineAnnealingConfig, WarmupConfig, OneCycleConfig, CyclicConfig]:
+        for cls in [
+            SchedulerConfig,
+            CosineAnnealingConfig,
+            WarmupConfig,
+            OneCycleConfig,
+            CyclicConfig,
+        ]:
             cfg = cls()
             assert hasattr(cfg, "name")
             assert isinstance(cfg.name, str)

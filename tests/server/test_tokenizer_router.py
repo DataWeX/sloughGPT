@@ -6,8 +6,8 @@ The router imports get_tokenizer_manager at module level, so we patch the
 name in the router's namespace.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock, patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

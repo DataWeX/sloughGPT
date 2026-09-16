@@ -7,69 +7,326 @@ Supports English, German, French, Spanish, Italian, and Portuguese with automati
 
 from __future__ import annotations
 
-from typing import Optional
 import numpy as np
 
-from domain.voice._internal.phoneme_encoder import PhonemeEncoder, BOS as EN_BOS, EOS as EN_EOS, PAD as EN_PAD
-from domain.voice._internal.german_phoneme_encoder import (
-    GermanPhonemeEncoder, BOS as DE_BOS, EOS as DE_EOS, PAD as DE_PAD,
-)
 from domain.voice._internal.french_phoneme_encoder import FrenchPhonemeEncoder
-from domain.voice._internal.spanish_phoneme_encoder import SpanishPhonemeEncoder
+from domain.voice._internal.german_phoneme_encoder import (
+    GermanPhonemeEncoder,
+)
 from domain.voice._internal.italian_phoneme_encoder import ItalianPhonemeEncoder
+from domain.voice._internal.phoneme_encoder import (
+    PhonemeEncoder,
+)
 from domain.voice._internal.portuguese_phoneme_encoder import PortuguesePhonemeEncoder
-
+from domain.voice._internal.spanish_phoneme_encoder import SpanishPhonemeEncoder
 
 # Language detection patterns
 _LANG_PATTERNS = {
-    "de": ["ich", "du", "er", "sie", "wir", "ihr", "bin", "ist", "hat", "haben",
-           "nicht", "ja", "nein", "danke", "guten", "morgen", "tag", "abend",
-           "nacht", "welt", "hund", "katze", "auto", "haus", "schule", "buch",
-           "gut", "gross", "klein", "neu", "alt", "heiss", "kalt", "schnell",
-           "langsam", "bitte", "tschuss", "eins", "zwei", "drei", "vier",
-           "fuenf", "sechs", "sieben", "acht", "neun", "zehn"],
-    "fr": ["je", "tu", "il", "elle", "nous", "vous", "ils", "elles",
-           "suis", "es", "est", "sommes", "etes", "ai", "as", "avons", "ont",
-           "pas", "ne", "oui", "non", "merci", "bonjour", "bonsoir", "salut",
-           "au revoir", "s'il vous plait", "pardon", "excusez-moi",
-           "bon", "mauvais", "grand", "petit", "nouveau", "vieux",
-           "maison", "ecole", "livre", "chien", "chat", "eau", "pain", "vin",
-           "fromage", "comment", "allez", "tres", "bien", "aussi", "peut-etre",
-           "voir", "faire", "dire", "venir", "prendre", "mettre", "parler",
-           "manger", "dormir", "lire", "ecrire", "vivre",
-           "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix",
-           "jour", "nuit", "heure", "matin", "soir",
-           "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"],
-    "es": ["yo", "tu", "el", "ella", "nosotros", "vosotros", "ellos", "ellas",
-           "soy", "eres", "es", "somos", "sois", "son",
-           "tengo", "tienes", "tiene", "tenemos", "teneis", "tienen",
-           "hola", "adios", "gracias", "por favor", "si", "no",
-           "bueno", "malo", "grande", "pequeno", "nuevo", "viejo",
-           "casa", "escuela", "libro", "perro", "gato", "dia", "noche",
-           "tiempo", "hora", "lunes", "martes", "miercoles", "jueves",
-           "viernes", "sabado", "domingo",
-           "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete",
-           "ocho", "nueve", "diez"],
-    "it": ["io", "tu", "lui", "lei", "noi", "voi", "loro",
-           "sono", "sei", "e", "siamo", "siete", "hanno", "ho", "hai",
-           "non", "si", "no", "ciao", "buongiorno", "buonasera", "grazie",
-           "prego", "per favore", "bene", "male", "grande", "piccolo",
-           "nuovo", "vecchio", "casa", "scuola", "libro", "gatto",
-           "giorno", "notte", "tempo", "ora",
-           "lunedi", "martedi", "mercoledi", "giovedi", "venerdi",
-           "sabato", "domenica",
-           "uno", "due", "tre", "quattro", "cinque", "sei", "sette",
-           "otto", "nove", "dieci"],
-    "pt": ["eu", "ele", "ela", "nos", "voce", "eles", "elas",
-           "sou", "eres", "e", "somos", "sao",
-           "tenho", "ten", "mae", "nao", "sim", "oi", "ola",
-           "obrigado", "obrigada", "por favor", "bem", "mal",
-           "grande", "pequeno", "novo", "velho",
-           "casa", "escola", "livro", "gato", "dia", "noite",
-           "tempo", "hora", "segunda", "terca", "quarta", "quinta",
-           "sexta", "sabado", "domingo",
-           "um", "dois", "tres", "quatro", "cinco", "seis", "sette",
-           "oito", "nove", "dez"],
+    "de": [
+        "ich",
+        "du",
+        "er",
+        "sie",
+        "wir",
+        "ihr",
+        "bin",
+        "ist",
+        "hat",
+        "haben",
+        "nicht",
+        "ja",
+        "nein",
+        "danke",
+        "guten",
+        "morgen",
+        "tag",
+        "abend",
+        "nacht",
+        "welt",
+        "hund",
+        "katze",
+        "auto",
+        "haus",
+        "schule",
+        "buch",
+        "gut",
+        "gross",
+        "klein",
+        "neu",
+        "alt",
+        "heiss",
+        "kalt",
+        "schnell",
+        "langsam",
+        "bitte",
+        "tschuss",
+        "eins",
+        "zwei",
+        "drei",
+        "vier",
+        "fuenf",
+        "sechs",
+        "sieben",
+        "acht",
+        "neun",
+        "zehn",
+    ],
+    "fr": [
+        "je",
+        "tu",
+        "il",
+        "elle",
+        "nous",
+        "vous",
+        "ils",
+        "elles",
+        "suis",
+        "es",
+        "est",
+        "sommes",
+        "etes",
+        "ai",
+        "as",
+        "avons",
+        "ont",
+        "pas",
+        "ne",
+        "oui",
+        "non",
+        "merci",
+        "bonjour",
+        "bonsoir",
+        "salut",
+        "au revoir",
+        "s'il vous plait",
+        "pardon",
+        "excusez-moi",
+        "bon",
+        "mauvais",
+        "grand",
+        "petit",
+        "nouveau",
+        "vieux",
+        "maison",
+        "ecole",
+        "livre",
+        "chien",
+        "chat",
+        "eau",
+        "pain",
+        "vin",
+        "fromage",
+        "comment",
+        "allez",
+        "tres",
+        "bien",
+        "aussi",
+        "peut-etre",
+        "voir",
+        "faire",
+        "dire",
+        "venir",
+        "prendre",
+        "mettre",
+        "parler",
+        "manger",
+        "dormir",
+        "lire",
+        "ecrire",
+        "vivre",
+        "trois",
+        "quatre",
+        "cinq",
+        "six",
+        "sept",
+        "huit",
+        "neuf",
+        "dix",
+        "jour",
+        "nuit",
+        "heure",
+        "matin",
+        "soir",
+        "lundi",
+        "mardi",
+        "mercredi",
+        "jeudi",
+        "vendredi",
+        "samedi",
+        "dimanche",
+    ],
+    "es": [
+        "yo",
+        "tu",
+        "el",
+        "ella",
+        "nosotros",
+        "vosotros",
+        "ellos",
+        "ellas",
+        "soy",
+        "eres",
+        "es",
+        "somos",
+        "sois",
+        "son",
+        "tengo",
+        "tienes",
+        "tiene",
+        "tenemos",
+        "teneis",
+        "tienen",
+        "hola",
+        "adios",
+        "gracias",
+        "por favor",
+        "si",
+        "no",
+        "bueno",
+        "malo",
+        "grande",
+        "pequeno",
+        "nuevo",
+        "viejo",
+        "casa",
+        "escuela",
+        "libro",
+        "perro",
+        "gato",
+        "dia",
+        "noche",
+        "tiempo",
+        "hora",
+        "lunes",
+        "martes",
+        "miercoles",
+        "jueves",
+        "viernes",
+        "sabado",
+        "domingo",
+        "uno",
+        "dos",
+        "tres",
+        "cuatro",
+        "cinco",
+        "seis",
+        "siete",
+        "ocho",
+        "nueve",
+        "diez",
+    ],
+    "it": [
+        "io",
+        "tu",
+        "lui",
+        "lei",
+        "noi",
+        "voi",
+        "loro",
+        "sono",
+        "sei",
+        "e",
+        "siamo",
+        "siete",
+        "hanno",
+        "ho",
+        "hai",
+        "non",
+        "si",
+        "no",
+        "ciao",
+        "buongiorno",
+        "buonasera",
+        "grazie",
+        "prego",
+        "per favore",
+        "bene",
+        "male",
+        "grande",
+        "piccolo",
+        "nuovo",
+        "vecchio",
+        "casa",
+        "scuola",
+        "libro",
+        "gatto",
+        "giorno",
+        "notte",
+        "tempo",
+        "ora",
+        "lunedi",
+        "martedi",
+        "mercoledi",
+        "giovedi",
+        "venerdi",
+        "sabato",
+        "domenica",
+        "uno",
+        "due",
+        "tre",
+        "quattro",
+        "cinque",
+        "sei",
+        "sette",
+        "otto",
+        "nove",
+        "dieci",
+    ],
+    "pt": [
+        "eu",
+        "ele",
+        "ela",
+        "nos",
+        "voce",
+        "eles",
+        "elas",
+        "sou",
+        "eres",
+        "e",
+        "somos",
+        "sao",
+        "tenho",
+        "ten",
+        "mae",
+        "nao",
+        "sim",
+        "oi",
+        "ola",
+        "obrigado",
+        "obrigada",
+        "por favor",
+        "bem",
+        "mal",
+        "grande",
+        "pequeno",
+        "novo",
+        "velho",
+        "casa",
+        "escola",
+        "livro",
+        "gato",
+        "dia",
+        "noite",
+        "tempo",
+        "hora",
+        "segunda",
+        "terca",
+        "quarta",
+        "quinta",
+        "sexta",
+        "sabado",
+        "domingo",
+        "um",
+        "dois",
+        "tres",
+        "quatro",
+        "cinco",
+        "seis",
+        "sette",
+        "oito",
+        "nove",
+        "dez",
+    ],
 }
 
 
@@ -110,7 +367,7 @@ class UnifiedPhonemeEncoder:
         }
         self._current_language = "en"
 
-    def encode(self, text: str, language: Optional[str] = None) -> np.ndarray:
+    def encode(self, text: str, language: str | None = None) -> np.ndarray:
         """Convert text to phoneme ID array.
 
         Args:
@@ -125,7 +382,7 @@ class UnifiedPhonemeEncoder:
         self._current_language = lang
         return self._encoders[lang].encode(text)
 
-    def decode(self, ids: np.ndarray, language: Optional[str] = None) -> str:
+    def decode(self, ids: np.ndarray, language: str | None = None) -> str:
         """Convert phoneme ID array back to text string.
 
         Args:
@@ -139,7 +396,7 @@ class UnifiedPhonemeEncoder:
             raise ValueError(f"Unsupported language: {lang}")
         return self._encoders[lang].decode(ids)
 
-    def decode_phonemes(self, ids: np.ndarray, language: Optional[str] = None) -> list[str]:
+    def decode_phonemes(self, ids: np.ndarray, language: str | None = None) -> list[str]:
         """Convert phoneme ID array to phoneme string list.
 
         Args:
@@ -153,7 +410,7 @@ class UnifiedPhonemeEncoder:
             raise ValueError(f"Unsupported language: {lang}")
         return self._encoders[lang].decode_phonemes(ids)
 
-    def visualize(self, text: str, language: Optional[str] = None) -> str:
+    def visualize(self, text: str, language: str | None = None) -> str:
         """Visualize the encoding process for debugging.
 
         Args:
@@ -168,8 +425,7 @@ class UnifiedPhonemeEncoder:
         self._current_language = lang
         return self._encoders[lang].visualize(text)
 
-    def score_pronunciation(self, target: str, spoken: str,
-                           language: Optional[str] = None) -> dict:
+    def score_pronunciation(self, target: str, spoken: str, language: str | None = None) -> dict:
         """Score how well a spoken word matches the target pronunciation.
 
         Args:
@@ -184,7 +440,7 @@ class UnifiedPhonemeEncoder:
             raise ValueError(f"Unsupported language: {lang}")
         return self._encoders[lang].score_pronunciation(target, spoken)
 
-    def encode_batch(self, texts: list[str], language: Optional[str] = None) -> list[dict]:
+    def encode_batch(self, texts: list[str], language: str | None = None) -> list[dict]:
         """Batch encode multiple texts.
 
         Args:
@@ -205,13 +461,15 @@ class UnifiedPhonemeEncoder:
             phonemes = self.decode_phonemes(ids, language=lang)
             decoded = self.decode(ids, language=lang)
 
-            results.append({
-                "text": text,
-                "language": lang,
-                "phonemes": phonemes,
-                "ids": ids.flatten().tolist(),
-                "decoded": decoded,
-            })
+            results.append(
+                {
+                    "text": text,
+                    "language": lang,
+                    "phonemes": phonemes,
+                    "ids": ids.flatten().tolist(),
+                    "decoded": decoded,
+                }
+            )
 
         return results
 

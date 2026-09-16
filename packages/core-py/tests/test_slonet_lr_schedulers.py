@@ -2,32 +2,26 @@
 
 from __future__ import annotations
 
-import math
 import pytest
-import numpy as np
+
 from domain.training._internal.slonet import (
-    SloSGD,
-    SloAdam,
-    SloAdamW,
-    SloLRScheduler,
-    SloConstantLR,
-    SloStepLR,
-    SloCosineAnnealingLR,
-    SloReduceLROnPlateau,
-    WarmupCosineScheduler,
-    PolynomialDecayScheduler,
     LinearWarmupScheduler,
-    SloOneCycleLR,
+    PolynomialDecayScheduler,
+    SloConstantLR,
+    SloCosineAnnealingLR,
     SloCyclicLR,
+    SloOneCycleLR,
+    SloReduceLROnPlateau,
+    SloSGD,
+    SloStepLR,
+    WarmupCosineScheduler,
     create_scheduler,
 )
-
 
 # ── SloLRScheduler base ─────────────────────────────────────────────────────
 
 
 class TestSloLRSchedulerBase:
-
     def test_step_updates_lr(self):
         opt = SloSGD(lr=1.0)
         sched = SloConstantLR(opt)
@@ -59,7 +53,6 @@ class TestSloLRSchedulerBase:
 
 
 class TestSloConstantLRDetailed:
-
     def test_constant_after_steps(self):
         opt = SloSGD(lr=0.5)
         sched = SloConstantLR(opt)
@@ -72,7 +65,6 @@ class TestSloConstantLRDetailed:
 
 
 class TestSloStepLRDetailed:
-
     def test_step_decay(self):
         opt = SloSGD(lr=1.0)
         sched = SloStepLR(opt, step_size=3, gamma=0.5)
@@ -82,17 +74,16 @@ class TestSloStepLRDetailed:
         for _ in range(9):
             sched.step()
             lrs.append(sched.get_lr()[0])
-        assert lrs[0] == 1.0   # last_epoch=1, 1//3=0
-        assert lrs[1] == 1.0   # last_epoch=2, 2//3=0
-        assert lrs[2] == 0.5   # last_epoch=3, 3//3=1
-        assert lrs[3] == 0.5   # last_epoch=4, 4//3=1
+        assert lrs[0] == 1.0  # last_epoch=1, 1//3=0
+        assert lrs[1] == 1.0  # last_epoch=2, 2//3=0
+        assert lrs[2] == 0.5  # last_epoch=3, 3//3=1
+        assert lrs[3] == 0.5  # last_epoch=4, 4//3=1
 
 
 # ── SloCosineAnnealingLR ────────────────────────────────────────────────────
 
 
 class TestSloCosineAnnealingLRDetailed:
-
     def test_cosine_schedule(self):
         opt = SloSGD(lr=1.0)
         sched = SloCosineAnnealingLR(opt, T_max=10, eta_min=0.0)
@@ -110,7 +101,6 @@ class TestSloCosineAnnealingLRDetailed:
 
 
 class TestSloReduceLROnPlateauDetailed:
-
     def test_reduce_on_plateau(self):
         opt = SloSGD(lr=1.0)
         sched = SloReduceLROnPlateau(opt, patience=3, factor=0.5)
@@ -137,7 +127,9 @@ class TestSloReduceLROnPlateauDetailed:
     def test_load_state_dict(self):
         opt = SloSGD(lr=1.0)
         sched = SloReduceLROnPlateau(opt)
-        sched.load_state_dict({"best": 0.5, "num_bad_epochs": 2, "cooldown_counter": 0, "last_lr": 0.5})
+        sched.load_state_dict(
+            {"best": 0.5, "num_bad_epochs": 2, "cooldown_counter": 0, "last_lr": 0.5}
+        )
         assert sched.best == 0.5
         assert sched.num_bad_epochs == 2
 
@@ -146,7 +138,6 @@ class TestSloReduceLROnPlateauDetailed:
 
 
 class TestWarmupCosineSchedulerDetailed:
-
     def test_warmup_phase(self):
         opt = SloSGD(lr=1.0)
         sched = WarmupCosineScheduler(opt, warmup_steps=10, total_steps=100)
@@ -172,7 +163,6 @@ class TestWarmupCosineSchedulerDetailed:
 
 
 class TestPolynomialDecaySchedulerDetailed:
-
     def test_polynomial_decay(self):
         opt = SloSGD(lr=1.0)
         sched = PolynomialDecayScheduler(opt, total_steps=100, min_lr=0.0, power=1.0)
@@ -188,7 +178,6 @@ class TestPolynomialDecaySchedulerDetailed:
 
 
 class TestLinearWarmupSchedulerDetailed:
-
     def test_warmup_then_hold(self):
         opt = SloSGD(lr=1.0)
         sched = LinearWarmupScheduler(opt, warmup_steps=5, hold_steps=10, base_lr=1.0)
@@ -202,7 +191,9 @@ class TestLinearWarmupSchedulerDetailed:
 
     def test_warmup_then_cosine(self):
         opt = SloSGD(lr=1.0)
-        sched = LinearWarmupScheduler(opt, warmup_steps=5, hold_steps=0, base_lr=1.0, decay_type="cosine", total_steps=20)
+        sched = LinearWarmupScheduler(
+            opt, warmup_steps=5, hold_steps=0, base_lr=1.0, decay_type="cosine", total_steps=20
+        )
         lrs = []
         for _ in range(10):
             sched.step()
@@ -216,7 +207,6 @@ class TestLinearWarmupSchedulerDetailed:
 
 
 class TestSloOneCycleLRDetailed:
-
     def test_one_cycle_schedule(self):
         opt = SloSGD(lr=0.001)
         sched = SloOneCycleLR(opt, max_lr=1.0, total_steps=100, div_factor=25.0)
@@ -232,7 +222,6 @@ class TestSloOneCycleLRDetailed:
 
 
 class TestSloCyclicLRDetailed:
-
     def test_cyclic_schedule(self):
         opt = SloSGD(lr=0.001)
         sched = SloCyclicLR(opt, base_lr=0.001, max_lr=0.1, step_size_up=10)
@@ -248,7 +237,6 @@ class TestSloCyclicLRDetailed:
 
 
 class TestCreateSchedulerFactory:
-
     def test_all_types(self):
         opt = SloSGD(lr=0.1)
         types = ["constant", "cosine", "step", "polynomial", "warmup", "onecycle", "cyclic"]

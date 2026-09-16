@@ -11,10 +11,9 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, List
+from typing import Any
 
 import requests
-
 
 HF_API_BASE = "https://api-inference.huggingface.co/models"
 
@@ -24,7 +23,7 @@ class HFAPIConfig:
     """Configuration for HF Inference API."""
 
     model: str
-    api_key: Optional[str] = None
+    api_key: str | None = None
     timeout: int = 60
     max_new_tokens: int = 256
     temperature: float = 0.7
@@ -42,7 +41,7 @@ class HuggingFaceAPILoader:
         if self.api_key:
             self.headers["Authorization"] = f"Bearer {self.api_key}"
 
-    def _make_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _make_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Make request to HF Inference API."""
         url = f"{HF_API_BASE}/{self.config.model}"
         response = requests.post(
@@ -64,10 +63,10 @@ class HuggingFaceAPILoader:
     def generate(
         self,
         prompt: str,
-        max_new_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
-        repetition_penalty: Optional[float] = None,
+        max_new_tokens: int | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        repetition_penalty: float | None = None,
         **kwargs,
     ) -> str:
         """Generate text from prompt."""
@@ -94,9 +93,9 @@ class HuggingFaceAPILoader:
 
     def chat(
         self,
-        messages: List[Dict[str, str]],
-        max_new_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        messages: list[dict[str, str]],
+        max_new_tokens: int | None = None,
+        temperature: float | None = None,
         **kwargs,
     ) -> str:
         """Chat with the model using messages format."""
@@ -108,7 +107,7 @@ class HuggingFaceAPILoader:
             **kwargs,
         )
 
-    def _format_chat_prompt(self, messages: List[Dict[str, str]]) -> str:
+    def _format_chat_prompt(self, messages: list[dict[str, str]]) -> str:
         """Format chat messages into a prompt."""
         formatted = ""
         for msg in messages:
@@ -139,7 +138,7 @@ def create_api_client(model: str, **kwargs) -> HuggingFaceAPILoader:
 def generate_via_api(
     prompt: str,
     model: str = "gpt2",
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
     **kwargs,
 ) -> str:
     """Quick generate via HF API."""
@@ -148,9 +147,9 @@ def generate_via_api(
 
 
 def chat_via_api(
-    messages: List[Dict[str, str]],
+    messages: list[dict[str, str]],
     model: str = "gpt2",
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
     **kwargs,
 ) -> str:
     """Quick chat via HF API."""

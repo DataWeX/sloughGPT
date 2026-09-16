@@ -4,16 +4,15 @@ from __future__ import annotations
 
 import os
 import tempfile
-import pytest
-import numpy as np
-from domain.training._internal.token_tree import TokenTree, TrieNode, SPECIAL_TOKENS
 
+import pytest
+
+from domain.training._internal.token_tree import TokenTree, TrieNode
 
 # ── TrieNode ────────────────────────────────────────────────────────────────
 
 
 class TestTrieNode:
-
     def test_default(self):
         node = TrieNode()
         assert node.children == {}
@@ -37,7 +36,6 @@ class TestTrieNode:
 
 
 class TestTokenTreeInit:
-
     def test_default(self):
         tree = TokenTree()
         assert tree.vocab_size == 0
@@ -61,7 +59,6 @@ class TestTokenTreeInit:
 
 
 class TestTokenTreeTrain:
-
     def test_train(self):
         tree = TokenTree()
         tree.train(["hello world"], vocab_size=32)
@@ -120,7 +117,6 @@ class TestTokenTreeTrain:
 
 
 class TestTokenTreeSaveLoad:
-
     def test_save_load(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tree = TokenTree()
@@ -149,7 +145,6 @@ class TestTokenTreeSaveLoad:
 
 
 class TestTokenTreeMerges:
-
     def test_merges(self):
         tree = TokenTree()
         tree.train(["hello world hello world"], vocab_size=32)

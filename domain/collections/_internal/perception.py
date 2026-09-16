@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-
-import numpy as np
 from dataclasses import dataclass, field
 
-
-from .sources import Record, Source
-from .stores import Store, MemoryStore
+import numpy as np
 
 from .collector import Collector
-
+from .sources import Record, Source
+from .stores import MemoryStore, Store
 
 
 @dataclass
@@ -18,10 +15,18 @@ class PerceptionConfig:
     grid_size: tuple[int, int, int] = (64, 4, 64)
     center: tuple[int, int, int] = (32, 0, 32)
     radius: int = 15
-    material_map: dict[str, int] = field(default_factory=lambda: {
-        "text": 1, "code": 2, "image": 3, "audio": 4,
-        "news": 5, "question": 6, "answer": 7, "event": 8,
-    })
+    material_map: dict[str, int] = field(
+        default_factory=lambda: {
+            "text": 1,
+            "code": 2,
+            "image": 3,
+            "audio": 4,
+            "news": 5,
+            "question": 6,
+            "answer": 7,
+            "event": 8,
+        }
+    )
     energy_scale: float = 1.0
     decay_rate: float = 0.95
     max_records: int = 1000
@@ -72,7 +77,7 @@ class RecordToMaterial:
         r = self.config.radius
         text_hash = hash(record.content) % 1000
         angle = (text_hash / 1000.0) * 2 * np.pi
-        dist = (text_hash % r)
+        dist = text_hash % r
         x = int(cx + dist * np.cos(angle))
         z = int(cz + dist * np.sin(angle))
         x = max(0, min(x, self.config.grid_size[0] - 1))

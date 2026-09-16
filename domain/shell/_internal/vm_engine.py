@@ -13,14 +13,20 @@ Usage:
 
 from __future__ import annotations
 
-import time
 import logging
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from .vm import (
-    X86CPU, X86Assembler, InsFault, MemFault,
-    ProcessTable, ProcessControlBlock, ProcessState, Scheduler,
+    X86CPU,
+    InsFault,
+    MemFault,
+    ProcessControlBlock,
+    ProcessState,
+    ProcessTable,
+    Scheduler,
+    X86Assembler,
 )
 
 logger = logging.getLogger("slo.vm.engine")
@@ -28,9 +34,11 @@ logger = logging.getLogger("slo.vm.engine")
 
 # ── Event Types ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Breakpoint:
     """A breakpoint set at a specific address or condition."""
+
     address: int
     enabled: bool = True
     hit_count: int = 0
@@ -52,6 +60,7 @@ class Breakpoint:
 @dataclass
 class StepEvent:
     """Emitted after every instruction execution."""
+
     eip: int
     opcode: int
     registers: dict[str, int]
@@ -62,6 +71,7 @@ class StepEvent:
 @dataclass
 class BreakpointEvent:
     """Emitted when a breakpoint is hit."""
+
     breakpoint: Breakpoint
     eip: int
     registers: dict[str, int]
@@ -70,6 +80,7 @@ class BreakpointEvent:
 @dataclass
 class FaultEvent:
     """Emitted on a CPU fault."""
+
     fault_type: type
     message: str
     eip: int
@@ -79,6 +90,7 @@ class FaultEvent:
 @dataclass
 class SyscallEvent:
     """Emitted on a syscall instruction (INT 0x80)."""
+
     number: int
     args: dict[str, int]
     eip: int
@@ -87,6 +99,7 @@ class SyscallEvent:
 @dataclass
 class ExecutionTrace:
     """Complete trace of an execution run."""
+
     steps: list[StepEvent] = field(default_factory=list)
     breakpoints_hit: list[BreakpointEvent] = field(default_factory=list)
     faults: list[FaultEvent] = field(default_factory=list)
@@ -97,6 +110,7 @@ class ExecutionTrace:
 
 
 # ── I/O Devices ──────────────────────────────────────────────────────────────
+
 
 class DeviceBus:
     """Simple I/O device bus — maps port numbers to device handlers."""
@@ -170,6 +184,7 @@ class ConsoleDevice:
 
 
 # ── VMEngine ─────────────────────────────────────────────────────────────────
+
 
 class VMEngine:
     """
@@ -451,8 +466,9 @@ class VMEngine:
 
     # ── Breakpoints ──────────────────────────────────────────────────────
 
-    def set_breakpoint(self, address: int, label: str = "",
-                       condition: Callable[[], bool] | None = None) -> int:
+    def set_breakpoint(
+        self, address: int, label: str = "", condition: Callable[[], bool] | None = None
+    ) -> int:
         """Set a breakpoint. Returns breakpoint ID."""
         self._bp_counter += 1
         bp = Breakpoint(address=address, label=label, condition=condition)
@@ -466,11 +482,13 @@ class VMEngine:
         original.condition = lambda: True
         # Wrap to auto-disable
         orig_trigger = original.should_trigger
+
         def auto_disable():
             if orig_trigger():
                 original.enabled = False
                 return True
             return False
+
         original.should_trigger = auto_disable
         return bp_id
 
@@ -495,8 +513,13 @@ class VMEngine:
     def list_breakpoints(self) -> list[dict]:
         """List all breakpoints."""
         return [
-            {"id": bp_id, "address": bp.address, "label": bp.label,
-             "enabled": bp.enabled, "hit_count": bp.hit_count}
+            {
+                "id": bp_id,
+                "address": bp.address,
+                "label": bp.label,
+                "enabled": bp.enabled,
+                "hit_count": bp.hit_count,
+            }
             for bp_id, bp in self._breakpoints.items()
         ]
 
@@ -532,7 +555,7 @@ class VMEngine:
 
         # Check breakpoints before execution
         if not self._skip_breakpoint_check:
-            for bp_id, bp in self._breakpoints.items():
+            for _bp_id, bp in self._breakpoints.items():
                 if bp.address == eip and bp.should_trigger():
                     bp.hit_count += 1
                     bp_event = BreakpointEvent(
@@ -631,7 +654,7 @@ class VMEngine:
             while not self._halted and not self._break_requested:
                 # Check breakpoints
                 eip = self._cpu.eip
-                for bp_id, bp in self._breakpoints.items():
+                for _bp_id, bp in self._breakpoints.items():
                     if bp.address == eip and bp.should_trigger():
                         bp.hit_count += 1
                         bp_event = BreakpointEvent(
@@ -742,15 +765,13 @@ class VMEngine:
             "syscalls": len(t.syscalls),
             "exit_reason": t.exit_reason,
             "instructions_per_ms": (
-                round(t.total_instructions / t.total_time_ms, 1)
-                if t.total_time_ms > 0 else 0
+                round(t.total_instructions / t.total_time_ms, 1) if t.total_time_ms > 0 else 0
             ),
         }
 
     # ── Process Management ───────────────────────────────────────────────
 
-    def create_process(self, name: str = "unnamed",
-                       priority: int = 0) -> ProcessControlBlock:
+    def create_process(self, name: str = "unnamed", priority: int = 0) -> ProcessControlBlock:
         """Create a new process."""
         return self._process_table.create(name=name, priority=priority)
 
@@ -788,8 +809,24 @@ class VMEngine:
         """Estimate instruction length without executing."""
         if opcode in (0x90, 0xF4, 0xC3, 0xCC, 0xFA, 0xFB, 0xFC, 0xFD):
             return 1
-        if opcode in (0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57,
-                       0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F):
+        if opcode in (
+            0x50,
+            0x51,
+            0x52,
+            0x53,
+            0x54,
+            0x55,
+            0x56,
+            0x57,
+            0x58,
+            0x59,
+            0x5A,
+            0x5B,
+            0x5C,
+            0x5D,
+            0x5E,
+            0x5F,
+        ):
             return 1
         if opcode in (0x66, 0xF0, 0xF2, 0xF3):
             return 2
@@ -830,12 +867,22 @@ class VMEngine:
             0xFB: "STI",
             0xFC: "CLD",
             0xFD: "STD",
-            0x50: "PUSH EAX", 0x51: "PUSH ECX", 0x52: "PUSH EDX",
-            0x53: "PUSH EBX", 0x54: "PUSH ESP", 0x55: "PUSH EBP",
-            0x56: "PUSH ESI", 0x57: "PUSH EDI",
-            0x58: "POP EAX", 0x59: "POP ECX", 0x5A: "POP EDX",
-            0x5B: "POP EBX", 0x5C: "POP ESP", 0x5D: "POP EBP",
-            0x5E: "POP ESI", 0x5F: "POP EDI",
+            0x50: "PUSH EAX",
+            0x51: "PUSH ECX",
+            0x52: "PUSH EDX",
+            0x53: "PUSH EBX",
+            0x54: "PUSH ESP",
+            0x55: "PUSH EBP",
+            0x56: "PUSH ESI",
+            0x57: "PUSH EDI",
+            0x58: "POP EAX",
+            0x59: "POP ECX",
+            0x5A: "POP EDX",
+            0x5B: "POP EBX",
+            0x5C: "POP ESP",
+            0x5D: "POP EBP",
+            0x5E: "POP ESI",
+            0x5F: "POP EDI",
         }
         return names.get(opcode, f"OP 0x{opcode:02X}")
 
@@ -862,7 +909,9 @@ class VMEngine:
             "flags": self.flags(),
             "stack": self.dump_memory(esp, 32) if stack_valid else "(invalid ESP)",
             "breakpoints": self.list_breakpoints(),
-            "trace_summary": self.get_trace_summary() if self._trace.total_instructions > 0 else None,
+            "trace_summary": self.get_trace_summary()
+            if self._trace.total_instructions > 0
+            else None,
         }
 
     def __repr__(self):

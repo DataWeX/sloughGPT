@@ -9,14 +9,15 @@ Provides:
 
 from __future__ import annotations
 
-import sys
 import importlib
 import importlib.util
 import logging
+import sys
 import time
-from pathlib import Path
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from pathlib import Path
+from typing import Any
 
 from .base import Addon
 
@@ -25,9 +26,11 @@ logger = logging.getLogger("slo.shell.addon_loader")
 
 # ── Module State ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ModuleInfo:
     """Metadata for a loaded kernel module."""
+
     name: str
     path: str
     version: str = "0.0.0"
@@ -42,6 +45,7 @@ class ModuleInfo:
 
 
 # ── Module Loader ─────────────────────────────────────────────────────────────
+
 
 class ModuleLoader:
     """
@@ -155,9 +159,7 @@ class ModuleLoader:
                     for pyc in pyc_dir.glob(f"{module_path.stem}*.pyc"):
                         pyc.unlink(missing_ok=True)
 
-            spec = importlib.util.spec_from_file_location(
-                module_key, str(module_path)
-            )
+            spec = importlib.util.spec_from_file_location(module_key, str(module_path))
             if spec is None or spec.loader is None:
                 raise ImportError(f"Cannot load module spec: {name}")
 

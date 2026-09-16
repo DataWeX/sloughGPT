@@ -1,17 +1,17 @@
 """Tests for per-user LoRA adapter store — creation, updates, merging, pruning."""
 
 import time
+
 import numpy as np
 import pytest
-from pathlib import Path
 
 from domain.feedback._internal.per_user_lora import (
     PerUserLoRAStore,
     UserAdapter,
 )
 
-
 # ── Fixtures ─────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def store(tmp_path):
@@ -45,8 +45,8 @@ def store_small(tmp_path):
 
 # ── UserAdapter dataclass ───────────────────────────────────────────────────
 
-class TestUserAdapter:
 
+class TestUserAdapter:
     def test_fields(self):
         adapter = UserAdapter(
             user_id="u1",
@@ -80,8 +80,8 @@ class TestUserAdapter:
 
 # ── Store initialization ────────────────────────────────────────────────────
 
-class TestStoreInit:
 
+class TestStoreInit:
     def test_creates_directory(self, tmp_path):
         store_dir = tmp_path / "adapters"
         PerUserLoRAStore(store_path=str(store_dir), run_eval=False)
@@ -103,8 +103,8 @@ class TestStoreInit:
 
 # ── Adapter path safety ─────────────────────────────────────────────────────
 
-class TestAdapterPath:
 
+class TestAdapterPath:
     def test_safe_path(self, store):
         path = store._get_adapter_path("user/123")
         assert path.name == "user_123.npz"
@@ -116,8 +116,8 @@ class TestAdapterPath:
 
 # ── Create adapter ──────────────────────────────────────────────────────────
 
-class TestCreateAdapter:
 
+class TestCreateAdapter:
     def test_creates_new_adapter(self, store):
         adapter = store.create_adapter("user1")
         assert adapter.user_id == "user1"
@@ -155,8 +155,8 @@ class TestCreateAdapter:
 
 # ── Get adapter ─────────────────────────────────────────────────────────────
 
-class TestGetAdapter:
 
+class TestGetAdapter:
     def test_returns_none_for_missing(self, store):
         assert store.get_adapter("nonexistent") is None
 
@@ -184,8 +184,8 @@ class TestGetAdapter:
 
 # ── Update adapter ──────────────────────────────────────────────────────────
 
-class TestUpdateAdapter:
 
+class TestUpdateAdapter:
     def test_increments_feedback_count(self, store):
         store.create_adapter("user1")
         store.update_adapter("user1", feedback_signal=1.0)
@@ -238,8 +238,8 @@ class TestUpdateAdapter:
 
 # ── Apply adapter to logits ─────────────────────────────────────────────────
 
-class TestApplyAdapterToLogits:
 
+class TestApplyAdapterToLogits:
     def test_no_adapter_returns_unchanged(self, store):
         logits = np.zeros((1, 16), dtype=np.float32)
         result = store.apply_adapter_to_logits("missing", logits)
@@ -269,8 +269,8 @@ class TestApplyAdapterToLogits:
 
 # ── Merge adapters ──────────────────────────────────────────────────────────
 
-class TestMergeAdapters:
 
+class TestMergeAdapters:
     def test_merge_single(self, store):
         store.create_adapter("user1")
         result = store.merge_adapters(["user1"])
@@ -306,8 +306,8 @@ class TestMergeAdapters:
 
 # ── Get all adapters ────────────────────────────────────────────────────────
 
-class TestGetAllAdapters:
 
+class TestGetAllAdapters:
     def test_empty_store(self, store):
         assert store.get_all_adapters() == []
 
@@ -323,8 +323,13 @@ class TestGetAllAdapters:
         store.create_adapter("u1")
         meta = store.get_all_adapters()[0]
         expected_keys = {
-            "user_id", "rank", "alpha", "model_dim",
-            "created_at", "updated_at", "feedback_count",
+            "user_id",
+            "rank",
+            "alpha",
+            "model_dim",
+            "created_at",
+            "updated_at",
+            "feedback_count",
         }
         assert set(meta.keys()) == expected_keys
 
@@ -339,8 +344,8 @@ class TestGetAllAdapters:
 
 # ── Stats ───────────────────────────────────────────────────────────────────
 
-class TestGetStats:
 
+class TestGetStats:
     def test_empty_stats(self, store):
         stats = store.get_stats()
         assert stats["total_users"] == 0
@@ -364,8 +369,8 @@ class TestGetStats:
 
 # ── Delete adapter ──────────────────────────────────────────────────────────
 
-class TestDeleteAdapter:
 
+class TestDeleteAdapter:
     def test_deletes_from_cache_and_disk(self, store):
         store.create_adapter("u1")
         assert store.get_adapter("u1") is not None
@@ -384,8 +389,8 @@ class TestDeleteAdapter:
 
 # ── Quality adapters ────────────────────────────────────────────────────────
 
-class TestQualityAdapters:
 
+class TestQualityAdapters:
     def test_filters_by_feedback_count(self, store):
         store.create_adapter("u1")
         store.create_adapter("u2")
@@ -419,8 +424,8 @@ class TestQualityAdapters:
 
 # ── Prune low quality ──────────────────────────────────────────────────────
 
-class TestPruneLowQuality:
 
+class TestPruneLowQuality:
     def test_prunes_by_feedback_count(self, store):
         store.create_adapter("u1")
         store.create_adapter("u2")
@@ -448,8 +453,8 @@ class TestPruneLowQuality:
 
 # ── Reset adapter ───────────────────────────────────────────────────────────
 
-class TestResetAdapter:
 
+class TestResetAdapter:
     def test_reset_clears_feedback_count(self, store):
         store.create_adapter("u1")
         for _ in range(10):
@@ -476,8 +481,8 @@ class TestResetAdapter:
 
 # ── Aggregate best adapters ─────────────────────────────────────────────────
 
-class TestAggregateBestAdapters:
 
+class TestAggregateBestAdapters:
     def test_no_adapters_returns_error(self, store):
         result = store.aggregate_best_adapters(top_k=5, min_feedback_count=1)
         assert "error" in result
@@ -500,7 +505,7 @@ class TestAggregateBestAdapters:
     def test_creates_output_file(self, store):
         store.create_adapter("u1")
         store.update_adapter("u1", feedback_signal=1.0)
-        result = store.aggregate_best_adapters(
+        store.aggregate_best_adapters(
             top_k=1,
             min_feedback_count=1,
             output_name="test_agg",
@@ -527,8 +532,8 @@ class TestAggregateBestAdapters:
 
 # ── Auto-management ─────────────────────────────────────────────────────────
 
-class TestAutoManage:
 
+class TestAutoManage:
     def test_auto_prune_triggers(self, store_small):
         for i in range(5):
             store_small.create_adapter(f"u{i}")
@@ -550,8 +555,8 @@ class TestAutoManage:
 
 # ── Concurrency ─────────────────────────────────────────────────────────────
 
-class TestConcurrency:
 
+class TestConcurrency:
     def test_concurrent_create(self, store):
         import threading
 
@@ -594,8 +599,8 @@ class TestConcurrency:
 
 # ── Persistence round-trip ──────────────────────────────────────────────────
 
-class TestPersistence:
 
+class TestPersistence:
     def test_survives_store_recreation(self, tmp_path):
         s1 = PerUserLoRAStore(
             store_path=str(tmp_path),

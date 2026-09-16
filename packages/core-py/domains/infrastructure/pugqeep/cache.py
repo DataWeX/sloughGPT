@@ -19,7 +19,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, Tuple
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -28,12 +28,14 @@ logger = logging.getLogger("slo.pugqeep")
 
 class EvictionPolicy(Enum):
     """Cache eviction strategies."""
+
     LRU = "lru"  # Least Recently Used
     LFU = "lfu"  # Least Frequently Used
 
 
 class Tier(Enum):
     """Storage tiers from coldest to hottest."""
+
     DISK = "disk"
     HOT = "hot"
     MEMORY = "memory"
@@ -42,6 +44,7 @@ class Tier(Enum):
 @dataclass
 class CacheEntry:
     """A cached item with metadata."""
+
     key: str
     tier: Tier
     data: Any = None
@@ -50,7 +53,7 @@ class CacheEntry:
     last_accessed: float = field(default_factory=time.time)
     access_count: int = 0
     pinned: bool = False  # don't evict pinned entries
-    ttl: Optional[float] = None  # time-to-live in seconds, None = forever
+    ttl: float | None = None  # time-to-live in seconds, None = forever
 
     def touch(self) -> None:
         """Update access metadata."""
@@ -67,6 +70,7 @@ class CacheEntry:
 @dataclass
 class CacheStats:
     """Cache statistics."""
+
     hits: int = 0
     misses: int = 0
     evictions: int = 0
@@ -101,10 +105,11 @@ class CacheStats:
 
 class Store(Protocol):
     """Protocol for storage backends."""
-    def get(self, key: str) -> Optional[Any]: ...
+
+    def get(self, key: str) -> Any | None: ...
     def put(self, key: str, value: Any) -> None: ...
     def remove(self, key: str) -> bool: ...
-    def list_keys(self) -> List[str]: ...
+    def list_keys(self) -> list[str]: ...
     def exists(self, key: str) -> bool: ...
     def size_bytes(self) -> int: ...
 
@@ -115,9 +120,9 @@ class MemoryStore:
     def __init__(self, max_size_bytes: int = 512 * 1024 * 1024):  # 512MB default
         self._max_size = max_size_bytes
         self._data: OrderedDict[str, Any] = OrderedDict()
-        self._sizes: Dict[str, int] = {}
+        self._sizes: dict[str, int] = {}
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         if key in self._data:
             self._data.move_to_end(key)
             return self._data[key]
@@ -136,7 +141,7 @@ class MemoryStore:
             return True
         return False
 
-    def list_keys(self) -> List[str]:
+    def list_keys(self) -> list[str]:
         return list(self._data.keys())
 
     def exists(self, key: str) -> bool:
@@ -145,7 +150,7 @@ class MemoryStore:
     def size_bytes(self) -> int:
         return sum(self._sizes.values())
 
-    def evict_lru(self, target_bytes: int) -> List[Tuple[str, Any]]:
+    def evict_lru(self, target_bytes: int) -> list[tuple[str, Any]]:
         """Evict least-recently-used entries to free space.
 
         Returns list of (key, data) tuples for evicted entries.
@@ -157,7 +162,7 @@ class MemoryStore:
             self._sizes.pop(key, None)
         return evicted
 
-    def evict_lfu(self, target_bytes: int, access_counts: Dict[str, int]) -> List[Tuple[str, Any]]:
+    def evict_lfu(self, target_bytes: int, access_counts: dict[str, int]) -> list[tuple[str, Any]]:
         """Evict least-frequently-used entries to free space.
 
         Returns list of (key, data) tuples for evicted entries.
@@ -191,7 +196,7 @@ class DiskStore:
         safe = key.replace("/", "_").replace("\\", "_")
         return self._dir / f"{safe}.data.npy"
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         meta_path = self._meta_path(key)
         data_path = self._data_path(key)
         if not meta_path.exists():
@@ -201,7 +206,7 @@ class DiskStore:
             return np.load(data_path, allow_pickle=False)
         return meta.get("value")
 
-    def put(self, key: str, value: Any, meta: Optional[dict] = None) -> None:
+    def put(self, key: str, value: Any, meta: dict | None = None) -> None:
         if isinstance(value, np.ndarray):
             np.save(self._data_path(key), value)
             meta_data = {"type": "ndarray", "shape": list(value.shape), "dtype": str(value.dtype)}
@@ -221,7 +226,7 @@ class DiskStore:
             removed = True
         return removed
 
-    def list_keys(self) -> List[str]:
+    def list_keys(self) -> list[str]:
         return [f.stem.replace(".meta", "") for f in self._dir.glob("*.meta.json")]
 
     def exists(self, key: str) -> bool:
@@ -237,7 +242,7 @@ class HotStore:
     def __init__(self, max_size_bytes: int = 128 * 1024 * 1024):  # 128MB default
         self._inner = MemoryStore(max_size_bytes)
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         return self._inner.get(key)
 
     def put(self, key: str, value: Any, size_bytes: int = 0) -> None:
@@ -246,7 +251,7 @@ class HotStore:
     def remove(self, key: str) -> bool:
         return self._inner.remove(key)
 
-    def list_keys(self) -> List[str]:
+    def list_keys(self) -> list[str]:
         return self._inner.list_keys()
 
     def exists(self, key: str) -> bool:
@@ -263,13 +268,15 @@ class TieredCache:
     Enforces size limits per tier with configurable eviction (LRU or LFU).
     """
 
-    def __init__(self,
-                 memory_max_mb: int = 512,
-                 hot_max_mb: int = 128,
-                 disk_dir: Optional[Path] = None,
-                 promote_threshold: int = 3,
-                 auto_promote: bool = True,
-                 eviction_policy: EvictionPolicy = EvictionPolicy.LRU):
+    def __init__(
+        self,
+        memory_max_mb: int = 512,
+        hot_max_mb: int = 128,
+        disk_dir: Path | None = None,
+        promote_threshold: int = 3,
+        auto_promote: bool = True,
+        eviction_policy: EvictionPolicy = EvictionPolicy.LRU,
+    ):
         """Initialize tiered cache.
 
         Args:
@@ -283,14 +290,14 @@ class TieredCache:
         self._memory = MemoryStore(memory_max_mb * 1024 * 1024)
         self._hot = HotStore(hot_max_mb * 1024 * 1024)
         self._disk = DiskStore(disk_dir) if disk_dir else None
-        self._entries: Dict[str, CacheEntry] = {}
+        self._entries: dict[str, CacheEntry] = {}
         self._promote_threshold = promote_threshold
         self._auto_promote = auto_promote
         self._eviction_policy = eviction_policy
         self._stats = CacheStats()
         self._lock = threading.RLock()  # protects _entries, _stats, and tier mutations
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get data, promoting to hotter tier if needed. Thread-safe."""
         with self._lock:
             entry = self._entries.get(key)
@@ -342,7 +349,7 @@ class TieredCache:
             self._stats.memory_misses += 1
             return None
 
-    def peek(self, key: str) -> Optional[Any]:
+    def peek(self, key: str) -> Any | None:
         """Get data without promoting or updating access stats.
 
         Thread-safe. Read-only — no tier changes, no access count update.
@@ -366,9 +373,15 @@ class TieredCache:
                     return data
             return None
 
-    def put(self, key: str, value: Any, tier: Tier = Tier.MEMORY,
-            size_bytes: int = 0, pinned: bool = False,
-            ttl: Optional[float] = None) -> None:
+    def put(
+        self,
+        key: str,
+        value: Any,
+        tier: Tier = Tier.MEMORY,
+        size_bytes: int = 0,
+        pinned: bool = False,
+        ttl: float | None = None,
+    ) -> None:
         """Store data at the specified tier. Thread-safe.
 
         Args:
@@ -422,7 +435,7 @@ class TieredCache:
         with self._lock:
             return key in self._entries
 
-    def list_keys(self, tier: Optional[Tier] = None) -> List[str]:
+    def list_keys(self, tier: Tier | None = None) -> list[str]:
         """List keys, optionally filtered by tier. Thread-safe."""
         with self._lock:
             if tier is None:
@@ -493,8 +506,11 @@ class TieredCache:
 
             if target_tier == Tier.MEMORY:
                 if self._eviction_policy == EvictionPolicy.LFU:
-                    counts = {k: e.access_count for k, e in self._entries.items()
-                              if e.tier == Tier.MEMORY and not e.pinned}
+                    counts = {
+                        k: e.access_count
+                        for k, e in self._entries.items()
+                        if e.tier == Tier.MEMORY and not e.pinned
+                    }
                     evicted = self._memory.evict_lfu(target_bytes, counts)
                 else:
                     evicted = self._memory.evict_lru(target_bytes)
@@ -511,8 +527,11 @@ class TieredCache:
 
             elif target_tier == Tier.HOT:
                 if self._eviction_policy == EvictionPolicy.LFU:
-                    counts = {k: e.access_count for k, e in self._entries.items()
-                              if e.tier == Tier.HOT and not e.pinned}
+                    counts = {
+                        k: e.access_count
+                        for k, e in self._entries.items()
+                        if e.tier == Tier.HOT and not e.pinned
+                    }
                     evicted = self._hot._inner.evict_lfu(target_bytes, counts)
                 else:
                     evicted = self._hot._inner.evict_lru(target_bytes)
@@ -538,8 +557,11 @@ class TieredCache:
         # Need to free ~10% headroom
         target = max_bytes // 10
         if self._eviction_policy == EvictionPolicy.LFU:
-            counts = {k: e.access_count for k, e in self._entries.items()
-                      if e.tier == Tier.MEMORY and not e.pinned}
+            counts = {
+                k: e.access_count
+                for k, e in self._entries.items()
+                if e.tier == Tier.MEMORY and not e.pinned
+            }
             evicted = self._memory.evict_lfu(target, counts)
         else:
             evicted = self._memory.evict_lru(target)
@@ -563,8 +585,11 @@ class TieredCache:
             return
         target = max_bytes // 10
         if self._eviction_policy == EvictionPolicy.LFU:
-            counts = {k: e.access_count for k, e in self._entries.items()
-                      if e.tier == Tier.HOT and not e.pinned}
+            counts = {
+                k: e.access_count
+                for k, e in self._entries.items()
+                if e.tier == Tier.HOT and not e.pinned
+            }
             evicted = self._hot._inner.evict_lfu(target, counts)
         else:
             evicted = self._hot._inner.evict_lru(target)

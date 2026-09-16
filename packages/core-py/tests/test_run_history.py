@@ -3,9 +3,9 @@
 Covers: start, append_log, set_tasks, complete, fail, get, list_runs, clear,
 pruning, singleton, safe_id validation. Uses temp directory for MogDB.
 """
+
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -16,7 +16,11 @@ if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
 from domain.agents._internal.run_history import (
-    AgentRunStore, _new_run_id, set_mogdb_path, reset_mogdb, reset_agent_run_store,
+    AgentRunStore,
+    _new_run_id,
+    reset_agent_run_store,
+    reset_mogdb,
+    set_mogdb_path,
 )
 
 
@@ -116,7 +120,7 @@ class TestAgentRunStore:
         db_path = str(tmp_path / "prune_test")
         set_mogdb_path(db_path)
         s = AgentRunStore(db_path=db_path, max_runs=3)
-        ids = [s.start(goal=f"G{i}") for i in range(5)]
+        [s.start(goal=f"G{i}") for i in range(5)]
         runs = s.list_runs()
         assert len(runs) <= 3
         reset_agent_run_store()
@@ -128,7 +132,7 @@ class TestAgentRunStore:
 
     def test_list_runs_newest_first(self, store):
         rid1 = store.start(goal="first")
-        rid2 = store.start(goal="second")
+        store.start(goal="second")
         rid3 = store.start(goal="third")
         runs = store.list_runs()
         assert len(runs) == 3
@@ -150,9 +154,13 @@ class TestAgentRunStore:
 
     def test_complete_with_tasks(self, store):
         rid = store.start(goal="test")
-        store.complete(rid, response="done", tasks=[
-            {"id": "t1", "status": "completed"},
-        ])
+        store.complete(
+            rid,
+            response="done",
+            tasks=[
+                {"id": "t1", "status": "completed"},
+            ],
+        )
         record = store.get(rid)
         assert record["status"] == "completed"
         assert record["response"] == "done"

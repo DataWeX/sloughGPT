@@ -88,7 +88,7 @@ class EpisodicMemory:
         """Episodes in insertion order regardless of buffer wrap state."""
         if len(self._episodes) < self.capacity or self._head == 0:
             return list(self._episodes)
-        return self._episodes[self._head:] + self._episodes[:self._head]
+        return self._episodes[self._head :] + self._episodes[: self._head]
 
     def recall(self, k: int = 5, by_reward: bool = False) -> list[Episode]:
         """
@@ -177,7 +177,7 @@ class EpisodicMemory:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "EpisodicMemory":
+    def from_dict(cls, data: dict[str, Any]) -> EpisodicMemory:
         """
         Rebuild a buffer from :meth:`to_dict` output.
 
@@ -252,14 +252,16 @@ class WorldMemory:
             group_id: donor's tribe id.
             donor_id: donor baby's entity id.
         """
-        self._episodes.append(WorldEpisode(
-            features=np.asarray(features, dtype=np.float32).copy(),
-            action=tuple(float(a) for a in action),
-            reward=float(reward),
-            tick=int(tick),
-            group_id=int(group_id),
-            donor_id=int(donor_id),
-        ))
+        self._episodes.append(
+            WorldEpisode(
+                features=np.asarray(features, dtype=np.float32).copy(),
+                action=tuple(float(a) for a in action),
+                reward=float(reward),
+                tick=int(tick),
+                group_id=int(group_id),
+                donor_id=int(donor_id),
+            )
+        )
 
     def consolidate(
         self,
@@ -283,8 +285,9 @@ class WorldMemory:
         if k <= 0:
             return 0
         for e in memory.recall(k, by_reward=True):
-            self.record(e.features, e.action, e.reward, e.tick,
-                        group_id=group_id, donor_id=donor_id)
+            self.record(
+                e.features, e.action, e.reward, e.tick, group_id=group_id, donor_id=donor_id
+            )
         return min(k, len(memory))
 
     def recall(
@@ -379,7 +382,7 @@ class WorldMemory:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "WorldMemory":
+    def from_dict(cls, data: dict[str, Any]) -> WorldMemory:
         """
         Rebuild a reservoir from :meth:`to_dict` output.
 

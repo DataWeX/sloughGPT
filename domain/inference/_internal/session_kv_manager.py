@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import threading
 import time as _time
-from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -21,13 +21,13 @@ class SessionKVManager:
     duplicated across SloNetChatProvider's construction paths.
     """
 
-    kv_states: Dict[str, Any] = field(default_factory=dict)
-    kv_last_access: Dict[str, float] = field(default_factory=dict)
+    kv_states: dict[str, Any] = field(default_factory=dict)
+    kv_last_access: dict[str, float] = field(default_factory=dict)
     kv_ttl: float = 3600.0  # 1 hour default TTL for idle sessions
     kv_max_sessions: int = 64  # LRU cap on concurrent sessions
     lock: threading.Lock = field(default_factory=threading.Lock)
 
-    def get_session(self, session_id: str) -> Optional[Any]:
+    def get_session(self, session_id: str) -> Any | None:
         """Get KV state for a session, updating last access time."""
         with self.lock:
             state = self.kv_states.get(session_id)
@@ -58,19 +58,19 @@ class SessionKVManager:
             self.kv_last_access.clear()
             return n
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get KV cache statistics."""
         with self.lock:
             n_sessions = len(self.kv_states)
             state_sizes = {}
             for sid, state in self.kv_states.items():
-                if hasattr(state, 'k') and hasattr(state, 'v'):
+                if hasattr(state, "k") and hasattr(state, "v"):
                     state_sizes[sid] = {
-                        'k_shape': list(state.k.shape) if hasattr(state.k, 'shape') else None,
-                        'v_shape': list(state.v.shape) if hasattr(state.v, 'shape') else None,
+                        "k_shape": list(state.k.shape) if hasattr(state.k, "shape") else None,
+                        "v_shape": list(state.v.shape) if hasattr(state.v, "shape") else None,
                     }
                 else:
-                    state_sizes[sid] = {'type': type(state).__name__}
+                    state_sizes[sid] = {"type": type(state).__name__}
 
             return {
                 "active_sessions": n_sessions,
@@ -79,7 +79,8 @@ class SessionKVManager:
                 "ttl_seconds": self.kv_ttl,
                 "oldest_session_age": (
                     max(self.kv_last_access.values()) - min(self.kv_last_access.values())
-                    if len(self.kv_last_access) > 1 else 0.0
+                    if len(self.kv_last_access) > 1
+                    else 0.0
                 ),
             }
 
@@ -87,19 +88,18 @@ class SessionKVManager:
         """Remove KV states for sessions idle longer than kv_ttl seconds."""
         now = _time.monotonic()
         with self.lock:
-            stale = [
-                sid for sid, ts in self.kv_last_access.items()
-                if now - ts > self.kv_ttl
-            ]
+            stale = [sid for sid, ts in self.kv_last_access.items() if now - ts > self.kv_ttl]
             for sid in stale:
                 self.kv_states.pop(sid, None)
                 self.kv_last_access.pop(sid, None)
             if stale:
                 from domain.infrastructure._internal.structured_log import StructuredLogger
+
                 logger = StructuredLogger("slo.inference.kv_cache")
                 logger.info(
                     "Evicted %d stale KV sessions (TTL=%.0fs)",
-                    len(stale), self.kv_ttl,
+                    len(stale),
+                    self.kv_ttl,
                     extra={"tag": "INF"},
                 )
             return len(stale)
@@ -114,8 +114,7 @@ class SessionKVManager:
             return
 
         evictable = {
-            sid: ts for sid, ts in self.kv_last_access.items()
-            if sid != current_session_id
+            sid: ts for sid, ts in self.kv_last_access.items() if sid != current_session_id
         }
         if not evictable:
             return
@@ -124,9 +123,11 @@ class SessionKVManager:
         self.kv_states.pop(lru_id, None)
         self.kv_last_access.pop(lru_id, None)
         from domain.infrastructure._internal.structured_log import StructuredLogger
+
         logger = StructuredLogger("slo.inference.kv_cache")
         logger.info(
             "Evicted LRU session %s (max=%d)",
-            lru_id, self.kv_max_sessions,
+            lru_id,
+            self.kv_max_sessions,
             extra={"tag": "INF"},
         )

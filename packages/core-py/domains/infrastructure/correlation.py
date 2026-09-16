@@ -1,24 +1,16 @@
-"""
-Correlation ID context variable — shared across core and API layers.
+"""Backward-compatibility shim."""
 
-Core uses this to include request correlation IDs in log records.
-API layer sets it per-request via middleware.
-"""
+from domain.infrastructure._internal.correlation import *  # noqa: F401,F403
 
-from __future__ import annotations
+try:
+    from domain.infrastructure._internal.correlation import __all__  # noqa: F401
+except ImportError:
+    pass
+import sys as _sys
 
-import contextvars
-
-_correlation_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "_correlation_id", default=None,
-)
-
-
-def set_correlation_id(cid: str | None) -> None:
-    """Set the current request's correlation ID."""
-    _correlation_id.set(cid)
-
-
-def get_correlation_id() -> str | None:
-    """Return the current request's correlation ID, or ``None``."""
-    return _correlation_id.get()
+_mod = _sys.modules[__name__]
+_real = _sys.modules.get("domain.infrastructure._internal.correlation")
+if _real is not None:
+    for _k in dir(_real):
+        if not _k.startswith("__"):
+            setattr(_mod, _k, getattr(_real, _k))

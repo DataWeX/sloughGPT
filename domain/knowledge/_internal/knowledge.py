@@ -17,18 +17,19 @@ Storage backed by VectorStore (InMemory/ChromaDB/Pinecone) instead of JSON files
 
 from __future__ import annotations
 
-import re
-import json
-import time
-import math
 import hashlib
+import json
 import logging
+import math
+import re
 import threading
-from typing import Optional, Any
+import time
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from typing import Any
 
 logger = logging.getLogger("slo.learner.knowledge")
+
 
 def _find_repo_root(start: Path) -> Path:
     for parent in start.parents:
@@ -37,6 +38,7 @@ def _find_repo_root(start: Path) -> Path:
         if (parent / "pyproject.toml").exists() and (parent / "apps").is_dir():
             return parent
     return start.parents[min(4, len(start.parents) - 1)]
+
 
 _REPO_ROOT = _find_repo_root(Path(__file__).resolve())
 KNOWLEDGE_DIR = _REPO_ROOT / "data" / "knowledge"
@@ -57,9 +59,11 @@ MAX_ARTICLE_TOKENS = 2048
 # Data
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class KnowledgeFact:
     """A single knowledge fact."""
+
     content: str
     topic: str = "general"
     source: str = "manual"
@@ -82,16 +86,18 @@ class FeedSubscription:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _topic_slug(topic: str) -> str:
     """Normalize a topic string to a filesystem-safe slug."""
     s = topic.lower().strip()
-    s = re.sub(r'[^a-z0-9]+', '_', s)
+    s = re.sub(r"[^a-z0-9]+", "_", s)
     return s[:64]
 
 
 # ---------------------------------------------------------------------------
 # Document chunking strategies
 # ---------------------------------------------------------------------------
+
 
 def chunk_by_fixed_size(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
     """Split text into fixed-size chunks with optional overlap.
@@ -139,7 +145,7 @@ def chunk_by_paragraph(text: str, max_chunk_size: int = 1000) -> list[str]:
         return []
 
     # Split on paragraph boundaries
-    paragraphs = re.split(r'\n\s*\n', text.strip())
+    paragraphs = re.split(r"\n\s*\n", text.strip())
 
     chunks = []
     current = ""
@@ -176,16 +182,16 @@ def chunk_by_heading(text: str, max_chunk_size: int = 1500) -> list[str]:
         return []
 
     # Split on heading lines
-    lines = text.strip().split('\n')
+    lines = text.strip().split("\n")
     sections = []
     current_heading = ""
     current_content = []
 
     for line in lines:
-        if re.match(r'^#{1,3}\s+', line):
+        if re.match(r"^#{1,3}\s+", line):
             # Save previous section
             if current_heading or current_content:
-                content = '\n'.join(current_content).strip()
+                content = "\n".join(current_content).strip()
                 if content:
                     sections.append(f"{current_heading}\n{content}" if current_heading else content)
             current_heading = line.strip()
@@ -195,7 +201,7 @@ def chunk_by_heading(text: str, max_chunk_size: int = 1500) -> list[str]:
 
     # Save last section
     if current_heading or current_content:
-        content = '\n'.join(current_content).strip()
+        content = "\n".join(current_content).strip()
         if content:
             sections.append(f"{current_heading}\n{content}" if current_heading else content)
 
@@ -237,7 +243,7 @@ def chunk_by_semantic(text: str, max_chunk_size: int = 800, min_chunk_size: int 
         return []
 
     # Split into sentences
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     if len(sentences) <= 2:
         return [text.strip()]
 
@@ -246,7 +252,7 @@ def chunk_by_semantic(text: str, max_chunk_size: int = 800, min_chunk_size: int 
 
     for i in range(1, len(sentences)):
         sent = sentences[i]
-        current_text = ' '.join(current_chunk)
+        current_text = " ".join(current_chunk)
         current_len = len(current_text)
         sent_len = len(sent)
 
@@ -257,7 +263,7 @@ def chunk_by_semantic(text: str, max_chunk_size: int = 800, min_chunk_size: int 
                 current_chunk = [sent]
             else:
                 current_chunk.append(sent)
-                chunks.append(' '.join(current_chunk))
+                chunks.append(" ".join(current_chunk))
                 current_chunk = []
             continue
 
@@ -285,7 +291,7 @@ def chunk_by_semantic(text: str, max_chunk_size: int = 800, min_chunk_size: int 
 
     # Final chunk
     if current_chunk:
-        final = ' '.join(current_chunk).strip()
+        final = " ".join(current_chunk).strip()
         if final:
             chunks.append(final)
 
@@ -312,9 +318,9 @@ def chunk_text(text: str, strategy: str = "auto", **kwargs) -> list[str]:
 
     if strategy == "auto":
         # Auto-select based on content
-        if re.search(r'^#{1,3}\s+', text, re.MULTILINE):
+        if re.search(r"^#{1,3}\s+", text, re.MULTILINE):
             return chunk_by_heading(text, **kwargs)
-        elif '\n\n' in text and text.count('\n\n') >= 3:
+        elif "\n\n" in text and text.count("\n\n") >= 3:
             return chunk_by_paragraph(text, **kwargs)
         elif len(text) > 2000:
             return chunk_by_semantic(text, **kwargs)
@@ -343,7 +349,7 @@ def _extract_facts_from_text(text: str) -> list[str]:
         return []
 
     # Split into sentences
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
 
     facts = []
     for sent in sentences:
@@ -352,34 +358,52 @@ def _extract_facts_from_text(text: str) -> list[str]:
             continue
 
         # Skip questions
-        if sent.startswith(('?', 'What', 'How', 'Why', 'When', 'Where', 'Who', 'Is', 'Are', 'Do', 'Does', 'Can', 'Could', 'Would', 'Should')):
+        if sent.startswith(
+            (
+                "?",
+                "What",
+                "How",
+                "Why",
+                "When",
+                "Where",
+                "Who",
+                "Is",
+                "Are",
+                "Do",
+                "Does",
+                "Can",
+                "Could",
+                "Would",
+                "Should",
+            )
+        ):
             continue
 
         # Skip imperative (instructions/commands)
-        if sent.startswith(('Try', 'Consider', 'Remember', 'Note', 'Make sure', 'Ensure')):
+        if sent.startswith(("Try", "Consider", "Remember", "Note", "Make sure", "Ensure")):
             continue
 
         # Skip very short or exclamatory
-        if len(sent) < 25 or sent.endswith('!'):
+        if len(sent) < 25 or sent.endswith("!"):
             continue
 
         # Likely factual if it contains declarative patterns
         is_fact = False
 
         # "X is/are/was/were Y"
-        if re.search(r'\b\w+\s+(is|are|was|were)\s+\w+', sent, re.I):
+        if re.search(r"\b\w+\s+(is|are|was|were)\s+\w+", sent, re.I):
             is_fact = True
 
         # "X has/have/had Y"
-        if re.search(r'\b\w+\s+(has|have|had)\s+\w+', sent, re.I):
+        if re.search(r"\b\w+\s+(has|have|had)\s+\w+", sent, re.I):
             is_fact = True
 
         # Contains numbers/dates (often factual)
-        if re.search(r'\d{4}|\d+\.\d+|\d+%', sent):
+        if re.search(r"\d{4}|\d+\.\d+|\d+%", sent):
             is_fact = True
 
         # "X can/must/should Y"
-        if re.search(r'\b\w+\s+(can|must|should|may|might)\s+\w+', sent, re.I):
+        if re.search(r"\b\w+\s+(can|must|should|may|might)\s+\w+", sent, re.I):
             is_fact = True
 
         if is_fact:
@@ -390,12 +414,41 @@ def _extract_facts_from_text(text: str) -> list[str]:
 
 def _extract_topics(text: str, max_topics: int = 5) -> list[str]:
     """Extract likely topic keywords from text via simple TF-like scoring."""
-    words = re.findall(r'[a-zA-Z][a-zA-Z-]{2,}', text.lower())
+    words = re.findall(r"[a-zA-Z][a-zA-Z-]{2,}", text.lower())
     stopwords = {
-        "the", "and", "for", "are", "but", "not", "you", "all", "can",
-        "had", "her", "was", "one", "our", "out", "has", "have", "been",
-        "some", "them", "than", "what", "when", "who", "will", "with",
-        "about", "from", "they", "that", "this", "which", "their",
+        "the",
+        "and",
+        "for",
+        "are",
+        "but",
+        "not",
+        "you",
+        "all",
+        "can",
+        "had",
+        "her",
+        "was",
+        "one",
+        "our",
+        "out",
+        "has",
+        "have",
+        "been",
+        "some",
+        "them",
+        "than",
+        "what",
+        "when",
+        "who",
+        "will",
+        "with",
+        "about",
+        "from",
+        "they",
+        "that",
+        "this",
+        "which",
+        "their",
     }
     counts: dict[str, float] = {}
     for w in words:
@@ -408,21 +461,28 @@ def _extract_topics(text: str, max_topics: int = 5) -> list[str]:
 def _scrape_article(url: str, timeout: float = 15) -> str:
     """Fetch a URL and extract readable article text."""
     import httpx
+
     try:
-        resp = httpx.get(url, timeout=timeout, follow_redirects=True,
-                         headers={"User-Agent": "Mozilla/5.0"})
+        resp = httpx.get(
+            url, timeout=timeout, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}
+        )
         resp.raise_for_status()
         import trafilatura
-        text = trafilatura.extract(resp.text, include_tables=False, include_images=False,
-                                   no_fallback=False)
+
+        text = trafilatura.extract(
+            resp.text, include_tables=False, include_images=False, no_fallback=False
+        )
         if text and len(text.strip()) > 50:
             return text.strip()
         from bs4 import BeautifulSoup
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        for tag in soup(['script', 'style', 'nav', 'footer', 'header']):
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "header"]):
             tag.decompose()
-        paragraphs = soup.find_all('p')
-        text = ' '.join(p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20)
+        paragraphs = soup.find_all("p")
+        text = " ".join(
+            p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20
+        )
         return text.strip() or resp.text[:2000]
     except Exception as e:
         logger.warning("Article scrape failed %s: %s", url, e, extra={"tag": "INF"})
@@ -431,8 +491,10 @@ def _scrape_article(url: str, timeout: float = 15) -> str:
 
 def _search_ddg(query: str, max_results: int = 5) -> list[dict]:
     """Search DuckDuckGo HTML and return result dicts with title, url, snippet."""
+    from urllib.parse import unquote, urlparse
+
     import httpx
-    from urllib.parse import urlparse, unquote
+
     results: list[dict] = []
     try:
         resp = httpx.get(
@@ -444,28 +506,29 @@ def _search_ddg(query: str, max_results: int = 5) -> list[dict]:
         )
         resp.raise_for_status()
         result_blocks = re.finditer(
-            r'<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)</a>',
-            resp.text, re.I | re.S
+            r'<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)</a>', resp.text, re.I | re.S
         )
-        snippets = list(re.finditer(
-            r'class="result__snippet"[^>]*>(.*?)</(?:a|div)>',
-            resp.text, re.I | re.S
-        ))
+        snippets = list(
+            re.finditer(r'class="result__snippet"[^>]*>(.*?)</(?:a|div)>', resp.text, re.I | re.S)
+        )
         for i, match in enumerate(result_blocks):
             raw_url = match.group(1)
-            title = re.sub(r'<[^>]+>', '', match.group(2)).strip()
+            title = re.sub(r"<[^>]+>", "", match.group(2)).strip()
             url = raw_url
             if "uddg=" in raw_url:
                 from urllib.parse import parse_qs, urlparse
+
                 parsed = urlparse(raw_url)
                 qs = parse_qs(parsed.query)
                 if "uddg" in qs:
                     url = unquote(qs["uddg"][0])
             snippet = ""
             if i < len(snippets):
-                snippet = re.sub(r'<[^>]+>', '', snippets[i].group(1)).strip()
-            if url and not any(d in url for d in ['duckduckgo.com']):
-                results.append({"title": title or snippet[:50], "url": url, "snippet": snippet or title})
+                snippet = re.sub(r"<[^>]+>", "", snippets[i].group(1)).strip()
+            if url and not any(d in url for d in ["duckduckgo.com"]):
+                results.append(
+                    {"title": title or snippet[:50], "url": url, "snippet": snippet or title}
+                )
                 if len(results) >= max_results:
                     break
     except Exception as e:
@@ -476,6 +539,7 @@ def _search_ddg(query: str, max_results: int = 5) -> list[dict]:
 # ---------------------------------------------------------------------------
 # KnowledgeMemory (VectorStore-backed)
 # ---------------------------------------------------------------------------
+
 
 class KnowledgeMemory:
     """Structured fact storage backed by a VectorStore.
@@ -526,7 +590,7 @@ class KnowledgeMemory:
             raise box["error"]
         return box.get("result")
 
-    def __init__(self, vector_store: Optional[Any] = None, load_persisted: bool = True):
+    def __init__(self, vector_store: Any | None = None, load_persisted: bool = True):
         self._lock = threading.Lock()
         self._mogdb = None
         self._visited_col = None
@@ -538,6 +602,7 @@ class KnowledgeMemory:
         else:
             from domain.inference._internal.vector_store import InMemoryVectorStore
             from domain.infrastructure._internal.embedding_service import get_embedding_service
+
             dim = get_embedding_service().dimension
             self._vector_store = InMemoryVectorStore(dimension=dim)
             try:
@@ -554,6 +619,7 @@ class KnowledgeMemory:
         """Initialize MogDB for visited hashes and entries persistence."""
         try:
             from mogdb import MogDB
+
             self._mogdb = MogDB(_KNOWLEDGE_DB_PATH)
             self._visited_col = self._mogdb.collection("visited")
             self._entries_col = self._mogdb.collection("entries")
@@ -563,12 +629,14 @@ class KnowledgeMemory:
 
     def _zero_vec(self) -> list[float]:
         from domain.infrastructure._internal.embedding_service import get_embedding_service
+
         return [0.0] * get_embedding_service().dimension
 
     def _get_embedding(self, text: str) -> list[float]:
         if self._embed_fn:
             return self._embed_fn(text)
         from domain.infrastructure._internal.embedding_service import get_embedding_service
+
         return get_embedding_service().embed(text)
 
     # ---- persistence -------------------------------------------------------
@@ -576,7 +644,7 @@ class KnowledgeMemory:
     def _load_visited(self) -> list[str]:
         """Load visited hashes from MogDB (or JSON fallback)."""
         # Try MogDB first
-        visited_col = getattr(self, '_visited_col', None)
+        visited_col = getattr(self, "_visited_col", None)
         if visited_col is not None:
             try:
                 docs = self._visited_col.find()
@@ -596,7 +664,7 @@ class KnowledgeMemory:
     def _save_visited(self):
         """Persist visited hashes to MogDB (and legacy JSON for backward compat)."""
         # Save to MogDB
-        visited_col = getattr(self, '_visited_col', None)
+        visited_col = getattr(self, "_visited_col", None)
         if visited_col is not None:
             try:
                 # Clear and re-insert all hashes
@@ -616,10 +684,10 @@ class KnowledgeMemory:
     def _save_entries(self):
         """Persist all vector entries to MogDB (and JSON fallback) for restart survival."""
         try:
-            entries = getattr(self._vector_store, '_entries', None)
+            entries = getattr(self._vector_store, "_entries", None)
             if not entries:
                 # Clear MogDB entries
-                entries_col = getattr(self, '_entries_col', None)
+                entries_col = getattr(self, "_entries_col", None)
                 if entries_col is not None:
                     try:
                         self._entries_col.drop()
@@ -634,17 +702,19 @@ class KnowledgeMemory:
                 return
 
             data = []
-            for eid, entry in (entries or {}).items():
-                data.append({
-                    "_id": entry.id,
-                    "id": entry.id,
-                    "vector": entry.vector,
-                    "text": entry.text,
-                    "metadata": dict(entry.metadata) if entry.metadata else {},
-                })
+            for _eid, entry in (entries or {}).items():
+                data.append(
+                    {
+                        "_id": entry.id,
+                        "id": entry.id,
+                        "vector": entry.vector,
+                        "text": entry.text,
+                        "metadata": dict(entry.metadata) if entry.metadata else {},
+                    }
+                )
 
             # Save to MogDB
-            entries_col = getattr(self, '_entries_col', None)
+            entries_col = getattr(self, "_entries_col", None)
             if entries_col is not None:
                 try:
                     self._entries_col.drop()
@@ -663,7 +733,7 @@ class KnowledgeMemory:
         data = None
 
         # Try MogDB first
-        entries_col = getattr(self, '_entries_col', None)
+        entries_col = getattr(self, "_entries_col", None)
         if entries_col is not None:
             try:
                 docs = self._entries_col.find({})
@@ -687,6 +757,7 @@ class KnowledgeMemory:
 
         try:
             from domain.inference._internal.vector_store import VectorEntry
+
             expected_dim = self._vector_store.dimension
             entries = []
             skipped = 0
@@ -703,11 +774,21 @@ class KnowledgeMemory:
                 )
                 entries.append(entry)
             if skipped:
-                logger.warning("Skipped %s entries with wrong dimension (expected %s)", skipped, expected_dim, extra={"tag": "INF"})
+                logger.warning(
+                    "Skipped %s entries with wrong dimension (expected %s)",
+                    skipped,
+                    expected_dim,
+                    extra={"tag": "INF"},
+                )
             if entries:
                 self._run_async(self._vector_store.upsert(entries))
-            if not hasattr(self, '_loaded_log'):
-                logger.info("Loaded %s persisted entries from %s", len(entries), ENTRIES_PATH, extra={"tag": "INF"})
+            if not hasattr(self, "_loaded_log"):
+                logger.info(
+                    "Loaded %s persisted entries from %s",
+                    len(entries),
+                    ENTRIES_PATH,
+                    extra={"tag": "INF"},
+                )
                 self._loaded_log = True
         except Exception as e:
             logger.warning("Failed to load entries: %s", e, extra={"tag": "INF"})
@@ -738,7 +819,11 @@ class KnowledgeMemory:
             except Exception as e:
                 logger.warning("Migration failed for %s: %s", f, e, extra={"tag": "INF"})
         migration_done.write_text(json.dumps({"migrated": migrated, "at": time.time()}))
-        logger.info("Migrated %s facts from legacy JSON topic files into vector store", migrated, extra={"tag": "INF"})
+        logger.info(
+            "Migrated %s facts from legacy JSON topic files into vector store",
+            migrated,
+            extra={"tag": "INF"},
+        )
 
     # ---- storage -----------------------------------------------------------
 
@@ -751,6 +836,7 @@ class KnowledgeMemory:
         try:
             vec = self._get_embedding(fact.content)
             from domain.inference._internal.vector_store import VectorEntry
+
             metadata = {
                 "topic": fact.topic,
                 "source": fact.source,
@@ -767,7 +853,7 @@ class KnowledgeMemory:
                 text=fact.content,
                 metadata=metadata,
             )
-            if hasattr(self._vector_store, 'upsert_sync'):
+            if hasattr(self._vector_store, "upsert_sync"):
                 self._vector_store.upsert_sync([entry])
             else:
                 self._run_async(self._vector_store.upsert([entry]))
@@ -781,8 +867,9 @@ class KnowledgeMemory:
         self._save_visited()
         return True
 
-    def add_facts(self, facts: list["KnowledgeFact"],
-                  vectors: Optional[list[list[float]]] = None) -> int:
+    def add_facts(
+        self, facts: list[KnowledgeFact], vectors: list[list[float]] | None = None
+    ) -> int:
         """Store multiple facts, persisting the store once.
 
         ``add_fact`` rewrites the full persisted store on every call, which
@@ -807,6 +894,7 @@ class KnowledgeMemory:
             raise ValueError("vectors must be aligned with facts")
 
         from domain.inference._internal.vector_store import VectorEntry
+
         if vectors is None:
             vectors = [self._get_embedding(f.content) for f in facts]
 
@@ -818,23 +906,25 @@ class KnowledgeMemory:
                     continue
                 self._visited.add(content_hash)
                 self._fact_counter += 1
-                to_upsert.append(VectorEntry(
-                    id=f"fact_{self._fact_counter}_{content_hash[:8]}",
-                    vector=vectors[i],
-                    text=fact.content,
-                    metadata={
-                        "topic": fact.topic,
-                        "source": fact.source,
-                        "url": fact.url,
-                        "timestamp": fact.timestamp,
-                        "importance": fact.importance,
-                        "content_hash": content_hash,
-                    },
-                ))
+                to_upsert.append(
+                    VectorEntry(
+                        id=f"fact_{self._fact_counter}_{content_hash[:8]}",
+                        vector=vectors[i],
+                        text=fact.content,
+                        metadata={
+                            "topic": fact.topic,
+                            "source": fact.source,
+                            "url": fact.url,
+                            "timestamp": fact.timestamp,
+                            "importance": fact.importance,
+                            "content_hash": content_hash,
+                        },
+                    )
+                )
         if not to_upsert:
             return 0
         try:
-            if hasattr(self._vector_store, 'upsert_sync'):
+            if hasattr(self._vector_store, "upsert_sync"):
                 self._vector_store.upsert_sync(to_upsert)
             else:
                 self._run_async(self._vector_store.upsert(to_upsert))
@@ -844,8 +934,14 @@ class KnowledgeMemory:
         self._save_visited()
         return len(to_upsert)
 
-    def add_article(self, url: str, title: str, content: str, source: str = "article",
-                     chunk_filter: Optional[callable] = None) -> int:
+    def add_article(
+        self,
+        url: str,
+        title: str,
+        content: str,
+        source: str = "article",
+        chunk_filter: callable | None = None,
+    ) -> int:
         """Extract topics from article content and store facts. Returns new fact count.
 
         Args:
@@ -860,7 +956,7 @@ class KnowledgeMemory:
             topics = ["general"]
         now = time.time()
         added = 0
-        chunks = [content[i:i+500] for i in range(0, len(content), 500)]
+        chunks = [content[i : i + 500] for i in range(0, len(content), 500)]
         for topic in topics[:3]:
             for chunk in chunks:
                 text = chunk.strip()
@@ -880,8 +976,9 @@ class KnowledgeMemory:
                     added += 1
         return added
 
-    def ingest_from_chat(self, user_message: str, assistant_response: str,
-                         max_facts: int = 3) -> list[str]:
+    def ingest_from_chat(
+        self, user_message: str, assistant_response: str, max_facts: int = 3
+    ) -> list[str]:
         """Extract and store facts from a chat exchange, returning the stored texts.
 
         Analyzes the assistant's response for declarative statements (facts)
@@ -923,11 +1020,17 @@ class KnowledgeMemory:
                 stored.append(fact_text)
 
         if stored:
-            logger.info("Auto-ingested %d facts from chat (topic=%s)", len(stored), topic, extra={"tag": "INF"})
+            logger.info(
+                "Auto-ingested %d facts from chat (topic=%s)",
+                len(stored),
+                topic,
+                extra={"tag": "INF"},
+            )
         return stored
 
-    def auto_ingest_from_chat(self, user_message: str, assistant_response: str,
-                               max_facts: int = 3) -> int:
+    def auto_ingest_from_chat(
+        self, user_message: str, assistant_response: str, max_facts: int = 3
+    ) -> int:
         """Extract and store facts from a chat exchange.
 
         Convenience wrapper around ``ingest_from_chat`` returning only the
@@ -948,7 +1051,7 @@ class KnowledgeMemory:
     def query(self, topic: str, top_k: int = 10) -> list[dict]:
         """Retrieve facts for a topic, sorted by importance."""
         try:
-            if hasattr(self._vector_store, 'count_sync'):
+            if hasattr(self._vector_store, "count_sync"):
                 total = self._vector_store.count_sync()
                 results = self._vector_store.query_sync(
                     vector=self._zero_vec(),
@@ -994,12 +1097,10 @@ class KnowledgeMemory:
         """
         try:
             query_vec = self._get_embedding(text)
-            if hasattr(self._vector_store, 'query_sync'):
+            if hasattr(self._vector_store, "query_sync"):
                 results = self._vector_store.query_sync(vector=query_vec, top_k=top_k)
             else:
-                results = self._run_async(
-                    self._vector_store.query(vector=query_vec, top_k=top_k)
-                )
+                results = self._run_async(self._vector_store.query(vector=query_vec, top_k=top_k))
             facts = []
             for r in results:
                 fact = {
@@ -1021,7 +1122,7 @@ class KnowledgeMemory:
     def stats(self) -> dict:
         """Return summary statistics."""
         try:
-            if hasattr(self._vector_store, 'count_sync'):
+            if hasattr(self._vector_store, "count_sync"):
                 total_facts = self._vector_store.count_sync()
             else:
                 total_facts = self._run_async(self._vector_store.count())
@@ -1039,7 +1140,7 @@ class KnowledgeMemory:
         """Return all unique topics from stored facts."""
         try:
             all_facts = self.list_all(top_k=5000)
-            topics = sorted(set(f.get("topic", "general") for f in all_facts))
+            topics = sorted({f.get("topic", "general") for f in all_facts})
             return topics if topics else ["general"]
         except Exception as e:
             logger.warning("all_topics failed: %s", e, extra={"tag": "INF"})
@@ -1051,7 +1152,7 @@ class KnowledgeMemory:
     def list_all(self, top_k: int = 5000) -> list[dict]:
         """Return all stored facts by querying with a zero vector."""
         try:
-            if hasattr(self._vector_store, 'query_sync'):
+            if hasattr(self._vector_store, "query_sync"):
                 results = self._vector_store.query_sync(vector=self._zero_vec(), top_k=top_k)
             else:
                 results = self._run_async(
@@ -1099,9 +1200,13 @@ class KnowledgeMemory:
             logger.warning("delete_by_id failed: %s", e, extra={"tag": "INF"})
             return False
 
-    def update_fact(self, item_id: str, content: str,
-                    topic: Optional[str] = None,
-                    importance: Optional[float] = None) -> bool:
+    def update_fact(
+        self,
+        item_id: str,
+        content: str,
+        topic: str | None = None,
+        importance: float | None = None,
+    ) -> bool:
         """Edit an existing fact's text, topic, and/or importance score.
 
         The vector-store entry keeps its id, so the fact stays discoverable
@@ -1127,9 +1232,7 @@ class KnowledgeMemory:
         if not text:
             return False
         try:
-            results = self._run_async(
-                self._vector_store.query(vector=self._zero_vec(), top_k=5000)
-            )
+            results = self._run_async(self._vector_store.query(vector=self._zero_vec(), top_k=5000))
             target = None
             for r in results:
                 if r.id == item_id:
@@ -1146,6 +1249,7 @@ class KnowledgeMemory:
                     self._visited.discard(old_hash)
                 self._visited.add(new_hash)
             from domain.inference._internal.vector_store import VectorEntry
+
             meta = dict(target.metadata)
             meta["content_hash"] = new_hash
             if topic is not None:
@@ -1158,7 +1262,7 @@ class KnowledgeMemory:
                 text=text,
                 metadata=meta,
             )
-            if hasattr(self._vector_store, 'upsert_sync'):
+            if hasattr(self._vector_store, "upsert_sync"):
                 self._vector_store.upsert_sync([entry])
             else:
                 self._run_async(self._vector_store.upsert([entry]))
@@ -1204,6 +1308,7 @@ class KnowledgeMemory:
 # KnowledgeIngestor
 # ---------------------------------------------------------------------------
 
+
 class KnowledgeIngestor:
     """Multi-source ingestion pipeline.
 
@@ -1214,14 +1319,15 @@ class KnowledgeIngestor:
     - Deduplication via visited URL set
     """
 
-    def __init__(self, memory: Optional[KnowledgeMemory] = None, filter_instance=None):
+    def __init__(self, memory: KnowledgeMemory | None = None, filter_instance=None):
         self.memory = memory or KnowledgeMemory()
         from domain.learner._internal.data_filter import get_data_filter
+
         self.filter = filter_instance or get_data_filter()
         self._feeds: list[FeedSubscription] = self._load_feeds()
         self._lock = threading.RLock()
         self._running = False
-        self._feed_thread: Optional[threading.Thread] = None
+        self._feed_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
 
     # ---- feeds -------------------------------------------------------------
@@ -1245,11 +1351,13 @@ class KnowledgeIngestor:
         with self._lock:
             if any(f.url == url for f in self._feeds):
                 return False
-            self._feeds.append(FeedSubscription(
-                url=url,
-                poll_interval=poll_interval,
-                last_fetched=0,
-            ))
+            self._feeds.append(
+                FeedSubscription(
+                    url=url,
+                    poll_interval=poll_interval,
+                    last_fetched=0,
+                )
+            )
             self._save_feeds()
         logger.info("Subscribed to RSS feed: %s", url, extra={"tag": "INF"})
         return True
@@ -1267,6 +1375,7 @@ class KnowledgeIngestor:
     def _fetch_feed(self, feed: FeedSubscription) -> list[dict]:
         """Fetch and parse an RSS/Atom feed. Returns list of article dicts."""
         import feedparser
+
         try:
             parsed = feedparser.parse(feed.url)
             articles = []
@@ -1275,7 +1384,7 @@ class KnowledgeIngestor:
                 title = entry.get("title", "").strip()
                 summary = entry.get("summary", entry.get("description", "")).strip()
                 # Strip HTML from summary
-                summary = re.sub(r'<[^>]+>', ' ', summary).strip()
+                summary = re.sub(r"<[^>]+>", " ", summary).strip()
                 if url and title:
                     articles.append({"url": url, "title": title, "summary": summary})
             return articles
@@ -1306,22 +1415,33 @@ class KnowledgeIngestor:
                     content = article.get("summary", article["title"])
                 # Run through filter
                 passes, reason = self.filter.filter_article(
-                    article["url"], article["title"], content,
-                    existing_facts=[f.get("content", "") for f in self.memory.search(article["title"], top_k=3)],
+                    article["url"],
+                    article["title"],
+                    content,
+                    existing_facts=[
+                        f.get("content", "") for f in self.memory.search(article["title"], top_k=3)
+                    ],
                 )
                 if not passes:
                     rejected += 1
                     self._mark_visited(article["url"])
                     continue
                 added = self.memory.add_article(
-                    article["url"], article["title"], content, source="rss",
+                    article["url"],
+                    article["title"],
+                    content,
+                    source="rss",
                     chunk_filter=lambda t, topic: self.filter.filter_chunk(t, topic),
                 )
                 if added > 0:
                     self._mark_visited(article["url"])
                     new_articles += 1
         self._save_feeds()
-        return {"new_articles": new_articles, "rejected": rejected, "stats": self.filter.get_stats()}
+        return {
+            "new_articles": new_articles,
+            "rejected": rejected,
+            "stats": self.filter.get_stats(),
+        }
 
     # ---- search ------------------------------------------------------------
 
@@ -1342,15 +1462,22 @@ class KnowledgeIngestor:
                 content = r.get("snippet", r.get("title", ""))
             # Run through filter
             passes, reason = self.filter.filter_article(
-                url, r.get("title", ""), content,
-                existing_facts=[f.get("content", "") for f in self.memory.search(r.get("title", ""), top_k=5)],
+                url,
+                r.get("title", ""),
+                content,
+                existing_facts=[
+                    f.get("content", "") for f in self.memory.search(r.get("title", ""), top_k=5)
+                ],
             )
             if not passes:
                 total_rejected += 1
                 logger.debug("Filter rejected %s: %s", url[:60], reason, extra={"tag": "INF"})
                 continue
             added = self.memory.add_article(
-                url, r.get("title", ""), content, source="search",
+                url,
+                r.get("title", ""),
+                content,
+                source="search",
                 chunk_filter=lambda t, topic: self.filter.filter_chunk(t, topic),
             )
             if added > 0:
@@ -1367,24 +1494,52 @@ class KnowledgeIngestor:
         if self._is_visited(url):
             content = _scrape_article(url)
             if not content:
-                return {"new_facts": 0, "title": "", "content_length": 0, "rejected": False, "status": "already_visited"}
+                return {
+                    "new_facts": 0,
+                    "title": "",
+                    "content_length": 0,
+                    "rejected": False,
+                    "status": "already_visited",
+                }
             # Re-check even if visited — might have been rejected before
         else:
             content = _scrape_article(url)
         if not content or len(content) < 50:
-            return {"new_facts": 0, "title": "", "content_length": 0, "rejected": False, "status": "no_content"}
+            return {
+                "new_facts": 0,
+                "title": "",
+                "content_length": 0,
+                "rejected": False,
+                "status": "no_content",
+            }
         title = content.split("\n")[0][:100]
         # Run through filter
         passes, reason = self.filter.filter_article(url, title, content)
         if not passes:
             self._mark_visited(url)  # mark visited so we don't retry
-            return {"new_facts": 0, "title": title, "content_length": len(content), "rejected": True, "reason": reason, "status": "rejected"}
+            return {
+                "new_facts": 0,
+                "title": title,
+                "content_length": len(content),
+                "rejected": True,
+                "reason": reason,
+                "status": "rejected",
+            }
         added = self.memory.add_article(
-            url, title, content, source="direct",
+            url,
+            title,
+            content,
+            source="direct",
             chunk_filter=lambda t, topic: self.filter.filter_chunk(t, topic),
         )
         self._mark_visited(url)
-        return {"new_facts": added, "title": title, "content_length": len(content), "rejected": False, "status": "ok"}
+        return {
+            "new_facts": added,
+            "title": title,
+            "content_length": len(content),
+            "rejected": False,
+            "status": "ok",
+        }
 
     # ---- visited tracking --------------------------------------------------
 
@@ -1404,11 +1559,11 @@ class KnowledgeIngestor:
             return
         self._stop_event.clear()
         self._running = True
-        self._feed_thread = threading.Thread(
-            target=self._poll_loop, args=(interval,), daemon=True
-        )
+        self._feed_thread = threading.Thread(target=self._poll_loop, args=(interval,), daemon=True)
         self._feed_thread.start()
-        logger.info("Background feed polling started (interval=%ss)", interval, extra={"tag": "INF"})
+        logger.info(
+            "Background feed polling started (interval=%ss)", interval, extra={"tag": "INF"}
+        )
 
     def stop_background_polling(self):
         self._running = False
@@ -1421,7 +1576,11 @@ class KnowledgeIngestor:
             try:
                 new = self.poll_feeds(max_articles=5)
                 if new.get("new_articles", 0) > 0:
-                    logger.info("Background poll: %s new articles ingested", new['new_articles'], extra={"tag": "INF"})
+                    logger.info(
+                        "Background poll: %s new articles ingested",
+                        new["new_articles"],
+                        extra={"tag": "INF"},
+                    )
             except Exception as e:
                 logger.warning("Background poll error: %s", e, extra={"tag": "INF"})
             if self._stop_event.wait(timeout=interval):
@@ -1429,8 +1588,8 @@ class KnowledgeIngestor:
 
 
 # Global singleton
-_knowledge_memory: Optional[KnowledgeMemory] = None
-_knowledge_ingestor: Optional[KnowledgeIngestor] = None
+_knowledge_memory: KnowledgeMemory | None = None
+_knowledge_ingestor: KnowledgeIngestor | None = None
 
 
 def get_knowledge_memory() -> KnowledgeMemory:

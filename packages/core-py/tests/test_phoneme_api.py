@@ -6,8 +6,9 @@ pronunciation scoring, and TTS synthesis endpoints.
 
 import numpy as np
 import pytest
-from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+
 from domain.multimodal._internal.tts import TTSEngine
+from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
 
 
 class TestUnifiedPhonemeEncoderAPI:
@@ -390,19 +391,21 @@ class TestBatchTTSEngineAPI:
         results = []
         for text in texts:
             waveform = engine.text_to_waveform(text)
-            results.append({
-                'text': text,
-                'waveform': waveform,
-                'sample_rate': engine.sample_rate,
-                'duration': len(waveform) / engine.sample_rate,
-            })
+            results.append(
+                {
+                    "text": text,
+                    "waveform": waveform,
+                    "sample_rate": engine.sample_rate,
+                    "duration": len(waveform) / engine.sample_rate,
+                }
+            )
         assert len(results) == 2
         for result in results:
-            assert 'text' in result
-            assert 'waveform' in result
-            assert 'sample_rate' in result
-            assert 'duration' in result
-            assert result['duration'] > 0
+            assert "text" in result
+            assert "waveform" in result
+            assert "sample_rate" in result
+            assert "duration" in result
+            assert result["duration"] > 0
 
     def test_batch_synthesis_empty(self):
         engine = TTSEngine()
@@ -410,5 +413,5 @@ class TestBatchTTSEngineAPI:
         results = []
         for text in texts:
             waveform = engine.text_to_waveform(text)
-            results.append({'text': text, 'waveform': waveform})
+            results.append({"text": text, "waveform": waveform})
         assert len(results) == 0

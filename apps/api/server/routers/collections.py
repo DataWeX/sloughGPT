@@ -10,11 +10,18 @@ Provides endpoints to:
 
 import logging
 
-from domain.infrastructure._internal.errors import AppError
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
+
+from domain.infrastructure._internal.errors import AppError
 
 logger = logging.getLogger("slo.api.collections")
 
@@ -86,6 +93,7 @@ class CollectionsRouter:
                 },
             }
         )
+
     @endpoint("collections.create_pipeline")
     async def create_pipeline(
         self, req: PipelineConfigRequest, auth_user: dict = Depends(require_auth_if_enabled)
@@ -225,6 +233,7 @@ class CollectionsRouter:
         registry = get_registry()
         stats = registry.stats()
         return success_response(data=stats)
+
     @endpoint("collections.get_pipeline")
     async def get_pipeline(self, pipeline_id: str) -> dict:
         """Get details of a specific pipeline."""
@@ -233,9 +242,7 @@ class CollectionsRouter:
         registry = get_registry()
         pipeline = registry.get_pipeline(pipeline_id)
         if not pipeline:
-            raise_error(
-                f"Pipeline '{pipeline_id}' not found", code="E_NOT_FOUND", status_code=404
-            )
+            raise_error(f"Pipeline '{pipeline_id}' not found", code="E_NOT_FOUND", status_code=404)
         return success_response(
             data={
                 "id": pipeline_id,
@@ -243,6 +250,7 @@ class CollectionsRouter:
                 "stats": pipeline.stats,
             }
         )
+
     @endpoint("collections.delete_pipeline")
     async def delete_pipeline(
         self, pipeline_id: str, auth_user: dict = Depends(require_auth_if_enabled)

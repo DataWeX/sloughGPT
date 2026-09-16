@@ -4,18 +4,17 @@ Integration tests for the API server.
 Marked ``slow`` because these require a running server on ``localhost:8000``.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 
 pytestmark = pytest.mark.slow
-import requests
 import time
-import json
-from typing import Dict, Any, Optional
 
+import requests
 
 BASE_URL = os.environ.get("MAN_INTEGRATION_BASE_URL", "http://localhost:8000")
 TIMEOUT = int(os.environ.get("MAN_INTEGRATION_TIMEOUT", "120"))
@@ -85,11 +84,7 @@ class TestGenerationEndpoints:
     def test_generate_endpoint(self):
         """Test basic text generation via /inference/generate."""
         payload = {"prompt": "Hello, how are you?", **_QUICK_GEN}
-        response = requests.post(
-            f"{BASE_URL}/inference/generate",
-            json=payload,
-            timeout=TIMEOUT
-        )
+        response = requests.post(f"{BASE_URL}/inference/generate", json=payload, timeout=TIMEOUT)
         assert response.status_code == 200
         data = response.json()
         assert "text" in data
@@ -102,21 +97,13 @@ class TestGenerationEndpoints:
             "temperature": 0.7,
             "top_p": 0.9,
         }
-        response = requests.post(
-            f"{BASE_URL}/inference/generate",
-            json=payload,
-            timeout=TIMEOUT
-        )
+        response = requests.post(f"{BASE_URL}/inference/generate", json=payload, timeout=TIMEOUT)
         assert response.status_code == 200
 
     def test_generate_empty_prompt(self):
         """Test that empty prompt is handled gracefully."""
         payload = {"prompt": ""}
-        response = requests.post(
-            f"{BASE_URL}/inference/generate",
-            json=payload,
-            timeout=TIMEOUT
-        )
+        response = requests.post(f"{BASE_URL}/inference/generate", json=payload, timeout=TIMEOUT)
         # Server accepts empty prompt and returns 200
         assert response.status_code == 200
 
@@ -124,10 +111,7 @@ class TestGenerationEndpoints:
         """Test streaming generation endpoint."""
         payload = {"prompt": "Count to 3:", **_QUICK_GEN}
         response = requests.post(
-            f"{BASE_URL}/inference/generate/stream",
-            json=payload,
-            stream=True,
-            timeout=TIMEOUT
+            f"{BASE_URL}/inference/generate/stream", json=payload, stream=True, timeout=TIMEOUT
         )
         assert response.status_code == 200
         assert response.headers.get("content-type", "").startswith("text/event-stream")
@@ -135,16 +119,10 @@ class TestGenerationEndpoints:
     def test_chat_endpoint(self):
         """Test chat endpoint."""
         payload = {
-            "messages": [
-                {"role": "user", "content": "Hello"}
-            ],
+            "messages": [{"role": "user", "content": "Hello"}],
             **_QUICK_GEN,
         }
-        response = requests.post(
-            f"{BASE_URL}/chat",
-            json=payload,
-            timeout=TIMEOUT
-        )
+        response = requests.post(f"{BASE_URL}/chat", json=payload, timeout=TIMEOUT)
         assert response.status_code == 200
         data = response.json()
         assert "message" in data
@@ -203,10 +181,7 @@ class TestMetricsEndpoints:
 
     def test_metrics_prometheus(self):
         """Test metrics endpoint in Prometheus format."""
-        response = requests.get(
-            f"{BASE_URL}/metrics/prometheus",
-            timeout=TIMEOUT
-        )
+        response = requests.get(f"{BASE_URL}/metrics/prometheus", timeout=TIMEOUT)
         assert response.status_code == 200
 
 
@@ -216,19 +191,12 @@ class TestAuthentication:
     def test_login_endpoint(self):
         """Test JWT token endpoint (API key)."""
         payload = {"api_key": "invalid-integration-test-key"}
-        response = requests.post(
-            f"{BASE_URL}/auth/token",
-            json=payload,
-            timeout=TIMEOUT
-        )
+        response = requests.post(f"{BASE_URL}/auth/token", json=payload, timeout=TIMEOUT)
         assert response.status_code in [200, 401]
 
     def test_token_refresh(self):
         """Test token refresh endpoint."""
-        response = requests.post(
-            f"{BASE_URL}/auth/refresh",
-            timeout=TIMEOUT
-        )
+        response = requests.post(f"{BASE_URL}/auth/refresh", timeout=TIMEOUT)
         assert response.status_code in [200, 401]
 
 
@@ -271,28 +239,20 @@ class TestErrorHandling:
             f"{BASE_URL}/inference/generate",
             data="not valid json",
             headers={"Content-Type": "application/json"},
-            timeout=TIMEOUT
+            timeout=TIMEOUT,
         )
         assert response.status_code == 422
 
     def test_missing_required_field(self):
         """Test handling of missing required fields."""
         payload = {"max_new_tokens": 100}
-        response = requests.post(
-            f"{BASE_URL}/inference/generate",
-            json=payload,
-            timeout=TIMEOUT
-        )
+        response = requests.post(f"{BASE_URL}/inference/generate", json=payload, timeout=TIMEOUT)
         assert response.status_code == 422
 
     def test_invalid_field_type(self):
         """Test handling of invalid field types."""
         payload = {"prompt": 12345}
-        response = requests.post(
-            f"{BASE_URL}/inference/generate",
-            json=payload,
-            timeout=TIMEOUT
-        )
+        response = requests.post(f"{BASE_URL}/inference/generate", json=payload, timeout=TIMEOUT)
         assert response.status_code == 422
 
     def test_404_not_found(self):

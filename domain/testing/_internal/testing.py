@@ -26,18 +26,19 @@ Usage:
     ])
     print(result)
 """
+
 from __future__ import annotations
 
-import json
 import time
-from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 
 T = TypeVar("T")
 
 
 # ── Core Data Types ────────────────────────────────────────────────────────
+
 
 @dataclass
 class StepResult:
@@ -47,10 +48,10 @@ class StepResult:
     passed: bool
     detail: str = ""
     duration_s: float = 0.0
-    screenshot: Optional[str] = None
-    console_errors: List[str] = field(default_factory=list)
-    network_errors: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    screenshot: str | None = None
+    console_errors: list[str] = field(default_factory=list)
+    network_errors: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -58,9 +59,9 @@ class JourneyResult:
     """Result of a complete journey test."""
 
     name: str
-    steps: List[StepResult] = field(default_factory=list)
+    steps: list[StepResult] = field(default_factory=list)
     total_duration_s: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def passed(self) -> bool:
@@ -74,7 +75,7 @@ class JourneyResult:
     def failed_count(self) -> int:
         return sum(1 for s in self.steps if not s.passed)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "passed": self.passed,
@@ -99,9 +100,9 @@ class Page:
 
     name: str
     path: str
-    checks: List[str] = field(default_factory=list)
+    checks: list[str] = field(default_factory=list)
     timeout_s: float = 10.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -110,13 +111,14 @@ class SiteConfig:
 
     name: str
     base_url: str
-    api_url: Optional[str] = None
-    pages: Dict[str, Page] = field(default_factory=dict)
-    headers: Dict[str, str] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    api_url: str | None = None
+    pages: dict[str, Page] = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 # ── Browser Protocol ────────────────────────────────────────────────────────
+
 
 class Browser(Protocol):
     """Protocol for browser automation backends."""
@@ -125,7 +127,7 @@ class Browser(Protocol):
         """Initialize the browser."""
         ...
 
-    async def navigate(self, url: str) -> Dict[str, Any]:
+    async def navigate(self, url: str) -> dict[str, Any]:
         """Navigate to a URL."""
         ...
 
@@ -133,7 +135,7 @@ class Browser(Protocol):
         """Wait for text to appear."""
         ...
 
-    async def take_snapshot(self) -> Dict[str, Any]:
+    async def take_snapshot(self) -> dict[str, Any]:
         """Take a page snapshot."""
         ...
 
@@ -145,11 +147,11 @@ class Browser(Protocol):
         """Fill an input."""
         ...
 
-    async def get_console_errors(self) -> List[str]:
+    async def get_console_errors(self) -> list[str]:
         """Get console errors."""
         ...
 
-    async def get_network_errors(self) -> List[str]:
+    async def get_network_errors(self) -> list[str]:
         """Get network errors."""
         ...
 
@@ -159,6 +161,7 @@ class Browser(Protocol):
 
 
 # ── Step Builder ────────────────────────────────────────────────────────────
+
 
 class Step:
     """Builder for creating test steps."""
@@ -174,10 +177,10 @@ class Step:
 class Journey:
     """Generic journey test runner."""
 
-    def __init__(self, config: SiteConfig, browser: Optional[Browser] = None):
+    def __init__(self, config: SiteConfig, browser: Browser | None = None):
         self.config = config
         self.browser = browser
-        self.results: List[JourneyResult] = []
+        self.results: list[JourneyResult] = []
 
     def goto(self, path: str) -> Step:
         """Create a navigation step."""
@@ -259,7 +262,7 @@ class Journey:
 
         return Step(name, action)
 
-    def run(self, steps: List[Step], name: str = "journey") -> JourneyResult:
+    def run(self, steps: list[Step], name: str = "journey") -> JourneyResult:
         """Run a sequence of steps."""
         result = JourneyResult(name=name)
         start = time.time()
@@ -303,12 +306,15 @@ class Journey:
             total_failed += result.failed_count
 
         lines.append(f"\n{'=' * 40}")
-        lines.append(f"Total: {total_passed + total_failed} steps, {total_passed} passed, {total_failed} failed")
+        lines.append(
+            f"Total: {total_passed + total_failed} steps, {total_passed} passed, {total_failed} failed"
+        )
 
         return "\n".join(lines)
 
 
 # ── Assertion Helpers ───────────────────────────────────────────────────────
+
 
 def assert_page_loads(body: str, min_length: int = 50) -> StepResult:
     """Assert that a page loaded with content."""
@@ -328,7 +334,7 @@ def assert_body_contains(body: str, text: str) -> StepResult:
     )
 
 
-def assert_no_errors(console_errors: List[str], network_errors: List[str]) -> StepResult:
+def assert_no_errors(console_errors: list[str], network_errors: list[str]) -> StepResult:
     """Assert that there are no console or network errors."""
     all_errors = console_errors + network_errors
     return StepResult(
@@ -358,11 +364,12 @@ def assert_api_healthy(status_code: int) -> StepResult:
 
 # ── Preset Site Configs ─────────────────────────────────────────────────────
 
+
 def create_site_config(
     name: str,
     base_url: str,
-    pages: Dict[str, tuple[str, list[str]]],
-    api_url: Optional[str] = None,
+    pages: dict[str, tuple[str, list[str]]],
+    api_url: str | None = None,
 ) -> SiteConfig:
     """Create a SiteConfig from a simple dictionary.
 

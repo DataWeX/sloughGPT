@@ -2,42 +2,48 @@
 
 from __future__ import annotations
 
-import json
 import threading
 import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domains.training import state as _state_mod
 from domain.training._internal.state import (
-    _state, _turbo_lock, _turbo_cancel_event, _turbo_pause_event, _turbo_state,
-    CHECKPOINTS_DIR, TURBO_DIR, REPO_ROOT,
+    CHECKPOINTS_DIR,
+    REPO_ROOT,
+    TURBO_DIR,
+    _state,
+    _turbo_cancel_event,
+    _turbo_lock,
+    _turbo_pause_event,
+    _turbo_state,
 )
-from domain.training._internal.turbo import get_turbo_status, start_turbo_training, run_turbo_worker
+from domain.training._internal.turbo import get_turbo_status, run_turbo_worker, start_turbo_training
 
 
 def _reset_turbo():
     with _turbo_lock:
         _turbo_state.clear()
-        _turbo_state.update({
-            "status": "idle",
-            "job_id": "",
-            "global_step": 0,
-            "total_steps": 0,
-            "progress": 0.0,
-            "loss": None,
-            "learning_rate": None,
-            "steps_per_sec": None,
-            "eta_s": None,
-            "elapsed_s": None,
-            "avg_quality": None,
-            "result": None,
-            "error": None,
-            "paused": False,
-            "last_heartbeat": 0,
-        })
+        _turbo_state.update(
+            {
+                "status": "idle",
+                "job_id": "",
+                "global_step": 0,
+                "total_steps": 0,
+                "progress": 0.0,
+                "loss": None,
+                "learning_rate": None,
+                "steps_per_sec": None,
+                "eta_s": None,
+                "elapsed_s": None,
+                "avg_quality": None,
+                "result": None,
+                "error": None,
+                "paused": False,
+                "last_heartbeat": 0,
+            }
+        )
     _turbo_cancel_event.clear()
     _turbo_pause_event.clear()
     _state.running = False
@@ -47,7 +53,6 @@ def _reset_turbo():
 
 
 class TestGetTurboStatus:
-
     def setup_method(self):
         _reset_turbo()
 
@@ -80,7 +85,6 @@ class TestGetTurboStatus:
 
 
 class TestStartTurboTraining:
-
     def setup_method(self):
         _reset_turbo()
 
@@ -104,12 +108,15 @@ class TestStartTurboTraining:
         (tmp / "data.jsonl").write_text("{}\n")
         try:
             with pytest.raises(FileNotFoundError, match="Checkpoint not found"):
-                start_turbo_training({
-                    "data_path": str(tmp / "data.jsonl"),
-                    "checkpoint_name": "nonexistent",
-                })
+                start_turbo_training(
+                    {
+                        "data_path": str(tmp / "data.jsonl"),
+                        "checkpoint_name": "nonexistent",
+                    }
+                )
         finally:
             import shutil
+
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_raises_data_outside_allowed_dirs(self):
@@ -121,6 +128,7 @@ class TestStartTurboTraining:
                 start_turbo_training({"data_path": str(tmp / "data.jsonl")})
         finally:
             import shutil
+
             shutil.rmtree(tmp, ignore_errors=True)
 
     @patch("domain.training.runtime_protocol.get_training_runtime")
@@ -154,10 +162,12 @@ class TestStartTurboTraining:
         soul_file = ckpt_dir / "test_ckpt.soul"
         soul_file.write_text("fake checkpoint")
         try:
-            result = start_turbo_training({
-                "data_path": str(data_file),
-                "checkpoint_name": "test_ckpt",
-            })
+            result = start_turbo_training(
+                {
+                    "data_path": str(data_file),
+                    "checkpoint_name": "test_ckpt",
+                }
+            )
             assert result["resume"] is True
             assert "test_ckpt.soul" in result["resume_path"]
         finally:
@@ -187,7 +197,7 @@ class TestStartTurboTraining:
         datasets_dir = REPO_ROOT / "datasets"
         datasets_dir.mkdir(parents=True, exist_ok=True)
         data_file = datasets_dir / "state_check.jsonl"
-        data_file.write_text('{}\n')
+        data_file.write_text("{}\n")
         try:
             start_turbo_training({"data_path": str(data_file)})
             with _turbo_lock:
@@ -202,7 +212,6 @@ class TestStartTurboTraining:
 
 
 class TestRunTurboWorker:
-
     def setup_method(self):
         _reset_turbo()
 
@@ -212,7 +221,10 @@ class TestRunTurboWorker:
             _turbo_state["job_id"] = "test_job"
         run_turbo_worker({})
         mock_update.assert_called_once()
-        assert mock_update.call_args[1].get("status") == "error" or mock_update.call_args[0][1] == "error"
+        assert (
+            mock_update.call_args[1].get("status") == "error"
+            or mock_update.call_args[0][1] == "error"
+        )
 
     @patch("domain.training._internal.turbo.update_job")
     def test_no_data_path_with_dataset_id_fails(self, mock_update):
@@ -229,7 +241,9 @@ class TestRunTurboWorker:
         with _turbo_lock:
             _turbo_state["job_id"] = "test_job"
 
-        with patch("domain.training.train_pipeline.SloughGPTTrainer", side_effect=RuntimeError("boom")):
+        with patch(
+            "domain.training.train_pipeline.SloughGPTTrainer", side_effect=RuntimeError("boom")
+        ):
             run_turbo_worker({"data_path": "/tmp/fake.jsonl"})
 
         with _turbo_lock:
@@ -308,17 +322,19 @@ class TestRunTurboWorker:
 
         def fake_train(on_progress=None, **kwargs):
             if on_progress:
-                on_progress({
-                    "global_step": 10,
-                    "total_steps": 100,
-                    "progress_percent": 10.0,
-                    "train_loss": 0.8,
-                    "learning_rate": 0.001,
-                    "steps_per_sec": 5.0,
-                    "eta_s": 18.0,
-                    "elapsed_s": 2.0,
-                    "avg_quality": 0.7,
-                })
+                on_progress(
+                    {
+                        "global_step": 10,
+                        "total_steps": 100,
+                        "progress_percent": 10.0,
+                        "train_loss": 0.8,
+                        "learning_rate": 0.001,
+                        "steps_per_sec": 5.0,
+                        "eta_s": 18.0,
+                        "elapsed_s": 2.0,
+                        "avg_quality": 0.7,
+                    }
+                )
             return {"loss": 0.5}
 
         mock_trainer = MagicMock()

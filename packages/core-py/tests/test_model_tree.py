@@ -1,23 +1,25 @@
 """Tests for domain.infrastructure._internal.pugqeep.model_tree — ModelTree."""
 
 import numpy as np
-import pytest
 
 
 class TestModelTree:
     def test_init_defaults(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m")
         assert tree.name == "m"
         assert tree.is_loaded is False
 
     def test_init_with_clusters(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=8)
         assert tree.n_clusters == 8
 
     def test_load_weights(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         weights = {
             "w1": np.random.randn(8, 8).astype(np.float32),
@@ -32,6 +34,7 @@ class TestModelTree:
 
     def test_get_weight(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         raw = np.random.randn(4, 4).astype(np.float32)
         tree.load_weights({"w": raw})
@@ -41,12 +44,14 @@ class TestModelTree:
 
     def test_get_weight_missing(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         tree.load_weights({})
         assert tree.get_weight("nonexistent") is None
 
     def test_skip_embeddings(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4, config=None)
         # Override skip settings
         tree._skip_embeddings = True
@@ -65,6 +70,7 @@ class TestModelTree:
 
     def test_small_tensor_raw(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=16)
         # Tensor smaller than n_clusters * 2 → stored as raw
         small = np.random.randn(4).astype(np.float32)
@@ -74,6 +80,7 @@ class TestModelTree:
 
     def test_cluster_compression(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         large = np.random.randn(64).astype(np.float32)
         tree.load_weights({"big": large}, method="cluster")
@@ -82,6 +89,7 @@ class TestModelTree:
 
     def test_stats(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         tree.load_weights({"w": np.zeros((4, 4), dtype=np.float32)})
         stats = tree.stats()
@@ -92,6 +100,7 @@ class TestModelTree:
 
     def test_estimate_size(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         tree._weight_shapes["w"] = (3, 4)
         assert tree._estimate_size("w") == 12
@@ -99,6 +108,7 @@ class TestModelTree:
 
     def test_function_method(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         arr = np.random.randn(64).astype(np.float32)
         tree.load_weights({"w": arr}, method="function")
@@ -107,6 +117,7 @@ class TestModelTree:
 
     def test_load_empty_weights(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         stats = tree.load_weights({})
         assert stats["num_weights"] == 0
@@ -115,6 +126,7 @@ class TestModelTree:
 
     def test_get_weights_multiple(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         w1 = np.random.randn(4, 4).astype(np.float32)
         w2 = np.random.randn(4, 4).astype(np.float32)
@@ -127,6 +139,7 @@ class TestModelTree:
 
     def test_get_weights_all(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         tree.load_weights({"a": np.zeros((2, 2), dtype=np.float32)})
         weights = tree.get_weights()
@@ -134,6 +147,7 @@ class TestModelTree:
 
     def test_get_weights_missing(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         tree.load_weights({})
         weights = tree.get_weights(["nonexistent"])
@@ -141,6 +155,7 @@ class TestModelTree:
 
     def test_is_loaded_property(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         assert tree.is_loaded is False
         tree.is_loaded = True
@@ -148,6 +163,7 @@ class TestModelTree:
 
     def test_weight_shapes_tracked(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         w = np.random.randn(3, 5).astype(np.float32)
         tree.load_weights({"my_weight": w})
@@ -156,6 +172,7 @@ class TestModelTree:
 
     def test_weight_dtypes_tracked(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         w = np.random.randn(4).astype(np.float32)
         tree.load_weights({"w": w})
@@ -164,6 +181,7 @@ class TestModelTree:
 
     def test_compression_ratio(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         w = np.random.randn(128).astype(np.float32)
         stats = tree.load_weights({"w": w})
@@ -172,6 +190,7 @@ class TestModelTree:
 
     def test_multiple_loads(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         tree.load_weights({"w1": np.zeros((4, 4), dtype=np.float32)})
         tree.load_weights({"w2": np.ones((4, 4), dtype=np.float32)})
@@ -180,11 +199,13 @@ class TestModelTree:
 
     def test_library_name(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("my_model", n_clusters=4)
         assert tree.library.name == "my_model_points"
 
     def test_estimate_size_from_point(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         w = np.random.randn(64).astype(np.float32)
         tree.load_weights({"w": w})
@@ -194,6 +215,7 @@ class TestModelTree:
 
     def test_estimate_cluster_assignments(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         w = np.random.randn(64).astype(np.float32)
         tree.load_weights({"w": w}, method="cluster")
@@ -203,6 +225,7 @@ class TestModelTree:
 
     def test_raw_weight_roundtrip(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         tree._skip_embeddings = False
         tree._skip_biases = False
@@ -213,6 +236,7 @@ class TestModelTree:
 
     def test_cluster_weight_retrievable(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         w = np.random.randn(64).astype(np.float32)
         tree.load_weights({"w": w}, method="cluster")
@@ -222,6 +246,7 @@ class TestModelTree:
 
     def test_function_weight_retrievable(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         w = np.random.randn(64).astype(np.float32)
         tree.load_weights({"w": w}, method="function")
@@ -231,6 +256,7 @@ class TestModelTree:
 
     def test_2d_weight_roundtrip_raw(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         original = np.random.randn(8, 8).astype(np.float32)
         # Embedding-like name gets stored as raw
@@ -240,16 +266,20 @@ class TestModelTree:
 
     def test_estimate_size_zero_shape(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         # No shape, no point → returns 0
         assert tree._estimate_size("nonexistent") == 0
 
     def test_load_weights_with_progress_callback(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         calls = []
+
         def _cb(done, total, name):
             calls.append((done, total, name))
+
         w = {"a": np.zeros((4, 4), dtype=np.float32)}
         tree.load_weights(w, on_progress=_cb)
         assert len(calls) == 1
@@ -257,6 +287,7 @@ class TestModelTree:
 
     def test_load_weights_parallel(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         weights = {f"w{i}": np.random.randn(64).astype(np.float32) for i in range(5)}
         stats = tree.load_weights(weights, num_workers=2)
@@ -265,6 +296,7 @@ class TestModelTree:
 
     def test_stats_before_load(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         stats = tree.stats()
         assert stats["loaded"] is False
@@ -272,6 +304,7 @@ class TestModelTree:
 
     def test_library_stores_all_points(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         weights = {f"w{i}": np.zeros((4, 4), dtype=np.float32) for i in range(5)}
         tree.load_weights(weights)
@@ -280,6 +313,7 @@ class TestModelTree:
 
     def test_skip_embeddings_disabled(self):
         from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+
         tree = ModelTree("m", n_clusters=4)
         tree._skip_embeddings = False
         tree._skip_biases = False

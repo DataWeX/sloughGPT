@@ -1,10 +1,11 @@
 """Tests for pugqeep checkpoint integration — save, compress, load roundtrip."""
 
 import json
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
-import tempfile
 
 
 class TestCompressCheckpoint:
@@ -15,9 +16,11 @@ class TestCompressCheckpoint:
         from domain.training._internal.slonet import SloTransformer
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            net = SloTransformer(vocab_size=256, n_embed=64, n_layer=2,
-                                  n_head=4, block_size=32, use_rope=True)
+            net = SloTransformer(
+                vocab_size=256, n_embed=64, n_layer=2, n_head=4, block_size=32, use_rope=True
+            )
             from domain.training._internal.export import export_to_sou
+
             soul_path = str(Path(tmpdir) / "test_model.soul")
             export_to_sou(net, soul_path)
 
@@ -40,9 +43,11 @@ class TestCompressCheckpoint:
         from domain.training._internal.slonet import SloTransformer
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            net = SloTransformer(vocab_size=128, n_embed=32, n_layer=1,
-                                  n_head=2, block_size=16, use_rope=False)
+            net = SloTransformer(
+                vocab_size=128, n_embed=32, n_layer=1, n_head=2, block_size=16, use_rope=False
+            )
             from domain.training._internal.export import export_to_sou
+
             soul_path = str(Path(tmpdir) / "small.soul")
             export_to_sou(net, soul_path)
 
@@ -54,6 +59,7 @@ class TestCompressCheckpoint:
 
     def test_compress_checkpoint_nonexistent_file(self):
         from domain.training._internal.executor import compress_checkpoint
+
         result = compress_checkpoint("/nonexistent/path/model.soul")
         assert result is None
 
@@ -62,9 +68,11 @@ class TestCompressCheckpoint:
         from domain.training._internal.slonet import SloTransformer
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            net = SloTransformer(vocab_size=128, n_embed=32, n_layer=1,
-                                  n_head=2, block_size=16, use_rope=True)
+            net = SloTransformer(
+                vocab_size=128, n_embed=32, n_layer=1, n_head=2, block_size=16, use_rope=True
+            )
             from domain.training._internal.export import export_to_sou
+
             soul_path = str(Path(tmpdir) / "meta_test.soul")
             export_to_sou(net, soul_path)
 
@@ -81,9 +89,11 @@ class TestCompressCheckpoint:
         from domain.training._internal.slonet import SloTransformer
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            net = SloTransformer(vocab_size=64, n_embed=32, n_layer=1,
-                                  n_head=2, block_size=16, use_rope=False)
+            net = SloTransformer(
+                vocab_size=64, n_embed=32, n_layer=1, n_head=2, block_size=16, use_rope=False
+            )
             from domain.training._internal.export import export_to_sou
+
             soul_path = str(Path(tmpdir) / "count.soul")
             export_to_sou(net, soul_path)
 
@@ -93,14 +103,16 @@ class TestCompressCheckpoint:
             assert stats["point_count"] == expected_points
 
     def test_compress_checkpoint_library_loadable(self):
+        from domain.infrastructure._internal.pugqeep.library import PointLibrary
         from domain.training._internal.executor import compress_checkpoint
         from domain.training._internal.slonet import SloTransformer
-        from domain.infrastructure._internal.pugqeep.library import PointLibrary
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            net = SloTransformer(vocab_size=128, n_embed=32, n_layer=1,
-                                  n_head=2, block_size=16, use_rope=True)
+            net = SloTransformer(
+                vocab_size=128, n_embed=32, n_layer=1, n_head=2, block_size=16, use_rope=True
+            )
             from domain.training._internal.export import export_to_sou
+
             soul_path = str(Path(tmpdir) / "lib_test.soul")
             export_to_sou(net, soul_path)
 
@@ -113,9 +125,11 @@ class TestCompressCheckpoint:
         from domain.training._internal.slonet import SloTransformer
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            net = SloTransformer(vocab_size=64, n_embed=32, n_layer=1,
-                                  n_head=2, block_size=16, use_rope=False)
+            net = SloTransformer(
+                vocab_size=64, n_embed=32, n_layer=1, n_head=2, block_size=16, use_rope=False
+            )
             from domain.training._internal.export import export_to_sou
+
             soul_path = str(Path(tmpdir) / "lineage.soul")
             export_to_sou(net, soul_path)
 
@@ -131,7 +145,8 @@ class TestLoadFromPoints:
     def test_load_from_points_file(self):
         from domain.infrastructure._internal.pugqeep.library import PointLibrary
         from domain.infrastructure._internal.pugqeep.model_tree import (
-            load_from_points, decompress_tree,
+            decompress_tree,
+            load_from_points,
         )
         from domain.infrastructure._internal.pugqeep.point import Point
 
@@ -182,13 +197,15 @@ class TestLoadFromPoints:
 
     def test_load_from_points_not_found(self):
         from domain.infrastructure._internal.pugqeep.model_tree import load_from_points
+
         with pytest.raises(FileNotFoundError):
             load_from_points("/nonexistent/path")
 
     def test_load_from_points_multiple_weights(self):
         from domain.infrastructure._internal.pugqeep.library import PointLibrary
         from domain.infrastructure._internal.pugqeep.model_tree import (
-            load_from_points, decompress_tree,
+            decompress_tree,
+            load_from_points,
         )
         from domain.infrastructure._internal.pugqeep.point import Point
 
@@ -213,7 +230,8 @@ class TestLoadFromPoints:
     def test_load_from_points_preserves_shapes(self):
         from domain.infrastructure._internal.pugqeep.library import PointLibrary
         from domain.infrastructure._internal.pugqeep.model_tree import (
-            load_from_points, decompress_tree,
+            decompress_tree,
+            load_from_points,
         )
         from domain.infrastructure._internal.pugqeep.point import Point
 
@@ -240,12 +258,13 @@ class TestImportFromSouFallback:
 
     def test_import_from_sou_loads_points(self):
         from domain.training._internal.executor import compress_checkpoint
-        from domain.training._internal.slonet import SloTransformer
         from domain.training._internal.export import export_to_sou
+        from domain.training._internal.slonet import SloTransformer
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            net = SloTransformer(vocab_size=128, n_embed=32, n_layer=1,
-                                  n_head=2, block_size=16, use_rope=True)
+            net = SloTransformer(
+                vocab_size=128, n_embed=32, n_layer=1, n_head=2, block_size=16, use_rope=True
+            )
             soul_path = str(Path(tmpdir) / "test.soul")
             export_to_sou(net, soul_path)
 
@@ -255,6 +274,7 @@ class TestImportFromSouFallback:
             Path(soul_path).unlink()
 
             from domain.training._internal.slonet import import_from_sou
+
             loaded = import_from_sou(soul_path)
             assert loaded is not None
             assert hasattr(loaded, "state_dict")
@@ -276,12 +296,13 @@ class TestImportFromSouFallback:
                 )
 
     def test_import_from_sou_prefers_soul_over_points(self):
-        from domain.training._internal.slonet import SloTransformer
         from domain.training._internal.export import export_to_sou
+        from domain.training._internal.slonet import SloTransformer
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            net = SloTransformer(vocab_size=128, n_embed=32, n_layer=1,
-                                  n_head=2, block_size=16, use_rope=True)
+            net = SloTransformer(
+                vocab_size=128, n_embed=32, n_layer=1, n_head=2, block_size=16, use_rope=True
+            )
             soul_path = str(Path(tmpdir) / "test.soul")
             export_to_sou(net, soul_path)
 
@@ -289,6 +310,7 @@ class TestImportFromSouFallback:
             points_path.write_text('{"name": "test", "points": []}')
 
             from domain.training._internal.slonet import import_from_sou
+
             loaded = import_from_sou(soul_path)
             assert loaded is not None
             weights = loaded.state_dict()
@@ -296,17 +318,19 @@ class TestImportFromSouFallback:
 
     def test_import_from_sou_nonexistent_returns_none(self):
         from domain.training._internal.slonet import import_from_sou
+
         with pytest.raises(FileNotFoundError):
             import_from_sou("/nonexistent/path/model.soul")
 
     def test_import_from_sou_weights_are_numpy(self):
         from domain.training._internal.executor import compress_checkpoint
-        from domain.training._internal.slonet import SloTransformer
         from domain.training._internal.export import export_to_sou
+        from domain.training._internal.slonet import SloTransformer
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            net = SloTransformer(vocab_size=64, n_embed=32, n_layer=1,
-                                  n_head=2, block_size=16, use_rope=False)
+            net = SloTransformer(
+                vocab_size=64, n_embed=32, n_layer=1, n_head=2, block_size=16, use_rope=False
+            )
             soul_path = str(Path(tmpdir) / "np_test.soul")
             export_to_sou(net, soul_path)
 
@@ -314,18 +338,20 @@ class TestImportFromSouFallback:
             Path(soul_path).unlink()
 
             from domain.training._internal.slonet import import_from_sou
+
             loaded = import_from_sou(soul_path)
             for name, w in loaded.state_dict().items():
                 assert isinstance(w, np.ndarray), f"{name} is not numpy array"
 
     def test_import_from_sou_model_attributes(self):
         from domain.training._internal.executor import compress_checkpoint
-        from domain.training._internal.slonet import SloTransformer
         from domain.training._internal.export import export_to_sou
+        from domain.training._internal.slonet import SloTransformer
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            net = SloTransformer(vocab_size=256, n_embed=64, n_layer=3,
-                                  n_head=4, block_size=32, use_rope=True)
+            net = SloTransformer(
+                vocab_size=256, n_embed=64, n_layer=3, n_head=4, block_size=32, use_rope=True
+            )
             soul_path = str(Path(tmpdir) / "attr.soul")
             export_to_sou(net, soul_path)
 
@@ -333,6 +359,7 @@ class TestImportFromSouFallback:
             Path(soul_path).unlink()
 
             from domain.training._internal.slonet import import_from_sou
+
             loaded = import_from_sou(soul_path)
             assert loaded.vocab_size == 256
             assert loaded.n_embed == 64
@@ -364,8 +391,7 @@ class TestDecompressTree:
             close_mask = np.isclose(orig, dec, rtol=1.0, atol=0.5)
             match_pct = close_mask.sum() / close_mask.size
             assert match_pct > 0.8, (
-                f"Weight {name}: only {match_pct:.1%} elements match "
-                f"(expected >80%)"
+                f"Weight {name}: only {match_pct:.1%} elements match (expected >80%)"
             )
 
     def test_decompress_preserves_shapes(self):
@@ -401,17 +427,21 @@ class TestDecompressTree:
         assert "only.weight" in decompressed
 
     def test_decompress_many_clusters_better_accuracy(self):
-        from domain.infrastructure._internal.pugqeep.model_tree import ModelTree, decompress_tree
         from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
+        from domain.infrastructure._internal.pugqeep.model_tree import ModelTree, decompress_tree
 
         orig = np.random.randn(64, 32).astype(np.float32)
 
-        compressor_low = PointCompressor(n_clusters=4, quantize_centroids=False, residual_threshold=0.0)
+        compressor_low = PointCompressor(
+            n_clusters=4, quantize_centroids=False, residual_threshold=0.0
+        )
         tree_low = ModelTree("low", n_clusters=4, compressor=compressor_low)
         tree_low.load_weights({"w": orig.copy()})
         dec_low = decompress_tree(tree_low)["w"]
 
-        compressor_high = PointCompressor(n_clusters=32, quantize_centroids=False, residual_threshold=0.0)
+        compressor_high = PointCompressor(
+            n_clusters=32, quantize_centroids=False, residual_threshold=0.0
+        )
         tree_high = ModelTree("high", n_clusters=32, compressor=compressor_high)
         tree_high.load_weights({"w": orig.copy()})
         dec_high = decompress_tree(tree_high)["w"]
@@ -424,6 +454,7 @@ class TestDecompressTree:
 class TestJobStatus:
     def test_job_status_values(self):
         from domain.training._internal.executor import JobStatus
+
         assert JobStatus.QUEUED.value == "queued"
         assert JobStatus.RUNNING.value == "running"
         assert JobStatus.COMPLETED.value == "completed"
@@ -432,10 +463,12 @@ class TestJobStatus:
 
     def test_job_status_is_str(self):
         from domain.training._internal.executor import JobStatus
+
         assert isinstance(JobStatus.QUEUED, str)
 
     def test_job_status_comparison(self):
         from domain.training._internal.executor import JobStatus
+
         assert JobStatus.QUEUED == "queued"
         assert JobStatus.RUNNING != "queued"
 
@@ -443,6 +476,7 @@ class TestJobStatus:
 class TestJobInfo:
     def test_job_info_defaults(self):
         from domain.training._internal.executor import JobInfo, JobStatus
+
         info = JobInfo(job_id="j1")
         assert info.job_id == "j1"
         assert info.status == JobStatus.QUEUED
@@ -452,15 +486,18 @@ class TestJobInfo:
         assert info.result is None
 
     def test_job_info_elapsed(self):
-        from domain.training._internal.executor import JobInfo
         import time
+
+        from domain.training._internal.executor import JobInfo
+
         info = JobInfo(job_id="j1")
         time.sleep(0.01)
         elapsed = info.elapsed()
         assert elapsed > 0
 
     def test_job_info_to_dict(self):
-        from domain.training._internal.executor import JobInfo, JobStatus
+        from domain.training._internal.executor import JobInfo
+
         info = JobInfo(job_id="j1", tree_id="t1")
         d = info.to_dict()
         assert d["job_id"] == "j1"
@@ -470,8 +507,10 @@ class TestJobInfo:
         assert "elapsed_s" in d
 
     def test_job_info_to_dict_completed(self):
-        from domain.training._internal.executor import JobInfo, JobStatus
         import numpy as np
+
+        from domain.training._internal.executor import JobInfo, JobStatus
+
         info = JobInfo(job_id="j1", status=JobStatus.COMPLETED)
         info.result = {"w": np.zeros(10)}
         d = info.to_dict()
@@ -480,6 +519,7 @@ class TestJobInfo:
 
     def test_job_info_to_dict_non_dict_result(self):
         from domain.training._internal.executor import JobInfo, JobStatus
+
         info = JobInfo(job_id="j1", status=JobStatus.COMPLETED)
         info.result = "some_string"
         d = info.to_dict()
@@ -488,15 +528,18 @@ class TestJobInfo:
 
 class TestTrainingExecutor:
     def test_submit_and_status(self):
-        from domain.training._internal.executor import TrainingExecutor, JobStatus
+        from domain.training._internal.executor import TrainingExecutor
+
         executor = TrainingExecutor(max_workers=2)
         try:
+
             def dummy_fn(job_id):
                 return {"loss": 0.5}
 
             job_id = executor.submit(dummy_fn, "test_job_1")
             assert job_id == "test_job_1"
             import time
+
             time.sleep(0.1)
             status = executor.status("test_job_1")
             assert status is not None
@@ -506,14 +549,17 @@ class TestTrainingExecutor:
 
     def test_list_jobs(self):
         from domain.training._internal.executor import TrainingExecutor
+
         executor = TrainingExecutor(max_workers=2)
         try:
+
             def dummy_fn(job_id):
                 return {}
 
             executor.submit(dummy_fn, "job_a")
             executor.submit(dummy_fn, "job_b")
             import time
+
             time.sleep(0.1)
             jobs = executor.list_jobs()
             assert len(jobs) >= 2
@@ -521,19 +567,23 @@ class TestTrainingExecutor:
             executor.shutdown(wait=True)
 
     def test_cancel_queued_job(self):
-        from domain.training._internal.executor import TrainingExecutor, JobStatus
         import threading
+
+        from domain.training._internal.executor import TrainingExecutor
+
         executor = TrainingExecutor(max_workers=1)
         try:
             import time as _time
+
             blocker = threading.Event()
+
             def blocking_fn(job_id):
                 blocker.wait(timeout=5)
                 return {}
 
             executor.submit(blocking_fn, "blocker")
             _time.sleep(0.05)
-            job_id = executor.submit(blocking_fn, "to_cancel")
+            executor.submit(blocking_fn, "to_cancel")
             result = executor.cancel("to_cancel")
             assert result is True
         finally:
@@ -542,10 +592,13 @@ class TestTrainingExecutor:
 
     def test_is_cancelled(self):
         from domain.training._internal.executor import TrainingExecutor
+
         executor = TrainingExecutor(max_workers=2)
         try:
+
             def dummy_fn(job_id):
                 return {}
+
             executor.submit(dummy_fn, "j1")
             assert not executor.is_cancelled("j1")
             executor.cancel("j1")
@@ -555,6 +608,7 @@ class TestTrainingExecutor:
 
     def test_status_unknown_job(self):
         from domain.training._internal.executor import TrainingExecutor
+
         executor = TrainingExecutor(max_workers=2)
         try:
             assert executor.status("nonexistent") is None
@@ -562,13 +616,17 @@ class TestTrainingExecutor:
             executor.shutdown(wait=True)
 
     def test_active_count(self):
-        from domain.training._internal.executor import TrainingExecutor
         import time
+
+        from domain.training._internal.executor import TrainingExecutor
+
         executor = TrainingExecutor(max_workers=2)
         try:
+
             def slow_fn(job_id):
                 time.sleep(0.2)
                 return {}
+
             executor.submit(slow_fn, "slow1")
             time.sleep(0.05)
             assert executor.active_count() >= 1
@@ -576,12 +634,16 @@ class TestTrainingExecutor:
             executor.shutdown(wait=True)
 
     def test_purge_completed(self):
-        from domain.training._internal.executor import TrainingExecutor, JobStatus
         import time
+
+        from domain.training._internal.executor import TrainingExecutor
+
         executor = TrainingExecutor(max_workers=2)
         try:
+
             def dummy_fn(job_id):
                 return {}
+
             executor.submit(dummy_fn, "purge_test")
             time.sleep(0.1)
             purged = executor.purge_completed(max_age_s=0.0)
@@ -591,12 +653,16 @@ class TestTrainingExecutor:
 
     def test_submit_with_kwargs(self):
         from domain.training._internal.executor import TrainingExecutor
+
         executor = TrainingExecutor(max_workers=2)
         try:
+
             def kwarg_fn(job_id, lr=0.01, epochs=10):
                 return {"lr": lr, "epochs": epochs}
+
             executor.submit(kwarg_fn, "kwargs_job", lr=0.001, epochs=5)
             import time
+
             time.sleep(0.1)
             status = executor.status("kwargs_job")
             assert status is not None
@@ -605,12 +671,16 @@ class TestTrainingExecutor:
 
     def test_submit_with_tree_id(self):
         from domain.training._internal.executor import TrainingExecutor
+
         executor = TrainingExecutor(max_workers=2)
         try:
+
             def dummy_fn(job_id):
                 return {}
+
             executor.submit(dummy_fn, "tree_job", tree_id="model_tree_1")
             import time
+
             time.sleep(0.1)
             status = executor.status("tree_job")
             assert status["tree_id"] == "model_tree_1"
@@ -618,13 +688,18 @@ class TestTrainingExecutor:
             executor.shutdown(wait=True)
 
     def test_result_summary(self):
-        from domain.training._internal.executor import TrainingExecutor
-        import numpy as np
         import time
+
+        import numpy as np
+
+        from domain.training._internal.executor import TrainingExecutor
+
         executor = TrainingExecutor(max_workers=2)
         try:
+
             def weight_fn(job_id):
                 return {"w1": np.zeros(10), "w2": np.ones((5, 5))}
+
             executor.submit(weight_fn, "summary_job")
             time.sleep(0.2)
             summary = executor.result_summary("summary_job")
@@ -637,9 +712,9 @@ class TestTrainingExecutor:
 
     def test_result_summary_incomplete(self):
         from domain.training._internal.executor import TrainingExecutor
+
         executor = TrainingExecutor(max_workers=2)
         try:
             assert executor.result_summary("nonexistent") is None
         finally:
             executor.shutdown(wait=True)
-

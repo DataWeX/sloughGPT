@@ -9,7 +9,6 @@ import pytest
 from domain.core._internal.soul import GenerationContext, SloEngine
 from domain.inference import SloProfile
 
-
 CHARSET = "abcdefghijklmnopqrstuvwxyz "
 
 
@@ -17,7 +16,7 @@ class FakeModel:
     """Minimal ModelInterface stand-in."""
 
     def __init__(self, charset: str = CHARSET):
-        self.itos = {i: c for i, c in enumerate(charset)}
+        self.itos = dict(enumerate(charset))
         self.stoi = {c: i for i, c in enumerate(charset)}
         self.device = "cpu"
         self.calls = []
@@ -72,6 +71,7 @@ def model_engine():
 # GenerationContext
 # =============================================================================
 
+
 class TestGenerationContext:
     def test_defaults(self):
         ctx = GenerationContext(prompt="hi", prompt_tokens=np.array([[1]]))
@@ -106,6 +106,7 @@ class TestGenerationContext:
 # =============================================================================
 # Initialization and properties
 # =============================================================================
+
 
 class TestSloEngineInit:
     def test_default_soul(self):
@@ -177,6 +178,7 @@ class TestSloEngineInit:
 # Setters
 # =============================================================================
 
+
 class TestSetters:
     def test_set_soul_returns_self(self, engine):
         soul = SloProfile(name="new_soul")
@@ -203,6 +205,7 @@ class TestSetters:
 # =============================================================================
 # Prompt building
 # =============================================================================
+
 
 class TestBuildSystemPrompt:
     def test_default_soul(self, engine):
@@ -337,9 +340,7 @@ class TestBuildFullPrompt:
 
     def test_conversation_history_capped(self, engine):
         engine._max_history_messages = 4
-        engine._session_history = [
-            {"role": "user", "content": f"msg{i}"} for i in range(10)
-        ]
+        engine._session_history = [{"role": "user", "content": f"msg{i}"} for i in range(10)]
         text = engine._build_full_prompt("now")
         assert "msg0" not in text
         assert "msg9" in text
@@ -354,18 +355,19 @@ class TestBuildFullPrompt:
 # Generation params
 # =============================================================================
 
+
 class TestGetGenerationParams:
     def _ctx(self, **overrides):
-        defaults = dict(
-            prompt="p",
-            prompt_tokens=np.array([[1]]),
-            temperature=0.8,
-            top_k=40,
-            top_p=0.9,
-            max_tokens=2048,
-            soul_overrides={},
-            reasoning_depth="balanced",
-        )
+        defaults = {
+            "prompt": "p",
+            "prompt_tokens": np.array([[1]]),
+            "temperature": 0.8,
+            "top_k": 40,
+            "top_p": 0.9,
+            "max_tokens": 2048,
+            "soul_overrides": {},
+            "reasoning_depth": "balanced",
+        }
         defaults.update(overrides)
         return GenerationContext(**defaults)
 
@@ -378,27 +380,19 @@ class TestGetGenerationParams:
         assert params["repetition_penalty"] == 1.2
 
     def test_soul_overrides_temperature(self, engine):
-        params = engine._get_generation_params(
-            self._ctx(soul_overrides={"temperature": 0.1})
-        )
+        params = engine._get_generation_params(self._ctx(soul_overrides={"temperature": 0.1}))
         assert params["temperature"] == 0.1
 
     def test_soul_overrides_max_tokens(self, engine):
-        params = engine._get_generation_params(
-            self._ctx(soul_overrides={"max_tokens": 64})
-        )
+        params = engine._get_generation_params(self._ctx(soul_overrides={"max_tokens": 64}))
         assert params["max_tokens"] == 64
 
     def test_deep_reasoning_lowers_temp(self, engine):
-        params = engine._get_generation_params(
-            self._ctx(reasoning_depth="deep")
-        )
+        params = engine._get_generation_params(self._ctx(reasoning_depth="deep"))
         assert params["temperature"] == pytest.approx(0.5)
 
     def test_creative_reasoning_raises_temp(self, engine):
-        params = engine._get_generation_params(
-            self._ctx(reasoning_depth="creative")
-        )
+        params = engine._get_generation_params(self._ctx(reasoning_depth="creative"))
         assert params["temperature"] == pytest.approx(1.1)
 
     def test_warmth_raises_temp(self, engine):
@@ -417,6 +411,7 @@ class TestGetGenerationParams:
 # =============================================================================
 # Hebbian learning
 # =============================================================================
+
 
 class TestHebbianLearning:
     def test_creates_connections(self, engine):
@@ -439,6 +434,7 @@ class TestHebbianLearning:
 # =============================================================================
 # Tokenization
 # =============================================================================
+
 
 class TestTokenization:
     def test_tokenize_fallback_ord(self, engine):
@@ -488,6 +484,7 @@ class TestTokenization:
 # =============================================================================
 # generate()
 # =============================================================================
+
 
 class TestGenerate:
     def test_no_model_placeholder(self, engine):
@@ -573,6 +570,7 @@ class TestGenerate:
 # generate_async()
 # =============================================================================
 
+
 class TestGenerateAsync:
     async def test_async_matches_sync(self, engine):
         sync_result = engine.generate("hello")
@@ -587,6 +585,7 @@ class TestGenerateAsync:
 # =============================================================================
 # chat()
 # =============================================================================
+
 
 class TestChat:
     def test_empty_messages_returns_empty(self, engine):
@@ -631,6 +630,7 @@ class TestChat:
 # Conversation state
 # =============================================================================
 
+
 class TestConversation:
     def test_clear_conversation(self, engine):
         engine.generate("hello")
@@ -643,6 +643,7 @@ class TestConversation:
 # =============================================================================
 # Personality
 # =============================================================================
+
 
 class TestApplyPersonality:
     def test_updates_traits(self, engine):
@@ -670,6 +671,7 @@ class TestApplyPersonality:
 # =============================================================================
 # Stats
 # =============================================================================
+
 
 class TestStats:
     def test_get_stats_structure(self, engine):
@@ -725,6 +727,7 @@ class TestStats:
 # Working memory
 # =============================================================================
 
+
 class TestWorkingMemory:
     def test_add_and_get(self, engine):
         engine.add_to_working_memory("item1")
@@ -747,6 +750,7 @@ class TestWorkingMemory:
 # =============================================================================
 # HD memory
 # =============================================================================
+
 
 class TestHDMemory:
     def test_stats(self):
@@ -790,6 +794,7 @@ class TestHDMemory:
 # =============================================================================
 # Semantic cache
 # =============================================================================
+
 
 class TestSemanticCache:
     def test_enable_cache(self, engine):
@@ -860,6 +865,7 @@ class TestSemanticCache:
 # Optimization / benchmarking (removed stubs)
 # =============================================================================
 
+
 class TestOptimization:
     def test_optimize_inference_removed(self, engine):
         result = engine.optimize_inference()
@@ -876,6 +882,7 @@ class TestOptimization:
 # Device
 # =============================================================================
 
+
 class TestDevice:
     def test_to_updates_device(self, engine):
         assert engine.to("gpu1") is engine
@@ -891,6 +898,7 @@ class TestDevice:
 # =============================================================================
 # Reasoning wrappers
 # =============================================================================
+
 
 class TestReasoningWrappers:
     async def test_deep_reason(self, engine):
@@ -949,6 +957,7 @@ class TestReasoningWrappers:
 # Grounding
 # =============================================================================
 
+
 class TestGrounding:
     def test_enable_grounding(self, engine):
         result = engine.enable_grounding()
@@ -987,6 +996,7 @@ class TestGrounding:
 # =============================================================================
 # save_soul
 # =============================================================================
+
 
 class TestSaveSoul:
     def test_requires_model(self, engine):

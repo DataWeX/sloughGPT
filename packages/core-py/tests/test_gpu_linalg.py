@@ -1,8 +1,12 @@
 """Tests for domain.training.gpu.accelerator — pure-numpy linear algebra functions."""
 
 import numpy as np
+
 from domain.training._internal.gpu.accelerator import (
-    cholesky, solve_triangular, solve_cholesky, dominant_eigen,
+    cholesky,
+    dominant_eigen,
+    solve_cholesky,
+    solve_triangular,
 )
 
 
@@ -70,7 +74,7 @@ class TestCholesky:
     def test_scale_invariance(self):
         A = np.array([[4, 2], [2, 3]], dtype=float)
         scale = 10.0
-        L1 = cholesky(A)
+        cholesky(A)
         L2 = cholesky(scale * A)
         np.testing.assert_allclose(L2 @ L2.T, scale * A, atol=1e-8)
 
@@ -314,7 +318,6 @@ class TestDominantEigen:
         np.testing.assert_allclose(sorted(vals, reverse=True), [5, 3, 1], atol=1e-5)
 
     def test_output_shapes(self):
-        n = 4
         A = np.diag([4.0, 3.0, 2.0, 1.0])
         vals, vecs = dominant_eigen(A, n_eigen=2)
         assert vals.shape == (2,)

@@ -3,12 +3,13 @@ Tests for the security router — GET /security/audit and GET /security/keys.
 """
 
 import json
-import pytest
 from unittest.mock import patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from infrastructure.exception_handlers import register_all_handlers
+
 from apps.api.server.routers.security import router
 
 
@@ -143,7 +144,9 @@ class TestSecurityAudit:
     @patch("infrastructure.auth.get_audit_logger")
     def test_extra_fields_passthrough(self, mock_get_logger, client):
         logger = mock_get_logger.return_value
-        logger.logs = [{"event_type": "model_loaded", "timestamp": "1", "model_id": "gpt2", "tag": "REQ"}]
+        logger.logs = [
+            {"event_type": "model_loaded", "timestamp": "1", "model_id": "gpt2", "tag": "REQ"}
+        ]
         resp = client.get("/security/audit")
         log = resp.json()["data"]["logs"][0]
         assert log["model_id"] == "gpt2"
@@ -207,8 +210,15 @@ class TestAuditLoggerReal:
 
     def test_log_appends_record_with_event_type(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         logger = AuditLogger(log_path=str(tmp_path / "audit.log"))
-        logger.log("auth_success", user="u1", resource="/auth/token", detail="ok", extra={"action": "token_create"})
+        logger.log(
+            "auth_success",
+            user="u1",
+            resource="/auth/token",
+            detail="ok",
+            extra={"action": "token_create"},
+        )
         assert len(logger.logs) == 1
         rec = logger.logs[0]
         assert rec["event_type"] == "auth_success"
@@ -220,6 +230,7 @@ class TestAuditLoggerReal:
 
     def test_logs_property_returns_copy(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         logger = AuditLogger(log_path=str(tmp_path / "audit.log"))
         logger.log("a", user="u")
         snapshot = logger.logs
@@ -228,6 +239,7 @@ class TestAuditLoggerReal:
 
     def test_logs_ring_buffer_caps_at_maxlen(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         logger = AuditLogger(log_path=str(tmp_path / "audit.log"))
         for i in range(1005):
             logger.log(f"e{i}", user="u")
@@ -237,6 +249,7 @@ class TestAuditLoggerReal:
     def test_get_audit_logger_returns_singleton(self, tmp_path, monkeypatch):
         from infrastructure import auth
         from infrastructure.auth import get_audit_logger
+
         monkeypatch.setattr(auth, "_audit_logger_instance", None)
         first = get_audit_logger()
         second = get_audit_logger()
@@ -257,17 +270,22 @@ class TestAuditLoggerFileQuery:
 
     def test_reads_tail_newest_last(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         p = str(tmp_path / "audit.log")
-        self._write(p, [
-            self._ev("2024-01-01T00:00:00+00:00", "a"),
-            self._ev("2024-01-01T00:00:01+00:00", "b"),
-            self._ev("2024-01-01T00:00:02+00:00", "c"),
-        ])
+        self._write(
+            p,
+            [
+                self._ev("2024-01-01T00:00:00+00:00", "a"),
+                self._ev("2024-01-01T00:00:01+00:00", "b"),
+                self._ev("2024-01-01T00:00:02+00:00", "c"),
+            ],
+        )
         logger = AuditLogger(log_path=p)
         assert [e["event_type"] for e in logger.file_query()] == ["c", "b", "a"]
 
     def test_limit_positive_zero_negative(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         p = str(tmp_path / "audit.log")
         self._write(p, [self._ev(f"2024-01-01T00:00:{i:02d}+00:00", f"e{i}") for i in range(20)])
         logger = AuditLogger(log_path=p)
@@ -278,34 +296,45 @@ class TestAuditLoggerFileQuery:
 
     def test_event_type_filter(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         p = str(tmp_path / "audit.log")
-        self._write(p, [
-            self._ev("2024-01-01T00:00:00+00:00", "auth_success"),
-            self._ev("2024-01-01T00:00:01+00:00", "auth_failed"),
-            self._ev("2024-01-01T00:00:02+00:00", "auth_success"),
-        ])
+        self._write(
+            p,
+            [
+                self._ev("2024-01-01T00:00:00+00:00", "auth_success"),
+                self._ev("2024-01-01T00:00:01+00:00", "auth_failed"),
+                self._ev("2024-01-01T00:00:02+00:00", "auth_success"),
+            ],
+        )
         logger = AuditLogger(log_path=p)
         res = logger.file_query(event_type="auth_success")
         assert [e["timestamp"] for e in res] == [
-            "2024-01-01T00:00:02+00:00", "2024-01-01T00:00:00+00:00",
+            "2024-01-01T00:00:02+00:00",
+            "2024-01-01T00:00:00+00:00",
         ]
 
     def test_before_cursor_excludes_newer(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         p = str(tmp_path / "audit.log")
-        self._write(p, [
-            self._ev("2024-01-01T00:00:00+00:00", "a"),
-            self._ev("2024-01-01T00:00:01+00:00", "b"),
-            self._ev("2024-01-01T00:00:02+00:00", "c"),
-        ])
+        self._write(
+            p,
+            [
+                self._ev("2024-01-01T00:00:00+00:00", "a"),
+                self._ev("2024-01-01T00:00:01+00:00", "b"),
+                self._ev("2024-01-01T00:00:02+00:00", "c"),
+            ],
+        )
         logger = AuditLogger(log_path=p)
         res = logger.file_query(before="2024-01-01T00:00:02+00:00")
         assert [e["timestamp"] for e in res] == [
-            "2024-01-01T00:00:01+00:00", "2024-01-01T00:00:00+00:00",
+            "2024-01-01T00:00:01+00:00",
+            "2024-01-01T00:00:00+00:00",
         ]
 
     def test_malformed_lines_skipped(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         p = str(tmp_path / "audit.log")
         self._write(p, ["not json", "", "{broken", self._ev("2024-01-01T00:00:00+00:00", "a")])
         logger = AuditLogger(log_path=p)
@@ -314,6 +343,7 @@ class TestAuditLoggerFileQuery:
 
     def test_missing_file_falls_back_to_buffer(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         logger = AuditLogger(log_path=str(tmp_path / "nope.log"))
         logger.log("auth_success", user="u")
         res = logger.file_query()
@@ -322,6 +352,7 @@ class TestAuditLoggerFileQuery:
 
     def test_limit_caps_return(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         p = str(tmp_path / "audit.log")
         self._write(p, [self._ev(f"2024-01-01T00:00:{i:02d}+00:00", "x") for i in range(10)])
         logger = AuditLogger(log_path=p)
@@ -346,7 +377,9 @@ class TestAuditLoggerFileQuery:
         )
         assert resp.status_code == 200
         logger.file_query.assert_called_once_with(
-            limit=5, event_type="auth_failed", before="2024-01-01T00:00:00+00:00",
+            limit=5,
+            event_type="auth_failed",
+            before="2024-01-01T00:00:00+00:00",
         )
 
     @patch("infrastructure.auth.get_audit_logger")
@@ -372,8 +405,22 @@ class TestSecurityKeys:
     @patch("apps.api.server.routers.security._get_key_manager")
     def test_lists_created_keys(self, mock_get_mgr, client):
         mock_get_mgr.return_value.list.return_value = [
-            {"id": "1", "name": "k1", "key_hash": "abc", "scopes": ["*"], "created_at": 1, "revoked": False},
-            {"id": "2", "name": "k2", "key_hash": "def", "scopes": ["*"], "created_at": 2, "revoked": False},
+            {
+                "id": "1",
+                "name": "k1",
+                "key_hash": "abc",
+                "scopes": ["*"],
+                "created_at": 1,
+                "revoked": False,
+            },
+            {
+                "id": "2",
+                "name": "k2",
+                "key_hash": "def",
+                "scopes": ["*"],
+                "created_at": 2,
+                "revoked": False,
+            },
         ]
         resp = client.get("/security/keys")
         data = resp.json()["data"]
@@ -383,7 +430,14 @@ class TestSecurityKeys:
     @patch("apps.api.server.routers.security._get_key_manager")
     def test_key_structure_hides_raw_key(self, mock_get_mgr, client):
         mock_get_mgr.return_value.list.return_value = [
-            {"id": "1", "name": "k1", "key_hash": "abc", "scopes": ["*"], "created_at": 1, "revoked": False}
+            {
+                "id": "1",
+                "name": "k1",
+                "key_hash": "abc",
+                "scopes": ["*"],
+                "created_at": 1,
+                "revoked": False,
+            }
         ]
         resp = client.get("/security/keys")
         key_entry = resp.json()["data"]["keys"][0]
@@ -395,8 +449,13 @@ class TestSecurityKeys:
     @patch("apps.api.server.routers.security._get_key_manager")
     def test_create_key(self, mock_get_mgr, client):
         mock_get_mgr.return_value.create.return_value = {
-            "id": "1", "name": "test", "key": "slo_abc123", "key_hash": "abc",
-            "scopes": ["read"], "created_at": 1, "revoked": False
+            "id": "1",
+            "name": "test",
+            "key": "slo_abc123",
+            "key_hash": "abc",
+            "scopes": ["read"],
+            "created_at": 1,
+            "revoked": False,
         }
         resp = client.post("/security/keys", json={"name": "test", "scopes": ["read"]})
         assert resp.status_code == 200
@@ -414,8 +473,13 @@ class TestSecurityKeys:
     @patch("apps.api.server.routers.security._get_key_manager")
     def test_rotate_key(self, mock_get_mgr, client):
         mock_get_mgr.return_value.rotate.return_value = {
-            "id": "2", "name": "k1", "key": "slo_new456", "key_hash": "new",
-            "scopes": ["*"], "created_at": 2, "revoked": False
+            "id": "2",
+            "name": "k1",
+            "key": "slo_new456",
+            "key_hash": "new",
+            "scopes": ["*"],
+            "created_at": 2,
+            "revoked": False,
         }
         resp = client.post("/security/keys/k1/rotate")
         assert resp.status_code == 200

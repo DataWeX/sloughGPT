@@ -1,33 +1,30 @@
 """Tests for the world realm headless observability driver."""
 
-import numpy as np
 import pytest
 
+from domain.shell._internal.simulation import (
+    MATERIAL_AIR,
+    MATERIAL_EMBER,
+    MATERIAL_ORGANIC,
+    MATERIAL_STONE,
+    MATERIAL_WATER,
+    NUM_MATERIALS,
+    WorldParams,
+)
 from domain.shell._internal.world_driver import (
     WorldDriver,
     _material_name,
     _parse_grid,
     main,
 )
-from domain.shell._internal.simulation import (
-    NUM_MATERIALS,
-    MATERIAL_AIR,
-    MATERIAL_EMBER,
-    MATERIAL_ORGANIC,
-    MATERIAL_STONE,
-    MATERIAL_WATER,
-    WorldParams,
-)
 
 
 def _small_params(**kw) -> WorldParams:
-    return WorldParams(grid_size=(8, 6, 8), generate_world=True,
-                       start_agents=2, **kw)
+    return WorldParams(grid_size=(8, 6, 8), generate_world=True, start_agents=2, **kw)
 
 
 def test_material_names_all_materials():
-    ids = {MATERIAL_AIR, MATERIAL_WATER, MATERIAL_STONE, MATERIAL_ORGANIC,
-           MATERIAL_EMBER}
+    ids = {MATERIAL_AIR, MATERIAL_WATER, MATERIAL_STONE, MATERIAL_ORGANIC, MATERIAL_EMBER}
     names = {_material_name(m) for m in ids}
     assert "air" in names
     assert "stone" in names
@@ -61,8 +58,7 @@ def test_driver_builds_world_and_spawns_babies():
 
 
 def test_empty_world_all_air():
-    params = WorldParams(grid_size=(4, 4, 4), generate_world=False,
-                         start_agents=0)
+    params = WorldParams(grid_size=(4, 4, 4), generate_world=False, start_agents=0)
     driver = WorldDriver(params, seed=1)
     pops = driver.material_populations()
     assert pops[MATERIAL_AIR] == 4 * 4 * 4
@@ -85,12 +81,20 @@ def test_snapshot_keys():
     snap = driver.snapshot()
     assert snap["tick"] == 0
     assert set(snap) == {
-        "tick", "alive_babies", "grid_energy", "entity_energy",
-        "nest_energy", "nests", "total_energy", "total_signal",
-        "mean_baby_energy", "materials",
+        "tick",
+        "alive_babies",
+        "grid_energy",
+        "entity_energy",
+        "nest_energy",
+        "nests",
+        "total_energy",
+        "total_signal",
+        "mean_baby_energy",
+        "materials",
     }
     assert snap["total_energy"] == pytest.approx(
-        snap["grid_energy"] + snap["entity_energy"] + snap["nest_energy"])
+        snap["grid_energy"] + snap["entity_energy"] + snap["nest_energy"]
+    )
 
 
 def test_run_ticks_returns_one_snapshot_per_tick():
@@ -103,8 +107,7 @@ def test_run_ticks_returns_one_snapshot_per_tick():
 def test_energy_ledger_consistent():
     driver = WorldDriver(_small_params(), seed=7)
     ledger = driver.energy_ledger()
-    assert ledger["total"] == pytest.approx(
-        ledger["grid"] + ledger["entities"] + ledger["nests"])
+    assert ledger["total"] == pytest.approx(ledger["grid"] + ledger["entities"] + ledger["nests"])
     per_mat = sum(ledger["per_material"].values())
     assert per_mat == pytest.approx(ledger["grid"])
     assert set(ledger["per_material"]) == set(range(NUM_MATERIALS))
@@ -162,8 +165,7 @@ def test_mean_baby_energy_positive_at_start():
 
 def test_evolution_returns_summary():
     driver = WorldDriver(_small_params(), seed=3)
-    result = driver.run_evolution(generations=2, population=4,
-                                  ticks_per_generation=3, seed=3)
+    result = driver.run_evolution(generations=2, population=4, ticks_per_generation=3, seed=3)
     assert result["generations"] == 2
     assert len(result["history"]) == 2
     for h in result["history"]:
@@ -172,8 +174,7 @@ def test_evolution_returns_summary():
 
 
 def test_main_prints_tick_table(capsys):
-    code = main(["--grid", "6,4,6", "--seed", "5", "--babies", "2",
-                 "--ticks", "6", "--every", "2"])
+    code = main(["--grid", "6,4,6", "--seed", "5", "--babies", "2", "--ticks", "6", "--every", "2"])
     out = capsys.readouterr().out
     assert code == 0
     assert "tick alive grid_energy" in out
@@ -182,9 +183,23 @@ def test_main_prints_tick_table(capsys):
 
 
 def test_main_evolution_mode(capsys):
-    code = main(["--grid", "6,4,6", "--seed", "5", "--babies", "2",
-                 "--evolution", "--generations", "2", "--population", "3",
-                 "--ticks-per-gen", "2"])
+    code = main(
+        [
+            "--grid",
+            "6,4,6",
+            "--seed",
+            "5",
+            "--babies",
+            "2",
+            "--evolution",
+            "--generations",
+            "2",
+            "--population",
+            "3",
+            "--ticks-per-gen",
+            "2",
+        ]
+    )
     out = capsys.readouterr().out
     assert code == 0
     assert "generation best_fitness avg_fitness alive" in out
@@ -192,9 +207,25 @@ def test_main_evolution_mode(capsys):
 
 
 def test_main_emergence_mode(capsys):
-    code = main(["--grid", "6,4,6", "--seed", "5", "--babies", "2",
-                 "--emergence", "--generations", "2", "--population", "3",
-                 "--ticks-per-gen", "2", "--hidden-units", "2"])
+    code = main(
+        [
+            "--grid",
+            "6,4,6",
+            "--seed",
+            "5",
+            "--babies",
+            "2",
+            "--emergence",
+            "--generations",
+            "2",
+            "--population",
+            "3",
+            "--ticks-per-gen",
+            "2",
+            "--hidden-units",
+            "2",
+        ]
+    )
     out = capsys.readouterr().out
     assert code == 0
     assert "generation evolved_avg frozen_avg" in out
@@ -204,9 +235,25 @@ def test_main_emergence_mode(capsys):
 
 
 def test_main_seasons_mode(capsys):
-    code = main(["--grid", "6,4,6", "--seed", "5", "--babies", "2",
-                 "--seasons", "--generations", "2", "--population", "3",
-                 "--ticks-per-gen", "4", "--seasons-per-year", "2"])
+    code = main(
+        [
+            "--grid",
+            "6,4,6",
+            "--seed",
+            "5",
+            "--babies",
+            "2",
+            "--seasons",
+            "--generations",
+            "2",
+            "--population",
+            "3",
+            "--ticks-per-gen",
+            "4",
+            "--seasons-per-year",
+            "2",
+        ]
+    )
     out = capsys.readouterr().out
     assert code == 0
     assert "generation control_avg seasonal_avg" in out

@@ -4,7 +4,7 @@ Tests for the UI Journey Testing Library (legacy wrapper).
 Usage:
     .venv/bin/python -m pytest tests/test_ui_journey_library.py -x -v
 """
-import pytest
+
 
 
 class TestJourneyCore:
@@ -22,10 +22,12 @@ class TestJourneyCore:
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
-        result = journey.run([
-            journey.goto("/"),
-            journey.check_body("test"),
-        ])
+        result = journey.run(
+            [
+                journey.goto("/"),
+                journey.check_body("test"),
+            ]
+        )
         assert result.passed
         assert result.passed_count == 2
 
@@ -44,7 +46,9 @@ class TestJourneyCore:
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
-        journey.journey("test1", [journey.goto("/")]) if hasattr(journey, "journey") else journey.run([journey.goto("/")])
+        journey.journey("test1", [journey.goto("/")]) if hasattr(
+            journey, "journey"
+        ) else journey.run([journey.goto("/")])
         report = journey.report()
         assert "Test" in report
         assert "Report" in report
@@ -157,10 +161,12 @@ class TestJourneyResults:
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
-        result = journey.run([
-            journey.goto("/"),
-            journey.goto("/chat"),
-        ])
+        result = journey.run(
+            [
+                journey.goto("/"),
+                journey.goto("/chat"),
+            ]
+        )
         assert result.passed
         assert result.failed_count == 0
 

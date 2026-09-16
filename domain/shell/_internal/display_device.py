@@ -98,7 +98,7 @@ class DisplayDevice:
 
     def move(self, x: int, y: int) -> bool:
         """Move cursor."""
-        sys.stdout.write(f"\033[{y+1};{x+1}H")
+        sys.stdout.write(f"\033[{y + 1};{x + 1}H")
         sys.stdout.flush()
         self._cursor_x = x
         self._cursor_y = y
@@ -107,8 +107,14 @@ class DisplayDevice:
     def color(self, fg: str = "", bg: str = "") -> bool:
         """Set color."""
         codes = {
-            "black": "30", "red": "31", "green": "32", "yellow": "33",
-            "blue": "34", "magenta": "35", "cyan": "36", "white": "37",
+            "black": "30",
+            "red": "31",
+            "green": "32",
+            "yellow": "33",
+            "blue": "34",
+            "magenta": "35",
+            "cyan": "36",
+            "white": "37",
             "reset": "0",
         }
         if fg:

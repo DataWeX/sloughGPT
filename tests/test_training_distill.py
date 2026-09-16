@@ -3,6 +3,7 @@
 Covers route registration, DistillStartRequest schema validation,
 and distill endpoint error handling (missing dataset, empty data).
 """
+
 from __future__ import annotations
 
 import sys
@@ -38,6 +39,7 @@ class TestDistillStartRequestSchema:
 
     def test_defaults(self):
         from training.schemas import DistillStartRequest
+
         req = DistillStartRequest(dataset="shakespeare")
         assert req.teacher_model == "gpt2"
         assert req.dataset == "shakespeare"
@@ -53,6 +55,7 @@ class TestDistillStartRequestSchema:
 
     def test_custom_values(self):
         from training.schemas import DistillStartRequest
+
         req = DistillStartRequest(
             teacher_model="gpt2",
             dataset="shakespeare",
@@ -80,6 +83,7 @@ class TestDistillStartRequestSchema:
     def test_temperature_must_be_positive(self):
         from pydantic import ValidationError
         from training.schemas import DistillStartRequest
+
         # Schema constrains temperature to >= 0.1.
         with pytest.raises(ValidationError):
             DistillStartRequest(dataset="shakespeare", temperature=-1.0)
@@ -87,6 +91,7 @@ class TestDistillStartRequestSchema:
     def test_epochs_must_be_positive(self):
         from pydantic import ValidationError
         from training.schemas import DistillStartRequest
+
         # Schema constrains epochs to >= 1.
         with pytest.raises(ValidationError):
             DistillStartRequest(dataset="shakespeare", epochs=0)
@@ -94,6 +99,7 @@ class TestDistillStartRequestSchema:
     def test_embed_dim_must_be_positive(self):
         from pydantic import ValidationError
         from training.schemas import DistillStartRequest
+
         # Schema constrains embed_dim to >= 16.
         with pytest.raises(ValidationError):
             DistillStartRequest(dataset="shakespeare", embed_dim=0)
@@ -118,10 +124,12 @@ class TestDistillRouteRegistered:
 
     def test_distill_route_exists(self):
         from training.router import router
+
         assert "/training/distill" in list(self._paths(router))
 
     def test_distill_jobs_route_exists(self):
         from training.router import router
+
         assert "/training/jobs" in list(self._paths(router))
 
 
@@ -138,17 +146,21 @@ class TestDistillEndpointErrors:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
         from training.router import router
+
         app = FastAPI()
         app.include_router(router)
         return TestClient(app, raise_server_exceptions=False)
 
     def test_missing_dataset_returns_error(self):
         client = self._make_client()
-        resp = client.post("/training/distill", json={
-            "teacher_model": "gpt2",
-            "dataset": "nonexistent_dataset_xyz",
-            "epochs": 1,
-        })
+        resp = client.post(
+            "/training/distill",
+            json={
+                "teacher_model": "gpt2",
+                "dataset": "nonexistent_dataset_xyz",
+                "epochs": 1,
+            },
+        )
         assert resp.status_code >= 400
 
     def test_empty_dataset_returns_error(self, tmp_path):
@@ -158,30 +170,38 @@ class TestDistillEndpointErrors:
         (ds_dir / "input.txt").write_text("")
         try:
             client = self._make_client()
-            resp = client.post("/training/distill", json={
-                "teacher_model": "gpt2",
-                "dataset": "_test_empty_distill",
-                "epochs": 1,
-            })
+            resp = client.post(
+                "/training/distill",
+                json={
+                    "teacher_model": "gpt2",
+                    "dataset": "_test_empty_distill",
+                    "epochs": 1,
+                },
+            )
             assert resp.status_code >= 400
         finally:
             import shutil
+
             shutil.rmtree(ds_dir, ignore_errors=True)
 
     def test_returns_queued_status(self):
         from training.router import training_jobs
+
         datasets_dir = _REPO_ROOT / "data"
         ds_dir = datasets_dir / "_test_distill_queued"
         ds_dir.mkdir(parents=True, exist_ok=True)
         (ds_dir / "input.txt").write_text("Hello world " * 100)
         try:
             client = self._make_client()
-            resp = client.post("/training/distill", json={
-                "teacher_model": "gpt2",
-                "dataset": "_test_distill_queued",
-                "epochs": 1,
-                "name": "test-queued",
-            })
+            resp = client.post(
+                "/training/distill",
+                json={
+                    "teacher_model": "gpt2",
+                    "dataset": "_test_distill_queued",
+                    "epochs": 1,
+                    "name": "test-queued",
+                },
+            )
             assert resp.status_code == 200
             data = resp.json()
             assert data["status"] == "queued"
@@ -191,6 +211,7 @@ class TestDistillEndpointErrors:
             training_jobs.pop(job_id, None)
         finally:
             import shutil
+
             shutil.rmtree(ds_dir, ignore_errors=True)
 
 
@@ -210,6 +231,7 @@ class TestDistillSlonetTeacher:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
         from training.router import router
+
         app = FastAPI()
         app.include_router(router)
         return TestClient(app, raise_server_exceptions=False)
@@ -226,8 +248,9 @@ class TestDistillSlonetTeacher:
             def forward(self, input_ids, targets=None):
                 # Logits dim is larger than the token vocab so the
                 # [..., :vocab_size] slice in the teacher wrapper is a no-op.
-                return _Logits(np.full((input_ids.shape[0], input_ids.shape[1], 640),
-                                       0.5, dtype=np.float32)), None
+                return _Logits(
+                    np.full((input_ids.shape[0], input_ids.shape[1], 640), 0.5, dtype=np.float32)
+                ), None
 
         class _Provider:
             model_id = "gpt2"
@@ -243,6 +266,7 @@ class TestDistillSlonetTeacher:
 
     def _poll(self, training_jobs, job_id, timeout=30.0):
         import time
+
         deadline = time.time() + timeout
         while time.time() < deadline:
             status = training_jobs.get(job_id, {}).get("status")
@@ -269,16 +293,23 @@ class TestDistillSlonetTeacher:
         job_id = None
         try:
             client = self._make_client()
-            with patch("domains.infrastructure.model_registry.get_model_registry",
-                       return_value=None), \
-                 patch("domains.infrastructure.server_state.get_server_state",
-                       return_value=fake_core):
-                resp = client.post("/training/distill", json={
-                    "teacher_model": "gpt2",
-                    "dataset": "_test_distill_slonet",
-                    "epochs": 1,
-                    "name": "_test_slonet_distill",
-                })
+            with (
+                patch(
+                    "domains.infrastructure.model_registry.get_model_registry", return_value=None
+                ),
+                patch(
+                    "domains.infrastructure.server_state.get_server_state", return_value=fake_core
+                ),
+            ):
+                resp = client.post(
+                    "/training/distill",
+                    json={
+                        "teacher_model": "gpt2",
+                        "dataset": "_test_distill_slonet",
+                        "epochs": 1,
+                        "name": "_test_slonet_distill",
+                    },
+                )
                 assert resp.status_code == 200
                 job_id = resp.json()["job_id"]
                 # Keep the patches active while the background training thread
@@ -313,16 +344,23 @@ class TestDistillSlonetTeacher:
         job_id = None
         try:
             client = self._make_client()
-            with patch("domains.infrastructure.model_registry.get_model_registry",
-                       return_value=None), \
-                 patch("domains.infrastructure.server_state.get_server_state",
-                       return_value=fake_core):
-                resp = client.post("/training/distill", json={
-                    "teacher_model": "gpt2",
-                    "dataset": "_test_distill_slonet_missing",
-                    "epochs": 1,
-                    "name": "_test_slonet_missing",
-                })
+            with (
+                patch(
+                    "domains.infrastructure.model_registry.get_model_registry", return_value=None
+                ),
+                patch(
+                    "domains.infrastructure.server_state.get_server_state", return_value=fake_core
+                ),
+            ):
+                resp = client.post(
+                    "/training/distill",
+                    json={
+                        "teacher_model": "gpt2",
+                        "dataset": "_test_distill_slonet_missing",
+                        "epochs": 1,
+                        "name": "_test_slonet_missing",
+                    },
+                )
                 assert resp.status_code == 200
                 job_id = resp.json()["job_id"]
                 assert self._poll(training_jobs, job_id) == "failed"

@@ -5,34 +5,30 @@ Covers: phase transitions, hook registration, startup/shutdown flows,
 health gates, in-flight tracking, profile filtering, parallel startup,
 drain, get_results, singleton reset.
 """
+
 from __future__ import annotations
 
 import asyncio
-import time
 
 import pytest
 
 from domain.infrastructure._internal.lifecycle import (
+    EVT_PHASE_CHANGED,
     LifecycleManager,
     LifecyclePhase,
-    StartupProfile,
-    StartupHook,
     ShutdownHook,
-    _HookResult,
-    _topological_sort,
+    StartupHook,
+    StartupProfile,
     _dependency_levels,
+    _topological_sort,
     get_lifecycle_manager,
     reset_lifecycle_manager,
-    EVT_PHASE_CHANGED,
-    EVT_HOOK_STARTED,
-    EVT_HOOK_COMPLETED,
-    EVT_HOOK_FAILED,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 async def _noop():
     pass
@@ -87,6 +83,7 @@ class MockEventBus:
 # LifecyclePhase
 # ---------------------------------------------------------------------------
 
+
 class TestLifecyclePhase:
     def test_all_members(self):
         phases = {p.value for p in LifecyclePhase}
@@ -107,6 +104,7 @@ class TestLifecyclePhase:
 # ---------------------------------------------------------------------------
 # StartupProfile
 # ---------------------------------------------------------------------------
+
 
 class TestStartupProfile:
     def test_all_members(self):
@@ -131,6 +129,7 @@ class TestStartupProfile:
 # ---------------------------------------------------------------------------
 # _topological_sort
 # ---------------------------------------------------------------------------
+
 
 class TestTopologicalSort:
     def test_no_deps(self):
@@ -168,6 +167,7 @@ class TestTopologicalSort:
 # _dependency_levels
 # ---------------------------------------------------------------------------
 
+
 class TestDependencyLevels:
     def test_no_deps(self):
         hooks = [_hook("a"), _hook("b")]
@@ -190,6 +190,7 @@ class TestDependencyLevels:
 # ---------------------------------------------------------------------------
 # LifecycleManager — construction and properties
 # ---------------------------------------------------------------------------
+
 
 class TestLifecycleManagerInit:
     def test_initial_phase(self):
@@ -221,6 +222,7 @@ class TestLifecycleManagerInit:
 # Hook registration
 # ---------------------------------------------------------------------------
 
+
 class TestHookRegistration:
     def test_register_startup_hook(self):
         mgr = LifecycleManager()
@@ -248,6 +250,7 @@ class TestHookRegistration:
 # ---------------------------------------------------------------------------
 # Health gates
 # ---------------------------------------------------------------------------
+
 
 class TestHealthGates:
     def test_register_and_check(self):
@@ -301,6 +304,7 @@ class TestHealthGates:
 # In-flight tracking
 # ---------------------------------------------------------------------------
 
+
 class TestInFlightTracking:
     @pytest.mark.asyncio
     async def test_acquire_and_release(self):
@@ -329,6 +333,7 @@ class TestInFlightTracking:
 # Startup flow
 # ---------------------------------------------------------------------------
 
+
 class TestStartup:
     @pytest.mark.asyncio
     async def test_startup_no_hooks(self):
@@ -341,8 +346,10 @@ class TestStartup:
     async def test_startup_single_hook(self):
         mgr = LifecycleManager()
         ran = []
+
         async def hook_fn():
             ran.append(True)
+
         mgr.register_startup_hook(_hook("db", handler=hook_fn))
         result = await mgr.start()
         assert result is True
@@ -354,8 +361,12 @@ class TestStartup:
         order = []
         mgr = LifecycleManager()
         mgr.register_startup_hook(_hook("a", handler=lambda: (order.append("a"), asyncio.sleep(0))))
-        mgr.register_startup_hook(_hook("b", handler=lambda: (order.append("b"), asyncio.sleep(0)), depends_on=["a"]))
-        mgr.register_startup_hook(_hook("c", handler=lambda: (order.append("c"), asyncio.sleep(0)), depends_on=["b"]))
+        mgr.register_startup_hook(
+            _hook("b", handler=lambda: (order.append("b"), asyncio.sleep(0)), depends_on=["a"])
+        )
+        mgr.register_startup_hook(
+            _hook("c", handler=lambda: (order.append("c"), asyncio.sleep(0)), depends_on=["b"])
+        )
         await mgr.start()
         assert order.index("a") < order.index("b") < order.index("c")
 
@@ -378,8 +389,10 @@ class TestStartup:
     @pytest.mark.asyncio
     async def test_startup_timeout(self):
         mgr = LifecycleManager()
+
         async def very_slow():
             await asyncio.sleep(100)
+
         mgr.register_startup_hook(_hook("slow", handler=very_slow, timeout=0.05))
         result = await mgr.start()
         assert result is False
@@ -389,12 +402,15 @@ class TestStartup:
     async def test_startup_parallel_hooks(self):
         mgr = LifecycleManager()
         order = []
+
         async def task_a():
             await asyncio.sleep(0.05)
             order.append("a")
+
         async def task_b():
             await asyncio.sleep(0.05)
             order.append("b")
+
         mgr.register_startup_hook(_hook("a", handler=task_a))
         mgr.register_startup_hook(_hook("b", handler=task_b))
         await mgr.start()
@@ -404,12 +420,19 @@ class TestStartup:
     async def test_startup_profile_filtering(self):
         mgr = LifecycleManager()
         ran = []
+
         async def hook_full():
             ran.append("full")
+
         async def hook_minimal():
             ran.append("minimal")
-        mgr.register_startup_hook(_hook("full_hook", handler=hook_full, profiles=[StartupProfile.FULL]))
-        mgr.register_startup_hook(_hook("min_hook", handler=hook_minimal, profiles=[StartupProfile.MINIMAL]))
+
+        mgr.register_startup_hook(
+            _hook("full_hook", handler=hook_full, profiles=[StartupProfile.FULL])
+        )
+        mgr.register_startup_hook(
+            _hook("min_hook", handler=hook_minimal, profiles=[StartupProfile.MINIMAL])
+        )
         await mgr.start(profile=StartupProfile.FULL)
         assert "full" in ran
         assert "minimal" not in ran
@@ -444,6 +467,7 @@ class TestStartup:
 # Shutdown flow
 # ---------------------------------------------------------------------------
 
+
 class TestShutdown:
     @pytest.mark.asyncio
     async def test_shutdown_no_hooks(self):
@@ -467,7 +491,7 @@ class TestShutdown:
         mgr = LifecycleManager()
         mgr.register_shutdown_hook(_shutdown_hook("fail_hook", handler=_fail))
         await mgr.start()
-        result = await mgr.shutdown()
+        await mgr.shutdown()
         assert mgr.phase == LifecyclePhase.STOPPED
 
     @pytest.mark.asyncio
@@ -476,7 +500,7 @@ class TestShutdown:
         mgr.register_startup_hook(_hook("db", handler=_fail, critical=True))
         await mgr.start()
         assert mgr.phase == LifecyclePhase.CRASHED
-        result = await mgr.shutdown()
+        await mgr.shutdown()
         assert mgr.phase == LifecyclePhase.STOPPED
 
     @pytest.mark.asyncio
@@ -501,14 +525,17 @@ class TestShutdown:
         await mgr.acquire_in_flight()
         await mgr.start()
         # Release in-flight after a short delay
-        asyncio.get_event_loop().call_later(0.1, lambda: asyncio.ensure_future(mgr.release_in_flight()))
-        result = await mgr.shutdown(timeout=2.0)
+        asyncio.get_event_loop().call_later(
+            0.1, lambda: asyncio.ensure_future(mgr.release_in_flight())
+        )
+        await mgr.shutdown(timeout=2.0)
         assert mgr.phase == LifecyclePhase.STOPPED
 
 
 # ---------------------------------------------------------------------------
 # Mark crashed
 # ---------------------------------------------------------------------------
+
 
 class TestMarkCrashed:
     @pytest.mark.asyncio
@@ -537,6 +564,7 @@ class TestMarkCrashed:
 # get_results
 # ---------------------------------------------------------------------------
 
+
 class TestGetResults:
     def test_get_results(self):
         mgr = LifecycleManager()
@@ -564,6 +592,7 @@ class TestGetResults:
 # Preview
 # ---------------------------------------------------------------------------
 
+
 class TestPreview:
     def test_preview_default(self):
         mgr = LifecycleManager()
@@ -585,6 +614,7 @@ class TestPreview:
 # ---------------------------------------------------------------------------
 # Singleton
 # ---------------------------------------------------------------------------
+
 
 class TestSingleton:
     def test_get_lifecycle_manager(self):

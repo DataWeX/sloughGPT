@@ -4,7 +4,6 @@ External providers (ChromaDB, Pinecone) are faked via ``sys.modules`` injection
 since their real clients are heavy and unavailable in the test environment.
 """
 
-import os
 import sys
 import types
 
@@ -19,8 +18,9 @@ from domain.inference._internal.vector_store import (
 from domain.inference._internal.vector_stores import (
     ChromaDBVectorStore,
     PineconeVectorStore,
+    chromadb_store,
+    pinecone_store,
 )
-from domain.inference._internal.vector_stores import chromadb_store, pinecone_store
 
 
 def test_package_re_exports():
@@ -102,9 +102,7 @@ class FakePineconeClient:
         return [type("Idx", (), {"name": n})() for n in self._existing]
 
     def create_index(self, name, dimension, metric, spec):
-        self.created.append(
-            {"name": name, "dimension": dimension, "metric": metric, "spec": spec}
-        )
+        self.created.append({"name": name, "dimension": dimension, "metric": metric, "spec": spec})
 
     def Index(self, name):
         if name not in self._indexes:
@@ -115,9 +113,11 @@ class FakePineconeClient:
 def _install_fake_pinecone(monkeypatch, client_factory):
     pinecone_mod = types.ModuleType("pinecone")
     pinecone_mod.Pinecone = client_factory
-    pinecone_mod.ServerlessSpec = (
-        lambda cloud, region: {"kind": "serverless", "cloud": cloud, "region": region}
-    )
+    pinecone_mod.ServerlessSpec = lambda cloud, region: {
+        "kind": "serverless",
+        "cloud": cloud,
+        "region": region,
+    }
     pinecone_mod.PodSpec = lambda environment, replicas, shards: {
         "kind": "pod",
         "environment": environment,
@@ -384,7 +384,11 @@ class TestPineconeVectorStore:
         )
         assert n == 2
         vectors = store.index.upsert_calls[-1]
-        assert vectors[0] == {"id": "a", "values": [1.0, 0.0], "metadata": {"text": "alpha", "k": "v"}}
+        assert vectors[0] == {
+            "id": "a",
+            "values": [1.0, 0.0],
+            "metadata": {"text": "alpha", "k": "v"},
+        }
         assert vectors[1] == {"id": "b", "values": [0.0, 1.0], "metadata": {"text": "beta"}}
 
     @pytest.mark.asyncio
@@ -486,9 +490,7 @@ class TestCreateVectorStore:
     @pytest.mark.asyncio
     async def test_pinecone(self, monkeypatch):
         _install_fake_pinecone(monkeypatch, FakePineconeClient)
-        store = await create_vector_store(
-            "pinecone", api_key="k", index="custom", dimension=512
-        )
+        store = await create_vector_store("pinecone", api_key="k", index="custom", dimension=512)
         assert isinstance(store, PineconeVectorStore)
         assert store.index_name == "custom"
         assert store.dimension == 512

@@ -9,9 +9,10 @@ Usage:
     journey = SloughGPTJourney()
     result = journey.run([journey.goto("/training"), journey.check_body("train")])
 """
+
 from __future__ import annotations
 
-from . import Page, SiteConfig, create_site_config
+from . import SiteConfig, create_site_config
 
 # ── sloughGPT Pages ─────────────────────────────────────────────────────────
 
@@ -157,10 +158,13 @@ SLOUGHPGPT_SITE = create_site_config(
 
 # ── sloughGPT Journey Helper ───────────────────────────────────────────────
 
+
 class SloughGPTJourney:
     """Pre-configured journey for sloughGPT."""
 
-    def __init__(self, base_url: str = "http://localhost:3000", api_url: str = "http://localhost:8000"):
+    def __init__(
+        self, base_url: str = "http://localhost:3000", api_url: str = "http://localhost:8000"
+    ):
         from . import Journey
 
         self.config = SiteConfig(

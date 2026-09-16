@@ -1,7 +1,8 @@
 """Tests for external API provider."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from domain.inference._internal.api_provider import ApiProvider
 
@@ -49,9 +50,7 @@ class TestApiProviderChat:
         p = ApiProvider(api_key="sk-test", api_url="https://api.openai.com/v1", model="gpt-4o")
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "Hello!"}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Hello!"}}]}
         mock_response.raise_for_status = MagicMock()
 
         with patch("domain.inference._internal.api_provider.httpx.AsyncClient") as MockClient:
@@ -102,9 +101,7 @@ class TestApiProviderConnection:
         p = ApiProvider(api_key="sk-test", api_url="https://api.openai.com/v1", model="gpt-4o")
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": [{"id": "gpt-4o"}, {"id": "gpt-3.5-turbo"}]
-        }
+        mock_response.json.return_value = {"data": [{"id": "gpt-4o"}, {"id": "gpt-3.5-turbo"}]}
         mock_response.raise_for_status = MagicMock()
 
         with patch("domain.inference._internal.api_provider.httpx.Client") as MockClient:

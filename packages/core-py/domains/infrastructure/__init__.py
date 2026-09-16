@@ -3,11 +3,15 @@
 try:
     from domain.infrastructure._internal.config import (
         AppConfig,
-        get_config,
-        reload_config,
         ConfigManager,
+        get_config,
         get_config_manager,
+        reload_config,
         set_config_manager,
+    )
+    from domain.infrastructure._internal.errors import (
+        AppError,
+        ErrorCode,
     )
     from domain.infrastructure._internal.event_bus import (
         EventBus,
@@ -16,10 +20,6 @@ try:
     from domain.infrastructure._internal.lifecycle import (
         LifecycleManager,
         LifecyclePhase,
-    )
-    from domain.infrastructure._internal.errors import (
-        AppError,
-        ErrorCode,
     )
 except (ImportError, AttributeError):
     AppConfig = None

@@ -1,8 +1,11 @@
 """Tests for ConfigController."""
+
+import os
+import sys
+
 import pytest
-from unittest.mock import patch
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'apps', 'api', 'server'))
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "apps", "api", "server"))
 
 from controllers.config import ConfigController, get_config_controller
 
@@ -34,8 +37,12 @@ class TestGetGenerationConfig:
     def test_has_full_known_key_set(self, ctrl):
         result = ctrl.get_generation_config()
         for key in [
-            "temperature", "top_p", "top_k", "repetition_penalty",
-            "max_new_tokens", "max_context_length",
+            "temperature",
+            "top_p",
+            "top_k",
+            "repetition_penalty",
+            "max_new_tokens",
+            "max_context_length",
         ]:
             assert key in result
 
@@ -129,8 +136,12 @@ class TestConfigShape:
     def test_exact_key_set(self, ctrl):
         result = ctrl.get_generation_config()
         assert set(result.keys()) == {
-            "temperature", "top_p", "top_k", "repetition_penalty",
-            "max_new_tokens", "max_context_length",
+            "temperature",
+            "top_p",
+            "top_k",
+            "repetition_penalty",
+            "max_new_tokens",
+            "max_context_length",
         }
 
     def test_values_are_scalars(self, ctrl):
@@ -173,8 +184,12 @@ class TestUpdateEdgeCases:
     def test_unknown_key_with_value_does_not_grow_config(self, ctrl):
         result = ctrl.update_generation_config(bogus=1)
         assert set(result.keys()) == {
-            "temperature", "top_p", "top_k", "repetition_penalty",
-            "max_new_tokens", "max_context_length",
+            "temperature",
+            "top_p",
+            "top_k",
+            "repetition_penalty",
+            "max_new_tokens",
+            "max_context_length",
         }
 
     def test_negative_values_stored(self, ctrl):

@@ -11,11 +11,11 @@ Adds:
 from __future__ import annotations
 
 import cmath
+import logging
 import math
 import random
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
-import logging
+from typing import Any
 
 logger = logging.getLogger("slo.soul.quantum")
 
@@ -53,11 +53,11 @@ class QuantumCognitiveEngine:
 
     def __init__(self, coherence: float = 0.9):
         self.coherence = coherence
-        self.superposition: List[QuantumState] = []
-        self.entangled_pairs: List[Tuple[str, str]] = []
+        self.superposition: list[QuantumState] = []
+        self.entangled_pairs: list[tuple[str, str]] = []
         self.decoherence_rate = 0.01
 
-    def create_superposition(self, thoughts: List[str]) -> None:
+    def create_superposition(self, thoughts: list[str]) -> None:
         """Create quantum superposition of thoughts."""
         self.superposition = []
         n = len(thoughts)
@@ -74,7 +74,7 @@ class QuantumCognitiveEngine:
             amp = amplitude * cmath.exp(1j * phase)
             self.superposition.append(QuantumState(amp, thought))
 
-    def interfere(self) -> List[Tuple[str, float]]:
+    def interfere(self) -> list[tuple[str, float]]:
         """
         Apply quantum interference between states.
         Similar thoughts constructively interfere.
@@ -123,7 +123,7 @@ class QuantumCognitiveEngine:
         """Create entanglement between thoughts."""
         self.entangled_pairs.append((thought1, thought2))
 
-    def tunnel(self, barrier: str) -> Optional[str]:
+    def tunnel(self, barrier: str) -> str | None:
         """
         Quantum tunneling - find unexpected insights.
         Can 'tunnel through' conceptual barriers.
@@ -161,10 +161,10 @@ class QuantumParallelProcessor:
 
     def __init__(self, num_streams: int = 8):
         self.num_streams = num_streams
-        self.streams: List[List[str]] = [[] for _ in range(num_streams)]
-        self.results: List[Dict] = []
+        self.streams: list[list[str]] = [[] for _ in range(num_streams)]
+        self.results: list[dict] = []
 
-    def parallel_process(self, inputs: List[str], processor: callable) -> List[Any]:
+    def parallel_process(self, inputs: list[str], processor: callable) -> list[Any]:
         """Process inputs in parallel quantum streams."""
         results = []
 
@@ -205,9 +205,9 @@ class HyperdimensionalProcessor:
 
     def __init__(self, dim: int = 10000):
         self.dim = dim
-        self.vectors: Dict[str, List[float]] = {}
+        self.vectors: dict[str, list[float]] = {}
 
-    def encode(self, symbol: str) -> List[float]:
+    def encode(self, symbol: str) -> list[float]:
         """Encode symbol as hyperdimensional vector."""
         if symbol in self.vectors:
             return self.vectors[symbol]
@@ -217,7 +217,7 @@ class HyperdimensionalProcessor:
         self.vectors[symbol] = vector
         return vector
 
-    def encode_text(self, text: str) -> List[float]:
+    def encode_text(self, text: str) -> list[float]:
         """
         Encode full text as hypervector by bundling word tokens.
         Uses chunking for long texts.
@@ -233,7 +233,7 @@ class HyperdimensionalProcessor:
 
         return self.bundle(word_vectors)
 
-    def bundle(self, vectors: List[List[float]]) -> List[float]:
+    def bundle(self, vectors: list[list[float]]) -> list[float]:
         """
         Bundle vectors via superposition.
         Result is thresholded to binary (-1, 1).
@@ -256,7 +256,7 @@ class HyperdimensionalProcessor:
         result = [1.0 if x > 0 else -1.0 for x in result]
         return result
 
-    def bind(self, v1: List[float], v2: List[float]) -> List[float]:
+    def bind(self, v1: list[float], v2: list[float]) -> list[float]:
         """
         Bind vectors (element-wise multiplication).
         Used for creating associations (AND semantics).
@@ -265,10 +265,10 @@ class HyperdimensionalProcessor:
         if len(v1) != len(v2):
             raise ValueError("Vectors must have same dimension")
 
-        result = [a * b for a, b in zip(v1, v2)]
+        result = [a * b for a, b in zip(v1, v2, strict=False)]
         return [1.0 if x > 0 else -1.0 for x in result]
 
-    def similarity(self, v1: List[float], v2: List[float]) -> float:
+    def similarity(self, v1: list[float], v2: list[float]) -> float:
         """
         Calculate cosine similarity between hypervectors.
         Returns value in [-1, 1] range.
@@ -276,10 +276,10 @@ class HyperdimensionalProcessor:
         if len(v1) != len(v2):
             raise ValueError("Vectors must have same dimension")
 
-        dot = sum(a * b for a, b in zip(v1, v2))
+        dot = sum(a * b for a, b in zip(v1, v2, strict=False))
         return dot / self.dim
 
-    def unbind(self, bound: List[float], key: List[float]) -> List[float]:
+    def unbind(self, bound: list[float], key: list[float]) -> list[float]:
         """
         Unbind a bound vector using the key.
         Inverse of bind operation.
@@ -303,11 +303,11 @@ class TemporalReasoningEngine:
 
     def __init__(self, timeline_depth: int = 5):
         self.timeline_depth = timeline_depth
-        self.timelines: List[List[Dict]] = [[] for _ in range(timeline_depth)]
+        self.timelines: list[list[dict]] = [[] for _ in range(timeline_depth)]
         self.current_timeline = 0
-        self.branch_points: List[Dict] = []
+        self.branch_points: list[dict] = []
 
-    def add_event(self, event: Dict[str, Any], timeline: int = None) -> None:
+    def add_event(self, event: dict[str, Any], timeline: int = None) -> None:
         """Add event to timeline."""
         if timeline is None:
             timeline = self.current_timeline
@@ -346,11 +346,11 @@ class TemporalReasoningEngine:
             return True
         return False
 
-    def get_current_events(self, n: int = 10) -> List[Dict]:
+    def get_current_events(self, n: int = 10) -> list[dict]:
         """Get recent events from current timeline."""
         return self.timelines[self.current_timeline][-n:]
 
-    def merge_timelines(self, t1: int, t2: int) -> List[Dict]:
+    def merge_timelines(self, t1: int, t2: int) -> list[dict]:
         """Merge two timelines."""
         merged = self.timelines[t1] + self.timelines[t2]
         # Sort by timestamp

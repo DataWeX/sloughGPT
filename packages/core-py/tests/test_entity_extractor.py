@@ -1,9 +1,10 @@
 """Meaningful tests for entity_extractor — entity extraction, relationship extraction, fact extraction from conversations."""
 
-import pytest
 from domain.learner._internal.entity_extractor import (
-    _is_valid_entity, extract_entities, extract_relationships,
-    extract_facts_from_conversation, _STOP_WORDS, _COMMON_FALSE_ENTITIES,
+    _is_valid_entity,
+    extract_entities,
+    extract_facts_from_conversation,
+    extract_relationships,
 )
 
 
@@ -110,22 +111,17 @@ class TestExtractRelationships:
 class TestExtractFactsFromConversation:
     def test_is_a_fact(self):
         facts = extract_facts_from_conversation(
-            "What is Python?",
-            "Python is a programming language"
+            "What is Python?", "Python is a programming language"
         )
         assert any("Python" in f and "programming language" in f for f in facts)
 
     def test_likes_fact(self):
-        facts = extract_facts_from_conversation(
-            "What does Alice like?",
-            "Alice likes hiking"
-        )
+        facts = extract_facts_from_conversation("What does Alice like?", "Alice likes hiking")
         assert any("Alice" in f and "hiking" in f for f in facts)
 
     def test_entity_fact(self):
         facts = extract_facts_from_conversation(
-            "Tell me about Tesla Motors",
-            "Tesla Motors was founded by Elon Musk"
+            "Tell me about Tesla Motors", "Tesla Motors was founded by Elon Musk"
         )
         assert any("Tesla" in f for f in facts)
 
@@ -140,7 +136,6 @@ class TestExtractFactsFromConversation:
 
     def test_deduplication(self):
         facts = extract_facts_from_conversation(
-            "Python is a language",
-            "Python is a language and Python is great"
+            "Python is a language", "Python is a language and Python is great"
         )
         assert len(facts) == len(set(facts))

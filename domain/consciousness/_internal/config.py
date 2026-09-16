@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 logger = logging.getLogger("slo.consciousness.config")
@@ -60,7 +60,7 @@ class ConsciousnessConfig:
             logger.warning("Failed to save consciousness config: %s", e)
 
     @classmethod
-    def load(cls, store_path: str = "data/consciousness") -> "ConsciousnessConfig":
+    def load(cls, store_path: str = "data/consciousness") -> ConsciousnessConfig:
         """Load config from disk, falling back to defaults."""
         config_file = Path(store_path) / _CONFIG_FILENAME
         try:

@@ -1,24 +1,27 @@
 import numpy as np
-import pytest
 
 from domain.collections._internal.baby_perception import (
-    BabyPerceptionConfig, BabyPerception, BabyAction, BabyLearning,
+    BabyAction,
+    BabyLearning,
+    BabyPerception,
+    BabyPerceptionConfig,
     BabyPerceptionSystem,
 )
-from domain.collections._internal.perception import WorldPerception, PerceptionEvent, Record
+from domain.collections._internal.perception import PerceptionEvent, WorldPerception
 from domain.collections._internal.sources import Record as SourceRecord
-from domain.shell._internal.simulation import WorldGrid, SimBaby, WorldParams
+from domain.shell._internal.simulation import WorldGrid
 
 
 class FakeBaby:
     def __init__(self, position=None, energy=50.0):
-        self.entity = type('Entity', (), {'id': 1, 'entity_type': 1})()
+        self.entity = type("Entity", (), {"id": 1, "entity_type": 1})()
         self.position = np.array(position if position else [32, 0, 32], dtype=np.float64)
         self.energy = energy
         self.alive = True
 
 
 # ── Config ──────────────────────────────────────────────────────────────
+
 
 class TestBabyPerceptionConfig:
     def test_defaults(self):
@@ -32,8 +35,12 @@ class TestBabyPerceptionConfig:
 
     def test_custom_values(self):
         cfg = BabyPerceptionConfig(
-            see_radius=10, material_weight=2.0, energy_weight=0.8,
-            novelty_bonus=3.0, memory_size=200, learning_rate=0.01,
+            see_radius=10,
+            material_weight=2.0,
+            energy_weight=0.8,
+            novelty_bonus=3.0,
+            memory_size=200,
+            learning_rate=0.01,
         )
         assert cfg.see_radius == 10
         assert cfg.material_weight == 2.0
@@ -41,6 +48,7 @@ class TestBabyPerceptionConfig:
 
 
 # ── BabyPerception ──────────────────────────────────────────────────────
+
 
 class TestBabyPerception:
     def test_perceive_world(self):
@@ -211,6 +219,7 @@ class TestBabyPerception:
 
 # ── BabyAction ──────────────────────────────────────────────────────────
 
+
 class TestBabyAction:
     def test_move_toward(self):
         baby = FakeBaby(position=[32, 0, 32])
@@ -375,6 +384,7 @@ class TestBabyAction:
 
 # ── BabyLearning ────────────────────────────────────────────────────────
 
+
 class TestBabyLearning:
     def test_record_experience(self):
         baby = FakeBaby()
@@ -429,7 +439,8 @@ class TestBabyLearning:
         learning = BabyLearning(baby, cfg)
         for i in range(10):
             learning.record_experience(
-                {"event_count": i}, {"success": False},
+                {"event_count": i},
+                {"success": False},
             )
         assert len(learning._experiences) <= 3
 
@@ -464,10 +475,12 @@ class TestBabyLearning:
         baby = FakeBaby()
         learning = BabyLearning(baby)
         learning.record_experience(
-            {"preferred_material": 5}, {"success": True},
+            {"preferred_material": 5},
+            {"success": True},
         )
         learning.record_experience(
-            {"preferred_material": 5}, {"success": True},
+            {"preferred_material": 5},
+            {"success": True},
         )
         assert learning.get_material_value(5) == 2.0
 
@@ -479,6 +492,7 @@ class TestBabyLearning:
 
 
 # ── BabyPerceptionSystem ───────────────────────────────────────────────
+
 
 class TestBabyPerceptionSystem:
     def test_register_baby(self):

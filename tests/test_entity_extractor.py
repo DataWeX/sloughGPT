@@ -1,8 +1,9 @@
 """Tests for entity_extractor — relationship and entity extraction from chat."""
-import pytest
-from domain.learner._internal.entity_extractor import (    extract_entities,
-    extract_relationships,
+
+from domain.learner._internal.entity_extractor import (
+    extract_entities,
     extract_facts_from_conversation,
+    extract_relationships,
 )
 
 

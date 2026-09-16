@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
 from domain.multimodal._internal.video import TemporalEncoder, VideoProcessor
-
 
 # ── TemporalEncoder ───────────────────────────────────────────────────────
 

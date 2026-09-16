@@ -1,6 +1,5 @@
 """Tests for domain.shell.addons.neural_bindings — Property descriptor."""
 
-import pytest
 from domain.shell._internal.addons.neural_bindings import Property
 
 
@@ -14,7 +13,8 @@ class TestProperty:
 
     def test_get_requires_addon(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x", require_addon=True)
 
         obj = Obj()
@@ -23,7 +23,8 @@ class TestProperty:
 
     def test_get_no_require(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x", require_addon=False)
 
         obj = Obj()
@@ -32,7 +33,8 @@ class TestProperty:
 
     def test_get_missing_returns_none(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x")
 
         obj = Obj()
@@ -40,7 +42,8 @@ class TestProperty:
 
     def test_get_default_factory(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x", default_factory=lambda: [1, 2, 3])
 
         obj = Obj()
@@ -48,27 +51,31 @@ class TestProperty:
 
     def test_get_class_returns_descriptor(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x")
 
         assert isinstance(Obj.x, Property)
 
     def test_get_none_obj_returns_descriptor(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x")
 
         assert isinstance(Obj.__dict__["x"].__get__(None, Obj), Property)
 
     def test_default_factory_called_each_access(self):
         call_count = 0
+
         def factory():
             nonlocal call_count
             call_count += 1
             return []
 
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x", default_factory=factory)
 
         obj = Obj()
@@ -78,7 +85,8 @@ class TestProperty:
 
     def test_default_factory_not_used_when_set(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x", default_factory=lambda: [1])
 
         obj = Obj()
@@ -87,7 +95,8 @@ class TestProperty:
 
     def test_different_instances_different_values(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x")
 
         obj1 = Obj()
@@ -99,8 +108,10 @@ class TestProperty:
 
     def test_require_addon_called(self):
         calls = []
+
         class Obj:
-            _require_addon = lambda self, name: calls.append(name)
+            def _require_addon(self, name):
+                return calls.append(name)
             x = Property("_x", require_addon=True)
 
         obj = Obj()
@@ -110,8 +121,10 @@ class TestProperty:
 
     def test_require_addon_not_called_when_false(self):
         calls = []
+
         class Obj:
-            _require_addon = lambda self, name: calls.append(name)
+            def _require_addon(self, name):
+                return calls.append(name)
             x = Property("_x", require_addon=False)
 
         obj = Obj()
@@ -121,7 +134,8 @@ class TestProperty:
 
     def test_multiple_properties(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x")
             y = Property("_y")
             z = Property("_z")
@@ -136,7 +150,8 @@ class TestProperty:
 
     def test_attr_name_underscore_prefix(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_internal_x")
 
         obj = Obj()
@@ -145,7 +160,8 @@ class TestProperty:
 
     def test_none_value_returned(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x")
 
         obj = Obj()
@@ -154,7 +170,8 @@ class TestProperty:
 
     def test_false_value_with_default_factory(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x", default_factory=lambda: [1])
 
         obj = Obj()
@@ -164,7 +181,8 @@ class TestProperty:
 
     def test_zero_with_default_factory(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x", default_factory=lambda: [1])
 
         obj = Obj()
@@ -174,7 +192,8 @@ class TestProperty:
 
     def test_empty_string_with_default_factory(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x", default_factory=lambda: [1])
 
         obj = Obj()
@@ -184,7 +203,8 @@ class TestProperty:
 
     def test_empty_list_with_default_factory(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x", default_factory=lambda: [1])
 
         obj = Obj()
@@ -194,7 +214,8 @@ class TestProperty:
 
     def test_set_new_value(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x")
 
         obj = Obj()
@@ -204,7 +225,8 @@ class TestProperty:
 
     def test_descriptor_on_class_level(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x")
 
         assert isinstance(Obj.__dict__["x"], Property)
@@ -212,7 +234,8 @@ class TestProperty:
 
     def test_inheritance(self):
         class Base:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x")
 
         class Child(Base):
@@ -224,12 +247,15 @@ class TestProperty:
 
     def test_overridden_require_addon(self):
         calls = []
+
         class Base:
-            _require_addon = lambda self, name: calls.append("base")
+            def _require_addon(self, name):
+                return calls.append("base")
             x = Property("_x", require_addon=True)
 
         class Child(Base):
-            _require_addon = lambda self, name: calls.append("child")
+            def _require_addon(self, name):
+                return calls.append("child")
 
         obj = Child()
         obj._x = 42
@@ -238,8 +264,10 @@ class TestProperty:
 
     def test_property_with_numpy_array(self):
         import numpy as np
+
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x")
 
         obj = Obj()
@@ -249,7 +277,8 @@ class TestProperty:
 
     def test_property_with_dict(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x")
 
         obj = Obj()
@@ -262,7 +291,8 @@ class TestProperty:
             return {"level1": {"level2": [1, 2, 3]}}
 
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x", default_factory=complex_factory)
 
         obj = Obj()
@@ -271,20 +301,21 @@ class TestProperty:
 
     def test_multiple_instances_independent(self):
         class Obj:
-            _require_addon = lambda self, name: None
+            def _require_addon(self, name):
+                return None
             x = Property("_x")
 
         instances = [Obj() for _ in range(5)]
         for i, inst in enumerate(instances):
             inst._x = i * 10
-        
+
         for i, inst in enumerate(instances):
             assert inst.x == i * 10
 
     def test_set_name_multiple_classes(self):
         class A:
             x = Property("_x")
-        
+
         class B:
             x = Property("_x")
 

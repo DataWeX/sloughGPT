@@ -6,22 +6,37 @@ No external downloads. Everything learned from scratch.
 
 from __future__ import annotations
 
-import os
-from typing import List, Tuple, Optional
-from dataclasses import dataclass
 import logging
+import os
+from dataclasses import dataclass
+
 import numpy as np
 
 logger = logging.getLogger("slo.multimodal.engine")
 
 from domain.training._internal.slonet import (
-    Tensor, SloLinear,
-    SloEmbedding, SloLayerNorm, SloTransformerBlock, SloCrossAttention,
-    SloMultiHeadAttention, SloFeedForward, SloRMSNorm, SloDropout, SloLayer,
-    SloAdam, softmax as _softmax,
-    tensor as _tensor,
-    cross_entropy as _cross_entropy,
+    SloAdam,
+    SloCrossAttention,
+    SloDropout,
+    SloEmbedding,
+    SloFeedForward,
+    SloLayer,
+    SloLayerNorm,
+    SloLinear,
+    SloMultiHeadAttention,
+    SloRMSNorm,
+    SloTransformerBlock,
+    Tensor,
     compute_sensitivity,
+)
+from domain.training._internal.slonet import (
+    cross_entropy as _cross_entropy,
+)
+from domain.training._internal.slonet import (
+    softmax as _softmax,
+)
+from domain.training._internal.slonet import (
+    tensor as _tensor,
 )
 
 from .char_tokenizer import CharTokenizer
@@ -45,15 +60,15 @@ class TextDecoder:
         self.hidden_dim = hidden_dim
         self.char = CharTokenizer()
 
-    def build_vocab(self, texts: List[str]):
+    def build_vocab(self, texts: list[str]):
         """Build character vocabulary from training texts."""
         self.char.build_vocab(texts)
 
-    def encode(self, text: str) -> List[int]:
+    def encode(self, text: str) -> list[int]:
         """Encode text using char tokenizer."""
         return self.char.encode(text)
 
-    def decode(self, token_ids: List[int]) -> str:
+    def decode(self, token_ids: list[int]) -> str:
         """Decode token IDs back to text using char tokenizer."""
         return self.char.decode(token_ids)
 
@@ -73,8 +88,15 @@ class MultimodalEngine:
     SAVE_PATH = "data/multimodal/multimodal_engine.npz"
     _model_id = "multimodal-v1"
 
-    def __init__(self, embed_dim=256, hidden_dim=512, n_vit_layers=3, n_heads=4,
-                 n_decoder_layers=3, n_audio_layers=2):
+    def __init__(
+        self,
+        embed_dim=256,
+        hidden_dim=512,
+        n_vit_layers=3,
+        n_heads=4,
+        n_decoder_layers=3,
+        n_audio_layers=2,
+    ):
         self.vision = VisionEncoder(embed_dim, n_heads, n_vit_layers)
         self.audio = AudioEncoder(embed_dim, n_heads, n_audio_layers)
         self.text = TextDecoder(embed_dim, hidden_dim)
@@ -89,9 +111,9 @@ class MultimodalEngine:
 
     def train(self, mode: bool = True):
         self.decoder.train(mode)
-        if hasattr(self.vision, 'train'):
+        if hasattr(self.vision, "train"):
             self.vision.train(mode)
-        if hasattr(self.audio, 'train'):
+        if hasattr(self.audio, "train"):
             self.audio.train(mode)
 
     def eval(self):
@@ -113,6 +135,7 @@ class MultimodalEngine:
     @property
     def capabilities(self):
         from domain.models._internal.provider import ModelCapabilities
+
         return ModelCapabilities(chat=True, streaming=False, embedding=True, vision=True)
 
     def _extract_images(self, messages: list) -> list:
@@ -127,11 +150,14 @@ class MultimodalEngine:
                         images.append(url)
             if isinstance(content, str):
                 import re
+
                 for m in re.finditer(r'data:image/\w+;base64,([^"]+)', content):
                     images.append(m.group(0))
         return images
 
-    async def chat_stream(self, messages: list, max_tokens: int = 512, temperature: float = 0.8, **kwargs):
+    async def chat_stream(
+        self, messages: list, max_tokens: int = 512, temperature: float = 0.8, **kwargs
+    ):
         """Stream caption for the first image found in messages."""
         images = self._extract_images(messages)
         if not images:
@@ -139,21 +165,26 @@ class MultimodalEngine:
             return
         try:
             import base64
-            from PIL import Image
             import io
+
+            from PIL import Image
+
             img_data = images[0]
             if "," in img_data:
                 img_data = img_data.split(",")[1]
             img_bytes = base64.b64decode(img_data)
             img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
             from .manager import get_multimodal_manager
+
             mgr = get_multimodal_manager()
             caption = mgr.caption_image(img)
             yield caption.text
         except Exception as e:
             yield f"[error: {e}]"
 
-    async def chat(self, messages: list, max_tokens: int = 512, temperature: float = 0.8, **kwargs) -> str:
+    async def chat(
+        self, messages: list, max_tokens: int = 512, temperature: float = 0.8, **kwargs
+    ) -> str:
         chunks = []
         async for chunk in self.chat_stream(messages, max_tokens, temperature, **kwargs):
             chunks.append(chunk)
@@ -178,7 +209,7 @@ class MultimodalEngine:
             "embed_dim": self.vision.embed_dim,
         }
 
-    def build_vocab(self, texts: List[str]):
+    def build_vocab(self, texts: list[str]):
         self.text.build_vocab(texts)
         char_vocab_size = self.text.vocab_size
         self.decoder = SloTransformerDecoder(
@@ -219,7 +250,9 @@ class MultimodalEngine:
         np.savez_compressed(path, **weights)
 
         meta = {
-            "char_vocab": [c for c in self.text.char.vocab if c not in set(CharTokenizer.SPECIAL_TOKENS)],
+            "char_vocab": [
+                c for c in self.text.char.vocab if c not in set(CharTokenizer.SPECIAL_TOKENS)
+            ],
             "embed_dim": self.vision.embed_dim,
             "hidden_dim": self.decoder.hidden_dim,
             "n_vit_layers": len(self.vision.blocks),
@@ -232,6 +265,7 @@ class MultimodalEngine:
             meta.update(extra_meta)
         meta_path = path + ".json"
         import json
+
         with open(meta_path, "w") as f:
             json.dump(meta, f, indent=2)
 
@@ -239,13 +273,14 @@ class MultimodalEngine:
         return path
 
     @classmethod
-    def load(cls, path: str = "") -> "MultimodalEngine":
+    def load(cls, path: str = "") -> MultimodalEngine:
         """Load engine state from .npz + JSON."""
         if not path:
             path = cls.SAVE_PATH
         meta_path = path + ".json"
 
         import json
+
         with open(meta_path) as f:
             meta = json.load(f)
 
@@ -321,8 +356,12 @@ class MultimodalEngine:
     def embed_dim(self):
         return self.vision.embed_dim
 
-    def _concat_modalities(self, images_np: Optional[np.ndarray] = None, audio_np: Optional[np.ndarray] = None,
-                           audio_patches: Optional[np.ndarray] = None) -> Tuple[Tensor, Tensor, List]:
+    def _concat_modalities(
+        self,
+        images_np: np.ndarray | None = None,
+        audio_np: np.ndarray | None = None,
+        audio_patches: np.ndarray | None = None,
+    ) -> tuple[Tensor, Tensor, list]:
         """Produce (embed, patches, optimizers) from optional image and audio inputs.
 
         Returns:
@@ -367,8 +406,9 @@ class MultimodalEngine:
         )
         return embed, all_patches, optimizers
 
-    def forward(self, images_np: np.ndarray, token_ids: np.ndarray,
-                audio_np: Optional[np.ndarray] = None) -> Tuple[Tensor, Tensor]:
+    def forward(
+        self, images_np: np.ndarray, token_ids: np.ndarray, audio_np: np.ndarray | None = None
+    ) -> tuple[Tensor, Tensor]:
         img_embed = self.vision.forward(images_np)
         patches = None
         if audio_np is not None:
@@ -386,13 +426,13 @@ class MultimodalEngine:
         """Precompute audio raw patches (B, N, input_dim) without STFT per epoch."""
         return self.audio.extract_patches(audio_np)
 
-    def _maybe_set_lr(self, lr: Optional[float], optimizers: list):
+    def _maybe_set_lr(self, lr: float | None, optimizers: list):
         """Temporarily override optimiser LR if provided."""
         if lr is not None:
             for opt in optimizers:
                 opt.lr = lr
 
-    def _maybe_restore_lr(self, lr: Optional[float], optimizers: list, old_lrs: dict):
+    def _maybe_restore_lr(self, lr: float | None, optimizers: list, old_lrs: dict):
         if lr is not None:
             for opt in optimizers:
                 opt.lr = old_lrs.get(id(opt), opt.lr)
@@ -402,14 +442,14 @@ class MultimodalEngine:
         total_norm = 0.0
         for p in params:
             if p.grad is not None:
-                g_data = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                g_data = p.grad.data if hasattr(p.grad, "data") else p.grad
                 total_norm += float(np.sum(np.asarray(g_data, dtype=np.float64).ravel() ** 2))
         total_norm = np.sqrt(total_norm)
         if total_norm > max_norm and total_norm > 0:
             scale = float(max_norm / total_norm)
             for p in params:
                 if p.grad is not None:
-                    g_data = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                    g_data = p.grad.data if hasattr(p.grad, "data") else p.grad
                     g_data *= scale
 
     def _zero_grad(self, optimizers: list):
@@ -421,7 +461,7 @@ class MultimodalEngine:
         """Scale all gradients by a factor (in-place)."""
         for p in params:
             if p.grad is not None:
-                g_data = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                g_data = p.grad.data if hasattr(p.grad, "data") else p.grad
                 g_data *= scale
 
     def param_groups(self) -> dict:
@@ -439,11 +479,11 @@ class MultimodalEngine:
 
     def train_step(
         self,
-        images_np: Optional[np.ndarray] = None,
-        text_tokens: Optional[np.ndarray] = None,
-        lr: Optional[float] = None,
-        audio_np: Optional[np.ndarray] = None,
-        audio_patches: Optional[np.ndarray] = None,
+        images_np: np.ndarray | None = None,
+        text_tokens: np.ndarray | None = None,
+        lr: float | None = None,
+        audio_np: np.ndarray | None = None,
+        audio_patches: np.ndarray | None = None,
         temperature: float = 1.0,
         compute_sens: bool = False,
     ):
@@ -461,6 +501,7 @@ class MultimodalEngine:
             raise ValueError("text_tokens is required")
         # Disable GPU accelerator for training — Metal dispatch overhead dominates at embed_dim≤128
         import domains.training.slonet as _slonet_mod
+
         _saved_accel = _slonet_mod._ACCELERATOR
         _slonet_mod._ACCELERATOR = "none"
         try:
@@ -497,7 +538,7 @@ class MultimodalEngine:
     def train_batch(
         self,
         samples: list,
-        lr: Optional[float] = None,
+        lr: float | None = None,
         temperature: float = 1.0,
         compute_sens: bool = False,
     ):
@@ -522,6 +563,7 @@ class MultimodalEngine:
             return 0.0
 
         import domains.training.slonet as _slonet_mod
+
         _saved_accel = _slonet_mod._ACCELERATOR
         _slonet_mod._ACCELERATOR = "none"
         try:
@@ -580,10 +622,16 @@ class MultimodalEngine:
             return self.audio.parameters()
         return []
 
-    def generate(self, image_np: Optional[np.ndarray] = None, max_len: int = 20,
-                 temperature: float = 1.0, audio_np: Optional[np.ndarray] = None,
-                 audio_patches: Optional[np.ndarray] = None,
-                 beam_width: int = 1, top_k: int = 0) -> MultimodalOutput:
+    def generate(
+        self,
+        image_np: np.ndarray | None = None,
+        max_len: int = 20,
+        temperature: float = 1.0,
+        audio_np: np.ndarray | None = None,
+        audio_patches: np.ndarray | None = None,
+        beam_width: int = 1,
+        top_k: int = 0,
+    ) -> MultimodalOutput:
         # Switch to eval mode for deterministic generation (disable dropout)
         self.eval()
         # Seed numpy RNG to ensure deterministic generation regardless of prior state
@@ -591,6 +639,7 @@ class MultimodalEngine:
         np.random.seed(42)
         # Disable GPU accelerator for deterministic inference (Metal can be non-deterministic)
         import domains.training.slonet as _slonet_mod
+
         _saved_accel = _slonet_mod._ACCELERATOR
         _slonet_mod._ACCELERATOR = "none"
         embed, patches, _ = self._concat_modalities(image_np, audio_np, audio_patches)
@@ -617,7 +666,9 @@ class MultimodalEngine:
                 logits_2d = logits.data.reshape(-1, logits.data.shape[-1])
                 last_pos = logits_2d[-1]
                 if temperature > 0 and self._trained:
-                    probs = _softmax(_tensor(last_pos[np.newaxis, :], requires_grad=False) / temperature)
+                    probs = _softmax(
+                        _tensor(last_pos[np.newaxis, :], requires_grad=False) / temperature
+                    )
                     probs_np = probs.data.flatten()
                     probs_np = np.maximum(probs_np, 1e-8)
                     for t in tokens[1:]:
@@ -720,8 +771,9 @@ class MultimodalEngine:
         _slonet_mod._ACCELERATOR = _saved_accel
         return MultimodalOutput(text=text, confidence=conf)
 
-    def generate_vqa(self, image_np: np.ndarray, question: str,
-                     max_len: int = 32, temperature: float = 0.8) -> MultimodalOutput:
+    def generate_vqa(
+        self, image_np: np.ndarray, question: str, max_len: int = 32, temperature: float = 0.8
+    ) -> MultimodalOutput:
         """Generate an answer for a question about an image.
 
         Encodes the question as a prefix, then autoregressively generates
@@ -739,13 +791,13 @@ class MultimodalEngine:
         _saved_rng = np.random.get_state()
         np.random.seed(42)
         import domains.training.slonet as _slonet_mod
+
         _saved_accel = _slonet_mod._ACCELERATOR
         _slonet_mod._ACCELERATOR = "none"
 
         try:
             embed, patches, _ = self._concat_modalities(image_np)
             bos, eos = 0, 1
-            vocab_size = self.text.vocab_size
 
             # Encode question as prefix tokens
             q_tokens = self.text.encode(question.lower().strip())
@@ -768,7 +820,9 @@ class MultimodalEngine:
                 last_pos = logits_2d[-1]
 
                 if temperature > 0:
-                    probs = _softmax(_tensor(last_pos[np.newaxis, :] / temperature, requires_grad=False))
+                    probs = _softmax(
+                        _tensor(last_pos[np.newaxis, :] / temperature, requires_grad=False)
+                    )
                     probs_np = probs.data.flatten()
                     probs_np = np.maximum(probs_np, 1e-8)
                     probs_np /= probs_np.sum()
@@ -781,7 +835,7 @@ class MultimodalEngine:
                 tokens.append(next_tok)
 
             # Decode only the answer portion (skip question tokens)
-            answer_tokens = tokens[len(q_tokens) + 1:]
+            answer_tokens = tokens[len(q_tokens) + 1 :]
             answer = self.text.decode(answer_tokens).strip()
 
             conf = float(np.mean(np.abs(embed.data)))
@@ -798,6 +852,7 @@ class VisionEncoder:
     projecting each patch to embed_dim, and adding positional embeddings.
     Output: (B, num_patches+1, embed_dim) with class token.
     """
+
     PATCH_SIZE = 32
     IMAGE_SIZE = 224
 
@@ -806,13 +861,20 @@ class VisionEncoder:
         self.n_heads = n_heads
         self.patch_dim = 3 * self.PATCH_SIZE * self.PATCH_SIZE  # 3 * 32 * 32 = 3072
         self.num_patches = (self.IMAGE_SIZE // self.PATCH_SIZE) ** 2  # 7*7 = 49
-        self.cls_token = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32) * 0.02, requires_grad=True)
-        self.pos_embed = Tensor(np.random.randn(1, self.num_patches + 1, embed_dim).astype(np.float32) * 0.02, requires_grad=True)
+        self.cls_token = Tensor(
+            np.random.randn(1, 1, embed_dim).astype(np.float32) * 0.02, requires_grad=True
+        )
+        self.pos_embed = Tensor(
+            np.random.randn(1, self.num_patches + 1, embed_dim).astype(np.float32) * 0.02,
+            requires_grad=True,
+        )
         self.patch_proj = SloLinear(self.patch_dim, embed_dim)
         self.norm = SloLayerNorm(embed_dim)
         # Transformer blocks for vision
         self.blocks = [
-            SloTransformerBlock(embed_dim, n_heads, use_rope=True, dropout=0.1, name=f"vit_block_{i}")
+            SloTransformerBlock(
+                embed_dim, n_heads, use_rope=True, dropout=0.1, name=f"vit_block_{i}"
+            )
             for i in range(n_layers)
         ]
         self.optimizer = SloAdam(lr=3e-4)
@@ -828,7 +890,9 @@ class VisionEncoder:
         """Split (B, H, W, C) images into (B, num_patches, patch_dim) patches."""
         B, H, W, C = images_np.shape
         p = self.PATCH_SIZE
-        assert H == self.IMAGE_SIZE and W == self.IMAGE_SIZE, f"Expected {self.IMAGE_SIZE}x{self.IMAGE_SIZE}, got {H}x{W}"
+        assert H == self.IMAGE_SIZE and W == self.IMAGE_SIZE, (
+            f"Expected {self.IMAGE_SIZE}x{self.IMAGE_SIZE}, got {H}x{W}"
+        )
         # Reshape to (B, H/p, p, W/p, p, C) -> (B, (H/p)*(W/p), p*p*C)
         patches = images_np.reshape(B, H // p, p, W // p, p, C)
         patches = patches.transpose(0, 1, 3, 2, 4, 5)  # (B, H/p, W/p, p, p, C)
@@ -844,17 +908,33 @@ class VisionEncoder:
         cls_tiled = self.cls_token.data.repeat(B, axis=0)
         combined_np = np.concatenate([cls_tiled, patch_out.data], axis=1)
         combined_np = combined_np + self.pos_embed.data
-        combined = Tensor(combined_np, requires_grad=True, _children=(self.cls_token, patch_out, self.pos_embed))
+        combined = Tensor(
+            combined_np, requires_grad=True, _children=(self.cls_token, patch_out, self.pos_embed)
+        )
+
         def _vit_backward(g):
             if self.cls_token.requires_grad:
                 g_cls = g[:, 0:1, :].sum(axis=0, keepdims=True)
-                self.cls_token.grad = Tensor(g_cls) if self.cls_token.grad is None else Tensor(self.cls_token.grad.data + g_cls)
+                self.cls_token.grad = (
+                    Tensor(g_cls)
+                    if self.cls_token.grad is None
+                    else Tensor(self.cls_token.grad.data + g_cls)
+                )
             if patch_out.requires_grad:
                 g_patches = g[:, 1:, :]
-                patch_out.grad = Tensor(g_patches) if patch_out.grad is None else Tensor(patch_out.grad.data + g_patches)
+                patch_out.grad = (
+                    Tensor(g_patches)
+                    if patch_out.grad is None
+                    else Tensor(patch_out.grad.data + g_patches)
+                )
             if self.pos_embed.requires_grad:
                 g_pos = g.sum(axis=0, keepdims=True)
-                self.pos_embed.grad = Tensor(g_pos) if self.pos_embed.grad is None else Tensor(self.pos_embed.grad.data + g_pos)
+                self.pos_embed.grad = (
+                    Tensor(g_pos)
+                    if self.pos_embed.grad is None
+                    else Tensor(self.pos_embed.grad.data + g_pos)
+                )
+
         combined._backward_fn = _vit_backward
         # Pass through transformer blocks
         x = combined
@@ -873,17 +953,33 @@ class VisionEncoder:
         cls_tiled = self.cls_token.data.repeat(B, axis=0)
         combined_np = np.concatenate([cls_tiled, patch_out.data], axis=1)
         combined_np = combined_np + self.pos_embed.data
-        combined = Tensor(combined_np, requires_grad=True, _children=(self.cls_token, patch_out, self.pos_embed))
+        combined = Tensor(
+            combined_np, requires_grad=True, _children=(self.cls_token, patch_out, self.pos_embed)
+        )
+
         def _vit_backward(g):
             if self.cls_token.requires_grad:
                 g_cls = g[:, 0:1, :].sum(axis=0, keepdims=True)
-                self.cls_token.grad = Tensor(g_cls) if self.cls_token.grad is None else Tensor(self.cls_token.grad.data + g_cls)
+                self.cls_token.grad = (
+                    Tensor(g_cls)
+                    if self.cls_token.grad is None
+                    else Tensor(self.cls_token.grad.data + g_cls)
+                )
             if patch_out.requires_grad:
                 g_patches = g[:, 1:, :]
-                patch_out.grad = Tensor(g_patches) if patch_out.grad is None else Tensor(patch_out.grad.data + g_patches)
+                patch_out.grad = (
+                    Tensor(g_patches)
+                    if patch_out.grad is None
+                    else Tensor(patch_out.grad.data + g_patches)
+                )
             if self.pos_embed.requires_grad:
                 g_pos = g.sum(axis=0, keepdims=True)
-                self.pos_embed.grad = Tensor(g_pos) if self.pos_embed.grad is None else Tensor(self.pos_embed.grad.data + g_pos)
+                self.pos_embed.grad = (
+                    Tensor(g_pos)
+                    if self.pos_embed.grad is None
+                    else Tensor(self.pos_embed.grad.data + g_pos)
+                )
+
         combined._backward_fn = _vit_backward
         x = combined
         for block in self.blocks:
@@ -912,7 +1008,7 @@ class AudioEncoder:
     N_FFT = 512
     HOP_LENGTH = 160  # 10ms at 16kHz
     PATCH_SECONDS = 0.5  # seconds of audio per patch
-    MAX_SECONDS = 30     # max audio duration
+    MAX_SECONDS = 30  # max audio duration
 
     def __init__(self, embed_dim=256, n_heads=4, n_layers=2):
         self.embed_dim = embed_dim
@@ -921,12 +1017,19 @@ class AudioEncoder:
         self.frames_per_patch = int(patches_per_sec * self.PATCH_SECONDS)  # 500 frames
         self.max_patches = int(self.MAX_SECONDS / self.PATCH_SECONDS)  # 6
         self.input_dim = self.N_MELS * self.frames_per_patch  # 80 * 500 = 40000
-        self.cls_token = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32) * 0.02, requires_grad=True)
-        self.pos_embed = Tensor(np.random.randn(1, self.max_patches + 1, embed_dim).astype(np.float32) * 0.02, requires_grad=True)
+        self.cls_token = Tensor(
+            np.random.randn(1, 1, embed_dim).astype(np.float32) * 0.02, requires_grad=True
+        )
+        self.pos_embed = Tensor(
+            np.random.randn(1, self.max_patches + 1, embed_dim).astype(np.float32) * 0.02,
+            requires_grad=True,
+        )
         self.patch_proj = SloLinear(self.input_dim, embed_dim)
         self.norm = SloLayerNorm(embed_dim)
         self.blocks = [
-            SloTransformerBlock(embed_dim, n_heads, use_rope=True, dropout=0.1, name=f"aud_block_{i}")
+            SloTransformerBlock(
+                embed_dim, n_heads, use_rope=True, dropout=0.1, name=f"aud_block_{i}"
+            )
             for i in range(n_layers)
         ]
         self.optimizer = SloAdam(lr=3e-4)
@@ -965,7 +1068,7 @@ class AudioEncoder:
         fft_bins = ((n_fft + 1) * hz_pts / sr).astype(int)
         mel_basis = np.zeros((n_mels, n_fft // 2 + 1), dtype=np.float32)
         for i in range(n_mels):
-            l, c, r = fft_bins[i], fft_bins[i+1], fft_bins[i+2]
+            l, c, r = fft_bins[i], fft_bins[i + 1], fft_bins[i + 2]
             denom_l = max(c - l, 1)
             denom_r = max(r - c, 1)
             if r > l:
@@ -990,17 +1093,17 @@ class AudioEncoder:
             n = min(T // fp, self.max_patches)
             if n == 0:
                 pad = fp - T
-                mel = np.pad(mel, ((0, 0), (0, pad)), mode='constant')
+                mel = np.pad(mel, ((0, 0), (0, pad)), mode="constant")
                 n = 1
             batch_patches = []
             for i in range(n):
-                seg = mel[:, i*fp:(i+1)*fp].reshape(-1)
+                seg = mel[:, i * fp : (i + 1) * fp].reshape(-1)
                 batch_patches.append(seg)
             patches_list.append(np.stack(batch_patches))
         max_n = max(p.shape[0] for p in patches_list)
         out = np.zeros((B, max_n, self.input_dim), dtype=np.float32)
         for b, p in enumerate(patches_list):
-            out[b, :p.shape[0]] = p
+            out[b, : p.shape[0]] = p
         return out
 
     def forward(self, waveform_np: np.ndarray) -> Tensor:
@@ -1012,8 +1115,8 @@ class AudioEncoder:
         cls_tokens = Tensor(cls_tokens_data, requires_grad=True, _children=(self.cls_token,))
         x_data = np.concatenate([cls_tokens.data, x.data], axis=1)
         if N < self.max_patches:
-            x_data = np.pad(x_data, ((0,0), (0, self.max_patches - N), (0,0)), mode='constant')
-        x_data = x_data + self.pos_embed.data[:, :x_data.shape[1], :]
+            x_data = np.pad(x_data, ((0, 0), (0, self.max_patches - N), (0, 0)), mode="constant")
+        x_data = x_data + self.pos_embed.data[:, : x_data.shape[1], :]
         x = Tensor(x_data, requires_grad=True, _children=(x, self.pos_embed, cls_tokens))
         for block in self.blocks:
             x, _ = block.forward(x)
@@ -1035,8 +1138,8 @@ class AudioEncoder:
         cls_tokens = Tensor(cls_tokens_data, requires_grad=True, _children=(self.cls_token,))
         x_data = np.concatenate([cls_tokens.data, x.data], axis=1)
         if N < self.max_patches:
-            x_data = np.pad(x_data, ((0,0), (0, self.max_patches - N), (0,0)), mode='constant')
-        x_data = x_data + self.pos_embed.data[:, :x_data.shape[1], :]
+            x_data = np.pad(x_data, ((0, 0), (0, self.max_patches - N), (0, 0)), mode="constant")
+        x_data = x_data + self.pos_embed.data[:, : x_data.shape[1], :]
         x = Tensor(x_data, requires_grad=True, _children=(x, self.pos_embed, cls_tokens))
         for block in self.blocks:
             x, _ = block.forward(x)
@@ -1062,9 +1165,17 @@ class SloTransformerDecoderBlock(SloLayer):
     All sub-layers use pre-norm (norm before each sub-layer).
     """
 
-    def __init__(self, d_model: int, n_heads: int, dim_ff: int = None,
-                 use_rope: bool = False, max_seq_len: int = 2048,
-                 rope_base: float = 10000.0, dropout: float = 0.1, name=""):
+    def __init__(
+        self,
+        d_model: int,
+        n_heads: int,
+        dim_ff: int = None,
+        use_rope: bool = False,
+        max_seq_len: int = 2048,
+        rope_base: float = 10000.0,
+        dropout: float = 0.1,
+        name="",
+    ):
         super().__init__(name or f"TransformerDecoder{d_model}")
         dim_ff = dim_ff or d_model * 4
         self.d_model = d_model
@@ -1073,8 +1184,11 @@ class SloTransformerDecoderBlock(SloLayer):
 
         self.self_attn_norm = SloRMSNorm(d_model, name=name + "_self_attn_norm")
         self.self_attn = SloMultiHeadAttention(
-            d_model, n_heads, use_rope=use_rope,
-            max_seq_len=max_seq_len, rope_base=rope_base,
+            d_model,
+            n_heads,
+            use_rope=use_rope,
+            max_seq_len=max_seq_len,
+            rope_base=rope_base,
             name=name + "_self_attn",
         )
         self.cross_attn_norm = SloRMSNorm(d_model, name=name + "_cross_attn_norm")
@@ -1093,10 +1207,14 @@ class SloTransformerDecoderBlock(SloLayer):
         if self.drop:
             self.drop.train(mode)
 
-    def forward(self, x: Tensor, context: Optional[Tensor] = None,
-                mask: Optional[Tensor] = None,
-                kv_cache: Optional[Tuple[np.ndarray, np.ndarray]] = None,
-                start_pos: int = 0) -> Tuple[Tensor, Tuple[np.ndarray, np.ndarray]]:
+    def forward(
+        self,
+        x: Tensor,
+        context: Tensor | None = None,
+        mask: Tensor | None = None,
+        kv_cache: tuple[np.ndarray, np.ndarray] | None = None,
+        start_pos: int = 0,
+    ) -> tuple[Tensor, tuple[np.ndarray, np.ndarray]]:
         """
         Args:
             x: (B, seq_len, d_model) input from previous layer
@@ -1128,7 +1246,7 @@ class SloTransformerDecoderBlock(SloLayer):
         x = x + h
         return x, new_cache
 
-    def parameters(self) -> List[Tensor]:
+    def parameters(self) -> list[Tensor]:
         ps = self.self_attn_norm.parameters() + self.self_attn.parameters()
         ps += self.cross_attn_norm.parameters() + self.cross_attn.parameters()
         ps += self.ff_norm.parameters() + self.ff.parameters()
@@ -1159,9 +1277,17 @@ class SloTransformerDecoder(SloLayer):
     and autoregressive generation (one token at a time with KV cache).
     """
 
-    def __init__(self, vocab_size: int, embed_dim: int = 256, hidden_dim: int = 512,
-                 n_heads: int = 8, n_layers: int = 4, max_seq_len: int = 512,
-                 dropout: float = 0.1, name=""):
+    def __init__(
+        self,
+        vocab_size: int,
+        embed_dim: int = 256,
+        hidden_dim: int = 512,
+        n_heads: int = 8,
+        n_layers: int = 4,
+        max_seq_len: int = 512,
+        dropout: float = 0.1,
+        name="",
+    ):
         super().__init__(name or f"TransformerDecoder{hidden_dim}")
         self.vocab_size = max(1, vocab_size)
         self.embed_dim = embed_dim
@@ -1173,9 +1299,12 @@ class SloTransformerDecoder(SloLayer):
         self.input_proj = SloLinear(embed_dim, hidden_dim, name=name + "_input_proj")
         self.blocks = [
             SloTransformerDecoderBlock(
-                hidden_dim, n_heads,
-                use_rope=True, max_seq_len=max_seq_len,
-                dropout=dropout, name=name + f"_block_{i}",
+                hidden_dim,
+                n_heads,
+                use_rope=True,
+                max_seq_len=max_seq_len,
+                dropout=dropout,
+                name=name + f"_block_{i}",
             )
             for i in range(n_layers)
         ]
@@ -1184,7 +1313,7 @@ class SloTransformerDecoder(SloLayer):
         self.img_proj = SloLinear(embed_dim, hidden_dim, name=name + "_img_proj")
         self.optimizer = SloAdam(lr=3e-4)
 
-    def parameters(self) -> List[Tensor]:
+    def parameters(self) -> list[Tensor]:
         ps = self.embedding.parameters()
         ps += self.input_proj.parameters()
         for block in self.blocks:
@@ -1203,10 +1332,14 @@ class SloTransformerDecoder(SloLayer):
         """Set evaluation mode (disables dropout)."""
         self.train(False)
 
-    def forward(self, img_embed: Tensor, token_ids: Tensor,
-                img_patches: Optional[Tensor] = None,
-                kv_cache: Optional[List[Tuple[np.ndarray, np.ndarray]]] = None,
-                start_pos: int = 0) -> Tuple[Tensor, Tensor, List[Tuple[np.ndarray, np.ndarray]]]:
+    def forward(
+        self,
+        img_embed: Tensor,
+        token_ids: Tensor,
+        img_patches: Tensor | None = None,
+        kv_cache: list[tuple[np.ndarray, np.ndarray]] | None = None,
+        start_pos: int = 0,
+    ) -> tuple[Tensor, Tensor, list[tuple[np.ndarray, np.ndarray]]]:
         """
         Args:
             img_embed: (B, 1, embed_dim) cls token (used for KV cache init, not directly as state)
@@ -1258,6 +1391,7 @@ class SloTransformerDecoder(SloLayer):
 # Self-Supervised Components
 # =============================================================================
 
+
 class ReplayBuffer:
     """Stores past (image, caption) pairs for diverse multimodal training.
 
@@ -1286,7 +1420,7 @@ class ReplayBuffer:
         self.captions.append(caption)
         self._counts[caption] = self._counts.get(caption, 0) + 1
 
-    def sample(self, n: int = 8) -> Tuple[List[np.ndarray], List[str]]:
+    def sample(self, n: int = 8) -> tuple[list[np.ndarray], list[str]]:
         if len(self.images) < n:
             return self.images.copy(), self.captions.copy()
         total = len(self.captions)
@@ -1317,10 +1451,10 @@ def augment_image(img_np: np.ndarray) -> np.ndarray:
     # Random crop with reflection padding
     if np.random.rand() < 0.5:
         pad = 4
-        padded = np.pad(img, ((0, 0), (pad, pad), (pad, pad), (0, 0)), mode='reflect')
+        padded = np.pad(img, ((0, 0), (pad, pad), (pad, pad), (0, 0)), mode="reflect")
         top = np.random.randint(0, 2 * pad + 1)
         left = np.random.randint(0, 2 * pad + 1)
-        img = padded[:, top:top + h, left:left + w, :]
+        img = padded[:, top : top + h, left : left + w, :]
 
     # Color jitter
     if np.random.rand() < 0.8:
@@ -1332,7 +1466,9 @@ def augment_image(img_np: np.ndarray) -> np.ndarray:
     return img
 
 
-def contrastive_loss(z1: Tensor, z2: Tensor, negatives: List[Tensor], temperature: float = 0.5) -> Tensor:
+def contrastive_loss(
+    z1: Tensor, z2: Tensor, negatives: list[Tensor], temperature: float = 0.5
+) -> Tensor:
     """NT-Xent-style contrastive loss between two views and negatives.
 
     Args:
@@ -1347,7 +1483,7 @@ def contrastive_loss(z1: Tensor, z2: Tensor, negatives: List[Tensor], temperatur
     eps = 1e-8
 
     def _l2_norm(t: Tensor) -> Tensor:
-        n = _tensor(np.sqrt((t.data ** 2).sum() + eps), requires_grad=False)
+        n = _tensor(np.sqrt((t.data**2).sum() + eps), requires_grad=False)
         return t / n
 
     z1_n = _l2_norm(z1)
@@ -1378,7 +1514,9 @@ def contrastive_loss(z1: Tensor, z2: Tensor, negatives: List[Tensor], temperatur
         z2_n.grad = _tensor(probs[0] * z1_n.data * grad_factor * z2_n.data, requires_grad=False)
         for i, neg in enumerate(negatives):
             if neg.requires_grad:
-                neg.grad = _tensor(probs[i + 1] * z1_n.data * grad_factor * neg.data, requires_grad=False)
+                neg.grad = _tensor(
+                    probs[i + 1] * z1_n.data * grad_factor * neg.data, requires_grad=False
+                )
 
     loss._backward_fn = bk
     return loss
@@ -1398,6 +1536,7 @@ def contrastive_step(engine: MultimodalEngine, img_np: np.ndarray, buffer: Repla
 
     # Disable GPU accelerator for training — Metal dispatch overhead dominates at embed_dim≤128
     import domains.training.slonet as _slonet_mod
+
     _saved_accel = _slonet_mod._ACCELERATOR
     _slonet_mod._ACCELERATOR = "none"
     try:
@@ -1439,7 +1578,7 @@ def replay_train_step(engine: MultimodalEngine, buffer: ReplayBuffer, batch_size
     total_loss = 0.0
     count = 0
 
-    for i, (img, cap) in enumerate(zip(images, caps)):
+    for i, (img, cap) in enumerate(zip(images, caps, strict=False)):
         try:
             tokens = engine.text.encode(cap)
             if len(tokens) < 3:
@@ -1450,8 +1589,10 @@ def replay_train_step(engine: MultimodalEngine, buffer: ReplayBuffer, batch_size
             count += 1
         except Exception as exc:
             import logging
+
             logging.getLogger("slo.multimodal.engine").debug(
-                "Training step failed for sample %d: %s", i, exc)
+                "Training step failed for sample %d: %s", i, exc
+            )
             continue
 
     if count > 0:
@@ -1459,8 +1600,9 @@ def replay_train_step(engine: MultimodalEngine, buffer: ReplayBuffer, batch_size
     return 0.0
 
 
-def get_multimodal_engine(embed_dim=256, hidden_dim=512, n_vit_layers=4, n_heads=8,
-                          n_decoder_layers=4, n_audio_layers=2) -> MultimodalEngine:
+def get_multimodal_engine(
+    embed_dim=256, hidden_dim=512, n_vit_layers=4, n_heads=8, n_decoder_layers=4, n_audio_layers=2
+) -> MultimodalEngine:
     """Get a new multimodal engine."""
     return MultimodalEngine(
         embed_dim=embed_dim,

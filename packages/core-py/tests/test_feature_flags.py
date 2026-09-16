@@ -1,9 +1,14 @@
 """Tests for domain.shared._internal.feature_flags — FeatureFlags, FeatureFlag, FlagStatus."""
 
 import os
+
 import pytest
+
 from domain.shared._internal.feature_flags import (
-    FlagStatus, FeatureFlag, FeatureFlags, is_enabled,
+    FeatureFlag,
+    FeatureFlags,
+    FlagStatus,
+    is_enabled,
 )
 
 
@@ -288,14 +293,32 @@ class TestRegisterDefaults:
     def test_known_flags_registered(self):
         """_register_defaults registers all known feature flags."""
         known = [
-            "slonet_provider", "native_c_inference", "cloud_vector_store",
-            "soul_format", "soul_manager", "slonet_kernels", "multimodal",
-            "cross_attention", "kv_cache", "session_kv_cache",
-            "model_server", "model_registry", "process_isolation",
-            "on_device_training", "quantization", "hf_finetune",
-            "vlm", "dpo", "context_managers", "knowledge_memory",
-            "semantic_cache", "llm_nlp", "feature_flags",
-            "slonet_provider_tests", "slonet_provider_wave_i", "slonet_wave_f",
+            "slonet_provider",
+            "native_c_inference",
+            "cloud_vector_store",
+            "soul_format",
+            "soul_manager",
+            "slonet_kernels",
+            "multimodal",
+            "cross_attention",
+            "kv_cache",
+            "session_kv_cache",
+            "model_server",
+            "model_registry",
+            "process_isolation",
+            "on_device_training",
+            "quantization",
+            "hf_finetune",
+            "vlm",
+            "dpo",
+            "context_managers",
+            "knowledge_memory",
+            "semantic_cache",
+            "llm_nlp",
+            "feature_flags",
+            "slonet_provider_tests",
+            "slonet_provider_wave_i",
+            "slonet_wave_f",
         ]
         for name in known:
             assert name in FeatureFlags._flags, f"Missing known flag: {name}"
@@ -316,6 +339,7 @@ class TestRegisterDefaults:
     def test_idempotent_defaults(self):
         """Calling _register_defaults twice doesn't duplicate flags."""
         from domain.shared._internal.feature_flags import _register_defaults
+
         count_before = len(FeatureFlags._flags)
         _register_defaults()
         count_after = len(FeatureFlags._flags)

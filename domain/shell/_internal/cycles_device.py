@@ -19,11 +19,17 @@ from __future__ import annotations
 
 import numpy as np
 
-from .vm import Device, DeviceFault
 from .cycles import (
-    CyclesRenderer, Scene, Camera, Material, Light,
-    create_sphere, create_plane, create_cube,
+    Camera,
+    CyclesRenderer,
+    Light,
+    Material,
+    Scene,
+    create_cube,
+    create_plane,
+    create_sphere,
 )
+from .vm import Device, DeviceFault
 
 
 class CyclesDevice(Device):
@@ -69,7 +75,9 @@ class CyclesDevice(Device):
             "meshes": len(self._scene.meshes),
             "lights": len(self._scene.lights),
             "materials": len(self._scene.materials),
-            "last_render_shape": list(self._last_image.shape) if self._last_image is not None else None,
+            "last_render_shape": list(self._last_image.shape)
+            if self._last_image is not None
+            else None,
         }
 
     def _render(self):
@@ -85,15 +93,15 @@ class CyclesDevice(Device):
         return self._last_state
 
     def _add_sphere(self, radius=0.5, cx=0.0, cy=0.0, cz=0.0, mat_idx=0, segments=16):
-        mesh = create_sphere(radius=radius, center=np.array([cx, cy, cz]),
-                             segments=segments, mat_idx=int(mat_idx))
+        mesh = create_sphere(
+            radius=radius, center=np.array([cx, cy, cz]), segments=segments, mat_idx=int(mat_idx)
+        )
         self._scene.add_mesh(mesh)
         self._invalidate()
         return np.array([len(self._scene.meshes) - 1])
 
     def _add_cube(self, size=1.0, cx=0.0, cy=0.0, cz=0.0, mat_idx=0):
-        mesh = create_cube(size=size, center=np.array([cx, cy, cz]),
-                           mat_idx=int(mat_idx))
+        mesh = create_cube(size=size, center=np.array([cx, cy, cz]), mat_idx=int(mat_idx))
         self._scene.add_mesh(mesh)
         self._invalidate()
         return np.array([len(self._scene.meshes) - 1])
@@ -113,8 +121,7 @@ class CyclesDevice(Device):
         self._scene.lights.append(light)
         return np.array([len(self._scene.lights) - 1])
 
-    def _set_camera(self, ox=0.0, oy=1.5, oz=4.0,
-                     lx=0.0, ly=0.0, lz=0.0, fov=50.0):
+    def _set_camera(self, ox=0.0, oy=1.5, oz=4.0, lx=0.0, ly=0.0, lz=0.0, fov=50.0):
         self._scene.camera = Camera(
             origin=np.array([ox, oy, oz]),
             look_at=np.array([lx, ly, lz]),
@@ -122,9 +129,18 @@ class CyclesDevice(Device):
         )
         self._invalidate()
 
-    def _set_material(self, idx, base_r=0.8, base_g=0.8, base_b=0.8,
-                       metallic=0.0, roughness=0.5, emission=0.0,
-                       transmission=0.0, ior=1.45):
+    def _set_material(
+        self,
+        idx,
+        base_r=0.8,
+        base_g=0.8,
+        base_b=0.8,
+        metallic=0.0,
+        roughness=0.5,
+        emission=0.0,
+        transmission=0.0,
+        ior=1.45,
+    ):
         idx = int(idx)
         while len(self._scene.materials) <= idx:
             self._scene.materials.append(Material())
@@ -157,9 +173,7 @@ class CyclesDevice(Device):
 
     def _ensure_renderer(self):
         if self._renderer is None:
-            self._renderer = CyclesRenderer(
-                self._scene, self._width, self._height, self._samples
-            )
+            self._renderer = CyclesRenderer(self._scene, self._width, self._height, self._samples)
 
     def _invalidate(self):
         self._renderer = None

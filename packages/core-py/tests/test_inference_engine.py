@@ -7,7 +7,6 @@ import socket
 import struct
 import threading
 import time
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -17,8 +16,8 @@ from domain.infrastructure._internal.inference_protocol import (
     encode_message,
 )
 
-
 # ── Protocol wire format ──────────────────────────────────────────────
+
 
 class TestProtocolWireFormat:
     def test_encode_decode_roundtrip(self):
@@ -54,11 +53,13 @@ class TestProtocolWireFormat:
 
 # ── Engine message dispatch ───────────────────────────────────────────
 
+
 class TestEngineDispatch:
     """Test InferenceEngine message handling without loading a real model."""
 
     def _make_engine(self):
         from domain.infrastructure._internal.inference_engine import InferenceEngine
+
         engine = InferenceEngine.__new__(InferenceEngine)
         engine.model_id = "test-model"
         engine.slnc_path = None
@@ -107,7 +108,7 @@ class TestEngineDispatch:
             msg_raw = client.recv(1024)
             # Decode the message
             length = struct.unpack("!I", msg_raw[:4])[0]
-            msg = json.loads(msg_raw[4:4+length])
+            msg = json.loads(msg_raw[4 : 4 + length])
             # Handle
             engine._handle_health(client, msg)
             client.close()
@@ -137,7 +138,7 @@ class TestEngineDispatch:
             client, _ = server.accept()
             msg_raw = client.recv(4096)
             length = struct.unpack("!I", msg_raw[:4])[0]
-            msg = json.loads(msg_raw[4:4+length])
+            msg = json.loads(msg_raw[4 : 4 + length])
             engine._handle_generate(client, msg)
             client.close()
 
@@ -146,12 +147,15 @@ class TestEngineDispatch:
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect(("127.0.0.1", port))
-        resp = self._send_recv(sock, {
-            "type": "generate",
-            "id": "req-1",
-            "messages": [{"role": "user", "content": "hi"}],
-            "params": {"max_new_tokens": 10},
-        })
+        resp = self._send_recv(
+            sock,
+            {
+                "type": "generate",
+                "id": "req-1",
+                "messages": [{"role": "user", "content": "hi"}],
+                "params": {"max_new_tokens": 10},
+            },
+        )
         sock.close()
         server.close()
 
@@ -171,7 +175,7 @@ class TestEngineDispatch:
             client, _ = server.accept()
             msg_raw = client.recv(1024)
             length = struct.unpack("!I", msg_raw[:4])[0]
-            msg = json.loads(msg_raw[4:4+length])
+            msg = json.loads(msg_raw[4 : 4 + length])
             engine._dispatch(client, msg)
             client.close()
 
@@ -198,9 +202,11 @@ class TestEngineDispatch:
 
 # ── Client reconnection ───────────────────────────────────────────────
 
+
 class TestInferenceClient:
     def test_client_kv_properties(self):
         from domain.infrastructure._internal.inference_client import InferenceClient
+
         client = InferenceClient(host="127.0.0.1", port=9999)
         assert client.model_id == "unknown"
         assert client._meta["loaded"] is False
@@ -209,6 +215,7 @@ class TestInferenceClient:
 
     def test_client_capabilities(self):
         from domain.infrastructure._internal.inference_client import InferenceClient
+
         client = InferenceClient()
         caps = client.capabilities
         assert caps.chat is True
@@ -217,12 +224,14 @@ class TestInferenceClient:
 
     def test_client_health_when_disconnected(self):
         from domain.infrastructure._internal.inference_client import InferenceClient
+
         client = InferenceClient(host="127.0.0.1", port=1)
         resp = client.health()
         assert resp.get("type") == "error" or resp == {}
 
     def test_client_disconnect_is_idempotent(self):
         from domain.infrastructure._internal.inference_client import InferenceClient
+
         client = InferenceClient()
         client.disconnect()
         client.disconnect()
@@ -230,6 +239,7 @@ class TestInferenceClient:
 
     def test_send_recv_exact(self):
         from domain.infrastructure._internal.inference_client import InferenceClient
+
         client = InferenceClient()
         s1, s2 = socket.socketpair()
         client._socket = s1
@@ -241,6 +251,7 @@ class TestInferenceClient:
 
     def test_recv_exact_short_read(self):
         from domain.infrastructure._internal.inference_client import InferenceClient
+
         client = InferenceClient()
         s1, s2 = socket.socketpair()
         client._socket = s1
@@ -252,6 +263,7 @@ class TestInferenceClient:
 
     def test_recv_message(self):
         from domain.infrastructure._internal.inference_client import InferenceClient
+
         client = InferenceClient()
         msg = {"type": "health_ok", "model_id": "test"}
         raw = encode_message(msg)
@@ -283,9 +295,11 @@ class TestInferenceClient:
 
 # ── Concurrent connections ────────────────────────────────────────────
 
+
 class TestEngineConcurrency:
     def _make_engine(self):
         from domain.infrastructure._internal.inference_engine import InferenceEngine
+
         engine = InferenceEngine.__new__(InferenceEngine)
         engine.model_id = "test-model"
         engine.slnc_path = None
@@ -331,7 +345,7 @@ class TestEngineConcurrency:
                     client.close()
                     continue
                 length = struct.unpack("!I", msg_raw[:4])[0]
-                msg = json.loads(msg_raw[4:4+length])
+                msg = json.loads(msg_raw[4 : 4 + length])
                 engine._handle_health(client, msg)
                 client.close()
 
@@ -383,6 +397,7 @@ class TestEngineConcurrency:
 
 # ── Client reconnection with restart callback ─────────────────────────
 
+
 class TestClientRestart:
     def test_restart_callback_called_on_failure(self):
         from domain.infrastructure._internal.inference_client import InferenceClient
@@ -414,12 +429,14 @@ class TestClientRestart:
 
     def test_no_restart_callback(self):
         from domain.infrastructure._internal.inference_client import InferenceClient
+
         client = InferenceClient(host="127.0.0.1", port=1)
         result = client._try_reconnect()
         assert result is False
 
 
 # ── Full integration: engine + client over TCP ─────────────────────────
+
 
 class MockProvider:
     """Minimal provider that simulates generate and chat_stream."""
@@ -432,9 +449,16 @@ class MockProvider:
     def _meta(self):
         return {"quantized": False}
 
-    def _generate_sync(self, messages, max_tokens=512, temperature=0.8,
-                       top_k=None, top_p=None, repetition_penalty=1.0,
-                       session_id=None):
+    def _generate_sync(
+        self,
+        messages,
+        max_tokens=512,
+        temperature=0.8,
+        top_k=None,
+        top_p=None,
+        repetition_penalty=1.0,
+        session_id=None,
+    ):
         prompt = messages[-1]["content"] if messages else ""
         return f"echo:{prompt[:50]}"
 
@@ -449,6 +473,7 @@ class TestFullIntegration:
 
     def _start_engine_with_mock(self):
         from domain.infrastructure._internal.inference_engine import InferenceEngine
+
         engine = InferenceEngine.__new__(InferenceEngine)
         engine.model_id = "mock-model"
         engine.slnc_path = None
@@ -487,13 +512,11 @@ class TestFullIntegration:
             while not engine._stop.is_set():
                 try:
                     client, addr = server.accept()
-                except socket.timeout:
+                except TimeoutError:
                     continue
                 except OSError:
                     break
-                t = threading.Thread(
-                    target=engine._handle_client, args=(client, addr), daemon=True
-                )
+                t = threading.Thread(target=engine._handle_client, args=(client, addr), daemon=True)
                 t.start()
 
         engine._thread = threading.Thread(target=_accept_loop, daemon=True, name="mock-engine")
@@ -504,6 +527,7 @@ class TestFullIntegration:
         engine, port = self._start_engine_with_mock()
         try:
             from domain.infrastructure._internal.inference_client import InferenceClient
+
             client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0)
             assert client.connect() is True
             assert client.model_id == "mock-model"
@@ -518,13 +542,17 @@ class TestFullIntegration:
         engine, port = self._start_engine_with_mock()
         try:
             from domain.infrastructure._internal.inference_client import InferenceClient
+
             client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0)
             client.connect()
             import asyncio
-            result = asyncio.run(client.chat(
-                [{"role": "user", "content": "hello world"}],
-                max_tokens=10,
-            ))
+
+            result = asyncio.run(
+                client.chat(
+                    [{"role": "user", "content": "hello world"}],
+                    max_tokens=10,
+                )
+            )
             assert result == "echo:hello world"
             client.disconnect()
         finally:
@@ -534,6 +562,7 @@ class TestFullIntegration:
         engine, port = self._start_engine_with_mock()
         try:
             from domain.infrastructure._internal.inference_client import InferenceClient
+
             client = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0)
             client.connect()
             import asyncio
@@ -557,18 +586,21 @@ class TestFullIntegration:
     def test_multiple_clients(self):
         engine, port = self._start_engine_with_mock()
         try:
-            from domain.infrastructure._internal.inference_client import InferenceClient
             import asyncio
+
+            from domain.infrastructure._internal.inference_client import InferenceClient
 
             results = []
 
             def _do_request(i):
                 c = InferenceClient(host="127.0.0.1", port=port, connect_timeout=2.0)
                 c.connect()
-                r = asyncio.run(c.chat(
-                    [{"role": "user", "content": f"msg{i}"}],
-                    max_tokens=5,
-                ))
+                r = asyncio.run(
+                    c.chat(
+                        [{"role": "user", "content": f"msg{i}"}],
+                        max_tokens=5,
+                    )
+                )
                 results.append((i, r))
                 c.disconnect()
 
@@ -586,6 +618,7 @@ class TestFullIntegration:
 
     def test_provider_none_raises(self):
         from domain.infrastructure._internal.inference_engine import InferenceEngine
+
         engine = InferenceEngine.__new__(InferenceEngine)
         engine.model_id = "test"
         engine._provider = None

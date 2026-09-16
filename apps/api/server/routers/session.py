@@ -15,7 +15,7 @@ from infrastructure.auth import require_auth_if_enabled
 from infrastructure.sse_fallback import sse_error, sse_token
 from infrastructure.sse_fallback import sse_event as _sse_event
 from pydantic import BaseModel
-from schemas.common import endpoint, classify_and_raise, safe_audit_log, success_response
+from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 
 from config import ServerConfig
 
@@ -226,7 +226,9 @@ class SessionRouter:
             _op_id = None
             try:
                 mgr = get_cancel_manager()
-                _op_id = mgr.register(OpType.INFERENCE, f"regenerate:{session_id}", cancel_fn=lambda: None)
+                _op_id = mgr.register(
+                    OpType.INFERENCE, f"regenerate:{session_id}", cancel_fn=lambda: None
+                )
                 mgr.start(_op_id)
             except Exception as exc:
                 logger.debug("CancelManager registration failed for regenerate: %s", exc)

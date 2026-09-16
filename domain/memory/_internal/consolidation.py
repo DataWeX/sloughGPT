@@ -13,19 +13,19 @@ removal plan. The task handler applies the plan through ``MemoryService``.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 from domain.memory._internal.embedding import cosine_similarity, ngram_embed
 
 logger = logging.getLogger(__name__)
 
 
-def _embed_cache(facts: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _embed_cache(facts: list[dict[str, Any]]) -> dict[str, Any]:
     """Precompute one n-gram embedding per fact entry id."""
     return {f["id"]: ngram_embed(f["content"]) for f in facts if f.get("id")}
 
 
-def plan_consolidation(facts: List[Dict[str, Any]], threshold: float = 0.80) -> Dict[str, Any]:
+def plan_consolidation(facts: list[dict[str, Any]], threshold: float = 0.80) -> dict[str, Any]:
     """
     Plan which facts are near-duplicates and should be removed.
 
@@ -59,7 +59,7 @@ def plan_consolidation(facts: List[Dict[str, Any]], threshold: float = 0.80) -> 
     if not valid_facts:
         return {"keep_ids": [], "remove_ids": [], "groups": [], "removed_count": 0}
 
-    by_topic: Dict[str, List[Dict[str, Any]]] = {}
+    by_topic: dict[str, list[dict[str, Any]]] = {}
     for f in valid_facts:
         by_topic.setdefault(f.get("topic") or "general", []).append(f)
 
@@ -86,14 +86,14 @@ def plan_consolidation(facts: List[Dict[str, Any]], threshold: float = 0.80) -> 
                     if cosine_similarity(va, vb) >= threshold:
                         union(a["id"], b["id"])
 
-    clusters: Dict[str, List[Dict[str, Any]]] = {}
+    clusters: dict[str, list[dict[str, Any]]] = {}
     for f in valid_facts:
         clusters.setdefault(find(f["id"]), []).append(f)
 
     input_order = [f["id"] for f in valid_facts]
     keep_set: set = set()
     remove_set: set = set()
-    groups: List[Dict[str, Any]] = []
+    groups: list[dict[str, Any]] = []
     for members in clusters.values():
         if len(members) < 2:
             keep_set.add(members[0]["id"])

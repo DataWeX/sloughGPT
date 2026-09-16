@@ -5,25 +5,20 @@ from __future__ import annotations
 import time
 from unittest.mock import MagicMock
 
-import pytest
-
 from domain.shell._internal.surface import (
-    TextSurface,
-    LogSurface,
-    RenderLine,
-    strip_ansi,
-    clip,
+    STYLE_ERROR,
     STYLE_INFO,
     STYLE_WARN,
-    STYLE_ERROR,
+    LogSurface,
+    TextSurface,
+    clip,
+    strip_ansi,
 )
-
 
 # ── strip_ansi ────────────────────────────────────────────────────────────
 
 
 class TestStripAnsi:
-
     def test_strips_csi(self):
         assert strip_ansi("\033[31mred\033[0m") == "red"
 
@@ -44,7 +39,6 @@ class TestStripAnsi:
 
 
 class TestClip:
-
     def test_no_clip_needed(self):
         assert clip("hello", 10) == "hello"
 
@@ -72,7 +66,6 @@ class TestClip:
 
 
 class TestTextSurface:
-
     def test_write_single_line(self):
         s = TextSurface()
         s.write("hello\n")
@@ -161,7 +154,6 @@ class TestTextSurface:
 
 
 class TestLogSurface:
-
     def _make_buffer(self, entries):
         buf = MagicMock()
         buf.get.return_value = entries

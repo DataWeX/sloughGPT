@@ -80,15 +80,15 @@ def kv_state_memory_kb(state):
     """
     total = 0
     for buf_k, buf_v, scale_k, scale_v in zip(
-            state.kv_buf_k, state.kv_buf_v, state.kv_scale_k, state.kv_scale_v):
+        state.kv_buf_k, state.kv_buf_v, state.kv_scale_k, state.kv_scale_v, strict=False
+    ):
         total += buf_k.nbytes + buf_v.nbytes
         if scale_k is not None and scale_v is not None:
             total += scale_k.nbytes + scale_v.nbytes
     return total / 1024.0
 
 
-def benchmark(model, base_ids, step, turns, max_tokens, steps,
-              quantize_kv=False):
+def benchmark(model, base_ids, step, turns, max_tokens, steps, quantize_kv=False):
     """Run warm (persistent state) and cold (fresh state) generation per turn.
 
     Each turn's prompt is the *real* previous warm output followed by a new
@@ -114,7 +114,9 @@ def benchmark(model, base_ids, step, turns, max_tokens, steps,
     # Warm-up to trigger any lazy compilation / allocation.
     _ = model.generate_numpy(
         np.array([base_ids], dtype=np.int64),
-        max_new_tokens=2, temperature=0.0, kv_state=model.new_kv_state(),
+        max_new_tokens=2,
+        temperature=0.0,
+        kv_state=model.new_kv_state(),
         quantize_kv=quantize_kv,
     )
 
@@ -133,8 +135,11 @@ def benchmark(model, base_ids, step, turns, max_tokens, steps,
         for _ in range(steps):
             t0 = time.perf_counter()
             out_warm = model.generate_numpy(
-                ids, max_new_tokens=max_tokens, temperature=0.0,
-                kv_state=warm_state, quantize_kv=quantize_kv,
+                ids,
+                max_new_tokens=max_tokens,
+                temperature=0.0,
+                kv_state=warm_state,
+                quantize_kv=quantize_kv,
             )
             warm_ms.append((time.perf_counter() - t0) * 1000)
 
@@ -144,8 +149,11 @@ def benchmark(model, base_ids, step, turns, max_tokens, steps,
             fresh = model.new_kv_state()
             t0 = time.perf_counter()
             out_cold = model.generate_numpy(
-                ids, max_new_tokens=max_tokens, temperature=0.0,
-                kv_state=fresh, quantize_kv=quantize_kv,
+                ids,
+                max_new_tokens=max_tokens,
+                temperature=0.0,
+                kv_state=fresh,
+                quantize_kv=quantize_kv,
             )
             cold_ms.append((time.perf_counter() - t0) * 1000)
 
@@ -157,16 +165,18 @@ def benchmark(model, base_ids, step, turns, max_tokens, steps,
         min_len = min(len(w_ids), len(c_ids))
         match = float(np.mean(w_ids[:min_len] == c_ids[:min_len])) * 100
 
-        rows.append({
-            "turn": i,
-            "prompt_len": len(prompt),
-            "reused_tokens": reused,
-            "kv_memory_kb": kv_state_memory_kb(warm_state),
-            "warm_ms": float(warm_ms.mean()),
-            "cold_ms": float(cold_ms.mean()),
-            "speedup": float(cold_ms.mean() / max(warm_ms.mean(), 1e-9)),
-            "consistency_pct": match,
-        })
+        rows.append(
+            {
+                "turn": i,
+                "prompt_len": len(prompt),
+                "reused_tokens": reused,
+                "kv_memory_kb": kv_state_memory_kb(warm_state),
+                "warm_ms": float(warm_ms.mean()),
+                "cold_ms": float(cold_ms.mean()),
+                "speedup": float(cold_ms.mean() / max(warm_ms.mean(), 1e-9)),
+                "consistency_pct": match,
+            }
+        )
 
         history = w_ids.tolist()
         prev_warm_output = w_ids.tolist()
@@ -213,6 +223,7 @@ class _StackProvider:
 
     def __init__(self, model):
         import threading
+
         self._model = model
         self._kv_states = {}
         self._kv_last_access = {}
@@ -227,8 +238,17 @@ class _StackProvider:
         return self._model
 
 
-def benchmark_stack(model, base_ids, step, turns, max_tokens, steps,
-                    session_id="bench", stream=False, quantize_kv=False):
+def benchmark_stack(
+    model,
+    base_ids,
+    step,
+    turns,
+    max_tokens,
+    steps,
+    session_id="bench",
+    stream=False,
+    quantize_kv=False,
+):
     """Run the cross-turn benchmark through the full serving stack.
 
     Drives ``SloNetServer.generate(session_id=...)`` (or
@@ -255,11 +275,18 @@ def benchmark_stack(model, base_ids, step, turns, max_tokens, steps,
         Same-shaped metrics dict as ``benchmark()`` with ``mode="stack"``.
     """
     tokenizer, provider, server = _make_stack(
-        model, model_id="bench-kv-reuse", quantize_kv=quantize_kv)
+        model, model_id="bench-kv-reuse", quantize_kv=quantize_kv
+    )
 
     # Warm-up through the stack (lazy imports / allocation).
-    _ = _run_server(server, tokenizer.decode(base_ids), max_new_tokens=2,
-                    with_session=False, session_id=session_id, stream=stream)
+    _ = _run_server(
+        server,
+        tokenizer.decode(base_ids),
+        max_new_tokens=2,
+        with_session=False,
+        session_id=session_id,
+        stream=stream,
+    )
 
     history = tokenizer.decode(base_ids)
     rows = []
@@ -281,17 +308,27 @@ def benchmark_stack(model, base_ids, step, turns, max_tokens, steps,
         warm_ms = []
         for _ in range(steps):
             t0 = time.perf_counter()
-            out_warm = _run_server(server, prompt, max_new_tokens=max_tokens,
-                                   with_session=True, session_id=session_id,
-                                   stream=stream)
+            out_warm = _run_server(
+                server,
+                prompt,
+                max_new_tokens=max_tokens,
+                with_session=True,
+                session_id=session_id,
+                stream=stream,
+            )
             warm_ms.append((time.perf_counter() - t0) * 1000)
 
         cold_ms = []
         for _ in range(steps):
             t0 = time.perf_counter()
-            out_cold = _run_server(server, prompt, max_new_tokens=max_tokens,
-                                   with_session=False, session_id=session_id,
-                                   stream=stream)
+            out_cold = _run_server(
+                server,
+                prompt,
+                max_new_tokens=max_tokens,
+                with_session=False,
+                session_id=session_id,
+                stream=stream,
+            )
             cold_ms.append((time.perf_counter() - t0) * 1000)
 
         warm_ms = np.array(warm_ms)
@@ -300,22 +337,23 @@ def benchmark_stack(model, base_ids, step, turns, max_tokens, steps,
         warm_ids = tokenizer.encode(out_warm)
         cold_ids = tokenizer.encode(out_cold)
         min_len = min(len(warm_ids), len(cold_ids))
-        match = float(np.mean(
-            np.array(warm_ids[:min_len]) == np.array(cold_ids[:min_len]))) * 100
+        match = float(np.mean(np.array(warm_ids[:min_len]) == np.array(cold_ids[:min_len]))) * 100
 
         state = provider._kv_states.get(session_id)
         kv_mem = 0.0 if state is None else kv_state_memory_kb(state)
 
-        rows.append({
-            "turn": i,
-            "prompt_len": prompt_len,
-            "reused_tokens": reused,
-            "kv_memory_kb": kv_mem,
-            "warm_ms": float(warm_ms.mean()),
-            "cold_ms": float(cold_ms.mean()),
-            "speedup": float(cold_ms.mean() / max(warm_ms.mean(), 1e-9)),
-            "consistency_pct": match,
-        })
+        rows.append(
+            {
+                "turn": i,
+                "prompt_len": prompt_len,
+                "reused_tokens": reused,
+                "kv_memory_kb": kv_mem,
+                "warm_ms": float(warm_ms.mean()),
+                "cold_ms": float(cold_ms.mean()),
+                "speedup": float(cold_ms.mean() / max(warm_ms.mean(), 1e-9)),
+                "consistency_pct": match,
+            }
+        )
 
         # Batch generate() echoes the prompt; streaming yields only new tokens.
         # Retain the full prior turn (prompt + output) so the next prompt is a
@@ -368,11 +406,19 @@ def compare_kv_quality(model, base_ids, step, turns, max_tokens):
         prompt = history + user_ids
         ids = np.array([prompt], dtype=np.int64)
         out_f = model.generate_numpy(
-            ids, max_new_tokens=max_tokens, temperature=0.0,
-            kv_state=model.new_kv_state(), quantize_kv=False)
+            ids,
+            max_new_tokens=max_tokens,
+            temperature=0.0,
+            kv_state=model.new_kv_state(),
+            quantize_kv=False,
+        )
         out_q = model.generate_numpy(
-            ids, max_new_tokens=max_tokens, temperature=0.0,
-            kv_state=model.new_kv_state(), quantize_kv=True)
+            ids,
+            max_new_tokens=max_tokens,
+            temperature=0.0,
+            kv_state=model.new_kv_state(),
+            quantize_kv=True,
+        )
         fl, ql = out_f.token_ids[0].tolist(), out_q.token_ids[0].tolist()
         n = min(len(fl), len(ql))
         pre = 0
@@ -380,22 +426,23 @@ def compare_kv_quality(model, base_ids, step, turns, max_tokens):
             if fl[j] != ql[j]:
                 break
             pre += 1
-        ident = sum(1 for a, b in zip(fl[:n], ql[:n]) if a == b) / max(n, 1)
-        rows.append({
-            "turn": i,
-            "prompt_len": len(prompt),
-            "generated": n,
-            "identical_pct": ident * 100,
-            "prefix_agree": pre,
-            "prefix_pct": pre / max(n, 1) * 100,
-        })
+        ident = sum(1 for a, b in zip(fl[:n], ql[:n], strict=False) if a == b) / max(n, 1)
+        rows.append(
+            {
+                "turn": i,
+                "prompt_len": len(prompt),
+                "generated": n,
+                "identical_pct": ident * 100,
+                "prefix_agree": pre,
+                "prefix_pct": pre / max(n, 1) * 100,
+            }
+        )
         history = fl
 
     return {
         "mode": "compare-kv",
         "rows": rows,
-        "overall_identical_pct": float(np.mean(
-            [r["identical_pct"] for r in rows])),
+        "overall_identical_pct": float(np.mean([r["identical_pct"] for r in rows])),
     }
 
 
@@ -403,12 +450,13 @@ def print_quality_report(metrics, title="KV Cache Quality — float32 vs int8"):
     print("=" * 76)
     print(title)
     print("=" * 76)
-    print(f"{'Turn':>4} {'Prompt':>7} {'Gen':>5} {'Identical':>10} "
-          f"{'Prefix':>8} {'Prefix%':>8}")
+    print(f"{'Turn':>4} {'Prompt':>7} {'Gen':>5} {'Identical':>10} {'Prefix':>8} {'Prefix%':>8}")
     for r in metrics["rows"]:
-        print(f"{r['turn']:>4} {r['prompt_len']:>7} {r['generated']:>5} "
-              f"{r['identical_pct']:>9.1f}% {r['prefix_agree']:>8} "
-              f"{r['prefix_pct']:>7.1f}%")
+        print(
+            f"{r['turn']:>4} {r['prompt_len']:>7} {r['generated']:>5} "
+            f"{r['identical_pct']:>9.1f}% {r['prefix_agree']:>8} "
+            f"{r['prefix_pct']:>7.1f}%"
+        )
     print("-" * 76)
     print(f"Overall identical: {metrics['overall_identical_pct']:.1f}%")
     print("=" * 76)
@@ -431,26 +479,29 @@ def _make_stack(model, model_id="bench", quantize_kv=False):
         Tuple of ``(tokenizer, provider, server)``.
     """
     from types import MethodType
+
     from domain.inference._internal.slonet_provider import SloNetChatProvider
     from domain.infrastructure._internal.slonet_server import SloNetServer
 
     tokenizer = _CharTokenizer()
     provider = _StackProvider(model)
-    provider._resolve_session_kv = MethodType(
-        SloNetChatProvider._resolve_session_kv, provider)
-    provider._evict_stale_sessions = MethodType(
-        SloNetChatProvider._evict_stale_sessions, provider)
-    provider._evict_lru_session = MethodType(
-        SloNetChatProvider._evict_lru_session, provider)
+    provider._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, provider)
+    provider._evict_stale_sessions = MethodType(SloNetChatProvider._evict_stale_sessions, provider)
+    provider._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, provider)
     server = SloNetServer(
-        model=model, tokenizer=tokenizer, model_id=model_id,
-        enable_warmup=False, provider=provider, quantize_kv=quantize_kv,
+        model=model,
+        tokenizer=tokenizer,
+        model_id=model_id,
+        enable_warmup=False,
+        provider=provider,
+        quantize_kv=quantize_kv,
     )
     return tokenizer, provider, server
 
 
-def benchmark_sessions(model, base_ids, step, turns, max_tokens, steps,
-                       n_sessions=2, stream=False, quantize_kv=False):
+def benchmark_sessions(
+    model, base_ids, step, turns, max_tokens, steps, n_sessions=2, stream=False, quantize_kv=False
+):
     """Interleave multiple sessions through one server and check isolation.
 
     Each session keeps its own prompt history (distinct user id ranges), and
@@ -475,10 +526,17 @@ def benchmark_sessions(model, base_ids, step, turns, max_tokens, steps,
         despite the interleaving.
     """
     tokenizer, provider, server = _make_stack(
-        model, model_id="bench-sessions", quantize_kv=quantize_kv)
+        model, model_id="bench-sessions", quantize_kv=quantize_kv
+    )
 
-    _ = _run_server(server, tokenizer.decode(base_ids), max_new_tokens=2,
-                    with_session=False, session_id="warm", stream=stream)
+    _ = _run_server(
+        server,
+        tokenizer.decode(base_ids),
+        max_new_tokens=2,
+        with_session=False,
+        session_id="warm",
+        stream=stream,
+    )
 
     histories = [tokenizer.decode(base_ids)] * n_sessions
     rows = []
@@ -486,8 +544,7 @@ def benchmark_sessions(model, base_ids, step, turns, max_tokens, steps,
 
     for i in range(turns):
         for s in range(n_sessions):
-            user_ids = list(range(1000 + s * 10000 + i * step,
-                                  1000 + s * 10000 + i * step + step))
+            user_ids = list(range(1000 + s * 10000 + i * step, 1000 + s * 10000 + i * step + step))
             prompt = histories[s] + "".join(chr(u % 256) for u in user_ids)
             prompt_ids = tokenizer.encode(prompt)
             prompt_len = len(prompt_ids)
@@ -504,16 +561,26 @@ def benchmark_sessions(model, base_ids, step, turns, max_tokens, steps,
             for _ in range(steps):
                 t0 = time.perf_counter()
                 out_warm = _run_server(
-                    server, prompt, max_new_tokens=max_tokens,
-                    with_session=True, session_id=sid, stream=stream)
+                    server,
+                    prompt,
+                    max_new_tokens=max_tokens,
+                    with_session=True,
+                    session_id=sid,
+                    stream=stream,
+                )
                 warm_ms.append((time.perf_counter() - t0) * 1000)
 
             cold_ms = []
             for _ in range(steps):
                 t0 = time.perf_counter()
                 out_cold = _run_server(
-                    server, prompt, max_new_tokens=max_tokens,
-                    with_session=False, session_id=sid, stream=stream)
+                    server,
+                    prompt,
+                    max_new_tokens=max_tokens,
+                    with_session=False,
+                    session_id=sid,
+                    stream=stream,
+                )
                 cold_ms.append((time.perf_counter() - t0) * 1000)
 
             warm_ms = np.array(warm_ms)
@@ -522,29 +589,33 @@ def benchmark_sessions(model, base_ids, step, turns, max_tokens, steps,
             warm_ids = tokenizer.encode(out_warm)
             cold_ids = tokenizer.encode(out_cold)
             min_len = min(len(warm_ids), len(cold_ids))
-            match = float(np.mean(
-                np.array(warm_ids[:min_len]) == np.array(cold_ids[:min_len]))) * 100
+            match = (
+                float(np.mean(np.array(warm_ids[:min_len]) == np.array(cold_ids[:min_len]))) * 100
+            )
 
             state = provider._kv_states.get(sid)
             kv_mem = 0.0 if state is None else kv_state_memory_kb(state)
 
-            rows.append({
-                "session": s,
-                "turn": i,
-                "prompt_len": prompt_len,
-                "reused_tokens": reused,
-                "kv_memory_kb": kv_mem,
-                "warm_ms": float(warm_ms.mean()),
-                "cold_ms": float(cold_ms.mean()),
-                "speedup": float(cold_ms.mean() / max(warm_ms.mean(), 1e-9)),
-                "consistency_pct": match,
-            })
+            rows.append(
+                {
+                    "session": s,
+                    "turn": i,
+                    "prompt_len": prompt_len,
+                    "reused_tokens": reused,
+                    "kv_memory_kb": kv_mem,
+                    "warm_ms": float(warm_ms.mean()),
+                    "cold_ms": float(cold_ms.mean()),
+                    "speedup": float(cold_ms.mean() / max(warm_ms.mean(), 1e-9)),
+                    "consistency_pct": match,
+                }
+            )
 
             histories[s] = (prompt + out_warm) if stream else out_warm
 
     isolation_ok = all(
-        reuse[0] == 0 and all(b > a for a, b in zip(reuse, reuse[1:]))
-        for reuse in per_session_reuse)
+        reuse[0] == 0 and all(b > a for a, b in zip(reuse, reuse[1:], strict=False))
+        for reuse in per_session_reuse
+    )
 
     total_warm = sum(r["warm_ms"] for r in rows)
     total_cold = sum(r["cold_ms"] for r in rows)
@@ -565,8 +636,7 @@ def benchmark_sessions(model, base_ids, step, turns, max_tokens, steps,
     }
 
 
-def _run_server(server, prompt, max_new_tokens, with_session, session_id,
-                stream=False):
+def _run_server(server, prompt, max_new_tokens, with_session, session_id, stream=False):
     """Run one ``SloNetServer`` call and return the generated text.
 
     Args:
@@ -582,18 +652,24 @@ def _run_server(server, prompt, max_new_tokens, with_session, session_id,
     import asyncio
 
     if stream:
+
         async def _call():
             out = []
             async for token in server.generate_stream(
-                prompt, max_new_tokens=max_new_tokens, temperature=0.0,
+                prompt,
+                max_new_tokens=max_new_tokens,
+                temperature=0.0,
                 session_id=session_id if with_session else None,
             ):
                 out.append(token)
             return "".join(out)
     else:
+
         async def _call():
             return await server.generate(
-                prompt, max_new_tokens=max_new_tokens, temperature=0.0,
+                prompt,
+                max_new_tokens=max_new_tokens,
+                temperature=0.0,
                 session_id=session_id if with_session else None,
             )
 
@@ -604,17 +680,23 @@ def print_report(metrics, title="Cross-Turn KV Cache Reuse Benchmark"):
     print("=" * 76)
     print(title)
     print("=" * 76)
-    print(f"{'Turn':>4} {'Prompt':>7} {'Reused':>7} {'KV KiB':>8} "
-          f"{'Warm ms':>9} {'Cold ms':>9} {'Speedup':>8} {'Match':>8}")
+    print(
+        f"{'Turn':>4} {'Prompt':>7} {'Reused':>7} {'KV KiB':>8} "
+        f"{'Warm ms':>9} {'Cold ms':>9} {'Speedup':>8} {'Match':>8}"
+    )
     for r in metrics["rows"]:
-        print(f"{r['turn']:>4} {r['prompt_len']:>7} {r['reused_tokens']:>7} "
-              f"{r['kv_memory_kb']:>8.1f} "
-              f"{r['warm_ms']:>9.2f} {r['cold_ms']:>9.2f} {r['speedup']:>7.2f}x "
-              f"{r['consistency_pct']:>7.1f}%")
+        print(
+            f"{r['turn']:>4} {r['prompt_len']:>7} {r['reused_tokens']:>7} "
+            f"{r['kv_memory_kb']:>8.1f} "
+            f"{r['warm_ms']:>9.2f} {r['cold_ms']:>9.2f} {r['speedup']:>7.2f}x "
+            f"{r['consistency_pct']:>7.1f}%"
+        )
     print("-" * 76)
-    print(f"Total warm: {metrics['total_warm_ms']:.1f} ms   "
-          f"Total cold: {metrics['total_cold_ms']:.1f} ms   "
-          f"Overall speedup: {metrics['overall_speedup']:.2f}x")
+    print(
+        f"Total warm: {metrics['total_warm_ms']:.1f} ms   "
+        f"Total cold: {metrics['total_cold_ms']:.1f} ms   "
+        f"Overall speedup: {metrics['overall_speedup']:.2f}x"
+    )
     print(f"Total KV tokens reused: {metrics['total_reused_tokens']}")
     if metrics.get("cached_tokens") is not None:
         print(f"Cached tokens in session map: {metrics['cached_tokens']}")
@@ -625,28 +707,40 @@ def print_sessions_report(metrics, title="Cross-Turn KV Reuse — concurrent ses
     print("=" * 76)
     print(title)
     print("=" * 76)
-    print(f"Interleaving {metrics['n_sessions']} sessions across "
-          f"{metrics['turns']} turns, {metrics['max_tokens']} tokens each.\n")
+    print(
+        f"Interleaving {metrics['n_sessions']} sessions across "
+        f"{metrics['turns']} turns, {metrics['max_tokens']} tokens each.\n"
+    )
     for s in range(metrics["n_sessions"]):
         print(f"--- Session {s} ---")
-        print(f"{'Turn':>4} {'Prompt':>7} {'Reused':>7} {'KV KiB':>8} "
-              f"{'Warm ms':>9} {'Cold ms':>9} {'Speedup':>8} {'Match':>8}")
+        print(
+            f"{'Turn':>4} {'Prompt':>7} {'Reused':>7} {'KV KiB':>8} "
+            f"{'Warm ms':>9} {'Cold ms':>9} {'Speedup':>8} {'Match':>8}"
+        )
         for r in metrics["rows"]:
             if r["session"] != s:
                 continue
-            print(f"{r['turn']:>4} {r['prompt_len']:>7} {r['reused_tokens']:>7} "
-                  f"{r['kv_memory_kb']:>8.1f} "
-                  f"{r['warm_ms']:>9.2f} {r['cold_ms']:>9.2f} {r['speedup']:>7.2f}x "
-                  f"{r['consistency_pct']:>7.1f}%")
+            print(
+                f"{r['turn']:>4} {r['prompt_len']:>7} {r['reused_tokens']:>7} "
+                f"{r['kv_memory_kb']:>8.1f} "
+                f"{r['warm_ms']:>9.2f} {r['cold_ms']:>9.2f} {r['speedup']:>7.2f}x "
+                f"{r['consistency_pct']:>7.1f}%"
+            )
         reuse = metrics["per_session_reuse"][s]
         print(f"  reuse = {reuse}")
     print("-" * 76)
-    print(f"Total warm: {metrics['total_warm_ms']:.1f} ms   "
-          f"Total cold: {metrics['total_cold_ms']:.1f} ms   "
-          f"Overall speedup: {metrics['overall_speedup']:.2f}x")
-    print(f"Total KV tokens reused: {metrics['total_reused_tokens']}   "
-          f"Cached in session map: {metrics['cached_tokens']}")
-    print(f"Session isolation: {'OK — reuse grew monotonically per session' if metrics['isolation_ok'] else 'BROKEN'}")
+    print(
+        f"Total warm: {metrics['total_warm_ms']:.1f} ms   "
+        f"Total cold: {metrics['total_cold_ms']:.1f} ms   "
+        f"Overall speedup: {metrics['overall_speedup']:.2f}x"
+    )
+    print(
+        f"Total KV tokens reused: {metrics['total_reused_tokens']}   "
+        f"Cached in session map: {metrics['cached_tokens']}"
+    )
+    print(
+        f"Session isolation: {'OK — reuse grew monotonically per session' if metrics['isolation_ok'] else 'BROKEN'}"
+    )
     print("=" * 76)
 
 
@@ -655,79 +749,125 @@ def main():
     parser.add_argument("--turns", type=int, default=4, help="Number of conversation turns")
     parser.add_argument("--max-tokens", type=int, default=8, help="New tokens per turn")
     parser.add_argument("--steps", type=int, default=3, help="Timing repeats per turn")
-    parser.add_argument("--stack", action="store_true",
-                        help="Drive the full serving stack (SloNetServer + session KV map)")
-    parser.add_argument("--stream", action="store_true",
-                        help="Stream tokens one at a time (with --stack: the /chat/stream SSE path)")
+    parser.add_argument(
+        "--stack",
+        action="store_true",
+        help="Drive the full serving stack (SloNetServer + session KV map)",
+    )
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="Stream tokens one at a time (with --stack: the /chat/stream SSE path)",
+    )
     parser.add_argument("--json", action="store_true", help="Emit machine-readable summary")
-    parser.add_argument("--quantize-kv", action="store_true",
-                        help="Store KV cache as int8 (4x memory reduction) and "
-                             "validate cross-turn reuse on the quantized path")
-    parser.add_argument("--compare-kv", action="store_true",
-                        help="Measure float32-vs-int8 KV output quality on "
-                             "identical prompts (near-tie argmax flips)")
-    parser.add_argument("--embed", type=int, default=128,
-                        help="Embedding dimension (model architecture sweep)")
-    parser.add_argument("--layers", type=int, default=4,
-                        help="Transformer blocks (model architecture sweep)")
-    parser.add_argument("--heads", type=int, default=8,
-                        help="Attention heads (model architecture sweep)")
-    parser.add_argument("--step", type=int, default=3,
-                        help="New user ids appended per turn (context growth)")
-    parser.add_argument("--sessions", type=int, default=1,
-                        help="Concurrent sessions interleaved through the "
-                             "stack (implies --stack); verifies per-session "
-                             "KV isolation")
+    parser.add_argument(
+        "--quantize-kv",
+        action="store_true",
+        help="Store KV cache as int8 (4x memory reduction) and "
+        "validate cross-turn reuse on the quantized path",
+    )
+    parser.add_argument(
+        "--compare-kv",
+        action="store_true",
+        help="Measure float32-vs-int8 KV output quality on "
+        "identical prompts (near-tie argmax flips)",
+    )
+    parser.add_argument(
+        "--embed", type=int, default=128, help="Embedding dimension (model architecture sweep)"
+    )
+    parser.add_argument(
+        "--layers", type=int, default=4, help="Transformer blocks (model architecture sweep)"
+    )
+    parser.add_argument(
+        "--heads", type=int, default=8, help="Attention heads (model architecture sweep)"
+    )
+    parser.add_argument(
+        "--step", type=int, default=3, help="New user ids appended per turn (context growth)"
+    )
+    parser.add_argument(
+        "--sessions",
+        type=int,
+        default=1,
+        help="Concurrent sessions interleaved through the "
+        "stack (implies --stack); verifies per-session "
+        "KV isolation",
+    )
     args = parser.parse_args()
 
     # Stack mode round-trips ids through the char tokenizer, so the model
     # vocab must stay within [0, 256) for lossless decode → encode history.
     vocab = 256 if (args.stack or args.sessions > 1) else 32000
-    model = create_model(vocab=vocab, embed=args.embed, layers=args.layers,
-                         heads=args.heads)
+    model = create_model(vocab=vocab, embed=args.embed, layers=args.layers, heads=args.heads)
     arch = f" layers={args.layers} embed={args.embed} heads={args.heads}"
 
     if args.compare_kv:
-        metrics = compare_kv_quality(model, [7], step=args.step, turns=args.turns,
-                                     max_tokens=args.max_tokens)
+        metrics = compare_kv_quality(
+            model, [7], step=args.step, turns=args.turns, max_tokens=args.max_tokens
+        )
         if args.json:
             print(json.dumps(metrics, indent=2))
         else:
-            print_quality_report(metrics, title=(
-                "KV Cache Quality — float32 vs int8" + arch))
+            print_quality_report(metrics, title=("KV Cache Quality — float32 vs int8" + arch))
         if metrics["overall_identical_pct"] < 50.0:
-            print("WARNING: int8 KV agreement below 50% — quality trade-off "
-                  "may be too costly", file=sys.stderr)
+            print(
+                "WARNING: int8 KV agreement below 50% — quality trade-off may be too costly",
+                file=sys.stderr,
+            )
             return 1
         return 0
 
     if args.sessions > 1:
-        metrics = benchmark_sessions(model, [7], step=args.step, turns=args.turns,
-                                     max_tokens=args.max_tokens, steps=args.steps,
-                                     n_sessions=args.sessions,
-                                     stream=args.stream, quantize_kv=args.quantize_kv)
-        title = (f"Cross-Turn KV Reuse — {args.sessions} concurrent sessions"
-                 + arch)
+        metrics = benchmark_sessions(
+            model,
+            [7],
+            step=args.step,
+            turns=args.turns,
+            max_tokens=args.max_tokens,
+            steps=args.steps,
+            n_sessions=args.sessions,
+            stream=args.stream,
+            quantize_kv=args.quantize_kv,
+        )
+        title = f"Cross-Turn KV Reuse — {args.sessions} concurrent sessions" + arch
         if args.json:
             print(json.dumps(metrics, indent=2))
         else:
             print_sessions_report(metrics, title=title)
         if not metrics["isolation_ok"]:
-            print("WARNING: per-session reuse did not grow monotonically — "
-                  "session KV isolation is broken", file=sys.stderr)
+            print(
+                "WARNING: per-session reuse did not grow monotonically — "
+                "session KV isolation is broken",
+                file=sys.stderr,
+            )
             return 1
         return 0
 
     if args.stack:
-        metrics = benchmark_stack(model, [7], step=args.step, turns=args.turns,
-                                  max_tokens=args.max_tokens, steps=args.steps,
-                                  stream=args.stream, quantize_kv=args.quantize_kv)
-        title = "Cross-Turn KV Reuse Benchmark (serving stack)" + (
-            " — streaming" if args.stream else "") + arch
+        metrics = benchmark_stack(
+            model,
+            [7],
+            step=args.step,
+            turns=args.turns,
+            max_tokens=args.max_tokens,
+            steps=args.steps,
+            stream=args.stream,
+            quantize_kv=args.quantize_kv,
+        )
+        title = (
+            "Cross-Turn KV Reuse Benchmark (serving stack)"
+            + (" — streaming" if args.stream else "")
+            + arch
+        )
     else:
-        metrics = benchmark(model, [7], step=args.step, turns=args.turns,
-                            max_tokens=args.max_tokens, steps=args.steps,
-                            quantize_kv=args.quantize_kv)
+        metrics = benchmark(
+            model,
+            [7],
+            step=args.step,
+            turns=args.turns,
+            max_tokens=args.max_tokens,
+            steps=args.steps,
+            quantize_kv=args.quantize_kv,
+        )
         title = "Cross-Turn KV Cache Reuse Benchmark" + arch
 
     if args.quantize_kv:
@@ -740,9 +880,11 @@ def main():
 
     # Reuse growth sanity: reused tokens must increase with each turn.
     reused = [r["reused_tokens"] for r in metrics["rows"]]
-    if any(b <= a for a, b in zip(reused, reused[1:])):
-        print("WARNING: reused tokens did not grow monotonically — reuse may be broken",
-              file=sys.stderr)
+    if any(b <= a for a, b in zip(reused, reused[1:], strict=False)):
+        print(
+            "WARNING: reused tokens did not grow monotonically — reuse may be broken",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

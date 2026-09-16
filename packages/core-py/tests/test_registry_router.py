@@ -2,13 +2,12 @@
 
 Covers: list_models, get_model (found/not-found), get_best_model, get_registry_stats.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -40,6 +39,7 @@ def _app(rr: RegistryRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(rr.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 
@@ -60,7 +60,11 @@ class TestListModels:
     def test_list_models_empty(self, mock_get):
         reg = _mock_registry()
         reg.list_models.return_value = []
-        reg.health_summary.return_value = {"total_models": 0, "loaded_models": 0, "failed_models": 0}
+        reg.health_summary.return_value = {
+            "total_models": 0,
+            "loaded_models": 0,
+            "failed_models": 0,
+        }
         mock_get.return_value = reg
         rr = RegistryRouter()
         client = TestClient(_app(rr))

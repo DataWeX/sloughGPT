@@ -179,11 +179,8 @@ class TestMeaningTagsRefine:
         s.add("b", _unit_vector(8, 2))
         rng = np.random.default_rng(0)
         embeddings = np.vstack(
-            [
-                rng.normal(s.get("a"), 0.01) for _ in range(5)
-            ] + [
-                rng.normal(s.get("b"), 0.01) for _ in range(5)
-            ]
+            [rng.normal(s.get("a"), 0.01) for _ in range(5)]
+            + [rng.normal(s.get("b"), 0.01) for _ in range(5)]
         )
         embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
         texts = [f"text{i}" for i in range(10)]
@@ -261,6 +258,6 @@ class TestDefaultMeaningTags:
         s = get_default_meaning_tags()
         names = s.names()
         for i, a in enumerate(names):
-            for b in names[i + 1:]:
+            for b in names[i + 1 :]:
                 sim = s.similarity(s.get(a).tolist(), b)
                 assert sim < 0.99, f"tags {a} and {b} too similar"

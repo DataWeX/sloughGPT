@@ -2,24 +2,23 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+import pytest
 
 from domain.multimodal._internal.audio_filter import (
-    FilterMode,
     AudioFilterConfig,
+    FilterMode,
     FilterResult,
     _db_to_linear,
+    _frame_energy_db,
     _linear_to_db,
     _rms_db,
-    _frame_energy_db,
-    apply_noise_gate,
     apply_agc,
-    normalize_loudness,
-    detect_voice_activity,
     apply_audio_filter,
+    apply_noise_gate,
+    detect_voice_activity,
+    normalize_loudness,
 )
-
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -49,7 +48,6 @@ def _make_silence_audio(
 
 
 class TestConversionHelpers:
-
     def test_db_to_linear_0db(self):
         assert abs(_db_to_linear(0.0) - 1.0) < 1e-6
 
@@ -90,7 +88,6 @@ class TestConversionHelpers:
 
 
 class TestNoiseGate:
-
     def test_gate_passes_loud_audio(self):
         audio = _make_speech_audio(amplitude=10000)
         config = AudioFilterConfig(noise_gate_threshold_db=-40.0)
@@ -116,7 +113,6 @@ class TestNoiseGate:
 
 
 class TestAGC:
-
     def test_agc_boosts_quiet(self):
         audio = _make_speech_audio(amplitude=100)
         config = AudioFilterConfig(agc_target_db=-20.0)
@@ -141,7 +137,6 @@ class TestAGC:
 
 
 class TestLoudnessNormalization:
-
     def test_normalize(self):
         audio = _make_speech_audio(amplitude=5000)
         config = AudioFilterConfig(target_lufs=-16.0)
@@ -173,7 +168,6 @@ class TestLoudnessNormalization:
 
 
 class TestVAD:
-
     def test_speech_detected(self):
         audio = _make_speech_audio(amplitude=10000, duration_s=0.5)
         config = AudioFilterConfig()
@@ -185,14 +179,14 @@ class TestVAD:
         audio = _make_silence_audio(noise_level=0.001)
         config = AudioFilterConfig()
         detected, silence_ratio = detect_voice_activity(audio, config)
-        assert detected == False
+        assert not detected
         assert silence_ratio > 0.5
 
     def test_empty_audio(self):
         audio = np.array([], dtype=np.int16)
         config = AudioFilterConfig()
         detected, silence_ratio = detect_voice_activity(audio, config)
-        assert detected == False
+        assert not detected
         assert silence_ratio == 1.0
 
 
@@ -200,7 +194,6 @@ class TestVAD:
 
 
 class TestApplyAudioFilter:
-
     def test_full_pipeline_speech(self):
         audio = _make_speech_audio(amplitude=8000, duration_s=0.5)
         result = apply_audio_filter(audio)
@@ -211,12 +204,12 @@ class TestApplyAudioFilter:
     def test_full_pipeline_silence(self):
         audio = _make_silence_audio(noise_level=0.001)
         result = apply_audio_filter(audio)
-        assert result.speech_detected == False
+        assert not result.speech_detected
 
     def test_full_pipeline_empty(self):
         audio = np.array([], dtype=np.int16)
         result = apply_audio_filter(audio)
-        assert result.speech_detected == False
+        assert not result.speech_detected
 
     def test_full_pipeline_none_config(self):
         audio = _make_speech_audio(amplitude=5000)
@@ -239,7 +232,7 @@ class TestApplyAudioFilter:
         audio = _make_silence_audio(noise_level=0.001)
         config = AudioFilterConfig(mode=FilterMode.VAD)
         result = apply_audio_filter(audio, config)
-        assert result.speech_detected == False
+        assert not result.speech_detected
 
     def test_pipeline_normalize_only(self):
         audio = _make_speech_audio(amplitude=5000)
@@ -259,7 +252,6 @@ class TestApplyAudioFilter:
 
 
 class TestFilterMode:
-
     def test_all_combines_flags(self):
         assert FilterMode.ALL.value == (
             FilterMode.NOISE_GATE.value
@@ -277,7 +269,6 @@ class TestFilterMode:
 
 
 class TestFilterResult:
-
     def test_defaults(self):
         r = FilterResult(audio=np.zeros(10, dtype=np.int16))
         assert r.speech_detected is True

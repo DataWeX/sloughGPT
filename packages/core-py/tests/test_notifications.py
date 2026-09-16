@@ -1,4 +1,4 @@
-"""Tests for domain.mobile.notifications: device tokens and Expo push service."""
+"""Tests for domain.mobile._internal.notifications: device tokens and Expo push service."""
 
 import time
 
@@ -9,8 +9,8 @@ from domain.mobile._internal.notifications import (
     NotificationPayload,
     PushNotificationService,
     get_notification_service,
-    set_mogdb_path,
     reset_mogdb,
+    set_mogdb_path,
 )
 
 
@@ -122,7 +122,6 @@ class FakeHttpx:
 
 @pytest.fixture
 def fake_httpx(monkeypatch):
-    import domain.mobile._internal.notifications as mod
 
     store = {}
 
@@ -208,7 +207,12 @@ class TestSendNotification:
     def test_batches_of_100(self, service, fake_httpx):
         for i in range(150):
             service.register_device(f"tok-{i:03d}", "ios")
-        fake_httpx([FakeResponse(200, [{"status": "ok"}] * 100), FakeResponse(200, [{"status": "ok"}] * 50)])
+        fake_httpx(
+            [
+                FakeResponse(200, [{"status": "ok"}] * 100),
+                FakeResponse(200, [{"status": "ok"}] * 50),
+            ]
+        )
         result = service.send_notification(NotificationPayload(title="t", body="b"))
         assert result["sent"] == 150
         assert len(fake_httpx._store["client"].Client().posts) == 2
@@ -289,8 +293,8 @@ class TestPersistence:
 
 class TestSingleton:
     def test_get_service_singleton(self, monkeypatch):
-        monkeypatch.setattr("domain.mobile.notifications._service", None)
+        monkeypatch.setattr("domain.mobile._internal.notifications._service", None)
         s1 = get_notification_service()
         s2 = get_notification_service()
         assert s1 is s2
-        monkeypatch.setattr("domain.mobile.notifications._service", None)
+        monkeypatch.setattr("domain.mobile._internal.notifications._service", None)

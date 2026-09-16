@@ -1,6 +1,5 @@
 """Tests for the plugin framework."""
 
-import pytest
 from domain.plugins import (
     Plugin,
     PluginHook,
@@ -42,7 +41,8 @@ class TestPluginHook:
 
     def test_unregister(self):
         hook = PluginHook("test_hook")
-        handler = lambda: None
+        def handler():
+            return None
         hook.register(handler)
         hook.unregister(handler)
         assert len(hook._handlers) == 0

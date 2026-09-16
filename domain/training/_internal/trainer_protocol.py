@@ -17,7 +17,7 @@ Usage::
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -29,7 +29,7 @@ class TrainerProtocol(Protocol):
     ``is_training``, and ``stop()``.
     """
 
-    def train(self, **kwargs: Any) -> "TrainResult":
+    def train(self, **kwargs: Any) -> TrainResult:
         """Run training and return a ``TrainResult``."""
         ...
 
@@ -66,28 +66,29 @@ class TrainResult:
         data_quality: Full data quality breakdown (repetition, diversity, language).
         error: Error message if success is False.
     """
+
     success: bool = True
     status: str = "completed"
-    final_loss: Optional[float] = None
-    best_eval_loss: Optional[float] = None
+    final_loss: float | None = None
+    best_eval_loss: float | None = None
     global_step: int = 0
     total_steps: int = 0
     epochs_completed: int = 0
-    model_path: Optional[str] = None
-    checkpoint_name: Optional[str] = None
+    model_path: str | None = None
+    checkpoint_name: str | None = None
     method: str = ""
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    avg_quality: Optional[float] = None
-    data_quality: Optional[Dict[str, float]] = None
-    error: Optional[str] = None
+    metrics: dict[str, Any] = field(default_factory=dict)
+    avg_quality: float | None = None
+    data_quality: dict[str, float] | None = None
+    error: str | None = None
 
     # Backward-compat aliases for old code that expects dict fields
     message: str = ""
     elapsed: float = 0.0
-    phases: List[Any] = field(default_factory=list)
+    phases: list[Any] = field(default_factory=list)
 
     @property
-    def checkpoint(self) -> Optional[str]:
+    def checkpoint(self) -> str | None:
         """Alias for ``checkpoint_name``."""
         return self.checkpoint_name
 
@@ -105,7 +106,7 @@ class TrainResult:
         """Dict-like ``"key" in result`` support."""
         return hasattr(self, key)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to plain dict (includes all fields + backward-compat aliases)."""
         d = {
             "success": self.success,

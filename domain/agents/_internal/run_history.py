@@ -24,7 +24,7 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("slo.agents.runs")
 
@@ -36,7 +36,7 @@ _collection = None
 
 def _now_iso() -> str:
     """Return current UTC time as an ISO 8601 string."""
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 _id_counter = 0
@@ -49,15 +49,17 @@ def _new_run_id() -> str:
     return f"run_{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}_{_id_counter:06d}"
 
 
-def _get_collection(db_path: Optional[str] = None):
+def _get_collection(db_path: str | None = None):
     global _db, _collection
     if _collection is not None:
         return _collection
     if db_path is None:
         from domain.shared import find_repo_root
+
         repo = find_repo_root(os.path.dirname(__file__))
         db_path = os.path.join(repo, "data", "mogdb", "agent_runs")
     from mogdb import MogDB
+
     _db = MogDB(db_path)
     _collection = _db.collection("runs")
     return _collection
@@ -67,6 +69,7 @@ def set_mogdb_path(db_path: str) -> None:
     """Override the default MogDB path (used by tests)."""
     global _db, _collection
     from mogdb import MogDB
+
     _db = MogDB(db_path)
     _collection = _db.collection("runs")
 
@@ -85,7 +88,7 @@ class AgentRunStore:
     by a process-level lock so concurrent SSE streams do not corrupt state.
     """
 
-    def __init__(self, db_path: Optional[str] = None, max_runs: int = 200):
+    def __init__(self, db_path: str | None = None, max_runs: int = 200):
         self._max_runs = max_runs
         self._lock = threading.RLock()
         self._col = _get_collection(db_path)
@@ -129,7 +132,7 @@ class AgentRunStore:
             logs.append(f"[{_now_iso()}] {message}")
             self._col.update_one({"_id": run_id}, {"$set": {"logs": logs}})
 
-    def set_tasks(self, run_id: str, tasks: List[Dict[str, Any]]) -> None:
+    def set_tasks(self, run_id: str, tasks: list[dict[str, Any]]) -> None:
         """Set the planned task list and refresh task counts."""
         with self._lock:
             existing = self._col.find_one({"_id": run_id})
@@ -139,14 +142,18 @@ class AgentRunStore:
             failed = sum(1 for t in tasks if t.get("status") == "failed")
             self._col.update_one(
                 {"_id": run_id},
-                {"$set": {
-                    "tasks": list(tasks),
-                    "completed_count": completed,
-                    "failed_count": failed,
-                }},
+                {
+                    "$set": {
+                        "tasks": list(tasks),
+                        "completed_count": completed,
+                        "failed_count": failed,
+                    }
+                },
             )
 
-    def complete(self, run_id: str, response: str, tasks: Optional[List[Dict[str, Any]]] = None) -> None:
+    def complete(
+        self, run_id: str, response: str, tasks: list[dict[str, Any]] | None = None
+    ) -> None:
         """Mark a run as completed with its final response."""
         with self._lock:
             existing = self._col.find_one({"_id": run_id})
@@ -159,15 +166,17 @@ class AgentRunStore:
             logs.append(f"[{_now_iso()}] Completed")
             self._col.update_one(
                 {"_id": run_id},
-                {"$set": {
-                    "tasks": run_tasks,
-                    "completed_count": completed,
-                    "failed_count": failed,
-                    "response": response,
-                    "status": "completed",
-                    "finished_at": _now_iso(),
-                    "logs": logs,
-                }},
+                {
+                    "$set": {
+                        "tasks": run_tasks,
+                        "completed_count": completed,
+                        "failed_count": failed,
+                        "response": response,
+                        "status": "completed",
+                        "finished_at": _now_iso(),
+                        "logs": logs,
+                    }
+                },
             )
 
     def fail(self, run_id: str, error: str) -> None:
@@ -180,17 +189,19 @@ class AgentRunStore:
             logs.append(f"[{_now_iso()}] Failed: {error}")
             self._col.update_one(
                 {"_id": run_id},
-                {"$set": {
-                    "error": error,
-                    "status": "failed",
-                    "finished_at": _now_iso(),
-                    "logs": logs,
-                }},
+                {
+                    "$set": {
+                        "error": error,
+                        "status": "failed",
+                        "finished_at": _now_iso(),
+                        "logs": logs,
+                    }
+                },
             )
 
     # ── Queries ──────────────────────────────────────────────────────────
 
-    def get(self, run_id: str) -> Optional[Dict[str, Any]]:
+    def get(self, run_id: str) -> dict[str, Any] | None:
         """Return a single run record, or None if it does not exist."""
         if not self._safe_id(run_id):
             return None
@@ -199,7 +210,7 @@ class AgentRunStore:
             return None
         return dict(doc)
 
-    def list_runs(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def list_runs(self, limit: int = 20) -> list[dict[str, Any]]:
         """Return run records sorted newest-first, truncated to ``limit``."""
         docs = self._col.find({}, sort=[("_id", -1)], limit=limit)
         return [dict(d) for d in docs]
@@ -219,12 +230,12 @@ class AgentRunStore:
         with self._lock:
             all_docs = self._col.find({}, sort=[("_id", -1)])
             ids = [d["_id"] for d in all_docs]
-            stale = ids[self._max_runs:]
+            stale = ids[self._max_runs :]
             if stale:
                 self._col.delete_many({"_id": {"$in": stale}})
 
 
-_default_store: Optional[AgentRunStore] = None
+_default_store: AgentRunStore | None = None
 
 
 def get_agent_run_store() -> AgentRunStore:

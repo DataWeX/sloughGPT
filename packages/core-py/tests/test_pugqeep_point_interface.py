@@ -5,25 +5,28 @@ import threading
 import numpy as np
 import pytest
 
+from domain.infrastructure._internal.pugqeep.library import PointLibrary
 from domain.infrastructure._internal.pugqeep.point import Point
 from domain.infrastructure._internal.pugqeep.point_interface import (
-    PointProtocol, PointView, FunctionType,
+    FunctionType,
+    PointProtocol,
+    PointView,
 )
-from domain.infrastructure._internal.pugqeep.library import PointLibrary
-
 
 # ── PointProtocol compliance ────────────────────────────────────────
 
 
 class TestPointProtocol:
     def test_point_implements_protocol(self):
-        p = Point(identity="t", function_type="raw",
-                  params={"data_b64": "", "shape": [], "dtype": "float32"})
+        p = Point(
+            identity="t",
+            function_type="raw",
+            params={"data_b64": "", "shape": [], "dtype": "float32"},
+        )
         assert isinstance(p, PointProtocol)
 
     def test_point_has_required_attributes(self):
-        p = Point(identity="x", function_type="linear",
-                  params={"a": 1.0, "b": 0.0}, accuracy=0.95)
+        p = Point(identity="x", function_type="linear", params={"a": 1.0, "b": 0.0}, accuracy=0.95)
         assert p.identity == "x"
         assert p.function_type == "linear"
         assert p.params == {"a": 1.0, "b": 0.0}
@@ -33,16 +36,14 @@ class TestPointProtocol:
         assert p.shape == ()
 
     def test_point_generate(self):
-        p = Point(identity="lin", function_type="linear",
-                  params={"a": 2.0, "b": 1.0})
+        p = Point(identity="lin", function_type="linear", params={"a": 2.0, "b": 1.0})
         arr = p.generate(5)
         assert arr.shape == (5,)
         assert arr[0] == pytest.approx(1.0)  # 2*0 + 1
         assert arr[4] == pytest.approx(9.0)  # 2*4 + 1
 
     def test_point_nbytes(self):
-        p = Point(identity="lin", function_type="linear",
-                  params={"a": 1.0, "b": 0.0})
+        p = Point(identity="lin", function_type="linear", params={"a": 1.0, "b": 0.0})
         assert p.nbytes() > 0
 
     def test_point_is_lossless(self):
@@ -52,8 +53,7 @@ class TestPointProtocol:
         assert not p2.is_lossless
 
     def test_point_compression_ratio(self):
-        p = Point(identity="c", function_type="linear",
-                  params={"a": 1.0, "b": 0.0})
+        p = Point(identity="c", function_type="linear", params={"a": 1.0, "b": 0.0})
         ratio = p.compression_ratio
         assert ratio > 0
 
@@ -67,8 +67,7 @@ class TestPointProtocol:
         assert hash(p1) != hash(p3)
 
     def test_point_repr(self):
-        p = Point(identity="test", function_type="cluster",
-                  params={}, accuracy=0.99)
+        p = Point(identity="test", function_type="cluster", params={}, accuracy=0.99)
         r = repr(p)
         assert "test" in r
         assert "cluster" in r
@@ -138,9 +137,14 @@ class TestPointView:
         """Cluster points should decompress only the sliced portion."""
         centroids = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float32)
         assignments = np.tile([0, 1, 2, 3], 25).astype(np.uint8)  # 100 elements
-        p = Point(identity="cluster-partial", function_type="cluster",
-                  params={"centroids": centroids, "assignments": assignments},
-                  accuracy=1.0, dtype="float32", shape=(100,))
+        p = Point(
+            identity="cluster-partial",
+            function_type="cluster",
+            params={"centroids": centroids, "assignments": assignments},
+            accuracy=1.0,
+            dtype="float32",
+            shape=(100,),
+        )
         view = PointView(p, shape=(100,), dtype="float32")
 
         # Slice should not trigger full decompression
@@ -180,17 +184,17 @@ class TestPointView:
 class TestPointLibraryInterface:
     def test_add_and_get(self):
         lib = PointLibrary("test-add")
-        p = Point(identity="w1", function_type="linear",
-                  params={"a": 1.0, "b": 0.0}, accuracy=0.9)
+        p = Point(identity="w1", function_type="linear", params={"a": 1.0, "b": 0.0}, accuracy=0.9)
         lib.add(p)
         got = lib.get("w1")
         assert got is p
 
     def test_add_many(self):
         lib = PointLibrary("test-add-many")
-        points = [Point(identity=f"p{i}", function_type="linear",
-                        params={"a": float(i), "b": 0.0})
-                  for i in range(10)]
+        points = [
+            Point(identity=f"p{i}", function_type="linear", params={"a": float(i), "b": 0.0})
+            for i in range(10)
+        ]
         count = lib.add_many(points)
         assert count == 10
         assert len(lib) == 10
@@ -198,8 +202,9 @@ class TestPointLibraryInterface:
     def test_get_many(self):
         lib = PointLibrary("test-get-many")
         for i in range(5):
-            lib.add(Point(identity=f"p{i}", function_type="linear",
-                          params={"a": float(i), "b": 0.0}))
+            lib.add(
+                Point(identity=f"p{i}", function_type="linear", params={"a": float(i), "b": 0.0})
+            )
         results = lib.get_many(["p0", "p2", "p4", "missing"])
         assert results["p0"] is not None
         assert results["p2"] is not None
@@ -209,8 +214,9 @@ class TestPointLibraryInterface:
     def test_remove_many(self):
         lib = PointLibrary("test-remove-many")
         for i in range(5):
-            lib.add(Point(identity=f"p{i}", function_type="linear",
-                          params={"a": float(i), "b": 0.0}))
+            lib.add(
+                Point(identity=f"p{i}", function_type="linear", params={"a": float(i), "b": 0.0})
+            )
         removed = lib.remove_many(["p0", "p2", "missing"])
         assert removed == 2
         assert len(lib) == 3
@@ -231,7 +237,10 @@ class TestPointLibraryInterface:
 
     def test_list_types(self):
         lib = PointLibrary("test-list-types")
-        cluster_params = {"centroids": np.zeros(4, dtype=np.float32), "assignments": np.zeros(8, dtype=np.uint8)}
+        cluster_params = {
+            "centroids": np.zeros(4, dtype=np.float32),
+            "assignments": np.zeros(8, dtype=np.uint8),
+        }
         lib.add(Point(identity="a", function_type="linear", params={}))
         lib.add(Point(identity="b", function_type="cluster", params=cluster_params))
         lib.add(Point(identity="c", function_type="linear", params={}))
@@ -248,7 +257,10 @@ class TestPointLibraryInterface:
 
     def test_iter_by_type(self):
         lib = PointLibrary("test-iter-type")
-        cluster_params = {"centroids": np.zeros(4, dtype=np.float32), "assignments": np.zeros(8, dtype=np.uint8)}
+        cluster_params = {
+            "centroids": np.zeros(4, dtype=np.float32),
+            "assignments": np.zeros(8, dtype=np.uint8),
+        }
         lib.add(Point(identity="a", function_type="linear", params={}))
         lib.add(Point(identity="b", function_type="cluster", params=cluster_params))
         lib.add(Point(identity="c", function_type="linear", params={}))
@@ -268,8 +280,13 @@ class TestPointLibraryInterface:
         def writer(start):
             try:
                 for i in range(50):
-                    lib.add(Point(identity=f"t{start}_{i}", function_type="linear",
-                                  params={"a": float(i), "b": 0.0}))
+                    lib.add(
+                        Point(
+                            identity=f"t{start}_{i}",
+                            function_type="linear",
+                            params={"a": float(i), "b": 0.0},
+                        )
+                    )
             except Exception as e:
                 errors.append(e)
 
@@ -295,9 +312,13 @@ class TestPointLibraryInterface:
 
     def test_stats(self):
         lib = PointLibrary("test-stats")
-        cluster_params = {"centroids": np.zeros(4, dtype=np.float32), "assignments": np.zeros(8, dtype=np.uint8)}
-        lib.add(Point(identity="a", function_type="linear",
-                      params={"a": 1.0, "b": 0.0}, accuracy=0.9))
+        cluster_params = {
+            "centroids": np.zeros(4, dtype=np.float32),
+            "assignments": np.zeros(8, dtype=np.uint8),
+        }
+        lib.add(
+            Point(identity="a", function_type="linear", params={"a": 1.0, "b": 0.0}, accuracy=0.9)
+        )
         lib.add(Point(identity="b", function_type="cluster", params=cluster_params))
         s = lib.stats()
         assert s["total_points"] == 2
@@ -318,7 +339,10 @@ class TestPointLibraryInterface:
 
     def test_search_by_type(self):
         lib = PointLibrary("test-search-type")
-        cluster_params = {"centroids": np.zeros(4, dtype=np.float32), "assignments": np.zeros(8, dtype=np.uint8)}
+        cluster_params = {
+            "centroids": np.zeros(4, dtype=np.float32),
+            "assignments": np.zeros(8, dtype=np.uint8),
+        }
         lib.add(Point(identity="layer_0.weight", function_type="cluster", params=cluster_params))
         lib.add(Point(identity="layer_1.bias", function_type="linear", params={}))
         lib.add(Point(identity="embed.weight", function_type="cluster", params=cluster_params))
@@ -339,8 +363,11 @@ class TestPointLibraryInterface:
         lib = PointLibrary("test-view")
         centroids = np.random.randn(8).astype(np.float32)
         assignments = np.random.randint(0, 8, size=100).astype(np.uint8)
-        p = Point(identity="w1", function_type="cluster",
-                  params={"centroids": centroids, "assignments": assignments})
+        p = Point(
+            identity="w1",
+            function_type="cluster",
+            params={"centroids": centroids, "assignments": assignments},
+        )
         lib.add(p)
         view = lib.view("w1", shape=(100,), dtype="float32")
         assert view is not None

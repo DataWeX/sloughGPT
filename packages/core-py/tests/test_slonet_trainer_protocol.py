@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import pytest
-from domain.training._internal.trainer_protocol import TrainResult
 
+from domain.training._internal.trainer_protocol import TrainResult
 
 # ── TrainResult ─────────────────────────────────────────────────────────────
 
 
 class TestTrainResult:
-
     def test_default(self):
         result = TrainResult()
         assert result.success is True

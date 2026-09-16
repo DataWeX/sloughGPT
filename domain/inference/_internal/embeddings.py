@@ -20,12 +20,11 @@ Usage:
 """
 
 import hashlib
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Union
 from enum import Enum
 
-import logging
 import numpy as np
 
 from domain.infrastructure._internal.config import get_config
@@ -42,15 +41,15 @@ class EmbeddingProvider(Enum):
 
 @dataclass
 class EmbeddingResult:
-    embedding: List[float]
+    embedding: list[float]
     model: str
     dimension: int
-    token_count: Optional[int] = None
+    token_count: int | None = None
 
 
 class BaseEmbedder(ABC):
     @abstractmethod
-    def embed(self, texts: Union[str, List[str]]) -> List[List[float]]:
+    def embed(self, texts: str | list[str]) -> list[list[float]]:
         pass  # pragma: no cover (abstractmethod body)
 
     @abstractmethod
@@ -68,7 +67,7 @@ class InMemoryEmbedder(BaseEmbedder):
     def __init__(self, dimension: int = 384):
         self.dimension = dimension
 
-    def embed(self, texts: Union[str, List[str]]) -> List[List[float]]:
+    def embed(self, texts: str | list[str]) -> list[list[float]]:
         if isinstance(texts, str):
             texts = [texts]
 
@@ -77,7 +76,7 @@ class InMemoryEmbedder(BaseEmbedder):
             vec = np.zeros(self.dimension)
             words = text.lower().split()
 
-            for i, word in enumerate(words[:self.dimension]):
+            for i, word in enumerate(words[: self.dimension]):
                 word_hash = int(hashlib.md5(word.encode()).hexdigest()[:8], 16)
                 vec[i % self.dimension] += np.sin(word_hash * (i + 1) * 0.1)
 
@@ -106,9 +105,9 @@ class OpenAIEmbedder(BaseEmbedder):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = "text-embedding-3-small",
-        dimensions: Optional[int] = None,
+        dimensions: int | None = None,
     ):
         self.api_key = api_key or get_config().embedding.openai_api_key or None
         self.model_name = model
@@ -119,11 +118,12 @@ class OpenAIEmbedder(BaseEmbedder):
 
         try:
             from openai import OpenAI
+
             self.client = OpenAI(api_key=self.api_key)
         except ImportError:
             raise ImportError("pip install openai")
 
-    def embed(self, texts: Union[str, List[str]]) -> List[List[float]]:
+    def embed(self, texts: str | list[str]) -> list[list[float]]:
         if isinstance(texts, str):
             texts = [texts]
 
@@ -154,9 +154,9 @@ class Embedder:
 
     def __init__(
         self,
-        provider: Optional[str] = None,
-        model: Optional[str] = None,
-        api_key: Optional[str] = None,
+        provider: str | None = None,
+        model: str | None = None,
+        api_key: str | None = None,
         dimension: int = 384,
         **kwargs,
     ):
@@ -168,10 +168,10 @@ class Embedder:
         else:
             self._impl = InMemoryEmbedder(dimension=dimension)
 
-    def embed(self, texts: Union[str, List[str]]) -> List[List[float]]:
+    def embed(self, texts: str | list[str]) -> list[list[float]]:
         return self._impl.embed(texts)
 
-    def embed_single(self, text: str) -> List[float]:
+    def embed_single(self, text: str) -> list[float]:
         return self.embed(text)[0]
 
     def get_dimension(self) -> int:
@@ -180,7 +180,7 @@ class Embedder:
     def get_model_name(self) -> str:
         return self._impl.get_model_name()
 
-    def __call__(self, texts: Union[str, List[str]]) -> List[List[float]]:
+    def __call__(self, texts: str | list[str]) -> list[list[float]]:
         return self.embed(texts)
 
 
@@ -189,16 +189,16 @@ class BatchEmbedder:
 
     def __init__(
         self,
-        embedder: Optional[Embedder] = None,
+        embedder: Embedder | None = None,
         batch_size: int = 32,
         cache_size: int = 1000,
     ):
         self.embedder = embedder or Embedder()
         self.batch_size = batch_size
-        self._cache: Dict[str, List[float]] = {}
+        self._cache: dict[str, list[float]] = {}
         self._cache_size = cache_size
 
-    def embed(self, texts: List[str]) -> List[List[float]]:
+    def embed(self, texts: list[str]) -> list[list[float]]:
         results = []
         to_embed = []
         indices = []
@@ -214,10 +214,12 @@ class BatchEmbedder:
 
         if to_embed:
             for i in range(0, len(to_embed), self.batch_size):
-                batch = to_embed[i:i + self.batch_size]
+                batch = to_embed[i : i + self.batch_size]
                 embeddings = self.embedder.embed(batch)
 
-                for j, text, emb in zip(indices[i:i + self.batch_size], batch, embeddings):
+                for j, text, emb in zip(
+                    indices[i : i + self.batch_size], batch, embeddings, strict=False
+                ):
                     self._cache[hashlib.md5(text.encode()).hexdigest()] = emb
                     results.append((j, emb))
 
@@ -229,8 +231,8 @@ class BatchEmbedder:
 
 
 def create_embedder(
-    provider: Optional[str] = None,
-    model: Optional[str] = None,
+    provider: str | None = None,
+    model: str | None = None,
     **kwargs,
 ) -> BaseEmbedder:
     """Factory function for creating embedders."""

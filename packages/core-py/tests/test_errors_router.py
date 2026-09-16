@@ -2,13 +2,11 @@
 
 Covers: log, recent, grouped, unread, clear, export.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -25,6 +23,7 @@ def _app(er: ErrorsRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(er.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 
@@ -195,9 +194,10 @@ class TestDedup:
         er._dedup_map.clear()
         client = TestClient(_app(er))
 
-        resp = client.post("/errors/log", json={
-            "errors": [_make_error("dup"), _make_error("dup"), _make_error("dup")]
-        })
+        resp = client.post(
+            "/errors/log",
+            json={"errors": [_make_error("dup"), _make_error("dup"), _make_error("dup")]},
+        )
         assert resp.json()["data"]["logged"] == 3
 
     def test_clear_resets_dedup_map(self):
@@ -231,6 +231,7 @@ class TestDedup:
 class TestDedupPruning:
     def test_prunes_old_entries_when_map_exceeds_500(self):
         import time
+
         er = ErrorsRouter()
         er._dedup_map.clear()
         er._error_buffer.clear()
@@ -256,8 +257,9 @@ class TestIngestLogs:
     def test_ingest(self):
         er = ErrorsRouter()
         client = TestClient(_app(er))
-        resp = client.post("/errors/logs/ingest", json={
-            "logs": [{"level": "info", "logger": "test", "message": "hello"}]
-        })
+        resp = client.post(
+            "/errors/logs/ingest",
+            json={"logs": [{"level": "info", "logger": "test", "message": "hello"}]},
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["ingested"] == 1

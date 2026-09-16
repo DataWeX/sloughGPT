@@ -4,12 +4,10 @@ import json
 import shlex
 import sys
 
-import pytest
-
-from domains.shell import init as init_mod
+from domain.shell._internal import init as init_mod
 from domain.shell._internal.init import (
-    InitSystem,
     SERVICE_STATES,
+    InitSystem,
     ServiceDef,
     ServiceInstance,
     ServiceManager,
@@ -95,11 +93,13 @@ def test_manager_start_no_command():
 
 
 def test_manager_start_real_process():
-    m = ServiceManager(ServiceDef(
-        name="worker",
-        builtin=False,
-        command=f"{shlex.quote(sys.executable)} -c 'import time; time.sleep(60)'",
-    ))
+    m = ServiceManager(
+        ServiceDef(
+            name="worker",
+            builtin=False,
+            command=f"{shlex.quote(sys.executable)} -c 'import time; time.sleep(60)'",
+        )
+    )
     assert m.start() is True
     assert m.instance.state == "running"
     assert m.instance.pid > 0
@@ -111,11 +111,13 @@ def test_manager_start_real_process():
 
 
 def test_manager_start_raises():
-    m = ServiceManager(ServiceDef(
-        name="worker",
-        builtin=False,
-        command="nonexistent-command-xyz --flag",
-    ))
+    m = ServiceManager(
+        ServiceDef(
+            name="worker",
+            builtin=False,
+            command="nonexistent-command-xyz --flag",
+        )
+    )
     assert m.start() is False
     assert m.instance.state == "failed"
     assert "start failed" in m.instance.log[-1]
@@ -127,20 +129,24 @@ def test_wait_until_healthy_no_check():
 
 
 def test_wait_until_healthy_success():
-    m = ServiceManager(ServiceDef(
-        name="svc",
-        health_check=f"{shlex.quote(sys.executable)} -c 'pass'",
-    ))
+    m = ServiceManager(
+        ServiceDef(
+            name="svc",
+            health_check=f"{shlex.quote(sys.executable)} -c 'pass'",
+        )
+    )
     m.instance.state = "starting"
     assert m.wait_until_healthy() is True
     assert m.instance.state == "running"
 
 
 def test_wait_until_healthy_failure():
-    m = ServiceManager(ServiceDef(
-        name="svc",
-        health_check="nonexistent-health-cmd",
-    ))
+    m = ServiceManager(
+        ServiceDef(
+            name="svc",
+            health_check="nonexistent-health-cmd",
+        )
+    )
     m.instance.state = "starting"
     assert m.wait_until_healthy() is False
 
@@ -165,7 +171,9 @@ def test_stop_kill_fallback(monkeypatch):
     fake.pid = 123
     m.instance.process = fake
     m.instance.state = "running"
-    monkeypatch.setattr(init_mod.os, "killpg", lambda pgid, sig: (_ for _ in ()).throw(OSError("nope")))
+    monkeypatch.setattr(
+        init_mod.os, "killpg", lambda pgid, sig: (_ for _ in ()).throw(OSError("nope"))
+    )
     monkeypatch.setattr(init_mod.os, "getpgid", lambda pid: 456)
     assert m.stop() is True
     assert m.instance.state == "stopped"
@@ -224,14 +232,16 @@ def test_wait_requested_stop():
 
 
 def test_wait_respawn_path():
-    m = ServiceManager(ServiceDef(
-        name="svc",
-        builtin=False,
-        command="",
-        respawn=True,
-        max_respawns=2,
-        respawn_delay=0.0,
-    ))
+    m = ServiceManager(
+        ServiceDef(
+            name="svc",
+            builtin=False,
+            command="",
+            respawn=True,
+            max_respawns=2,
+            respawn_delay=0.0,
+        )
+    )
     m.instance.process = FakeProc()
     m._wait()
     assert m.instance.respawn_count == 1
@@ -239,13 +249,15 @@ def test_wait_respawn_path():
 
 
 def test_wait_crashed_max_respawns():
-    m = ServiceManager(ServiceDef(
-        name="svc",
-        builtin=False,
-        command="",
-        respawn=False,
-        max_respawns=1,
-    ))
+    m = ServiceManager(
+        ServiceDef(
+            name="svc",
+            builtin=False,
+            command="",
+            respawn=False,
+            max_respawns=1,
+        )
+    )
     m.instance.process = FakeProc()
     m.instance.respawn_count = 1
     m._wait()
@@ -254,13 +266,15 @@ def test_wait_crashed_max_respawns():
 
 
 def test_wait_crashed_process_exited():
-    m = ServiceManager(ServiceDef(
-        name="svc",
-        builtin=False,
-        command="",
-        respawn=False,
-        max_respawns=3,
-    ))
+    m = ServiceManager(
+        ServiceDef(
+            name="svc",
+            builtin=False,
+            command="",
+            respawn=False,
+            max_respawns=3,
+        )
+    )
     m.instance.process = FakeProc()
     m.instance.respawn_count = 0
     m._wait()
@@ -307,8 +321,9 @@ def test_boot_basic(tmp_path, monkeypatch):
 def test_boot_dependency_started(tmp_path, monkeypatch):
     init = _builtin_only_init(monkeypatch, tmp_path)
     init._managers["helper"] = ServiceManager(ServiceDef(name="helper", builtin=True, runlevel=2))
-    init._managers["worker"] = ServiceManager(ServiceDef(
-        name="worker", builtin=True, runlevel=2, deps=["helper"]))
+    init._managers["worker"] = ServiceManager(
+        ServiceDef(name="worker", builtin=True, runlevel=2, deps=["helper"])
+    )
     output = init.boot(target_runlevel=2)
     assert init.get_manager("worker").instance.state == "running"
     assert "worker" in output
@@ -316,9 +331,12 @@ def test_boot_dependency_started(tmp_path, monkeypatch):
 
 def test_boot_dependency_failure(tmp_path, monkeypatch):
     init = _builtin_only_init(monkeypatch, tmp_path)
-    init._managers["bad-dep"] = ServiceManager(ServiceDef(name="bad-dep", builtin=False, command=""))
-    init._managers["custom"] = ServiceManager(ServiceDef(
-        name="custom", builtin=True, runlevel=2, deps=["bad-dep"]))
+    init._managers["bad-dep"] = ServiceManager(
+        ServiceDef(name="bad-dep", builtin=False, command="")
+    )
+    init._managers["custom"] = ServiceManager(
+        ServiceDef(name="custom", builtin=True, runlevel=2, deps=["bad-dep"])
+    )
     output = init.boot(target_runlevel=2)
     assert "dependency bad-dep failed" in output
     assert "✗ dependency failed" in output
@@ -327,13 +345,15 @@ def test_boot_dependency_failure(tmp_path, monkeypatch):
 
 def test_boot_health_timeout(tmp_path, monkeypatch):
     init = _builtin_only_init(monkeypatch, tmp_path)
-    init._managers["flaky"] = ServiceManager(ServiceDef(
-        name="flaky",
-        builtin=True,
-        runlevel=2,
-        timeout=0.01,
-        health_check="nonexistent-health-cmd",
-    ))
+    init._managers["flaky"] = ServiceManager(
+        ServiceDef(
+            name="flaky",
+            builtin=True,
+            runlevel=2,
+            timeout=0.01,
+            health_check="nonexistent-health-cmd",
+        )
+    )
     output = init.boot(target_runlevel=2)
     assert "flaky" in output
     assert init.get_manager("flaky").instance.state in ("failed", "crashed")
@@ -341,13 +361,15 @@ def test_boot_health_timeout(tmp_path, monkeypatch):
 
 def test_boot_health_break_on_failed(tmp_path, monkeypatch):
     init = _builtin_only_init(monkeypatch, tmp_path)
-    mgr = ServiceManager(ServiceDef(
-        name="flaky",
-        builtin=True,
-        runlevel=2,
-        timeout=10,
-        health_check="unused",
-    ))
+    mgr = ServiceManager(
+        ServiceDef(
+            name="flaky",
+            builtin=True,
+            runlevel=2,
+            timeout=10,
+            health_check="unused",
+        )
+    )
     init._managers["flaky"] = mgr
 
     def _fail_health():
@@ -362,13 +384,15 @@ def test_boot_health_break_on_failed(tmp_path, monkeypatch):
 
 def test_boot_health_success(tmp_path, monkeypatch):
     init = _builtin_only_init(monkeypatch, tmp_path)
-    init._managers["healthy"] = ServiceManager(ServiceDef(
-        name="healthy",
-        builtin=True,
-        runlevel=2,
-        timeout=5,
-        health_check=f"{shlex.quote(sys.executable)} -c 'pass'",
-    ))
+    init._managers["healthy"] = ServiceManager(
+        ServiceDef(
+            name="healthy",
+            builtin=True,
+            runlevel=2,
+            timeout=5,
+            health_check=f"{shlex.quote(sys.executable)} -c 'pass'",
+        )
+    )
     output = init.boot(target_runlevel=2)
     assert "healthy" in output
     assert init.get_manager("healthy").instance.state == "running"

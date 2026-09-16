@@ -3,25 +3,24 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 
 from domain.agents._internal.multi import (
-    SpecializedAgent,
     DEFAULT_AGENTS,
-    TaskStatus,
     AgentTask,
     MultiAgentOrchestrator,
+    SpecializedAgent,
+    TaskStatus,
     get_orchestrator,
     reset_orchestrator,
 )
-
 
 # ── SpecializedAgent ───────────────────────────────────────────────────────
 
 
 class TestSpecializedAgent:
-
     def test_init(self):
         a = SpecializedAgent(name="R", role="research", system_prompt="Do research")
         assert a.name == "R"
@@ -44,7 +43,6 @@ class TestSpecializedAgent:
 
 
 class TestTaskStatus:
-
     def test_values(self):
         assert TaskStatus.PENDING == "pending"
         assert TaskStatus.IN_PROGRESS == "in_progress"
@@ -56,7 +54,6 @@ class TestTaskStatus:
 
 
 class TestAgentTask:
-
     def test_init(self):
         t = AgentTask(id="1", description="do stuff", assigned_agent="researcher")
         assert t.status == TaskStatus.PENDING
@@ -81,7 +78,6 @@ class TestAgentTask:
 
 
 class TestDefaultAgents:
-
     def test_has_all(self):
         assert "researcher" in DEFAULT_AGENTS
         assert "writer" in DEFAULT_AGENTS
@@ -98,7 +94,6 @@ class TestDefaultAgents:
 
 
 class TestOrchestrator:
-
     def test_init(self):
         orch = MultiAgentOrchestrator()
         assert len(orch.agents) >= 4
@@ -137,7 +132,6 @@ class TestOrchestrator:
 
 
 class TestComputeLevels:
-
     def test_no_deps(self):
         orch = MultiAgentOrchestrator()
         tasks = [
@@ -178,7 +172,6 @@ class TestComputeLevels:
 
 
 class TestBuildDepContext:
-
     def test_no_deps(self):
         orch = MultiAgentOrchestrator()
         task = AgentTask(id="1", description="a", assigned_agent="researcher")
@@ -199,7 +192,6 @@ class TestBuildDepContext:
 
 
 class TestExecute:
-
     def test_execute_plan_failure(self):
         orch = MultiAgentOrchestrator()
         # Empty string triggers _simple_plan fallback, not "Could not plan"
@@ -232,7 +224,9 @@ class TestExecute:
 
     def test_execute_all_failed(self):
         orch = MultiAgentOrchestrator()
-        plan = json.dumps([{"id": "1", "description": "t", "agent": "researcher", "depends_on": []}])
+        plan = json.dumps(
+            [{"id": "1", "description": "t", "agent": "researcher", "depends_on": []}]
+        )
 
         call_count = 0
 
@@ -268,7 +262,6 @@ class TestExecute:
 
 
 class TestPlanEdgeCases:
-
     def test_plan_json_decode_error(self):
         orch = MultiAgentOrchestrator()
         with patch.object(orch, "_generate", return_value="not json"):
@@ -310,18 +303,26 @@ class TestPlanEdgeCases:
 
 
 class TestCompose:
-
     def test_compose_no_completed(self):
         orch = MultiAgentOrchestrator()
-        tasks = [AgentTask(id="1", description="t", assigned_agent="researcher", status=TaskStatus.FAILED)]
+        tasks = [
+            AgentTask(
+                id="1", description="t", assigned_agent="researcher", status=TaskStatus.FAILED
+            )
+        ]
         result = orch._compose("goal", tasks)
         assert result == "All agents failed."
 
     def test_compose_with_completed(self):
         orch = MultiAgentOrchestrator()
         tasks = [
-            AgentTask(id="1", description="t", assigned_agent="researcher",
-                      result="research done", status=TaskStatus.COMPLETED),
+            AgentTask(
+                id="1",
+                description="t",
+                assigned_agent="researcher",
+                result="research done",
+                status=TaskStatus.COMPLETED,
+            ),
         ]
         with patch.object(orch, "_generate", return_value="synthesized response"):
             result = orch._compose("goal", tasks)
@@ -332,7 +333,6 @@ class TestCompose:
 
 
 class TestRunAgent:
-
     def test_run_agent_no_agent(self):
         orch = MultiAgentOrchestrator()
         task = AgentTask(id="1", description="t", assigned_agent="nonexistent")
@@ -351,7 +351,6 @@ class TestRunAgent:
 
 
 class TestSingleton:
-
     def test_get_orchestrator(self):
         reset_orchestrator()
         orch = get_orchestrator()
@@ -370,7 +369,6 @@ class TestSingleton:
 
 
 class TestAsyncExecute:
-
     @pytest.mark.asyncio
     async def test_async_execute_no_plan(self):
         orch = MultiAgentOrchestrator()
@@ -382,7 +380,9 @@ class TestAsyncExecute:
     @pytest.mark.asyncio
     async def test_async_execute_simple(self):
         orch = MultiAgentOrchestrator()
-        plan = json.dumps([{"id": "1", "description": "t", "agent": "researcher", "depends_on": []}])
+        plan = json.dumps(
+            [{"id": "1", "description": "t", "agent": "researcher", "depends_on": []}]
+        )
         responses = [plan, "agent output", "final"]
         call_count = 0
 

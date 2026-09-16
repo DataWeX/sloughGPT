@@ -3,13 +3,15 @@
 Covers DistillConfig, TextDataset, loss functions, softmax, and DistillEvaluator.
 The full distill_gpt2_to_slo() is slow (downloads GPT-2) and marked @slow.
 """
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import json
 import threading
 import types
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -17,15 +19,15 @@ import pytest
 import domain.training._internal.distill_gpt2 as dg
 from domain.training._internal.distill_gpt2 import (
     DistillConfig,
-    TextDataset,
-    DistillEvaluator,
     DistillEvalResult,
-    _softmax,
-    _kl_div_loss,
-    _cross_entropy_loss,
-    _compute_perplexity,
+    DistillEvaluator,
+    TextDataset,
     _bleu_score,
+    _compute_perplexity,
+    _cross_entropy_loss,
+    _kl_div_loss,
     _load_gpt2_numpy,
+    _softmax,
     _teacher_forward,
     distill_gpt2_to_slo,
 )
@@ -139,7 +141,7 @@ class TestSoftmax:
     def test_uniform_input(self):
         x = np.array([[1.0, 1.0, 1.0]])
         result = _softmax(x, axis=-1)
-        np.testing.assert_allclose(result, [[1/3, 1/3, 1/3]], atol=1e-6)
+        np.testing.assert_allclose(result, [[1 / 3, 1 / 3, 1 / 3]], atol=1e-6)
 
     def test_batch(self):
         x = np.array([[1.0, 2.0], [3.0, 4.0]])
@@ -335,7 +337,11 @@ class TestDistillEvaluator:
         assert evaluator.eval_prompts == prompts
 
     def test_bleu_score_static_method(self):
-        score = DistillEvaluator._bleu_score("hello world", "hello world") if hasattr(DistillEvaluator, '_bleu_score') else _bleu_score("hello world", "hello world")
+        score = (
+            DistillEvaluator._bleu_score("hello world", "hello world")
+            if hasattr(DistillEvaluator, "_bleu_score")
+            else _bleu_score("hello world", "hello world")
+        )
         # _bleu_score is a module-level function, not a method
         score = _bleu_score("hello world", "hello world")
         assert score == 100.0
@@ -435,9 +441,7 @@ class TestLoadGpt2Numpy:
         snap = base / ".cache/huggingface/hub/models--gpt2/snapshots/1234"
         snap.mkdir(parents=True)
         (snap / "model.slnc").write_text("fake")
-        (snap / "tokenizer.json").write_text(
-            json.dumps({"model": {"vocab": {"a": 0, "b": 1}}})
-        )
+        (snap / "tokenizer.json").write_text(json.dumps({"model": {"vocab": {"a": 0, "b": 1}}}))
 
         monkeypatch.setattr(dg.Path, "home", staticmethod(lambda: base))
         monkeypatch.setattr(dg, "build_arch", lambda *a, **k: "ARCH")
@@ -469,6 +473,7 @@ class TestLoadGpt2Numpy:
         class _FakeSLNCParser:
             def __init__(self, path):
                 pass
+
             def get_weights_dict_parallel(self):
                 return {"wte": np.zeros((2, 2))}
 
@@ -652,9 +657,7 @@ class TestEvaluatorRun:
         )
         monkeypatch.setattr(ev, "_generate_greedy", lambda *a, **k: t_out)
         monkeypatch.setattr(ev, "_generate_student", lambda *a, **k: s_out)
-        monkeypatch.setattr(
-            ev, "_compute_perplexity_from_model", lambda *a, **k: 2.5
-        )
+        monkeypatch.setattr(ev, "_compute_perplexity_from_model", lambda *a, **k: 2.5)
         return ev
 
     def test_run_with_samples(self, monkeypatch):
@@ -682,9 +685,7 @@ class TestEvaluatorRun:
         )
         monkeypatch.setattr(ev, "_generate_greedy", lambda *a, **k: "")
         monkeypatch.setattr(ev, "_generate_student", lambda *a, **k: "")
-        monkeypatch.setattr(
-            ev, "_compute_perplexity_from_model", lambda *a, **k: 2.5
-        )
+        monkeypatch.setattr(ev, "_compute_perplexity_from_model", lambda *a, **k: 2.5)
         res = ev.run(None)
         assert res.bleu_vs_teacher == 0.0
         assert res.avg_response_len == 0.0
@@ -699,12 +700,13 @@ def _patch_distill(monkeypatch, vocab_size=5):
     monkeypatch.setattr(
         dg,
         "_load_gpt2_numpy",
-        lambda: ({"w": np.zeros((2, 2))}, arch,
-                 {"stoi": vocab, "itos": itos, "vocab_size": vocab_size}),
+        lambda: (
+            {"w": np.zeros((2, 2))},
+            arch,
+            {"stoi": vocab, "itos": itos, "vocab_size": vocab_size},
+        ),
     )
-    monkeypatch.setattr(
-        dg, "forward_fast", lambda rw, a, ids: np.zeros((len(ids), vocab_size))
-    )
+    monkeypatch.setattr(dg, "forward_fast", lambda rw, a, ids: np.zeros((len(ids), vocab_size)))
     monkeypatch.setattr(dg, "SloTransformer", lambda **kw: _StubSloTransformer(vocab_size))
     monkeypatch.setattr(dg, "SloAdam", _StubAdam)
     return text, vocab, itos
@@ -730,12 +732,25 @@ class TestDistillGpt2ToSlo:
         return _Eval
 
     def _config(self, tmp_path, **kw):
-        base = dict(
-            n_embed=16, n_layer=1, n_head=2, block_size=8, dropout=0.0,
-            epochs=2, lr=1e-3, batch_size=2, grad_clip=1.0, warmup_steps=0,
-            temperature=4.0, alpha=0.5, beta=0.5, teacher_model="gpt2",
-            checkpoint_dir=str(tmp_path), eval_interval=3, log_interval=2,
-        )
+        base = {
+            "n_embed": 16,
+            "n_layer": 1,
+            "n_head": 2,
+            "block_size": 8,
+            "dropout": 0.0,
+            "epochs": 2,
+            "lr": 1e-3,
+            "batch_size": 2,
+            "grad_clip": 1.0,
+            "warmup_steps": 0,
+            "temperature": 4.0,
+            "alpha": 0.5,
+            "beta": 0.5,
+            "teacher_model": "gpt2",
+            "checkpoint_dir": str(tmp_path),
+            "eval_interval": 3,
+            "log_interval": 2,
+        }
         base.update(kw)
         return DistillConfig(**base)
 
@@ -743,7 +758,8 @@ class TestDistillGpt2ToSlo:
         text, _, _ = _patch_distill(monkeypatch)
         exported = {}
         monkeypatch.setattr(
-            dg, "export_to_sou",
+            dg,
+            "export_to_sou",
             lambda net, path, soul_profile=None, metadata=None: exported.update(
                 {"path": path, "metadata": metadata}
             ),
@@ -767,7 +783,8 @@ class TestDistillGpt2ToSlo:
         text, _, _ = _patch_distill(monkeypatch)
         exported = {}
         monkeypatch.setattr(
-            dg, "export_to_sou",
+            dg,
+            "export_to_sou",
             lambda net, path, soul_profile=None, metadata=None: exported.update(
                 {"path": path, "metadata": metadata}
             ),
@@ -784,7 +801,8 @@ class TestDistillGpt2ToSlo:
         text, _, _ = _patch_distill(monkeypatch)
         exported = {}
         monkeypatch.setattr(
-            dg, "export_to_sou",
+            dg,
+            "export_to_sou",
             lambda net, path, soul_profile=None, metadata=None: exported.update(
                 {"path": path, "metadata": metadata}
             ),
@@ -816,16 +834,15 @@ class TestDistillGpt2ToSlo:
 
         monkeypatch.setattr(dg, "SloTransformer", _PlainLogitsStudent)
         monkeypatch.setattr(
-            dg, "export_to_sou",
+            dg,
+            "export_to_sou",
             lambda net, path, soul_profile=None, metadata=None: exported.update(
                 {"path": path, "metadata": metadata}
             ),
         )
         monkeypatch.setattr(dg, "DistillEvaluator", self._eval_stub())
 
-        _, meta = distill_gpt2_to_slo(
-            text, self._config(tmp_path, batch_size=1, epochs=1)
-        )
+        _, meta = distill_gpt2_to_slo(text, self._config(tmp_path, batch_size=1, epochs=1))
         assert meta["vocab_size"] == "5"
 
     def test_resume_from_checkpoint(self, monkeypatch, tmp_path):
@@ -840,9 +857,11 @@ class TestDistillGpt2ToSlo:
                 self.metadata = {"epoch": 1, "step": 5, "best_loss": 0.25}
 
         import domain.training._internal.slonet as slonet
+
         monkeypatch.setattr(slonet, "import_from_sou", lambda p: _ResumeStudent())
         monkeypatch.setattr(
-            dg, "export_to_sou",
+            dg,
+            "export_to_sou",
             lambda net, path, soul_profile=None, metadata=None: exported.update(
                 {"path": path, "metadata": metadata}
             ),
@@ -864,9 +883,11 @@ class TestDistillGpt2ToSlo:
         exported = {}
 
         import domain.training._internal.slonet as slonet
+
         monkeypatch.setattr(slonet, "import_from_sou", lambda p: _StubSloTransformer(5))
         monkeypatch.setattr(
-            dg, "export_to_sou",
+            dg,
+            "export_to_sou",
             lambda net, path, soul_profile=None, metadata=None: exported.update(
                 {"path": path, "metadata": metadata}
             ),

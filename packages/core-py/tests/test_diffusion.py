@@ -1,17 +1,17 @@
 """Tests for Latent Diffusion Model — text-to-image generation."""
 
 import numpy as np
-import pytest
-from domain.training._internal.slonet import Tensor, tensor as _tensor
+
 from domain.multimodal._internal.diffusion import (
+    LatentDiffusionModel,
+    LatentUNet,
+    ResBlock,
+    TimestepEmbedder,
+    UNetBlock,
     _group_norm,
     _timestep_embedding,
-    TimestepEmbedder,
-    ResBlock,
-    UNetBlock,
-    LatentUNet,
-    LatentDiffusionModel,
 )
+from domain.training._internal.slonet import tensor as _tensor
 
 
 class TestGroupNorm:
@@ -108,8 +108,14 @@ class TestUNetBlock:
         assert out.data.shape == (1, 32, 7, 7)
 
     def test_with_cross_attention(self):
-        block = UNetBlock(in_channels=16, out_channels=32, temb_dim=64,
-                          context_dim=64, n_heads=4, has_cross_attn=True)
+        block = UNetBlock(
+            in_channels=16,
+            out_channels=32,
+            temb_dim=64,
+            context_dim=64,
+            n_heads=4,
+            has_cross_attn=True,
+        )
         x = _tensor(np.random.randn(1, 16, 7, 7).astype(np.float32))
         temb = _tensor(np.random.randn(1, 64).astype(np.float32))
         context = _tensor(np.random.randn(1, 4, 64).astype(np.float32))
@@ -119,16 +125,28 @@ class TestUNetBlock:
 
 class TestLatentUNet:
     def test_forward_shape(self):
-        unet = LatentUNet(in_channels=16, model_channels=32, out_channels=16,
-                          temb_dim=64, context_dim=64, n_heads=4)
+        unet = LatentUNet(
+            in_channels=16,
+            model_channels=32,
+            out_channels=16,
+            temb_dim=64,
+            context_dim=64,
+            n_heads=4,
+        )
         x = _tensor(np.random.randn(1, 16, 7, 7).astype(np.float32))
         t = np.array([100])
         out = unet.forward(x, t)
         assert out.data.shape == (1, 16, 7, 7)
 
     def test_with_context(self):
-        unet = LatentUNet(in_channels=16, model_channels=32, out_channels=16,
-                          temb_dim=64, context_dim=64, n_heads=4)
+        unet = LatentUNet(
+            in_channels=16,
+            model_channels=32,
+            out_channels=16,
+            temb_dim=64,
+            context_dim=64,
+            n_heads=4,
+        )
         x = _tensor(np.random.randn(1, 16, 7, 7).astype(np.float32))
         t = np.array([100])
         context = _tensor(np.random.randn(1, 4, 64).astype(np.float32))
@@ -136,24 +154,37 @@ class TestLatentUNet:
         assert out.data.shape == (1, 16, 7, 7)
 
     def test_batch_size_2(self):
-        unet = LatentUNet(in_channels=16, model_channels=32, out_channels=16,
-                          temb_dim=64, context_dim=64, n_heads=4)
+        unet = LatentUNet(
+            in_channels=16,
+            model_channels=32,
+            out_channels=16,
+            temb_dim=64,
+            context_dim=64,
+            n_heads=4,
+        )
         x = _tensor(np.random.randn(2, 16, 7, 7).astype(np.float32))
         t = np.array([100, 500])
         out = unet.forward(x, t)
         assert out.data.shape == (2, 16, 7, 7)
 
     def test_parameters_count(self):
-        unet = LatentUNet(in_channels=16, model_channels=32, out_channels=16,
-                          temb_dim=64, context_dim=64, n_heads=4)
+        unet = LatentUNet(
+            in_channels=16,
+            model_channels=32,
+            out_channels=16,
+            temb_dim=64,
+            context_dim=64,
+            n_heads=4,
+        )
         params = unet.parameters()
         assert len(params) > 100
 
 
 class TestLatentDiffusionModel:
     def test_init(self):
-        model = LatentDiffusionModel(latent_dim=16, model_channels=32,
-                                     temb_dim=64, context_dim=64, n_heads=4)
+        model = LatentDiffusionModel(
+            latent_dim=16, model_channels=32, temb_dim=64, context_dim=64, n_heads=4
+        )
         assert model.num_timesteps == 1000
         assert model.betas.shape == (1000,)
         assert model.alphas_cumprod.shape == (1000,)
@@ -171,9 +202,14 @@ class TestLatentDiffusionModel:
         assert np.all(np.diff(model.alphas_cumprod) <= 0)
 
     def test_train_step_returns_float(self):
-        model = LatentDiffusionModel(latent_dim=16, model_channels=16,
-                                     temb_dim=32, context_dim=32, n_heads=2,
-                                     num_timesteps=100)
+        model = LatentDiffusionModel(
+            latent_dim=16,
+            model_channels=16,
+            temb_dim=32,
+            context_dim=32,
+            n_heads=2,
+            num_timesteps=100,
+        )
         latents = np.random.randn(1, 16, 7, 7).astype(np.float32)
         text_emb = np.random.randn(1, 4, 32).astype(np.float32)
         loss = model.train_step(latents, text_emb)
@@ -181,17 +217,27 @@ class TestLatentDiffusionModel:
         assert loss > 0
 
     def test_sample_output_shape(self):
-        model = LatentDiffusionModel(latent_dim=16, model_channels=16,
-                                     temb_dim=32, context_dim=32, n_heads=2,
-                                     num_timesteps=100)
+        model = LatentDiffusionModel(
+            latent_dim=16,
+            model_channels=16,
+            temb_dim=32,
+            context_dim=32,
+            n_heads=2,
+            num_timesteps=100,
+        )
         text_emb = np.random.randn(1, 4, 32).astype(np.float32)
         latents = model.sample(text_emb, num_steps=3)
         assert latents.shape == (1, 16, 7, 7)
 
     def test_sample_deterministic_with_seed(self):
-        model = LatentDiffusionModel(latent_dim=16, model_channels=16,
-                                     temb_dim=32, context_dim=32, n_heads=2,
-                                     num_timesteps=100)
+        model = LatentDiffusionModel(
+            latent_dim=16,
+            model_channels=16,
+            temb_dim=32,
+            context_dim=32,
+            n_heads=2,
+            num_timesteps=100,
+        )
         text_emb = np.random.randn(1, 4, 32).astype(np.float32)
         np.random.seed(42)
         latents1 = model.sample(text_emb, num_steps=3)
@@ -200,7 +246,8 @@ class TestLatentDiffusionModel:
         np.testing.assert_array_equal(latents1, latents2)
 
     def test_parameters(self):
-        model = LatentDiffusionModel(latent_dim=16, model_channels=16,
-                                     temb_dim=32, context_dim=32, n_heads=2)
+        model = LatentDiffusionModel(
+            latent_dim=16, model_channels=16, temb_dim=32, context_dim=32, n_heads=2
+        )
         params = model.parameters()
         assert len(params) > 0

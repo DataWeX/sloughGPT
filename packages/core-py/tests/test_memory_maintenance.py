@@ -3,18 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
+import domain.memory._internal.maintenance as mod
 from domain.memory._internal.maintenance import (
     maintenance_tick,
-    run_memory_maintenance,
     start_memory_maintenance,
     stop_memory_maintenance,
-    _maintenance_task,
 )
-import domain.memory._internal.maintenance as mod
 
 
 @pytest.fixture(autouse=True)
@@ -45,7 +43,6 @@ def disabled_cfg():
 
 
 class TestMaintenanceTick:
-
     @pytest.mark.asyncio
     async def test_returns_none_when_disabled(self, disabled_cfg):
         with patch.object(mod, "MemoryConfig") as mock_cfg:
@@ -105,7 +102,6 @@ class TestMaintenanceTick:
 
 
 class TestStartMemoryMaintenance:
-
     def test_returns_none_when_disabled(self, disabled_cfg):
         with patch.object(mod, "MemoryConfig") as mock_cfg:
             mock_cfg.get.return_value = disabled_cfg
@@ -122,16 +118,20 @@ class TestStartMemoryMaintenance:
             assert result is None
 
     def test_returns_task_when_enabled(self, enabled_cfg):
-        with patch.object(mod, "MemoryConfig") as mock_cfg, \
-             patch("asyncio.create_task") as mock_create:
+        with (
+            patch.object(mod, "MemoryConfig") as mock_cfg,
+            patch("asyncio.create_task") as mock_create,
+        ):
             mock_cfg.get.return_value = enabled_cfg
             mock_create.return_value = AsyncMock()
             result = start_memory_maintenance()
             assert result is not None
 
     def test_idempotent(self, enabled_cfg):
-        with patch.object(mod, "MemoryConfig") as mock_cfg, \
-             patch("asyncio.create_task") as mock_create:
+        with (
+            patch.object(mod, "MemoryConfig") as mock_cfg,
+            patch("asyncio.create_task") as mock_create,
+        ):
             mock_cfg.get.return_value = enabled_cfg
             mock_create.return_value = AsyncMock()
             t1 = start_memory_maintenance()
@@ -143,7 +143,6 @@ class TestStartMemoryMaintenance:
 
 
 class TestStopMaintenance:
-
     @pytest.mark.asyncio
     async def test_noop_when_no_task(self):
         await stop_memory_maintenance()

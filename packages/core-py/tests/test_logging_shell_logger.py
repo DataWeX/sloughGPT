@@ -1,4 +1,5 @@
 """Tests for ShellLogger — ANSI logger for REPL."""
+
 from __future__ import annotations
 
 import io
@@ -34,6 +35,8 @@ class TestShellLogger:
 
     def test_context(self):
         stream = io.StringIO()
-        log = ShellLogger("test", level=LogLevel.DEBUG, stream=stream, colors=False, context={"app": "cli"})
+        log = ShellLogger(
+            "test", level=LogLevel.DEBUG, stream=stream, colors=False, context={"app": "cli"}
+        )
         log.info("started")
         assert "started" in stream.getvalue()

@@ -11,7 +11,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from controllers.models import get_models_controller
 from fastapi import APIRouter, Depends
@@ -19,8 +19,8 @@ from fastapi.responses import FileResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import (
+    classify_and_raise,
     endpoint,
-classify_and_raise,
     raise_error,
     safe_audit_log,
     success_response,
@@ -30,8 +30,8 @@ from schemas.models import LoadModelRequest, ModelInfo, ModelStatus
 
 logger = logging.getLogger(__name__)
 
-from domain.infrastructure.model_size import compute_model_size_gb, format_size_gb, is_model_cached
 from domain.infrastructure.compute_backend import get_backend
+from domain.infrastructure.model_size import compute_model_size_gb, format_size_gb, is_model_cached
 
 # Module-level so tests can patch ``routers.models._hf_cache_dir``; resolved at call time.
 _hf_cache_dir = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
@@ -86,6 +86,7 @@ class ModelsRouter:
     def __init__(self):
         self.router = APIRouter(prefix="/models", tags=["models"])
         from mogdb.cache import QueryCache
+
         self._cache = QueryCache(ttl_seconds=5.0, max_entries=16)
         self._register_routes()
 
@@ -426,6 +427,7 @@ class ModelsRouter:
             detail=result.get("status", "unknown"),
         )
         return wrap_controller_result(result)
+
     @endpoint("models.current_model")
     async def current_model(self) -> dict:
         """Get current model info"""
@@ -434,6 +436,7 @@ class ModelsRouter:
         if not model:
             raise_error("No model loaded", "E_NOT_FOUND")
         return success_response(data=model)
+
     @endpoint("models.list_hf_models")
     async def list_hf_models(
         self,
@@ -485,7 +488,7 @@ class ModelsRouter:
                         logger.debug("Failed to scan HF cache", exc_info=True)
 
                 total = len(all_model_ids)
-                page_ids = all_model_ids[offset:offset + limit]
+                page_ids = all_model_ids[offset : offset + limit]
 
                 size_results: dict[str, float | None] = {}
                 cached_results: dict[str, bool] = {}
@@ -507,8 +510,10 @@ class ModelsRouter:
                         except Exception as exc:
                             mid = futures[future]
                             import logging
+
                             logging.getLogger("slo.models").debug(
-                                "Size computation failed for %s: %s", mid, exc)
+                                "Size computation failed for %s: %s", mid, exc
+                            )
                             size_results[mid] = None
                             cached_results[mid] = False
 
@@ -529,7 +534,9 @@ class ModelsRouter:
                 return models_out, total
 
             models, total = await asyncio.to_thread(_build_list)
-            return success_response(data=models, meta={"q": q, "total": total, "limit": limit, "offset": offset})
+            return success_response(
+                data=models, meta={"q": q, "total": total, "limit": limit, "offset": offset}
+            )
         except Exception as e:
             classify_and_raise(e, source="models.hf_list")
 
@@ -543,6 +550,7 @@ class ModelsRouter:
                 data=_logger.get_logs(limit=limit, model=model_filter), meta=_logger.get_stats()
             )
         return success_response(data=[], meta={})
+
     @endpoint("models.export_model")
     async def export_model(
         self, request: ExportRequest, auth_user: dict = Depends(require_auth_if_enabled)
@@ -594,6 +602,7 @@ class ModelsRouter:
         from domain.training._internal.export import list_export_formats
 
         return success_response(data=list_export_formats())
+
     @endpoint("models.start_download")
     async def start_download(
         self, req: DownloadRequest, auth_user: dict = Depends(require_auth_if_enabled)
@@ -628,6 +637,7 @@ class ModelsRouter:
         import time as _time
 
         from controllers.models import get_models_controller
+
         from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
         from domain.infrastructure.download_manager import get_download_manager
 
@@ -730,6 +740,7 @@ class ModelsRouter:
                 data={"model_id": model_id, "cached": cached}, message="not_found"
             )
         return success_response(data=progress)
+
     @endpoint("models.list_downloads")
     async def list_downloads(self) -> dict[str, Any]:
         """List all active and recent downloads."""
@@ -777,10 +788,13 @@ class ModelsRouter:
         downloads.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
         downloads = downloads[:limit]
 
-        return success_response(data={
-            "history": downloads,
-            "total": len(downloads),
-        })
+        return success_response(
+            data={
+                "history": downloads,
+                "total": len(downloads),
+            }
+        )
+
     @endpoint("models.cancel_download")
     async def cancel_download(
         self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
@@ -1030,7 +1044,7 @@ class ModelsRouter:
 
     # ── External server management ───────────────────────────────────────
 
-    _external_servers: Dict[str, Dict] = {}
+    _external_servers: dict[str, dict] = {}
 
     @endpoint("models.list_external_servers")
     async def list_external_servers(
@@ -1085,8 +1099,8 @@ class ModelsRouter:
         cfg = self._external_servers[server]
         ExternalDownloadBackend(cfg["url"], compressed=cfg.get("compressed", True))
 
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         try:
             url = f"{cfg['url']}/models"
@@ -1117,9 +1131,7 @@ class ModelsRouter:
 
         mgr = get_download_manager()
         if mgr.is_downloading(req.model_id):
-            return success_response(
-                data={"model_id": req.model_id}, message="already_downloading"
-            )
+            return success_response(data={"model_id": req.model_id}, message="already_downloading")
 
         asyncio.create_task(self._run_external_download(backend, req.model_id))
         return success_response(
@@ -1163,6 +1175,7 @@ class ModelsRouter:
         }
         try:
             from domain.infrastructure.hf_hub import HFDownloadBackend
+
             hf_info["available"] = True
         except ImportError:
             hf_info["available"] = False
@@ -1181,6 +1194,7 @@ class ModelsRouter:
         }
         try:
             from domain.infrastructure.external_download import ExternalDownloadBackend
+
             ext_info["available"] = True
         except ImportError:
             ext_info["available"] = False
@@ -1199,6 +1213,7 @@ class ModelsRouter:
         }
         try:
             from domain.infrastructure.git_download import GitBackend
+
             git_info["available"] = True
         except ImportError:
             git_info["available"] = False
@@ -1217,6 +1232,7 @@ class ModelsRouter:
         }
         try:
             from domain.infrastructure.local_download import LocalFileBackend
+
             local_info["available"] = True
         except ImportError:
             local_info["available"] = False
@@ -1234,15 +1250,18 @@ class ModelsRouter:
 
         try:
             from domain.infrastructure.external_download import ExternalDownloadBackend
+
             # If external backend is configured, prefer it
             backend_type = "external"
         except ImportError:
             pass
 
-        return success_response(data={
-            "type": backend_type,
-            "class": f"{backend_type.title()}Backend",
-        })
+        return success_response(
+            data={
+                "type": backend_type,
+                "class": f"{backend_type.title()}Backend",
+            }
+        )
 
     @endpoint("models.set_active_backend")
     async def set_active_backend(
@@ -1283,6 +1302,7 @@ class ModelsRouter:
             ctrl = get_models_controller()
             if model_dir:
                 from pathlib import Path as _P
+
                 resolved = _P(model_dir).resolve()
                 allowed_parents = [_P("models").resolve(), _P("data").resolve(), _P.home()]
                 if not any(str(resolved).startswith(str(p)) for p in allowed_parents):
@@ -1469,13 +1489,13 @@ class ModelsRouter:
             from domain.infrastructure.quantization import walk_slo_linears
 
             layers = walk_slo_linears(model)
-            for name, module in layers.items():
+            for _name, module in layers.items():
                 module._quant_info = None
         else:
             from domain.infrastructure.quantization import walk_hf_linears
 
             layers = walk_hf_linears(model)
-            for name, module in layers.items():
+            for _name, module in layers.items():
                 if hasattr(module, "_quant_info"):
                     module._quant_info = None
                     # Restore original forward if we patched it
@@ -1523,6 +1543,7 @@ class ModelsRouter:
                 and per-format timing/quality.
             """
             import numpy as np
+
             from domain.slolib._internal.gpu import get_accelerator, set_accelerator_precision
 
             acc = get_accelerator()
@@ -1626,9 +1647,7 @@ class ModelsRouter:
         if model_id:
             status = tracker.get(model_id)
             if not status:
-                return success_response(
-                    data={"model_id": model_id, "stage": "idle", "progress": 0}
-                )
+                return success_response(data={"model_id": model_id, "stage": "idle", "progress": 0})
             return success_response(data=status)
 
         return success_response(data=tracker.get_active())
@@ -1690,8 +1709,8 @@ class ModelsRouter:
                 metrics = health.get("metrics", {})
             except Exception as exc:
                 import logging
-                logging.getLogger("slo.models").warning(
-                    "Provider health check failed: %s", exc)
+
+                logging.getLogger("slo.models").warning("Provider health check failed: %s", exc)
                 health = {"type": "error", "error": str(exc)}
         return success_response(
             data={
@@ -1717,6 +1736,7 @@ class ModelsRouter:
             Swaps the model in the engine subprocess without restarting.
             """
             import state as server_state
+
             from domain.infrastructure.inference_client import InferenceClient
 
             provider = getattr(server_state, "provider", None)
@@ -1745,6 +1765,7 @@ class ModelsRouter:
         failures.
         """
         import state as server_state
+
         from domain.models._internal.provider import get_provider, list_providers
 
         providers = {}
@@ -1807,6 +1828,7 @@ class ModelsRouter:
         result = monitor.force_cleanup()
         stats = monitor.stats()
         return success_response(data={"cleanup": result, "stats": stats})
+
     @staticmethod
     @endpoint("models.memory_pressure")
     async def memory_pressure(auth_user: dict = Depends(require_auth_if_enabled)):
@@ -1815,5 +1837,7 @@ class ModelsRouter:
 
         monitor = get_memory_pressure_monitor()
         return success_response(data=monitor.stats())
+
+
 _instance = ModelsRouter()
 router = _instance.router

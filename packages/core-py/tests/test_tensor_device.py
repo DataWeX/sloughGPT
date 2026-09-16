@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+import pytest
 
 from domain.shell._internal.tensor_device import TensorDevice
-from domain.shell._internal.kernel_syscall import SyscallResult
-
 
 # ── TensorDevice ───────────────────────────────────────────────────────────
 
 
 class TestTensorDevice:
-
     def test_init(self):
         td = TensorDevice()
         assert td.name == "tensor"
@@ -67,7 +64,6 @@ class TestTensorDevice:
 
 
 class TestLinearAlgebra:
-
     def test_matmul(self):
         td = TensorDevice()
         a = np.array([[1, 2], [3, 4]])
@@ -105,7 +101,6 @@ class TestLinearAlgebra:
 
 
 class TestActivations:
-
     def test_relu(self):
         td = TensorDevice()
         result = td.relu(np.array([-1, 0, 1, 2]))
@@ -164,7 +159,6 @@ class TestActivations:
 
 
 class TestArithmetic:
-
     def test_add(self):
         td = TensorDevice()
         assert np.allclose(td.add(np.array([1, 2]), np.array([3, 4])), [4, 6])
@@ -218,7 +212,6 @@ class TestArithmetic:
 
 
 class TestReduction:
-
     def test_sum(self):
         td = TensorDevice()
         result = td.ioctl("SUM", np.array([1, 2, 3]))
@@ -264,7 +257,6 @@ class TestReduction:
 
 
 class TestShape:
-
     def test_reshape(self):
         td = TensorDevice()
         result = td.ioctl("RESHAPE", np.array([1, 2, 3, 4]), (2, 2))
@@ -305,7 +297,6 @@ class TestShape:
 
 
 class TestLoss:
-
     def test_cross_entropy(self):
         td = TensorDevice()
         logits = np.array([[1.0, 2.0, 3.0]])
@@ -330,7 +321,6 @@ class TestLoss:
 
 
 class TestOptimizers:
-
     def test_sgd_step(self):
         td = TensorDevice()
         params = {"w": np.array([1.0, 2.0])}
@@ -344,7 +334,7 @@ class TestOptimizers:
         params = {"w": np.array([1.0])}
         grads = {"w": np.array([0.1])}
         state = {}
-        result = td._sgd_step(params, grads, 0.1, 0.9, state)
+        td._sgd_step(params, grads, 0.1, 0.9, state)
         assert "w" in state
 
     def test_adam_step(self):
@@ -362,7 +352,6 @@ class TestOptimizers:
 
 
 class TestUtility:
-
     def test_clip_grad_norm(self):
         td = TensorDevice()
         grads = {"w": np.array([1.0, 2.0, 3.0])}
@@ -433,7 +422,6 @@ class TestUtility:
 
 
 class TestNormalization:
-
     def test_batch_norm(self):
         td = TensorDevice()
         x = np.random.randn(2, 3, 4)
@@ -464,7 +452,6 @@ class TestNormalization:
 
 
 class TestPooling:
-
     def test_max_pool1d(self):
         td = TensorDevice()
         x = np.random.randn(1, 1, 8)
@@ -498,7 +485,6 @@ class TestPooling:
 
 
 class TestConvolution:
-
     def test_conv1d(self):
         td = TensorDevice()
         x = np.random.randn(1, 1, 8)
@@ -520,7 +506,6 @@ class TestConvolution:
 
 
 class TestTypeConversion:
-
     def test_to_arr_list(self):
         td = TensorDevice()
         result = td._to_arr([1, 2, 3])

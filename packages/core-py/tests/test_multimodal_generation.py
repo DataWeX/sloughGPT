@@ -2,18 +2,19 @@
 
 import numpy as np
 import pytest
+
 pytestmark = pytest.mark.slow
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Add core-py to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from domain.multimodal._internal.vae import SloVAE, SloVAEEncoder, SloVAEDecoder
 from domain.multimodal._internal.diffusion import LatentDiffusionModel, LatentUNet
 from domain.multimodal._internal.text_encoder import TextEncoder
-from domain.multimodal._internal.video import VideoProcessor, TemporalEncoder
-from domain.multimodal._internal.tts import TTSEngine, GriffinLimVocoder
+from domain.multimodal._internal.tts import GriffinLimVocoder, TTSEngine
+from domain.multimodal._internal.vae import SloVAE, SloVAEDecoder, SloVAEEncoder
+from domain.multimodal._internal.video import TemporalEncoder, VideoProcessor
 
 
 class TestSloVAE:
@@ -30,7 +31,7 @@ class TestSloVAE:
         # Encode
         mean, log_var = vae.encoder.forward(img)
         assert mean.data.shape[1] == 32  # latent_dim
-        assert mean.data.shape[2] == 7   # 224 / 32
+        assert mean.data.shape[2] == 7  # 224 / 32
         assert mean.data.shape[3] == 7
 
         # Sample and decode
@@ -138,6 +139,7 @@ class TestSloVAE:
         dec = SloVAEDecoder(latent_dim=32)
         x = np.random.randn(1, 32, 7, 7).astype(np.float32)
         from domain.training._internal.slonet import tensor as _tensor
+
         x_tensor = _tensor(x, requires_grad=False)
         up = dec._upsample(x_tensor)
         assert up.data.shape == (1, 32, 14, 14)
@@ -184,6 +186,7 @@ class TestLatentDiffusion:
         context = np.random.randn(B, 10, 64).astype(np.float32)
 
         from domain.training._internal.slonet import Tensor
+
         x_tensor = Tensor(x, requires_grad=False)
         context_tensor = Tensor(context, requires_grad=False)
 
@@ -271,6 +274,7 @@ class TestLatentDiffusion:
         x = np.random.randn(B, 32, 7, 7).astype(np.float32)
         timesteps = np.array([500])
         from domain.training._internal.slonet import Tensor
+
         x_tensor = Tensor(x, requires_grad=False)
         noise_pred = unet.forward(x_tensor, timesteps)
         assert noise_pred.data.shape == (B, 32, 7, 7)
@@ -371,7 +375,7 @@ class TestVideoProcessor:
 
     def test_video_processor_extract_frames(self):
         """Video processor should extract frames from video."""
-        cv2 = pytest.importorskip("cv2")
+        pytest.importorskip("cv2")
         processor = VideoProcessor(max_frames=8)
 
         # Test with non-existent file (should fallback to random frames)
@@ -429,14 +433,14 @@ class TestVideoProcessor:
 
     def test_extract_frames_num_frames_default(self):
         """Video processor extract_frames should use max_frames default."""
-        cv2 = pytest.importorskip("cv2")
+        pytest.importorskip("cv2")
         processor = VideoProcessor(max_frames=4)
         frames = processor.extract_frames("/nonexistent/video.mp4")
         assert len(frames) == 4
 
     def test_extract_frames_output_shape(self):
         """Video processor extract_frames should return 224x224x3 frames."""
-        cv2 = pytest.importorskip("cv2")
+        pytest.importorskip("cv2")
         processor = VideoProcessor(max_frames=4)
         frames = processor.extract_frames("/nonexistent/video.mp4", num_frames=4)
         for frame in frames:
@@ -536,6 +540,7 @@ class TestTTSEngine:
     def test_spectrogram_decoder_encode_text(self):
         """Spectrogram decoder should encode text to hidden states."""
         from domain.multimodal._internal.tts import SpectrogramDecoder
+
         decoder = SpectrogramDecoder(vocab_size=256, embed_dim=64, hidden_dim=128, n_mels=40)
         phoneme_ids = np.array([[65, 66, 67]], dtype=np.int32)
         enc_out, h, c = decoder.encode_text(phoneme_ids)
@@ -544,6 +549,7 @@ class TestTTSEngine:
     def test_spectrogram_decoder_generate(self):
         """Spectrogram decoder should generate mel spectrogram."""
         from domain.multimodal._internal.tts import SpectrogramDecoder
+
         decoder = SpectrogramDecoder(vocab_size=256, embed_dim=64, hidden_dim=128, n_mels=40)
         phoneme_ids = np.array([[65, 66, 67]], dtype=np.int32)
         mel = decoder.generate(phoneme_ids, max_frames=10)
@@ -553,6 +559,7 @@ class TestTTSEngine:
     def test_spectrogram_decoder_parameters(self):
         """Spectrogram decoder should have parameters."""
         from domain.multimodal._internal.tts import SpectrogramDecoder
+
         decoder = SpectrogramDecoder(vocab_size=256, embed_dim=64, hidden_dim=128, n_mels=40)
         params = decoder.parameters()
         assert len(params) > 0

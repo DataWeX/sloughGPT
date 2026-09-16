@@ -7,6 +7,7 @@ Requires running API (localhost:8000) and web (localhost:3000) servers.
 Usage:
     .venv/bin/python -m pytest tests/test_computer_use_training_integration.py -x -v -s
 """
+
 import json
 import time
 import urllib.request
@@ -54,6 +55,7 @@ def ok(name: str, passed: bool, detail: str = ""):
 
 # ── Computer-Use Agent Integration Tests ────────────────────────────
 
+
 class TestComputerUseAgentIntegration:
     """Tests the ComputerUseAgent against a live server."""
 
@@ -67,15 +69,21 @@ class TestComputerUseAgentIntegration:
     async def test_agent_navigates_to_training(self, agent):
         result = await agent.navigate("/training")
         body = await agent.get_body_text()
-        ok("agent_navigates_training", result.status == 200 and len(body) > 50,
-           f"status={result.status}, len={len(body)}")
+        ok(
+            "agent_navigates_training",
+            result.status == 200 and len(body) > 50,
+            f"status={result.status}, len={len(body)}",
+        )
         assert result.status == 200
 
     async def test_agent_navigates_to_datasets(self, agent):
         result = await agent.navigate("/datasets")
         body = await agent.get_body_text()
-        ok("agent_navigates_datasets", result.status == 200 and len(body) > 50,
-           f"status={result.status}, len={len(body)}")
+        ok(
+            "agent_navigates_datasets",
+            result.status == 200 and len(body) > 50,
+            f"status={result.status}, len={len(body)}",
+        )
         assert result.status == 200
 
     async def test_agent_clicks_import_button(self, agent):
@@ -98,24 +106,21 @@ class TestComputerUseAgentIntegration:
         await agent.navigate("/training")
         time.sleep(2)
         report = agent.devtools_report()
-        ok("agent_devtools_console", report.total_console > 0,
-           f"console={report.total_console}")
+        ok("agent_devtools_console", report.total_console > 0, f"console={report.total_console}")
         assert report.total_console > 0
 
     async def test_agent_devtools_captures_network(self, agent):
         await agent.navigate("/training")
         time.sleep(2)
         report = agent.devtools_report()
-        ok("agent_devtools_network", report.total_requests > 0,
-           f"requests={report.total_requests}")
+        ok("agent_devtools_network", report.total_requests > 0, f"requests={report.total_requests}")
         assert report.total_requests > 0
 
     async def test_agent_devtools_no_critical_errors(self, agent):
         await agent.navigate("/training")
         time.sleep(2)
         critical = [e for e in agent._errors if "uncaught" in e.get("message", "").lower()]
-        ok("agent_devtools_no_critical", len(critical) == 0,
-           f"critical={len(critical)}")
+        ok("agent_devtools_no_critical", len(critical) == 0, f"critical={len(critical)}")
         assert len(critical) == 0
 
     async def test_agent_screenshot(self, agent, tmp_path):
@@ -143,6 +148,7 @@ class TestComputerUseAgentIntegration:
 
 # ── DevTools Follower Integration Tests ─────────────────────────────
 
+
 class TestDevToolsFollowerIntegration:
     """Tests the DevToolsFollower against a live server."""
 
@@ -155,8 +161,11 @@ class TestDevToolsFollowerIntegration:
 
     async def test_follower_navigate(self, follower):
         record = await follower.navigate("/training")
-        ok("follower_navigate", record.success and record.step == 1,
-           f"step={record.step}, success={record.success}")
+        ok(
+            "follower_navigate",
+            record.success and record.step == 1,
+            f"step={record.step}, success={record.success}",
+        )
         assert record.success
 
     async def test_follower_click_button(self, follower):
@@ -171,8 +180,7 @@ class TestDevToolsFollowerIntegration:
         await follower.navigate("/datasets")
         await follower.navigate("/models")
         report = follower.report()
-        ok("follower_multi_step", report.total_steps >= 3,
-           f"steps={report.total_steps}")
+        ok("follower_multi_step", report.total_steps >= 3, f"steps={report.total_steps}")
         assert report.total_steps >= 3
 
     async def test_follower_report_json(self, follower):
@@ -209,6 +217,7 @@ class TestDevToolsFollowerIntegration:
 
 
 # ── Cross-System Integration Tests ──────────────────────────────────
+
 
 class TestCrossSystemIntegration:
     """Tests that agent + trainer + DevTools work together."""
@@ -266,6 +275,7 @@ class TestCrossSystemIntegration:
 
 # ── Results ─────────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="session", autouse=True)
 def save_results():
     yield
@@ -276,9 +286,9 @@ def save_results():
     total = len(RESULTS)
     passed = sum(1 for r in RESULTS if r["passed"])
     failed = total - passed
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Computer-Use Integration Results: {passed}/{total} passed, {failed} failed")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     if failed:
         for r in RESULTS:
             if not r["passed"]:

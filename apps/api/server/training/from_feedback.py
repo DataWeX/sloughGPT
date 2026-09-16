@@ -10,12 +10,13 @@ import threading
 import time
 from pathlib import Path
 
-from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import raise_error
+
+from domain.shared import find_repo_root
+from domain.training._internal.executor import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async
@@ -128,6 +129,7 @@ async def train_from_feedback(
         # Register with TrainingRuntime
         try:
             from .runtime import get_training_runtime
+
             get_training_runtime().register(jid, training_jobs[jid], cancel_event, req.model_dump())
         except Exception as exc:
             logger.warning("Training runtime registration failed for %s: %s", jid, exc)
@@ -227,7 +229,9 @@ async def train_from_feedback(
                         )
                     )
                 except Exception as webhook_exc:
-                    logger.warning("Feedback training failure webhook failed: %s: %s", jid, webhook_exc)
+                    logger.warning(
+                        "Feedback training failure webhook failed: %s: %s", jid, webhook_exc
+                    )
 
         executor = get_training_executor()
         executor.submit(run_feedback_training, jid)

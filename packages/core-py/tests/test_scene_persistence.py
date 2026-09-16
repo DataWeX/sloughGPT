@@ -30,8 +30,9 @@ from domain.shell._internal.simulation import (
 SMALL = (8, 8, 8)
 
 
-def _params(grid: tuple[int, int, int] = SMALL, agents: int = 2,
-            energy: float = 80.0) -> WorldParams:
+def _params(
+    grid: tuple[int, int, int] = SMALL, agents: int = 2, energy: float = 80.0
+) -> WorldParams:
     return WorldParams(grid_size=grid, start_agents=agents, start_energy=energy)
 
 
@@ -120,16 +121,13 @@ class TestMemoryPersistence:
     def test_round_trip_preserves_episodes_and_head(self):
         m = EpisodicMemory(capacity=3)
         for i in range(5):
-            m.record(np.array([i] * 4, dtype=np.float32), (1.0, 0.0, 0.5),
-                     float(i), tick=i)
+            m.record(np.array([i] * 4, dtype=np.float32), (1.0, 0.0, 0.5), float(i), tick=i)
         assert m.is_full
         r = EpisodicMemory.from_dict(m.to_dict())
         assert r.capacity == m.capacity
         assert r._head == m._head
         assert len(r) == len(m)
-        assert [e.reward for e in r._chronological()] == [
-            e.reward for e in m._chronological()
-        ]
+        assert [e.reward for e in r._chronological()] == [e.reward for e in m._chronological()]
 
     def test_eviction_continues_at_same_slot_after_restore(self):
         m = EpisodicMemory(capacity=3)
@@ -142,8 +140,7 @@ class TestMemoryPersistence:
 
     def test_to_dict_is_json_safe(self):
         m = EpisodicMemory(capacity=2)
-        m.record(np.array([0.5, 0.5, 0.5, 0.5], dtype=np.float32),
-                 (1.0, 0.0, 0.5), 3.0, tick=1)
+        m.record(np.array([0.5, 0.5, 0.5, 0.5], dtype=np.float32), (1.0, 0.0, 0.5), 3.0, tick=1)
         r = EpisodicMemory.from_dict(json.loads(json.dumps(m.to_dict())))
         assert r.to_dict() == m.to_dict()
 
@@ -194,7 +191,7 @@ class TestScenePersistence:
         assert np.array_equal(r.world.signal, scene.world.signal)
         assert len(r.entities) == len(scene.entities)
         assert len(r.babies) == len(scene.babies)
-        for rb, sb in zip(r.babies, scene.babies):
+        for rb, sb in zip(r.babies, scene.babies, strict=False):
             assert rb.entity.id == sb.entity.id
             assert rb.entity.energy == sb.entity.energy
             assert rb.tick_count == sb.tick_count
@@ -210,8 +207,9 @@ class TestScenePersistence:
 
     def test_non_baby_entities_restored(self):
         scene = SimScene(_params(agents=0))
-        extra = Entity(id=901, position=np.array([1.0, 1.0, 1.0]),
-                       energy=50.0, entity_type=EntityType.LIGHT)
+        extra = Entity(
+            id=901, position=np.array([1.0, 1.0, 1.0]), energy=50.0, entity_type=EntityType.LIGHT
+        )
         scene.entities.append(extra)
         r = SimScene.from_dict(scene.to_dict())
         restored = next(e for e in r.entities if e.id == 901)
@@ -230,8 +228,7 @@ class TestScenePersistence:
         max_id = max(b.entity.id for b in scene.babies)
         r = SimScene.from_dict(scene.to_dict())
         r.spawn_babies(count=1)
-        new_ids = [b.entity.id for b in r.babies
-                   if b.entity.id > max_id]
+        new_ids = [b.entity.id for b in r.babies if b.entity.id > max_id]
         assert len(new_ids) == 1
         assert len({b.entity.id for b in r.babies}) == len(r.babies)
 
@@ -265,7 +262,7 @@ class TestScenePersistence:
         assert np.array_equal(restored.world.signal, continuous.world.signal)
 
         assert len(restored.babies) == len(continuous.babies)
-        for baby, orig in zip(restored.babies, continuous.babies):
+        for baby, orig in zip(restored.babies, continuous.babies, strict=False):
             assert baby.entity.energy == orig.entity.energy
             assert np.array_equal(baby.entity.position, orig.entity.position)
             assert np.array_equal(baby.perceptron_cells.W, orig.perceptron_cells.W)

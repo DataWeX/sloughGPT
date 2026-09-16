@@ -2,11 +2,13 @@
 SloughGPT Quantization Tests
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
+
 torch = pytest.importorskip("torch")
 import torch.nn as nn
 
@@ -149,7 +151,7 @@ class TestQuantizationInfo:
 
     def test_quantization_info_creation(self):
         """Test QuantizationInfo creation."""
-        from domains.inference.quantization import QuantizationType, QuantizationInfo
+        from domains.inference.quantization import QuantizationInfo, QuantizationType
 
         info = QuantizationInfo(
             quantization_type=QuantizationType.INT8,
@@ -157,7 +159,7 @@ class TestQuantizationInfo:
             original_size_mb=100.0,
             quantized_size_mb=25.0,
             compression_ratio=0.25,
-            memory_saved_mb=75.0
+            memory_saved_mb=75.0,
         )
 
         assert info.quantization_type == QuantizationType.INT8
@@ -170,7 +172,7 @@ class TestQuantizer:
 
     def test_quantizer_fp16(self):
         """Test FP16 quantization."""
-        from domains.inference.quantization import Quantizer, QuantizationType
+        from domains.inference.quantization import QuantizationType, Quantizer
 
         model = nn.Linear(100, 50)
         quantizer = Quantizer(QuantizationType.FP16)
@@ -180,7 +182,7 @@ class TestQuantizer:
 
     def test_quantizer_bf16(self):
         """Test BF16 quantization."""
-        from domains.inference.quantization import Quantizer, QuantizationType
+        from domains.inference.quantization import QuantizationType, Quantizer
 
         model = nn.Linear(100, 50)
         quantizer = Quantizer(QuantizationType.BF16)
@@ -190,7 +192,7 @@ class TestQuantizer:
 
     def test_quantizer_int8_dynamic(self):
         """Test INT8 dynamic quantization."""
-        from domains.inference.quantization import Quantizer, QuantizationType
+        from domains.inference.quantization import QuantizationType, Quantizer
 
         model = nn.Linear(100, 50)
         quantizer = Quantizer(QuantizationType.INT8_DYNAMIC)
@@ -200,7 +202,7 @@ class TestQuantizer:
 
     def test_quantizer_no_op(self):
         """Test no-op quantization."""
-        from domains.inference.quantization import Quantizer, QuantizationType
+        from domains.inference.quantization import QuantizationType, Quantizer
 
         model = nn.Linear(100, 50)
         quantizer = Quantizer(QuantizationType.NONE)
@@ -210,7 +212,7 @@ class TestQuantizer:
 
     def test_get_quantization_info(self):
         """Test getting quantization info."""
-        from domains.inference.quantization import Quantizer, QuantizationType
+        from domains.inference.quantization import QuantizationType, Quantizer
 
         model = nn.Linear(100, 50)
         quantizer = Quantizer(QuantizationType.INT8)
@@ -289,14 +291,14 @@ class TestSouModelQuantizer:
 
     def test_sou_quantizer_init(self):
         """Test SouModelQuantizer initialization."""
-        from domains.inference.quantization import SouModelQuantizer, QuantizationType
+        from domains.inference.quantization import QuantizationType, SouModelQuantizer
 
         quantizer = SouModelQuantizer(QuantizationType.Q4_K)
         assert quantizer.quantization_type == QuantizationType.Q4_K
 
     def test_sou_quantizer_quantize(self):
         """Test SouModelQuantizer quantization."""
-        from domains.inference.quantization import SouModelQuantizer, QuantizationType
+        from domains.inference.quantization import QuantizationType, SouModelQuantizer
 
         model = nn.Linear(100, 50)
         quantizer = SouModelQuantizer(QuantizationType.INT8_DYNAMIC)

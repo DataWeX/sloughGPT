@@ -1,4 +1,5 @@
 """Tests for TestFramework — test runner and benchmark utilities."""
+
 from __future__ import annotations
 
 from domain.shared._internal.test_framework import (
@@ -20,7 +21,15 @@ class TestTestResult:
 
 class TestTestSuite:
     def test_creation(self):
-        s = TestSuite(name="suite", tests=[], total_tests=0, passed_tests=0, failed_tests=0, skipped_tests=0, total_execution_time=0.0)
+        s = TestSuite(
+            name="suite",
+            tests=[],
+            total_tests=0,
+            passed_tests=0,
+            failed_tests=0,
+            skipped_tests=0,
+            total_execution_time=0.0,
+        )
         assert s.name == "suite"
         assert s.total_tests == 0
 
@@ -54,6 +63,7 @@ class TestMarkTest:
         @mark_test
         def my_test():
             pass
+
         assert getattr(my_test, "_is_test", False) is True
 
 

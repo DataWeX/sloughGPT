@@ -9,7 +9,6 @@ Usage:
 """
 
 import time
-from typing import Dict, Tuple
 
 
 def bench(label: str, fn, n: int = 1000) -> float:
@@ -21,13 +20,16 @@ def bench(label: str, fn, n: int = 1000) -> float:
     return elapsed / n
 
 
-def run_benchmarks() -> Dict[str, Tuple[float, float, str]]:
+def run_benchmarks() -> dict[str, tuple[float, float, str]]:
     """Run all benchmarks, return {name: (ml_time, torch_time, winner)}."""
-    import numpy as np
     import sys
+
+    import numpy as np
+
     sys.path.insert(0, "packages/core-py")
-    from domain.infrastructure import ml_types as ml
     import torch
+
+    from domain.infrastructure import ml_types as ml
 
     results = {}
 
@@ -153,7 +155,9 @@ def main():
 
     results = run_benchmarks()
 
-    print(f"\n{'Operation':<28} {'ml_types (μs)':<15} {'torch (μs)':<15} {'winner':<10} {'speedup'}")
+    print(
+        f"\n{'Operation':<28} {'ml_types (μs)':<15} {'torch (μs)':<15} {'winner':<10} {'speedup'}"
+    )
     print("-" * 70)
 
     for name, (ml_t, torch_t, winner) in results.items():

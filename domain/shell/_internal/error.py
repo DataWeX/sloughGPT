@@ -3,6 +3,7 @@
 Provides a single source of truth for user-friendly error messages,
 including connection-error hints, permission detection, and colored output.
 """
+
 from __future__ import annotations
 
 
@@ -18,6 +19,7 @@ def format_error(e: Exception, cmd: str = "", *, color: bool = True) -> str:
         color: Whether to include ANSI color codes (default True).
     """
     import requests as _req
+
     etype = type(e).__name__
 
     # --- connection / network ---

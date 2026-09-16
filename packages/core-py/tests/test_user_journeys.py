@@ -9,18 +9,21 @@ Usage:
 Requirements:
     .venv/bin/playwright install chromium
 """
+
 import json
 import time
 import urllib.request
-import pytest
 from pathlib import Path
-from playwright.sync_api import sync_playwright, Page
+
+import pytest
+from playwright.sync_api import Page, sync_playwright
 
 BASE = "http://localhost:3000"
 API = "http://localhost:8000"
 RESULTS = []
 
 # ── API readiness helpers ─────────────────────────────────────────────
+
 
 def _api_is_ready() -> bool:
     """Check if the API is responding to health checks."""
@@ -66,6 +69,7 @@ def ensure_servers_ready():
 
 
 # ── Test infrastructure ───────────────────────────────────────────────
+
 
 def ok(name: str, passed: bool, detail: str = ""):
     RESULTS.append({"test": name, "passed": passed, "detail": detail})
@@ -127,6 +131,7 @@ def go(page: Page, path: str) -> str:
 
 
 # ── Dashboard ─────────────────────────────────────────────────
+
 
 class TestDashboard:
     def test_loads(self, page: Page):
@@ -198,6 +203,7 @@ class TestNavigation:
 
 # ── Chat ──────────────────────────────────────────────────────
 
+
 class TestChat:
     def test_loads(self, page: Page):
         body = go(page, "/chat")
@@ -224,6 +230,7 @@ class TestChat:
 
 # ── Training ──────────────────────────────────────────────────
 
+
 class TestTraining:
     def test_loads(self, page: Page):
         body = go(page, "/training")
@@ -248,6 +255,7 @@ class TestTraining:
 
 # ── Settings ──────────────────────────────────────────────────
 
+
 class TestSettings:
     def test_loads(self, page: Page):
         body = go(page, "/settings")
@@ -257,6 +265,7 @@ class TestSettings:
 
 # ── Planner ───────────────────────────────────────────────────
 
+
 class TestPlanner:
     def test_loads(self, page: Page):
         body = go(page, "/planner")
@@ -265,6 +274,7 @@ class TestPlanner:
 
 
 # ── Models ────────────────────────────────────────────────────
+
 
 class TestModels:
     def test_loads(self, page: Page):
@@ -277,6 +287,7 @@ class TestModels:
 
 # ── Monitoring ────────────────────────────────────────────────
 
+
 class TestMonitoring:
     def test_loads(self, page: Page):
         body = go(page, "/monitoring")
@@ -287,6 +298,7 @@ class TestMonitoring:
 
 # ── Knowledge ─────────────────────────────────────────────────
 
+
 class TestKnowledge:
     def test_loads(self, page: Page):
         body = go(page, "/knowledge")
@@ -296,6 +308,7 @@ class TestKnowledge:
 
 
 # ── Datasets Import ───────────────────────────────────────────
+
 
 class TestDatasetsImport:
     def test_loads(self, page: Page):
@@ -368,7 +381,9 @@ class TestDatasetsImport:
         # Reload to clear any stale state from prior tests
         page.goto(f"{BASE}/datasets", wait_until="load", timeout=20000)
         try:
-            page.wait_for_function("() => !document.body.innerText.includes('Connecting...')", timeout=10000)
+            page.wait_for_function(
+                "() => !document.body.innerText.includes('Connecting...')", timeout=10000
+            )
         except Exception:
             pass
         time.sleep(2)
@@ -413,24 +428,31 @@ class TestRedirects:
     @pytest.mark.parametrize("old,expected", REDIRECTS)
     def test_redirect(self, page: Page, old: str, expected: str):
         body = go(page, old)
-        ok(f"redirect_{old.replace('/', '_')}", len(body) > 50,
-           f"{old} -> /{expected}, len={len(body)}")
+        ok(
+            f"redirect_{old.replace('/', '_')}",
+            len(body) > 50,
+            f"{old} -> /{expected}, len={len(body)}",
+        )
         assert len(body) > 50, f"Redirect {old} failed"
 
 
 # ── Tools Pages — Interactive Flows ──────────────────────────
+
 
 class TestToolsFlows:
     def test_brstorm_has_input_and_suggestions(self, page: Page):
         body = go(page, "/brainstorm")
         has_input = page.locator("textarea:visible").count() > 0
         has_suggestions = "Name ideas" in body or "Weekend" in body
-        ok("brainstorm_input_and_suggestions", has_input and has_suggestions,
-           f"input={has_input}, suggestions={has_suggestions}")
+        ok(
+            "brainstorm_input_and_suggestions",
+            has_input and has_suggestions,
+            f"input={has_input}, suggestions={has_suggestions}",
+        )
         assert has_input and has_suggestions
 
     def test_decide_has_two_options(self, page: Page):
-        body = go(page, "/decide")
+        go(page, "/decide")
         inputs = page.locator("input:visible")
         ok("decide_has_options", inputs.count() >= 2, f"inputs={inputs.count()}")
         assert inputs.count() >= 2
@@ -439,44 +461,60 @@ class TestToolsFlows:
         body = go(page, "/explain")
         has_simple = "Simple" in body
         has_normal = "Normal" in body
-        ok("explain_has_difficulty", has_simple and has_normal,
-           f"simple={has_simple}, normal={has_normal}")
+        ok(
+            "explain_has_difficulty",
+            has_simple and has_normal,
+            f"simple={has_simple}, normal={has_normal}",
+        )
         assert has_simple and has_normal
 
     def test_rewrite_has_action_buttons(self, page: Page):
         body = go(page, "/rewrite")
         has_grammar = "Fix Grammar" in body
         has_shorter = "Make Shorter" in body
-        ok("rewrite_has_actions", has_grammar and has_shorter,
-           f"grammar={has_grammar}, shorter={has_shorter}")
+        ok(
+            "rewrite_has_actions",
+            has_grammar and has_shorter,
+            f"grammar={has_grammar}, shorter={has_shorter}",
+        )
         assert has_grammar and has_shorter
 
     def test_translate_has_language_selector(self, page: Page):
         body = go(page, "/translate")
         has_select = page.locator("select:visible").count() > 0
         has_translate_btn = "Translate" in body
-        ok("translate_has_selector", has_select and has_translate_btn,
-           f"select={has_select}, btn={has_translate_btn}")
+        ok(
+            "translate_has_selector",
+            has_select and has_translate_btn,
+            f"select={has_select}, btn={has_translate_btn}",
+        )
         assert has_select and has_translate_btn
 
     def test_wellness_has_options(self, page: Page):
         body = go(page, "/wellness")
         has_sleep = "Sleep" in body
         has_meditate = "Meditat" in body
-        ok("wellness_has_options", has_sleep and has_meditate,
-           f"sleep={has_sleep}, meditate={has_meditate}")
+        ok(
+            "wellness_has_options",
+            has_sleep and has_meditate,
+            f"sleep={has_sleep}, meditate={has_meditate}",
+        )
         assert has_sleep and has_meditate
 
     def test_writing_has_tones_and_types(self, page: Page):
         body = go(page, "/writing")
         has_friendly = "Friendly" in body
         has_email = "Email" in body
-        ok("writing_has_tones_types", has_friendly and has_email,
-           f"friendly={has_friendly}, email={has_email}")
+        ok(
+            "writing_has_tones_types",
+            has_friendly and has_email,
+            f"friendly={has_friendly}, email={has_email}",
+        )
         assert has_friendly and has_email
 
 
 # ── Consciousness Pages ──────────────────────────────────────
+
 
 class TestConsciousnessFlows:
     def test_dashboard_loads(self, page: Page):
@@ -497,6 +535,7 @@ class TestConsciousnessFlows:
 
 # ── Results ───────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="session", autouse=True)
 def save_results():
     yield
@@ -507,9 +546,9 @@ def save_results():
     total = len(RESULTS)
     passed = sum(1 for r in RESULTS if r["passed"])
     failed = total - passed
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"Results: {passed}/{total} passed, {failed} failed")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     if failed:
         for r in RESULTS:
             if not r["passed"]:

@@ -1,7 +1,9 @@
 """Tests for KnowledgeMemoryProvider — memory CRUD backed by KnowledgeMemory."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from domain.memory import KnowledgeMemoryProvider
 
 

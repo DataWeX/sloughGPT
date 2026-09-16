@@ -1,18 +1,17 @@
 """Tests for the multimodal TTS module (SpectrogramDecoder, GriffinLimVocoder, TTSEngine)."""
 
 import numpy as np
-import pytest
 
-from domain.training._internal.slonet import Tensor
 from domain.multimodal._internal.tts import (
     GriffinLimVocoder,
     SpectrogramDecoder,
     TTSEngine,
 )
+from domain.training._internal.slonet import Tensor
 
 
 def make_decoder(**kw):
-    defaults = dict(vocab_size=40, embed_dim=16, hidden_dim=24, n_mels=20, max_frames=8)
+    defaults = {"vocab_size": 40, "embed_dim": 16, "hidden_dim": 24, "n_mels": 20, "max_frames": 8}
     defaults.update(kw)
     return SpectrogramDecoder(**defaults)
 
@@ -25,6 +24,7 @@ def force_stop(decoder, fire=True):
 # ---------------------------------------------------------------------------
 # SpectrogramDecoder
 # ---------------------------------------------------------------------------
+
 
 class TestDecoderInit:
     def test_attributes(self):
@@ -148,6 +148,7 @@ class TestParameters:
 # GriffinLimVocoder
 # ---------------------------------------------------------------------------
 
+
 class TestMelScale:
     def test_hz_to_mel_zero(self):
         v = GriffinLimVocoder()
@@ -219,8 +220,9 @@ class TestSTFT:
 # TTSEngine
 # ---------------------------------------------------------------------------
 
+
 def make_engine(**kw):
-    defaults = dict(vocab_size=40, embed_dim=16, hidden_dim=24, n_mels=20, sample_rate=8000)
+    defaults = {"vocab_size": 40, "embed_dim": 16, "hidden_dim": 24, "n_mels": 20, "sample_rate": 8000}
     defaults.update(kw)
     return TTSEngine(**defaults)
 
@@ -260,15 +262,18 @@ class TestTextToWaveform:
 # SSML Parsing
 # ---------------------------------------------------------------------------
 
+
 class TestSSMLParsing:
     def test_parse_simple_text(self):
         from domain.multimodal._internal.tts import parse_ssml
+
         text, events = parse_ssml("hello world")
         assert text == "hello world"
         assert events == []
 
     def test_parse_break_tag(self):
         from domain.multimodal._internal.tts import parse_ssml
+
         text, events = parse_ssml("hello<break time='500ms'/>world")
         assert text == "helloworld"
         assert len(events) == 1
@@ -277,12 +282,14 @@ class TestSSMLParsing:
 
     def test_parse_break_tag_seconds(self):
         from domain.multimodal._internal.tts import parse_ssml
+
         text, events = parse_ssml("hello<break time='1s'/>world")
         assert text == "helloworld"
         assert events[0]["duration_ms"] == 1000
 
     def test_parse_prosody_tag(self):
         from domain.multimodal._internal.tts import parse_ssml
+
         text, events = parse_ssml("<prosody rate='slow' pitch='low'>hello</prosody>")
         assert text == "hello"
         assert len(events) == 1
@@ -292,6 +299,7 @@ class TestSSMLParsing:
 
     def test_parse_emphasis_tag(self):
         from domain.multimodal._internal.tts import parse_ssml
+
         text, events = parse_ssml("<emphasis level='strong'>hello</emphasis>")
         assert text == "hello"
         assert len(events) == 1
@@ -300,6 +308,7 @@ class TestSSMLParsing:
 
     def test_parse_multiple_tags(self):
         from domain.multimodal._internal.tts import parse_ssml
+
         ssml = "hello<break time='200ms'/><emphasis level='strong'>world</emphasis>"
         text, events = parse_ssml(ssml)
         assert text == "helloworld"
@@ -309,6 +318,7 @@ class TestSSMLParsing:
 # ---------------------------------------------------------------------------
 # SSML to Waveform
 # ---------------------------------------------------------------------------
+
 
 class TestSSMLToWaveform:
     def test_returns_waveform(self):
@@ -342,10 +352,13 @@ class TestSSMLToWaveform:
 # Streaming Generation
 # ---------------------------------------------------------------------------
 
+
 class TestStreamingGeneration:
     def test_yields_chunks(self):
         d = make_decoder()
-        chunks = list(d.generate_streaming(np.array([[1, 2, 3]], dtype=np.int32), max_frames=6, chunk_size=3))
+        chunks = list(
+            d.generate_streaming(np.array([[1, 2, 3]], dtype=np.int32), max_frames=6, chunk_size=3)
+        )
         assert len(chunks) > 0
         for chunk in chunks:
             assert chunk.ndim == 2
@@ -353,7 +366,9 @@ class TestStreamingGeneration:
 
     def test_chunk_size(self):
         d = make_decoder()
-        chunks = list(d.generate_streaming(np.array([[1, 2]], dtype=np.int32), max_frames=8, chunk_size=4))
+        chunks = list(
+            d.generate_streaming(np.array([[1, 2]], dtype=np.int32), max_frames=8, chunk_size=4)
+        )
         assert len(chunks) > 0
         # First chunks should have chunk_size frames
         for chunk in chunks[:-1]:
@@ -362,20 +377,25 @@ class TestStreamingGeneration:
     def test_stop_early(self):
         d = make_decoder()
         force_stop(d, fire=True)
-        chunks = list(d.generate_streaming(np.array([[1, 2]], dtype=np.int32), max_frames=20, chunk_size=4))
+        chunks = list(
+            d.generate_streaming(np.array([[1, 2]], dtype=np.int32), max_frames=20, chunk_size=4)
+        )
         # Should stop early due to stop token
         total_frames = sum(c.shape[1] for c in chunks)
         assert total_frames < 20
 
     def test_empty_sequence(self):
         d = make_decoder()
-        chunks = list(d.generate_streaming(np.empty((1, 0), dtype=np.int32), max_frames=4, chunk_size=2))
+        chunks = list(
+            d.generate_streaming(np.empty((1, 0), dtype=np.int32), max_frames=4, chunk_size=2)
+        )
         assert len(chunks) == 0
 
 
 # ---------------------------------------------------------------------------
 # Training
 # ---------------------------------------------------------------------------
+
 
 class TestDecoderTrainStep:
     def test_returns_loss(self):

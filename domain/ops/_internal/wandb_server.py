@@ -6,7 +6,8 @@ import asyncio
 import logging
 import os
 import threading
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any
 
 from domain.infrastructure._internal.config import get_config
 
@@ -31,7 +32,7 @@ def record_inference_call(latency_s: float, approx_tokens: float) -> None:
         _inference_tokens_sum += approx_tokens
 
 
-def _drain_inference_snapshot() -> Dict[str, float]:
+def _drain_inference_snapshot() -> dict[str, float]:
     global _inference_total, _inference_latency_sum, _inference_tokens_sum
     with _inference_lock:
         t = _inference_total
@@ -49,7 +50,7 @@ def _drain_inference_snapshot() -> Dict[str, float]:
     }
 
 
-def _wandb_log_payload(payload: Dict[str, Any], step: int) -> None:
+def _wandb_log_payload(payload: dict[str, Any], step: int) -> None:
     import wandb
 
     wandb.log(payload, step=step)
@@ -85,8 +86,8 @@ def _wandb_finish_run() -> None:
 async def start_wandb_server_background(
     http_metrics: Any,
     *,
-    extra_metrics: Optional[Callable[[], Dict[str, Any]]] = None,
-) -> Optional[asyncio.Task]:
+    extra_metrics: Callable[[], dict[str, Any]] | None = None,
+) -> asyncio.Task | None:
     """Start periodic W&B logging when ``SLO_WANDB_SERVER`` is set. Returns task or ``None``.
 
     ``extra_metrics`` is called in a worker thread each flush (e.g. psutil host snapshot aligned with ``GET /info``).
@@ -98,7 +99,10 @@ async def start_wandb_server_background(
     try:
         import wandb  # noqa: F401
     except ImportError:
-        logger.warning("wandb not installed; set SLO_WANDB_SERVER=0 or pip install wandb", extra={"tag": "INFRA"})
+        logger.warning(
+            "wandb not installed; set SLO_WANDB_SERVER=0 or pip install wandb",
+            extra={"tag": "INFRA"},
+        )
         return None
 
     interval = float(get_config().tracking.wandb_server_interval)
@@ -109,11 +113,11 @@ async def start_wandb_server_background(
         try:
             while True:
                 await asyncio.sleep(interval)
-                http_part: Dict[str, float] = {}
+                http_part: dict[str, float] = {}
                 if hasattr(http_metrics, "wandb_aggregate"):
                     http_part = http_metrics.wandb_aggregate()
                 inf_part = _drain_inference_snapshot()
-                extra_part: Dict[str, Any] = {}
+                extra_part: dict[str, Any] = {}
                 if extra_metrics is not None:
                     try:
                         extra_part = await asyncio.to_thread(extra_metrics)

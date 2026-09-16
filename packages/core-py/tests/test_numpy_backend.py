@@ -1,10 +1,9 @@
 """Tests for NumpyBE compute backend."""
 
 import numpy as np
-import pytest
 
+from domain.infrastructure._internal.arch_config import LLAMA_WEIGHT_MAP, ArchConfig
 from domain.infrastructure._internal.numpy_backend import NumpyBE
-from domain.infrastructure._internal.arch_config import ArchConfig, LLAMA_WEIGHT_MAP
 
 
 def _make_tiny_arch():
@@ -41,13 +40,27 @@ def _make_weights(arch):
     weights["model.embed_tokens.weight"] = np.random.randn(V, E).astype(np.float32) * 0.02
     # Per-layer
     for i in range(L):
-        weights[f"model.layers.{i}.self_attn.q_proj.weight"] = np.random.randn(H * D, E).astype(np.float32) * 0.02
-        weights[f"model.layers.{i}.self_attn.k_proj.weight"] = np.random.randn(KV * D, E).astype(np.float32) * 0.02
-        weights[f"model.layers.{i}.self_attn.v_proj.weight"] = np.random.randn(KV * D, E).astype(np.float32) * 0.02
-        weights[f"model.layers.{i}.self_attn.o_proj.weight"] = np.random.randn(E, H * D).astype(np.float32) * 0.02
-        weights[f"model.layers.{i}.mlp.gate_proj.weight"] = np.random.randn(FF, E).astype(np.float32) * 0.02
-        weights[f"model.layers.{i}.mlp.up_proj.weight"] = np.random.randn(FF, E).astype(np.float32) * 0.02
-        weights[f"model.layers.{i}.mlp.down_proj.weight"] = np.random.randn(E, FF).astype(np.float32) * 0.02
+        weights[f"model.layers.{i}.self_attn.q_proj.weight"] = (
+            np.random.randn(H * D, E).astype(np.float32) * 0.02
+        )
+        weights[f"model.layers.{i}.self_attn.k_proj.weight"] = (
+            np.random.randn(KV * D, E).astype(np.float32) * 0.02
+        )
+        weights[f"model.layers.{i}.self_attn.v_proj.weight"] = (
+            np.random.randn(KV * D, E).astype(np.float32) * 0.02
+        )
+        weights[f"model.layers.{i}.self_attn.o_proj.weight"] = (
+            np.random.randn(E, H * D).astype(np.float32) * 0.02
+        )
+        weights[f"model.layers.{i}.mlp.gate_proj.weight"] = (
+            np.random.randn(FF, E).astype(np.float32) * 0.02
+        )
+        weights[f"model.layers.{i}.mlp.up_proj.weight"] = (
+            np.random.randn(FF, E).astype(np.float32) * 0.02
+        )
+        weights[f"model.layers.{i}.mlp.down_proj.weight"] = (
+            np.random.randn(E, FF).astype(np.float32) * 0.02
+        )
         weights[f"model.layers.{i}.input_layernorm.weight"] = np.ones(E, dtype=np.float32)
         weights[f"model.layers.{i}.post_attention_layernorm.weight"] = np.ones(E, dtype=np.float32)
     # Final norm and lm_head

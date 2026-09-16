@@ -2,12 +2,13 @@
 Tests for the self-train router — POST start/stop and GET status.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from infrastructure.exception_handlers import register_all_handlers
+
 from apps.api.server.routers.self_train import router
 
 
@@ -44,11 +45,14 @@ class TestSelfTrainStart:
         assert resp.status_code == 200
 
     def test_start_with_all_params(self, client):
-        resp = client.post("/self-train/start", json={
-            "model": "gpt2",
-            "temperature": 0.7,
-            "max_steps": 100,
-        })
+        resp = client.post(
+            "/self-train/start",
+            json={
+                "model": "gpt2",
+                "temperature": 0.7,
+                "max_steps": 100,
+            },
+        )
         assert resp.status_code == 200
 
     def test_start_response_has_status(self, client):
@@ -64,11 +68,13 @@ class TestSelfTrainDeterministic:
     @pytest.fixture(autouse=True)
     def reset_proc(self):
         import state as server_state
+
         yield
         server_state._self_train_proc = None
 
     def test_already_running(self, client):
         import state as server_state
+
         proc = MagicMock()
         proc.poll.return_value = None
         proc.pid = 4242
@@ -81,11 +87,14 @@ class TestSelfTrainDeterministic:
     @patch("apps.api.server.routers.self_train.subprocess.Popen")
     def test_start_builds_command(self, mock_popen, client):
         import state as server_state
+
         proc = MagicMock()
         proc.poll.return_value = None
         proc.pid = 9999
         mock_popen.return_value = proc
-        client.post("/self-train/start", json={"model": "gpt2", "temperature": 0.5, "forever": True})
+        client.post(
+            "/self-train/start", json={"model": "gpt2", "temperature": 0.5, "forever": True}
+        )
         args, kwargs = mock_popen.call_args
         cmd = args[0]
         assert "--model" in cmd and "gpt2" in cmd
@@ -105,6 +114,7 @@ class TestSelfTrainDeterministic:
 
     def test_stop_stopped(self, client):
         import state as server_state
+
         proc = MagicMock()
         proc.poll.return_value = None
         server_state._self_train_proc = proc
@@ -115,6 +125,7 @@ class TestSelfTrainDeterministic:
 
     def test_stop_killed_on_terminate_failure(self, client):
         import state as server_state
+
         proc = MagicMock()
         proc.poll.return_value = None
         proc.terminate.side_effect = OSError("timeout")
@@ -126,6 +137,7 @@ class TestSelfTrainDeterministic:
 
     def test_status_exited(self, client):
         import state as server_state
+
         proc = MagicMock()
         proc.poll.return_value = 3
         server_state._self_train_proc = proc
@@ -135,6 +147,7 @@ class TestSelfTrainDeterministic:
 
     def test_status_running(self, client):
         import state as server_state
+
         proc = MagicMock()
         proc.poll.return_value = None
         proc.pid = 5
@@ -142,6 +155,7 @@ class TestSelfTrainDeterministic:
         data = client.get("/self-train/status").json()["data"]
         assert data["status"] == "running"
         assert data["pid"] == 5
+
     def test_returns_stopped_or_not_running(self, client):
         resp = client.post("/self-train/stop")
         assert resp.status_code == 200
@@ -233,11 +247,13 @@ class TestSelfTrainEdgePaths:
     @pytest.fixture(autouse=True)
     def reset_proc(self):
         import state as server_state
+
         yield
         server_state._self_train_proc = None
 
     def test_start_when_proc_exited(self, client):
         import state as server_state
+
         proc = MagicMock()
         proc.poll.return_value = 0
         server_state._self_train_proc = proc
@@ -253,6 +269,7 @@ class TestSelfTrainEdgePaths:
 
     def test_stop_when_proc_exited(self, client):
         import state as server_state
+
         proc = MagicMock()
         proc.poll.return_value = 1
         server_state._self_train_proc = proc
@@ -261,6 +278,7 @@ class TestSelfTrainEdgePaths:
 
     def test_stop_kill_failure_returns_500(self, client):
         import state as server_state
+
         proc = MagicMock()
         proc.poll.return_value = None
         proc.terminate.side_effect = OSError("timeout")
@@ -281,6 +299,7 @@ class TestSelfTrainEdgePaths:
     @patch("pathlib.Path.exists", return_value=True)
     def test_status_history_caps_at_fifty(self, mock_exists, mock_read, client):
         import state as server_state
+
         mock_read.return_value = "\n".join(f"line {i}" for i in range(70))
         proc = MagicMock()
         proc.poll.return_value = 7

@@ -1,7 +1,6 @@
 """Tests for CharTokenizer — character-level tokenizer."""
-from __future__ import annotations
 
-import json
+from __future__ import annotations
 
 from domain.multimodal._internal.char_tokenizer import CharTokenizer
 
@@ -60,7 +59,7 @@ class TestCharTokenizer:
         tok = CharTokenizer()
         try:
             tok.encode("test")
-            assert False, "should raise"
+            raise AssertionError("should raise")
         except RuntimeError:
             pass
 

@@ -1,22 +1,21 @@
 """Tests for domain.cognitive._internal.core — CognitiveCore, enums, and dataclasses."""
 
 import time
-import pytest
 from dataclasses import fields as dc_fields
 
 from domain.cognitive._internal.core import (
-    ThinkingMode,
-    ReasoningType,
-    ThoughtProcess,
+    CognitiveCore,
     CreativeIdea,
     ReasoningChain,
-    CognitiveCore,
+    ReasoningType,
+    ThinkingMode,
+    ThoughtProcess,
 )
-
 
 # ---------------------------------------------------------------------------
 # ThinkingMode enum
 # ---------------------------------------------------------------------------
+
 
 class TestThinkingMode:
     def test_member_count(self):
@@ -50,6 +49,7 @@ class TestThinkingMode:
 # ReasoningType enum
 # ---------------------------------------------------------------------------
 
+
 class TestReasoningType:
     def test_member_count(self):
         assert len(ReasoningType) == 5
@@ -78,20 +78,21 @@ class TestReasoningType:
 # ThoughtProcess dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestThoughtProcess:
     def _make(self, **overrides):
-        defaults = dict(
-            id="t0",
-            mode=ThinkingMode.ANALYTICAL,
-            reasoning_type=ReasoningType.DEDUCTIVE,
-            input_prompt="prompt",
-            thought_content="content",
-            confidence=0.9,
-            creativity_score=0.5,
-            logical_score=0.8,
-            timestamp=1.0,
-            processing_time=0.1,
-        )
+        defaults = {
+            "id": "t0",
+            "mode": ThinkingMode.ANALYTICAL,
+            "reasoning_type": ReasoningType.DEDUCTIVE,
+            "input_prompt": "prompt",
+            "thought_content": "content",
+            "confidence": 0.9,
+            "creativity_score": 0.5,
+            "logical_score": 0.8,
+            "timestamp": 1.0,
+            "processing_time": 0.1,
+        }
         defaults.update(overrides)
         return ThoughtProcess(**defaults)
 
@@ -130,19 +131,20 @@ class TestThoughtProcess:
 # CreativeIdea dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestCreativeIdea:
     def _make(self, **overrides):
-        defaults = dict(
-            id="i0",
-            concept="test",
-            description="desc",
-            novelty_score=0.7,
-            feasibility_score=0.8,
-            creativity_score=0.9,
-            category="tech",
-            tags=["ai", "ml"],
-            timestamp=2.0,
-        )
+        defaults = {
+            "id": "i0",
+            "concept": "test",
+            "description": "desc",
+            "novelty_score": 0.7,
+            "feasibility_score": 0.8,
+            "creativity_score": 0.9,
+            "category": "tech",
+            "tags": ["ai", "ml"],
+            "timestamp": 2.0,
+        }
         defaults.update(overrides)
         return CreativeIdea(**defaults)
 
@@ -173,18 +175,19 @@ class TestCreativeIdea:
 # ReasoningChain dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestReasoningChain:
     def _make(self, **overrides):
-        defaults = dict(
-            id="r0",
-            question="why?",
-            reasoning_steps=["s1", "s2"],
-            conclusion="because",
-            confidence=0.85,
-            reasoning_type=ReasoningType.ABDUCTIVE,
-            evidence=["e1", "e2", "e3"],
-            timestamp=3.0,
-        )
+        defaults = {
+            "id": "r0",
+            "question": "why?",
+            "reasoning_steps": ["s1", "s2"],
+            "conclusion": "because",
+            "confidence": 0.85,
+            "reasoning_type": ReasoningType.ABDUCTIVE,
+            "evidence": ["e1", "e2", "e3"],
+            "timestamp": 3.0,
+        }
         defaults.update(overrides)
         return ReasoningChain(**defaults)
 
@@ -214,6 +217,7 @@ class TestReasoningChain:
 # CognitiveCore
 # ---------------------------------------------------------------------------
 
+
 class TestCognitiveCore:
     def setup_method(self):
         self.core = CognitiveCore(db_path=":memory:")
@@ -234,6 +238,7 @@ class TestCognitiveCore:
 # ---------------------------------------------------------------------------
 # CognitiveCore.think
 # ---------------------------------------------------------------------------
+
 
 class TestCognitiveCoreThink:
     def setup_method(self):
@@ -306,6 +311,7 @@ class TestCognitiveCoreThink:
 # CognitiveCore.generate_idea
 # ---------------------------------------------------------------------------
 
+
 class TestCognitiveCoreGenerateIdea:
     def setup_method(self):
         self.core = CognitiveCore()
@@ -355,6 +361,7 @@ class TestCognitiveCoreGenerateIdea:
 # ---------------------------------------------------------------------------
 # CognitiveCore.reason
 # ---------------------------------------------------------------------------
+
 
 class TestCognitiveCoreReason:
     def setup_method(self):
@@ -420,6 +427,7 @@ class TestCognitiveCoreReason:
 # CognitiveCore.get_recent_thoughts
 # ---------------------------------------------------------------------------
 
+
 class TestCognitiveCoreGetRecentThoughts:
     def setup_method(self):
         self.core = CognitiveCore()
@@ -455,6 +463,7 @@ class TestCognitiveCoreGetRecentThoughts:
 # ---------------------------------------------------------------------------
 # CognitiveCore.get_statistics
 # ---------------------------------------------------------------------------
+
 
 class TestCognitiveCoreGetStatistics:
     def setup_method(self):

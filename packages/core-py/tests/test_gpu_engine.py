@@ -7,10 +7,9 @@ initialisation paths, and convenience functions. No real GPU hardware needed.
 from __future__ import annotations
 
 import ctypes
-import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -20,38 +19,37 @@ if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
 from domain.infrastructure._internal.gpu.gpu_engine import (
-    GPU_OK,
-    GPU_ERROR_NO_DEVICE,
-    GPU_ERROR_NO_MEMORY,
-    GPU_ERROR_SHADER_COMPILE,
-    GPU_ERROR_PIPELINE,
-    GPU_ERROR_BUFFER,
-    GPU_ERROR_DISPATCH,
-    GPU_ERROR_UNSUPPORTED,
+    GPU_BUF_COPY_DST,
+    GPU_BUF_COPY_SRC,
     GPU_BUF_STORAGE,
     GPU_BUF_UNIFORM,
     GPU_BUF_VERTEX,
-    GPU_BUF_COPY_SRC,
-    GPU_BUF_COPY_DST,
-    GpuDeviceT,
-    GpuBufferT,
-    GpuShaderT,
-    GpuPipelineT,
-    GpuContextT,
-    GpuBufferPoolT,
+    GPU_ERROR_BUFFER,
+    GPU_ERROR_DISPATCH,
+    GPU_ERROR_NO_DEVICE,
+    GPU_ERROR_NO_MEMORY,
+    GPU_ERROR_PIPELINE,
+    GPU_ERROR_SHADER_COMPILE,
+    GPU_ERROR_UNSUPPORTED,
+    GPU_OK,
     GpuBindEntry,
-    GpuDevice,
     GpuBuffer,
-    GpuShader,
-    GpuPipeline,
-    GpuContext,
     GpuBufferPool,
+    GpuBufferPoolT,
+    GpuBufferT,
+    GpuContext,
+    GpuContextT,
+    GpuDevice,
+    GpuDeviceT,
+    GpuPipeline,
+    GpuPipelineT,
+    GpuShader,
+    GpuShaderT,
     _find_library,
     _setup_functions,
     auto_device,
     is_gpu_available,
 )
-
 
 # ── Constants ───────────────────────────────────────────────────────────
 
@@ -112,7 +110,13 @@ class TestBufferUsageConstants:
         assert GPU_BUF_COPY_DST == 1 << 4
 
     def test_all_unique(self):
-        flags = [GPU_BUF_STORAGE, GPU_BUF_UNIFORM, GPU_BUF_VERTEX, GPU_BUF_COPY_SRC, GPU_BUF_COPY_DST]
+        flags = [
+            GPU_BUF_STORAGE,
+            GPU_BUF_UNIFORM,
+            GPU_BUF_VERTEX,
+            GPU_BUF_COPY_SRC,
+            GPU_BUF_COPY_DST,
+        ]
         assert len(flags) == len(set(flags))
 
     def test_composable_via_bitwise_or(self):
@@ -182,7 +186,10 @@ class TestFindLibrary:
         lib_path = tmp_path / "libgpu_engine.so"
         mock_exists.side_effect = lambda p: p == str(lib_path)
 
-        with patch("domain.infrastructure._internal.gpu.gpu_engine.os.path.dirname", return_value=str(tmp_path)):
+        with patch(
+            "domain.infrastructure._internal.gpu.gpu_engine.os.path.dirname",
+            return_value=str(tmp_path),
+        ):
             result = _find_library()
 
         mock_cdll.assert_called_once_with(str(lib_path))
@@ -196,7 +203,9 @@ class TestFindLibrary:
         assert result is mock_cdll.return_value
 
     @patch("domain.infrastructure._internal.gpu.gpu_engine.os.path.exists", return_value=False)
-    @patch("domain.infrastructure._internal.gpu.gpu_engine.ctypes.CDLL", side_effect=OSError("no lib"))
+    @patch(
+        "domain.infrastructure._internal.gpu.gpu_engine.ctypes.CDLL", side_effect=OSError("no lib")
+    )
     def test_raises_when_not_found(self, mock_cdll, mock_exists):
         with pytest.raises(FileNotFoundError, match="gpu_engine shared library not found"):
             _find_library()
@@ -207,8 +216,11 @@ class TestFindLibrary:
         dll_path = tmp_path / "gpu_engine.dll"
         mock_exists.side_effect = lambda p: p == str(dll_path)
 
-        with patch("domain.infrastructure._internal.gpu.gpu_engine.os.path.dirname", return_value=str(tmp_path)):
-            result = _find_library()
+        with patch(
+            "domain.infrastructure._internal.gpu.gpu_engine.os.path.dirname",
+            return_value=str(tmp_path),
+        ):
+            _find_library()
 
         mock_cdll.assert_called_once_with(str(dll_path))
 
@@ -233,8 +245,18 @@ class TestSetupFunctions:
         _setup_functions(lib)
 
         assert lib.gpu_buffer_create.argtypes == [GpuDeviceT, ctypes.c_size_t, ctypes.c_uint32]
-        assert lib.gpu_buffer_write.argtypes == [GpuBufferT, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_size_t]
-        assert lib.gpu_buffer_read.argtypes == [GpuBufferT, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_size_t]
+        assert lib.gpu_buffer_write.argtypes == [
+            GpuBufferT,
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.c_size_t,
+        ]
+        assert lib.gpu_buffer_read.argtypes == [
+            GpuBufferT,
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.c_size_t,
+        ]
         assert lib.gpu_buffer_map.argtypes == [GpuBufferT]
         assert lib.gpu_buffer_unmap.argtypes == [GpuBufferT]
         assert lib.gpu_buffer_destroy.argtypes == [GpuBufferT]
@@ -260,7 +282,12 @@ class TestSetupFunctions:
 
         assert lib.gpu_compute_begin.restype is GpuContextT
         assert lib.gpu_compute_end.argtypes == [GpuContextT]
-        assert lib.gpu_compute_dispatch.argtypes == [GpuContextT, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]
+        assert lib.gpu_compute_dispatch.argtypes == [
+            GpuContextT,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+        ]
 
     def test_sets_pool_function_signatures(self):
         lib = MagicMock()
@@ -299,7 +326,7 @@ class TestGpuDeviceWrapper:
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
 
-        device = GpuDevice()
+        GpuDevice()
         lib.gpu_device_create.assert_called_once()
         lib.gpu_device_create_backend.assert_not_called()
 
@@ -308,7 +335,7 @@ class TestGpuDeviceWrapper:
         lib = _make_mock_lib()
         mock_get_lib.return_value = lib
 
-        device = GpuDevice(backend="vulkan")
+        GpuDevice(backend="vulkan")
         lib.gpu_device_create_backend.assert_called_once_with(b"vulkan")
 
     @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
@@ -720,7 +747,7 @@ class TestGpuBufferPoolWrapper:
         mock_get_lib.return_value = lib
 
         device = GpuDevice()
-        pool = GpuBufferPool(device, capacity=32, min_size=512)
+        GpuBufferPool(device, capacity=32, min_size=512)
         lib.gpu_pool_create.assert_called_once_with(device._ptr, 32, 512)
 
     @patch("domain.infrastructure._internal.gpu.gpu_engine._get_lib")
@@ -781,7 +808,7 @@ class TestConvenienceFunctions:
 
     @patch("domain.infrastructure._internal.gpu.gpu_engine.GpuDevice")
     def test_auto_device_passes_backend(self, mock_cls):
-        result = auto_device(backend="metal")
+        auto_device(backend="metal")
         mock_cls.assert_called_once_with("metal")
 
     @patch("domain.infrastructure._internal.gpu.gpu_engine.GpuDevice")
@@ -790,6 +817,9 @@ class TestConvenienceFunctions:
         assert is_gpu_available() is True
         mock_cls.assert_called_once()
 
-    @patch("domain.infrastructure._internal.gpu.gpu_engine.GpuDevice", side_effect=RuntimeError("no device"))
+    @patch(
+        "domain.infrastructure._internal.gpu.gpu_engine.GpuDevice",
+        side_effect=RuntimeError("no device"),
+    )
     def test_is_gpu_available_false(self, mock_cls):
         assert is_gpu_available() is False

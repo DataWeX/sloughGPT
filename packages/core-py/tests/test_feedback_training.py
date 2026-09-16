@@ -4,28 +4,40 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from domain.feedback._internal.training import (
-    TrainingExample, DPOPair, FeedbackTrainer, create_training_pipeline,
+    DPOPair,
+    FeedbackTrainer,
+    TrainingExample,
+    create_training_pipeline,
 )
 
 
 def _make_message(msg_id, role, content, conv_id="conv1", created_at="2024-01-01T00:00:00"):
-    return {"_id": msg_id, "id": msg_id, "role": role, "content": content, "conversation_id": conv_id, "created_at": created_at}
+    return {
+        "_id": msg_id,
+        "id": msg_id,
+        "role": role,
+        "content": content,
+        "conversation_id": conv_id,
+        "created_at": created_at,
+    }
 
 
 def _make_feedback(msg_id, rating, quality_score=None, created_at="2024-01-01T00:00:01"):
-    return {"message_id": msg_id, "rating": rating, "quality_score": quality_score, "created_at": created_at}
+    return {
+        "message_id": msg_id,
+        "rating": rating,
+        "quality_score": quality_score,
+        "created_at": created_at,
+    }
 
 
 # ── TrainingExample / DPOPair ──────────────────────────────────────────────
 
 
 class TestTrainingExample:
-
     def test_defaults(self):
         ex = TrainingExample(prompt="p", response="r", rating="thumbs_up")
         assert ex.quality_score is None
@@ -36,7 +48,6 @@ class TestTrainingExample:
 
 
 class TestDPOPair:
-
     def test_init(self):
         pair = DPOPair(chosen="a", rejected="b", prompt="p")
         assert pair.chosen == "a"
@@ -48,7 +59,6 @@ class TestDPOPair:
 
 
 class TestFeedbackTrainer:
-
     def setup_method(self):
         self.mock_mog = MagicMock()
         self.mock_msgs = MagicMock()
@@ -141,9 +151,14 @@ class TestFeedbackTrainer:
     def test_get_training_examples_limit(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         fbs = [_make_feedback(f"m{i}", "thumbs_up") for i in range(5)]
-        msgs = [_make_message(f"m{i}", "assistant", f"resp{i}", created_at=f"2024-01-0{i}") for i in range(5)]
+        msgs = [
+            _make_message(f"m{i}", "assistant", f"resp{i}", created_at=f"2024-01-0{i}")
+            for i in range(5)
+        ]
         self.mock_fb.find.return_value = fbs
-        self.mock_msgs.find_one.side_effect = lambda q: next((m for m in msgs if m["_id"] == q.get("_id")), None)
+        self.mock_msgs.find_one.side_effect = lambda q: next(
+            (m for m in msgs if m["_id"] == q.get("_id")), None
+        )
         self.mock_msgs.find.return_value = [{"content": "p"}]
 
         trainer = FeedbackTrainer()
@@ -295,7 +310,6 @@ class TestFeedbackTrainer:
 
 
 class TestFactory:
-
     @patch("domain.feedback._internal.training.MogDB")
     def test_create_training_pipeline(self, MockMogDB):
         trainer = create_training_pipeline()

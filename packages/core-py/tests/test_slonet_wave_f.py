@@ -7,6 +7,7 @@ FEATURE: slonet-wave-f — Covers from_slnc (plain + quantized), chat/chat_strea
 seed branch, safetensors BF16 loader, fused-QKV bias split, and module helpers.
 DO NOT DELETE.
 """
+
 import asyncio
 import json
 import struct
@@ -58,7 +59,9 @@ def _make_gpt2_tensors(rng):
         p = f"h.{i}"
         t[f"{p}.ln_1.weight"] = np.ones(N_EMBED, dtype=np.float32)
         t[f"{p}.ln_1.bias"] = np.zeros(N_EMBED, dtype=np.float32)
-        t[f"{p}.attn.c_attn.weight"] = rng.standard_normal((N_EMBED, 3 * N_EMBED)).astype(np.float32)
+        t[f"{p}.attn.c_attn.weight"] = rng.standard_normal((N_EMBED, 3 * N_EMBED)).astype(
+            np.float32
+        )
         t[f"{p}.attn.c_attn.bias"] = rng.standard_normal((3 * N_EMBED,)).astype(np.float32)
         t[f"{p}.attn.c_proj.weight"] = rng.standard_normal((N_EMBED, N_EMBED)).astype(np.float32)
         t[f"{p}.attn.c_proj.bias"] = np.zeros(N_EMBED, dtype=np.float32)
@@ -94,9 +97,7 @@ def build_slnc(path, config, tensors):
         ndim = arr.ndim
         crc = zlib.crc32(data) & 0xFFFFFFFF
         entries.append((name, data, ndim, tuple(arr.shape), crc))
-    formula_table_size = sum(
-        compute_tensor_entry_size(e[2], len(e[0].encode())) for e in entries
-    )
+    formula_table_size = sum(compute_tensor_entry_size(e[2], len(e[0].encode())) for e in entries)
     data_offset = (header_size + formula_table_size + 63) & ~63
     cur = data_offset
     offs = []
@@ -107,10 +108,21 @@ def build_slnc(path, config, tensors):
         f.write(b"SLNC")
         f.write(struct.pack("<I", 1))
         f.write(struct.pack("<I", 0))
-        f.write(struct.pack(
-            "<10I", N_LAYER, N_EMBED, N_HEAD, N_INNER, VOCAB, N_POS,
-            N_LAYER, N_POS, len(tensors), data_offset,
-        ))
+        f.write(
+            struct.pack(
+                "<10I",
+                N_LAYER,
+                N_EMBED,
+                N_HEAD,
+                N_INNER,
+                VOCAB,
+                N_POS,
+                N_LAYER,
+                N_POS,
+                len(tensors),
+                data_offset,
+            )
+        )
         f.write(b"\x00" * 24)
         f.write(struct.pack("<I", len(json_bytes)))
         f.write(json_bytes)
@@ -141,9 +153,7 @@ def slnc_path(tmp_path):
 @pytest.fixture
 def real_provider(slnc_path):
     """Provider loaded from a real .slnc file with a stubbed tokenizer."""
-    with patch.object(
-        SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()
-    ):
+    with patch.object(SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()):
         provider = SloNetChatProvider.from_slnc(str(slnc_path), model_id="gpt2")
     return provider
 
@@ -157,9 +167,7 @@ class TestModuleHelpers:
 
     def test_split_fused_qkv_weight(self):
         arr = np.random.randn(N_EMBED, 3 * N_EMBED).astype(np.float32)
-        out = _split_fused_qkv(
-            "h.0.attn.c_attn.weight", arr, N_EMBED, N_LAYER, {}
-        )
+        out = _split_fused_qkv("h.0.attn.c_attn.weight", arr, N_EMBED, N_LAYER, {})
         assert "blocks.0.attn.q_proj.weight" in out
         assert out["blocks.0.attn.q_proj.weight"].shape == (N_EMBED, N_EMBED)
 
@@ -278,12 +286,8 @@ class TestFromSlnc:
         assert isinstance(out, str)
 
     def test_from_slnc_quantize_fresh(self, slnc_path):
-        with patch.object(
-            SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()
-        ):
-            provider = SloNetChatProvider.from_slnc(
-                str(slnc_path), model_id="gpt2", quantize=True
-            )
+        with patch.object(SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()):
+            provider = SloNetChatProvider.from_slnc(str(slnc_path), model_id="gpt2", quantize=True)
         report = provider.quantization_report()
         assert report["quantized"] is True
         assert report["bits"] == 8
@@ -295,33 +299,25 @@ class TestFromSlnc:
         assert slnc_path.with_suffix(".slnc.quant.json").exists()
 
     def test_from_slnc_quantize_prequantized(self, slnc_path):
-        with patch.object(
-            SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()
-        ):
+        with patch.object(SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()):
             SloNetChatProvider.from_slnc(str(slnc_path), quantize=True)
         npz_path = slnc_path.with_suffix(".slnc.quant.npz")
         json_path = slnc_path.with_suffix(".slnc.quant.json")
         assert npz_path.exists()
         json_path.unlink()
-        with patch.object(
-            SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()
-        ):
+        with patch.object(SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()):
             provider = SloNetChatProvider.from_slnc(str(slnc_path), quantize=True)
         assert provider.quantization_report()["quantized"] is True
         assert provider.generate("hello", max_tokens=4)
 
     def test_from_slnc_quantize_metadata_only(self, slnc_path):
-        with patch.object(
-            SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()
-        ):
+        with patch.object(SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()):
             SloNetChatProvider.from_slnc(str(slnc_path), quantize=True)
         npz_path = slnc_path.with_suffix(".slnc.quant.npz")
         json_path = slnc_path.with_suffix(".slnc.quant.json")
         npz_path.unlink()
         assert json_path.exists()
-        with patch.object(
-            SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()
-        ):
+        with patch.object(SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()):
             provider = SloNetChatProvider.from_slnc(str(slnc_path), quantize=True)
         assert provider.quantization_report()["quantized"] is True
         assert npz_path.exists()
@@ -333,20 +329,19 @@ class TestFromSlnc:
         cfg["num_key_value_heads"] = N_HEAD
         path = tmp_path / "rope.slnc"
         build_slnc(path, cfg, _make_gpt2_tensors(np.random.default_rng(1)))
-        with patch.object(
-            SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()
-        ):
+        with patch.object(SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()):
             provider = SloNetChatProvider.from_slnc(str(path), model_id="qwen")
         assert provider.model_id == "qwen"
         assert provider.generate("hi", max_tokens=4)
 
     def test_from_slnc_resource_manager_applies(self, slnc_path):
         rm = MagicMock()
-        with patch(
-            "domain.infrastructure.resource_manager.get_resource_manager",
-            return_value=rm,
-        ), patch.object(
-            SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()
+        with (
+            patch(
+                "domain.infrastructure._internal.resource_manager.get_resource_manager",
+                return_value=rm,
+            ),
+            patch.object(SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()),
         ):
             provider = SloNetChatProvider.from_slnc(str(slnc_path))
         rm.apply_blas_env.assert_called_once()
@@ -354,11 +349,12 @@ class TestFromSlnc:
         assert provider.model_id == "gpt2"
 
     def test_from_slnc_resource_manager_error_tolerated(self, slnc_path):
-        with patch(
-            "domain.infrastructure.resource_manager.get_resource_manager",
-            side_effect=RuntimeError("boom"),
-        ), patch.object(
-            SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()
+        with (
+            patch(
+                "domain.infrastructure._internal.resource_manager.get_resource_manager",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch.object(SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()),
         ):
             provider = SloNetChatProvider.from_slnc(str(slnc_path))
         assert provider.generate("hi", max_tokens=4)
@@ -421,7 +417,7 @@ class TestBuildPromptAndTokenizer:
 
     def test_load_tokenizer_success(self, real_provider):
         with patch(
-            "domain.infrastructure.morph_tokenizer.MorphTokenizer.from_pretrained",
+            "domain.infrastructure._internal.morph_tokenizer.MorphTokenizer.from_pretrained",
             return_value=FakeTokenizer(),
         ) as mock_load:
             tok = real_provider._load_tokenizer(Path("."), _slnc_config())
@@ -430,7 +426,7 @@ class TestBuildPromptAndTokenizer:
 
     def test_load_tokenizer_failure_raises(self, real_provider):
         with patch(
-            "domain.infrastructure.morph_tokenizer.MorphTokenizer.from_pretrained",
+            "domain.infrastructure._internal.morph_tokenizer.MorphTokenizer.from_pretrained",
             side_effect=RuntimeError("boom"),
         ):
             with pytest.raises(RuntimeError):
@@ -476,15 +472,14 @@ class TestChatPaths:
 
     def test_chat_stream_builtin_empty_decode(self, real_provider):
         real_provider._tokenizer.decode = lambda ids: ""
+
         async def collect():
             return [t async for t in real_provider.chat_stream("hi", max_tokens=3)]
 
         assert asyncio.run(collect()) == []
 
     def test_generate_with_logprobs_seed(self, real_provider):
-        text, logprobs = real_provider.generate_with_logprobs(
-            "hello", max_tokens=3, seed=42
-        )
+        text, logprobs = real_provider.generate_with_logprobs("hello", max_tokens=3, seed=42)
         assert len(logprobs) == 3
         assert all("token_id" in e and "logprob" in e for e in logprobs)
         assert isinstance(text, str)
@@ -502,14 +497,26 @@ class TestConverterEdgeCases:
         for i in range(n_layer):
             p = f"model.layers.{i}"
             sd[f"{p}.input_layernorm.weight"] = np.ones(n_embed, dtype=np.float32)
-            sd[f"{p}.self_attn.q_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
-            sd[f"{p}.self_attn.k_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
-            sd[f"{p}.self_attn.v_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
-            sd[f"{p}.self_attn.o_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
+            sd[f"{p}.self_attn.q_proj.weight"] = np.random.randn(n_embed, n_embed).astype(
+                np.float32
+            )
+            sd[f"{p}.self_attn.k_proj.weight"] = np.random.randn(n_embed, n_embed).astype(
+                np.float32
+            )
+            sd[f"{p}.self_attn.v_proj.weight"] = np.random.randn(n_embed, n_embed).astype(
+                np.float32
+            )
+            sd[f"{p}.self_attn.o_proj.weight"] = np.random.randn(n_embed, n_embed).astype(
+                np.float32
+            )
             sd[f"{p}.post_attention_layernorm.weight"] = np.ones(n_embed, dtype=np.float32)
-            sd[f"{p}.mlp.gate_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(np.float32)
+            sd[f"{p}.mlp.gate_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(
+                np.float32
+            )
             sd[f"{p}.mlp.up_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(np.float32)
-            sd[f"{p}.mlp.down_proj.weight"] = np.random.randn(n_embed, 4 * n_embed).astype(np.float32)
+            sd[f"{p}.mlp.down_proj.weight"] = np.random.randn(n_embed, 4 * n_embed).astype(
+                np.float32
+            )
 
         result = convert_hf_to_slonet(sd, n_layer=n_layer)
         assert "tok_emb.weight" in result

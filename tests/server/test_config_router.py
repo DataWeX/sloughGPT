@@ -2,8 +2,9 @@
 Tests for the config router — GET/PUT /config/generation.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -67,7 +68,10 @@ class TestGetGenerationConfig:
         assert set(resp.json()["data"].keys()) == set(DEFAULT_CFG.keys())
 
     def test_get_error_returns_500(self, client):
-        with patch("apps.api.server.routers.config.get_config_controller", side_effect=RuntimeError("broken")):
+        with patch(
+            "apps.api.server.routers.config.get_config_controller",
+            side_effect=RuntimeError("broken"),
+        ):
             resp = client.get("/config/generation")
         assert resp.status_code == 500
 
@@ -255,9 +259,17 @@ class TestConfigValidation:
         ctrl = MagicMock()
         ctrl.update_generation_config.return_value = dict(DEFAULT_CFG)
         mock_get_ctrl.return_value = ctrl
-        resp = client.put("/config/generation", json={"temperature": None, "top_p": None,
-                                                      "top_k": None, "repetition_penalty": None,
-                                                      "max_new_tokens": None, "max_context_length": None})
+        resp = client.put(
+            "/config/generation",
+            json={
+                "temperature": None,
+                "top_p": None,
+                "top_k": None,
+                "repetition_penalty": None,
+                "max_new_tokens": None,
+                "max_context_length": None,
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["temperature"] == 0.8
 

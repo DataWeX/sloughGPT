@@ -9,10 +9,9 @@ Covers:
     - Interval tier thresholds
 """
 
-import time
 import sys
+import time
 from pathlib import Path
-import pytest
 
 _CORE_PY = Path(__file__).resolve().parents[1]
 if str(_CORE_PY) not in sys.path:

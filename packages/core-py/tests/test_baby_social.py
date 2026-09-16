@@ -1,14 +1,17 @@
 import numpy as np
-import pytest
 
 from domain.collections._internal.baby_social import (
-    SocialConfig, Message, BabySocial, BabyCultural, BabySocialSystem,
+    BabyCultural,
+    BabySocial,
+    BabySocialSystem,
+    Message,
+    SocialConfig,
 )
 
 
 class FakeBaby:
     def __init__(self, id=1, position=None, energy=50.0):
-        self.entity = type('Entity', (), {'id': id, 'entity_type': 1})()
+        self.entity = type("Entity", (), {"id": id, "entity_type": 1})()
         self.position = np.array(position if position else [32, 0, 32], dtype=np.float64)
         self.energy = energy
         self.alive = True
@@ -175,7 +178,7 @@ class TestBabySocialSystem:
         baby = FakeBaby(id=1)
         system.register_baby(baby)
         assert 1 in system._social_modules
-        assert hasattr(baby, '_social')
+        assert hasattr(baby, "_social")
 
     def test_unregister_baby(self):
         system = BabySocialSystem()

@@ -7,10 +7,8 @@ import pytest
 from domain.logging._internal.base import LogLevel, LogRecord
 from domain.logging._internal.cli_logger import (
     CLILogger,
-    set_cli_terminal,
-    _TERMINAL_ENABLED,
     _color_enabled,
-    _term_width,
+    set_cli_terminal,
 )
 
 
@@ -50,12 +48,14 @@ def logger(buf):
 def reset_terminal():
     """Reset global terminal state between tests."""
     import domain.logging._internal.cli_logger as mod
+
     mod._TERMINAL_ENABLED = True
     yield
     mod._TERMINAL_ENABLED = True
 
 
 # ── Construction ────────────────────────────────────────────────────────
+
 
 class TestConstruction:
     def test_creates_with_name(self, logger):
@@ -93,6 +93,7 @@ class TestConstruction:
 
 # ── Color detection ─────────────────────────────────────────────────────
 
+
 class TestColorDetection:
     def test_no_color_env_disables(self, monkeypatch):
         monkeypatch.setenv("NO_COLOR", "1")
@@ -117,6 +118,7 @@ class TestColorDetection:
 
 
 # ── Emit ────────────────────────────────────────────────────────────────
+
 
 class TestEmit:
     def test_emit_writes_line(self, logger, buf):
@@ -169,6 +171,7 @@ class TestEmit:
         class Broken:
             def write(self, _):
                 raise OSError("closed")
+
             def flush(self):
                 raise OSError("closed")
 
@@ -185,6 +188,7 @@ class TestEmit:
 
 
 # ── Success ─────────────────────────────────────────────────────────────
+
 
 class TestSuccess:
     def test_success_prints(self, logger, buf):
@@ -209,6 +213,7 @@ class TestSuccess:
 
 # ── Step ────────────────────────────────────────────────────────────────
 
+
 class TestStep:
     def test_step_prints(self, logger, buf):
         logger.step("processing", file="data.csv")
@@ -219,6 +224,7 @@ class TestStep:
 
 
 # ── Header ──────────────────────────────────────────────────────────────
+
 
 class TestHeader:
     def test_header_prints_three_lines(self, logger, buf):
@@ -235,6 +241,7 @@ class TestHeader:
 
 # ── Section ─────────────────────────────────────────────────────────────
 
+
 class TestSection:
     def test_section_prints_three_lines(self, logger, buf):
         logger.section("Section")
@@ -244,6 +251,7 @@ class TestSection:
 
 
 # ── Table ───────────────────────────────────────────────────────────────
+
 
 class TestTable:
     def test_table_with_rows(self, logger, buf):
@@ -272,6 +280,7 @@ class TestTable:
 
 # ── JSON ────────────────────────────────────────────────────────────────
 
+
 class TestJson:
     def test_json_prints(self, logger, buf):
         logger.json({"key": "value"})
@@ -286,6 +295,7 @@ class TestJson:
 
 
 # ── Status ──────────────────────────────────────────────────────────────
+
 
 class TestStatus:
     def test_status_ok(self, logger, buf):
@@ -312,6 +322,7 @@ class TestStatus:
 
 # ── Divider ─────────────────────────────────────────────────────────────
 
+
 class TestDivider:
     def test_divider_prints(self, logger, buf):
         logger.divider()
@@ -326,6 +337,7 @@ class TestDivider:
 
 
 # ── KeyValue ────────────────────────────────────────────────────────────
+
 
 class TestKeyValue:
     def test_key_value_prints(self, logger, buf):
@@ -348,6 +360,7 @@ class TestKeyValue:
 
 # ── Blank ───────────────────────────────────────────────────────────────
 
+
 class TestBlank:
     def test_blank_prints_empty_line(self, logger, buf):
         logger.blank()
@@ -359,6 +372,7 @@ class TestBlank:
 
 
 # ── Command ─────────────────────────────────────────────────────────────
+
 
 class TestCommand:
     def test_command_prints(self, logger, buf):
@@ -375,9 +389,11 @@ class TestCommand:
 
 # ── Timer ───────────────────────────────────────────────────────────────
 
+
 class TestTimer:
     def test_timer_logs_elapsed(self, logger, buf):
         import time
+
         with logger.timer("test op"):
             time.sleep(0.01)
         out = buf.getvalue()
@@ -386,6 +402,7 @@ class TestTimer:
 
     def test_timer_logs_on_exception(self, logger, buf):
         import time
+
         try:
             with logger.timer("fail op"):
                 time.sleep(0.01)
@@ -399,9 +416,11 @@ class TestTimer:
 
 # ── SetCliTerminal ─────────────────────────────────────────────────────
 
+
 class TestSetCliTerminal:
     def test_disable_and_reenable(self):
         import domain.logging._internal.cli_logger as mod
+
         set_cli_terminal(False)
         assert mod._TERMINAL_ENABLED is False
         set_cli_terminal(True)

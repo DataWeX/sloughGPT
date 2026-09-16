@@ -22,21 +22,20 @@ import os
 import struct
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
 from domain.infrastructure._internal.slnc.spec import (
+    FLAG_ALIGNED_TENSORS,
+    FLAG_HAS_HEADER_CRC,
     MAGIC,
-    VERSION,
+    MAX_NAME_LEN,
     MAX_NDIM,
     MAX_TENSOR_COUNT,
-    MAX_NAME_LEN,
-    FLAG_HAS_HEADER_CRC,
-    FLAG_ALIGNED_TENSORS,
+    VERSION,
     SLNCConfig,
-    compute_header_size,
     code_to_dtype,
+    compute_header_size,
 )
 
 logger = logging.getLogger("slo.infrastructure.slnc.parser")
@@ -54,7 +53,7 @@ class SLNCParser:
         self,
         path: str,
         verify_checksums: bool = False,
-        config: Optional[SLNCConfig] = None,
+        config: SLNCConfig | None = None,
     ):
         """Open .slnc file and parse header + tensor table.
 
@@ -108,23 +107,24 @@ class SLNCParser:
         pos = 0
 
         # Magic
-        magic = buf[pos:pos + 4]
+        magic = buf[pos : pos + 4]
         pos += 4
         if magic != MAGIC:
             raise ValueError(f"Invalid magic: {magic!r} (expected {MAGIC!r})")
 
         # Version — soft check
-        version = struct.unpack("<I", buf[pos:pos + 4])[0]
+        version = struct.unpack("<I", buf[pos : pos + 4])[0]
         pos += 4
         if version > VERSION:
             logger.warning(
                 "SLNC version %d > supported %d — some features may be unavailable",
-                version, VERSION,
+                version,
+                VERSION,
                 extra={"tag": "INFRA"},
             )
 
         # Flags
-        self._flags = struct.unpack("<I", buf[pos:pos + 4])[0]
+        self._flags = struct.unpack("<I", buf[pos : pos + 4])[0]
         pos += 4
 
         # Decode flags
@@ -132,19 +132,29 @@ class SLNCParser:
         self._aligned_tensors = bool(self._flags & FLAG_ALIGNED_TENSORS)
 
         # Model metadata (64 bytes → 10 × uint32)
-        self._n_layer = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
-        self._n_embd = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
-        self._n_head = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
-        self._n_inner = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
-        self._vocab_size = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
-        self._n_positions = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
-        self._block_count = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
-        self._block_size = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
-        self._tensor_count = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
-        self._data_offset = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
+        self._n_layer = struct.unpack("<I", buf[pos : pos + 4])[0]
+        pos += 4
+        self._n_embd = struct.unpack("<I", buf[pos : pos + 4])[0]
+        pos += 4
+        self._n_head = struct.unpack("<I", buf[pos : pos + 4])[0]
+        pos += 4
+        self._n_inner = struct.unpack("<I", buf[pos : pos + 4])[0]
+        pos += 4
+        self._vocab_size = struct.unpack("<I", buf[pos : pos + 4])[0]
+        pos += 4
+        self._n_positions = struct.unpack("<I", buf[pos : pos + 4])[0]
+        pos += 4
+        self._block_count = struct.unpack("<I", buf[pos : pos + 4])[0]
+        pos += 4
+        self._block_size = struct.unpack("<I", buf[pos : pos + 4])[0]
+        pos += 4
+        self._tensor_count = struct.unpack("<I", buf[pos : pos + 4])[0]
+        pos += 4
+        self._data_offset = struct.unpack("<I", buf[pos : pos + 4])[0]
+        pos += 4
 
         # Reserved region (24 bytes)
-        reserved = buf[pos:pos + 24]
+        reserved = buf[pos : pos + 24]
         pos += 24
         self._header_crc = struct.unpack("<I", reserved[:4])[0]
 
@@ -153,9 +163,9 @@ class SLNCParser:
             raise ValueError(f"Too many tensors: {self._tensor_count} (max {MAX_TENSOR_COUNT})")
 
         # Config JSON — still in buffered data (after fixed header)
-        json_len = struct.unpack("<I", buf[pos:pos + 4])[0]
+        json_len = struct.unpack("<I", buf[pos : pos + 4])[0]
         pos += 4
-        self._config_dict = json.loads(buf[pos:pos + json_len])
+        self._config_dict = json.loads(buf[pos : pos + json_len])
 
         # Verify header CRC if present
         if self._has_header_crc and self._header_crc != 0:
@@ -164,10 +174,9 @@ class SLNCParser:
     def _verify_header_crc(self):
         """Verify header integrity via CRC32."""
         import zlib
+
         # Read entire header up to tensor table start
-        header_size = compute_header_size(
-            json.dumps(self._config_dict, sort_keys=True).encode()
-        )
+        header_size = compute_header_size(json.dumps(self._config_dict, sort_keys=True).encode())
         self._mm.seek(0)
         header_data = self._mm.read(header_size)
         actual_crc = zlib.crc32(header_data) & 0xFFFFFFFF
@@ -178,29 +187,27 @@ class SLNCParser:
 
     def _parse_tensor_table(self):
         """Parse the tensor table from buffered data (fast, no mmap)."""
-        self._tensor_map: Dict[str, Tuple[int, Tuple[int, ...], np.dtype, int]] = {}
+        self._tensor_map: dict[str, tuple[int, tuple[int, ...], np.dtype, int]] = {}
 
-        header_size = compute_header_size(
-            json.dumps(self._config_dict, sort_keys=True).encode()
-        )
+        header_size = compute_header_size(json.dumps(self._config_dict, sort_keys=True).encode())
         buf = self._header_data
         pos = header_size
 
         for _ in range(self._tensor_count):
             # Read name string
-            name_len = struct.unpack("<I", buf[pos:pos + 4])[0]
+            name_len = struct.unpack("<I", buf[pos : pos + 4])[0]
             pos += 4
             if name_len > MAX_NAME_LEN:
                 raise ValueError(f"Tensor name too long: {name_len} > {MAX_NAME_LEN}")
-            name = buf[pos:pos + name_len].decode()
+            name = buf[pos : pos + name_len].decode()
             pos += name_len
 
             # Read entry fields
-            offset = struct.unpack("<Q", buf[pos:pos + 8])[0]
+            offset = struct.unpack("<Q", buf[pos : pos + 8])[0]
             pos += 8
-            struct.unpack("<I", buf[pos:pos + 4])[0]
+            struct.unpack("<I", buf[pos : pos + 4])[0]
             pos += 4
-            ndim = struct.unpack("<I", buf[pos:pos + 4])[0]
+            ndim = struct.unpack("<I", buf[pos : pos + 4])[0]
             pos += 4
 
             # Validate ndim
@@ -208,14 +215,13 @@ class SLNCParser:
                 raise ValueError(f"Tensor {name!r} has {ndim} dims (max {MAX_NDIM})")
 
             shape = tuple(
-                struct.unpack("<I", buf[pos + i * 4:pos + (i + 1) * 4])[0]
-                for i in range(ndim)
+                struct.unpack("<I", buf[pos + i * 4 : pos + (i + 1) * 4])[0] for i in range(ndim)
             )
             pos += ndim * 4
 
-            dtype_code = struct.unpack("<I", buf[pos:pos + 4])[0]
+            dtype_code = struct.unpack("<I", buf[pos : pos + 4])[0]
             pos += 4
-            crc = struct.unpack("<I", buf[pos:pos + 4])[0]
+            crc = struct.unpack("<I", buf[pos : pos + 4])[0]
             pos += 4
 
             dtype = code_to_dtype(dtype_code)
@@ -237,14 +243,17 @@ class SLNCParser:
         nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
 
         # True zero-copy: view into mmap without .copy()
-        arr = np.frombuffer(self._mm[offset:offset + nbytes], dtype=dtype).reshape(shape)
+        arr = np.frombuffer(self._mm[offset : offset + nbytes], dtype=dtype).reshape(shape)
 
         # Optional integrity check
         if self._verify:
             import zlib
+
             actual_crc = zlib.crc32(arr.tobytes()) & 0xFFFFFFFF
             if actual_crc != crc:
-                raise ValueError(f"Checksum mismatch for {name}: expected {crc:#x}, got {actual_crc:#x}")
+                raise ValueError(
+                    f"Checksum mismatch for {name}: expected {crc:#x}, got {actual_crc:#x}"
+                )
 
         return arr
 
@@ -263,7 +272,7 @@ class SLNCParser:
         """
         return self.get_tensor(name).copy()
 
-    def get_tensor_info(self, name: str) -> Tuple[int, Tuple[int, ...], np.dtype, int]:
+    def get_tensor_info(self, name: str) -> tuple[int, tuple[int, ...], np.dtype, int]:
         """Get tensor metadata without reading data.
 
         Returns:
@@ -283,22 +292,28 @@ class SLNCParser:
         """
         offset, shape, dtype, crc = self.get_tensor_info(name)
         nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
-        return np.frombuffer(self._mm[offset:offset + nbytes], dtype=dtype).reshape(shape).copy()
+        return np.frombuffer(self._mm[offset : offset + nbytes], dtype=dtype).reshape(shape).copy()
 
     @property
-    def tensor_names(self) -> List[str]:
+    def tensor_names(self) -> list[str]:
         """List of all tensor names in the file."""
         return list(self._tensor_map.keys())
 
-    def get_block(self, layer_idx: int) -> Dict[str, np.ndarray]:
+    def get_block(self, layer_idx: int) -> dict[str, np.ndarray]:
         """Get all weights for a transformer block."""
         block_tensor_names = [
-            "ln_1.weight", "ln_1.bias",
-            "attn.c_attn.weight", "attn.c_attn.bias",
-            "attn.c_proj.weight", "attn.c_proj.bias",
-            "ln_2.weight", "ln_2.bias",
-            "mlp.c_fc.weight", "mlp.c_fc.bias",
-            "mlp.c_proj.weight", "mlp.c_proj.bias",
+            "ln_1.weight",
+            "ln_1.bias",
+            "attn.c_attn.weight",
+            "attn.c_attn.bias",
+            "attn.c_proj.weight",
+            "attn.c_proj.bias",
+            "ln_2.weight",
+            "ln_2.bias",
+            "mlp.c_fc.weight",
+            "mlp.c_fc.bias",
+            "mlp.c_proj.weight",
+            "mlp.c_proj.bias",
         ]
 
         result = {}
@@ -308,11 +323,11 @@ class SLNCParser:
                 result[tensor_name] = self.get_tensor(key)
         return result
 
-    def get_weights_dict(self) -> Dict[str, np.ndarray]:
+    def get_weights_dict(self) -> dict[str, np.ndarray]:
         """Get all weights as a dict (zero-copy views)."""
         return {name: self.get_tensor(name) for name in self._tensor_map}
 
-    def get_weights_dict_parallel(self, max_workers: Optional[int] = None) -> Dict[str, np.ndarray]:
+    def get_weights_dict_parallel(self, max_workers: int | None = None) -> dict[str, np.ndarray]:
         """Get all weights as a dict using parallel tensor loading.
 
         Numpy operations release the GIL, so a thread pool can load multiple
@@ -350,14 +365,20 @@ class SLNCParser:
     def verify_all(self) -> bool:
         """Verify all tensor checksums. Returns True if all pass."""
         import zlib
+
         for name in self._tensor_map:
             offset, shape, dtype, expected_crc = self._tensor_map[name]
             nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
-            data = self._mm[offset:offset + nbytes]
+            data = self._mm[offset : offset + nbytes]
             actual_crc = zlib.crc32(data) & 0xFFFFFFFF
             if actual_crc != expected_crc:
-                logger.error("Checksum mismatch: %s (expected %x, got %x)", name, expected_crc, actual_crc,
-                    extra={"tag": "INFRA"})
+                logger.error(
+                    "Checksum mismatch: %s (expected %x, got %x)",
+                    name,
+                    expected_crc,
+                    actual_crc,
+                    extra={"tag": "INFRA"},
+                )
                 return False
         return True
 

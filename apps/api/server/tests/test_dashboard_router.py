@@ -140,13 +140,16 @@ class TestDashboardAuth:
 class TestDashboardEdgeCases:
     def test_summary_with_mocked_health(self):
         _app = _build_app()
-        with patch("routers.dashboard._get_health_summary", return_value={
-            "model_loaded": True,
-            "model_type": "test-model",
-            "uptime_seconds": 100,
-            "cpu_percent": 50.0,
-            "memory_percent": 75.0,
-        }):
+        with patch(
+            "routers.dashboard._get_health_summary",
+            return_value={
+                "model_loaded": True,
+                "model_type": "test-model",
+                "uptime_seconds": 100,
+                "cpu_percent": 50.0,
+                "memory_percent": 75.0,
+            },
+        ):
             resp = TestClient(_app).get("/dashboard/summary")
             assert resp.status_code == 200
             data = _data(resp)
@@ -160,7 +163,9 @@ class TestDashboardEdgeCases:
             {"event": "test_event", "ts": 1.0},
             {"event": "another_event", "ts": 2.0},
         ]
-        with patch("domains.infrastructure.event_buffer.get_event_buffer", return_value=mock_buffer):
+        with patch(
+            "domains.infrastructure.event_buffer.get_event_buffer", return_value=mock_buffer
+        ):
             resp = TestClient(_app).get("/dashboard/events?n=10")
             assert resp.status_code == 200
             data = _data(resp)

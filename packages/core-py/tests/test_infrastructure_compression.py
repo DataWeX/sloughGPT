@@ -1,8 +1,8 @@
 """Tests for CompressedWeight and LRUCache — weight compression utilities."""
+
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from domain.infrastructure._internal.compression import CompressedWeight, LRUCache
 
@@ -36,8 +36,13 @@ class TestCompressedWeight:
         centroids = np.zeros(3, dtype=np.float32)  # placeholder
         assignments = np.array([0, 1, 2], dtype=np.int32)
         cw = CompressedWeight(
-            centroids, assignments, None, (3,), np.float32,
-            centroid_fn="linear", centroid_fn_params={"a": 2.0, "b": 1.0},
+            centroids,
+            assignments,
+            None,
+            (3,),
+            np.float32,
+            centroid_fn="linear",
+            centroid_fn_params={"a": 2.0, "b": 1.0},
         )
         result = cw.decompress()
         # linear: a*i + b = [1, 3, 5]
@@ -53,8 +58,13 @@ class TestCompressedWeight:
         centroids = np.zeros(100, dtype=np.float32)
         assignments = np.zeros(4, dtype=np.int32)
         cw = CompressedWeight(
-            centroids, assignments, None, (4,), np.float32,
-            centroid_fn="linear", centroid_fn_params={"a": 1.0, "b": 0.0},
+            centroids,
+            assignments,
+            None,
+            (4,),
+            np.float32,
+            centroid_fn="linear",
+            centroid_fn_params={"a": 1.0, "b": 0.0},
         )
         # linear = 8 bytes (2 float32) + assignments
         assert cw.compressed_bytes == 8 + assignments.nbytes

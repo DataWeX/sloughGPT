@@ -185,9 +185,7 @@ def test_build_process_guard_uses_config_not_undefined_var(tmp_path):
         patch(
             "domains.infrastructure.process_guard.ProcessGuard", return_value=fake_guard
         ) as pg_cls,
-        patch(
-            "domains.infrastructure.model_resolver.get_model_dir", return_value=slnc_dir.parent
-        ),
+        patch("domains.infrastructure.model_resolver.get_model_dir", return_value=slnc_dir.parent),
         patch("os.path.exists", return_value=True),
     ):
         guard = ctrl._build_process_guard("Fake/Model")

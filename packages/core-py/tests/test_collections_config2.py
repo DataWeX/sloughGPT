@@ -1,12 +1,12 @@
 """Tests for domain.collections._internal.config — SourceConfig, StoreConfig, FilterConfig, PipelineConfig."""
 
-from dataclasses import fields, asdict
+from dataclasses import asdict, fields
 
 from domain.collections._internal.config import (
-    SourceConfig,
-    StoreConfig,
     FilterConfig,
     PipelineConfig,
+    SourceConfig,
+    StoreConfig,
 )
 
 
@@ -22,8 +22,15 @@ class TestSourceConfig:
         assert c.headers == {}
 
     def test_custom_values(self):
-        c = SourceConfig(type="url", path="/data", url="http://example.com", name="web",
-                         timeout=60, poll_interval=120.5, headers={"Auth": "tok"})
+        c = SourceConfig(
+            type="url",
+            path="/data",
+            url="http://example.com",
+            name="web",
+            timeout=60,
+            poll_interval=120.5,
+            headers={"Auth": "tok"},
+        )
         assert c.type == "url"
         assert c.path == "/data"
         assert c.url == "http://example.com"
@@ -109,9 +116,15 @@ class TestFilterConfig:
         assert c.allowed_chars_ratio == 0.8
 
     def test_custom_values(self):
-        c = FilterConfig(type="keyword", keywords=["py", "thon"], mode="exclude",
-                         min_length=5, max_length=500, pattern=r"\d+",
-                         allowed_chars_ratio=0.9)
+        c = FilterConfig(
+            type="keyword",
+            keywords=["py", "thon"],
+            mode="exclude",
+            min_length=5,
+            max_length=500,
+            pattern=r"\d+",
+            allowed_chars_ratio=0.9,
+        )
         assert c.type == "keyword"
         assert c.keywords == ["py", "thon"]
         assert c.mode == "exclude"
@@ -122,7 +135,15 @@ class TestFilterConfig:
 
     def test_dataclass_fields_exist(self):
         names = {f.name for f in fields(FilterConfig)}
-        assert names == {"type", "min_length", "max_length", "keywords", "mode", "pattern", "allowed_chars_ratio"}
+        assert names == {
+            "type",
+            "min_length",
+            "max_length",
+            "keywords",
+            "mode",
+            "pattern",
+            "allowed_chars_ratio",
+        }
 
     def test_keywords_mutable_default_independence(self):
         a = FilterConfig()
@@ -149,8 +170,9 @@ class TestPipelineConfig:
     def test_custom_source_and_store(self):
         src = SourceConfig(type="rss", url="http://feed.example.com")
         sto = StoreConfig(type="memory", max_size=500)
-        c = PipelineConfig(name="rss-pipe", source=src, store=sto,
-                           collect_interval=30.0, max_rounds=10)
+        c = PipelineConfig(
+            name="rss-pipe", source=src, store=sto, collect_interval=30.0, max_rounds=10
+        )
         assert c.name == "rss-pipe"
         assert c.source.type == "rss"
         assert c.source.url == "http://feed.example.com"

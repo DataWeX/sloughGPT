@@ -3,21 +3,23 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import pytest
 
 
-def test_sloughgpt_trainer_on_progress_receives_steps_and_loss(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sloughgpt_trainer_on_progress_receives_steps_and_loss(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.chdir(tmp_path)
     corpus = tmp_path / "corpus.txt"
     corpus.write_text("abcdefgh" * 80, encoding="utf-8")
 
     from domains.training.train_pipeline import SloughGPTTrainer
 
-    events: List[Dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
 
-    def on_progress(info: Dict[str, Any]) -> None:
+    def on_progress(info: dict[str, Any]) -> None:
         events.append(dict(info))
 
     trainer = SloughGPTTrainer(

@@ -11,19 +11,21 @@ The NPU calls forward_pass() without knowing which backend is running.
 from __future__ import annotations
 
 import time
-import numpy as np
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
+
+import numpy as np
 
 
 @dataclass
 class ForwardPassResult:
     """Result of a single forward pass through any transformer engine."""
-    logits: np.ndarray           # (batch, seq_len, vocab_size)
+
+    logits: np.ndarray  # (batch, seq_len, vocab_size)
     forward_time_ms: float = 0.0
     model_name: str = ""
-    cached_tokens: int = 0       # how many tokens were in KV cache before this call
-    engine: str = "unknown"      # "numpy" or "c"
+    cached_tokens: int = 0  # how many tokens were in KV cache before this call
+    engine: str = "unknown"  # "numpy" or "c"
 
     @property
     def shape(self):
@@ -47,8 +49,9 @@ class ForwardPassable(Protocol):
         ...
 
 
-def timed_forward(model: ForwardPassable, input_ids: np.ndarray,
-                  model_name: str = "") -> ForwardPassResult:
+def timed_forward(
+    model: ForwardPassable, input_ids: np.ndarray, model_name: str = ""
+) -> ForwardPassResult:
     """Run forward_pass() with automatic timing."""
     t0 = time.monotonic()
     result = model.forward_pass(input_ids)

@@ -1,28 +1,25 @@
 """Tests for domain.collections._internal.sources — pure logic only."""
+
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
-
-import pytest
 
 from domain.collections._internal.sources import (
     ApiSource,
     FileSource,
     GeneratorSource,
     Record,
+    Source,
     SseSource,
     UrlSource,
     WatchSource,
-    Source,
 )
-
 
 # ---------------------------------------------------------------------------
 # Record
 # ---------------------------------------------------------------------------
+
 
 class TestRecord:
     def test_basic_creation(self):
@@ -68,6 +65,7 @@ class TestRecord:
 # Source protocol
 # ---------------------------------------------------------------------------
 
+
 class TestSourceProtocol:
     def test_generator_source_is_source(self):
         gs = GeneratorSource(lambda: [])
@@ -77,6 +75,7 @@ class TestSourceProtocol:
 # ---------------------------------------------------------------------------
 # FileSource
 # ---------------------------------------------------------------------------
+
 
 class TestFileSource:
     def _write(self, tmp_path: Path, name: str, content: str) -> Path:
@@ -136,7 +135,7 @@ class TestFileSource:
         assert records[0].content == "NOT_JSON"
 
     def test_jsonl_non_dict_item(self, tmp_path):
-        p = self._write(tmp_path, "data.jsonl", '42\n')
+        p = self._write(tmp_path, "data.jsonl", "42\n")
         records = list(FileSource(str(p)).read())
         assert records[0].content == "42"
 
@@ -197,6 +196,7 @@ class TestFileSource:
 # GeneratorSource
 # ---------------------------------------------------------------------------
 
+
 class TestGeneratorSource:
     def test_yields_records_directly(self):
         src = GeneratorSource(lambda: [Record(content="a"), Record(content="b")])
@@ -248,6 +248,7 @@ class TestGeneratorSource:
 # WatchSource
 # ---------------------------------------------------------------------------
 
+
 class TestWatchSource:
     def test_detects_new_files(self, tmp_path):
         (tmp_path / "a.txt").write_text("hello")
@@ -270,7 +271,9 @@ class TestWatchSource:
         ws = WatchSource(str(tmp_path))
         list(ws.read())
         p.write_text("v2")
-        import time; time.sleep(0.05)
+        import time
+
+        time.sleep(0.05)
         records = list(ws.read())
         assert len(records) == 1
         assert records[0].content == "v2"
@@ -335,10 +338,11 @@ class TestWatchSource:
 # UrlSource — constructor logic only (no network)
 # ---------------------------------------------------------------------------
 
+
 class TestUrlSource:
     def test_name_default(self):
         src = UrlSource("https://example.com/api/data")
-        assert src.name == f"url:https://example.com/api/data"[:60]
+        assert src.name == "url:https://example.com/api/data"[:60]
 
     def test_name_override(self):
         src = UrlSource("https://example.com", name="custom")
@@ -388,6 +392,7 @@ class TestUrlSource:
 # SseSource — constructor logic only
 # ---------------------------------------------------------------------------
 
+
 class TestSseSource:
     def test_name_default(self):
         src = SseSource("https://example.com/events")
@@ -405,6 +410,7 @@ class TestSseSource:
 # ---------------------------------------------------------------------------
 # ApiSource — constructor + _last_id logic
 # ---------------------------------------------------------------------------
+
 
 class TestApiSource:
     def test_name_default(self):

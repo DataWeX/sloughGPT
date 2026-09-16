@@ -2,21 +2,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
-import pytest
 
-from domain.collections._internal.training_bridge import (
-    TrainingDataConfig,
-    TrainingDataAdapter,
-    RecordToTrainingSource,
-    TrainingDatasetBuilder,
-    CollectorTrainingBridge,
-)
-from domain.collections._internal.sources import Record
 from domain.collections._internal.collector import Collector
-
+from domain.collections._internal.sources import Record
+from domain.collections._internal.training_bridge import (
+    CollectorTrainingBridge,
+    RecordToTrainingSource,
+    TrainingDataAdapter,
+    TrainingDataConfig,
+    TrainingDatasetBuilder,
+)
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -48,7 +44,6 @@ class ListStore:
 
 
 class TestTrainingDataConfig:
-
     def test_defaults(self):
         cfg = TrainingDataConfig()
         assert cfg.block_size == 128
@@ -68,7 +63,6 @@ class TestTrainingDataConfig:
 
 
 class TestTrainingDataAdapter:
-
     def test_records_to_text(self):
         adapter = TrainingDataAdapter(TrainingDataConfig(min_length=1))
         records = [Record(content="hello"), Record(content="world")]
@@ -144,7 +138,6 @@ class TestTrainingDataAdapter:
 
 
 class TestRecordToTrainingSource:
-
     def test_read_returns_records(self):
         records = [Record(content="a"), Record(content="b")]
         src = RecordToTrainingSource(records)
@@ -157,7 +150,6 @@ class TestRecordToTrainingSource:
 
 
 class TestTrainingDatasetBuilder:
-
     def test_add_records(self):
         builder = TrainingDatasetBuilder(TrainingDataConfig(min_length=1))
         builder.add_records([Record(content="a"), Record(content="b")])
@@ -235,7 +227,6 @@ class TestTrainingDatasetBuilder:
 
 
 class TestCollectorTrainingBridge:
-
     def test_collect_and_prepare(self):
         src = NameSource("s", [Record(content="hello world test")])
         store = ListStore()

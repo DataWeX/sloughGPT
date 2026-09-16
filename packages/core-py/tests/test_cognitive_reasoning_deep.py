@@ -5,9 +5,9 @@ Covers: DeepReasoning (retrieval, self-correction, synthesis), FormalLogicEngine
 WorkingMemory (LRU eviction, access tracking), dataclasses, enums.
 No mocks, pure logic with default LLM stubs.
 """
+
 from __future__ import annotations
 
-import asyncio
 import sys
 from pathlib import Path
 
@@ -17,25 +17,25 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
+from domain.cognitive._internal.reasoning.advanced import ReasoningMode, ThoughtStep
 from domain.cognitive._internal.reasoning.deep import (
     DeepReasoning,
     DeepReasoningContext,
     FormalLogicEngine,
     LogicalOperator,
     Predicate,
+    RetrievalSource,
+    RetrievedKnowledge,
+    Substitution,
     Term,
     WellFormedFormula,
     WorkingMemory,
-    RetrievedKnowledge,
-    RetrievalSource,
-    Substitution,
 )
-from domain.cognitive._internal.reasoning.advanced import ThoughtStep, ReasoningMode
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # RetrievalSource Enum
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestRetrievalSource:
     def test_all_values_are_strings(self):
@@ -56,6 +56,7 @@ class TestRetrievalSource:
 # Dataclasses
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestRetrievedKnowledge:
     def test_basic(self):
         rk = RetrievedKnowledge(content="fact", source=RetrievalSource.MEMORY, relevance=0.9)
@@ -66,8 +67,10 @@ class TestRetrievedKnowledge:
 
     def test_with_source_id(self):
         rk = RetrievedKnowledge(
-            content="doc", source=RetrievalSource.VECTOR_STORE,
-            relevance=0.8, source_id="doc-42",
+            content="doc",
+            source=RetrievalSource.VECTOR_STORE,
+            relevance=0.8,
+            source_id="doc-42",
         )
         assert rk.source_id == "doc-42"
 
@@ -100,6 +103,7 @@ class TestDeepReasoningContext:
 # LogicalOperator Enum
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestLogicalOperator:
     def test_all_operators_present(self):
         names = {op.name for op in LogicalOperator}
@@ -118,6 +122,7 @@ class TestLogicalOperator:
 # ═══════════════════════════════════════════════════════════════════════
 # Term & Predicate
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestTerm:
     def test_constant(self):
@@ -168,6 +173,7 @@ class TestPredicate:
 # WellFormedFormula
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestWellFormedFormula:
     def test_predicate_only(self):
         pred = Predicate(name="p", terms=[Term(name="a")])
@@ -196,6 +202,7 @@ class TestWellFormedFormula:
 # Substitution
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestSubstitution:
     def test_empty_mapping(self):
         s = Substitution()
@@ -209,6 +216,7 @@ class TestSubstitution:
 # ═══════════════════════════════════════════════════════════════════════
 # FormalLogicEngine — Knowledge Base
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestFormalLogicKB:
     def test_assert_fact(self):
@@ -235,6 +243,7 @@ class TestFormalLogicKB:
 # ═══════════════════════════════════════════════════════════════════════
 # FormalLogicEngine — Forward Chaining
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestForwardChaining:
     def test_query_direct_fact(self):
@@ -303,6 +312,7 @@ class TestForwardChaining:
 # ═══════════════════════════════════════════════════════════════════════
 # FormalLogicEngine — Unification
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestUnification:
     def test_unify_identical_constants(self):
@@ -386,6 +396,7 @@ class TestUnification:
 # FormalLogicEngine — Resolution
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestResolution:
     def test_resolution_proves_entailed(self):
         engine = FormalLogicEngine()
@@ -461,6 +472,7 @@ class TestResolution:
 # FormalLogicEngine — Syllogisms
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestSyllogisms:
     def test_prove_syllogism_returns_structure(self):
         engine = FormalLogicEngine()
@@ -535,6 +547,7 @@ class TestSyllogisms:
 # ═══════════════════════════════════════════════════════════════════════
 # WorkingMemory
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestWorkingMemory:
     def test_add_item(self):
@@ -616,6 +629,7 @@ class TestWorkingMemory:
 # ═══════════════════════════════════════════════════════════════════════
 # DeepReasoning
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestDeepReasoning:
     @pytest.mark.asyncio
@@ -733,6 +747,7 @@ class TestDeepReasoning:
 # DeepReasoning — Self-Correction
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestDeepReasoningSelfCorrection:
     @pytest.mark.asyncio
     async def test_self_correct_returns_structure(self):
@@ -793,6 +808,7 @@ class TestDeepReasoningSelfCorrection:
 # DeepReasoning — With Vector/Memory Stores
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestDeepReasoningWithStores:
     @pytest.mark.asyncio
     async def test_vector_store_used(self):
@@ -840,13 +856,22 @@ class TestDeepReasoningWithStores:
 # __all__ exports
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestExports:
     def test_all_contains_expected(self):
         from domain.cognitive._internal.reasoning.deep import __all__ as exported
+
         expected = {
-            "DeepReasoning", "DeepReasoningContext", "RetrievedKnowledge",
-            "RetrievalSource", "FormalLogicEngine", "LogicalOperator",
-            "Term", "Predicate", "WellFormedFormula", "Substitution",
+            "DeepReasoning",
+            "DeepReasoningContext",
+            "RetrievedKnowledge",
+            "RetrievalSource",
+            "FormalLogicEngine",
+            "LogicalOperator",
+            "Term",
+            "Predicate",
+            "WellFormedFormula",
+            "Substitution",
             "WorkingMemory",
         }
         assert expected == set(exported)

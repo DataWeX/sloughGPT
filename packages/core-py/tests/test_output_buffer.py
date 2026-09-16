@@ -12,8 +12,8 @@ from domain.infrastructure._internal.output_buffer import (
     BufferLogHandler,
     OutputBuffer,
     OutputLine,
-    _TeeWriter,
     _norm_level,
+    _TeeWriter,
     get_server_buffer,
     install_log_bridge,
     install_stdio_bridge,
@@ -81,8 +81,7 @@ class TestOutputBuffer:
 
     def test_append_log_fields(self):
         buf = OutputBuffer()
-        line = buf.append_log("boom", level="error", source="slo.x", tag="ERR",
-                             context={"code": 1})
+        line = buf.append_log("boom", level="error", source="slo.x", tag="ERR", context={"code": 1})
         assert line.level == "error"
         assert line.source == "slo.x"
         assert line.tag == "ERR"
@@ -245,6 +244,7 @@ class TestSubscribers:
         async def scenario():
             def bg():
                 import time
+
                 time.sleep(0.05)
                 buf.append_text("from-thread")
 
@@ -282,8 +282,9 @@ class TestBufferLogHandler:
     def test_captures_record(self):
         buf = OutputBuffer()
         handler = BufferLogHandler(buf)
-        record = logging.LogRecord("slo.test", logging.WARNING, "x.py", 1,
-                                   "warned %s", ("now",), None)
+        record = logging.LogRecord(
+            "slo.test", logging.WARNING, "x.py", 1, "warned %s", ("now",), None
+        )
         handler.emit(record)
         line = buf.lines[0]
         assert line.level == "warning"
@@ -293,8 +294,7 @@ class TestBufferLogHandler:
     def test_captures_extra_fields(self):
         buf = OutputBuffer()
         handler = BufferLogHandler(buf)
-        record = logging.LogRecord("slo.test", logging.ERROR, "x.py", 1,
-                                   "failed", (), None)
+        record = logging.LogRecord("slo.test", logging.ERROR, "x.py", 1, "failed", (), None)
         record.tag = "ERR"
         record.context = {"code": 42}
         record.error_code = "E42"
@@ -307,8 +307,7 @@ class TestBufferLogHandler:
     def test_emit_swallows_errors(self, monkeypatch):
         buf = OutputBuffer()
         handler = BufferLogHandler(buf)
-        record = logging.LogRecord("slo.test", logging.INFO, "x.py", 1,
-                                   "ok", (), None)
+        record = logging.LogRecord("slo.test", logging.INFO, "x.py", 1, "ok", (), None)
         monkeypatch.setattr(record, "getMessage", lambda: (_ for _ in ()).throw(ValueError()))
         handler.emit(record)
         assert buf.count == 0
@@ -316,8 +315,7 @@ class TestBufferLogHandler:
     def test_stray_extra_fields_captured_automatically(self):
         buf = OutputBuffer()
         handler = BufferLogHandler(buf)
-        record = logging.LogRecord("slo.test", logging.INFO, "x.py", 1,
-                                   "trained", (), None)
+        record = logging.LogRecord("slo.test", logging.INFO, "x.py", 1, "trained", (), None)
         record.vocab_size = 512
         record.corpus_size = 128000
         handler.emit(record)
@@ -326,8 +324,7 @@ class TestBufferLogHandler:
     def test_explicit_context_wins_over_stray(self):
         buf = OutputBuffer()
         handler = BufferLogHandler(buf)
-        record = logging.LogRecord("slo.test", logging.INFO, "x.py", 1,
-                                   "msg", (), None)
+        record = logging.LogRecord("slo.test", logging.INFO, "x.py", 1, "msg", (), None)
         record.context = {"mode": "explicit"}
         record.mode = "stray"
         handler.emit(record)
@@ -337,8 +334,9 @@ class TestBufferLogHandler:
         # Production shape from e.g. routers/inference.py request logs.
         buf = OutputBuffer()
         handler = BufferLogHandler(buf)
-        record = logging.LogRecord("slo.routers.inference", logging.INFO, "x.py", 1,
-                                   "generate", (), None)
+        record = logging.LogRecord(
+            "slo.routers.inference", logging.INFO, "x.py", 1, "generate", (), None
+        )
         record.tag = "INFO"
         record.context = {"provider": "hf-default"}
         record.elapsed_ms = 511
@@ -418,8 +416,10 @@ class TestTeeWriter:
         class Fake:
             def __init__(self):
                 self.flushed = False
+
             def flush(self):
                 self.flushed = True
+
         f = Fake()
         w = _TeeWriter(f, OutputBuffer())
         w.flush()
@@ -428,6 +428,7 @@ class TestTeeWriter:
     def test_attr_delegation(self):
         class Fake:
             encoding = "utf-8"
+
         w = _TeeWriter(Fake(), OutputBuffer())
         assert w.encoding == "utf-8"
 
@@ -444,19 +445,28 @@ class _Capture:
 
 
 class TestNormLevel:
-    @pytest.mark.parametrize("raw,expected", [
-        ("INFO", "info"), ("inf", "info"), ("WARNING", "warning"),
-        ("wrn", "warning"), ("ERROR", "error"), ("err", "error"),
-        ("DEBUG", "debug"), ("dbg", "debug"), ("CRITICAL", "critical"),
-        ("weird", "weird"),
-    ])
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("INFO", "info"),
+            ("inf", "info"),
+            ("WARNING", "warning"),
+            ("wrn", "warning"),
+            ("ERROR", "error"),
+            ("err", "error"),
+            ("DEBUG", "debug"),
+            ("dbg", "debug"),
+            ("CRITICAL", "critical"),
+            ("weird", "weird"),
+        ],
+    )
     def test_norm_level(self, raw, expected):
         assert _norm_level(raw) == expected
 
 
 class TestSingletons:
     def test_get_server_buffer_singleton(self, monkeypatch):
-        monkeypatch.setattr("domain.infrastructure.output_buffer._server_buffer", None)
+        monkeypatch.setattr("domain.infrastructure._internal.output_buffer._server_buffer", None)
         b1 = get_server_buffer()
         b2 = get_server_buffer()
         assert b1 is b2

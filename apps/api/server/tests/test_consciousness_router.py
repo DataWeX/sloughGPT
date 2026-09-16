@@ -3,8 +3,9 @@
 import io
 import json
 import time
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -68,8 +69,9 @@ def mock_trainer():
 
 @pytest.fixture
 def client(mock_engine, mock_trainer):
-    from apps.api.server.routers.consciousness import ConsciousnessRouter
     from infrastructure.exception_handlers import register_app_error_handler
+
+    from apps.api.server.routers.consciousness import ConsciousnessRouter
 
     router_obj = ConsciousnessRouter()
     router_obj._engine = mock_engine
@@ -147,8 +149,9 @@ class TestConsciousnessAPI:
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_train_start_busy(self, _auth, mock_engine):
         """Test that train_start returns 409 when already training."""
-        from apps.api.server.routers.consciousness import ConsciousnessRouter
         from infrastructure.exception_handlers import register_app_error_handler
+
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
 
         router_obj = ConsciousnessRouter()
         router_obj._engine = mock_engine
@@ -168,8 +171,9 @@ class TestConsciousnessAPI:
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_train_start_insufficient_data(self, _auth, mock_engine):
         """Test that train_start returns 400 when insufficient data."""
-        from apps.api.server.routers.consciousness import ConsciousnessRouter
         from infrastructure.exception_handlers import register_app_error_handler
+
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
 
         router_obj = ConsciousnessRouter()
         router_obj._engine = mock_engine
@@ -225,9 +229,11 @@ class TestConsciousnessAPI:
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_beliefs_history_with_episodes(self, _auth, mock_engine):
         """Test beliefs history reconstructs evolution from episodes."""
-        from apps.api.server.routers.consciousness import ConsciousnessRouter
-        from infrastructure.exception_handlers import register_app_error_handler
         import time
+
+        from infrastructure.exception_handlers import register_app_error_handler
+
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
 
         router_obj = ConsciousnessRouter()
 
@@ -268,10 +274,12 @@ class TestConsciousnessAPI:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_submit_feedback(self, _auth, mock_engine):
-        from apps.api.server.routers.consciousness import ConsciousnessRouter
-        from infrastructure.exception_handlers import register_app_error_handler
-        from domain.consciousness._internal.self_model import SelfEpisode
         import time
+
+        from infrastructure.exception_handlers import register_app_error_handler
+
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
+        from domain.consciousness._internal.self_model import SelfEpisode
 
         router_obj = ConsciousnessRouter()
         mock_eng = MagicMock()
@@ -307,8 +315,9 @@ class TestConsciousnessAPI:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_submit_feedback_invalid_index(self, _auth):
-        from apps.api.server.routers.consciousness import ConsciousnessRouter
         from infrastructure.exception_handlers import register_app_error_handler
+
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
 
         router_obj = ConsciousnessRouter()
         mock_eng = MagicMock()
@@ -330,13 +339,12 @@ class TestConsciousnessAPI:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_seed_data(self, _auth):
-        from apps.api.server.routers.consciousness import ConsciousnessRouter
         from infrastructure.exception_handlers import register_app_error_handler
-        from domain.consciousness._internal.self_model import SelfModel
-        from domain.consciousness._internal.qualia import QualiaEngine
-        from domain.consciousness._internal.meta_cognition import MetaCognition
+
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
         from domain.consciousness._internal.config import ConsciousnessConfig
-        from domain.consciousness._internal.narrative import NarrativeGenerator
+        from domain.consciousness._internal.qualia import QualiaEngine
+        from domain.consciousness._internal.self_model import SelfModel
 
         router_obj = ConsciousnessRouter()
         real_engine = MagicMock()
@@ -403,10 +411,12 @@ class TestConsciousnessAPI:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_personality_history_with_episodes(self, _auth):
-        from apps.api.server.routers.consciousness import ConsciousnessRouter
-        from infrastructure.exception_handlers import register_app_error_handler
-        from domain.consciousness._internal.self_model import SelfEpisode
         import time
+
+        from infrastructure.exception_handlers import register_app_error_handler
+
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
+        from domain.consciousness._internal.self_model import SelfEpisode
 
         router_obj = ConsciousnessRouter()
         mock_eng = MagicMock()
@@ -713,8 +723,9 @@ class TestConsciousnessStream:
         assert accel == "no"
 
     def test_stream_payload_shape(self):
-        from domain.consciousness._internal.self_model import SelfEpisode
         import time as _time
+
+        from domain.consciousness._internal.self_model import SelfEpisode
 
         router_obj = self._make_router()
         router_obj._engine.self_model.episodes = [
@@ -813,10 +824,12 @@ class TestConsciousnessBatch:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_batch_feedback(self, _auth):
-        from apps.api.server.routers.consciousness import ConsciousnessRouter
-        from infrastructure.exception_handlers import register_app_error_handler
-        from domain.consciousness._internal.self_model import SelfEpisode
         import time as _time
+
+        from infrastructure.exception_handlers import register_app_error_handler
+
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
+        from domain.consciousness._internal.self_model import SelfEpisode
 
         router_obj = ConsciousnessRouter()
         mock_eng = MagicMock()
@@ -867,9 +880,9 @@ class TestConsciousnessStats:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_stats_empty(self, _auth):
-        from apps.api.server.routers.consciousness import ConsciousnessRouter
         from infrastructure.exception_handlers import register_app_error_handler
-        from domain.consciousness._internal.personality import PersonalityManager, PersonalityProfile
+
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
 
         router_obj = ConsciousnessRouter()
         mock_eng = MagicMock()
@@ -905,10 +918,12 @@ class TestConsciousnessStats:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_stats_with_episodes(self, _auth):
-        from apps.api.server.routers.consciousness import ConsciousnessRouter
-        from infrastructure.exception_handlers import register_app_error_handler
-        from domain.consciousness._internal.self_model import SelfEpisode
         import time as _time
+
+        from infrastructure.exception_handlers import register_app_error_handler
+
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
+        from domain.consciousness._internal.self_model import SelfEpisode
 
         router_obj = ConsciousnessRouter()
         mock_eng = MagicMock()

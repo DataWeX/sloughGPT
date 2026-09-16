@@ -2,30 +2,21 @@
 
 from __future__ import annotations
 
-import asyncio
 import pytest
 
 from domain.cognitive._internal.reasoning import (
-    ReasoningEngine,
-    ReasoningMode,
-    ThoughtStep,
-    ReasoningResult,
     ChainOfThought,
-    TreeOfThoughts,
-    SelfConsistency,
     ConstitutionalAI,
-    CausalReasoning,
-    SyllogismReasoning,
-    ReActReasoning,
     DeepReasoning,
     FormalLogicEngine,
+    ReasoningEngine,
+    ReasoningMode,
+    ReasoningResult,
+    SelfConsistency,
+    ThoughtStep,
+    TreeOfThoughts,
     WorkingMemory,
-    Term,
-    Predicate,
-    WellFormedFormula,
-    LogicalOperator,
 )
-
 
 # ── ReasoningMode ─────────────────────────────────────────────────────────────
 
@@ -78,9 +69,7 @@ class TestThoughtStep:
         assert step.is_final is False
 
     def test_with_parent(self):
-        step = ThoughtStep(
-            step_id=1, thought="x", reasoning_type="y", confidence=0.5, parent_id=0
-        )
+        step = ThoughtStep(step_id=1, thought="x", reasoning_type="y", confidence=0.5, parent_id=0)
         assert step.parent_id == 0
 
     def test_with_children(self):
@@ -114,8 +103,12 @@ class TestReasoningResult:
             ThoughtStep(1, "step2", "type2", 0.7),
         ]
         result = ReasoningResult(
-            conclusion="Done", confidence=0.8, mode=ReasoningMode.TREE_OF_THOUGHTS,
-            steps=steps, metadata={"depth": 2}, execution_time_ms=200.0,
+            conclusion="Done",
+            confidence=0.8,
+            mode=ReasoningMode.TREE_OF_THOUGHTS,
+            steps=steps,
+            metadata={"depth": 2},
+            execution_time_ms=200.0,
         )
         assert len(result.steps) == 2
         assert result.metadata["depth"] == 2
@@ -191,7 +184,7 @@ class TestTreeOfThoughts:
 
     @pytest.mark.asyncio
     async def test_reason_has_nodes(self, tot):
-        result = await tot.reason("Problem")
+        await tot.reason("Problem")
         assert len(tot.nodes) > 0
 
     @pytest.mark.asyncio

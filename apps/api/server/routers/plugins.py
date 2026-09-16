@@ -5,10 +5,11 @@ Plugins Router — endpoints for plugin management.
 import logging
 from pathlib import Path
 
-from domain.shared import find_repo_root
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
+
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.routers.plugins")
 
@@ -21,24 +22,17 @@ class PluginsRouter:
         self._register_routes()
 
     def _register_routes(self):
-        self.router.add_api_route(
-            "", self.list_plugins, methods=["GET"]
-        )
-        self.router.add_api_route(
-            "/{plugin_name}/enable", self.enable_plugin, methods=["POST"]
-        )
-        self.router.add_api_route(
-            "/{plugin_name}/disable", self.disable_plugin, methods=["POST"]
-        )
-        self.router.add_api_route(
-            "/reload", self.reload_plugins, methods=["POST"]
-        )
+        self.router.add_api_route("", self.list_plugins, methods=["GET"])
+        self.router.add_api_route("/{plugin_name}/enable", self.enable_plugin, methods=["POST"])
+        self.router.add_api_route("/{plugin_name}/disable", self.disable_plugin, methods=["POST"])
+        self.router.add_api_route("/reload", self.reload_plugins, methods=["POST"])
 
     @endpoint("plugins.list")
     async def list_plugins(self) -> dict:
         """List all loaded plugins."""
         try:
             from domain.plugins import get_plugin_manager
+
             pm = get_plugin_manager()
             plugins = pm.list_plugins()
             return success_response(data={"plugins": plugins})
@@ -54,6 +48,7 @@ class PluginsRouter:
         """Enable a plugin."""
         try:
             from domain.plugins import get_plugin_manager
+
             pm = get_plugin_manager()
             meta = pm._metadata.get(plugin_name)
             if meta:
@@ -72,6 +67,7 @@ class PluginsRouter:
         """Disable a plugin."""
         try:
             from domain.plugins import get_plugin_manager
+
             pm = get_plugin_manager()
             meta = pm._metadata.get(plugin_name)
             if meta:
@@ -89,6 +85,7 @@ class PluginsRouter:
         """Reload plugins from plugin directories."""
         try:
             from domain.plugins import get_plugin_manager
+
             pm = get_plugin_manager()
             repo_root = find_repo_root(Path(__file__).resolve())
             plugin_dir = repo_root / "plugins"

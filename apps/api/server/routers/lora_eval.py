@@ -9,7 +9,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 _VALID_ADAPTER_PATH = re.compile(r"^[\w\-/]+\.npz$")
 _ADAPTER_BASE = Path("data/user_adapters").resolve()

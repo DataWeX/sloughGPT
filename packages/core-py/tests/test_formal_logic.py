@@ -1,12 +1,17 @@
 """Meaningful tests for FormalLogicEngine (unification, forward chaining, resolution) and WorkingMemory."""
 
 from domain.cognitive._internal.reasoning.deep import (
-    FormalLogicEngine, LogicalOperator, Term, Predicate,
-    WellFormedFormula, Substitution, WorkingMemory,
+    FormalLogicEngine,
+    LogicalOperator,
+    Predicate,
+    Substitution,
+    Term,
+    WellFormedFormula,
+    WorkingMemory,
 )
 
-
 # ── WorkingMemory ──────────────────────────────────────────────────────
+
 
 class TestWorkingMemory:
     def test_add_within_capacity(self):
@@ -58,6 +63,7 @@ class TestWorkingMemory:
 
 # ── Term / Predicate / WFF ────────────────────────────────────────────
 
+
 class TestTerm:
     def test_constant(self):
         t = Term(name="socrates")
@@ -100,6 +106,7 @@ class TestWFF:
 
 # ── FormalLogicEngine ─────────────────────────────────────────────────
 
+
 class TestFormalLogicEngineAssert:
     def test_assert_predicate(self):
         engine = FormalLogicEngine()
@@ -133,8 +140,12 @@ class TestFormalLogicEngineQuery:
         # human(socrates)
         engine.assert_predicate("human", "socrates")
         # human(X) → mortal(X)
-        left = WellFormedFormula(predicate=Predicate(name="human", terms=[Term(name="X", is_variable=True)]))
-        right = WellFormedFormula(predicate=Predicate(name="mortal", terms=[Term(name="X", is_variable=True)]))
+        left = WellFormedFormula(
+            predicate=Predicate(name="human", terms=[Term(name="X", is_variable=True)])
+        )
+        right = WellFormedFormula(
+            predicate=Predicate(name="mortal", terms=[Term(name="X", is_variable=True)])
+        )
         implication = WellFormedFormula(operator=LogicalOperator.IMPLIES, left=left, right=right)
         engine.assert_fact(implication)
         # Query: mortal(socrates)
@@ -146,13 +157,25 @@ class TestFormalLogicEngineQuery:
         # human(socrates) → mortal(socrates) → finite(socrates)
         engine.assert_predicate("human", "socrates")
         # human(X) → mortal(X)
-        left1 = WellFormedFormula(predicate=Predicate(name="human", terms=[Term(name="X", is_variable=True)]))
-        right1 = WellFormedFormula(predicate=Predicate(name="mortal", terms=[Term(name="X", is_variable=True)]))
-        engine.assert_fact(WellFormedFormula(operator=LogicalOperator.IMPLIES, left=left1, right=right1))
+        left1 = WellFormedFormula(
+            predicate=Predicate(name="human", terms=[Term(name="X", is_variable=True)])
+        )
+        right1 = WellFormedFormula(
+            predicate=Predicate(name="mortal", terms=[Term(name="X", is_variable=True)])
+        )
+        engine.assert_fact(
+            WellFormedFormula(operator=LogicalOperator.IMPLIES, left=left1, right=right1)
+        )
         # mortal(X) → finite(X)
-        left2 = WellFormedFormula(predicate=Predicate(name="mortal", terms=[Term(name="X", is_variable=True)]))
-        right2 = WellFormedFormula(predicate=Predicate(name="finite", terms=[Term(name="X", is_variable=True)]))
-        engine.assert_fact(WellFormedFormula(operator=LogicalOperator.IMPLIES, left=left2, right=right2))
+        left2 = WellFormedFormula(
+            predicate=Predicate(name="mortal", terms=[Term(name="X", is_variable=True)])
+        )
+        right2 = WellFormedFormula(
+            predicate=Predicate(name="finite", terms=[Term(name="X", is_variable=True)])
+        )
+        engine.assert_fact(
+            WellFormedFormula(operator=LogicalOperator.IMPLIES, left=left2, right=right2)
+        )
         # Query: finite(socrates)
         q = Predicate(name="finite", terms=[Term(name="socrates")])
         assert engine.query(q) is True
@@ -208,9 +231,15 @@ class TestFormalLogicEngineResolution:
         # human(socrates)
         engine.assert_predicate("human", "socrates")
         # human(X) → mortal(X)
-        left = WellFormedFormula(predicate=Predicate(name="human", terms=[Term(name="X", is_variable=True)]))
-        right = WellFormedFormula(predicate=Predicate(name="mortal", terms=[Term(name="X", is_variable=True)]))
-        engine.assert_fact(WellFormedFormula(operator=LogicalOperator.IMPLIES, left=left, right=right))
+        left = WellFormedFormula(
+            predicate=Predicate(name="human", terms=[Term(name="X", is_variable=True)])
+        )
+        right = WellFormedFormula(
+            predicate=Predicate(name="mortal", terms=[Term(name="X", is_variable=True)])
+        )
+        engine.assert_fact(
+            WellFormedFormula(operator=LogicalOperator.IMPLIES, left=left, right=right)
+        )
         # Prove mortal(socrates)
         goal = Predicate(name="mortal", terms=[Term(name="socrates")])
         assert engine.resolution(goal) is True

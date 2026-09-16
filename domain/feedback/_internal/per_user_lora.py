@@ -10,15 +10,16 @@ Each user gets their own lightweight LoRA adapter that:
 
 from __future__ import annotations
 
-import numpy as np
+import logging
 import threading
 import time
-from pathlib import Path
-from typing import Dict, Optional, Any, List
 from dataclasses import dataclass
-import logging
+from pathlib import Path
+from typing import Any
 
+import numpy as np
 from mogdb import MogDB
+
 from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.feedback.per_user_lora")
@@ -77,7 +78,7 @@ class PerUserLoRAStore:
         self._last_prune_count = 0
 
         # In-memory cache
-        self._cache: Dict[str, UserAdapter] = {}
+        self._cache: dict[str, UserAdapter] = {}
         self._cache_lock = threading.Lock()
         self.run_eval = run_eval
 
@@ -196,7 +197,7 @@ class PerUserLoRAStore:
             self._cache[user_id] = adapter
             return adapter
 
-    def get_adapter(self, user_id: str) -> Optional[UserAdapter]:
+    def get_adapter(self, user_id: str) -> UserAdapter | None:
         """Get user's adapter, creating if needed."""
         with self._cache_lock:
             if user_id in self._cache:
@@ -281,7 +282,9 @@ class PerUserLoRAStore:
                         max_age_days=7,
                     )
                     self._last_prune_count = total_users - len(deleted)
-                    logger.info("Auto-pruned %d low-quality adapters", len(deleted), extra={"tag": "INFRA"})
+                    logger.info(
+                        "Auto-pruned %d low-quality adapters", len(deleted), extra={"tag": "INFRA"}
+                    )
 
             # Auto-aggregate: if we have enough quality adapters
             quality_adapters = self.get_quality_adapters(
@@ -296,7 +299,11 @@ class PerUserLoRAStore:
                     )
                     if "error" not in result:
                         self._last_aggregate_count = len(quality_adapters)
-                        logger.info("Auto-aggregated %d adapters", result.get('user_count', 0), extra={"tag": "INFRA"})
+                        logger.info(
+                            "Auto-aggregated %d adapters",
+                            result.get("user_count", 0),
+                            extra={"tag": "INFRA"},
+                        )
 
         except Exception as e:
             logger.error("Auto-manage error: %s", e, extra={"tag": "INFRA"})
@@ -357,7 +364,7 @@ class PerUserLoRAStore:
 
         return logits + adjustment
 
-    def merge_adapters(self, user_ids: list) -> Dict[str, np.ndarray]:
+    def merge_adapters(self, user_ids: list) -> dict[str, np.ndarray]:
         """
         Merge multiple user adapters into aggregated weights.
 
@@ -387,7 +394,7 @@ class PerUserLoRAStore:
             "user_count": count,
         }
 
-    def merge_all(self) -> Dict[str, Any]:
+    def merge_all(self) -> dict[str, Any]:
         """
         Merge every stored user adapter into aggregated weights.
 
@@ -421,7 +428,7 @@ class PerUserLoRAStore:
             for d in docs
         ]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get statistics about adapters."""
         adapters = self.get_all_adapters()
 
@@ -463,8 +470,8 @@ class PerUserLoRAStore:
     def get_quality_adapters(
         self,
         min_feedback_count: int = 3,
-        max_age_days: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
+        max_age_days: int | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Get adapters filtered by quality metrics.
 
@@ -496,8 +503,8 @@ class PerUserLoRAStore:
     def get_quality_report(
         self,
         min_feedback_count: int = 3,
-        max_age_days: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        max_age_days: int | None = None,
+    ) -> dict[str, Any]:
         """
         Get a quality report of adapters meeting the quality threshold.
 
@@ -524,7 +531,7 @@ class PerUserLoRAStore:
         min_feedback_count: int = 5,
         output_name: str = "best_aggregated",
         run_eval: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Aggregate top-k best-performing user adapters.
 
@@ -642,7 +649,7 @@ class PerUserLoRAStore:
         self,
         min_feedback_count: int = 1,
         max_age_days: int = 30,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Remove adapters that haven't been updated or have too few feedback.
 
@@ -691,7 +698,7 @@ class PerUserLoRAStore:
 
 
 # Global instance
-_per_user_lora: Optional[PerUserLoRAStore] = None
+_per_user_lora: PerUserLoRAStore | None = None
 
 
 def get_per_user_lora(

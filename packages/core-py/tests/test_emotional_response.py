@@ -1,17 +1,16 @@
 """Meaningful tests for EmotionalResponseGenerator — empathetic responses, adaptation, formatting."""
 
 from domain.soul._internal.cognitive import (
-    EmotionalResponseGenerator,
-    SentimentAnalyzer,
-    RelationshipMemory,
-    SessionMemory,
-    EpisodicMemoryStore,
     CognitiveArchitecture,
-    NeuralPlasticityEngine,
-    MetaLearningEngine,
     DreamProcessingEngine,
+    EmotionalResponseGenerator,
+    EpisodicMemoryStore,
+    MetaLearningEngine,
+    NeuralPlasticityEngine,
+    RelationshipMemory,
+    SentimentAnalyzer,
+    SessionMemory,
 )
-
 
 # ── EmotionalResponseGenerator ────────────────────────────────────────────────
 
@@ -37,7 +36,9 @@ class TestGenerateEmpatheticResponse:
     def test_angry_response(self):
         gen = EmotionalResponseGenerator()
         resp = gen.generate_empathetic_response("angry", -0.9)
-        assert any(kw in resp.lower() for kw in ["frustration", "upsetting", "hear", "work through"])
+        assert any(
+            kw in resp.lower() for kw in ["frustration", "upsetting", "hear", "work through"]
+        )
 
     def test_fear_response(self):
         gen = EmotionalResponseGenerator()
@@ -301,8 +302,11 @@ class TestRelationshipMemory:
     def test_update_from_interaction(self):
         rm = RelationshipMemory()
         rm.update_from_interaction(
-            user_id="user1", user_input="hello", response="hi",
-            sentiment=0.5, emotion="happy",
+            user_id="user1",
+            user_input="hello",
+            response="hi",
+            sentiment=0.5,
+            emotion="happy",
         )
         profile = rm.get_user_profile("user1")
         assert profile["total_interactions"] == 1
@@ -310,8 +314,12 @@ class TestRelationshipMemory:
     def test_update_satisfaction_good(self):
         rm = RelationshipMemory()
         rm.update_from_interaction(
-            user_id="user1", user_input="hello", response="hi",
-            sentiment=0.5, emotion="happy", feedback="good",
+            user_id="user1",
+            user_input="hello",
+            response="hi",
+            sentiment=0.5,
+            emotion="happy",
+            feedback="good",
         )
         profile = rm.get_user_profile("user1")
         assert profile["satisfaction_score"] == 0.6
@@ -319,36 +327,49 @@ class TestRelationshipMemory:
     def test_update_satisfaction_bad(self):
         rm = RelationshipMemory()
         rm.update_from_interaction(
-            user_id="user1", user_input="hello", response="hi",
-            sentiment=-0.5, emotion="sad", feedback="bad",
+            user_id="user1",
+            user_input="hello",
+            response="hi",
+            sentiment=-0.5,
+            emotion="sad",
+            feedback="bad",
         )
         profile = rm.get_user_profile("user1")
         assert profile["satisfaction_score"] == 0.4
 
     def test_mood_history_capped_at_50(self):
         rm = RelationshipMemory()
-        for i in range(60):
+        for _i in range(60):
             rm.update_from_interaction(
-                user_id="user1", user_input="hello", response="hi",
-                sentiment=0.5, emotion="happy",
+                user_id="user1",
+                user_input="hello",
+                response="hi",
+                sentiment=0.5,
+                emotion="happy",
             )
         profile = rm.get_user_profile("user1")
         assert len(profile["mood_history"]) <= 50
 
     def test_interaction_history_capped_at_100(self):
         rm = RelationshipMemory()
-        for i in range(110):
+        for _i in range(110):
             rm.update_from_interaction(
-                user_id="user1", user_input="hello", response="hi",
-                sentiment=0.5, emotion="happy",
+                user_id="user1",
+                user_input="hello",
+                response="hi",
+                sentiment=0.5,
+                emotion="happy",
             )
         assert len(rm.interaction_history["user1"]) <= 100
 
     def test_get_user_summary(self):
         rm = RelationshipMemory()
         rm.update_from_interaction(
-            user_id="user1", user_input="hello world", response="hi",
-            sentiment=0.8, emotion="happy",
+            user_id="user1",
+            user_input="hello world",
+            response="hi",
+            sentiment=0.8,
+            emotion="happy",
         )
         summary = rm.get_user_summary("user1")
         assert summary["user_id"] == "user1"
@@ -357,10 +378,13 @@ class TestRelationshipMemory:
 
     def test_get_relationship_context(self):
         rm = RelationshipMemory()
-        for i in range(6):
+        for _i in range(6):
             rm.update_from_interaction(
-                user_id="user1", user_input="hello", response="hi",
-                sentiment=0.5, emotion="happy",
+                user_id="user1",
+                user_input="hello",
+                response="hi",
+                sentiment=0.5,
+                emotion="happy",
             )
         ctx = rm.get_relationship_context("user1", "sad")
         assert isinstance(ctx, str)
@@ -369,8 +393,12 @@ class TestRelationshipMemory:
         rm = RelationshipMemory()
         for _ in range(6):
             rm.update_from_interaction(
-                user_id="user1", user_input="hello", response="hi",
-                sentiment=-0.8, emotion="sad", feedback="bad",
+                user_id="user1",
+                user_input="hello",
+                response="hi",
+                sentiment=-0.8,
+                emotion="sad",
+                feedback="bad",
             )
         ctx = rm.get_relationship_context("user1", "neutral")
         assert "dissatisfied" in ctx.lower()
@@ -378,13 +406,21 @@ class TestRelationshipMemory:
     def test_high_satisfaction_context(self):
         rm = RelationshipMemory()
         rm.update_from_interaction(
-            user_id="user1", user_input="hello", response="hi",
-            sentiment=0.8, emotion="happy", feedback="good",
+            user_id="user1",
+            user_input="hello",
+            response="hi",
+            sentiment=0.8,
+            emotion="happy",
+            feedback="good",
         )
         for _ in range(5):
             rm.update_from_interaction(
-                user_id="user1", user_input="hello", response="hi",
-                sentiment=0.8, emotion="happy", feedback="good",
+                user_id="user1",
+                user_input="hello",
+                response="hi",
+                sentiment=0.8,
+                emotion="happy",
+                feedback="good",
             )
         ctx = rm.get_relationship_context("user1", "neutral")
         assert "happy" in ctx.lower()
@@ -687,11 +723,13 @@ class TestDreamProcessingEngine:
     def test_dream_returns_insights(self):
         dpe = DreamProcessingEngine()
         plasticity = NeuralPlasticityEngine()
+
         # Create mock experiences
         class MockExp:
             def __init__(self, eid, imp):
                 self.id = eid
                 self.importance = imp
+
         memories = [MockExp(f"e{i}", float(i)) for i in range(5)]
         insights = dpe.dream(memories, plasticity)
         assert isinstance(insights, list)
@@ -704,6 +742,7 @@ class TestDreamProcessingEngine:
             def __init__(self, eid, imp):
                 self.id = eid
                 self.importance = imp
+
         memories = [MockExp(f"e{i}", float(i)) for i in range(10)]
         dpe.dream(memories, plasticity)
         assert dpe.consolidated == 10
@@ -716,6 +755,7 @@ class TestDreamProcessingEngine:
             def __init__(self, eid, imp):
                 self.id = eid
                 self.importance = imp
+
         memories = [MockExp(f"e{i}", float(i)) for i in range(5)]
         insights = dpe.dream(memories, plasticity)
         assert len(insights) > 0
@@ -735,6 +775,7 @@ class TestDreamProcessingEngine:
             def __init__(self, eid, imp):
                 self.id = eid
                 self.importance = imp
+
         memories = [MockExp("a", 1.0), MockExp("b", 2.0)]
         dpe.dream(memories, plasticity)
         assert plasticity.get_connection_strength("a", "b") > 0.0

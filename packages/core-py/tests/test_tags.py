@@ -5,9 +5,10 @@ Tests for Tags (semantic meaning reference points).
 save/load roundtrip, dimension validation, default tags, determinism,
 edge cases, and backward compat aliases.
 """
-import json
+
 import os
 import tempfile
+
 import numpy as np
 import pytest
 
@@ -15,6 +16,7 @@ import pytest
 def _make_tags(dimension: int = 8) -> "MeaningTags":  # noqa: F821
     """Create a MeaningTags instance with test vectors."""
     from domain.infrastructure._internal.anchor_store import MeaningTags
+
     store = MeaningTags(dimension=dimension)
     store.add("factual", np.random.randn(dimension).tolist())
     store.add("procedural", np.random.randn(dimension).tolist())
@@ -64,6 +66,7 @@ class TestTagsClassify:
 
     def test_classify_empty_returns_unknown(self):
         from domain.infrastructure._internal.anchor_store import MeaningTags
+
         store = MeaningTags(dimension=8)
         assert store.classify(np.zeros(8).tolist()) == "unknown"
 
@@ -98,6 +101,7 @@ class TestTagsSaveLoad:
 
     def test_load_nonexistent_returns_empty(self):
         from domain.infrastructure._internal.anchor_store import MeaningTags
+
         store = MeaningTags.load("/tmp/nonexistent_tags_123.json")
         assert len(store.names()) == 0
 
@@ -119,14 +123,23 @@ class TestTagsValidation:
 class TestTagsDefaults:
     def test_default_tags_create_seven(self):
         from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
+
         store = get_default_meaning_tags(dimension=16)
         assert len(store.names()) == 7
-        expected = {"factual", "conceptual", "procedural", "interrogative",
-                    "descriptive", "directive", "analytical"}
+        expected = {
+            "factual",
+            "conceptual",
+            "procedural",
+            "interrogative",
+            "descriptive",
+            "directive",
+            "analytical",
+        }
         assert set(store.names()) == expected
 
     def test_default_tags_are_normalized(self):
         from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
+
         store = get_default_meaning_tags(dimension=16)
         for name in store.names():
             vec = store.get(name)
@@ -136,12 +149,14 @@ class TestTagsDefaults:
 class TestTagsDeterminism:
     def test_seed_deterministic(self):
         from domain.infrastructure._internal.anchor_store import _seed_tag_from_text
+
         a = _seed_tag_from_text("hello world", 16)
         b = _seed_tag_from_text("hello world", 16)
         np.testing.assert_array_equal(a, b)
 
     def test_different_descriptions_differ(self):
         from domain.infrastructure._internal.anchor_store import _seed_tag_from_text
+
         a = _seed_tag_from_text("factual assertion", 16)
         b = _seed_tag_from_text("question uncertainty", 16)
         assert not np.allclose(a, b)

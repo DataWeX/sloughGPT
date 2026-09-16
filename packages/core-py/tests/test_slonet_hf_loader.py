@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import pytest
 from domain.training._internal.huggingface.local_loader import (
     HFLocalConfig,
     HuggingFaceLocalLoader,
 )
 
-
 # ── HFLocalConfig ──────────────────────────────────────────────────────────
 
 
 class TestHFLocalConfig:
-
     def test_default(self):
         config = HFLocalConfig(model="test-model")
         assert config.model == "test-model"
@@ -38,7 +35,6 @@ class TestHFLocalConfig:
 
 
 class TestHuggingFaceLocalLoader:
-
     def test_init(self):
         config = HFLocalConfig(model="test-model")
         loader = HuggingFaceLocalLoader(config)

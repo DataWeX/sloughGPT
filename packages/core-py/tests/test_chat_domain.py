@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -15,12 +13,10 @@ from domain.chat._internal.domain import (
     get_chat_domain,
 )
 
-
 # ── ChatRequest ───────────────────────────────────────────────────────────
 
 
 class TestChatRequest:
-
     def test_defaults(self):
         req = ChatRequest(messages=[{"role": "user", "content": "hi"}])
         assert req.model == "gpt2"
@@ -43,7 +39,6 @@ class TestChatRequest:
 
 
 class TestChatResponse:
-
     def test_defaults(self):
         resp = ChatResponse(text="hello", session_id="s1")
         assert resp.done is True
@@ -65,7 +60,6 @@ class TestChatResponse:
 
 
 class TestChatDomain:
-
     def test_init(self, tmp_path):
         domain = ChatDomain(log_dir=str(tmp_path / "logs"))
         assert domain.log_dir.exists()
@@ -133,7 +127,7 @@ class TestChatDomain:
     async def test_respond_timeout(self):
         domain = ChatDomain()
         mock_provider = AsyncMock()
-        mock_provider.chat.side_effect = asyncio.TimeoutError()
+        mock_provider.chat.side_effect = TimeoutError()
 
         with patch("domain.models._internal.provider.get_provider", return_value=mock_provider):
             resp = await domain.respond(
@@ -164,10 +158,10 @@ class TestChatDomain:
 
 
 class TestSingleton:
-
     def test_get_returns_same(self):
         with patch("domain.chat._internal.domain.ChatDomain"):
             import domain.chat._internal.domain as mod
+
             mod._chat_domain = None
             d1 = get_chat_domain()
             d2 = get_chat_domain()

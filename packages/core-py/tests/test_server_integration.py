@@ -12,26 +12,33 @@ Tests the full pipeline without an HTTP server:
 """
 
 import asyncio
-import time
 import threading
+import time
 from unittest.mock import patch
-import pytest
-pytestmark = pytest.mark.slow
-from domain.infrastructure._internal.server_state import get_server_state
-from domain.infrastructure._internal.model_registry import get_model_registry, ModelRegistry
-from domain.infrastructure._internal.model_server import (
-    ModelServer, ModelStatus, CircuitBreakerState, PriorityRequestQueue, Priority,
-)
-from domain.infrastructure._internal.event_bus import get_event_bus, set_event_bus
 
+import pytest
+
+pytestmark = pytest.mark.slow
+from domain.infrastructure._internal.event_bus import get_event_bus
+from domain.infrastructure._internal.model_registry import ModelRegistry, get_model_registry
+from domain.infrastructure._internal.model_server import (
+    CircuitBreakerState,
+    ModelServer,
+    ModelStatus,
+    Priority,
+    PriorityRequestQueue,
+)
+from domain.infrastructure._internal.server_state import get_server_state
 
 # ── Mock model (torch-free) ──────────────────────────────────────────
 
 
 class _FakeTensor:
     """Minimal tensor stand-in for MockModel forward passes."""
+
     def __init__(self, data, device="cpu"):
         import numpy as np
+
         self.data = np.array(data)
         self.device = device
         self.shape = self.data.shape
@@ -119,8 +126,7 @@ def _mock_generate_sync(*args, **kwargs):
 def patch_torch_deps():
     """Patch out torch from ModelServer so tests run torch-free."""
     patches = [
-        patch.object(ModelServer, "_generate_sync", autospec=True,
-                     side_effect=_mock_generate_sync),
+        patch.object(ModelServer, "_generate_sync", autospec=True, side_effect=_mock_generate_sync),
     ]
     for p in patches:
         p.start()
@@ -282,13 +288,15 @@ class TestModelServer:
     async def test_semaphore_serializes(self, model, tokenizer):
         """Two concurrent requests should be serialized by the semaphore."""
         slow_model = MockModel(slow=True)
-        server = ModelServer(slow_model, tokenizer, model_id="slow", max_concurrent=1, enable_warmup=False)
+        server = ModelServer(
+            slow_model, tokenizer, model_id="slow", max_concurrent=1, enable_warmup=False
+        )
 
         # Patch _generate_sync to be slow for this test only
-        original = server._generate_sync
         def _slow(*args, **kwargs):
             time.sleep(3)
             return {"text": "slow result", "tokens_generated": 1, "elapsed_ms": 3000.0}
+
         server._generate_sync = _slow
 
         async def gen():
@@ -311,7 +319,9 @@ class TestModelServer:
     async def test_circuit_breaker_opens(self, model, tokenizer):
         fail_model = MockModel(fail_on_call=True)
         server = ModelServer(
-            fail_model, tokenizer, model_id="fail",
+            fail_model,
+            tokenizer,
+            model_id="fail",
             enable_circuit_breaker=True,
             failure_threshold=2,
             enable_warmup=False,
@@ -319,6 +329,7 @@ class TestModelServer:
 
         def _fail(*args, **kwargs):
             raise RuntimeError("mock generation failure")
+
         server._generate_sync = _fail
 
         for _ in range(2):
@@ -334,7 +345,9 @@ class TestModelServer:
         """After recovery_timeout, circuit breaker should half-open and recover."""
         fail_model = MockModel(fail_on_call=True)
         server = ModelServer(
-            fail_model, tokenizer, model_id="fail",
+            fail_model,
+            tokenizer,
+            model_id="fail",
             enable_circuit_breaker=True,
             failure_threshold=1,
             recovery_timeout=2.0,
@@ -343,12 +356,16 @@ class TestModelServer:
 
         def _fail(*args, **kwargs):
             raise RuntimeError("mock generation failure")
+
         server._generate_sync = _fail
         with pytest.raises(RuntimeError):
             await server.generate("hello")
 
         # Circuit breaker is open or half-open (may transition during generate error handling)
-        assert server._circuit_breaker.state in (CircuitBreakerState.OPEN, CircuitBreakerState.HALF_OPEN)
+        assert server._circuit_breaker.state in (
+            CircuitBreakerState.OPEN,
+            CircuitBreakerState.HALF_OPEN,
+        )
 
         # Wait for recovery
         await asyncio.sleep(2.1)
@@ -361,7 +378,9 @@ class TestModelServer:
     async def test_circuit_breaker_opens_on_queue_full_generate(self, model, tokenizer):
         """Queue-full error in generate() trips circuit breaker after threshold."""
         server = ModelServer(
-            model, tokenizer, model_id="test",
+            model,
+            tokenizer,
+            model_id="test",
             enable_circuit_breaker=True,
             failure_threshold=2,
             enable_warmup=False,
@@ -377,6 +396,7 @@ class TestModelServer:
         def _slow(*args, **kwargs):
             time.sleep(0.5)
             return {"text": "done", "tokens_generated": 5, "elapsed_ms": 500.0}
+
         server._generate_sync = _slow
 
         # First request: occupies the in-flight slot
@@ -418,7 +438,9 @@ class TestModelServer:
         generate_stream() raises Queue full → CB opens.
         """
         server = ModelServer(
-            model, tokenizer, model_id="test",
+            model,
+            tokenizer,
+            model_id="test",
             enable_circuit_breaker=True,
             failure_threshold=2,
             enable_warmup=False,
@@ -432,6 +454,7 @@ class TestModelServer:
         def _slow(*args, **kwargs):
             time.sleep(0.5)
             return {"text": "done", "tokens_generated": 5, "elapsed_ms": 500.0}
+
         server._generate_sync = _slow
 
         # Slow generate occupies the in-flight slot
@@ -439,9 +462,7 @@ class TestModelServer:
         await asyncio.sleep(0.05)
 
         # Fill heap via direct acquire (worker busy, in_flight=1)
-        a1 = asyncio.create_task(
-            q.acquire(priority=Priority.HIGH, request_id="fill")
-        )
+        a1 = asyncio.create_task(q.acquire(priority=Priority.HIGH, request_id="fill"))
         await asyncio.sleep(0.05)
 
         # generate_stream tries acquire → heap full → raises → CB records 1
@@ -472,12 +493,15 @@ class TestModelServer:
     @pytest.mark.asyncio
     async def test_timeout_semaphore(self, model, tokenizer):
         slow_model = MockModel(slow=True)
-        server = ModelServer(slow_model, tokenizer, model_id="slow", max_concurrent=1, enable_warmup=False)
+        server = ModelServer(
+            slow_model, tokenizer, model_id="slow", max_concurrent=1, enable_warmup=False
+        )
 
         # Patch to be slow
         def _slow(*args, **kwargs):
             time.sleep(3)
             return {"text": "slow result", "tokens_generated": 1, "elapsed_ms": 3000.0}
+
         server._generate_sync = _slow
 
         # First request hogs the semaphore
@@ -504,8 +528,7 @@ class TestModelServer:
 
     @pytest.mark.asyncio
     async def test_post_gen_hooks(self, model, tokenizer):
-        hooks = []
-        server = ModelServer(model, tokenizer, model_id="hooked", enable_warmup=False)
+        ModelServer(model, tokenizer, model_id="hooked", enable_warmup=False)
 
     @pytest.mark.asyncio
     async def test_on_error_hooks(self, model, tokenizer):
@@ -513,8 +536,10 @@ class TestModelServer:
         fail_model = MockModel(fail_on_call=True)
         server = ModelServer(fail_model, tokenizer, model_id="fail", enable_warmup=False)
         server.add_on_error_hook(lambda e: errors.append(str(e)))
+
         def _fail(*args, **kwargs):
             raise RuntimeError("mock generation failure")
+
         server._generate_sync = _fail
         with pytest.raises(RuntimeError):
             await server.generate("hello")
@@ -557,13 +582,16 @@ class TestWarmup:
         server = ModelServer(model, tokenizer, model_id="warmup", enable_warmup=True)
         # Give warmup thread time to finish (may take longer on slow machines or with CPU fallback)
         import time
+
         for _ in range(20):
             time.sleep(0.5)
             with server._warmup_lock:
                 if server._warmup_completed or server._warmup_error:
                     break
         with server._warmup_lock:
-            assert server._warmup_completed or server._warmup_error, "warmup did not complete or error"
+            assert server._warmup_completed or server._warmup_error, (
+                "warmup did not complete or error"
+            )
         snap = server.get_metrics_snapshot()
         assert snap["warmup_completed"]
 
@@ -578,6 +606,7 @@ class TestWarmup:
         """Warmup request counts toward metrics."""
         server = ModelServer(model, tokenizer, model_id="warmup-metrics")
         import time
+
         time.sleep(1.0)
         snap = server.get_metrics_snapshot()
         assert snap["requests_total"] >= 1
@@ -587,6 +616,7 @@ class TestWarmup:
         """Warmup re-runs after swap_model()."""
         server = ModelServer(model, tokenizer, model_id="swap-warmup")
         import time
+
         time.sleep(1.0)
         assert server._warmup_completed
 
@@ -598,16 +628,23 @@ class TestWarmup:
 
     def test_warmup_graceful_on_failure(self, tokenizer):
         """Warmup failure doesn't crash — just degrades status."""
-        with patch.object(ModelServer, "_generate_sync", new=lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("mock generation failure"))):
+        with patch.object(
+            ModelServer,
+            "_generate_sync",
+            new=lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("mock generation failure")),
+        ):
             server = ModelServer(MockModel(fail_on_call=True), tokenizer, model_id="fail-warmup")
             import time
+
             deadline = time.time() + 15.0
             while time.time() < deadline:
                 if server._warmup_error is not None:
                     break
                 time.sleep(0.2)
             assert not server._warmup_completed, "warmup should not have completed"
-            assert server._warmup_error is not None, f"expected warmup error, got None (completed={server._warmup_completed})"
+            assert server._warmup_error is not None, (
+                f"expected warmup error, got None (completed={server._warmup_completed})"
+            )
             assert server.status == ModelStatus.DEGRADED
 
 
@@ -666,8 +703,8 @@ class TestRegistryWiring:
     def test_registry_lifecycle_hooks_fire(self, registry, model, tokenizer):
         """Pre/post hooks on ModelServer fire during generation."""
         server = registry.register("hook-model", model, tokenizer, make_default=True)
-        pre_count_before = len(server._pre_generate_hooks)
-        post_count_before = len(server._post_generate_hooks)
+        len(server._pre_generate_hooks)
+        len(server._post_generate_hooks)
         asyncio.run(registry.generate("test prompt"))
         # Hooks should have fired at least once (warmup + explicit generate)
         assert server.metrics.requests_completed >= 1
@@ -703,7 +740,6 @@ class TestRegistryWiring:
 
 
 class TestCircuitBreakerEvents:
-
     @pytest.fixture(autouse=True)
     def setup_event_bus(self):
         bus = get_event_bus()
@@ -723,13 +759,17 @@ class TestCircuitBreakerEvents:
         bus.on("circuit_breaker.open", handler)
 
         server = ModelServer(
-            model, tokenizer, model_id="test-cb-open",
-            enable_circuit_breaker=True, failure_threshold=1,
+            model,
+            tokenizer,
+            model_id="test-cb-open",
+            enable_circuit_breaker=True,
+            failure_threshold=1,
             enable_warmup=False,
         )
 
         def _fail(*args, **kwargs):
             raise RuntimeError("fail")
+
         server._generate_sync = _fail
 
         with pytest.raises(RuntimeError):
@@ -752,14 +792,18 @@ class TestCircuitBreakerEvents:
         bus.on("circuit_breaker.closed", handler)
 
         server = ModelServer(
-            model, tokenizer, model_id="test-cb-closed",
-            enable_circuit_breaker=True, failure_threshold=1,
+            model,
+            tokenizer,
+            model_id="test-cb-closed",
+            enable_circuit_breaker=True,
+            failure_threshold=1,
             recovery_timeout=0.5,
             enable_warmup=False,
         )
 
         def _fail(*args, **kwargs):
             raise RuntimeError("fail")
+
         server._generate_sync = _fail
 
         # First failure opens the breaker
@@ -791,13 +835,17 @@ class TestCircuitBreakerEvents:
         bus.on("circuit_breaker.closed", handler)
 
         server = ModelServer(
-            model, tokenizer, model_id="test-cb-all",
-            enable_circuit_breaker=True, failure_threshold=1,
+            model,
+            tokenizer,
+            model_id="test-cb-all",
+            enable_circuit_breaker=True,
+            failure_threshold=1,
             enable_warmup=False,
         )
 
         def _fail(*args, **kwargs):
             raise RuntimeError("fail")
+
         server._generate_sync = _fail
 
         with pytest.raises(RuntimeError):
@@ -822,8 +870,11 @@ class TestCircuitBreakerEvents:
         bus.on("generation.failed", handler)
 
         server = ModelServer(
-            model, tokenizer, model_id="test-gen-lifecycle",
-            enable_circuit_breaker=False, enable_warmup=False,
+            model,
+            tokenizer,
+            model_id="test-gen-lifecycle",
+            enable_circuit_breaker=False,
+            enable_warmup=False,
         )
         result = await server.generate("hello")
         assert result["tokens_generated"] == 5
@@ -855,13 +906,17 @@ class TestCircuitBreakerEvents:
         bus.on("generation.failed", handler)
 
         server = ModelServer(
-            model, tokenizer, model_id="test-gen-fail",
-            enable_circuit_breaker=True, failure_threshold=5,
+            model,
+            tokenizer,
+            model_id="test-gen-fail",
+            enable_circuit_breaker=True,
+            failure_threshold=5,
             enable_warmup=False,
         )
 
         def _fail(*args, **kwargs):
             raise RuntimeError("mock generation failure")
+
         server._generate_sync = _fail
 
         with pytest.raises(RuntimeError):
@@ -875,7 +930,9 @@ class TestCircuitBreakerEvents:
         assert "mock generation failure" in failed[0][1]["error"]
 
     @pytest.mark.asyncio
-    async def test_generation_stream_emits_started_completed(self, model, tokenizer, setup_event_bus):
+    async def test_generation_stream_emits_started_completed(
+        self, model, tokenizer, setup_event_bus
+    ):
         bus = setup_event_bus
         events = []
 
@@ -886,8 +943,11 @@ class TestCircuitBreakerEvents:
         bus.on("generation.completed", handler)
 
         server = ModelServer(
-            model, tokenizer, model_id="test-stream-lifecycle",
-            enable_circuit_breaker=False, enable_warmup=False,
+            model,
+            tokenizer,
+            model_id="test-stream-lifecycle",
+            enable_circuit_breaker=False,
+            enable_warmup=False,
         )
 
         def _mock_backend():
@@ -896,6 +956,7 @@ class TestCircuitBreakerEvents:
                     yield "hello"
                     yield " world"
                     return {"text": "hello world", "tokens_generated": 2}
+
             return FakeBackend()
 
         with patch.object(server, "_select_backend", return_value=_mock_backend()):
@@ -925,8 +986,11 @@ class TestCircuitBreakerEvents:
         bus.on("generation.started", handler)
 
         server = ModelServer(
-            model, tokenizer, model_id="test-stream-fail",
-            enable_circuit_breaker=False, enable_warmup=False,
+            model,
+            tokenizer,
+            model_id="test-stream-fail",
+            enable_circuit_breaker=False,
+            enable_warmup=False,
         )
 
         class FailBackend:
@@ -935,7 +999,7 @@ class TestCircuitBreakerEvents:
 
         with patch.object(server, "_select_backend", return_value=FailBackend()):
             with pytest.raises(RuntimeError, match="stream generation failure"):
-                async for token in server.generate_stream("hello"):
+                async for _token in server.generate_stream("hello"):
                     pass
 
         failed = [e for e in events if e[0] == "generation.failed"]
@@ -954,13 +1018,17 @@ class TestCircuitBreakerEvents:
         bus.on("generation.started", handler)
 
         server = ModelServer(
-            model, tokenizer, model_id="test-stream-cancel",
-            enable_circuit_breaker=False, enable_warmup=False,
+            model,
+            tokenizer,
+            model_id="test-stream-cancel",
+            enable_circuit_breaker=False,
+            enable_warmup=False,
         )
 
         class SlowBackend:
             def generate_stream(self, *a, **kw):
                 import time
+
                 for i in range(50):
                     time.sleep(0.005)
                     yield f"token{i}"

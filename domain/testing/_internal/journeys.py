@@ -10,11 +10,10 @@ Usage:
     journey = PageJourney(SLOUGHPGPT_SITE)
     result = journey.test_page("training")
 """
+
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
-from . import Journey, JourneyResult, Page, SiteConfig
+from . import Journey, JourneyResult, SiteConfig
 
 
 class PageJourney:
@@ -109,10 +108,10 @@ class APIJourney:
 
         return self.journey.run(steps, name="api_health")
 
-    def test_all_endpoints(self, endpoints: Dict[str, str]) -> JourneyResult:
+    def test_all_endpoints(self, endpoints: dict[str, str]) -> JourneyResult:
         """Test multiple API endpoints."""
         steps = []
-        for name, path in endpoints.items():
+        for _name, path in endpoints.items():
             steps.append(self.journey.check_api(path))
 
         return self.journey.run(steps, name="api_endpoints")
@@ -127,7 +126,7 @@ class FullSuiteJourney:
         self.nav_journey = NavigationJourney(config)
         self.api_journey = APIJourney(config)
 
-    def run_all(self) -> List[JourneyResult]:
+    def run_all(self) -> list[JourneyResult]:
         """Run all journey tests."""
         results = []
 
@@ -162,6 +161,8 @@ class FullSuiteJourney:
             total_failed += result.failed_count
 
         lines.append(f"\n{'=' * 50}")
-        lines.append(f"Total: {total_passed + total_failed} steps, {total_passed} passed, {total_failed} failed")
+        lines.append(
+            f"Total: {total_passed + total_failed} steps, {total_passed} passed, {total_failed} failed"
+        )
 
         return "\n".join(lines)

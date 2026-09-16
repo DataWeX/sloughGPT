@@ -22,16 +22,15 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
 
 import numpy as np
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Data generation — realistic NN weight distributions
 # ══════════════════════════════════════════════════════════════════════════════
 
-def make_weight(shape: Tuple[int, ...], seed: int = 0) -> np.ndarray:
+
+def make_weight(shape: tuple[int, ...], seed: int = 0) -> np.ndarray:
     """Generate realistic NN weights: near-zero mean, small variance, low-rank structure."""
     rng = np.random.RandomState(seed)
     w = rng.randn(*shape).astype(np.float32) * 0.02
@@ -43,14 +42,14 @@ def make_weight(shape: Tuple[int, ...], seed: int = 0) -> np.ndarray:
     return w
 
 
-def make_test_suite() -> Dict[str, np.ndarray]:
+def make_test_suite() -> dict[str, np.ndarray]:
     return {
-        "attn_qkv":    make_weight((768, 2304)),
-        "attn_out":    make_weight((768, 768)),
-        "ffn_up":      make_weight((768, 3072)),
-        "ffn_down":    make_weight((3072, 768)),
-        "ln_weight":   make_weight((768,)),
-        "bias":        make_weight((768,)),
+        "attn_qkv": make_weight((768, 2304)),
+        "attn_out": make_weight((768, 768)),
+        "ffn_up": make_weight((768, 3072)),
+        "ffn_down": make_weight((3072, 768)),
+        "ln_weight": make_weight((768,)),
+        "bias": make_weight((768,)),
     }
 
 
@@ -58,10 +57,11 @@ def make_test_suite() -> Dict[str, np.ndarray]:
 # Metrics
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class BenchResult:
     name: str
-    shape: Tuple[int, ...]
+    shape: tuple[int, ...]
     raw_bytes: int
     compressed_bytes: int
     ratio: float
@@ -92,8 +92,14 @@ def measure(func, *args, repeats: int = 2):
 # VQ core — used by multiple approaches
 # ══════════════════════════════════════════════════════════════════════════════
 
-def vq_core(flat: np.ndarray, n_clusters: int, lloyd_iters: int = 3,
-            init: str = "quantile", rng: np.random.RandomState = None):
+
+def vq_core(
+    flat: np.ndarray,
+    n_clusters: int,
+    lloyd_iters: int = 3,
+    init: str = "quantile",
+    rng: np.random.RandomState = None,
+):
     """Core VQ: returns (centroids, assignments, accuracy, nbytes)."""
     n = len(flat)
     n_clusters = min(n_clusters, n)
@@ -149,10 +155,12 @@ def compute_entropy_k(flat: np.ndarray, base_k: int = 16) -> int:
 # Approach 0: Baseline VQ
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def bench_baseline(flat):
     flat = flat.flatten()
     c, a, acc, nb = vq_core(flat, 16, 3, "quantile")
     return c, a, acc, nb
+
 
 def decompress_baseline(r, n):
     return r[0][r[1][:n]]
@@ -162,11 +170,13 @@ def decompress_baseline(r, n):
 # Approach 1: Adaptive k
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def bench_adaptive_k(flat):
     flat = flat.flatten()
     k = compute_entropy_k(flat, 16)
     c, a, acc, nb = vq_core(flat, k, 3, "quantile")
     return c, a, acc, nb
+
 
 def decompress_adaptive_k(r, n):
     return r[0][r[1][:n]]
@@ -176,10 +186,12 @@ def decompress_adaptive_k(r, n):
 # Approach 2: k-means++ init
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def bench_kmeanspp(flat):
     flat = flat.flatten()
     c, a, acc, nb = vq_core(flat, 16, 3, "kmeanspp")
     return c, a, acc, nb
+
 
 def decompress_kmeanspp(r, n):
     return r[0][r[1][:n]]
@@ -188,6 +200,7 @@ def decompress_kmeanspp(r, n):
 # ══════════════════════════════════════════════════════════════════════════════
 # Approach 3: Product Quantization (OPQ)
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def bench_pq(flat, n_sub=8, nc_per_sub=16):
     flat = flat.flatten()
@@ -214,6 +227,7 @@ def bench_pq(flat, n_sub=8, nc_per_sub=16):
     acc = 1.0 - mse / (var + 1e-8)
     return all_c, all_a, acc, total_bytes
 
+
 def decompress_pq(r, n):
     all_c, all_a = r[0], r[1]
     n_sub = len(all_c)
@@ -225,6 +239,7 @@ def decompress_pq(r, n):
 # Approach 4: Residual VQ (RVQ)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def bench_rvq(flat, n_stages=3, nc=16):
     flat = flat.flatten()
     residual = flat.copy()
@@ -235,18 +250,19 @@ def bench_rvq(flat, n_stages=3, nc=16):
         all_c.append(c)
         all_a.append(a)
         total_bytes += nb
-        recon_stage = c[a[:len(residual)]]
+        recon_stage = c[a[: len(residual)]]
         residual = residual - recon_stage
 
     # Reconstruct
     recon = np.zeros_like(flat)
     for s in range(n_stages):
-        recon += all_c[s][all_a[s][:len(flat)]]
+        recon += all_c[s][all_a[s][: len(flat)]]
 
     mse = float(np.mean((flat - recon) ** 2))
     var = float(np.var(flat))
     acc = 1.0 - mse / (var + 1e-8)
     return all_c, all_a, acc, total_bytes
+
 
 def decompress_rvq(r, n):
     all_c, all_a = r[0], r[1]
@@ -259,6 +275,7 @@ def decompress_rvq(r, n):
 # ══════════════════════════════════════════════════════════════════════════════
 # Approach 5: Finite Scalar Quantization (FSQ)
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def bench_fsq(flat, n_levels=8):
     flat = flat.flatten()
@@ -278,6 +295,7 @@ def bench_fsq(flat, n_levels=8):
     nbytes = 8 + q.nbytes  # scale + zero_point + quantized
     return scale, zero_point, q, acc, nbytes
 
+
 def decompress_fsq(r, n):
     scale, zero_point, q = r[0], r[1], r[2]
     return (q[:n].astype(np.float32) - zero_point) / scale
@@ -286,6 +304,7 @@ def decompress_fsq(r, n):
 # ══════════════════════════════════════════════════════════════════════════════
 # Benchmark runner
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def bench_one(name, flat, compress_fn, decompress_fn):
     raw_bytes = flat.nbytes
@@ -297,46 +316,59 @@ def bench_one(name, flat, compress_fn, decompress_fn):
     mse = float(np.mean((flat_1d - decompressed) ** 2))
     compressed_bytes = result[-1]
     ratio = raw_bytes / max(compressed_bytes, 1)
-    return BenchResult(name=name, shape=flat.shape, raw_bytes=raw_bytes,
-                       compressed_bytes=compressed_bytes, ratio=ratio,
-                       cosine=cosine, mse=mse,
-                       compress_ms=compress_ms, decompress_ms=decompress_ms)
+    return BenchResult(
+        name=name,
+        shape=flat.shape,
+        raw_bytes=raw_bytes,
+        compressed_bytes=compressed_bytes,
+        ratio=ratio,
+        cosine=cosine,
+        mse=mse,
+        compress_ms=compress_ms,
+        decompress_ms=decompress_ms,
+    )
 
 
 def run_benchmarks():
     suite = make_test_suite()
 
     approaches = [
-        ("0_baseline",    bench_baseline,    decompress_baseline),
-        ("1_adaptive_k",  bench_adaptive_k,  decompress_adaptive_k),
-        ("2_kmeanspp",    bench_kmeanspp,    decompress_kmeanspp),
-        ("3_pq_8x16",     bench_pq,          decompress_pq),
-        ("4_rvq_3stage",  bench_rvq,         decompress_rvq),
-        ("5_fsq_8level",  bench_fsq,         decompress_fsq),
+        ("0_baseline", bench_baseline, decompress_baseline),
+        ("1_adaptive_k", bench_adaptive_k, decompress_adaptive_k),
+        ("2_kmeanspp", bench_kmeanspp, decompress_kmeanspp),
+        ("3_pq_8x16", bench_pq, decompress_pq),
+        ("4_rvq_3stage", bench_rvq, decompress_rvq),
+        ("5_fsq_8level", bench_fsq, decompress_fsq),
     ]
 
-    all_results: List[BenchResult] = []
+    all_results: list[BenchResult] = []
 
     print("=" * 95)
     print("VQ APPROACH BENCHMARK — 6 METHODS")
     print("=" * 95)
-    print(f"{'Approach':<18} {'Shape':<16} {'Ratio':>7} {'Cosine':>8} {'MSE':>12} {'Compress':>10} {'Decompress':>10}")
+    print(
+        f"{'Approach':<18} {'Shape':<16} {'Ratio':>7} {'Cosine':>8} {'MSE':>12} {'Compress':>10} {'Decompress':>10}"
+    )
     print("-" * 95)
 
-    for weight_name, flat in suite.items():
+    for _weight_name, flat in suite.items():
         for approach_name, compress_fn, decompress_fn in approaches:
             result = bench_one(approach_name, flat, compress_fn, decompress_fn)
             all_results.append(result)
-            print(f"{approach_name:<18} {str(flat.shape):<16} {result.ratio:>7.2f}x "
-                  f"{result.cosine:>8.5f} {result.mse:>12.2e} "
-                  f"{result.compress_ms:>8.1f}ms {result.decompress_ms:>8.1f}ms")
+            print(
+                f"{approach_name:<18} {str(flat.shape):<16} {result.ratio:>7.2f}x "
+                f"{result.cosine:>8.5f} {result.mse:>12.2e} "
+                f"{result.compress_ms:>8.1f}ms {result.decompress_ms:>8.1f}ms"
+            )
         print()
 
     # Summary
     print("=" * 95)
     print("AVERAGE BY APPROACH")
     print("=" * 95)
-    print(f"{'Approach':<18} {'Avg Ratio':>10} {'Avg Cosine':>11} {'Avg MSE':>12} {'Avg Compress':>13} {'Avg Decompress':>14}")
+    print(
+        f"{'Approach':<18} {'Avg Ratio':>10} {'Avg Cosine':>11} {'Avg MSE':>12} {'Avg Compress':>13} {'Avg Decompress':>14}"
+    )
     print("-" * 95)
 
     names = [a[0] for a in approaches]
@@ -355,12 +387,15 @@ def run_benchmarks():
     print("VERDICT")
     print("=" * 95)
 
-    metrics = {n: {
-        "ratio": np.mean([r.ratio for r in all_results if r.name == n]),
-        "cosine": np.mean([r.cosine for r in all_results if r.name == n]),
-        "mse": np.mean([r.mse for r in all_results if r.name == n]),
-        "speed": np.mean([r.compress_ms for r in all_results if r.name == n]),
-    } for n in names}
+    metrics = {
+        n: {
+            "ratio": np.mean([r.ratio for r in all_results if r.name == n]),
+            "cosine": np.mean([r.cosine for r in all_results if r.name == n]),
+            "mse": np.mean([r.mse for r in all_results if r.name == n]),
+            "speed": np.mean([r.compress_ms for r in all_results if r.name == n]),
+        }
+        for n in names
+    }
 
     best_cos = max(names, key=lambda n: metrics[n]["cosine"])
     best_ratio = max(names, key=lambda n: metrics[n]["ratio"])
@@ -388,8 +423,10 @@ def run_benchmarks():
     for i, (n, s) in enumerate(ranked):
         m = metrics[n]
         tag = " <-- WINNER" if i == 0 else ""
-        print(f"  {i+1}. {n:<18} score={s:.4f}  (ratio={m['ratio']:.2f}x, cos={m['cosine']:.5f}, "
-              f"speed={m['speed']:.1f}ms){tag}")
+        print(
+            f"  {i + 1}. {n:<18} score={s:.4f}  (ratio={m['ratio']:.2f}x, cos={m['cosine']:.5f}, "
+            f"speed={m['speed']:.1f}ms){tag}"
+        )
 
 
 if __name__ == "__main__":

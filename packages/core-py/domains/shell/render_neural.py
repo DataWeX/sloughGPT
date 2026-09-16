@@ -1,3 +1,5 @@
 """Backward-compatibility shim."""
+
 from domain.shell._internal import render_neural as _mod
-globals().update({k: v for k, v in vars(_mod).items()})
+
+globals().update(dict(vars(_mod).items()))

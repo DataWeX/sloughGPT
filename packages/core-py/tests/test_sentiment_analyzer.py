@@ -6,6 +6,7 @@ NeuralPlasticityEngine, MetaLearningEngine, DreamProcessingEngine.
 """
 
 import pytest
+
 from domain.soul._internal.cognitive import (
     CognitiveArchitecture,
     DreamProcessingEngine,
@@ -20,9 +21,11 @@ from domain.soul._internal.cognitive import (
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
+
 def _make_experience(eid="e1", importance=0.5):
     """Build a minimal Experience for DreamProcessingEngine tests."""
     from types import SimpleNamespace
+
     return SimpleNamespace(id=eid, importance=importance)
 
 
@@ -30,6 +33,7 @@ def _make_experience_real(eid="e1", importance=0.5):
     """Try importing real Experience; fall back to SimpleNamespace."""
     try:
         from domain.soul._internal.foundation import Experience
+
         return Experience(id=eid, importance=importance, content="test")
     except ImportError:
         return _make_experience(eid, importance)
@@ -38,6 +42,7 @@ def _make_experience_real(eid="e1", importance=0.5):
 # ═══════════════════════════════════════════════════════════════════════════════
 # SentimentAnalyzer
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestAnalyzeSentiment:
     def test_positive_sentiment(self):
@@ -216,6 +221,7 @@ class TestAnalyze:
 # EmotionalResponseGenerator
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestEmotionalResponseGenerator:
     def test_generates_string(self):
         erg = EmotionalResponseGenerator()
@@ -273,6 +279,7 @@ class TestEmotionalResponseGenerator:
 # ═══════════════════════════════════════════════════════════════════════════════
 # RelationshipMemory
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestRelationshipMemory:
     def test_get_new_profile(self):
@@ -380,6 +387,7 @@ class TestRelationshipMemory:
 # SessionMemory
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestSessionMemory:
     def test_add_message(self):
         sm = SessionMemory()
@@ -449,6 +457,7 @@ class TestSessionMemory:
 # EpisodicMemoryStore
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestEpisodicMemoryStore:
     def test_save_episode(self):
         em = EpisodicMemoryStore()
@@ -516,6 +525,7 @@ class TestEpisodicMemoryStore:
 # ═══════════════════════════════════════════════════════════════════════════════
 # CognitiveArchitecture
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestCognitiveArchitecture:
     def test_process_sensory(self):
@@ -604,6 +614,7 @@ class TestCognitiveArchitecture:
 # NeuralPlasticityEngine
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestNeuralPlasticityEngine:
     def test_activate(self):
         npe = NeuralPlasticityEngine()
@@ -671,6 +682,7 @@ class TestNeuralPlasticityEngine:
 # MetaLearningEngine
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestMetaLearningEngine:
     def test_initial_strategy(self):
         mle = MetaLearningEngine()
@@ -727,6 +739,7 @@ class TestMetaLearningEngine:
 # DreamProcessingEngine
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestDreamProcessingEngine:
     def test_initial_state(self):
         dpe = DreamProcessingEngine()
@@ -737,7 +750,7 @@ class TestDreamProcessingEngine:
         dpe = DreamProcessingEngine()
         npe = NeuralPlasticityEngine()
         exps = [_make_experience_real(f"e{i}", 0.5) for i in range(2)]
-        insights = dpe.dream(exps, npe)
+        dpe.dream(exps, npe)
         assert dpe.dream_cycles == 1
         assert dpe.consolidated == 2
 
@@ -775,6 +788,7 @@ class TestDreamProcessingEngine:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Additional Coverage — SentimentAnalyzer edge cases
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestSentimentAnalyzerExtra:
     def test_whitespace_only(self):
@@ -827,6 +841,7 @@ class TestSentimentAnalyzerExtra:
 # Additional Coverage — EmotionalResponseGenerator edge cases
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestEmotionalResponseGeneratorExtra:
     def test_empathy_responses_structure(self):
         erg = EmotionalResponseGenerator()
@@ -866,6 +881,7 @@ class TestEmotionalResponseGeneratorExtra:
 # Additional Coverage — RelationshipMemory edge cases
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestRelationshipMemoryExtra:
     def test_multiple_users(self):
         rm = RelationshipMemory()
@@ -888,7 +904,9 @@ class TestRelationshipMemoryExtra:
     def test_many_interactions_dominate(self):
         rm = RelationshipMemory()
         for _ in range(10):
-            rm.update_from_interaction("u1", "artificial intelligence programming", "r", 0.5, "happy")
+            rm.update_from_interaction(
+                "u1", "artificial intelligence programming", "r", 0.5, "happy"
+            )
         topics = rm.get_user_profile("u1")["topics_of_interest"]
         assert "artificial" in topics or "intelligence" in topics or "programming" in topics
 
@@ -896,6 +914,7 @@ class TestRelationshipMemoryExtra:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Additional Coverage — SessionMemory edge cases
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestSessionMemoryExtra:
     def test_multiple_roles(self):
@@ -929,6 +948,7 @@ class TestSessionMemoryExtra:
 # Additional Coverage — EpisodicMemoryStore edge cases
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestEpisodicMemoryStoreExtra:
     def test_search_limit(self):
         em = EpisodicMemoryStore()
@@ -959,6 +979,7 @@ class TestEpisodicMemoryStoreExtra:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Additional Coverage — CognitiveArchitecture edge cases
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestCognitiveArchitectureExtra:
     def test_semantic_multiple_keys(self):
@@ -1002,6 +1023,7 @@ class TestCognitiveArchitectureExtra:
 # Additional Coverage — NeuralPlasticityEngine edge cases
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestNeuralPlasticityEngineExtra:
     def test_multiple_connections(self):
         npe = NeuralPlasticityEngine(learning_rate=0.1)
@@ -1040,11 +1062,12 @@ class TestNeuralPlasticityEngineExtra:
 # Additional Coverage — MetaLearningEngine edge cases
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestMetaLearningEngineExtra:
     def test_update_weights_all_zero_attempts(self):
         mle = MetaLearningEngine()
         mle.update_weights()
-        for name, data in mle.strategies.items():
+        for _name, data in mle.strategies.items():
             assert data["weight"] == 1.0
 
     def test_best_strategy_can_change(self):

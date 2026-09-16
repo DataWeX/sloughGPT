@@ -1,14 +1,14 @@
 """Backward-compatibility shim — imports from the new ``domain.auth`` package."""
 
 from domain.auth import (
-    Role,
+    RBAC,
     Permission,
-    UserRole,
-    User,
+    Role,
     Tenant,
+    User,
+    UserRole,
     Workspace,
     WorkspaceMember,
-    RBAC,
     get_rbac,
 )
 

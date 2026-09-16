@@ -1,7 +1,7 @@
 """
 Feeds Router Tests
 """
-import json
+
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -15,7 +15,7 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-from routers.feeds import FeedsRouter, _filter_notes, _build_rss_xml, _build_json_feed, _md_to_html
+from routers.feeds import FeedsRouter, _build_json_feed, _build_rss_xml, _filter_notes, _md_to_html
 
 
 @pytest.fixture
@@ -31,16 +31,37 @@ def _make_client(app):
 
 SAMPLE_NOTES = [
     {
-        "id": "n1", "title": "First Note", "body": "Body one", "tags": "training,ml",
-        "status": "done", "created_at": "2026-09-10T10:00:00Z", "updated_at": "", "sprint": "s1", "gh": "",
+        "id": "n1",
+        "title": "First Note",
+        "body": "Body one",
+        "tags": "training,ml",
+        "status": "done",
+        "created_at": "2026-09-10T10:00:00Z",
+        "updated_at": "",
+        "sprint": "s1",
+        "gh": "",
     },
     {
-        "id": "n2", "title": "Second Note", "body": "Body two", "tags": "infra",
-        "status": "open", "created_at": "2026-09-09T10:00:00Z", "updated_at": "", "sprint": "", "gh": "",
+        "id": "n2",
+        "title": "Second Note",
+        "body": "Body two",
+        "tags": "infra",
+        "status": "open",
+        "created_at": "2026-09-09T10:00:00Z",
+        "updated_at": "",
+        "sprint": "",
+        "gh": "",
     },
     {
-        "id": "n3", "title": "Third Note", "body": "Body three", "tags": "training,infra",
-        "status": "wip", "created_at": "2026-09-11T10:00:00Z", "updated_at": "", "sprint": "", "gh": "",
+        "id": "n3",
+        "title": "Third Note",
+        "body": "Body three",
+        "tags": "training,infra",
+        "status": "wip",
+        "created_at": "2026-09-11T10:00:00Z",
+        "updated_at": "",
+        "sprint": "",
+        "gh": "",
     },
 ]
 

@@ -1,41 +1,41 @@
 """Backward-compatibility shim — imports from the new ``domain.cognitive._internal.reasoning`` package."""
 
 from domain.cognitive._internal.reasoning import (
-    advanced_reasoning,
-    ChainOfThought,
     CausalReasoning,
+    ChainOfThought,
     ConstitutionalAI,
-    ReasoningMode,
-    ReasoningResult,
-    ReActReasoning,
-    SelfConsistency,
-    SyllogismReasoning,
-    ThoughtStep,
-    TreeOfThoughts,
     DeepReasoning,
     DeepReasoningContext,
     FormalLogicEngine,
     LogicalOperator,
     Predicate,
-    Term,
-    WellFormedFormula,
-    WorkingMemory,
-    RetrievedKnowledge,
-    RetrievalSource,
-    Substitution,
-)
-from domain.cognitive._internal.reasoning.advanced import (
-    advanced_reasoning,
-    ChainOfThought,
-    CausalReasoning,
-    ConstitutionalAI,
+    ReActReasoning,
     ReasoningMode,
     ReasoningResult,
+    RetrievalSource,
+    RetrievedKnowledge,
+    SelfConsistency,
+    Substitution,
+    SyllogismReasoning,
+    Term,
+    ThoughtStep,
+    TreeOfThoughts,
+    WellFormedFormula,
+    WorkingMemory,
+    advanced_reasoning,
+)
+from domain.cognitive._internal.reasoning.advanced import (
+    CausalReasoning,
+    ChainOfThought,
+    ConstitutionalAI,
     ReActReasoning,
+    ReasoningMode,
+    ReasoningResult,
     SelfConsistency,
     SyllogismReasoning,
     ThoughtStep,
     TreeOfThoughts,
+    advanced_reasoning,
 )
 from domain.cognitive._internal.reasoning.deep import (
     DeepReasoning,
@@ -43,12 +43,12 @@ from domain.cognitive._internal.reasoning.deep import (
     FormalLogicEngine,
     LogicalOperator,
     Predicate,
+    RetrievalSource,
+    RetrievedKnowledge,
+    Substitution,
     Term,
     WellFormedFormula,
     WorkingMemory,
-    RetrievedKnowledge,
-    RetrievalSource,
-    Substitution,
 )
 
 __all__ = [
@@ -100,7 +100,9 @@ class ReasoningEngine:
         self.logic_engine.assert_predicate(predicate_name, *terms)
 
     def query(self, predicate_name: str, *terms: str) -> bool:
-        return self.logic_engine.query(Predicate(name=predicate_name, terms=[Term(name=t) for t in terms]))
+        return self.logic_engine.query(
+            Predicate(name=predicate_name, terms=[Term(name=t) for t in terms])
+        )
 
     async def set_mode(self, mode: ReasoningMode) -> None:
         self.mode = mode

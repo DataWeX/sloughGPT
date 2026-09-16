@@ -2,16 +2,28 @@
 
 import threading
 import time
+
 from domain.infrastructure._internal.cancel_manager import (
-    CancelManager, OpType, OpStatus, Operation, get_cancel_manager, reset_cancel_manager,
+    CancelManager,
+    Operation,
+    OpStatus,
+    OpType,
+    get_cancel_manager,
+    reset_cancel_manager,
 )
 
 
 class TestOperationToDict:
     def test_to_dict_completed(self):
         op = Operation(
-            id="x", op_type=OpType.TRAINING, label="test", status=OpStatus.COMPLETED,
-            cancel_fn=lambda: None, created_at=100.0, started_at=101.0, finished_at=105.0,
+            id="x",
+            op_type=OpType.TRAINING,
+            label="test",
+            status=OpStatus.COMPLETED,
+            cancel_fn=lambda: None,
+            created_at=100.0,
+            started_at=101.0,
+            finished_at=105.0,
         )
         d = op.to_dict()
         assert d["id"] == "x"
@@ -19,8 +31,12 @@ class TestOperationToDict:
 
     def test_to_dict_no_start(self):
         op = Operation(
-            id="x", op_type=OpType.INFERENCE, label="test", status=OpStatus.REGISTERED,
-            cancel_fn=lambda: None, created_at=100.0,
+            id="x",
+            op_type=OpType.INFERENCE,
+            label="test",
+            status=OpStatus.REGISTERED,
+            cancel_fn=lambda: None,
+            created_at=100.0,
         )
         d = op.to_dict()
         # elapsed from created_at to now should be >= 0
@@ -159,8 +175,8 @@ class TestCancelManagerCancel:
 class TestCancelAll:
     def test_cancel_all_filters_by_type(self):
         mgr = CancelManager()
-        t1 = mgr.register(OpType.TRAINING, "t1", lambda: None)
-        t2 = mgr.register(OpType.TRAINING, "t2", lambda: None)
+        mgr.register(OpType.TRAINING, "t1", lambda: None)
+        mgr.register(OpType.TRAINING, "t2", lambda: None)
         i1 = mgr.register(OpType.INFERENCE, "i1", lambda: None)
         cancelled = mgr.cancel_all(op_type=OpType.TRAINING)
         assert len(cancelled) == 2

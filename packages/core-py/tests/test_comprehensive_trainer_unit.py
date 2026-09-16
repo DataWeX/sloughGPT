@@ -3,17 +3,25 @@ Unit tests for the Comprehensive Training Orchestrator and Computer-Use Agent.
 
 Tests the core logic without requiring a running server.
 """
+
 import json
 import tempfile
 import time
 
 FAST_CONFIG = {
-    "method": "sft", "data_quality_threshold": 0.0, "epochs": 1,
-    "batch_size": 8, "block_size": 32, "max_steps": 2,
-    "n_embed": 32, "n_layer": 2, "n_head": 2,
+    "method": "sft",
+    "data_quality_threshold": 0.0,
+    "epochs": 1,
+    "batch_size": 8,
+    "block_size": 32,
+    "max_steps": 2,
+    "n_embed": 32,
+    "n_layer": 2,
+    "n_head": 2,
 }
 
 # ── Comprehensive Trainer Unit Tests ────────────────────────────────
+
 
 class TestComprehensiveTrainer:
     """Unit tests for ComprehensiveTrainer."""
@@ -151,7 +159,10 @@ class TestComprehensiveTrainer:
             assert result.success is False
 
     def test_trainer_runs_validation_phase(self):
-        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer, TrainingPhase
+        from domain.training._internal.comprehensive_trainer import (
+            ComprehensiveTrainer,
+            TrainingPhase,
+        )
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("The quick brown fox jumps over the lazy dog. " * 200)
@@ -214,7 +225,12 @@ class TestComprehensiveTrainer:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             for i in range(20):
-                f.write(json.dumps({"input": f"question {i} about topic", "output": f"answer {i} with detail"}) + "\n")
+                f.write(
+                    json.dumps(
+                        {"input": f"question {i} about topic", "output": f"answer {i} with detail"}
+                    )
+                    + "\n"
+                )
             f.flush()
             trainer = ComprehensiveTrainer()
             result = trainer.run_full_cycle(data_path=f.name, config=FAST_CONFIG)
@@ -234,8 +250,7 @@ class TestComprehensiveTrainer:
                 )
                 assert result.method == method
 
-
-# ── Computer-Use Agent Unit Tests ──────────────────────────────────
+    # ── Computer-Use Agent Unit Tests ──────────────────────────────────
 
     def test_trainer_performance_metrics(self):
         from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
@@ -328,7 +343,9 @@ class TestComputerUseAgent:
 
         agent = ComputerUseAgent()
         agent._console_messages.append({"type": "log", "text": "hello", "timestamp": time.time()})
-        agent._network_requests.append({"url": "http://test", "method": "GET", "timestamp": time.time()})
+        agent._network_requests.append(
+            {"url": "http://test", "method": "GET", "timestamp": time.time()}
+        )
         agent._errors.append({"message": "err", "timestamp": time.time()})
 
         report = agent.devtools_report()
@@ -421,6 +438,7 @@ class TestComputerUseAgent:
 
 
 # ── DevToolsReport Unit Tests ───────────────────────────────────────
+
 
 class TestDevToolsReport:
     """Unit tests for the DevToolsReport dataclass."""

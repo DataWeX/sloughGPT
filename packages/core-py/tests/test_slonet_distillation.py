@@ -2,23 +2,21 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+
 from domain.training._internal.distillation import (
     DistillationConfig,
     DistillationLoss,
+    _size,
     _to_np,
     _to_tensor,
-    _size,
 )
 from domain.training._internal.slonet import Tensor
-
 
 # ── _to_np / _to_tensor / _size helpers ────────────────────────────────────
 
 
 class TestHelperFunctions:
-
     def test_to_np_tensor(self):
         t = Tensor(np.array([1.0, 2.0]))
         result = _to_np(t)
@@ -54,7 +52,6 @@ class TestHelperFunctions:
 
 
 class TestDistillationConfig:
-
     def test_default(self):
         config = DistillationConfig()
         assert config.temperature == 4.0
@@ -71,7 +68,6 @@ class TestDistillationConfig:
 
 
 class TestDistillationLoss:
-
     def test_soft_loss(self):
         config = DistillationConfig(beta=1.0, alpha=0.0)
         loss_fn = DistillationLoss(config)
@@ -108,7 +104,9 @@ class TestDistillationLoss:
         teacher = np.random.randn(1, 10)
         student_hidden = np.random.randn(1, 10)
         teacher_hidden = np.random.randn(1, 10)
-        total, losses = loss_fn(student, teacher, student_hidden=student_hidden, teacher_hidden=teacher_hidden)
+        total, losses = loss_fn(
+            student, teacher, student_hidden=student_hidden, teacher_hidden=teacher_hidden
+        )
         assert "feature_loss" in losses
         assert total > 0
 
@@ -119,5 +117,7 @@ class TestDistillationLoss:
         teacher = np.random.randn(1, 10)
         student_hidden = np.random.randn(1, 10)
         teacher_hidden = np.random.randn(1, 15)
-        total, losses = loss_fn(student, teacher, student_hidden=student_hidden, teacher_hidden=teacher_hidden)
+        total, losses = loss_fn(
+            student, teacher, student_hidden=student_hidden, teacher_hidden=teacher_hidden
+        )
         assert "feature_loss" in losses

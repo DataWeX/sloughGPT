@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-
 from domain.shell._internal.error import format_error
-
 
 # ── format_error ──────────────────────────────────────────────────────────
 
 
 class TestFormatError:
-
     def test_connection_error_with_hint(self):
         e = ConnectionError("refused")
         result = format_error(e, color=False)
@@ -20,6 +16,7 @@ class TestFormatError:
 
     def test_requests_connection_error(self):
         import requests
+
         e = requests.ConnectionError("refused")
         result = format_error(e, color=False)
         assert "Connection failed" in result
@@ -32,6 +29,7 @@ class TestFormatError:
 
     def test_requests_timeout(self):
         import requests
+
         e = requests.Timeout("timed out")
         result = format_error(e, color=False)
         assert "Request timed out" in result

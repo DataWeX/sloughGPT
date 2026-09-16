@@ -6,7 +6,7 @@ small-vocabulary debugging and training.
 """
 
 from __future__ import annotations
-from typing import List, Dict, Set, Optional
+
 import json
 from pathlib import Path
 
@@ -26,31 +26,31 @@ class CharTokenizer:
 
     SPECIAL_TOKENS = ["<BOS>", "<EOS>", "<PAD>", "<UNK>"]
 
-    def __init__(self, pad_to: Optional[int] = None):
+    def __init__(self, pad_to: int | None = None):
         self.pad_to = pad_to
-        self.vocab: Dict[str, int] = {}
-        self.itos: Dict[int, str] = {}
+        self.vocab: dict[str, int] = {}
+        self.itos: dict[int, str] = {}
         self._built = False
 
-    def _ensure_ascii(self) -> Set[str]:
+    def _ensure_ascii(self) -> set[str]:
         """Return set of all printable ASCII characters.
         Acts as a fallback base vocabulary so unseen characters at
         inference time map to <UNK> less often.
         """
-        chars: Set[str] = set()
+        chars: set[str] = set()
         for i in range(32, 127):  # printable ASCII
             chars.add(chr(i))
         chars.add("\n")
         chars.add("\t")
         return chars
 
-    def build_vocab(self, texts: List[str]):
+    def build_vocab(self, texts: list[str]):
         """Build character vocabulary from training texts.
 
         Collects all unique characters plus printable ASCII fallback,
         then assigns IDs starting after special tokens.
         """
-        chars: Set[str] = set()
+        chars: set[str] = set()
         for t in texts:
             chars.update(t)
 
@@ -66,7 +66,7 @@ class CharTokenizer:
         self.itos = {i: tok for tok, i in self.vocab.items()}
         self._built = True
 
-    def encode(self, text: str) -> List[int]:
+    def encode(self, text: str) -> list[int]:
         """Encode text to token IDs with BOS/EOS markers.
 
         Returns [0] + [char_id for each char] + [1], i.e.
@@ -81,9 +81,9 @@ class CharTokenizer:
         ids.append(self.vocab.get("<EOS>", 1))
         return ids
 
-    def decode(self, token_ids: List[int]) -> str:
+    def decode(self, token_ids: list[int]) -> str:
         """Decode token IDs back to text, stripping special tokens."""
-        chars: List[str] = []
+        chars: list[str] = []
         special = {"<BOS>", "<EOS>", "<PAD>", "<UNK>"}
         for tid in token_ids:
             tok = self.itos.get(tid, "")

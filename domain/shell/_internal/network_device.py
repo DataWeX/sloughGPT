@@ -148,12 +148,14 @@ class NetworkDevice:
     def http_get(self, url: str) -> bytes:
         """Simple HTTP GET."""
         import urllib.request
+
         with urllib.request.urlopen(url) as response:
             return response.read()
 
     def http_post(self, url: str, data: bytes) -> bytes:
         """Simple HTTP POST."""
         import urllib.request
+
         req = urllib.request.Request(url, data=data, method="POST")
         with urllib.request.urlopen(req) as response:
             return response.read()

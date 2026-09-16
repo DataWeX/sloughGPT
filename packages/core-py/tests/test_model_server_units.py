@@ -12,12 +12,9 @@ Covers:
     - QueueMetrics: data defaults
 """
 
-import time
 import sys
+import time
 from pathlib import Path
-from threading import Thread
-from unittest.mock import MagicMock
-import pytest
 
 _CORE_PY = Path(__file__).resolve().parents[1]
 if str(_CORE_PY) not in sys.path:
@@ -26,13 +23,12 @@ if str(_CORE_PY) not in sys.path:
 from domain.infrastructure._internal.model_server import (
     CircuitBreaker,
     CircuitBreakerState,
+    IdleManager,
     ModelMetrics,
     ModelStatus,
-    IdleManager,
     Priority,
     QueueMetrics,
 )
-
 
 # ── CircuitBreaker ────────────────────────────────────────────────────
 
@@ -344,6 +340,7 @@ class TestIdleManagerReset:
         im = IdleManager(idle_timeout_s=60)
         im.register("model_a")
         import time
+
         time.sleep(0.1)  # let thread start
         assert im._running is True
 

@@ -6,6 +6,7 @@ Run: PYTHONPATH=packages/core-py python -m pytest tests/test_render_neural_edges
 
 import numpy as np
 import pytest
+
 from domain.shell._internal.render_neural import RenderNeuralDevice, _softmax
 from domain.shell._internal.vm import DeviceFault
 
@@ -35,6 +36,7 @@ class _FakeCycles:
 # =============================================================================
 # StackChannels
 # =============================================================================
+
 
 class TestStackChannelsEdgeCases:
     def test_missing_tensor_key_is_skipped(self):
@@ -226,6 +228,7 @@ class TestStackChannelsEdgeCases:
 # TestForwardRaw
 # =============================================================================
 
+
 class TestForwardRaw:
     def test_forward_with_state_tensors_dict(self):
         dev = RenderNeuralDevice()
@@ -272,6 +275,7 @@ class TestForwardRaw:
 # =============================================================================
 # TestDeviceInfo
 # =============================================================================
+
 
 class TestDeviceInfo:
     def test_info_returns_dict(self):
@@ -321,6 +325,7 @@ class TestDeviceInfo:
 # TestCallUnknownOp
 # =============================================================================
 
+
 class TestCallUnknownOp:
     def test_unknown_op_raises(self):
         dev = RenderNeuralDevice()
@@ -346,6 +351,7 @@ class TestCallUnknownOp:
 # =============================================================================
 # TestSetSource
 # =============================================================================
+
 
 class TestSetSource:
     def test_set_source_clears_cache(self):
@@ -393,6 +399,7 @@ class TestSetSource:
 # TestEnsureSource
 # =============================================================================
 
+
 class TestEnsureSource:
     def test_no_source_raises(self):
         dev = RenderNeuralDevice()
@@ -409,6 +416,7 @@ class TestEnsureSource:
 # =============================================================================
 # TestConv2dRelu
 # =============================================================================
+
 
 class TestConv2dRelu:
     def test_output_shape(self):
@@ -435,7 +443,7 @@ class TestConv2dRelu:
         dev = RenderNeuralDevice()
         x = np.random.rand(1, 6, 8, 6).astype(np.float32)
         dev._conv2d_relu(x, dev._conv1_w, dev._conv1_b)
-        assert hasattr(dev, '_col_indices')
+        assert hasattr(dev, "_col_indices")
         first = dev._col_indices
         dev._conv2d_relu(x, dev._conv1_w, dev._conv1_b)
         assert dev._col_indices is first
@@ -479,6 +487,7 @@ class TestConv2dRelu:
 # =============================================================================
 # TestAdaptiveAvgPool
 # =============================================================================
+
 
 class TestAdaptiveAvgPool:
     def test_reduces_to_1d(self):
@@ -524,6 +533,7 @@ class TestAdaptiveAvgPool:
 # =============================================================================
 # TestForward
 # =============================================================================
+
 
 class TestForward:
     def test_embedding_shape(self):
@@ -604,6 +614,7 @@ class TestForward:
 # =============================================================================
 # TestProcessPipeline
 # =============================================================================
+
 
 class TestProcessPipeline:
     def test_process_with_source(self):
@@ -708,6 +719,7 @@ class TestProcessPipeline:
 # TestSoftmax
 # =============================================================================
 
+
 class TestSoftmax:
     def test_basic(self):
         x = np.array([1.0, 2.0, 3.0])
@@ -761,6 +773,7 @@ class TestSoftmax:
 # =============================================================================
 # TestXavierInit
 # =============================================================================
+
 
 class TestXavierInit:
     def test_conv1_weight_shape(self):

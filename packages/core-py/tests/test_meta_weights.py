@@ -1,12 +1,12 @@
 """Tests for domain.feedback._internal.meta_weights — MetaWeights dataclass and MetaWeightManager logic."""
 
+from dataclasses import fields
+from unittest.mock import MagicMock
+
 import numpy as np
 import pytest
-from dataclasses import fields
-from unittest.mock import patch, MagicMock
 
-from domain.feedback._internal.meta_weights import MetaWeights, MetaWeightManager
-
+from domain.feedback._internal.meta_weights import MetaWeightManager, MetaWeights
 
 # ── MetaWeights dataclass ──────────────────────────────────────────────
 
@@ -94,6 +94,7 @@ class TestSimpleEmbed:
 class TestAggregatePatterns:
     def _make_pattern(self, rating, similarity):
         from domain.feedback._internal.database import SimilarPattern
+
         return SimilarPattern(content="x", rating=rating, similarity=similarity, pattern_type="msg")
 
     def test_empty_patterns(self):
@@ -164,6 +165,7 @@ class TestAggregatePatterns:
 class TestWeightClamping:
     def _make_manager(self):
         from unittest.mock import MagicMock
+
         mgr = MetaWeightManager.__new__(MetaWeightManager)
         mgr.db = MagicMock()
         mgr.embedding_dim = 64
@@ -391,10 +393,22 @@ class TestGetStats:
         mgr.db.get_stats.return_value = {}
         mgr.db.get_all_feedback.return_value = []
         mgr._weight_history = [
-            {"temperature": 0.8, "repetition_penalty": 1.1, "top_p": 0.9,
-             "top_k": 30, "style_bias": 0.1, "confidence_boost": 0.05},
-            {"temperature": 0.6, "repetition_penalty": 1.2, "top_p": 0.8,
-             "top_k": 50, "style_bias": -0.1, "confidence_boost": -0.05},
+            {
+                "temperature": 0.8,
+                "repetition_penalty": 1.1,
+                "top_p": 0.9,
+                "top_k": 30,
+                "style_bias": 0.1,
+                "confidence_boost": 0.05,
+            },
+            {
+                "temperature": 0.6,
+                "repetition_penalty": 1.2,
+                "top_p": 0.8,
+                "top_k": 50,
+                "style_bias": -0.1,
+                "confidence_boost": -0.05,
+            },
         ]
         stats = mgr.get_stats()
         assert stats["current_weights"]["temperature"] == pytest.approx(0.7)
@@ -408,6 +422,7 @@ class TestGetStats:
 class TestGlobalSingleton:
     def test_returns_manager(self):
         import domain.feedback._internal.meta_weights as mod
+
         old = mod._meta_weight_manager
         mod._meta_weight_manager = None
         try:

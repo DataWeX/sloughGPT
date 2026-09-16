@@ -2,23 +2,19 @@
 
 from __future__ import annotations
 
-import math
-import pytest
 import numpy as np
+
 from domain.training._internal.slonet import (
-    Tensor,
     SloFeedForward,
     SloTransformerBlock,
-    SloMultiHeadAttention,
+    Tensor,
     no_grad,
 )
-
 
 # ── SloFeedForward ──────────────────────────────────────────────────────────
 
 
 class TestSloFeedForward:
-
     def test_init(self):
         ff = SloFeedForward(d_model=64, dim_ff=256)
         assert ff.act_name == "gelu"
@@ -60,7 +56,6 @@ class TestSloFeedForward:
 
 
 class TestSloTransformerBlock:
-
     def test_init(self):
         block = SloTransformerBlock(d_model=64, n_heads=4)
         assert block.d_model == 64
@@ -119,7 +114,6 @@ class TestSloTransformerBlock:
 
 
 class TestFeedForwardIntegration:
-
     def test_feedforward_no_grad(self):
         ff = SloFeedForward(d_model=64, dim_ff=256)
         x = Tensor(np.ones((1, 10, 64)))

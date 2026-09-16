@@ -1,15 +1,12 @@
 """Tests for domain.soul._internal.hd_memory — HDMemoryItem, HDMemoryStore."""
 
-import pytest
-import time
 from domain.soul._internal.hd_memory import HDMemoryItem, HDMemoryStore
 
 
 class TestHDMemoryItem:
     def test_fields(self):
         item = HDMemoryItem(
-            id="1", content="hello", hypervector=[0.1, 0.2],
-            metadata={}, timestamp=1.0, role="user"
+            id="1", content="hello", hypervector=[0.1, 0.2], metadata={}, timestamp=1.0, role="user"
         )
         assert item.id == "1"
         assert item.content == "hello"
@@ -17,8 +14,12 @@ class TestHDMemoryItem:
 
     def test_all_fields(self):
         item = HDMemoryItem(
-            id="2", content="world", hypervector=[0.3, 0.4, 0.5],
-            metadata={"key": "val"}, timestamp=2.0, role="assistant"
+            id="2",
+            content="world",
+            hypervector=[0.3, 0.4, 0.5],
+            metadata={"key": "val"},
+            timestamp=2.0,
+            role="assistant",
         )
         assert item.content == "world"
         assert len(item.hypervector) == 3
@@ -28,33 +29,36 @@ class TestHDMemoryItem:
 
     def test_system_role(self):
         item = HDMemoryItem(
-            id="3", content="sys", hypervector=[], metadata={},
-            timestamp=0.0, role="system"
+            id="3", content="sys", hypervector=[], metadata={}, timestamp=0.0, role="system"
         )
         assert item.role == "system"
 
     def test_metadata_mutable(self):
         item = HDMemoryItem(
-            id="4", content="c", hypervector=[], metadata={},
-            timestamp=0.0, role="user"
+            id="4", content="c", hypervector=[], metadata={}, timestamp=0.0, role="user"
         )
         item.metadata["new"] = "data"
         assert item.metadata["new"] == "data"
 
     def test_empty_content(self):
         item = HDMemoryItem(
-            id="5", content="", hypervector=[], metadata={},
-            timestamp=0.0, role="user"
+            id="5", content="", hypervector=[], metadata={}, timestamp=0.0, role="user"
         )
         assert item.content == ""
 
     def test_equality(self):
-        a = HDMemoryItem(id="1", content="c", hypervector=[1], metadata={}, timestamp=0.0, role="user")
-        b = HDMemoryItem(id="1", content="c", hypervector=[1], metadata={}, timestamp=0.0, role="user")
+        a = HDMemoryItem(
+            id="1", content="c", hypervector=[1], metadata={}, timestamp=0.0, role="user"
+        )
+        b = HDMemoryItem(
+            id="1", content="c", hypervector=[1], metadata={}, timestamp=0.0, role="user"
+        )
         assert a == b
 
     def test_repr(self):
-        item = HDMemoryItem(id="6", content="c", hypervector=[], metadata={}, timestamp=0.0, role="user")
+        item = HDMemoryItem(
+            id="6", content="c", hypervector=[], metadata={}, timestamp=0.0, role="user"
+        )
         r = repr(item)
         assert "6" in r
 

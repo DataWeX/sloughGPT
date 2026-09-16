@@ -6,18 +6,18 @@ EpisodicMemoryStore, CognitiveArchitecture.
 """
 
 from domain.soul._internal.cognitive import (
-    NeuralPlasticityEngine,
-    MetaLearningEngine,
-    SentimentAnalyzer,
-    EmotionalResponseGenerator,
-    RelationshipMemory,
-    SessionMemory,
-    EpisodicMemoryStore,
     CognitiveArchitecture,
+    EmotionalResponseGenerator,
+    EpisodicMemoryStore,
+    MetaLearningEngine,
+    NeuralPlasticityEngine,
+    RelationshipMemory,
+    SentimentAnalyzer,
+    SessionMemory,
 )
 
-
 # ── NeuralPlasticityEngine ──────────────────────────────────────────────
+
 
 class TestNeuralPlasticityEngine:
     def test_init(self):
@@ -125,6 +125,7 @@ class TestNeuralPlasticityEngine:
 
 # ── MetaLearningEngine ──────────────────────────────────────────────────
 
+
 class TestMetaLearningEngine:
     def test_init(self):
         mle = MetaLearningEngine()
@@ -200,6 +201,7 @@ class TestMetaLearningEngine:
 
 
 # ── SentimentAnalyzer ───────────────────────────────────────────────────
+
 
 class TestSentimentAnalyzer:
     def test_positive_sentiment(self):
@@ -282,6 +284,7 @@ class TestSentimentAnalyzer:
 
 # ── EmotionalResponseGenerator ──────────────────────────────────────────
 
+
 class TestEmotionalResponseGenerator:
     def test_generate_happy(self):
         erg = EmotionalResponseGenerator()
@@ -334,6 +337,7 @@ class TestEmotionalResponseGenerator:
 
 # ── RelationshipMemory ──────────────────────────────────────────────────
 
+
 class TestRelationshipMemory:
     def test_get_user_profile(self):
         rm = RelationshipMemory()
@@ -379,14 +383,14 @@ class TestRelationshipMemory:
 
     def test_mood_history_trimming(self):
         rm = RelationshipMemory()
-        for i in range(60):
+        for _i in range(60):
             rm.update_from_interaction("u1", "hello", "hi", 0.5, "neutral")
         p = rm.get_user_profile("u1")
         assert len(p["mood_history"]) <= 50
 
     def test_interaction_history_trimming(self):
         rm = RelationshipMemory()
-        for i in range(110):
+        for _i in range(110):
             rm.update_from_interaction("u1", "hello", "hi", 0.5, "neutral")
         assert len(rm.interaction_history["u1"]) <= 100
 
@@ -400,6 +404,7 @@ class TestRelationshipMemory:
 
 
 # ── SessionMemory ───────────────────────────────────────────────────────
+
 
 class TestSessionMemory:
     def test_init(self):
@@ -460,6 +465,7 @@ class TestSessionMemory:
 
 
 # ── EpisodicMemoryStore ─────────────────────────────────────────────────
+
 
 class TestEpisodicMemoryStore:
     def test_save_episode(self):
@@ -523,6 +529,7 @@ class TestEpisodicMemoryStore:
 
 
 # ── CognitiveArchitecture ───────────────────────────────────────────────
+
 
 class TestCognitiveArchitecture:
     def test_init(self):

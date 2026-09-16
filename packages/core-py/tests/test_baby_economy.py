@@ -1,9 +1,11 @@
-import numpy as np
-import pytest
-
 from domain.collections._internal.baby_economy import (
-    ResourceType, TradeStatus, EconomyConfig, Resource, TradeOffer,
-    BabyEconomy, MarketSystem,
+    BabyEconomy,
+    EconomyConfig,
+    MarketSystem,
+    Resource,
+    ResourceType,
+    TradeOffer,
+    TradeStatus,
 )
 
 
@@ -41,7 +43,9 @@ class TestResource:
 class TestTradeOffer:
     def test_create(self):
         offer = TradeOffer(
-            offer_id=0, seller_id=1, buyer_id=2,
+            offer_id=0,
+            seller_id=1,
+            buyer_id=2,
             offer_resource=Resource(ResourceType.FOOD, 5.0),
             want_resource=Resource(ResourceType.WOOD, 3.0),
         )
@@ -49,7 +53,9 @@ class TestTradeOffer:
 
     def test_accept(self):
         offer = TradeOffer(
-            offer_id=0, seller_id=1, buyer_id=2,
+            offer_id=0,
+            seller_id=1,
+            buyer_id=2,
             offer_resource=Resource(ResourceType.FOOD, 5.0),
             want_resource=Resource(ResourceType.WOOD, 3.0),
         )
@@ -59,7 +65,9 @@ class TestTradeOffer:
 
     def test_reject(self):
         offer = TradeOffer(
-            offer_id=0, seller_id=1, buyer_id=2,
+            offer_id=0,
+            seller_id=1,
+            buyer_id=2,
             offer_resource=Resource(ResourceType.FOOD, 5.0),
             want_resource=Resource(ResourceType.WOOD, 3.0),
         )
@@ -69,7 +77,9 @@ class TestTradeOffer:
 
     def test_complete(self):
         offer = TradeOffer(
-            offer_id=0, seller_id=1, buyer_id=2,
+            offer_id=0,
+            seller_id=1,
+            buyer_id=2,
             offer_resource=Resource(ResourceType.FOOD, 5.0),
             want_resource=Resource(ResourceType.WOOD, 3.0),
         )
@@ -80,7 +90,9 @@ class TestTradeOffer:
 
     def test_cancel(self):
         offer = TradeOffer(
-            offer_id=0, seller_id=1, buyer_id=2,
+            offer_id=0,
+            seller_id=1,
+            buyer_id=2,
             offer_resource=Resource(ResourceType.FOOD, 5.0),
             want_resource=Resource(ResourceType.WOOD, 3.0),
         )
@@ -133,7 +145,9 @@ class TestBabyEconomy:
     def test_create_offer(self):
         econ = BabyEconomy(1)
         econ.add_resource(Resource(ResourceType.FOOD, 10.0))
-        offer = econ.create_offer(2, Resource(ResourceType.FOOD, 5.0), Resource(ResourceType.WOOD, 3.0))
+        offer = econ.create_offer(
+            2, Resource(ResourceType.FOOD, 5.0), Resource(ResourceType.WOOD, 3.0)
+        )
         assert offer is not None
         assert offer.seller_id == 1
         assert offer.status == TradeStatus.PENDING
@@ -141,13 +155,17 @@ class TestBabyEconomy:
     def test_create_offer_insufficient(self):
         econ = BabyEconomy(1)
         econ.add_resource(Resource(ResourceType.FOOD, 2.0))
-        offer = econ.create_offer(2, Resource(ResourceType.FOOD, 5.0), Resource(ResourceType.WOOD, 3.0))
+        offer = econ.create_offer(
+            2, Resource(ResourceType.FOOD, 5.0), Resource(ResourceType.WOOD, 3.0)
+        )
         assert offer is None
 
     def test_accept_offer(self):
         seller = BabyEconomy(1)
         seller.add_resource(Resource(ResourceType.FOOD, 10.0))
-        offer = seller.create_offer(2, Resource(ResourceType.FOOD, 5.0), Resource(ResourceType.WOOD, 3.0))
+        offer = seller.create_offer(
+            2, Resource(ResourceType.FOOD, 5.0), Resource(ResourceType.WOOD, 3.0)
+        )
 
         buyer = BabyEconomy(2)
         buyer.add_resource(Resource(ResourceType.WOOD, 10.0))
@@ -215,7 +233,9 @@ class TestMarketSystem:
         market = MarketSystem()
         seller = BabyEconomy(1)
         seller.add_resource(Resource(ResourceType.FOOD, 10.0))
-        offer = seller.create_offer(2, Resource(ResourceType.FOOD, 5.0), Resource(ResourceType.WOOD, 3.0))
+        offer = seller.create_offer(
+            2, Resource(ResourceType.FOOD, 5.0), Resource(ResourceType.WOOD, 3.0)
+        )
         market.register(1, seller)
 
         buyer = BabyEconomy(2)

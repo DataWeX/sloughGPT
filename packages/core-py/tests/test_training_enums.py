@@ -1,9 +1,9 @@
 """Tests for domain.training — RLHFMetric, RLHFConfig, TrackerBackend, TrackingConfig, LoRAType, LoRAConfig, DataFormat."""
 
-from domain.training._internal.rlhf import RLHFMetric, RLHFConfig
-from domain.training._internal.tracking import TrackerBackend, TrackingConfig
-from domain.training._internal.lora import LoRAType, LoRAConfig
 from domain.training import DataFormat
+from domain.training._internal.lora import LoRAConfig, LoRAType
+from domain.training._internal.rlhf import RLHFConfig, RLHFMetric
+from domain.training._internal.tracking import TrackerBackend, TrackingConfig
 
 
 class TestRLHFMetric:
@@ -135,16 +135,28 @@ class TestRLHFConfig:
 
     def test_dataclass_fields_count(self):
         import dataclasses
+
         fields = [f.name for f in dataclasses.fields(RLHFConfig)]
         assert len(fields) >= 12
 
     def test_dataclass_field_names(self):
         import dataclasses
+
         fields = {f.name for f in dataclasses.fields(RLHFConfig)}
         expected = {
-            "ppo_epochs", "num_mini_batches", "clip_epsilon", "value_loss_coef",
-            "entropy_coef", "max_grad_norm", "gamma", "lam", "reward_model_path",
-            "ref_model_path", "use_ref_model", "gen_max_length", "gen_temperature",
+            "ppo_epochs",
+            "num_mini_batches",
+            "clip_epsilon",
+            "value_loss_coef",
+            "entropy_coef",
+            "max_grad_norm",
+            "gamma",
+            "lam",
+            "reward_model_path",
+            "ref_model_path",
+            "use_ref_model",
+            "gen_max_length",
+            "gen_temperature",
             "gen_top_p",
         }
         assert expected.issubset(fields)
@@ -257,11 +269,13 @@ class TestTrackingConfig:
 
     def test_dataclass_fields_count(self):
         import dataclasses
+
         fields = [f.name for f in dataclasses.fields(TrackingConfig)]
         assert len(fields) >= 8
 
     def test_dataclass_field_names(self):
         import dataclasses
+
         fields = {f.name for f in dataclasses.fields(TrackingConfig)}
         assert "backend" in fields
         assert "experiment_name" in fields
@@ -353,11 +367,13 @@ class TestLoRAConfig:
 
     def test_dataclass_fields_count(self):
         import dataclasses
+
         fields = [f.name for f in dataclasses.fields(LoRAConfig)]
         assert len(fields) == 7
 
     def test_dataclass_field_names(self):
         import dataclasses
+
         fields = {f.name for f in dataclasses.fields(LoRAConfig)}
         expected = {"rank", "alpha", "dropout", "target_modules", "lora_type", "bias", "task_type"}
         assert expected == fields

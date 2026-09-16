@@ -6,32 +6,30 @@ import numpy as np
 import pytest
 
 from domain.infrastructure._internal.slnc.spec import (
-    MAGIC,
-    VERSION,
-    FLAGS_DEFAULT,
-    FLAG_HAS_HEADER_CRC,
-    FLAG_ALIGNED_TENSORS,
-    FLAG_HAS_FILE_HASH,
     ALIGNMENT,
-    DTYPE_FLOAT32,
-    DTYPE_FLOAT16,
     DTYPE_BFLOAT16,
+    DTYPE_FLOAT16,
+    DTYPE_FLOAT32,
     DTYPE_INT32,
     DTYPE_INT64,
-    DTYPE_UINT8,
     DTYPE_MAP,
+    DTYPE_UINT8,
+    FLAG_ALIGNED_TENSORS,
+    FLAG_HAS_HEADER_CRC,
+    MAGIC,
+    VERSION,
     SLNCConfig,
+    _align,
+    _align_offset,
+    code_to_dtype,
     compute_header_size,
     compute_tensor_entry_size,
     compute_tensor_table_size,
-    _align,
-    _align_offset,
     dtype_to_code,
-    code_to_dtype,
 )
 
-
 # ── Constants ─────────────────────────────────────────────────────────────────
+
 
 class TestConstants:
     def test_magic(self):
@@ -46,12 +44,17 @@ class TestConstants:
 
     def test_dtype_map_keys(self):
         assert set(DTYPE_MAP.keys()) == {
-            DTYPE_FLOAT32, DTYPE_FLOAT16, DTYPE_BFLOAT16,
-            DTYPE_INT32, DTYPE_INT64, DTYPE_UINT8,
+            DTYPE_FLOAT32,
+            DTYPE_FLOAT16,
+            DTYPE_BFLOAT16,
+            DTYPE_INT32,
+            DTYPE_INT64,
+            DTYPE_UINT8,
         }
 
 
 # ── SLNCConfig ───────────────────────────────────────────────────────────────
+
 
 class TestSLNCConfig:
     def test_defaults(self):
@@ -104,6 +107,7 @@ class TestSLNCConfig:
 
 # ── _align / _align_offset ───────────────────────────────────────────────────
 
+
 class TestAlign:
     def test_already_aligned(self):
         assert _align(64) == 64
@@ -119,6 +123,7 @@ class TestAlign:
 
 
 # ── compute_header_size ──────────────────────────────────────────────────────
+
 
 class TestComputeHeaderSize:
     def test_empty_json(self):
@@ -136,6 +141,7 @@ class TestComputeHeaderSize:
 
 # ── compute_tensor_entry_size ────────────────────────────────────────────────
 
+
 class TestComputeTensorEntrySize:
     def test_1d_tensor(self):
         # name_len(4) + name_bytes[5] + offset(8) + size(4) + ndim(4) + shape[1](4) + dtype(4) + crc32(4)
@@ -152,6 +158,7 @@ class TestComputeTensorEntrySize:
 
 
 # ── compute_tensor_table_size ────────────────────────────────────────────────
+
 
 class TestComputeTensorTableSize:
     def test_empty(self):
@@ -175,6 +182,7 @@ class TestComputeTensorTableSize:
 
 
 # ── dtype_to_code / code_to_dtype ────────────────────────────────────────────
+
 
 class TestDtypeConversion:
     def test_float32_roundtrip(self):

@@ -5,33 +5,33 @@ load_into_model, WeightLoadResult.
 Covers: TensorMapping, LoadPlan, WeightLoadResult, infer_arch_from_state_dict,
 WeightLoaderRegistry register/get/load, DirectWeightLoader, load_into_model.
 """
+
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
 from domain.infrastructure._internal.weight_loader import (
-    TensorMapping,
-    LoadPlan,
-    WeightLoadResult,
-    infer_arch_from_state_dict,
-    WeightLoaderRegistry,
-    get_weight_loader_registry,
-    load_into_model,
-    _NO_TRANSPOSE,
     _ARCH_TO_SLONET,
-    _SWIGLU_MAP,
     _GELU_MAP,
+    _NO_TRANSPOSE,
     _NORM_BIAS_MAP,
+    _SWIGLU_MAP,
+    LoadPlan,
+    TensorMapping,
+    WeightLoaderRegistry,
+    WeightLoadResult,
+    get_weight_loader_registry,
+    infer_arch_from_state_dict,
+    load_into_model,
 )
-
 
 # ---------------------------------------------------------------------------
 # TensorMapping
 # ---------------------------------------------------------------------------
+
 
 class TestTensorMapping:
     def test_creation(self):
@@ -54,6 +54,7 @@ class TestTensorMapping:
 # LoadPlan
 # ---------------------------------------------------------------------------
 
+
 class TestLoadPlan:
     def test_creation(self):
         plan = LoadPlan(
@@ -75,6 +76,7 @@ class TestLoadPlan:
 # ---------------------------------------------------------------------------
 # WeightLoadResult
 # ---------------------------------------------------------------------------
+
 
 class TestWeightLoadResult:
     def test_success(self):
@@ -103,6 +105,7 @@ class TestWeightLoadResult:
 # ---------------------------------------------------------------------------
 # infer_arch_from_state_dict
 # ---------------------------------------------------------------------------
+
 
 class TestInferArch:
     def test_basic_gpt2(self):
@@ -153,6 +156,7 @@ class TestInferArch:
 # Mapping constants
 # ---------------------------------------------------------------------------
 
+
 class TestMappingConstants:
     def test_arch_to_slonet_has_key_embeddings(self):
         assert "embed.token" in _ARCH_TO_SLONET
@@ -176,6 +180,7 @@ class TestMappingConstants:
 # ---------------------------------------------------------------------------
 # WeightLoaderRegistry
 # ---------------------------------------------------------------------------
+
 
 class TestWeightLoaderRegistry:
     def test_register_and_get(self):
@@ -249,6 +254,7 @@ class TestWeightLoaderRegistry:
 # load_into_model — mock model
 # ---------------------------------------------------------------------------
 
+
 class TestLoadIntoModel:
     def _make_mock_model(self, param_names):
         """Create a mock model with named parameters."""
@@ -302,7 +308,9 @@ class TestLoadIntoModel:
             arch_name="test",
         )
         model, params = self._make_mock_model(["model.weight"])
-        arr = np.array([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]], dtype=np.float32)
+        arr = np.array(
+            [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]], dtype=np.float32
+        )
         tensor_data = {"hf.weight": arr}
 
         result = load_into_model(model, plan, tensor_data)
@@ -325,11 +333,13 @@ class TestLoadIntoModel:
             n_embed=4,
             arch_name="test",
         )
-        model, params = self._make_mock_model([
-            "blocks.0.attn.q_proj.weight",
-            "blocks.0.attn.k_proj.weight",
-            "blocks.0.attn.v_proj.weight",
-        ])
+        model, params = self._make_mock_model(
+            [
+                "blocks.0.attn.q_proj.weight",
+                "blocks.0.attn.k_proj.weight",
+                "blocks.0.attn.v_proj.weight",
+            ]
+        )
         # fused weight shape: (3*n_embed, n_embed) → (12, 4)
         fused = np.random.randn(12, 4).astype(np.float32)
         tensor_data = {"hf.qkv.weight": fused}
@@ -364,11 +374,13 @@ class TestLoadIntoModel:
             n_embed=4,
             arch_name="test",
         )
-        model, params = self._make_mock_model([
-            "blocks.0.attn.q_proj.bias",
-            "blocks.0.attn.k_proj.bias",
-            "blocks.0.attn.v_proj.bias",
-        ])
+        model, params = self._make_mock_model(
+            [
+                "blocks.0.attn.q_proj.bias",
+                "blocks.0.attn.k_proj.bias",
+                "blocks.0.attn.v_proj.bias",
+            ]
+        )
         fused_bias = np.random.randn(12).astype(np.float32)
         tensor_data = {"hf.qkv.bias": fused_bias}
 
@@ -417,8 +429,13 @@ class TestLoadIntoModel:
 
     def test_timing_recorded(self):
         plan = LoadPlan(
-            tensor_map={}, tied_weights=[], synthesized_params=[],
-            fused_qkv={}, n_layer=1, n_embed=4, arch_name="test",
+            tensor_map={},
+            tied_weights=[],
+            synthesized_params=[],
+            fused_qkv={},
+            n_layer=1,
+            n_embed=4,
+            arch_name="test",
         )
         model, _ = self._make_mock_model([])
         result = load_into_model(model, plan, {})
@@ -430,7 +447,9 @@ class TestLoadIntoModel:
 # _is_intel_mac helper (imported from model_server, tested here too)
 # ---------------------------------------------------------------------------
 
+
 class TestIsIntelMac:
     def test_returns_bool(self):
         from domain.infrastructure._internal.model_server import _is_intel_mac
+
         assert isinstance(_is_intel_mac(), bool)

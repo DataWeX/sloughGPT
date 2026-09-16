@@ -1,12 +1,10 @@
 """Tests for domain.collections._internal.stores — pure logic, no network."""
+
 from __future__ import annotations
 
 import json
 import os
 import tempfile
-from pathlib import Path
-
-import pytest
 
 from domain.collections._internal.sources import Record
 from domain.collections._internal.stores import (
@@ -18,10 +16,10 @@ from domain.collections._internal.stores import (
     Store,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _r(content: str, **meta) -> Record:
     return Record(content=content, metadata=meta)
@@ -30,6 +28,7 @@ def _r(content: str, **meta) -> Record:
 # ---------------------------------------------------------------------------
 # Store protocol
 # ---------------------------------------------------------------------------
+
 
 class TestStoreProtocol:
     def test_memory_store_is_store(self):
@@ -52,6 +51,7 @@ class TestStoreProtocol:
 # ---------------------------------------------------------------------------
 # FileStore
 # ---------------------------------------------------------------------------
+
 
 class TestFileStore:
     def test_init_creates_parent_dir(self):
@@ -140,6 +140,7 @@ class TestFileStore:
 # MemoryStore
 # ---------------------------------------------------------------------------
 
+
 class TestMemoryStore:
     def test_write_and_read(self):
         ms = MemoryStore()
@@ -226,10 +227,13 @@ class TestMemoryStore:
 
     def test_thread_safety(self):
         import threading
+
         ms = MemoryStore()
+
         def writer(n):
             for i in range(100):
                 ms.write(_r(f"{n}-{i}"))
+
         threads = [threading.Thread(target=writer, args=(t,)) for t in range(4)]
         for t in threads:
             t.start()
@@ -241,6 +245,7 @@ class TestMemoryStore:
 # ---------------------------------------------------------------------------
 # CallbackStore
 # ---------------------------------------------------------------------------
+
 
 class TestCallbackStore:
     def test_callback_called(self):
@@ -270,6 +275,7 @@ class TestCallbackStore:
 # ---------------------------------------------------------------------------
 # ChainedStore
 # ---------------------------------------------------------------------------
+
 
 class TestChainedStore:
     def test_write_to_all_stores(self):
@@ -313,6 +319,7 @@ class TestChainedStore:
 # ---------------------------------------------------------------------------
 # StatsStore
 # ---------------------------------------------------------------------------
+
 
 class TestStatsStore:
     def test_delegates_write(self):

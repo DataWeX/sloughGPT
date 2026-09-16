@@ -2,13 +2,13 @@
 Tests for the companion router — personality, presets, chat, prompt.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from apps.api.server.routers.companion import router
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
+from apps.api.server.routers.companion import router
 
 app = FastAPI()
 register_all_handlers(app)
@@ -58,14 +58,17 @@ class TestSetPersonality:
         comp = _mock_companion()
         mock_get.return_value = comp
 
-        resp = client.post("/companion/personality", json={
-            "name": "Alice",
-            "warmth": 0.9,
-            "curiosity": 0.8,
-            "creativity": 0.7,
-            "confidence": 0.6,
-            "humor": 0.5,
-        })
+        resp = client.post(
+            "/companion/personality",
+            json={
+                "name": "Alice",
+                "warmth": 0.9,
+                "curiosity": 0.8,
+                "creativity": 0.7,
+                "confidence": 0.6,
+                "humor": 0.5,
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "success"
@@ -88,17 +91,23 @@ class TestSetPersonality:
         assert comp.name == "Bob"
 
     def test_set_personality_warmth_out_of_range(self):
-        resp = client.post("/companion/personality", json={
-            "name": "Bad",
-            "warmth": 1.5,
-        })
+        resp = client.post(
+            "/companion/personality",
+            json={
+                "name": "Bad",
+                "warmth": 1.5,
+            },
+        )
         assert resp.status_code == 422
 
     def test_set_personality_negative_curiosity(self):
-        resp = client.post("/companion/personality", json={
-            "name": "Bad",
-            "curiosity": -0.1,
-        })
+        resp = client.post(
+            "/companion/personality",
+            json={
+                "name": "Bad",
+                "curiosity": -0.1,
+            },
+        )
         assert resp.status_code == 422
 
 
@@ -121,10 +130,13 @@ class TestPatchPersonality:
         comp = _mock_companion()
         mock_get.return_value = comp
 
-        resp = client.patch("/companion/personality", json={
-            "name": "Patched",
-            "humor": 0.9,
-        })
+        resp = client.patch(
+            "/companion/personality",
+            json={
+                "name": "Patched",
+                "humor": 0.9,
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert "traits" in body["data"]
@@ -222,10 +234,13 @@ class TestChat:
         comp.build_system_prompt = MagicMock(return_value="You are a warm friend.")
         mock_get.return_value = comp
 
-        resp = client.post("/companion/chat", json={
-            "message": "I'm feeling sad",
-            "user_mood": "sad",
-        })
+        resp = client.post(
+            "/companion/chat",
+            json={
+                "message": "I'm feeling sad",
+                "user_mood": "sad",
+            },
+        )
         assert resp.status_code == 200
 
     @patch(COMPANION_TARGET)
@@ -235,10 +250,13 @@ class TestChat:
         comp.build_system_prompt = MagicMock(return_value="You are a warm friend.")
         mock_get.return_value = comp
 
-        resp = client.post("/companion/chat", json={
-            "message": "Hi",
-            "include_system_prompt": False,
-        })
+        resp = client.post(
+            "/companion/chat",
+            json={
+                "message": "Hi",
+                "include_system_prompt": False,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["system_prompt"] == ""
@@ -250,10 +268,13 @@ class TestChat:
         comp.build_system_prompt = MagicMock(return_value="You are a warm friend.")
         mock_get.return_value = comp
 
-        resp = client.post("/companion/chat", json={
-            "message": "Hi there",
-            "user_name": "Alice",
-        })
+        resp = client.post(
+            "/companion/chat",
+            json={
+                "message": "Hi there",
+                "user_name": "Alice",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert "response" in data
@@ -328,16 +349,27 @@ class TestPatchPersonalityEdgeCases:
         assert resp.status_code == 200
 
     def test_patch_nulls_ignored(self):
-        resp = client.patch("/companion/personality", json={
-            "warmth": None, "curiosity": None,
-        })
+        resp = client.patch(
+            "/companion/personality",
+            json={
+                "warmth": None,
+                "curiosity": None,
+            },
+        )
         assert resp.status_code == 200
 
     def test_patch_all_fields(self):
-        resp = client.patch("/companion/personality", json={
-            "name": "All", "warmth": 0.1, "curiosity": 0.2,
-            "creativity": 0.3, "confidence": 0.4, "humor": 0.5,
-        })
+        resp = client.patch(
+            "/companion/personality",
+            json={
+                "name": "All",
+                "warmth": 0.1,
+                "curiosity": 0.2,
+                "creativity": 0.3,
+                "confidence": 0.4,
+                "humor": 0.5,
+            },
+        )
         assert resp.status_code == 200
 
     def test_patch_negative_creativity_rejected(self):

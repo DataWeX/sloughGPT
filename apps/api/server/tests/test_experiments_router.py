@@ -1,6 +1,5 @@
 """Tests for the /experiments router — CRUD, metric/param logging, compare."""
 
-import pytest
 from test_support import _data, get_test_client
 
 
@@ -17,7 +16,9 @@ class TestCreateExperiment:
         assert "id" in data
 
     def test_create_experiment_with_config(self):
-        resp = self.client.post("/experiments", json={"name": "config_exp", "config": {"lr": 0.001}})
+        resp = self.client.post(
+            "/experiments", json={"name": "config_exp", "config": {"lr": 0.001}}
+        )
         assert resp.status_code == 200
         data = _data(resp)
         assert data["name"] == "config_exp"

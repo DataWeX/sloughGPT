@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any
 
-from .advanced import ThoughtStep, ReasoningResult, ReasoningMode
+from .advanced import ReasoningMode, ReasoningResult, ThoughtStep
 
 logger = logging.getLogger("slo.cognitive.reasoning.deep")
 
@@ -23,6 +24,7 @@ logger = logging.getLogger("slo.cognitive.reasoning.deep")
 # =============================================================================
 # 1. RETRIEVAL-AUGMENTED REASONING
 # =============================================================================
+
 
 class RetrievalSource(Enum):
     VECTOR_STORE = "vector_store"
@@ -34,20 +36,22 @@ class RetrievalSource(Enum):
 @dataclass
 class RetrievedKnowledge:
     """Retrieved piece of knowledge."""
+
     content: str
     source: RetrievalSource
     relevance: float
-    source_id: Optional[str] = None
+    source_id: str | None = None
 
 
 @dataclass
 class DeepReasoningContext:
     """Context for deep reasoning."""
+
     query: str
-    retrieved_knowledge: List[RetrievedKnowledge] = field(default_factory=list)
-    working_memory: List[str] = field(default_factory=list)
-    constraints: List[str] = field(default_factory=list)
-    assumptions: List[str] = field(default_factory=list)
+    retrieved_knowledge: list[RetrievedKnowledge] = field(default_factory=list)
+    working_memory: list[str] = field(default_factory=list)
+    constraints: list[str] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
 
 
 class DeepReasoning:
@@ -57,7 +61,7 @@ class DeepReasoning:
         self,
         vector_store=None,
         memory_store=None,
-        llm_call: Optional[Callable] = None,
+        llm_call: Callable | None = None,
     ):
         self.vector_store = vector_store
         self.memory_store = memory_store
@@ -67,7 +71,7 @@ class DeepReasoning:
     async def reason(
         self,
         problem: str,
-        context: Optional[DeepReasoningContext] = None,
+        context: DeepReasoningContext | None = None,
         max_depth: int = 3,
     ) -> ReasoningResult:
         """
@@ -84,12 +88,14 @@ class DeepReasoning:
 
         # Step 2: Build grounded context
         grounded_context = await self._build_context(problem, retrieved, ctx)
-        steps.append(ThoughtStep(
-            step_id=0,
-            thought=f"Retrieved {len(retrieved)} knowledge pieces",
-            reasoning_type="retrieval",
-            confidence=0.9,
-        ))
+        steps.append(
+            ThoughtStep(
+                step_id=0,
+                thought=f"Retrieved {len(retrieved)} knowledge pieces",
+                reasoning_type="retrieval",
+                confidence=0.9,
+            )
+        )
 
         # Step 3: Generate initial reasoning
         initial_reasoning = await self._generate_reasoning(grounded_context, max_depth)
@@ -97,18 +103,18 @@ class DeepReasoning:
 
         # Step 4: Self-correction loop
         corrected_reasoning = await self._self_correct(initial_reasoning, grounded_context, ctx)
-        steps.append(ThoughtStep(
-            step_id=len(steps),
-            thought=f"Self-correction: {corrected_reasoning['corrections']}",
-            reasoning_type="correction",
-            confidence=0.85,
-        ))
+        steps.append(
+            ThoughtStep(
+                step_id=len(steps),
+                thought=f"Self-correction: {corrected_reasoning['corrections']}",
+                reasoning_type="correction",
+                confidence=0.85,
+            )
+        )
 
         # Step 5: Final synthesis
         conclusion = await self._synthesize(
-            initial_reasoning,
-            corrected_reasoning,
-            grounded_context
+            initial_reasoning, corrected_reasoning, grounded_context
         )
 
         return ReasoningResult(
@@ -124,7 +130,7 @@ class DeepReasoning:
             execution_time_ms=(asyncio.get_event_loop().time() - start_time) * 1000,
         )
 
-    async def _retrieve_knowledge(self, query: str) -> List[RetrievedKnowledge]:
+    async def _retrieve_knowledge(self, query: str) -> list[RetrievedKnowledge]:
         """Retrieve relevant knowledge from all sources."""
         results = []
 
@@ -135,12 +141,14 @@ class DeepReasoning:
                 for doc_id, similarity in vector_results:
                     doc = self.vector_store.documents.get(doc_id)
                     if doc:
-                        results.append(RetrievedKnowledge(
-                            content=doc.content,
-                            source=RetrievalSource.VECTOR_STORE,
-                            relevance=float(similarity),
-                            source_id=doc_id,
-                        ))
+                        results.append(
+                            RetrievedKnowledge(
+                                content=doc.content,
+                                source=RetrievalSource.VECTOR_STORE,
+                                relevance=float(similarity),
+                                source_id=doc_id,
+                            )
+                        )
             except Exception as e:
                 logger.debug("Vector store retrieval failed: %s", e)
 
@@ -149,12 +157,14 @@ class DeepReasoning:
             try:
                 memory_results = self.memory_store.retrieve(query, top_k=self.max_retrieval)
                 for item in memory_results:
-                    results.append(RetrievedKnowledge(
-                        content=item.get("content", ""),
-                        source=RetrievalSource.MEMORY,
-                        relevance=item.get("relevance", 0.5),
-                        source_id=item.get("id"),
-                    ))
+                    results.append(
+                        RetrievedKnowledge(
+                            content=item.get("content", ""),
+                            source=RetrievalSource.MEMORY,
+                            relevance=item.get("relevance", 0.5),
+                            source_id=item.get("id"),
+                        )
+                    )
             except Exception as e:
                 logger.debug("Memory store retrieval failed: %s", e)
 
@@ -164,7 +174,7 @@ class DeepReasoning:
 
         return results
 
-    async def _fallback_retrieval(self, query: str) -> List[RetrievedKnowledge]:
+    async def _fallback_retrieval(self, query: str) -> list[RetrievedKnowledge]:
         """Fallback when no external stores available."""
         # Our own reasoning patterns
         patterns = {
@@ -180,19 +190,21 @@ class DeepReasoning:
         for category, keywords in patterns.items():
             for kw in keywords:
                 if kw in query_lower:
-                    results.append(RetrievedKnowledge(
-                        content=f"Reasoning pattern '{category}': {query}",
-                        source=RetrievalSource.WORKING_MEMORY,
-                        relevance=0.7,
-                    ))
+                    results.append(
+                        RetrievedKnowledge(
+                            content=f"Reasoning pattern '{category}': {query}",
+                            source=RetrievalSource.WORKING_MEMORY,
+                            relevance=0.7,
+                        )
+                    )
                     break
 
-        return results[:self.max_retrieval]
+        return results[: self.max_retrieval]
 
     async def _build_context(
         self,
         problem: str,
-        retrieved: List[RetrievedKnowledge],
+        retrieved: list[RetrievedKnowledge],
         ctx: DeepReasoningContext,
     ) -> str:
         """Build grounded context from retrieved knowledge."""
@@ -215,7 +227,7 @@ class DeepReasoning:
         self,
         context: str,
         max_depth: int,
-    ) -> List[ThoughtStep]:
+    ) -> list[ThoughtStep]:
         """Generate multi-step reasoning."""
         steps = []
         current_context = context
@@ -224,22 +236,24 @@ class DeepReasoning:
             thought = await self.llm_call(
                 f"{current_context}\n\nStep {depth + 1}: Analyze this step by step:"
             )
-            steps.append(ThoughtStep(
-                step_id=len(steps),
-                thought=thought,
-                reasoning_type="analysis",
-                confidence=0.8 - depth * 0.1,
-            ))
+            steps.append(
+                ThoughtStep(
+                    step_id=len(steps),
+                    thought=thought,
+                    reasoning_type="analysis",
+                    confidence=0.8 - depth * 0.1,
+                )
+            )
             current_context = thought
 
         return steps
 
     async def _self_correct(
         self,
-        reasoning: List[ThoughtStep],
+        reasoning: list[ThoughtStep],
         context: str,
         ctx: DeepReasoningContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Self-correction loop: reflect on reasoning, find flaws, revise.
         """
@@ -268,7 +282,7 @@ class DeepReasoning:
         step: ThoughtStep,
         context: str,
         ctx: DeepReasoningContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Critique a single reasoning step."""
         critique_prompt = f"""Critique this reasoning step:
 Step: {step.thought}
@@ -305,28 +319,27 @@ Critique:"""
 
     async def _apply_corrections(
         self,
-        reasoning: List[ThoughtStep],
-        corrections: List[Dict],
-    ) -> List[ThoughtStep]:
+        reasoning: list[ThoughtStep],
+        corrections: list[dict],
+    ) -> list[ThoughtStep]:
         """Apply corrections to reasoning."""
         corrected = []
 
         for step in reasoning:
-            correction = next(
-                (c for c in corrections if c["step_id"] == step.step_id),
-                None
-            )
+            correction = next((c for c in corrections if c["step_id"] == step.step_id), None)
             if correction and correction["has_issue"]:
                 new_thought = await self.llm_call(
                     f"Original: {step.thought}\nCritique: {correction['critique']}\n"
                     "Provide a corrected version:"
                 )
-                corrected.append(ThoughtStep(
-                    step_id=step.step_id,
-                    thought=f"[CORRECTED] {new_thought}",
-                    reasoning_type="correction",
-                    confidence=0.9,
-                ))
+                corrected.append(
+                    ThoughtStep(
+                        step_id=step.step_id,
+                        thought=f"[CORRECTED] {new_thought}",
+                        reasoning_type="correction",
+                        confidence=0.9,
+                    )
+                )
             else:
                 corrected.append(step)
 
@@ -334,16 +347,16 @@ Critique:"""
 
     async def _synthesize(
         self,
-        initial: List[ThoughtStep],
-        corrected: Dict,
+        initial: list[ThoughtStep],
+        corrected: dict,
         context: str,
     ) -> str:
         """Synthesize final conclusion."""
         synthesis_prompt = f"""Given the reasoning steps and corrections, provide a final answer.
 
 Context: {context[:500]}
-Initial reasoning: {initial[-1].thought if initial else 'N/A'}
-Corrections applied: {len(corrected.get('corrections', []))}
+Initial reasoning: {initial[-1].thought if initial else "N/A"}
+Corrections applied: {len(corrected.get("corrections", []))}
 
 Final answer:"""
 
@@ -368,6 +381,7 @@ Final answer:"""
 # 2. FORMAL LOGIC ENGINE
 # =============================================================================
 
+
 class LogicalOperator(Enum):
     AND = "∧"
     OR = "∨"
@@ -381,17 +395,19 @@ class LogicalOperator(Enum):
 @dataclass
 class Term:
     """A logical term (constant, variable, or function)."""
+
     name: str
     is_variable: bool = False
     is_function: bool = False
-    arguments: List["Term"] = field(default_factory=list)
+    arguments: list[Term] = field(default_factory=list)
 
 
 @dataclass
 class Predicate:
     """A predicate (relation) in first-order logic."""
+
     name: str
-    terms: List[Term]
+    terms: list[Term]
     negated: bool = False
 
     def __hash__(self):
@@ -401,19 +417,21 @@ class Predicate:
 @dataclass
 class WellFormedFormula:
     """A well-formed formula in first-order logic."""
-    predicate: Optional[Predicate] = None
-    operator: Optional[LogicalOperator] = None
-    left: Optional["WellFormedFormula"] = None
-    right: Optional["WellFormedFormula"] = None
-    quantifier_var: Optional[Term] = None
-    quantifier_type: Optional[LogicalOperator] = None
-    subformula: Optional["WellFormedFormula"] = None
+
+    predicate: Predicate | None = None
+    operator: LogicalOperator | None = None
+    left: WellFormedFormula | None = None
+    right: WellFormedFormula | None = None
+    quantifier_var: Term | None = None
+    quantifier_type: LogicalOperator | None = None
+    subformula: WellFormedFormula | None = None
 
 
 @dataclass
 class Substitution:
     """A substitution mapping variables to terms."""
-    mapping: Dict[str, Term] = field(default_factory=dict)
+
+    mapping: dict[str, Term] = field(default_factory=dict)
 
 
 class FormalLogicEngine:
@@ -427,8 +445,8 @@ class FormalLogicEngine:
     """
 
     def __init__(self):
-        self.knowledge_base: List[WellFormedFormula] = []
-        self.inference_history: List[Dict] = []
+        self.knowledge_base: list[WellFormedFormula] = []
+        self.inference_history: list[dict] = []
 
     def assert_fact(self, formula: WellFormedFormula) -> None:
         """Add a formula to the knowledge base."""
@@ -450,7 +468,7 @@ class FormalLogicEngine:
 
     def _forward_chain(self, query: Predicate) -> bool:
         """Forward chaining inference."""
-        derived: Set[Predicate] = set()
+        derived: set[Predicate] = set()
         changed = True
 
         while changed:
@@ -480,8 +498,8 @@ class FormalLogicEngine:
         self,
         antecedent: WellFormedFormula,
         consequent: WellFormedFormula,
-        derived: Set[Predicate],
-    ) -> Optional[Predicate]:
+        derived: set[Predicate],
+    ) -> Predicate | None:
         """Apply Modus Ponens: (P → Q), P ⊢ Q"""
         if not antecedent.predicate or not consequent.predicate:
             return None
@@ -494,7 +512,7 @@ class FormalLogicEngine:
 
         return None
 
-    def _unify(self, pred1: Predicate, pred2: Predicate) -> Optional[Substitution]:
+    def _unify(self, pred1: Predicate, pred2: Predicate) -> Substitution | None:
         """Unification algorithm - find substitution making predicates equal."""
         if pred1.name != pred2.name:
             return None
@@ -504,7 +522,7 @@ class FormalLogicEngine:
 
         subst = Substitution()
 
-        for t1, t2 in zip(pred1.terms, pred2.terms):
+        for t1, t2 in zip(pred1.terms, pred2.terms, strict=False):
             new_subst = self._unify_terms(t1, t2, subst)
             if new_subst is None:
                 return None
@@ -517,7 +535,7 @@ class FormalLogicEngine:
         t1: Term,
         t2: Term,
         subst: Substitution,
-    ) -> Optional[Substitution]:
+    ) -> Substitution | None:
         """Unify two terms."""
         # Apply existing substitution
         t1 = self._apply_term_substitution(t1, subst)
@@ -598,7 +616,7 @@ class FormalLogicEngine:
             new_clauses = []
 
             for i, clause1 in enumerate(clauses):
-                for clause2 in clauses[i + 1:]:
+                for clause2 in clauses[i + 1 :]:
                     resolvent = self._resolve_clauses(clause1, clause2)
                     if resolvent is not None:
                         if not resolvent:  # Empty clause = contradiction
@@ -613,7 +631,7 @@ class FormalLogicEngine:
 
         return False
 
-    def _to_clausal_form(self, wffs: List[WellFormedFormula]) -> List[Set[Predicate]]:
+    def _to_clausal_form(self, wffs: list[WellFormedFormula]) -> list[set[Predicate]]:
         """Convert to clausal form (conjunctive normal form)."""
         clauses = []
         for wff in wffs:
@@ -621,7 +639,7 @@ class FormalLogicEngine:
             clauses.append(clause)
         return clauses
 
-    def _extract_literals(self, wff: WellFormedFormula) -> Set[Predicate]:
+    def _extract_literals(self, wff: WellFormedFormula) -> set[Predicate]:
         """Extract literals from formula."""
         literals = set()
 
@@ -649,9 +667,9 @@ class FormalLogicEngine:
 
     def _resolve_clauses(
         self,
-        clause1: Set[Predicate],
-        clause2: Set[Predicate],
-    ) -> Optional[Set[Predicate]]:
+        clause1: set[Predicate],
+        clause2: set[Predicate],
+    ) -> set[Predicate] | None:
         """Resolve two clauses."""
         for lit1 in clause1:
             for lit2 in clause2:
@@ -672,14 +690,14 @@ class FormalLogicEngine:
                         return new_resolvent
         return None
 
-    def _unify_complementary(self, lit1: Predicate, lit2: Predicate) -> Optional[Substitution]:
+    def _unify_complementary(self, lit1: Predicate, lit2: Predicate) -> Substitution | None:
         """Unify complementary literals."""
         if lit1.negated:
             return self._unify(lit1, Predicate(name=lit2.name, terms=lit2.terms, negated=False))
         else:
             return self._unify(
                 Predicate(name=lit1.name, terms=lit1.terms, negated=False),
-                Predicate(name=lit2.name, terms=lit2.terms, negated=True)
+                Predicate(name=lit2.name, terms=lit2.terms, negated=True),
             )
 
     # =============================================================================
@@ -695,10 +713,10 @@ class FormalLogicEngine:
 
     def prove_syllogism(
         self,
-        premise1: Tuple[str, str, str],  # (Subject, Copula, Predicate)
-        premise2: Tuple[str, str, str],
-        conclusion: Tuple[str, str, str],
-    ) -> Dict[str, Any]:
+        premise1: tuple[str, str, str],  # (Subject, Copula, Predicate)
+        premise2: tuple[str, str, str],
+        conclusion: tuple[str, str, str],
+    ) -> dict[str, Any]:
         """
         Prove a categorical syllogism.
 
@@ -724,16 +742,18 @@ class FormalLogicEngine:
         # Check validity using Aristotle's rules
         valid, reason = self._check_syllogism_validity(mood, figure, p1, p2, conc)
 
-        self.inference_history.append({
-            "type": "syllogism",
-            "premise1": premise1,
-            "premise2": premise2,
-            "conclusion": conclusion,
-            "figure": figure,
-            "mood": mood,
-            "valid": valid,
-            "reason": reason,
-        })
+        self.inference_history.append(
+            {
+                "type": "syllogism",
+                "premise1": premise1,
+                "premise2": premise2,
+                "conclusion": conclusion,
+                "figure": figure,
+                "mood": mood,
+                "valid": valid,
+                "reason": reason,
+            }
+        )
 
         return {
             "valid": valid,
@@ -743,7 +763,7 @@ class FormalLogicEngine:
             "form": f"{self._format_categorical(p1)} / {self._format_categorical(p2)} ∴ {self._format_categorical(conc)}",
         }
 
-    def _to_categorical(self, premise: Tuple[str, str, str]) -> Tuple[str, str, str, str]:
+    def _to_categorical(self, premise: tuple[str, str, str]) -> tuple[str, str, str, str]:
         """Convert to categorical form: (quantifier, subject, copula, predicate)"""
         quant, copula, pred = premise
         # Infer subject from quantifier position
@@ -753,7 +773,7 @@ class FormalLogicEngine:
             subject = "S"
         return (quant.upper()[:1], subject, copula, pred)  # A, E, I, O
 
-    def _determine_figure(self, p1: Tuple, p2: Tuple) -> int:
+    def _determine_figure(self, p1: tuple, p2: tuple) -> int:
         """Determine syllogistic figure (1-4)."""
         # Simplified figure detection
         return 1
@@ -762,10 +782,10 @@ class FormalLogicEngine:
         self,
         mood: str,
         figure: int,
-        p1: Tuple,
-        p2: Tuple,
-        conc: Tuple,
-    ) -> Tuple[bool, str]:
+        p1: tuple,
+        p2: tuple,
+        conc: tuple,
+    ) -> tuple[bool, str]:
         """Check syllogism validity."""
         # Valid mood-figure combinations (Aristotle's rules)
         valid_combinations = {
@@ -780,7 +800,7 @@ class FormalLogicEngine:
 
         return False, "Invalid syllogism form"
 
-    def _format_categorical(self, cat: Tuple) -> str:
+    def _format_categorical(self, cat: tuple) -> str:
         """Format categorical proposition."""
         return f"{cat[0]} {cat[1]} {cat[2]} {cat[3]}"
 
@@ -789,13 +809,14 @@ class FormalLogicEngine:
 # 3. WORKING MEMORY FOR REASONING
 # =============================================================================
 
+
 class WorkingMemory:
     """Working memory for active reasoning."""
 
     def __init__(self, capacity: int = 7):
         self.capacity = capacity
-        self.items: List[str] = []
-        self.access_count: Dict[str, int] = {}
+        self.items: list[str] = []
+        self.access_count: dict[str, int] = {}
 
     def add(self, item: str) -> None:
         """Add item to working memory."""
@@ -811,7 +832,7 @@ class WorkingMemory:
         """Record access to item."""
         self.access_count[item] = self.access_count.get(item, 0) + 1
 
-    def get_recent(self, n: int = 5) -> List[str]:
+    def get_recent(self, n: int = 5) -> list[str]:
         """Get n most recently accessed items."""
         sorted_items = sorted(self.items, key=lambda x: -self.access_count.get(x, 0))
         return sorted_items[:n]

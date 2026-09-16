@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+
 from domain.training._internal.slonet import (
-    Tensor,
     SloLinear,
     _fuse_quant_weights,
     _fuse_quant_weights_int4,
 )
-
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 
 class MockQuantInfo:
     """Mock quantization info for testing."""
+
     def __init__(self, bits=8, scale=1.0, zero_point=0, original_shape=None):
         self.is_quantized = True
-        self.meta = MockQuantMeta(bits=bits, scale=scale, zero_point=zero_point, original_shape=original_shape)
+        self.meta = MockQuantMeta(
+            bits=bits, scale=scale, zero_point=zero_point, original_shape=original_shape
+        )
         self.array = None
 
 
@@ -35,7 +36,6 @@ class MockQuantMeta:
 
 
 class TestFuseQuantWeights:
-
     def test_returns_none_no_quantization(self):
         lin = SloLinear(10, 5)
         result = _fuse_quant_weights([lin])
@@ -102,7 +102,6 @@ class TestFuseQuantWeights:
 
 
 class TestFuseQuantWeightsInt4:
-
     def test_returns_none_no_quantization(self):
         lin = SloLinear(10, 5)
         result = _fuse_quant_weights_int4([lin])
@@ -130,7 +129,6 @@ class TestFuseQuantWeightsInt4:
 
 
 class TestSetQuantizedWeight:
-
     def test_set_quantized_weight(self):
         lin = SloLinear(10, 5)
         info = MockQuantInfo(original_shape=(5, 10))

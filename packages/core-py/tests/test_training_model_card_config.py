@@ -6,6 +6,7 @@ Tests model card generation, auto-configuration, and dataset manifest handling.
 Usage:
     .venv/bin/python -m pytest tests/test_training_model_card_config.py -x -v
 """
+
 import tempfile
 import time
 
@@ -157,8 +158,9 @@ class TestDatasetManifest:
     """Tests for dataset manifest handling."""
 
     def test_load_manifest_nonexistent(self):
-        from domain.training._internal.dataset_manifest import load_manifest
         import pytest
+
+        from domain.training._internal.dataset_manifest import load_manifest
 
         with pytest.raises(Exception):
             load_manifest("/nonexistent/manifest.json")

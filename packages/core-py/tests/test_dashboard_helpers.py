@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 from domain.shell._internal.cmds.dashboard import (
-    _format_uptime,
     _format_ts,
+    _format_uptime,
+    _progress_bar,
     _sparkline,
     _status_icon,
-    _progress_bar,
 )
 
-
 # ── _format_uptime ────────────────────────────────────────────────────────────
+
 
 class TestFormatUptime:
     def test_seconds(self):
@@ -35,6 +35,7 @@ class TestFormatUptime:
 
 # ── _format_ts ────────────────────────────────────────────────────────────────
 
+
 class TestFormatTs:
     def test_returns_string(self):
         result = _format_ts(0.0)
@@ -48,6 +49,7 @@ class TestFormatTs:
 
 
 # ── _sparkline ────────────────────────────────────────────────────────────────
+
 
 class TestSparkline:
     def test_empty(self):
@@ -73,6 +75,7 @@ class TestSparkline:
 
 # ── _status_icon ──────────────────────────────────────────────────────────────
 
+
 class TestStatusIcon:
     def test_running(self):
         icon = _status_icon("running")
@@ -92,6 +95,7 @@ class TestStatusIcon:
 
 
 # ── _progress_bar ─────────────────────────────────────────────────────────────
+
 
 class TestProgressBar:
     def test_zero(self):

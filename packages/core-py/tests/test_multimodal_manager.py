@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
+from unittest.mock import MagicMock, patch
+
 import numpy as np
-from unittest.mock import MagicMock, patch, AsyncMock
-from dataclasses import dataclass
 
 from domain.multimodal._internal.manager import (
     MultimodalCapabilities,
@@ -14,12 +13,10 @@ from domain.multimodal._internal.manager import (
     initialize_multimodal,
 )
 
-
 # ── MultimodalCapabilities ─────────────────────────────────────────────────
 
 
 class TestMultimodalCapabilities:
-
     def test_defaults(self):
         c = MultimodalCapabilities()
         assert c.speech_to_text is False
@@ -39,7 +36,6 @@ class TestMultimodalCapabilities:
 
 
 class TestMultimodalManager:
-
     def test_init(self):
         m = MultimodalManager()
         assert m._initialized is False
@@ -117,6 +113,7 @@ class TestMultimodalManager:
 
     def test_pil_to_np(self):
         from PIL import Image
+
         m = MultimodalManager()
         img = Image.new("RGB", (100, 100), (255, 0, 0))
         arr = m._pil_to_np(img)
@@ -149,7 +146,6 @@ class TestMultimodalManager:
 
 
 class TestRecognizeSpeech:
-
     def test_recognize_speech(self):
         m = MultimodalManager()
         mock_recognizer = MagicMock()
@@ -176,7 +172,7 @@ class TestRecognizeSpeech:
         m._speech_recognizer = mock_recognizer
         result = m.recognize_speech(b"", "en")
         assert result.text == ""
-        assert result.is_valid == False
+        assert not result.is_valid
         mock_recognizer.recognize.assert_not_called()
 
     def test_recognize_speech_vad_silence(self):
@@ -187,7 +183,7 @@ class TestRecognizeSpeech:
         audio = np.full(16000, 10, dtype=np.int16).tobytes()
         result = m.recognize_speech(audio, "en")
         assert result.text == ""
-        assert result.is_valid == False
+        assert not result.is_valid
         mock_recognizer.recognize.assert_not_called()
 
     def test_recognize_speech_with_audio_filter_config(self):
@@ -195,6 +191,7 @@ class TestRecognizeSpeech:
         mock_recognizer = MagicMock()
         m._speech_recognizer = mock_recognizer
         from domain.multimodal._internal.audio_filter import AudioFilterConfig, FilterMode
+
         m._audio_filter_config = AudioFilterConfig(mode=FilterMode.NONE)
         audio = np.zeros(160, dtype=np.int16).tobytes()
         m.recognize_speech(audio, "en")
@@ -205,7 +202,6 @@ class TestRecognizeSpeech:
 
 
 class TestCaptionImage:
-
     def test_caption_no_engine(self):
         m = MultimodalManager()
         engine_mock = MagicMock()
@@ -215,9 +211,12 @@ class TestCaptionImage:
         engine_mock.train_step.return_value = 0.5
 
         from PIL import Image
+
         img = Image.new("RGB", (64, 64), (128, 128, 128))
 
-        with patch("domain.multimodal._internal.manager.get_multimodal_engine", return_value=engine_mock):
+        with patch(
+            "domain.multimodal._internal.manager.get_multimodal_engine", return_value=engine_mock
+        ):
             with patch("domain.multimodal._internal.manager.contrastive_step", return_value=0.1):
                 result = m.caption_image(img, generate_only=True)
                 assert result.text == "generated caption"
@@ -231,6 +230,7 @@ class TestCaptionImage:
         m._embed_cache = {hash(b"cached"): "cached caption"}
 
         from PIL import Image
+
         img = Image.new("RGB", (64, 64), (128, 128, 128))
 
         with patch.object(m, "_image_hash", return_value=hash(b"cached")):
@@ -243,6 +243,7 @@ class TestCaptionImage:
         m._multimodal_engine.generate.side_effect = RuntimeError("fail")
 
         from PIL import Image
+
         img = Image.new("RGB", (64, 64), (128, 128, 128))
 
         result = m.caption_image(img, generate_only=True)
@@ -254,7 +255,6 @@ class TestCaptionImage:
 
 
 class TestDetectObjects:
-
     def test_detect_objects(self):
         m = MultimodalManager()
         m._learning_count = 10  # >= 10 to skip seed caption
@@ -264,6 +264,7 @@ class TestDetectObjects:
         m._multimodal_engine.text.encode.return_value = [1, 2]
 
         from PIL import Image
+
         img = Image.new("RGB", (64, 64))
         with patch("domain.multimodal._internal.manager.contrastive_step", return_value=0.1):
             objs = m.detect_objects(img)
@@ -276,7 +277,6 @@ class TestDetectObjects:
 
 
 class TestAskQuestion:
-
     def test_ask_question_returns_answer(self):
         m = MultimodalManager()
         m._multimodal_engine = MagicMock()
@@ -284,6 +284,7 @@ class TestAskQuestion:
         m._multimodal_engine.vision.forward.return_value = MagicMock(data=np.array([0.5]))
 
         from PIL import Image
+
         img = Image.new("RGB", (64, 64))
 
         with patch.object(m, "_pil_to_np", return_value=np.zeros((1, 64, 64, 3), dtype=np.float32)):
@@ -296,13 +297,16 @@ class TestAskQuestion:
         m = MultimodalManager()
 
         from PIL import Image
+
         img = Image.new("RGB", (64, 64))
 
         with patch("domain.multimodal._internal.manager.get_multimodal_engine") as mock_get:
             mock_engine = MagicMock()
             mock_engine.generate_vqa.return_value = MagicMock(text="blue")
             mock_get.return_value = mock_engine
-            with patch.object(m, "_pil_to_np", return_value=np.zeros((1, 64, 64, 3), dtype=np.float32)):
+            with patch.object(
+                m, "_pil_to_np", return_value=np.zeros((1, 64, 64, 3), dtype=np.float32)
+            ):
                 answer = m.ask_question(img, "What color?")
                 assert answer == "blue"
 
@@ -313,6 +317,7 @@ class TestAskQuestion:
         m._multimodal_engine.vision.forward.return_value = MagicMock(data=np.array([0.5]))
 
         from PIL import Image
+
         img = Image.new("RGB", (64, 64))
 
         with patch.object(m, "_pil_to_np", return_value=np.zeros((1, 64, 64, 3), dtype=np.float32)):
@@ -325,6 +330,7 @@ class TestAskQuestion:
         m._multimodal_engine.generate_vqa.side_effect = RuntimeError("fail")
 
         from PIL import Image
+
         img = Image.new("RGB", (64, 64))
 
         with patch.object(m, "_pil_to_np", return_value=np.zeros((1, 64, 64, 3), dtype=np.float32)):
@@ -347,7 +353,6 @@ class TestAskQuestion:
 
 
 class TestBrowserSpeechConfig:
-
     def test_get_config_no_recognizer(self):
         m = MultimodalManager()
         with patch("domain.multimodal._internal.manager.get_speech_recognizer") as mock_get:
@@ -368,9 +373,9 @@ class TestBrowserSpeechConfig:
 
 
 class TestSingleton:
-
     def test_get_multimodal_manager(self):
         import domain.multimodal._internal.manager as mod
+
         mod._multimodal_manager = None
         m = get_multimodal_manager()
         assert isinstance(m, MultimodalManager)
@@ -378,6 +383,7 @@ class TestSingleton:
 
     def test_initialize_multimodal(self):
         import domain.multimodal._internal.manager as mod
+
         mod._multimodal_manager = None
         with patch.object(MultimodalManager, "initialize"):
             initialize_multimodal(speech_server=False, vision_model="slonet")
@@ -389,7 +395,6 @@ class TestSingleton:
 
 
 class TestPretrain:
-
     def test_pretrain_no_engine(self):
         m = MultimodalManager()
         m._multimodal_engine = None

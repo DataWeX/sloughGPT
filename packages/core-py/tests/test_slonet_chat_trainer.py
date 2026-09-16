@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+
 from domain.training._internal.chat_trainer import (
-    ChatTrainConfig,
     ChatTextDataset,
+    ChatTrainConfig,
     _build_vocab,
 )
-
 
 # ── ChatTrainConfig ────────────────────────────────────────────────────────
 
 
 class TestChatTrainConfig:
-
     def test_default(self):
         config = ChatTrainConfig()
         assert config.n_embed == 128
@@ -32,7 +30,6 @@ class TestChatTrainConfig:
 
 
 class TestChatTextDataset:
-
     def test_init(self):
         text = "hello world"
         stoi = {"h": 1, "e": 2, "l": 3, "o": 4, " ": 5, "w": 6, "r": 7, "d": 8, "\x00": 0}
@@ -53,7 +50,6 @@ class TestChatTextDataset:
 
 
 class TestBuildVocab:
-
     def test_build_vocab(self):
         pairs = [
             {"user_msg": "hello", "assistant_msg": "world"},

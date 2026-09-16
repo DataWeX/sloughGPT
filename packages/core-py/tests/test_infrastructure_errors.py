@@ -1,17 +1,16 @@
 """Tests for AppError hierarchy — codes, recovery policies, serialization."""
+
 from __future__ import annotations
 
 import json
-
-import pytest
 
 from domain.infrastructure._internal.errors import (
     AppError,
     AuthError,
     ConfigError,
     FatalError,
-    ModelOOMError,
     ModelError,
+    ModelOOMError,
     ModelTimeoutError,
     NotFoundError,
     RecoverableError,
@@ -77,7 +76,9 @@ class TestAppError:
         assert e.cause is orig
 
     def test_to_dict(self):
-        e = AppError("msg", code="c1", user_message="um", recoverable=True, http_status=422, details={"a": 1})
+        e = AppError(
+            "msg", code="c1", user_message="um", recoverable=True, http_status=422, details={"a": 1}
+        )
         d = e.to_dict()
         assert d["code"] == "c1"
         assert d["message"] == "msg"
@@ -158,7 +159,17 @@ class TestConcreteErrors:
         assert e.http_status == 401
 
     def test_all_inherit_app_error(self):
-        for cls in [RecoverableError, FatalError, ValidationError, ConfigError,
-                    ModelError, ModelOOMError, ModelTimeoutError, TaskError,
-                    ResourceExhaustedError, NotFoundError, AuthError]:
+        for cls in [
+            RecoverableError,
+            FatalError,
+            ValidationError,
+            ConfigError,
+            ModelError,
+            ModelOOMError,
+            ModelTimeoutError,
+            TaskError,
+            ResourceExhaustedError,
+            NotFoundError,
+            AuthError,
+        ]:
             assert issubclass(cls, AppError)

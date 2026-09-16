@@ -11,7 +11,6 @@ encodings and a merge-lineage decomposition, benchmarks parallel batch
 encoding against serial, and round-trips save/load.
 """
 
-import os
 import sys
 import time
 from pathlib import Path
@@ -63,8 +62,10 @@ def main() -> int:
     ]:
         ids = tree.encode(phrase)
         tokens = [tree.itos[i].replace("</w>", "") for i in ids]
-        print(f"  {phrase!r}\n    -> {tokens}  ({len(ids)} tokens, "
-              f"round-trip={tree.decode(ids) == phrase.lower()})")
+        print(
+            f"  {phrase!r}\n    -> {tokens}  ({len(ids)} tokens, "
+            f"round-trip={tree.decode(ids) == phrase.lower()})"
+        )
 
     common = "to" + "</w>"
     if common in tree.stoi:
@@ -74,8 +75,10 @@ def main() -> int:
     print("\n-- embeddings generated from points --")
     emb = tree.embedding(tree.stoi.get("t", 0))
     if emb is not None:
-        print(f"  token 't' embedding: shape={emb.shape} dtype={emb.dtype} "
-              f"norm={float(emb @ emb) ** 0.5:.3f}")
+        print(
+            f"  token 't' embedding: shape={emb.shape} dtype={emb.dtype} "
+            f"norm={float(emb @ emb) ** 0.5:.3f}"
+        )
 
     print("\n-- semantic query (nearest neighbors by generated embedding) --")
     if tree.embedding_points():
@@ -86,10 +89,10 @@ def main() -> int:
             neigh = tree.similar(token_id, top_k=4)
             labels = [tree.itos[t].replace("</w>", "") for t, _ in neigh]
             scores = [f"{s:.2f}" for _, s in neigh]
-            print(f"  {probe!r} -> {list(zip(labels, scores))}")
+            print(f"  {probe!r} -> {list(zip(labels, scores, strict=False))}")
 
     print("\n-- parallel batch encode --")
-    batch = [texts[i:i + 120] for i in range(0, min(len(texts), 120000), 120)]
+    batch = [texts[i : i + 120] for i in range(0, min(len(texts), 120000), 120)]
     t0 = time.perf_counter()
     serial = [tree.encode(t) for t in batch]
     t_serial = time.perf_counter() - t0
@@ -97,8 +100,10 @@ def main() -> int:
     parallel = tree.encode_batch(batch, max_workers=8)
     t_par = time.perf_counter() - t0
     assert parallel == serial
-    print(f"  {len(batch)} texts | serial {t_serial:.2f}s | "
-          f"parallel {t_par:.2f}s | speedup {t_serial / max(t_par, 1e-9):.1f}x")
+    print(
+        f"  {len(batch)} texts | serial {t_serial:.2f}s | "
+        f"parallel {t_par:.2f}s | speedup {t_serial / max(t_par, 1e-9):.1f}x"
+    )
 
     print("\n-- persistence --")
     base = str(REPO_ROOT / "models" / "slonet-native" / "token_tree_demo")

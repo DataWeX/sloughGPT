@@ -1,9 +1,9 @@
 """Tests for meta_weights router — GetMetaWeightsRequest, MetaWeightsRouter construction."""
 
 import sys
-import pytest
 from pathlib import Path
-from types import SimpleNamespace
+
+import pytest
 
 pytest.importorskip("fastapi")
 
@@ -11,7 +11,7 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-from apps.api.server.routers.meta_weights import MetaWeightsRouter, GetMetaWeightsRequest
+from apps.api.server.routers.meta_weights import GetMetaWeightsRequest, MetaWeightsRouter
 
 
 class TestGetMetaWeightsRequest:
@@ -51,7 +51,7 @@ class TestGetMetaWeightsRequest:
         assert req.k == 1000
 
     def test_special_chars_message(self):
-        req = GetMetaWeightsRequest(user_message="hello <world> & \"test\"")
+        req = GetMetaWeightsRequest(user_message='hello <world> & "test"')
         assert req.user_message == 'hello <world> & "test"'
 
 

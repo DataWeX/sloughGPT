@@ -2,12 +2,13 @@
 Tests for the inference router — chat, generate, sessions.
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from infrastructure.exception_handlers import register_all_handlers
+
 from apps.api.server.routers.inference import _instance as _inference_router
 
 
@@ -467,6 +468,7 @@ class TestVoice:
 
     def test_audio_traversal_guard_direct(self):
         import asyncio
+
         from domains.infrastructure.errors import AuthError
         with pytest.raises(AuthError):
             asyncio.run(_inference_router.get_voice_audio("../evil", "msg"))

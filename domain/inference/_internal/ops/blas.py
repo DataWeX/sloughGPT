@@ -8,6 +8,7 @@ Accelerate is unavailable (Linux, non-macOS).
 from __future__ import annotations
 
 import ctypes
+
 import numpy as np
 
 _accelerate = None
@@ -34,20 +35,20 @@ def _setup_sgemm(lib):
     """Set cblas_sgemm signature."""
     # CBLAS_LAYOUT, CBLAS_TRANSPOSE, CBLAS_TRANSPOSE, M, N, K, alpha, A, lda, B, ldb, beta, C, ldc
     lib.cblas_sgemm.argtypes = [
-        ctypes.c_int,       # Layout (101 = RowMajor)
-        ctypes.c_int,       # TransA
-        ctypes.c_int,       # TransB
-        ctypes.c_int,       # M
-        ctypes.c_int,       # N
-        ctypes.c_int,       # K
-        ctypes.c_float,     # alpha
-        ctypes.c_void_p,    # A
-        ctypes.c_int,       # lda
-        ctypes.c_void_p,    # B
-        ctypes.c_int,       # ldb
-        ctypes.c_float,     # beta
-        ctypes.c_void_p,    # C
-        ctypes.c_int,       # ldc
+        ctypes.c_int,  # Layout (101 = RowMajor)
+        ctypes.c_int,  # TransA
+        ctypes.c_int,  # TransB
+        ctypes.c_int,  # M
+        ctypes.c_int,  # N
+        ctypes.c_int,  # K
+        ctypes.c_float,  # alpha
+        ctypes.c_void_p,  # A
+        ctypes.c_int,  # lda
+        ctypes.c_void_p,  # B
+        ctypes.c_int,  # ldb
+        ctypes.c_float,  # beta
+        ctypes.c_void_p,  # C
+        ctypes.c_int,  # ldc
     ]
     lib.cblas_sgemm.restype = None
 
@@ -80,12 +81,17 @@ def sgemm(a: np.ndarray, b: np.ndarray, alpha: float = 1.0, beta: float = 0.0) -
         CBLAS_ROW_MAJOR,
         CBLAS_NO_TRANS,
         CBLAS_NO_TRANS,
-        M, N, K,
+        M,
+        N,
+        K,
         alpha,
-        a.ctypes.data_as(ctypes.c_void_p), K,
-        b.ctypes.data_as(ctypes.c_void_p), N,
+        a.ctypes.data_as(ctypes.c_void_p),
+        K,
+        b.ctypes.data_as(ctypes.c_void_p),
+        N,
         beta,
-        c.ctypes.data_as(ctypes.c_void_p), N,
+        c.ctypes.data_as(ctypes.c_void_p),
+        N,
     )
     return c
 

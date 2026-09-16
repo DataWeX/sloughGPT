@@ -104,7 +104,7 @@ def _writing() -> ToolProfile:
                 f"Just output the rewritten {type_label}."
             )
         return (
-            f"Write a {tone_label} {type_label} based on this: \"{text}\"\n\n"
+            f'Write a {tone_label} {type_label} based on this: "{text}"\n\n'
             f"Just output the {type_label} directly, no explanation."
         )
 
@@ -114,7 +114,12 @@ def _writing() -> ToolProfile:
         description="Write an email, social post, story, poem, letter or note in your tone of choice.",
         icon="document",
         params=[
-            ToolParam("text", "What do you want to write?", "Tell me what you want to write about...", multiline=True),
+            ToolParam(
+                "text",
+                "What do you want to write?",
+                "Tell me what you want to write about...",
+                multiline=True,
+            ),
         ],
         options={
             "tone": [
@@ -148,6 +153,7 @@ _register(_writing())
 
 # ── Translate ────────────────────────────────────────────────────────
 
+
 def _translate() -> ToolProfile:
     def render(payload: dict[str, Any]) -> str:
         text = payload.get("text", "").strip()
@@ -168,10 +174,23 @@ def _translate() -> ToolProfile:
         ],
         options={
             "target_lang": [
-                ToolOption(lang, lang) for lang in (
-                    "Spanish", "French", "German", "Italian", "Portuguese",
-                    "Chinese", "Japanese", "Korean", "Arabic", "Hindi",
-                    "Russian", "Dutch", "Swedish", "Polish", "Turkish",
+                ToolOption(lang, lang)
+                for lang in (
+                    "Spanish",
+                    "French",
+                    "German",
+                    "Italian",
+                    "Portuguese",
+                    "Chinese",
+                    "Japanese",
+                    "Korean",
+                    "Arabic",
+                    "Hindi",
+                    "Russian",
+                    "Dutch",
+                    "Swedish",
+                    "Polish",
+                    "Turkish",
                 )
             ],
         },
@@ -186,6 +205,7 @@ def _translate() -> ToolProfile:
 
 
 # ── Rewrite & Polish ─────────────────────────────────────────────────
+
 
 def _rewrite() -> ToolProfile:
     def render(payload: dict[str, Any]) -> str:
@@ -230,6 +250,7 @@ def _rewrite() -> ToolProfile:
 
 # ── Brainstorm ───────────────────────────────────────────────────────
 
+
 def _brainstorm() -> ToolProfile:
     def render(payload: dict[str, Any]) -> str:
         messages = payload.get("history", [])
@@ -258,6 +279,7 @@ def _brainstorm() -> ToolProfile:
 
 
 # ── Help Me Decide ───────────────────────────────────────────────────
+
 
 def _decide() -> ToolProfile:
     def render(payload: dict[str, Any]) -> str:
@@ -305,7 +327,11 @@ def _decide() -> ToolProfile:
         description="Compare two options with pros, cons and a clear recommendation.",
         icon="chart",
         params=[
-            ToolParam("question", "What are you deciding between?", "e.g. Should I take the job in New York or stay?"),
+            ToolParam(
+                "question",
+                "What are you deciding between?",
+                "e.g. Should I take the job in New York or stay?",
+            ),
             ToolParam("option_a", "Option A", "First option"),
             ToolParam("option_b", "Option B", "Second option"),
             ToolParam("notes_a", "Notes for A", "Notes (optional)", optional=True),
@@ -322,6 +348,7 @@ def _decide() -> ToolProfile:
 
 
 # ── Explain Simply ───────────────────────────────────────────────────
+
 
 def _explain() -> ToolProfile:
     def render(payload: dict[str, Any]) -> str:
@@ -347,7 +374,12 @@ def _explain() -> ToolProfile:
         description="Understand anything at the level you choose.",
         icon="search",
         params=[
-            ToolParam("topic", "What do you want explained?", "e.g. How does the internet work?", multiline=True),
+            ToolParam(
+                "topic",
+                "What do you want explained?",
+                "e.g. How does the internet work?",
+                multiline=True,
+            ),
         ],
         options={
             "difficulty": [
@@ -368,6 +400,7 @@ def _explain() -> ToolProfile:
 
 # ── Wellness ─────────────────────────────────────────────────────────
 
+
 def _wellness() -> ToolProfile:
     def render(payload: dict[str, Any]) -> str:
         kind = payload.get("kind", "sleep")
@@ -376,14 +409,18 @@ def _wellness() -> ToolProfile:
         prompts = {
             "sleep": (
                 "Tell me a gentle, calming sleep story. "
-                + (f"The user wants: {prefs}." if prefs else "Make it about a peaceful natural setting.")
+                + (
+                    f"The user wants: {prefs}."
+                    if prefs
+                    else "Make it about a peaceful natural setting."
+                )
                 + " The story should be soothing, with a slow pace and calming imagery. "
                 "End with the words fading into silence."
             ),
             "meditate": (
                 "Guide me through a short meditation. "
                 + (f"Focus on: {prefs}." if prefs else "Focus on breathing and presence.")
-                + " Speak slowly, calmly. Include pauses marked with \"...\". Help me feel grounded."
+                + ' Speak slowly, calmly. Include pauses marked with "...". Help me feel grounded.'
             ),
             "journal": (
                 "Give me a thoughtful journal prompt to reflect on. "
@@ -409,7 +446,12 @@ def _wellness() -> ToolProfile:
         description="Sleep stories, meditations, journal prompts, breathing exercises and affirmations.",
         icon="sparkle",
         params=[
-            ToolParam("preferences", "Any preferences?", "Optional — personalise the session", optional=True),
+            ToolParam(
+                "preferences",
+                "Any preferences?",
+                "Optional — personalise the session",
+                optional=True,
+            ),
         ],
         options={
             "kind": [
@@ -433,6 +475,7 @@ def _wellness() -> ToolProfile:
 def get_tool_profile(tool_id: str) -> ToolProfile | None:
     """Look up a tool profile by id."""
     return TOOL_PROFILES.get(tool_id)
+
 
 # ── Registry — evaluate every profile at import time ─────────────────
 _register(_translate())

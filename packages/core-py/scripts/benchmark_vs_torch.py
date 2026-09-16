@@ -3,20 +3,25 @@ Benchmark SloNet vs PyTorch on real neural network workloads.
 Tests: LSTM forward, matmul, attention, layer_norm, softmax, full model.
 """
 
-import time
-import sys
 import os
+import sys
+import time
+
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from domain.training._internal.slonet import (Tensor, no_grad, zeros, SloLSTM,
-    SloEmbedding, SloLinear, softmax, cross_entropy, gelu, silu)
+from domain.training._internal.slonet import (
+    SloLSTM,
+    Tensor,
+    no_grad,
+)
 
 # Check if PyTorch is available
 try:
     import torch
     import torch.nn as nn
+
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
@@ -55,12 +60,12 @@ def benchmark(name, fn_slonet, fn_torch=None, iters=ITERATIONS):
             fn_torch()
             times.append(time.perf_counter() - t0)
         th_time = np.median(times) * 1000
-        ratio = th_time / sn_time if sn_time > 0 else float('inf')
+        ratio = th_time / sn_time if sn_time > 0 else float("inf")
         result += f"  Torch: {th_time:>7.2f} ms  SN/Torch: {ratio:.2f}x"
         if ratio > 1.0:
             result += "  🏆 FASTER"
         else:
-            result += f"  ({1/ratio:.2f}x slower)"
+            result += f"  ({1 / ratio:.2f}x slower)"
     else:
         result += "  (no torch comparison)"
 
@@ -100,15 +105,18 @@ def make_lstm(batch=1, seq_len=32, vocab=256, embed=256, hidden=512, num_layers=
             tx = Tensor(x_np, requires_grad=False)
             logits, _ = sn_model.forward(tx)
             _ = logits.data
+
     sn()  # init hidden
 
     if HAS_TORCH:
+
         class TorchLSTM(nn.Module):
             def __init__(self):
                 super().__init__()
                 self.embed = nn.Embedding(vocab, embed)
                 self.lstm = nn.LSTM(embed, hidden, num_layers, batch_first=True)
                 self.fc = nn.Linear(hidden, vocab)
+
             def forward(self, x):
                 x = self.embed(x)
                 x, _ = self.lstm(x)
@@ -116,6 +124,7 @@ def make_lstm(batch=1, seq_len=32, vocab=256, embed=256, hidden=512, num_layers=
                 return self.fc(x)
 
         th_model = TorchLSTM().eval()
+
         def th():
             with torch.no_grad():
                 tx = torch.from_numpy(x_np).long()
@@ -136,11 +145,13 @@ def make_softmax(B=8, N=64, S=64):
     def sn():
         with no_grad():
             from domain.slolib._internal.gpu import get_accelerator
+
             acc = get_accelerator()
             o = acc.scaled_dot_attention(q_np, k_np, v_np)
             _ = o
 
     if HAS_TORCH:
+
         def th():
             q = torch.from_numpy(q_np)
             k = torch.from_numpy(k_np)
@@ -150,6 +161,7 @@ def make_softmax(B=8, N=64, S=64):
             attn = torch.softmax(scores, dim=-1)
             o = torch.einsum("bhns,bhsk->bhnk", attn, v)
             _ = o.numpy()
+
         return sn, th
     return sn, None
 
@@ -177,13 +189,16 @@ for B, N, S, E in [(4, 32, 32, 16), (8, 64, 64, 16)]:
         def sn():
             with no_grad():
                 from domain.slolib._internal.gpu import get_accelerator
+
                 acc = get_accelerator()
                 acc.scaled_dot_attention(qn, kn, vn)
+
         return sn
 
     def make_th(qn, kn, vn):
         def th():
             import torch
+
             q = torch.from_numpy(qn)
             k = torch.from_numpy(kn)
             v = torch.from_numpy(vn)
@@ -191,6 +206,7 @@ for B, N, S, E in [(4, 32, 32, 16), (8, 64, 64, 16)]:
             scores = torch.einsum("bhnk,bhsk->bhns", q, k) * scale
             attn = torch.softmax(scores, dim=-1)
             torch.einsum("bhns,bhsk->bhnk", attn, v).numpy()
+
         return th
 
     label = f"attention B{B}xH4x{N}x{E}"
@@ -202,16 +218,21 @@ X = np.random.randn(128, 768).astype(np.float32)
 W = np.random.randn(768).astype(np.float32)
 B = np.random.randn(768).astype(np.float32)
 
+
 def sn_separate():
     from domain.slolib._internal.gpu import get_accelerator
+
     acc = get_accelerator()
     n = acc.layer_norm(X, W, B)
     acc.gelu(n)
 
+
 def sn_fused():
     from domain.slolib._internal.gpu import get_accelerator
+
     acc = get_accelerator()
     acc.fused_layer_norm_gelu(X, W, B)
+
 
 benchmark("layer_norm+gelu separate", sn_separate)
 benchmark("layer_norm+gelu fused     ", sn_fused)

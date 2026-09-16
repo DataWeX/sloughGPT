@@ -92,7 +92,9 @@ class TestReady:
             assert data["checks"]["database"] is False
 
     def test_ready_with_inference_down(self):
-        with patch("domains.inference.native.engine.get_engine", side_effect=Exception("engine missing")):
+        with patch(
+            "domains.inference.native.engine.get_engine", side_effect=Exception("engine missing")
+        ):
             resp = client.get("/ready")
             data = _data(resp)
             assert data["checks"]["inference"] is False

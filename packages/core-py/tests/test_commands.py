@@ -32,7 +32,9 @@ class TestHelpers:
         assert result["detail"] == "boom"
 
     def test_api_get_exception(self, monkeypatch):
-        monkeypatch.setattr(requests, "get", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("down")))
+        monkeypatch.setattr(
+            requests, "get", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("down"))
+        )
         result = commands._api_get("/x")
         assert "error" in result
         assert result["error_type"] == "ConnectionError"
@@ -40,8 +42,13 @@ class TestHelpers:
     def test_api_post_success(self, monkeypatch):
         calls = []
         monkeypatch.setattr(requests, "post", lambda *a, **k: (_ for _ in ()).throw(RuntimeError()))
-        monkeypatch.setattr(requests, "post",
-                            lambda url, json=None, timeout=0: calls.append((url, json)) or _Resp(201, data={"id": 1}))
+        monkeypatch.setattr(
+            requests,
+            "post",
+            lambda url, json=None, timeout=0: (
+                calls.append((url, json)) or _Resp(201, data={"id": 1})
+            ),
+        )
         assert commands._api_post("/x", {"a": 1}) == {"id": 1}
         assert calls[0][1] == {"a": 1}
 
@@ -52,7 +59,9 @@ class TestHelpers:
         assert result["detail"] == "missing"
 
     def test_api_post_exception(self, monkeypatch):
-        monkeypatch.setattr(requests, "post", lambda *a, **k: (_ for _ in ()).throw(TimeoutError("slow")))
+        monkeypatch.setattr(
+            requests, "post", lambda *a, **k: (_ for _ in ()).throw(TimeoutError("slow"))
+        )
         result = commands._api_post("/x")
         assert "error" in result
 
@@ -67,7 +76,9 @@ class TestHelpers:
         assert result["error_type"] == "HTTPError"
 
     def test_api_delete_exception(self, monkeypatch):
-        monkeypatch.setattr(requests, "delete", lambda *a, **k: (_ for _ in ()).throw(OSError("nope")))
+        monkeypatch.setattr(
+            requests, "delete", lambda *a, **k: (_ for _ in ()).throw(OSError("nope"))
+        )
         result = commands._api_delete("/x")
         assert "error" in result
 
@@ -111,7 +122,9 @@ class TestShellCommands:
         assert result["error"] == "HTTP 400"
 
     def test_load_model_exception(self, monkeypatch):
-        monkeypatch.setattr(requests, "post", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("x")))
+        monkeypatch.setattr(
+            requests, "post", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("x"))
+        )
         result = ShellCommands.load_model("gpt2")
         assert result["error"] == "x"
         assert result["error_type"] == "ConnectionError"
@@ -130,7 +143,9 @@ class TestShellCommands:
 
     def test_switch_soul(self, monkeypatch):
         calls = []
-        monkeypatch.setattr(commands, "_api_post", lambda p, d=None: calls.append((p, d)) or {"ok": True})
+        monkeypatch.setattr(
+            commands, "_api_post", lambda p, d=None: calls.append((p, d)) or {"ok": True}
+        )
         ShellCommands.switch_soul("calm")
         assert calls[0][1] == {"name": "calm"}
 
@@ -184,7 +199,9 @@ class TestShellCommands:
 
     def test_add_knowledge(self, monkeypatch):
         calls = []
-        monkeypatch.setattr(commands, "_api_post", lambda p, d=None: calls.append((p, d)) or {"ok": True})
+        monkeypatch.setattr(
+            commands, "_api_post", lambda p, d=None: calls.append((p, d)) or {"ok": True}
+        )
         ShellCommands.add_knowledge("fact")
         path, data = calls[0]
         assert path == "/knowledge"
@@ -241,7 +258,9 @@ class TestShellCommands:
     def test_train_auto(self, monkeypatch):
         calls = []
         monkeypatch.setattr(commands, "_api_post", lambda p, d=None: calls.append(d) or {})
-        ShellCommands.train_auto(soul_name="s", teacher="gpt2", epochs=10, source_text="t", dataset_id="d")
+        ShellCommands.train_auto(
+            soul_name="s", teacher="gpt2", epochs=10, source_text="t", dataset_id="d"
+        )
         assert calls[0]["teacher_model"] == "gpt2"
         assert calls[0]["epochs"] == 10
 

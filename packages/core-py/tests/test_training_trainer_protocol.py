@@ -1,7 +1,8 @@
 """Tests for TrainResult and TrainerProtocol."""
+
 from __future__ import annotations
 
-from domain.training._internal.trainer_protocol import TrainResult, TrainerProtocol
+from domain.training._internal.trainer_protocol import TrainerProtocol, TrainResult
 
 
 class TestTrainResult:
@@ -22,7 +23,7 @@ class TestTrainResult:
         assert r["final_loss"] == 0.3
         try:
             _ = r["nonexistent"]
-            assert False, "should raise"
+            raise AssertionError("should raise")
         except KeyError:
             pass
 
@@ -59,9 +60,11 @@ class TestTrainerProtocol:
         class GoodTrainer:
             def train(self, **kwargs):
                 return TrainResult()
+
             @property
             def is_training(self):
                 return False
+
             def stop(self):
                 pass
 

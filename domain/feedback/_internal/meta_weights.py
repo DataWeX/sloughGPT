@@ -7,14 +7,14 @@ adjust generation parameters accordingly.
 
 from __future__ import annotations
 
-import numpy as np
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass
-from datetime import datetime, timezone
-
 import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 
-from .database import get_feedback_db, SimilarPattern
+import numpy as np
+
+from .database import SimilarPattern, get_feedback_db
 
 logger = logging.getLogger("slo.feedback.meta_weights")
 
@@ -51,7 +51,7 @@ class MetaWeightManager:
         self.use_simple_search = use_simple_search
 
         # Running averages for meta-weights
-        self._weight_history: List[Dict[str, float]] = []
+        self._weight_history: list[dict[str, float]] = []
         self._default_weights = MetaWeights()
 
         # Decay factor for historical weights (higher = more weight on recent)
@@ -70,11 +70,14 @@ class MetaWeightManager:
                 self._embed_model = SentenceTransformer("all-MiniLM-L6-v2")
                 self.embedding_dim = 384
                 logger.info(
-                    "MetaWeightManager: Using sentence-transformers embeddings (dim=%d)", self.embedding_dim, extra={"tag": "INFRA"}
+                    "MetaWeightManager: Using sentence-transformers embeddings (dim=%d)",
+                    self.embedding_dim,
+                    extra={"tag": "INFRA"},
                 )
             except ImportError:
                 logger.warning(
-                    "MetaWeightManager: sentence-transformers not available, using simple embeddings", extra={"tag": "INFRA"}
+                    "MetaWeightManager: sentence-transformers not available, using simple embeddings",
+                    extra={"tag": "INFRA"},
                 )
                 self._embed_model = "simple"
         return self._embed_model
@@ -116,7 +119,7 @@ class MetaWeightManager:
 
         return vector
 
-    def _aggregate_patterns(self, patterns: List[SimilarPattern]) -> Dict[str, float]:
+    def _aggregate_patterns(self, patterns: list[SimilarPattern]) -> dict[str, float]:
         """Aggregate patterns to get adjustment values.
 
         Each similar message adjusts generation parameters based on
@@ -132,7 +135,7 @@ class MetaWeightManager:
         if not patterns:
             return {}
 
-        weighted: Dict[str, float] = {
+        weighted: dict[str, float] = {
             "temperature_boost": 0.0,
             "repetition_boost": 0.0,
             "top_p_boost": 0.0,
@@ -169,7 +172,7 @@ class MetaWeightManager:
         self,
         user_message: str,
         k: int = 5,
-        rating: Optional[str] = "thumbs_up",
+        rating: str | None = "thumbs_up",
         user_id: str = "default",
     ) -> MetaWeights:
         """
@@ -234,16 +237,18 @@ class MetaWeightManager:
             weights.confidence_boost = max(-1.0, min(1.0, weights.confidence_boost))
 
             # Store in history
-            self._weight_history.append({
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "temperature": weights.temperature,
-                "repetition_penalty": weights.repetition_penalty,
-                "top_p": weights.top_p,
-                "top_k": weights.top_k,
-                "style_bias": weights.style_bias,
-                "confidence_boost": weights.confidence_boost,
-                "pattern_count": len(patterns),
-            })
+            self._weight_history.append(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "temperature": weights.temperature,
+                    "repetition_penalty": weights.repetition_penalty,
+                    "top_p": weights.top_p,
+                    "top_k": weights.top_k,
+                    "style_bias": weights.style_bias,
+                    "confidence_boost": weights.confidence_boost,
+                    "pattern_count": len(patterns),
+                }
+            )
 
             if len(self._weight_history) > 100:
                 self._weight_history = self._weight_history[-50:]
@@ -258,8 +263,8 @@ class MetaWeightManager:
         user_message: str,
         assistant_response: str,
         rating: str,
-        conversation_id: Optional[str] = None,
-        quality_score: Optional[float] = None,
+        conversation_id: str | None = None,
+        quality_score: float | None = None,
         user_id: str = "default",
     ) -> str:
         """
@@ -321,7 +326,7 @@ class MetaWeightManager:
 
         return feedback_id
 
-    def get_quality_trend(self, window: int = 10) -> Dict[str, float]:
+    def get_quality_trend(self, window: int = 10) -> dict[str, float]:
         """Get quality trend from recent feedback."""
         feedback = self.db.get_all_feedback(rating=None, limit=window)
 
@@ -342,15 +347,22 @@ class MetaWeightManager:
         elif format == "dpo":
             self.db.export_dpo_format(filepath)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get meta-weight statistics."""
         db_stats = self.db.get_stats()
         trend = self.get_quality_trend()
 
-        avg = {field: 0.0 for field in (
-            "temperature", "repetition_penalty", "top_p", "top_k",
-            "style_bias", "confidence_boost",
-        )}
+        avg = dict.fromkeys(
+            (
+                "temperature",
+                "repetition_penalty",
+                "top_p",
+                "top_k",
+                "style_bias",
+                "confidence_boost",
+            ),
+            0.0,
+        )
         if self._weight_history:
             n = len(self._weight_history)
             for field in avg:
@@ -361,7 +373,8 @@ class MetaWeightManager:
             "quality_trend": trend,
             "current_weights": {
                 "temperature": avg["temperature"] or self._default_weights.temperature,
-                "repetition_penalty": avg["repetition_penalty"] or self._default_weights.repetition_penalty,
+                "repetition_penalty": avg["repetition_penalty"]
+                or self._default_weights.repetition_penalty,
                 "top_p": avg["top_p"] or self._default_weights.top_p,
                 "top_k": int(avg["top_k"]) or self._default_weights.top_k,
                 "style_bias": avg["style_bias"],
@@ -372,7 +385,7 @@ class MetaWeightManager:
 
 
 # Global instance
-_meta_weight_manager: Optional[MetaWeightManager] = None
+_meta_weight_manager: MetaWeightManager | None = None
 
 
 def get_meta_weight_manager() -> MetaWeightManager:

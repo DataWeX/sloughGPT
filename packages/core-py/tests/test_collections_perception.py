@@ -1,16 +1,16 @@
 import numpy as np
 import pytest
 
-from domain.collections._internal.sources import Record
-from domain.collections._internal.stores import MemoryStore
 from domain.collections._internal.perception import (
     PerceptionConfig,
     PerceptionEvent,
-    RecordToMaterial,
-    WorldPerception,
     PerceptionFeed,
     PerceptionScheduler,
+    RecordToMaterial,
+    WorldPerception,
 )
+from domain.collections._internal.sources import Record
+from domain.collections._internal.stores import MemoryStore
 
 
 class _FakeGrid:

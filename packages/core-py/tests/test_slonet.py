@@ -2,26 +2,22 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
-from unittest.mock import MagicMock
+import pytest
 
 from domain.training._internal.slonet import (
-    Tensor,
-    GenerationMetrics,
     GenerateResult,
-    no_grad,
+    GenerationMetrics,
+    Tensor,
     _broadcast_back,
     _broadcast_forward,
-    _NO_GRAD,
+    no_grad,
 )
-
 
 # ── GenerationMetrics ───────────────────────────────────────────────────────
 
 
 class TestGenerationMetrics:
-
     def test_defaults(self):
         m = GenerationMetrics()
         assert m.n_tokens == 0
@@ -57,7 +53,6 @@ class TestGenerationMetrics:
 
 
 class TestGenerateResult:
-
     def test_init(self):
         r = GenerateResult(token_ids=np.array([[1, 2, 3]]))
         assert r.shape == (1, 3)
@@ -95,9 +90,9 @@ class TestGenerateResult:
 
 
 class TestNoGrad:
-
     def test_context_manager(self):
         import domain.training._internal.slonet as mod
+
         old = mod._NO_GRAD
         with no_grad():
             assert mod._NO_GRAD is True
@@ -105,6 +100,7 @@ class TestNoGrad:
 
     def test_decorator(self):
         import domain.training._internal.slonet as mod
+
         old = mod._NO_GRAD
 
         @no_grad()
@@ -116,6 +112,7 @@ class TestNoGrad:
 
     def test_nested(self):
         import domain.training._internal.slonet as mod
+
         old = mod._NO_GRAD
         with no_grad():
             assert mod._NO_GRAD is True
@@ -131,7 +128,6 @@ class TestNoGrad:
 
 
 class TestBroadcastBack:
-
     def test_same_shape(self):
         g = np.ones((2, 3))
         result = _broadcast_back(g, (2, 3))
@@ -157,7 +153,6 @@ class TestBroadcastBack:
 
 
 class TestBroadcastForward:
-
     def test_same_shape(self):
         t = np.ones((2, 3))
         result = _broadcast_forward(t, (2, 3))
@@ -173,7 +168,6 @@ class TestBroadcastForward:
 
 
 class TestTensor:
-
     def test_init_numpy(self):
         t = Tensor(np.array([1.0, 2.0, 3.0]))
         assert t.shape == (3,)
@@ -197,6 +191,7 @@ class TestTensor:
 
     def test_no_grad_mode(self):
         import domain.training._internal.slonet as mod
+
         old = mod._NO_GRAD
         mod._NO_GRAD = True
         try:
@@ -322,19 +317,21 @@ class TestTensor:
 
 
 class TestMetaTensor:
-
     def test_init(self):
         from domain.training._internal.slonet import _MetaTensor
+
         mt = _MetaTensor(shape=(2, 3))
         assert mt.shape == (2, 3)
         assert mt.requires_grad is False
 
     def test_repr(self):
         from domain.training._internal.slonet import _MetaTensor
+
         mt = _MetaTensor()
         assert "MetaTensor" in repr(mt)
 
     def test_numpy(self):
         from domain.training._internal.slonet import _MetaTensor
+
         mt = _MetaTensor()
         assert isinstance(mt.numpy(), np.ndarray)

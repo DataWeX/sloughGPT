@@ -7,7 +7,6 @@ Usage:
     status = get_preload_status()
 """
 
-import importlib
 import logging
 import threading
 import time
@@ -75,6 +74,7 @@ def _preload_module(module_name: str) -> PreloadResult:
     start = time.perf_counter()
     try:
         from infrastructure.startup_cache import cached_import
+
         cached_import(module_name)
         duration_ms = (time.perf_counter() - start) * 1000
         return PreloadResult(
@@ -111,7 +111,12 @@ def _run_preload(modules: list[str], delay: float) -> None:
                 _status.succeeded += 1
             else:
                 _status.failed += 1
-            logger.debug("Preloaded %s in %.1fms%s", module, result.duration_ms, " (failed)" if not result.success else "")
+            logger.debug(
+                "Preloaded %s in %.1fms%s",
+                module,
+                result.duration_ms,
+                " (failed)" if not result.success else "",
+            )
 
     total_ms = (time.perf_counter() - start) * 1000
 

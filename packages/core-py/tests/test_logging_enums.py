@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from domain.logging._internal.base import LogLevel, ErrorCode, LogTag, LogRecord
+from domain.logging._internal.base import ErrorCode, LogLevel, LogRecord, LogTag
 
 
 class TestLogLevel:
@@ -31,7 +31,9 @@ class TestLogLevel:
         assert LogLevel.DEBUG.__lt__("other") is NotImplemented
 
     def test_full_ordering(self):
-        assert LogLevel.DEBUG < LogLevel.INFO < LogLevel.WARNING < LogLevel.ERROR < LogLevel.CRITICAL
+        assert (
+            LogLevel.DEBUG < LogLevel.INFO < LogLevel.WARNING < LogLevel.ERROR < LogLevel.CRITICAL
+        )
 
     def test_equal_to_self(self):
         assert LogLevel.INFO >= LogLevel.INFO
@@ -65,7 +67,13 @@ class TestLogLevel:
         assert LogLevel.ERROR.name == "ERROR"
 
     def test_ordering_chain_ge(self):
-        assert LogLevel.CRITICAL >= LogLevel.ERROR >= LogLevel.WARNING >= LogLevel.INFO >= LogLevel.DEBUG
+        assert (
+            LogLevel.CRITICAL
+            >= LogLevel.ERROR
+            >= LogLevel.WARNING
+            >= LogLevel.INFO
+            >= LogLevel.DEBUG
+        )
 
     def test_ne_different(self):
         assert LogLevel.DEBUG != LogLevel.CRITICAL
@@ -136,19 +144,32 @@ class TestErrorCode:
         assert ErrorCode.E_INF_GENERATION.value == "E_INF_GENERATION"
 
     def test_all_auth_codes(self):
-        auth_codes = [ErrorCode.E_AUTH_MISSING, ErrorCode.E_AUTH_EXPIRED,
-                      ErrorCode.E_AUTH_INVALID, ErrorCode.E_AUTH_FORBIDDEN]
+        auth_codes = [
+            ErrorCode.E_AUTH_MISSING,
+            ErrorCode.E_AUTH_EXPIRED,
+            ErrorCode.E_AUTH_INVALID,
+            ErrorCode.E_AUTH_FORBIDDEN,
+        ]
         assert len(auth_codes) == 4
 
     def test_all_model_codes(self):
-        model_codes = [ErrorCode.E_MODEL_LOAD, ErrorCode.E_MODEL_OOM,
-                       ErrorCode.E_MODEL_TIMEOUT, ErrorCode.E_MODEL_CRASH,
-                       ErrorCode.E_MODEL_NOT_FOUND, ErrorCode.E_MODEL_WARMUP]
+        model_codes = [
+            ErrorCode.E_MODEL_LOAD,
+            ErrorCode.E_MODEL_OOM,
+            ErrorCode.E_MODEL_TIMEOUT,
+            ErrorCode.E_MODEL_CRASH,
+            ErrorCode.E_MODEL_NOT_FOUND,
+            ErrorCode.E_MODEL_WARMUP,
+        ]
         assert len(model_codes) == 6
 
     def test_infra_codes(self):
-        infra = [ErrorCode.E_INFRA_STARTUP, ErrorCode.E_INFRA_TIMEOUT,
-                 ErrorCode.E_INFRA_REGISTRY, ErrorCode.E_INFRA_PROVIDER]
+        infra = [
+            ErrorCode.E_INFRA_STARTUP,
+            ErrorCode.E_INFRA_TIMEOUT,
+            ErrorCode.E_INFRA_REGISTRY,
+            ErrorCode.E_INFRA_PROVIDER,
+        ]
         assert len(infra) == 4
 
     def test_validation_codes(self):
@@ -258,9 +279,19 @@ class TestLogTag:
         assert LogTag.ERROR.value == "ERROR"
 
     def test_all_tags(self):
-        tags = [LogTag.REQ, LogTag.AUTH, LogTag.MODEL, LogTag.SOUL,
-                LogTag.TRAIN, LogTag.INFRA, LogTag.START, LogTag.SLOW,
-                LogTag.ERROR, LogTag.WARN, LogTag.OK]
+        tags = [
+            LogTag.REQ,
+            LogTag.AUTH,
+            LogTag.MODEL,
+            LogTag.SOUL,
+            LogTag.TRAIN,
+            LogTag.INFRA,
+            LogTag.START,
+            LogTag.SLOW,
+            LogTag.ERROR,
+            LogTag.WARN,
+            LogTag.OK,
+        ]
         assert len(tags) == 11
 
     def test_is_str_enum(self):
@@ -366,7 +397,7 @@ class TestLogRecord:
         lr = LogRecord(level=LogLevel.INFO, message="x")
         try:
             lr.message = "changed"
-            assert False, "Should have raised FrozenInstanceError"
+            raise AssertionError("Should have raised FrozenInstanceError")
         except Exception:
             pass
 
@@ -409,10 +440,14 @@ class TestLogRecord:
 
     def test_all_fields(self):
         lr = LogRecord(
-            level=LogLevel.CRITICAL, message="big fail",
-            logger="slo.core", timestamp=1234567890.0,
-            context={"k": "v"}, exception="RuntimeError: crash",
-            error_code="E_MODEL_CRASH", tag="ERROR",
+            level=LogLevel.CRITICAL,
+            message="big fail",
+            logger="slo.core",
+            timestamp=1234567890.0,
+            context={"k": "v"},
+            exception="RuntimeError: crash",
+            error_code="E_MODEL_CRASH",
+            tag="ERROR",
         )
         assert lr.level == LogLevel.CRITICAL
         assert lr.message == "big fail"
@@ -465,19 +500,18 @@ class TestLogRecord:
         assert lr.context["a"] == 2
 
     def test_multiple_context_keys(self):
-        lr = LogRecord(level=LogLevel.INFO, message="x",
-                       context={"a": 1, "b": "two", "c": 3.0})
+        lr = LogRecord(level=LogLevel.INFO, message="x", context={"a": 1, "b": "two", "c": 3.0})
         assert len(lr.context) == 3
 
     def test_exception_string_format(self):
-        lr = LogRecord(level=LogLevel.ERROR, message="fail",
-                       exception="KeyError: 'missing'")
+        lr = LogRecord(level=LogLevel.ERROR, message="fail", exception="KeyError: 'missing'")
         assert "KeyError" in lr.exception
         assert "missing" in lr.exception
 
     def test_error_code_with_tag(self):
-        lr = LogRecord(level=LogLevel.WARNING, message="warn",
-                       error_code="E_AUTH_EXPIRING", tag="AUTH")
+        lr = LogRecord(
+            level=LogLevel.WARNING, message="warn", error_code="E_AUTH_EXPIRING", tag="AUTH"
+        )
         assert lr.error_code == "E_AUTH_EXPIRING"
         assert lr.tag == "AUTH"
 
@@ -496,7 +530,13 @@ class TestLogLevelComparisonChained:
         assert LogLevel.ERROR < LogLevel.CRITICAL
 
     def test_ge_chain(self):
-        assert LogLevel.CRITICAL >= LogLevel.ERROR >= LogLevel.WARNING >= LogLevel.INFO >= LogLevel.DEBUG
+        assert (
+            LogLevel.CRITICAL
+            >= LogLevel.ERROR
+            >= LogLevel.WARNING
+            >= LogLevel.INFO
+            >= LogLevel.DEBUG
+        )
 
     def test_ne_different_levels(self):
         assert LogLevel.DEBUG != LogLevel.CRITICAL

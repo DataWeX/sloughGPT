@@ -1,11 +1,12 @@
 """Process scheduler for the AI-native kernel."""
 
 from __future__ import annotations
-import time
-import logging
-from typing import Callable, Optional
 
-from .kernel_process import Process, ProcessState, Priority
+import logging
+import time
+from collections.abc import Callable
+
+from .kernel_process import Priority, Process, ProcessState
 
 logger = logging.getLogger("slo.kernel.scheduler")
 
@@ -22,16 +23,16 @@ class Scheduler:
             "low": [],
             "idle": [],
         }
-        self._current_pid: Optional[int] = None
+        self._current_pid: int | None = None
         self._callbacks: dict[str, Callable] = {}
         self._sleeping: dict[int, float] = {}
 
     @property
-    def current_pid(self) -> Optional[int]:
+    def current_pid(self) -> int | None:
         return self._current_pid
 
     @property
-    def current_process(self) -> Optional[Process]:
+    def current_process(self) -> Process | None:
         if self._current_pid is None:
             return None
         return self._processes.get(self._current_pid)
@@ -54,11 +55,13 @@ class Scheduler:
         if process.state == ProcessState.CREATED:
             process.transition(ProcessState.READY)
         self._processes[process.pid] = process
-        queue = self._priority_to_queue(process.priority if hasattr(process, "priority") else Priority.NORMAL)
+        queue = self._priority_to_queue(
+            process.priority if hasattr(process, "priority") else Priority.NORMAL
+        )
         self._queues[queue].append(process.pid)
         logger.debug("Added pid=%d to queue=%s", process.pid, queue)
 
-    def remove(self, pid: int) -> Optional[Process]:
+    def remove(self, pid: int) -> Process | None:
         proc = self._processes.pop(pid, None)
         if proc is None:
             return None
@@ -69,13 +72,13 @@ class Scheduler:
             self._current_pid = None
         return proc
 
-    def get(self, pid: int) -> Optional[Process]:
+    def get(self, pid: int) -> Process | None:
         return self._processes.get(pid)
 
     def list_all(self) -> list[Process]:
         return list(self._processes.values())
 
-    def _pick_next(self) -> Optional[int]:
+    def _pick_next(self) -> int | None:
         for queue_name in ["realtime", "high", "normal", "low", "idle"]:
             queue = self._queues[queue_name]
             while queue:
@@ -102,7 +105,7 @@ class Scheduler:
                 return False
         return True
 
-    def tick(self) -> Optional[Process]:
+    def tick(self) -> Process | None:
         if self._current_pid is not None:
             proc = self._processes.get(self._current_pid)
             if proc and proc.state == ProcessState.RUNNING:
@@ -128,7 +131,9 @@ class Scheduler:
         proc = self._processes.get(pid)
         if proc and proc.state == ProcessState.WAITING:
             proc.state = ProcessState.READY
-            queue = self._priority_to_queue(proc.priority if hasattr(proc, "priority") else Priority.NORMAL)
+            queue = self._priority_to_queue(
+                proc.priority if hasattr(proc, "priority") else Priority.NORMAL
+            )
             self._queues[queue].append(pid)
 
     def complete(self, pid: int, result: dict | None = None) -> None:

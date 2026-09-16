@@ -2,8 +2,9 @@
 Tests for the unified inference router — /infer prefix endpoints.
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

@@ -7,15 +7,14 @@ but this module itself imports neither torch nor slonet_compat.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
-from typing import Optional, Dict, List
 from pathlib import Path
 
-import logging
-
 try:
-    from transformers import AutoTokenizer, AutoModelForCausalLM
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
     _HAS_TRANSFORMERS = True
 except ImportError:
     _HAS_TRANSFORMERS = False
@@ -34,7 +33,7 @@ class HFLocalConfig:
     dtype: str = "auto"
     load_in_8bit: bool = False
     load_in_4bit: bool = False
-    cache_dir: Optional[str] = None
+    cache_dir: str | None = None
     local_files_only: bool = True
     max_new_tokens: int = 256
     temperature: float = 0.7
@@ -82,10 +81,16 @@ class HuggingFaceLocalLoader:
             "HF_CACHE_DIR", str(Path.home() / ".cache" / "huggingface")
         )
 
-        logger.info("Loading model: %s", self.config.model,
-            extra={"tag": "TRAIN"},)
-        logger.info("Device: %s", self.config.device,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Loading model: %s",
+            self.config.model,
+            extra={"tag": "TRAIN"},
+        )
+        logger.info(
+            "Device: %s",
+            self.config.device,
+            extra={"tag": "TRAIN"},
+        )
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.config.model,
@@ -121,16 +126,18 @@ class HuggingFaceLocalLoader:
                 self.model = self.model.to(self.config.device)
 
         self.model.eval()
-        logger.info("Model loaded successfully!",
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Model loaded successfully!",
+            extra={"tag": "TRAIN"},
+        )
 
     def generate(
         self,
         prompt: str,
-        max_new_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
-        repetition_penalty: Optional[float] = None,
+        max_new_tokens: int | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        repetition_penalty: float | None = None,
         **kwargs,
     ) -> str:
         """Generate text from prompt."""
@@ -156,9 +163,9 @@ class HuggingFaceLocalLoader:
 
     def chat(
         self,
-        messages: List[Dict[str, str]],
-        max_new_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        messages: list[dict[str, str]],
+        max_new_tokens: int | None = None,
+        temperature: float | None = None,
         **kwargs,
     ) -> str:
         """Chat with the model using messages format."""
@@ -170,7 +177,7 @@ class HuggingFaceLocalLoader:
             **kwargs,
         )
 
-    def _format_chat_prompt(self, messages: List[Dict[str, str]]) -> str:
+    def _format_chat_prompt(self, messages: list[dict[str, str]]) -> str:
         """Format chat messages into a prompt."""
         formatted = ""
         for msg in messages:
@@ -199,15 +206,21 @@ class HuggingFaceLocalClient(HuggingFaceLocalLoader):
     pass
 
 
-def download_model(model: str, cache_dir: Optional[str] = None) -> str:
+def download_model(model: str, cache_dir: str | None = None) -> str:
     """Download a model without loading it."""
     cache_dir = cache_dir or os.getenv("HF_CACHE_DIR", str(Path.home() / ".cache" / "huggingface"))
-    logger.info("Downloading %s...", model,
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Downloading %s...",
+        model,
+        extra={"tag": "TRAIN"},
+    )
     AutoTokenizer.from_pretrained(model, cache_dir=cache_dir)
     AutoModelForCausalLM.from_pretrained(model, cache_dir=cache_dir)
-    logger.info("Downloaded to %s", cache_dir,
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Downloaded to %s",
+        cache_dir,
+        extra={"tag": "TRAIN"},
+    )
     return cache_dir
 
 

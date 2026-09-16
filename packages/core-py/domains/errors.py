@@ -1,9 +1,9 @@
 """Backward-compatibility shim — imports from the new ``domain.errors`` package."""
 
 from domain.errors import (
-    SloughGPTDomainError,
-    InvalidGenerationInputError,
     EmptyPromptError,
+    InvalidGenerationInputError,
+    SloughGPTDomainError,
     require_non_empty_prompt,
 )
 

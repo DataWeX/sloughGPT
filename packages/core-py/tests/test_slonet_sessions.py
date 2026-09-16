@@ -4,11 +4,12 @@ Covers: session_stats, clear_session, clear_all_sessions,
 _evict_stale_sessions, _evict_lru_session with edge cases and concurrency.
 """
 
-import time
 import threading
-import pytest
-from unittest.mock import MagicMock
+import time
 from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
 
 
 class FakeProvider:
@@ -37,8 +38,10 @@ class FakeProvider:
                 "max_sessions": self._kv_max_sessions,
                 "ttl_seconds": self._kv_ttl,
                 "cached_tokens": total_tokens,
-                "oldest_session_age": max(self._kv_last_access.values()) - min(self._kv_last_access.values())
-                if len(self._kv_last_access) > 1 else 0.0,
+                "oldest_session_age": max(self._kv_last_access.values())
+                - min(self._kv_last_access.values())
+                if len(self._kv_last_access) > 1
+                else 0.0,
             }
 
     def clear_session(self, session_id):
@@ -57,8 +60,7 @@ class FakeProvider:
     def _evict_stale_sessions(self):
         now = time.monotonic()
         with self._kv_lock:
-            stale = [sid for sid, ts in self._kv_last_access.items()
-                     if now - ts > self._kv_ttl]
+            stale = [sid for sid, ts in self._kv_last_access.items() if now - ts > self._kv_ttl]
             for sid in stale:
                 self._kv_states.pop(sid, None)
                 self._kv_last_access.pop(sid, None)
@@ -67,8 +69,7 @@ class FakeProvider:
     def _evict_lru_session(self, keep_session_id):
         if len(self._kv_states) <= self._kv_max_sessions:
             return
-        evictable = {sid: ts for sid, ts in self._kv_last_access.items()
-                     if sid != keep_session_id}
+        evictable = {sid: ts for sid, ts in self._kv_last_access.items() if sid != keep_session_id}
         if not evictable:
             return
         lru_id = min(evictable, key=evictable.get)
@@ -78,6 +79,7 @@ class FakeProvider:
 
 
 # ── session_stats ──────────────────────────────────────────────────────────
+
 
 class TestSessionStats:
     def test_empty(self):
@@ -152,6 +154,7 @@ class TestSessionStats:
 
 # ── clear_session ──────────────────────────────────────────────────────────
 
+
 class TestClearSession:
     def test_clear_existing(self):
         fp = FakeProvider()
@@ -202,6 +205,7 @@ class TestClearSession:
 
 # ── clear_all_sessions ─────────────────────────────────────────────────────
 
+
 class TestClearAllSessions:
     def test_clear_all(self):
         fp = FakeProvider()
@@ -243,6 +247,7 @@ class TestClearAllSessions:
 
 
 # ── _evict_stale_sessions ──────────────────────────────────────────────────
+
 
 class TestEvictStaleSessions:
     def test_evicts_old(self):
@@ -309,6 +314,7 @@ class TestEvictStaleSessions:
 
 
 # ── _evict_lru_session ─────────────────────────────────────────────────────
+
 
 class TestEvictLRUSession:
     def test_no_eviction_when_under_cap(self):
@@ -381,6 +387,7 @@ class TestEvictLRUSession:
 
 # ── Concurrency ────────────────────────────────────────────────────────────
 
+
 class TestConcurrency:
     def test_concurrent_clear_session(self):
         fp = FakeProvider()
@@ -446,10 +453,9 @@ class TestConcurrency:
             except Exception as e:
                 errors.append(e)
 
-        threads = (
-            [threading.Thread(target=add_sessions) for _ in range(3)] +
-            [threading.Thread(target=evict) for _ in range(2)]
-        )
+        threads = [threading.Thread(target=add_sessions) for _ in range(3)] + [
+            threading.Thread(target=evict) for _ in range(2)
+        ]
         for t in threads:
             t.start()
         for t in threads:
@@ -458,6 +464,7 @@ class TestConcurrency:
 
 
 # ── Edge Cases ─────────────────────────────────────────────────────────────
+
 
 class TestEdgeCases:
     def test_session_stats_after_all_cleared(self):
@@ -517,6 +524,7 @@ class TestEdgeCases:
 
 
 # ── Additional Coverage ──────────────────────────────────────────────────────
+
 
 class TestSessionStatsExtra:
     def test_zero_token_kv_len(self):

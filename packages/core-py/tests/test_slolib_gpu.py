@@ -18,9 +18,7 @@ import time
 
 import numpy as np
 import pytest
-
 from domains.slolib import gpu as slib
-
 
 _TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
@@ -28,6 +26,7 @@ _TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 # =============================================================================
 # Independent numpy references
 # =============================================================================
+
 
 def _ref_softmax(a, axis=-1):
     e = np.exp(a - np.max(a, axis=axis, keepdims=True))
@@ -50,7 +49,7 @@ def _ref_rmsnorm(a, w, eps=1e-5):
 
 
 def _ref_gelu(x):
-    return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x ** 3)))
+    return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x**3)))
 
 
 def _ref_scaled_dot_attention(q, k, v, mask=None, scale=None, causal=False):
@@ -75,7 +74,7 @@ def _ref_conv2d(x, weight, bias=None, stride=1, padding=0):
     out = np.zeros((n, oc, oh, ow), dtype=np.float64)
     for i in range(kh):
         for j in range(kw):
-            patch = x[:, :, i:i + (oh - 1) * stride + 1, j:j + (ow - 1) * stride + 1]
+            patch = x[:, :, i : i + (oh - 1) * stride + 1, j : j + (ow - 1) * stride + 1]
             if stride != 1:
                 patch = patch[:, :, ::stride, ::stride]
             out += np.tensordot(patch, weight[:, :, i, j], axes=([1], [1])).transpose(0, 3, 1, 2)
@@ -91,7 +90,9 @@ def _ref_max_pool(x, k, stride):
     out = np.zeros((n, c, oh, ow))
     for i in range(oh):
         for j in range(ow):
-            out[:, :, i, j] = x[:, :, i * stride:i * stride + k, j * stride:j * stride + k].max(axis=(2, 3))
+            out[:, :, i, j] = x[:, :, i * stride : i * stride + k, j * stride : j * stride + k].max(
+                axis=(2, 3)
+            )
     return out
 
 
@@ -102,7 +103,9 @@ def _ref_avg_pool(x, k, stride):
     out = np.zeros((n, c, oh, ow))
     for i in range(oh):
         for j in range(ow):
-            out[:, :, i, j] = x[:, :, i * stride:i * stride + k, j * stride:j * stride + k].mean(axis=(2, 3))
+            out[:, :, i, j] = x[
+                :, :, i * stride : i * stride + k, j * stride : j * stride + k
+            ].mean(axis=(2, 3))
     return out
 
 
@@ -144,6 +147,7 @@ def _ref_batchnorm1d(x, gamma, beta, rmean, rvar, eps=1e-5, momentum=0.1, traini
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture(autouse=True)
 def _reset_backend():
     slib.reset_accelerator()
@@ -159,6 +163,7 @@ def cpu():
 # =============================================================================
 # _BufferPool
 # =============================================================================
+
 
 class TestBufferPool:
     def test_get_miss_creates_array(self):
@@ -201,6 +206,7 @@ class TestBufferPool:
 # Accelerator selection / detection
 # =============================================================================
 
+
 class TestBackendSelection:
     def test_default_detection_returns_cpu(self):
         acc = slib.get_accelerator()
@@ -238,17 +244,29 @@ class TestBackendSelection:
 
     def test_metal_exception_is_swallowed(self, monkeypatch):
         monkeypatch.setattr(sys, "platform", "darwin")
-        monkeypatch.setattr(slib._MetalBackend, "is_available", lambda self: (_ for _ in ()).throw(RuntimeError("boom")))
+        monkeypatch.setattr(
+            slib._MetalBackend,
+            "is_available",
+            lambda self: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
         acc = slib._detect_best_backend()
         assert isinstance(acc, slib._CPUBackend)
 
     def test_cuda_exception_is_swallowed(self, monkeypatch):
-        monkeypatch.setattr(slib._CUDABackend, "is_available", lambda self: (_ for _ in ()).throw(RuntimeError("boom")))
+        monkeypatch.setattr(
+            slib._CUDABackend,
+            "is_available",
+            lambda self: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
         acc = slib._detect_best_backend()
         assert isinstance(acc, slib._CPUBackend)
 
     def test_opencl_exception_is_swallowed(self, monkeypatch):
-        monkeypatch.setattr(slib._OpenCLBackend, "is_available", lambda self: (_ for _ in ()).throw(RuntimeError("boom")))
+        monkeypatch.setattr(
+            slib._OpenCLBackend,
+            "is_available",
+            lambda self: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
         acc = slib._detect_best_backend()
         assert isinstance(acc, slib._CPUBackend)
 
@@ -278,6 +296,7 @@ class TestBackendSelection:
 # =============================================================================
 # Precision control on the base class
 # =============================================================================
+
 
 class TestPrecision:
     def test_fp32_mode(self, cpu):
@@ -369,6 +388,7 @@ class TestAcceleratorBase:
 # Device info / transfer
 # =============================================================================
 
+
 class TestDeviceBasics:
     def test_is_available_true(self, cpu):
         assert cpu.is_available() is True
@@ -397,7 +417,7 @@ class TestDeviceBasics:
 
     def test_vram_gb_uses_psutil(self, cpu, monkeypatch):
         class _VM:
-            total = 32 * 1024 ** 3
+            total = 32 * 1024**3
 
         class _FakePsutil:
             @staticmethod
@@ -421,6 +441,7 @@ class TestDeviceBasics:
 # Elementary ops
 # =============================================================================
 
+
 class TestElementaryOps:
     def test_arith(self, cpu):
         a = np.array([[1.0, 2.0], [3.0, 4.0]])
@@ -437,7 +458,7 @@ class TestElementaryOps:
 
     def test_pow_sqrt_exp_log(self, cpu):
         a = np.array([1.0, 4.0, 9.0])
-        assert np.allclose(cpu.pow(a, 2), a ** 2)
+        assert np.allclose(cpu.pow(a, 2), a**2)
         assert np.allclose(cpu.sqrt(a), np.sqrt(a))
         assert np.allclose(cpu.exp(a), np.exp(a))
         assert np.allclose(cpu.log(a), np.log(a))
@@ -499,6 +520,7 @@ class TestElementaryOps:
 # =============================================================================
 # Activations + norms
 # =============================================================================
+
 
 class TestActivationsAndNorms:
     def test_softmax_1d(self, cpu):
@@ -566,18 +588,23 @@ class TestFusedOps:
         w = np.random.randn(8).astype(np.float32)
         b = np.random.randn(8).astype(np.float32)
         normed = _ref_layernorm(x, w, b)
-        assert np.allclose(cpu.fused_layernorm_silu(x, w, b), normed / (1 + np.exp(-normed)), atol=1e-5)
+        assert np.allclose(
+            cpu.fused_layernorm_silu(x, w, b), normed / (1 + np.exp(-normed)), atol=1e-5
+        )
 
     def test_fused_layer_norm_gelu_alias(self, cpu):
         x = np.random.randn(4, 8).astype(np.float32)
         w = np.random.randn(8).astype(np.float32)
         b = np.random.randn(8).astype(np.float32)
-        assert np.allclose(cpu.fused_layer_norm_gelu(x, w, b), cpu.fused_layernorm_gelu(x, w, b), atol=1e-6)
+        assert np.allclose(
+            cpu.fused_layer_norm_gelu(x, w, b), cpu.fused_layernorm_gelu(x, w, b), atol=1e-6
+        )
 
 
 # =============================================================================
 # Attention
 # =============================================================================
+
 
 class TestAttention:
     def test_scaled_dot_attention_basic(self, cpu):
@@ -645,7 +672,9 @@ class TestFusedSoftmaxAttention:
         mask = np.zeros((1, 1, 4, 6), dtype=np.float32)
         mask[..., -1] = -1e9
         out = cpu.fused_softmax_attention(q, k, v, mask=mask, causal=True)
-        assert np.allclose(out, _ref_scaled_dot_attention(q, k, v, mask=mask, causal=True), atol=1e-4)
+        assert np.allclose(
+            out, _ref_scaled_dot_attention(q, k, v, mask=mask, causal=True), atol=1e-4
+        )
 
     def test_tiled_path_matches_direct(self, cpu):
         q = np.random.randn(1, 1, 64, 8).astype(np.float32)
@@ -674,6 +703,7 @@ class TestFusedSoftmaxAttention:
 # =============================================================================
 # Convolution / pooling
 # =============================================================================
+
 
 class TestConvAndPool:
     def test_conv2d_basic(self, cpu):
@@ -717,6 +747,7 @@ class TestConvAndPool:
 # Embedding / losses / misc
 # =============================================================================
 
+
 class TestEmbeddingAndLoss:
     def test_embedding_lookup(self, cpu):
         weight = np.random.randn(10, 4).astype(np.float32)
@@ -751,7 +782,9 @@ class TestEmbeddingAndLoss:
     def test_cross_entropy(self, cpu):
         logits = np.random.randn(4, 6).astype(np.float32)
         targets = np.array([0, 2, 5, 3])
-        assert np.isclose(cpu.cross_entropy(logits, targets), _ref_cross_entropy(logits, targets), atol=1e-6)
+        assert np.isclose(
+            cpu.cross_entropy(logits, targets), _ref_cross_entropy(logits, targets), atol=1e-6
+        )
 
     def test_cross_entropy_skips_oob(self, cpu):
         logits = np.random.randn(4, 6).astype(np.float32)
@@ -800,7 +833,9 @@ class TestTensorOps:
         assert np.allclose(values, np.take_along_axis(a, ref_idx, axis=-1))
 
     def test_topk_smallest(self, cpu):
-        a = np.random.randn(5,).astype(np.float32)
+        a = np.random.randn(
+            5,
+        ).astype(np.float32)
         values, indices = cpu.topk(a, 2, dim=-1, largest=False)
         assert np.array_equal(indices, np.argsort(a)[:2])
         assert np.allclose(values, np.sort(a)[:2])
@@ -864,7 +899,9 @@ class TestDropoutAndNorm:
         rm = np.array([0.5, -0.5, 1.0], dtype=np.float32)
         rv = np.array([2.0, 1.0, 0.5], dtype=np.float32)
         exp = _ref_batchnorm2d(x, gamma, beta, rm, rv, training=False)
-        assert np.allclose(cpu.batch_norm_2d(x, gamma, beta, rm, rv, training=False), exp, atol=1e-5)
+        assert np.allclose(
+            cpu.batch_norm_2d(x, gamma, beta, rm, rv, training=False), exp, atol=1e-5
+        )
 
     def test_batch_norm_1d_training(self, cpu):
         x = np.random.randn(5, 3).astype(np.float32)
@@ -885,28 +922,35 @@ class TestDropoutAndNorm:
         rm = np.array([1.0, 0.0, -1.0], dtype=np.float32)
         rv = np.array([1.0, 4.0, 0.25], dtype=np.float32)
         exp = _ref_batchnorm1d(x, gamma, beta, rm, rv, training=False)
-        assert np.allclose(cpu.batch_norm_1d(x, gamma, beta, rm, rv, training=False), exp, atol=1e-5)
+        assert np.allclose(
+            cpu.batch_norm_1d(x, gamma, beta, rm, rv, training=False), exp, atol=1e-5
+        )
 
 
 # =============================================================================
 # _CPUBackend specifics
 # =============================================================================
 
+
 class TestCPUBackend:
     def test_has_openblas_true(self, monkeypatch):
         import ctypes.util
+
         monkeypatch.setattr(ctypes.util, "find_library", lambda name: "libopenblas.so")
         assert slib._CPUBackend().has_openblas() is True
 
     def test_has_openblas_false(self, monkeypatch):
         import ctypes.util
+
         monkeypatch.setattr(ctypes.util, "find_library", lambda name: None)
         assert slib._CPUBackend().has_openblas() is False
 
     def test_has_openblas_exception(self, monkeypatch):
         import ctypes.util
+
         def boom(name):
             raise OSError("no lib")
+
         monkeypatch.setattr(ctypes.util, "find_library", boom)
         assert slib._CPUBackend().has_openblas() is False
 
@@ -925,6 +969,7 @@ class TestCPUBackend:
     def test_has_simd_exception(self, monkeypatch):
         def boom():
             raise OSError("no platform")
+
         monkeypatch.setattr("platform.machine", boom)
         assert slib._CPUBackend().has_simd() is False
 
@@ -944,7 +989,9 @@ class TestCPUBackend:
 
     def test_openblas_threads_exception(self, cpu, monkeypatch):
         cpu._openblas_threads_cache = None
-        monkeypatch.setattr("os.environ.get", lambda *a, **k: (_ for _ in ()).throw(OSError("boom")))
+        monkeypatch.setattr(
+            "os.environ.get", lambda *a, **k: (_ for _ in ()).throw(OSError("boom"))
+        )
         assert cpu.openblas_threads() == 1
 
     def test_openblas_threads_resource_manager_fallback(self, cpu, monkeypatch):
@@ -995,17 +1042,16 @@ class TestCPUBackend:
 # GPU backend numpy-fallback / unavailable state
 # =============================================================================
 
+
 class TestGpuBackends:
     def test_metal_not_available_without_mps(self, monkeypatch):
         monkeypatch.setattr(
-            "domain.infrastructure.ml_types._mps_available", lambda: False
+            "domain.infrastructure._internal.ml_types._mps_available", lambda: False
         )
         assert slib._MetalBackend().is_available() is False
 
     def test_metal_is_available_when_mps_detected(self, monkeypatch):
-        monkeypatch.setattr(
-            "domain.infrastructure.ml_types._mps_available", lambda: True
-        )
+        monkeypatch.setattr("domain.infrastructure._internal.ml_types._mps_available", lambda: True)
         backend = slib._MetalBackend()
         assert backend.is_available() is True
 
@@ -1038,7 +1084,9 @@ class TestGpuBackends:
         q = np.random.randn(1, 1, 3, 8).astype(np.float32)
         k = np.random.randn(1, 1, 4, 8).astype(np.float32)
         v = np.random.randn(1, 1, 4, 8).astype(np.float32)
-        assert np.allclose(backend.scaled_dot_attention(q, k, v), _ref_scaled_dot_attention(q, k, v), atol=1e-5)
+        assert np.allclose(
+            backend.scaled_dot_attention(q, k, v), _ref_scaled_dot_attention(q, k, v), atol=1e-5
+        )
 
     def test_cuda_fallback_layer_norm_gelu(self):
         backend = slib._CUDABackend()
@@ -1063,9 +1111,11 @@ class TestGpuBackends:
 
     def test_opencl_sync_with_fake_queue(self):
         backend = slib._OpenCLBackend()
+
         class _Q:
             def finish(self):
                 pass
+
         backend._queue = _Q()
         backend.sync()
 
@@ -1128,7 +1178,7 @@ class TestCudaWithFakeCupy:
             return TestCudaWithFakeCupy._CupArr(self.data / TestCudaWithFakeCupy._val(o))
 
         def __pow__(self, o):
-            return TestCudaWithFakeCupy._CupArr(self.data ** o)
+            return TestCudaWithFakeCupy._CupArr(self.data**o)
 
         def __neg__(self):
             return TestCudaWithFakeCupy._CupArr(-self.data)
@@ -1152,7 +1202,7 @@ class TestCudaWithFakeCupy:
 
         class _Device:
             def mem_info(self):
-                return (0, int(total_gb * 1024 ** 3))
+                return (0, int(total_gb * 1024**3))
 
         class _Cuda:
             Stream = _StreamHolder
@@ -1327,6 +1377,7 @@ class TestCudaWithFakeCupy:
 # Metal backend dispatch arms with a numpy-backed torch proxy
 # =============================================================================
 
+
 class TestMetalBackendNumpy:
     """Exercise the numpy Metal backend.
 
@@ -1342,15 +1393,13 @@ class TestMetalBackendNumpy:
         assert backend.is_available() is (sys.platform == "darwin")
 
     def test_metal_available_when_mps_detected(self, monkeypatch):
-        monkeypatch.setattr(
-            "domain.infrastructure.ml_types._mps_available", lambda: True
-        )
+        monkeypatch.setattr("domain.infrastructure._internal.ml_types._mps_available", lambda: True)
         backend = slib._MetalBackend()
         assert backend.is_available() is True
 
     def test_metal_unavailable_when_mps_absent(self, monkeypatch):
         monkeypatch.setattr(
-            "domain.infrastructure.ml_types._mps_available", lambda: False
+            "domain.infrastructure._internal.ml_types._mps_available", lambda: False
         )
         backend = slib._MetalBackend()
         assert backend.is_available() is False
@@ -1373,9 +1422,7 @@ class TestMetalBackendNumpy:
         arr = np.array([3.0, 4.0])
         assert np.array_equal(backend.from_device(arr), arr)
         assert backend.from_device(arr) is not arr
-        assert np.array_equal(
-            backend.to_device([1, 2, 3]), np.asarray([1, 2, 3], dtype=np.float32)
-        )
+        assert np.array_equal(backend.to_device([1, 2, 3]), np.asarray([1, 2, 3], dtype=np.float32))
 
     def test_metal_sync_noop(self):
         backend = slib._MetalBackend()
@@ -1394,7 +1441,7 @@ class TestMetalBackendNumpy:
         assert np.allclose(backend.add(a, b), a + b, atol=1e-5)
         assert np.allclose(backend.neg(a), -a, atol=1e-5)
         assert np.allclose(backend.mul(a, b), a * b, atol=1e-5)
-        assert np.allclose(backend.pow(a, 2), a ** 2, atol=1e-5)
+        assert np.allclose(backend.pow(a, 2), a**2, atol=1e-5)
 
     def test_metal_sum_mean(self):
         backend = slib._MetalBackend()
@@ -1438,16 +1485,20 @@ class TestMetalBackendNumpy:
         backend = slib._MetalBackend()
         logits = np.random.randn(4, 8).astype(np.float32)
         targets = np.array([0, 1, 7, 3])
-        assert np.allclose(backend.cross_entropy(logits, targets),
-                           _ref_cross_entropy(logits, targets), atol=1e-5)
+        assert np.allclose(
+            backend.cross_entropy(logits, targets), _ref_cross_entropy(logits, targets), atol=1e-5
+        )
 
     def test_metal_conv_maxpool_embedding_dropout(self):
         backend = slib._MetalBackend()
         x = np.random.randn(1, 2, 6, 6).astype(np.float32)
         weight = np.random.randn(3, 2, 3, 3).astype(np.float32)
         bias = np.random.randn(3).astype(np.float32)
-        assert np.allclose(backend.conv2d(x, weight, bias, stride=1, padding=1),
-                           _ref_conv2d(x, weight, bias, 1, 1), atol=1e-4)
+        assert np.allclose(
+            backend.conv2d(x, weight, bias, stride=1, padding=1),
+            _ref_conv2d(x, weight, bias, 1, 1),
+            atol=1e-4,
+        )
         assert np.allclose(backend.max_pool2d(x, 2, 2), _ref_max_pool(x, 2, 2), atol=1e-5)
         idx = np.array([[0, 2], [1, 3]])
         emb = np.random.randn(4, 5).astype(np.float32)
@@ -1470,6 +1521,7 @@ class TestMetalBackendNumpy:
 # OpenCL backend dispatch arms with a numpy-backed pyopencl proxy
 # =============================================================================
 
+
 class TestOpenCLWithFakeOpenCL:
     """Exercise the pyopencl-present dispatch arms with a minimal proxy.
 
@@ -1488,7 +1540,7 @@ class TestOpenCLWithFakeOpenCL:
             return self.data.shape
 
     @classmethod
-    def _fake_opencl(cls, mem_bytes=8 * 1024 ** 3):
+    def _fake_opencl(cls, mem_bytes=8 * 1024**3):
         _Buf = cls._Buf
 
         class _MemFlags:
@@ -1529,7 +1581,9 @@ class TestOpenCLWithFakeOpenCL:
 
             @staticmethod
             def enqueue_copy(queue, dest, src):
-                dest[...] = np.asarray(src.data if isinstance(src, _Buf) else src).astype(np.float32)
+                dest[...] = np.asarray(src.data if isinstance(src, _Buf) else src).astype(
+                    np.float32
+                )
                 return None
 
             @staticmethod
@@ -1545,7 +1599,7 @@ class TestOpenCLWithFakeOpenCL:
         assert backend._cl is not None
 
     def test_opencl_vram_full_tier(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "pyopencl", self._fake_opencl(mem_bytes=8 * 1024 ** 3))
+        monkeypatch.setitem(sys.modules, "pyopencl", self._fake_opencl(mem_bytes=8 * 1024**3))
         backend = slib._OpenCLBackend()
         backend.is_available()
         assert backend.vram_gb() == 8.0
@@ -1556,14 +1610,14 @@ class TestOpenCLWithFakeOpenCL:
         assert hint["recommend_quantization"] is False
 
     def test_opencl_vram_medium_tier(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "pyopencl", self._fake_opencl(mem_bytes=2 * 1024 ** 3))
+        monkeypatch.setitem(sys.modules, "pyopencl", self._fake_opencl(mem_bytes=2 * 1024**3))
         backend = slib._OpenCLBackend()
         backend.is_available()
         assert backend.compute_tier == "medium"
         assert backend.memory_hint()["max_seq_len"] == 256
 
     def test_opencl_vram_lite_tier(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "pyopencl", self._fake_opencl(mem_bytes=1 * 1024 ** 3))
+        monkeypatch.setitem(sys.modules, "pyopencl", self._fake_opencl(mem_bytes=1 * 1024**3))
         backend = slib._OpenCLBackend()
         backend.is_available()
         assert backend.compute_tier == "lite"
@@ -1618,6 +1672,7 @@ class TestOpenCLWithFakeOpenCL:
 # Module-level convenience functions
 # =============================================================================
 
+
 class TestModuleFunctions:
     def test_to_gpu_from_gpu_roundtrip(self):
         arr = np.arange(6, dtype=np.float64)
@@ -1649,19 +1704,27 @@ class TestBenchmarkAccelerators:
     def test_benchmark_cpu_error_path(self, monkeypatch):
         class _BrokenCPU:
             name = "cpu"
+
             def is_available(self):
                 return True
+
             def matmul(self, a, b):
                 raise RuntimeError("no blas")
+
             def layer_norm(self, a, b, c):
                 raise RuntimeError("no blas")
+
             def gelu(self, a):
                 raise RuntimeError("no blas")
+
             def sync(self):
                 pass
+
             def vram_gb(self):
                 return 1.0
+
             compute_tier = "lite"
+
         monkeypatch.setattr(slib, "_CPUBackend", _BrokenCPU)
         results = slib.benchmark_accelerators()
         assert results["cpu"]["status"].startswith("error:")

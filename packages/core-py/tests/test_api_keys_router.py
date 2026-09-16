@@ -1,9 +1,10 @@
 """
 API Keys Router Tests
 """
+
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -14,13 +15,14 @@ if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
 from infrastructure.auth import require_auth_if_enabled
-from routers.api_keys import ApiKeysRouter, ApiKeyManager
+from routers.api_keys import ApiKeyManager, ApiKeysRouter
 
 
 @pytest.fixture
 def app_with_manager():
     app = FastAPI()
     from infrastructure.exception_handlers import register_app_error_handler
+
     register_app_error_handler(app)
 
     mock_manager = MagicMock(spec=ApiKeyManager)
@@ -39,9 +41,15 @@ class TestCreateKey:
     def test_creates_key(self, app_with_manager):
         app, mgr = app_with_manager
         mgr.create.return_value = {
-            "id": "k1", "name": "test-key", "key": "slo_abc123", "key_hash": "hash",
-            "scopes": ["*"], "created_at": 1000, "revoked": False,
-            "workspace_id": "ws1", "user_id": "u1",
+            "id": "k1",
+            "name": "test-key",
+            "key": "slo_abc123",
+            "key_hash": "hash",
+            "scopes": ["*"],
+            "created_at": 1000,
+            "revoked": False,
+            "workspace_id": "ws1",
+            "user_id": "u1",
         }
 
         client = _make_client(app)

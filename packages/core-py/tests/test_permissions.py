@@ -1,8 +1,13 @@
 """Tests for shell/permissions.py — risk classification, grant/deny, persistence."""
 
-import json
 import pytest
-from domain.shell._internal.permissions import ShellPermissions, Risk, set_permissions_db, reset_permissions_db
+
+from domain.shell._internal.permissions import (
+    Risk,
+    ShellPermissions,
+    reset_permissions_db,
+    set_permissions_db,
+)
 
 
 @pytest.fixture(autouse=True)

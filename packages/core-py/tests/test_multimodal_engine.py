@@ -2,24 +2,21 @@
 
 from __future__ import annotations
 
-import os
-import json
-import pytest
+from unittest.mock import MagicMock
+
 import numpy as np
-from unittest.mock import MagicMock, patch
+import pytest
 
 from domain.multimodal._internal.engine import (
+    MultimodalEngine,
     MultimodalOutput,
     TextDecoder,
-    MultimodalEngine,
 )
-
 
 # ── MultimodalOutput ────────────────────────────────────────────────────────
 
 
 class TestMultimodalOutput:
-
     def test_init(self):
         out = MultimodalOutput(text="hello", confidence=0.9)
         assert out.text == "hello"
@@ -30,7 +27,6 @@ class TestMultimodalOutput:
 
 
 class TestTextDecoder:
-
     def test_init(self):
         td = TextDecoder()
         assert td.embed_dim == 256
@@ -63,7 +59,6 @@ class TestTextDecoder:
 
 
 class TestMultimodalEngine:
-
     def test_init(self):
         engine = MultimodalEngine(embed_dim=64, hidden_dim=128)
         assert engine.vision is not None
@@ -124,7 +119,9 @@ class TestMultimodalEngine:
 
     def test_extract_images_list_content(self):
         engine = MultimodalEngine(embed_dim=64, hidden_dim=128)
-        msg = {"content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}
+        msg = {
+            "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]
+        }
         result = engine._extract_images([msg])
         assert len(result) == 1
 
@@ -215,6 +212,7 @@ class TestMultimodalEngine:
     def test_clip_gradients(self):
         engine = MultimodalEngine(embed_dim=64, hidden_dim=128)
         from domain.training._internal.slonet import Tensor
+
         p = Tensor(np.ones((2, 2)), requires_grad=True)
         p.grad = Tensor(np.ones((2, 2)) * 10)
         engine._clip_gradients([p], max_norm=1.0)

@@ -2,18 +2,21 @@
 
 Provides CRUD operations for workspaces and their member assignments.
 """
-from __future__ import annotations
+# NOTE: No `from __future__ import annotations` — Pydantic needs runtime-resolvable
+# type annotations for OpenAPI schema generation. Future annotations break TypeAdapter
+# resolution for nested functions referencing module-level models.
 
 import logging
 import uuid
 from datetime import UTC, datetime
 
-from domain.auth._internal.models import Role, User, Workspace, WorkspaceMember
-from domain.auth._internal.repositories import UserRepository, WorkspaceRepository
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import raise_error, safe_audit_log, success_response
+
+from domain.auth._internal.models import Role, User, Workspace, WorkspaceMember
+from domain.auth._internal.repositories import UserRepository, WorkspaceRepository
 
 logger = logging.getLogger("slo.workspaces")
 
@@ -44,13 +47,26 @@ class WorkspaceSettingsRequest(BaseModel):
     allow_sharing: bool | None = None
 
 
+class WorkspaceImportRequest(BaseModel):
+    workspace_data: dict = Field(..., description="Exported workspace data")
+
+
+class ShareDataRequest(BaseModel):
+    resource_type: str = Field(..., description="Dataset, knowledge, or api_key")
+    resource_id: str = Field(..., min_length=1)
+    target_workspace_id: str = Field(..., min_length=1)
+    permission: str = Field(default="read", description="Read or admin")
+
+
 class InviteMemberRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=320)
     role: str = Field(default="user", description="Role: viewer, user, admin")
 
 
 class BulkMemberImportRequest(BaseModel):
-    members: list[dict[str, str]] = Field(..., description="List of {user_id, role} or {email, role}")
+    members: list[dict[str, str]] = Field(
+        ..., description="List of {user_id, role} or {email, role}"
+    )
 
 
 class MemberAddRequest(BaseModel):
@@ -309,6 +325,7 @@ class WorkspacesRouter:
             dataset_count = 0
             try:
                 from controllers.datasets import get_datasets_controller
+
                 ctrl = get_datasets_controller()
                 datasets = ctrl.list_datasets(workspace_id=workspace_id)
                 dataset_count = len(datasets)
@@ -320,6 +337,7 @@ class WorkspacesRouter:
             active_jobs = 0
             try:
                 from training.jobs import training_jobs
+
                 for j in training_jobs.values():
                     if j.get("workspace_id", "") == workspace_id:
                         job_count += 1
@@ -332,30 +350,30 @@ class WorkspacesRouter:
             knowledge_count = 0
             try:
                 from routers.kb import get_kb_router
+
                 kb = get_kb_router()
                 memory = kb._get_memory()
                 all_items = memory.list_all(top_k=5000)
                 knowledge_count = sum(
-                    1 for item in all_items
-                    if item.get("workspace_id", "") == workspace_id
+                    1 for item in all_items if item.get("workspace_id", "") == workspace_id
                 )
             except Exception as e:
                 logger.debug("Knowledge count unavailable: %s", e)
 
-            return success_response(data={
-                "workspace_id": workspace_id,
-                "name": ws.name,
-                "member_count": len(members),
-                "dataset_count": dataset_count,
-                "training_jobs": job_count,
-                "active_training_jobs": active_jobs,
-                "knowledge_items": knowledge_count,
-            })
+            return success_response(
+                data={
+                    "workspace_id": workspace_id,
+                    "name": ws.name,
+                    "member_count": len(members),
+                    "dataset_count": dataset_count,
+                    "training_jobs": job_count,
+                    "active_training_jobs": active_jobs,
+                    "knowledge_items": knowledge_count,
+                }
+            )
 
         # ─── Workspace usage ─────────────────────────────────────
-        async def get_workspace_usage(
-            workspace_id: str, auth_user: dict = auth_dep
-        ) -> dict:
+        async def get_workspace_usage(workspace_id: str, auth_user: dict = auth_dep) -> dict:
             """Detailed usage metrics for a workspace."""
             user = self._get_user(auth_user)
             ws = self._ws_repo.get(workspace_id)
@@ -371,6 +389,7 @@ class WorkspacesRouter:
             total_training_minutes = 0.0
             try:
                 from training.jobs import training_jobs
+
                 for j in training_jobs.values():
                     if j.get("workspace_id", "") == workspace_id:
                         status = j.get("status", "unknown")
@@ -381,6 +400,7 @@ class WorkspacesRouter:
                         ended = j.get("ended_at", "")
                         if started and ended:
                             from datetime import datetime as dt
+
                             try:
                                 s = dt.fromisoformat(started.replace("Z", "+00:00"))
                                 e = dt.fromisoformat(ended.replace("Z", "+00:00"))
@@ -394,6 +414,7 @@ class WorkspacesRouter:
             dataset_count = 0
             try:
                 from controllers.datasets import get_datasets_controller
+
                 ctrl = get_datasets_controller()
                 ds_list = ctrl.list_datasets(user_id=user.id, workspace_id=workspace_id)
                 dataset_count = len(ds_list) if ds_list else 0
@@ -404,12 +425,12 @@ class WorkspacesRouter:
             knowledge_count = 0
             try:
                 from routers.kb import get_kb_router
+
                 kb = get_kb_router()
                 memory = kb._get_memory()
                 all_items = memory.list_all(top_k=10000)
                 knowledge_count = sum(
-                    1 for item in all_items
-                    if item.get("workspace_id", "") == workspace_id
+                    1 for item in all_items if item.get("workspace_id", "") == workspace_id
                 )
             except Exception as e:
                 logger.debug("Knowledge count unavailable: %s", e)
@@ -418,6 +439,7 @@ class WorkspacesRouter:
             api_key_count = 0
             try:
                 from routers.api_keys import get_api_key_manager
+
                 mgr = get_api_key_manager()
                 keys = mgr.list(workspace_id=workspace_id)
                 api_key_count = len(keys) if keys else 0
@@ -431,21 +453,23 @@ class WorkspacesRouter:
                 r = m.role.value if hasattr(m.role, "value") else str(m.role)
                 role_breakdown[r] = role_breakdown.get(r, 0) + 1
 
-            return success_response(data={
-                "workspace_id": workspace_id,
-                "name": ws.name,
-                "members": {
-                    "total": len(members),
-                    "by_role": role_breakdown,
-                },
-                "training": {
-                    "by_status": training_by_status,
-                    "total_minutes": round(total_training_minutes, 1),
-                },
-                "datasets": dataset_count,
-                "knowledge_items": knowledge_count,
-                "api_keys": api_key_count,
-            })
+            return success_response(
+                data={
+                    "workspace_id": workspace_id,
+                    "name": ws.name,
+                    "members": {
+                        "total": len(members),
+                        "by_role": role_breakdown,
+                    },
+                    "training": {
+                        "by_status": training_by_status,
+                        "total_minutes": round(total_training_minutes, 1),
+                    },
+                    "datasets": dataset_count,
+                    "knowledge_items": knowledge_count,
+                    "api_keys": api_key_count,
+                }
+            )
 
         # ─── Workspace activity log ──────────────────────────────
         async def get_workspace_activity(
@@ -469,34 +493,40 @@ class WorkspacesRouter:
             # Training job events
             try:
                 from training.jobs import training_jobs
+
                 for j in training_jobs.values():
                     if j.get("workspace_id", "") == workspace_id:
                         status = j.get("status", "unknown")
-                        activity.append({
-                            "type": "training",
-                            "action": f"Training job {status}",
-                            "detail": j.get("job_id", j.get("name", "unknown")),
-                            "status": status,
-                            "timestamp": j.get("updated_at", j.get("started_at", "")),
-                            "user": j.get("user_id", ""),
-                        })
+                        activity.append(
+                            {
+                                "type": "training",
+                                "action": f"Training job {status}",
+                                "detail": j.get("job_id", j.get("name", "unknown")),
+                                "status": status,
+                                "timestamp": j.get("updated_at", j.get("started_at", "")),
+                                "user": j.get("user_id", ""),
+                            }
+                        )
             except Exception as e:
                 logger.debug("Training job activity unavailable: %s", e)
 
             # Audit log entries for this workspace
             try:
                 from infrastructure.auth import get_audit_logger
+
                 audit = get_audit_logger()
                 entries = audit.file_query(workspace_id=workspace_id, limit=50)
                 for entry in entries:
-                    activity.append({
-                        "type": "audit",
-                        "action": entry.get("action", ""),
-                        "detail": entry.get("resource", ""),
-                        "status": "success" if entry.get("success", True) else "failure",
-                        "timestamp": entry.get("timestamp", ""),
-                        "user": entry.get("user_id", ""),
-                    })
+                    activity.append(
+                        {
+                            "type": "audit",
+                            "action": entry.get("action", ""),
+                            "detail": entry.get("resource", ""),
+                            "status": "success" if entry.get("success", True) else "failure",
+                            "timestamp": entry.get("timestamp", ""),
+                            "user": entry.get("user_id", ""),
+                        }
+                    )
             except Exception as e:
                 logger.debug("Audit log activity unavailable: %s", e)
 
@@ -512,16 +542,16 @@ class WorkspacesRouter:
             activity.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
             activity = activity[:200]
 
-            return success_response(data={
-                "workspace_id": workspace_id,
-                "activities": activity,
-                "total": len(activity),
-            })
+            return success_response(
+                data={
+                    "workspace_id": workspace_id,
+                    "activities": activity,
+                    "total": len(activity),
+                }
+            )
 
         # ─── Workspace data export ───────────────────────────────
-        async def export_workspace_data(
-            workspace_id: str, auth_user: dict = auth_dep
-        ) -> dict:
+        async def export_workspace_data(workspace_id: str, auth_user: dict = auth_dep) -> dict:
             """Export all workspace data (members, training jobs, usage)."""
             user = self._get_user(auth_user)
             ws = self._ws_repo.get(workspace_id)
@@ -537,28 +567,33 @@ class WorkspacesRouter:
             members = self._ws_repo.list_members(workspace_id)
             members_data = []
             for m in members:
-                members_data.append({
-                    "user_id": m.user_id,
-                    "role": m.role.value if hasattr(m.role, "value") else str(m.role),
-                    "joined_at": m.joined_at,
-                })
+                members_data.append(
+                    {
+                        "user_id": m.user_id,
+                        "role": m.role.value if hasattr(m.role, "value") else str(m.role),
+                        "joined_at": m.joined_at,
+                    }
+                )
 
             # Training jobs
             training_jobs = []
             try:
                 from training.jobs import training_jobs as tj
+
                 for j in tj.values():
                     if j.get("workspace_id", "") == workspace_id:
-                        training_jobs.append({
-                            "job_id": j.get("job_id", ""),
-                            "name": j.get("name", ""),
-                            "status": j.get("status", ""),
-                            "model": j.get("model", ""),
-                            "created_at": j.get("created_at", ""),
-                            "started_at": j.get("started_at", ""),
-                            "ended_at": j.get("ended_at", ""),
-                            "user_id": j.get("user_id", ""),
-                        })
+                        training_jobs.append(
+                            {
+                                "job_id": j.get("job_id", ""),
+                                "name": j.get("name", ""),
+                                "status": j.get("status", ""),
+                                "model": j.get("model", ""),
+                                "created_at": j.get("created_at", ""),
+                                "started_at": j.get("started_at", ""),
+                                "ended_at": j.get("ended_at", ""),
+                                "user_id": j.get("user_id", ""),
+                            }
+                        )
             except Exception as e:
                 logger.debug("Training jobs export unavailable: %s", e)
 
@@ -566,15 +601,18 @@ class WorkspacesRouter:
             api_keys = []
             try:
                 from routers.api_keys import get_api_key_manager
+
                 mgr = get_api_key_manager()
                 keys = mgr.list(workspace_id=workspace_id)
                 for k in keys:
-                    api_keys.append({
-                        "key_id": k.get("key_id", ""),
-                        "name": k.get("name", ""),
-                        "created_at": k.get("created_at", ""),
-                        "last_used_at": k.get("last_used_at", ""),
-                    })
+                    api_keys.append(
+                        {
+                            "key_id": k.get("key_id", ""),
+                            "name": k.get("name", ""),
+                            "created_at": k.get("created_at", ""),
+                            "last_used_at": k.get("last_used_at", ""),
+                        }
+                    )
             except Exception as e:
                 logger.debug("API keys export unavailable: %s", e)
 
@@ -582,6 +620,7 @@ class WorkspacesRouter:
             dataset_count = 0
             try:
                 from controllers.datasets import get_datasets_controller
+
                 ctrl = get_datasets_controller()
                 ds_list = ctrl.list_datasets(user_id=user.id, workspace_id=workspace_id)
                 dataset_count = len(ds_list) if ds_list else 0
@@ -592,36 +631,35 @@ class WorkspacesRouter:
             knowledge_count = 0
             try:
                 from routers.kb import get_kb_router
+
                 kb = get_kb_router()
                 memory = kb._get_memory()
                 all_items = memory.list_all(top_k=10000)
                 knowledge_count = sum(
-                    1 for item in all_items
-                    if item.get("workspace_id", "") == workspace_id
+                    1 for item in all_items if item.get("workspace_id", "") == workspace_id
                 )
             except Exception as e:
                 logger.debug("Knowledge count export unavailable: %s", e)
 
-            return success_response(data={
-                "workspace": {
-                    "id": ws.id,
-                    "name": ws.name,
-                    "description": ws.description,
-                    "tenant_id": ws.tenant_id,
-                    "created_at": ws.created_at,
-                },
-                "members": members_data,
-                "training_jobs": training_jobs,
-                "api_keys": api_keys,
-                "datasets_count": dataset_count,
-                "knowledge_count": knowledge_count,
-                "exported_at": datetime.now(UTC).isoformat(),
-            })
+            return success_response(
+                data={
+                    "workspace": {
+                        "id": ws.id,
+                        "name": ws.name,
+                        "description": ws.description,
+                        "tenant_id": ws.tenant_id,
+                        "created_at": ws.created_at,
+                    },
+                    "members": members_data,
+                    "training_jobs": training_jobs,
+                    "api_keys": api_keys,
+                    "datasets_count": dataset_count,
+                    "knowledge_count": knowledge_count,
+                    "exported_at": datetime.now(UTC).isoformat(),
+                }
+            )
 
         # ─── Workspace data import ───────────────────────────────
-        class WorkspaceImportRequest(BaseModel):
-            workspace_data: dict = Field(..., description="Exported workspace data")
-
         async def import_workspace_data(
             req: WorkspaceImportRequest, auth_user: dict = auth_dep
         ) -> dict:
@@ -672,19 +710,21 @@ class WorkspacesRouter:
 
             logger.info(
                 "User %s imported workspace %s with %d members",
-                user.username, ws.id, imported_members,
+                user.username,
+                ws.id,
+                imported_members,
             )
 
-            return success_response(data={
-                "workspace_id": ws.id,
-                "name": ws.name,
-                "imported_members": imported_members,
-            })
+            return success_response(
+                data={
+                    "workspace_id": ws.id,
+                    "name": ws.name,
+                    "imported_members": imported_members,
+                }
+            )
 
         # ─── Workspace health check ──────────────────────────────
-        async def workspace_health_check(
-            workspace_id: str, auth_user: dict = auth_dep
-        ) -> dict:
+        async def workspace_health_check(workspace_id: str, auth_user: dict = auth_dep) -> dict:
             """Health check for workspace data integrity."""
             user = self._get_user(auth_user)
             ws = self._ws_repo.get(workspace_id)
@@ -697,11 +737,13 @@ class WorkspacesRouter:
             checks: list[dict] = []
 
             # Check workspace exists
-            checks.append({
-                "name": "workspace_exists",
-                "status": "pass",
-                "detail": f"Workspace '{ws.name}' exists",
-            })
+            checks.append(
+                {
+                    "name": "workspace_exists",
+                    "status": "pass",
+                    "detail": f"Workspace '{ws.name}' exists",
+                }
+            )
 
             # Check members
             members = self._ws_repo.list_members(workspace_id)
@@ -709,17 +751,20 @@ class WorkspacesRouter:
                 (m.role.value if hasattr(m.role, "value") else str(m.role)) == "owner"
                 for m in members
             )
-            checks.append({
-                "name": "has_owner",
-                "status": "pass" if has_owner else "warn",
-                "detail": f"{len(members)} members, {'has' if has_owner else 'missing'} owner",
-            })
+            checks.append(
+                {
+                    "name": "has_owner",
+                    "status": "pass" if has_owner else "warn",
+                    "detail": f"{len(members)} members, {'has' if has_owner else 'missing'} owner",
+                }
+            )
 
             # Check training jobs consistency
             orphan_jobs = 0
             active_jobs = 0
             try:
                 from training.jobs import training_jobs
+
                 member_ids = {m.user_id for m in members}
                 for j in training_jobs.values():
                     if j.get("workspace_id", "") == workspace_id:
@@ -731,57 +776,66 @@ class WorkspacesRouter:
             except Exception as e:
                 logger.debug("Training jobs health check unavailable: %s", e)
 
-            checks.append({
-                "name": "training_jobs",
-                "status": "pass" if orphan_jobs == 0 else "warn",
-                "detail": f"{active_jobs} active, {orphan_jobs} orphaned (user not in workspace)",
-            })
+            checks.append(
+                {
+                    "name": "training_jobs",
+                    "status": "pass" if orphan_jobs == 0 else "warn",
+                    "detail": f"{active_jobs} active, {orphan_jobs} orphaned (user not in workspace)",
+                }
+            )
 
             # Check datasets accessible
             dataset_count = 0
             try:
                 from controllers.datasets import get_datasets_controller
+
                 ctrl = get_datasets_controller()
                 ds_list = ctrl.list_datasets(user_id=user.id, workspace_id=workspace_id)
                 dataset_count = len(ds_list) if ds_list else 0
             except Exception as e:
                 logger.debug("Datasets health check unavailable: %s", e)
 
-            checks.append({
-                "name": "datasets",
-                "status": "pass",
-                "detail": f"{dataset_count} datasets accessible",
-            })
+            checks.append(
+                {
+                    "name": "datasets",
+                    "status": "pass",
+                    "detail": f"{dataset_count} datasets accessible",
+                }
+            )
 
             # Check knowledge items
             knowledge_count = 0
             try:
                 from routers.kb import get_kb_router
+
                 kb = get_kb_router()
                 memory = kb._get_memory()
                 all_items = memory.list_all(top_k=10000)
                 knowledge_count = sum(
-                    1 for item in all_items
-                    if item.get("workspace_id", "") == workspace_id
+                    1 for item in all_items if item.get("workspace_id", "") == workspace_id
                 )
             except Exception as e:
                 logger.debug("Knowledge health check unavailable: %s", e)
 
-            checks.append({
-                "name": "knowledge",
-                "status": "pass",
-                "detail": f"{knowledge_count} knowledge items",
-            })
+            checks.append(
+                {
+                    "name": "knowledge",
+                    "status": "pass",
+                    "detail": f"{knowledge_count} knowledge items",
+                }
+            )
 
             # Overall status
             has_warning = any(c["status"] == "warn" for c in checks)
             has_error = any(c["status"] == "fail" for c in checks)
 
-            return success_response(data={
-                "workspace_id": workspace_id,
-                "status": "error" if has_error else ("warning" if has_warning else "healthy"),
-                "checks": checks,
-            })
+            return success_response(
+                data={
+                    "workspace_id": workspace_id,
+                    "status": "error" if has_error else ("warning" if has_warning else "healthy"),
+                    "checks": checks,
+                }
+            )
 
         # ─── Get workspace settings ─────────────────────────
         async def get_workspace_settings(workspace_id: str, auth_user: dict = auth_dep) -> dict:
@@ -792,17 +846,19 @@ class WorkspacesRouter:
             member = self._ws_repo.get_member(workspace_id, user.id)
             if not member and not user.is_admin:
                 raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
-            return success_response(data={
-                "workspace_id": ws.id,
-                "name": ws.name,
-                "description": ws.description,
-                "default_model": ws.default_model,
-                "data_retention_days": ws.data_retention_days,
-                "max_members": ws.max_members,
-                "allow_sharing": ws.allow_sharing,
-                "created_at": ws.created_at,
-                "updated_at": ws.updated_at,
-            })
+            return success_response(
+                data={
+                    "workspace_id": ws.id,
+                    "name": ws.name,
+                    "description": ws.description,
+                    "default_model": ws.default_model,
+                    "data_retention_days": ws.data_retention_days,
+                    "max_members": ws.max_members,
+                    "allow_sharing": ws.allow_sharing,
+                    "created_at": ws.created_at,
+                    "updated_at": ws.updated_at,
+                }
+            )
 
         # ─── Update workspace settings ──────────────────────
         async def update_workspace_settings(
@@ -834,18 +890,20 @@ class WorkspacesRouter:
             self._ws_repo.update(ws)
             members = self._ws_repo.list_members(workspace_id)
             logger.info("User %s updated settings for workspace %s", user.username, workspace_id)
-            return success_response(data={
-                "workspace_id": ws.id,
-                "name": ws.name,
-                "description": ws.description,
-                "default_model": ws.default_model,
-                "data_retention_days": ws.data_retention_days,
-                "max_members": ws.max_members,
-                "allow_sharing": ws.allow_sharing,
-                "created_at": ws.created_at,
-                "updated_at": ws.updated_at,
-                "member_count": len(members),
-            })
+            return success_response(
+                data={
+                    "workspace_id": ws.id,
+                    "name": ws.name,
+                    "description": ws.description,
+                    "default_model": ws.default_model,
+                    "data_retention_days": ws.data_retention_days,
+                    "max_members": ws.max_members,
+                    "allow_sharing": ws.allow_sharing,
+                    "created_at": ws.created_at,
+                    "updated_at": ws.updated_at,
+                    "member_count": len(members),
+                }
+            )
 
         # ─── Invite member by email ─────────────────────────
         async def invite_member(
@@ -890,12 +948,14 @@ class WorkspacesRouter:
             )
             self._ws_repo.add_member(member)
             logger.info("User %s invited %s to workspace %s", user.username, req.email, ws.name)
-            return success_response(data={
-                "user_id": invitee.id,
-                "username": invitee.username,
-                "email": req.email,
-                "role": role.value,
-            })
+            return success_response(
+                data={
+                    "user_id": invitee.id,
+                    "username": invitee.username,
+                    "email": req.email,
+                    "role": role.value,
+                }
+            )
 
         # ─── Cleanup expired data ─────────────────────────────
         async def cleanup_workspace_data(workspace_id: str, auth_user: dict = auth_dep) -> dict:
@@ -909,24 +969,27 @@ class WorkspacesRouter:
                     raise_error("Admin access required", "E_AUTH_MISSING", status_code=403)
 
             now = datetime.now(UTC).timestamp()
-            default_retention = getattr(ws, 'data_retention_days', 90) or 90
-            training_retention = getattr(ws, 'training_retention_days', None) or default_retention
-            audit_retention = getattr(ws, 'audit_retention_days', None) or default_retention
-            dataset_retention = getattr(ws, 'dataset_retention_days', None) or default_retention
+            default_retention = getattr(ws, "data_retention_days", 90) or 90
+            training_retention = getattr(ws, "training_retention_days", None) or default_retention
+            audit_retention = getattr(ws, "audit_retention_days", None) or default_retention
+            dataset_retention = getattr(ws, "dataset_retention_days", None) or default_retention
 
             cleaned = {"training_jobs": 0, "audit_logs": 0, "datasets": 0}
 
             # Clean old training jobs
             try:
                 from domain.training.repository import TrainingRepository
+
                 repo = TrainingRepository()
                 training_cutoff = now - (training_retention * 86400)
                 old_jobs = repo.list_by_workspace(workspace_id)
                 for job in old_jobs:
-                    created = getattr(job, 'created_at', None)
+                    created = getattr(job, "created_at", None)
                     if created:
                         try:
-                            job_ts = datetime.fromisoformat(created.replace('Z', '+00:00')).timestamp()
+                            job_ts = datetime.fromisoformat(
+                                created.replace("Z", "+00:00")
+                            ).timestamp()
                         except (ValueError, TypeError):
                             continue
                         if job_ts < training_cutoff:
@@ -938,6 +1001,7 @@ class WorkspacesRouter:
             # Clean old audit logs
             try:
                 from infrastructure.auth import AuditLogger
+
                 audit = AuditLogger()
                 audit_cutoff = now - (audit_retention * 86400)
                 old_logs = audit.list(workspace_id=workspace_id, limit=10000)
@@ -945,7 +1009,7 @@ class WorkspacesRouter:
                     ts = log.get("timestamp", "")
                     if ts:
                         try:
-                            log_ts = datetime.fromisoformat(ts.replace('Z', '+00:00')).timestamp()
+                            log_ts = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
                         except (ValueError, TypeError):
                             continue
                         if log_ts < audit_cutoff:
@@ -956,16 +1020,20 @@ class WorkspacesRouter:
 
             logger.info(
                 "User %s cleaned workspace %s: %s",
-                user.username, workspace_id, cleaned,
+                user.username,
+                workspace_id,
+                cleaned,
             )
-            return success_response(data={
-                "retention": {
-                    "training_days": training_retention,
-                    "audit_days": audit_retention,
-                    "dataset_days": dataset_retention,
-                },
-                "cleaned": cleaned,
-            })
+            return success_response(
+                data={
+                    "retention": {
+                        "training_days": training_retention,
+                        "audit_days": audit_retention,
+                        "dataset_days": dataset_retention,
+                    },
+                    "cleaned": cleaned,
+                }
+            )
 
         # ─── Bulk member import ───────────────────────────────
         async def bulk_import_members(
@@ -1027,11 +1095,13 @@ class WorkspacesRouter:
                 self._ws_repo.add_member(member)
                 added += 1
 
-            return success_response(data={
-                "added": added,
-                "skipped": skipped,
-                "errors": errors,
-            })
+            return success_response(
+                data={
+                    "added": added,
+                    "skipped": skipped,
+                    "errors": errors,
+                }
+            )
 
         # ─── Workspace notifications ──────────────────────────
         async def get_workspace_notifications(
@@ -1050,50 +1120,58 @@ class WorkspacesRouter:
             # Recent training job events
             try:
                 from domain.training.repository import TrainingRepository
+
                 repo = TrainingRepository()
                 jobs = repo.list_by_workspace(workspace_id)
                 for job in jobs[-20:]:  # last 20
-                    status = getattr(job, 'status', '')
-                    if status in ('completed', 'failed'):
-                        notifications.append({
-                            "type": "training",
-                            "title": f"Training job {status}",
-                            "detail": getattr(job, 'name', job.id),
-                            "status": status,
-                            "timestamp": getattr(job, 'updated_at', getattr(job, 'created_at', '')),
-                        })
+                    status = getattr(job, "status", "")
+                    if status in ("completed", "failed"):
+                        notifications.append(
+                            {
+                                "type": "training",
+                                "title": f"Training job {status}",
+                                "detail": getattr(job, "name", job.id),
+                                "status": status,
+                                "timestamp": getattr(
+                                    job, "updated_at", getattr(job, "created_at", "")
+                                ),
+                            }
+                        )
             except Exception as e:
                 logger.debug("Training notifications unavailable: %s", e)
 
             # Recent member changes from audit log
             try:
                 from infrastructure.auth import AuditLogger
+
                 audit = AuditLogger()
                 logs = audit.list(workspace_id=workspace_id, limit=50)
                 for log in logs:
                     action = log.get("action", "")
                     if "member" in action or "invite" in action:
-                        notifications.append({
-                            "type": "member",
-                            "title": action.replace("_", " ").title(),
-                            "detail": log.get("detail", ""),
-                            "status": "info",
-                            "timestamp": log.get("timestamp", ""),
-                        })
+                        notifications.append(
+                            {
+                                "type": "member",
+                                "title": action.replace("_", " ").title(),
+                                "detail": log.get("detail", ""),
+                                "status": "info",
+                                "timestamp": log.get("timestamp", ""),
+                            }
+                        )
             except Exception as e:
                 logger.debug("Member change notifications unavailable: %s", e)
 
             # Sort by timestamp descending
             notifications.sort(key=lambda n: n.get("timestamp", ""), reverse=True)
 
-            return success_response(data={
-                "notifications": notifications[:50],
-            })
+            return success_response(
+                data={
+                    "notifications": notifications[:50],
+                }
+            )
 
         # ─── Clone workspace ─────────────────────────────────
-        async def clone_workspace(
-            workspace_id: str, auth_user: dict = auth_dep
-        ) -> dict:
+        async def clone_workspace(workspace_id: str, auth_user: dict = auth_dep) -> dict:
             user = self._get_user(auth_user)
             ws = self._ws_repo.get(workspace_id)
             if not ws:
@@ -1109,10 +1187,10 @@ class WorkspacesRouter:
                 name=f"{ws.name} (Copy)",
                 tenant_id=ws.tenant_id,
                 description=ws.description,
-                default_model=getattr(ws, 'default_model', ''),
-                data_retention_days=getattr(ws, 'data_retention_days', 90),
-                max_members=getattr(ws, 'max_members', 50),
-                allow_sharing=getattr(ws, 'allow_sharing', True),
+                default_model=getattr(ws, "default_model", ""),
+                data_retention_days=getattr(ws, "data_retention_days", 90),
+                max_members=getattr(ws, "max_members", 50),
+                allow_sharing=getattr(ws, "allow_sharing", True),
             )
             self._ws_repo.create(new_ws)
 
@@ -1141,16 +1219,16 @@ class WorkspacesRouter:
             self._ws_repo.add_member(owner_member)
 
             logger.info("User %s cloned workspace %s to %s", user.username, workspace_id, new_ws.id)
-            return success_response(data={
-                "id": new_ws.id,
-                "name": new_ws.name,
-                "members_cloned": cloned_count,
-            })
+            return success_response(
+                data={
+                    "id": new_ws.id,
+                    "name": new_ws.name,
+                    "members_cloned": cloned_count,
+                }
+            )
 
         # ─── Workspace search ─────────────────────────────────
-        async def search_workspace(
-            workspace_id: str, auth_user: dict = auth_dep
-        ) -> dict:
+        async def search_workspace(workspace_id: str, auth_user: dict = auth_dep) -> dict:
             user = self._get_user(auth_user)
             ws = self._ws_repo.get(workspace_id)
             if not ws:
@@ -1168,55 +1246,66 @@ class WorkspacesRouter:
             members = self._ws_repo.list_members(workspace_id)
             for m in members:
                 u = self._user_repo.get(m.user_id)
-                results["members"].append({
-                    "id": m.id,
-                    "type": "member",
-                    "title": u.username if u else m.user_id,
-                    "detail": f"Role: {m.role.value}",
-                })
+                results["members"].append(
+                    {
+                        "id": m.id,
+                        "type": "member",
+                        "title": u.username if u else m.user_id,
+                        "detail": f"Role: {m.role.value}",
+                    }
+                )
 
             # Search training jobs
             try:
                 from domain.training.repository import TrainingRepository
+
                 repo = TrainingRepository()
                 jobs = repo.list_by_workspace(workspace_id)
                 for job in jobs:
-                    results["training_jobs"].append({
-                        "id": job.id,
-                        "type": "training",
-                        "title": getattr(job, 'name', job.id),
-                        "detail": f"Status: {getattr(job, 'status', 'unknown')}",
-                    })
+                    results["training_jobs"].append(
+                        {
+                            "id": job.id,
+                            "type": "training",
+                            "title": getattr(job, "name", job.id),
+                            "detail": f"Status: {getattr(job, 'status', 'unknown')}",
+                        }
+                    )
             except Exception as e:
                 logger.debug("Training job search unavailable: %s", e)
 
             # Search datasets
             try:
                 from domain.dataset._internal.repository import DatasetRepository
+
                 ds_repo = DatasetRepository()
                 datasets = ds_repo.list_by_workspace(workspace_id)
                 for ds in datasets:
-                    results["datasets"].append({
-                        "id": ds.id,
-                        "type": "dataset",
-                        "title": ds.name,
-                        "detail": f"Size: {getattr(ds, 'size', 0)} bytes",
-                    })
+                    results["datasets"].append(
+                        {
+                            "id": ds.id,
+                            "type": "dataset",
+                            "title": ds.name,
+                            "detail": f"Size: {getattr(ds, 'size', 0)} bytes",
+                        }
+                    )
             except Exception as e:
                 logger.debug("Dataset search unavailable: %s", e)
 
             # Search knowledge
             try:
                 from domain.learner._internal.knowledge import KnowledgeRepository
+
                 k_repo = KnowledgeRepository()
                 facts = k_repo.list_by_workspace(workspace_id)
                 for fact in facts:
-                    results["knowledge"].append({
-                        "id": fact.id,
-                        "type": "knowledge",
-                        "title": fact.subject if hasattr(fact, 'subject') else str(fact.id),
-                        "detail": fact.predicate if hasattr(fact, 'predicate') else "",
-                    })
+                    results["knowledge"].append(
+                        {
+                            "id": fact.id,
+                            "type": "knowledge",
+                            "title": fact.subject if hasattr(fact, "subject") else str(fact.id),
+                            "detail": fact.predicate if hasattr(fact, "predicate") else "",
+                        }
+                    )
             except Exception as e:
                 logger.debug("Knowledge search unavailable: %s", e)
 
@@ -1224,9 +1313,7 @@ class WorkspacesRouter:
             return success_response(data={"results": results, "total": total})
 
         # ─── Permissions matrix ───────────────────────────────
-        async def get_workspace_permissions(
-            workspace_id: str, auth_user: dict = auth_dep
-        ) -> dict:
+        async def get_workspace_permissions(workspace_id: str, auth_user: dict = auth_dep) -> dict:
             user = self._get_user(auth_user)
             ws = self._ws_repo.get(workspace_id)
             if not ws:
@@ -1259,26 +1346,24 @@ class WorkspacesRouter:
             for m in members:
                 u = self._user_repo.get(m.user_id)
                 perms = ROLE_PERMISSIONS.get(m.role, set())
-                member_perms.append({
-                    "user_id": m.user_id,
-                    "username": u.username if u else "",
-                    "role": m.role.value,
-                    "permissions": [p.value for p in perms],
-                })
+                member_perms.append(
+                    {
+                        "user_id": m.user_id,
+                        "username": u.username if u else "",
+                        "role": m.role.value,
+                        "permissions": [p.value for p in perms],
+                    }
+                )
 
-            return success_response(data={
-                "roles": roles,
-                "all_permissions": all_permissions,
-                "member_permissions": member_perms,
-            })
+            return success_response(
+                data={
+                    "roles": roles,
+                    "all_permissions": all_permissions,
+                    "member_permissions": member_perms,
+                }
+            )
 
         # ─── Data Sharing ───────────────────────────────────────
-        class ShareDataRequest(BaseModel):
-            resource_type: str = Field(..., description="Dataset, knowledge, or api_key")
-            resource_id: str = Field(..., min_length=1)
-            target_workspace_id: str = Field(..., min_length=1)
-            permission: str = Field(default="read", description="Read or admin")
-
         async def share_data(req: ShareDataRequest, auth_user: dict = auth_dep) -> dict:
             user = self._get_user(auth_user)
             ws = self._ws_repo.get(req.target_workspace_id)
@@ -1311,49 +1396,75 @@ class WorkspacesRouter:
             }
             # Store in MogDB
             from infrastructure.mogdb import get_mogdb
+
             db = get_mogdb()
             db.insert("workspace_shares", doc)
 
-            safe_audit_log("workspace.share", resource=source_ws_id, user_id=user.id,
-                           detail=f"{req.resource_type}:{req.resource_id} -> {req.target_workspace_id}")
+            safe_audit_log(
+                "workspace.share",
+                resource=source_ws_id,
+                user_id=user.id,
+                detail=f"{req.resource_type}:{req.resource_id} -> {req.target_workspace_id}",
+            )
             return success_response(data=doc)
 
         async def list_shared_data(workspace_id: str, auth_user: dict = auth_dep) -> dict:
             from infrastructure.mogdb import get_mogdb
+
             db = get_mogdb()
-            shares = list(db.find("workspace_shares", {
-                "$or": [
-                    {"source_workspace_id": workspace_id},
-                    {"target_workspace_id": workspace_id},
-                ]
-            }))
+            shares = list(
+                db.find(
+                    "workspace_shares",
+                    {
+                        "$or": [
+                            {"source_workspace_id": workspace_id},
+                            {"target_workspace_id": workspace_id},
+                        ]
+                    },
+                )
+            )
             return success_response(data={"shares": shares})
 
-        async def revoke_share(share_id: str, workspace_id: str, auth_user: dict = auth_dep) -> dict:
+        async def revoke_share(
+            share_id: str, workspace_id: str, auth_user: dict = auth_dep
+        ) -> dict:
             user = self._get_user(auth_user)
             member = self._ws_repo.get_member(workspace_id, user.id)
             if not member or member.role not in (Role.ADMIN, Role.OWNER):
                 raise_error("Admin or owner role required", "E_AUTH_MISSING", status_code=403)
             from infrastructure.mogdb import get_mogdb
+
             db = get_mogdb()
             doc = db.find_one("workspace_shares", {"id": share_id})
             if not doc:
                 raise_error("Share not found", "E_NOT_FOUND", status_code=404)
             if doc["source_workspace_id"] != workspace_id:
-                raise_error("Not authorized to revoke this share", "E_AUTH_MISSING", status_code=403)
+                raise_error(
+                    "Not authorized to revoke this share", "E_AUTH_MISSING", status_code=403
+                )
             db.delete("workspace_shares", {"id": share_id})
-            safe_audit_log("workspace.unshare", resource=workspace_id, user_id=user.id,
-                           detail=f"Revoked share {share_id}")
+            safe_audit_log(
+                "workspace.unshare",
+                resource=workspace_id,
+                user_id=user.id,
+                detail=f"Revoked share {share_id}",
+            )
             return success_response(data={"revoked": share_id})
 
         async def get_shared_datasets(workspace_id: str, auth_user: dict = auth_dep) -> dict:
             from controllers.datasets import get_datasets_controller
             from infrastructure.mogdb import get_mogdb
+
             db = get_mogdb()
-            shares = list(db.find("workspace_shares", {
-                "target_workspace_id": workspace_id,
-                "resource_type": "dataset",
-            }))
+            shares = list(
+                db.find(
+                    "workspace_shares",
+                    {
+                        "target_workspace_id": workspace_id,
+                        "resource_type": "dataset",
+                    },
+                )
+            )
             ctrl = get_datasets_controller()
             results = []
             for s in shares:
@@ -1366,20 +1477,32 @@ class WorkspacesRouter:
 
         async def get_shared_knowledge(workspace_id: str, auth_user: dict = auth_dep) -> dict:
             from infrastructure.mogdb import get_mogdb
+
             db = get_mogdb()
-            shares = list(db.find("workspace_shares", {
-                "target_workspace_id": workspace_id,
-                "resource_type": "knowledge",
-            }))
+            shares = list(
+                db.find(
+                    "workspace_shares",
+                    {
+                        "target_workspace_id": workspace_id,
+                        "resource_type": "knowledge",
+                    },
+                )
+            )
             return success_response(data={"knowledge": shares})
 
         async def get_shared_api_keys(workspace_id: str, auth_user: dict = auth_dep) -> dict:
             from infrastructure.mogdb import get_mogdb
+
             db = get_mogdb()
-            shares = list(db.find("workspace_shares", {
-                "target_workspace_id": workspace_id,
-                "resource_type": "api_key",
-            }))
+            shares = list(
+                db.find(
+                    "workspace_shares",
+                    {
+                        "target_workspace_id": workspace_id,
+                        "resource_type": "api_key",
+                    },
+                )
+            )
             return success_response(data={"api_keys": shares})
 
         router.add_api_route("", list_workspaces, methods=["GET"])
@@ -1389,9 +1512,7 @@ class WorkspacesRouter:
         router.add_api_route("/{workspace_id}", delete_workspace, methods=["DELETE"])
         router.add_api_route("/{workspace_id}/members", list_members, methods=["GET"])
         router.add_api_route("/{workspace_id}/members", add_member, methods=["POST"])
-        router.add_api_route(
-            "/{workspace_id}/members/{user_id}", remove_member, methods=["DELETE"]
-        )
+        router.add_api_route("/{workspace_id}/members/{user_id}", remove_member, methods=["DELETE"])
         router.add_api_route("/{workspace_id}/stats", get_workspace_stats, methods=["GET"])
         router.add_api_route("/{workspace_id}/usage", get_workspace_usage, methods=["GET"])
         router.add_api_route("/{workspace_id}/activity", get_workspace_activity, methods=["GET"])
@@ -1403,16 +1524,26 @@ class WorkspacesRouter:
         router.add_api_route("/{workspace_id}/invite", invite_member, methods=["POST"])
         router.add_api_route("/{workspace_id}/cleanup", cleanup_workspace_data, methods=["POST"])
         router.add_api_route("/{workspace_id}/members/bulk", bulk_import_members, methods=["POST"])
-        router.add_api_route("/{workspace_id}/notifications", get_workspace_notifications, methods=["GET"])
+        router.add_api_route(
+            "/{workspace_id}/notifications", get_workspace_notifications, methods=["GET"]
+        )
         router.add_api_route("/{workspace_id}/clone", clone_workspace, methods=["POST"])
         router.add_api_route("/{workspace_id}/search", search_workspace, methods=["GET"])
-        router.add_api_route("/{workspace_id}/permissions", get_workspace_permissions, methods=["GET"])
+        router.add_api_route(
+            "/{workspace_id}/permissions", get_workspace_permissions, methods=["GET"]
+        )
         router.add_api_route("/{workspace_id}/share", share_data, methods=["POST"])
         router.add_api_route("/{workspace_id}/shared", list_shared_data, methods=["GET"])
         router.add_api_route("/{workspace_id}/share/{share_id}", revoke_share, methods=["DELETE"])
-        router.add_api_route("/{workspace_id}/shared/datasets", get_shared_datasets, methods=["GET"])
-        router.add_api_route("/{workspace_id}/shared/knowledge", get_shared_knowledge, methods=["GET"])
-        router.add_api_route("/{workspace_id}/shared/api-keys", get_shared_api_keys, methods=["GET"])
+        router.add_api_route(
+            "/{workspace_id}/shared/datasets", get_shared_datasets, methods=["GET"]
+        )
+        router.add_api_route(
+            "/{workspace_id}/shared/knowledge", get_shared_knowledge, methods=["GET"]
+        )
+        router.add_api_route(
+            "/{workspace_id}/shared/api-keys", get_shared_api_keys, methods=["GET"]
+        )
 
 
 # ─── Singleton ─────────────────────────────────────────────────

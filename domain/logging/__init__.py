@@ -12,22 +12,28 @@ from __future__ import annotations
 from typing import Optional
 
 from domain.logging._internal.base import (
-    Logger, LogLevel, LogRecord, ChildLogger, TaggedLogger,
-    CompositeLogger, ErrorCode, LogTag,
+    ChildLogger,
+    CompositeLogger,
+    ErrorCode,
+    Logger,
+    LogLevel,
+    LogRecord,
+    LogTag,
+    TaggedLogger,
+)
+from domain.logging._internal.bridge import BridgeHandler
+from domain.logging._internal.cli_logger import CLILogger
+from domain.logging._internal.config import (
+    clear_log_context,
+    get_log_context,
+    get_request_id,
+    set_log_context,
+    set_request_id,
+    setup_logging,
 )
 from domain.logging._internal.console_logger import ConsoleLogger
-from domain.logging._internal.cli_logger import CLILogger
 from domain.logging._internal.shell_logger import ShellLogger
 from domain.logging._internal.web_logger import WebLogger
-from domain.logging._internal.bridge import BridgeHandler
-from domain.logging._internal.config import (
-    setup_logging,
-    get_request_id,
-    set_request_id,
-    get_log_context,
-    set_log_context,
-    clear_log_context,
-)
 
 WebEventLogger = WebLogger  # backward compat alias
 
@@ -57,7 +63,7 @@ __all__ = [
     "get_global",
 ]
 
-_global_logger: Optional[Logger] = None
+_global_logger: Logger | None = None
 
 
 def set_global(logger: Logger) -> None:
@@ -73,13 +79,13 @@ def get_global() -> Logger:
 
 
 _INTERFACE_MAP = {
-    "api":     ConsoleLogger,
-    "server":  ConsoleLogger,
+    "api": ConsoleLogger,
+    "server": ConsoleLogger,
     "console": ConsoleLogger,
-    "cli":     CLILogger,
-    "shell":   ShellLogger,
-    "repl":    ShellLogger,
-    "web":     WebLogger,
+    "cli": CLILogger,
+    "shell": ShellLogger,
+    "repl": ShellLogger,
+    "web": WebLogger,
     "browser": WebLogger,
 }
 

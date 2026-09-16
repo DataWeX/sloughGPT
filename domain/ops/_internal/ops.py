@@ -14,13 +14,13 @@ Fused operations:
 from __future__ import annotations
 
 import math
-import numpy as np
-from typing import Optional, Tuple
 
+import numpy as np
 
 # =============================================================================
 # LAYER NORM
 # =============================================================================
+
 
 class FusedLayerNorm:
     """Fused Layer Normalization — pure numpy, GPU-aware.
@@ -29,7 +29,9 @@ class FusedLayerNorm:
     """
 
     def __init__(self, normalized_shape: int, eps: float = 1e-5, bias: bool = True):
-        self.normalized_shape = (normalized_shape,) if isinstance(normalized_shape, int) else tuple(normalized_shape)
+        self.normalized_shape = (
+            (normalized_shape,) if isinstance(normalized_shape, int) else tuple(normalized_shape)
+        )
         self.eps = eps
         self.weight = np.ones(normalized_shape, dtype=np.float32)
         self.bias = np.zeros(normalized_shape, dtype=np.float32) if bias else None
@@ -72,6 +74,7 @@ class FusedRMSNorm:
 # CROSS ENTROPY
 # =============================================================================
 
+
 class FusedCrossEntropyLoss:
     """Fused Cross-Entropy: log_softmax + nll_loss in one pass."""
 
@@ -86,7 +89,11 @@ class FusedCrossEntropyLoss:
         flat_logits = logits.reshape(-1, logits.shape[-1])
 
         x_max = np.max(flat_logits, axis=-1, keepdims=True)
-        log_probs = flat_logits - x_max - np.log(np.sum(np.exp(flat_logits - x_max), axis=-1, keepdims=True))
+        log_probs = (
+            flat_logits
+            - x_max
+            - np.log(np.sum(np.exp(flat_logits - x_max), axis=-1, keepdims=True))
+        )
 
         if self.label_smoothing > 0:
             vocab = flat_logits.shape[-1]
@@ -99,7 +106,11 @@ class FusedCrossEntropyLoss:
         if len(valid_targets) == 0:
             return 0.0
 
-        losses = [-float(log_probs[i, int(t)]) for i, t in enumerate(valid_targets) if int(t) < log_probs.shape[1]]
+        losses = [
+            -float(log_probs[i, int(t)])
+            for i, t in enumerate(valid_targets)
+            if int(t) < log_probs.shape[1]
+        ]
         return sum(losses) / len(losses) if losses else 0.0
 
     def __call__(self, logits: np.ndarray, targets: np.ndarray) -> float:
@@ -109,6 +120,7 @@ class FusedCrossEntropyLoss:
 # =============================================================================
 # ATTENTION
 # =============================================================================
+
 
 class FusedAttentionBias:
     """Fused attention with bias, causal mask, and scaling.
@@ -120,9 +132,15 @@ class FusedAttentionBias:
     def __init__(self, num_heads: int):
         self.num_heads = num_heads
 
-    def forward(self, query: np.ndarray, key: np.ndarray, value: np.ndarray,
-                attn_bias: Optional[np.ndarray] = None, scale: float = 1.0,
-                causal: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+    def forward(
+        self,
+        query: np.ndarray,
+        key: np.ndarray,
+        value: np.ndarray,
+        attn_bias: np.ndarray | None = None,
+        scale: float = 1.0,
+        causal: bool = False,
+    ) -> tuple[np.ndarray, np.ndarray]:
         B, N, H, E = query.shape
         _, S, _, _ = key.shape
 
@@ -141,7 +159,7 @@ class FusedAttentionBias:
 
         return output, attn_weights
 
-    def __call__(self, *args, **kwargs) -> Tuple[np.ndarray, np.ndarray]:
+    def __call__(self, *args, **kwargs) -> tuple[np.ndarray, np.ndarray]:
         return self.forward(*args, **kwargs)
 
 
@@ -151,8 +169,9 @@ class ChunkedOperation:
     def __init__(self, chunk_size: int = 512):
         self.chunk_size = chunk_size
 
-    def attention_chunked(self, query: np.ndarray, key: np.ndarray, value: np.ndarray,
-                          chunk_size: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray]:
+    def attention_chunked(
+        self, query: np.ndarray, key: np.ndarray, value: np.ndarray, chunk_size: int | None = None
+    ) -> tuple[np.ndarray, np.ndarray]:
         chunk_size = chunk_size or self.chunk_size
         # Layout: [B, S, H, E] — sequence dim=1, heads dim=2
         B, S, H, E = query.shape
@@ -161,10 +180,10 @@ class ChunkedOperation:
         scale = 1.0 / math.sqrt(E)
 
         for i in range(0, S, chunk_size):
-            q_chunk = query[:, i:i+chunk_size]
+            q_chunk = query[:, i : i + chunk_size]
             start = max(0, i - chunk_size)
-            k_chunk = key[:, start:i+chunk_size]
-            v_chunk = value[:, start:i+chunk_size]
+            k_chunk = key[:, start : i + chunk_size]
+            v_chunk = value[:, start : i + chunk_size]
 
             q_len = q_chunk.shape[1]
             k_len = k_chunk.shape[1]
@@ -190,12 +209,14 @@ class ChunkedOperation:
 # MEMORY-EFFICIENT SOFTMAX
 # =============================================================================
 
+
 class MemoryEfficientSoftmax:
     """Memory-efficient softmax with numerical stability and chunking."""
 
     @staticmethod
-    def forward(logits: np.ndarray, dim: int = -1, stable: bool = True,
-                chunk_size: int = 0) -> np.ndarray:
+    def forward(
+        logits: np.ndarray, dim: int = -1, stable: bool = True, chunk_size: int = 0
+    ) -> np.ndarray:
         if chunk_size > 0 and logits.shape[dim] > chunk_size:
             return MemoryEfficientSoftmax._chunked(logits, dim, stable, chunk_size)
 
@@ -247,6 +268,7 @@ class MemoryEfficientSoftmax:
 # FUSED SCALE + BIAS
 # =============================================================================
 
+
 class FusedScaleBias:
     """Fused multiply-add: x * weight + bias in one pass."""
 
@@ -265,13 +287,21 @@ class FusedScaleBias:
 # OPTIMIZED EMBEDDING
 # =============================================================================
 
+
 class OptimizedEmbedding:
     """Embedding lookup with optional quantization (int8 / uint8)."""
 
-    def __init__(self, num_embeddings: int, embedding_dim: int,
-                 padding_idx: Optional[int] = None, max_norm: Optional[float] = None,
-                 norm_type: float = 2.0, scale_grad_by_freq: bool = False,
-                 sparse: bool = False, quantize: bool = False):
+    def __init__(
+        self,
+        num_embeddings: int,
+        embedding_dim: int,
+        padding_idx: int | None = None,
+        max_norm: float | None = None,
+        norm_type: float = 2.0,
+        scale_grad_by_freq: bool = False,
+        sparse: bool = False,
+        quantize: bool = False,
+    ):
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
         self.padding_idx = padding_idx
@@ -281,13 +311,13 @@ class OptimizedEmbedding:
         self.sparse = sparse
         self.quantize = quantize
         self.weight = np.random.randn(num_embeddings, embedding_dim).astype(np.float32) * 0.02
-        self._quantized: Optional[np.ndarray] = None
-        self._scale: Optional[np.ndarray] = None
+        self._quantized: np.ndarray | None = None
+        self._scale: np.ndarray | None = None
 
     def quantize_weight(self, dtype: str = "uint8"):
         """Quantize weights to int8/uint8 for memory savings."""
         w = self.weight
-        scale = (np.abs(w).max(axis=1, keepdims=True) + 1e-8)
+        scale = np.abs(w).max(axis=1, keepdims=True) + 1e-8
         if dtype == "uint8":
             self._quantized = np.clip(np.round(w / scale * 127) + 128, 0, 255).astype(np.uint8)
         else:
@@ -307,9 +337,16 @@ class OptimizedEmbedding:
 # FUSED OPERATIONS
 # =============================================================================
 
-def fused_swiglu(x: np.ndarray, w1_weight: np.ndarray, w1_bias: np.ndarray,
-                  w2_weight: np.ndarray, w2_bias: np.ndarray,
-                  w3_weight: np.ndarray, w3_bias: np.ndarray) -> np.ndarray:
+
+def fused_swiglu(
+    x: np.ndarray,
+    w1_weight: np.ndarray,
+    w1_bias: np.ndarray,
+    w2_weight: np.ndarray,
+    w2_bias: np.ndarray,
+    w3_weight: np.ndarray,
+    w3_bias: np.ndarray,
+) -> np.ndarray:
     """Fused SwiGLU: SiLU(w1(x)) * w3(x) @ w2"""
     h = x @ w1_weight.T + w1_bias
     act = h / (1 + np.exp(-h))
@@ -317,8 +354,9 @@ def fused_swiglu(x: np.ndarray, w1_weight: np.ndarray, w1_bias: np.ndarray,
     return (act * gate) @ w2_weight.T + w2_bias
 
 
-def efficient_cross_entropy(logits: np.ndarray, targets: np.ndarray,
-                            ignore_index: int = -100, reduction: str = "mean"):
+def efficient_cross_entropy(
+    logits: np.ndarray, targets: np.ndarray, ignore_index: int = -100, reduction: str = "mean"
+):
     """Cross-entropy with log-sum-exp stability and ignore index."""
     flat_l = logits.reshape(-1, logits.shape[-1])
     x_max = np.max(flat_l, axis=-1, keepdims=True)
@@ -336,12 +374,12 @@ def efficient_cross_entropy(logits: np.ndarray, targets: np.ndarray,
             return np.zeros(len(flat_t), dtype=np.float32)
         return 0.0
 
-    valid_log_probs = log_probs[valid_indices[:len(valid_targets)], valid_targets]
+    valid_log_probs = log_probs[valid_indices[: len(valid_targets)], valid_targets]
     losses = -valid_log_probs.astype(np.float32)
 
     if reduction == "none":
         result = np.zeros(len(flat_t), dtype=np.float32)
-        result[valid_indices[:len(valid_targets)]] = losses
+        result[valid_indices[: len(valid_targets)]] = losses
         return result
     if reduction == "sum":
         return float(np.sum(losses))
@@ -355,21 +393,22 @@ def chunked_matmul(a: np.ndarray, b: np.ndarray, chunk_size: int = 512) -> np.nd
 
     result = np.zeros((a.shape[0], b.shape[1]), dtype=a.dtype)
     for i in range(0, a.shape[0], chunk_size):
-        chunk = a[i:i+chunk_size]
-        result[i:i+chunk_size] = chunk @ b
+        chunk = a[i : i + chunk_size]
+        result[i : i + chunk_size] = chunk @ b
     return result
 
 
-def ragged_to_padded(tokens: np.ndarray, pad_token_id: int = 0) -> Tuple[np.ndarray, np.ndarray]:
+def ragged_to_padded(tokens: np.ndarray, pad_token_id: int = 0) -> tuple[np.ndarray, np.ndarray]:
     """Convert ragged sequences to padded with attention mask. Returns (padded, mask)."""
     mask = tokens != pad_token_id
     return tokens, mask
 
 
-def estimate_attention_memory(batch_size: int, seq_len: int, num_heads: int,
-                               head_dim: int, precision_bytes: int = 2) -> float:
+def estimate_attention_memory(
+    batch_size: int, seq_len: int, num_heads: int, head_dim: int, precision_bytes: int = 2
+) -> float:
     """Estimate memory for attention score matrix in MB."""
-    return batch_size * num_heads * seq_len * seq_len * precision_bytes / (1024 ** 2)
+    return batch_size * num_heads * seq_len * seq_len * precision_bytes / (1024**2)
 
 
 def silu(x: np.ndarray) -> np.ndarray:

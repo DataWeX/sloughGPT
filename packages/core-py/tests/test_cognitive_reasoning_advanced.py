@@ -4,6 +4,7 @@ Covers: dataclasses, all 7 reasoning engines, factory function, enum values,
 internal logic (confidence, pruning, unification heuristics, subproblem extraction).
 No mocks, pure logic with default LLM stubs.
 """
+
 from __future__ import annotations
 
 import sys
@@ -16,23 +17,23 @@ if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
 from domain.cognitive._internal.reasoning.advanced import (
-    ReasoningMode,
-    ThoughtStep,
-    ReasoningResult,
-    ChainOfThought,
-    TreeOfThoughts,
-    SelfConsistency,
-    ConstitutionalAI,
     CausalReasoning,
-    SyllogismReasoning,
+    ChainOfThought,
+    ConstitutionalAI,
     ReActReasoning,
+    ReasoningMode,
+    ReasoningResult,
+    SelfConsistency,
+    SyllogismReasoning,
+    ThoughtStep,
+    TreeOfThoughts,
     advanced_reasoning,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # ReasoningMode Enum
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestReasoningMode:
     def test_all_values_are_strings(self):
@@ -46,8 +47,14 @@ class TestReasoningMode:
 
     def test_expected_modes(self):
         expected = {
-            "chain_of_thought", "tree_of_thoughts", "self_consistency",
-            "constitutional", "react", "causal", "counterfactual", "syllogism",
+            "chain_of_thought",
+            "tree_of_thoughts",
+            "self_consistency",
+            "constitutional",
+            "react",
+            "causal",
+            "counterfactual",
+            "syllogism",
         }
         assert {m.value for m in ReasoningMode} == expected
 
@@ -55,6 +62,7 @@ class TestReasoningMode:
 # ═══════════════════════════════════════════════════════════════════════
 # Dataclasses
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestThoughtStep:
     def test_defaults(self):
@@ -66,9 +74,14 @@ class TestThoughtStep:
 
     def test_full_construction(self):
         s = ThoughtStep(
-            step_id=5, thought="deep", reasoning_type="branch",
-            confidence=0.7, parent_id=2, children_ids=[6, 7],
-            value=0.85, is_final=True,
+            step_id=5,
+            thought="deep",
+            reasoning_type="branch",
+            confidence=0.7,
+            parent_id=2,
+            children_ids=[6, 7],
+            value=0.85,
+            is_final=True,
         )
         assert s.parent_id == 2
         assert s.children_ids == [6, 7]
@@ -83,8 +96,12 @@ class TestThoughtStep:
 class TestReasoningResult:
     def test_basic(self):
         r = ReasoningResult(
-            conclusion="done", confidence=0.95,
-            mode=ReasoningMode.REACT, steps=[], metadata={}, execution_time_ms=1.0,
+            conclusion="done",
+            confidence=0.95,
+            mode=ReasoningMode.REACT,
+            steps=[],
+            metadata={},
+            execution_time_ms=1.0,
         )
         assert r.conclusion == "done"
         assert r.mode == ReasoningMode.REACT
@@ -92,8 +109,12 @@ class TestReasoningResult:
     def test_with_steps(self):
         step = ThoughtStep(0, "step", "analysis", 0.8)
         r = ReasoningResult(
-            conclusion="c", confidence=0.7, mode=ReasoningMode.CAUSAL,
-            steps=[step], metadata={"k": "v"}, execution_time_ms=5.0,
+            conclusion="c",
+            confidence=0.7,
+            mode=ReasoningMode.CAUSAL,
+            steps=[step],
+            metadata={"k": "v"},
+            execution_time_ms=5.0,
         )
         assert len(r.steps) == 1
         assert r.metadata["k"] == "v"
@@ -102,6 +123,7 @@ class TestReasoningResult:
 # ═══════════════════════════════════════════════════════════════════════
 # ChainOfThought
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestChainOfThought:
     @pytest.mark.asyncio
@@ -118,6 +140,7 @@ class TestChainOfThought:
     async def test_confidence_threshold_early_exit(self):
         async def fast_llm(prompt):
             return "Therefore we conclude that the answer is obvious."
+
         cot = ChainOfThought(llm_call=fast_llm)
         result = await cot.reason("Q", confidence_threshold=0.5)
         assert result.steps[-1].is_final is True
@@ -125,9 +148,11 @@ class TestChainOfThought:
     @pytest.mark.asyncio
     async def test_custom_llm_is_called(self):
         calls = []
+
         async def track(prompt):
             calls.append(prompt)
             return "Step done."
+
         await ChainOfThought(llm_call=track).reason("X")
         assert len(calls) >= 1
 
@@ -188,6 +213,7 @@ class TestChainOfThought:
     async def test_metadata_solved_flag(self):
         async def solved_llm(p):
             return "Therefore it is done."
+
         result = await ChainOfThought(llm_call=solved_llm).reason("Q", confidence_threshold=0.5)
         assert result.metadata["solved"] is True
 
@@ -200,6 +226,7 @@ class TestChainOfThought:
 # ═══════════════════════════════════════════════════════════════════════
 # TreeOfThoughts
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestTreeOfThoughts:
     @pytest.mark.asyncio
@@ -282,8 +309,8 @@ class TestTreeOfThoughts:
 
     def test_default_llm(self):
         tot = TreeOfThoughts()
-        result = tot._default_llm.__func__
         import asyncio
+
         val = asyncio.get_event_loop().run_until_complete(tot._default_llm("test"))
         assert isinstance(val, str)
 
@@ -291,6 +318,7 @@ class TestTreeOfThoughts:
 # ═══════════════════════════════════════════════════════════════════════
 # SelfConsistency
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestSelfConsistency:
     @pytest.mark.asyncio
@@ -356,6 +384,7 @@ class TestSelfConsistency:
 # ConstitutionalAI
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestConstitutionalAI:
     @pytest.mark.asyncio
     async def test_returns_correct_mode(self):
@@ -401,6 +430,7 @@ class TestConstitutionalAI:
 # ═══════════════════════════════════════════════════════════════════════
 # CausalReasoning
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestCausalReasoning:
     @pytest.mark.asyncio
@@ -469,6 +499,7 @@ class TestCausalReasoning:
 
     def test_metadata_counts(self):
         import asyncio
+
         result = asyncio.get_event_loop().run_until_complete(
             CausalReasoning().reason("Because X. Therefore Y.")
         )
@@ -479,6 +510,7 @@ class TestCausalReasoning:
 # ═══════════════════════════════════════════════════════════════════════
 # SyllogismReasoning
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestSyllogismReasoning:
     @pytest.mark.asyncio
@@ -563,6 +595,7 @@ class TestSyllogismReasoning:
 
     def test_conclusion_stored(self):
         import asyncio
+
         sr = SyllogismReasoning()
         asyncio.get_event_loop().run_until_complete(sr.reason("All A are B. X is A."))
         assert sr.conclusion is not None
@@ -571,6 +604,7 @@ class TestSyllogismReasoning:
 # ═══════════════════════════════════════════════════════════════════════
 # ReActReasoning
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class TestReActReasoning:
     @pytest.mark.asyncio
@@ -644,6 +678,7 @@ class TestReActReasoning:
 # Factory Function
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestAdvancedReasoningFactory:
     @pytest.mark.asyncio
     async def test_chain_of_thought(self):
@@ -692,16 +727,20 @@ class TestAdvancedReasoningFactory:
 
     @pytest.mark.asyncio
     async def test_beam_width_passed_to_tot(self):
-        r = await advanced_reasoning("Q", mode=ReasoningMode.TREE_OF_THOUGHTS, beam_width=1, max_depth=1)
+        r = await advanced_reasoning(
+            "Q", mode=ReasoningMode.TREE_OF_THOUGHTS, beam_width=1, max_depth=1
+        )
         assert r.mode == ReasoningMode.TREE_OF_THOUGHTS
 
     @pytest.mark.asyncio
     async def test_llm_call_passed_through(self):
         calls = []
+
         async def track(p):
             calls.append(p)
             return "Therefore done."
-        r = await advanced_reasoning("Q", mode=ReasoningMode.CHAIN_OF_THOUGHT, llm_call=track)
+
+        await advanced_reasoning("Q", mode=ReasoningMode.CHAIN_OF_THOUGHT, llm_call=track)
         assert len(calls) >= 1
 
 
@@ -709,13 +748,22 @@ class TestAdvancedReasoningFactory:
 # __all__ exports
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestExports:
     def test_all_contains_expected(self):
         from domain.cognitive._internal.reasoning.advanced import __all__ as exported
+
         expected = {
-            "ReasoningMode", "ThoughtStep", "ReasoningResult",
-            "ChainOfThought", "TreeOfThoughts", "SelfConsistency",
-            "ConstitutionalAI", "CausalReasoning", "SyllogismReasoning",
-            "ReActReasoning", "advanced_reasoning",
+            "ReasoningMode",
+            "ThoughtStep",
+            "ReasoningResult",
+            "ChainOfThought",
+            "TreeOfThoughts",
+            "SelfConsistency",
+            "ConstitutionalAI",
+            "CausalReasoning",
+            "SyllogismReasoning",
+            "ReActReasoning",
+            "advanced_reasoning",
         }
         assert expected == set(exported)

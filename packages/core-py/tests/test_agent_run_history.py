@@ -1,10 +1,14 @@
 """Tests for domain.agents._internal.run_history — AgentRunStore MogDB persistence."""
 
-import os
-import tempfile
-
 import pytest
-from domain.agents._internal.run_history import AgentRunStore, _new_run_id, reset_agent_run_store, set_mogdb_path, reset_mogdb
+
+from domain.agents._internal.run_history import (
+    AgentRunStore,
+    _new_run_id,
+    reset_agent_run_store,
+    reset_mogdb,
+    set_mogdb_path,
+)
 
 
 @pytest.fixture
@@ -86,9 +90,13 @@ class TestAgentRunStoreLifecycle:
 
     def test_complete(self, store):
         rid = store.start(goal="test")
-        store.complete(rid, response="done", tasks=[
-            {"id": "t1", "status": "completed"},
-        ])
+        store.complete(
+            rid,
+            response="done",
+            tasks=[
+                {"id": "t1", "status": "completed"},
+            ],
+        )
         record = store.get(rid)
         assert record["status"] == "completed"
         assert record["response"] == "done"
@@ -119,7 +127,7 @@ class TestAgentRunStoreQueries:
 
     def test_list_runs_newest_first(self, store):
         rid1 = store.start(goal="first")
-        rid2 = store.start(goal="second")
+        store.start(goal="second")
         rid3 = store.start(goal="third")
         runs = store.list_runs()
         assert len(runs) == 3

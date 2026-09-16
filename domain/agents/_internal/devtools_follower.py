@@ -211,8 +211,8 @@ class DevToolsFollower:
         self._console_snapshot_idx = snapshot[0]
         self._network_snapshot_idx = snapshot[1]
 
-        new_console = self.agent._console_messages[console_start:snapshot[0]]
-        new_network = self.agent._network_requests[network_start:snapshot[1]]
+        new_console = self.agent._console_messages[console_start : snapshot[0]]
+        new_network = self.agent._network_requests[network_start : snapshot[1]]
 
         console_errors = [
             f"{m['type']}: {m['text'][:100]}"

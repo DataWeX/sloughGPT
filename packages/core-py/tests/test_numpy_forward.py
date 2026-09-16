@@ -1,16 +1,20 @@
 """Tests for numpy_forward — generic transformer forward pass."""
 
 import numpy as np
-import pytest
-from domain.infrastructure._internal.arch_config import ArchConfig, GPT2_WEIGHT_MAP, LLAMA_WEIGHT_MAP
-from domain.infrastructure._internal.numpy_forward import (
-    norm_fn,
-    forward,
-    forward_cached,
-    pre_extract_weights,
-    forward_fast,
+
+from domain.infrastructure._internal.arch_config import (
+    GPT2_WEIGHT_MAP,
+    LLAMA_WEIGHT_MAP,
+    ArchConfig,
 )
 from domain.infrastructure._internal.numpy_engine import KVCache
+from domain.infrastructure._internal.numpy_forward import (
+    forward,
+    forward_cached,
+    forward_fast,
+    norm_fn,
+    pre_extract_weights,
+)
 
 
 def _make_gpt2_config(n_layers=2, n_head=4, n_embed=32):
@@ -100,18 +104,32 @@ def _make_llama_weights(arch: ArchConfig, vocab_size=100, seq_len=10):
         W[f"model.layers.{i}.post_attention_layernorm.weight"] = np.ones(ne, dtype=np.float32)
 
         # Attention projections stored as (out, in) — T() transposes to (in, out) for matmul
-        W[f"model.layers.{i}.self_attn.q_proj.weight"] = np.random.randn(ne, ne).astype(np.float32) * 0.02
-        W[f"model.layers.{i}.self_attn.k_proj.weight"] = np.random.randn(kv_dim, ne).astype(np.float32) * 0.02
-        W[f"model.layers.{i}.self_attn.v_proj.weight"] = np.random.randn(kv_dim, ne).astype(np.float32) * 0.02
+        W[f"model.layers.{i}.self_attn.q_proj.weight"] = (
+            np.random.randn(ne, ne).astype(np.float32) * 0.02
+        )
+        W[f"model.layers.{i}.self_attn.k_proj.weight"] = (
+            np.random.randn(kv_dim, ne).astype(np.float32) * 0.02
+        )
+        W[f"model.layers.{i}.self_attn.v_proj.weight"] = (
+            np.random.randn(kv_dim, ne).astype(np.float32) * 0.02
+        )
         W[f"model.layers.{i}.self_attn.q_proj.bias"] = np.zeros(ne, dtype=np.float32)
         W[f"model.layers.{i}.self_attn.k_proj.bias"] = np.zeros(kv_dim, dtype=np.float32)
         W[f"model.layers.{i}.self_attn.v_proj.bias"] = np.zeros(kv_dim, dtype=np.float32)
-        W[f"model.layers.{i}.self_attn.o_proj.weight"] = np.random.randn(ne, ne).astype(np.float32) * 0.02
+        W[f"model.layers.{i}.self_attn.o_proj.weight"] = (
+            np.random.randn(ne, ne).astype(np.float32) * 0.02
+        )
 
         # FFN projections stored as (out, in)
-        W[f"model.layers.{i}.mlp.gate_proj.weight"] = np.random.randn(ffn_dim, ne).astype(np.float32) * 0.02
-        W[f"model.layers.{i}.mlp.up_proj.weight"] = np.random.randn(ffn_dim, ne).astype(np.float32) * 0.02
-        W[f"model.layers.{i}.mlp.down_proj.weight"] = np.random.randn(ne, ffn_dim).astype(np.float32) * 0.02
+        W[f"model.layers.{i}.mlp.gate_proj.weight"] = (
+            np.random.randn(ffn_dim, ne).astype(np.float32) * 0.02
+        )
+        W[f"model.layers.{i}.mlp.up_proj.weight"] = (
+            np.random.randn(ffn_dim, ne).astype(np.float32) * 0.02
+        )
+        W[f"model.layers.{i}.mlp.down_proj.weight"] = (
+            np.random.randn(ne, ffn_dim).astype(np.float32) * 0.02
+        )
 
     W["model.norm.weight"] = np.ones(ne, dtype=np.float32)
 
@@ -120,12 +138,14 @@ def _make_llama_weights(arch: ArchConfig, vocab_size=100, seq_len=10):
 
 # ── norm_fn ────────────────────────────────────────────────────────────────
 
+
 class TestNormFn:
     def test_returns_rmsnorm_for_rms_norm(self):
         arch = _make_gpt2_config()
         arch.norm = "rms_norm"
         fn = norm_fn(arch)
         from domain.infrastructure._internal.numpy_ops import rmsnorm
+
         assert fn is rmsnorm
 
     def test_returns_layer_norm_for_layer_norm(self):
@@ -133,6 +153,7 @@ class TestNormFn:
         arch.norm = "layer_norm"
         fn = norm_fn(arch)
         from domain.infrastructure._internal.numpy_ops import layer_norm
+
         assert fn is layer_norm
 
     def test_norm_fn_returns_callable(self):
@@ -147,7 +168,7 @@ class TestNormFn:
         x = np.array([[3.0, 4.0]], dtype=np.float32)
         w = np.ones(2, dtype=np.float32)
         result = fn(x, w)
-        rms = np.sqrt(np.mean(result ** 2))
+        rms = np.sqrt(np.mean(result**2))
         assert np.isclose(rms, 1.0, atol=1e-5)
 
     def test_norm_fn_with_layer_norm_actually_normalizes(self):
@@ -162,6 +183,7 @@ class TestNormFn:
 
 
 # ── forward (GPT-2) ──────────────────────────────────────────────────────
+
 
 class TestForwardGPT2:
     def test_output_shape(self):
@@ -244,6 +266,7 @@ class TestForwardGPT2:
 
 # ── forward (LLaMA) ──────────────────────────────────────────────────────
 
+
 class TestForwardLLaMA:
     def test_llama_output_shape(self):
         arch = _make_llama_config(n_layers=2, n_head=4, n_embed=32, n_kv_head=2)
@@ -287,6 +310,7 @@ class TestForwardLLaMA:
 
 # ── pre_extract_weights ──────────────────────────────────────────────────
 
+
 class TestPreExtractWeights:
     def test_extracts_all_weights(self):
         arch = _make_gpt2_config(n_layers=2, n_head=4, n_embed=32)
@@ -304,10 +328,7 @@ class TestPreExtractWeights:
         arch = _make_gpt2_config(n_layers=1, n_head=4, n_embed=32)
         weights = _make_gpt2_weights(arch)
         extracted = pre_extract_weights(arch, weights)
-        np.testing.assert_array_equal(
-            extracted["embed.token"],
-            weights["wte.weight"]
-        )
+        np.testing.assert_array_equal(extracted["embed.token"], weights["wte.weight"])
 
     def test_layer_weights_per_layer(self):
         arch = _make_gpt2_config(n_layers=3, n_head=4, n_embed=32)
@@ -341,6 +362,7 @@ class TestPreExtractWeights:
 
 
 # ── forward_fast ────────────────────────────────────────────────────────
+
 
 class TestForwardFast:
     def test_matches_forward(self):
@@ -394,6 +416,7 @@ class TestForwardFast:
 
 
 # ── forward_cached ──────────────────────────────────────────────────────
+
 
 class TestForwardCached:
     def test_single_token_matches_full(self):
@@ -465,6 +488,7 @@ class TestForwardCached:
 
     def test_start_pos_affects_rope(self):
         from domain.infrastructure._internal.numpy_ops import rope
+
         x = np.random.randn(3, 4, 8).astype(np.float32)
         r0 = rope(x, 0, 8, 10000.0)
         r10 = rope(x, 10, 8, 10000.0)

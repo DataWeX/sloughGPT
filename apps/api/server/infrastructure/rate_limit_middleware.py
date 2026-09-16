@@ -7,14 +7,14 @@ BaseHTTPMiddleware, JSONResponse 429, header injection.
 Supports per-workspace rate limiting when auth is enabled.
 """
 
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+
 from domain.infrastructure.rate_limiter import (
     RATE_LIMIT_HEADER_LIMIT,
     RATE_LIMIT_HEADER_REMAINING,
     RateLimiter,
 )
-from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-
 
 # Per-route rate limits: path prefix -> (max_requests, window_seconds)
 # Expensive GPU/CPU endpoints get much lower limits.

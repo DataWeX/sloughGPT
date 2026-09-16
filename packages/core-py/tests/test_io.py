@@ -9,7 +9,10 @@ from types import SimpleNamespace
 import pytest
 
 from domain.shell._internal.io import (
-    ConsoleIO, MemoryIO, capture_cmd, capture_output,
+    ConsoleIO,
+    MemoryIO,
+    capture_cmd,
+    capture_output,
 )
 
 
@@ -110,6 +113,7 @@ class TestConsoleIOFallback:
 
     def test_readline_import_failure(self, monkeypatch):
         import builtins
+
         _orig = builtins.__import__
 
         def _no_readline(name, *a, **k):
@@ -118,7 +122,9 @@ class TestConsoleIOFallback:
             return _orig(name, *a, **k)
 
         monkeypatch.setattr(builtins, "__import__", _no_readline)
-        monkeypatch.setattr(sys, "modules", {k: v for k, v in sys.modules.items() if k != "readline"})
+        monkeypatch.setattr(
+            sys, "modules", {k: v for k, v in sys.modules.items() if k != "readline"}
+        )
         c = ConsoleIO()
         assert c._has_readline is False
 
@@ -131,6 +137,7 @@ class TestConsoleIOCompletionHistory:
 
     def test_setup_completion_enabled(self, monkeypatch):
         import readline
+
         calls = []
         monkeypatch.setattr(readline, "set_completer", lambda f: calls.append("set"))
         monkeypatch.setattr(readline, "parse_and_bind", lambda s: calls.append(s))
@@ -141,7 +148,10 @@ class TestConsoleIOCompletionHistory:
 
     def test_setup_completion_exception(self, monkeypatch):
         import readline
-        monkeypatch.setattr(readline, "parse_and_bind", lambda s: (_ for _ in ()).throw(RuntimeError()))
+
+        monkeypatch.setattr(
+            readline, "parse_and_bind", lambda s: (_ for _ in ()).throw(RuntimeError())
+        )
         c = ConsoleIO()
         c._has_readline = True
         c.setup_completion(lambda text, state: None)
@@ -154,6 +164,7 @@ class TestConsoleIOCompletionHistory:
 
     def test_save_history_enabled(self, monkeypatch):
         import readline
+
         calls = []
         monkeypatch.setattr(readline, "write_history_file", lambda p: calls.append(p))
         c = ConsoleIO()
@@ -163,13 +174,17 @@ class TestConsoleIOCompletionHistory:
 
     def test_save_history_exception(self, monkeypatch):
         import readline
-        monkeypatch.setattr(readline, "write_history_file", lambda p: (_ for _ in ()).throw(RuntimeError()))
+
+        monkeypatch.setattr(
+            readline, "write_history_file", lambda p: (_ for _ in ()).throw(RuntimeError())
+        )
         c = ConsoleIO()
         c._has_readline = True
         c.save_history("/tmp/hist")
 
     def test_load_history_enabled(self, monkeypatch):
         import readline
+
         calls = []
         monkeypatch.setattr(readline, "read_history_file", lambda p: calls.append(p))
         monkeypatch.setattr(readline, "set_history_length", lambda n: calls.append(n))
@@ -180,7 +195,10 @@ class TestConsoleIOCompletionHistory:
 
     def test_load_history_missing_file(self, monkeypatch):
         import readline
-        monkeypatch.setattr(readline, "read_history_file", lambda p: (_ for _ in ()).throw(FileNotFoundError()))
+
+        monkeypatch.setattr(
+            readline, "read_history_file", lambda p: (_ for _ in ()).throw(FileNotFoundError())
+        )
         c = ConsoleIO()
         c._has_readline = True
         c.load_history("/tmp/absent")

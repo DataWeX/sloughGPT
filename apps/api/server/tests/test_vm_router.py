@@ -124,7 +124,9 @@ HLT"""
             def start(self, config_json):
                 return 1
 
-        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        monkeypatch.setattr(
+            "domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge()
+        )
         source = """[BITS 32]
 MOV EBX, cfg
 MOV EAX, 28
@@ -147,7 +149,9 @@ cfg: db '{}', 0"""
                 calls.append(config_json)
                 return 1
 
-        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        monkeypatch.setattr(
+            "domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge()
+        )
         source = """[BITS 32]
 MOV EBX, cfg
 MOV EAX, 28

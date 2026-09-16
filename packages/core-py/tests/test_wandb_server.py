@@ -1,6 +1,7 @@
 """
 Tests for domain.ops.wandb_server: inference counters + background flush loop.
 """
+
 import asyncio
 import sys
 import types
@@ -47,6 +48,7 @@ def wandb_enabled():
 
 # ── Inference counter no-op when disabled ────────────────────────────────────
 
+
 def test_record_inference_noop_when_disabled():
     ws.record_inference_call(0.5, 10)
     assert ws._inference_total == 0
@@ -61,6 +63,7 @@ def test_record_inference_multiple_noop_when_disabled():
 
 
 # ── Inference counter accumulation when enabled ──────────────────────────────
+
 
 def test_record_inference_accumulates_when_enabled(wandb_enabled):
     ws.record_inference_call(0.2, 5)
@@ -97,6 +100,7 @@ def test_record_inference_large_values(wandb_enabled):
 
 
 # ── Drain snapshot ───────────────────────────────────────────────────────────
+
 
 def test_drain_snapshot_metrics(wandb_enabled):
     ws.record_inference_call(0.2, 5)
@@ -166,6 +170,7 @@ def test_drain_correct_mean_with_many_records(wandb_enabled):
 
 # ── Background start when disabled / missing wandb ──────────────────────────
 
+
 def test_start_background_returns_none_when_disabled():
     result = asyncio.run(ws.start_wandb_server_background(object()))
     assert result is None
@@ -178,6 +183,7 @@ def test_start_background_returns_none_when_wandb_missing(wandb_enabled, monkeyp
 
 
 # ── wandb log/init/finish ───────────────────────────────────────────────────
+
 
 def test_wandb_log_payload_calls_wandb_log(monkeypatch):
     dummy = types.ModuleType("wandb")
@@ -266,6 +272,7 @@ def test_wandb_finish_run_calls_finish(monkeypatch):
 
 
 # ── Background loop flushes ──────────────────────────────────────────────────
+
 
 def test_background_loop_flushes(wandb_enabled, monkeypatch):
     dummy = types.ModuleType("wandb")
@@ -466,6 +473,7 @@ def test_background_loop_finishes_on_cancel(wandb_enabled, monkeypatch):
 
 # ── Thread safety of counters ────────────────────────────────────────────────
 
+
 def test_counter_concurrent_increments(wandb_enabled):
     import threading
 
@@ -484,6 +492,7 @@ def test_counter_concurrent_increments(wandb_enabled):
 
 # ── Drain thread safety ─────────────────────────────────────────────────────
 
+
 def test_drain_concurrent_with_record(wandb_enabled):
     import threading
 
@@ -501,6 +510,7 @@ def test_drain_concurrent_with_record(wandb_enabled):
 
 
 # ── Config interaction ───────────────────────────────────────────────────────
+
 
 def test_wandb_init_uses_run_name(monkeypatch, wandb_enabled):
     dummy = types.ModuleType("wandb")
@@ -539,6 +549,7 @@ def test_wandb_init_entity_none_when_empty(monkeypatch, wandb_enabled):
 
 
 # ── Extra edge cases ─────────────────────────────────────────────────────────
+
 
 def test_drain_after_disable_reenable(wandb_enabled):
     ws.record_inference_call(0.1, 5)
@@ -663,6 +674,7 @@ def test_counter_resets_after_drain(wandb_enabled):
 
 def test_thread_safety_drain_concurrent(wandb_enabled):
     import threading
+
     ws.record_inference_call(0.1, 5)
     results = []
     barrier = threading.Barrier(5)

@@ -1,10 +1,18 @@
 """Tests for domain.api.sse_envelope — StreamPhase, StreamStatus, SSEEnvelope, sse_event, sse_error, sse_complete, sse_token, _json_safe."""
 
 import json
+
 import numpy as np
+
 from domain.api._internal.sse_envelope import (
-    StreamPhase, StreamStatus, SSEEnvelope, sse_event,
-    sse_error, sse_complete, sse_token, _json_safe,
+    SSEEnvelope,
+    StreamPhase,
+    StreamStatus,
+    _json_safe,
+    sse_complete,
+    sse_error,
+    sse_event,
+    sse_token,
 )
 
 
@@ -33,16 +41,24 @@ class TestStreamStatus:
 class TestSSEEnvelope:
     def test_fields(self):
         env = SSEEnvelope(
-            stream="auto-train", phase="TRAIN", status=StreamStatus.WORKING,
-            message="training", data={"loss": 0.5}, meta={"step": 1},
+            stream="auto-train",
+            phase="TRAIN",
+            status=StreamStatus.WORKING,
+            message="training",
+            data={"loss": 0.5},
+            meta={"step": 1},
         )
         assert env.stream == "auto-train"
         assert env.status == StreamStatus.WORKING
 
     def test_to_dict(self):
         env = SSEEnvelope(
-            stream="auto-train", phase="TRAIN", status=StreamStatus.WORKING,
-            message="training", data={"loss": 0.5}, meta={"step": 1},
+            stream="auto-train",
+            phase="TRAIN",
+            status=StreamStatus.WORKING,
+            message="training",
+            data={"loss": 0.5},
+            meta={"step": 1},
         )
         d = env.to_dict()
         assert d["stream"] == "auto-train"
@@ -51,7 +67,9 @@ class TestSSEEnvelope:
 
     def test_to_dict_string_status(self):
         env = SSEEnvelope(
-            stream="chat", phase="STREAMING", status="working",
+            stream="chat",
+            phase="STREAMING",
+            status="working",
         )
         d = env.to_dict()
         assert d["status"] == "working"
@@ -107,7 +125,9 @@ class TestSSEError:
         assert "http_status" not in parsed["data"]
 
     def test_error_with_code_and_meta(self):
-        result = sse_error("chat", "IDLE", "oom", code="MODEL_OOM", http_status=503, meta={"mem_pct": 97})
+        result = sse_error(
+            "chat", "IDLE", "oom", code="MODEL_OOM", http_status=503, meta={"mem_pct": 97}
+        )
         parsed = json.loads(result.removeprefix("data: ").strip())
         assert parsed["data"]["code"] == "MODEL_OOM"
         assert parsed["data"]["http_status"] == 503

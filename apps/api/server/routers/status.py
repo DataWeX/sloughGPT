@@ -2,10 +2,10 @@
 Status Router - Overall service health and info
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter
-from schemas.common import classify_and_raise, endpoint, success_response
+from schemas.common import endpoint, success_response
 
 
 class StatusRouter:
@@ -27,7 +27,7 @@ class StatusRouter:
             data={
                 "status": "healthy",
                 "uptime_seconds": uptime,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
 
@@ -40,6 +40,7 @@ class StatusRouter:
         """
         checks = {}
         import logging
+
         _log = logging.getLogger("slo.status")
 
         # Check database connectivity

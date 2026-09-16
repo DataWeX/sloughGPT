@@ -1,24 +1,25 @@
 """Comprehensive tests for domain.cognitive._internal.grounding.py — pure logic only."""
 
-import pytest
 import numpy as np
+import pytest
+
 from domain.cognitive._internal.grounding import (
+    CurriculumLearner,
     Document,
-    RAGGrounder,
-    FisherInformation,
     ElasticWeightConsolidation,
+    FisherInformation,
+    GroundingOrchestrator,
     HierarchicalContext,
-    KnowledgeNode,
     KnowledgeEdge,
     KnowledgeGrounding,
-    CurriculumLearner,
-    GroundingOrchestrator,
+    KnowledgeNode,
+    RAGGrounder,
 )
-
 
 # ---------------------------------------------------------------------------
 # Document dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestDocument:
     def test_fields(self):
@@ -40,6 +41,7 @@ class TestDocument:
 # ---------------------------------------------------------------------------
 # RAGGrounder
 # ---------------------------------------------------------------------------
+
 
 class TestRAGGrounder:
     def test_add_document_stores(self):
@@ -139,8 +141,14 @@ class TestRAGGrounder:
     def test_ground_response_structure(self):
         rg = RAGGrounder()
         result = rg.ground_response("resp", "query")
-        for key in ("response", "grounded", "confidence", "supporting_docs",
-                     "contradictions", "hallucination_score"):
+        for key in (
+            "response",
+            "grounded",
+            "confidence",
+            "supporting_docs",
+            "contradictions",
+            "hallucination_score",
+        ):
             assert key in result
 
     def test_ground_response_with_data(self):
@@ -155,6 +163,7 @@ class TestRAGGrounder:
 # FisherInformation dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestFisherInformation:
     def test_fields(self):
         fi = FisherInformation(param_name="layer1.weight", importance=0.5, old_value=1.0)
@@ -166,6 +175,7 @@ class TestFisherInformation:
 # ---------------------------------------------------------------------------
 # ElasticWeightConsolidation
 # ---------------------------------------------------------------------------
+
 
 class _FakeParam:
     def __init__(self, data):
@@ -272,6 +282,7 @@ class TestElasticWeightConsolidation:
 # HierarchicalContext
 # ---------------------------------------------------------------------------
 
+
 class TestHierarchicalContext:
     def test_initial_state(self):
         hc = HierarchicalContext(max_context=2048, chunk_size=128)
@@ -364,6 +375,7 @@ class TestHierarchicalContext:
 # KnowledgeNode & KnowledgeEdge dataclasses
 # ---------------------------------------------------------------------------
 
+
 class TestKnowledgeNodeEdge:
     def test_node_fields(self):
         node = KnowledgeNode(id="n1", label="Python", node_type="entity", properties={"lang": "en"})
@@ -391,6 +403,7 @@ class TestKnowledgeNodeEdge:
 # ---------------------------------------------------------------------------
 # KnowledgeGrounding
 # ---------------------------------------------------------------------------
+
 
 class TestKnowledgeGrounding:
     def test_initial_state(self):
@@ -525,6 +538,7 @@ class TestKnowledgeGrounding:
 # CurriculumLearner
 # ---------------------------------------------------------------------------
 
+
 class TestCurriculumLearner:
     def test_initial_state(self):
         cl = CurriculumLearner()
@@ -620,6 +634,7 @@ class TestCurriculumLearner:
 # ---------------------------------------------------------------------------
 # GroundingOrchestrator
 # ---------------------------------------------------------------------------
+
 
 class TestGroundingOrchestrator:
     def test_initial_state(self):

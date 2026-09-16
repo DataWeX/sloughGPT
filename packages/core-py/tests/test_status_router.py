@@ -2,12 +2,11 @@
 
 Covers: get_status, ready, live.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -24,6 +23,7 @@ def _app(sr: StatusRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(sr.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 

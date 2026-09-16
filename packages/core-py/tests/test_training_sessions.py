@@ -19,7 +19,6 @@ def fresh_state():
 
 
 class TestStartFromSessionsTraining:
-
     def test_sets_running_to_true(self, fresh_state):
         start_from_sessions_training(fresh_state, {})
         assert fresh_state.running is True

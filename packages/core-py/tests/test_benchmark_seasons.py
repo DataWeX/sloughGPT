@@ -22,18 +22,18 @@ from domain.shell._internal.simulation import SimScene, WorldParams
 
 
 def _seasonal_params(**kw) -> WorldParams:
-    base = dict(
-        grid_size=(16, 8, 16),
-        generate_world=True,
-        world_seed=7,
-        learning_enabled=True,
-        solar_enabled=True,
-        solar_day_ticks=24,
-        solar_max_intensity=1.0,
-        solar_deposit_rate=0.1,
-        solar_season_ticks=96,   # 4 full days per year
-        solar_seasonality=1.0,
-    )
+    base = {
+        "grid_size": (16, 8, 16),
+        "generate_world": True,
+        "world_seed": 7,
+        "learning_enabled": True,
+        "solar_enabled": True,
+        "solar_day_ticks": 24,
+        "solar_max_intensity": 1.0,
+        "solar_deposit_rate": 0.1,
+        "solar_season_ticks": 96,  # 4 full days per year
+        "solar_seasonality": 1.0,
+    }
     base.update(kw)
     return WorldParams(**base)
 
@@ -78,8 +78,10 @@ class TestSeasonEnvelope:
             scene.apply_solar()
             assert scene.solar_season_index == want
             assert scene.solar_season_factor == pytest.approx(
-                (1 - p.solar_seasonality) + p.solar_seasonality * (
-                    0.5 + 0.5 * np.cos(2 * np.pi * tick / p.solar_season_ticks)))
+                (1 - p.solar_seasonality)
+                + p.solar_seasonality
+                * (0.5 + 0.5 * np.cos(2 * np.pi * tick / p.solar_season_ticks))
+            )
 
     def test_year_counter_increments(self):
         p = _seasonal_params()
@@ -200,8 +202,7 @@ class TestSeasonEnvelope:
 class TestSeasonalConservation:
     def test_monotonic_under_seasonal_boundary(self):
         params = _seasonal_params()
-        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0)
-                   for _ in range(8)]
+        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0) for _ in range(8)]
         result = _conservation_sweep(params, genomes, ticks=96)
         assert result["monotonic"] is True
         assert result["violations"] == []
@@ -209,37 +210,32 @@ class TestSeasonalConservation:
 
     def test_deterministic_sweep(self):
         params = _seasonal_params()
-        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0)
-                   for _ in range(8)]
+        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0) for _ in range(8)]
         a = _conservation_sweep(params, genomes, ticks=48)
         b = _conservation_sweep(params, genomes, ticks=48)
         assert a["end_total"] == b["end_total"]
 
     def test_start_total_positive(self):
         params = _seasonal_params()
-        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0)
-                   for _ in range(4)]
+        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0) for _ in range(4)]
         result = _conservation_sweep(params, genomes, ticks=24)
         assert result["start_total"] > 0.0
 
     def test_boundary_deposit_non_negative(self):
         params = _seasonal_params()
-        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0)
-                   for _ in range(4)]
+        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0) for _ in range(4)]
         result = _conservation_sweep(params, genomes, ticks=48)
         assert result["boundary_deposit_total"] >= 0.0
 
     def test_violations_list_type(self):
         params = _seasonal_params()
-        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0)
-                   for _ in range(4)]
+        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0) for _ in range(4)]
         result = _conservation_sweep(params, genomes, ticks=24)
         assert isinstance(result["violations"], list)
 
     def test_monotonic_flag_is_bool(self):
         params = _seasonal_params()
-        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0)
-                   for _ in range(4)]
+        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0) for _ in range(4)]
         result = _conservation_sweep(params, genomes, ticks=24)
         assert isinstance(result["monotonic"], bool)
 
@@ -257,77 +253,112 @@ class TestSeasonalConservation:
 
     def test_sweep_returns_required_keys(self):
         params = _seasonal_params()
-        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0)
-                   for _ in range(4)]
+        genomes = [Genome.random(params, np.random.default_rng(7), group_id=0) for _ in range(4)]
         result = _conservation_sweep(params, genomes, ticks=24)
-        for key in ("monotonic", "violations", "start_total", "end_total",
-                     "boundary_deposit_total"):
+        for key in (
+            "monotonic",
+            "violations",
+            "start_total",
+            "end_total",
+            "boundary_deposit_total",
+        ):
             assert key in result
 
 
 class TestRNGIsolation:
     def test_brains_bit_identical_year_on_off(self):
         day = 24
-        off = WorldParams(grid_size=(16, 8, 16), generate_world=True,
-                          world_seed=7, solar_enabled=True,
-                          solar_day_ticks=day, solar_max_intensity=1.0,
-                          solar_season_ticks=0, solar_seasonality=1.0)
-        on = WorldParams(grid_size=(16, 8, 16), generate_world=True,
-                         world_seed=7, solar_enabled=True,
-                         solar_day_ticks=day, solar_max_intensity=1.0,
-                         solar_season_ticks=4 * day, solar_seasonality=1.0)
+        off = WorldParams(
+            grid_size=(16, 8, 16),
+            generate_world=True,
+            world_seed=7,
+            solar_enabled=True,
+            solar_day_ticks=day,
+            solar_max_intensity=1.0,
+            solar_season_ticks=0,
+            solar_seasonality=1.0,
+        )
+        on = WorldParams(
+            grid_size=(16, 8, 16),
+            generate_world=True,
+            world_seed=7,
+            solar_enabled=True,
+            solar_day_ticks=day,
+            solar_max_intensity=1.0,
+            solar_season_ticks=4 * day,
+            solar_seasonality=1.0,
+        )
         rng_off = np.random.default_rng(7)
         rng_on = np.random.default_rng(7)
         g_off = Genome.random(off, rng_off, group_id=0)
         g_on = Genome.random(on, rng_on, group_id=0)
         for name in ("cells", "body", "entity", "move"):
             for suf in ("W", "b"):
-                assert np.allclose(g_off.tensors[f"{name}.{suf}"],
-                                   g_on.tensors[f"{name}.{suf}"])
-                assert g_off.tensors[f"{name}.{suf}"].dtype \
-                    == g_on.tensors[f"{name}.{suf}"].dtype
+                assert np.allclose(g_off.tensors[f"{name}.{suf}"], g_on.tensors[f"{name}.{suf}"])
+                assert g_off.tensors[f"{name}.{suf}"].dtype == g_on.tensors[f"{name}.{suf}"].dtype
 
     def test_isolation_with_different_seasonality(self):
         day = 24
-        p0 = WorldParams(grid_size=(16, 8, 16), generate_world=True,
-                         world_seed=7, solar_enabled=True,
-                         solar_day_ticks=day, solar_max_intensity=1.0,
-                         solar_season_ticks=96, solar_seasonality=0.0)
-        p1 = WorldParams(grid_size=(16, 8, 16), generate_world=True,
-                         world_seed=7, solar_enabled=True,
-                         solar_day_ticks=day, solar_max_intensity=1.0,
-                         solar_season_ticks=96, solar_seasonality=1.0)
+        p0 = WorldParams(
+            grid_size=(16, 8, 16),
+            generate_world=True,
+            world_seed=7,
+            solar_enabled=True,
+            solar_day_ticks=day,
+            solar_max_intensity=1.0,
+            solar_season_ticks=96,
+            solar_seasonality=0.0,
+        )
+        p1 = WorldParams(
+            grid_size=(16, 8, 16),
+            generate_world=True,
+            world_seed=7,
+            solar_enabled=True,
+            solar_day_ticks=day,
+            solar_max_intensity=1.0,
+            solar_season_ticks=96,
+            solar_seasonality=1.0,
+        )
         rng0 = np.random.default_rng(7)
         rng1 = np.random.default_rng(7)
         g0 = Genome.random(p0, rng0, group_id=0)
         g1 = Genome.random(p1, rng1, group_id=0)
         for name in ("cells", "body", "entity", "move"):
             for suf in ("W", "b"):
-                assert np.allclose(g0.tensors[f"{name}.{suf}"],
-                                   g1.tensors[f"{name}.{suf}"])
+                assert np.allclose(g0.tensors[f"{name}.{suf}"], g1.tensors[f"{name}.{suf}"])
 
     def test_group_id_does_not_affect_brains(self):
         day = 24
-        p = WorldParams(grid_size=(16, 8, 16), generate_world=True,
-                        world_seed=7, solar_enabled=True,
-                        solar_day_ticks=day, solar_max_intensity=1.0,
-                        solar_season_ticks=96, solar_seasonality=1.0)
+        p = WorldParams(
+            grid_size=(16, 8, 16),
+            generate_world=True,
+            world_seed=7,
+            solar_enabled=True,
+            solar_day_ticks=day,
+            solar_max_intensity=1.0,
+            solar_season_ticks=96,
+            solar_seasonality=1.0,
+        )
         rng_a = np.random.default_rng(7)
         rng_b = np.random.default_rng(7)
         g_a = Genome.random(p, rng_a, group_id=0)
         g_b = Genome.random(p, rng_b, group_id=1)
         for name in ("cells", "body", "entity", "move"):
             for suf in ("W", "b"):
-                assert np.allclose(g_a.tensors[f"{name}.{suf}"],
-                                   g_b.tensors[f"{name}.{suf}"])
+                assert np.allclose(g_a.tensors[f"{name}.{suf}"], g_b.tensors[f"{name}.{suf}"])
 
 
 class TestBenchmarkSeasons:
     def test_benchmark_verdicts(self):
         result = benchmark_seasons(
-            population_size=6, generations=3, ticks_per_generation=24,
-            organic_pools=2, solar_deposit_rate=0.1, seasonality=1.0,
-            seasons_per_year=4, seed=7,
+            population_size=6,
+            generations=3,
+            ticks_per_generation=24,
+            organic_pools=2,
+            solar_deposit_rate=0.1,
+            seasonality=1.0,
+            seasons_per_year=4,
+            seed=7,
         )
         assert result["seasonal_conservation_exact"] is True
         assert result["closed_monotonic"] is True
@@ -339,8 +370,13 @@ class TestBenchmarkSeasons:
 
     def test_benchmark_shape(self):
         result = benchmark_seasons(
-            population_size=4, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=0.6, seasons_per_year=4, seed=3,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.6,
+            seasons_per_year=4,
+            seed=3,
         )
         assert result["control_last_avg"] >= 0.0
         assert result["seasonal_last_avg"] >= 0.0
@@ -350,88 +386,160 @@ class TestBenchmarkSeasons:
 
     def test_benchmark_returns_all_required_keys(self):
         result = benchmark_seasons(
-            population_size=4, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=0.8, seasons_per_year=4, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.8,
+            seasons_per_year=4,
+            seed=5,
         )
         expected_keys = [
-            "control", "seasonal", "control_last_avg", "seasonal_last_avg",
-            "seasonal_conservation_exact", "seasonal_violations",
-            "seasonal_start_total", "seasonal_end_total",
-            "seasonal_boundary_deposit", "closed_monotonic",
-            "closed_violations", "closed_start_total", "closed_end_total",
-            "brains_identical", "summer_noon", "winter_noon",
-            "deposited", "sunshine", "population_size", "generations",
-            "seasons_per_year", "seasonality", "seasons_emerged",
+            "control",
+            "seasonal",
+            "control_last_avg",
+            "seasonal_last_avg",
+            "seasonal_conservation_exact",
+            "seasonal_violations",
+            "seasonal_start_total",
+            "seasonal_end_total",
+            "seasonal_boundary_deposit",
+            "closed_monotonic",
+            "closed_violations",
+            "closed_start_total",
+            "closed_end_total",
+            "brains_identical",
+            "summer_noon",
+            "winter_noon",
+            "deposited",
+            "sunshine",
+            "population_size",
+            "generations",
+            "seasons_per_year",
+            "seasonality",
+            "seasons_emerged",
         ]
         for key in expected_keys:
             assert key in result, f"Missing key: {key}"
 
     def test_benchmark_deterministic(self):
-        a = benchmark_seasons(population_size=4, generations=2,
-                              ticks_per_generation=16, organic_pools=1,
-                              seasonality=0.8, seasons_per_year=4, seed=99)
-        b = benchmark_seasons(population_size=4, generations=2,
-                              ticks_per_generation=16, organic_pools=1,
-                              seasonality=0.8, seasons_per_year=4, seed=99)
+        a = benchmark_seasons(
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.8,
+            seasons_per_year=4,
+            seed=99,
+        )
+        b = benchmark_seasons(
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.8,
+            seasons_per_year=4,
+            seed=99,
+        )
         assert a["summer_noon"] == b["summer_noon"]
         assert a["winter_noon"] == b["winter_noon"]
 
     def test_benchmark_generations_count(self):
         result = benchmark_seasons(
-            population_size=4, generations=3, ticks_per_generation=16,
-            organic_pools=1, seasonality=0.8, seasons_per_year=4, seed=5,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.8,
+            seasons_per_year=4,
+            seed=5,
         )
         assert len(result["seasonal"]["history"]) == 3
         assert len(result["control"]["history"]) == 3
 
     def test_benchmark_population_size(self):
         result = benchmark_seasons(
-            population_size=5, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=0.8, seasons_per_year=4, seed=5,
+            population_size=5,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.8,
+            seasons_per_year=4,
+            seed=5,
         )
         assert result["population_size"] == 5
 
     def test_benchmark_seasons_per_year(self):
         result = benchmark_seasons(
-            population_size=4, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=1.0, seasons_per_year=4, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=1.0,
+            seasons_per_year=4,
+            seed=5,
         )
         assert result["seasons_per_year"] == 4
 
     def test_benchmark_seasonality_value(self):
         result = benchmark_seasons(
-            population_size=4, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=0.6, seasons_per_year=4, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.6,
+            seasons_per_year=4,
+            seed=5,
         )
         assert result["seasonality"] == 0.6
 
     def test_summer_noon_greater_than_winter_noon(self):
         result = benchmark_seasons(
-            population_size=4, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=1.0, seasons_per_year=4, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=1.0,
+            seasons_per_year=4,
+            seed=5,
         )
         assert result["summer_noon"] > result["winter_noon"]
 
     def test_closed_world_violations_empty_when_monotonic(self):
         result = benchmark_seasons(
-            population_size=4, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=0.8, seasons_per_year=4, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.8,
+            seasons_per_year=4,
+            seed=5,
         )
         if result["closed_monotonic"]:
             assert result["closed_violations"] == []
 
     def test_seasonal_violations_empty_when_monotonic(self):
         result = benchmark_seasons(
-            population_size=4, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=0.8, seasons_per_year=4, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.8,
+            seasons_per_year=4,
+            seed=5,
         )
         if result["seasonal_conservation_exact"]:
             assert result["seasonal_violations"] == []
 
     def test_control_and_seasonal_history_entries(self):
         result = benchmark_seasons(
-            population_size=4, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=0.8, seasons_per_year=4, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.8,
+            seasons_per_year=4,
+            seed=5,
         )
         for entry in result["seasonal"]["history"]:
             assert "best_fitness" in entry
@@ -440,15 +548,25 @@ class TestBenchmarkSeasons:
 
     def test_control_last_avg_non_negative(self):
         result = benchmark_seasons(
-            population_size=4, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=0.8, seasons_per_year=4, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.8,
+            seasons_per_year=4,
+            seed=5,
         )
         assert result["control_last_avg"] >= 0.0
 
     def test_benchmark_with_different_seasonality(self):
         result = benchmark_seasons(
-            population_size=4, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=0.0, seasons_per_year=4, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.0,
+            seasons_per_year=4,
+            seed=5,
         )
         assert result["seasonality"] == 0.0
         # With zero seasonality, summer and winter noon should be closer
@@ -457,22 +575,37 @@ class TestBenchmarkSeasons:
 
     def test_benchmark_deposited_positive(self):
         result = benchmark_seasons(
-            population_size=4, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=0.8, seasons_per_year=4, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.8,
+            seasons_per_year=4,
+            seed=5,
         )
         assert result["deposited"] >= 0.0
 
     def test_benchmark_sunshine_positive(self):
         result = benchmark_seasons(
-            population_size=4, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=0.8, seasons_per_year=4, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.8,
+            seasons_per_year=4,
+            seed=5,
         )
         assert result["sunshine"] >= 0.0
 
     def test_history_entry_has_social_stats(self):
         result = benchmark_seasons(
-            population_size=4, generations=2, ticks_per_generation=16,
-            organic_pools=1, seasonality=0.8, seasons_per_year=4, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=16,
+            organic_pools=1,
+            seasonality=0.8,
+            seasons_per_year=4,
+            seed=5,
         )
         for entry in result["seasonal"]["history"]:
             assert "cooperations" in entry

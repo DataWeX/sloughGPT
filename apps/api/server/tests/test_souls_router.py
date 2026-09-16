@@ -16,8 +16,9 @@ Covers all 13 endpoints:
   GET  /souls/stats                    — get_soul_stats
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from test_support import get_test_client
 
 
@@ -53,8 +54,8 @@ def _mock_manager(souls=None, current=None):
     m = MagicMock()
     m.list_souls.return_value = souls or []
     m.get_current_soul.return_value = current
-    m.get_soul.side_effect = lambda name: (
-        next((s for s in (souls or [] if souls else m.list_souls.return_value) if s.name == name), None)
+    m.get_soul.side_effect = lambda name: next(
+        (s for s in (souls or [] if souls else m.list_souls.return_value) if s.name == name), None
     )
     m.switch_soul.return_value = {"success": True, "soul": "test"}
     m.get_trait_weights.return_value = {
@@ -70,6 +71,7 @@ def _mock_manager(souls=None, current=None):
 def _clear_souls_cache():
     """Clear the module-level list_souls cache before each test."""
     import routers.souls as souls_mod
+
     souls_mod._list_souls_cache = None
     yield
     souls_mod._list_souls_cache = None

@@ -1,14 +1,12 @@
 """Tests for domains/infrastructure/health_flow.py — diagnostic pipeline."""
 
-import pytest
 from domain.infrastructure._internal.health_flow import (
-    Severity,
-    Diagnosis,
     HealthFlowResult,
+    Severity,
     _check_errors,
     _check_latency,
-    _check_throughput,
     _check_model,
+    _check_throughput,
     _check_uptime,
     run_health_flow,
 )
@@ -155,8 +153,12 @@ class TestRunHealthFlow:
 
     def test_summary_is_string(self):
         result = run_health_flow(
-            req_count=0, err_count=0, avg_latency_ms=0,
-            tokens_per_sec=0, uptime_seconds=0, model_loaded=False,
+            req_count=0,
+            err_count=0,
+            avg_latency_ms=0,
+            tokens_per_sec=0,
+            uptime_seconds=0,
+            model_loaded=False,
         )
         assert isinstance(result.summary, str)
         assert len(result.summary) > 0

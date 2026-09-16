@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from domain.auth._internal.models import Role, Tenant, User, UserRole
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.exception_handlers import register_app_error_handler
 
+from domain.auth._internal.models import Role, Tenant, User, UserRole
 
 _AUTH_ADMIN = {"sub": "admin1", "tenant_id": "t1"}
 _AUTH_OWNER = {"sub": "owner1", "tenant_id": "t1"}

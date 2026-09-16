@@ -7,32 +7,45 @@ No external model downloads — uses the own-trained SloNet.
 
 from __future__ import annotations
 
-from typing import List
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 
 logger = logging.getLogger("slo.vision")
 
-from domain.training._internal.slonet import (
-    Tensor, SloNet, SloConv2D, SloMaxPool2D,
-    SloLinear, SloAdam, relu as _relu,
-    flatten as _flatten, tensor as _tensor, mse_loss,
-)
 import numpy as np
+
+from domain.training._internal.slonet import (
+    SloAdam,
+    SloConv2D,
+    SloLinear,
+    SloMaxPool2D,
+    SloNet,
+    Tensor,
+    mse_loss,
+)
+from domain.training._internal.slonet import (
+    flatten as _flatten,
+)
+from domain.training._internal.slonet import (
+    relu as _relu,
+)
+from domain.training._internal.slonet import (
+    tensor as _tensor,
+)
 
 
 @dataclass
 class ImageCaption:
     text: str
     confidence: float
-    tags: List[str]
+    tags: list[str]
     accuracy: float = 0.0
 
 
 @dataclass
 class VisualObject:
     label: str
-    bbox: List[float]
+    bbox: list[float]
     confidence: float
 
 
@@ -51,29 +64,28 @@ class VisionCNN:
     def build_model(self, embed_dim=128):
         """Build a CNN that learns free representations."""
         self._embed_dim = embed_dim
-        self._model = SloNet(layers=[
-            SloConv2D(3, 32, kernel_size=3, padding=1),
-            SloMaxPool2D(kernel_size=2, stride=2),
-            _relu,
-
-            SloConv2D(32, 64, kernel_size=3, padding=1),
-            SloMaxPool2D(kernel_size=2, stride=2),
-            _relu,
-
-            SloConv2D(64, 128, kernel_size=3, padding=1),
-            SloMaxPool2D(kernel_size=2, stride=2),
-            _relu,
-
-            _flatten,
-
-            SloLinear(128 * 4 * 4, embed_dim),
-        ])
+        self._model = SloNet(
+            layers=[
+                SloConv2D(3, 32, kernel_size=3, padding=1),
+                SloMaxPool2D(kernel_size=2, stride=2),
+                _relu,
+                SloConv2D(32, 64, kernel_size=3, padding=1),
+                SloMaxPool2D(kernel_size=2, stride=2),
+                _relu,
+                SloConv2D(64, 128, kernel_size=3, padding=1),
+                SloMaxPool2D(kernel_size=2, stride=2),
+                _relu,
+                _flatten,
+                SloLinear(128 * 4 * 4, embed_dim),
+            ]
+        )
         self._optimizer = SloAdam(lr=0.01)
         self._learned = False
 
     def _preprocess(self, img):
         """Convert PIL Image to normalized (N, C, H, W) tensor."""
         from PIL import Image
+
         if isinstance(img, str):
             img = Image.open(img)
         img = img.convert("RGB")
@@ -120,7 +132,7 @@ class VisionCNN:
             logger.error("VisionCNN caption error: %s", e, extra={"tag": "MODEL"})
             return ImageCaption(text="[vision model error]", confidence=0.0, tags=[])
 
-    def detect(self, image) -> List[VisualObject]:
+    def detect(self, image) -> list[VisualObject]:
         caption = self.caption(image)
         return [VisualObject(label=caption.text, bbox=[0, 0, 0, 0], confidence=caption.confidence)]
 

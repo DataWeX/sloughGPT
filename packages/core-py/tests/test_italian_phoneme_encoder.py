@@ -1,10 +1,14 @@
 """Tests for multimodal/italian_phoneme_encoder.py — ItalianPhonemeEncoder."""
 
 import numpy as np
-import pytest
+
 from domain.multimodal._internal.italian_phoneme_encoder import (
-    ItalianPhonemeEncoder, italian_text_to_phonemes,
-    ITALIAN_ID_TO_PHONEME, BOS, EOS, PAD, SPACE, NUM_ITALIAN_PHONEMES,
+    BOS,
+    EOS,
+    ITALIAN_ID_TO_PHONEME,
+    NUM_ITALIAN_PHONEMES,
+    ItalianPhonemeEncoder,
+    italian_text_to_phonemes,
 )
 
 

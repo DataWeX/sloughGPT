@@ -11,7 +11,7 @@ Char-LM bundles may include ``stoi`` / ``itos`` / ``chars`` (see
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -32,7 +32,7 @@ save_checkpoint_npz = _save_npz
 load_checkpoint_npz = _load_npz
 
 
-def normalize_raw_checkpoint(raw: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_raw_checkpoint(raw: dict[str, Any]) -> dict[str, Any]:
     """
     Wrap a flat parameter ``state_dict`` in a standard bundle, or pass through
     bundled checkpoints (``model_state_dict``, ``model``, ``training_info``, …).
@@ -47,7 +47,7 @@ def normalize_raw_checkpoint(raw: Dict[str, Any]) -> Dict[str, Any]:
     return raw
 
 
-def extract_state_dict(bundle: Dict[str, Any]) -> Dict[str, np.ndarray]:
+def extract_state_dict(bundle: dict[str, Any]) -> dict[str, np.ndarray]:
     """Return the state dict as numpy arrays from a normalized bundle."""
     if KEY_MODEL_LEGACY in bundle and isinstance(bundle[KEY_MODEL_LEGACY], dict):
         state = bundle[KEY_MODEL_LEGACY]
@@ -60,7 +60,7 @@ def extract_state_dict(bundle: Dict[str, Any]) -> Dict[str, np.ndarray]:
     return _to_numpy_dict(state)
 
 
-def _to_numpy_dict(d: Dict[str, Any]) -> Dict[str, np.ndarray]:
+def _to_numpy_dict(d: dict[str, Any]) -> dict[str, np.ndarray]:
     """Recursively normalize arrays in a dict to numpy arrays."""
     result = {}
     for k, v in d.items():
@@ -74,7 +74,7 @@ def _to_numpy_dict(d: Dict[str, Any]) -> Dict[str, np.ndarray]:
 
 
 def resolve_sloughgpt_hyperparams(
-    bundle: Dict[str, Any],
+    bundle: dict[str, Any],
     *,
     fallback_vocab_size: int,
     fallback_n_embed: int,
@@ -82,9 +82,9 @@ def resolve_sloughgpt_hyperparams(
     fallback_n_head: int,
     fallback_block_size: int,
     fallback_dropout: float = 0.1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Merge ``training_info`` / top-level keys with fallbacks for ``SloughGPTModel`` kwargs."""
-    info: Dict[str, Any] = bundle.get(KEY_TRAINING_INFO) or {}
+    info: dict[str, Any] = bundle.get(KEY_TRAINING_INFO) or {}
     if isinstance(bundle.get("config"), dict):
         cfg = bundle["config"]
         info = {**cfg, **info}
@@ -92,9 +92,7 @@ def resolve_sloughgpt_hyperparams(
     if "chars" in bundle:
         vocab_size = len(bundle["chars"])
     else:
-        vocab_size = int(
-            info.get("vocab_size", bundle.get("vocab_size", fallback_vocab_size))
-        )
+        vocab_size = int(info.get("vocab_size", bundle.get("vocab_size", fallback_vocab_size)))
     if vocab_size <= 0:
         vocab_size = int(fallback_vocab_size)
 
@@ -103,15 +101,13 @@ def resolve_sloughgpt_hyperparams(
         "n_embed": int(info.get("n_embed", bundle.get("n_embed", fallback_n_embed))),
         "n_layer": int(info.get("n_layer", bundle.get("n_layer", fallback_n_layer))),
         "n_head": int(info.get("n_head", bundle.get("n_head", fallback_n_head))),
-        "block_size": int(
-            info.get("block_size", bundle.get("block_size", fallback_block_size))
-        ),
+        "block_size": int(info.get("block_size", bundle.get("block_size", fallback_block_size))),
         "dropout": float(info.get("dropout", bundle.get("dropout", fallback_dropout))),
     }
 
 
 def load_sloughgpt_from_checkpoint(
-    bundle: Dict[str, Any],
+    bundle: dict[str, Any],
     *,
     device: str = "cpu",
     strict: bool = True,
@@ -121,7 +117,7 @@ def load_sloughgpt_from_checkpoint(
     fallback_n_head: int = 8,
     fallback_block_size: int = 128,
     fallback_dropout: float = 0.1,
-) -> Tuple[SloughGPTModel, Dict[str, Any]]:
+) -> tuple[SloughGPTModel, dict[str, Any]]:
     """
     Build ``SloughGPTModel``, load weights, move to ``device``.
 
@@ -132,10 +128,7 @@ def load_sloughgpt_from_checkpoint(
         RuntimeError: If ``SloughGPTModel`` cannot be imported.
     """
     if SloughGPTModel is None:
-        raise RuntimeError(
-            "SloughGPTModel is not available — "
-            "ensure domains.models is importable."
-        )
+        raise RuntimeError("SloughGPTModel is not available — ensure domains.models is importable.")
     bundle = normalize_raw_checkpoint(bundle)
     hp = resolve_sloughgpt_hyperparams(
         bundle,
@@ -160,8 +153,8 @@ def load_sloughgpt_from_checkpoint(
 
 
 def tokenizer_maps_from_bundle(
-    bundle: Dict[str, Any],
-) -> Tuple[Optional[Dict[str, int]], Optional[Dict[int, str]]]:
+    bundle: dict[str, Any],
+) -> tuple[dict[str, int] | None, dict[int, str] | None]:
     """Return ``(stoi, itos)`` if present on the checkpoint bundle."""
     bundle = normalize_raw_checkpoint(bundle)
     return bundle.get("stoi"), bundle.get("itos")

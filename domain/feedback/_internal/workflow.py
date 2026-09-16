@@ -11,20 +11,21 @@ Orchestrates the complete feedback → training pipeline:
 from __future__ import annotations
 
 import copy
+import logging
 import threading
 import time
-from typing import Optional, Dict, Any
 from dataclasses import dataclass
-import logging
+from typing import Any
 
 logger = logging.getLogger("slo.feedback")
+
+from domain.infrastructure._internal.training_pipeline import TrainingDataPipeline, get_pipeline
+from domain.shared import find_repo_root
 
 from .database import FeedbackDB, get_feedback_db
 from .meta_weights import MetaWeightManager, get_meta_weight_manager
 from .online_train import OnlineLoRAUpdater, get_online_lora_updater
 from .per_user_lora import PerUserLoRAStore, get_per_user_lora
-from domain.infrastructure._internal.training_pipeline import TrainingDataPipeline, get_pipeline
-from domain.shared import find_repo_root
 
 
 @dataclass
@@ -82,11 +83,11 @@ class FeedbackWorkflowManager:
 
         self.lora_updater = lora_updater or get_online_lora_updater()
 
-        self._pipeline: Optional[TrainingDataPipeline] = None
+        self._pipeline: TrainingDataPipeline | None = None
 
         self._running = False
-        self._scheduler_thread: Optional[threading.Thread] = None
-        self._health_thread: Optional[threading.Thread] = None
+        self._scheduler_thread: threading.Thread | None = None
+        self._health_thread: threading.Thread | None = None
         self._last_aggregate_time: float = 0
         self._last_prune_time: float = 0
         self._last_export_time: float = 0
@@ -147,6 +148,7 @@ class FeedbackWorkflowManager:
         # ── Trait weight update (context manager config) ──
         try:
             from domain.context._internal.managers import get_trait_config
+
             config = get_trait_config()
             config.update_from_feedback(
                 rating=rating,
@@ -155,6 +157,7 @@ class FeedbackWorkflowManager:
             )
         except Exception as e:
             import logging
+
             logging.getLogger("slo.feedback.workflow").debug("Trait config update failed: %s", e)
 
         self.lora_updater.add_feedback(
@@ -198,11 +201,12 @@ class FeedbackWorkflowManager:
 
         return feedback_id
 
-    def _benchmark_ppl(self, net, tok) -> Optional[float]:
+    def _benchmark_ppl(self, net, tok) -> float | None:
         """Evaluate perplexity across multiple benchmark phrases."""
         try:
             import numpy as np
-            from domain.training._internal.slonet import tensor, SloLSTM
+
+            from domain.training._internal.slonet import SloLSTM, tensor
 
             benchmarks = [
                 "the quick brown fox jumps over the lazy dog",
@@ -248,9 +252,12 @@ class FeedbackWorkflowManager:
                 return None
             return float(np.mean(all_ppls))
         except Exception as e:
-            logger.warning("workflow: _benchmark_ppl failed", extra={
-                "error": str(e),
-            })
+            logger.warning(
+                "workflow: _benchmark_ppl failed",
+                extra={
+                    "error": str(e),
+                },
+            )
             return None
 
     def _snapshot_weights(self, net):
@@ -258,14 +265,14 @@ class FeedbackWorkflowManager:
         return {
             str(i): copy.deepcopy(layer.weight.data)
             for i, layer in enumerate(net.layers)
-            if hasattr(layer, 'weight') and layer.weight is not None
+            if hasattr(layer, "weight") and layer.weight is not None
         }
 
     def _restore_weights(self, net, snapshot):
         """Restore model weights from a snapshot."""
         for i, layer in enumerate(net.layers):
             key = str(i)
-            if key in snapshot and hasattr(layer, 'weight'):
+            if key in snapshot and hasattr(layer, "weight"):
                 layer.weight.data = snapshot[key]
 
     def _maybe_auto_train(self):
@@ -276,18 +283,24 @@ class FeedbackWorkflowManager:
         rolls back the weights and logs the rejection.
         Uses gradient clipping and cosine LR scheduling for stable updates.
         """
-        net = getattr(self, '_model', None)
-        tok = getattr(self, '_tokenizer', None)
+        net = getattr(self, "_model", None)
+        tok = getattr(self, "_tokenizer", None)
         if net is None or tok is None:
             logger.debug("Auto-train skipped: no model set", extra={"tag": "INFRA"})
             return
 
         try:
-            from .training import FeedbackTrainer
-            from domain.training._internal.slonet import SloAdam, cross_entropy, tensor, create_scheduler
-            from .model_health import get_health_monitor
+            from domain.training._internal.slonet import (
+                SloAdam,
+                create_scheduler,
+                cross_entropy,
+                tensor,
+            )
 
-            if not hasattr(tok, 'encode'):
+            from .model_health import get_health_monitor
+            from .training import FeedbackTrainer
+
+            if not hasattr(tok, "encode"):
                 return
 
             trainer = FeedbackTrainer()
@@ -311,9 +324,11 @@ class FeedbackWorkflowManager:
             steps = 0
             total_loss = 0.0
             total_steps = len(texts) * 2 * 4
-            scheduler = create_scheduler(optimizer, "cosine", total_steps=max(total_steps, 1), warmup_steps=4, min_lr=1e-5)
+            scheduler = create_scheduler(
+                optimizer, "cosine", total_steps=max(total_steps, 1), warmup_steps=4, min_lr=1e-5
+            )
 
-            for epoch in range(2):
+            for _epoch in range(2):
                 for text in texts:
                     input_ids = tok.encode(text[:256])
                     if len(input_ids) < 2:
@@ -321,8 +336,8 @@ class FeedbackWorkflowManager:
                     seq_len = min(len(input_ids) - 1, 64)
                     chunk_size = 16
                     for i in range(0, seq_len, chunk_size):
-                        x_chunk = input_ids[i:i+chunk_size]
-                        y_chunk = input_ids[i+1:i+chunk_size+1]
+                        x_chunk = input_ids[i : i + chunk_size]
+                        y_chunk = input_ids[i + 1 : i + chunk_size + 1]
                         while len(x_chunk) < chunk_size:
                             x_chunk.append(tok.pad_id)
                         while len(y_chunk) < chunk_size:
@@ -330,7 +345,7 @@ class FeedbackWorkflowManager:
                         x = tensor([[x_chunk]], requires_grad=True)
                         y = tensor([[y_chunk]])
                         lstm = net.layers[1] if len(net.layers) > 1 else net.layers[0]
-                        if not hasattr(lstm, 'init_hidden'):
+                        if not hasattr(lstm, "init_hidden"):
                             continue
                         hidden = lstm.init_hidden()
                         logits, _ = lstm.forward(x, hidden)
@@ -354,7 +369,8 @@ class FeedbackWorkflowManager:
                     self._last_rollback_time = time.time()
                     logger.warning(
                         f"Auto-train rejected: PPL increased {ppl_delta:+.1f}% "
-                        f"({before_ppl:.1f} → {after_ppl:.1f})", extra={"tag": "INFRA"}
+                        f"({before_ppl:.1f} → {after_ppl:.1f})",
+                        extra={"tag": "INFRA"},
                     )
 
             self._stats["auto_train_steps"] += 1
@@ -363,13 +379,17 @@ class FeedbackWorkflowManager:
                 self._stats["auto_train_rejected"] += 1
                 logger.info(
                     f"Auto-train rolled back (quality guard): loss={avg_loss:.4f}, "
-                    f"ppl_delta={ppl_delta:+.1f}%", extra={"tag": "INFRA"}
+                    f"ppl_delta={ppl_delta:+.1f}%",
+                    extra={"tag": "INFRA"},
                 )
             else:
                 logger.info(
                     f"Auto-trained on feedback: {steps} steps, loss={avg_loss:.4f}, "
                     f"ppl={after_ppl:.1f if after_ppl else '?'} "
-                    f"({ppl_delta:+.1f}% vs before)" if ppl_delta else "", extra={"tag": "INFRA"}
+                    f"({ppl_delta:+.1f}% vs before)"
+                    if ppl_delta
+                    else "",
+                    extra={"tag": "INFRA"},
                 )
 
             try:
@@ -392,14 +412,20 @@ class FeedbackWorkflowManager:
         rejected probability down. Quality guard prevents degradation.
         Uses gradient clipping and cosine LR scheduling for stable updates.
         """
-        net = getattr(self, '_model', None)
-        tok = getattr(self, '_tokenizer', None)
+        net = getattr(self, "_model", None)
+        tok = getattr(self, "_tokenizer", None)
         if net is None or tok is None:
             return
 
         try:
+            from domain.training._internal.slonet import (
+                SloAdam,
+                create_scheduler,
+                cross_entropy,
+                tensor,
+            )
+
             from .training import FeedbackTrainer
-            from domain.training._internal.slonet import SloAdam, cross_entropy, tensor, create_scheduler
 
             trainer = FeedbackTrainer()
             pairs = trainer.prepare_dpo_pairs()
@@ -413,7 +439,9 @@ class FeedbackWorkflowManager:
             steps = 0
             total_loss = 0.0
             total_steps = len(pairs) * 2 * 4
-            scheduler = create_scheduler(optimizer, "cosine", total_steps=max(total_steps, 1), warmup_steps=3, min_lr=1e-5)
+            scheduler = create_scheduler(
+                optimizer, "cosine", total_steps=max(total_steps, 1), warmup_steps=3, min_lr=1e-5
+            )
 
             for pair in pairs:
                 chosen_text = f"user: {pair.prompt}\nassistant: {pair.chosen}"
@@ -430,8 +458,8 @@ class FeedbackWorkflowManager:
                     seq_len = min(len(ids) - 1, 64)
                     chunk_size = 16
                     for i in range(0, seq_len, chunk_size):
-                        x_chunk = ids[i:i+chunk_size]
-                        y_chunk = ids[i+1:i+chunk_size+1]
+                        x_chunk = ids[i : i + chunk_size]
+                        y_chunk = ids[i + 1 : i + chunk_size + 1]
                         while len(x_chunk) < chunk_size:
                             x_chunk.append(tok.pad_id)
                         while len(y_chunk) < chunk_size:
@@ -439,7 +467,7 @@ class FeedbackWorkflowManager:
                         x = tensor([[x_chunk]], requires_grad=True)
                         y = tensor([[y_chunk]])
                         lstm = net.layers[1] if len(net.layers) > 1 else net.layers[0]
-                        if not hasattr(lstm, 'init_hidden'):
+                        if not hasattr(lstm, "init_hidden"):
                             continue
                         hidden = lstm.init_hidden()
                         logits, _ = lstm.forward(x, hidden)
@@ -469,20 +497,25 @@ class FeedbackWorkflowManager:
                     rejected = True
                     self._last_rollback_time = time.time()
                     logger.warning(
-                        "DPO train rejected: PPL increased %+.1f%% "
-                        "(%s -> %s)", ppl_delta, before_ppl, after_ppl, extra={"tag": "INFRA"}
+                        "DPO train rejected: PPL increased %+.1f%% (%s -> %s)",
+                        ppl_delta,
+                        before_ppl,
+                        after_ppl,
+                        extra={"tag": "INFRA"},
                     )
 
             self._stats["dpo_train_steps"] = self._stats.get("dpo_train_steps", 0) + 1
             if rejected:
                 self._stats["dpo_train_rejected"] = self._stats.get("dpo_train_rejected", 0) + 1
                 logger.info(
-                    f"DPO train rolled back: loss={avg_loss:.4f}, ppl_delta={ppl_delta:+.1f}%", extra={"tag": "INFRA"}
+                    f"DPO train rolled back: loss={avg_loss:.4f}, ppl_delta={ppl_delta:+.1f}%",
+                    extra={"tag": "INFRA"},
                 )
             else:
                 logger.info(
                     f"DPO trained on {len(pairs)} pairs: {steps} steps, loss={avg_loss:.4f}, "
-                    f"ppl={after_ppl:.1f if after_ppl else '?'}", extra={"tag": "INFRA"}
+                    f"ppl={after_ppl:.1f if after_ppl else '?'}",
+                    extra={"tag": "INFRA"},
                 )
         except Exception as e:
             logger.warning("DPO train skipped: %s", e, extra={"tag": "INFRA"})
@@ -508,23 +541,33 @@ class FeedbackWorkflowManager:
                 "weights": {k: str(v.shape) for k, v in (result.get("weights") or {}).items()},
                 "eval_verdict": (result.get("eval") or {}).get("delta", {}).get("verdict"),
             }
-            logger.info("[Workflow] Adapter aggregation completed: %s", summary, extra={"tag": "INFRA"})
+            logger.info(
+                "[Workflow] Adapter aggregation completed: %s", summary, extra={"tag": "INFRA"}
+            )
         except Exception as e:
             logger.error("[Workflow] Adapter aggregation failed: %s", e, extra={"tag": "INFRA"})
 
     def _maybe_train_user_adapter(self, user_id: str):
         """Train a per-user adapter using accumulated feedback."""
-        import numpy as np
         from pathlib import Path
 
-        net = getattr(self, '_model', None)
-        tok = getattr(self, '_tokenizer', None)
+        import numpy as np
+
+        net = getattr(self, "_model", None)
+        tok = getattr(self, "_tokenizer", None)
         if net is None or tok is None:
             return
 
         try:
+            from domain.training._internal.slonet import (
+                SloAdam,
+                SloAdapterLayer,
+                SloLSTM,
+                cross_entropy,
+                tensor,
+            )
+
             from .training import FeedbackTrainer
-            from domain.training._internal.slonet import SloAdam, cross_entropy, tensor, SloLSTM, SloAdapterLayer
 
             trainer = FeedbackTrainer()
             sft_data = trainer.prepare_sft_data(min_quality=0.3)
@@ -543,7 +586,7 @@ class FeedbackWorkflowManager:
             if not texts:
                 return
 
-            dim = getattr(net, 'hidden_dim', 768)
+            dim = getattr(net, "hidden_dim", 768)
             adapter = SloAdapterLayer(dim=dim, rank=8, name=f"adapter_{user_id}")
 
             lstm_layers = [l for l in net.layers if isinstance(l, SloLSTM)]
@@ -558,7 +601,7 @@ class FeedbackWorkflowManager:
             steps = 0
             total_loss = 0.0
 
-            for epoch in range(3):
+            for _epoch in range(3):
                 for text in texts:
                     input_ids = tok.encode(text[:192])
                     if len(input_ids) < 2:
@@ -566,8 +609,8 @@ class FeedbackWorkflowManager:
                     seq_len = min(len(input_ids) - 1, 32)
                     chunk_size = 8
                     for i in range(0, seq_len, chunk_size):
-                        x_chunk = input_ids[i:i+chunk_size]
-                        y_chunk = input_ids[i+1:i+chunk_size+1]
+                        x_chunk = input_ids[i : i + chunk_size]
+                        y_chunk = input_ids[i + 1 : i + chunk_size + 1]
                         while len(x_chunk) < chunk_size:
                             x_chunk.append(tok.pad_id)
                         while len(y_chunk) < chunk_size:
@@ -596,10 +639,16 @@ class FeedbackWorkflowManager:
                     rejected = True
                     self._last_rollback_time = time.time()
                     logger.warning(
-                        f"User adapter rejected: PPL increased {ppl_delta:+.1f}%", extra={"tag": "INFRA"}
+                        f"User adapter rejected: PPL increased {ppl_delta:+.1f}%",
+                        extra={"tag": "INFRA"},
                     )
 
-            adapter_path = find_repo_root(Path(__file__).resolve()) / "data" / "user_adapters" / f"{user_id}_adapter.npz"
+            adapter_path = (
+                find_repo_root(Path(__file__).resolve())
+                / "data"
+                / "user_adapters"
+                / f"{user_id}_adapter.npz"
+            )
             adapter_path.parent.mkdir(parents=True, exist_ok=True)
             np.savez(
                 str(adapter_path),
@@ -614,7 +663,7 @@ class FeedbackWorkflowManager:
                 rejected=rejected,
             )
 
-            if not rejected and hasattr(net, 'get_user_adapter'):
+            if not rejected and hasattr(net, "get_user_adapter"):
                 model_adapter = net.get_user_adapter(user_id, dim=dim, rank=8)
                 model_adapter.down_proj.weight.data = adapter.down_proj.weight.data.copy()
                 model_adapter.up_proj.weight.data = adapter.up_proj.weight.data.copy()
@@ -622,12 +671,18 @@ class FeedbackWorkflowManager:
 
             self._stats["user_adapter_trained"] = self._stats.get("user_adapter_trained", 0) + 1
             if rejected:
-                self._stats["user_adapter_rejected"] = self._stats.get("user_adapter_rejected", 0) + 1
+                self._stats["user_adapter_rejected"] = (
+                    self._stats.get("user_adapter_rejected", 0) + 1
+                )
 
             status = "rejected" if rejected else "trained"
             logger.info(
                 "User adapter %s for %s: %s steps, loss=%.4f",
-                status, user_id, steps, avg_loss, extra={"tag": "INFRA"}
+                status,
+                user_id,
+                steps,
+                avg_loss,
+                extra={"tag": "INFRA"},
             )
         except Exception as e:
             logger.warning("User adapter training skipped: %s", e, extra={"tag": "INFRA"})
@@ -650,7 +705,9 @@ class FeedbackWorkflowManager:
                 self._do_aggregate()
                 self._last_aggregate_time = now
             except Exception as e:
-                logger.error("[Workflow] Scheduled aggregation failed: %s", e, extra={"tag": "INFRA"})
+                logger.error(
+                    "[Workflow] Scheduled aggregation failed: %s", e, extra={"tag": "INFRA"}
+                )
         # Pruning
         if now - self._last_prune_time >= self.config.prune_interval_minutes * 60:
             try:
@@ -676,6 +733,7 @@ class FeedbackWorkflowManager:
     def _do_prune(self):
         """Perform pruning task."""
         import time as _time
+
         t0 = _time.monotonic()
         try:
             deleted = self.lora_store.prune_low_quality(
@@ -685,16 +743,21 @@ class FeedbackWorkflowManager:
             elapsed_ms = (_time.monotonic() - t0) * 1000
             if deleted:
                 self._stats["prunes_performed"] += 1
-                logger.info("Pruned %d adapters", len(deleted), extra={
-                    "tag": "INFRA", "elapsed_ms": round(elapsed_ms, 1),
-                })
+                logger.info(
+                    "Pruned %d adapters",
+                    len(deleted),
+                    extra={
+                        "tag": "INFRA",
+                        "elapsed_ms": round(elapsed_ms, 1),
+                    },
+                )
         except Exception as e:
             logger.warning("Prune error: %s", e, extra={"tag": "INFRA"})
-
 
     def _do_export(self):
         """Perform training data export task."""
         import time as _time
+
         t0 = _time.monotonic()
         try:
             from pathlib import Path
@@ -708,9 +771,14 @@ class FeedbackWorkflowManager:
             self.db.export_feedback_jsonl(str(filepath))
             elapsed_ms = (_time.monotonic() - t0) * 1000
             self._stats["exports_performed"] += 1
-            logger.info("Exported training data to %s", filepath, extra={
-                "tag": "INFRA", "elapsed_ms": round(elapsed_ms, 1),
-            })
+            logger.info(
+                "Exported training data to %s",
+                filepath,
+                extra={
+                    "tag": "INFRA",
+                    "elapsed_ms": round(elapsed_ms, 1),
+                },
+            )
         except Exception as e:
             logger.warning("Export error: %s", e, extra={"tag": "INFRA"})
 
@@ -744,29 +812,28 @@ class FeedbackWorkflowManager:
         used for training yet. This ensures continuous improvement even
         when no new feedback events are happening.
         """
-        net = getattr(self, '_model', None)
-        tok = getattr(self, '_tokenizer', None)
+        net = getattr(self, "_model", None)
+        tok = getattr(self, "_tokenizer", None)
         if net is None or tok is None:
             return
 
         try:
             from .training import FeedbackTrainer
+
             trainer = FeedbackTrainer()
             sft_data = trainer.prepare_sft_data(min_quality=0.4)
             if not sft_data or len(sft_data) < 3:
                 return
 
             last_training = self._stats.get("last_background_training_time", 0)
-            recent_data = [
-                d for d in sft_data
-                if d.get("timestamp", 0) > last_training
-            ]
+            recent_data = [d for d in sft_data if d.get("timestamp", 0) > last_training]
             if not recent_data or len(recent_data) < 2:
                 return
 
             logger.info(
-                "Background training: %d new feedback items", len(recent_data),
-                extra={"tag": "INFRA"}
+                "Background training: %d new feedback items",
+                len(recent_data),
+                extra={"tag": "INFRA"},
             )
 
             self._maybe_auto_train()
@@ -795,6 +862,7 @@ class FeedbackWorkflowManager:
         self._scheduler_thread.start()
 
         if self.config.background_training_enabled:
+
             def background_training_loop():
                 while self._running:
                     try:
@@ -813,7 +881,7 @@ class FeedbackWorkflowManager:
         self._running = False
         logger.info("Stopped automated feedback workflow", extra={"tag": "INFRA"})
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get current workflow status and statistics."""
         return {
             "running": self._running,
@@ -850,23 +918,23 @@ class FeedbackWorkflowManager:
             },
         }
 
-    def trigger_aggregate(self) -> Dict[str, Any]:
+    def trigger_aggregate(self) -> dict[str, Any]:
         """Manually trigger aggregation."""
         self._do_aggregate()
         return {"status": "aggregated", "timestamp": time.time()}
 
-    def trigger_prune(self) -> Dict[str, Any]:
+    def trigger_prune(self) -> dict[str, Any]:
         """Manually trigger pruning."""
         self._do_prune()
         return {"status": "pruned", "timestamp": time.time()}
 
-    def trigger_export(self) -> Dict[str, Any]:
+    def trigger_export(self) -> dict[str, Any]:
         """Manually trigger export."""
         self._do_export()
         return {"status": "exported", "timestamp": time.time()}
 
 
-_workflow_manager: Optional[FeedbackWorkflowManager] = None
+_workflow_manager: FeedbackWorkflowManager | None = None
 
 
 def get_feedback_workflow(

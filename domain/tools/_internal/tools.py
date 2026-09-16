@@ -7,10 +7,7 @@ from typing import Any
 
 from domain.tools._internal.profiles import (
     TOOL_PROFILES,
-    ToolOption,
-    ToolParam,
     ToolProfile,
-    get_tool_profile,
 )
 
 
@@ -66,8 +63,7 @@ class ToolsEngine:
             ],
             "options": {
                 group: [
-                    {"id": o.id, "label": o.label, "description": o.description}
-                    for o in options
+                    {"id": o.id, "label": o.label, "description": o.description} for o in options
                 ]
                 for group, options in profile.options.items()
             },

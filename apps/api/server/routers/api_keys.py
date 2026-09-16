@@ -1,4 +1,5 @@
 """API key management with MogDB persistence and JSON sync."""
+
 from __future__ import annotations
 
 import hashlib
@@ -6,7 +7,7 @@ import logging
 import secrets
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
@@ -29,7 +30,9 @@ def _hash_key(key: str) -> str:
 class ApiKeyManager:
     """Manages API keys with MogDB storage and optional JSON sync."""
 
-    def __init__(self, db=None, db_path: str | Path | None = None, sync_dir: str | Path | None = None):
+    def __init__(
+        self, db=None, db_path: str | Path | None = None, sync_dir: str | Path | None = None
+    ):
         if db is not None:
             self._db = db
         else:
@@ -94,7 +97,7 @@ class ApiKeyManager:
             result.append(entry)
         return result
 
-    def get(self, key_id: str) -> Optional[dict[str, Any]]:
+    def get(self, key_id: str) -> dict[str, Any] | None:
         doc = self._collection.find_one({"_id": key_id})
         if doc is None:
             return None
@@ -154,10 +157,16 @@ class ApiKeysRouter:
     def _register_routes(self):
         self.router.add_api_route(path="/keys", endpoint=self.create_key, methods=["POST"])
         self.router.add_api_route(path="/keys", endpoint=self.list_keys, methods=["GET"])
-        self.router.add_api_route(path="/keys/validate", endpoint=self.validate_key, methods=["POST"])
+        self.router.add_api_route(
+            path="/keys/validate", endpoint=self.validate_key, methods=["POST"]
+        )
         self.router.add_api_route(path="/keys/{key_id}", endpoint=self.get_key, methods=["GET"])
-        self.router.add_api_route(path="/keys/{key_id}", endpoint=self.delete_key, methods=["DELETE"])
-        self.router.add_api_route(path="/keys/{key_id}/rotate", endpoint=self.rotate_key, methods=["POST"])
+        self.router.add_api_route(
+            path="/keys/{key_id}", endpoint=self.delete_key, methods=["DELETE"]
+        )
+        self.router.add_api_route(
+            path="/keys/{key_id}/rotate", endpoint=self.rotate_key, methods=["POST"]
+        )
 
     def _get_workspace_user(self, auth_user: dict) -> tuple[str, str]:
         """Extract workspace_id and user_id from auth_user."""
@@ -166,11 +175,16 @@ class ApiKeysRouter:
         return workspace_id, user_id
 
     @endpoint("api_keys.create")
-    async def create_key(self, req: CreateKeyRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def create_key(
+        self, req: CreateKeyRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         workspace_id, user_id = self._get_workspace_user(auth_user)
         key = self._manager.create(
-            req.name, scopes=req.scopes, expires_at=req.expires_at,
-            workspace_id=workspace_id, user_id=user_id,
+            req.name,
+            scopes=req.scopes,
+            expires_at=req.expires_at,
+            workspace_id=workspace_id,
+            user_id=user_id,
         )
         return success_response(data=key)
 

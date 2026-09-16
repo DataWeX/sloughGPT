@@ -11,21 +11,34 @@ Uses the VectorStore-backed KnowledgeMemory for all retrieval — no keyword ext
 
 from __future__ import annotations
 
-import re
 import logging
+import re
 
 from domain.learner._internal.knowledge import (
-    get_knowledge_memory,
     get_knowledge_ingestor,
+    get_knowledge_memory,
 )
 
 logger = logging.getLogger("slo.learner.augmenter")
 
 _QUERY_SIGNALS = [
-    "what", "who", "when", "where", "why", "how",
-    "explain", "tell me", "define", "describe",
-    "latest", "current", "news", "update", "recent",
-    "compare", "difference between",
+    "what",
+    "who",
+    "when",
+    "where",
+    "why",
+    "how",
+    "explain",
+    "tell me",
+    "define",
+    "describe",
+    "latest",
+    "current",
+    "news",
+    "update",
+    "recent",
+    "compare",
+    "difference between",
 ]
 
 
@@ -111,10 +124,7 @@ def _content_tokens(text: str) -> set:
     Side effects:
         - none
     """
-    return {
-        w for w in re.findall(r"[a-z0-9]+", text.lower())
-        if len(w) >= _MIN_CONTENT_TOKEN_LEN
-    }
+    return {w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) >= _MIN_CONTENT_TOKEN_LEN}
 
 
 def _topically_related(query: str, fact: str) -> bool:

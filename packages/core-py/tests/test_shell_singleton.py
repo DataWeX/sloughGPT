@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import domain.shell as shell_mod
-from domain.shell import get_dait_runtime, DaitRuntime
+from domain.shell import DaitRuntime, get_dait_runtime
 from domain.shell._internal.runtime import Resource
-
 
 # ---------------------------------------------------------------------------
 # Resource dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestResource:
     def test_basic_fields(self):
@@ -21,8 +21,13 @@ class TestResource:
         assert r.metadata == {}
 
     def test_custom_fields(self):
-        r = Resource(name="ds.json", kind="dataset", path="/data/ds.json",
-                     size_bytes=1024, metadata={"format": "json"})
+        r = Resource(
+            name="ds.json",
+            kind="dataset",
+            path="/data/ds.json",
+            size_bytes=1024,
+            metadata={"format": "json"},
+        )
         assert r.size_bytes == 1024
         assert r.metadata["format"] == "json"
 
@@ -140,6 +145,7 @@ class TestResource:
 # get_dait_runtime singleton
 # ---------------------------------------------------------------------------
 
+
 class TestGetDaitRuntime:
     def test_returns_dait_runtime(self):
         shell_mod._dait_instance = None
@@ -175,6 +181,7 @@ class TestGetDaitRuntime:
 
     def test_concurrent_same_instance(self):
         import threading
+
         shell_mod._dait_instance = None
         instances = []
 
@@ -253,6 +260,7 @@ class TestGetDaitRuntime:
 
     def test_multiple_threads_see_singleton(self):
         import threading
+
         shell_mod._dait_instance = None
         results = [None] * 20
 
@@ -277,6 +285,7 @@ class TestGetDaitRuntime:
         shell_mod._dait_instance = None
         rt = get_dait_runtime()
         from domain.shell._internal.runtime import APIServerProcess
+
         assert isinstance(rt.api, APIServerProcess)
         shell_mod._dait_instance = None
 

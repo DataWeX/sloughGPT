@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import numpy as np
 from dataclasses import dataclass
 
-from .perception import WorldPerception, PerceptionEvent
+import numpy as np
+
+from .perception import PerceptionEvent, WorldPerception
 
 
 @dataclass
@@ -27,7 +28,11 @@ class BabyPerception:
         self._memory: list[dict] = []
 
     def perceive_world(self, world, perception: WorldPerception) -> dict:
-        gx, _gy, gz = int(self.baby.position[0]), int(self.baby.position[1]), int(self.baby.position[2])
+        gx, _gy, gz = (
+            int(self.baby.position[0]),
+            int(self.baby.position[1]),
+            int(self.baby.position[2]),
+        )
         radius = self.config.see_radius
 
         nearby_events = []
@@ -57,7 +62,7 @@ class BabyPerception:
 
         self._perceived_events.extend(nearby_events)
         if len(self._perceived_events) > self.config.memory_size:
-            self._perceived_events = self._perceived_events[-self.config.memory_size:]
+            self._perceived_events = self._perceived_events[-self.config.memory_size :]
 
         result = {
             "material_features": material_features,
@@ -70,7 +75,7 @@ class BabyPerception:
 
         self._memory.append(result)
         if len(self._memory) > self.config.memory_size:
-            self._memory = self._memory[-self.config.memory_size:]
+            self._memory = self._memory[-self.config.memory_size :]
 
         return result
 
@@ -128,7 +133,11 @@ class BabyAction:
         return False
 
     def write_to_grid(self, world, material_id: int, energy: float) -> bool:
-        gx, gy, gz = int(self.baby.position[0]), int(self.baby.position[1]), int(self.baby.position[2])
+        gx, gy, gz = (
+            int(self.baby.position[0]),
+            int(self.baby.position[1]),
+            int(self.baby.position[2]),
+        )
         nx, ny, nz = world.size
         if 0 <= gx < nx and 0 <= gy < ny and 0 <= gz < nz:
             idx = world.idx(gx, gy, gz)
@@ -182,7 +191,7 @@ class BabyLearning:
         }
         self._experiences.append(experience)
         if len(self._experiences) > self.config.memory_size:
-            self._experiences = self._experiences[-self.config.memory_size:]
+            self._experiences = self._experiences[-self.config.memory_size :]
 
         if action_result.get("success"):
             material_id = perception_result.get("preferred_material", 1)
@@ -245,19 +254,24 @@ class BabyPerceptionSystem:
             if perc_result["event_count"] > 0:
                 best_event = max(
                     perception.events,
-                    key=lambda e: e.energy * self.config.energy_weight +
-                                  modules["perception"].get_novelty_score(e.material_type) * self.config.novelty_bonus,
+                    key=lambda e: (
+                        e.energy * self.config.energy_weight
+                        + modules["perception"].get_novelty_score(e.material_type)
+                        * self.config.novelty_bonus
+                    ),
                     default=None,
                 )
                 if best_event:
                     action_result = modules["action"].interact_with_event(best_event, world)
 
             modules["learning"].record_experience(perc_result, action_result)
-            results.append({
-                "baby_id": baby_id,
-                "perception": perc_result,
-                "action": action_result,
-            })
+            results.append(
+                {
+                    "baby_id": baby_id,
+                    "perception": perc_result,
+                    "action": action_result,
+                }
+            )
 
         return results
 

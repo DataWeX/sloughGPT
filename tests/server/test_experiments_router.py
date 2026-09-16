@@ -2,11 +2,11 @@
 Tests for the experiments router — CRUD, metric/param logging, path traversal.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.experiments import ExperimentsRouter
@@ -20,6 +20,7 @@ def mock_db():
         class FakeDeleteResult:
             def __init__(self, n):
                 self.deleted_count = n
+
             def __bool__(self):
                 return self.deleted_count > 0
 
@@ -36,14 +37,29 @@ def mock_db():
             col.insert_one.side_effect = lambda doc: store.append(doc)
             col.delete_many.side_effect = lambda q: (
                 FakeDeleteResult(
-                    len([store.remove(d) for d in list(store) if d.get("experiment_id") == q.get("experiment_id")])
-                ) if any(d.get("experiment_id") == q.get("experiment_id") for d in store)
+                    len(
+                        [
+                            store.remove(d)
+                            for d in list(store)
+                            if d.get("experiment_id") == q.get("experiment_id")
+                        ]
+                    )
+                )
+                if any(d.get("experiment_id") == q.get("experiment_id") for d in store)
                 else FakeDeleteResult(0)
             )
             col.delete_one.side_effect = lambda q: (
-                FakeDeleteResult(1) if store.remove(next(d for d in store if d.get("experiment_id") == q.get("experiment_id"))) is None
+                (
+                    FakeDeleteResult(1)
+                    if store.remove(
+                        next(d for d in store if d.get("experiment_id") == q.get("experiment_id"))
+                    )
+                    is None
+                    else FakeDeleteResult(0)
+                )
+                if any(d.get("experiment_id") == q.get("experiment_id") for d in store)
                 else FakeDeleteResult(0)
-            ) if any(d.get("experiment_id") == q.get("experiment_id") for d in store) else FakeDeleteResult(0)
+            )
             return col
 
         mock_db = MagicMock()
@@ -100,7 +116,8 @@ class TestCreateExperiment:
         resp = client.post("/experiments", json={"name": "ts_test"})
         exp_id = resp.json()["data"]["id"]
         import re
-        assert re.search(r'\d{8}_\d{6}$', exp_id)
+
+        assert re.search(r"\d{8}_\d{6}$", exp_id)
 
 
 class TestListExperiments:
@@ -203,7 +220,7 @@ class TestLogMetric:
     def test_logs_metric(self, client):
         resp = client.post(
             "/experiments/test_exp/log_metric",
-            params={"metric_name": "loss", "value": 0.5, "step": 1}
+            params={"metric_name": "loss", "value": 0.5, "step": 1},
         )
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "logged"
@@ -211,14 +228,13 @@ class TestLogMetric:
     def test_metric_invalid_id(self, client):
         resp = client.post(
             "/experiments/invalid..id/log_metric",
-            params={"metric_name": "x", "value": 1.0, "step": 0}
+            params={"metric_name": "x", "value": 1.0, "step": 0},
         )
         assert resp.status_code == 400
 
     def test_metric_default_step_zero(self, client):
         resp = client.post(
-            "/experiments/exp1/log_metric",
-            params={"metric_name": "f1", "value": 0.7}
+            "/experiments/exp1/log_metric", params={"metric_name": "f1", "value": 0.7}
         )
         assert resp.status_code == 200
 
@@ -227,22 +243,20 @@ class TestLogParam:
     def test_logs_param(self, client):
         resp = client.post(
             "/experiments/test_exp/log_param",
-            params={"param_name": "learning_rate", "value": 0.001}
+            params={"param_name": "learning_rate", "value": 0.001},
         )
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "logged"
 
     def test_param_invalid_id(self, client):
         resp = client.post(
-            "/experiments/invalid..id/log_param",
-            params={"param_name": "x", "value": 1}
+            "/experiments/invalid..id/log_param", params={"param_name": "x", "value": 1}
         )
         assert resp.status_code == 400
 
     def test_param_string_value(self, client):
         resp = client.post(
-            "/experiments/exp2/log_param",
-            params={"param_name": "model", "value": "gpt2"}
+            "/experiments/exp2/log_param", params={"param_name": "model", "value": "gpt2"}
         )
         assert resp.status_code == 200
 
@@ -264,8 +278,12 @@ class TestExperimentData:
 
     def test_data_reads_logged_metrics_and_params(self, client, mock_db):
         e_id = "readback_123"
-        mock_db.setdefault("metrics", []).append({"experiment_id": e_id, "metric": "loss", "value": 0.5, "step": 1})
-        mock_db.setdefault("params", []).append({"experiment_id": e_id, "param": "lr", "value": 0.001})
+        mock_db.setdefault("metrics", []).append(
+            {"experiment_id": e_id, "metric": "loss", "value": 0.5, "step": 1}
+        )
+        mock_db.setdefault("params", []).append(
+            {"experiment_id": e_id, "param": "lr", "value": 0.001}
+        )
         resp = client.get(f"/experiments/{e_id}/data")
         data = resp.json()["data"]
         assert data["metrics"][0]["value"] == 0.5
@@ -286,7 +304,9 @@ class TestCompleteExperimentEdges:
 
     def test_complete_persists_status_readable_by_data(self, client):
         import os
+
         from apps.api.server.routers import experiments as exp_mod
+
         e_id = "persist_123"
         log_dir = os.path.join(os.path.dirname(exp_mod.__file__), "..", "data", "experiments")
         status_file = os.path.join(log_dir, f"{e_id}_status.json")

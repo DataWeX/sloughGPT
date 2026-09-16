@@ -36,11 +36,13 @@ reconstructed = point.generate(weights.size)
 from pugqeep import Tree
 
 tree = Tree("my-model", n_clusters=16)
-stats = tree.load_weights({
-    "layer0.weight": np.random.randn(512, 512).astype(np.float32),
-    "layer0.bias": np.random.randn(512).astype(np.float32),
-    "layer1.weight": np.random.randn(256, 512).astype(np.float32),
-})
+stats = tree.load_weights(
+    {
+        "layer0.weight": np.random.randn(512, 512).astype(np.float32),
+        "layer0.bias": np.random.randn(512).astype(np.float32),
+        "layer1.weight": np.random.randn(256, 512).astype(np.float32),
+    }
+)
 print(f"Compression ratio: {stats['ratio']:.1f}x")
 
 # Get a weight back
@@ -79,11 +81,11 @@ sys.complete_task(task.id, result=output)
 ### Serialize to bytes (for network/storage)
 
 ```python
-data = point.to_bytes()           # binary
-point = Point.from_bytes(data)    # reconstruct
+data = point.to_bytes()  # binary
+point = Point.from_bytes(data)  # reconstruct
 
-data = point.to_dict()            # JSON-safe
-point = Point.from_dict(data)     # reconstruct
+data = point.to_dict()  # JSON-safe
+point = Point.from_dict(data)  # reconstruct
 ```
 
 ### Skip embeddings and biases
@@ -92,8 +94,8 @@ point = Point.from_dict(data)     # reconstruct
 from pugqeep import Tree, TreeConfig
 
 config = TreeConfig(
-    skip_embeddings=True,   # store as raw (discrete data)
-    skip_biases=True,       # store as raw (small tensors)
+    skip_embeddings=True,  # store as raw (discrete data)
+    skip_biases=True,  # store as raw (small tensors)
     n_clusters=32,
 )
 tree = Tree("model", config=config)

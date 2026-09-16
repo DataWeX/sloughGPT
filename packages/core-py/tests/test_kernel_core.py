@@ -6,6 +6,7 @@ import time
 
 import numpy as np
 
+from domain.shell._internal import kernel_scheduler
 from domain.shell._internal.kernel_interrupts import (
     Interrupt,
     InterruptManager,
@@ -13,8 +14,7 @@ from domain.shell._internal.kernel_interrupts import (
     InterruptVector,
 )
 from domain.shell._internal.kernel_memory import MemoryBlock, TensorMemory
-from domain.shell._internal.kernel_process import Process, ProcessState, Priority
-from domains.shell import kernel_scheduler
+from domain.shell._internal.kernel_process import Priority, Process, ProcessState
 from domain.shell._internal.kernel_scheduler import Scheduler
 
 

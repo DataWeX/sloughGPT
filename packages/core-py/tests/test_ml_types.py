@@ -36,6 +36,7 @@ class TestDtype:
         class FakeTorchDtype:
             def numpy(self):
                 return np.float16
+
         assert mt.dtype(FakeTorchDtype()) == np.float16
 
     def test_torch_dtype_numpy_raises_falls_back(self, monkeypatch):

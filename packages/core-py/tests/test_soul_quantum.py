@@ -1,7 +1,6 @@
 """Tests for domains/soul/quantum.py — pure logic, no mocks."""
 
 import math
-import random
 
 import pytest
 
@@ -13,10 +12,10 @@ from domain.soul._internal.quantum import (
     TemporalReasoningEngine,
 )
 
-
 # ---------------------------------------------------------------------------
 # QuantumState
 # ---------------------------------------------------------------------------
+
 
 class TestQuantumState:
     def test_default_amplitude_and_phase(self):
@@ -55,6 +54,7 @@ class TestQuantumState:
 # ---------------------------------------------------------------------------
 # QuantumCognitiveEngine
 # ---------------------------------------------------------------------------
+
 
 class TestQuantumCognitiveEngine:
     def test_superposition_count(self):
@@ -130,6 +130,7 @@ class TestQuantumCognitiveEngine:
 # QuantumParallelProcessor
 # ---------------------------------------------------------------------------
 
+
 class TestQuantumParallelProcessor:
     def test_default_capacity(self):
         qpp = QuantumParallelProcessor()
@@ -159,6 +160,7 @@ class TestQuantumParallelProcessor:
 # ---------------------------------------------------------------------------
 # HyperdimensionalProcessor
 # ---------------------------------------------------------------------------
+
 
 class TestHyperdimensionalProcessor:
     def test_encode_caches(self):
@@ -267,6 +269,7 @@ class TestHyperdimensionalProcessor:
 # ---------------------------------------------------------------------------
 # TemporalReasoningEngine
 # ---------------------------------------------------------------------------
+
 
 class TestTemporalReasoningEngine:
     def test_default_depth(self):

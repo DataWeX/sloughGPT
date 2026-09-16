@@ -4,28 +4,28 @@ ModelMetrics, ModelStatus, Priority, QueueMetrics.
 Covers: priority queue ordering, submit/acquire, cache get/store/clear/evict,
 metrics recording, snapshot, reset, idle management.
 """
+
 from __future__ import annotations
 
 import asyncio
 import time
-from unittest.mock import MagicMock
 
 import pytest
 
 from domain.infrastructure._internal.model_server import (
+    ModelMetrics,
+    ModelStatus,
     Priority,
     PriorityRequestQueue,
     QueueMetrics,
     SessionKVCache,
-    ModelMetrics,
-    ModelStatus,
     _is_intel_mac,
 )
-
 
 # ---------------------------------------------------------------------------
 # Priority enum
 # ---------------------------------------------------------------------------
+
 
 class TestPriority:
     def test_ordering(self):
@@ -41,6 +41,7 @@ class TestPriority:
 # ModelStatus enum
 # ---------------------------------------------------------------------------
 
+
 class TestModelStatus:
     def test_all_states(self):
         states = [s.value for s in ModelStatus]
@@ -55,6 +56,7 @@ class TestModelStatus:
 # ---------------------------------------------------------------------------
 # ModelMetrics
 # ---------------------------------------------------------------------------
+
 
 class TestModelMetrics:
     def test_record_success(self):
@@ -150,6 +152,7 @@ class TestModelMetrics:
 # QueueMetrics
 # ---------------------------------------------------------------------------
 
+
 class TestQueueMetrics:
     def test_defaults(self):
         qm = QueueMetrics()
@@ -161,6 +164,7 @@ class TestQueueMetrics:
 # ---------------------------------------------------------------------------
 # SessionKVCache
 # ---------------------------------------------------------------------------
+
 
 class TestSessionKVCache:
     def test_store_and_get(self):
@@ -246,6 +250,7 @@ class TestSessionKVCache:
 # ---------------------------------------------------------------------------
 # PriorityRequestQueue — async tests
 # ---------------------------------------------------------------------------
+
 
 class TestPriorityRequestQueue:
     @pytest.mark.asyncio
@@ -369,6 +374,7 @@ class TestPriorityRequestQueue:
 # ---------------------------------------------------------------------------
 # _is_intel_mac
 # ---------------------------------------------------------------------------
+
 
 class TestIntelMac:
     def test_returns_bool(self):

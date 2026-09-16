@@ -1,6 +1,5 @@
 """Comprehensive tests for domain.cognitive._internal.knowledge_graph_v2."""
 
-import pytest
 from domain.cognitive._internal.knowledge_graph_v2 import (
     Entity,
     Fact,
@@ -8,15 +7,24 @@ from domain.cognitive._internal.knowledge_graph_v2 import (
     RelationType,
 )
 
-
 # ---------------------------------------------------------------------------
 # RelationType
 # ---------------------------------------------------------------------------
 
+
 class TestRelationType:
     def test_all_members_exist(self):
-        expected = {"IS_A", "PART_OF", "CAUSES", "RELATED_TO", "SIMILAR_TO",
-                    "OPPOSITE_OF", "LOCATED_IN", "HAS_PROPERTY", "INSTANCE_OF"}
+        expected = {
+            "IS_A",
+            "PART_OF",
+            "CAUSES",
+            "RELATED_TO",
+            "SIMILAR_TO",
+            "OPPOSITE_OF",
+            "LOCATED_IN",
+            "HAS_PROPERTY",
+            "INSTANCE_OF",
+        }
         assert {m.name for m in RelationType} == expected
 
     def test_enum_values_are_strings(self):
@@ -38,6 +46,7 @@ class TestRelationType:
 # Entity
 # ---------------------------------------------------------------------------
 
+
 class TestEntity:
     def test_basic_fields(self):
         e = Entity(id="e1", label="Cat", entity_type="animal")
@@ -54,8 +63,7 @@ class TestEntity:
         assert e.properties == props
 
     def test_with_aliases(self):
-        e = Entity(id="e1", label="Paris", entity_type="city",
-                   aliases={"City of Light"})
+        e = Entity(id="e1", label="Paris", entity_type="city", aliases={"City of Light"})
         assert "City of Light" in e.aliases
 
     def test_hash_based_on_id(self):
@@ -78,9 +86,11 @@ class TestEntity:
         assert e.__eq__("not an entity") is NotImplemented
 
     def test_entity_in_set(self):
-        s = {Entity(id="a", label="A", entity_type="t"),
-             Entity(id="a", label="B", entity_type="t"),
-             Entity(id="c", label="C", entity_type="t")}
+        s = {
+            Entity(id="a", label="A", entity_type="t"),
+            Entity(id="a", label="B", entity_type="t"),
+            Entity(id="c", label="C", entity_type="t"),
+        }
         assert len(s) == 2
 
     def test_entity_as_dict_key(self):
@@ -94,6 +104,7 @@ class TestEntity:
 # Fact
 # ---------------------------------------------------------------------------
 
+
 class TestFact:
     def test_basic_fields(self):
         f = Fact(subject="a", predicate="rel", object="b")
@@ -106,8 +117,15 @@ class TestFact:
         assert f.verified is False
 
     def test_custom_fields(self):
-        f = Fact(subject="a", predicate="rel", object="b",
-                 confidence=0.9, source="wiki", timestamp=100.0, verified=True)
+        f = Fact(
+            subject="a",
+            predicate="rel",
+            object="b",
+            confidence=0.9,
+            source="wiki",
+            timestamp=100.0,
+            verified=True,
+        )
         assert f.confidence == 0.9
         assert f.source == "wiki"
         assert f.timestamp == 100.0
@@ -128,6 +146,7 @@ class TestFact:
 # ---------------------------------------------------------------------------
 # KnowledgeGraph — init and stats
 # ---------------------------------------------------------------------------
+
 
 class TestKGInit:
     def test_empty_graph(self):
@@ -155,6 +174,7 @@ class TestKGInit:
 # ---------------------------------------------------------------------------
 # add_entity
 # ---------------------------------------------------------------------------
+
 
 class TestAddEntity:
     def test_add_new_entity(self):
@@ -192,6 +212,7 @@ class TestAddEntity:
 # ---------------------------------------------------------------------------
 # add_fact
 # ---------------------------------------------------------------------------
+
 
 class TestAddFact:
     def test_auto_creates_entities(self):
@@ -262,6 +283,7 @@ class TestAddFact:
 # case-insensitive resolution
 # ---------------------------------------------------------------------------
 
+
 class TestCaseInsensitive:
     def test_resolve_by_entity_id(self):
         kg = KnowledgeGraph()
@@ -309,6 +331,7 @@ class TestCaseInsensitive:
 # ---------------------------------------------------------------------------
 # get_outgoing / get_incoming
 # ---------------------------------------------------------------------------
+
 
 class TestEdges:
     def _build_graph(self):
@@ -365,6 +388,7 @@ class TestEdges:
 # ---------------------------------------------------------------------------
 # query
 # ---------------------------------------------------------------------------
+
 
 class TestQuery:
     def _build_graph(self):
@@ -443,6 +467,7 @@ class TestQuery:
 # BFS
 # ---------------------------------------------------------------------------
 
+
 class TestBFS:
     def _build_chain(self):
         kg = KnowledgeGraph()
@@ -511,6 +536,7 @@ class TestBFS:
 # DFS
 # ---------------------------------------------------------------------------
 
+
 class TestDFS:
     def _build_linear(self):
         kg = KnowledgeGraph()
@@ -562,6 +588,7 @@ class TestDFS:
 # ---------------------------------------------------------------------------
 # find_paths / shortest_path
 # ---------------------------------------------------------------------------
+
 
 class TestPathFinding:
     def _build_grid(self):
@@ -651,6 +678,7 @@ class TestPathFinding:
 # infer_transitive
 # ---------------------------------------------------------------------------
 
+
 class TestInferTransitive:
     def test_single_hop(self):
         kg = KnowledgeGraph()
@@ -701,6 +729,7 @@ class TestInferTransitive:
 # ---------------------------------------------------------------------------
 # verify_statement
 # ---------------------------------------------------------------------------
+
 
 class TestVerifyStatement:
     def _build_verified_graph(self):
@@ -777,6 +806,7 @@ class TestVerifyStatement:
 # check_consistency
 # ---------------------------------------------------------------------------
 
+
 class TestCheckConsistency:
     def test_clean_graph(self):
         kg = KnowledgeGraph()
@@ -819,6 +849,7 @@ class TestCheckConsistency:
 # export / export_triples / summary
 # ---------------------------------------------------------------------------
 
+
 class TestExport:
     def test_export(self):
         kg = KnowledgeGraph()
@@ -858,6 +889,7 @@ class TestExport:
 # ---------------------------------------------------------------------------
 # edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     def test_empty_graph_bfs(self):

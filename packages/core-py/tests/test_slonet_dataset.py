@@ -2,25 +2,24 @@
 
 from __future__ import annotations
 
-import math
-import pytest
 import numpy as np
+import pytest
+
 from domain.training._internal.slonet import (
-    SloDataset,
-    SloDataLoader,
-    SloSGD,
-    SloConstantLR,
-    SloStepLR,
-    SloCosineAnnealingLR,
-    SloReduceLROnPlateau,
-    WarmupCosineScheduler,
-    PolynomialDecayScheduler,
     LinearWarmupScheduler,
-    SloOneCycleLR,
+    PolynomialDecayScheduler,
+    SloConstantLR,
+    SloCosineAnnealingLR,
     SloCyclicLR,
+    SloDataLoader,
+    SloDataset,
+    SloOneCycleLR,
+    SloReduceLROnPlateau,
+    SloSGD,
+    SloStepLR,
+    WarmupCosineScheduler,
     create_scheduler,
 )
-
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -40,7 +39,6 @@ class DummyDataset(SloDataset):
 
 
 class TestSloDataset:
-
     def test_len(self):
         ds = DummyDataset(10)
         assert len(ds) == 10
@@ -61,7 +59,6 @@ class TestSloDataset:
 
 
 class TestDataLoader:
-
     def test_init(self):
         ds = DummyDataset(10)
         loader = SloDataLoader(ds, batch_size=2)
@@ -92,8 +89,10 @@ class TestDataLoader:
 
     def test_collate_fn(self):
         ds = DummyDataset(10)
+
         def collate(batch):
             return {"x": np.stack([b["x"] for b in batch]), "y": np.array([b["y"] for b in batch])}
+
         loader = SloDataLoader(ds, batch_size=2, collate_fn=collate)
         batch = next(iter(loader))
         assert batch["x"].shape == (2, 1)
@@ -115,7 +114,6 @@ class TestDataLoader:
 
 
 class TestSloConstantLR:
-
     def test_constant(self):
         opt = SloSGD(lr=0.1)
         sched = SloConstantLR(opt)
@@ -127,7 +125,6 @@ class TestSloConstantLR:
 
 
 class TestSloStepLR:
-
     def test_step(self):
         opt = SloSGD(lr=1.0)
         sched = SloStepLR(opt, step_size=2, gamma=0.5)
@@ -141,7 +138,6 @@ class TestSloStepLR:
 
 
 class TestSloCosineAnnealingLR:
-
     def test_cosine(self):
         opt = SloSGD(lr=1.0)
         sched = SloCosineAnnealingLR(opt, T_max=10, eta_min=0.0)
@@ -158,7 +154,6 @@ class TestSloCosineAnnealingLR:
 
 
 class TestSloReduceLROnPlateau:
-
     def test_reduce(self):
         opt = SloSGD(lr=1.0)
         sched = SloReduceLROnPlateau(opt, patience=2, factor=0.5)
@@ -180,7 +175,6 @@ class TestSloReduceLROnPlateau:
 
 
 class TestWarmupCosineScheduler:
-
     def test_warmup(self):
         opt = SloSGD(lr=1.0)
         sched = WarmupCosineScheduler(opt, warmup_steps=10, total_steps=100)
@@ -201,7 +195,6 @@ class TestWarmupCosineScheduler:
 
 
 class TestPolynomialDecayScheduler:
-
     def test_decay(self):
         opt = SloSGD(lr=1.0)
         sched = PolynomialDecayScheduler(opt, total_steps=100, min_lr=0.0, power=1.0)
@@ -216,7 +209,6 @@ class TestPolynomialDecayScheduler:
 
 
 class TestLinearWarmupScheduler:
-
     def test_warmup(self):
         opt = SloSGD(lr=1.0)
         sched = LinearWarmupScheduler(opt, warmup_steps=10, base_lr=1.0)
@@ -235,7 +227,6 @@ class TestLinearWarmupScheduler:
 
 
 class TestSloOneCycleLR:
-
     def test_one_cycle(self):
         opt = SloSGD(lr=0.001)
         sched = SloOneCycleLR(opt, max_lr=1.0, total_steps=100, div_factor=25.0)
@@ -251,7 +242,6 @@ class TestSloOneCycleLR:
 
 
 class TestSloCyclicLR:
-
     def test_cyclic(self):
         opt = SloSGD(lr=0.001)
         sched = SloCyclicLR(opt, base_lr=0.001, max_lr=0.1, step_size_up=10)
@@ -263,7 +253,6 @@ class TestSloCyclicLR:
 
 
 class TestCreateScheduler:
-
     def test_create_constant(self):
         opt = SloSGD(lr=0.1)
         sched = create_scheduler(opt, "constant")
@@ -289,7 +278,6 @@ class TestCreateScheduler:
 
 
 class TestSchedulerStateDict:
-
     def test_state_dict(self):
         opt = SloSGD(lr=0.1)
         sched = SloStepLR(opt, step_size=10)

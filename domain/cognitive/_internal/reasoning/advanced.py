@@ -17,9 +17,10 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 
 class ReasoningMode(Enum):
@@ -36,12 +37,13 @@ class ReasoningMode(Enum):
 @dataclass
 class ThoughtStep:
     """A single step in reasoning chain."""
+
     step_id: int
     thought: str
     reasoning_type: str
     confidence: float
-    parent_id: Optional[int] = None
-    children_ids: List[int] = field(default_factory=list)
+    parent_id: int | None = None
+    children_ids: list[int] = field(default_factory=list)
     value: float = 0.0  # For tree search
     is_final: bool = False
 
@@ -49,20 +51,21 @@ class ThoughtStep:
 @dataclass
 class ReasoningResult:
     """Complete reasoning result with trace."""
+
     conclusion: str
     confidence: float
     mode: ReasoningMode
-    steps: List[ThoughtStep]
-    metadata: Dict[str, Any]
+    steps: list[ThoughtStep]
+    metadata: dict[str, Any]
     execution_time_ms: float
 
 
 class ChainOfThought:
     """Chain of Thought reasoning - step-by-step decomposition."""
 
-    def __init__(self, llm_call: Optional[Callable] = None):
+    def __init__(self, llm_call: Callable | None = None):
         self.llm_call = llm_call or self._default_llm
-        self.steps: List[ThoughtStep] = []
+        self.steps: list[ThoughtStep] = []
 
     async def reason(
         self,
@@ -106,10 +109,15 @@ class ChainOfThought:
 
         return ReasoningResult(
             conclusion=conclusion,
-            confidence=sum(s.confidence for s in self.steps) / len(self.steps) if self.steps else 0.0,
+            confidence=sum(s.confidence for s in self.steps) / len(self.steps)
+            if self.steps
+            else 0.0,
             mode=ReasoningMode.CHAIN_OF_THOUGHT,
             steps=self.steps,
-            metadata={"max_steps": max_steps, "solved": self.steps[-1].is_final if self.steps else False},
+            metadata={
+                "max_steps": max_steps,
+                "solved": self.steps[-1].is_final if self.steps else False,
+            },
             execution_time_ms=(time.time() - start_time) * 1000,
         )
 
@@ -146,7 +154,7 @@ Thought:"""
 
         return min(confidence, 1.0)
 
-    def _extract_subproblem(self, thought: str) -> Optional[str]:
+    def _extract_subproblem(self, thought: str) -> str | None:
         """Extract remaining subproblem from thought."""
         patterns = [
             r"remaining:\s*(.+)",
@@ -182,10 +190,10 @@ Thought:"""
 class TreeOfThoughts:
     """Tree of Thoughts - Branching exploration with backtracking."""
 
-    def __init__(self, llm_call: Optional[Callable] = None, beam_width: int = 3):
+    def __init__(self, llm_call: Callable | None = None, beam_width: int = 3):
         self.llm_call = llm_call or self._default_llm
         self.beam_width = beam_width
-        self.nodes: Dict[int, ThoughtStep] = {}
+        self.nodes: dict[int, ThoughtStep] = {}
         self.root_id = 0
 
     async def reason(
@@ -196,13 +204,15 @@ class TreeOfThoughts:
     ) -> ReasoningResult:
         """Perform tree of thoughts reasoning."""
         start_time = time.time()
-        self.nodes = {0: ThoughtStep(
-            step_id=0,
-            thought=problem,
-            reasoning_type="root",
-            confidence=1.0,
-            value=1.0,
-        )}
+        self.nodes = {
+            0: ThoughtStep(
+                step_id=0,
+                thought=problem,
+                reasoning_type="root",
+                confidence=1.0,
+                value=1.0,
+            )
+        }
 
         current_nodes = [0]
         all_nodes = [0]
@@ -258,9 +268,7 @@ class TreeOfThoughts:
             execution_time_ms=(time.time() - start_time) * 1000,
         )
 
-    async def _generate_candidates(
-        self, thought: str, depth: int, num: int
-    ) -> List[str]:
+    async def _generate_candidates(self, thought: str, depth: int, num: int) -> list[str]:
         """Generate candidate branches."""
         candidates = []
         for i in range(num):
@@ -272,7 +280,9 @@ Generate a different alternative approach or continuation:
             if self.llm_call:
                 candidate = await self.llm_call(prompt)
             else:
-                candidate = f"Alternative approach {i+1} exploring different aspects of the problem."
+                candidate = (
+                    f"Alternative approach {i + 1} exploring different aspects of the problem."
+                )
             candidates.append(candidate)
         return candidates
 
@@ -290,13 +300,13 @@ Generate a different alternative approach or continuation:
         solution_indicators = ["answer:", "solution:", "therefore", "conclusion"]
         return any(ind in thought.lower() for ind in solution_indicators)
 
-    def _prune_nodes(self, node_ids: List[int], threshold: float) -> List[int]:
+    def _prune_nodes(self, node_ids: list[int], threshold: float) -> list[int]:
         """Prune low-value nodes."""
         scored = [(n, self.nodes[n].value) for n in node_ids]
         scored.sort(key=lambda x: -x[1])
-        return [n for n, v in scored[:self.beam_width] if v >= threshold]
+        return [n for n, v in scored[: self.beam_width] if v >= threshold]
 
-    def _get_path(self, node_id: int) -> List[int]:
+    def _get_path(self, node_id: int) -> list[int]:
         """Get path from root to node."""
         path = []
         current = node_id
@@ -313,20 +323,19 @@ Generate a different alternative approach or continuation:
 class SelfConsistency:
     """Self-consistency - Multiple reasoning paths, majority vote."""
 
-    def __init__(self, llm_call: Optional[Callable] = None, num_paths: int = 5):
+    def __init__(self, llm_call: Callable | None = None, num_paths: int = 5):
         self.llm_call = llm_call or self._default_llm
         self.num_paths = num_paths
-        self.reasoning_paths: List[List[ThoughtStep]] = []
+        self.reasoning_paths: list[list[ThoughtStep]] = []
 
     async def reason(self, problem: str) -> ReasoningResult:
         """Perform self-consistent reasoning."""
         start_time = time.time()
 
         # Generate multiple reasoning paths
-        paths = await asyncio.gather(*[
-            self._generate_path(problem, path_id)
-            for path_id in range(self.num_paths)
-        ])
+        paths = await asyncio.gather(
+            *[self._generate_path(problem, path_id) for path_id in range(self.num_paths)]
+        )
 
         self.reasoning_paths = paths
 
@@ -344,7 +353,7 @@ class SelfConsistency:
         all_steps = []
         for path in paths:
             for step in path:
-                step.thought = f"[Path {len(all_steps)//len(path)+1}] {step.thought}"
+                step.thought = f"[Path {len(all_steps) // len(path) + 1}] {step.thought}"
                 all_steps.append(step)
 
         return ReasoningResult(
@@ -356,23 +365,27 @@ class SelfConsistency:
             execution_time_ms=(time.time() - start_time) * 1000,
         )
 
-    async def _generate_path(self, problem: str, path_id: int) -> List[ThoughtStep]:
+    async def _generate_path(self, problem: str, path_id: int) -> list[ThoughtStep]:
         """Generate a single reasoning path."""
-        steps = [ThoughtStep(
-            step_id=0,
-            thought=f"[Path {path_id}] Starting reasoning for: {problem[:50]}...",
-            reasoning_type="start",
-            confidence=1.0,
-        )]
+        steps = [
+            ThoughtStep(
+                step_id=0,
+                thought=f"[Path {path_id}] Starting reasoning for: {problem[:50]}...",
+                reasoning_type="start",
+                confidence=1.0,
+            )
+        ]
 
         for i in range(3):
             thought = await self.llm_call(f"{steps[-1].thought}\nContinue reasoning:")
-            steps.append(ThoughtStep(
-                step_id=i + 1,
-                thought=thought,
-                reasoning_type="reasoning",
-                confidence=0.8 - 0.1 * i,
-            ))
+            steps.append(
+                ThoughtStep(
+                    step_id=i + 1,
+                    thought=thought,
+                    reasoning_type="reasoning",
+                    confidence=0.8 - 0.1 * i,
+                )
+            )
 
         return steps
 
@@ -382,9 +395,10 @@ class SelfConsistency:
             return re.search(r"answer:\s*(.+)", thought, re.IGNORECASE).group(1)
         return thought[-100:].strip()
 
-    def _majority_vote(self, conclusions: List[str]) -> str:
+    def _majority_vote(self, conclusions: list[str]) -> str:
         """Select most common conclusion."""
         from collections import Counter
+
         if not conclusions:
             return ""
         counts = Counter(conclusions)
@@ -406,15 +420,15 @@ class ConstitutionalAI:
         "Respect user privacy and confidentiality.",
     ]
 
-    def __init__(self, llm_call: Optional[Callable] = None):
+    def __init__(self, llm_call: Callable | None = None):
         self.llm_call = llm_call or self._default_llm
         self.principles = self.PRINCIPLES.copy()
-        self.review_history: List[Dict] = []
+        self.review_history: list[dict] = []
 
     async def reason(
         self,
         problem: str,
-        custom_principles: Optional[List[str]] = None,
+        custom_principles: list[str] | None = None,
     ) -> ReasoningResult:
         """Perform constitutional reasoning."""
         start_time = time.time()
@@ -453,7 +467,7 @@ class ConstitutionalAI:
 
     async def _self_critique(self, response: str) -> str:
         """Critique response against principles."""
-        principles_text = "\n".join(f"{i+1}. {p}" for i, p in enumerate(self.principles))
+        principles_text = "\n".join(f"{i + 1}. {p}" for i, p in enumerate(self.principles))
         prompt = f"""Response to critique:
 {response}
 
@@ -483,7 +497,7 @@ class CausalReasoning:
     """Causal Reasoning - Cause-effect relationships."""
 
     def __init__(self):
-        self.causal_graph: Dict[str, List[str]] = {}
+        self.causal_graph: dict[str, list[str]] = {}
 
     async def reason(self, problem: str) -> ReasoningResult:
         """Perform causal reasoning."""
@@ -496,7 +510,7 @@ class CausalReasoning:
 
         # Build causal chain
         causal_chain = []
-        for cause, effect in zip(causes[:5], effects[:5]):
+        for cause, effect in zip(causes[:5], effects[:5], strict=False):
             chain_step = ThoughtStep(
                 step_id=len(causal_chain),
                 thought=f"{cause} → {effect}",
@@ -517,7 +531,7 @@ class CausalReasoning:
             execution_time_ms=(time.time() - start_time) * 1000,
         )
 
-    def _identify_causes(self, text: str) -> List[str]:
+    def _identify_causes(self, text: str) -> list[str]:
         """Identify causal factors."""
         cause_patterns = [
             r"because\s+(.+?)(?:\.|$)",
@@ -532,7 +546,7 @@ class CausalReasoning:
             causes.extend(matches)
         return causes if causes else ["Unknown cause"]
 
-    def _identify_effects(self, text: str) -> List[str]:
+    def _identify_effects(self, text: str) -> list[str]:
         """Identify effects."""
         effect_patterns = [
             r"(?:therefore|thus|hence)\s+(.+?)(?:\.|$)",
@@ -545,22 +559,22 @@ class CausalReasoning:
             effects.extend(matches)
         return effects if effects else ["Unknown effect"]
 
-    def _identify_relationships(self, text: str) -> List[Tuple[str, str, float]]:
+    def _identify_relationships(self, text: str) -> list[tuple[str, str, float]]:
         """Identify causal relationships with strength."""
         relationships = []
         causes = self._identify_causes(text)
         effects = self._identify_effects(text)
 
-        for cause, effect in zip(causes, effects):
+        for cause, effect in zip(causes, effects, strict=False):
             relationships.append((cause, effect, 0.8))
 
         return relationships
 
     def _build_causal_conclusion(
         self,
-        causes: List[str],
-        effects: List[str],
-        relationships: List[Tuple],
+        causes: list[str],
+        effects: list[str],
+        relationships: list[tuple],
     ) -> str:
         """Build causal conclusion."""
         if not causes or not effects:
@@ -577,8 +591,8 @@ class SyllogismReasoning:
     """Formal Logic - Syllogistic reasoning."""
 
     def __init__(self):
-        self.premises: List[str] = []
-        self.conclusion: Optional[str] = None
+        self.premises: list[str] = []
+        self.conclusion: str | None = None
 
     async def reason(self, problem: str) -> ReasoningResult:
         """Perform syllogistic reasoning."""
@@ -611,27 +625,29 @@ class SyllogismReasoning:
             execution_time_ms=(time.time() - start_time) * 1000,
         )
 
-    def _parse_premises(self, text: str) -> List[str]:
+    def _parse_premises(self, text: str) -> list[str]:
         """Parse premises from text."""
         sentences = re.split(r"[.!?]", text)
         premises = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
         return premises[:3] if premises else ["All humans are mortal.", "Socrates is human."]
 
-    def _identify_figure(self, premises: List[str]) -> int:
+    def _identify_figure(self, premises: list[str]) -> int:
         """Identify syllogistic figure (1-4)."""
         return 1  # Simplified
 
-    def _identify_mood(self, premises: List[str]) -> str:
+    def _identify_mood(self, premises: list[str]) -> str:
         """Identify syllogistic mood (AAA, EAE, etc.)."""
         return "AAA" if len(premises) >= 2 else "AA"
 
-    def _apply_syllogistic_rules(self, figure: int, mood: str) -> Tuple[bool, str]:
+    def _apply_syllogistic_rules(self, figure: int, mood: str) -> tuple[bool, str]:
         """Apply syllogistic validity rules."""
         # Valid moods for figure 1: AAA, EAE, AII, EIO
-        valid_moods = {1: ["AAA", "EAE", "AII", "EIO", "AAI", "EAO"],
-                       2: ["EAE", "AEE", "EIO", "AOO", "AEQ", "EAO"],
-                       3: ["AAI", "IAI", "AII", "OAO", "EIO", "EAO"],
-                       4: ["AAI", "AEE", "IAI", "EIO", "AEO", "EAO"]}
+        valid_moods = {
+            1: ["AAA", "EAE", "AII", "EIO", "AAI", "EAO"],
+            2: ["EAE", "AEE", "EIO", "AOO", "AEQ", "EAO"],
+            3: ["AAI", "IAI", "AII", "OAO", "EIO", "EAO"],
+            4: ["AAI", "AEE", "IAI", "EIO", "AEO", "EAO"],
+        }
 
         is_valid = mood in valid_moods.get(figure, [])
 
@@ -639,7 +655,7 @@ class SyllogismReasoning:
             return True, f"Syllogism is valid (Figure {figure}, Mood {mood})"
         return False, f"Syllogism may be invalid (Figure {figure}, Mood {mood})"
 
-    def _derive_conclusion(self, premises: List[str]) -> str:
+    def _derive_conclusion(self, premises: list[str]) -> str:
         """Derive logical conclusion."""
         if len(premises) >= 2:
             return f"Therefore: {premises[-1]}"
@@ -649,9 +665,9 @@ class SyllogismReasoning:
 class ReActReasoning:
     """ReAct - Reasoning + Acting framework."""
 
-    def __init__(self, tool_registry: Optional[Dict[str, Callable]] = None):
+    def __init__(self, tool_registry: dict[str, Callable] | None = None):
         self.tool_registry = tool_registry or {}
-        self.action_history: List[Dict] = []
+        self.action_history: list[dict] = []
 
     async def reason(
         self,
@@ -669,7 +685,7 @@ class ReActReasoning:
             # Think
             thought_step = ThoughtStep(
                 step_id=len(steps),
-                thought=f"Thought {i+1}: {thought}",
+                thought=f"Thought {i + 1}: {thought}",
                 reasoning_type="think",
                 confidence=0.8,
             )
@@ -707,7 +723,7 @@ class ReActReasoning:
         indicators = ["answer:", "solution:", "conclusion:", "final answer"]
         return any(ind in thought.lower() for ind in indicators)
 
-    async def _act(self, thought: str) -> Tuple[str, str]:
+    async def _act(self, thought: str) -> tuple[str, str]:
         """Execute an action."""
         tool = list(self.tool_registry.keys())[0] if self.tool_registry else "search"
         result = f"Executed {tool} on: {thought[:30]}... Result obtained."
@@ -718,7 +734,7 @@ class ReActReasoning:
 async def advanced_reasoning(
     problem: str,
     mode: ReasoningMode = ReasoningMode.CHAIN_OF_THOUGHT,
-    llm_call: Optional[Callable] = None,
+    llm_call: Callable | None = None,
     **kwargs,
 ) -> ReasoningResult:
     """

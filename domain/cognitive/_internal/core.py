@@ -5,11 +5,11 @@ Core: Reasoning + Thinking + Creativity
 
 from __future__ import annotations
 
-import time
 import logging
-from typing import Dict, List, Any
+import time
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 
 class ThinkingMode(Enum):
@@ -59,7 +59,7 @@ class CreativeIdea:
     feasibility_score: float
     creativity_score: float
     category: str
-    tags: List[str]
+    tags: list[str]
     timestamp: float
 
 
@@ -69,11 +69,11 @@ class ReasoningChain:
 
     id: str
     question: str
-    reasoning_steps: List[str]
+    reasoning_steps: list[str]
     conclusion: str
     confidence: float
     reasoning_type: ReasoningType
-    evidence: List[str]
+    evidence: list[str]
     timestamp: float
 
 
@@ -83,9 +83,9 @@ class CognitiveCore:
     def __init__(self, db_path: str = "slo_cognitive_core.db"):
         self.db_path = db_path
         self.logger = logging.getLogger("slo.cognitive_core")
-        self.thought_history: List[ThoughtProcess] = []
-        self.ideas: List[CreativeIdea] = []
-        self.reasoning_chains: List[ReasoningChain] = []
+        self.thought_history: list[ThoughtProcess] = []
+        self.ideas: list[CreativeIdea] = []
+        self.reasoning_chains: list[ReasoningChain] = []
 
     def think(self, prompt: str, mode: ThinkingMode = ThinkingMode.ANALYTICAL) -> ThoughtProcess:
         """Process a thought"""
@@ -155,17 +155,17 @@ class CognitiveCore:
         self.reasoning_chains.append(chain)
         return chain
 
-    def get_recent_thoughts(self, limit: int = 10) -> List[ThoughtProcess]:
+    def get_recent_thoughts(self, limit: int = 10) -> list[ThoughtProcess]:
         """Get recent thoughts"""
         return self.thought_history[-limit:]
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get cognitive statistics"""
         return {
             "total_thoughts": len(self.thought_history),
             "total_ideas": len(self.ideas),
             "total_reasoning_chains": len(self.reasoning_chains),
-            "modes_used": [m.value for m in set(t.mode for t in self.thought_history)],
+            "modes_used": [m.value for m in {t.mode for t in self.thought_history}],
         }
 
 

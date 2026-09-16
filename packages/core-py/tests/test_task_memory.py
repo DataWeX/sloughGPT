@@ -1,28 +1,25 @@
 """Tests for domain.memory._internal.task_memory — archive helpers and constants."""
 
-import json
 import time
-import pytest
-from pathlib import Path
 
 from domain.memory._internal.config import MemoryConfig
 from domain.memory._internal.task_memory import (
+    _ARCHIVE_FILENAME,
+    TASK_CONSOLIDATE,
     TASK_REMEMBER,
     TASK_STORE,
-    TASK_CONSOLIDATE,
-    _ARCHIVE_FILENAME,
-    _archive_path,
     _append_archive,
+    _archive_path,
     _read_archive,
-    list_archive,
     archive_stats,
+    list_archive,
     prune_archive,
 )
-
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+
 
 class TestConstants:
     def test_task_remember_value(self):
@@ -41,6 +38,7 @@ class TestConstants:
 # ---------------------------------------------------------------------------
 # _archive_path
 # ---------------------------------------------------------------------------
+
 
 class TestArchivePath:
     def test_returns_path_with_filename(self, tmp_path, monkeypatch):
@@ -61,6 +59,7 @@ class TestArchivePath:
 # ---------------------------------------------------------------------------
 # _append_archive / _read_archive (round-trip)
 # ---------------------------------------------------------------------------
+
 
 class TestAppendReadRoundTrip:
     def test_single_record(self, tmp_path, monkeypatch):
@@ -116,6 +115,7 @@ class TestAppendReadRoundTrip:
 # _read_archive — edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestReadArchive:
     def test_empty_when_file_missing(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
@@ -169,6 +169,7 @@ class TestReadArchive:
 # ---------------------------------------------------------------------------
 # list_archive
 # ---------------------------------------------------------------------------
+
 
 class TestListArchive:
     def test_returns_newest_first(self, tmp_path, monkeypatch):
@@ -230,6 +231,7 @@ class TestListArchive:
 # ---------------------------------------------------------------------------
 # archive_stats
 # ---------------------------------------------------------------------------
+
 
 class TestArchiveStats:
     def test_empty_archive(self, tmp_path, monkeypatch):
@@ -305,6 +307,7 @@ class TestArchiveStats:
 # ---------------------------------------------------------------------------
 # prune_archive
 # ---------------------------------------------------------------------------
+
 
 class TestPruneArchive:
     def test_no_file_returns_zero(self, tmp_path, monkeypatch):

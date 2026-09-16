@@ -7,23 +7,35 @@ Tests:
   - Per-tensor error distribution across a full model
 """
 
-import time
 import tempfile
+import time
+
 import numpy as np
 import pytest
 
 from domain.infrastructure._internal.quantization import (
-    Quantine, TensorInfo, QuantMeta, QuantMode, QuantDtype,
-    _pack_int4, _unpack_int4, _dequantize, _cosine_similarity,
-    quantize_state_dict, quantize_activation, quantize_kv_tensor,
-    dequantize_kv_tensor, _ensure_2d_packed, int4_matmul, int8_matmul,
-    quantized_linear, int4_quantized_linear,
+    Quantine,
+    QuantMeta,
+    TensorInfo,
+    _cosine_similarity,
+    _ensure_2d_packed,
+    _pack_int4,
+    _unpack_int4,
+    dequantize_kv_tensor,
+    int4_matmul,
+    int4_quantized_linear,
+    int8_matmul,
+    quantize_activation,
+    quantize_kv_tensor,
+    quantize_state_dict,
+    quantized_linear,
 )
 
 
 def _require_c_matmul():
     """Skip if AVX2 C extension not available."""
     from domain.infrastructure._internal.quantization import _c_matmul_int4, _int4_numpy_fallback
+
     if _c_matmul_int4 is _int4_numpy_fallback:
         pytest.skip("AVX2 int4 C extension not available")
 
@@ -37,15 +49,29 @@ def _make_gpt2_like_weights(n_layer=12, n_embed=768, n_head=12):
 
     for i in range(n_layer):
         prefix = f"blocks.{i}"
-        weights[f"{prefix}.attn.q_proj.weight"] = rng.randn(n_embed, n_embed).astype(np.float32) * 0.02
-        weights[f"{prefix}.attn.k_proj.weight"] = rng.randn(n_embed, n_embed).astype(np.float32) * 0.02
-        weights[f"{prefix}.attn.v_proj.weight"] = rng.randn(n_embed, n_embed).astype(np.float32) * 0.02
-        weights[f"{prefix}.attn.o_proj.weight"] = rng.randn(n_embed, n_embed).astype(np.float32) * 0.02
+        weights[f"{prefix}.attn.q_proj.weight"] = (
+            rng.randn(n_embed, n_embed).astype(np.float32) * 0.02
+        )
+        weights[f"{prefix}.attn.k_proj.weight"] = (
+            rng.randn(n_embed, n_embed).astype(np.float32) * 0.02
+        )
+        weights[f"{prefix}.attn.v_proj.weight"] = (
+            rng.randn(n_embed, n_embed).astype(np.float32) * 0.02
+        )
+        weights[f"{prefix}.attn.o_proj.weight"] = (
+            rng.randn(n_embed, n_embed).astype(np.float32) * 0.02
+        )
 
         intermediate = n_embed * 4
-        weights[f"{prefix}.ff.w1.weight"] = rng.randn(intermediate, n_embed).astype(np.float32) * 0.02
-        weights[f"{prefix}.ff.w2.weight"] = rng.randn(n_embed, intermediate).astype(np.float32) * 0.02
-        weights[f"{prefix}.ff.w3.weight"] = rng.randn(intermediate, n_embed).astype(np.float32) * 0.02
+        weights[f"{prefix}.ff.w1.weight"] = (
+            rng.randn(intermediate, n_embed).astype(np.float32) * 0.02
+        )
+        weights[f"{prefix}.ff.w2.weight"] = (
+            rng.randn(n_embed, intermediate).astype(np.float32) * 0.02
+        )
+        weights[f"{prefix}.ff.w3.weight"] = (
+            rng.randn(intermediate, n_embed).astype(np.float32) * 0.02
+        )
 
         weights[f"{prefix}.attn_norm.weight"] = rng.randn(n_embed).astype(np.float32) * 0.01 + 1.0
         weights[f"{prefix}.ff_norm.weight"] = rng.randn(n_embed).astype(np.float32) * 0.01 + 1.0
@@ -101,13 +127,12 @@ class TestQuantizationBenchmark:
         t0 = time.perf_counter()
         for _ in range(10):
             y_fp32 = x @ arr.T
-        t_fp32 = (time.perf_counter() - t0) / 10
+        (time.perf_counter() - t0) / 10
 
-        quant_arr = info.array
         t0 = time.perf_counter()
         for _ in range(10):
             y_quant = x @ info.as_float().T
-        t_quant = (time.perf_counter() - t0) / 10
+        (time.perf_counter() - t0) / 10
 
         mse = np.mean((y_fp32 - y_quant) ** 2)
         cos = np.dot(y_fp32.flatten(), y_quant.flatten()) / (
@@ -196,14 +221,16 @@ class TestQuantizationBenchmark:
         t_int4 = (time.perf_counter() - t0) / 10
 
         n_total = int(np.prod(arr.shape))
-        unpacked = _unpack_int4(packed.ravel(), n_total, signed=True).reshape(arr.shape).astype(np.int8)
+        unpacked = (
+            _unpack_int4(packed.ravel(), n_total, signed=True).reshape(arr.shape).astype(np.int8)
+        )
         t0 = time.perf_counter()
         for _ in range(10):
             int8_matmul(x_int8, unpacked, act_scale, info.meta.scale)
         t_old = (time.perf_counter() - t0) / 10
 
         assert t_int4 < t_old * 3, (
-            f"AVX2 int4 {t_int4*1000:.1f}ms too slow vs int8 {t_old*1000:.1f}ms"
+            f"AVX2 int4 {t_int4 * 1000:.1f}ms too slow vs int8 {t_old * 1000:.1f}ms"
         )
 
     def test_int4_vs_int8_speed(self, gpt2_weights):
@@ -242,11 +269,11 @@ class TestQuantizationBenchmark:
         t_int8 = (time.perf_counter() - t0) / 10
 
         assert t_int4 < t_int8 * 5, (
-            f"int4 {t_int4*1000:.1f}ms too slow vs int8 {t_int8*1000:.1f}ms"
+            f"int4 {t_int4 * 1000:.1f}ms too slow vs int8 {t_int8 * 1000:.1f}ms"
         )
 
     def test_fused_int8_linear_faster_than_unfused(self, gpt2_weights):
-        import domain.infrastructure.quantization as Q
+        import domain.infrastructure._internal.quantization as Q
 
         _require_c_matmul()
         assert Q.matmul_int8_f32_c is not None, "fused kernel not wired"
@@ -277,16 +304,23 @@ class TestQuantizationBenchmark:
             Q.matmul_int8_f32_c = saved
         np.testing.assert_array_equal(fused, unfused)
         assert t_fused < t_unfused * 3.0, (
-            f"fused {t_fused*1000:.2f}ms not faster than unfused {t_unfused*1000:.2f}ms"
+            f"fused {t_fused * 1000:.2f}ms not faster than unfused {t_unfused * 1000:.2f}ms"
         )
 
 
 class TestQuantMeta:
     def test_to_dict(self):
         meta = QuantMeta(
-            scale=0.1, zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(3, 4), original_dtype="float32",
-            mse=0.001, max_abs_error=0.01, cosine_sim=0.999,
+            scale=0.1,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(3, 4),
+            original_dtype="float32",
+            mse=0.001,
+            max_abs_error=0.01,
+            cosine_sim=0.999,
         )
         d = meta.to_dict()
         assert d["scale"] == 0.1
@@ -295,9 +329,16 @@ class TestQuantMeta:
 
     def test_from_dict(self):
         d = {
-            "scale": 0.1, "zero_point": 0, "bits": 8, "mode": "symmetric",
-            "dtype_code": 5, "original_shape": [3, 4], "original_dtype": "float32",
-            "mse": 0.001, "max_abs_error": 0.01, "cosine_sim": 0.999,
+            "scale": 0.1,
+            "zero_point": 0,
+            "bits": 8,
+            "mode": "symmetric",
+            "dtype_code": 5,
+            "original_shape": [3, 4],
+            "original_dtype": "float32",
+            "mse": 0.001,
+            "max_abs_error": 0.01,
+            "cosine_sim": 0.999,
         }
         meta = QuantMeta.from_dict(d)
         assert meta.scale == 0.1
@@ -307,8 +348,12 @@ class TestQuantMeta:
     def test_to_dict_per_channel(self):
         meta = QuantMeta(
             scale=np.array([0.1, 0.2, 0.3], dtype=np.float32),
-            zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(3, 4), original_dtype="float32",
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(3, 4),
+            original_dtype="float32",
         )
         d = meta.to_dict()
         assert isinstance(d["scale"], list)
@@ -316,28 +361,53 @@ class TestQuantMeta:
 
     def test_from_dict_per_channel(self):
         d = {
-            "scale": [0.1, 0.2, 0.3], "zero_point": 0, "bits": 8,
-            "mode": "symmetric", "dtype_code": 5,
-            "original_shape": [3, 4], "original_dtype": "float32",
+            "scale": [0.1, 0.2, 0.3],
+            "zero_point": 0,
+            "bits": 8,
+            "mode": "symmetric",
+            "dtype_code": 5,
+            "original_shape": [3, 4],
+            "original_dtype": "float32",
         }
         meta = QuantMeta.from_dict(d)
         assert isinstance(meta.scale, np.ndarray)
         assert len(meta.scale) == 3
 
     def test_is_per_channel(self):
-        meta_t = QuantMeta(scale=0.1, zero_point=0, bits=8, mode="symmetric",
-                          dtype_code=5, original_shape=(3,), original_dtype="float32")
+        meta_t = QuantMeta(
+            scale=0.1,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(3,),
+            original_dtype="float32",
+        )
         assert not meta_t.is_per_channel
 
-        meta_c = QuantMeta(scale=np.array([0.1, 0.2]), zero_point=0, bits=8, mode="symmetric",
-                          dtype_code=5, original_shape=(2, 4), original_dtype="float32")
+        meta_c = QuantMeta(
+            scale=np.array([0.1, 0.2]),
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(2, 4),
+            original_dtype="float32",
+        )
         assert meta_c.is_per_channel
 
     def test_roundtrip_dict(self):
         meta = QuantMeta(
-            scale=0.05, zero_point=10, bits=8, mode="asymmetric",
-            dtype_code=5, original_shape=(16,), original_dtype="float32",
-            mse=0.002, max_abs_error=0.05, cosine_sim=0.995,
+            scale=0.05,
+            zero_point=10,
+            bits=8,
+            mode="asymmetric",
+            dtype_code=5,
+            original_shape=(16,),
+            original_dtype="float32",
+            mse=0.002,
+            max_abs_error=0.05,
+            cosine_sim=0.995,
         )
         d = meta.to_dict()
         meta2 = QuantMeta.from_dict(d)
@@ -359,8 +429,15 @@ class TestTensorInfo:
 
     def test_quantized(self):
         arr = np.array([1, 2, 3], dtype=np.int8)
-        meta = QuantMeta(scale=0.1, zero_point=0, bits=8, mode="symmetric",
-                        dtype_code=5, original_shape=(3,), original_dtype="float32")
+        meta = QuantMeta(
+            scale=0.1,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(3,),
+            original_dtype="float32",
+        )
         info = TensorInfo(name="w", array=arr, meta=meta)
         assert info.is_quantized
         assert info.shape == (3,)
@@ -374,8 +451,15 @@ class TestTensorInfo:
 
     def test_as_float_int8(self):
         arr = np.array([1, 2, 3, -1], dtype=np.int8)
-        meta = QuantMeta(scale=0.1, zero_point=0, bits=8, mode="symmetric",
-                        dtype_code=5, original_shape=(4,), original_dtype="float32")
+        meta = QuantMeta(
+            scale=0.1,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(4,),
+            original_dtype="float32",
+        )
         info = TensorInfo(name="w", array=arr, meta=meta)
         result = info.as_float()
         assert result.dtype == np.float32
@@ -392,10 +476,17 @@ class TestTensorInfo:
         assert info.compression_ratio() == 1.0
 
     def test_compression_ratio_int8(self):
-        arr_f32 = np.random.randn(16, 32).astype(np.float32)
+        np.random.randn(16, 32).astype(np.float32)
         arr_i8 = np.random.randn(16, 32).astype(np.int8)
-        meta = QuantMeta(scale=0.1, zero_point=0, bits=8, mode="symmetric",
-                        dtype_code=5, original_shape=(16, 32), original_dtype="float32")
+        meta = QuantMeta(
+            scale=0.1,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(16, 32),
+            original_dtype="float32",
+        )
         info = TensorInfo(name="w", array=arr_i8, meta=meta)
         ratio = info.compression_ratio()
         assert ratio > 1.0
@@ -602,7 +693,7 @@ class TestQuantizeStateDict:
         }
         result = quantize_state_dict(sd, bits=8, mode="symmetric")
         assert len(result) == 2
-        for name, info in result.items():
+        for _name, info in result.items():
             assert info.is_quantized
 
     def test_int4(self):

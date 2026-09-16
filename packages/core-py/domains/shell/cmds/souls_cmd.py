@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from ..console import Console
 from ..commands import ShellCommands
+from ..console import Console
 
 help = "List, switch, or show current soul"
 names = ["souls", "switch", "whoami"]
 
 
-def run(argv: list[str], out: Console, api: ShellCommands,
-        env: dict[str, str]) -> int:
+def run(argv: list[str], out: Console, api: ShellCommands, env: dict[str, str]) -> int:
     cmd = argv[0] if argv else "souls"
 
     try:
@@ -78,6 +77,7 @@ def run(argv: list[str], out: Console, api: ShellCommands,
 
     except Exception as e:
         from domain.shell._internal.error import format_error
+
         out.print(format_error(e, "souls", color=False))
         return 1
 

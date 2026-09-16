@@ -3,31 +3,30 @@
 import time
 from pathlib import Path
 
-import numpy as np
 import pytest
 
-from domains.learner import continual
+from domain.learner._internal import continual
 from domain.learner._internal.continual import (
+    BUFFER_CAPACITY,
     CHAR_SET,
-    STOI,
     ITOS,
+    STOI,
     UNK,
     VOCAB,
-    TRAIN_SEQ_LEN,
-    BUFFER_CAPACITY,
     ContinualLearner,
-    _tokenize,
-    _detokenize,
     _build_transformer,
+    _detokenize,
+    _tokenize,
 )
-from domain.training._internal.slonet import SloTransformer
 from domain.learner._internal.knowledge import KnowledgeFact
+from domain.training._internal.slonet import SloTransformer
 
 
 @pytest.fixture(autouse=True)
 def isolated_knowledge_paths(tmp_path, monkeypatch):
     """Keep ContinualLearner's KnowledgeMemory persistence off the real data dir."""
     from domains.learner import knowledge as K
+
     monkeypatch.setattr(K, "KNOWLEDGE_DIR", tmp_path)
     monkeypatch.setattr(K, "VISITED_PATH", tmp_path / "visited.json")
     monkeypatch.setattr(K, "ENTRIES_PATH", tmp_path / "entries.json")
@@ -121,7 +120,7 @@ def test_ingest_text_empty_is_noop(learner):
 
 
 def test_ingest_text_trims_buffer_to_capacity(learner):
-    text = ("hello " * (BUFFER_CAPACITY + 1000))
+    text = "hello " * (BUFFER_CAPACITY + 1000)
     learner.ingest_text(text)
     assert len(learner.buffer) <= BUFFER_CAPACITY
     assert learner.buffer == learner.buffer[-BUFFER_CAPACITY:]
@@ -231,14 +230,24 @@ def test_shutdown_stops_thread_and_saves(learner, state_paths):
 
 
 def test_search_knowledge_and_query_topic(learner):
-    learner.knowledge.add_fact(KnowledgeFact(
-        content="Paris is the capital of France", topic="geography",
-        source="test", timestamp=time.time(), importance=0.9,
-    ))
-    learner.knowledge.add_fact(KnowledgeFact(
-        content="Python is a programming language", topic="code",
-        source="test", timestamp=time.time(), importance=0.8,
-    ))
+    learner.knowledge.add_fact(
+        KnowledgeFact(
+            content="Paris is the capital of France",
+            topic="geography",
+            source="test",
+            timestamp=time.time(),
+            importance=0.9,
+        )
+    )
+    learner.knowledge.add_fact(
+        KnowledgeFact(
+            content="Python is a programming language",
+            topic="code",
+            source="test",
+            timestamp=time.time(),
+            importance=0.8,
+        )
+    )
     results = learner.search_knowledge("paris capital")
     assert any("France" in r["content"] for r in results)
     topic_facts = learner.query_knowledge("code")
@@ -247,6 +256,7 @@ def test_search_knowledge_and_query_topic(learner):
 
 def test_get_learner_singleton(learner, monkeypatch):
     from domain.learner._internal.continual import get_learner
+
     monkeypatch.setattr(continual, "_learner", None)
     monkeypatch.setattr(continual, "ContinualLearner", lambda **kw: learner)
     assert get_learner() is learner
@@ -258,6 +268,7 @@ def test_get_learner_singleton(learner, monkeypatch):
 
 def test_load_existing_checkpoint(state_paths):
     from domain.training._internal.slonet import export_to_sou
+
     net = _build_transformer(n_embed=32, n_layer=1, n_head=1, soul_name="t")
     export_to_sou(net, str(state_paths))
     inst = ContinualLearner(n_embed=32, n_layer=1, n_head=1)
@@ -282,8 +293,10 @@ def test_load_checkpoint_non_transformer_recreates(state_paths, monkeypatch):
 def test_load_checkpoint_raises_recreates(state_paths, monkeypatch):
     state_paths.parent.mkdir(parents=True, exist_ok=True)
     state_paths.write_text("not a soul file")
+
     def boom(path):
         raise RuntimeError("corrupt checkpoint")
+
     monkeypatch.setattr(continual, "import_from_sou", boom)
     inst = ContinualLearner(n_embed=32, n_layer=1, n_head=1)
     try:
@@ -297,12 +310,17 @@ def test_load_checkpoint_raises_recreates(state_paths, monkeypatch):
 
 def test_search_and_learn_ingests_articles(learner, monkeypatch):
     monkeypatch.setattr(
-        learner.ingestor, "search_and_ingest",
+        learner.ingestor,
+        "search_and_ingest",
         lambda query, max_results: {"new_facts": 3, "rejected": 1, "stats": {"accepted": 3}},
     )
     monkeypatch.setattr(
-        learner.knowledge, "search",
-        lambda query, top_k: [{"content": "Alpha article content"}, {"content": "Beta article content"}],
+        learner.knowledge,
+        "search",
+        lambda query, top_k: [
+            {"content": "Alpha article content"},
+            {"content": "Beta article content"},
+        ],
     )
     result = learner.search_and_learn("latest ai news")
     assert result["new_facts"] == 3
@@ -316,7 +334,8 @@ def test_search_and_learn_ingests_articles(learner, monkeypatch):
 
 def test_search_and_learn_no_facts_is_noop(learner, monkeypatch):
     monkeypatch.setattr(
-        learner.ingestor, "search_and_ingest",
+        learner.ingestor,
+        "search_and_ingest",
         lambda query, max_results: {"new_facts": 0, "rejected": 0, "stats": {}},
     )
     result = learner.search_and_learn("nothing found")
@@ -329,7 +348,8 @@ def test_subscribe_feed_ingests_initial_articles(learner, monkeypatch):
     monkeypatch.setattr(learner.ingestor, "poll_feeds", lambda max_articles: {"new_articles": 2})
     monkeypatch.setattr(learner.knowledge, "all_topics", lambda: ["rss-topic"])
     monkeypatch.setattr(
-        learner.knowledge, "get_topic_facts",
+        learner.knowledge,
+        "get_topic_facts",
         lambda topic: [{"content": "Feed article body text"}],
     )
     assert learner.subscribe_feed("http://example.com/rss") is True
@@ -358,12 +378,20 @@ def test_list_feeds(learner, monkeypatch):
 def test_ingest_url_ingests_matching_fact(learner, monkeypatch):
     url = "http://example.com/article-1"
     monkeypatch.setattr(
-        learner.ingestor, "ingest_url",
-        lambda u: {"new_facts": 1, "title": "Title", "content_length": 120, "rejected": False, "status": "ok"},
+        learner.ingestor,
+        "ingest_url",
+        lambda u: {
+            "new_facts": 1,
+            "title": "Title",
+            "content_length": 120,
+            "rejected": False,
+            "status": "ok",
+        },
     )
     monkeypatch.setattr(learner.knowledge, "all_topics", lambda: ["web-topic"])
     monkeypatch.setattr(
-        learner.knowledge, "get_topic_facts",
+        learner.knowledge,
+        "get_topic_facts",
         lambda topic: [{"url": url, "content": "Scraped article body"}],
     )
     result = learner.ingest_url(url)
@@ -374,8 +402,15 @@ def test_ingest_url_ingests_matching_fact(learner, monkeypatch):
 
 def test_ingest_url_no_new_facts(learner, monkeypatch):
     monkeypatch.setattr(
-        learner.ingestor, "ingest_url",
-        lambda u: {"new_facts": 0, "title": "", "content_length": 0, "rejected": False, "status": "no_content"},
+        learner.ingestor,
+        "ingest_url",
+        lambda u: {
+            "new_facts": 0,
+            "title": "",
+            "content_length": 0,
+            "rejected": False,
+            "status": "no_content",
+        },
     )
     result = learner.ingest_url("http://example.com/empty")
     assert result["new_facts"] == 0
@@ -404,7 +439,9 @@ def test_train_step_skips_when_loss_none(learner):
 
 def test_train_step_trims_loss_history(learner):
     learner.ingest_text("hello world, continual learning " * 30)
-    learner.loss_history = [{"step": i, "loss": 0.1, "tokens": 1, "timestamp": 0.0} for i in range(500)]
+    learner.loss_history = [
+        {"step": i, "loss": 0.1, "tokens": 1, "timestamp": 0.0} for i in range(500)
+    ]
     status = learner.train_now()
     assert len(learner.loss_history) == 500
     assert status["loss_history"][-1]["step"] == 1
@@ -434,6 +471,7 @@ def test_shutdown_joins_live_thread(state_paths, monkeypatch):
 
 def _make_no_thread_learner(monkeypatch, state_paths):
     import threading
+
     monkeypatch.setattr(threading.Thread, "start", lambda self: None)
     return ContinualLearner(n_embed=32, n_layer=1, n_head=1, lr=1e-4)
 
@@ -457,7 +495,8 @@ def test_background_loop_polls_feed_articles(monkeypatch, state_paths):
     inst = _make_no_thread_learner(monkeypatch, state_paths)
     monkeypatch.setattr(inst.knowledge, "all_topics", lambda: ["rss-topic"])
     monkeypatch.setattr(
-        inst.knowledge, "get_topic_facts",
+        inst.knowledge,
+        "get_topic_facts",
         lambda topic: [{"source": "rss", "content": "Feed snippet for training"}],
     )
     calls = {"n": 0}

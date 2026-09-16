@@ -1,10 +1,9 @@
 """Meaningful tests for ModelHealthMonitor — get_trend, detect_drift, get_stats, history persistence."""
 
-import json
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
-from domain.feedback._internal.model_health import ModelHealthMonitor, HealthSnapshot
+
+from domain.feedback._internal.model_health import HealthSnapshot, ModelHealthMonitor
 
 
 class TestModelHealthMonitor:

@@ -10,11 +10,12 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
+
+from domain.shared import find_repo_root
+from domain.training._internal.executor import get_training_executor
 
 from .helpers import _finish_job
 from .jobs import training_jobs
@@ -92,7 +93,10 @@ async def start_visual_training(
     def _run_visual(job_id_: str = job_id):
         try:
             training_jobs[job_id_]["status"] = "running"
-            from domain.training._internal.video_trainer import VideoCaptionTrainer, VideoTrainConfig
+            from domain.training._internal.video_trainer import (
+                VideoCaptionTrainer,
+                VideoTrainConfig,
+            )
 
             config = VideoTrainConfig(
                 data_path=data_path_str,

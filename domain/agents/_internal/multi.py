@@ -21,12 +21,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
-
-import logging
+from typing import Any
 
 from domain.shell._internal.commands import ShellCommands
 
@@ -35,6 +34,7 @@ logger = logging.getLogger("slo.agents.multi")
 
 # ── Agent definitions ─────────────────────────────────────────────────
 
+
 @dataclass
 class SpecializedAgent:
     """A specialized agent with a role and system prompt."""
@@ -42,9 +42,9 @@ class SpecializedAgent:
     name: str
     role: str
     system_prompt: str
-    tools: List[str] = field(default_factory=list)
+    tools: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "role": self.role,
@@ -52,7 +52,7 @@ class SpecializedAgent:
         }
 
 
-DEFAULT_AGENTS: Dict[str, SpecializedAgent] = {
+DEFAULT_AGENTS: dict[str, SpecializedAgent] = {
     "researcher": SpecializedAgent(
         name="Researcher",
         role="research and gather information",
@@ -117,9 +117,9 @@ class AgentTask:
     result: str = ""
     status: str = TaskStatus.PENDING
     error: str = ""
-    depends_on: List[str] = field(default_factory=list)
+    depends_on: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "description": self.description,
@@ -132,6 +132,7 @@ class AgentTask:
 
 # ── Multi-agent orchestrator ──────────────────────────────────────────
 
+
 class MultiAgentOrchestrator:
     """Orchestrates multiple specialized agents to accomplish a goal.
 
@@ -140,7 +141,7 @@ class MultiAgentOrchestrator:
     wall-clock time for goals that decompose into independent subtasks.
     """
 
-    def __init__(self, agents: Optional[Dict[str, SpecializedAgent]] = None):
+    def __init__(self, agents: dict[str, SpecializedAgent] | None = None):
         self.agents = agents or dict(DEFAULT_AGENTS)
         self._cmds = ShellCommands
         self._load_custom_agents()
@@ -150,6 +151,7 @@ class MultiAgentOrchestrator:
         try:
             import json
             from pathlib import Path
+
             agents_file = Path.home() / ".config" / "sloughgpt" / "custom_agents.json"
             if agents_file.exists():
                 custom = json.loads(agents_file.read_text())
@@ -164,13 +166,13 @@ class MultiAgentOrchestrator:
         except Exception as e:
             logger.debug("custom agents file load failed: %s", e)
 
-    def list_agents(self) -> List[Dict[str, Any]]:
+    def list_agents(self) -> list[dict[str, Any]]:
         return [a.to_dict() for a in self.agents.values()]
 
-    def get_agent(self, name: str) -> Optional[SpecializedAgent]:
+    def get_agent(self, name: str) -> SpecializedAgent | None:
         return self.agents.get(name)
 
-    def execute(self, goal: str, context: str = "") -> Dict[str, Any]:
+    def execute(self, goal: str, context: str = "") -> dict[str, Any]:
         """Execute a goal using parallel-aware multi-agent orchestration.
 
         Steps:
@@ -186,12 +188,13 @@ class MultiAgentOrchestrator:
 
         task_map = {t.id: t for t in tasks}
         levels = self._compute_levels(tasks)
-        results_ctx: Dict[str, str] = {}
+        results_ctx: dict[str, str] = {}
 
         for level_idx, task_ids in enumerate(levels):
             logger.info(
                 "Executing level %d (%d tasks in parallel)",
-                level_idx, len(task_ids),
+                level_idx,
+                len(task_ids),
                 extra={"tag": "MODEL"},
             )
             with ThreadPoolExecutor(max_workers=len(task_ids)) as pool:
@@ -219,7 +222,7 @@ class MultiAgentOrchestrator:
         final = self._compose(goal, tasks)
         return {"response": final, "tasks": [t.to_dict() for t in tasks]}
 
-    async def async_execute(self, goal: str, context: str = "") -> Dict[str, Any]:
+    async def async_execute(self, goal: str, context: str = "") -> dict[str, Any]:
         """Async version of execute — uses asyncio.gather instead of ThreadPoolExecutor.
 
         Non-blocking during inference calls via httpx.AsyncClient.
@@ -231,12 +234,13 @@ class MultiAgentOrchestrator:
 
         task_map = {t.id: t for t in tasks}
         levels = self._compute_levels(tasks)
-        results_ctx: Dict[str, str] = {}
+        results_ctx: dict[str, str] = {}
 
         for level_idx, task_ids in enumerate(levels):
             logger.info(
                 "Executing level %d (%d tasks in parallel via asyncio)",
-                level_idx, len(task_ids),
+                level_idx,
+                len(task_ids),
                 extra={"tag": "MODEL"},
             )
 
@@ -260,7 +264,7 @@ class MultiAgentOrchestrator:
         final = await self._async_compose(goal, tasks)
         return {"response": final, "tasks": [t.to_dict() for t in tasks]}
 
-    def _plan(self, goal: str, context: str) -> List[AgentTask]:
+    def _plan(self, goal: str, context: str) -> list[AgentTask]:
         """Use LLM to plan subtasks with dependency info."""
         agent_names = ", ".join(self.agents.keys())
         prompt = (
@@ -299,35 +303,45 @@ class MultiAgentOrchestrator:
             deps = item.get("depends_on") or []
             if isinstance(deps, str):
                 deps = [deps]
-            tasks.append(AgentTask(
-                id=item.get("id", str(i + 1)),
-                description=item.get("description", item.get("task", f"Step {i + 1}")),
-                assigned_agent=agent_name,
-                depends_on=[d for d in deps if d],
-            ))
+            tasks.append(
+                AgentTask(
+                    id=item.get("id", str(i + 1)),
+                    description=item.get("description", item.get("task", f"Step {i + 1}")),
+                    assigned_agent=agent_name,
+                    depends_on=[d for d in deps if d],
+                )
+            )
         return tasks or self._simple_plan(goal)
 
-    def _simple_plan(self, goal: str) -> List[AgentTask]:
+    def _simple_plan(self, goal: str) -> list[AgentTask]:
         """Fallback plan when LLM fails — independent research + write."""
         return [
-            AgentTask(id="1", description=f"Research: {goal}", assigned_agent="researcher", depends_on=[]),
-            AgentTask(id="2", description="Write: synthesize findings", assigned_agent="writer", depends_on=["1"]),
+            AgentTask(
+                id="1", description=f"Research: {goal}", assigned_agent="researcher", depends_on=[]
+            ),
+            AgentTask(
+                id="2",
+                description="Write: synthesize findings",
+                assigned_agent="writer",
+                depends_on=["1"],
+            ),
         ]
 
-    def _compute_levels(self, tasks: List[AgentTask]) -> List[List[str]]:
+    def _compute_levels(self, tasks: list[AgentTask]) -> list[list[str]]:
         """Topological sort into parallel levels by dependency.
 
         Returns [[level_0_ids], [level_1_ids], ...] where each level's
         tasks have no remaining unmet dependencies.
         """
-        remaining: Set[str] = {t.id for t in tasks}
-        completed: Set[str] = set()
+        remaining: set[str] = {t.id for t in tasks}
+        completed: set[str] = set()
         task_map = {t.id: t for t in tasks}
-        levels: List[List[str]] = []
+        levels: list[list[str]] = []
 
         while remaining:
             level = [
-                tid for tid in remaining
+                tid
+                for tid in remaining
                 if all(dep in completed for dep in task_map[tid].depends_on)
             ]
             if not level:
@@ -343,8 +357,8 @@ class MultiAgentOrchestrator:
     def _build_dep_context(
         self,
         task: AgentTask,
-        task_map: Dict[str, AgentTask],
-        results_ctx: Dict[str, str],
+        task_map: dict[str, AgentTask],
+        results_ctx: dict[str, str],
     ) -> str:
         """Build context string from completed dependencies."""
         parts = []
@@ -380,7 +394,7 @@ class MultiAgentOrchestrator:
 
         return result
 
-    def _compose(self, goal: str, tasks: List[AgentTask]) -> str:
+    def _compose(self, goal: str, tasks: list[AgentTask]) -> str:
         """Compose final output from all task results."""
         completed = [t for t in tasks if t.status == TaskStatus.COMPLETED]
         if not completed:
@@ -396,9 +410,7 @@ class MultiAgentOrchestrator:
 
         summary_prompt = (
             f"Synthesize the following agent outputs into a cohesive response "
-            f"for the user's goal: {goal}\n\n"
-            + "\n".join(lines)
-            + "\n\nFinal response:"
+            f"for the user's goal: {goal}\n\n" + "\n".join(lines) + "\n\nFinal response:"
         )
         summary = self._generate(summary_prompt, max_tokens=400)
         return summary.strip()
@@ -421,9 +433,10 @@ class MultiAgentOrchestrator:
             return f"[LLM error: {result['error']}]"
         return str(result)
 
-    def _try_execute_tool(self, text: str, agent_tools: List[str]) -> Optional[str]:
+    def _try_execute_tool(self, text: str, agent_tools: list[str]) -> str | None:
         """Detect and execute a tool from agent output text. Returns result or None."""
         from .tools import get_tool_registry
+
         registry = get_tool_registry()
         intent = registry.detect_tool_intent(text)
         if not intent:
@@ -432,6 +445,7 @@ class MultiAgentOrchestrator:
         if tool_name not in agent_tools:
             return None
         import asyncio
+
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
@@ -443,9 +457,10 @@ class MultiAgentOrchestrator:
             return result.output
         return None
 
-    async def _async_try_execute_tool(self, text: str, agent_tools: List[str]) -> Optional[str]:
+    async def _async_try_execute_tool(self, text: str, agent_tools: list[str]) -> str | None:
         """Async detect and execute a tool from agent output text."""
         from .tools import get_tool_registry
+
         registry = get_tool_registry()
         intent = registry.detect_tool_intent(text)
         if not intent:
@@ -461,7 +476,7 @@ class MultiAgentOrchestrator:
             return result.output
         return None
 
-    async def _async_plan(self, goal: str, context: str) -> List[AgentTask]:
+    async def _async_plan(self, goal: str, context: str) -> list[AgentTask]:
         """Async plan subtasks — same as _plan but non-blocking."""
         agent_names = ", ".join(self.agents.keys())
         prompt = (
@@ -500,12 +515,14 @@ class MultiAgentOrchestrator:
             deps = item.get("depends_on") or []
             if isinstance(deps, str):
                 deps = [deps]
-            tasks.append(AgentTask(
-                id=item.get("id", str(i + 1)),
-                description=item.get("description", item.get("task", f"Step {i + 1}")),
-                assigned_agent=agent_name,
-                depends_on=[d for d in deps if d],
-            ))
+            tasks.append(
+                AgentTask(
+                    id=item.get("id", str(i + 1)),
+                    description=item.get("description", item.get("task", f"Step {i + 1}")),
+                    assigned_agent=agent_name,
+                    depends_on=[d for d in deps if d],
+                )
+            )
         return tasks or self._simple_plan(goal)
 
     async def _async_run_agent(self, task: AgentTask, goal: str, dep_context: str) -> str:
@@ -533,7 +550,7 @@ class MultiAgentOrchestrator:
 
         return result
 
-    async def _async_compose(self, goal: str, tasks: List[AgentTask]) -> str:
+    async def _async_compose(self, goal: str, tasks: list[AgentTask]) -> str:
         """Async compose final output — same as _compose but non-blocking."""
         completed = [t for t in tasks if t.status == TaskStatus.COMPLETED]
         if not completed:
@@ -549,9 +566,7 @@ class MultiAgentOrchestrator:
 
         summary_prompt = (
             f"Synthesize the following agent outputs into a cohesive response "
-            f"for the user's goal: {goal}\n\n"
-            + "\n".join(lines)
-            + "\n\nFinal response:"
+            f"for the user's goal: {goal}\n\n" + "\n".join(lines) + "\n\nFinal response:"
         )
         summary = await self._async_generate(summary_prompt, max_tokens=400)
         return summary.strip()
@@ -559,7 +574,7 @@ class MultiAgentOrchestrator:
 
 # ── Singleton ─────────────────────────────────────────────────────────
 
-_orchestrator: Optional[MultiAgentOrchestrator] = None
+_orchestrator: MultiAgentOrchestrator | None = None
 
 
 def get_orchestrator() -> MultiAgentOrchestrator:

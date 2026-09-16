@@ -7,16 +7,24 @@ Text conditioning via cross-attention with text embeddings.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
-import numpy as np
 import logging
 import math
+
+import numpy as np
 
 logger = logging.getLogger("slo.multimodal.diffusion")
 
 from domain.training._internal.slonet import (
-    Tensor, SloConv2D, SloLinear, SloCrossAttention,
-    SloAdam, silu as _silu,
+    SloAdam,
+    SloConv2D,
+    SloCrossAttention,
+    SloLinear,
+    Tensor,
+)
+from domain.training._internal.slonet import (
+    silu as _silu,
+)
+from domain.training._internal.slonet import (
     tensor as _tensor,
 )
 
@@ -120,8 +128,15 @@ class ResBlock:
 class UNetBlock:
     """Single UNet block with ResBlocks and optional cross-attention."""
 
-    def __init__(self, in_channels: int, out_channels: int, temb_dim: int = 256,
-                 context_dim: int = 256, n_heads: int = 4, has_cross_attn: bool = False):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        temb_dim: int = 256,
+        context_dim: int = 256,
+        n_heads: int = 4,
+        has_cross_attn: bool = False,
+    ):
         self.res1 = ResBlock(in_channels, out_channels, temb_dim)
         self.res2 = ResBlock(out_channels, out_channels, temb_dim)
         self.has_cross_attn = has_cross_attn
@@ -130,23 +145,29 @@ class UNetBlock:
             # Cross-attention for text conditioning
             self.cross_attn = SloCrossAttention(out_channels, n_heads)
 
-    def forward(self, x: Tensor, temb: Tensor, context: Optional[Tensor] = None) -> Tensor:
+    def forward(self, x: Tensor, temb: Tensor, context: Tensor | None = None) -> Tensor:
         x = self.res1.forward(x, temb)
         x = self.res2.forward(x, temb)
 
         if self.has_cross_attn and context is not None:
             # x is (B, C, H, W), need (B, H*W, C) for cross-attention
             B, C_out, H, W = x.data.shape
-            x_flat = Tensor(x.data.reshape(B, C_out, H * W).transpose(0, 2, 1),
-                           requires_grad=True, _children=(x,))
+            x_flat = Tensor(
+                x.data.reshape(B, C_out, H * W).transpose(0, 2, 1),
+                requires_grad=True,
+                _children=(x,),
+            )
             # Project context to match channel dim if needed
             ctx = context
             if context.data.shape[-1] != C_out:
                 proj = SloLinear(context.data.shape[-1], C_out)
                 ctx = proj.forward(context)
             x_flat = self.cross_attn.forward(x_flat, ctx)
-            x = Tensor(x_flat.data.transpose(0, 2, 1).reshape(B, C_out, H, W),
-                      requires_grad=True, _children=(x_flat,))
+            x = Tensor(
+                x_flat.data.transpose(0, 2, 1).reshape(B, C_out, H, W),
+                requires_grad=True,
+                _children=(x_flat,),
+            )
 
         return x
 
@@ -167,8 +188,15 @@ class LatentUNet:
     - Cross-attention at lowest resolution for text conditioning
     """
 
-    def __init__(self, in_channels=64, model_channels=128, out_channels=64,
-                 temb_dim=256, context_dim=256, n_heads=4):
+    def __init__(
+        self,
+        in_channels=64,
+        model_channels=128,
+        out_channels=64,
+        temb_dim=256,
+        context_dim=256,
+        n_heads=4,
+    ):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.model_channels = model_channels
@@ -185,7 +213,7 @@ class LatentUNet:
         in_ch = model_channels
         for i, mult in enumerate(ch_mult):
             out_ch = model_channels * mult
-            has_cross_attn = (i == len(ch_mult) - 1)  # Cross-attn at lowest resolution
+            has_cross_attn = i == len(ch_mult) - 1  # Cross-attn at lowest resolution
             block = UNetBlock(in_ch, out_ch, temb_dim, context_dim, n_heads, has_cross_attn)
             self.down_blocks.append(block)
             in_ch = out_ch
@@ -202,15 +230,16 @@ class LatentUNet:
         for i, mult in enumerate(reversed(ch_mult)):
             out_ch = model_channels * mult
             skip_ch = skip_channels.pop(-1)
-            block = UNetBlock(in_ch + skip_ch, out_ch, temb_dim, context_dim, n_heads,
-                            has_cross_attn=(i == 0))
+            block = UNetBlock(
+                in_ch + skip_ch, out_ch, temb_dim, context_dim, n_heads, has_cross_attn=(i == 0)
+            )
             self.up_blocks.append(block)
             in_ch = out_ch
 
         # Output
         self.out_conv = SloConv2D(in_ch, out_channels, kernel_size=3, padding=1)
 
-    def forward(self, x: Tensor, timesteps: np.ndarray, context: Optional[Tensor] = None) -> Tensor:
+    def forward(self, x: Tensor, timesteps: np.ndarray, context: Tensor | None = None) -> Tensor:
         """
         Args:
             x: (B, in_channels, H, W) noisy latents
@@ -236,7 +265,7 @@ class LatentUNet:
         h = self.middle_block2.forward(h, temb)
 
         # Decoder with skip connections
-        for i, block in enumerate(self.up_blocks):
+        for _i, block in enumerate(self.up_blocks):
             skip = skip_connections.pop(-1)
             # Concatenate skip connection
             h_data = np.concatenate([h.data, skip.data], axis=1)
@@ -267,12 +296,20 @@ class LatentDiffusionModel:
     to predict noise in the latent space conditioned on text embeddings.
     """
 
-    def __init__(self, latent_dim=64, model_channels=128, temb_dim=256,
-                 context_dim=256, n_heads=4, num_timesteps=1000):
+    def __init__(
+        self,
+        latent_dim=64,
+        model_channels=128,
+        temb_dim=256,
+        context_dim=256,
+        n_heads=4,
+        num_timesteps=1000,
+    ):
         self.latent_dim = latent_dim
         self.num_timesteps = num_timesteps
-        self.unet = LatentUNet(latent_dim, model_channels, latent_dim,
-                              temb_dim, context_dim, n_heads)
+        self.unet = LatentUNet(
+            latent_dim, model_channels, latent_dim, temb_dim, context_dim, n_heads
+        )
         self.optimizer = SloAdam(lr=1e-4)
 
         # Noise schedule (linear)
@@ -288,7 +325,7 @@ class LatentDiffusionModel:
         """Get sqrt(1 - alpha_cumprod) for timestep t."""
         return np.sqrt(1 - self.alphas_cumprod[t])[:, None, None, None]
 
-    def add_noise(self, latents: np.ndarray, t: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def add_noise(self, latents: np.ndarray, t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Add noise to latents at timestep t."""
         noise = np.random.randn(*latents.shape).astype(np.float32)
         sqrt_alpha_bar = self._get_sqrt_alpha_bar(t)
@@ -328,7 +365,7 @@ class LatentDiffusionModel:
 
         return float(loss.data)
 
-    @np.errstate(over='ignore')
+    @np.errstate(over="ignore")
     def sample(self, text_embeddings: np.ndarray, num_steps=50, guidance_scale=7.5) -> np.ndarray:
         """
         Generate image latents from text embeddings using DDIM sampling.
@@ -354,7 +391,7 @@ class LatentDiffusionModel:
 
         use_cfg = guidance_scale > 1.0
 
-        for i, t in enumerate(timesteps):
+        for _i, t in enumerate(timesteps):
             t_array = np.array([t])
 
             # Predict noise (conditional)
@@ -368,7 +405,9 @@ class LatentDiffusionModel:
                 noise_uncond = self.unet.forward(x_tensor, t_array, uncond_tensor)
 
                 # Classifier-free guidance
-                noise_pred_np = noise_uncond.data + guidance_scale * (noise_cond.data - noise_uncond.data)
+                noise_pred_np = noise_uncond.data + guidance_scale * (
+                    noise_cond.data - noise_uncond.data
+                )
             else:
                 noise_pred_np = noise_cond.data
 
@@ -386,7 +425,7 @@ class LatentDiffusionModel:
             pred_x0 = np.clip(pred_x0, -1.0, 1.0)
 
             # Direction pointing to x_t
-            dir_xt = np.sqrt(1 - alpha_bar_prev - sigma ** 2) * noise_pred_np
+            dir_xt = np.sqrt(1 - alpha_bar_prev - sigma**2) * noise_pred_np
 
             # Random noise (none for DDIM)
             noise = sigma * np.random.randn(*latent_shape).astype(np.float32)

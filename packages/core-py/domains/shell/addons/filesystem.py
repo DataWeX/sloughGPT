@@ -17,12 +17,13 @@ Usage::
 
 from __future__ import annotations
 
-import os
-import time
-import stat as stat_mod
-from pathlib import Path
-from typing import Any, Callable
 import logging
+import os
+import stat as stat_mod
+import time
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("slo.shell.addons.filesystem")
 
@@ -142,6 +143,7 @@ class VFS:
     def _gen_meminfo(self) -> str:
         try:
             import psutil
+
             mem = psutil.virtual_memory()
             return (
                 f"MemTotal:      {mem.total // 1024} kB\n"
@@ -154,16 +156,19 @@ class VFS:
     def _gen_cpuinfo(self) -> str:
         try:
             from domain.infrastructure._internal.resource_manager import get_resource_manager
+
             rm = get_resource_manager()
             cores = rm.topology.logical_cores
         except Exception:
             try:
                 import psutil
+
                 cores = psutil.cpu_count()
             except Exception:
                 cores = os.cpu_count() or 1
         try:
             import psutil
+
             freq = psutil.cpu_freq()
             freq_str = f"{freq.current:.0f}" if freq else "0"
             return f"processor\t: 0\ncpu cores\t: {cores}\nCPU MHz\t\t: {freq_str}\n"
@@ -199,7 +204,7 @@ class VFS:
             if abs_path == mount_point:
                 return mount_obj, ""
             if abs_path.startswith(mount_point + "/"):
-                rel = abs_path[len(mount_point) + 1:]
+                rel = abs_path[len(mount_point) + 1 :]
                 return mount_obj, rel
 
         return None

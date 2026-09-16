@@ -1,10 +1,8 @@
 """Meaningful tests for TraitWeightsConfig.update_from_feedback, TaskManager mode derivation."""
 
-import pytest
-import os
 from domain.context._internal.managers import (
-    TraitWeightsConfig, PersonalityManager, MemoryManager,
-    StyleManager, TaskManager,
+    TaskManager,
+    TraitWeightsConfig,
 )
 
 
@@ -21,6 +19,7 @@ def _make_config(tmp_path, personality=None, cognition=None):
 
 
 # ── update_from_feedback ───────────────────────────────────────────────
+
 
 class TestUpdateFromFeedback:
     def test_thumbs_up_increases_all(self, tmp_path):
@@ -103,6 +102,7 @@ class TestUpdateFromFeedback:
 
 # ── TaskManager ────────────────────────────────────────────────────────
 
+
 class TestTaskManager:
     def test_apply_returns_block(self, tmp_path):
         tm = TaskManager(config=_make_config(tmp_path))
@@ -135,46 +135,74 @@ class TestTaskManager:
         assert "reflect" in block.lower() or "thinking" in block.lower()
 
     def test_get_mode_analytical(self, tmp_path):
-        tm = TaskManager(config=_make_config(tmp_path, cognition={
-            "abstract_reasoning": 0.9, "metacognitive_awareness": 0.8,
-            "systematic_planning": 0.7
-        }))
+        tm = TaskManager(
+            config=_make_config(
+                tmp_path,
+                cognition={
+                    "abstract_reasoning": 0.9,
+                    "metacognitive_awareness": 0.8,
+                    "systematic_planning": 0.7,
+                },
+            )
+        )
         mode = tm.get_mode()
         assert mode["label"] == "Analytical"
 
     def test_get_mode_creative(self, tmp_path):
-        tm = TaskManager(config=_make_config(tmp_path, cognition={
-            "creative_divergence": 0.9, "systematic_planning": 0.1
-        }, personality={"curiosity": 0.8}))
+        tm = TaskManager(
+            config=_make_config(
+                tmp_path,
+                cognition={"creative_divergence": 0.9, "systematic_planning": 0.1},
+                personality={"curiosity": 0.8},
+            )
+        )
         mode = tm.get_mode()
         assert mode["label"] == "Creative"
 
     def test_get_mode_methodical(self, tmp_path):
-        tm = TaskManager(config=_make_config(tmp_path, cognition={
-            "systematic_planning": 0.9, "abstract_reasoning": 0.7
-        }, personality={"patience": 0.8}))
+        tm = TaskManager(
+            config=_make_config(
+                tmp_path,
+                cognition={"systematic_planning": 0.9, "abstract_reasoning": 0.7},
+                personality={"patience": 0.8},
+            )
+        )
         mode = tm.get_mode()
         assert mode["label"] == "Methodical"
 
     def test_get_mode_exploratory(self, tmp_path):
-        tm = TaskManager(config=_make_config(tmp_path, cognition={
-            "creative_divergence": 0.8, "systematic_planning": 0.1
-        }, personality={"curiosity": 0.9}))
+        tm = TaskManager(
+            config=_make_config(
+                tmp_path,
+                cognition={"creative_divergence": 0.8, "systematic_planning": 0.1},
+                personality={"curiosity": 0.9},
+            )
+        )
         mode = tm.get_mode()
         assert mode["label"] == "Exploratory"
 
     def test_get_mode_structured(self, tmp_path):
-        tm = TaskManager(config=_make_config(tmp_path, cognition={
-            "systematic_planning": 0.9, "abstract_reasoning": 0.8,
-            "metacognitive_awareness": 0.7
-        }))
+        tm = TaskManager(
+            config=_make_config(
+                tmp_path,
+                cognition={
+                    "systematic_planning": 0.9,
+                    "abstract_reasoning": 0.8,
+                    "metacognitive_awareness": 0.7,
+                },
+            )
+        )
         mode = tm.get_mode()
         assert mode["label"] == "Structured"
 
     def test_get_mode_reflective(self, tmp_path):
-        tm = TaskManager(config=_make_config(tmp_path, cognition={
-            "metacognitive_awareness": 0.9, "abstract_reasoning": 0.7
-        }, personality={"patience": 0.9}))
+        tm = TaskManager(
+            config=_make_config(
+                tmp_path,
+                cognition={"metacognitive_awareness": 0.9, "abstract_reasoning": 0.7},
+                personality={"patience": 0.9},
+            )
+        )
         mode = tm.get_mode()
         assert mode["label"] == "Reflective"
 

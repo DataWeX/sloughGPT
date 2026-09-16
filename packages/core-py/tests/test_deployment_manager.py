@@ -72,9 +72,7 @@ class TestDeploymentManager:
 
     async def test_shutdown_cancels_active(self, manager, fast_sleep):
         manager.deployments["d1"] = _mk_deployment()
-        manager.active_deployments["d1"] = asyncio.create_task(
-            _never_completes()
-        )
+        manager.active_deployments["d1"] = asyncio.create_task(_never_completes())
         await manager.shutdown()
         assert manager.active_deployments["d1"].done()
 
@@ -188,39 +186,29 @@ class TestDeploymentManager:
 
     async def test_get_deployment_history(self, manager, fast_sleep):
         did1 = await manager.deploy({"version": "v1", "image": "app:v1"}, "development")
-        await asyncio.gather(
-            manager.active_deployments[did1], return_exceptions=True
-        )
+        await asyncio.gather(manager.active_deployments[did1], return_exceptions=True)
         did2 = await manager.deploy({"version": "v2", "image": "app:v2"}, "development")
-        await asyncio.gather(
-            manager.active_deployments[did2], return_exceptions=True
-        )
+        await asyncio.gather(manager.active_deployments[did2], return_exceptions=True)
         history = await manager.get_deployment_history()
         assert len(history) == 2
         assert history[0]["created_at"] >= history[1]["created_at"]
 
     async def test_get_deployment_history_filtered(self, manager, fast_sleep):
         did1 = await manager.deploy({"version": "v1", "image": "app:v1"}, "development")
-        await asyncio.gather(
-            manager.active_deployments[did1], return_exceptions=True
-        )
+        await asyncio.gather(manager.active_deployments[did1], return_exceptions=True)
         history = await manager.get_deployment_history(environment="staging")
         assert history == []
 
     async def test_get_deployment_history_limit(self, manager, fast_sleep):
         for i in range(3):
             did = await manager.deploy({"version": f"v{i}", "image": "app:v1"}, "development")
-            await asyncio.gather(
-                manager.active_deployments[did], return_exceptions=True
-            )
+            await asyncio.gather(manager.active_deployments[did], return_exceptions=True)
         history = await manager.get_deployment_history(limit=2)
         assert len(history) == 2
 
     async def test_deploy_health_check_runs(self, manager, fast_sleep):
         did = await manager.deploy({"version": "v1", "image": "app:v1"}, "development")
-        await asyncio.gather(
-            manager.active_deployments[did], return_exceptions=True
-        )
+        await asyncio.gather(manager.active_deployments[did], return_exceptions=True)
         assert manager.deployments[did].status is DeploymentStatus.COMPLETED
 
 
@@ -255,6 +243,7 @@ class TestDeployArtifacts:
         task = manager.active_deployments[did]
         await asyncio.gather(task, return_exceptions=True)
         from pathlib import Path
+
         deploy_dir = Path("/tmp") / "deployments" / did
         assert deploy_dir.exists()
         assert (deploy_dir / "VERSION").exists()

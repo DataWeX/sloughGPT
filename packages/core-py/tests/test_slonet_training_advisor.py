@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import pytest
 from domain.training._internal.training_advisor import (
     TrainingRecommendation,
     recommend_training_config,
 )
 
-
 # ── TrainingRecommendation ─────────────────────────────────────────────────
 
 
 class TestTrainingRecommendation:
-
     def test_init(self):
         rec = TrainingRecommendation(
             learning_rate=0.001,
@@ -32,7 +29,6 @@ class TestTrainingRecommendation:
 
 
 class TestRecommendTrainingConfig:
-
     def test_small_dataset(self):
         rec = recommend_training_config(dataset_size=50)
         assert rec.learning_rate < 3e-4

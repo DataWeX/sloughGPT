@@ -2,11 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-import numpy as np
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from infrastructure.exception_handlers import register_app_error_handler
 from routers.multimodal import MultimodalRouter
 
@@ -123,9 +120,7 @@ class TestEncodePhonemes:
 
 class TestDecodePhonemes:
     def test_decode_basic(self):
-        encode_resp = client.post(
-            "/multimodal/encode-phonemes", json={"text": "hello"}
-        )
+        encode_resp = client.post("/multimodal/encode-phonemes", json={"text": "hello"})
         ids = _d(encode_resp)["ids"]
         resp = client.post(
             "/multimodal/decode-phonemes",
@@ -307,9 +302,7 @@ class TestTrainVideo:
 
 class TestVideoInfer:
     def test_video_infer_no_checkpoints(self):
-        with patch(
-            "domains.training.video_trainer.list_video_checkpoints", return_value=[]
-        ):
+        with patch("domains.training.video_trainer.list_video_checkpoints", return_value=[]):
             resp = client.post(
                 "/multimodal/video-infer",
                 json={"video_path": "/tmp/test.mp4"},

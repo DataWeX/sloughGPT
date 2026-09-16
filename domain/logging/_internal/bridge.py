@@ -31,10 +31,10 @@ from .base import Logger, LogLevel
 # ── Standard logging → our LogLevel mapping ────────────────────────────
 
 _LEVEL_MAP = {
-    logging.DEBUG:    LogLevel.DEBUG,
-    logging.INFO:     LogLevel.INFO,
-    logging.WARNING:  LogLevel.WARNING,
-    logging.ERROR:    LogLevel.ERROR,
+    logging.DEBUG: LogLevel.DEBUG,
+    logging.INFO: LogLevel.INFO,
+    logging.WARNING: LogLevel.WARNING,
+    logging.ERROR: LogLevel.ERROR,
     logging.CRITICAL: LogLevel.CRITICAL,
 }
 
@@ -42,12 +42,33 @@ _LEVEL_MAP = {
 # these (plus the explicitly handled context/error_code/tag) was injected
 # via ``extra={...}`` and belongs in the record's context — mirroring the
 # native Logger API where ``log.info(msg, **ctx)`` merges kwargs into context.
-_STANDARD_ATTRS = frozenset({
-    "name", "msg", "args", "levelname", "levelno", "pathname", "filename",
-    "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName",
-    "created", "msecs", "relativeCreated", "thread", "threadName",
-    "processName", "process", "taskName", "message", "asctime",
-})
+_STANDARD_ATTRS = frozenset(
+    {
+        "name",
+        "msg",
+        "args",
+        "levelname",
+        "levelno",
+        "pathname",
+        "filename",
+        "module",
+        "exc_info",
+        "exc_text",
+        "stack_info",
+        "lineno",
+        "funcName",
+        "created",
+        "msecs",
+        "relativeCreated",
+        "thread",
+        "threadName",
+        "processName",
+        "process",
+        "taskName",
+        "message",
+        "asctime",
+    }
+)
 
 _HANDLED_ATTRS = frozenset({"context", "error_code", "tag"})
 
@@ -126,6 +147,7 @@ class BridgeHandler(logging.Handler):
 
         # Create and emit our LogRecord
         from .base import LogRecord
+
         log_record = LogRecord(
             level=level,
             message=record.getMessage(),

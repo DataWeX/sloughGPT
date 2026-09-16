@@ -7,6 +7,7 @@ Validates that training progress is properly streamed to connected clients.
 Usage:
     .venv/bin/python -m pytest tests/test_training_progress_stream.py -x -v
 """
+
 import tempfile
 
 FAST_CONFIG = {
@@ -103,12 +104,16 @@ class TestTrainingProgressCallbacks:
             f.flush()
             trainer = ComprehensiveTrainer()
             bad_called = [False]
+
             def bad_callback(d):
                 bad_called[0] = True
                 raise RuntimeError("callback error")
+
             good_called = [False]
+
             def good_callback(d):
                 good_called[0] = True
+
             trainer.on_progress(bad_callback)
             trainer.on_progress(good_callback)
             result = trainer.run_full_cycle(data_path=f.name, config=FAST_CONFIG)

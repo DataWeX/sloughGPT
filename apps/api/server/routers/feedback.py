@@ -44,7 +44,9 @@ class FeedbackRouter:
 
     def _register_routes(self):
         self.router.add_api_route(
-            "/workflow-record", self.record_feedback_workflow, methods=["POST"],
+            "/workflow-record",
+            self.record_feedback_workflow,
+            methods=["POST"],
             response_model=FeedbackResponse,
         )
         self.router.add_api_route(
@@ -123,9 +125,7 @@ class FeedbackRouter:
             user_message=getattr(req, "user_message", None),
             assistant_response=getattr(req, "assistant_response", None),
         )
-        safe_audit_log(
-            "feedback.record", resource=req.message_id, detail=f"rating={req.rating}"
-        )
+        safe_audit_log("feedback.record", resource=req.message_id, detail=f"rating={req.rating}")
         return FeedbackResponse(**feedback).model_dump()
 
     @endpoint("feedback.get_stats")

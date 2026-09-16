@@ -2,22 +2,25 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
-import struct
-import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
-from domain.training._internal.state import CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR
 from domain.training._internal.checkpoints import (
-    find_checkpoint, load_soul, load_lora_soul, _load_soul_from_path,
-    _scan_all_checkpoints, list_checkpoints, delete_checkpoint,
-    download_checkpoint_path, checkpoint_info, get_all_checkpoint_data,
+    _load_soul_from_path,
+    checkpoint_info,
+    delete_checkpoint,
+    download_checkpoint_path,
     export_all_metrics,
+    find_checkpoint,
+    get_all_checkpoint_data,
+    list_checkpoints,
+    load_lora_soul,
+    load_soul,
 )
+from domain.training._internal.state import CHECKPOINTS_DIR, LORA_DIR, TURBO_DIR
 
 
 def _reset_dirs():
@@ -39,7 +42,6 @@ def _make_soul_with_meta(path: Path, meta: dict):
 
 
 class TestFindCheckpoint:
-
     def setup_method(self):
         _reset_dirs()
 
@@ -78,7 +80,6 @@ class TestFindCheckpoint:
 
 
 class TestLoadSoul:
-
     def setup_method(self):
         _reset_dirs()
 
@@ -133,7 +134,6 @@ class TestLoadSoul:
 
 
 class TestLoadLoraSoul:
-
     def setup_method(self):
         LORA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -152,7 +152,6 @@ class TestLoadLoraSoul:
 
 
 class TestLoadSoulFromPath:
-
     def setup_method(self):
         _reset_dirs()
 
@@ -175,7 +174,6 @@ class TestLoadSoulFromPath:
 
 
 class TestAsyncFunctions:
-
     def setup_method(self):
         _reset_dirs()
 

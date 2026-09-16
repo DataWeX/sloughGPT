@@ -1,4 +1,5 @@
 """Tests for RateLimiter — sliding window rate limiter."""
+
 from __future__ import annotations
 
 import time

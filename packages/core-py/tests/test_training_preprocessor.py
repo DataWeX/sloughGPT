@@ -1,10 +1,12 @@
 """Tests for domain.training — DataPreprocessor and more DatasetManager."""
 
-import json
-import pytest
 from domain.training import (
-    DataPreprocessor, PreprocessingStepType,
-    DatasetManager, DatasetConfig, DatasetType, DataFormat,
+    DataFormat,
+    DataPreprocessor,
+    DatasetConfig,
+    DatasetManager,
+    DatasetType,
+    PreprocessingStepType,
 )
 
 
@@ -119,5 +121,3 @@ class TestDatasetManagerSummarize:
         summary = mgr.summarize()
         assert "text" in summary
         assert "code" in summary
-
-

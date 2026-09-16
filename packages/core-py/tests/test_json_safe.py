@@ -4,16 +4,16 @@ import numpy as np
 import pytest
 
 from domain.api._internal.sse_envelope import (
-    _json_safe,
-    sse_event,
-    sse_error,
-    sse_complete,
-    sse_token,
+    CHAT_SEQUENCE,
+    TRAINING_SEQUENCE,
     SSEEnvelope,
     StreamPhase,
     StreamStatus,
-    TRAINING_SEQUENCE,
-    CHAT_SEQUENCE,
+    _json_safe,
+    sse_complete,
+    sse_error,
+    sse_event,
+    sse_token,
 )
 
 
@@ -88,6 +88,7 @@ class TestJsonSafe:
     def test_custom_object_without_tolist_or_item(self):
         class Custom:
             pass
+
         c = Custom()
         with pytest.raises((TypeError, ValueError)):
             json.dumps(c, default=_json_safe)
@@ -96,6 +97,7 @@ class TestJsonSafe:
         class HasToList:
             def tolist(self):
                 return [10, 20]
+
         result = _json_safe(HasToList())
         assert result == [10, 20]
 
@@ -103,6 +105,7 @@ class TestJsonSafe:
         class HasItem:
             def item(self):
                 return 99
+
         result = _json_safe(HasItem())
         assert result == 99
 

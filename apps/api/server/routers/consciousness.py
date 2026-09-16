@@ -11,7 +11,6 @@ import asyncio
 import json
 import logging
 import time as _time
-
 from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Query, Request, UploadFile
@@ -24,7 +23,9 @@ logger = logging.getLogger("slo.routers.consciousness")
 
 
 class ConsciousnessLevelRequest(BaseModel):
-    level: int = Field(..., ge=0, le=3, description="Consciousness level (0=off, 1=basic, 2=full, 3=deep)")
+    level: int = Field(
+        ..., ge=0, le=3, description="Consciousness level (0=off, 1=basic, 2=full, 3=deep)"
+    )
 
 
 class FeedbackRequest(BaseModel):
@@ -47,13 +48,17 @@ class PersonalityUpdateRequest(BaseModel):
 
 
 class PresetRequest(BaseModel):
-    preset: str = Field(..., description="Preset name (default, formal, creative, analyst, empathetic, minimal)")
+    preset: str = Field(
+        ..., description="Preset name (default, formal, creative, analyst, empathetic, minimal)"
+    )
 
 
 class SavePersonaRequest(BaseModel):
     persona_id: str = Field(..., min_length=1, max_length=50, description="Unique persona ID")
     name: str | None = Field(default=None, description="Display name for the persona")
-    profile: dict | None = Field(default=None, description="Full profile to save (uses current if null)")
+    profile: dict | None = Field(
+        default=None, description="Full profile to save (uses current if null)"
+    )
 
 
 class RestoreRequest(BaseModel):
@@ -66,7 +71,9 @@ class BatchOperation(BaseModel):
 
 
 class BatchRequest(BaseModel):
-    operations: list[BatchOperation] = Field(..., min_length=1, description="Ordered list of operations to execute")
+    operations: list[BatchOperation] = Field(
+        ..., min_length=1, description="Ordered list of operations to execute"
+    )
 
 
 class ConsciousnessRouter:
@@ -82,6 +89,7 @@ class ConsciousnessRouter:
         """Lazy-load the consciousness engine."""
         if self._engine is None:
             from domain.consciousness import get_consciousness
+
             self._engine = get_consciousness()
         return self._engine
 
@@ -89,6 +97,7 @@ class ConsciousnessRouter:
         """Lazy-load the consciousness trainer."""
         if self._trainer is None:
             from domain.consciousness.training import ConsciousnessTrainer, TrainingConfig
+
             engine = self._get_engine()
             config = TrainingConfig(
                 model_path="",
@@ -116,14 +125,18 @@ class ConsciousnessRouter:
         self.router.add_api_route("/personality", self.get_personality, methods=["GET"])
         self.router.add_api_route("/personality", self.update_personality, methods=["PATCH"])
         self.router.add_api_route("/personality/reset", self.reset_personality, methods=["POST"])
-        self.router.add_api_route("/personality/history", self.get_personality_history, methods=["GET"])
+        self.router.add_api_route(
+            "/personality/history", self.get_personality_history, methods=["GET"]
+        )
         self.router.add_api_route("/personality/presets", self.get_presets, methods=["GET"])
         self.router.add_api_route("/personality/presets/apply", self.apply_preset, methods=["POST"])
         self.router.add_api_route("/personality/conflicts", self.get_conflicts, methods=["GET"])
         self.router.add_api_route("/personas", self.list_personas, methods=["GET"])
         self.router.add_api_route("/personas/save", self.save_persona, methods=["POST"])
         self.router.add_api_route("/personas/{persona_id}", self.get_persona, methods=["GET"])
-        self.router.add_api_route("/personas/{persona_id}/activate", self.activate_persona, methods=["POST"])
+        self.router.add_api_route(
+            "/personas/{persona_id}/activate", self.activate_persona, methods=["POST"]
+        )
         self.router.add_api_route("/personas/{persona_id}", self.delete_persona, methods=["DELETE"])
         self.router.add_api_route("/health", self.health_check, methods=["GET"])
         self.router.add_api_route("/backup", self.backup, methods=["POST"])
@@ -150,28 +163,32 @@ class ConsciousnessRouter:
         """Get the self-model state."""
         engine = self._get_engine()
         sm = engine.self_model
-        return success_response(data={
-            "identity": {
-                "name": sm.identity.name,
-                "capabilities": sm.identity.capabilities,
-                "limitations": sm.identity.limitations,
-                "values": sm.identity.values,
-            },
-            "beliefs": dict(sm.self_beliefs),
-            "doubts": sm.self_doubts,
-            "episode_count": len(sm.episodes),
-        })
+        return success_response(
+            data={
+                "identity": {
+                    "name": sm.identity.name,
+                    "capabilities": sm.identity.capabilities,
+                    "limitations": sm.identity.limitations,
+                    "values": sm.identity.values,
+                },
+                "beliefs": dict(sm.self_beliefs),
+                "doubts": sm.self_doubts,
+                "episode_count": len(sm.episodes),
+            }
+        )
 
     @endpoint("consciousness.qualia")
     async def get_qualia(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Get current qualia state and narrative."""
         engine = self._get_engine()
         qualia = engine.qualia
-        return success_response(data={
-            "current": qualia.current.to_dict(),
-            "narrative": qualia.get_narrative(),
-            "history_count": len(qualia.history),
-        })
+        return success_response(
+            data={
+                "current": qualia.current.to_dict(),
+                "narrative": qualia.get_narrative(),
+                "history_count": len(qualia.history),
+            }
+        )
 
     @endpoint("consciousness.reflect")
     async def reflect(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
@@ -190,10 +207,12 @@ class ConsciousnessRouter:
         engine = self._get_engine()
         engine.config.level = req.level
         engine.config.save()
-        return success_response(data={
-            "level": engine.config.level,
-            "enabled": engine.config.is_enabled(),
-        })
+        return success_response(
+            data={
+                "level": engine.config.level,
+                "enabled": engine.config.is_enabled(),
+            }
+        )
 
     @endpoint("consciousness.train_status")
     async def train_status(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
@@ -222,6 +241,7 @@ class ConsciousnessRouter:
             trainer.config.model_path = req.model_path
 
         import asyncio
+
         result = await asyncio.to_thread(trainer.train)
         return success_response(data=result.to_dict())
 
@@ -242,9 +262,7 @@ class ConsciousnessRouter:
             for e in engine.self_model.episodes
         ]
         beliefs = dict(engine.self_model.self_beliefs)
-        qualia_history = [
-            q[1].to_dict() for q in engine.qualia.history
-        ]
+        qualia_history = [q[1].to_dict() for q in engine.qualia.history]
 
         report = evaluator.evaluate(episodes, beliefs, qualia_history)
         return success_response(data=report.to_dict())
@@ -258,19 +276,21 @@ class ConsciousnessRouter:
         """Get episode history with timestamps."""
         engine = self._get_engine()
         episodes = engine.self_model.episodes[-limit:]
-        return success_response(data={
-            "episodes": [
-                {
-                    "timestamp": e.timestamp,
-                    "input_text": e.input_text[:200],
-                    "self_insight": e.self_insight,
-                    "growth_delta": round(e.growth_delta, 4),
-                    "qualia": e.qualia,
-                }
-                for e in episodes
-            ],
-            "total": len(engine.self_model.episodes),
-        })
+        return success_response(
+            data={
+                "episodes": [
+                    {
+                        "timestamp": e.timestamp,
+                        "input_text": e.input_text[:200],
+                        "self_insight": e.self_insight,
+                        "growth_delta": round(e.growth_delta, 4),
+                        "qualia": e.qualia,
+                    }
+                    for e in episodes
+                ],
+                "total": len(engine.self_model.episodes),
+            }
+        )
 
     @endpoint("consciousness.qualia_history")
     async def get_qualia_history(
@@ -281,16 +301,18 @@ class ConsciousnessRouter:
         """Get qualia history as time series."""
         engine = self._get_engine()
         history = engine.qualia.history[-limit:]
-        return success_response(data={
-            "history": [
-                {
-                    "timestamp": ts,
-                    **state.to_dict(),
-                }
-                for ts, state in history
-            ],
-            "total": len(engine.qualia.history),
-        })
+        return success_response(
+            data={
+                "history": [
+                    {
+                        "timestamp": ts,
+                        **state.to_dict(),
+                    }
+                    for ts, state in history
+                ],
+                "total": len(engine.qualia.history),
+            }
+        )
 
     @endpoint("consciousness.beliefs_history")
     async def get_beliefs_history(
@@ -336,16 +358,20 @@ class ConsciousnessRouter:
                 beliefs["empathy"] = max(0.0, beliefs["empathy"] - 0.01)
 
             if i % step == 0 or i == len(episodes) - 1:
-                evolution.append({
-                    "timestamp": ep.timestamp,
-                    "step": i,
-                    **{k: round(v, 4) for k, v in beliefs.items()},
-                })
+                evolution.append(
+                    {
+                        "timestamp": ep.timestamp,
+                        "step": i,
+                        **{k: round(v, 4) for k, v in beliefs.items()},
+                    }
+                )
 
-        return success_response(data={
-            "beliefs": evolution,
-            "labels": list(defaults.keys()),
-        })
+        return success_response(
+            data={
+                "beliefs": evolution,
+                "labels": list(defaults.keys()),
+            }
+        )
 
     @endpoint("consciousness.feedback")
     async def submit_feedback(
@@ -368,11 +394,13 @@ class ConsciousnessRouter:
         episode.growth_delta = new_growth
         engine.self_model._update_beliefs_from_episode(episode)
 
-        return success_response(data={
-            "episode_index": body.episode_index,
-            "new_growth_delta": round(new_growth, 4),
-            "beliefs": {k: round(v, 4) for k, v in engine.self_model.self_beliefs.items()},
-        })
+        return success_response(
+            data={
+                "episode_index": body.episode_index,
+                "new_growth_delta": round(new_growth, 4),
+                "beliefs": {k: round(v, 4) for k, v in engine.self_model.self_beliefs.items()},
+            }
+        )
 
     @endpoint("consciousness.seed")
     async def seed_data(
@@ -425,32 +453,38 @@ class ConsciousnessRouter:
             growth = random.uniform(-0.08, 0.12)
 
             from domain.consciousness._internal.self_model import SelfEpisode
+
             episode = SelfEpisode(
                 timestamp=now - (count - i) * 120,  # 2 min apart
                 input_text=topic,
                 response=resp,
                 qualia=qualia.to_dict(),
-                self_insight=random.choice([
-                    "I learned something new here.",
-                    "This felt familiar but I refined my understanding.",
-                    "An interesting challenge to my existing beliefs.",
-                    "I see a pattern emerging in how I process these queries.",
-                    "This pushed the boundaries of my knowledge.",
-                ]),
+                self_insight=random.choice(
+                    [
+                        "I learned something new here.",
+                        "This felt familiar but I refined my understanding.",
+                        "An interesting challenge to my existing beliefs.",
+                        "I see a pattern emerging in how I process these queries.",
+                        "This pushed the boundaries of my knowledge.",
+                    ]
+                ),
                 growth_delta=growth,
             )
             engine.self_model.episodes.append(episode)
             engine.self_model._update_beliefs_from_episode(episode)
 
-        return success_response(data={
-            "seeded": count,
-            "total_episodes": len(engine.self_model.episodes),
-        })
+        return success_response(
+            data={
+                "seeded": count,
+                "total_episodes": len(engine.self_model.episodes),
+            }
+        )
 
     @endpoint("consciousness.personality.get")
     async def get_personality(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Get the current personality profile."""
         from domain.consciousness._internal.personality import PersonalityManager
+
         manager = PersonalityManager()
         profile = manager.get_profile()
         return success_response(data=profile.to_dict())
@@ -463,6 +497,7 @@ class ConsciousnessRouter:
     ) -> dict:
         """Update the personality profile."""
         from domain.consciousness._internal.personality import PersonalityManager
+
         manager = PersonalityManager()
         profile = manager.get_profile()
 
@@ -487,14 +522,20 @@ class ConsciousnessRouter:
     @endpoint("consciousness.personality.reset")
     async def reset_personality(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Reset personality to defaults."""
-        from domain.consciousness._internal.personality import PersonalityManager, PersonalityProfile
+        from domain.consciousness._internal.personality import (
+            PersonalityManager,
+            PersonalityProfile,
+        )
+
         manager = PersonalityManager()
         profile = PersonalityProfile()
         manager.save(profile)
         return success_response(data=profile.to_dict())
 
     @endpoint("consciousness.personality.history")
-    async def get_personality_history(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def get_personality_history(
+        self, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Get personality evolution history derived from episodes."""
         engine = self._get_engine()
         episodes = engine.self_model.episodes
@@ -503,6 +544,7 @@ class ConsciousnessRouter:
             return success_response(data={"history": [], "labels": {}})
 
         from domain.consciousness._internal.personality import PersonalityProfile
+
         defaults = PersonalityProfile()
         current = defaults.to_dict()
         history = []
@@ -519,33 +561,42 @@ class ConsciousnessRouter:
             if qualia.get("coherence", 1) < 0.3:
                 current["voice"]["verbosity"] = max(0.0, current["voice"]["verbosity"] - 0.01)
             if qualia.get("valence", 0) > 0.5:
-                current["traits"]["agreeableness"] = min(1.0, current["traits"]["agreeableness"] + 0.005)
+                current["traits"]["agreeableness"] = min(
+                    1.0, current["traits"]["agreeableness"] + 0.005
+                )
 
             if i % step == 0 or i == len(episodes) - 1:
-                history.append({
-                    "timestamp": ep.timestamp,
-                    "step": i,
-                    "voice": {k: round(v, 4) for k, v in current["voice"].items()},
-                    "traits": {k: round(v, 4) for k, v in current["traits"].items()},
-                })
+                history.append(
+                    {
+                        "timestamp": ep.timestamp,
+                        "step": i,
+                        "voice": {k: round(v, 4) for k, v in current["voice"].items()},
+                        "traits": {k: round(v, 4) for k, v in current["traits"].items()},
+                    }
+                )
 
-        return success_response(data={
-            "history": history,
-            "labels": {
-                "voice": list(defaults.voice.keys()),
-                "traits": list(defaults.traits.keys()),
-            },
-        })
+        return success_response(
+            data={
+                "history": history,
+                "labels": {
+                    "voice": list(defaults.voice.keys()),
+                    "traits": list(defaults.traits.keys()),
+                },
+            }
+        )
 
     @endpoint("consciousness.personality.presets")
     async def get_presets(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Get available personality presets."""
         from domain.consciousness._internal.personality import PersonalityManager
+
         presets = PersonalityManager.get_presets()
-        return success_response(data={
-            "presets": {name: profile.to_dict() for name, profile in presets.items()},
-            "names": list(presets.keys()),
-        })
+        return success_response(
+            data={
+                "presets": {name: profile.to_dict() for name, profile in presets.items()},
+                "names": list(presets.keys()),
+            }
+        )
 
     @endpoint("consciousness.personality.apply_preset")
     async def apply_preset(
@@ -555,6 +606,7 @@ class ConsciousnessRouter:
     ) -> dict:
         """Apply a personality preset."""
         from domain.consciousness._internal.personality import PersonalityManager
+
         manager = PersonalityManager()
         try:
             profile = manager.apply_preset(body.preset)
@@ -566,17 +618,21 @@ class ConsciousnessRouter:
     async def get_conflicts(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Detect personality conflicts and warnings."""
         from domain.consciousness._internal.personality import PersonalityManager
+
         manager = PersonalityManager()
         conflicts = manager.get_conflicts()
-        return success_response(data={
-            "conflicts": conflicts,
-            "count": len(conflicts),
-        })
+        return success_response(
+            data={
+                "conflicts": conflicts,
+                "count": len(conflicts),
+            }
+        )
 
     @endpoint("consciousness.personas.list")
     async def list_personas(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """List all saved personas."""
         from domain.consciousness._internal.personality import PersonalityManager
+
         manager = PersonalityManager()
         personas = manager.list_personas()
         return success_response(data={"personas": personas, "count": len(personas)})
@@ -588,7 +644,11 @@ class ConsciousnessRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Save a named persona from the current profile or a provided profile."""
-        from domain.consciousness._internal.personality import PersonalityManager, PersonalityProfile
+        from domain.consciousness._internal.personality import (
+            PersonalityManager,
+            PersonalityProfile,
+        )
+
         manager = PersonalityManager()
         if body.profile:
             profile = PersonalityProfile.from_dict(body.profile)
@@ -598,9 +658,12 @@ class ConsciousnessRouter:
         return success_response(data=result)
 
     @endpoint("consciousness.personas.get")
-    async def get_persona(self, persona_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def get_persona(
+        self, persona_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Get a saved persona's full profile."""
         from domain.consciousness._internal.personality import PersonalityManager
+
         manager = PersonalityManager()
         profile = manager.load_persona(persona_id)
         if profile is None:
@@ -608,9 +671,12 @@ class ConsciousnessRouter:
         return success_response(data={"id": persona_id, **profile.to_dict()})
 
     @endpoint("consciousness.personas.activate")
-    async def activate_persona(self, persona_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def activate_persona(
+        self, persona_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Activate a saved persona as the current profile."""
         from domain.consciousness._internal.personality import PersonalityManager
+
         manager = PersonalityManager()
         profile = manager.activate_persona(persona_id)
         if profile is None:
@@ -618,9 +684,12 @@ class ConsciousnessRouter:
         return success_response(data=profile.to_dict())
 
     @endpoint("consciousness.personas.delete")
-    async def delete_persona(self, persona_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def delete_persona(
+        self, persona_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Delete a saved persona."""
         from domain.consciousness._internal.personality import PersonalityManager
+
         manager = PersonalityManager()
         deleted = manager.delete_persona(persona_id)
         if not deleted:
@@ -631,6 +700,7 @@ class ConsciousnessRouter:
     async def backup(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Create a full backup of consciousness state."""
         import time as _time
+
         from domain.consciousness._internal.personality import PersonalityManager
 
         engine = self._get_engine()
@@ -649,8 +719,7 @@ class ConsciousnessRouter:
         ]
 
         qualia_history = [
-            {"timestamp": ts, **state.to_dict()}
-            for ts, state in engine.qualia.history
+            {"timestamp": ts, **state.to_dict()} for ts, state in engine.qualia.history
         ]
 
         personas = manager.list_personas()
@@ -691,7 +760,10 @@ class ConsciousnessRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Restore consciousness from a backup."""
-        from domain.consciousness._internal.personality import PersonalityManager, PersonalityProfile
+        from domain.consciousness._internal.personality import (
+            PersonalityManager,
+            PersonalityProfile,
+        )
         from domain.consciousness._internal.self_model import SelfEpisode
 
         backup = body.backup
@@ -701,10 +773,18 @@ class ConsciousnessRouter:
         required_keys = {"version", "episodes", "beliefs", "personality", "config"}
         missing = required_keys - set(backup.keys())
         if missing:
-            raise_error(f"Missing backup fields: {', '.join(sorted(missing))}", "E_INVALID_BACKUP", status_code=400)
+            raise_error(
+                f"Missing backup fields: {', '.join(sorted(missing))}",
+                "E_INVALID_BACKUP",
+                status_code=400,
+            )
 
         if backup.get("version") != 1:
-            raise_error(f"Unsupported backup version: {backup.get('version')}", "E_UNSUPPORTED_VERSION", status_code=400)
+            raise_error(
+                f"Unsupported backup version: {backup.get('version')}",
+                "E_UNSUPPORTED_VERSION",
+                status_code=400,
+            )
 
         engine = self._get_engine()
         manager = PersonalityManager()
@@ -732,6 +812,7 @@ class ConsciousnessRouter:
             ts = qh.get("timestamp", 0)
             state_data = {k: v for k, v in qh.items() if k != "timestamp"}
             from domain.consciousness._internal.qualia import QualiaState
+
             state = QualiaState(**state_data)
             engine.qualia.history.append((ts, state))
 
@@ -743,23 +824,35 @@ class ConsciousnessRouter:
             manager.save_persona(persona_id, persona_profile, persona_data.get("name"))
 
         cfg = backup.get("config", {})
-        for key in ("level", "max_tokens", "training_enabled", "training_interval", "lora_rank", "lora_alpha", "reflection_interval"):
+        for key in (
+            "level",
+            "max_tokens",
+            "training_enabled",
+            "training_interval",
+            "lora_rank",
+            "lora_alpha",
+            "reflection_interval",
+        ):
             if key in cfg:
                 setattr(engine.config, key, cfg[key])
         engine.config.save()
 
-        return success_response(data={
-            "restored": True,
-            "episodes_restored": restored_episodes,
-            "beliefs_restored": len(backup.get("beliefs", {})),
-            "personas_restored": len(backup.get("personas", {})),
-        })
+        return success_response(
+            data={
+                "restored": True,
+                "episodes_restored": restored_episodes,
+                "beliefs_restored": len(backup.get("beliefs", {})),
+                "personas_restored": len(backup.get("personas", {})),
+            }
+        )
 
     @endpoint("consciousness.backup.download")
     async def backup_download(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Download consciousness backup as a JSON file."""
-        from fastapi.responses import JSONResponse
         import time as _time
+
+        from fastapi.responses import JSONResponse
+
         from domain.consciousness._internal.personality import PersonalityManager
 
         engine = self._get_engine()
@@ -778,8 +871,7 @@ class ConsciousnessRouter:
         ]
 
         qualia_history = [
-            {"timestamp": ts, **state.to_dict()}
-            for ts, state in engine.qualia.history
+            {"timestamp": ts, **state.to_dict()} for ts, state in engine.qualia.history
         ]
 
         personas = manager.list_personas()
@@ -813,6 +905,7 @@ class ConsciousnessRouter:
 
         filename = f"consciousness_backup_{int(_time.time())}.json"
         from fastapi.encoders import jsonable_encoder
+
         return JSONResponse(
             content=jsonable_encoder(backup_data),
             media_type="application/json",
@@ -822,11 +915,10 @@ class ConsciousnessRouter:
     @endpoint("consciousness.backup.import")
     async def backup_import(
         self,
-        file: "UploadFile",
+        file: UploadFile,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Import consciousness from an uploaded backup file."""
-        from fastapi import UploadFile
         import json as _json
 
         content = await file.read()
@@ -848,24 +940,31 @@ class ConsciousnessRouter:
         avg_growth = sum(recent_growth) / len(recent_growth) if recent_growth else 0
         positive_count = sum(1 for g in recent_growth if g > 0)
         positive_ratio = positive_count / len(recent_growth) if recent_growth else 0
-        health_score = min(100, max(0, int(
-            (1.0 if status.get("enabled") else 0.0) * 30
-            + min(1.0, len(episodes) / 50) * 20
-            + positive_ratio * 25
-            + (status.get("level", 0) / 3) * 25
-        )))
-        return success_response(data={
-            "status": "healthy" if health_score >= 50 else "degraded",
-            "health_score": health_score,
-            "enabled": status.get("enabled", False),
-            "level": status.get("level", 0),
-            "episodes": len(episodes),
-            "avg_growth": round(avg_growth, 4),
-            "positive_ratio": round(positive_ratio, 2),
-            "qualia": status.get("current_qualia", {}),
-            "last_reflection": status.get("last_reflection"),
-        })
-
+        health_score = min(
+            100,
+            max(
+                0,
+                int(
+                    (1.0 if status.get("enabled") else 0.0) * 30
+                    + min(1.0, len(episodes) / 50) * 20
+                    + positive_ratio * 25
+                    + (status.get("level", 0) / 3) * 25
+                ),
+            ),
+        )
+        return success_response(
+            data={
+                "status": "healthy" if health_score >= 50 else "degraded",
+                "health_score": health_score,
+                "enabled": status.get("enabled", False),
+                "level": status.get("level", 0),
+                "episodes": len(episodes),
+                "avg_growth": round(avg_growth, 4),
+                "positive_ratio": round(positive_ratio, 2),
+                "qualia": status.get("current_qualia", {}),
+                "last_reflection": status.get("last_reflection"),
+            }
+        )
 
     async def stream_status(
         self,
@@ -932,7 +1031,9 @@ class ConsciousnessRouter:
                     episode_index = op.params.get("episode_index", 0)
                     rating = op.params.get("rating", 3)
                     feedback_req = FeedbackRequest(episode_index=episode_index, rating=rating)
-                    feedback_result = await self.submit_feedback(body=feedback_req, auth_user=auth_user)
+                    feedback_result = await self.submit_feedback(
+                        body=feedback_req, auth_user=auth_user
+                    )
                     results.append({"success": True, "data": feedback_result.get("data")})
                 elif op.action == "reflect":
                     reflect_result = await self.reflect(auth_user=auth_user)
@@ -959,8 +1060,13 @@ class ConsciousnessRouter:
         ratings: list[int] = []
         growth_values: list[float] = []
         qualia_sums: dict[str, float] = {
-            "valence": 0.0, "arousal": 0.0, "novelty": 0.0, "coherence": 0.0,
-            "salience": 0.0, "certainty": 0.0, "complexity": 0.0,
+            "valence": 0.0,
+            "arousal": 0.0,
+            "novelty": 0.0,
+            "coherence": 0.0,
+            "salience": 0.0,
+            "certainty": 0.0,
+            "complexity": 0.0,
         }
         qualia_count = 0
 
@@ -977,12 +1083,17 @@ class ConsciousnessRouter:
 
         avg_rating = sum(ratings) / len(ratings) if ratings else 0.0
         avg_growth = sum(growth_values) / len(growth_values) if growth_values else 0.0
-        qualia_avgs = {k: round(v / qualia_count, 4) for k, v in qualia_sums.items()} if qualia_count else qualia_sums
+        qualia_avgs = (
+            {k: round(v / qualia_count, 4) for k, v in qualia_sums.items()}
+            if qualia_count
+            else qualia_sums
+        )
 
         beliefs = dict(engine.self_model.self_beliefs)
         belief_avgs = {k: round(v, 4) for k, v in beliefs.items()}
 
         from domain.consciousness._internal.personality import PersonalityManager
+
         manager = PersonalityManager()
         profile = manager.get_profile()
         voice_avgs = {k: round(v, 4) for k, v in profile.voice.items()}
@@ -993,30 +1104,38 @@ class ConsciousnessRouter:
         recent_growth = [e.growth_delta for e in episodes[-10:]] if episodes else []
         positive_count = sum(1 for g in recent_growth if g > 0)
         positive_ratio = positive_count / len(recent_growth) if recent_growth else 0
-        health_score = min(100, max(0, int(
-            (1.0 if engine.config.is_enabled() else 0.0) * 30
-            + min(1.0, total_episodes / 50) * 20
-            + positive_ratio * 25
-            + (engine.config.level / 3) * 25
-        )))
+        health_score = min(
+            100,
+            max(
+                0,
+                int(
+                    (1.0 if engine.config.is_enabled() else 0.0) * 30
+                    + min(1.0, total_episodes / 50) * 20
+                    + positive_ratio * 25
+                    + (engine.config.level / 3) * 25
+                ),
+            ),
+        )
 
         personas = manager.list_personas()
 
-        return success_response(data={
-            "total_episodes": total_episodes,
-            "total_feedback": total_feedback,
-            "avg_rating": round(avg_rating, 4),
-            "avg_growth": round(avg_growth, 4),
-            "qualia_averages": qualia_avgs,
-            "belief_averages": belief_avgs,
-            "personality_summary": {
-                "voice_averages": voice_avgs,
-                "trait_averages": trait_avgs,
-            },
-            "training_status": trainer_status,
-            "health_score": health_score,
-            "active_personas": len(personas),
-        })
+        return success_response(
+            data={
+                "total_episodes": total_episodes,
+                "total_feedback": total_feedback,
+                "avg_rating": round(avg_rating, 4),
+                "avg_growth": round(avg_growth, 4),
+                "qualia_averages": qualia_avgs,
+                "belief_averages": belief_avgs,
+                "personality_summary": {
+                    "voice_averages": voice_avgs,
+                    "trait_averages": trait_avgs,
+                },
+                "training_status": trainer_status,
+                "health_score": health_score,
+                "active_personas": len(personas),
+            }
+        )
 
     @endpoint("consciousness.clear_episodes")
     async def clear_episodes(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:

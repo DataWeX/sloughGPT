@@ -2,13 +2,12 @@
 
 import json
 import sys
-import time
 import types
 
 import numpy as np
 import pytest
 
-import domain.infrastructure.knowledge_weight_integrator as ki
+import domain.infrastructure._internal.knowledge_weight_integrator as ki
 
 
 @pytest.fixture
@@ -91,6 +90,7 @@ class TestTrainKnowledgeAdapter:
     def test_training_failure(self, adapter_paths, monkeypatch):
         def boom(*args, **kwargs):
             raise RuntimeError("boom")
+
         monkeypatch.setattr(ki, "_train_native", boom)
         result = ki.train_knowledge_adapter([{"content": "some knowledge fact here"}])
         assert result == {"status": "training_failed: boom", "fact_count": 1}
@@ -118,8 +118,10 @@ class TestLoadKnowledgeAdapter:
 
     def test_merges_delta_into_model(self, adapter_paths):
         from domain.training._internal.slonet import SloTransformer
-        model = SloTransformer(vocab_size=64, n_embed=16, n_layer=1, n_head=2,
-                               block_size=16, max_seq_len=64)
+
+        model = SloTransformer(
+            vocab_size=64, n_embed=16, n_layer=1, n_head=2, block_size=16, max_seq_len=64
+        )
         facts = [{"content": "some knowledge fact here"}]
         ki.train_knowledge_adapter(facts, model=model)
         before = {n: np.asarray(p.data).copy() for n, p in model.named_parameters()}
@@ -138,6 +140,7 @@ class TestLoadKnowledgeAdapter:
 
         def boom(*args, **kwargs):
             raise ValueError("corrupt npz")
+
         monkeypatch.setattr(ki.np, "load", boom)
         model = object()
         assert ki.load_knowledge_adapter(model) is model
@@ -152,12 +155,18 @@ class TestLoadKnowledgeAdapter:
 
     def test_merge_skips_missing_keys(self, adapter_paths):
         from domain.training._internal.slonet import SloTransformer
-        model = SloTransformer(vocab_size=64, n_embed=16, n_layer=1, n_head=2,
-                               block_size=16, max_seq_len=64)
+
+        model = SloTransformer(
+            vocab_size=64, n_embed=16, n_layer=1, n_head=2, block_size=16, max_seq_len=64
+        )
         delta = ki._DELTA_PATH
         delta.parent.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(str(delta), _stoi=np.array([1]), _itos=np.array([1]),
-                            _rank=np.array([8], dtype=np.int32))
+        np.savez_compressed(
+            str(delta),
+            _stoi=np.array([1]),
+            _itos=np.array([1]),
+            _rank=np.array([8], dtype=np.int32),
+        )
         assert ki.load_knowledge_adapter(model) is model
 
 
@@ -172,14 +181,18 @@ class TestGetAdapterStatus:
         adapter, manifest = adapter_paths
         adapter.mkdir(parents=True)
         (adapter / "adapter_config.json").write_text("{}")
-        manifest.write_text(json.dumps({
-            "fact_count": 7,
-            "total_facts_available": 10,
-            "epochs": 3,
-            "lora_rank": 8,
-            "trained_at": 1234.0,
-            "post_training_loss": 0.42,
-        }))
+        manifest.write_text(
+            json.dumps(
+                {
+                    "fact_count": 7,
+                    "total_facts_available": 10,
+                    "epochs": 3,
+                    "lora_rank": 8,
+                    "trained_at": 1234.0,
+                    "post_training_loss": 0.42,
+                }
+            )
+        )
         status = ki.get_adapter_status()
         assert status["adapter_exists"] is True
         assert status["fact_count"] == 7

@@ -1,31 +1,30 @@
 """Backward-compatibility shim — imports from the new ``domain.logging`` package."""
 
 from domain.logging import (
+    BridgeHandler,
+    ChildLogger,
+    CLILogger,
+    CompositeLogger,
+    ConsoleLogger,
+    ErrorCode,
+    Logger,
     LogLevel,
     LogRecord,
-    Logger,
-    ChildLogger,
-    TaggedLogger,
-    CompositeLogger,
-    ErrorCode,
     LogTag,
-    ConsoleLogger,
-    CLILogger,
     ShellLogger,
-    WebLogger,
+    TaggedLogger,
     WebEventLogger,
-    BridgeHandler,
-    setup_logging,
-    get_request_id,
-    set_request_id,
-    get_log_context,
-    set_log_context,
+    WebLogger,
     clear_log_context,
-    get_logger,
-    set_global,
     get_global,
+    get_log_context,
+    get_logger,
+    get_request_id,
+    set_global,
+    set_log_context,
+    set_request_id,
+    setup_logging,
 )
-
 from domain.logging._internal import config  # noqa: F401
 
 __all__ = [

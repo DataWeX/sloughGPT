@@ -25,8 +25,6 @@ PaneLayout also tracks **focus** (which pane has the cursor) and
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
-
 
 # ── Rect ──────────────────────────────────────────────────────────────
 
@@ -214,7 +212,7 @@ class PaneLayout:
     layout; only focusable panes receive focus.
     """
 
-    panes: List[Pane] = field(default_factory=list)
+    panes: list[Pane] = field(default_factory=list)
     _focus_idx: int = field(default=0, init=False, repr=False)
 
     # ── Focus ──────────────────────────────────────────────────────────
@@ -326,7 +324,7 @@ class PaneLayout:
         content_heights: dict[str, int] = {}
         used_flex = 0.0
 
-        for idx, p in enumerate(visible):
+        for _idx, p in enumerate(visible):
             if p.fixed is not None:
                 h = p.fixed
             elif proportional and p is proportional[-1]:
@@ -415,7 +413,7 @@ def split(
     b = Border(borders)
     panes = [
         Pane(name=str(i), ratio=r, min_rows=m, border=b)
-        for i, (r, m) in enumerate(zip(ratios, min_rows))
+        for i, (r, m) in enumerate(zip(ratios, min_rows, strict=False))
     ]
     layout = PaneLayout(panes)
     out = layout.compute(rows, cols)

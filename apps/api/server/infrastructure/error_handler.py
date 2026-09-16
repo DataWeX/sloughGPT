@@ -23,6 +23,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from schemas.common import error_response, get_correlation_id
+
 from domain.infrastructure._internal.errors import (
     AppError,
     AuthError,
@@ -36,9 +40,6 @@ from domain.infrastructure._internal.errors import (
     ValidationError,
     classify_exception,
 )
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-from schemas.common import error_response, get_correlation_id
 
 logger = logging.getLogger("slo.error_handler")
 

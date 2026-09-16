@@ -1,17 +1,16 @@
 """Tests for domain.cognitive._internal.rag — CitationTracker, TextChunk, BM25Indexer,
 HybridRetriever, HallucinationDetector, ProductionRAG."""
 
-import hashlib
 import numpy as np
-import pytest
+
 from domain.cognitive._internal.rag import (
-    TextChunk,
-    RetrievalResult,
     BM25Indexer,
-    HybridRetriever,
     CitationTracker,
     HallucinationDetector,
+    HybridRetriever,
     ProductionRAG,
+    RetrievalResult,
+    TextChunk,
 )
 
 
@@ -61,8 +60,9 @@ class TestTextChunkFields:
 class TestRetrievalResult:
     def test_fields(self):
         chunk = TextChunk(id="c1", content="x", metadata={})
-        rr = RetrievalResult(chunk=chunk, dense_score=0.8, sparse_score=0.6,
-                             combined_score=0.7, rank=1)
+        rr = RetrievalResult(
+            chunk=chunk, dense_score=0.8, sparse_score=0.6, combined_score=0.7, rank=1
+        )
         assert rr.chunk.id == "c1"
         assert rr.dense_score == 0.8
         assert rr.sparse_score == 0.6
@@ -151,7 +151,7 @@ class TestBM25Indexer:
         bm25.index(chunks)
         results = bm25.score("python programming")
         # First doc should score higher (has both terms)
-        scores_dict = {doc_id: score for doc_id, score in results}
+        scores_dict = dict(results)
         assert scores_dict.get(0, 0) > scores_dict.get(1, 0)
 
     def test_avg_doc_length(self):
@@ -200,7 +200,9 @@ class TestHybridRetriever:
 
     def test_retrieve_hybrid(self):
         hr = HybridRetriever()
-        hr.add_chunk(TextChunk(id="c1", content="python is a language", metadata={"source": "doc1"}))
+        hr.add_chunk(
+            TextChunk(id="c1", content="python is a language", metadata={"source": "doc1"})
+        )
         hr.add_chunk(TextChunk(id="c2", content="rust is fast", metadata={"source": "doc2"}))
         hr.build_index()
         results = hr.retrieve("python language", top_k=2)
@@ -247,7 +249,9 @@ class TestHybridRetriever:
 
     def test_rerank_diversity(self):
         hr = HybridRetriever(use_rerank=True)
-        hr.add_chunk(TextChunk(id="c1", content="python programming language features", metadata={}))
+        hr.add_chunk(
+            TextChunk(id="c1", content="python programming language features", metadata={})
+        )
         hr.add_chunk(TextChunk(id="c2", content="python programming language basics", metadata={}))
         hr.add_chunk(TextChunk(id="c3", content="rust systems programming", metadata={}))
         hr.build_index()
@@ -457,7 +461,11 @@ class TestHallucinationDetector:
         assert result["overall_confidence"] == 1.0
 
     def test_grounded_claim(self):
-        chunks = [TextChunk(id="c1", content="Python is a programming language", metadata={"source": "wiki"})]
+        chunks = [
+            TextChunk(
+                id="c1", content="Python is a programming language", metadata={"source": "wiki"}
+            )
+        ]
         hd = self._make_detector(chunks)
         result = hd.detect("Python is a programming language.")
         assert result["total_claims"] >= 1
@@ -660,7 +668,9 @@ class TestHybridRetrieverEdgeCases:
     def test_many_chunks(self):
         hr = HybridRetriever()
         for i in range(50):
-            hr.add_chunk(TextChunk(id=f"c{i}", content=f"chunk number {i} about topic {i % 5}", metadata={}))
+            hr.add_chunk(
+                TextChunk(id=f"c{i}", content=f"chunk number {i} about topic {i % 5}", metadata={})
+            )
         hr.build_index()
         results = hr.retrieve("topic", top_k=10)
         assert len(results) <= 10

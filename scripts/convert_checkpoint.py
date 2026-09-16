@@ -7,17 +7,16 @@ Usage::
 """
 
 from __future__ import annotations
-import sys
+
 import os
+import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO_ROOT, "packages", "core-py"))
 
-import struct
-import json
 
-from domain.training._internal.slonet import import_from_sou
 from domain.inference import write_v3_sou
+from domain.training._internal.slonet import import_from_sou
 
 
 def convert(inpath: str, outpath: str | None = None) -> str:
@@ -48,7 +47,7 @@ def convert(inpath: str, outpath: str | None = None) -> str:
     }
 
     # Extract flat parameter arrays in order
-    raw = net._sd if (hasattr(net, '_sd') and net._sd) else net.state_dict()
+    raw = net._sd if (hasattr(net, "_sd") and net._sd) else net.state_dict()
     state_dict = {f"p{i}": v.flatten() for i, (k, v) in enumerate(raw.items())}
 
     write_v3_sou(outpath, metadata, state_dict)
@@ -56,8 +55,8 @@ def convert(inpath: str, outpath: str | None = None) -> str:
     in_size = os.path.getsize(inpath)
     out_size = os.path.getsize(outpath)
     pct = (1 - out_size / in_size) * 100
-    print(f"Converted {inpath} ({in_size/1024:.0f} KB)")
-    print(f"  → {outpath} ({out_size/1024:.0f} KB, {pct:.0f}% smaller)")
+    print(f"Converted {inpath} ({in_size / 1024:.0f} KB)")
+    print(f"  → {outpath} ({out_size / 1024:.0f} KB, {pct:.0f}% smaller)")
     return outpath
 
 

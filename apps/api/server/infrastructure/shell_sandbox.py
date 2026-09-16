@@ -116,7 +116,6 @@ _BLOCKED_COMMANDS = frozenset(
         "strace",
         "ltrace",
         "ptrace",
-        "dd",
         "sysctl",
         "modprobe",
         "insmod",

@@ -192,9 +192,7 @@ class ComprehensiveTrainer:
             except Exception:
                 logger.exception("Progress callback error")
 
-    def _run_phase(
-        self, phase: TrainingPhase, fn: Callable[[], PhaseResult]
-    ) -> PhaseResult:
+    def _run_phase(self, phase: TrainingPhase, fn: Callable[[], PhaseResult]) -> PhaseResult:
         logger.info("Phase: %s", phase.value)
         t0 = time.time()
         try:
@@ -319,6 +317,7 @@ class ComprehensiveTrainer:
                         extract_pairs_from_logs,
                         extract_pairs_from_sessions,
                     )
+
                     session_pairs = extract_pairs_from_sessions(limit=100)
                     log_pairs = extract_pairs_from_logs(limit=100)
                     pairs = session_pairs + log_pairs
@@ -565,7 +564,9 @@ class ComprehensiveTrainer:
         t0 = time.time()
         phases: list[PhaseResult] = []
 
-        cfg = TrainingConfig(**{k: v for k, v in (config or {}).items() if k in TrainingConfig.__dataclass_fields__})
+        cfg = TrainingConfig(
+            **{k: v for k, v in (config or {}).items() if k in TrainingConfig.__dataclass_fields__}
+        )
 
         # Phase 1: Validate
         self._emit_progress({"phase": "validating", "progress": 0.0, "run_id": run_id})

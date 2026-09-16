@@ -5,13 +5,12 @@ Run: PYTHONPATH=packages/core-py python -m pytest tests/test_kernel_coverage.py 
 """
 
 import time
+import types
 from types import SimpleNamespace
 
 import pytest
 
-import types
-
-from domains.shell import kernel as kernel_mod
+from domain.shell._internal import kernel as kernel_mod
 from domain.shell._internal.kernel import Kernel, NeuralKernel
 from domain.shell._internal.kernel_devices import NullDevice
 from domain.shell._internal.kernel_interrupts import Interrupt, InterruptType
@@ -106,6 +105,7 @@ class TestLifecycle:
 
     def test_boot_neural_addon_failure(self, monkeypatch):
         import domain.shell._internal.addons.neural as neural_mod
+
         monkeypatch.setattr(neural_mod, "setup", _boom)
         k = Kernel()
         msg = k.boot()
@@ -113,6 +113,7 @@ class TestLifecycle:
 
     def test_boot_shell_ui_addon_failure(self, monkeypatch):
         import domain.shell._internal.addons.shell_ui as shell_ui_mod
+
         monkeypatch.setattr(shell_ui_mod, "setup", _boom)
         k = Kernel()
         msg = k.boot()
@@ -190,9 +191,12 @@ class TestProcessManagement:
 
     def test_process_acquire_and_release_tensor(self):
         from domain.shell._internal.kernel_process import TensorRef
+
         k = Kernel()
         proc = k.spawn_process("t")
-        ref = TensorRef(block_id=1, shape=(2, 3), dtype="float32", size_bytes=24, owner_pid=proc.pid)
+        ref = TensorRef(
+            block_id=1, shape=(2, 3), dtype="float32", size_bytes=24, owner_pid=proc.pid
+        )
         proc.acquire_tensor(ref)
         assert proc.memory_bytes == 24
         assert proc.release_tensor(1) is ref
@@ -317,6 +321,7 @@ class TestDevices:
 
     def test_vfs_requires_filesystem_addon(self):
         from domain.shell._internal.addons import filesystem
+
         k = Kernel()
         k.install_addon(filesystem)
         assert k.vfs is k._vfs
@@ -333,11 +338,13 @@ class TestInterruptHandlers:
         k, proc = self._booted_with_proc()
         done = []
         k.on_process_done(done.append)
-        k._handle_process_done(Interrupt(
-            vector=InterruptType.PROCESS_DONE,
-            source_pid=proc.pid,
-            data={"ok": True},
-        ))
+        k._handle_process_done(
+            Interrupt(
+                vector=InterruptType.PROCESS_DONE,
+                source_pid=proc.pid,
+                data={"ok": True},
+            )
+        )
         assert proc.result == {"ok": True}
         assert proc in done
 
@@ -348,21 +355,25 @@ class TestInterruptHandlers:
             raise RuntimeError("cb fail")
 
         k.on_process_done(_raise_cb)
-        k._handle_process_done(Interrupt(
-            vector=InterruptType.PROCESS_DONE,
-            source_pid=proc.pid,
-            data={"ok": True},
-        ))
+        k._handle_process_done(
+            Interrupt(
+                vector=InterruptType.PROCESS_DONE,
+                source_pid=proc.pid,
+                data={"ok": True},
+            )
+        )
         assert proc.result == {"ok": True}
 
     def test_handle_process_done_missing_pid(self):
         k = Kernel()
         k.boot()
-        k._handle_process_done(Interrupt(
-            vector=InterruptType.PROCESS_DONE,
-            source_pid=9999,
-            data={"ok": True},
-        ))
+        k._handle_process_done(
+            Interrupt(
+                vector=InterruptType.PROCESS_DONE,
+                source_pid=9999,
+                data={"ok": True},
+            )
+        )
 
     def test_handle_memory_full(self):
         k = Kernel()
@@ -416,7 +427,7 @@ class TestTickRun:
     def test_run_stops_when_all_zombie(self):
         k = Kernel()
         k.boot()
-        k.spawn_process('fast', entry=lambda: 42)
+        k.spawn_process("fast", entry=lambda: 42)
         results = k.run(max_ticks=10000)
         assert len(results) < 10000
 

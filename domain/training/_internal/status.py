@@ -15,10 +15,10 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -30,6 +30,7 @@ logger = logging.getLogger("slo.training.status")
 
 class TrainingStage(Enum):
     """Training pipeline stages."""
+
     NOT_STARTED = "not_started"
     PRETRAINING = "pretraining"
     FEDERATED = "federated"
@@ -40,6 +41,7 @@ class TrainingStage(Enum):
 
 class CompletionStatus(Enum):
     """Training completion status."""
+
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -50,32 +52,34 @@ class CompletionStatus(Enum):
 @dataclass
 class StageStatus:
     """Status of a single training stage."""
+
     name: str
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    started_at: str | None = None
+    completed_at: str | None = None
     epochs_completed: int = 0
     total_epochs: int = 0
     best_loss: float = 0.0
     final_loss: float = 0.0
     status: CompletionStatus = CompletionStatus.NOT_STARTED
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
 class TrainingCompletionReport:
     """Complete report of training status."""
+
     model_name: str
     created_at: str
-    trained_at: Optional[str] = None
+    trained_at: str | None = None
 
     # Overall completion
     completion_status: CompletionStatus = CompletionStatus.NOT_STARTED
     completion_percentage: float = 0.0
 
     # Stage statuses
-    pretraining: Optional[StageStatus] = None
-    federated: Optional[StageStatus] = None
-    rlhf: Optional[StageStatus] = None
+    pretraining: StageStatus | None = None
+    federated: StageStatus | None = None
+    rlhf: StageStatus | None = None
 
     # Overall metrics
     total_epochs: int = 0
@@ -85,13 +89,13 @@ class TrainingCompletionReport:
     best_val_loss: float = 0.0
 
     # Checkpoint info
-    checkpoint_path: Optional[str] = None
+    checkpoint_path: str | None = None
     last_checkpoint_step: int = 0
     checkpoint_count: int = 0
 
     # Errors
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
     # Metadata
     dataset: str = ""
@@ -105,10 +109,14 @@ class TrainingCompletionReport:
 
     def can_resume(self) -> bool:
         """Check if training can be resumed."""
-        return self.completion_status in [
-            CompletionStatus.IN_PROGRESS,
-            CompletionStatus.INTERRUPTED,
-        ] and self.checkpoint_path is not None
+        return (
+            self.completion_status
+            in [
+                CompletionStatus.IN_PROGRESS,
+                CompletionStatus.INTERRUPTED,
+            ]
+            and self.checkpoint_path is not None
+        )
 
     def get_progress_summary(self) -> str:
         """Get human-readable progress summary."""
@@ -131,9 +139,9 @@ class TrainingStatusTracker:
         self.model_name = model_name
         self.report = TrainingCompletionReport(
             model_name=model_name,
-            created_at=datetime.now(timezone.utc).isoformat() + "Z",
+            created_at=datetime.now(UTC).isoformat() + "Z",
         )
-        self.checkpoints: List[Dict[str, Any]] = []
+        self.checkpoints: list[dict[str, Any]] = []
 
     def start_training(
         self,
@@ -179,7 +187,7 @@ class TrainingStatusTracker:
 
         stage_status = stage_name_map.get(stage)
         if stage_status:
-            stage_status.started_at = datetime.now(timezone.utc).isoformat() + "Z"
+            stage_status.started_at = datetime.now(UTC).isoformat() + "Z"
             stage_status.status = CompletionStatus.IN_PROGRESS
 
     def update_stage(
@@ -187,7 +195,7 @@ class TrainingStatusTracker:
         stage: TrainingStage,
         epoch: int,
         loss: float,
-        val_loss: Optional[float] = None,
+        val_loss: float | None = None,
     ):
         """Update stage progress."""
         stage_name_map = {
@@ -200,7 +208,9 @@ class TrainingStatusTracker:
         if stage_status:
             stage_status.epochs_completed = epoch + 1
             stage_status.final_loss = loss
-            if val_loss is not None and (stage_status.best_loss == 0 or val_loss < stage_status.best_loss):
+            if val_loss is not None and (
+                stage_status.best_loss == 0 or val_loss < stage_status.best_loss
+            ):
                 stage_status.best_loss = val_loss
 
             # Update overall progress
@@ -216,7 +226,7 @@ class TrainingStatusTracker:
 
         stage_status = stage_name_map.get(stage)
         if stage_status:
-            stage_status.completed_at = datetime.now(timezone.utc).isoformat() + "Z"
+            stage_status.completed_at = datetime.now(UTC).isoformat() + "Z"
             stage_status.status = CompletionStatus.COMPLETED
 
             if stage_status.best_loss > 0:
@@ -251,12 +261,14 @@ class TrainingStatusTracker:
         self.report.checkpoint_path = checkpoint_path
         self.report.last_checkpoint_step = step
 
-        self.checkpoints.append({
-            "path": checkpoint_path,
-            "step": step,
-            "loss": loss,
-            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
-        })
+        self.checkpoints.append(
+            {
+                "path": checkpoint_path,
+                "step": step,
+                "loss": loss,
+                "timestamp": datetime.now(UTC).isoformat() + "Z",
+            }
+        )
         self.report.checkpoint_count = len(self.checkpoints)
 
     def _update_overall_progress(self):
@@ -282,13 +294,13 @@ class TrainingStatusTracker:
 
             if all_complete:
                 self.report.completion_status = CompletionStatus.COMPLETED
-                self.report.trained_at = datetime.now(timezone.utc).isoformat() + "Z"
+                self.report.trained_at = datetime.now(UTC).isoformat() + "Z"
 
     def mark_complete(self):
         """Mark training as complete."""
         self.report.completion_status = CompletionStatus.COMPLETED
         self.report.completion_percentage = 100.0
-        self.report.trained_at = datetime.now(timezone.utc).isoformat() + "Z"
+        self.report.trained_at = datetime.now(UTC).isoformat() + "Z"
 
     def get_report(self) -> TrainingCompletionReport:
         """Get the completion report."""
@@ -296,25 +308,24 @@ class TrainingStatusTracker:
 
     def save_report(self, path: str):
         """Save report to JSON (converts enums to their values)."""
+
         def _serialize(obj):
             if isinstance(obj, Enum):
                 return obj.value
             raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(asdict(self.report), f, indent=2, default=_serialize)
 
     @classmethod
-    def load_report(cls, path: str) -> "TrainingStatusTracker":
+    def load_report(cls, path: str) -> TrainingStatusTracker:
         """Load report from JSON."""
-        with open(path, 'r') as f:
+        with open(path) as f:
             data = json.load(f)
 
         def _coerce(obj):
             if isinstance(obj, dict):
-                if {"name", "status"} <= set(obj) and isinstance(
-                    obj.get("name"), str
-                ):
+                if {"name", "status"} <= set(obj) and isinstance(obj.get("name"), str):
                     return StageStatus(**{k: _coerce(v) for k, v in obj.items()})
                 return {k: _coerce(v) for k, v in obj.items()}
             if isinstance(obj, list):
@@ -334,7 +345,9 @@ class TrainingStatusTracker:
     def print_summary(self):
         """Print human-readable summary."""
         logger.info("=" * 60, extra={"tag": "TRAIN"})
-        logger.info("Training Status: %s", self.report.completion_status.value, extra={"tag": "TRAIN"})
+        logger.info(
+            "Training Status: %s", self.report.completion_status.value, extra={"tag": "TRAIN"}
+        )
         logger.info("Progress: %.1f%%", self.report.completion_percentage, extra={"tag": "TRAIN"})
         logger.info("Total Epochs: %s", self.report.total_epochs, extra={"tag": "TRAIN"})
         logger.info("Best Loss: %.4f", self.report.best_loss, extra={"tag": "TRAIN"})
@@ -346,7 +359,12 @@ class TrainingStatusTracker:
                 logger.info("", extra={"tag": "TRAIN"})
                 logger.info("%s:", stage.name, extra={"tag": "TRAIN"})
                 logger.info("  Status: %s", stage.status.value, extra={"tag": "TRAIN"})
-                logger.info("  Epochs: %s/%s", stage.epochs_completed, stage.total_epochs, extra={"tag": "TRAIN"})
+                logger.info(
+                    "  Epochs: %s/%s",
+                    stage.epochs_completed,
+                    stage.total_epochs,
+                    extra={"tag": "TRAIN"},
+                )
                 if stage.best_loss > 0:
                     logger.info("  Best Loss: %.4f", stage.best_loss, extra={"tag": "TRAIN"})
                 if stage.error:
@@ -354,12 +372,13 @@ class TrainingStatusTracker:
 
         logger.info("=" * 60, extra={"tag": "TRAIN"})
 
+
 # =============================================================================
 # STANDALONE NPZ CHECKPOINT HELPERS (native)
 # =============================================================================
 
 
-def _tensors_to_numpy(state_dict: Dict[str, Any]) -> Dict[str, np.ndarray]:
+def _tensors_to_numpy(state_dict: dict[str, Any]) -> dict[str, np.ndarray]:
     """Convert tensors in a state dict to numpy arrays."""
     result = {}
     for k, v in state_dict.items():

@@ -6,10 +6,10 @@ import threading
 from typing import Any
 
 from domain.consciousness._internal.config import ConsciousnessConfig
-from domain.consciousness._internal.self_model import SelfModel
-from domain.consciousness._internal.qualia import QualiaEngine
 from domain.consciousness._internal.meta_cognition import MetaCognition
 from domain.consciousness._internal.narrative import NarrativeGenerator
+from domain.consciousness._internal.qualia import QualiaEngine
+from domain.consciousness._internal.self_model import SelfModel
 
 
 class ConsciousnessEngine:

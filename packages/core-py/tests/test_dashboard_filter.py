@@ -5,19 +5,17 @@ from __future__ import annotations
 import logging
 import re
 
-import pytest
-
 from domain.logging._internal.dashboard_filter import (
-    DashboardFilter,
     _PATTERNS,
     _WATCHED_OPS,
     _WATCHED_TAGS,
+    DashboardFilter,
     _format_punchy,
     _summarize_from_op,
 )
 
-
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def _record(msg: str = "", level: int = logging.INFO, **attrs) -> logging.LogRecord:
     r = logging.LogRecord("test", level, "", 0, msg, (), None)
@@ -27,6 +25,7 @@ def _record(msg: str = "", level: int = logging.INFO, **attrs) -> logging.LogRec
 
 
 # ── _summarize_from_op ──────────────────────────────────────────────────────
+
 
 class TestSummarizeFromOp:
     def test_unknown_op_returns_none(self):
@@ -139,6 +138,7 @@ class TestSummarizeFromOp:
 
 
 # ── _format_punchy ──────────────────────────────────────────────────────────
+
 
 class TestFormatPunchy:
     def test_op_takes_precedence(self):
@@ -393,6 +393,7 @@ class TestFormatPunchy:
 
 # ── DashboardFilter ──────────────────────────────────────────────────────────
 
+
 class TestDashboardFilter:
     def test_filter_always_returns_true(self):
         f = DashboardFilter()
@@ -436,14 +437,23 @@ class TestDashboardFilter:
 
 # ── constants ────────────────────────────────────────────────────────────────
 
+
 class TestConstants:
     def test_watched_tags_are_frozen(self):
         assert isinstance(_WATCHED_TAGS, frozenset)
 
     def test_watched_ops_keys(self):
         expected = {
-            "train", "model", "infer", "http", "rag", "download",
-            "workflow", "sys", "infra", "web",
+            "train",
+            "model",
+            "infer",
+            "http",
+            "rag",
+            "download",
+            "workflow",
+            "sys",
+            "infra",
+            "web",
         }
         assert set(_WATCHED_OPS.keys()) == expected
 
@@ -455,6 +465,7 @@ class TestConstants:
 
 
 # ── pattern coverage ─────────────────────────────────────────────────────────
+
 
 class TestPatternCoverage:
     def test_all_watched_tags_covered(self):

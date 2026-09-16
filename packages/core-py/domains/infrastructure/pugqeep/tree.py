@@ -5,22 +5,23 @@ Full engine: compress, store, retrieve, decompress arrays as Points.
 Works for model weights, knowledge graphs, any array data.
 ModelTree extends this with ML-specific skip logic (embeddings, biases).
 """
+
 from __future__ import annotations
 
 import base64
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Type
 
 import numpy as np
 
-from .point import Point
 from .compressor import PointCompressor
-from .library import PointLibrary
 from .config import TreeConfig
-from .strategies import CompressStrategy, ClusterStrategy, FunctionStrategy, RawStrategy
 from .executor import ParallelExecutor
+from .library import PointLibrary
+from .point import Point
+from .strategies import ClusterStrategy, CompressStrategy, FunctionStrategy, RawStrategy
 
 logger = logging.getLogger("slo.pugqeep")
 
@@ -38,20 +39,35 @@ class Tree:
         executor: Optional ParallelExecutor (overrides default parallel config).
     """
 
-    __slots__ = ('name', 'library', 'n_clusters', '_method', '_compressor',
-                 '_strategy', '_executor', '_shapes', '_dtypes', '_loaded')
+    __slots__ = (
+        "name",
+        "library",
+        "n_clusters",
+        "_method",
+        "_compressor",
+        "_strategy",
+        "_executor",
+        "_shapes",
+        "_dtypes",
+        "_loaded",
+    )
 
     # Strategy registry: method name → strategy class
-    _STRATEGIES: Dict[str, Type[CompressStrategy]] = {
+    _STRATEGIES: dict[str, type[CompressStrategy]] = {
         "cluster": ClusterStrategy,
         "function": FunctionStrategy,
     }
 
-    def __init__(self, name: str, library: Optional[PointLibrary] = None,
-                 n_clusters: int = 16, config: Optional[TreeConfig] = None,
-                 compressor: Optional[PointCompressor] = None,
-                 strategy: Optional[CompressStrategy] = None,
-                 executor: Optional[ParallelExecutor] = None):
+    def __init__(
+        self,
+        name: str,
+        library: PointLibrary | None = None,
+        n_clusters: int = 16,
+        config: TreeConfig | None = None,
+        compressor: PointCompressor | None = None,
+        strategy: CompressStrategy | None = None,
+        executor: ParallelExecutor | None = None,
+    ):
         self.name = name
         self.library = library if library is not None else PointLibrary(name=f"{name}_points")
         if config is not None:
@@ -63,8 +79,8 @@ class Tree:
         self._compressor = compressor or PointCompressor(n_clusters=self.n_clusters)
         self._strategy = strategy or self._make_strategy(self._method)
         self._executor = executor or ParallelExecutor()
-        self._shapes: Dict[str, Tuple[int, ...]] = {}
-        self._dtypes: Dict[str, np.dtype] = {}
+        self._shapes: dict[str, tuple[int, ...]] = {}
+        self._dtypes: dict[str, np.dtype] = {}
         self._loaded = False
 
     def _make_strategy(self, method: str) -> CompressStrategy:
@@ -84,9 +100,13 @@ class Tree:
 
     # ── Batch loading ──
 
-    def load_data(self, data: Dict[str, np.ndarray], method: Optional[str] = None,
-                  num_workers: int = 0,
-                  on_progress: Optional[Callable[[int, int, str], None]] = None) -> dict:
+    def load_data(
+        self,
+        data: dict[str, np.ndarray],
+        method: str | None = None,
+        num_workers: int = 0,
+        on_progress: Callable[[int, int, str], None] | None = None,
+    ) -> dict:
         """Compress all arrays into Points and store in library.
 
         Args:
@@ -111,8 +131,13 @@ class Tree:
     # Backward-compat alias
     load_weights = load_data
 
-    def _load_sequential(self, data: Dict[str, np.ndarray], strategy: CompressStrategy,
-                         method: str, on_progress: Optional[Callable] = None) -> dict:
+    def _load_sequential(
+        self,
+        data: dict[str, np.ndarray],
+        strategy: CompressStrategy,
+        method: str,
+        on_progress: Callable | None = None,
+    ) -> dict:
         total_raw = 0
         total_compressed = 0
 
@@ -137,13 +162,18 @@ class Tree:
             "method": method,
         }
 
-    def _load_parallel(self, data: Dict[str, np.ndarray], strategy: CompressStrategy,
-                       method: str, num_workers: int,
-                       on_progress: Optional[Callable] = None) -> dict:
+    def _load_parallel(
+        self,
+        data: dict[str, np.ndarray],
+        strategy: CompressStrategy,
+        method: str,
+        num_workers: int,
+        on_progress: Callable | None = None,
+    ) -> dict:
         executor = ParallelExecutor(num_workers)
         total_done = [0]
         total_count = len(data)
-        results: Dict[str, tuple] = {}
+        results: dict[str, tuple] = {}
 
         def compress_one(item):
             name, raw = item
@@ -194,7 +224,7 @@ class Tree:
 
     # ── Retrieval ──
 
-    def get_data(self, name: str) -> Optional[np.ndarray]:
+    def get_data(self, name: str) -> np.ndarray | None:
         """Retrieve a decompressed array by name."""
         point_id = f"{self.name}.{name}"
         point = self.library.get(point_id)
@@ -211,13 +241,14 @@ class Tree:
                 arr = arr.reshape(point.params["shape"])
             return arr
 
-        flat = point.generate(point.params.get("n", 0) if "n" in point.params
-                              else self._estimate_size(name))
+        flat = point.generate(
+            point.params.get("n", 0) if "n" in point.params else self._estimate_size(name)
+        )
         if shape is not None:
             flat = flat.reshape(shape)
         return flat.astype(dtype)
 
-    def get_data_batch(self, names: Optional[List[str]] = None) -> Dict[str, Optional[np.ndarray]]:
+    def get_data_batch(self, names: list[str] | None = None) -> dict[str, np.ndarray | None]:
         """Retrieve multiple arrays by name."""
         if names is None:
             names = list(self._shapes.keys())
@@ -245,7 +276,7 @@ class Tree:
         self.library.add(point)
         return point
 
-    def get(self, name: str) -> Optional[Point]:
+    def get(self, name: str) -> Point | None:
         """Get a Point by identity."""
         return self.library.get(name)
 
@@ -260,13 +291,13 @@ class Tree:
         self._dtypes.pop(name, None)
         return removed
 
-    def list_items(self) -> List[str]:
+    def list_items(self) -> list[str]:
         """List all item names."""
         prefix = f"{self.name}."
         names = []
         for point in self.library.list_all():
             if point.identity.startswith(prefix):
-                names.append(point.identity[len(prefix):])
+                names.append(point.identity[len(prefix) :])
             else:
                 names.append(point.identity)
         return names
@@ -291,14 +322,14 @@ class Tree:
 
     # ── Decompression (instance method) ──
 
-    def decompress(self, num_workers: int = 0) -> Dict[str, np.ndarray]:
+    def decompress(self, num_workers: int = 0) -> dict[str, np.ndarray]:
         """Decompress all data back to numpy arrays."""
         return decompress_tree(self, num_workers)
 
     # ── Persistence (class methods) ──
 
     @classmethod
-    def from_points(cls, path: str) -> Tuple["Tree", dict]:
+    def from_points(cls, path: str) -> tuple[Tree, dict]:
         """Load a Tree from a `.points.json` library file."""
         return load_from_points(path)
 
@@ -316,14 +347,15 @@ class Tree:
 # Module-level helpers (backward compat)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def decompress_tree(tree: Tree, num_workers: int = 0) -> Dict[str, np.ndarray]:
+
+def decompress_tree(tree: Tree, num_workers: int = 0) -> dict[str, np.ndarray]:
     """Decompress all data from a Tree back to numpy arrays."""
     prefix = f"{tree.name}."
 
     items = []
     for point in tree.library.list_all():
         if point.identity.startswith(prefix):
-            item_name = point.identity[len(prefix):]
+            item_name = point.identity[len(prefix) :]
         else:
             item_name = point.identity
         items.append((item_name, point))
@@ -334,7 +366,7 @@ def decompress_tree(tree: Tree, num_workers: int = 0) -> Dict[str, np.ndarray]:
     # Parallel: items already have stripped names from the prefix loop above.
     # executor.map() unwraps (key, value) so fn receives just the Point.
     # We need the stripped name, so process directly with executor.run().
-    results: Dict[str, np.ndarray] = {}
+    results: dict[str, np.ndarray] = {}
     lock = __import__("threading").Lock()
 
     def _decomp(item):
@@ -360,7 +392,11 @@ def _decompress_point(tree: Tree, item_name: str, point: Point) -> np.ndarray:
         if point.params.get("shape"):
             arr = arr.reshape(point.params["shape"])
     else:
-        n = point.params.get("n", 0) if "n" in point.params else (int(np.prod(shape)) if shape else 1000)
+        n = (
+            point.params.get("n", 0)
+            if "n" in point.params
+            else (int(np.prod(shape)) if shape else 1000)
+        )
         arr = point.generate(n)
         if shape:
             arr = arr.reshape(shape)
@@ -377,14 +413,16 @@ def load_library(path: Path) -> PointLibrary:
     return PointLibrary.load(path)
 
 
-def load_from_points(path: str) -> Tuple[Tree, dict]:
+def load_from_points(path: str) -> tuple[Tree, dict]:
     """Load a Tree from a `.points.json` library file."""
     p = Path(path)
     lib_path = p.with_suffix(".points.json")
     if not lib_path.exists():
         lib_path = p / "library.json"
         if not lib_path.exists():
-            raise FileNotFoundError(f"Library not found: {p.with_suffix('.points.json')} or {p / 'library.json'}")
+            raise FileNotFoundError(
+                f"Library not found: {p.with_suffix('.points.json')} or {p / 'library.json'}"
+            )
 
     library = PointLibrary.load(lib_path)
     tree_name = p.stem
@@ -404,7 +442,7 @@ def load_from_points(path: str) -> Tuple[Tree, dict]:
     for point in library.list_all():
         prefix = f"{tree_name}."
         if point.identity.startswith(prefix):
-            item_name = point.identity[len(prefix):]
+            item_name = point.identity[len(prefix) :]
         else:
             item_name = point.identity
         shape = tuple(saved_shapes.get(item_name, saved_shapes.get(point.identity, [])))
@@ -416,10 +454,10 @@ def load_from_points(path: str) -> Tuple[Tree, dict]:
 
 def load_model_to_points(
     model_id: str,
-    library: Optional[PointLibrary] = None,
+    library: PointLibrary | None = None,
     n_clusters: int = 16,
     method: str = "cluster",
-    storage_dir: Optional[Path] = None,
+    storage_dir: Path | None = None,
 ) -> Tree:
     """Load a HuggingFace model and compress its weights into Points."""
     try:

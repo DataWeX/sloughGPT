@@ -23,10 +23,8 @@ from domain.shell._internal.addons.neural import (
     NeuralMemoryType,
     NeuralOp,
     NeuralProcess,
-    NeuralProcessType,
     NeuralState,
     NeuralSyscall,
-    NeuralKVCache,
     TokenizerDevice,
 )
 from domain.shell._internal.kernel import Kernel
@@ -276,7 +274,8 @@ class TestNeuralEngineDevice:
 
     def test_read_returns_models(self):
         dev = NeuralEngineDevice()
-        model = lambda x: x
+        def model(x):
+            return x
         dev.load_model("m", model)
         assert dev.read() == {"m": model}
 
@@ -359,7 +358,7 @@ class TestTokenizerDevice:
         dev = TokenizerDevice()
         result = dev.ioctl("decode", [0xFF, 0xFE])
         assert result.success
-        assert "\uFFFD" in result.value["text"]
+        assert "\ufffd" in result.value["text"]
 
     def test_ioctl_unknown_command(self):
         dev = TokenizerDevice()
@@ -651,20 +650,26 @@ class TestBatchProcessor:
     def test_process_batch_fires_callback(self):
         received = []
         bp = BatchProcessor(process_fn=lambda inputs: {"out": inputs["x"]})
-        bp.submit(BatchRequest(
-            id="r1", inputs={"x": np.array([1.0])},
-            callback=lambda result: received.append(result),
-        ))
+        bp.submit(
+            BatchRequest(
+                id="r1",
+                inputs={"x": np.array([1.0])},
+                callback=lambda result: received.append(result),
+            )
+        )
         bp.process_batch()
         assert len(received) == 1
         assert received[0].id == "r1"
 
     def test_process_batch_callback_raises_is_swallowed(self):
         bp = BatchProcessor(process_fn=lambda inputs: {"out": inputs["x"]})
-        bp.submit(BatchRequest(
-            id="r1", inputs={"x": np.array([1.0])},
-            callback=lambda result: (_ for _ in ()).throw(RuntimeError("cb boom")),
-        ))
+        bp.submit(
+            BatchRequest(
+                id="r1",
+                inputs={"x": np.array([1.0])},
+                callback=lambda result: (_ for _ in ()).throw(RuntimeError("cb boom")),
+            )
+        )
         results = bp.process_batch()
         assert len(results) == 1
 
@@ -688,6 +693,7 @@ class TestBatchProcessor:
 class TestNeuralKernelReExport:
     def test_module_getattr_neural_kernel(self):
         from domain.shell._internal.kernel import NeuralKernel as NK
+
         assert neural.NeuralKernel is NK
 
     def test_module_getattr_unknown(self):

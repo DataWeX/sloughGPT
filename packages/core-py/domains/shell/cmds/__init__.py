@@ -27,10 +27,11 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from ..console import Console
 from ..commands import ShellCommands
+from ..console import Console
 
 CommandFunc = Callable[
     [list[str], Console, ShellCommands, dict[str, str]],
@@ -71,7 +72,15 @@ class CmdModule:
 # Unix standard commands (cp, mv, grep, echo, etc.) are NOT included —
 # users already have those in their terminal.
 _MODULE_NAMES: dict[str, list[str]] = {
-    "data_cmds": ["datasets", "checkpoints", "finetuned", "knowledge", "remember", "recall", "tokenizer"],
+    "data_cmds": [
+        "datasets",
+        "checkpoints",
+        "finetuned",
+        "knowledge",
+        "remember",
+        "recall",
+        "tokenizer",
+    ],
     "dashboard": ["dashboard"],
     "health": ["health"],
     "models_cmd": ["models", "unload", "precision", "quantize", "dequantize"],

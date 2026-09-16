@@ -14,13 +14,14 @@ from __future__ import annotations
 import logging
 import math
 import time
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Dict, Iterator, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
-from domain.infrastructure._internal.compute_backend import ComputeBackend, register_backend
 from domain.infrastructure._internal.arch_config import ArchConfig
+from domain.infrastructure._internal.compute_backend import ComputeBackend, register_backend
 
 logger = logging.getLogger(__name__)
 
@@ -50,13 +51,14 @@ class WgpuBE(ComputeBackend):
     Falls back to numpy for operations not yet implemented on GPU.
     """
 
-    def __init__(self, weights: Dict[str, np.ndarray], arch: ArchConfig, device: Any = None):
+    def __init__(self, weights: dict[str, np.ndarray], arch: ArchConfig, device: Any = None):
         self._arch = arch
         self._np_weights = weights  # Keep numpy copy for fallback
 
         # Import GPU engine
         try:
-            from domain.infrastructure._internal.gpu.gpu_engine import GpuDevice, GPU_BUF_STORAGE
+            from domain.infrastructure._internal.gpu.gpu_engine import GPU_BUF_STORAGE, GpuDevice
+
             self._gpu = GpuDevice(device)
             self._GPU_BUF_STORAGE = GPU_BUF_STORAGE
             self._has_gpu = True
@@ -65,7 +67,7 @@ class WgpuBE(ComputeBackend):
             self._has_gpu = False
 
         # Transfer weights to GPU
-        self._gpu_buffers: Dict[str, Any] = {}
+        self._gpu_buffers: dict[str, Any] = {}
         if self._has_gpu:
             self._upload_weights(weights)
 
@@ -81,7 +83,9 @@ class WgpuBE(ComputeBackend):
         self._cached_cos_pos = -1
 
     @staticmethod
-    def _build_flat_lookup(weights: Dict[str, np.ndarray], arch: ArchConfig) -> Dict[str, np.ndarray]:
+    def _build_flat_lookup(
+        weights: dict[str, np.ndarray], arch: ArchConfig
+    ) -> dict[str, np.ndarray]:
         flat = {}
         W = arch.weight_map
         for canonical, mapped in W.items():
@@ -98,7 +102,7 @@ class WgpuBE(ComputeBackend):
                 flat[key] = weights[key]
         return flat
 
-    def _upload_weights(self, weights: Dict[str, np.ndarray]) -> None:
+    def _upload_weights(self, weights: dict[str, np.ndarray]) -> None:
         """Upload all weights to GPU buffers."""
         for name, arr in weights.items():
             arr = np.ascontiguousarray(arr.astype(np.float32))
@@ -107,7 +111,7 @@ class WgpuBE(ComputeBackend):
             self._gpu_buffers[name] = (buf, arr.shape, arr.dtype)
 
     @classmethod
-    def from_weights(cls, weights: Dict[str, np.ndarray], arch: ArchConfig) -> "WgpuBE":
+    def from_weights(cls, weights: dict[str, np.ndarray], arch: ArchConfig) -> WgpuBE:
         return cls(weights, arch)
 
     def warmup(self, seq_len: int = 1) -> None:
@@ -118,12 +122,15 @@ class WgpuBE(ComputeBackend):
             src = (_SHADERS_DIR / "matmul.wgsl").read_text()
             shader = self._gpu.shader_create_wgsl(src, entry="main")
             # Bindings: 0=A, 1=B, 2=C, 3=params (uniform)
-            self._matmul_pipeline = self._gpu.pipeline_create(shader, [
-                (0, 0, 1),  # binding=0, type=storage, stage=compute
-                (1, 0, 1),  # binding=1, type=storage, stage=compute
-                (2, 0, 1),  # binding=2, type=storage, stage=compute
-                (3, 1, 1),  # binding=3, type=uniform, stage=compute
-            ])
+            self._matmul_pipeline = self._gpu.pipeline_create(
+                shader,
+                [
+                    (0, 0, 1),  # binding=0, type=storage, stage=compute
+                    (1, 0, 1),  # binding=1, type=storage, stage=compute
+                    (2, 0, 1),  # binding=2, type=storage, stage=compute
+                    (3, 1, 1),  # binding=3, type=uniform, stage=compute
+                ],
+            )
             logger.info("WgpuBE: matmul shader compiled and pipeline created")
         except Exception as e:
             logger.warning("WgpuBE: shader warmup failed (%s), will use numpy fallback", e)
@@ -149,7 +156,10 @@ class WgpuBE(ComputeBackend):
             return a @ b
 
         try:
-            from domain.infrastructure._internal.gpu.gpu_engine import GPU_BUF_STORAGE, GPU_BUF_UNIFORM
+            from domain.infrastructure._internal.gpu.gpu_engine import (
+                GPU_BUF_STORAGE,
+                GPU_BUF_UNIFORM,
+            )
 
             a_f32 = np.ascontiguousarray(a.astype(np.float32))
             b_f32 = np.ascontiguousarray(b.astype(np.float32))
@@ -198,10 +208,12 @@ class WgpuBE(ComputeBackend):
     def rmsnorm(self, x: Any, weight: Any, eps: float = 1e-6) -> Any:
         if isinstance(x, np.ndarray):
             eps_t = np.dtype(x.dtype).type(eps)
-            return (x / np.sqrt(np.mean(x ** 2, axis=-1, keepdims=True) + eps_t)) * weight
+            return (x / np.sqrt(np.mean(x**2, axis=-1, keepdims=True) + eps_t)) * weight
         return x
 
-    def layer_norm(self, x: np.ndarray, weight: np.ndarray, bias: Optional[np.ndarray] = None, eps: float = 1e-5) -> np.ndarray:
+    def layer_norm(
+        self, x: np.ndarray, weight: np.ndarray, bias: np.ndarray | None = None, eps: float = 1e-5
+    ) -> np.ndarray:
         eps_t = np.dtype(x.dtype).type(eps)
         mean = x.mean(axis=-1, keepdims=True)
         var = x.var(axis=-1, keepdims=True)
@@ -219,7 +231,9 @@ class WgpuBE(ComputeBackend):
     def gelu(self, x: Any) -> Any:
         if isinstance(x, np.ndarray):
             T = np.dtype(x.dtype).type
-            return T(0.5) * x * (T(1.0) + np.tanh(T(np.sqrt(2.0 / np.pi)) * (x + T(0.044715) * x ** 3)))
+            return (
+                T(0.5) * x * (T(1.0) + np.tanh(T(np.sqrt(2.0 / np.pi)) * (x + T(0.044715) * x**3)))
+            )
         return x
 
     def rope(self, x: Any, cos: Any, sin: Any) -> Any:
@@ -234,8 +248,9 @@ class WgpuBE(ComputeBackend):
             if n_reps <= 1:
                 return x
             bs, nkv, sl, d = x.shape
-            return np.broadcast_to(x[:, :, np.newaxis, :, :],
-                                   (bs, nkv, n_reps, sl, d)).reshape(bs, nkv * n_reps, sl, d)
+            return np.broadcast_to(x[:, :, np.newaxis, :, :], (bs, nkv, n_reps, sl, d)).reshape(
+                bs, nkv * n_reps, sl, d
+            )
         return x
 
     def argmax(self, x: Any) -> int:
@@ -270,7 +285,7 @@ class WgpuBE(ComputeBackend):
         def w(name: str) -> np.ndarray:
             return flat[name]
 
-        def wn(name: str) -> Optional[np.ndarray]:
+        def wn(name: str) -> np.ndarray | None:
             return flat.get(name)
 
         # Embeddings
@@ -301,7 +316,10 @@ class WgpuBE(ComputeBackend):
                 q = q.reshape(1, seq_len, arch.n_head, arch.head_dim)
                 k = k.reshape(1, seq_len, arch.n_kv_head, arch.head_dim)
                 t = np.arange(0, seq_len, dtype=np.float32)
-                freqs = 1.0 / (arch.rope_base ** (np.arange(0, arch.head_dim, 2, dtype=np.float32) / arch.head_dim))
+                freqs = 1.0 / (
+                    arch.rope_base
+                    ** (np.arange(0, arch.head_dim, 2, dtype=np.float32) / arch.head_dim)
+                )
                 emb = np.outer(t, freqs)
                 cos = np.cos(emb)[:, np.newaxis, :]
                 sin = np.sin(emb)[:, np.newaxis, :]
@@ -315,10 +333,12 @@ class WgpuBE(ComputeBackend):
                 reps = arch.n_head // arch.n_kv_head
                 k_r = k.reshape(1, seq_len, arch.n_kv_head, arch.head_dim)
                 v_r = v.reshape(1, seq_len, arch.n_kv_head, arch.head_dim)
-                k = np.broadcast_to(k_r[:, :, :, np.newaxis, :],
-                                    (1, seq_len, arch.n_kv_head, reps, arch.head_dim)).reshape(1, seq_len, -1)
-                v = np.broadcast_to(v_r[:, :, :, np.newaxis, :],
-                                    (1, seq_len, arch.n_kv_head, reps, arch.head_dim)).reshape(1, seq_len, -1)
+                k = np.broadcast_to(
+                    k_r[:, :, :, np.newaxis, :], (1, seq_len, arch.n_kv_head, reps, arch.head_dim)
+                ).reshape(1, seq_len, -1)
+                v = np.broadcast_to(
+                    v_r[:, :, :, np.newaxis, :], (1, seq_len, arch.n_kv_head, reps, arch.head_dim)
+                ).reshape(1, seq_len, -1)
 
             # Attention
             scale = math.sqrt(arch.head_dim)
@@ -374,9 +394,17 @@ class WgpuBE(ComputeBackend):
 
         return logits
 
-    def generate_stream(self, token_ids, max_new_tokens=100, temperature=1.0,
-                        top_k=None, top_p=None, repetition_penalty=1.0,
-                        eos_token=None, extra_stop_ids=None) -> Iterator[int]:
+    def generate_stream(
+        self,
+        token_ids,
+        max_new_tokens=100,
+        temperature=1.0,
+        top_k=None,
+        top_p=None,
+        repetition_penalty=1.0,
+        eos_token=None,
+        extra_stop_ids=None,
+    ) -> Iterator[int]:
         if token_ids.ndim == 1:
             token_ids = token_ids.reshape(1, -1)
 
@@ -409,7 +437,7 @@ class WgpuBE(ComputeBackend):
                 cum_probs /= cum_probs[-1]
                 cutoff = np.searchsorted(cum_probs, top_p)
                 if cutoff < len(sorted_idx):
-                    next_logits[sorted_idx[cutoff + 1:]] = -1e10
+                    next_logits[sorted_idx[cutoff + 1 :]] = -1e10
 
             if temperature < 1e-6:
                 tok = int(np.argmax(next_logits))
@@ -425,15 +453,31 @@ class WgpuBE(ComputeBackend):
             token_ids = np.concatenate([token_ids, np.array([[tok]], dtype=np.int64)], axis=1)
             yield tok
 
-    def generate(self, token_ids, max_new_tokens=100, temperature=1.0,
-                 top_k=None, top_p=None, repetition_penalty=1.0,
-                 eos_token=None, extra_stop_ids=None) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def generate(
+        self,
+        token_ids,
+        max_new_tokens=100,
+        temperature=1.0,
+        top_k=None,
+        top_p=None,
+        repetition_penalty=1.0,
+        eos_token=None,
+        extra_stop_ids=None,
+    ) -> tuple[np.ndarray, dict[str, Any]]:
         t_start = time.perf_counter()
         prompt_len = token_ids.shape[1] if token_ids.ndim > 1 else len(token_ids)
         all_tokens = list(token_ids.flatten())
 
-        for tok in self.generate_stream(token_ids, max_new_tokens, temperature, top_k, top_p,
-                                        repetition_penalty, eos_token, extra_stop_ids):
+        for tok in self.generate_stream(
+            token_ids,
+            max_new_tokens,
+            temperature,
+            top_k,
+            top_p,
+            repetition_penalty,
+            eos_token,
+            extra_stop_ids,
+        ):
             all_tokens.append(tok)
 
         t_end = time.perf_counter()
@@ -470,4 +514,5 @@ try:
     register_backend("gpu", WgpuBE)
 except Exception as e:
     import logging
+
     logging.getLogger(__name__).debug("GPU backend not registered: %s", e)

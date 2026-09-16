@@ -1,13 +1,17 @@
 """Meaningful tests for RAGGrounder — document storage, chunking, retrieval, grounding."""
 
 import pytest
+
 from domain.cognitive._internal.grounding import (
-    RAGGrounder, Document, KnowledgeGrounding, KnowledgeNode,
-    KnowledgeEdge, HierarchicalContext, CurriculumLearner,
+    CurriculumLearner,
+    Document,
+    HierarchicalContext,
+    KnowledgeGrounding,
+    RAGGrounder,
 )
 
-
 # ── RAGGrounder — Add Documents ────────────────────────────────────────
+
 
 class TestRAGGrounderAddDocument:
     def test_add_document(self):
@@ -65,6 +69,7 @@ class TestRAGGrounderAddDocument:
 
     def test_add_document_with_embedding(self):
         import numpy as np
+
         rag = RAGGrounder()
         emb = np.array([0.1, 0.2, 0.3])
         doc = Document(id="d1", content="x", source="test", embedding=emb)
@@ -110,6 +115,7 @@ class TestRAGGrounderAddDocument:
 
 
 # ── RAGGrounder — Retrieve ────────────────────────────────────────────
+
 
 class TestRAGGrounderRetrieve:
     @pytest.mark.asyncio
@@ -201,6 +207,7 @@ class TestRAGGrounderRetrieve:
 
 # ── RAGGrounder — Ground Response ─────────────────────────────────────
 
+
 class TestRAGGrounderGround:
     def test_ground_response_no_docs(self):
         rag = RAGGrounder()
@@ -258,6 +265,7 @@ class TestRAGGrounderGround:
 
 
 # ── KnowledgeGrounding ────────────────────────────────────────────────
+
 
 class TestKnowledgeGrounding:
     def test_add_fact(self):
@@ -348,6 +356,7 @@ class TestKnowledgeGrounding:
 
 # ── HierarchicalContext ───────────────────────────────────────────────
 
+
 class TestHierarchicalContext:
     def test_init(self):
         hc = HierarchicalContext(max_context=2048, chunk_size=256)
@@ -407,6 +416,7 @@ class TestHierarchicalContext:
 
 
 # ── CurriculumLearner ─────────────────────────────────────────────────
+
 
 class TestCurriculumLearner:
     def test_init(self):

@@ -22,23 +22,33 @@ background thread so the UI stays responsive.
 
 from __future__ import annotations
 
-import os
 import curses
+import os
 import threading
 from typing import TYPE_CHECKING
 
 try:
     import ctypes
+
     _SET_ASYNC_EXC = ctypes.pythonapi.PyThreadState_SetAsyncExc
 except (ImportError, AttributeError):
     _SET_ASYNC_EXC = None
 
 from .pane import Pane, PaneLayout, Rect
-from .surface import LogSurface, RenderLine, STYLE_INFO, STYLE_WARN, STYLE_ERROR, STYLE_DEBUG, STYLE_CRITICAL, TextSurface
+from .surface import (
+    STYLE_CRITICAL,
+    STYLE_DEBUG,
+    STYLE_ERROR,
+    STYLE_INFO,
+    STYLE_WARN,
+    LogSurface,
+    RenderLine,
+    TextSurface,
+)
 
 if TYPE_CHECKING:
-    from .repl import ShellREPL
     from .log_buffer import LogBuffer
+    from .repl import ShellREPL
 
 # ── Colour pairs ──────────────────────────────────────────────────────────
 
@@ -152,6 +162,7 @@ def _read_escape_remainder(stdscr, alt_map, restore_ms: int = 100):
 
 # ── TuiIo — routes command output into a TextSurface ──────────────────────
 
+
 class TuiIo:
     """ShellIO-compatible writer that feeds a TextSurface."""
 
@@ -169,6 +180,7 @@ class TuiIo:
 
 
 # ── TuiRepl ───────────────────────────────────────────────────────────────
+
 
 class TuiRepl:
     """Three-pane curses shell composing a PaneLayout with surfaces."""
@@ -232,12 +244,14 @@ class TuiRepl:
         self._log_surface = LogSurface(log_buffer)
 
         # Panes (arranger) — pure geometry, no rendering knowledge.
-        self._layout = PaneLayout([
-            Pane("console", ratio=self.CONSOLE_RATIO, min_rows=self.CONSOLE_MIN),
-            Pane("output", ratio=1.0 - self.CONSOLE_RATIO, min_rows=self.OUTPUT_MIN),
-            Pane("status", fixed=1),
-            Pane("input", fixed=1),
-        ])
+        self._layout = PaneLayout(
+            [
+                Pane("console", ratio=self.CONSOLE_RATIO, min_rows=self.CONSOLE_MIN),
+                Pane("output", ratio=1.0 - self.CONSOLE_RATIO, min_rows=self.OUTPUT_MIN),
+                Pane("status", fixed=1),
+                Pane("input", fixed=1),
+            ]
+        )
 
     def _repeat_out_search(self, rows: int, fwd: bool) -> None:
         """Repeat the last accepted output-pane search from the current match.
@@ -311,7 +325,7 @@ class TuiRepl:
             prefix = " > " if idx == self._select_idx else "   "
             text = filtered[idx]
             if len(prefix) + len(text) > cols - 2:
-                text = text[:cols - 2 - len(prefix)]
+                text = text[: cols - 2 - len(prefix)]
             lines.append(f"{prefix}{text}")
         if len(filtered) > max_show:
             lines.append(f"   ({len(filtered)} items, {self._select_idx + 1}/{len(filtered)})")
@@ -410,8 +424,13 @@ class TuiRepl:
         except curses.error:
             pass
 
-    def _blit(self, win: curses._CursesWindow, lines: list[RenderLine],
-              offset_y: int = 0, offset_x: int = 0) -> None:
+    def _blit(
+        self,
+        win: curses._CursesWindow,
+        lines: list[RenderLine],
+        offset_y: int = 0,
+        offset_x: int = 0,
+    ) -> None:
         """Write *lines* into *win*, starting at (offset_y, offset_x).
 
         Offsets are used when the pane has borders or padding so content
@@ -446,11 +465,27 @@ class TuiRepl:
             if pane.name == "console":
                 oy = pane.border_top + pane.pad_top
                 ox = pane.border_left + pane.pad_left
-                self._blit(win_console, self._log_surface.render(regions["console"].rows - pane.border_top - pane.border_bottom, self._log_scroll), oy, ox)
+                self._blit(
+                    win_console,
+                    self._log_surface.render(
+                        regions["console"].rows - pane.border_top - pane.border_bottom,
+                        self._log_scroll,
+                    ),
+                    oy,
+                    ox,
+                )
             elif pane.name == "output":
                 oy = pane.border_top + pane.pad_top
                 ox = pane.border_left + pane.pad_left
-                self._blit(win_output, self._output_surface.render(regions["output"].rows - pane.border_top - pane.border_bottom, self._out_scroll), oy, ox)
+                self._blit(
+                    win_output,
+                    self._output_surface.render(
+                        regions["output"].rows - pane.border_top - pane.border_bottom,
+                        self._out_scroll,
+                    ),
+                    oy,
+                    ox,
+                )
         self._render_status(win_status, regions["status"].cols)
         self._render_input(win_input, regions["input"].cols)
 
@@ -469,7 +504,7 @@ class TuiRepl:
         if len(buf) <= max_w:
             return buf, len(prompt) + caret
         start = min(caret, len(buf) - max_w)
-        return buf[start:start + max_w], len(prompt) + (caret - start)
+        return buf[start : start + max_w], len(prompt) + (caret - start)
 
     def _render_input(self, win: curses._CursesWindow, cols: int) -> None:
         """Draw the command line: prompt plus the buffered input, with the
@@ -525,7 +560,9 @@ class TuiRepl:
             win.addstr(0, 0, head, curses.color_pair(_P_PROMPT))
             col = len(head) + 1
             if col < cols:
-                attr = curses.color_pair(_P_LOG_WARN) if scroll > 0 else curses.color_pair(_P_LOG_INFO)
+                attr = (
+                    curses.color_pair(_P_LOG_WARN) if scroll > 0 else curses.color_pair(_P_LOG_INFO)
+                )
                 win.addstr(0, col, scroll_txt, attr)
                 col += len(scroll_txt) + 1
             if col < cols and self._active_cmd:
@@ -697,13 +734,13 @@ class TuiRepl:
     def _kill_to_start(self) -> None:
         """Delete the text before the caret (Ctrl+U); pushed to the ring."""
         killed = "".join(self._input_buf[: self._input_cursor])
-        self._input_buf = self._input_buf[self._input_cursor:]
+        self._input_buf = self._input_buf[self._input_cursor :]
         self._input_cursor = 0
         self._push_kill(killed)
 
     def _kill_to_end(self) -> None:
         """Delete the text from the caret to the end (Ctrl+K); pushed to ring."""
-        killed = "".join(self._input_buf[self._input_cursor:])
+        killed = "".join(self._input_buf[self._input_cursor :])
         self._input_buf = self._input_buf[: self._input_cursor]
         self._push_kill(killed)
 
@@ -765,7 +802,7 @@ class TuiRepl:
             return
         if self._yank_active:
             prev = self._kill_ring[self._yank_idx]
-            here = "".join(self._input_buf[self._yank_start:self._yank_start + len(prev)])
+            here = "".join(self._input_buf[self._yank_start : self._yank_start + len(prev)])
             if here != prev:
                 self._yank_active = False  # line was edited since — start fresh
         if not self._yank_active:
@@ -775,11 +812,11 @@ class TuiRepl:
             text = self._kill_ring[self._yank_idx]
         else:
             prev = self._kill_ring[self._yank_idx]
-            del self._input_buf[self._yank_start:self._yank_start + len(prev)]
+            del self._input_buf[self._yank_start : self._yank_start + len(prev)]
             self._input_cursor = self._yank_start
             self._yank_idx = max(self._yank_idx - 1, 0)
             text = self._kill_ring[self._yank_idx]
-        self._input_buf[self._yank_start:self._yank_start] = list(text)
+        self._input_buf[self._yank_start : self._yank_start] = list(text)
         self._input_cursor = self._yank_start + len(text)
 
     # ── Interrupt (Ctrl+C) ─────────────────────────────────────────────
@@ -974,10 +1011,30 @@ class TuiRepl:
         regions = self._layout.compute(rows, cols)
         self._log_surface.set_width(regions["console"].cols)
         self._output_surface.set_width(regions["output"].cols)
-        win_console = curses.newwin(regions["console"].rows, regions["console"].cols, regions["console"].top, regions["console"].left)
-        win_output = curses.newwin(regions["output"].rows, regions["output"].cols, regions["output"].top, regions["output"].left)
-        win_status = curses.newwin(regions["status"].rows, regions["status"].cols, regions["status"].top, regions["status"].left)
-        win_input = curses.newwin(regions["input"].rows, regions["input"].cols, regions["input"].top, regions["input"].left)
+        win_console = curses.newwin(
+            regions["console"].rows,
+            regions["console"].cols,
+            regions["console"].top,
+            regions["console"].left,
+        )
+        win_output = curses.newwin(
+            regions["output"].rows,
+            regions["output"].cols,
+            regions["output"].top,
+            regions["output"].left,
+        )
+        win_status = curses.newwin(
+            regions["status"].rows,
+            regions["status"].cols,
+            regions["status"].top,
+            regions["status"].left,
+        )
+        win_input = curses.newwin(
+            regions["input"].rows,
+            regions["input"].cols,
+            regions["input"].top,
+            regions["input"].left,
+        )
 
         def _redraw() -> None:
             self._render_all(stdscr, regions, win_console, win_output, win_status, win_input)
@@ -995,10 +1052,30 @@ class TuiRepl:
             regions = self._layout.compute(nrows, ncols)
             self._log_surface.set_width(regions["console"].cols)
             self._output_surface.set_width(regions["output"].cols)
-            win_console = curses.newwin(regions["console"].rows, regions["console"].cols, regions["console"].top, regions["console"].left)
-            win_output = curses.newwin(regions["output"].rows, regions["output"].cols, regions["output"].top, regions["output"].left)
-            win_status = curses.newwin(regions["status"].rows, regions["status"].cols, regions["status"].top, regions["status"].left)
-            win_input = curses.newwin(regions["input"].rows, regions["input"].cols, regions["input"].top, regions["input"].left)
+            win_console = curses.newwin(
+                regions["console"].rows,
+                regions["console"].cols,
+                regions["console"].top,
+                regions["console"].left,
+            )
+            win_output = curses.newwin(
+                regions["output"].rows,
+                regions["output"].cols,
+                regions["output"].top,
+                regions["output"].left,
+            )
+            win_status = curses.newwin(
+                regions["status"].rows,
+                regions["status"].cols,
+                regions["status"].top,
+                regions["status"].left,
+            )
+            win_input = curses.newwin(
+                regions["input"].rows,
+                regions["input"].cols,
+                regions["input"].top,
+                regions["input"].left,
+            )
             _redraw()
 
         def _detect_resize(stdscr) -> bool:
@@ -1045,15 +1122,22 @@ class TuiRepl:
                     self._active_thread = None
                 if _detect_resize(stdscr):
                     _resize(self._rows, self._cols)
-                self._blit(win_output, self._output_surface.render(regions["output"].rows, self._out_scroll))
-                self._blit(win_console, self._log_surface.render(regions["console"].rows, self._log_scroll))
+                self._blit(
+                    win_output,
+                    self._output_surface.render(regions["output"].rows, self._out_scroll),
+                )
+                self._blit(
+                    win_console, self._log_surface.render(regions["console"].rows, self._log_scroll)
+                )
                 self._render_status(win_status, regions["status"].cols)
                 self._render_input(win_input, regions["input"].cols)
                 continue
 
             # ── Interactive select mode ──────────────────────────────────
             if self._select_event.is_set():
-                filtered = [o for o in self._select_options if self._select_filter.lower() in o.lower()]
+                filtered = [
+                    o for o in self._select_options if self._select_filter.lower() in o.lower()
+                ]
                 if not filtered:
                     filtered = list(self._select_options)
                 max_show = min(len(filtered), regions["output"].rows - 2)
@@ -1224,9 +1308,11 @@ class TuiRepl:
                         self._running = False
                         break
                     self._output_surface.write(f"\u03bb {cmd}")
+
                     def _run() -> None:
                         with self._repl_lock:
                             self._repl._dispatch(cmd)
+
                     self._active_cmd = cmd
                     self._active_thread = threading.Thread(target=_run, daemon=True)
                     self._active_thread.start()
@@ -1363,7 +1449,12 @@ class TuiRepl:
                 self._transpose_chars()
                 _redraw()
 
-            elif ch in (110, 78) and not self._input_buf and self._out_search_last and self._out_scroll > 0:
+            elif (
+                ch in (110, 78)
+                and not self._input_buf
+                and self._out_search_last
+                and self._out_scroll > 0
+            ):
                 # n / N — repeat the last output-pane search.  Only at an
                 # empty prompt while scrolled back (reading mode), so command
                 # text keeps its 'n'/'N'.
@@ -1386,8 +1477,13 @@ class TuiRepl:
 
             else:
                 # Background command output: refresh output pane each frame.
-                self._blit(win_output, self._output_surface.render(regions["output"].rows, self._out_scroll))
-                self._blit(win_console, self._log_surface.render(regions["console"].rows, self._log_scroll))
+                self._blit(
+                    win_output,
+                    self._output_surface.render(regions["output"].rows, self._out_scroll),
+                )
+                self._blit(
+                    win_console, self._log_surface.render(regions["console"].rows, self._log_scroll)
+                )
 
         # ── Restore ──
         if self._old_io is not None:

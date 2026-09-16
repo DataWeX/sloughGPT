@@ -23,11 +23,17 @@ API_BASE = get_api_base()  # backward compat
 
 def _api_get(path: str) -> dict[str, Any] | list:
     import requests
+
     try:
         r = requests.get(f"{get_api_base()}{path}", timeout=15)
         if r.status_code == 200:
             return r.json()
-        return {"error": f"HTTP {r.status_code}", "detail": r.text[:200], "error_type": "HTTPError", "status_code": r.status_code}
+        return {
+            "error": f"HTTP {r.status_code}",
+            "detail": r.text[:200],
+            "error_type": "HTTPError",
+            "status_code": r.status_code,
+        }
     except requests.ConnectionError:
         return {"error": "Cannot connect to API server", "error_type": "ConnectionError"}
     except requests.Timeout:
@@ -38,11 +44,17 @@ def _api_get(path: str) -> dict[str, Any] | list:
 
 def _api_post(path: str, data: dict | None = None) -> dict[str, Any] | list:
     import requests
+
     try:
         r = requests.post(f"{get_api_base()}{path}", json=data or {}, timeout=120)
         if r.status_code in (200, 201):
             return r.json()
-        return {"error": f"HTTP {r.status_code}", "detail": r.text[:200], "error_type": "HTTPError", "status_code": r.status_code}
+        return {
+            "error": f"HTTP {r.status_code}",
+            "detail": r.text[:200],
+            "error_type": "HTTPError",
+            "status_code": r.status_code,
+        }
     except requests.ConnectionError:
         return {"error": "Cannot connect to API server", "error_type": "ConnectionError"}
     except requests.Timeout:
@@ -53,11 +65,16 @@ def _api_post(path: str, data: dict | None = None) -> dict[str, Any] | list:
 
 def _api_delete(path: str) -> dict[str, Any]:
     import requests
+
     try:
         r = requests.delete(f"{get_api_base()}{path}", timeout=15)
         if r.status_code == 200:
             return r.json()
-        return {"error": f"HTTP {r.status_code}", "error_type": "HTTPError", "status_code": r.status_code}
+        return {
+            "error": f"HTTP {r.status_code}",
+            "error_type": "HTTPError",
+            "status_code": r.status_code,
+        }
     except requests.ConnectionError:
         return {"error": "Cannot connect to API server", "error_type": "ConnectionError"}
     except requests.Timeout:
@@ -96,6 +113,7 @@ class ShellCommands:
     def load_model(model_name: str) -> dict[str, Any]:
         """Load a model by name."""
         import requests
+
         try:
             r = requests.post(
                 f"{get_api_base()}/models/load",
@@ -104,7 +122,12 @@ class ShellCommands:
             )
             if r.status_code in (200, 201):
                 return r.json()
-            return {"error": f"HTTP {r.status_code}", "detail": r.text[:200], "error_type": "HTTPError", "status_code": r.status_code}
+            return {
+                "error": f"HTTP {r.status_code}",
+                "detail": r.text[:200],
+                "error_type": "HTTPError",
+                "status_code": r.status_code,
+            }
         except requests.ConnectionError as e:
             return {"error": f"Cannot connect to API server: {e}", "error_type": "ConnectionError"}
         except requests.Timeout as e:
@@ -232,38 +255,71 @@ class ShellCommands:
         return _api_post("/training/quick", {"dataset": dataset, "name": name or None})
 
     @staticmethod
-    def train_auto(soul_name: str = "", teacher: str = "gpt2", epochs: int = 10,
-                   source_text: str = "", dataset_id: str = "") -> dict[str, Any]:
+    def train_auto(
+        soul_name: str = "",
+        teacher: str = "gpt2",
+        epochs: int = 10,
+        source_text: str = "",
+        dataset_id: str = "",
+    ) -> dict[str, Any]:
         """Start auto-train (SloNet student learning)."""
-        return _api_post("/auto-train/start", {
-            "soul_name": soul_name, "teacher_model": teacher,
-            "epochs": epochs, "source_text": source_text, "dataset_id": dataset_id,
-        })
+        return _api_post(
+            "/auto-train/start",
+            {
+                "soul_name": soul_name,
+                "teacher_model": teacher,
+                "epochs": epochs,
+                "source_text": source_text,
+                "dataset_id": dataset_id,
+            },
+        )
 
     @staticmethod
-    def train_distill(dataset: str, teacher: str = "gpt2", name: str = "",
-                      temperature: float = 2.0, epochs: int = 5) -> dict[str, Any]:
+    def train_distill(
+        dataset: str,
+        teacher: str = "gpt2",
+        name: str = "",
+        temperature: float = 2.0,
+        epochs: int = 5,
+    ) -> dict[str, Any]:
         """Start knowledge distillation."""
-        return _api_post("/training/distill", {
-            "dataset": dataset, "teacher_model": teacher, "name": name or None,
-            "temperature": temperature, "epochs": epochs,
-        })
+        return _api_post(
+            "/training/distill",
+            {
+                "dataset": dataset,
+                "teacher_model": teacher,
+                "name": name or None,
+                "temperature": temperature,
+                "epochs": epochs,
+            },
+        )
 
     @staticmethod
-    def train_hf(model: str, dataset: str, name: str = "", epochs: int = 3,
-                 rank: int = 8) -> dict[str, Any]:
+    def train_hf(
+        model: str, dataset: str, name: str = "", epochs: int = 3, rank: int = 8
+    ) -> dict[str, Any]:
         """Start LoRA fine-tuning on a .slnc model."""
-        return _api_post("/training/lora-finetune", {
-            "model_path": model, "dataset": dataset, "name": name or None,
-            "epochs": epochs, "rank": rank,
-        })
+        return _api_post(
+            "/training/lora-finetune",
+            {
+                "model_path": model,
+                "dataset": dataset,
+                "name": name or None,
+                "epochs": epochs,
+                "rank": rank,
+            },
+        )
 
     @staticmethod
     def load_adapter(adapter_path: str, merge: bool = False) -> dict[str, Any]:
         """Load a LoRA adapter into the running model for inference."""
-        return _api_post("/training/load-adapter", {
-            "adapter_path": adapter_path, "merge": merge,
-        })
+        return _api_post(
+            "/training/load-adapter",
+            {
+                "adapter_path": adapter_path,
+                "merge": merge,
+            },
+        )
 
     @staticmethod
     def unload_adapter() -> dict[str, Any]:
@@ -293,11 +349,14 @@ class ShellCommands:
     @staticmethod
     def generate(prompt: str, max_tokens: int = 100) -> dict[str, Any]:
         """Generate text via the inference endpoint."""
-        return _api_post("/inference/generate", {
-            "prompt": prompt,
-            "max_new_tokens": max_tokens,
-            "temperature": 0.7,
-        })
+        return _api_post(
+            "/inference/generate",
+            {
+                "prompt": prompt,
+                "max_new_tokens": max_tokens,
+                "temperature": 0.7,
+            },
+        )
 
     @staticmethod
     def chat(messages: list[dict[str, str]]) -> dict[str, Any]:
@@ -305,9 +364,15 @@ class ShellCommands:
         return _api_post("/chat", {"messages": messages})
 
     @staticmethod
-    def chat_stream(messages: list[dict[str, str]], session_id: str = "", max_tokens: int = 512, temperature: float = 0.7):
+    def chat_stream(
+        messages: list[dict[str, str]],
+        session_id: str = "",
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+    ):
         """Stream a chat response token by token. Yields tokens as they arrive."""
         import requests
+
         try:
             payload = {
                 "messages": messages,
@@ -333,6 +398,7 @@ class ShellCommands:
                         return
                     try:
                         import json
+
                         obj = json.loads(data)
                         if obj.get("done"):
                             return
@@ -399,7 +465,11 @@ class ShellCommands:
         if isinstance(result, list):
             return result
         if isinstance(result, dict):
-            return result.get("data", result).get("operations", []) if isinstance(result.get("data"), dict) else result.get("operations", [])
+            return (
+                result.get("data", result).get("operations", [])
+                if isinstance(result.get("data"), dict)
+                else result.get("operations", [])
+            )
         return []
 
     @staticmethod

@@ -1,46 +1,45 @@
 """Tests for domain.shared — utils, feature_flags, test_framework."""
 
-import json
 import time
-import pytest
-from pathlib import Path
 
-from domain.shared._internal.utils import (
-    generate_id,
-    hash_string,
-    format_size,
-    format_time,
-    load_json,
-    save_json,
-    merge_dicts,
-    clamp,
-    retry,
-    Timer,
-    Cache,
-    RateLimiter,
-    validate_config,
-    get_timestamp,
-    find_available_port,
-    find_server_python,
-)
+import pytest
+
 from domain.shared._internal.feature_flags import (
-    FlagStatus,
     FeatureFlag,
     FeatureFlags,
+    FlagStatus,
     is_enabled,
 )
 from domain.shared._internal.test_framework import (
+    BenchmarkRunner,
+    TestFramework,
     TestResult,
     TestSuite,
-    TestFramework,
-    BenchmarkRunner,
     mark_test,
 )
-
+from domain.shared._internal.utils import (
+    Cache,
+    RateLimiter,
+    Timer,
+    clamp,
+    find_available_port,
+    find_server_python,
+    format_size,
+    format_time,
+    generate_id,
+    get_timestamp,
+    hash_string,
+    load_json,
+    merge_dicts,
+    retry,
+    save_json,
+    validate_config,
+)
 
 # ===================================================================
 # utils.py
 # ===================================================================
+
 
 class TestGenerateId:
     def test_length(self):
@@ -84,15 +83,18 @@ class TestHashString:
 
 
 class TestFormatSize:
-    @pytest.mark.parametrize("size,expected", [
-        (0, "0.0 B"),
-        (512, "512.0 B"),
-        (1024, "1.0 KB"),
-        (1024 * 1024, "1.0 MB"),
-        (1024 ** 3, "1.0 GB"),
-        (1024 ** 4, "1.0 TB"),
-        (1024 ** 5, "1.0 PB"),
-    ])
+    @pytest.mark.parametrize(
+        "size,expected",
+        [
+            (0, "0.0 B"),
+            (512, "512.0 B"),
+            (1024, "1.0 KB"),
+            (1024 * 1024, "1.0 MB"),
+            (1024**3, "1.0 GB"),
+            (1024**4, "1.0 TB"),
+            (1024**5, "1.0 PB"),
+        ],
+    )
     def test_units(self, size, expected):
         assert format_size(size) == expected
 
@@ -101,12 +103,15 @@ class TestFormatSize:
 
 
 class TestFormatTime:
-    @pytest.mark.parametrize("seconds,expected", [
-        (5.0, "5.0s"),
-        (65.0, "1.1m"),
-        (3700.0, "1.0h"),
-        (90000.0, "1.0d"),
-    ])
+    @pytest.mark.parametrize(
+        "seconds,expected",
+        [
+            (5.0, "5.0s"),
+            (65.0, "1.1m"),
+            (3700.0, "1.0h"),
+            (90000.0, "1.0d"),
+        ],
+    )
     def test_units(self, seconds, expected):
         assert format_time(seconds) == expected
 
@@ -144,13 +149,16 @@ class TestMergeDicts:
 
 
 class TestClamp:
-    @pytest.mark.parametrize("value,min_val,max_val,expected", [
-        (5, 0, 10, 5),
-        (-1, 0, 10, 0),
-        (11, 0, 10, 10),
-        (5, 5, 5, 5),
-        (0, 0, 0, 0),
-    ])
+    @pytest.mark.parametrize(
+        "value,min_val,max_val,expected",
+        [
+            (5, 0, 10, 5),
+            (-1, 0, 10, 0),
+            (11, 0, 10, 10),
+            (5, 5, 5, 5),
+            (0, 0, 0, 0),
+        ],
+    )
     def test_clamp(self, value, min_val, max_val, expected):
         assert clamp(value, min_val, max_val) == expected
 
@@ -309,6 +317,7 @@ class TestFindServerPython:
 # feature_flags.py
 # ===================================================================
 
+
 class TestFlagStatus:
     def test_values(self):
         assert FlagStatus.ENABLED.value == "enabled"
@@ -443,6 +452,7 @@ def _register_defaults_for_tests():
 # test_framework.py
 # ===================================================================
 
+
 class TestTestResult:
     def test_creation(self):
         r = TestResult(name="t1", status="passed", execution_time=0.1)
@@ -459,8 +469,12 @@ class TestTestResult:
 class TestTestSuite:
     def test_creation(self):
         s = TestSuite(
-            name="suite", tests=[], total_tests=0,
-            passed_tests=0, failed_tests=0, skipped_tests=0,
+            name="suite",
+            tests=[],
+            total_tests=0,
+            passed_tests=0,
+            failed_tests=0,
+            skipped_tests=0,
             total_execution_time=0.0,
         )
         assert s.name == "suite"
@@ -499,6 +513,7 @@ class TestMarkTest:
         @mark_test
         def my_test():
             pass
+
         assert getattr(my_test, "_is_test", False) is True
 
 

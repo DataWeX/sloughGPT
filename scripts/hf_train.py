@@ -24,6 +24,7 @@ def _default_dl_workers() -> int:
     """Default DataLoader workers — prefer ResourceManager, fall back to cpu_count // 2."""
     try:
         from domain.infrastructure._internal.resource_manager import get_resource_manager
+
         return get_resource_manager().dataloader_workers
     except Exception:
         return max(0, (os.cpu_count() or 1) // 2)
@@ -48,10 +49,18 @@ def main():
     parser.add_argument("--use-lora", action="store_true", default=True)
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-alpha", type=int, default=16)
-    parser.add_argument("--stream", action="store_true", default=False,
-                        help="Emit JSON progress lines per training step")
-    parser.add_argument("--dataloader-workers", type=int, default=None,
-                        help="DataLoader num_workers (default: os.cpu_count() // 2)")
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        default=False,
+        help="Emit JSON progress lines per training step",
+    )
+    parser.add_argument(
+        "--dataloader-workers",
+        type=int,
+        default=None,
+        help="DataLoader num_workers (default: os.cpu_count() // 2)",
+    )
     args = parser.parse_args()
 
     t0 = time.time()
@@ -65,10 +74,10 @@ def main():
         from transformers import (
             AutoModelForCausalLM,
             AutoTokenizer,
-            Trainer,
-            TrainingArguments,
             DataCollatorForLanguageModeling,
+            Trainer,
             TrainerCallback,
+            TrainingArguments,
         )
     except ImportError as e:
         sys.stdout.write(json.dumps({"success": False, "error": f"Missing dependency: {e}"}) + "\n")
@@ -93,11 +102,13 @@ def main():
                 attention_mask = encoded["attention_mask"].squeeze(0)
                 labels = input_ids.clone()
                 labels[attention_mask == 0] = -100
-                self.examples.append({
-                    "input_ids": input_ids,
-                    "attention_mask": attention_mask,
-                    "labels": labels,
-                })
+                self.examples.append(
+                    {
+                        "input_ids": input_ids,
+                        "attention_mask": attention_mask,
+                        "labels": labels,
+                    }
+                )
 
         def __len__(self):
             return len(self.examples)
@@ -121,15 +132,20 @@ def main():
             loss = (logs or {}).get("loss")
             if loss is None:
                 return
-            _emit({
-                "phase": "TRAIN",
-                "status": "working",
-                "step": state.global_step,
-                "loss": round(loss, 4),
-                "epoch": round(state.epoch or 0, 2),
-                "progress_pct": min(100, int(state.global_step / max(1, self.total_steps) * 100)),
-                "total_steps": self.total_steps,
-            }, stream)
+            _emit(
+                {
+                    "phase": "TRAIN",
+                    "status": "working",
+                    "step": state.global_step,
+                    "loss": round(loss, 4),
+                    "epoch": round(state.epoch or 0, 2),
+                    "progress_pct": min(
+                        100, int(state.global_step / max(1, self.total_steps) * 100)
+                    ),
+                    "total_steps": self.total_steps,
+                },
+                stream,
+            )
 
     # ── Load ─────────────────────────────────────────────────────────────
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
@@ -145,7 +161,8 @@ def main():
     )
 
     if args.use_lora:
-        from peft import LoraConfig, get_peft_model, TaskType
+        from peft import LoraConfig, TaskType, get_peft_model
+
         lora_config = LoraConfig(
             task_type=TaskType.CAUSAL_LM,
             r=args.lora_rank,
@@ -171,14 +188,17 @@ def main():
 
     total_steps = max(1, (len(dataset) // args.batch_size) * args.epochs)
 
-    _emit({
-        "phase": "TRAIN",
-        "status": "working",
-        "message": f"Starting training: {len(dataset)} samples, {args.epochs} epochs, ~{total_steps} steps",
-        "total_steps": total_steps,
-        "samples": len(dataset),
-        "epochs": args.epochs,
-    }, stream)
+    _emit(
+        {
+            "phase": "TRAIN",
+            "status": "working",
+            "message": f"Starting training: {len(dataset)} samples, {args.epochs} epochs, ~{total_steps} steps",
+            "total_steps": total_steps,
+            "samples": len(dataset),
+            "epochs": args.epochs,
+        },
+        stream,
+    )
 
     training_args = TrainingArguments(
         output_dir=str(output_path),
@@ -191,7 +211,9 @@ def main():
         save_strategy="epoch",
         report_to="none",
         fp16=False,
-        dataloader_num_workers=args.dataloader_workers if args.dataloader_workers is not None else max(0, _default_dl_workers()),
+        dataloader_num_workers=args.dataloader_workers
+        if args.dataloader_workers is not None
+        else max(0, _default_dl_workers()),
     )
 
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)

@@ -3,11 +3,13 @@ Tests for Production-Grade RAG System
 """
 
 import pytest
-from domain.cognitive._internal.rag import (    TextChunk,
+
+from domain.cognitive._internal.rag import (
     BM25Indexer,
-    HybridRetriever,
     CitationTracker,
+    HybridRetriever,
     ProductionRAG,
+    TextChunk,
 )
 
 
@@ -112,7 +114,7 @@ class TestCitationTracker:
         chunk = TextChunk("1", "Python is a programming language", {"source": "docs"})
         cited = tracker.cite(claim, [chunk])
 
-        assert cited["supported"] == True
+        assert cited["supported"]
         assert len(cited["sources"]) == 1
 
 

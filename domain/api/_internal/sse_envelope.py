@@ -49,10 +49,9 @@ Usage in routers:
 
 from __future__ import annotations
 
-from typing import Any, Optional, Dict, Union
 from dataclasses import dataclass, field
 from enum import Enum
-
+from typing import Any
 
 TRAINING_SEQUENCE = [
     "IDLE",
@@ -99,13 +98,13 @@ class StreamStatus(Enum):
 class SSEEnvelope:
     stream: str
     phase: str
-    status: Union[StreamStatus, str]
+    status: StreamStatus | str
     message: str = ""
-    data: Dict[str, Any] = field(default_factory=dict)
-    meta: Dict[str, Any] = field(default_factory=dict)
-    id: Optional[str] = None
+    data: dict[str, Any] = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
+    id: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         status = self.status.value if isinstance(self.status, StreamStatus) else self.status
         result = {
             "stream": self.stream,
@@ -123,11 +122,11 @@ class SSEEnvelope:
 def sse_event(
     stream: str,
     phase: str,
-    status: Union[StreamStatus, str],
-    data: Optional[Dict[str, Any]] = None,
-    meta: Optional[Dict[str, Any]] = None,
+    status: StreamStatus | str,
+    data: dict[str, Any] | None = None,
+    meta: dict[str, Any] | None = None,
     message: str = "",
-    id: Optional[str] = None,
+    id: str | None = None,
 ) -> str:
     """
     Build a standard SSE data line.
@@ -171,9 +170,9 @@ def sse_error(
     stream: str,
     phase: str,
     error: str,
-    meta: Optional[Dict[str, Any]] = None,
-    code: Optional[str] = None,
-    http_status: Optional[int] = None,
+    meta: dict[str, Any] | None = None,
+    code: str | None = None,
+    http_status: int | None = None,
 ) -> str:
     """Convenience: emit an error event.
 
@@ -185,7 +184,7 @@ def sse_error(
         code:       structured error code (e.g. "MODEL_TIMEOUT", "E_VAL_REQUEST")
         http_status: suggested HTTP status code for the client (e.g. 503, 400)
     """
-    data: Dict[str, Any] = {"error": error}
+    data: dict[str, Any] = {"error": error}
     if code is not None:
         data["code"] = code
     if http_status is not None:
@@ -203,8 +202,8 @@ def sse_error(
 def sse_complete(
     stream: str,
     phase: str = "COMPLETE",
-    data: Optional[Dict[str, Any]] = None,
-    meta: Optional[Dict[str, Any]] = None,
+    data: dict[str, Any] | None = None,
+    meta: dict[str, Any] | None = None,
     message: str = "Done",
 ) -> str:
     """Convenience: emit a completion event."""
@@ -222,8 +221,8 @@ def sse_token(
     stream: str,
     token: str,
     done: bool = False,
-    meta: Optional[Dict[str, Any]] = None,
-    elapsed_ms: Optional[float] = None,
+    meta: dict[str, Any] | None = None,
+    elapsed_ms: float | None = None,
 ) -> str:
     """
     Token streaming shortcut. phase=STREAMING, status=complete when done.

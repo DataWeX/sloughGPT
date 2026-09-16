@@ -3,24 +3,22 @@ ServerSpeechRecognizer, get_speech_recognizer.
 
 Covers: dataclass creation, browser config, server recognizer init, factory.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-
-import pytest
 
 _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
 from domain.multimodal._internal.speech import (
-    TranscriptionResult,
     BrowserSpeechRecognizer,
     ServerSpeechRecognizer,
+    TranscriptionResult,
     get_speech_recognizer,
 )
-
 
 # ── TranscriptionResult ──────────────────────────────────────────────────
 
@@ -71,7 +69,9 @@ class TestTranscriptionResult:
         assert r.text == "hello <>&\"'"
 
     def test_all_fields_explicit(self):
-        r = TranscriptionResult(text="t", confidence=0.7, language="fr", duration=3.14, is_valid=False)
+        r = TranscriptionResult(
+            text="t", confidence=0.7, language="fr", duration=3.14, is_valid=False
+        )
         assert r.text == "t"
         assert r.confidence == 0.7
         assert r.language == "fr"

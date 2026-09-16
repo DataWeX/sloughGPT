@@ -1,7 +1,11 @@
 """Tests for domain.training._internal.sequence — TrainingSequence, PhaseResult, TrainingRunConfig, CheckpointFormat, TrainingSequenceState."""
 
 from domain.training._internal.sequence import (
-    TrainingSequence, PhaseResult, TrainingRunConfig, CheckpointFormat, TrainingSequenceState,
+    CheckpointFormat,
+    PhaseResult,
+    TrainingRunConfig,
+    TrainingSequence,
+    TrainingSequenceState,
 )
 
 

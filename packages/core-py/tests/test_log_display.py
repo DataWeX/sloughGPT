@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import time
-import pytest
 
-from domain.shell._internal.log_buffer import LogEntry, LogBuffer
-from domain.shell._internal.log_display import LineModeLogDisplay, _LEVEL_LABELS, _LEVEL_COLORS
+from domain.shell._internal.log_buffer import LogBuffer, LogEntry
+from domain.shell._internal.log_display import _LEVEL_COLORS, _LEVEL_LABELS, LineModeLogDisplay
 
 
 def _make_entry(level="INFO", source="slo.test", message="test message"):
@@ -19,6 +18,7 @@ def _make_entry(level="INFO", source="slo.test", message="test message"):
 
 
 # ── LineModeLogDisplay ───────────────────────────────────────────────────────
+
 
 class TestLineModeLogDisplay:
     def test_empty_buffer(self):
@@ -145,6 +145,7 @@ class TestLineModeLogDisplay:
 
 
 # ── Level constants ──────────────────────────────────────────────────────────
+
 
 class TestLevelConstants:
     def test_labels_complete(self):

@@ -2,20 +2,19 @@
 
 import json
 import time
+
 import numpy as np
 import pytest
-from pathlib import Path
-from datetime import datetime, timezone
 
 from domain.feedback._internal.database import (
+    Feedback,
     FeedbackDB,
     Message,
-    Feedback,
     SimilarPattern,
 )
 
-
 # ── Fixtures ─────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def db(tmp_path):
@@ -34,8 +33,8 @@ def db_with_conversation(db):
 
 # ── Message and Feedback dataclasses ────────────────────────────────────────
 
-class TestMessageDataclass:
 
+class TestMessageDataclass:
     def test_creation(self):
         m = Message(id="m1", conversation_id="c1", role="user", content="hi")
         assert m.id == "m1"
@@ -49,7 +48,6 @@ class TestMessageDataclass:
 
 
 class TestFeedbackDataclass:
-
     def test_creation(self):
         f = Feedback(id="f1", message_id="m1", rating="thumbs_up")
         assert f.rating == "thumbs_up"
@@ -57,16 +55,17 @@ class TestFeedbackDataclass:
 
 
 class TestSimilarPatternDataclass:
-
     def test_creation(self):
-        p = SimilarPattern(content="hello", rating="thumbs_up", similarity=0.9, pattern_type="message")
+        p = SimilarPattern(
+            content="hello", rating="thumbs_up", similarity=0.9, pattern_type="message"
+        )
         assert p.similarity == 0.9
 
 
 # ── DB initialization ──────────────────────────────────────────────────────
 
-class TestDBInit:
 
+class TestDBInit:
     def test_creates_parent_directory(self, tmp_path):
         FeedbackDB(db_path=str(tmp_path / "deep" / "feedback"))
         assert (tmp_path / "deep" / "feedback").parent.exists()
@@ -80,8 +79,8 @@ class TestDBInit:
 
 # ── Embedding helpers ──────────────────────────────────────────────────────
 
-class TestEmbeddingHelpers:
 
+class TestEmbeddingHelpers:
     def test_embedding_to_list_roundtrip(self, db):
         original = np.array([1.0, -0.5, 0.0, 0.25], dtype=np.float32)
         as_list = db._embedding_to_list(original)
@@ -99,8 +98,8 @@ class TestEmbeddingHelpers:
 
 # ── Cosine similarity ──────────────────────────────────────────────────────
 
-class TestCosineSimilarity:
 
+class TestCosineSimilarity:
     def test_identical_vectors(self, db):
         a = np.array([1.0, 0.0, 0.0], dtype=np.float32)
         assert db._cosine_similarity(a, a) == pytest.approx(1.0)
@@ -123,8 +122,8 @@ class TestCosineSimilarity:
 
 # ── Strip meta ─────────────────────────────────────────────────────────────
 
-class TestStripMeta:
 
+class TestStripMeta:
     def test_removes_internal_fields(self, db):
         doc = {"_id": "x", "_created": 1, "_updated": 2, "user_id": "u1", "name": "test"}
         result = db._strip_meta(doc)
@@ -141,8 +140,8 @@ class TestStripMeta:
 
 # ── Conversations ──────────────────────────────────────────────────────────
 
-class TestConversations:
 
+class TestConversations:
     def test_create_conversation(self, db):
         conv_id = db.create_conversation(user_id="alice", title="Chat 1")
         assert isinstance(conv_id, str)
@@ -185,8 +184,8 @@ class TestConversations:
 
 # ── Messages ───────────────────────────────────────────────────────────────
 
-class TestMessages:
 
+class TestMessages:
     def test_add_message(self, db, db_with_conversation):
         _, conv_id, msg1, msg2 = db_with_conversation
         assert isinstance(msg1, str)
@@ -235,8 +234,8 @@ class TestMessages:
 
 # ── Feedback ───────────────────────────────────────────────────────────────
 
-class TestFeedback:
 
+class TestFeedback:
     def test_add_feedback(self, db):
         conv_id = db.create_conversation()
         msg_id = db.add_message(conv_id, "user", "test")
@@ -247,7 +246,7 @@ class TestFeedback:
     def test_get_feedback(self, db):
         conv_id = db.create_conversation()
         msg_id = db.add_message(conv_id, "user", "test")
-        fb_id = db.add_feedback(msg_id, "thumbs_up", quality_score=0.9)
+        db.add_feedback(msg_id, "thumbs_up", quality_score=0.9)
         feedbacks = db.get_feedback(msg_id)
         assert len(feedbacks) == 1
         assert feedbacks[0]["rating"] == "thumbs_up"
@@ -299,8 +298,8 @@ class TestFeedback:
 
 # ── Vector search ──────────────────────────────────────────────────────────
 
-class TestVectorSearch:
 
+class TestVectorSearch:
     def test_find_similar_messages(self, db):
         conv_id = db.create_conversation()
         emb1 = np.array([1.0, 0.0, 0.0], dtype=np.float32)
@@ -325,8 +324,12 @@ class TestVectorSearch:
 
     def test_find_similar_messages_with_rating_filter(self, db):
         conv_id = db.create_conversation()
-        msg1 = db.add_message(conv_id, "user", "liked", embedding=np.array([1.0, 0.0], dtype=np.float32))
-        msg2 = db.add_message(conv_id, "user", "disliked", embedding=np.array([1.0, 0.0], dtype=np.float32))
+        msg1 = db.add_message(
+            conv_id, "user", "liked", embedding=np.array([1.0, 0.0], dtype=np.float32)
+        )
+        msg2 = db.add_message(
+            conv_id, "user", "disliked", embedding=np.array([1.0, 0.0], dtype=np.float32)
+        )
         db.add_feedback(msg1, "thumbs_up")
         db.add_feedback(msg2, "thumbs_down")
         query = np.array([1.0, 0.0], dtype=np.float32)
@@ -338,8 +341,8 @@ class TestVectorSearch:
 
 # ── Text search ────────────────────────────────────────────────────────────
 
-class TestTextSearch:
 
+class TestTextSearch:
     def test_find_similar_by_text(self, db):
         conv_id = db.create_conversation()
         db.add_message(conv_id, "user", "the quick brown fox")
@@ -376,8 +379,8 @@ class TestTextSearch:
 
 # ── Statistics ──────────────────────────────────────────────────────────────
 
-class TestStats:
 
+class TestStats:
     def test_empty_db(self, db):
         stats = db.get_stats()
         assert stats["conversations"] == 0
@@ -411,11 +414,11 @@ class TestStats:
 
 # ── Export ──────────────────────────────────────────────────────────────────
 
-class TestExport:
 
+class TestExport:
     def test_export_jsonl(self, db, tmp_path):
         conv_id = db.create_conversation()
-        msg_user = db.add_message(conv_id, "user", "prompt text")
+        db.add_message(conv_id, "user", "prompt text")
         msg_asst = db.add_message(conv_id, "assistant", "response text")
         db.add_message(conv_id, "user", "follow up")
         db.add_feedback(msg_asst, "thumbs_up", quality_score=0.95)
@@ -448,8 +451,8 @@ class TestExport:
 
 # ── User meta weights ──────────────────────────────────────────────────────
 
-class TestUserMetaWeights:
 
+class TestUserMetaWeights:
     def test_get_nonexistent(self, db):
         assert db.get_user_meta_weights("nobody") is None
 
@@ -494,7 +497,8 @@ class TestUserMetaWeights:
 
     def test_custom_deltas(self, db):
         weights = db.update_user_meta_weights(
-            "alice", "thumbs_up",
+            "alice",
+            "thumbs_up",
             temperature_delta=0.1,
             repetition_delta=0.2,
             top_p_delta=0.3,
@@ -518,8 +522,8 @@ class TestUserMetaWeights:
 
 # ── Thread safety ──────────────────────────────────────────────────────────
 
-class TestThreadSafety:
 
+class TestThreadSafety:
     def test_concurrent_creates(self, db):
         import threading
 
@@ -562,8 +566,8 @@ class TestThreadSafety:
 
 # ── Persistence round-trip ──────────────────────────────────────────────────
 
-class TestPersistence:
 
+class TestPersistence:
     def test_survives_recreation(self, tmp_path):
         path = str(tmp_path / "feedback")
         db1 = FeedbackDB(db_path=path)

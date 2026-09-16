@@ -9,24 +9,27 @@ Usage:
 """
 
 import sys
+
 sys.path.insert(0, "packages/core-py")
 
-import time
 import json
 import tempfile
-import numpy as np
-from dataclasses import dataclass, asdict
-from typing import List, Dict, Any, Optional
+import time
+from dataclasses import asdict, dataclass
 
+import numpy as np
+
+from domain.inference import SloProfile, save_soul
 from domain.training._internal.slonet import (
-    SloNet, SloEmbedding, SloLSTM, SloAdam,
-    SloTransformer, SloTransformerBlock,
-    SloLinear, SloLayerNorm,
-    cross_entropy, tensor, zeros,
-    sigmoid, tanh, gelu, softmax,
+    SloAdam,
+    SloEmbedding,
+    SloLSTM,
+    SloNet,
+    SloTransformer,
+    cross_entropy,
     import_from_sou,
+    tensor,
 )
-from domain.inference import save_soul, SloProfile
 
 
 @dataclass
@@ -40,18 +43,18 @@ class TestResult:
 
 def format_time(s: float) -> str:
     if s < 1e-3:
-        return f"{s*1e6:.1f} µs"
+        return f"{s * 1e6:.1f} µs"
     elif s < 1:
-        return f"{s*1e3:.2f} ms"
+        return f"{s * 1e3:.2f} ms"
     else:
         return f"{s:.2f} s"
 
 
 def format_num(n: float) -> str:
     if abs(n) >= 1e6:
-        return f"{n/1e6:.2f}M"
+        return f"{n / 1e6:.2f}M"
     elif abs(n) >= 1e3:
-        return f"{n/1e3:.1f}K"
+        return f"{n / 1e3:.1f}K"
     elif abs(n) >= 1:
         return f"{n:.4f}"
     else:
@@ -62,9 +65,9 @@ class SloNetBenchmark:
     """SloNet benchmark suite."""
 
     def __init__(self):
-        self.results: List[TestResult] = []
+        self.results: list[TestResult] = []
 
-    def run_all(self) -> List[TestResult]:
+    def run_all(self) -> list[TestResult]:
         print("=" * 60)
         print("SloNet Benchmark Suite")
         print("=" * 60)
@@ -95,7 +98,7 @@ class SloNetBenchmark:
             ],
             soul_name="test_grad_flow",
         )
-        adam = SloAdam(lr=0.01)
+        SloAdam(lr=0.01)
 
         x = tensor([[5, 10, 15, 20, 25, 30, 35, 40]], requires_grad=True)
         y = tensor([[10, 15, 20, 25, 30, 35, 40, 45]])
@@ -129,13 +132,15 @@ class SloNetBenchmark:
         print(f"  Result: {'PASS' if passed else 'FAIL'}")
         print()
 
-        self.results.append(TestResult(
-            name="gradient_flow",
-            passed=passed,
-            value=sum(grad_norms),
-            unit="total_grad_norm",
-            details=f"{len(params)} params, {len([g for g in grad_norms if g > 0.01])} with gradients",
-        ))
+        self.results.append(
+            TestResult(
+                name="gradient_flow",
+                passed=passed,
+                value=sum(grad_norms),
+                unit="total_grad_norm",
+                details=f"{len(params)} params, {len([g for g in grad_norms if g > 0.01])} with gradients",
+            )
+        )
 
     # -------------------------------------------------------------------------
     # Test 2: Training Convergence
@@ -155,7 +160,7 @@ class SloNetBenchmark:
         adam = SloAdam(lr=0.005)
 
         losses = []
-        for step in range(150):
+        for _step in range(150):
             x = tensor([[5, 10, 15, 20, 25, 30, 35, 40]], requires_grad=True)
             y = tensor([[10, 15, 20, 25, 30, 35, 40, 45]])
             h = net.layers[1].init_hidden()
@@ -188,13 +193,15 @@ class SloNetBenchmark:
             bar = "█" * bar_len
             print(f"    step {i:3d}: {losses[i]:.4f}  {bar}")
 
-        self.results.append(TestResult(
-            name="training_convergence",
-            passed=passed,
-            value=improvement,
-            unit="pct_improvement",
-            details=f"loss {init_loss:.4f} → {final_loss:.4f}",
-        ))
+        self.results.append(
+            TestResult(
+                name="training_convergence",
+                passed=passed,
+                value=improvement,
+                unit="pct_improvement",
+                details=f"loss {init_loss:.4f} → {final_loss:.4f}",
+            )
+        )
 
     # -------------------------------------------------------------------------
     # Test 3: Export/Import Roundtrip
@@ -214,7 +221,7 @@ class SloNetBenchmark:
         net.metadata["lstm_dropout"] = 0.0
 
         adam = SloAdam(lr=0.01)
-        for step in range(10):
+        for _step in range(10):
             x = tensor([[5, 10, 15, 20, 25]], requires_grad=True)
             y = tensor([[10, 15, 20, 25, 30]])
             h = net.layers[1].init_hidden()
@@ -237,10 +244,7 @@ class SloNetBenchmark:
         # Check weights
         orig_sd = net.state_dict()
         imp_sd = imported.state_dict()
-        weights_match = all(
-            float(np.max(np.abs(orig_sd[k] - imp_sd[k]))) < 1e-6
-            for k in orig_sd
-        )
+        weights_match = all(float(np.max(np.abs(orig_sd[k] - imp_sd[k]))) < 1e-6 for k in orig_sd)
 
         # Check inference
         x_t = tensor([[5, 10, 15, 20, 25]])
@@ -253,20 +257,26 @@ class SloNetBenchmark:
         passed = layers_ok and params_ok and dropout_ok and weights_match and logit_diff < 1e-6
 
         print(f"  Layers match:  {layers_ok} (orig={len(net.layers)}, imp={len(imported.layers)})")
-        print(f"  Params match: {params_ok} (orig={len(list(net.parameters()))}, imp={len(list(imported.parameters()))})")
-        print(f"  Dropout match: {dropout_ok} (orig={net.layers[1].dropout}, imp={imported.layers[1].dropout})")
+        print(
+            f"  Params match: {params_ok} (orig={len(list(net.parameters()))}, imp={len(list(imported.parameters()))})"
+        )
+        print(
+            f"  Dropout match: {dropout_ok} (orig={net.layers[1].dropout}, imp={imported.layers[1].dropout})"
+        )
         print(f"  Weights match: {weights_match}")
         print(f"  Logit diff:   {logit_diff:.2e}")
         print(f"  Result: {'PASS' if passed else 'FAIL'}")
         print()
 
-        self.results.append(TestResult(
-            name="export_import_roundtrip",
-            passed=passed,
-            value=logit_diff,
-            unit="logit_diff",
-            details=f"layers={len(imported.layers)}, params={len(list(imported.parameters()))}",
-        ))
+        self.results.append(
+            TestResult(
+                name="export_import_roundtrip",
+                passed=passed,
+                value=logit_diff,
+                unit="logit_diff",
+                details=f"layers={len(imported.layers)}, params={len(list(imported.parameters()))}",
+            )
+        )
 
     # -------------------------------------------------------------------------
     # Test 4: Accelerator Speed
@@ -276,7 +286,8 @@ class SloNetBenchmark:
         print("[4] Accelerator Speed")
         print("-" * 40)
 
-        from domain.slolib.gpu import get_accelerator, benchmark_accelerators, reset_accelerator
+        from domain.slolib.gpu import get_accelerator, reset_accelerator
+
         reset_accelerator()
         acc = get_accelerator()
 
@@ -287,7 +298,6 @@ class SloNetBenchmark:
         print()
 
         total_ops = 0
-        speedups = []
         for m, k in sizes:
             A = np.random.randn(m, k).astype(np.float32)
             B = np.random.randn(k, m).astype(np.float32)
@@ -312,24 +322,28 @@ class SloNetBenchmark:
                 mean = X.mean(axis=-1, keepdims=True)
                 var = X.var(axis=-1, keepdims=True)
                 c = ((X - mean) / np.sqrt(var + 1e-5)) * W + Bv
-                c = 0.5 * X * (1 + np.tanh(np.sqrt(2 / np.pi) * (X + 0.044715 * X ** 3)))
+                c = 0.5 * X * (1 + np.tanh(np.sqrt(2 / np.pi) * (X + 0.044715 * X**3)))
             numpy_time = time.perf_counter() - t0
 
             speedup = numpy_time / acc_time if acc_time > 0 else 0
             total_ops += 1
 
-            print(f"    {m}x{k} × {k}x{m}: acc={format_time(acc_time/20):>10s}  "
-                  f"numpy={format_time(numpy_time/20):>10s}  "
-                  f"speedup={speedup:.1f}x")
+            print(
+                f"    {m}x{k} × {k}x{m}: acc={format_time(acc_time / 20):>10s}  "
+                f"numpy={format_time(numpy_time / 20):>10s}  "
+                f"speedup={speedup:.1f}x"
+            )
 
         print()
-        self.results.append(TestResult(
-            name="accelerator_speed",
-            passed=True,
-            value=speedup if total_ops > 0 else 0,
-            unit="speedup",
-            details=f"{acc.name} vs numpy on {sizes[-1]} matmul",
-        ))
+        self.results.append(
+            TestResult(
+                name="accelerator_speed",
+                passed=True,
+                value=speedup if total_ops > 0 else 0,
+                unit="speedup",
+                details=f"{acc.name} vs numpy on {sizes[-1]} matmul",
+            )
+        )
 
     # -------------------------------------------------------------------------
     # Test 5: LSTM Forward/Backward Speed
@@ -340,8 +354,8 @@ class SloNetBenchmark:
         print("-" * 40)
 
         configs = [
-            (100, 16, 32, 1, 8),   # small, 1-layer
-            (100, 16, 32, 2, 8),   # small, 2-layer
+            (100, 16, 32, 1, 8),  # small, 1-layer
+            (100, 16, 32, 2, 8),  # small, 2-layer
             (256, 32, 64, 2, 16),  # medium, 2-layer
         ]
 
@@ -382,17 +396,21 @@ class SloNetBenchmark:
             avg_time = sum(times) / len(times)
             params = len(list(net.parameters()))
 
-            print(f"    vocab={vocab}, emb={emb}, hid={hid}, layers={layers}, seq={seq}: "
-                  f"{format_time(avg_time):>8s}/step, {params} params")
+            print(
+                f"    vocab={vocab}, emb={emb}, hid={hid}, layers={layers}, seq={seq}: "
+                f"{format_time(avg_time):>8s}/step, {params} params"
+            )
 
         print()
-        self.results.append(TestResult(
-            name="lstm_forward_backward_speed",
-            passed=True,
-            value=avg_time,
-            unit="seconds_per_step",
-            details=f"{vocab}x{emb}x{hid}x{layers}",
-        ))
+        self.results.append(
+            TestResult(
+                name="lstm_forward_backward_speed",
+                passed=True,
+                value=avg_time,
+                unit="seconds_per_step",
+                details=f"{vocab}x{emb}x{hid}x{layers}",
+            )
+        )
 
     # -------------------------------------------------------------------------
     # Test 6: Inference Consistency
@@ -439,13 +457,15 @@ class SloNetBenchmark:
         print(f"  Result: {'PASS' if passed else 'FAIL'}")
         print()
 
-        self.results.append(TestResult(
-            name="inference_consistency",
-            passed=passed,
-            value=max_diff,
-            unit="max_output_diff",
-            details=f"variance={variance:.2e}",
-        ))
+        self.results.append(
+            TestResult(
+                name="inference_consistency",
+                passed=passed,
+                value=max_diff,
+                unit="max_output_diff",
+                details=f"variance={variance:.2e}",
+            )
+        )
 
     # -------------------------------------------------------------------------
     # Test 7: SloTransformer vs PyTorch GPT2
@@ -505,6 +525,7 @@ class SloNetBenchmark:
                         self.blocks.append(block)
                     self.ln = nn.LayerNorm(n_embed)
                     self.lm_head = nn.Linear(n_embed, vocab, bias=False)
+
                 def forward(self, x):
                     b, t = x.shape
                     tok = self.tok_emb(x)
@@ -523,7 +544,7 @@ class SloNetBenchmark:
             print(f"  PyTorch ref unavailable: {e}")
             print()
 
-        print(f"  Model              Tensors   Elements")
+        print("  Model              Tensors   Elements")
         print(f"  SloTransformer    {soul_params:5d}   {soul_count:>8d}")
         if torch_tfm:
             print(f"  PyTorch Ref        {torch_params:5d}   {torch_count:>8d}")
@@ -560,16 +581,16 @@ class SloNetBenchmark:
                 torch_avg = (time.perf_counter() - t0) / timed
                 torch_times[seq_len] = torch_avg
 
-        print(f"\n  ┌──────────┬──────────────┬──────────────┬──────────┐")
-        print(f"  │ seq_len  │ SloTfm (ms) │ PyTorch (ms) │  ratio   │")
-        print(f"  ├──────────┼──────────────┼──────────────┼──────────┤")
+        print("\n  ┌──────────┬──────────────┬──────────────┬──────────┐")
+        print("  │ seq_len  │ SloTfm (ms) │ PyTorch (ms) │  ratio   │")
+        print("  ├──────────┼──────────────┼──────────────┼──────────┤")
         for seq_len in seq_lens:
             s = soul_times[seq_len] * 1000
             t = torch_times.get(seq_len, 0) * 1000
             r = (s / t) if t > 0 else 0
             t_str = f"{t:8.2f}   " if torch_tfm else "  N/A     "
             print(f"  │ {seq_len:>6d} │ {s:8.2f}    │ {t_str} │ {r:>6.2f}x │")
-        print(f"  └──────────┴──────────────┴──────────────┴──────────┘")
+        print("  └──────────┴──────────────┴──────────────┴──────────┘")
         print()
 
         # Benchmark generation (autoregressive with KV-cache)
@@ -578,7 +599,7 @@ class SloNetBenchmark:
         # SloTransformer generate
         soul_tfm.clear_kv_cache()
         t0 = time.perf_counter()
-        out = soul_tfm.generate(prompt, max_new_tokens=20, temperature=1.0)
+        soul_tfm.generate(prompt, max_new_tokens=20, temperature=1.0)
         soul_gen = time.perf_counter() - t0
 
         # PyTorch generate (autoregressive)
@@ -603,11 +624,11 @@ class SloNetBenchmark:
                     current = torch.cat([current, next_tok], dim=1)
             torch_gen = time.perf_counter() - t0
 
-        print(f"  Generation (8+20 tokens):")
+        print("  Generation (8+20 tokens):")
         print(f"    SloTransformer: {format_time(soul_gen):>8s}")
         if torch_tfm:
             print(f"    PyTorch Ref:     {format_time(torch_gen):>8s}")
-            print(f"    Ratio:           {soul_gen/torch_gen:.2f}x")
+            print(f"    Ratio:           {soul_gen / torch_gen:.2f}x")
         print()
 
         passed = True
@@ -617,13 +638,15 @@ class SloNetBenchmark:
             print(f"  ⚠  Element count mismatch: Slo={soul_count}, PyTorch={torch_count}")
             # Don't fail — architectures differ (RMSNorm vs LayerNorm, SwiGLU vs FF, separate QKV)
 
-        self.results.append(TestResult(
-            name="transformer_vs_pytorch",
-            passed=passed,
-            value=torch_gen / soul_gen if torch_gen > 0 else 0,
-            unit="gen_speed_ratio",
-            details=f"SloTfm={format_time(soul_gen)}, PyTorch={format_time(torch_gen)}",
-        ))
+        self.results.append(
+            TestResult(
+                name="transformer_vs_pytorch",
+                passed=passed,
+                value=torch_gen / soul_gen if torch_gen > 0 else 0,
+                unit="gen_speed_ratio",
+                details=f"SloTfm={format_time(soul_gen)}, PyTorch={format_time(torch_gen)}",
+            )
+        )
 
     # -------------------------------------------------------------------------
     # Summary
@@ -669,6 +692,7 @@ def main():
 
     out_path = "data/eval_results/slonet_benchmark.json"
     import os
+
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w") as f:
         json.dump(out, f, indent=2)

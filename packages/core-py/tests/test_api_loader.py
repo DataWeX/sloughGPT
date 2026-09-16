@@ -1,17 +1,17 @@
 """Tests for api_loader — HuggingFace Inference API wrapper."""
 
-import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from domain.training._internal.huggingface.api_loader import (
     HFAPIConfig,
-    HuggingFaceAPILoader,
     HFInferenceClient,
+    HuggingFaceAPILoader,
+    chat_via_api,
     create_api_client,
     generate_via_api,
-    chat_via_api,
 )
-
 
 # ── HFAPIConfig ────────────────────────────────────────────────────────
 
@@ -41,8 +41,13 @@ class TestHFAPIConfig:
 
     def test_all_fields_settable(self):
         cfg = HFAPIConfig(
-            model="m", api_key="k", timeout=10, max_new_tokens=512,
-            temperature=0.3, top_p=0.8, repetition_penalty=1.2,
+            model="m",
+            api_key="k",
+            timeout=10,
+            max_new_tokens=512,
+            temperature=0.3,
+            top_p=0.8,
+            repetition_penalty=1.2,
         )
         assert cfg.model == "m"
         assert cfg.api_key == "k"
@@ -54,6 +59,7 @@ class TestHFAPIConfig:
 
     def test_dataclass_fields(self):
         import dataclasses
+
         fields = {f.name for f in dataclasses.fields(HFAPIConfig)}
         assert "model" in fields
         assert "api_key" in fields
@@ -391,7 +397,8 @@ class TestHuggingFaceAPILoader:
         loader = HuggingFaceAPILoader(HFAPIConfig(model="gpt2"))
         result = loader.chat(
             [{"role": "user", "content": "hi"}],
-            max_new_tokens=50, temperature=0.2,
+            max_new_tokens=50,
+            temperature=0.2,
         )
         assert result == "ok"
 
@@ -534,6 +541,7 @@ class TestAliases:
 
     def test_module_all(self):
         import domain.training._internal.huggingface.api_loader as mod
+
         assert "HFAPIConfig" in mod.__all__
         assert "HuggingFaceAPILoader" in mod.__all__
         assert "HFInferenceClient" in mod.__all__
@@ -543,8 +551,10 @@ class TestAliases:
 
     def test_module_all_count(self):
         import domain.training._internal.huggingface.api_loader as mod
+
         assert len(mod.__all__) == 6
 
     def test_hf_api_base_url(self):
         import domain.training._internal.huggingface.api_loader as mod
+
         assert "huggingface.co" in mod.HF_API_BASE

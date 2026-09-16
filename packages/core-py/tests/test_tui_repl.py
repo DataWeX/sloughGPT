@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-import os
-import pytest
 from unittest.mock import MagicMock
 
-from domain.shell._internal.tui_repl import TuiIo, _complete_path, _STYLE_PAIRS, _P_LOG_INFO
-from domain.shell._internal.surface import TextSurface
+import pytest
 
+from domain.shell._internal.surface import TextSurface
+from domain.shell._internal.tui_repl import _P_LOG_INFO, _STYLE_PAIRS, TuiIo, _complete_path
 
 # ── _complete_path ──────────────────────────────────────────────────────────
 
 
 class TestCompletePath:
-
     def test_empty(self):
         result = _complete_path("")
         assert isinstance(result, list)
@@ -37,7 +35,6 @@ class TestCompletePath:
 
 
 class TestStylePairs:
-
     def test_has_all_styles(self):
         assert _P_LOG_INFO in _STYLE_PAIRS.values()
 
@@ -46,7 +43,6 @@ class TestStylePairs:
 
 
 class TestTuiIo:
-
     def test_init(self):
         surface = TextSurface()
         io = TuiIo(surface)
@@ -82,17 +78,19 @@ class TestTuiIo:
 
 
 class TestTuiReplConstants:
-
     def test_console_ratio(self):
         from domain.shell._internal.tui_repl import TuiRepl
+
         assert TuiRepl.CONSOLE_RATIO == 0.3
 
     def test_console_min(self):
         from domain.shell._internal.tui_repl import TuiRepl
+
         assert TuiRepl.CONSOLE_MIN == 4
 
     def test_output_min(self):
         from domain.shell._internal.tui_repl import TuiRepl
+
         assert TuiRepl.OUTPUT_MIN == 6
 
 
@@ -100,9 +98,9 @@ class TestTuiReplConstants:
 
 
 class TestReadEscapeRemainder:
-
     def test_no_more_bytes(self):
         from domain.shell._internal.tui_repl import _read_escape_remainder
+
         mock_stdscr = MagicMock()
         mock_stdscr.getch.return_value = -1
         result = _read_escape_remainder(mock_stdscr, {})
@@ -110,6 +108,7 @@ class TestReadEscapeRemainder:
 
     def test_ctrl_sequence(self):
         from domain.shell._internal.tui_repl import _read_escape_remainder
+
         mock_stdscr = MagicMock()
         mock_stdscr.getch.side_effect = [ord("["), ord("5"), ord("C")]
         result = _read_escape_remainder(mock_stdscr, {})
@@ -117,6 +116,7 @@ class TestReadEscapeRemainder:
 
     def test_ctrl_left(self):
         from domain.shell._internal.tui_repl import _read_escape_remainder
+
         mock_stdscr = MagicMock()
         mock_stdscr.getch.side_effect = [ord("["), ord("5"), ord("D")]
         result = _read_escape_remainder(mock_stdscr, {})
@@ -124,6 +124,7 @@ class TestReadEscapeRemainder:
 
     def test_alt_key(self):
         from domain.shell._internal.tui_repl import _read_escape_remainder
+
         mock_stdscr = MagicMock()
         mock_stdscr.getch.side_effect = [ord("f")]
         result = _read_escape_remainder(mock_stdscr, {"f": "find"})
@@ -131,6 +132,7 @@ class TestReadEscapeRemainder:
 
     def test_alt_key_no_mapping(self):
         from domain.shell._internal.tui_repl import _read_escape_remainder
+
         mock_stdscr = MagicMock()
         mock_stdscr.getch.side_effect = [ord("x")]
         result = _read_escape_remainder(mock_stdscr, {})

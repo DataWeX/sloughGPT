@@ -40,7 +40,8 @@ class LogBuffer:
             self._entries.append(entry)
 
     def get(
-        self, level: str | None = None,
+        self,
+        level: str | None = None,
         source: str | None = None,
         limit: int | None = None,
         offset: int = 0,

@@ -2,13 +2,14 @@
 Tests for the knowledge base router.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from infrastructure.exception_handlers import register_all_handlers
 
 from apps.api.server.routers.kb import router
-from infrastructure.exception_handlers import register_all_handlers
 
 
 @pytest.fixture
@@ -45,8 +46,22 @@ class TestListKnowledge:
     def test_returns_list_of_items(self, mock_get_mem, client):
         mem = mock_get_mem.return_value
         mem.list_all.return_value = [
-            {"id": "1", "content": "fact 1", "topic": "general", "source": "manual", "importance": 0.5, "score": 1.0},
-            {"id": "2", "content": "fact 2", "topic": "code", "source": "manual", "importance": 0.7, "score": 1.0},
+            {
+                "id": "1",
+                "content": "fact 1",
+                "topic": "general",
+                "source": "manual",
+                "importance": 0.5,
+                "score": 1.0,
+            },
+            {
+                "id": "2",
+                "content": "fact 2",
+                "topic": "code",
+                "source": "manual",
+                "importance": 0.7,
+                "score": 1.0,
+            },
         ]
         resp = client.get("/knowledge")
         assert resp.status_code == 200
@@ -56,7 +71,14 @@ class TestListKnowledge:
     def test_respects_pagination(self, mock_get_mem, client):
         mem = mock_get_mem.return_value
         mem.list_all.return_value = [
-            {"id": str(i), "content": f"f{i}", "topic": "general", "source": "manual", "importance": 0.5, "score": 1.0}
+            {
+                "id": str(i),
+                "content": f"f{i}",
+                "topic": "general",
+                "source": "manual",
+                "importance": 0.5,
+                "score": 1.0,
+            }
             for i in range(10)
         ]
         resp = client.get("/knowledge", params={"limit": 3, "offset": 2})
@@ -135,8 +157,7 @@ class TestBulkIngest:
         mem.add_facts.assert_called_once()
 
     def test_bulk_ingest_empty_items(self, client):
-        with patch("domains.learner.knowledge.get_knowledge_memory") as mock_get_mem:
-            mem = mock_get_mem.return_value
+        with patch("domains.learner.knowledge.get_knowledge_memory"):
             resp = client.post("/knowledge/bulk-ingest", json={"items": []})
         assert resp.status_code == 200
         data = resp.json()["data"]
@@ -269,7 +290,9 @@ class TestUpdateKnowledge:
     @patch("domains.learner.knowledge.get_knowledge_memory")
     def test_updates_existing_item(self, mock_get_mem, client):
         mem = mock_get_mem.return_value
-        mem.list_all.return_value = [{"id": "abc", "content": "old", "topic": "docs", "source": "manual", "importance": 0.5}]
+        mem.list_all.return_value = [
+            {"id": "abc", "content": "old", "topic": "docs", "source": "manual", "importance": 0.5}
+        ]
         mem.delete_by_id.return_value = True
         mem.add_fact.return_value = True
         resp = client.patch("/knowledge/abc", json={"content": "new content", "topic": "code"})
@@ -287,7 +310,17 @@ class TestUpdateKnowledge:
     @patch("domains.learner.knowledge.get_knowledge_memory")
     def test_update_partial_fields_keep_existing(self, mock_get_mem, client):
         mem = mock_get_mem.return_value
-        mem.list_all.return_value = [{"id": "abc", "content": "keep this", "topic": "docs", "source": "manual", "url": "u", "timestamp": 5.0, "importance": 0.5}]
+        mem.list_all.return_value = [
+            {
+                "id": "abc",
+                "content": "keep this",
+                "topic": "docs",
+                "source": "manual",
+                "url": "u",
+                "timestamp": 5.0,
+                "importance": 0.5,
+            }
+        ]
         mem.delete_by_id.return_value = True
         mem.add_fact.return_value = True
         resp = client.patch("/knowledge/abc", json={"importance": 0.9})
@@ -338,7 +371,9 @@ class TestBatchIngest:
     def test_batch_ingest_skips_duplicates(self, mock_get_mem, client):
         mem = mock_get_mem.return_value
         mem.add_fact.side_effect = [True, False]
-        resp = client.post("/knowledge/batch", json={"items": [{"content": "a"}, {"content": "dup"}]})
+        resp = client.post(
+            "/knowledge/batch", json={"items": [{"content": "a"}, {"content": "dup"}]}
+        )
         assert resp.json()["data"]["stored"] == 1
 
 
@@ -348,8 +383,22 @@ class TestRelatedKnowledge:
         mem = mock_get_mem.return_value
         mem.list_all.return_value = [{"id": "abc", "content": "topic text"}]
         mem.search.return_value = [
-            {"id": "abc", "content": "a", "topic": "general", "source": "manual", "importance": 0.5, "score": 0.9},
-            {"id": "def", "content": "b", "topic": "general", "source": "manual", "importance": 0.5, "score": 0.8},
+            {
+                "id": "abc",
+                "content": "a",
+                "topic": "general",
+                "source": "manual",
+                "importance": 0.5,
+                "score": 0.9,
+            },
+            {
+                "id": "def",
+                "content": "b",
+                "topic": "general",
+                "source": "manual",
+                "importance": 0.5,
+                "score": 0.8,
+            },
         ]
         resp = client.get("/knowledge/abc/related")
         assert resp.status_code == 200
@@ -381,7 +430,12 @@ class TestIngestUrl:
     @patch("domains.learner.knowledge.get_knowledge_ingestor")
     def test_https_ingest_ok(self, mock_get_ingestor, client):
         ing = mock_get_ingestor.return_value
-        ing.ingest_url.return_value = {"status": "ok", "new_facts": 3, "title": "T", "content_length": 100}
+        ing.ingest_url.return_value = {
+            "status": "ok",
+            "new_facts": 3,
+            "title": "T",
+            "content_length": 100,
+        }
         resp = client.post("/knowledge/ingest-url", json={"url": "https://example.com/foo"})
         assert resp.status_code == 200
         data = resp.json()["data"]

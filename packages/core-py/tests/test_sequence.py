@@ -1,11 +1,11 @@
 """Tests for training sequence — phases, state tracking, config, and checkpoint format."""
 
 from domain.training._internal.sequence import (
-    TrainingSequence,
-    PhaseResult,
-    TrainingSequenceState,
-    TrainingRunConfig,
     CheckpointFormat,
+    PhaseResult,
+    TrainingRunConfig,
+    TrainingSequence,
+    TrainingSequenceState,
 )
 
 
@@ -122,8 +122,11 @@ class TestTrainingRunConfig:
 
     def test_effective_phases_skip_all(self):
         c = TrainingRunConfig(
-            skip_generate=True, skip_distill=True,
-            skip_train=True, skip_evaluate=True, skip_deploy=True,
+            skip_generate=True,
+            skip_distill=True,
+            skip_train=True,
+            skip_evaluate=True,
+            skip_deploy=True,
         )
         phases = c.effective_phases()
         assert len(phases) == 0

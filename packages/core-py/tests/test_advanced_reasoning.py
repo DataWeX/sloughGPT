@@ -4,6 +4,7 @@ Covers: ChainOfThought, TreeOfThoughts, SelfConsistency, ConstitutionalAI,
 CausalReasoning, SyllogismReasoning, ReActReasoning, advanced_reasoning factory.
 Pure logic tests with default LLM stubs, no external dependencies.
 """
+
 from __future__ import annotations
 
 import sys
@@ -16,21 +17,21 @@ if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
 from domain.cognitive._internal.reasoning.advanced import (
-    ReasoningMode,
-    ThoughtStep,
-    ReasoningResult,
-    ChainOfThought,
-    TreeOfThoughts,
-    SelfConsistency,
-    ConstitutionalAI,
     CausalReasoning,
-    SyllogismReasoning,
+    ChainOfThought,
+    ConstitutionalAI,
     ReActReasoning,
+    ReasoningMode,
+    ReasoningResult,
+    SelfConsistency,
+    SyllogismReasoning,
+    ThoughtStep,
+    TreeOfThoughts,
     advanced_reasoning,
 )
 
-
 # ── Data classes ──────────────────────────────────────────────────────
+
 
 class TestThoughtStep:
     def test_creation(self):
@@ -44,8 +45,15 @@ class TestThoughtStep:
         assert s.is_final is False
 
     def test_with_parent(self):
-        s = ThoughtStep(step_id=1, thought="b", reasoning_type="branch",
-                        confidence=0.8, parent_id=0, value=0.6, is_final=True)
+        s = ThoughtStep(
+            step_id=1,
+            thought="b",
+            reasoning_type="branch",
+            confidence=0.8,
+            parent_id=0,
+            value=0.6,
+            is_final=True,
+        )
         assert s.parent_id == 0
         assert s.is_final is True
 
@@ -53,14 +61,19 @@ class TestThoughtStep:
 class TestReasoningResult:
     def test_creation(self):
         r = ReasoningResult(
-            conclusion="42", confidence=0.9, mode=ReasoningMode.CHAIN_OF_THOUGHT,
-            steps=[], metadata={}, execution_time_ms=10.0,
+            conclusion="42",
+            confidence=0.9,
+            mode=ReasoningMode.CHAIN_OF_THOUGHT,
+            steps=[],
+            metadata={},
+            execution_time_ms=10.0,
         )
         assert r.conclusion == "42"
         assert r.mode == ReasoningMode.CHAIN_OF_THOUGHT
 
 
 # ── Chain of Thought ─────────────────────────────────────────────────
+
 
 class TestChainOfThought:
     @pytest.mark.asyncio
@@ -81,9 +94,11 @@ class TestChainOfThought:
     @pytest.mark.asyncio
     async def test_custom_llm(self):
         calls = []
+
         async def mock_llm(prompt):
             calls.append(prompt)
             return "Therefore the answer is 42. Thus we conclude."
+
         cot = ChainOfThought(llm_call=mock_llm)
         result = await cot.reason("Test", confidence_threshold=0.99)
         assert len(calls) > 0
@@ -111,6 +126,7 @@ class TestChainOfThought:
 
 
 # ── Tree of Thoughts ─────────────────────────────────────────────────
+
 
 class TestTreeOfThoughts:
     @pytest.mark.asyncio
@@ -161,6 +177,7 @@ class TestTreeOfThoughts:
 
 # ── Self-Consistency ─────────────────────────────────────────────────
 
+
 class TestSelfConsistency:
     @pytest.mark.asyncio
     async def test_basic_reasoning(self):
@@ -182,6 +199,7 @@ class TestSelfConsistency:
 
 
 # ── Constitutional AI ────────────────────────────────────────────────
+
 
 class TestConstitutionalAI:
     @pytest.mark.asyncio
@@ -205,6 +223,7 @@ class TestConstitutionalAI:
 
 
 # ── Causal Reasoning ─────────────────────────────────────────────────
+
 
 class TestCausalReasoning:
     @pytest.mark.asyncio
@@ -235,6 +254,7 @@ class TestCausalReasoning:
 
 
 # ── Syllogism ────────────────────────────────────────────────────────
+
 
 class TestSyllogismReasoning:
     @pytest.mark.asyncio
@@ -285,6 +305,7 @@ class TestSyllogismReasoning:
 
 # ── ReAct ────────────────────────────────────────────────────────────
 
+
 class TestReActReasoning:
     @pytest.mark.asyncio
     async def test_basic_reasoning(self):
@@ -314,6 +335,7 @@ class TestReActReasoning:
 
 
 # ── Factory ──────────────────────────────────────────────────────────
+
 
 class TestAdvancedReasoningFactory:
     @pytest.mark.asyncio

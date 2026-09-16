@@ -23,11 +23,17 @@ This router just exposes manager methods as HTTP endpoints:
 - ``POST /token-tree/compare`` — diff two saved trees (overlap + examples).
 """
 
-from domain.training._internal.token_tree_manager import get_token_tree_manager
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
+
+from domain.training._internal.token_tree_manager import get_token_tree_manager
 
 
 class TrainTreeRequest(BaseModel):

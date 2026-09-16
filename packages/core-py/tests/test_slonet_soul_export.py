@@ -2,30 +2,27 @@
 
 from __future__ import annotations
 
-import os
 import json
-import struct
+import os
 import tempfile
+
 import pytest
-import numpy as np
+
 from domain.training._internal.slonet import (
+    SOU_MAGIC,
+    SOU_VERSION,
+    SloLinear,
     SloNet,
     SloTransformer,
-    SloLinear,
     _sanitize,
     export_to_sou,
     import_from_sou,
-    SOU_MAGIC,
-    SOU_VERSION,
-    create_scheduler,
 )
-
 
 # ── _sanitize ───────────────────────────────────────────────────────────────
 
 
 class TestSanitize:
-
     def test_sanitize_dict(self):
         result = _sanitize({"a": float("nan"), "b": float("inf"), "c": 1.0})
         assert result["a"] is None
@@ -50,7 +47,6 @@ class TestSanitize:
 
 
 class TestSOUExportImport:
-
     def test_export_import_slo_net(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "test.soul")
@@ -70,7 +66,10 @@ class TestSOUExportImport:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "test.soul")
             model = SloTransformer(
-                vocab_size=100, n_embed=32, n_layer=1, n_head=2,
+                vocab_size=100,
+                n_embed=32,
+                n_layer=1,
+                n_head=2,
                 soul_name="TestTransformer",
             )
             export_to_sou(model, path, include_weights=True)
@@ -114,7 +113,6 @@ class TestSOUExportImport:
 
 
 class TestSOUConstants:
-
     def test_magic(self):
         assert SOU_MAGIC == b"SOUL"
 

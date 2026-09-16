@@ -23,9 +23,7 @@ import sys
 import textwrap
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HISTORY_FILE = REPO_ROOT / ".test-history.jsonl"
@@ -53,7 +51,7 @@ class Spinner:
     def __init__(self, msg: str):
         self.msg = msg
 
-    def start(self) -> "Spinner":
+    def start(self) -> Spinner:
         return self
 
     def stop(self) -> None:
@@ -84,6 +82,7 @@ def _green(msg: str) -> str:
 
 # ── Pytest ─────────────────────────────────────────────────────────────
 
+
 def _run(args: list[str], timeout: int = 120, tb: str = "short") -> tuple[int, str, str]:
     cmd = [sys.executable, "-m", "pytest"] + args + [f"--tb={tb}", "-q", "--no-header"]
     try:
@@ -97,13 +96,17 @@ def _counts(stdout: str, stderr: str) -> dict[str, int]:
     c = {"p": 0, "f": 0, "e": 0, "s": 0}
     for line in stdout.splitlines() + stderr.splitlines():
         m = re.search(r"(\d+) passed", line)
-        if m: c["p"] = int(m.group(1))
+        if m:
+            c["p"] = int(m.group(1))
         m = re.search(r"(\d+) failed", line)
-        if m: c["f"] = int(m.group(1))
+        if m:
+            c["f"] = int(m.group(1))
         m = re.search(r"(\d+) error", line)
-        if m: c["e"] = int(m.group(1))
+        if m:
+            c["e"] = int(m.group(1))
         m = re.search(r"(\d+) skipped", line)
-        if m: c["s"] = int(m.group(1))
+        if m:
+            c["s"] = int(m.group(1))
     return c
 
 
@@ -117,6 +120,7 @@ def _results(stdout: str) -> list[tuple[str, str]]:
 
 
 # ── Diagnosis ──────────────────────────────────────────────────────────
+
 
 def _source(nodeid: str, n: int = 6) -> str:
     parts = nodeid.split("::")
@@ -134,8 +138,7 @@ def _source(nodeid: str, n: int = 6) -> str:
         if f"def {name}(" in line or f"def {name}:" in line:
             s, e = max(0, i - n), min(len(lines), i + n + 1)
             return "\n".join(
-                f"  {'→' if j == i else ' '} {j+1:4d} │ {lines[j]}"
-                for j in range(s, e)
+                f"  {'→' if j == i else ' '} {j + 1:4d} │ {lines[j]}" for j in range(s, e)
             )
     return ""
 
@@ -144,7 +147,10 @@ def _git_log(filepath: str, n: int = 3) -> list[str]:
     try:
         r = subprocess.run(
             ["git", "log", "--oneline", f"-{n}", "--", filepath],
-            capture_output=True, text=True, timeout=5, cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            cwd=str(REPO_ROOT),
         )
         return [l for l in r.stdout.strip().splitlines() if l]
     except Exception:
@@ -173,8 +179,16 @@ def _related(nodeid: str, lim: int = 5) -> list[str]:
 # ── Failure patterns ───────────────────────────────────────────────────
 
 _PAT: list[tuple[str, str, str]] = [
-    (r"ImportError: cannot import name '(\w+)' from '(\w+)'", "import", "'{0}' not in '{1}' — check __init__.py exports"),
-    (r"ModuleNotFoundError: No module named '(\S+)'", "module", "'{0}' not installed — pip install {0}"),
+    (
+        r"ImportError: cannot import name '(\w+)' from '(\w+)'",
+        "import",
+        "'{0}' not in '{1}' — check __init__.py exports",
+    ),
+    (
+        r"ModuleNotFoundError: No module named '(\S+)'",
+        "module",
+        "'{0}' not installed — pip install {0}",
+    ),
     (r"AssertionError: (.+)", "assert", "{0}"),
     (r"TypeError: .+takes (\d+) positional.*?but (\d+)", "arity", "expects {0} args, got {1}"),
     (r"KeyError: (.+)", "key", "{0} not found — check spelling"),
@@ -186,7 +200,7 @@ _PAT: list[tuple[str, str, str]] = [
 ]
 
 
-def _diagnose(output: str) -> Optional[tuple[str, str]]:
+def _diagnose(output: str) -> tuple[str, str] | None:
     for pat, label, msg in _PAT:
         m = re.search(pat, output)
         if m:
@@ -198,6 +212,7 @@ def _diagnose(output: str) -> Optional[tuple[str, str]]:
 
 
 # ── History ────────────────────────────────────────────────────────────
+
 
 def _append(results: list[tuple[str, str]], dur: float) -> None:
     entry = {"ts": time.time(), "dur": round(dur, 2), "r": [{"n": n, "o": o} for n, o in results]}
@@ -222,6 +237,7 @@ def _history() -> list[dict]:
 # ═══════════════════════════════════════════════════════════════════════
 # Commands — one line per result
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def cmd_health(quiet: bool = False, summary: bool = False, verbose: bool = False) -> int:
     areas = [
@@ -260,9 +276,11 @@ def cmd_health(quiet: bool = False, summary: bool = False, verbose: bool = False
                 _line(_ok, msg)
         else:
             all_ok = False
-            parts = [f'{c["p"]} passed']
-            if c["f"]: parts.append(_red(f'{c["f"]} failed'))
-            if c["e"]: parts.append(_red(f'{c["e"]} error'))
+            parts = [f"{c['p']} passed"]
+            if c["f"]:
+                parts.append(_red(f"{c['f']} failed"))
+            if c["e"]:
+                parts.append(_red(f"{c['e']} error"))
             msg = f"{name:20s} {', '.join(parts)}  {_dim(f'{dur:.1f}s')}"
             if not quiet and not summary:
                 _line(_no, msg)
@@ -298,11 +316,15 @@ def cmd_diagnose(target: str) -> int:
     sp.stop()
 
     parts = []
-    if c["p"]: parts.append(_green(f'{c["p"]}P'))
-    if c["f"]: parts.append(_red(f'{c["f"]}F'))
-    if c["e"]: parts.append(_red(f'{c["e"]}E'))
-    if c["s"]: parts.append(f'{c["s"]}S')
-    parts.append(_dim(f'{dur:.1f}s'))
+    if c["p"]:
+        parts.append(_green(f"{c['p']}P"))
+    if c["f"]:
+        parts.append(_red(f"{c['f']}F"))
+    if c["e"]:
+        parts.append(_red(f"{c['e']}E"))
+    if c["s"]:
+        parts.append(f"{c['s']}S")
+    parts.append(_dim(f"{dur:.1f}s"))
     _line(" ", " ".join(parts))
 
     # Failures — one line each, then expand first
@@ -453,7 +475,7 @@ def cmd_flake() -> int:
         _line(_ok, _green("no flakes"))
     else:
         flaky.sort(key=lambda x: x[1])
-        for nid, rate, runs in flaky:
+        for nid, rate, _runs in flaky:
             bar_len = 16
             filled = int(rate * bar_len)
             clr = _gn if rate > 0.8 else _y if rate > 0.5 else _rd
@@ -468,9 +490,11 @@ def cmd_flake() -> int:
 # CLI
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def main() -> int:
     ap = argparse.ArgumentParser(
-        prog="test-doctor", description="Fast test failure diagnosis",
+        prog="test-doctor",
+        description="Fast test failure diagnosis",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
             examples:
@@ -494,10 +518,14 @@ def main() -> int:
         _NC = True
         _b = _d = _r = _rd = _gn = _y = _c = _gr = ""
 
-    if args.fix_hint: return cmd_fix_hint(args.fix_hint)
-    if args.flake: return cmd_flake()
-    if args.recent: return cmd_recent()
-    if args.target: return cmd_diagnose(args.target)
+    if args.fix_hint:
+        return cmd_fix_hint(args.fix_hint)
+    if args.flake:
+        return cmd_flake()
+    if args.recent:
+        return cmd_recent()
+    if args.target:
+        return cmd_diagnose(args.target)
     return cmd_health(quiet=args.quiet, summary=args.summary)
 
 

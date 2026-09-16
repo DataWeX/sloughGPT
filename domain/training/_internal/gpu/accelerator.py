@@ -13,7 +13,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # BACKEND DETECTION
 # =============================================================================
+
 
 class _MetalAccelerator:
     """Metal (Apple GPU) awareness.
@@ -42,6 +43,7 @@ class _MetalAccelerator:
         """Check if MPS is available without importing torch."""
         try:
             from domain.infrastructure._internal.ml_types import _mps_available
+
             return _mps_available()
         except Exception:
             return False
@@ -77,6 +79,7 @@ class _CUDAAccelerator:
         """Check if CUDA is available via CuPy."""
         try:
             import cupy as cp
+
             cp.cuda.runtime.getDeviceCount()
             return True
         except Exception:
@@ -88,18 +91,21 @@ class _CUDAAccelerator:
     def to_device(self, arr: np.ndarray) -> Any:
         if self._cp is None:
             import cupy as cp
+
             self._cp = cp
         return self._cp.asarray(arr)
 
     def from_device(self, arr: Any) -> np.ndarray:
         if self._cp is None:
             import cupy as cp
+
             self._cp = cp
         return self._cp.asnumpy(arr)
 
     def matmul(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
         if self._cp is None:
             import cupy as cp
+
             self._cp = cp
         a_gpu = self._cp.asarray(a)
         b_gpu = self._cp.asarray(b)
@@ -129,7 +135,7 @@ class _CPUAccelerator:
 # GLOBAL ACCELERATOR
 # =============================================================================
 
-_accelerator: Optional[object] = None
+_accelerator: object | None = None
 
 
 def get_accelerator() -> object:
@@ -152,6 +158,7 @@ def get_accelerator() -> object:
 def cholesky(A: object) -> object:
     """Cholesky decomposition A = L @ L.T using numpy."""
     import numpy as np
+
     n = A.shape[0]
     L = np.zeros_like(A)
     for i in range(n):
@@ -167,6 +174,7 @@ def cholesky(A: object) -> object:
 def solve_triangular(L: object, b: object) -> object:
     """Solve L @ x = b for lower triangular L."""
     import numpy as np
+
     n = L.shape[0]
     x = np.zeros(n)
     for i in range(n):
@@ -184,6 +192,7 @@ def solve_cholesky(A: object, b: object) -> object:
 def dominant_eigen(A: object, max_iter: int = 100) -> object:
     """Compute dominant eigenvalue via power iteration."""
     import numpy as np
+
     n = A.shape[0]
     v = np.ones(n) / np.sqrt(n)
     for _ in range(max_iter):

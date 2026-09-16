@@ -5,6 +5,7 @@ Covers: zeros/ones/randn/tensor, sigmoid/tanh/relu/gelu/silu, softmax,
 broadcast_back/broadcast_forward, _ensure, topk, cross_entropy, mse_loss.
 Excludes: full forward/backward pass through model layers (covered elsewhere).
 """
+
 from __future__ import annotations
 
 import sys
@@ -19,15 +20,26 @@ if _core_dir not in sys.path:
 
 from domain.training._internal.slonet import (
     Tensor,
-    zeros, ones, randn, tensor,
-    sigmoid, tanh, relu, gelu_np, gelu, silu_np, silu,
-    softmax, cross_entropy, mse_loss,
-    _broadcast_back, _broadcast_forward, _ensure,
+    _broadcast_back,
+    _broadcast_forward,
+    _ensure,
+    cross_entropy,
+    gelu_np,
+    mse_loss,
+    ones,
+    randn,
+    relu,
+    sigmoid,
+    silu_np,
+    softmax,
+    tanh,
+    tensor,
     topk,
+    zeros,
 )
 
-
 # ── Tensor creation ──────────────────────────────────────────────────
+
 
 class TestTensorCreation:
     def test_zeros(self):
@@ -52,6 +64,7 @@ class TestTensorCreation:
 
 
 # ── Activations ──────────────────────────────────────────────────────
+
 
 class TestSigmoid:
     def test_zero(self):
@@ -120,6 +133,7 @@ class TestSoftmax:
 
 # ── Broadcast helpers ────────────────────────────────────────────────
 
+
 class TestBroadcastBack:
     def test_same_shape(self):
         g = np.array([1.0, 2.0, 3.0])
@@ -153,6 +167,7 @@ class TestBroadcastForward:
 
 # ── Losses ───────────────────────────────────────────────────────────
 
+
 class TestCrossEntropy:
     def test_basic(self):
         logits = tensor(np.array([[1.0, 2.0, 3.0]]))
@@ -183,6 +198,7 @@ class TestMseLoss:
 
 
 # ── _ensure ──────────────────────────────────────────────────────────
+
 
 class TestEnsure:
     def test_tensor_passthrough(self):

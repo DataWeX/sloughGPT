@@ -11,8 +11,8 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Dict, List, Optional
+from enum import StrEnum
+from typing import Any
 
 import numpy as np
 
@@ -48,7 +48,7 @@ def sanitize_input(content: str) -> str:
     return cleaned
 
 
-class VectorStoreType(str, Enum):
+class VectorStoreType(StrEnum):
     """Backend identifiers for create_vector_store."""
 
     IN_MEMORY = "in_memory"
@@ -60,9 +60,9 @@ class VectorStoreType(str, Enum):
 @dataclass
 class VectorEntry:
     id: str
-    vector: List[float]
+    vector: list[float]
     text: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -70,7 +70,7 @@ class QueryResult:
     id: str
     score: float
     text: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class VectorStore(ABC):
@@ -83,20 +83,20 @@ class VectorStore(ABC):
         pass  # pragma: no cover (abstractmethod body)
 
     @abstractmethod
-    async def upsert(self, entries: List[VectorEntry]) -> int:
+    async def upsert(self, entries: list[VectorEntry]) -> int:
         pass  # pragma: no cover (abstractmethod body)
 
     @abstractmethod
     async def query(
         self,
-        vector: List[float],
+        vector: list[float],
         top_k: int = 5,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[QueryResult]:
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[QueryResult]:
         pass  # pragma: no cover (abstractmethod body)
 
     @abstractmethod
-    async def delete(self, ids: List[str]) -> bool:
+    async def delete(self, ids: list[str]) -> bool:
         pass  # pragma: no cover (abstractmethod body)
 
     @abstractmethod
@@ -109,7 +109,7 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / denom)
 
 
-def _build_matrix(entries: Dict[str, VectorEntry], ids: List[str]) -> np.ndarray:
+def _build_matrix(entries: dict[str, VectorEntry], ids: list[str]) -> np.ndarray:
     """Stack ``entries[eid].vector`` for every id into one (N, dim) matrix.
 
     A single ``np.array(list_of_lists)`` builds the 2-D array in one C pass,
@@ -125,12 +125,12 @@ def _matrix_norms(mat: np.ndarray) -> np.ndarray:
 
 def _rank_matrix(
     mat: np.ndarray,
-    ids: List[str],
-    entries: Dict[str, VectorEntry],
+    ids: list[str],
+    entries: dict[str, VectorEntry],
     q: np.ndarray,
     top_k: int,
-    norms: Optional[np.ndarray] = None,
-) -> List[QueryResult]:
+    norms: np.ndarray | None = None,
+) -> list[QueryResult]:
     """Score a query against an (N, dim) matrix aligned with *ids*.
 
     Cosine scores are ``dot(a, b) / (|a||b| + 1e-10)`` computed with a single
@@ -156,16 +156,18 @@ def _rank_matrix(
     denom = norms * q_norm + 1e-10
     scores = (mat @ q) / denom
     order = np.argsort(-scores, kind="stable")
-    out: List[QueryResult] = []
+    out: list[QueryResult] = []
     for idx in order[:top_k]:
         i = int(idx)
         entry = entries[ids[i]]
-        out.append(QueryResult(
-            id=entry.id,
-            score=float(scores[i]),
-            text=entry.text,
-            metadata=dict(entry.metadata),
-        ))
+        out.append(
+            QueryResult(
+                id=entry.id,
+                score=float(scores[i]),
+                text=entry.text,
+                metadata=dict(entry.metadata),
+            )
+        )
     return out
 
 
@@ -174,13 +176,13 @@ class InMemoryVectorStore(VectorStore):
 
     def __init__(self, dimension: int = 384):
         self.dimension = dimension
-        self._entries: Dict[str, VectorEntry] = {}
+        self._entries: dict[str, VectorEntry] = {}
         # Full-matrix cache: (version, ids, mat). _version bumps on every
         # mutation; a query rebuilds when the cached version is stale, so a
         # tuple assigned concurrently with an upsert self-heals on next read
         # (no locks needed — tuple reads are GIL-atomic).
         self._version = 0
-        self._matrix_cache: Optional[tuple] = None
+        self._matrix_cache: tuple | None = None
 
     async def connect(self) -> bool:
         return True
@@ -204,10 +206,10 @@ class InMemoryVectorStore(VectorStore):
 
     def query_sync(
         self,
-        vector: List[float],
+        vector: list[float],
         top_k: int = 5,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[QueryResult]:
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[QueryResult]:
         """Synchronous query — avoids event-loop deadlock from _run_async.
 
         Unfiltered queries reuse a cached (ids, matrix, norms) so repeated
@@ -220,7 +222,8 @@ class InMemoryVectorStore(VectorStore):
         q = np.asarray(vector, dtype=np.float64)
         if filter_metadata:
             ids = [
-                eid for eid, e in self._entries.items()
+                eid
+                for eid, e in self._entries.items()
                 if e.metadata and all(e.metadata.get(k) == v for k, v in filter_metadata.items())
             ]
             if not ids:
@@ -236,7 +239,7 @@ class InMemoryVectorStore(VectorStore):
         self._version += 1
         self._matrix_cache = None
 
-    def upsert_sync(self, entries: List[VectorEntry]) -> int:
+    def upsert_sync(self, entries: list[VectorEntry]) -> int:
         """Synchronous upsert — avoids event-loop deadlock from _run_async."""
         for e in entries:
             self._entries[e.id] = e
@@ -247,7 +250,7 @@ class InMemoryVectorStore(VectorStore):
         """Synchronous count — avoids event-loop deadlock from _run_async."""
         return len(self._entries)
 
-    async def upsert(self, entries: List[VectorEntry]) -> int:
+    async def upsert(self, entries: list[VectorEntry]) -> int:
         for e in entries:
             self._entries[e.id] = e
         self._bump_version()
@@ -255,13 +258,13 @@ class InMemoryVectorStore(VectorStore):
 
     async def query(
         self,
-        vector: List[float],
+        vector: list[float],
         top_k: int = 5,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[QueryResult]:
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[QueryResult]:
         return self.query_sync(vector, top_k, filter_metadata)
 
-    async def delete(self, ids: List[str]) -> bool:
+    async def delete(self, ids: list[str]) -> bool:
         removed = 0
         for i in ids:
             if i in self._entries:
@@ -293,16 +296,17 @@ class MogDBVectorStore(VectorStore):
     def __init__(self, dimension: int = 384, path: str = "data/vector_store"):
         self.dimension = dimension
         self._path = path
-        self._entries: Dict[str, VectorEntry] = {}
-        self._mogdb: Optional[Any] = None
-        self._coll: Optional[Any] = None
+        self._entries: dict[str, VectorEntry] = {}
+        self._mogdb: Any | None = None
+        self._coll: Any | None = None
         # Full-matrix cache: (version, ids, mat). Version-guarded against
         # concurrent mutation (see InMemoryVectorStore).
         self._version = 0
-        self._matrix_cache: Optional[tuple] = None
+        self._matrix_cache: tuple | None = None
 
     async def connect(self) -> bool:
         from mogdb import MogDB
+
         self._mogdb = MogDB(self._path)
         self._coll = self._mogdb.collection("vectors")
         # Load existing entries from disk
@@ -315,7 +319,12 @@ class MogDBVectorStore(VectorStore):
                 metadata=doc.get("metadata", {}),
             )
             self._entries[entry.id] = entry
-        logger.info("MogDBVectorStore loaded %d entries from %s", len(self._entries), self._path, extra={"tag": "INF"})
+        logger.info(
+            "MogDBVectorStore loaded %d entries from %s",
+            len(self._entries),
+            self._path,
+            extra={"tag": "INF"},
+        )
         return True
 
     async def disconnect(self) -> None:
@@ -345,17 +354,18 @@ class MogDBVectorStore(VectorStore):
 
     def query_sync(
         self,
-        vector: List[float],
+        vector: list[float],
         top_k: int = 5,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[QueryResult]:
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[QueryResult]:
         """Synchronous query over in-memory entries (cached matrix)."""
         if not self._entries:
             return []
         q = np.asarray(vector, dtype=np.float64)
         if filter_metadata:
             ids = [
-                eid for eid, e in self._entries.items()
+                eid
+                for eid, e in self._entries.items()
                 if e.metadata and all(e.metadata.get(k) == v for k, v in filter_metadata.items())
             ]
             if not ids:
@@ -366,42 +376,46 @@ class MogDBVectorStore(VectorStore):
             ids, mat, norms = self._cached_matrix()
         return _rank_matrix(mat, ids, self._entries, q, top_k, norms=norms)
 
-    def upsert_sync(self, entries: List[VectorEntry]) -> int:
+    def upsert_sync(self, entries: list[VectorEntry]) -> int:
         if not self._coll:
             return 0
         for e in entries:
             self._entries[e.id] = e
             self._coll.update_one(
-                    {"_id": e.id},
-                    {"$set": {
+                {"_id": e.id},
+                {
+                    "$set": {
                         "_vector_json": json.dumps(e.vector),
                         "text": e.text,
                         "metadata": e.metadata,
-                    }},
-                ) or self._coll.insert_one({
+                    }
+                },
+            ) or self._coll.insert_one(
+                {
                     "_id": e.id,
                     "_vector_json": json.dumps(e.vector),
                     "text": e.text,
                     "metadata": e.metadata,
-                })
+                }
+            )
         self._bump_version()
         return len(entries)
 
     def count_sync(self) -> int:
         return len(self._entries)
 
-    async def upsert(self, entries: List[VectorEntry]) -> int:
+    async def upsert(self, entries: list[VectorEntry]) -> int:
         return self.upsert_sync(entries)
 
     async def query(
         self,
-        vector: List[float],
+        vector: list[float],
         top_k: int = 5,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[QueryResult]:
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[QueryResult]:
         return self.query_sync(vector, top_k, filter_metadata)
 
-    async def delete(self, ids: List[str]) -> bool:
+    async def delete(self, ids: list[str]) -> bool:
         removed = 0
         for i in ids:
             if i in self._entries:
@@ -433,6 +447,7 @@ async def create_vector_store(provider: str = "in_memory", **kwargs: Any) -> Vec
         return store
     if key == "chromadb":
         from domain.inference._internal.vector_stores.chromadb_store import ChromaDBVectorStore
+
         store = ChromaDBVectorStore(
             persist_directory=kwargs.get("persist_directory", "data/vector_store")
         )
@@ -440,6 +455,7 @@ async def create_vector_store(provider: str = "in_memory", **kwargs: Any) -> Vec
         return store
     if key == "pinecone":
         from domain.inference._internal.vector_stores.pinecone_store import PineconeVectorStore
+
         store = PineconeVectorStore(
             api_key=kwargs.get("api_key"),
             index_name=kwargs.get("index") or kwargs.get("index_name") or "sloughgpt",
@@ -456,7 +472,7 @@ async def create_vector_store(provider: str = "in_memory", **kwargs: Any) -> Vec
     )
 
 
-_embed_model: Optional[Any] = None
+_embed_model: Any | None = None
 _EMBED_DIM: int = 384
 _EMBED_LOAD_FAILED: bool = False
 _EMBED_MODEL_NAME: str = "all-MiniLM-L6-v2"
@@ -482,11 +498,13 @@ def _load_embed_model() -> Any:
     # Check available memory before loading
     try:
         import psutil
+
         avail_mb = psutil.virtual_memory().available / (1024 * 1024)
         if avail_mb < _EMBED_MIN_MEMORY_MB:
             logger.warning(
                 "Embed model skipped: only %.0f MB available (need %d MB)",
-                avail_mb, _EMBED_MIN_MEMORY_MB,
+                avail_mb,
+                _EMBED_MIN_MEMORY_MB,
                 extra={"tag": "INF"},
             )
             _EMBED_LOAD_FAILED = True
@@ -508,35 +526,139 @@ def _load_embed_model() -> Any:
 
     # Load model on CPU (auto-downloads on first run)
     try:
-        logger.info("Loading embedding model %s (device=cpu)...", _EMBED_MODEL_NAME, extra={"tag": "INF"})
+        logger.info(
+            "Loading embedding model %s (device=cpu)...", _EMBED_MODEL_NAME, extra={"tag": "INF"}
+        )
         _embed_model = SentenceTransformer(_EMBED_MODEL_NAME, device="cpu")
-        logger.info("Embedding model loaded (%d-dimensional, device=cpu)", _EMBED_DIM, extra={"tag": "INF"})
+        logger.info(
+            "Embedding model loaded (%d-dimensional, device=cpu)", _EMBED_DIM, extra={"tag": "INF"}
+        )
         return _embed_model
     except Exception as exc:
-        logger.warning("Failed to load embedding model: %s — using n-gram fallback", exc, extra={"tag": "INF"})
+        logger.warning(
+            "Failed to load embedding model: %s — using n-gram fallback", exc, extra={"tag": "INF"}
+        )
         _EMBED_LOAD_FAILED = True
         return None
 
 
-_STOPWORDS: frozenset = frozenset({
-    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "could",
-    "should", "may", "might", "can", "shall", "to", "of", "in", "for",
-    "on", "with", "at", "by", "from", "as", "into", "through", "during",
-    "before", "after", "above", "below", "between", "out", "off", "over",
-    "under", "again", "further", "then", "once", "here", "there", "when",
-    "where", "why", "how", "all", "each", "every", "both", "few", "more",
-    "most", "other", "some", "such", "no", "nor", "not", "only", "own",
-    "same", "so", "than", "too", "very", "just", "because", "and", "but",
-    "or", "if", "while", "about", "up", "it", "its", "this", "that",
-    "these", "those", "i", "me", "my", "we", "our", "you", "your", "he",
-    "she", "they", "them", "their", "what", "which", "who", "whom",
-})
+_STOPWORDS: frozenset = frozenset(
+    {
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "can",
+        "shall",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "as",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "between",
+        "out",
+        "off",
+        "over",
+        "under",
+        "again",
+        "further",
+        "then",
+        "once",
+        "here",
+        "there",
+        "when",
+        "where",
+        "why",
+        "how",
+        "all",
+        "each",
+        "every",
+        "both",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "no",
+        "nor",
+        "not",
+        "only",
+        "own",
+        "same",
+        "so",
+        "than",
+        "too",
+        "very",
+        "just",
+        "because",
+        "and",
+        "but",
+        "or",
+        "if",
+        "while",
+        "about",
+        "up",
+        "it",
+        "its",
+        "this",
+        "that",
+        "these",
+        "those",
+        "i",
+        "me",
+        "my",
+        "we",
+        "our",
+        "you",
+        "your",
+        "he",
+        "she",
+        "they",
+        "them",
+        "their",
+        "what",
+        "which",
+        "who",
+        "whom",
+    }
+)
 
 
 def _tokenize(text: str) -> list[str]:
     """Lowercase, strip punctuation, split on whitespace."""
     import re
+
     return re.findall(r"[a-z0-9']+", text.lower())
 
 
@@ -558,7 +680,7 @@ def _word_ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
     ngrams: list[str] = []
     for n in (1, 2, 3):
         for i in range(max(0, len(tokens) - n + 1)):
-            ngrams.append(" ".join(tokens[i:i + n]))
+            ngrams.append(" ".join(tokens[i : i + n]))
 
     for ng in ngrams:
         h = int(hashlib.md5(ng.encode()).hexdigest()[:8], 16)
@@ -581,7 +703,7 @@ _slo_embedder = None
 _slo_embedder_rejected = False
 
 
-def simple_embed(text: str, dimension: int = 384) -> List[float]:
+def simple_embed(text: str, dimension: int = 384) -> list[float]:
     """Embed text into a vector using the best available embedder.
 
     Priority:
@@ -612,13 +734,17 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
             return vec.tolist()
         except Exception:
             import logging
-            logging.getLogger(__name__).warning("sentence-transformers encode failed, trying SloNet embedder")
+
+            logging.getLogger(__name__).warning(
+                "sentence-transformers encode failed, trying SloNet embedder"
+            )
 
     # 2. Try SloNet-trained embedder (no downloads, trained on your corpus)
     global _slo_embedder, _slo_embedder_rejected
     if _slo_embedder is None and not _slo_embedder_rejected:
         try:
             from domain.inference._internal.slo_embedder import SloTextEmbedder
+
             candidate = SloTextEmbedder.load()
             if candidate is not None and not candidate.acceptable():
                 logger.info(
@@ -629,9 +755,12 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
             elif candidate is not None:
                 _slo_embedder = candidate
         except Exception as e:
-            logger.warning("vector_store: SloNet embedder load failed, using n-gram fallback", extra={
-                "error": str(e),
-            })
+            logger.warning(
+                "vector_store: SloNet embedder load failed, using n-gram fallback",
+                extra={
+                    "error": str(e),
+                },
+            )
     if _slo_embedder is not None:
         try:
             vec = _slo_embedder.embed(text)
@@ -645,8 +774,9 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
                     vec = vec / norm
             return vec.tolist() if isinstance(vec, np.ndarray) else vec
         except Exception:
-            logger.warning("vector_store: SloNet embedder encode failed, using n-gram fallback",
-                exc_info=True)
+            logger.warning(
+                "vector_store: SloNet embedder encode failed, using n-gram fallback", exc_info=True
+            )
 
     # 3. Last resort: word n-gram TF-IDF (zero downloads, zero training)
     vec = _ngram_embed(text, dimension)

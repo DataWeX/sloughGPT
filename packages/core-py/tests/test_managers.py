@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 import pytest
-from pathlib import Path
 
 from domain.context._internal.managers import (
     TRAIT_SCHEMA,
-    ALL_TRAITS,
-    TraitWeightsConfig,
     PersonalityManager,
+    TraitWeightsConfig,
     _describe_trait,
     _if_above,
 )
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 class TestHelpers:
     def test_describe_trait_high(self):
@@ -35,6 +33,7 @@ class TestHelpers:
 
 
 # ── TraitWeightsConfig ────────────────────────────────────────────────────────
+
 
 class TestTraitWeightsConfig:
     def test_set_and_get(self, tmp_path):
@@ -87,6 +86,7 @@ class TestTraitWeightsConfig:
 
 # ── PersonalityManager ────────────────────────────────────────────────────────
 
+
 class TestPersonalityManager:
     def test_apply_generates_block(self, tmp_path):
         cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
@@ -110,7 +110,14 @@ class TestPersonalityManager:
         assert "label" in mode
         assert "confidence" in mode
         assert "scores" in mode
-        assert mode["label"] in ["Analytical", "Warm", "Playful", "Confident", "Reserved", "Creative"]
+        assert mode["label"] in [
+            "Analytical",
+            "Warm",
+            "Playful",
+            "Confident",
+            "Reserved",
+            "Creative",
+        ]
 
     def test_get_mode_warm(self, tmp_path):
         cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))

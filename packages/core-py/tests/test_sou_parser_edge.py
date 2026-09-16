@@ -1,20 +1,12 @@
 """Edge-case tests for SouParser.parse() not covered in test_slo_format.py."""
 
-import math
 from domain.inference._internal.slo_format import (
-    SouParser,
     SloProfile,
-    PersonalityCore,
-    BehavioralTraits,
-    CognitiveSignature,
-    EmotionalRange,
-    GenerationParams,
-    ContextParams,
+    SouParser,
 )
 
 
 class TestParseEdgeCases:
-
     def test_empty_string(self):
         sp = SouParser.parse("")
         assert sp.name == "unknown"
@@ -53,10 +45,7 @@ class TestParseEdgeCases:
         assert sp.certifications == ["iso-27001"]
 
     def test_multiple_certifications(self):
-        content = (
-            "SOUL bot\nCERTIFICATION iso-27001\n"
-            "CERTIFICATION soc2\nCERTIFICATION gdpr\n"
-        )
+        content = "SOUL bot\nCERTIFICATION iso-27001\nCERTIFICATION soc2\nCERTIFICATION gdpr\n"
         sp = SouParser.parse(content)
         assert sp.certifications == ["iso-27001", "soc2", "gdpr"]
 
@@ -71,10 +60,7 @@ class TestParseEdgeCases:
         assert sp.tags == ["python"]
 
     def test_metadata_custom_key(self):
-        content = (
-            "SOUL bot\nMETADATA custom_key custom_value\n"
-            "METADATA epochs_trained 5\n"
-        )
+        content = "SOUL bot\nMETADATA custom_key custom_value\nMETADATA epochs_trained 5\n"
         sp = SouParser.parse(content)
         assert sp.metadata["custom_key"] == "custom_value"
         assert sp.epochs_trained == 5
@@ -85,9 +71,7 @@ class TestParseEdgeCases:
         assert sp.final_val_loss == 0.33
 
     def test_parameter_float_values(self):
-        content = (
-            "SOUL bot\nPARAMETER\ntemperature 0.9\ntop_p 0.95\n"
-        )
+        content = "SOUL bot\nPARAMETER\ntemperature 0.9\ntop_p 0.95\n"
         sp = SouParser.parse(content)
         assert sp.generation.temperature == 0.9
         assert sp.generation.top_p == 0.95
@@ -99,10 +83,7 @@ class TestParseEdgeCases:
         assert sp.generation.max_tokens == 4096
 
     def test_parameter_multiple_stop_tokens(self):
-        content = (
-            "SOUL bot\nPARAMETER\n"
-            "stop END\nstop STOP\nstop DONE\n"
-        )
+        content = "SOUL bot\nPARAMETER\nstop END\nstop STOP\nstop DONE\n"
         sp = SouParser.parse(content)
         assert sp.generation.stop == ["END", "STOP", "DONE"]
 
@@ -123,45 +104,31 @@ class TestParseEdgeCases:
         assert sp.context.num_gpu == "auto"
 
     def test_personality_section(self):
-        content = (
-            "SOUL bot\nPERSONALITY\nwarmth 0.9\ncreativity 0.1\nEND\n"
-        )
+        content = "SOUL bot\nPERSONALITY\nwarmth 0.9\ncreativity 0.1\nEND\n"
         sp = SouParser.parse(content)
         assert sp.personality.warmth == 0.9
         assert sp.personality.creativity == 0.1
 
     def test_cognition_section(self):
-        content = (
-            "SOUL bot\nCOGNITION\npattern_recognition 0.8\n"
-            "abstract_reasoning 0.2\nEND\n"
-        )
+        content = "SOUL bot\nCOGNITION\npattern_recognition 0.8\nabstract_reasoning 0.2\nEND\n"
         sp = SouParser.parse(content)
         assert sp.cognition.pattern_recognition == 0.8
         assert sp.cognition.abstract_reasoning == 0.2
 
     def test_emotion_section(self):
-        content = (
-            "SOUL bot\nEMOTION\nempathy_depth 0.7\n"
-            "mood_responsiveness 0.3\nEND\n"
-        )
+        content = "SOUL bot\nEMOTION\nempathy_depth 0.7\nmood_responsiveness 0.3\nEND\n"
         sp = SouParser.parse(content)
         assert sp.emotion.empathy_depth == 0.7
         assert sp.emotion.mood_responsiveness == 0.3
 
     def test_behavior_section_string_fields(self):
-        content = (
-            "SOUL bot\nBEHAVIOR\nspeaking_style formal\n"
-            "reasoning_approach logical\nEND\n"
-        )
+        content = "SOUL bot\nBEHAVIOR\nspeaking_style formal\nreasoning_approach logical\nEND\n"
         sp = SouParser.parse(content)
         assert sp.behavior.speaking_style == "formal"
         assert sp.behavior.reasoning_approach == "logical"
 
     def test_behavior_section_float_fields(self):
-        content = (
-            "SOUL bot\nBEHAVIOR\nemotional_expressiveness 0.8\n"
-            "formality_dynamic 0.2\nEND\n"
-        )
+        content = "SOUL bot\nBEHAVIOR\nemotional_expressiveness 0.8\nformality_dynamic 0.2\nEND\n"
         sp = SouParser.parse(content)
         assert sp.behavior.emotional_expressiveness == 0.8
         assert sp.behavior.formality_dynamic == 0.2
@@ -177,9 +144,7 @@ class TestParseEdgeCases:
         assert sp.behavior.follow_up_tendency == 0.4
 
     def test_adapter_section(self):
-        content = (
-            "SOUL bot\nADAPTER\nlora-adapter-a\nlora-adapter-b\nEND\n"
-        )
+        content = "SOUL bot\nADAPTER\nlora-adapter-a\nlora-adapter-b\nEND\n"
         sp = SouParser.parse(content)
         assert sp.lora_adapters == ["lora-adapter-a", "lora-adapter-b"]
 
@@ -208,10 +173,7 @@ class TestParseEdgeCases:
         }
 
     def test_multiple_messages(self):
-        content = (
-            "SOUL bot\nMESSAGE user Hi\n"
-            "MESSAGE assistant Hello!\nMESSAGE user Bye\n"
-        )
+        content = "SOUL bot\nMESSAGE user Hi\nMESSAGE assistant Hello!\nMESSAGE user Bye\n"
         sp = SouParser.parse(content)
         assert len(sp.sample_dialogue) == 3
 
@@ -243,16 +205,14 @@ class TestParseEdgeCases:
         assert sp.dataset_signature == "abc123"
 
     def test_section_switching_without_end(self):
-        content = (
-            "SOUL bot\nPERSONALITY\nwarmth 0.9\n"
-            "COGNITION\npattern_recognition 0.8\nEND\n"
-        )
+        content = "SOUL bot\nPERSONALITY\nwarmth 0.9\nCOGNITION\npattern_recognition 0.8\nEND\n"
         sp = SouParser.parse(content)
         assert sp.personality.warmth == 0.5
         assert sp.cognition.pattern_recognition == 0.8
 
     def test_parameter_unknown_key_raises(self):
         import pytest
+
         content = "SOUL bot\nPARAMETER\nunknown_field 42\n"
         with pytest.raises(TypeError, match="unexpected keyword argument"):
             SouParser.parse(content)

@@ -8,32 +8,26 @@ No mocks — uses real X86CPU and X86Assembler.
 
 from __future__ import annotations
 
-import struct
 import pytest
 
 from domain.shell._internal.vm import (
     X86CPU,
-    X86Assembler,
     InsFault,
-    Halt,
-    MemFault,
-    ProcessTable,
-    ProcessControlBlock,
     ProcessState,
-    Scheduler,
+    ProcessTable,
+    X86Assembler,
 )
 from domain.shell._internal.vm_engine import (
     Breakpoint,
-    StepEvent,
     BreakpointEvent,
-    FaultEvent,
-    SyscallEvent,
-    ExecutionTrace,
-    DeviceBus,
     ConsoleDevice,
+    DeviceBus,
+    ExecutionTrace,
+    FaultEvent,
+    StepEvent,
+    SyscallEvent,
     VMEngine,
 )
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -52,6 +46,7 @@ def _load_nop_hlt(engine: VMEngine, org=0x1000):
 # =============================================================================
 # Breakpoint
 # =============================================================================
+
 
 class TestBreakpoint:
     def test_creation(self):
@@ -90,6 +85,7 @@ class TestBreakpoint:
 # StepEvent
 # =============================================================================
 
+
 class TestStepEvent:
     def test_creation(self):
         e = StepEvent(
@@ -108,6 +104,7 @@ class TestStepEvent:
 # BreakpointEvent
 # =============================================================================
 
+
 class TestBreakpointEvent:
     def test_creation(self):
         bp = Breakpoint(address=0x1000)
@@ -119,6 +116,7 @@ class TestBreakpointEvent:
 # =============================================================================
 # FaultEvent
 # =============================================================================
+
 
 class TestFaultEvent:
     def test_creation(self):
@@ -136,6 +134,7 @@ class TestFaultEvent:
 # SyscallEvent
 # =============================================================================
 
+
 class TestSyscallEvent:
     def test_creation(self):
         e = SyscallEvent(number=1, args={"eax": 4}, eip=0x1000)
@@ -146,6 +145,7 @@ class TestSyscallEvent:
 # =============================================================================
 # ExecutionTrace
 # =============================================================================
+
 
 class TestExecutionTrace:
     def test_default(self):
@@ -162,6 +162,7 @@ class TestExecutionTrace:
 # =============================================================================
 # DeviceBus
 # =============================================================================
+
 
 class TestDeviceBus:
     def test_outb_log(self):
@@ -246,6 +247,7 @@ class TestDeviceBus:
 # ConsoleDevice
 # =============================================================================
 
+
 class TestConsoleDevice:
     def test_write_byte(self):
         dev = ConsoleDevice()
@@ -285,6 +287,7 @@ class TestConsoleDevice:
 # VMEngine — properties
 # =============================================================================
 
+
 class TestVMEngineProperties:
     def test_cpu_property(self):
         e = _make_engine()
@@ -323,6 +326,7 @@ class TestVMEngineProperties:
 # VMEngine — program loading
 # =============================================================================
 
+
 class TestVMEngineLoading:
     def test_load_bytes(self):
         e = _make_engine()
@@ -352,13 +356,34 @@ class TestVMEngineLoading:
 # VMEngine — register access
 # =============================================================================
 
+
 class TestVMEngineRegisters:
     def test_registers_returns_all(self):
         e = _make_engine()
         regs = e.registers()
-        expected = ["eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi",
-                     "eip", "ax", "cx", "dx", "bx", "al", "cl", "dl", "bl",
-                     "ah", "ch", "dh", "bh"]
+        expected = [
+            "eax",
+            "ecx",
+            "edx",
+            "ebx",
+            "esp",
+            "ebp",
+            "esi",
+            "edi",
+            "eip",
+            "ax",
+            "cx",
+            "dx",
+            "bx",
+            "al",
+            "cl",
+            "dl",
+            "bl",
+            "ah",
+            "ch",
+            "dh",
+            "bh",
+        ]
         for r in expected:
             assert r in regs
 
@@ -430,6 +455,7 @@ class TestVMEngineRegisters:
 # VMEngine — memory access
 # =============================================================================
 
+
 class TestVMEngineMemory:
     def test_read_write_byte(self):
         e = _make_engine()
@@ -476,6 +502,7 @@ class TestVMEngineMemory:
 # =============================================================================
 # VMEngine — breakpoints
 # =============================================================================
+
 
 class TestVMEngineBreakpoints:
     def test_set_breakpoint(self):
@@ -539,6 +566,7 @@ class TestVMEngineBreakpoints:
 # VMEngine — event hooks
 # =============================================================================
 
+
 class TestVMEngineHooks:
     def test_on_step(self):
         e = _make_engine()
@@ -571,6 +599,7 @@ class TestVMEngineHooks:
 # =============================================================================
 # VMEngine — execution
 # =============================================================================
+
 
 class TestVMEngineExecution:
     def test_step_nop(self):
@@ -648,15 +677,17 @@ class TestVMEngineExecution:
         e = _make_engine()
         e.load_bytes(HLT, org=0x1000)
         e.step()
-        trace = e.continue_execution()
+        e.continue_execution()
         assert e.is_halted is True
 
     def test_request_break(self):
         e = _make_engine()
         e.load_bytes(NOP * 1000, org=0x1000)
+
         def maybe_break(ev):
             if ev.eip == 0x1005:
                 e.request_break()
+
         e.on_step(maybe_break)
         trace = e.run()
         assert trace.exit_reason == "break_request"
@@ -665,6 +696,7 @@ class TestVMEngineExecution:
 # =============================================================================
 # VMEngine — tracing
 # =============================================================================
+
 
 class TestVMEngineTracing:
     def test_enable_disable_tracing(self):
@@ -689,6 +721,7 @@ class TestVMEngineTracing:
 # VMEngine — reset
 # =============================================================================
 
+
 class TestVMEngineReset:
     def test_reset_clears_state(self):
         e = _make_engine()
@@ -707,6 +740,7 @@ class TestVMEngineReset:
 # =============================================================================
 # VMEngine — state snapshot
 # =============================================================================
+
 
 class TestVMEngineState:
     def test_state_snapshot(self):
@@ -730,6 +764,7 @@ class TestVMEngineState:
 # =============================================================================
 # VMEngine — disassembly
 # =============================================================================
+
 
 class TestVMEngineDisassembly:
     def test_disassemble_nop(self):
@@ -755,22 +790,26 @@ class TestVMEngineDisassembly:
 # VMEngine — instruction length
 # =============================================================================
 
+
 class TestVMEngineInstructionLength:
-    @pytest.mark.parametrize("opcode,expected", [
-        (0x90, 1),  # NOP
-        (0xF4, 1),  # HLT
-        (0xC3, 1),  # RET
-        (0x50, 1),  # PUSH EAX
-        (0x58, 1),  # POP EAX
-        (0x66, 2),  # prefix
-        (0xE8, 5),  # CALL rel32
-        (0xEB, 2),  # JMP short
-        (0x74, 2),  # JZ short
-        (0xB0, 2),  # MOV AL, imm8
-        (0x68, 5),  # PUSH imm32
-        (0x6A, 2),  # PUSH imm8
-        (0xCD, 2),  # INT imm8
-    ])
+    @pytest.mark.parametrize(
+        "opcode,expected",
+        [
+            (0x90, 1),  # NOP
+            (0xF4, 1),  # HLT
+            (0xC3, 1),  # RET
+            (0x50, 1),  # PUSH EAX
+            (0x58, 1),  # POP EAX
+            (0x66, 2),  # prefix
+            (0xE8, 5),  # CALL rel32
+            (0xEB, 2),  # JMP short
+            (0x74, 2),  # JZ short
+            (0xB0, 2),  # MOV AL, imm8
+            (0x68, 5),  # PUSH imm32
+            (0x6A, 2),  # PUSH imm8
+            (0xCD, 2),  # INT imm8
+        ],
+    )
     def test_instruction_lengths(self, opcode, expected):
         e = _make_engine()
         assert e._instruction_length(opcode, 0) == expected
@@ -779,6 +818,7 @@ class TestVMEngineInstructionLength:
 # =============================================================================
 # VMEngine — opcode name
 # =============================================================================
+
 
 class TestVMEngineOpcodeName:
     def test_known_opcodes(self):
@@ -799,6 +839,7 @@ class TestVMEngineOpcodeName:
 # VMEngine — repr
 # =============================================================================
 
+
 class TestVMEngineRepr:
     def test_repr(self):
         e = _make_engine()
@@ -811,6 +852,7 @@ class TestVMEngineRepr:
 # =============================================================================
 # VMEngine — process management
 # =============================================================================
+
 
 class TestVMEngineProcessManagement:
     def test_create_process(self):
@@ -831,6 +873,7 @@ class TestVMEngineProcessManagement:
 # =============================================================================
 # VMEngine — console I/O bus integration
 # =============================================================================
+
 
 class TestVMEngineConsoleBus:
     def test_console_registered_on_port(self):

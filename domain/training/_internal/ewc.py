@@ -12,10 +12,12 @@ Runs entirely on the SloNet autograd stack (pure NumPy).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple
-import numpy as np
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
 
 from domain.training._internal.slonet import Tensor
 
@@ -49,7 +51,7 @@ def _batch_size(inputs) -> int:
     return int(arr.shape[0])
 
 
-def _unpack_batch(batch) -> Tuple[Any, Optional[Any]]:
+def _unpack_batch(batch) -> tuple[Any, Any | None]:
     """Split a batch into (inputs, targets); targets may be None."""
     if isinstance(batch, (list, tuple)):
         inputs = batch[0]
@@ -63,6 +65,7 @@ def _unpack_batch(batch) -> Tuple[Any, Optional[Any]]:
 @dataclass
 class EWCParameters:
     """Parameters for EWC training."""
+
     lambda_ewc: float = 1000.0  # Regularization strength
     diagonal_approx: bool = True  # Use diagonal Fisher approximation
     batch_size: int = 32
@@ -74,10 +77,11 @@ class EWCParameters:
 @dataclass
 class TaskSnapshot:
     """Snapshot of model after learning a task."""
+
     task_id: str
     task_name: str
-    parameters: Dict[str, np.ndarray]
-    fisher_diagonal: Dict[str, np.ndarray]
+    parameters: dict[str, np.ndarray]
+    fisher_diagonal: dict[str, np.ndarray]
     optimal_loss: float
     num_samples: int
 
@@ -101,7 +105,7 @@ class DiagonalFisherEstimator:
         self.model = model
         self.ema_decay = ema_decay
         self.device = device
-        self.fisher_accum: Dict[str, np.ndarray] = {}
+        self.fisher_accum: dict[str, np.ndarray] = {}
         self.num_observations = 0
         self._init_fisher()
 
@@ -117,7 +121,7 @@ class DiagonalFisherEstimator:
         loss_fn: Callable,
         num_samples: int = 100,
         accumulation_steps: int = 10,
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """
         Estimate Fisher Information Matrix diagonal.
 
@@ -178,7 +182,7 @@ class DiagonalFisherEstimator:
         inputs,
         targets,
         num_samples: int = 10,
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """
         Estimate Fisher from logits (for classification).
 
@@ -233,7 +237,7 @@ class EwcContinualLearner:
     def __init__(
         self,
         model,
-        params: Optional[EWCParameters] = None,
+        params: EWCParameters | None = None,
         device: str = "cpu",
     ):
         self.model = model
@@ -250,10 +254,10 @@ class EwcContinualLearner:
         )
 
         # Store snapshots of each task
-        self.task_snapshots: Dict[str, TaskSnapshot] = {}
+        self.task_snapshots: dict[str, TaskSnapshot] = {}
 
         # Current task
-        self.current_task: Optional[str] = None
+        self.current_task: str | None = None
 
     def save_task_snapshot(
         self,
@@ -269,11 +273,14 @@ class EwcContinualLearner:
         - Current parameter values
         - Fisher Information diagonal
         """
-        logger.info("Saving snapshot for task: %s", task_name,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Saving snapshot for task: %s",
+            task_name,
+            extra={"tag": "TRAIN"},
+        )
 
         # Store current parameters
-        parameters: Dict[str, np.ndarray] = {}
+        parameters: dict[str, np.ndarray] = {}
         for name, param in self.model.named_parameters():
             if getattr(param, "requires_grad", True):
                 parameters[name] = _as_array(param).copy()
@@ -317,16 +324,25 @@ class EwcContinualLearner:
 
         self.task_snapshots[task_id] = snapshot
         total_elems = sum(int(np.prod(f.shape)) for f in fisher.values())
-        logger.info("  Parameters: %d", len(parameters),
-            extra={"tag": "TRAIN"},)
-        logger.info("  Fisher elements: %d", total_elems,
-            extra={"tag": "TRAIN"},)
-        logger.info("  Optimal loss: %.4f", optimal_loss,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "  Parameters: %d",
+            len(parameters),
+            extra={"tag": "TRAIN"},
+        )
+        logger.info(
+            "  Fisher elements: %d",
+            total_elems,
+            extra={"tag": "TRAIN"},
+        )
+        logger.info(
+            "  Optimal loss: %.4f",
+            optimal_loss,
+            extra={"tag": "TRAIN"},
+        )
 
         return snapshot
 
-    def _penalty_tensor(self, snapshot: TaskSnapshot) -> Tuple[Tensor, int]:
+    def _penalty_tensor(self, snapshot: TaskSnapshot) -> tuple[Tensor, int]:
         """Build the differentiable EWC penalty for one snapshot.
 
         Returns (penalty Tensor, number of matched parameters).
@@ -338,11 +354,11 @@ class EwcContinualLearner:
                 old_param = np.asarray(snapshot.parameters[name])
                 fisher = np.asarray(snapshot.fisher_diagonal[name])
                 diff = param - old_param
-                penalty = penalty + (fisher * (diff ** 2)).sum()
+                penalty = penalty + (fisher * (diff**2)).sum()
                 param_count += 1
         return penalty, param_count
 
-    def ewc_loss(self, task_id: Optional[str] = None) -> Tuple[Tensor, Dict[str, float]]:
+    def ewc_loss(self, task_id: str | None = None) -> tuple[Tensor, dict[str, float]]:
         """
         Calculate EWC regularization loss.
 
@@ -372,7 +388,7 @@ class EwcContinualLearner:
 
         return scaled_loss, stats
 
-    def multi_task_ewc_loss(self) -> Tuple[Tensor, Dict[str, float]]:
+    def multi_task_ewc_loss(self) -> tuple[Tensor, dict[str, float]]:
         """
         Calculate EWC loss for all previous tasks.
 
@@ -386,7 +402,7 @@ class EwcContinualLearner:
         total_loss = Tensor(np.zeros(1))
         total_params = 0
 
-        for task_id, snapshot in self.task_snapshots.items():
+        for _task_id, snapshot in self.task_snapshots.items():
             task_penalty, task_params = self._penalty_tensor(snapshot)
             total_params += task_params
 
@@ -407,8 +423,8 @@ class EwcContinualLearner:
         self,
         batch,
         loss_fn: Callable,
-        task_id: Optional[str] = None,
-    ) -> Tuple[Tensor, Dict[str, Any]]:
+        task_id: str | None = None,
+    ) -> tuple[Tensor, dict[str, Any]]:
         """
         Forward pass with EWC loss.
 
@@ -442,7 +458,7 @@ class EwcContinualLearner:
     def prune_consolidation(
         self,
         top_k_percent: float = 10.0,
-    ) -> Dict[str, int]:
+    ) -> dict[str, int]:
         """
         Identify which parameters to protect most.
 
@@ -452,7 +468,7 @@ class EwcContinualLearner:
             return {}
 
         # Average Fisher across tasks
-        avg_fisher: Dict[str, np.ndarray] = {}
+        avg_fisher: dict[str, np.ndarray] = {}
         state_keys = set()
         if hasattr(self.model, "state_dict"):
             state_keys = set(self.model.state_dict().keys())
@@ -465,27 +481,31 @@ class EwcContinualLearner:
                 avg_fisher[name] = np.mean(fisher_values, axis=0)
 
         # Find top K% important parameters
-        important: Dict[str, int] = {}
+        important: dict[str, int] = {}
         all_fishers = list(avg_fisher.values())
         for name, fisher in avg_fisher.items():
-            total_params = int(np.prod(fisher.shape)) if hasattr(fisher, 'shape') else 1
+            total_params = int(np.prod(fisher.shape)) if hasattr(fisher, "shape") else 1
             if total_params > 1:
                 threshold = np.percentile(fisher.flatten(), 100 - top_k_percent)
                 important[name] = int((fisher > threshold).sum())
             else:
-                flat_all = np.concatenate([f.flatten() for f in all_fishers]) if all_fishers else np.array([0.0])
+                flat_all = (
+                    np.concatenate([f.flatten() for f in all_fishers])
+                    if all_fishers
+                    else np.array([0.0])
+                )
                 important[name] = 1 if fisher > np.percentile(flat_all, 100 - top_k_percent) else 0
 
         return important
 
-    def estimate_forgetting(self) -> Dict[str, float]:
+    def estimate_forgetting(self) -> dict[str, float]:
         """
         Estimate how much each previous task is being forgotten.
         """
         if not self.task_snapshots:
             return {}
 
-        forgetting: Dict[str, float] = {}
+        forgetting: dict[str, float] = {}
 
         for task_id, snapshot in self.task_snapshots.items():
             loss_increase = 0.0
@@ -494,7 +514,9 @@ class EwcContinualLearner:
             for name, param in self.model.named_parameters():
                 if name in snapshot.parameters:
                     old_param = np.asarray(snapshot.parameters[name])
-                    fisher = np.asarray(snapshot.fisher_diagonal.get(name, np.ones_like(_as_array(param))))
+                    fisher = np.asarray(
+                        snapshot.fisher_diagonal.get(name, np.ones_like(_as_array(param)))
+                    )
 
                     # Distance in Fisher-scaled space
                     diff = (_as_array(param) - old_param) ** 2

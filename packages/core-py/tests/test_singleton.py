@@ -3,7 +3,7 @@
 import threading
 import time
 
-from domain.infrastructure._internal.singleton import make_singleton, SingletonMeta
+from domain.infrastructure._internal.singleton import SingletonMeta, make_singleton
 
 
 class TestMakeSingleton:
@@ -349,7 +349,7 @@ class TestSingletonMeta:
             def helper():
                 return 42
 
-        obj = WithStatic()
+        WithStatic()
         assert WithStatic.helper() == 42
 
     def test_class_with_del(self):
@@ -358,6 +358,7 @@ class TestSingletonMeta:
         class WithDel(metaclass=SingletonMeta):
             def __init__(self, v):
                 self.v = v
+
             def __del__(self):
                 deleted.append(self.v)
 
@@ -464,6 +465,7 @@ class TestSingletonMeta:
         class Contextual(metaclass=SingletonMeta):
             def __enter__(self):
                 return self
+
             def __exit__(self, *args):
                 pass
 
@@ -527,6 +529,7 @@ class TestSingletonMeta:
     def test_class_with_slots(self):
         class Slotted(metaclass=SingletonMeta):
             __slots__ = ("val",)
+
             def __init__(self, val):
                 self.val = val
 
@@ -558,6 +561,7 @@ class TestSingletonMeta:
         class Iterable(metaclass=SingletonMeta):
             def __init__(self):
                 self.items = [1, 2, 3]
+
             def __iter__(self):
                 return iter(self.items)
 
@@ -571,6 +575,7 @@ class TestSingletonMeta:
         class Sized(metaclass=SingletonMeta):
             def __init__(self):
                 self.data = [1, 2, 3, 4, 5]
+
             def __len__(self):
                 return len(self.data)
 
@@ -583,6 +588,7 @@ class TestSingletonMeta:
         class Subscriptable(metaclass=SingletonMeta):
             def __init__(self):
                 self.data = {"a": 1, "b": 2}
+
             def __getitem__(self, key):
                 return self.data[key]
 
@@ -596,6 +602,7 @@ class TestSingletonMeta:
         class Callable(metaclass=SingletonMeta):
             def __init__(self):
                 self.call_count = 0
+
             def __call__(self, x):
                 self.call_count += 1
                 return x * 2

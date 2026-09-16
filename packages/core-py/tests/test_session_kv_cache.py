@@ -1,8 +1,10 @@
 """Tests for domain.infrastructure.model_server — SessionKVCache."""
 
-import time
 import threading
+import time
+
 import pytest
+
 from domain.infrastructure._internal.model_server import SessionKVCache
 
 
@@ -199,8 +201,8 @@ class TestSessionKVCache:
 
     def test_concurrent_get_store(self):
         import threading
+
         skc = SessionKVCache()
-        results = []
 
         def writer():
             for i in range(50):
@@ -287,6 +289,7 @@ class TestSessionKVCache:
 
     def test_size_thread_safe(self):
         import threading
+
         skc = SessionKVCache(max_sessions=100)
         errors = []
 

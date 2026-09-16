@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
+from schemas.common import endpoint, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.world_render")
 
@@ -111,8 +111,9 @@ class WorldRenderRouter:
         import io
 
         import numpy as np
-        from domain.shell._internal.world_render import RenderBridge, RenderConfig
         from PIL import Image
+
+        from domain.shell._internal.world_render import RenderBridge, RenderConfig
 
         cfg = RenderConfig(
             width=config.width if config else 160,

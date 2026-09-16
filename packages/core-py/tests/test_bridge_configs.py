@@ -1,15 +1,15 @@
 """Tests for domain.collections._internal.training_bridge — TrainingDataConfig, TrainingDataAdapter; domain.collections._internal.world_bridge — WorldFeedConfig, RecordToWorldMapper."""
 
 import numpy as np
-import pytest
+
 from domain.collections._internal.sources import Record
-from domain.collections._internal.training_bridge import TrainingDataConfig, TrainingDataAdapter
+from domain.collections._internal.training_bridge import TrainingDataAdapter, TrainingDataConfig
 from domain.collections._internal.world_bridge import (
-    WorldFeedConfig,
-    RecordToWorldMapper,
-    MATERIAL_SIGNAL,
     MATERIAL_FOOD,
+    MATERIAL_SIGNAL,
     MATERIAL_TOXIC,
+    RecordToWorldMapper,
+    WorldFeedConfig,
 )
 
 
@@ -74,8 +74,13 @@ class TestTrainingDataConfigCustom:
 
     def test_all_custom(self):
         tdc = TrainingDataConfig(
-            block_size=32, separator=";", include_metadata=True,
-            max_records=10, deduplicate=False, min_length=1, max_length=100,
+            block_size=32,
+            separator=";",
+            include_metadata=True,
+            max_records=10,
+            deduplicate=False,
+            min_length=1,
+            max_length=100,
         )
         assert tdc.block_size == 32
         assert tdc.separator == ";"
@@ -230,8 +235,12 @@ class TestWorldFeedConfigCustom:
 
     def test_all_custom(self):
         wfc = WorldFeedConfig(
-            grid_size=(10, 10, 10), energy_scale=2.5, temperature_scale=0.5,
-            signal_scale=1.5, feed_radius=20, max_records=200,
+            grid_size=(10, 10, 10),
+            energy_scale=2.5,
+            temperature_scale=0.5,
+            signal_scale=1.5,
+            feed_radius=20,
+            max_records=200,
         )
         assert wfc.grid_size == (10, 10, 10)
         assert wfc.energy_scale == 2.5

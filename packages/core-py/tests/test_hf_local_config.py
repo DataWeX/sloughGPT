@@ -2,8 +2,8 @@
 
 from domain.training._internal.huggingface.local_loader import (
     HFLocalConfig,
-    HuggingFaceLocalLoader,
     HuggingFaceLocalClient,
+    HuggingFaceLocalLoader,
 )
 
 
@@ -54,15 +54,27 @@ class TestHFLocalConfigDefaults:
 
     def test_field_count(self):
         import dataclasses
+
         fields = [f.name for f in dataclasses.fields(HFLocalConfig)]
         assert len(fields) == 11
 
     def test_field_names(self):
         import dataclasses
+
         names = {f.name for f in dataclasses.fields(HFLocalConfig)}
-        expected = {"model", "device", "dtype", "load_in_8bit", "load_in_4bit",
-                    "cache_dir", "local_files_only", "max_new_tokens",
-                    "temperature", "top_p", "repetition_penalty"}
+        expected = {
+            "model",
+            "device",
+            "dtype",
+            "load_in_8bit",
+            "load_in_4bit",
+            "cache_dir",
+            "local_files_only",
+            "max_new_tokens",
+            "temperature",
+            "top_p",
+            "repetition_penalty",
+        }
         assert names == expected
 
 
@@ -272,6 +284,7 @@ class TestHFLocalConfigEdgeCases:
 
     def test_copy_semantics(self):
         import dataclasses
+
         a = HFLocalConfig(model="gpt2", device="cuda", temperature=0.7)
         b = dataclasses.replace(a, device="cpu")
         assert a.device == "cuda"
@@ -280,10 +293,15 @@ class TestHFLocalConfigEdgeCases:
 
     def test_copy_preserves_all_fields(self):
         import dataclasses
+
         a = HFLocalConfig(
-            model="llama", device="cuda", dtype="float16",
-            load_in_4bit=True, cache_dir="/cache",
-            temperature=0.1, max_new_tokens=512,
+            model="llama",
+            device="cuda",
+            dtype="float16",
+            load_in_4bit=True,
+            cache_dir="/cache",
+            temperature=0.1,
+            max_new_tokens=512,
         )
         b = dataclasses.replace(a, model="mistral")
         assert b.model == "mistral"
@@ -368,7 +386,7 @@ class TestHFLocalLoaderInteraction:
         loader = HuggingFaceLocalLoader(cfg)
         try:
             loader.generate("hello")
-            assert False, "Should have raised RuntimeError"
+            raise AssertionError("Should have raised RuntimeError")
         except RuntimeError as e:
             assert "not loaded" in str(e)
 

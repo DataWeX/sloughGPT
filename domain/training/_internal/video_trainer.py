@@ -17,14 +17,19 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import numpy as np
 
 from domain.shared import find_repo_root
 from domain.training._internal.slonet import (
+    SloAdam,
     Tensor,
-    SloAdam, cross_entropy as _cross_entropy, tensor as _tensor,
+)
+from domain.training._internal.slonet import (
+    cross_entropy as _cross_entropy,
+)
+from domain.training._internal.slonet import (
+    tensor as _tensor,
 )
 
 logger = logging.getLogger("slo.video_trainer")
@@ -67,8 +72,8 @@ class VideoCaptionTrainer:
         self.max_seq_len = max_seq_len
         self.lr = lr
 
+        from domain.multimodal._internal.engine import SloTransformerDecoder, VisionEncoder
         from domain.multimodal._internal.video import TemporalEncoder
-        from domain.multimodal._internal.engine import VisionEncoder, SloTransformerDecoder
 
         self.vision_encoder = VisionEncoder(embed_dim, n_heads, n_vision_layers)
         self.temporal_encoder = TemporalEncoder(embed_dim, n_heads, n_temporal_layers, max_frames)
@@ -86,10 +91,10 @@ class VideoCaptionTrainer:
         self.decoder_optimizer = SloAdam(lr=lr)
 
         self._trained = False
-        self._vocab: Dict[str, int] = {}
-        self._rev_vocab: Dict[int, str] = {}
+        self._vocab: dict[str, int] = {}
+        self._rev_vocab: dict[int, str] = {}
 
-    def build_vocab(self, captions: List[str]):
+    def build_vocab(self, captions: list[str]):
         """Build character-level vocabulary from training captions."""
         chars = set()
         for c in captions:
@@ -101,10 +106,13 @@ class VideoCaptionTrainer:
         self._vocab["<EOS>"] = len(self._vocab)
         self._rev_vocab = {v: k for k, v in self._vocab.items()}
         self.decoder.vocab_size = max(1, len(self._vocab))
-        logger.info("Built vocab: %d tokens", len(self._vocab),
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Built vocab: %d tokens",
+            len(self._vocab),
+            extra={"tag": "TRAIN"},
+        )
 
-    def encode_text(self, text: str) -> List[int]:
+    def encode_text(self, text: str) -> list[int]:
         """Encode text to token IDs."""
         tokens = [self._vocab.get("<BOS>", 1)]
         for ch in text:
@@ -112,7 +120,7 @@ class VideoCaptionTrainer:
         tokens.append(self._vocab.get("<EOS>", len(self._vocab) - 1))
         return tokens
 
-    def decode_text(self, token_ids: List[int]) -> str:
+    def decode_text(self, token_ids: list[int]) -> str:
         """Decode token IDs back to text."""
         chars = []
         for tid in token_ids:
@@ -123,7 +131,7 @@ class VideoCaptionTrainer:
             chars.append(self._rev_vocab.get(tid, ""))
         return "".join(chars)
 
-    def load_dataset(self, data_path: str) -> List[Dict[str, str]]:
+    def load_dataset(self, data_path: str) -> list[dict[str, str]]:
         """Load JSONL dataset with video_path and caption fields."""
         path = Path(data_path)
         if not path.exists():
@@ -136,21 +144,29 @@ class VideoCaptionTrainer:
                     continue
                 entry = json.loads(line)
                 if "video_path" not in entry or "caption" not in entry:
-                    logger.warning("Skipping entry missing video_path or caption: %s", line[:80],
-                        extra={"tag": "TRAIN"},)
+                    logger.warning(
+                        "Skipping entry missing video_path or caption: %s",
+                        line[:80],
+                        extra={"tag": "TRAIN"},
+                    )
                     continue
                 entries.append(entry)
-        logger.info("Loaded %d video-caption pairs from %s", len(entries), data_path,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Loaded %d video-caption pairs from %s",
+            len(entries),
+            data_path,
+            extra={"tag": "TRAIN"},
+        )
         return entries
 
-    def _extract_frames(self, video_path: str) -> Optional[np.ndarray]:
+    def _extract_frames(self, video_path: str) -> np.ndarray | None:
         """Extract uniformly spaced frames from a video file.
 
         Returns (1, N, 224, 224, 3) or None on failure.
         """
         try:
             from domain.multimodal._internal.video import VideoProcessor
+
             proc = VideoProcessor(max_frames=self.max_frames)
             frames = proc.extract_frames(video_path, self.max_frames)
             if not frames:
@@ -158,8 +174,12 @@ class VideoCaptionTrainer:
             stacked = np.stack(frames, axis=0)  # (N, 224, 224, 3)
             return stacked.reshape(1, *stacked.shape)  # (1, N, 224, 224, 3)
         except Exception as e:
-            logger.warning("Failed to extract frames from %s: %s", video_path, e,
-                extra={"tag": "TRAIN"},)
+            logger.warning(
+                "Failed to extract frames from %s: %s",
+                video_path,
+                e,
+                extra={"tag": "TRAIN"},
+            )
             return None
 
     def _encode_video(self, frames_np: np.ndarray) -> Tensor:
@@ -191,10 +211,10 @@ class VideoCaptionTrainer:
         data_path: str,
         epochs: int = 5,
         batch_size: int = 2,
-        lr: Optional[float] = None,
-        output_dir: Optional[str] = None,
+        lr: float | None = None,
+        output_dir: str | None = None,
         progress_callback=None,
-    ) -> Dict:
+    ) -> dict:
         """Train the video captioning model on a JSONL dataset.
 
         Args:
@@ -226,8 +246,12 @@ class VideoCaptionTrainer:
         output_dir = Path(output_dir) if output_dir else DEFAULT_OUTPUT_DIR
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info("Starting video training: %d entries, %d epochs", len(entries), epochs,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Starting video training: %d entries, %d epochs",
+            len(entries),
+            epochs,
+            extra={"tag": "TRAIN"},
+        )
         t0 = time.time()
 
         for epoch in range(epochs):
@@ -235,7 +259,7 @@ class VideoCaptionTrainer:
             epoch_losses = []
 
             for i in range(0, len(entries), batch_size):
-                batch = entries[i:i + batch_size]
+                batch = entries[i : i + batch_size]
                 step += 1
 
                 batch_loss = 0.0
@@ -244,13 +268,16 @@ class VideoCaptionTrainer:
                 for entry in batch:
                     frames = self._extract_frames(entry["video_path"])
                     if frames is None:
-                        logger.warning("Skipping video: %s", entry["video_path"],
-                            extra={"tag": "TRAIN"},)
+                        logger.warning(
+                            "Skipping video: %s",
+                            entry["video_path"],
+                            extra={"tag": "TRAIN"},
+                        )
                         continue
 
                     video_embed = self._encode_video(frames)
                     text_tokens = self.encode_text(entry["caption"])
-                    token_ids = np.array([text_tokens[:self.max_seq_len - 1]], dtype=np.int64)
+                    token_ids = np.array([text_tokens[: self.max_seq_len - 1]], dtype=np.int64)
                     inp = _tensor(token_ids, requires_grad=False)
 
                     logits, _ = self.decoder.forward(video_embed, inp, None)
@@ -281,18 +308,29 @@ class VideoCaptionTrainer:
                 if step % 10 == 0:
                     logger.info(
                         "Epoch %d/%d step %d/%d loss=%.4f (%.1fs)",
-                        epoch + 1, epochs, step, total_steps, avg_loss,
+                        epoch + 1,
+                        epochs,
+                        step,
+                        total_steps,
+                        avg_loss,
                         time.time() - t0,
                         extra={"tag": "TRAIN"},
                     )
 
             epoch_avg = np.mean(epoch_losses) if epoch_losses else float("inf")
-            logger.info("Epoch %d/%d complete — avg loss: %.4f", epoch + 1, epochs, epoch_avg,
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "Epoch %d/%d complete — avg loss: %.4f",
+                epoch + 1,
+                epochs,
+                epoch_avg,
+                extra={"tag": "TRAIN"},
+            )
 
             if epoch_avg < best_loss:
                 best_loss = epoch_avg
-                self._save_checkpoint(output_dir / "checkpoints", f"epoch_{epoch + 1}", epoch + 1, step, epoch_avg)
+                self._save_checkpoint(
+                    output_dir / "checkpoints", f"epoch_{epoch + 1}", epoch + 1, step, epoch_avg
+                )
 
         elapsed = time.time() - t0
         self._trained = True
@@ -311,8 +349,12 @@ class VideoCaptionTrainer:
 
         self._save_checkpoint(output_dir / "checkpoints", "final", epochs, step, best_loss)
 
-        logger.info("Video training complete in %.1fs: %s", elapsed, result["status"],
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Video training complete in %.1fs: %s",
+            elapsed,
+            result["status"],
+            extra={"tag": "TRAIN"},
+        )
         return result
 
     def _all_params(self):
@@ -339,19 +381,27 @@ class VideoCaptionTrainer:
 
         meta_path = checkpoint_dir / f"{name}_meta.json"
         with open(meta_path, "w") as f:
-            json.dump({
-                "name": name,
-                "epoch": epoch,
-                "step": step,
-                "loss": loss,
-                "vocab_size": len(self._vocab),
-                "embed_dim": self.embed_dim,
-                "hidden_dim": self.hidden_dim,
-                "max_frames": self.max_frames,
-            }, f)
+            json.dump(
+                {
+                    "name": name,
+                    "epoch": epoch,
+                    "step": step,
+                    "loss": loss,
+                    "vocab_size": len(self._vocab),
+                    "embed_dim": self.embed_dim,
+                    "hidden_dim": self.hidden_dim,
+                    "max_frames": self.max_frames,
+                },
+                f,
+            )
 
-        logger.info("Checkpoint saved: %s (loss=%.4f, step=%d)", ckpt_path, loss, step,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Checkpoint saved: %s (loss=%.4f, step=%d)",
+            ckpt_path,
+            loss,
+            step,
+            extra={"tag": "TRAIN"},
+        )
 
     def load_checkpoint(self, path: str):
         """Load training checkpoint."""
@@ -363,7 +413,7 @@ class VideoCaptionTrainer:
 
         vocab_keys = ckpt["vocab_keys"].tolist()
         vocab_vals = ckpt["vocab_vals"].tolist()
-        self._vocab = dict(zip(vocab_keys, vocab_vals))
+        self._vocab = dict(zip(vocab_keys, vocab_vals, strict=False))
         self._rev_vocab = {v: k for k, v in self._vocab.items()}
         self.decoder.vocab_size = max(1, len(self._vocab))
 
@@ -374,8 +424,12 @@ class VideoCaptionTrainer:
                 p.data = ckpt[key].copy()
 
         self._trained = True
-        logger.info("Checkpoint loaded: %s (%d params)", path, len(params),
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Checkpoint loaded: %s (%d params)",
+            path,
+            len(params),
+            extra={"tag": "TRAIN"},
+        )
 
     def generate(self, video_path: str, max_len: int = 50, temperature: float = 0.8) -> str:
         """Generate a caption for a video.
@@ -420,7 +474,7 @@ class VideoCaptionTrainer:
         return self.decode_text(tokens)
 
 
-def list_video_checkpoints(base_dir: Optional[str] = None) -> List[Dict]:
+def list_video_checkpoints(base_dir: str | None = None) -> list[dict]:
     """List all saved video training checkpoints."""
     ckpt_dir = Path(base_dir) / "checkpoints" if base_dir else CHECKPOINT_DIR
     if not ckpt_dir.exists():
@@ -433,15 +487,17 @@ def list_video_checkpoints(base_dir: Optional[str] = None) -> List[Dict]:
                 meta = json.load(f)
             npz_path = ckpt_dir / (meta_file.stem.replace("_meta", "") + ".npz")
             size_mb = round(npz_path.stat().st_size / (1024 * 1024), 3) if npz_path.exists() else 0
-            checkpoints.append({
-                "name": meta.get("name", meta_file.stem.replace("_meta", "")),
-                "path": str(npz_path),
-                "size_mb": size_mb,
-                "epoch": meta.get("epoch", 0),
-                "step": meta.get("step", 0),
-                "loss": meta.get("loss"),
-                "vocab_size": meta.get("vocab_size", 0),
-            })
+            checkpoints.append(
+                {
+                    "name": meta.get("name", meta_file.stem.replace("_meta", "")),
+                    "path": str(npz_path),
+                    "size_mb": size_mb,
+                    "epoch": meta.get("epoch", 0),
+                    "step": meta.get("step", 0),
+                    "loss": meta.get("loss"),
+                    "vocab_size": meta.get("vocab_size", 0),
+                }
+            )
         except Exception:
             continue
     return checkpoints

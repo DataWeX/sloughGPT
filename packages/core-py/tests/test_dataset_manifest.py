@@ -11,7 +11,6 @@ from domain.training._internal.dataset_manifest import (
     resolve_training_data_path,
 )
 
-
 MINIMAL_MANIFEST = {
     "schema_version": "1.0",
     "dataset_id": "shakespeare",

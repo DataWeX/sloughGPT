@@ -9,16 +9,16 @@ Supports:
   - Centroid int8: quantize centroids to int8 for better ratio
   - Function fitting (periodic, linear, polynomial) with residual storage
 """
+
 from __future__ import annotations
 
 import heapq
 from collections import Counter
-from typing import Dict, Optional, Tuple
 
 import numpy as np
 
-from .point import Point
 from .config import CompressorConfig
+from .point import Point
 
 
 class HuffmanTree:
@@ -28,20 +28,22 @@ class HuffmanTree:
     bitstream, and decodes back to the original array.
     """
 
-    __slots__ = ('codes', 'tree')
+    __slots__ = ("codes", "tree")
 
     class _Node:
-        __slots__ = ('symbol', 'freq', 'left', 'right')
+        __slots__ = ("symbol", "freq", "left", "right")
+
         def __init__(self, symbol=None, freq=0, left=None, right=None):
             self.symbol = symbol
             self.freq = freq
             self.left = left
             self.right = right
+
         def __lt__(self, other):
             return self.freq < other.freq
 
     @classmethod
-    def build(cls, data: np.ndarray) -> "HuffmanTree":
+    def build(cls, data: np.ndarray) -> HuffmanTree:
         """Build Huffman tree from uint8 array."""
         freq = Counter(data.tolist())
         heap = [cls._Node(v, c) for v, c in freq.items()]
@@ -57,27 +59,29 @@ class HuffmanTree:
                 heapq.heappush(heap, cls._Node(None, l.freq + r.freq, l, r))
             root = heap[0]
         codes = {}
-        def _build_codes(node, prefix=''):
+
+        def _build_codes(node, prefix=""):
             if node is None:
                 return
             if node.left is None and node.right is None:
                 if node.symbol is not None:
-                    codes[node.symbol] = prefix or '0'
+                    codes[node.symbol] = prefix or "0"
                 return
-            _build_codes(node.left, prefix + '0')
-            _build_codes(node.right, prefix + '1')
+            _build_codes(node.left, prefix + "0")
+            _build_codes(node.right, prefix + "1")
+
         _build_codes(root)
         return cls(codes=codes, tree=root)
 
     @classmethod
-    def from_dict(cls, d: dict) -> "HuffmanTree":
+    def from_dict(cls, d: dict) -> HuffmanTree:
         """Reconstruct from serialized codes dict. Rebuilds tree from codes."""
         codes = {int(k): v for k, v in d.items()}
         tree = cls._Node()
         for symbol, code in codes.items():
             node = tree
             for bit in code[:-1]:
-                if bit == '0':
+                if bit == "0":
                     if node.left is None:
                         node.left = cls._Node()
                     node = node.left
@@ -86,7 +90,7 @@ class HuffmanTree:
                         node.right = cls._Node()
                     node = node.right
             # Last bit creates leaf
-            if code[-1] == '0':
+            if code[-1] == "0":
                 node.left = cls._Node(symbol=symbol)
             else:
                 node.right = cls._Node(symbol=symbol)
@@ -96,7 +100,7 @@ class HuffmanTree:
         self.codes = codes or {}
         self.tree = tree
 
-    def encode(self, data: np.ndarray) -> Tuple[bytes, int]:
+    def encode(self, data: np.ndarray) -> tuple[bytes, int]:
         """Encode uint8 array to packed bitstream.
 
         Returns:
@@ -105,19 +109,18 @@ class HuffmanTree:
         bits = []
         for val in data:
             bits.append(self.codes[val])
-        bitstring = ''.join(bits)
+        bitstring = "".join(bits)
         total_bits = len(bitstring)
         # Pad to byte boundary
         pad = (8 - total_bits % 8) % 8
-        bitstring += '0' * pad
+        bitstring += "0" * pad
         packed = bytearray()
         for i in range(0, len(bitstring), 8):
-            packed.append(int(bitstring[i:i+8], 2))
+            packed.append(int(bitstring[i : i + 8], 2))
         return bytes(packed), total_bits
 
     @staticmethod
-    def decode(packed: bytes, total_bits: int, tree: _Node,
-               n: int) -> np.ndarray:
+    def decode(packed: bytes, total_bits: int, tree: _Node, n: int) -> np.ndarray:
         """Decode packed bitstream back to uint8 array."""
         if tree is None:
             return np.zeros(n, dtype=np.uint8)
@@ -153,11 +156,16 @@ class PointCompressor:
         quantize_centroids: If True, quantize centroids to int8 when safe.
     """
 
-    def __init__(self, config: Optional[CompressorConfig] = None, *,
-                 n_clusters: int = 16, lloyd_iterations: int = 5,
-                 residual_threshold: float = 0.99,
-                 adaptive_k: bool = True,
-                 quantize_centroids: bool = True):
+    def __init__(
+        self,
+        config: CompressorConfig | None = None,
+        *,
+        n_clusters: int = 16,
+        lloyd_iterations: int = 5,
+        residual_threshold: float = 0.99,
+        adaptive_k: bool = True,
+        quantize_centroids: bool = True,
+    ):
         if config is not None:
             self.n_clusters = config.n_clusters
             self.lloyd_iterations = config.lloyd_iterations
@@ -174,8 +182,9 @@ class PointCompressor:
         self.adaptive_k = adaptive_k
         self.quantize_centroids = quantize_centroids
 
-    def compress_cluster(self, weights: np.ndarray, identity: str = "unknown",
-                        n_clusters: Optional[int] = None) -> Point:
+    def compress_cluster(
+        self, weights: np.ndarray, identity: str = "unknown", n_clusters: int | None = None
+    ) -> Point:
         """
         Compress using vector quantization (cluster-based).
 
@@ -214,7 +223,7 @@ class PointCompressor:
             sample_idx = np.random.choice(n, min(1000, n), replace=False)
             sample = flat[sample_idx]
             dists = np.min(np.abs(sample[:, None] - centroids[:i, None].T), axis=1)
-            probs = dists ** 2
+            probs = dists**2
             probs_sum = probs.sum()
             if probs_sum > 0:
                 probs /= probs_sum
@@ -224,7 +233,7 @@ class PointCompressor:
         centroids.sort()
 
         # Lloyd's refinement with early stopping
-        prev_inertia = float('inf')
+        prev_inertia = float("inf")
         for _ in range(self.lloyd_iterations):
             assignments = np.clip(np.searchsorted(centroids, flat), 0, nc - 1).astype(np.uint8)
             sums = np.bincount(assignments, weights=flat, minlength=nc)
@@ -247,15 +256,19 @@ class PointCompressor:
             if crange > 1e-12:
                 c_scale = crange / 255.0
                 c_zero_point = -cmin / c_scale
-                q_centroids = np.clip(
-                    np.round(centroids / c_scale + c_zero_point), 0, 255
-                ).astype(np.uint8)
+                q_centroids = np.clip(np.round(centroids / c_scale + c_zero_point), 0, 255).astype(
+                    np.uint8
+                )
                 recon_centroids = (q_centroids.astype(np.float32) - c_zero_point) * c_scale
                 recon_via_q = recon_centroids[assignments]
-                q_cos = float(np.dot(flat, recon_via_q) / (
-                    np.linalg.norm(flat) * np.linalg.norm(recon_via_q) + 1e-12))
-                orig_cos = float(np.dot(flat, centroids[assignments]) / (
-                    np.linalg.norm(flat) * np.linalg.norm(centroids[assignments]) + 1e-12))
+                q_cos = float(
+                    np.dot(flat, recon_via_q)
+                    / (np.linalg.norm(flat) * np.linalg.norm(recon_via_q) + 1e-12)
+                )
+                orig_cos = float(
+                    np.dot(flat, centroids[assignments])
+                    / (np.linalg.norm(flat) * np.linalg.norm(centroids[assignments]) + 1e-12)
+                )
                 if q_cos > orig_cos * 0.999:
                     centroids = q_centroids
                     centroid_scale = c_scale
@@ -347,9 +360,9 @@ class PointCompressor:
             shape=weights.shape,
         )
 
-    def compress_batch(self, weights_dict: Dict[str, np.ndarray],
-                       method: Optional[str] = None,
-                       prefix: str = "") -> Dict[str, Point]:
+    def compress_batch(
+        self, weights_dict: dict[str, np.ndarray], method: str | None = None, prefix: str = ""
+    ) -> dict[str, Point]:
         """Compress multiple weight tensors in one call.
 
         Args:
@@ -366,8 +379,9 @@ class PointCompressor:
             results[name] = self.compress(weights, identity=identity, method=method)
         return results
 
-    def compress(self, weights: np.ndarray, identity: str = "unknown",
-                method: Optional[str] = None) -> Point:
+    def compress(
+        self, weights: np.ndarray, identity: str = "unknown", method: str | None = None
+    ) -> Point:
         """Compress using specified method (defaults to self.method)."""
         if method is None:
             method = self.method
@@ -411,7 +425,7 @@ class PointCompressor:
             "function_type": point.function_type,
         }
 
-    def _fit_periodic(self, flat: np.ndarray) -> Tuple[dict, float]:
+    def _fit_periodic(self, flat: np.ndarray) -> tuple[dict, float]:
         """Fit a * cos(i) + b * sin(i) + w."""
         n = len(flat)
         i = np.arange(n, dtype=np.float32)
@@ -422,7 +436,7 @@ class PointCompressor:
         mse = np.mean((flat - fitted) ** 2)
         return {"a": float(a), "b": float(b), "w": float(w)}, mse
 
-    def _fit_linear(self, flat: np.ndarray) -> Tuple[dict, float]:
+    def _fit_linear(self, flat: np.ndarray) -> tuple[dict, float]:
         """Fit a * i + b."""
         n = len(flat)
         i = np.arange(n, dtype=np.float32)
@@ -433,7 +447,7 @@ class PointCompressor:
         mse = np.mean((flat - fitted) ** 2)
         return {"a": float(a), "b": float(b)}, mse
 
-    def _fit_polynomial(self, flat: np.ndarray) -> Tuple[dict, float]:
+    def _fit_polynomial(self, flat: np.ndarray) -> tuple[dict, float]:
         """Fit a * i^2 + b * i + c."""
         n = len(flat)
         i = np.arange(n, dtype=np.float32)
@@ -458,8 +472,7 @@ class PointCompressor:
 
     BLOCK_SIZE = 32
 
-    def compress_block_q4(self, weights: np.ndarray,
-                          identity: str = "unknown") -> Point:
+    def compress_block_q4(self, weights: np.ndarray, identity: str = "unknown") -> Point:
         """Block-wise 4-bit quantization (Q4_K style)."""
         flat = weights.flatten().astype(np.float32)
         n = len(flat)
@@ -473,7 +486,7 @@ class PointCompressor:
         bmax = blocks.max(axis=1)
         brange = np.maximum(bmax - bmin, 1e-10)
         scale = brange / 15.0
-        q = ((blocks - bmin[:, None]) / scale[:, None])
+        q = (blocks - bmin[:, None]) / scale[:, None]
         q = np.clip(np.round(q), 0, 15).astype(np.uint8)
         n_blocks * bs
         q_flat = q.ravel()
@@ -484,25 +497,36 @@ class PointCompressor:
         var = np.var(flat[:n])
         accuracy = 1.0 - mse / (var + 1e-8)
         return Point(
-            identity=identity, function_type="block_q4",
-            params={"mins": bmin.astype(np.float32), "scales": scale.astype(np.float32),
-                    "packed": packed, "n_elements": n, "n_blocks": n_blocks, "block_size": bs},
-            accuracy=float(accuracy), dtype=str(weights.dtype), shape=weights.shape,
+            identity=identity,
+            function_type="block_q4",
+            params={
+                "mins": bmin.astype(np.float32),
+                "scales": scale.astype(np.float32),
+                "packed": packed,
+                "n_elements": n,
+                "n_blocks": n_blocks,
+                "block_size": bs,
+            },
+            accuracy=float(accuracy),
+            dtype=str(weights.dtype),
+            shape=weights.shape,
         )
 
     def decompress_block_q4(self, point: Point) -> np.ndarray:
         """Decompress block_q4 Point."""
-        mins = point.params["mins"]; scales = point.params["scales"]
-        packed = point.params["packed"]; n = point.params["n_elements"]
-        n_blocks = point.params["n_blocks"]; bs = point.params["block_size"]
+        mins = point.params["mins"]
+        scales = point.params["scales"]
+        packed = point.params["packed"]
+        n = point.params["n_elements"]
+        n_blocks = point.params["n_blocks"]
+        bs = point.params["block_size"]
         unpacked = np.zeros(n_blocks * bs, dtype=np.uint8)
         unpacked[0::2] = packed & 0x0F
         unpacked[1::2] = (packed >> 4) & 0x0F
         q = unpacked.reshape(n_blocks, bs).astype(np.float32)
         return (q * scales[:, None] + mins[:, None]).ravel()[:n]
 
-    def compress_block_q8(self, weights: np.ndarray,
-                          identity: str = "unknown") -> Point:
+    def compress_block_q8(self, weights: np.ndarray, identity: str = "unknown") -> Point:
         """Block-wise 8-bit quantization."""
         flat = weights.flatten().astype(np.float32)
         n = len(flat)
@@ -512,10 +536,11 @@ class PointCompressor:
             flat = np.concatenate([flat, np.zeros(pad, dtype=np.float32)])
         n_blocks = len(flat) // bs
         blocks = flat.reshape(n_blocks, bs)
-        bmin = blocks.min(axis=1); bmax = blocks.max(axis=1)
+        bmin = blocks.min(axis=1)
+        bmax = blocks.max(axis=1)
         brange = np.maximum(bmax - bmin, 1e-10)
         scale = brange / 255.0
-        q = ((blocks - bmin[:, None]) / scale[:, None])
+        q = (blocks - bmin[:, None]) / scale[:, None]
         q = np.clip(np.round(q), 0, 255).astype(np.uint8)
         deq = q.astype(np.float32) * scale[:, None] + bmin[:, None]
         reconstructed = deq.ravel()[:n]
@@ -523,18 +548,28 @@ class PointCompressor:
         var = np.var(flat[:n])
         accuracy = 1.0 - mse / (var + 1e-8)
         return Point(
-            identity=identity, function_type="block_q8",
-            params={"mins": bmin.astype(np.float32), "scales": scale.astype(np.float32),
-                    "values": q, "n_elements": n, "n_blocks": n_blocks, "block_size": bs},
-            accuracy=float(accuracy), dtype=str(weights.dtype), shape=weights.shape,
+            identity=identity,
+            function_type="block_q8",
+            params={
+                "mins": bmin.astype(np.float32),
+                "scales": scale.astype(np.float32),
+                "values": q,
+                "n_elements": n,
+                "n_blocks": n_blocks,
+                "block_size": bs,
+            },
+            accuracy=float(accuracy),
+            dtype=str(weights.dtype),
+            shape=weights.shape,
         )
 
     def decompress_block_q8(self, point: Point) -> np.ndarray:
         """Decompress block_q8 Point."""
-        mins = point.params["mins"]; scales = point.params["scales"]
-        values = point.params["values"]; n = point.params["n_elements"]
-        n_blocks = point.params["n_blocks"]; bs = point.params["block_size"]
+        mins = point.params["mins"]
+        scales = point.params["scales"]
+        values = point.params["values"]
+        n = point.params["n_elements"]
+        n_blocks = point.params["n_blocks"]
+        bs = point.params["block_size"]
         q = values.reshape(n_blocks, bs).astype(np.float32)
         return (q * scales[:, None] + mins[:, None]).ravel()[:n]
-
-

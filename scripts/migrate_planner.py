@@ -27,7 +27,7 @@ def parse_note_file(filepath: Path) -> dict | None:
         colon = line.index(":") if ":" in line else -1
         if colon > 0:
             key = line[:colon].strip()
-            val = line[colon + 1:].strip()
+            val = line[colon + 1 :].strip()
             meta[key] = val
     tags_raw = meta.get("tags", "")
     tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else []
@@ -98,8 +98,13 @@ def migrate(repo_root: Path, dry_run: bool = False) -> dict:
                 continue
             title = note["title"]
             STATUS_MAP = {
-                "done": "done", "wip": "in_progress", "review": "review",
-                "todo": "todo", "open": "todo", "blocked": "todo", "": "todo",
+                "done": "done",
+                "wip": "in_progress",
+                "review": "review",
+                "todo": "todo",
+                "open": "todo",
+                "blocked": "todo",
+                "": "todo",
             }
             col = STATUS_MAP.get(note["status"].lower(), "todo")
 
@@ -120,27 +125,34 @@ def migrate(repo_root: Path, dry_run: bool = False) -> dict:
             else:
                 # Create new card from note
                 import re as _re
+
                 slug = title.lower().strip()
                 slug = _re.sub(r"[^\w\s-]", "", slug)
                 slug = _re.sub(r"[\s_]+", "-", slug)
                 slug = _re.sub(r"-+", "-", slug)[:60].rstrip("-")
                 now = note.get("created_at") or note.get("updated_at") or ""
-                card_id = f"{now.replace('-', '').replace(':', '').replace('T', '')[:15]}_{slug}" if now else f"migration_{slug}"
-                existing_cards.append({
-                    "id": card_id,
-                    "title": title,
-                    "description": note["body"],
-                    "column": col,
-                    "priority": "medium",
-                    "tags": note["tags"],
-                    "created_at": note["created_at"],
-                    "updated_at": note["updated_at"],
-                    "due_date": "",
-                    "assignee": "",
-                    "sprint": note["sprint"],
-                    "gh": note["gh"],
-                    "comments": [],
-                })
+                card_id = (
+                    f"{now.replace('-', '').replace(':', '').replace('T', '')[:15]}_{slug}"
+                    if now
+                    else f"migration_{slug}"
+                )
+                existing_cards.append(
+                    {
+                        "id": card_id,
+                        "title": title,
+                        "description": note["body"],
+                        "column": col,
+                        "priority": "medium",
+                        "tags": note["tags"],
+                        "created_at": note["created_at"],
+                        "updated_at": note["updated_at"],
+                        "due_date": "",
+                        "assignee": "",
+                        "sprint": note["sprint"],
+                        "gh": note["gh"],
+                        "comments": [],
+                    }
+                )
                 stats["cards_from_notes"] += 1
 
     # Write board.jsonl
@@ -171,13 +183,14 @@ def migrate(repo_root: Path, dry_run: bool = False) -> dict:
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="Migrate planner to JSONL single store")
     parser.add_argument("--repo-root", default=".", help="Repository root")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done")
     args = parser.parse_args()
 
     repo = Path(args.repo_root).resolve()
-    print(f"Migrating planner to JSONL single store...")
+    print("Migrating planner to JSONL single store...")
     print(f"  Repo root: {repo}")
 
     stats = migrate(repo, dry_run=args.dry_run)

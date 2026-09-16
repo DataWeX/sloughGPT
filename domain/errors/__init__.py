@@ -5,9 +5,9 @@ Public API:
 """
 
 from domain.errors._internal.errors import (
-    SloughGPTDomainError,
-    InvalidGenerationInputError,
     EmptyPromptError,
+    InvalidGenerationInputError,
+    SloughGPTDomainError,
     require_non_empty_prompt,
 )
 

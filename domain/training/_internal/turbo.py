@@ -27,9 +27,11 @@ logger = logging.getLogger("slo.training")
 def get_turbo_status() -> dict:
     with _turbo_lock:
         state = dict(_turbo_state)
-        if (state.get("status") == "running"
-                and state.get("last_heartbeat", 0) > 0
-                and (time.time() - state["last_heartbeat"]) > 30):
+        if (
+            state.get("status") == "running"
+            and state.get("last_heartbeat", 0) > 0
+            and (time.time() - state["last_heartbeat"]) > 30
+        ):
             state["status"] = "error"
             state["error"] = "Training process lost — no progress for 30 seconds"
             state["paused"] = False
@@ -80,26 +82,29 @@ def start_turbo_training(config: dict) -> dict:
     with _turbo_lock:
         if _turbo_state.get("status") == "running":
             raise RuntimeError("A turbo training job is already running")
-        _turbo_state.update({
-            "status": "running",
-            "job_id": job_id,
-            "global_step": 0,
-            "total_steps": 0,
-            "progress": 0.0,
-            "loss": None,
-            "learning_rate": None,
-            "steps_per_sec": None,
-            "eta_s": None,
-            "elapsed_s": None,
-            "avg_quality": None,
-            "result": None,
-            "error": None,
-            "paused": False,
-            "last_heartbeat": time.time(),
-        })
+        _turbo_state.update(
+            {
+                "status": "running",
+                "job_id": job_id,
+                "global_step": 0,
+                "total_steps": 0,
+                "progress": 0.0,
+                "loss": None,
+                "learning_rate": None,
+                "steps_per_sec": None,
+                "eta_s": None,
+                "elapsed_s": None,
+                "avg_quality": None,
+                "result": None,
+                "error": None,
+                "paused": False,
+                "last_heartbeat": time.time(),
+            }
+        )
 
     try:
         from domain.infrastructure._internal.cancel_manager import OpType, get_cancel_manager
+
         _mgr = get_cancel_manager()
         _cm_op_id = _mgr.register(
             op_type=OpType.TRAINING,
@@ -109,7 +114,9 @@ def start_turbo_training(config: dict) -> dict:
         _mgr.start(_cm_op_id)
         _turbo_state["_cm_op_id"] = _cm_op_id
     except Exception as e:
-        logger.warning("CancelManager registration failed (turbo training may be unkillable): %s", e)
+        logger.warning(
+            "CancelManager registration failed (turbo training may be unkillable): %s", e
+        )
 
     output_dir = TURBO_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -135,6 +142,7 @@ def start_turbo_training(config: dict) -> dict:
         "experiment_id": experiment_id,
     }
     from domain.training._internal.runtime_protocol import get_training_runtime
+
     get_training_runtime().register(job_id, runtime_job, cancel_event, config)
 
     return {
@@ -159,6 +167,7 @@ def run_turbo_worker(config: dict) -> None:
         if op_id:
             try:
                 from domain.infrastructure._internal.cancel_manager import get_cancel_manager
+
                 get_cancel_manager().finish(op_id, error=error if status != "completed" else "")
             except Exception as exc:
                 logger.debug("CancelManager.finish failed: %s", exc)
@@ -223,7 +232,9 @@ def run_turbo_worker(config: dict) -> None:
 
         logger.info(
             "Starting SloughGPTTrainer with method=%s data=%s resume=%s",
-            config.get("method"), data_path, resume,
+            config.get("method"),
+            data_path,
+            resume,
         )
         _train_t0 = time.monotonic()
         result = trainer.train(

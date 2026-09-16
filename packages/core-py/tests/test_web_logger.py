@@ -26,7 +26,6 @@ def _record(
 
 
 class TestConstruction:
-
     def test_defaults(self):
         log = WebLogger("slo.web")
         assert log.name == "slo.web"
@@ -35,7 +34,6 @@ class TestConstruction:
 
 
 class TestSerialization:
-
     def test_record_to_dict_basic(self):
         log = WebLogger("slo.web")
         d = log._record_to_dict(_record(message="msg", context={"a": 1}))
@@ -76,7 +74,6 @@ class TestSerialization:
 
 
 class TestEmit:
-
     def test_console_delegation(self):
         calls = []
 
@@ -165,7 +162,6 @@ class TestEmit:
 
 
 class TestFormatBrief:
-
     def test_brief_format(self):
         log = WebLogger("slo.web")
         out = log._format_brief(_record(message="hi", context={"a": 1}))

@@ -3,13 +3,14 @@ Tests for the Mobile BFF router — dashboard, conversations, models, knowledge,
 notifications, training, sync.
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from apps.api.server.routers.mobile import MobileRouter
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
+from apps.api.server.routers.mobile import MobileRouter
 
 
 @pytest.fixture
@@ -53,10 +54,36 @@ class TestMobileDashboard:
     """GET /mobile/dashboard"""
 
     def test_returns_dashboard_data(self, client):
-        with patch.object(MobileRouter, "_get_health_data", return_value={"status": "healthy", "model_type": "gpt2", "model_loaded": True, "inference_count": 5}), \
-             patch.object(MobileRouter, "_get_current_soul", return_value={"name": "sage", "description": "A wise soul"}), \
-             patch.object(MobileRouter, "_get_sessions_list", return_value=[{"id": "s1", "title": "Chat", "messages": [{"content": "hi"}], "updated_at": "2026-01-01"}]), \
-             patch.object(MobileRouter, "_get_models_list", return_value=[{"model_id": "gpt2"}]):
+        with (
+            patch.object(
+                MobileRouter,
+                "_get_health_data",
+                return_value={
+                    "status": "healthy",
+                    "model_type": "gpt2",
+                    "model_loaded": True,
+                    "inference_count": 5,
+                },
+            ),
+            patch.object(
+                MobileRouter,
+                "_get_current_soul",
+                return_value={"name": "sage", "description": "A wise soul"},
+            ),
+            patch.object(
+                MobileRouter,
+                "_get_sessions_list",
+                return_value=[
+                    {
+                        "id": "s1",
+                        "title": "Chat",
+                        "messages": [{"content": "hi"}],
+                        "updated_at": "2026-01-01",
+                    }
+                ],
+            ),
+            patch.object(MobileRouter, "_get_models_list", return_value=[{"model_id": "gpt2"}]),
+        ):
             resp = client.get("/mobile/dashboard")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -73,10 +100,21 @@ class TestMobileConversations:
     """GET /mobile/conversations"""
 
     def test_returns_conversation_list(self, client):
-        with patch.object(MobileRouter, "_get_sessions_list", return_value=[
-            {"id": "s1", "title": "Chat 1", "messages": [{"content": "hello"}],
-             "updated_at": "2026-01-01", "created_at": "2026-01-01", "starred": False, "pinned": False},
-        ]):
+        with patch.object(
+            MobileRouter,
+            "_get_sessions_list",
+            return_value=[
+                {
+                    "id": "s1",
+                    "title": "Chat 1",
+                    "messages": [{"content": "hello"}],
+                    "updated_at": "2026-01-01",
+                    "created_at": "2026-01-01",
+                    "starred": False,
+                    "pinned": False,
+                },
+            ],
+        ):
             resp = client.get("/mobile/conversations")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -91,7 +129,9 @@ class TestMobileConversationDetail:
     """GET /mobile/conversations/{session_id}"""
 
     def test_returns_conversation(self, client):
-        with patch.object(MobileRouter, "_get_session_messages", return_value=[{"role": "user", "content": "hi"}]):
+        with patch.object(
+            MobileRouter, "_get_session_messages", return_value=[{"role": "user", "content": "hi"}]
+        ):
             resp = client.get("/mobile/conversations/s1")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -106,11 +146,19 @@ class TestMobileModels:
     """GET /mobile/models"""
 
     def test_returns_model_list(self, client):
-        with patch.object(MobileRouter, "_get_models_list", return_value=[{"model_id": "gpt2", "name": "GPT-2", "loaded": True, "source": "local"}]), \
-             patch.object(MobileRouter, "_get_current_soul", return_value={"name": "sage"}), \
-             patch.object(MobileRouter, "_get_souls", return_value=[{"name": "sage"}]), \
-             patch.object(MobileRouter, "_get_checkpoints", return_value=[]), \
-             patch.object(MobileRouter, "_get_health_data", return_value={"model_type": "gpt2"}):
+        with (
+            patch.object(
+                MobileRouter,
+                "_get_models_list",
+                return_value=[
+                    {"model_id": "gpt2", "name": "GPT-2", "loaded": True, "source": "local"}
+                ],
+            ),
+            patch.object(MobileRouter, "_get_current_soul", return_value={"name": "sage"}),
+            patch.object(MobileRouter, "_get_souls", return_value=[{"name": "sage"}]),
+            patch.object(MobileRouter, "_get_checkpoints", return_value=[]),
+            patch.object(MobileRouter, "_get_health_data", return_value={"model_type": "gpt2"}),
+        ):
             resp = client.get("/mobile/models")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -126,9 +174,11 @@ class TestMobileSwitchModel:
     """POST /mobile/models/switch"""
 
     def test_switch_with_valid_body(self, client):
-        with patch.object(MobileRouter, "_load_model", return_value=None), \
-             patch.object(MobileRouter, "_switch_soul", return_value=None), \
-             patch.object(MobileRouter, "_get_health_data", return_value={"model_type": "gpt2"}):
+        with (
+            patch.object(MobileRouter, "_load_model", return_value=None),
+            patch.object(MobileRouter, "_switch_soul", return_value=None),
+            patch.object(MobileRouter, "_get_health_data", return_value={"model_type": "gpt2"}),
+        ):
             resp = client.post("/mobile/models/switch", json={"soul_name": "sage"})
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -147,15 +197,21 @@ class TestMobileHealth:
     """GET /mobile/health"""
 
     def test_returns_health_data(self, client):
-        detailed = {"status": "healthy", "model_type": "gpt2", "model_loaded": True,
-                    "uptime_seconds": 100, "system": {"cpu_percent": 50.0, "memory_percent": 60.0,
-                                                      "memory_available_mb": 8192},
-                    "inference": {"inference_count": 10}}
+        detailed = {
+            "status": "healthy",
+            "model_type": "gpt2",
+            "model_loaded": True,
+            "uptime_seconds": 100,
+            "system": {"cpu_percent": 50.0, "memory_percent": 60.0, "memory_available_mb": 8192},
+            "inference": {"inference_count": 10},
+        }
         metrics = {"cpu_percent": 50.0, "memory_percent": 60.0}
         disk = {"used_gb": 1.0, "free_gb": 2.0}
-        with patch.object(MobileRouter, "_get_detailed_health", return_value=detailed), \
-             patch.object(MobileRouter, "_get_system_metrics", return_value=metrics), \
-             patch.object(MobileRouter, "_get_disk_info", return_value=disk):
+        with (
+            patch.object(MobileRouter, "_get_detailed_health", return_value=detailed),
+            patch.object(MobileRouter, "_get_system_metrics", return_value=metrics),
+            patch.object(MobileRouter, "_get_disk_info", return_value=disk),
+        ):
             resp = client.get("/mobile/health")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -171,7 +227,11 @@ class TestMobileKnowledge:
     """GET /mobile/knowledge"""
 
     def test_returns_knowledge_list(self, client):
-        with patch.object(MobileRouter, "_get_knowledge_items", return_value=[{"id": "k1", "content": "fact", "topic": "general", "importance": 0.8}]):
+        with patch.object(
+            MobileRouter,
+            "_get_knowledge_items",
+            return_value=[{"id": "k1", "content": "fact", "topic": "general", "importance": 0.8}],
+        ):
             resp = client.get("/mobile/knowledge")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -187,13 +247,19 @@ class TestMobileKnowledgeCreate:
 
     def test_creates_knowledge_item(self, client):
         with patch.object(MobileRouter, "_create_knowledge_item", return_value="k2"):
-            resp = client.post("/mobile/knowledge", json={"content": "new fact", "topic": "science"})
+            resp = client.post(
+                "/mobile/knowledge", json={"content": "new fact", "topic": "science"}
+            )
             assert resp.status_code == 200
             body = resp.json()["data"]
             assert body["content"] == "new fact"
 
     def test_empty_content_returns_error(self, client):
-        with patch.object(MobileRouter, "_create_knowledge_item", side_effect=Exception("Failed to create knowledge")):
+        with patch.object(
+            MobileRouter,
+            "_create_knowledge_item",
+            side_effect=Exception("Failed to create knowledge"),
+        ):
             resp = client.post("/mobile/knowledge", json={"content": ""})
             assert resp.status_code == 400
             body = resp.json()
@@ -207,7 +273,11 @@ class TestMobileSyncStatus:
     """GET /mobile/sync/status"""
 
     def test_returns_sync_status(self, client):
-        with patch.object(MobileRouter, "_get_health_data", return_value={"status": "healthy", "model_loaded": True, "inference_count": 10}):
+        with patch.object(
+            MobileRouter,
+            "_get_health_data",
+            return_value={"status": "healthy", "model_loaded": True, "inference_count": 10},
+        ):
             resp = client.get("/mobile/sync/status")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -225,9 +295,14 @@ class TestMobileNotificationsRegister:
         svc = MagicMock()
         svc.register_device.return_value = {"status": "registered"}
         mock_get_svc.return_value = svc
-        resp = client.post("/mobile/notifications/register", json={
-            "token": "expo-token-123", "platform": "ios", "user_id": "u1",
-        })
+        resp = client.post(
+            "/mobile/notifications/register",
+            json={
+                "token": "expo-token-123",
+                "platform": "ios",
+                "user_id": "u1",
+            },
+        )
         assert resp.status_code == 200
 
 
@@ -293,7 +368,9 @@ class TestMobileTrainPairs:
     @patch("domains.training.mobile_training_store.get_training_store")
     def test_returns_pairs_list(self, mock_get_store, client):
         store = MagicMock()
-        store.list_pairs.return_value = [{"_id": "p1", "user_msg": "hi", "assistant_msg": "hello", "quality": 0.9}]
+        store.list_pairs.return_value = [
+            {"_id": "p1", "user_msg": "hi", "assistant_msg": "hello", "quality": 0.9}
+        ]
         store.count.return_value = 1
         mock_get_store.return_value = store
         resp = client.get("/mobile/train/pairs")
@@ -312,7 +389,9 @@ class TestMobileTrainExport:
     @patch("domains.training.mobile_training_store.get_training_store")
     def test_returns_export_data(self, mock_get_store, client):
         store = MagicMock()
-        store.list_pairs.return_value = [{"user_msg": "hi", "assistant_msg": "hello", "quality": 0.9, "session_id": "s1"}]
+        store.list_pairs.return_value = [
+            {"user_msg": "hi", "assistant_msg": "hello", "quality": 0.9, "session_id": "s1"}
+        ]
         mock_get_store.return_value = store
         resp = client.get("/mobile/train/export")
         assert resp.status_code == 200
@@ -372,10 +451,21 @@ class TestMobileDashboardEdges:
     """GET /mobile/dashboard — degraded inputs"""
 
     def test_non_dict_sessions_returns_empty_recent(self, client):
-        with patch.object(MobileRouter, "_get_health_data", return_value={"status": "healthy", "model_type": "gpt2", "model_loaded": True, "inference_count": 5}), \
-             patch.object(MobileRouter, "_get_current_soul", return_value={"name": "sage"}), \
-             patch.object(MobileRouter, "_get_sessions_list", return_value=[{"id": "s1"}]), \
-             patch.object(MobileRouter, "_get_models_list", return_value=[{"model_id": "gpt2"}]):
+        with (
+            patch.object(
+                MobileRouter,
+                "_get_health_data",
+                return_value={
+                    "status": "healthy",
+                    "model_type": "gpt2",
+                    "model_loaded": True,
+                    "inference_count": 5,
+                },
+            ),
+            patch.object(MobileRouter, "_get_current_soul", return_value={"name": "sage"}),
+            patch.object(MobileRouter, "_get_sessions_list", return_value=[{"id": "s1"}]),
+            patch.object(MobileRouter, "_get_models_list", return_value=[{"model_id": "gpt2"}]),
+        ):
             resp = client.get("/mobile/dashboard")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -384,10 +474,12 @@ class TestMobileDashboardEdges:
             assert body["recent_conversations"][0]["id"] == "s1"
 
     def test_missing_health_defaults(self, client):
-        with patch.object(MobileRouter, "_get_health_data", return_value={}), \
-             patch.object(MobileRouter, "_get_current_soul", return_value={"name": "Default"}), \
-             patch.object(MobileRouter, "_get_sessions_list", return_value=[]), \
-             patch.object(MobileRouter, "_get_models_list", return_value=[]):
+        with (
+            patch.object(MobileRouter, "_get_health_data", return_value={}),
+            patch.object(MobileRouter, "_get_current_soul", return_value={"name": "Default"}),
+            patch.object(MobileRouter, "_get_sessions_list", return_value=[]),
+            patch.object(MobileRouter, "_get_models_list", return_value=[]),
+        ):
             resp = client.get("/mobile/dashboard")
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -396,13 +488,38 @@ class TestMobileDashboardEdges:
             assert body["soul"]["name"] == "Default"
 
     def test_last_message_uses_newest_session(self, client):
-        with patch.object(MobileRouter, "_get_health_data", return_value={"status": "healthy", "model_type": "gpt2", "model_loaded": True, "inference_count": 5}), \
-             patch.object(MobileRouter, "_get_current_soul", return_value={"name": "sage"}), \
-             patch.object(MobileRouter, "_get_sessions_list", return_value=[
-                 {"id": "old", "title": "Older", "messages": [{"content": "stale"}], "updated_at": "2026-01-01"},
-                 {"id": "new", "title": "Newer", "messages": [{"content": "fresh"}], "updated_at": "2026-06-01"},
-             ]), \
-             patch.object(MobileRouter, "_get_models_list", return_value=[{"model_id": "gpt2"}]):
+        with (
+            patch.object(
+                MobileRouter,
+                "_get_health_data",
+                return_value={
+                    "status": "healthy",
+                    "model_type": "gpt2",
+                    "model_loaded": True,
+                    "inference_count": 5,
+                },
+            ),
+            patch.object(MobileRouter, "_get_current_soul", return_value={"name": "sage"}),
+            patch.object(
+                MobileRouter,
+                "_get_sessions_list",
+                return_value=[
+                    {
+                        "id": "old",
+                        "title": "Older",
+                        "messages": [{"content": "stale"}],
+                        "updated_at": "2026-01-01",
+                    },
+                    {
+                        "id": "new",
+                        "title": "Newer",
+                        "messages": [{"content": "fresh"}],
+                        "updated_at": "2026-06-01",
+                    },
+                ],
+            ),
+            patch.object(MobileRouter, "_get_models_list", return_value=[{"model_id": "gpt2"}]),
+        ):
             body = client.get("/mobile/dashboard").json()["data"]
             assert body["recent_conversations"][0]["id"] == "new"
             assert body["recent_conversations"][0]["last_message"] == ""
@@ -415,11 +532,21 @@ class TestMobileConversationsEdges:
     """GET /mobile/conversations — pagination and search"""
 
     def _make_session(self, sid, title, content, updated):
-        return {"id": sid, "title": title, "messages": [{"content": content}],
-                "updated_at": updated, "created_at": updated, "starred": False, "pinned": False}
+        return {
+            "id": sid,
+            "title": title,
+            "messages": [{"content": content}],
+            "updated_at": updated,
+            "created_at": updated,
+            "starred": False,
+            "pinned": False,
+        }
 
     def test_paginates(self, client):
-        sessions = [self._make_session(f"s{i}", f"Title {i}", "msg", f"2026-01-{i+1:02d}") for i in range(3)]
+        sessions = [
+            self._make_session(f"s{i}", f"Title {i}", "msg", f"2026-01-{i + 1:02d}")
+            for i in range(3)
+        ]
         with patch.object(MobileRouter, "_get_sessions_list", return_value={"data": sessions}):
             resp = client.get("/mobile/conversations", params={"page": 2, "per_page": 1})
             body = resp.json()["data"]
@@ -458,9 +585,11 @@ class TestMobileSwitchModelEdges:
     """POST /mobile/models/switch"""
 
     def test_switch_with_model_id_only(self, client):
-        with patch.object(MobileRouter, "_load_model", return_value=None), \
-             patch.object(MobileRouter, "_switch_soul", return_value=None), \
-             patch.object(MobileRouter, "_get_health_data", return_value={"model_type": "qwen"}):
+        with (
+            patch.object(MobileRouter, "_load_model", return_value=None),
+            patch.object(MobileRouter, "_switch_soul", return_value=None),
+            patch.object(MobileRouter, "_get_health_data", return_value={"model_type": "qwen"}),
+        ):
             resp = client.post("/mobile/models/switch", json={"model_id": "qwen"})
             assert resp.status_code == 200
             body = resp.json()["data"]
@@ -468,10 +597,14 @@ class TestMobileSwitchModelEdges:
             assert body["soul"] == ""
 
     def test_switch_posts_soul_with_checkpoint(self, client):
-        with patch.object(MobileRouter, "_load_model", return_value=None), \
-             patch.object(MobileRouter, "_switch_soul", return_value=None) as mock_soul, \
-             patch.object(MobileRouter, "_get_health_data", return_value={"model_type": "gpt2"}):
-            client.post("/mobile/models/switch", json={"soul_name": "sage", "checkpoint_name": "cp1"})
+        with (
+            patch.object(MobileRouter, "_load_model", return_value=None),
+            patch.object(MobileRouter, "_switch_soul", return_value=None) as mock_soul,
+            patch.object(MobileRouter, "_get_health_data", return_value={"model_type": "gpt2"}),
+        ):
+            client.post(
+                "/mobile/models/switch", json={"soul_name": "sage", "checkpoint_name": "cp1"}
+            )
             mock_soul.assert_called_once_with("sage", "cp1")
 
 
@@ -488,7 +621,9 @@ class TestMobileKnowledgeUpdate:
             assert resp.json()["data"]["updated"] is True
 
     def test_update_failure_returns_error(self, client):
-        with patch.object(MobileRouter, "_update_knowledge_item", side_effect=Exception("HTTP 500: server error")):
+        with patch.object(
+            MobileRouter, "_update_knowledge_item", side_effect=Exception("HTTP 500: server error")
+        ):
             resp = client.patch("/mobile/knowledge/k1", json={"content": "x"})
             assert resp.status_code == 400
             assert "error" in resp.json()
@@ -519,7 +654,11 @@ class TestMobileKnowledgeListEdges:
     """GET /mobile/knowledge — search, topic, pagination"""
 
     def test_search_uses_search_endpoint(self, client):
-        with patch.object(MobileRouter, "_search_knowledge", return_value=[{"id": "k1", "content": "match", "topic": "t"}]):
+        with patch.object(
+            MobileRouter,
+            "_search_knowledge",
+            return_value=[{"id": "k1", "content": "match", "topic": "t"}],
+        ):
             resp = client.get("/mobile/knowledge", params={"search": "match"})
             assert resp.json()["data"]["total"] == 1
 
@@ -561,17 +700,28 @@ class TestMobileSyncOffline:
         mock_chat_resp.timestamp = 111
         mock_chat_resp.model_dump.return_value = {"message": "hi there", "timestamp": 111}
 
-        with patch("routers.inference._instance") as mock_inference, \
-             patch.object(MobileRouter, "_get_sessions_list", return_value={"sessions": [{"id": "s1", "title": "T"}]}):
+        with (
+            patch("routers.inference._instance") as mock_inference,
+            patch.object(
+                MobileRouter,
+                "_get_sessions_list",
+                return_value={"sessions": [{"id": "s1", "title": "T"}]},
+            ),
+        ):
+
             async def mock_chat(req):
                 return mock_chat_resp
+
             mock_inference.chat = mock_chat
-            resp = client.post("/mobile/sync", json={
-                "pending_messages": [
-                    {"id": "m1", "session_id": "s1", "content": "hello", "timestamp": 100},
-                    {"id": "m2", "session_id": "s1", "content": "again", "timestamp": 101},
-                ],
-            })
+            resp = client.post(
+                "/mobile/sync",
+                json={
+                    "pending_messages": [
+                        {"id": "m1", "session_id": "s1", "content": "hello", "timestamp": 100},
+                        {"id": "m2", "session_id": "s1", "content": "again", "timestamp": 101},
+                    ],
+                },
+            )
             assert resp.status_code == 200
             body = resp.json()["data"]
             assert body["synced_count"] == 2
@@ -583,16 +733,23 @@ class TestMobileSyncOffline:
         mock_chat_resp.message = None
         mock_chat_resp.model_dump.return_value = {}
 
-        with patch("routers.inference._instance") as mock_inference, \
-             patch.object(MobileRouter, "_get_sessions_list", return_value={}):
+        with (
+            patch("routers.inference._instance") as mock_inference,
+            patch.object(MobileRouter, "_get_sessions_list", return_value={}),
+        ):
+
             async def mock_chat(req):
                 return mock_chat_resp
+
             mock_inference.chat = mock_chat
-            resp = client.post("/mobile/sync", json={
-                "pending_messages": [
-                    {"id": "m1", "session_id": "s1", "content": "hello", "timestamp": 100},
-                ],
-            })
+            resp = client.post(
+                "/mobile/sync",
+                json={
+                    "pending_messages": [
+                        {"id": "m1", "session_id": "s1", "content": "hello", "timestamp": 100},
+                    ],
+                },
+            )
             body = resp.json()["data"]
             assert body["failed_count"] == 1
             assert body["results"][0]["status"] == "error"
@@ -605,7 +762,9 @@ class TestMobileSyncOffline:
             assert body["results"] == []
 
     def test_sessions_wrapped_in_data_field(self, client):
-        with patch.object(MobileRouter, "_get_sessions_list", return_value={"data": [{"id": "s9"}]}):
+        with patch.object(
+            MobileRouter, "_get_sessions_list", return_value={"data": [{"id": "s9"}]}
+        ):
             resp = client.post("/mobile/sync", json={"pending_messages": []})
             sessions = resp.json()["data"]["sessions"]
             assert sessions[0]["id"] == "s9"
@@ -632,8 +791,10 @@ class TestMobileNotificationsSend:
         svc = MagicMock()
         svc.send_notification_async = AsyncMock(return_value={"sent": 1})
         mock_get_svc.return_value = svc
-        resp = client.post("/mobile/notifications/send",
-                           json={"title": "Hi", "body": "World", "topic": "news", "badge": 5})
+        resp = client.post(
+            "/mobile/notifications/send",
+            json={"title": "Hi", "body": "World", "topic": "news", "badge": 5},
+        )
         assert resp.status_code == 200
         payload = svc.send_notification_async.call_args.kwargs["payload"]
         assert payload.badge == 5
@@ -683,7 +844,11 @@ class TestMobileNotifyTrainingComplete:
         svc = MagicMock()
         svc.send_notification.return_value = {"sent": 1}
         mock_get_svc.return_value = svc
-        with patch.object(MobileRouter, "_get_training_status", return_value={"status": "complete", "final_loss": 1.5}):
+        with patch.object(
+            MobileRouter,
+            "_get_training_status",
+            return_value={"status": "complete", "final_loss": 1.5},
+        ):
             resp = client.post("/mobile/notify/training-complete")
         assert resp.status_code == 200
         payload = svc.send_notification.call_args.kwargs["payload"]
@@ -711,7 +876,9 @@ class TestMobileTrainPending:
     @patch("domains.training.mobile_training_store.get_training_store")
     def test_returns_pending(self, mock_get_store, client):
         store = MagicMock()
-        store.get_pending_pairs.return_value = [{"_id": "p1", "user_msg": "hi", "assistant_msg": "lo"}]
+        store.get_pending_pairs.return_value = [
+            {"_id": "p1", "user_msg": "hi", "assistant_msg": "lo"}
+        ]
         mock_get_store.return_value = store
         resp = client.get("/mobile/train/pending")
         assert resp.status_code == 200
@@ -870,5 +1037,9 @@ class TestMobileAutoTrainConfig:
     @patch("domains.training.auto_trainer.get_auto_trainer")
     def test_threshold_bounds_422(self, mock_get_trainer, client):
         assert client.patch("/mobile/train/auto-config", params={"threshold": 0}).status_code == 422
-        assert client.patch("/mobile/train/auto-config", params={"threshold": 101}).status_code == 422
-        assert client.patch("/mobile/train/auto-config", params={"interval_s": 10}).status_code == 422
+        assert (
+            client.patch("/mobile/train/auto-config", params={"threshold": 101}).status_code == 422
+        )
+        assert (
+            client.patch("/mobile/train/auto-config", params={"interval_s": 10}).status_code == 422
+        )

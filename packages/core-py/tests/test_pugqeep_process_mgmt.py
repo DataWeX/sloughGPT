@@ -1,12 +1,9 @@
 """Tests for pugqeep process management — subprocess, monitor, config, signal handling."""
 
-import multiprocessing
 import os
 import signal
-import struct
 import threading
 import time
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -19,25 +16,20 @@ from domain.infrastructure._internal.pugqeep.config import (
 from domain.infrastructure._internal.pugqeep.engine import (
     Engine,
     EngineMetrics,
+    GuardTree,
     Process,
     ProcessGroup,
     ProcessMonitor,
     ProcessStatus,
-    GuardTree,
     ResultCache,
     Stem,
     StemStatus,
     SubprocessProcess,
     Tree,
-    TreeStatus,
-    _MSG_ERROR,
-    _MSG_HEARTBEAT,
-    _MSG_READY,
-    _MSG_RESULT,
 )
 
-
 # ── Helpers ──────────────────────────────────────────────────────
+
 
 def _noop():
     return 42
@@ -66,6 +58,7 @@ def _identity(x):
 
 
 # ── Config ───────────────────────────────────────────────────────
+
 
 class TestEngineConfig:
     def test_defaults(self):
@@ -127,6 +120,7 @@ class TestEngineConfig:
 
 
 # ── SubprocessProcess ───────────────────────────────────────────
+
 
 class TestSubprocessProcess:
     def test_spawn_simple_function(self):
@@ -227,6 +221,7 @@ class TestSubprocessProcess:
 
 # ── GuardTree ────────────────────────────────────────────────────
 
+
 class TestGuardTree:
     def test_branch_thread_mode(self):
         config = SubprocessConfig(enabled=False)
@@ -271,6 +266,7 @@ class TestGuardTree:
 
 
 # ── ProcessMonitor ───────────────────────────────────────────────
+
 
 class TestProcessMonitor:
     def test_tracks_process(self):
@@ -529,6 +525,7 @@ class TestProcessMonitor:
 
 # ── Engine with config ───────────────────────────────────────────
 
+
 class TestEngineWithConfig:
     def test_engine_creates_guard_tree(self):
         cfg = EngineConfig(name="test", max_trees=4)
@@ -570,6 +567,7 @@ class TestEngineWithConfig:
 
 # ── Signal handling ─────────────────────────────────────────────
 
+
 class TestSignalHandling:
     def test_install_restore_handlers(self):
         engine = Engine("test")
@@ -593,6 +591,7 @@ class TestSignalHandling:
 
 # ── SubprocessProcess pipe protocol ─────────────────────────────
 
+
 class TestSubprocessPipeProtocol:
     def test_msg_ready_sent(self):
         """Verify the child sends _MSG_READY before executing."""
@@ -613,9 +612,10 @@ class TestSubprocessPipeProtocol:
 
 # ── EngineMetrics ────────────────────────────────────────────────
 
+
 class TestEngineMetrics:
     def test_record_spawn(self):
-        from domain.infrastructure._internal.pugqeep.engine import EngineMetrics
+
         m = EngineMetrics()
         m.record_spawn()
         m.record_spawn()
@@ -623,7 +623,7 @@ class TestEngineMetrics:
         assert s["spawned"] == 2
 
     def test_record_complete(self):
-        from domain.infrastructure._internal.pugqeep.engine import EngineMetrics
+
         m = EngineMetrics()
         proc = Process(fn=_noop)
         proc.running()
@@ -635,7 +635,7 @@ class TestEngineMetrics:
         assert s["avg_latency_s"] > 0
 
     def test_record_fail(self):
-        from domain.infrastructure._internal.pugqeep.engine import EngineMetrics
+
         m = EngineMetrics()
         m.record_fail()
         s = m.snapshot()
@@ -643,7 +643,7 @@ class TestEngineMetrics:
         assert s["error_rate"] == 1.0
 
     def test_throughput(self):
-        from domain.infrastructure._internal.pugqeep.engine import EngineMetrics
+
         m = EngineMetrics()
         m.record_complete(Process(fn=_noop))
         m.record_complete(Process(fn=_noop))
@@ -651,7 +651,7 @@ class TestEngineMetrics:
         assert s["throughput_per_s"] > 0
 
     def test_reset(self):
-        from domain.infrastructure._internal.pugqeep.engine import EngineMetrics
+
         m = EngineMetrics()
         m.record_spawn()
         m.record_fail()
@@ -661,7 +661,7 @@ class TestEngineMetrics:
         assert s["failed"] == 0
 
     def test_cancel_and_timeout(self):
-        from domain.infrastructure._internal.pugqeep.engine import EngineMetrics
+
         m = EngineMetrics()
         m.record_cancel()
         m.record_timeout()
@@ -673,6 +673,7 @@ class TestEngineMetrics:
 
 
 # ── Process dependency resolution ────────────────────────────────
+
 
 class TestProcessDependencies:
     def test_deps_met(self):
@@ -766,6 +767,7 @@ class TestProcessDependencies:
 
 # ── spawn_chain ──────────────────────────────────────────────────
 
+
 class TestSpawnChain:
     def test_chain_basic(self):
         engine = Engine("test")
@@ -818,6 +820,7 @@ class TestSpawnChain:
 
 # ── Process cancel propagation ──────────────────────────────────
 
+
 class TestCancelPropagation:
     def test_process_cancel_event(self):
         proc = Process(fn=time.sleep, args=(60,))
@@ -863,6 +866,7 @@ class TestCancelPropagation:
 
 # ── Engine metrics integration ──────────────────────────────────
 
+
 class TestEngineMetricsIntegration:
     def test_engine_has_metrics(self):
         engine = Engine("test")
@@ -885,7 +889,7 @@ class TestEngineMetricsIntegration:
         engine = Engine("test")
         engine.tree("t")
 
-        p = engine.spawn(_noop, name="work")
+        engine.spawn(_noop, name="work")
         engine.run_background(poll_interval=0.01)
         engine.wait(timeout=5)
         engine.stop()
@@ -908,6 +912,7 @@ class TestEngineMetricsIntegration:
 
 
 # ── ProcessGroup ─────────────────────────────────────────────────
+
 
 class TestProcessGroup:
     def test_group_spawn_and_gather(self):
@@ -993,6 +998,7 @@ class TestProcessGroup:
 
 # ── ResultCache ──────────────────────────────────────────────────
 
+
 class TestResultCache:
     def test_put_and_get(self):
         cache = ResultCache()
@@ -1065,6 +1071,7 @@ class TestResultCache:
 
 # ── Engine cache integration ────────────────────────────────────
 
+
 class TestEngineCache:
     def test_enable_disable_cache(self):
         engine = Engine("test")
@@ -1080,7 +1087,7 @@ class TestEngineCache:
         engine.tree("t")
         engine.enable_cache()
 
-        p1 = engine.spawn(_noop, name="cached")
+        engine.spawn(_noop, name="cached")
         engine.run_background(poll_interval=0.01)
         engine.wait(timeout=5)
         engine.stop()
@@ -1104,6 +1111,7 @@ class TestEngineCache:
 
 
 # ── Engine health ────────────────────────────────────────────────
+
 
 class TestEngineHealth:
     def test_health_snapshot(self):
@@ -1158,15 +1166,19 @@ class TestCancelManagerIntegration:
     def test_cancel_via_cancel_manager(self):
         engine = Engine("test")
         engine.tree("t")
-        proc = engine.spawn(_sleep_and_return, 0.5, "cancelled", name="cancel-test", register_cancel=True)
+        proc = engine.spawn(
+            _sleep_and_return, 0.5, "cancelled", name="cancel-test", register_cancel=True
+        )
         # Dispatch to start the process
         engine.dispatch()
         # Cancel via CancelManager
         from domain.infrastructure._internal.cancel_manager import get_cancel_manager
+
         mgr = get_cancel_manager()
         mgr.cancel(proc.id)
         # Wait for process to finish (cancellation sets CANCELLED status)
         import time
+
         time.sleep(0.1)
         engine.stop()
         assert proc.is_cancelled
@@ -1179,6 +1191,7 @@ class TestCancelManagerIntegration:
         engine.wait(timeout=5)
         # After completion, process should still be tracked by CancelManager
         from domain.infrastructure._internal.cancel_manager import get_cancel_manager
+
         mgr = get_cancel_manager()
         assert mgr.get(proc.id) is not None
         engine.stop()
@@ -1192,11 +1205,13 @@ class TestCancelManagerIntegration:
         engine.stop()
         # Should not be registered with CancelManager
         from domain.infrastructure._internal.cancel_manager import get_cancel_manager
+
         mgr = get_cancel_manager()
         assert mgr.get(proc.id) is None
 
 
 # ── Subprocess CPU affinity ──────────────────────────────────────
+
 
 class TestSubprocessCPUAffinity:
     def test_cpu_affinity_set(self):
@@ -1223,6 +1238,7 @@ class TestSubprocessCPUAffinity:
 
 
 # ── ProcessGroup.gather ──────────────────────────────────────────
+
 
 class TestProcessGroupGather:
     def test_gather_returns_results(self):
@@ -1251,6 +1267,7 @@ class TestProcessGroupGather:
 
 # ── EngineMetrics dispatched ─────────────────────────────────────
 
+
 class TestEngineMetricsDispatched:
     def test_dispatch_increments_metrics(self):
         engine = Engine("test")
@@ -1275,6 +1292,7 @@ class TestEngineMetricsDispatched:
 
 # ── spawn_chain with kwargs ──────────────────────────────────────
 
+
 class TestSpawnChainKwargs:
     def test_chain_with_kwargs(self):
         engine = Engine("test")
@@ -1297,12 +1315,13 @@ class TestSpawnChainKwargs:
 
 # ── Cancel propagation ──────────────────────────────────────────
 
+
 class TestCancelPropagation:
     def test_cancel_tree(self):
         engine = Engine("test")
         engine.tree("t")
-        p1 = engine.spawn(_noop, name="a")
-        p2 = engine.spawn(_noop, name="b")
+        engine.spawn(_noop, name="a")
+        engine.spawn(_noop, name="b")
         engine.dispatch()
         count = engine.cancel_tree("t")
         engine.stop()
@@ -1317,6 +1336,7 @@ class TestCancelPropagation:
 
 
 # ── Signal handling ──────────────────────────────────────────────
+
 
 class TestSignalHandlingExtended:
     def test_double_install_restore(self):
@@ -1337,6 +1357,7 @@ class TestSignalHandlingExtended:
 
 
 # ── Engine cache integration ─────────────────────────────────────
+
 
 class TestEngineCacheExtended:
     def test_cache_hit_returns_same_result(self):
@@ -1365,6 +1386,7 @@ class TestEngineCacheExtended:
 
 # ── wait_all ─────────────────────────────────────────────────────
 
+
 class TestWaitAll:
     def test_wait_all_returns_completed(self):
         engine = Engine("test")
@@ -1389,12 +1411,13 @@ class TestWaitAll:
 
 # ── cancel_process with propagation ──────────────────────────────
 
+
 class TestCancelPropagationExtended:
     def test_cancel_parent_cancels_dependents(self):
         engine = Engine("test")
         engine.tree("t")
         p1 = engine.spawn(time.sleep, 60, name="parent")
-        p2 = engine.spawn(time.sleep, 60, name="child", depends_on=[p1.id])
+        engine.spawn(time.sleep, 60, name="child", depends_on=[p1.id])
         engine.run_background(poll_interval=0.01)
         time.sleep(0.1)
         # p1 dispatched and running; p2 held
@@ -1407,7 +1430,7 @@ class TestCancelPropagationExtended:
         engine = Engine("test")
         engine.tree("t")
         p1 = engine.spawn(time.sleep, 60, name="parent")
-        p2 = engine.spawn(time.sleep, 60, name="child", depends_on=[p1.id])
+        engine.spawn(time.sleep, 60, name="child", depends_on=[p1.id])
         engine.run_background(poll_interval=0.01)
         time.sleep(0.1)
         count = engine.cancel_process(p1.id, propagate=False)
@@ -1445,6 +1468,7 @@ class TestCancelPropagationExtended:
 
 # ── Engine.to_dict comprehensive ─────────────────────────────────
 
+
 class TestEngineToDict:
     def test_to_dict_structure(self):
         engine = Engine("test")
@@ -1472,6 +1496,7 @@ class TestEngineToDict:
 
 
 # ── on_complete callback ─────────────────────────────────────────
+
 
 class TestOnComplete:
     def test_on_complete_fires(self):
@@ -1503,6 +1528,7 @@ class TestOnComplete:
 
 # ── route ────────────────────────────────────────────────────────
 
+
 class TestRoute:
     def test_route_existing_tree(self):
         engine = Engine("test")
@@ -1521,6 +1547,7 @@ class TestRoute:
 
 # ── Tree.max_stems limit ─────────────────────────────────────────
 
+
 class TestTreeMaxStems:
     def test_branch_at_max_stems(self):
         engine = Engine("test")
@@ -1536,7 +1563,7 @@ class TestTreeMaxStems:
         config = SubprocessConfig(enabled=False)
         tree = GuardTree("g", config=config, max_stems=2, pool_workers=2)
         procs = [Process(fn=time.sleep, args=(60,), name=f"p{i}") for i in range(2)]
-        stem = tree.branch(procs)
+        tree.branch(procs)
         assert tree.active_stems >= 1
         for p in procs:
             p.cancel()
@@ -1544,6 +1571,7 @@ class TestTreeMaxStems:
 
 
 # ── Worker pool ──────────────────────────────────────────────────
+
 
 class TestWorkerPool:
     def test_start_stop_workers(self):
@@ -1574,9 +1602,11 @@ class TestWorkerPool:
 
 # ── ProcessMonitor restart ───────────────────────────────────────
 
+
 class TestProcessMonitorRestart:
     def test_restart_callback_fires(self):
         from domain.infrastructure._internal.pugqeep.config import RestartPolicy
+
         policy = RestartPolicy(max_restarts=2, restart_delay=0.01)
         monitor = ProcessMonitor(poll_interval=0.01, stall_timeout=0.1)
         monitor.start()
@@ -1607,14 +1637,17 @@ class TestProcessMonitorRestart:
 
 # ── on_progress callback ─────────────────────────────────────────
 
+
 class TestOnProgress:
     def test_on_progress_fires(self):
         engine = Engine("test")
         engine.tree("t")
         progress = []
         engine.spawn(_sleep_and_return, 0.1, "ok", name="prog")
+
         def _run():
             engine.run(poll_interval=0.01, on_progress=lambda d: progress.append(d))
+
         t = threading.Thread(target=_run, daemon=True)
         t.start()
         engine.wait(timeout=5)
@@ -1630,8 +1663,10 @@ class TestOnProgress:
         engine.spawn(_sleep_and_return, 0.1, "a", name="a")
         engine.spawn(_sleep_and_return, 0.1, "b", name="b")
         progress = []
+
         def _run():
             engine.run(poll_interval=0.01, on_progress=lambda d: progress.append(dict(d)))
+
         t = threading.Thread(target=_run, daemon=True)
         t.start()
         engine.wait(timeout=5)
@@ -1644,6 +1679,7 @@ class TestOnProgress:
 
 
 # ── ResultCache TTL ──────────────────────────────────────────────
+
 
 class TestResultCacheTTL:
     def test_ttl_expiry(self):
@@ -1689,6 +1725,7 @@ class TestResultCacheTTL:
 
 # ── Engine.run stop ──────────────────────────────────────────────
 
+
 class TestEngineRunStop:
     def test_run_stops_on_stop(self):
         engine = Engine("test")
@@ -1713,6 +1750,7 @@ class TestEngineRunStop:
 
 
 # ── Stem status tracking ─────────────────────────────────────────
+
 
 class TestStemStatus:
     def test_stem_created(self):
@@ -1780,29 +1818,33 @@ class TestStemStatus:
 
 # ── Priority dispatch ordering ───────────────────────────────────
 
+
 class TestPriorityDispatch:
     def test_higher_priority_dispatched_first(self):
         engine = Engine("test")
         engine.tree("t")
-        p_low = engine.spawn(_noop, name="low", priority=3)
-        p_high = engine.spawn(_noop, name="high", priority=0)
-        p_med = engine.spawn(_noop, name="med", priority=1)
+        engine.spawn(_noop, name="low", priority=3)
+        engine.spawn(_noop, name="high", priority=0)
+        engine.spawn(_noop, name="med", priority=1)
         engine.dispatch()
-        dispatched = [p.name for p in engine._processes.values() if p.status != ProcessStatus.CREATED]
+        [
+            p.name for p in engine._processes.values() if p.status != ProcessStatus.CREATED
+        ]
         engine.stop()
 
     def test_priority_with_deps(self):
         engine = Engine("test")
         engine.tree("t")
         p1 = engine.spawn(time.sleep, 60, name="dep", priority=0)
-        p2 = engine.spawn(_noop, name="blocked", priority=0, depends_on=[p1.id])
-        p3 = engine.spawn(time.sleep, 60, name="free", priority=3)
+        engine.spawn(_noop, name="blocked", priority=0, depends_on=[p1.id])
+        engine.spawn(time.sleep, 60, name="free", priority=3)
         dispatched = engine.dispatch()
         assert dispatched >= 1
         engine.stop()
 
 
 # ── Config edge cases ────────────────────────────────────────────
+
 
 class TestConfigEdgeCases:
     def test_engine_config_defaults(self):
@@ -1844,6 +1886,7 @@ class TestConfigEdgeCases:
 
 # ── ProcessGroup extended ────────────────────────────────────────
 
+
 class TestProcessGroupExtended:
     def test_group_to_dict(self):
         engine = Engine("test")
@@ -1880,6 +1923,7 @@ class TestProcessGroupExtended:
 
 # ── Tree health ──────────────────────────────────────────────────
 
+
 class TestTreeHealth:
     def test_guard_tree_health(self):
         config = SubprocessConfig(enabled=False)
@@ -1897,6 +1941,7 @@ class TestTreeHealth:
 
 
 # ── Process.to_dict extended ─────────────────────────────────────
+
 
 class TestProcessToDict:
     def test_to_dict_fields(self):
@@ -1937,6 +1982,7 @@ class TestProcessToDict:
 
 # ── Engine.max_trees limit ───────────────────────────────────────
 
+
 class TestEngineMaxTrees:
     def test_max_trees_raises(self):
         cfg = EngineConfig(max_trees=1)
@@ -1953,6 +1999,7 @@ class TestEngineMaxTrees:
 
 
 # ── SubprocessProcess.health / to_dict ───────────────────────────
+
 
 class TestSubprocessProcessHealth:
     def test_health_while_running(self):
@@ -1991,6 +2038,7 @@ class TestSubprocessProcessHealth:
 
 # ── Engine.spawn no tree ─────────────────────────────────────────
 
+
 class TestEngineSpawnNoTree:
     def test_spawn_no_tree_routes_to_default(self):
         engine = Engine("test")
@@ -2022,6 +2070,7 @@ class TestEngineSpawnNoTree:
 
 # ── Engine.cancel_tree comprehensive ─────────────────────────────
 
+
 class TestCancelTreeComprehensive:
     def test_cancel_tree_only_affects_matching(self):
         engine = Engine("test")
@@ -2045,6 +2094,7 @@ class TestCancelTreeComprehensive:
 
 
 # ── Engine.wait_for_any ──────────────────────────────────────────
+
 
 class TestWaitForAnyExtended:
     def test_wait_for_any_first_completes(self):
@@ -2070,10 +2120,11 @@ class TestWaitForAnyExtended:
 
 # ── Subprocess cwd and capture_output ─────────────────────────────
 
+
 class TestSubprocessCwdAndCapture:
     def test_subprocess_cwd(self):
-        import os
         from domain.infrastructure._internal.pugqeep.config import EngineConfig, SubprocessConfig
+
         cfg = EngineConfig(name="test", subprocess=SubprocessConfig(cwd="/tmp"))
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
@@ -2090,12 +2141,13 @@ class TestSubprocessCwdAndCapture:
 
     def test_subprocess_cwd_nonexistent(self):
         from domain.infrastructure._internal.pugqeep.config import EngineConfig, SubprocessConfig
+
         cfg = EngineConfig(name="test", subprocess=SubprocessConfig(cwd="/nonexistent/path"))
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
 
         def get_cwd():
-            import os
+
             return os.getcwd()
 
         p = engine.spawn(get_cwd, name="getcwd", subprocess=True, tree="t")
@@ -2107,6 +2159,7 @@ class TestSubprocessCwdAndCapture:
 
     def test_subprocess_capture_output(self):
         from domain.infrastructure._internal.pugqeep.config import EngineConfig, SubprocessConfig
+
         cfg = EngineConfig(name="test", subprocess=SubprocessConfig(capture_output=True))
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
@@ -2125,12 +2178,13 @@ class TestSubprocessCwdAndCapture:
 
     def test_subprocess_env(self):
         from domain.infrastructure._internal.pugqeep.config import EngineConfig, SubprocessConfig
+
         cfg = EngineConfig(name="test", subprocess=SubprocessConfig(env={"MY_TEST_VAR": "hello"}))
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
 
         def get_env(key):
-            import os
+
             return os.environ.get(key, "not_set")
 
         p = engine.spawn(get_env, "MY_TEST_VAR", name="envtest", subprocess=True, tree="t")
@@ -2142,6 +2196,7 @@ class TestSubprocessCwdAndCapture:
 
     def test_run_subprocess_convenience(self):
         from domain.infrastructure._internal.pugqeep.config import EngineConfig, SubprocessConfig
+
         cfg = EngineConfig(name="test", subprocess=SubprocessConfig(cwd="/tmp"))
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
@@ -2158,6 +2213,7 @@ class TestSubprocessCwdAndCapture:
 
     def test_subprocess_health_with_stdout(self):
         from domain.infrastructure._internal.pugqeep.config import EngineConfig, SubprocessConfig
+
         cfg = EngineConfig(name="test", subprocess=SubprocessConfig(capture_output=True))
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)

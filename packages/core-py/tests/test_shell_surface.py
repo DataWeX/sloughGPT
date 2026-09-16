@@ -2,12 +2,16 @@
 
 import time
 
-import pytest
-from domain.shell._internal.surface import (
-    strip_ansi, clip, RenderLine, TextSurface, LogSurface,
-    STYLE_INFO, STYLE_WARN, STYLE_ERROR, STYLE_DEBUG, STYLE_CRITICAL,
-)
 from domain.shell._internal.log_buffer import LogBuffer, LogEntry
+from domain.shell._internal.surface import (
+    STYLE_ERROR,
+    STYLE_WARN,
+    LogSurface,
+    RenderLine,
+    TextSurface,
+    clip,
+    strip_ansi,
+)
 
 
 class TestStripAnsi:

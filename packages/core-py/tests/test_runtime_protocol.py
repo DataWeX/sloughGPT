@@ -1,8 +1,9 @@
 import threading
+
 from domain.training._internal.runtime_protocol import (
-    set_training_runtime,
-    get_training_runtime,
     _NoOpRuntime,
+    get_training_runtime,
+    set_training_runtime,
 )
 
 
@@ -39,8 +40,10 @@ class TestTrainingRuntimeSingleton:
         class FakeRuntime:
             def register(self, job_id, job, cancel_event=None, config=None):
                 pass
+
             def get(self, job_id):
                 return {"id": job_id}
+
             def sync(self, job_id):
                 pass
 

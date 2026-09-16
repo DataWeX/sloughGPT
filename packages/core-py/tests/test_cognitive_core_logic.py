@@ -1,6 +1,6 @@
 """Meaningful tests for CognitiveCore — think, generate_idea, reason, statistics."""
 
-from domain.cognitive._internal.core import CognitiveCore, ThinkingMode, ReasoningType
+from domain.cognitive._internal.core import CognitiveCore, ReasoningType, ThinkingMode
 
 
 class TestCognitiveCoreThink:

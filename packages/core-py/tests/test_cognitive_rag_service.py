@@ -5,13 +5,11 @@ persistence, KG integration, list, clear, stats), KGTrainingPipeline
 (validation, submit, batch processing, sync), and singleton helpers.
 All tests use tmp_path isolation; no external API mocks.
 """
+
 from __future__ import annotations
 
 import json
-import os
 import threading
-from pathlib import Path
-from typing import Any, Dict, List
 from unittest.mock import patch
 
 import numpy as np
@@ -26,10 +24,10 @@ from domain.cognitive._internal.rag_service import (
     is_rag_service_ready,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def _isolated_rag_store(tmp_path):
@@ -77,6 +75,7 @@ def populated_svc(svc):
 # ProductionRAGWithRealEmbeddings
 # ---------------------------------------------------------------------------
 
+
 class TestProductionRAGWithRealEmbeddings:
     def test_init_sets_real_embedder(self):
         rag = ProductionRAGWithRealEmbeddings()
@@ -112,6 +111,7 @@ class TestProductionRAGWithRealEmbeddings:
 # ---------------------------------------------------------------------------
 # RAGService — __init__ & document loading
 # ---------------------------------------------------------------------------
+
 
 class TestRAGServiceInit:
     def test_creates_data_dir(self, tmp_path):
@@ -171,6 +171,7 @@ class TestRAGServiceInit:
 # RAGService — add_document
 # ---------------------------------------------------------------------------
 
+
 class TestRAGServiceAddDocument:
     def test_returns_chunk_ids(self, svc):
         ids = svc.add_document(content="Hello world, this is a test.", metadata={"source": "t"})
@@ -188,7 +189,9 @@ class TestRAGServiceAddDocument:
         assert docs[0]["metadata"]["source"] == "user"
 
     def test_custom_metadata_preserved(self, svc):
-        svc.add_document(content="Some real content for custom metadata test.", metadata={"source": "custom"})
+        svc.add_document(
+            content="Some real content for custom metadata test.", metadata={"source": "custom"}
+        )
         docs = svc.list_documents()
         assert docs[0]["metadata"]["source"] == "custom"
 
@@ -248,6 +251,7 @@ class TestRAGServiceAddDocument:
 # RAGService — query
 # ---------------------------------------------------------------------------
 
+
 class TestRAGServiceQuery:
     def test_query_returns_expected_keys(self, populated_svc):
         result = populated_svc.query("Python programming")
@@ -285,6 +289,7 @@ class TestRAGServiceQuery:
 # ---------------------------------------------------------------------------
 # RAGService — verify_and_ground
 # ---------------------------------------------------------------------------
+
 
 class TestRAGServiceVerifyAndGround:
     def test_returns_expected_keys(self, populated_svc):
@@ -327,6 +332,7 @@ class TestRAGServiceVerifyAndGround:
 # RAGService — list_documents
 # ---------------------------------------------------------------------------
 
+
 class TestRAGServiceListDocuments:
     def test_empty_when_no_docs(self, svc):
         assert svc.list_documents() == []
@@ -358,6 +364,7 @@ class TestRAGServiceListDocuments:
 # RAGService — clear
 # ---------------------------------------------------------------------------
 
+
 class TestRAGServiceClear:
     def test_clear_returns_count(self, populated_svc):
         count = populated_svc.clear()
@@ -377,13 +384,16 @@ class TestRAGServiceClear:
 
     def test_can_add_after_clear(self, populated_svc):
         populated_svc.clear()
-        populated_svc.add_document(content="After clear document for re-add test.", metadata={"source": "x"})
+        populated_svc.add_document(
+            content="After clear document for re-add test.", metadata={"source": "x"}
+        )
         assert populated_svc.stats()["total_documents"] == 1
 
 
 # ---------------------------------------------------------------------------
 # RAGService — stats
 # ---------------------------------------------------------------------------
+
 
 class TestRAGServiceStats:
     def test_empty_stats(self, svc):
@@ -402,9 +412,12 @@ class TestRAGServiceStats:
 # RAGService — persistence across instances
 # ---------------------------------------------------------------------------
 
+
 class TestRAGServicePersistence:
     def test_documents_survive_recreation(self, svc):
-        svc.add_document(content="Persistent content for restart test.", metadata={"source": "persist"})
+        svc.add_document(
+            content="Persistent content for restart test.", metadata={"source": "persist"}
+        )
         # Simulate restart
         svc2 = RAGService()
         assert svc2.stats()["total_documents"] == 1
@@ -413,12 +426,16 @@ class TestRAGServicePersistence:
 
     def test_multiple_documents_persist(self, svc):
         svc.add_document(content="First document for multi-persist test.", metadata={"source": "a"})
-        svc.add_document(content="Second document for multi-persist test.", metadata={"source": "b"})
+        svc.add_document(
+            content="Second document for multi-persist test.", metadata={"source": "b"}
+        )
         svc2 = RAGService()
         assert svc2.stats()["total_documents"] == 2
 
     def test_persistence_file_is_jsonl(self, svc):
-        svc.add_document(content="JSONL format verification document.", metadata={"source": "jsonl"})
+        svc.add_document(
+            content="JSONL format verification document.", metadata={"source": "jsonl"}
+        )
         content = mod._DOCUMENTS_FILE.read_text()
         lines = content.strip().split("\n")
         for line in lines:
@@ -429,6 +446,7 @@ class TestRAGServicePersistence:
 # ---------------------------------------------------------------------------
 # RAGService — KG integration
 # ---------------------------------------------------------------------------
+
 
 class TestRAGServiceKGIntegration:
     def test_kg_stats_empty_when_no_kg(self, svc):
@@ -499,9 +517,10 @@ class TestRAGServiceKGIntegration:
 # RAGService — auto_ingest_directory
 # ---------------------------------------------------------------------------
 
+
 class TestRAGServiceAutoIngestDirectory:
     def test_returns_zero_when_repo_scanner_unavailable(self, svc):
-        with patch.dict("sys.modules", {"domain.infrastructure.auto_ingest": None}):
+        with patch.dict("sys.modules", {"domain.infrastructure._internal.auto_ingest": None}):
             result = svc.auto_ingest_directory("/tmp/nonexistent")
             assert result == 0
 
@@ -511,13 +530,17 @@ class TestRAGServiceAutoIngestDirectory:
 
     def test_ingests_files_in_directory(self, svc, tmp_path):
         (tmp_path / "a.py").write_text("def hello():\n    return 'world'\n")
-        (tmp_path / "b.txt").write_text("This is a text file with enough content to pass the threshold.")
+        (tmp_path / "b.txt").write_text(
+            "This is a text file with enough content to pass the threshold."
+        )
         result = svc.auto_ingest_directory(str(tmp_path), max_files=10)
         assert result >= 1
 
     def test_max_files_limit(self, svc, tmp_path):
         for i in range(5):
-            (tmp_path / f"doc_{i}.txt").write_text(f"Document {i} with sufficient content for ingestion test.")
+            (tmp_path / f"doc_{i}.txt").write_text(
+                f"Document {i} with sufficient content for ingestion test."
+            )
         result = svc.auto_ingest_directory(str(tmp_path), max_files=2)
         assert result <= 2
 
@@ -531,6 +554,7 @@ class TestRAGServiceAutoIngestDirectory:
 # ---------------------------------------------------------------------------
 # KGTrainingPipeline — _validate_triple
 # ---------------------------------------------------------------------------
+
 
 class TestKGTrainingPipelineValidateTriple:
     def test_valid_triple(self):
@@ -569,15 +593,24 @@ class TestKGTrainingPipelineValidateTriple:
 
     def test_extra_keys_ignored(self):
         pipe = KGTrainingPipeline(rag_service=RAGService())
-        assert pipe._validate_triple({
-            "subject": "A", "predicate": "p", "object": "B",
-            "confidence": 0.9, "source": "test"
-        }) is True
+        assert (
+            pipe._validate_triple(
+                {
+                    "subject": "A",
+                    "predicate": "p",
+                    "object": "B",
+                    "confidence": 0.9,
+                    "source": "test",
+                }
+            )
+            is True
+        )
 
 
 # ---------------------------------------------------------------------------
 # KGTrainingPipeline — submit_triples
 # ---------------------------------------------------------------------------
+
 
 class TestKGTrainingPipelineSubmitTriples:
     def test_raises_on_empty_list(self):
@@ -615,13 +648,17 @@ class TestKGTrainingPipelineSubmitTriples:
     def test_task_data_structure(self):
         svc = RAGService()
         pipe = KGTrainingPipeline(rag_service=svc)
-        pipe.submit_triples([{
-            "subject": "X",
-            "predicate": "relates_to",
-            "object": "Y",
-            "confidence": 0.9,
-            "source": "kg",
-        }])
+        pipe.submit_triples(
+            [
+                {
+                    "subject": "X",
+                    "predicate": "relates_to",
+                    "object": "Y",
+                    "confidence": 0.9,
+                    "source": "kg",
+                }
+            ]
+        )
         queue = pipe._get_queue()
         # Task should be pending
         assert len(queue._pending) >= 1
@@ -630,6 +667,7 @@ class TestKGTrainingPipelineSubmitTriples:
 # ---------------------------------------------------------------------------
 # KGTrainingPipeline — process_batch
 # ---------------------------------------------------------------------------
+
 
 class TestKGTrainingPipelineProcessBatch:
     def test_process_batch_with_no_tasks(self):
@@ -650,10 +688,12 @@ class TestKGTrainingPipelineProcessBatch:
     def test_process_batch_processes_tasks(self):
         svc = RAGService()
         pipe = KGTrainingPipeline(rag_service=svc)
-        pipe.submit_triples([
-            {"subject": "A", "predicate": "p", "object": "B"},
-            {"subject": "C", "predicate": "q", "object": "D"},
-        ])
+        pipe.submit_triples(
+            [
+                {"subject": "A", "predicate": "p", "object": "B"},
+                {"subject": "C", "predicate": "q", "object": "D"},
+            ]
+        )
         result = pipe.process_batch(max_tasks=10)
         assert result["processed"] == 2
         assert result["failed"] == 0
@@ -662,11 +702,13 @@ class TestKGTrainingPipelineProcessBatch:
     def test_process_batch_respects_max_tasks(self):
         svc = RAGService()
         pipe = KGTrainingPipeline(rag_service=svc)
-        pipe.submit_triples([
-            {"subject": "A", "predicate": "p", "object": "B"},
-            {"subject": "C", "predicate": "q", "object": "D"},
-            {"subject": "E", "predicate": "r", "object": "F"},
-        ])
+        pipe.submit_triples(
+            [
+                {"subject": "A", "predicate": "p", "object": "B"},
+                {"subject": "C", "predicate": "q", "object": "D"},
+                {"subject": "E", "predicate": "r", "object": "F"},
+            ]
+        )
         result = pipe.process_batch(max_tasks=1)
         assert result["processed"] == 1
         assert result["remaining"] == 2
@@ -674,11 +716,15 @@ class TestKGTrainingPipelineProcessBatch:
     def test_process_batch_indexes_into_rag(self):
         svc = RAGService()
         pipe = KGTrainingPipeline(rag_service=svc)
-        pipe.submit_triples([{
-            "subject": "Python",
-            "predicate": "is_a",
-            "object": "language",
-        }])
+        pipe.submit_triples(
+            [
+                {
+                    "subject": "Python",
+                    "predicate": "is_a",
+                    "object": "language",
+                }
+            ]
+        )
         pipe.process_batch(max_tasks=5)
         assert svc.stats()["total_documents"] >= 1
 
@@ -686,6 +732,7 @@ class TestKGTrainingPipelineProcessBatch:
 # ---------------------------------------------------------------------------
 # KGTrainingPipeline — sync_kg_to_rag
 # ---------------------------------------------------------------------------
+
 
 class TestKGTrainingPipelineSyncKgToRag:
     def test_sync_with_no_kg(self):
@@ -727,6 +774,7 @@ class TestKGTrainingPipelineSyncKgToRag:
 # KGTrainingPipeline — stats
 # ---------------------------------------------------------------------------
 
+
 class TestKGTrainingPipelineStats:
     def test_stats_empty(self):
         svc = RAGService()
@@ -756,6 +804,7 @@ class TestKGTrainingPipelineStats:
 # ---------------------------------------------------------------------------
 # Singleton helpers
 # ---------------------------------------------------------------------------
+
 
 class TestSingletonHelpers:
     def test_is_rag_service_ready_false_by_default(self):
@@ -793,9 +842,12 @@ class TestSingletonHelpers:
 # Edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestEdgeCases:
     def test_add_document_with_unicode(self, svc):
-        ids = svc.add_document(content="日本語のテストドキュメント。Unicode content.", metadata={"source": "unicode"})
+        ids = svc.add_document(
+            content="日本語のテストドキュメント。Unicode content.", metadata={"source": "unicode"}
+        )
         assert len(ids) >= 1
 
     def test_add_document_with_newlines(self, svc):
@@ -810,7 +862,9 @@ class TestEdgeCases:
         assert "num_results" in result
 
     def test_list_documents_returns_copy(self, svc):
-        svc.add_document(content="Original document content for copy test.", metadata={"source": "x"})
+        svc.add_document(
+            content="Original document content for copy test.", metadata={"source": "x"}
+        )
         docs1 = svc.list_documents()
         docs1.clear()
         docs2 = svc.list_documents()

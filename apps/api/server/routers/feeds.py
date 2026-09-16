@@ -17,7 +17,7 @@ Generates RSS 2.0 and JSON Feed from the dev notes journal.
 import json
 import logging
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Query
@@ -106,7 +106,7 @@ def _build_rss_xml(notes: list[dict], title: str = "sloughGPT Dev Notes") -> str
         channel, "description"
     ).text = f"Development notes for sloughGPT — {len(notes)} notes"
     ET.SubElement(channel, "language").text = "en-us"
-    ET.SubElement(channel, "lastBuildDate").text = datetime.now(timezone.utc).strftime(
+    ET.SubElement(channel, "lastBuildDate").text = datetime.now(UTC).strftime(
         "%a, %d %b %Y %H:%M:%S +0000"
     )
     ET.SubElement(channel, "generator").text = "sloughGPT feeds router"

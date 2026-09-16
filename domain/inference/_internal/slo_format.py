@@ -14,19 +14,18 @@ Trademark (c) 2026 SloughGPT. All rights reserved.
 
 from __future__ import annotations
 
-import os
 import json
-import math
-import struct
 import logging
+import math
+import os
+import struct
 
 logger = logging.getLogger("slo.inference.slo_format")
-import hashlib
 import datetime
-from dataclasses import dataclass, field, asdict
-from typing import Optional, List, Dict, Any
+import hashlib
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-
+from typing import Any
 
 SOU_MAGIC = b"SOUL"
 SOU_VERSION = 2
@@ -55,9 +54,9 @@ class GenerationParams:
     repeat_penalty: float = 1.1
     presence_penalty: float = 0.0
     frequency_penalty: float = 0.0
-    stop: List[str] = field(default_factory=list)
+    stop: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "temperature": self.temperature,
             "top_p": self.top_p,
@@ -77,7 +76,7 @@ class ContextParams:
     num_gpu: int = 0
     num_thread: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -94,7 +93,7 @@ class PersonalityCore:
     directness: float = 0.5
     optimism: float = 0.5
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> dict[str, float]:
         return asdict(self)
 
 
@@ -109,7 +108,7 @@ class BehavioralTraits:
     follow_up_tendency: float = 0.5
     clarification_seeking: float = 0.5
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -124,7 +123,7 @@ class CognitiveSignature:
     metacognitive_awareness: float = 0.5
     learning_adaptability: float = 0.5
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> dict[str, float]:
         return asdict(self)
 
 
@@ -136,7 +135,7 @@ class EmotionalRange:
     sentiment_awareness: float = 0.5
     distress_handling: float = 0.5
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> dict[str, float]:
         return asdict(self)
 
 
@@ -162,22 +161,22 @@ class SloProfile:
     generation: GenerationParams = field(default_factory=GenerationParams)
     context: ContextParams = field(default_factory=ContextParams)
     system_prompt: str = ""
-    sample_dialogue: List[Dict[str, str]] = field(default_factory=list)
-    lora_adapters: List[str] = field(default_factory=list)
+    sample_dialogue: list[dict[str, str]] = field(default_factory=list)
+    lora_adapters: list[str] = field(default_factory=list)
     quantization: str = "none"
-    acl_users: List[str] = field(default_factory=list)
+    acl_users: list[str] = field(default_factory=list)
     watermark_enabled: bool = False
     watermark_strength: float = 0.1
-    tags: List[str] = field(default_factory=list)
-    certifications: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    certifications: list[str] = field(default_factory=list)
     integrity_hash: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if not self.born_at:
-            self.born_at = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+            self.born_at = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         d = {
             "name": self.name,
             "version": self.version,
@@ -393,9 +392,18 @@ class SouParser:
                 if section == "personality":
                     sp.personality = PersonalityCore(**current_block)
                 elif section == "behavior":
-                    sp.behavior = BehavioralTraits(**{k: v for k, v in current_block.items() if not isinstance(v, str) or v.replace(".", "1", 1).isdigit() is False})
+                    sp.behavior = BehavioralTraits(
+                        **{
+                            k: v
+                            for k, v in current_block.items()
+                            if not isinstance(v, str) or v.replace(".", "1", 1).isdigit() is False
+                        }
+                    )
                     for k, v in current_block.items():
-                        if isinstance(v, str) and not v.replace(".", "1", 1).replace("e-", "", 1).isdigit():
+                        if (
+                            isinstance(v, str)
+                            and not v.replace(".", "1", 1).replace("e-", "", 1).isdigit()
+                        ):
                             setattr(sp.behavior, k, v)
                         else:
                             try:
@@ -403,7 +411,9 @@ class SouParser:
                             except (ValueError, TypeError):
                                 setattr(sp.behavior, k, v)
                 elif section == "cognition":
-                    sp.cognition = CognitiveSignature(**{k: float(v) for k, v in current_block.items()})
+                    sp.cognition = CognitiveSignature(
+                        **{k: float(v) for k, v in current_block.items()}
+                    )
                 elif section == "emotion":
                     sp.emotion = EmotionalRange(**{k: float(v) for k, v in current_block.items()})
                 elif section == "adapter":
@@ -435,7 +445,9 @@ class SouParser:
                             current_block[k] = float(v) if "." in v else int(v)
                         except ValueError:
                             current_block[k] = v
-                sp.generation = GenerationParams(**{k: v for k, v in current_block.items() if k != "stop"})
+                sp.generation = GenerationParams(
+                    **{k: v for k, v in current_block.items() if k != "stop"}
+                )
                 if "stop" in current_block:
                     sp.generation.stop = current_block["stop"]
             elif section == "context":
@@ -471,7 +483,7 @@ class SouParser:
 
     @staticmethod
     def load(path: str) -> SloProfile:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             content = f.read()
         return SouParser.parse(content)
 
@@ -488,10 +500,10 @@ def create_soul_profile(
     epochs_trained: int = 0,
     final_train_loss: float = 0.0,
     final_val_loss: float = 0.0,
-    personality: Optional[PersonalityCore] = None,
-    generation: Optional[GenerationParams] = None,
+    personality: PersonalityCore | None = None,
+    generation: GenerationParams | None = None,
     system_prompt: str = "",
-    tags: Optional[List[str]] = None,
+    tags: list[str] | None = None,
     lineage: str = "nanogpt",
     dataset_signature: str = "",
     **kwargs,
@@ -519,7 +531,7 @@ def create_soul_profile(
 def save_soul(
     model,
     output_path: str,
-    soul_profile: Optional[SloProfile] = None,
+    soul_profile: SloProfile | None = None,
     weights_only: bool = False,
 ) -> str:
     """Export model to .soul format (binary: header + config + JSON weights).
@@ -544,7 +556,11 @@ def save_soul(
     if soul_profile is None:
         soul_profile = SloProfile(name=Path(output_path).stem)
 
-    if not soul_profile.metadata and hasattr(model, "metadata") and isinstance(model.metadata, dict):
+    if (
+        not soul_profile.metadata
+        and hasattr(model, "metadata")
+        and isinstance(model.metadata, dict)
+    ):
         soul_profile.metadata = dict(model.metadata)
     if not soul_profile.lineage and hasattr(model, "lineage"):
         soul_profile.lineage = model.lineage
@@ -566,7 +582,8 @@ def save_soul(
     # could be misread as matching the soul.
     meta_path = output_path + ".meta.json"
     meta_fd, meta_tmp_path = tempfile.mkstemp(
-        dir=os.path.dirname(output_path) or ".", suffix=".tmp",
+        dir=os.path.dirname(output_path) or ".",
+        suffix=".tmp",
     )
     try:
         with os.fdopen(meta_fd, "w", encoding="utf-8") as f:
@@ -586,7 +603,8 @@ def save_soul(
         raise
 
     tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=os.path.dirname(output_path) or ".", suffix=".tmp",
+        dir=os.path.dirname(output_path) or ".",
+        suffix=".tmp",
     )
     try:
         with os.fdopen(tmp_fd, "wb") as f:
@@ -597,6 +615,7 @@ def save_soul(
 
             if not weights_only:
                 import numpy as np
+
                 if hasattr(model, "state_dict"):
                     state = model.state_dict()
                     params = []
@@ -616,19 +635,24 @@ def save_soul(
                             elif isinstance(v, (list, tuple)):
                                 arr = np.asarray(v, dtype=np.float32)
                             elif isinstance(v, dict):
-                                logger.debug("Skipping non-tensor state_dict key: %s (dict value)", k)
+                                logger.debug(
+                                    "Skipping non-tensor state_dict key: %s (dict value)", k
+                                )
                                 continue
                             else:
                                 arr = np.asarray(v, dtype=np.float32)
                             params.append((k, arr))
                         except (TypeError, ValueError) as e:
-                            logger.warning("Skipping state_dict key %s: %s", k, e, extra={"tag": "INF"})
+                            logger.warning(
+                                "Skipping state_dict key %s: %s", k, e, extra={"tag": "INF"}
+                            )
                             continue
                     if len(params) == 0 and len(state) > 0:
                         logger.error(
                             "save_soul: wrote 0 params out of %d state_dict keys — "
                             "checkpoint will be unusable. Model type: %s",
-                            len(state), type(model).__name__,
+                            len(state),
+                            type(model).__name__,
                             extra={"tag": "INF"},
                         )
                     f.write(struct.pack("<I", len(params)))
@@ -710,11 +734,10 @@ def load_soul(sou_path: str):
                         arr = np.array(v, dtype=np.float32)
                         state_dict[k] = arr
             except Exception as e:
-                logger.error("v1/v2 JSON weight parse failed for %s: %s", sou_path, e,
-                    extra={"tag": "INF"})
-                raise ValueError(
-                    f"Corrupted .soul file weights: {sou_path} — {e}"
-                ) from e
+                logger.error(
+                    "v1/v2 JSON weight parse failed for %s: %s", sou_path, e, extra={"tag": "INF"}
+                )
+                raise ValueError(f"Corrupted .soul file weights: {sou_path} — {e}") from e
 
     config = json.loads(config_json)
     soul = SouParser.parse(
@@ -765,8 +788,7 @@ def write_v3_sou(
     import numpy as np
 
     params = {
-        f"p{i}": np.asarray(v, dtype=np.float32)
-        for i, (_, v) in enumerate(state_dict.items())
+        f"p{i}": np.asarray(v, dtype=np.float32) for i, (_, v) in enumerate(state_dict.items())
     }
     meta_bytes = json.dumps(metadata, allow_nan=False, default=str).encode()
     num_params = len(params)
@@ -792,11 +814,11 @@ def write_v3_sou(
 
 def generate_sample_dialogue(
     model,
-    stoi: Dict[int, str],
-    itos: Dict[int, str],
+    stoi: dict[int, str],
+    itos: dict[int, str],
     num_turns: int = 3,
     max_tokens: int = 50,
-) -> List[Dict[str, str]]:
+) -> list[dict[str, str]]:
     """Generate sample dialogue to populate the soul profile."""
     import numpy as np
 
@@ -818,7 +840,7 @@ def generate_sample_dialogue(
             else:
                 output = idx
             response = "".join([itos.get(int(i), "?") for i in np.asarray(output).flatten()])
-            response = response[len(prompt):].strip()
+            response = response[len(prompt) :].strip()
         except Exception:
             response = "[generation failed]"
         dialogue.append({"role": role, "content": prompt})

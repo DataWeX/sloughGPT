@@ -2,10 +2,7 @@
 
 import subprocess
 import time
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from domain.training._internal.auto_trainer import AutoTrainer
 
@@ -91,9 +88,11 @@ class TestAutoTrainer:
         t._sessions_mtime = 0
         t._logs_mtime = 0
         counter = [100.0]
+
         def incr_mtime(_):
             counter[0] += 1
             return counter[0]
+
         with patch.object(AutoTrainer, "_dir_mtime", side_effect=incr_mtime):
             for _ in range(3):
                 t._check_and_train()
@@ -138,13 +137,16 @@ class TestAutoTrainer:
         t.stop()  # Should not raise
 
     @patch("domain.training._internal.pair_extractor.write_training_text")
-    @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[
-        {"user_msg": "Hello", "assistant_msg": "Hi there!", "session_id": "s1"},
-        {"user_msg": "Bye", "assistant_msg": "Goodbye!", "session_id": "s1"},
-        {"user_msg": "Thanks", "assistant_msg": "You're welcome!", "session_id": "s1"},
-        {"user_msg": "Test", "assistant_msg": "Result!", "session_id": "s1"},
-        {"user_msg": "One", "assistant_msg": "More!", "session_id": "s1"},
-    ])
+    @patch(
+        "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
+        return_value=[
+            {"user_msg": "Hello", "assistant_msg": "Hi there!", "session_id": "s1"},
+            {"user_msg": "Bye", "assistant_msg": "Goodbye!", "session_id": "s1"},
+            {"user_msg": "Thanks", "assistant_msg": "You're welcome!", "session_id": "s1"},
+            {"user_msg": "Test", "assistant_msg": "Result!", "session_id": "s1"},
+            {"user_msg": "One", "assistant_msg": "More!", "session_id": "s1"},
+        ],
+    )
     @patch("domain.training._internal.pair_extractor.extract_pairs_from_logs", return_value=[])
     def test_do_train_success(self, mock_logs, mock_sessions, mock_write, tmp_path):
         """Successful training updates state."""
@@ -189,13 +191,18 @@ class TestAutoTrainer:
         t = AutoTrainer()
         t._conversation_count = 5
 
-        with patch(
-            "domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[
-                {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
-                for i in range(5)
-            ]
-        ), patch(
-            "domain.training._internal.pair_extractor.write_training_text", return_value=tmp_path / "train.txt"
+        with (
+            patch(
+                "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
+                return_value=[
+                    {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
+                    for i in range(5)
+                ],
+            ),
+            patch(
+                "domain.training._internal.pair_extractor.write_training_text",
+                return_value=tmp_path / "train.txt",
+            ),
         ):
             result = t._do_train()
         assert result is False
@@ -203,8 +210,10 @@ class TestAutoTrainer:
     def test_loop_logs_exception(self, caplog):
         """The monitoring loop logs exceptions from _check_and_train."""
         t = AutoTrainer()
-        with patch.object(t, "_check_and_train", side_effect=RuntimeError("boom")), \
-                patch.object(t._stop_event, "wait", side_effect=lambda *_: t._stop_event.set()):
+        with (
+            patch.object(t, "_check_and_train", side_effect=RuntimeError("boom")),
+            patch.object(t._stop_event, "wait", side_effect=lambda *_: t._stop_event.set()),
+        ):
             t._loop()
         assert t._stop_event.is_set()
 
@@ -221,12 +230,17 @@ class TestAutoTrainer:
 
     @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[])
     @patch("domain.training._internal.pair_extractor.extract_pairs_from_corpus", return_value=[])
-    @patch("domain.training._internal.pair_extractor.extract_pairs_from_logs", return_value=[
-        {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
-        for i in range(5)
-    ])
+    @patch(
+        "domain.training._internal.pair_extractor.extract_pairs_from_logs",
+        return_value=[
+            {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
+            for i in range(5)
+        ],
+    )
     @patch("domain.training._internal.pair_extractor.write_training_text")
-    def test_do_train_falls_back_to_logs(self, mock_write, mock_logs, mock_corpus, mock_sessions, tmp_path):
+    def test_do_train_falls_back_to_logs(
+        self, mock_write, mock_logs, mock_corpus, mock_sessions, tmp_path
+    ):
         """Training falls back to response logs when sessions/corpus are empty."""
         mock_write.return_value = tmp_path / "train.txt"
         venv = tmp_path / ".venv" / "bin"
@@ -249,12 +263,17 @@ class TestAutoTrainer:
 
     @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[])
     @patch("domain.training._internal.pair_extractor.extract_pairs_from_corpus", return_value=[])
-    @patch("domain.training._internal.pair_extractor.extract_pairs_from_logs", return_value=[
-        {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
-        for i in range(5)
-    ])
+    @patch(
+        "domain.training._internal.pair_extractor.extract_pairs_from_logs",
+        return_value=[
+            {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
+            for i in range(5)
+        ],
+    )
     @patch("domain.training._internal.pair_extractor.write_training_text")
-    def test_do_train_subprocess_failed(self, mock_write, mock_logs, mock_corpus, mock_sessions, tmp_path):
+    def test_do_train_subprocess_failed(
+        self, mock_write, mock_logs, mock_corpus, mock_sessions, tmp_path
+    ):
         """Training reports False when the subprocess exits non-zero."""
         mock_write.return_value = tmp_path / "train.txt"
         venv = tmp_path / ".venv" / "bin"
@@ -271,10 +290,13 @@ class TestAutoTrainer:
         assert result is False
         assert t._total_trains == 0
 
-    @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[
-        {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
-        for i in range(5)
-    ])
+    @patch(
+        "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
+        return_value=[
+            {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
+            for i in range(5)
+        ],
+    )
     @patch("domain.training._internal.pair_extractor.write_training_text")
     def test_do_train_store_failure_is_logged(self, mock_write, mock_sessions, tmp_path):
         """Store failures are logged without failing the training run."""
@@ -292,16 +314,24 @@ class TestAutoTrainer:
                 stdout='{"success": true, "loss": 1.5, "steps": 5}\n',
                 stderr="",
             )
-            with patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path), \
-                    patch("domain.training._internal.quality_scorer.score_batch", side_effect=RuntimeError("db down")):
+            with (
+                patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path),
+                patch(
+                    "domain.training._internal.quality_scorer.score_batch",
+                    side_effect=RuntimeError("db down"),
+                ),
+            ):
                 result = t._do_train()
         assert result is True
         assert t._total_trains == 1
 
-    @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[
-        {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
-        for i in range(5)
-    ])
+    @patch(
+        "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
+        return_value=[
+            {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
+            for i in range(5)
+        ],
+    )
     @patch("domain.training._internal.pair_extractor.write_training_text")
     def test_do_train_result_not_success(self, mock_write, mock_sessions, tmp_path):
         """Training reports False when the subprocess result is not successful."""
@@ -324,10 +354,13 @@ class TestAutoTrainer:
         assert result is False
         assert t._total_trains == 0
 
-    @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[
-        {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
-        for i in range(5)
-    ])
+    @patch(
+        "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
+        return_value=[
+            {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
+            for i in range(5)
+        ],
+    )
     @patch("domain.training._internal.pair_extractor.write_training_text")
     def test_do_train_subprocess_timeout(self, mock_write, mock_sessions, tmp_path):
         """Training reports False when the subprocess times out."""
@@ -339,15 +372,20 @@ class TestAutoTrainer:
 
         t = AutoTrainer(threshold=5, interval_s=0)
         t._conversation_count = 5
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("hf_train.py", 300)), \
-                patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path):
+        with (
+            patch("subprocess.run", side_effect=subprocess.TimeoutExpired("hf_train.py", 300)),
+            patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path),
+        ):
             result = t._do_train()
         assert result is False
 
-    @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[
-        {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
-        for i in range(5)
-    ])
+    @patch(
+        "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
+        return_value=[
+            {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
+            for i in range(5)
+        ],
+    )
     @patch("domain.training._internal.pair_extractor.write_training_text")
     def test_do_train_subprocess_other_error(self, mock_write, mock_sessions, tmp_path):
         """Training reports False on an unexpected subprocess error."""
@@ -359,8 +397,10 @@ class TestAutoTrainer:
 
         t = AutoTrainer(threshold=5, interval_s=0)
         t._conversation_count = 5
-        with patch("subprocess.run", side_effect=OSError("no python")), \
-                patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path):
+        with (
+            patch("subprocess.run", side_effect=OSError("no python")),
+            patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path),
+        ):
             result = t._do_train()
         assert result is False
 
@@ -369,6 +409,7 @@ class TestAutoTrainerSingleton:
     def test_get_auto_trainer_creates_singleton(self, monkeypatch):
         """get_auto_trainer creates a singleton with env-driven config."""
         import domain.training._internal.auto_trainer as at
+
         monkeypatch.setattr(at, "_auto_trainer", None)
         monkeypatch.setenv("SLO_AUTO_TRAIN_THRESHOLD", "7")
         monkeypatch.setenv("SLO_AUTO_TRAIN_INTERVAL", "120")
@@ -380,6 +421,7 @@ class TestAutoTrainerSingleton:
     def test_start_auto_trainer_if_disabled(self, monkeypatch):
         """start_auto_trainer_if_enabled returns None when disabled."""
         import domain.training._internal.auto_trainer as at
+
         monkeypatch.setattr(at, "_auto_trainer", None)
         monkeypatch.setenv("SLO_AUTO_TRAIN", "0")
         assert at.start_auto_trainer_if_enabled() is None
@@ -387,6 +429,7 @@ class TestAutoTrainerSingleton:
     def test_start_auto_trainer_if_enabled(self, monkeypatch):
         """start_auto_trainer_if_enabled starts the trainer when enabled."""
         import domain.training._internal.auto_trainer as at
+
         t = AutoTrainer(interval_s=9999)
         monkeypatch.setattr(at, "_auto_trainer", t)
         monkeypatch.setenv("SLO_AUTO_TRAIN", "1")
@@ -401,6 +444,7 @@ class TestAutoTrainerSingleton:
     def test_stop_auto_trainer_stops_global(self, monkeypatch):
         """stop_auto_trainer stops the global trainer."""
         import domain.training._internal.auto_trainer as at
+
         t = AutoTrainer(interval_s=9999)
         monkeypatch.setattr(at, "_auto_trainer", t)
         t.start()

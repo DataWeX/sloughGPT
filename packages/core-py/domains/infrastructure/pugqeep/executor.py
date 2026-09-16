@@ -3,11 +3,13 @@ ParallelExecutor — shared threading logic for batch compress/decompress.
 
 Single place for ProducerConsumerQueue coordination.
 """
+
 from __future__ import annotations
 
 import os
 import threading
-from typing import Any, Callable, Dict, List, Tuple
+from collections.abc import Callable
+from typing import Any
 
 
 class ParallelExecutor:
@@ -19,10 +21,9 @@ class ParallelExecutor:
         timeout: Max seconds to wait for queue drain.
     """
 
-    __slots__ = ('_num_workers', '_queue_factor', '_timeout')
+    __slots__ = ("_num_workers", "_queue_factor", "_timeout")
 
-    def __init__(self, num_workers: int = -1, queue_factor: int = 4,
-                 timeout: float = 30.0):
+    def __init__(self, num_workers: int = -1, queue_factor: int = 4, timeout: float = 30.0):
         if num_workers < 0:
             num_workers = os.cpu_count() or 4
         self._num_workers = num_workers
@@ -33,8 +34,9 @@ class ParallelExecutor:
     def num_workers(self) -> int:
         return self._num_workers
 
-    def run(self, items: List[Tuple[str, Any]], handler: Callable[[Any], None],
-            name: str = "parallel") -> None:
+    def run(
+        self, items: list[tuple[str, Any]], handler: Callable[[Any], None], name: str = "parallel"
+    ) -> None:
         """Run handler on each item in parallel.
 
         Args:
@@ -58,9 +60,9 @@ class ParallelExecutor:
         finally:
             q.stop(timeout=self._timeout)
 
-    def map(self, items: List[Tuple[str, Any]],
-            fn: Callable[[Any], Any],
-            name: str = "parallel") -> Dict[str, Any]:
+    def map(
+        self, items: list[tuple[str, Any]], fn: Callable[[Any], Any], name: str = "parallel"
+    ) -> dict[str, Any]:
         """Map fn over items in parallel, return {key: result}.
 
         Args:
@@ -71,7 +73,7 @@ class ParallelExecutor:
         Returns:
             Dict mapping keys to results.
         """
-        results: Dict[str, Any] = {}
+        results: dict[str, Any] = {}
         lock = threading.Lock()
 
         def process(item):

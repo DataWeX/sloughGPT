@@ -3,21 +3,20 @@
 Covers: training stats, notification history, sync status, device management,
 compact, auto-train status, and model switching.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
 from fastapi.testclient import TestClient
-
 from routers.mobile import MobileRouter
+
 from conftest import build_test_app
 
 
@@ -134,12 +133,15 @@ class TestDeviceManagement:
 
         mr = MobileRouter()
         client = TestClient(_app(mr))
-        resp = client.post("/mobile/notifications/register", json={
-            "token": "device_token_123",
-            "platform": "ios",
-            "user_id": "user1",
-            "topics": ["training"],
-        })
+        resp = client.post(
+            "/mobile/notifications/register",
+            json={
+                "token": "device_token_123",
+                "platform": "ios",
+                "user_id": "user1",
+                "topics": ["training"],
+            },
+        )
         assert resp.status_code == 200
         svc.register_device.assert_called_once()
 
@@ -223,10 +225,13 @@ class TestSendNotification:
 
         mr = MobileRouter()
         client = TestClient(_app(mr))
-        resp = client.post("/mobile/notifications/send", json={
-            "title": "Training Complete",
-            "body": "Your model finished training",
-        })
+        resp = client.post(
+            "/mobile/notifications/send",
+            json={
+                "title": "Training Complete",
+                "body": "Your model finished training",
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()["data"]
         assert body["sent"] == 5

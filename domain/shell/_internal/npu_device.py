@@ -7,14 +7,15 @@ Adds: model management, I/O, clean ioctl interface.
 
 from __future__ import annotations
 
-import time
 import logging
-import numpy as np
+import time
 from typing import Any
 
-from .tensor_device import TensorDevice
+import numpy as np
+
 from .ioctl import IoctlCommand
 from .kernel_syscall import SyscallResult
+from .tensor_device import TensorDevice
 
 logger = logging.getLogger("slo.npu")
 
@@ -155,13 +156,23 @@ class NPUDevice:
 
     def list_commands(self) -> list[str]:
         """List all available commands."""
-        return sorted([
-            "INFO", "LIST_COMMANDS",
-            "LOAD", "UNLOAD", "CALL",
-            "BATCH", "PIPELINE", "PROFILE", "QUANTIZE",
-            "CHECKPOINT_SAVE", "CHECKPOINT_LOAD",
-            "MEMORY", "COMPUTE",
-        ])
+        return sorted(
+            [
+                "INFO",
+                "LIST_COMMANDS",
+                "LOAD",
+                "UNLOAD",
+                "CALL",
+                "BATCH",
+                "PIPELINE",
+                "PROFILE",
+                "QUANTIZE",
+                "CHECKPOINT_SAVE",
+                "CHECKPOINT_LOAD",
+                "MEMORY",
+                "COMPUTE",
+            ]
+        )
 
     # ── Function calls (direct use) ───────────────────────────────────────
 
@@ -251,8 +262,9 @@ class NPUDevice:
             "total_ms": round(total_ms, 2),
         }
 
-    def profile(self, model_name: str, seq_len: int = 512,
-                batch_sizes: list[int] | None = None) -> dict:
+    def profile(
+        self, model_name: str, seq_len: int = 512, batch_sizes: list[int] | None = None
+    ) -> dict:
         """Benchmark model performance."""
         name = model_name or self._default_model
         provider = self._models.get(name)
@@ -270,12 +282,14 @@ class NPUDevice:
                 self.execute(name, prompt)
             ms = (time.time() - t0) * 1000
             toks_per_sec = (bs * seq_len) / (ms / 1000) if ms > 0 else 0
-            profiles.append({
-                "batch_size": bs,
-                "seq_len": seq_len,
-                "latency_ms": round(ms / bs, 2),
-                "tokens_per_sec": round(toks_per_sec, 1),
-            })
+            profiles.append(
+                {
+                    "batch_size": bs,
+                    "seq_len": seq_len,
+                    "latency_ms": round(ms / bs, 2),
+                    "tokens_per_sec": round(toks_per_sec, 1),
+                }
+            )
 
         return {"model": name, "profiles": profiles}
 
@@ -298,8 +312,9 @@ class NPUDevice:
                 inner._original_weights = {}
             inner._original_weights[key] = arr.copy()
             scale = np.max(np.abs(arr)) / (127 if bits == 8 else 7)
-            quant = np.clip(np.round(arr / scale), -(128 if bits == 8 else 8),
-                            127 if bits == 8 else 7).astype(np.int8)
+            quant = np.clip(
+                np.round(arr / scale), -(128 if bits == 8 else 8), 127 if bits == 8 else 7
+            ).astype(np.int8)
             inner._params[key] = quant
             n_quantized += 1
 
@@ -327,16 +342,16 @@ class NPUDevice:
     def memory(self) -> dict:
         """Memory usage."""
         import psutil
+
         proc = psutil.Process()
         rss = proc.memory_info().rss / (1024 * 1024)
         model_mem = {}
         for name, provider in self._models.items():
             inner = getattr(provider, "_model", None)
             if inner and hasattr(inner, "_params"):
-                mem = sum(
-                    p.nbytes for p in inner._params.values()
-                    if isinstance(p, np.ndarray)
-                ) / (1024 * 1024)
+                mem = sum(p.nbytes for p in inner._params.values() if isinstance(p, np.ndarray)) / (
+                    1024 * 1024
+                )
                 model_mem[name] = round(mem, 2)
         return {
             "rss_mb": round(rss, 2),
@@ -397,10 +412,12 @@ class NPUDevice:
 
     def _load_numpy(self, name: str, path: str):
         from domain.inference._internal.slonet_provider import SlonetChatProvider
+
         return SlonetChatProvider.from_slnc(path, model_id=name)
 
     def _load_c(self, name: str, path: str):
         from domain.inference._internal.ct_provider import CTransformProvider
+
         return CTransformProvider.from_slnc(path, model_id=name)
 
     def _load_numpy_array(self, path: str, name: str):
@@ -409,6 +426,7 @@ class NPUDevice:
 
     def _load_python(self, path: str, name: str):
         import importlib.util
+
         spec = importlib.util.spec_from_file_location(name, path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -416,6 +434,7 @@ class NPUDevice:
 
     def _load_dataset(self, path: str, name: str):
         import pandas as pd
+
         if path.endswith(".csv"):
             data = pd.read_csv(path)
         elif path.endswith(".json"):

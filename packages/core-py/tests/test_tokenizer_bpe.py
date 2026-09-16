@@ -4,16 +4,15 @@ from __future__ import annotations
 
 import os
 import tempfile
-import pytest
-import numpy as np
-from domain.training._internal.tokenizer import SloBPE
 
+import pytest
+
+from domain.training._internal.tokenizer import SloBPE
 
 # ── SloBPE init ─────────────────────────────────────────────────────────────
 
 
 class TestSloBPEInit:
-
     def test_default(self):
         tok = SloBPE()
         assert tok.vocab_size == 0
@@ -36,7 +35,6 @@ class TestSloBPEInit:
 
 
 class TestSloBPETrain:
-
     def test_train(self):
         tok = SloBPE()
         tok.train(["hello world"], vocab_size=32)
@@ -80,7 +78,6 @@ class TestSloBPETrain:
 
 
 class TestSloBPESaveLoad:
-
     def test_save_load(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tok = SloBPE()
@@ -108,7 +105,6 @@ class TestSloBPESaveLoad:
 
 
 class TestSloBPEBosEos:
-
     def test_encode_with_bos_eos(self):
         tok = SloBPE()
         tok.train(["hello world"], vocab_size=32)
@@ -121,15 +117,16 @@ class TestSloBPEBosEos:
 
 
 class TestPretokenizeHelpers:
-
     def test_gpt2_pretokenize(self):
         from domain.training._internal.tokenizer import gpt2_pretokenize
+
         result = gpt2_pretokenize("hello world")
         assert isinstance(result, list)
         assert len(result) > 0
 
     def test_default_pretokenize(self):
         from domain.training._internal.tokenizer import default_pretokenize
+
         result = default_pretokenize("hello world")
         assert isinstance(result, list)
         assert len(result) > 0

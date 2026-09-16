@@ -1,15 +1,20 @@
 """Tests for domain.infrastructure.resource_manager — ResourceAllocation; domain.infrastructure.model_worker — WorkerHealth, WorkerStreamStalledError."""
 
-from domain.infrastructure._internal.resource_manager import (
-    ResourceAllocation, ResourceManager, compute_allocation,
-    get_resource_manager, reset_resource_manager, _clamp, _env_int,
-)
 from domain.infrastructure._internal.model_worker import WorkerHealth, WorkerStreamStalledError
-
+from domain.infrastructure._internal.resource_manager import (
+    ResourceAllocation,
+    ResourceManager,
+    _clamp,
+    _env_int,
+    compute_allocation,
+    get_resource_manager,
+    reset_resource_manager,
+)
 
 # ---------------------------------------------------------------------------
 # ResourceAllocation
 # ---------------------------------------------------------------------------
+
 
 class TestResourceAllocation:
     def test_defaults(self):
@@ -32,12 +37,18 @@ class TestResourceAllocation:
 
     def test_all_fields_settable(self):
         ra = ResourceAllocation(
-            compute_threads=2, io_threads=1,
-            omp_num_threads=2, mkl_num_threads=2,
-            openblas_num_threads=1, numexpr_num_threads=2,
-            inference_pool_size=4, train_pool_size=2,
-            task_queue_workers=4, dataloader_workers=2,
-            concurrent_writes=4, concurrent_reads=16,
+            compute_threads=2,
+            io_threads=1,
+            omp_num_threads=2,
+            mkl_num_threads=2,
+            openblas_num_threads=1,
+            numexpr_num_threads=2,
+            inference_pool_size=4,
+            train_pool_size=2,
+            task_queue_workers=4,
+            dataloader_workers=2,
+            concurrent_writes=4,
+            concurrent_reads=16,
             process_guard_concurrent=1,
             workload_mode="inference",
         )
@@ -46,9 +57,16 @@ class TestResourceAllocation:
         assert ra.concurrent_reads == 16
 
     def test_summary_contains_all_fields(self):
-        ra = ResourceAllocation(compute_threads=4, io_threads=2, inference_pool_size=8,
-                                train_pool_size=4, task_queue_workers=6, dataloader_workers=2,
-                                concurrent_writes=8, concurrent_reads=32)
+        ra = ResourceAllocation(
+            compute_threads=4,
+            io_threads=2,
+            inference_pool_size=8,
+            train_pool_size=4,
+            task_queue_workers=6,
+            dataloader_workers=2,
+            concurrent_writes=8,
+            concurrent_reads=32,
+        )
         s = ra.summary()
         assert "compute=4" in s
         assert "io=2" in s
@@ -61,7 +79,7 @@ class TestResourceAllocation:
         ra = ResourceAllocation()
         try:
             ra.workload_mode = "other"
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -79,6 +97,7 @@ class TestResourceAllocation:
 # ---------------------------------------------------------------------------
 # _clamp
 # ---------------------------------------------------------------------------
+
 
 class TestClamp:
     def test_within_range(self):
@@ -99,6 +118,7 @@ class TestClamp:
 # _env_int
 # ---------------------------------------------------------------------------
 
+
 class TestEnvInt:
     def test_existing_env(self, monkeypatch):
         monkeypatch.setenv("TEST_ENV_INT_VAR", "42")
@@ -115,6 +135,7 @@ class TestEnvInt:
 # ---------------------------------------------------------------------------
 # compute_allocation
 # ---------------------------------------------------------------------------
+
 
 class TestComputeAllocation:
     def test_balanced(self):
@@ -180,6 +201,7 @@ class TestComputeAllocation:
 # ResourceManager
 # ---------------------------------------------------------------------------
 
+
 class TestResourceManager:
     def test_init(self):
         rm = ResourceManager()
@@ -193,7 +215,6 @@ class TestResourceManager:
 
     def test_recompute(self):
         rm = ResourceManager()
-        old_infer = rm.inference_pool_size
         rm.recompute("inference")
         assert rm.mode == "inference"
 
@@ -231,6 +252,7 @@ class TestResourceManager:
 # Singleton functions
 # ---------------------------------------------------------------------------
 
+
 class TestSingleton:
     def test_get_resource_manager(self):
         rm = get_resource_manager()
@@ -249,6 +271,7 @@ class TestSingleton:
 # ---------------------------------------------------------------------------
 # WorkerHealth
 # ---------------------------------------------------------------------------
+
 
 class TestWorkerHealth:
     def test_defaults(self):
@@ -279,8 +302,14 @@ class TestWorkerHealth:
 
     def test_all_fields(self):
         wh = WorkerHealth(
-            pid=999, alive=True, started_at=1.0, last_heartbeat=2.0,
-            requests_served=50, errors=3, crashed=True, crash_count=1,
+            pid=999,
+            alive=True,
+            started_at=1.0,
+            last_heartbeat=2.0,
+            requests_served=50,
+            errors=3,
+            crashed=True,
+            crash_count=1,
         )
         assert wh.pid == 999
         assert wh.alive is True
@@ -305,6 +334,7 @@ class TestWorkerHealth:
 # ---------------------------------------------------------------------------
 # WorkerStreamStalledError
 # ---------------------------------------------------------------------------
+
 
 class TestWorkerStreamStalledError:
     def test_is_runtime_error(self):
@@ -337,6 +367,7 @@ class TestWorkerStreamStalledError:
 # ---------------------------------------------------------------------------
 # Additional ResourceAllocation tests
 # ---------------------------------------------------------------------------
+
 
 class TestResourceAllocationExtra:
     def test_topology_detected(self):
@@ -400,7 +431,7 @@ class TestResourceAllocationExtra:
         ra = ResourceAllocation()
         try:
             ra.compute_threads = 999
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -408,6 +439,7 @@ class TestResourceAllocationExtra:
 # ---------------------------------------------------------------------------
 # Additional _clamp tests
 # ---------------------------------------------------------------------------
+
 
 class TestClampExtra:
     def test_same_value(self):
@@ -429,6 +461,7 @@ class TestClampExtra:
 # ---------------------------------------------------------------------------
 # Additional _env_int tests
 # ---------------------------------------------------------------------------
+
 
 class TestEnvIntExtra:
     def test_zero_value(self, monkeypatch):
@@ -455,6 +488,7 @@ class TestEnvIntExtra:
 # ---------------------------------------------------------------------------
 # Additional compute_allocation tests
 # ---------------------------------------------------------------------------
+
 
 class TestComputeAllocationExtra:
     def test_balanced_train_pool(self):
@@ -493,6 +527,7 @@ class TestComputeAllocationExtra:
 # ---------------------------------------------------------------------------
 # Additional ResourceManager tests
 # ---------------------------------------------------------------------------
+
 
 class TestResourceManagerExtra:
     def test_io_threads_property(self):
@@ -553,6 +588,7 @@ class TestResourceManagerExtra:
 # Additional Singleton tests
 # ---------------------------------------------------------------------------
 
+
 class TestSingletonExtra:
     def test_reset_changes_instance(self):
         rm1 = get_resource_manager()
@@ -573,6 +609,7 @@ class TestSingletonExtra:
 # Additional WorkerHealth tests
 # ---------------------------------------------------------------------------
 
+
 class TestWorkerHealthExtra:
     def test_repr(self):
         wh = WorkerHealth(pid=1, alive=True)
@@ -591,9 +628,7 @@ class TestWorkerHealthExtra:
 
     def test_copy(self):
         wh1 = WorkerHealth(pid=1, alive=True, requests_served=10)
-        wh2 = WorkerHealth(
-            pid=wh1.pid, alive=wh1.alive, requests_served=wh1.requests_served
-        )
+        wh2 = WorkerHealth(pid=wh1.pid, alive=wh1.alive, requests_served=wh1.requests_served)
         assert wh1 == wh2
 
     def test_crash_count_increment(self):
@@ -615,6 +650,7 @@ class TestWorkerHealthExtra:
 # ---------------------------------------------------------------------------
 # Additional WorkerStreamStalledError tests
 # ---------------------------------------------------------------------------
+
 
 class TestWorkerStreamStalledErrorExtra:
     def test_is_exception(self):

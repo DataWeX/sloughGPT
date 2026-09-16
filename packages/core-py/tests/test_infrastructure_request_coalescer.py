@@ -1,9 +1,8 @@
 """Tests for RequestCoalescer — deduplicates concurrent requests."""
+
 from __future__ import annotations
 
 import asyncio
-
-import pytest
 
 from domain.infrastructure._internal.request_coalescer import (
     RequestCoalescer,

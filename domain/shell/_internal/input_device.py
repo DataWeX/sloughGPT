@@ -6,8 +6,8 @@ User input operations with clean ioctl interface.
 
 from __future__ import annotations
 
-import sys
 import select
+import sys
 import termios
 import tty
 from typing import Any

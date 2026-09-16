@@ -7,35 +7,39 @@ or any unit of work the kernel schedules and manages.
 
 from __future__ import annotations
 
-import time
 import threading
-from enum import IntEnum
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from enum import IntEnum
+from typing import Any
 
 
 class ProcessState(IntEnum):
     """Process lifecycle states."""
+
     CREATED = 0
     READY = 1
     RUNNING = 2
-    WAITING = 3    # waiting on I/O, model load, or dependency
+    WAITING = 3  # waiting on I/O, model load, or dependency
     STOPPED = 4
-    ZOMBIE = 5     # completed but not yet reaped
+    ZOMBIE = 5  # completed but not yet reaped
 
 
 class Priority(IntEnum):
     """Scheduling priority — lower value = higher priority."""
-    CRITICAL = 0   # system services, interrupt handlers
-    HIGH = 1       # real-time inference
-    NORMAL = 2     # batch inference, training
-    LOW = 3        # background data loading, preprocessing
-    IDLE = 4       # garbage collection, cleanup
+
+    CRITICAL = 0  # system services, interrupt handlers
+    HIGH = 1  # real-time inference
+    NORMAL = 2  # batch inference, training
+    LOW = 3  # background data loading, preprocessing
+    IDLE = 4  # garbage collection, cleanup
 
 
 @dataclass
 class TensorRef:
     """Reference to a tensor allocation in kernel memory."""
+
     block_id: int
     shape: tuple[int, ...]
     dtype: str
@@ -56,6 +60,7 @@ class Process:
     - A callable entry point and its arguments
     - Timing and resource usage stats
     """
+
     pid: int
     name: str
     state: ProcessState = ProcessState.CREATED
@@ -100,8 +105,12 @@ class Process:
 
     @property
     def is_active(self) -> bool:
-        return self.state in (ProcessState.CREATED, ProcessState.READY,
-                              ProcessState.RUNNING, ProcessState.WAITING)
+        return self.state in (
+            ProcessState.CREATED,
+            ProcessState.READY,
+            ProcessState.RUNNING,
+            ProcessState.WAITING,
+        )
 
     @property
     def is_done(self) -> bool:

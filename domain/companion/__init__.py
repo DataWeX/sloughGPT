@@ -6,12 +6,12 @@ Public API:
 """
 
 from domain.companion._internal.companion import (
-    ResponseStyle,
+    CompanionSystem,
     CompanionTraits,
     ConversationContext,
-    CompanionSystem,
-    get_companion,
+    ResponseStyle,
     create_companion,
+    get_companion,
 )
 
 __all__ = [

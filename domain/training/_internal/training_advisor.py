@@ -7,9 +7,7 @@ Analyzes dataset size, quality, and model type to suggest optimal hyperparameter
 from __future__ import annotations
 
 import logging
-import math
 from dataclasses import dataclass
-from typing import Optional
 
 logger = logging.getLogger("slo.training.advisor")
 
@@ -17,6 +15,7 @@ logger = logging.getLogger("slo.training.advisor")
 @dataclass
 class TrainingRecommendation:
     """Recommended training configuration."""
+
     learning_rate: float
     batch_size: int
     epochs: int
@@ -28,19 +27,19 @@ class TrainingRecommendation:
 
 def recommend_training_config(
     dataset_size: int,
-    model_params: Optional[int] = None,
-    avg_quality: Optional[float] = None,
+    model_params: int | None = None,
+    avg_quality: float | None = None,
     method: str = "distill",
 ) -> TrainingRecommendation:
     """
     Recommend training configuration based on dataset and model characteristics.
-    
+
     Args:
         dataset_size: Number of training examples
         model_params: Number of model parameters (if known)
         avg_quality: Average quality score of training data (0-5)
         method: Training method ('distill', 'finetune', 'native')
-    
+
     Returns:
         TrainingRecommendation with suggested hyperparameters
     """
@@ -118,10 +117,10 @@ def recommend_training_config(
     learning_rate = base_lr * lr_factor
     batch_size = max(4, int(base_batch * batch_factor))
     epochs = max(5, int(base_epochs * epoch_factor))
-    
+
     # Warmup steps based on dataset size
     warmup_steps = max(10, min(100, dataset_size // 100))
-    
+
     # Early stopping patience based on epochs
     early_stopping_patience = max(3, epochs // 5)
 
@@ -143,46 +142,46 @@ def recommend_training_config(
 
 def get_training_tips(
     dataset_size: int,
-    current_loss: Optional[float] = None,
-    best_loss: Optional[float] = None,
-    trend: Optional[float] = None,
+    current_loss: float | None = None,
+    best_loss: float | None = None,
+    trend: float | None = None,
 ) -> list[str]:
     """
     Generate helpful tips based on training state.
-    
+
     Args:
         dataset_size: Number of training examples
         current_loss: Current training loss
         best_loss: Best loss achieved so far
         trend: Loss trend (negative = improving, positive = diverging)
-    
+
     Returns:
         List of actionable tips
     """
     tips = []
-    
+
     if dataset_size < 100:
         tips.append("Very small dataset. Consider collecting more data or using data augmentation.")
-    
+
     if dataset_size < 1000:
         tips.append("Small dataset. Use LoRA or fine-tuning instead of training from scratch.")
-    
+
     if current_loss is not None and best_loss is not None:
         gap = current_loss - best_loss
         if gap > 0.5:
             tips.append("Large gap between current and best loss. Model may be overfitting.")
         elif gap < 0.01:
             tips.append("Training has converged. Consider stopping or reducing learning rate.")
-    
+
     if trend is not None:
         if trend > 0.1:
             tips.append("Loss is increasing. Lower learning rate or add warmup steps.")
         elif trend < -0.1:
             tips.append("Good progress! Loss is decreasing steadily.")
-    
+
     if not tips:
         tips.append("Training looks healthy. Keep going!")
-    
+
     return tips
 
 

@@ -2,26 +2,21 @@
 
 from __future__ import annotations
 
-import json
-import time
-from pathlib import Path
-from unittest.mock import patch
-
-import pytest
-
-from domain.training._internal.status import (
-    TrainingStage, CompletionStatus, StageStatus,
-    TrainingCompletionReport, TrainingStatusTracker,
-    _tensors_to_numpy,
-)
 import numpy as np
 
+from domain.training._internal.status import (
+    CompletionStatus,
+    StageStatus,
+    TrainingCompletionReport,
+    TrainingStage,
+    TrainingStatusTracker,
+    _tensors_to_numpy,
+)
 
 # ── Enums ───────────────────────────────────────────────────────────────────
 
 
 class TestEnums:
-
     def test_training_stage_values(self):
         assert TrainingStage.NOT_STARTED.value == "not_started"
         assert TrainingStage.PRETRAINING.value == "pretraining"
@@ -37,7 +32,6 @@ class TestEnums:
 
 
 class TestStageStatus:
-
     def test_defaults(self):
         s = StageStatus(name="test")
         assert s.started_at is None
@@ -55,7 +49,6 @@ class TestStageStatus:
 
 
 class TestTrainingCompletionReport:
-
     def test_defaults(self):
         r = TrainingCompletionReport(model_name="test", created_at="2024-01-01")
         assert r.is_complete() is False
@@ -64,14 +57,16 @@ class TestTrainingCompletionReport:
 
     def test_is_complete(self):
         r = TrainingCompletionReport(
-            model_name="test", created_at="2024",
+            model_name="test",
+            created_at="2024",
             completion_status=CompletionStatus.COMPLETED,
         )
         assert r.is_complete() is True
 
     def test_can_resume_in_progress(self):
         r = TrainingCompletionReport(
-            model_name="test", created_at="2024",
+            model_name="test",
+            created_at="2024",
             completion_status=CompletionStatus.IN_PROGRESS,
             checkpoint_path="/path/ckpt",
         )
@@ -79,14 +74,16 @@ class TestTrainingCompletionReport:
 
     def test_can_resume_no_checkpoint(self):
         r = TrainingCompletionReport(
-            model_name="test", created_at="2024",
+            model_name="test",
+            created_at="2024",
             completion_status=CompletionStatus.IN_PROGRESS,
         )
         assert r.can_resume() is False
 
     def test_can_resume_interrupted(self):
         r = TrainingCompletionReport(
-            model_name="test", created_at="2024",
+            model_name="test",
+            created_at="2024",
             completion_status=CompletionStatus.INTERRUPTED,
             checkpoint_path="/path/ckpt",
         )
@@ -94,7 +91,8 @@ class TestTrainingCompletionReport:
 
     def test_progress_summary_completed(self):
         r = TrainingCompletionReport(
-            model_name="test", created_at="2024",
+            model_name="test",
+            created_at="2024",
             completion_status=CompletionStatus.COMPLETED,
             final_loss=0.1234,
         )
@@ -102,7 +100,8 @@ class TestTrainingCompletionReport:
 
     def test_progress_summary_in_progress(self):
         r = TrainingCompletionReport(
-            model_name="test", created_at="2024",
+            model_name="test",
+            created_at="2024",
             completion_status=CompletionStatus.IN_PROGRESS,
             completion_percentage=50.0,
         )
@@ -110,7 +109,8 @@ class TestTrainingCompletionReport:
 
     def test_progress_summary_interrupted(self):
         r = TrainingCompletionReport(
-            model_name="test", created_at="2024",
+            model_name="test",
+            created_at="2024",
             completion_status=CompletionStatus.INTERRUPTED,
             completion_percentage=75.0,
         )
@@ -121,7 +121,6 @@ class TestTrainingCompletionReport:
 
 
 class TestTrainingStatusTracker:
-
     def test_init(self):
         tracker = TrainingStatusTracker("mymodel")
         assert tracker.model_name == "mymodel"
@@ -130,8 +129,12 @@ class TestTrainingStatusTracker:
     def test_start_training(self):
         tracker = TrainingStatusTracker()
         tracker.start_training(
-            dataset="test.jsonl", batch_size=8, learning_rate=0.001,
-            pretrain_epochs=5, federated_rounds=3, rlhf_epochs=2,
+            dataset="test.jsonl",
+            batch_size=8,
+            learning_rate=0.001,
+            pretrain_epochs=5,
+            federated_rounds=3,
+            rlhf_epochs=2,
         )
         assert tracker.report.completion_status == CompletionStatus.IN_PROGRESS
         assert tracker.report.dataset == "test.jsonl"
@@ -248,7 +251,6 @@ class TestTrainingStatusTracker:
 
 
 class TestTensorsToNumpy:
-
     def test_numpy_passthrough(self):
         arr = np.array([1.0, 2.0, 3.0])
         result = _tensors_to_numpy({"a": arr})

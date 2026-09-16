@@ -26,14 +26,14 @@ Usage:
     python scripts/benchmark_compare.py --checkpoints model.soul --json
 """
 
-import sys
-import json
-import time
 import argparse
-import numpy as np
+import json
+import sys
+import time
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
-from typing import List, Optional
+
+import numpy as np
 
 # Add core-py to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packages" / "core-py"))
@@ -51,10 +51,10 @@ DEFAULT_PROMPTS = [
 @dataclass
 class ModelResult:
     name: str
-    prompts: List[str]
-    responses: List[str]
-    latencies: List[float]
-    token_counts: List[int]
+    prompts: list[str]
+    responses: list[str]
+    latencies: list[float]
+    token_counts: list[int]
 
     @property
     def mean_latency(self) -> float:
@@ -91,34 +91,37 @@ class ModelResult:
 
 @dataclass
 class ComparisonReport:
-    models: List[ModelResult]
-    prompts: List[str]
+    models: list[ModelResult]
+    prompts: list[str]
 
 
-def benchmark_sou(checkpoint_path: str, prompts: List[str],
-                  max_new_tokens: int = 50, runs: int = 1) -> ModelResult:
+def benchmark_sou(
+    checkpoint_path: str, prompts: list[str], max_new_tokens: int = 50, runs: int = 1
+) -> ModelResult:
     """Benchmark a SOU checkpoint via SloNet numpy engine."""
-    from domain.training._internal.slonet import SloTransformer, SloNet, import_from_sou
+    from domain.training._internal.slonet import import_from_sou
 
     model = import_from_sou(checkpoint_path)
     model.eval()
 
-    has_generate = hasattr(model, 'generate_numpy')
+    has_generate = hasattr(model, "generate_numpy")
 
     # Build vocab from tokenizer if available
-    tokenizer = getattr(model, '_tokenizer', None)
+    tokenizer = getattr(model, "_tokenizer", None)
     if tokenizer is None:
         # Try loading from the checkpoint's directory
         ckpt_dir = Path(checkpoint_path).parent
         tok_path = ckpt_dir / "tokenizer.json"
         if tok_path.exists():
             from domain.multimodal.char_tokenizer import CharTokenizer
+
             tokenizer = CharTokenizer()
             tokenizer.load(str(tok_path))
 
     if tokenizer is None:
         # Fallback: char tokenizer from checkpoint metadata
         from domain.multimodal.char_tokenizer import CharTokenizer
+
         tokenizer = CharTokenizer()
         tokenizer.build_vocab("".join(prompts))
 
@@ -146,7 +149,7 @@ def benchmark_sou(checkpoint_path: str, prompts: List[str],
             )
             elapsed = time.perf_counter() - t0
 
-            gen_ids = output[0, len(input_ids):]
+            gen_ids = output[0, len(input_ids) :]
             text = tokenizer.decode(gen_ids.tolist())
 
             responses.append(text)
@@ -163,8 +166,9 @@ def benchmark_sou(checkpoint_path: str, prompts: List[str],
     )
 
 
-def benchmark_hf(model_name: str, prompts: List[str],
-                 max_new_tokens: int = 50, runs: int = 1) -> Optional[ModelResult]:
+def benchmark_hf(
+    model_name: str, prompts: list[str], max_new_tokens: int = 50, runs: int = 1
+) -> ModelResult | None:
     """Benchmark a HuggingFace model (requires torch)."""
     try:
         import torch
@@ -176,7 +180,9 @@ def benchmark_hf(model_name: str, prompts: List[str],
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
         model = AutoModelForCausalLM.from_pretrained(
-            model_name, torch_dtype=torch.float32, trust_remote_code=True,
+            model_name,
+            torch_dtype=torch.float32,
+            trust_remote_code=True,
         )
         model.eval()
     except Exception as e:
@@ -213,6 +219,7 @@ def benchmark_hf(model_name: str, prompts: List[str],
     # Free memory
     del model
     import gc
+
     gc.collect()
 
     return ModelResult(
@@ -224,7 +231,7 @@ def benchmark_hf(model_name: str, prompts: List[str],
     )
 
 
-def print_comparison(results: List[ModelResult], prompts: List[str]):
+def print_comparison(results: list[ModelResult], prompts: list[str]):
     """Print a formatted comparison table."""
     if not results:
         print("No results to display.")
@@ -235,13 +242,15 @@ def print_comparison(results: List[ModelResult], prompts: List[str]):
     print("MODEL COMPARISON BENCHMARK")
     print("=" * 80)
 
-    header = f"{'Model':<25} {'Mean(ms)':>10} {'P95(ms)':>10} {'tok/s':>8} {'AvgLen':>8} {'LenCV':>8}"
+    header = (
+        f"{'Model':<25} {'Mean(ms)':>10} {'P95(ms)':>10} {'tok/s':>8} {'AvgLen':>8} {'LenCV':>8}"
+    )
     print(header)
     print("-" * 80)
 
     for r in results:
         print(
-            f"{r.name:<25} {r.mean_latency*1000:>10.1f} {r.p95_latency*1000:>10.1f} "
+            f"{r.name:<25} {r.mean_latency * 1000:>10.1f} {r.p95_latency * 1000:>10.1f} "
             f"{r.tokens_per_sec:>8.1f} {r.mean_response_len:>8.1f} {r.len_cv:>8.3f}"
         )
 
@@ -250,11 +259,11 @@ def print_comparison(results: List[ModelResult], prompts: List[str]):
     print("RESPONSE COMPARISON")
     print("=" * 80)
 
-    n_models = len(results)
+    len(results)
     for i, prompt in enumerate(prompts):
         print(f"\nPrompt: {prompt!r}")
         print("-" * 60)
-        for j, r in enumerate(results):
+        for _j, r in enumerate(results):
             resp = r.responses[i] if i < len(r.responses) else "(no response)"
             print(f"  [{r.name}] {resp[:200]}")
 
@@ -263,18 +272,22 @@ def print_comparison(results: List[ModelResult], prompts: List[str]):
 
 def main():
     parser = argparse.ArgumentParser(description="Model Comparison Benchmark")
-    parser.add_argument("--checkpoints", nargs="*", default=[],
-                        help="SOU checkpoint paths to compare")
-    parser.add_argument("--hf-models", nargs="*", default=[],
-                        help="HuggingFace model names to compare")
-    parser.add_argument("--prompts", nargs="*", default=None,
-                        help="Custom prompts (default: 5 built-in)")
-    parser.add_argument("--max-new-tokens", type=int, default=50,
-                        help="Max tokens to generate per prompt")
-    parser.add_argument("--runs", type=int, default=1,
-                        help="Number of runs per prompt (for stable latency)")
-    parser.add_argument("--json", action="store_true",
-                        help="Output results as JSON")
+    parser.add_argument(
+        "--checkpoints", nargs="*", default=[], help="SOU checkpoint paths to compare"
+    )
+    parser.add_argument(
+        "--hf-models", nargs="*", default=[], help="HuggingFace model names to compare"
+    )
+    parser.add_argument(
+        "--prompts", nargs="*", default=None, help="Custom prompts (default: 5 built-in)"
+    )
+    parser.add_argument(
+        "--max-new-tokens", type=int, default=50, help="Max tokens to generate per prompt"
+    )
+    parser.add_argument(
+        "--runs", type=int, default=1, help="Number of runs per prompt (for stable latency)"
+    )
+    parser.add_argument("--json", action="store_true", help="Output results as JSON")
     args = parser.parse_args()
 
     prompts = args.prompts or DEFAULT_PROMPTS

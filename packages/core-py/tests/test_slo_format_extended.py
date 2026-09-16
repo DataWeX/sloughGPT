@@ -4,30 +4,26 @@ import json
 import os
 import struct
 import tempfile
+
 import numpy as np
-import pytest
 
 from domain.inference._internal.slo_format import (
     SOU_MAGIC,
     SOU_VERSION_V3,
     GenerationParams,
-    ContextParams,
     PersonalityCore,
-    BehavioralTraits,
-    CognitiveSignature,
-    EmotionalRange,
     SloProfile,
     SouParser,
     create_soul_profile,
-    save_soul,
-    load_soul,
     generate_sample_dialogue,
+    load_soul,
+    save_soul,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class FakeModel:
     """Minimal model with state_dict() returning numpy arrays."""
@@ -117,6 +113,7 @@ class FakeModelNoGen:
 # save_soul tests
 # ---------------------------------------------------------------------------
 
+
 class TestSaveSoul:
     def test_writes_file_with_valid_header(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -140,7 +137,7 @@ class TestSaveSoul:
             meta_path = path + ".meta.json"
             assert os.path.exists(meta_path)
 
-            with open(meta_path, "r") as f:
+            with open(meta_path) as f:
                 meta = json.load(f)
             assert meta["name"] == "meta"
             assert "personality" in meta
@@ -172,9 +169,7 @@ class TestSaveSoul:
             original = model.state_dict()
             assert len(state) == len(original)
             for key in original:
-                np.testing.assert_array_almost_equal(
-                    state[key], original[key], decimal=5
-                )
+                np.testing.assert_array_almost_equal(state[key], original[key], decimal=5)
 
     def test_weights_only_flag(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -302,6 +297,7 @@ class TestSaveSoul:
 # generate_sample_dialogue tests
 # ---------------------------------------------------------------------------
 
+
 class TestGenerateSampleDialogue:
     def _make_vocab(self):
         chars = list("abcdefghijklmnopqrstuvwxyz !?.")
@@ -386,6 +382,7 @@ class TestGenerateSampleDialogue:
 # create_soul_profile edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestCreateSoulProfileExtended:
     def test_default_system_prompt(self):
         sp = create_soul_profile(name="test")
@@ -453,6 +450,7 @@ class TestCreateSoulProfileExtended:
 # ---------------------------------------------------------------------------
 # Edge cases for SloProfile / to_sou_string / round-trip
 # ---------------------------------------------------------------------------
+
 
 class TestSloProfileEdgeCases:
     def test_to_dict_all_fields(self):

@@ -1,4 +1,5 @@
 """Tests for SessionCore — session context storage and retrieval."""
+
 from __future__ import annotations
 
 from domain.infrastructure._internal.session_core import SessionCore
@@ -6,10 +7,13 @@ from domain.infrastructure._internal.session_core import SessionCore
 
 class TestSessionCore:
     def test_store_and_get(self):
-        result = SessionCore.store_context("s1", [
-            {"role": "user", "content": "hello"},
-            {"role": "assistant", "content": "hi"},
-        ])
+        result = SessionCore.store_context(
+            "s1",
+            [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi"},
+            ],
+        )
         assert result["status"] == "stored"
         assert result["message_count"] == 2
 

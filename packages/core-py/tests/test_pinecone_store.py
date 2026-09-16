@@ -3,16 +3,16 @@
 Pinecone is not a dependency; ``connect()`` is exercised via import mocking.
 """
 
-import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from domain.inference._internal.vector_store import VectorEntry
 from domain.inference._internal.vector_stores.pinecone_store import PineconeVectorStore
 
 
 class TestConstruction:
-
     def test_defaults(self):
         store = PineconeVectorStore()
         assert store.api_key is None
@@ -34,7 +34,6 @@ class TestConstruction:
 
 
 class TestConnect:
-
     @pytest.mark.asyncio
     async def test_connect_requires_api_key(self, monkeypatch):
         monkeypatch.delenv("PINECONE_API_KEY", raising=False)
@@ -131,7 +130,6 @@ class TestConnect:
 
 
 class TestOperations:
-
     @pytest.mark.asyncio
     async def test_upsert_requires_connection(self):
         store = PineconeVectorStore(api_key="k")
@@ -176,9 +174,7 @@ class TestOperations:
         assert results[0].score == pytest.approx(0.9)
         assert results[0].text == "one"
         assert results[0].metadata == {"k": 1}
-        store.index.query.assert_called_once_with(
-            vector=[1.0, 2.0], top_k=2, include_metadata=True
-        )
+        store.index.query.assert_called_once_with(vector=[1.0, 2.0], top_k=2, include_metadata=True)
 
     @pytest.mark.asyncio
     async def test_query_passes_filter(self):

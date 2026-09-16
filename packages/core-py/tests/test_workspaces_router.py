@@ -1,6 +1,7 @@
 """
 Workspaces Router Tests
 """
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -51,14 +52,18 @@ def _make_member(ws_id="ws1", user_id="u1", role="admin"):
 def app_with_repos():
     app = FastAPI()
     from infrastructure.exception_handlers import register_app_error_handler
+
     register_app_error_handler(app)
 
     mock_ws_repo = MagicMock()
     mock_user_repo = MagicMock()
 
-    with patch("routers.workspaces.WorkspaceRepository", return_value=mock_ws_repo), \
-         patch("routers.workspaces.UserRepository", return_value=mock_user_repo):
+    with (
+        patch("routers.workspaces.WorkspaceRepository", return_value=mock_ws_repo),
+        patch("routers.workspaces.UserRepository", return_value=mock_user_repo),
+    ):
         from routers.workspaces import WorkspacesRouter
+
         router_obj = WorkspacesRouter()
         app.include_router(router_obj.router)
 
@@ -228,7 +233,9 @@ class TestAddMember:
         ws_repo.get.return_value = ws1
         # First call: caller is admin member; second call: target is not a member
         caller_member = _make_member("ws1", "admin1", "admin")
-        ws_repo.get_member.side_effect = lambda ws_id, uid: caller_member if uid == "admin1" else None
+        ws_repo.get_member.side_effect = lambda ws_id, uid: (
+            caller_member if uid == "admin1" else None
+        )
 
         client = _make_client(app)
         resp = client.post("/workspaces/ws1/members", json={"user_id": "u2", "role": "user"})

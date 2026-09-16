@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any
 
 from domain.auth._internal.models import (
-    Role,
-    User,
-    UserRole,
     Tenant,
+    User,
     Workspace,
     WorkspaceMember,
 )
@@ -22,6 +19,7 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 
 def _get_mogdb(db_path: str | None = None):
     from mogdb import MogDB
+
     if db_path is None:
         db_path = os.path.join(_REPO_ROOT, "data", "auth_mogdb")
     return MogDB(db_path)
@@ -50,10 +48,7 @@ class UserRepository:
         return User.from_dict(doc) if doc else None
 
     def list_by_tenant(self, tenant_id: str) -> list[User]:
-        return [
-            User.from_dict(d)
-            for d in self._col.find({"tenant_id": tenant_id})
-        ]
+        return [User.from_dict(d) for d in self._col.find({"tenant_id": tenant_id})]
 
     def create(self, user: User) -> User:
         existing = self.get(user.id)
@@ -143,14 +138,10 @@ class WorkspaceRepository:
         return member
 
     def remove_member(self, workspace_id: str, user_id: str) -> bool:
-        return self._members_col.delete_one(
-            {"workspace_id": workspace_id, "user_id": user_id}
-        )
+        return self._members_col.delete_one({"workspace_id": workspace_id, "user_id": user_id})
 
     def get_member(self, workspace_id: str, user_id: str) -> WorkspaceMember | None:
-        doc = self._members_col.find_one(
-            {"workspace_id": workspace_id, "user_id": user_id}
-        )
+        doc = self._members_col.find_one({"workspace_id": workspace_id, "user_id": user_id})
         return WorkspaceMember.from_dict(doc) if doc else None
 
     def list_members(self, workspace_id: str) -> list[WorkspaceMember]:
@@ -160,7 +151,4 @@ class WorkspaceRepository:
         ]
 
     def list_user_workspaces(self, user_id: str) -> list[WorkspaceMember]:
-        return [
-            WorkspaceMember.from_dict(d)
-            for d in self._members_col.find({"user_id": user_id})
-        ]
+        return [WorkspaceMember.from_dict(d) for d in self._members_col.find({"user_id": user_id})]

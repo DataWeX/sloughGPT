@@ -1,23 +1,17 @@
 """Tests for entity_repositories — typed wrappers for domain repositories."""
 
-import json
-import time
-from pathlib import Path
-import pytest
-
 from domain.infrastructure._internal.entity_repositories import (
-    KnowledgeEntry,
-    FeedState,
-    KnowledgeRepository,
-    SessionData,
-    MessageRecord,
-    SessionRepository,
-    FeedbackRecord,
-    FeedbackRepository,
     DatasetMetadata,
     DatasetRepository,
+    FeedbackRecord,
+    FeedbackRepository,
+    FeedState,
+    KnowledgeEntry,
+    KnowledgeRepository,
+    MessageRecord,
+    SessionData,
+    SessionRepository,
 )
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Dataclass round-trips
@@ -27,9 +21,14 @@ from domain.infrastructure._internal.entity_repositories import (
 class TestKnowledgeEntry:
     def test_to_dict_and_back(self):
         entry = KnowledgeEntry(
-            id="k1", content="test fact", topic="ai",
-            source="manual", url="http://x", timestamp=1.0,
-            importance=0.8, tags=["tag1"],
+            id="k1",
+            content="test fact",
+            topic="ai",
+            source="manual",
+            url="http://x",
+            timestamp=1.0,
+            importance=0.8,
+            tags=["tag1"],
         )
         d = entry.to_dict()
         assert d["id"] == "k1"
@@ -56,7 +55,9 @@ class TestKnowledgeEntry:
 
 class TestFeedState:
     def test_to_dict_and_back(self):
-        feed = FeedState(url="http://rss", title="Feed", last_fetched=100.0, poll_interval=600.0, enabled=False)
+        feed = FeedState(
+            url="http://rss", title="Feed", last_fetched=100.0, poll_interval=600.0, enabled=False
+        )
         d = feed.to_dict()
         restored = FeedState.from_dict(d)
         assert restored.url == "http://rss"
@@ -94,7 +95,9 @@ class TestMessageRecord:
 
 class TestFeedbackRecord:
     def test_to_dict_and_back(self):
-        f = FeedbackRecord(id="f1", message_id="m1", rating="thumbs_up", session_id="s1", quality_score=0.9)
+        f = FeedbackRecord(
+            id="f1", message_id="m1", rating="thumbs_up", session_id="s1", quality_score=0.9
+        )
         d = f.to_dict()
         restored = FeedbackRecord.from_dict(d)
         assert restored.id == "f1"
@@ -108,7 +111,9 @@ class TestFeedbackRecord:
 
 class TestDatasetMetadata:
     def test_to_dict_and_back(self):
-        ds = DatasetMetadata(id="d1", name="train", description="desc", record_count=100, tags=["t1"])
+        ds = DatasetMetadata(
+            id="d1", name="train", description="desc", record_count=100, tags=["t1"]
+        )
         d = ds.to_dict()
         restored = DatasetMetadata.from_dict(d)
         assert restored.id == "d1"
@@ -331,8 +336,12 @@ class TestFeedbackRepository:
 
     def test_list_feedback_by_session(self):
         repo = FeedbackRepository()
-        repo.save_feedback(FeedbackRecord(id="f1", message_id="m1", rating="thumbs_up", session_id="s1"))
-        repo.save_feedback(FeedbackRecord(id="f2", message_id="m2", rating="thumbs_down", session_id="s2"))
+        repo.save_feedback(
+            FeedbackRecord(id="f1", message_id="m1", rating="thumbs_up", session_id="s1")
+        )
+        repo.save_feedback(
+            FeedbackRecord(id="f2", message_id="m2", rating="thumbs_down", session_id="s2")
+        )
         s1_feedback = repo.list_feedback(session_id="s1")
         assert len(s1_feedback) == 1
         assert s1_feedback[0].session_id == "s1"

@@ -10,12 +10,11 @@ import logging
 import time
 import uuid
 from pathlib import Path
-from typing import Optional
 
 from domain.infrastructure._internal.entity_repositories import (
+    FeedState,
     KnowledgeEntry,
     KnowledgeRepository,
-    FeedState,
 )
 
 logger = logging.getLogger("slo.knowledge.storage")
@@ -54,7 +53,7 @@ class KnowledgeStorage:
         self._repo.save_fact(entry)
         return fact_id
 
-    def get_fact(self, fact_id: str) -> Optional[dict]:
+    def get_fact(self, fact_id: str) -> dict | None:
         """Retrieve a knowledge fact by ID."""
         entry = self._repo.get_fact(fact_id)
         return entry.to_dict() if entry else None
@@ -109,7 +108,7 @@ class KnowledgeStorage:
         )
         self._repo.save_feed(feed)
 
-    def get_feed(self, url: str) -> Optional[dict]:
+    def get_feed(self, url: str) -> dict | None:
         """Get feed subscription by URL."""
         feed = self._repo.get_feed(url)
         return feed.to_dict() if feed else None

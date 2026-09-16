@@ -18,10 +18,10 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from domain.memory._internal.consolidation import plan_consolidation
 from domain.memory._internal.config import MemoryConfig
+from domain.memory._internal.consolidation import plan_consolidation
 from domain.memory._internal.service import MemoryService, get_memory_service
 
 logger = logging.getLogger("slo.memory_task")
@@ -38,7 +38,7 @@ def _archive_path() -> Path:
     return Path(MemoryConfig.get().store_path) / _ARCHIVE_FILENAME
 
 
-def _append_archive(record: Dict[str, Any]) -> None:
+def _append_archive(record: dict[str, Any]) -> None:
     """Append one durable record to the task-backed store (fail-closed)."""
     try:
         path = _archive_path()
@@ -49,7 +49,7 @@ def _append_archive(record: Dict[str, Any]) -> None:
         logger.debug("Task memory archive append failed: %s", e)
 
 
-def _read_archive() -> List[Dict[str, Any]]:
+def _read_archive() -> list[dict[str, Any]]:
     """Read every archive record in file order (oldest first).
 
     Corrupt or non-JSON lines are skipped so one bad append never breaks
@@ -67,7 +67,7 @@ def _read_archive() -> List[Dict[str, Any]]:
     path = _archive_path()
     if not path.exists():
         return []
-    records: List[Dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
@@ -80,7 +80,7 @@ def _read_archive() -> List[Dict[str, Any]]:
     return records
 
 
-def list_archive(limit: int = 20) -> List[Dict[str, Any]]:
+def list_archive(limit: int = 20) -> list[dict[str, Any]]:
     """
     Return the most recent task-backed archive records, newest first.
 
@@ -94,10 +94,10 @@ def list_archive(limit: int = 20) -> List[Dict[str, Any]]:
         - none; read-only.
     """
     records = _read_archive()
-    return records[-(max(int(limit), 1)):][::-1]
+    return records[-(max(int(limit), 1)) :][::-1]
 
 
-def archive_stats() -> Dict[str, Any]:
+def archive_stats() -> dict[str, Any]:
     """
     Summarize the task-backed provenance archive.
 
@@ -113,7 +113,7 @@ def archive_stats() -> Dict[str, Any]:
         - none; read-only.
     """
     records = _read_archive()
-    by_type: Dict[str, int] = {}
+    by_type: dict[str, int] = {}
     for r in records:
         task_type = r.get("task_type") or "unknown"
         by_type[task_type] = by_type.get(task_type, 0) + 1
@@ -129,7 +129,7 @@ def archive_stats() -> Dict[str, Any]:
     }
 
 
-def prune_archive(retain_days: Optional[float] = None) -> int:
+def prune_archive(retain_days: float | None = None) -> int:
     """
     Delete archive records older than ``retain_days``, keeping the file valid.
 
@@ -162,9 +162,7 @@ def prune_archive(retain_days: Optional[float] = None) -> int:
         return 0
     tmp = path.with_name(path.name + ".tmp")
     try:
-        body = "".join(
-            json.dumps(r, ensure_ascii=False) + "\n" for r in kept
-        )
+        body = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in kept)
         tmp.write_text(body, encoding="utf-8")
         tmp.replace(path)
     except Exception as e:
@@ -173,7 +171,7 @@ def prune_archive(retain_days: Optional[float] = None) -> int:
     return removed
 
 
-async def remember_handler(task) -> Dict[str, Any]:
+async def remember_handler(task) -> dict[str, Any]:
     """
     TaskQueue handler for ``memory.remember``.
 
@@ -195,18 +193,20 @@ async def remember_handler(task) -> Dict[str, Any]:
     assistant_response = str(task.payload.get("assistant_response", "") or "")
     stored = await svc.remember_async(user_message, assistant_response)
     if stored:
-        _append_archive({
-            "ts": time.time(),
-            "task_id": task.id,
-            "task_type": TASK_REMEMBER,
-            "stored": True,
-            "user_message": user_message,
-            "assistant_response": assistant_response,
-        })
+        _append_archive(
+            {
+                "ts": time.time(),
+                "task_id": task.id,
+                "task_type": TASK_REMEMBER,
+                "stored": True,
+                "user_message": user_message,
+                "assistant_response": assistant_response,
+            }
+        )
     return {"stored": stored}
 
 
-async def store_handler(task) -> Dict[str, Any]:
+async def store_handler(task) -> dict[str, Any]:
     """
     TaskQueue handler for ``memory.store``.
 
@@ -228,19 +228,21 @@ async def store_handler(task) -> Dict[str, Any]:
     source = str(task.payload.get("source", "task") or "task")
     stored = svc.store(content, topic, source)
     if stored:
-        _append_archive({
-            "ts": time.time(),
-            "task_id": task.id,
-            "task_type": TASK_STORE,
-            "stored": True,
-            "content": content,
-            "topic": topic,
-            "source": source,
-        })
+        _append_archive(
+            {
+                "ts": time.time(),
+                "task_id": task.id,
+                "task_type": TASK_STORE,
+                "stored": True,
+                "content": content,
+                "topic": topic,
+                "source": source,
+            }
+        )
     return {"stored": stored}
 
 
-async def consolidate_handler(task) -> Dict[str, Any]:
+async def consolidate_handler(task) -> dict[str, Any]:
     """
     TaskQueue handler for ``memory.consolidate``.
 
@@ -262,21 +264,21 @@ async def consolidate_handler(task) -> Dict[str, Any]:
         - appends a provenance record to the task-backed store.
     """
     svc: MemoryService = get_memory_service()
-    threshold = float(
-        task.payload.get("threshold") or MemoryConfig.get().consolidation_threshold
-    )
+    threshold = float(task.payload.get("threshold") or MemoryConfig.get().consolidation_threshold)
     facts = svc.list_all(limit=5000)
     plan = plan_consolidation(facts, threshold=threshold)
     removed = svc.delete(plan["remove_ids"]) if plan["remove_ids"] else 0
     result = {"removed": removed, "kept": len(plan["keep_ids"]), "threshold": threshold}
-    _append_archive({
-        "ts": time.time(),
-        "task_id": task.id,
-        "task_type": TASK_CONSOLIDATE,
-        "removed": removed,
-        "kept": result["kept"],
-        "threshold": threshold,
-    })
+    _append_archive(
+        {
+            "ts": time.time(),
+            "task_id": task.id,
+            "task_type": TASK_CONSOLIDATE,
+            "removed": removed,
+            "kept": result["kept"],
+            "threshold": threshold,
+        }
+    )
     return result
 
 
@@ -288,6 +290,7 @@ def register_memory_handlers(queue=None) -> None:
         queue: target queue; defaults to the global task queue.
     """
     from domain.infrastructure._internal.task_queue import get_task_queue
+
     tq = queue or get_task_queue()
     tq.register_handler(TASK_REMEMBER, remember_handler)
     tq.register_handler(TASK_STORE, store_handler)
@@ -303,6 +306,7 @@ def unregister_memory_handlers(queue=None) -> None:
         queue: target queue; defaults to the global task queue.
     """
     from domain.infrastructure._internal.task_queue import get_task_queue
+
     tq = queue or get_task_queue()
     tq.unregister_handler(TASK_REMEMBER)
     tq.unregister_handler(TASK_STORE)
@@ -331,6 +335,7 @@ async def submit_memory_remember(
         - enqueues work on the queue; the handler persists facts later.
     """
     from domain.infrastructure._internal.task_queue import Priority, Task, get_task_queue
+
     q = queue or get_task_queue()
     priority = priority if priority is not None else Priority.NORMAL
     task = Task(
@@ -369,6 +374,7 @@ async def submit_memory_store(
         - enqueues work on the queue; the handler persists the fact later.
     """
     from domain.infrastructure._internal.task_queue import Priority, Task, get_task_queue
+
     q = queue or get_task_queue()
     priority = priority if priority is not None else Priority.NORMAL
     task = Task(
@@ -385,7 +391,7 @@ async def submit_memory_store(
 
 
 async def submit_memory_consolidate(
-    threshold: Optional[float] = None,
+    threshold: float | None = None,
     queue=None,
     priority=None,
 ) -> str:
@@ -405,9 +411,10 @@ async def submit_memory_consolidate(
         - enqueues work on the queue; the handler consolidates later.
     """
     from domain.infrastructure._internal.task_queue import Priority, Task, get_task_queue
+
     q = queue or get_task_queue()
     priority = priority if priority is not None else Priority.NORMAL
-    payload: Dict[str, Any] = {}
+    payload: dict[str, Any] = {}
     if threshold is not None:
         payload["threshold"] = float(threshold)
     task = Task(

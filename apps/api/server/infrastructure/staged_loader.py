@@ -112,7 +112,9 @@ class StagedLoader:
     def __init__(self) -> None:
         self._stage = Stage.INIT
         self._stage_time: dict[Stage, float] = {}
-        self._hooks: dict[Stage, list[tuple[str, Callable[[], Coroutine[Any, Any, None]], float]]] = {
+        self._hooks: dict[
+            Stage, list[tuple[str, Callable[[], Coroutine[Any, Any, None]], float]]
+        ] = {
             Stage.CRITICAL: [],
             Stage.READY: [],
             Stage.BACKGROUND: [],
@@ -145,6 +147,7 @@ class StagedLoader:
         # Record metrics
         try:
             from domain.infrastructure.metrics import get_metrics_collector
+
             collector = get_metrics_collector()
             collector.record_startup_model_progress(progress)
         except Exception:
@@ -154,6 +157,7 @@ class StagedLoader:
         """Start tracking startup history."""
         try:
             from infrastructure.startup_history import get_startup_history
+
             self._startup_history = get_startup_history()
             self._startup_history.start_startup()
         except Exception:
@@ -183,11 +187,18 @@ class StagedLoader:
             except Exception:
                 pass
 
-    def on(self, stage: Stage, name: str, hook: Callable[[], Coroutine[Any, Any, None]], timeout: float = 30.0) -> None:
+    def on(
+        self,
+        stage: Stage,
+        name: str,
+        hook: Callable[[], Coroutine[Any, Any, None]],
+        timeout: float = 30.0,
+    ) -> None:
         """Register a hook for a given stage."""
         # Check if hook is disabled via config
         try:
             from infrastructure.startup_config import get_startup_config
+
             config = get_startup_config()
             if config.is_hook_disabled(name):
                 logger.info("Hook '%s' disabled via config", name, extra={"tag": "START"})
@@ -243,6 +254,7 @@ class StagedLoader:
         # Record metrics
         try:
             from domain.infrastructure.metrics import get_metrics_collector
+
             collector = get_metrics_collector()
             collector.record_startup_stage(stage.name.lower(), int(stage), self.elapsed)
             collector.record_startup_stage_duration(stage.name.lower(), stage_duration)
@@ -283,6 +295,7 @@ class StagedLoader:
                 # Record hook metrics
                 try:
                     from domain.infrastructure.metrics import get_metrics_collector
+
                     collector = get_metrics_collector()
                     collector.record_startup_hook(name, info.duration)
                 except Exception:
@@ -306,6 +319,7 @@ class StagedLoader:
             # Record failure for rollback
             try:
                 from infrastructure.startup_rollback import get_startup_rollback
+
                 rollback = get_startup_rollback()
                 rollback.record_failure(name, f"timeout after {timeout}s")
             except Exception:
@@ -327,6 +341,7 @@ class StagedLoader:
             # Record failure for rollback
             try:
                 from infrastructure.startup_rollback import get_startup_rollback
+
                 rollback = get_startup_rollback()
                 rollback.record_failure(name, str(exc))
             except Exception:
@@ -341,14 +356,15 @@ class StagedLoader:
             "model_progress": round(self._model_progress, 2),
             "model_progress_message": self._model_progress_message,
             "errors": dict(self._errors),
-            "hooks": {
-                name: info.to_dict()
-                for name, info in self._hook_infos.items()
-            },
+            "hooks": {name: info.to_dict() for name, info in self._hook_infos.items()},
             "stages": {
                 s.name.lower(): {
                     "hooks": [name for name, _, _ in self._hooks.get(s, [])],
-                    "time": round(self._stage_time.get(s, 0) - self._stage_time.get(Stage.INIT, 0), 1) if s in self._stage_time else None,
+                    "time": round(
+                        self._stage_time.get(s, 0) - self._stage_time.get(Stage.INIT, 0), 1
+                    )
+                    if s in self._stage_time
+                    else None,
                 }
                 for s in Stage
             },

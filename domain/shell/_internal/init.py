@@ -10,17 +10,18 @@ Provides:
 
 from __future__ import annotations
 
-import os
-import time
 import json
 import logging
+import os
 import shlex
-import threading
 import subprocess
-from pathlib import Path
-from datetime import datetime
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("slo.shell.init")
 
@@ -62,6 +63,7 @@ SERVICE_STATES = ["stopped", "starting", "running", "stopping", "failed", "crash
 @dataclass
 class ServiceDef:
     """Declarative service definition (loaded from JSON or built-in)."""
+
     name: str
     command: str = ""
     deps: list[str] = field(default_factory=list)
@@ -78,6 +80,7 @@ class ServiceDef:
 @dataclass
 class ServiceInstance:
     """Running instance of a service."""
+
     definition: ServiceDef
     state: str = "stopped"
     pid: int = 0
@@ -232,7 +235,9 @@ class ServiceManager:
 
         if self.defn.respawn and self.instance.respawn_count < self.defn.max_respawns:
             self.instance.respawn_count += 1
-            self._log(f"crashed — respawning ({self.instance.respawn_count}/{self.defn.max_respawns})")
+            self._log(
+                f"crashed — respawning ({self.instance.respawn_count}/{self.defn.max_respawns})"
+            )
             time.sleep(self.defn.respawn_delay)
             self.start()
         else:
@@ -285,7 +290,9 @@ class InitSystem:
                     if name not in self._managers:
                         self._managers[name] = ServiceManager(ServiceDef(name=name, **data))
                 except Exception as e:
-                    logger.warning("Failed to load service %s: %s", f.name, e, extra={"tag": "INFRA"})
+                    logger.warning(
+                        "Failed to load service %s: %s", f.name, e, extra={"tag": "INFRA"}
+                    )
 
     def boot(self, target_runlevel: int = 3, shell_run: Callable[[str], str] | None = None) -> str:
         """Boot through runlevels up to target_runlevel. Returns boot log."""
@@ -379,7 +386,11 @@ class InitSystem:
         # Stop in reverse runlevel order
         for rl in sorted({m.defn.runlevel for m in all_services}, reverse=True):
             for mgr in all_services:
-                if mgr.defn.runlevel == rl and mgr.instance.state in ("running", "starting", "crashed"):
+                if mgr.defn.runlevel == rl and mgr.instance.state in (
+                    "running",
+                    "starting",
+                    "crashed",
+                ):
                     mgr.stop()
                     lines.append(f"    {mgr.defn.name}... stopped")
         self._boot_complete = False
@@ -406,7 +417,9 @@ class InitSystem:
     def status_summary(self) -> str:
         lines = [f"  Runlevel: {self._current_runlevel}"]
         lines.append(f"  Uptime: {self.uptime:.0f}s")
-        lines.append(f"  Services: {len(self._managers)} ({sum(1 for m in self._managers.values() if m.instance.state == 'running')} running)")
+        lines.append(
+            f"  Services: {len(self._managers)} ({sum(1 for m in self._managers.values() if m.instance.state == 'running')} running)"
+        )
         return "\n".join(lines)
 
     def service_table(self) -> str:

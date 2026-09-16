@@ -1,6 +1,5 @@
 """Tests for domain.logging — LogLevel, LogRecord, Logger ABC, formatters, config, and serialization."""
 
-import io
 import json
 import logging
 import time
@@ -10,34 +9,32 @@ from unittest.mock import MagicMock
 import pytest
 
 from domain.logging._internal.base import (
-    LogLevel,
-    LogRecord,
-    Logger,
-    ChildLogger,
-    TaggedLogger,
     CompositeLogger,
     ErrorCode,
+    Logger,
+    LogLevel,
+    LogRecord,
     LogTag,
 )
-from domain.logging._internal.console_logger import ConsoleLogger
+from domain.logging._internal.bridge import BridgeHandler, record_extra_context
 from domain.logging._internal.cli_logger import CLILogger
+from domain.logging._internal.config import (
+    _LEGACY_TAG_TO_OP,
+    ClientExtensionFilter,
+    LogFormatter,
+    _derive_op,
+    clear_log_context,
+    get_log_context,
+    get_request_id,
+    set_log_context,
+    set_request_id,
+)
+from domain.logging._internal.console_logger import ConsoleLogger
 from domain.logging._internal.shell_logger import ShellLogger
 from domain.logging._internal.web_logger import WebLogger
-from domain.logging._internal.bridge import BridgeHandler, record_extra_context
-from domain.logging._internal.config import (
-    LogFormatter,
-    get_request_id,
-    set_request_id,
-    get_log_context,
-    set_log_context,
-    clear_log_context,
-    _derive_op,
-    ClientExtensionFilter,
-    _LEGACY_TAG_TO_OP,
-)
-
 
 # ── LogLevel comparisons ─────────────────────────────────────────────────
+
 
 class TestLogLevel:
     def test_ordering(self):
@@ -80,6 +77,7 @@ class TestLogLevel:
 
 # ── ErrorCode enum ────────────────────────────────────────────────────────
 
+
 class TestErrorCode:
     def test_all_members_exist(self):
         assert ErrorCode.E_AUTH_MISSING.value == "E_AUTH_MISSING"
@@ -101,6 +99,7 @@ class TestErrorCode:
 
 # ── LogTag enum ───────────────────────────────────────────────────────────
 
+
 class TestLogTag:
     def test_members(self):
         assert LogTag.REQ.value == "REQ"
@@ -113,6 +112,7 @@ class TestLogTag:
 
 
 # ── LogRecord dataclass ──────────────────────────────────────────────────
+
 
 class TestLogRecord:
     def test_defaults(self):
@@ -150,6 +150,7 @@ class TestLogRecord:
 
 # ── Concrete Logger subclass for testing ──────────────────────────────────
 
+
 class _SinkLogger(Logger):
     """Logger that captures emitted records for testing."""
 
@@ -162,6 +163,7 @@ class _SinkLogger(Logger):
 
 
 # ── Logger ABC convenience methods ────────────────────────────────────────
+
 
 class TestLoggerConvenienceMethods:
     def test_debug(self):
@@ -258,6 +260,7 @@ class TestLoggerConvenienceMethods:
 
 # ── TaggedLogger ──────────────────────────────────────────────────────────
 
+
 class TestTaggedLogger:
     def test_tag_attached(self):
         parent = _SinkLogger(level=LogLevel.DEBUG)
@@ -279,6 +282,7 @@ class TestTaggedLogger:
 
 
 # ── ChildLogger ──────────────────────────────────────────────────────────
+
 
 class TestChildLogger:
     def test_child_name(self):
@@ -314,6 +318,7 @@ class TestChildLogger:
 
 
 # ── CompositeLogger ──────────────────────────────────────────────────────
+
 
 class TestCompositeLogger:
     def test_emits_to_all_children(self):
@@ -352,6 +357,7 @@ class TestCompositeLogger:
 
 
 # ── ConsoleLogger formatting ──────────────────────────────────────────────
+
 
 class TestConsoleLogger:
     def test_emit_to_stream(self):
@@ -421,6 +427,7 @@ class TestConsoleLogger:
 
 
 # ── CLILogger formatting ──────────────────────────────────────────────────
+
 
 class TestCLILogger:
     def test_emit_to_stream(self):
@@ -518,6 +525,7 @@ class TestCLILogger:
 
     def test_terminal_disabled(self):
         import domain.logging._internal.cli_logger as cli_mod
+
         original = cli_mod._TERMINAL_ENABLED
         try:
             cli_mod._TERMINAL_ENABLED = False
@@ -539,6 +547,7 @@ class TestCLILogger:
 
 
 # ── ShellLogger formatting ───────────────────────────────────────────────
+
 
 class TestShellLogger:
     def test_emit_to_stream(self):
@@ -578,6 +587,7 @@ class TestShellLogger:
 
 
 # ── WebLogger serialization ──────────────────────────────────────────────
+
 
 class TestWebLogger:
     def test_record_to_dict(self):
@@ -678,14 +688,20 @@ class TestWebLogger:
 
 # ── BridgeHandler ────────────────────────────────────────────────────────
 
+
 class TestBridgeHandler:
     def test_routes_to_our_logger(self):
         sink = _SinkLogger(level=LogLevel.DEBUG)
         handler = BridgeHandler(sink)
 
         std_record = logging.LogRecord(
-            name="slo.test", level=logging.INFO, pathname="", lineno=0,
-            msg="hello %s", args=("world",), exc_info=None,
+            name="slo.test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="hello %s",
+            args=("world",),
+            exc_info=None,
         )
         handler.emit(std_record)
         assert len(sink.records) == 1
@@ -704,8 +720,13 @@ class TestBridgeHandler:
             (logging.CRITICAL, LogLevel.CRITICAL),
         ]:
             std_record = logging.LogRecord(
-                name="slo", level=py_level, pathname="", lineno=0,
-                msg="test", args=(), exc_info=None,
+                name="slo",
+                level=py_level,
+                pathname="",
+                lineno=0,
+                msg="test",
+                args=(),
+                exc_info=None,
             )
             handler.emit(std_record)
             assert sink.records[-1].level == expected
@@ -715,8 +736,13 @@ class TestBridgeHandler:
         handler = BridgeHandler(sink)
 
         std_record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         std_record.custom_field = "value"
         handler.emit(std_record)
@@ -727,8 +753,13 @@ class TestBridgeHandler:
         handler = BridgeHandler(sink)
 
         std_record = logging.LogRecord(
-            name="slo", level=logging.ERROR, pathname="", lineno=0,
-            msg="fail", args=(), exc_info=None,
+            name="slo",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="fail",
+            args=(),
+            exc_info=None,
         )
         std_record.error_code = "E_MODEL_OOM"
         handler.emit(std_record)
@@ -739,8 +770,13 @@ class TestBridgeHandler:
         handler = BridgeHandler(sink)
 
         std_record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="load", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="load",
+            args=(),
+            exc_info=None,
         )
         std_record.tag = "MODEL"
         handler.emit(std_record)
@@ -754,10 +790,16 @@ class TestBridgeHandler:
             raise ValueError("bad")
         except ValueError:
             import sys
+
             exc_info = sys.exc_info()
         std_record = logging.LogRecord(
-            name="slo", level=logging.ERROR, pathname="", lineno=0,
-            msg="fail", args=(), exc_info=exc_info,
+            name="slo",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="fail",
+            args=(),
+            exc_info=exc_info,
         )
         handler.emit(std_record)
         assert "ValueError" in sink.records[0].exception
@@ -767,8 +809,13 @@ class TestBridgeHandler:
 class TestRecordExtraContext:
     def test_merges_explicit_context(self):
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         record.context = {"key": "val"}
         ctx = record_extra_context(record)
@@ -776,8 +823,13 @@ class TestRecordExtraContext:
 
     def test_captures_non_standard_extras(self):
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         record.custom = "value"
         ctx = record_extra_context(record)
@@ -785,6 +837,7 @@ class TestRecordExtraContext:
 
 
 # ── Config: request_id / log_context ─────────────────────────────────────
+
 
 class TestConfigContextVars:
     def test_request_id_roundtrip(self):
@@ -827,12 +880,19 @@ class TestConfigContextVars:
 
 # ── LogFormatter ──────────────────────────────────────────────────────────
 
+
 class TestLogFormatter:
     def test_human_format(self):
         fmt = LogFormatter(colors=False)
         record = logging.LogRecord(
-            name="slo.test", level=logging.INFO, pathname="", lineno=0,
-            msg="hello", args=(), exc_info=None, created=time.time(),
+            name="slo.test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="hello",
+            args=(),
+            exc_info=None,
+            created=time.time(),
         )
         output = fmt.format(record)
         assert "INF" in output
@@ -841,8 +901,14 @@ class TestLogFormatter:
     def test_human_format_with_tag(self):
         fmt = LogFormatter(colors=False)
         record = logging.LogRecord(
-            name="slo.test", level=logging.INFO, pathname="", lineno=0,
-            msg="loaded", args=(), exc_info=None, created=time.time(),
+            name="slo.test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="loaded",
+            args=(),
+            exc_info=None,
+            created=time.time(),
         )
         record.tag = "MODEL"
         output = fmt.format(record)
@@ -851,8 +917,14 @@ class TestLogFormatter:
     def test_json_format(self):
         fmt = LogFormatter(fmt="json", colors=False)
         record = logging.LogRecord(
-            name="slo.test", level=logging.INFO, pathname="", lineno=0,
-            msg="test msg", args=(), exc_info=None, created=time.time(),
+            name="slo.test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test msg",
+            args=(),
+            exc_info=None,
+            created=time.time(),
         )
         output = fmt.format(record)
         data = json.loads(output)
@@ -862,8 +934,14 @@ class TestLogFormatter:
     def test_json_format_with_error_code(self):
         fmt = LogFormatter(fmt="json", colors=False)
         record = logging.LogRecord(
-            name="slo.test", level=logging.ERROR, pathname="", lineno=0,
-            msg="oom", args=(), exc_info=None, created=time.time(),
+            name="slo.test",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="oom",
+            args=(),
+            exc_info=None,
+            created=time.time(),
         )
         record.error_code = "E_MODEL_OOM"
         output = fmt.format(record)
@@ -874,55 +952,87 @@ class TestLogFormatter:
 
 # ── ClientExtensionFilter ─────────────────────────────────────────────────
 
+
 class TestClientExtensionFilter:
     def test_filters_chrome_extension(self):
         f = ClientExtensionFilter()
         record = logging.LogRecord(
-            name="slo", level=logging.WARNING, pathname="", lineno=0,
-            msg="CLIENT ERROR chrome-extension://abc", args=(), exc_info=None,
+            name="slo",
+            level=logging.WARNING,
+            pathname="",
+            lineno=0,
+            msg="CLIENT ERROR chrome-extension://abc",
+            args=(),
+            exc_info=None,
         )
         assert f.filter(record) is False
 
     def test_filters_moz_extension(self):
         f = ClientExtensionFilter()
         record = logging.LogRecord(
-            name="slo", level=logging.WARNING, pathname="", lineno=0,
-            msg="moz-extension://abc failed", args=(), exc_info=None,
+            name="slo",
+            level=logging.WARNING,
+            pathname="",
+            lineno=0,
+            msg="moz-extension://abc failed",
+            args=(),
+            exc_info=None,
         )
         assert f.filter(record) is False
 
     def test_passes_normal_message(self):
         f = ClientExtensionFilter()
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="server started", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="server started",
+            args=(),
+            exc_info=None,
         )
         assert f.filter(record) is True
 
 
 # ── derive_op ─────────────────────────────────────────────────────────────
 
+
 class TestDeriveOp:
     def test_explicit_op(self):
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="",
+            args=(),
+            exc_info=None,
         )
         record.op = "model.load"
         assert _derive_op(record) == "model.load"
 
     def test_legacy_tag(self):
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="",
+            args=(),
+            exc_info=None,
         )
         record.tag = "TRAIN"
         assert _derive_op(record) == _LEGACY_TAG_TO_OP["TRAIN"]
 
     def test_fallback(self):
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="",
+            args=(),
+            exc_info=None,
         )
         assert _derive_op(record) == "sys.info"
 
@@ -930,10 +1040,9 @@ class TestDeriveOp:
 # ── __init__.py: factory and global logger ────────────────────────────────
 
 from domain.logging import (
+    get_global,
     get_logger,
     set_global,
-    get_global,
-    CompositeLogger as CLFromInit,
 )
 
 

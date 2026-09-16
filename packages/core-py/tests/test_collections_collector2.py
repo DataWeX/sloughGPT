@@ -1,7 +1,6 @@
 """Tests for domain.collections._internal.collector — pure logic, no network."""
-from __future__ import annotations
 
-import pytest
+from __future__ import annotations
 
 from domain.collections._internal.collector import BatchCollector, Collector, ParallelCollector
 from domain.collections._internal.filters import (
@@ -13,10 +12,10 @@ from domain.collections._internal.filters import (
 from domain.collections._internal.sources import GeneratorSource, Record
 from domain.collections._internal.stores import MemoryStore
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _source(records: list[Record]):
     return GeneratorSource(lambda: iter(records))
@@ -33,6 +32,7 @@ def _r(content: str, **meta) -> Record:
 # ---------------------------------------------------------------------------
 # Collector
 # ---------------------------------------------------------------------------
+
 
 class TestCollector:
     def test_collect_returns_count(self):
@@ -98,6 +98,7 @@ class TestCollector:
         c = Collector(_source([_r("a")]), _store())
         c.collect = lambda: counting_collect(c)
         import unittest.mock
+
         with unittest.mock.patch("domain.collections._internal.collector.time.sleep"):
             c.collect_continuous(interval=0, max_rounds=3)
         assert call_count == 3
@@ -123,13 +124,16 @@ class TestCollector:
 # Collector — error handling
 # ---------------------------------------------------------------------------
 
+
 class TestCollectorErrorHandling:
     def test_error_during_write_increments_error_stat(self):
         class BrokenStore:
             def write(self, record):
                 raise RuntimeError("disk full")
+
             def read_all(self):
                 return iter([])
+
             def count(self):
                 return 0
 
@@ -139,17 +143,19 @@ class TestCollectorErrorHandling:
         assert c.stats["collected"] == 0
 
     def test_error_does_not_stop_iteration(self):
-        call_count = 0
 
         class FailOnceStore:
             def __init__(self):
                 self.n = 0
+
             def write(self, record):
                 self.n += 1
                 if self.n == 1:
                     raise RuntimeError("boom")
+
             def read_all(self):
                 return iter([])
+
             def count(self):
                 return self.n - 1 if self.n > 0 else 0
 
@@ -163,6 +169,7 @@ class TestCollectorErrorHandling:
 # ---------------------------------------------------------------------------
 # ParallelCollector
 # ---------------------------------------------------------------------------
+
 
 class TestParallelCollector:
     def test_collect_sums(self):
@@ -218,6 +225,7 @@ class TestParallelCollector:
         pc = ParallelCollector([c1])
         pc.collect_threaded = lambda: counting_collect(pc)
         import unittest.mock
+
         with unittest.mock.patch("domain.collections._internal.collector.time.sleep"):
             pc.collect_continuous(interval=0, max_rounds=2)
         assert call_count == 2
@@ -247,6 +255,7 @@ class TestParallelCollector:
 # ---------------------------------------------------------------------------
 # BatchCollector
 # ---------------------------------------------------------------------------
+
 
 class TestBatchCollector:
     def test_collect_returns_count(self):
@@ -332,21 +341,24 @@ class TestBatchCollector:
 # BatchCollector — write retry logic
 # ---------------------------------------------------------------------------
 
+
 class TestBatchCollectorRetry:
     def test_write_batch_retries_on_failure(self):
-        call_count = 0
 
         class FailFirstStore:
             def __init__(self):
                 self.written = []
                 self.n = 0
+
             def write(self, record):
                 self.n += 1
                 if self.n <= 1:
                     raise RuntimeError("transient failure")
                 self.written.append(record)
+
             def read_all(self):
                 return iter([])
+
             def count(self):
                 return len(self.written)
 
@@ -361,8 +373,10 @@ class TestBatchCollectorRetry:
         class AlwaysFailStore:
             def write(self, record):
                 raise RuntimeError("permanent failure")
+
             def read_all(self):
                 return iter([])
+
             def count(self):
                 return 0
 
@@ -382,6 +396,7 @@ class TestBatchCollectorRetry:
 # ---------------------------------------------------------------------------
 # Integration: Collector + FilterChain
 # ---------------------------------------------------------------------------
+
 
 class TestCollectorIntegration:
     def test_dedup_filter(self):
@@ -421,7 +436,7 @@ class TestCollectorIntegration:
         assert c.stats["collected"] == 1
 
     def test_chained_filters(self):
-        chain = FilterChain([LengthFilter(min_length=5), KeywordFilter(keywords=["test"])])
+        FilterChain([LengthFilter(min_length=5), KeywordFilter(keywords=["test"])])
         c = Collector(
             _source([_r("test"), _r("nope"), _r("test long enough")]),
             _store(),

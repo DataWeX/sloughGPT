@@ -1,7 +1,6 @@
 """Tests for domain.training._internal.data_import.py (repo/URL/HF/ISBN/local importers)."""
 
 import json
-import os
 import subprocess
 import sys
 import urllib.request
@@ -16,17 +15,17 @@ from domain.training._internal.data_import import (
     DataImporter,
     GitHubSearch,
     HuggingFaceImporter,
-    ISBNImporter,
     ImportResult,
+    ISBNImporter,
     RepoImporter,
     URLImporter,
     import_data,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class FakeResponse:
     def __init__(self, payload):
@@ -86,16 +85,24 @@ def write_repo(root, files):
 # ImportResult
 # ---------------------------------------------------------------------------
 
+
 class TestImportResult:
     def test_defaults(self):
-        r = ImportResult(success=True, name="n", source="s",
-                         files_imported=1, total_chars=2, output_path="p")
+        r = ImportResult(
+            success=True, name="n", source="s", files_imported=1, total_chars=2, output_path="p"
+        )
         assert r.error is None
 
     def test_fields(self):
-        r = ImportResult(success=False, name="n", source="s",
-                         files_imported=0, total_chars=0, output_path="",
-                         error="boom")
+        r = ImportResult(
+            success=False,
+            name="n",
+            source="s",
+            files_imported=0,
+            total_chars=0,
+            output_path="",
+            error="boom",
+        )
         assert r.error == "boom"
         assert r.success is False
 
@@ -104,9 +111,10 @@ class TestImportResult:
 # RepoImporter
 # ---------------------------------------------------------------------------
 
+
 class TestRepoImporter:
     def test_init_creates_cache_dir(self, tmp_path):
-        imp = RepoImporter(cache_dir=str(tmp_path / "cache"))
+        RepoImporter(cache_dir=str(tmp_path / "cache"))
         assert (tmp_path / "cache").is_dir()
 
     def test_clone_existing_repo_skips_git(self, tmp_path, monkeypatch):
@@ -130,8 +138,14 @@ class TestRepoImporter:
 
         monkeypatch.setattr(subprocess, "check_call", fake_check_call)
         target = imp.clone_repo("https://github.com/org/repo.git")
-        assert calls[0] == ["git", "clone", "https://github.com/org/repo.git",
-                            str(target), "--depth", "1"]
+        assert calls[0] == [
+            "git",
+            "clone",
+            "https://github.com/org/repo.git",
+            str(target),
+            "--depth",
+            "1",
+        ]
 
     def test_clone_repo_branch_and_depth(self, tmp_path, monkeypatch):
         imp = RepoImporter(cache_dir=str(tmp_path))
@@ -165,15 +179,18 @@ class TestRepoImporter:
 
     def _make_repo(self, tmp_path):
         repo = tmp_path / "repo"
-        write_repo(repo, {
-            "src/main.py": "print('hello')\n",
-            "README.md": "# Project\n",
-            "notes.txt": "some notes\n",
-            ".hidden.py": "x\n",
-            "node_modules/lib/index.js": "const x = 1;\n",
-            ".venv/lib/a.py": "import os\n",
-            "binary.dat": "\xff\xfe\x00bad",
-        })
+        write_repo(
+            repo,
+            {
+                "src/main.py": "print('hello')\n",
+                "README.md": "# Project\n",
+                "notes.txt": "some notes\n",
+                ".hidden.py": "x\n",
+                "node_modules/lib/index.js": "const x = 1;\n",
+                ".venv/lib/a.py": "import os\n",
+                "binary.dat": "\xff\xfe\x00bad",
+            },
+        )
         return repo
 
     def test_export_to_corpus_basic(self, tmp_path):
@@ -255,13 +272,30 @@ class TestRepoImporter:
     def test_detect_language_extensions(self, tmp_path):
         imp = RepoImporter()
         cases = {
-            "f.py": "python", "f.js": "javascript", "f.ts": "typescript",
-            "f.md": "markdown", "f.json": "json", "f.yaml": "yaml",
-            "f.sh": "shell", "f.rs": "rust", "f.go": "go", "f.java": "java",
-            "f.cpp": "cpp", "f.c": "c", "f.cs": "csharp", "f.rb": "ruby",
-            "f.php": "php", "f.sql": "sql", "f.lua": "lua", "f.html": "html",
-            "f.css": "css", "f.toml": "toml", "f.csv": "csv", "f.xml": "xml",
-            "f.tex": "latex", "f.txt": "text",
+            "f.py": "python",
+            "f.js": "javascript",
+            "f.ts": "typescript",
+            "f.md": "markdown",
+            "f.json": "json",
+            "f.yaml": "yaml",
+            "f.sh": "shell",
+            "f.rs": "rust",
+            "f.go": "go",
+            "f.java": "java",
+            "f.cpp": "cpp",
+            "f.c": "c",
+            "f.cs": "csharp",
+            "f.rb": "ruby",
+            "f.php": "php",
+            "f.sql": "sql",
+            "f.lua": "lua",
+            "f.html": "html",
+            "f.css": "css",
+            "f.toml": "toml",
+            "f.csv": "csv",
+            "f.xml": "xml",
+            "f.tex": "latex",
+            "f.txt": "text",
         }
         for name, expected in cases.items():
             assert imp._detect_language(tmp_path / name) == expected, name
@@ -355,9 +389,11 @@ class TestRepoImporter:
 
     def test_detect_language_content_java(self, tmp_path):
         imp = RepoImporter()
-        content = ("public class Hello {\n"
-                   "  public static void main(String[] args) {\n"
-                   "    System.out.println('x');\n  }\n}\n")
+        content = (
+            "public class Hello {\n"
+            "  public static void main(String[] args) {\n"
+            "    System.out.println('x');\n  }\n}\n"
+        )
         assert imp._detect_language(tmp_path / "sample", content) == "java"
 
     def test_detect_language_content_cpp(self, tmp_path):
@@ -423,6 +459,7 @@ class TestRepoImporter:
 # BooksSearch
 # ---------------------------------------------------------------------------
 
+
 class TestBooksSearch:
     def test_sanitize_query(self):
         b = BooksSearch()
@@ -442,13 +479,25 @@ class TestBooksSearch:
 
     def test_search_title(self, tmp_path, fake_urlopen):
         calls, responses = fake_urlopen
-        responses.append(FakeResponse(json.dumps({
-            "docs": [
-                {"key": "/a", "title": "The Book", "author_name": ["Author"],
-                 "isbn": ["123"], "first_publish_year": 1999, "cover_i": 5},
-                {"key": "/b", "author_name": ["X"]},  # no title -> filtered
-            ]
-        })))
+        responses.append(
+            FakeResponse(
+                json.dumps(
+                    {
+                        "docs": [
+                            {
+                                "key": "/a",
+                                "title": "The Book",
+                                "author_name": ["Author"],
+                                "isbn": ["123"],
+                                "first_publish_year": 1999,
+                                "cover_i": 5,
+                            },
+                            {"key": "/b", "author_name": ["X"]},  # no title -> filtered
+                        ]
+                    }
+                )
+            )
+        )
         b = BooksSearch()
         results = b.search("hello world")
         assert len(results) == 1
@@ -458,7 +507,10 @@ class TestBooksSearch:
         assert r["isbn"] == "123"
         assert r["year"] == 1999
         assert r["cover"] == 5
-        assert calls[0][0] == "https://openlibrary.org/search.json?q=title:hello%20world&limit=10&fields=title,author_name,first_publish_year,cover_i,isbn,key"
+        assert (
+            calls[0][0]
+            == "https://openlibrary.org/search.json?q=title:hello%20world&limit=10&fields=title,author_name,first_publish_year,cover_i,isbn,key"
+        )
 
     def test_search_isbn(self, fake_urlopen):
         calls, responses = fake_urlopen
@@ -482,31 +534,39 @@ class TestBooksSearch:
 # HuggingFaceImporter
 # ---------------------------------------------------------------------------
 
+
 class TestHuggingFaceImporter:
     def test_check_hf_missing(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "datasets", None)
         assert HuggingFaceImporter()._hf_available is False
 
     def test_check_hf_present(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "datasets",
-                            SimpleNamespace(load_dataset=lambda *a, **k: None))
+        monkeypatch.setitem(
+            sys.modules, "datasets", SimpleNamespace(load_dataset=lambda *a, **k: None)
+        )
         assert HuggingFaceImporter()._hf_available is True
 
     def test_search_datasets_import_error(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "domain.infrastructure.hf_hub", None)
+        monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.hf_hub", None)
         assert HuggingFaceImporter().search_datasets("anything") == []
 
     def test_search_datasets_success(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "domain.infrastructure.hf_hub",
-                            SimpleNamespace(fetch_dataset_search=lambda q, limit: [{"id": q}]))
+        monkeypatch.setitem(
+            sys.modules,
+            "domain.infrastructure._internal.hf_hub",
+            SimpleNamespace(fetch_dataset_search=lambda q, limit: [{"id": q}]),
+        )
         assert HuggingFaceImporter().search_datasets("cats") == [{"id": "cats"}]
 
     def test_search_datasets_error(self, monkeypatch):
         def boom(q, limit):
             raise RuntimeError("hub down")
 
-        monkeypatch.setitem(sys.modules, "domain.infrastructure.hf_hub",
-                            SimpleNamespace(fetch_dataset_search=boom))
+        monkeypatch.setitem(
+            sys.modules,
+            "domain.infrastructure._internal.hf_hub",
+            SimpleNamespace(fetch_dataset_search=boom),
+        )
         assert HuggingFaceImporter().search_datasets("cats") == []
 
     def test_download_requires_datasets_package(self, monkeypatch):
@@ -516,14 +576,12 @@ class TestHuggingFaceImporter:
         assert "pip install datasets" in result.error
 
     def _importer_with_fake_load(self, monkeypatch, load_fn):
-        monkeypatch.setitem(sys.modules, "datasets",
-                            SimpleNamespace(load_dataset=load_fn))
+        monkeypatch.setitem(sys.modules, "datasets", SimpleNamespace(load_dataset=load_fn))
         return HuggingFaceImporter()
 
     def test_download_datasetdict(self, tmp_path, monkeypatch):
         def load(*args, **kwargs):
-            return {"train": [{"text": "hello"}, {"text": "world"}],
-                    "test": [{"content": "bye"}]}
+            return {"train": [{"text": "hello"}, {"text": "world"}], "test": [{"content": "bye"}]}
 
         imp = self._importer_with_fake_load(monkeypatch, load)
         out = tmp_path / "datasets"
@@ -575,9 +633,10 @@ class TestHuggingFaceImporter:
 # URLImporter
 # ---------------------------------------------------------------------------
 
+
 class TestURLImporter:
     def test_init_creates_cache_dir(self, tmp_path):
-        imp = URLImporter(cache_dir=str(tmp_path / "dl"))
+        URLImporter(cache_dir=str(tmp_path / "dl"))
         assert (tmp_path / "dl").is_dir()
 
     def test_download_file_with_extension(self, tmp_path, monkeypatch):
@@ -597,7 +656,9 @@ class TestURLImporter:
         src = tmp_path / "data.txt"
         src.write_text("file content", encoding="utf-8")
         monkeypatch.setattr(imp, "download_file", lambda url: src)
-        result = imp.import_from_url("https://example.com/data.txt", "ds", str(tmp_path / "datasets"))
+        result = imp.import_from_url(
+            "https://example.com/data.txt", "ds", str(tmp_path / "datasets")
+        )
         assert result.success is True
         assert result.files_imported == 1
         assert result.total_chars == len("file content")
@@ -621,6 +682,7 @@ class TestURLImporter:
 # GitHubSearch
 # ---------------------------------------------------------------------------
 
+
 class TestGitHubSearch:
     def test_sanitize_query(self):
         g = GitHubSearch()
@@ -628,13 +690,25 @@ class TestGitHubSearch:
 
     def test_search_repos_success(self, fake_urlopen):
         calls, responses = fake_urlopen
-        responses.append(FakeResponse(json.dumps({
-            "items": [
-                {"full_name": "o/r", "description": "desc", "html_url": "https://x",
-                 "stargazers_count": 5, "forks_count": 2, "language": "Python"},
-                {"full_name": "o2/r2", "html_url": "https://y"},
-            ]
-        })))
+        responses.append(
+            FakeResponse(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "full_name": "o/r",
+                                "description": "desc",
+                                "html_url": "https://x",
+                                "stargazers_count": 5,
+                                "forks_count": 2,
+                                "language": "Python",
+                            },
+                            {"full_name": "o2/r2", "html_url": "https://y"},
+                        ]
+                    }
+                )
+            )
+        )
         g = GitHubSearch()
         results = g.search_repos("python code")
         assert len(results) == 2
@@ -659,6 +733,7 @@ class TestGitHubSearch:
 # ISBNImporter
 # ---------------------------------------------------------------------------
 
+
 class TestISBNImporter:
     def test_import_not_found(self, tmp_path, monkeypatch):
         imp = ISBNImporter(output_dir=str(tmp_path / "datasets"))
@@ -670,9 +745,11 @@ class TestISBNImporter:
 
     def test_import_with_gutenberg_text(self, tmp_path, monkeypatch):
         imp = ISBNImporter(output_dir=str(tmp_path / "datasets"))
-        monkeypatch.setattr(imp._books_search, "search",
-                            lambda *a, **k: [{"title": "Book", "author": "Writer",
-                                              "first_publish_year": 1900}])
+        monkeypatch.setattr(
+            imp._books_search,
+            "search",
+            lambda *a, **k: [{"title": "Book", "author": "Writer", "first_publish_year": 1900}],
+        )
         monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a: "FULL TEXT")
         result = imp.import_from_isbn("0306406152", "book")
         assert result.success is True
@@ -683,8 +760,9 @@ class TestISBNImporter:
 
     def test_import_metadata_only(self, tmp_path, monkeypatch):
         imp = ISBNImporter(output_dir=str(tmp_path / "datasets"))
-        monkeypatch.setattr(imp._books_search, "search",
-                            lambda *a, **k: [{"title": "Book", "author": "Writer"}])
+        monkeypatch.setattr(
+            imp._books_search, "search", lambda *a, **k: [{"title": "Book", "author": "Writer"}]
+        )
         monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a: None)
         result = imp.import_from_isbn("0306406152", "book")
         assert result.success is True
@@ -718,6 +796,7 @@ class TestISBNImporter:
 # DataImporter
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def data_importer(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -740,8 +819,9 @@ class TestDataImporter:
             return ImportResult(True, name, url, 1, 5, "p")
 
         monkeypatch.setattr(data_importer.repo_importer, "import_from_github", fake)
-        r = data_importer.import_from_github("https://github.com/a/b", "n",
-                                             extensions=[".py"], max_files=3)
+        r = data_importer.import_from_github(
+            "https://github.com/a/b", "n", extensions=[".py"], max_files=3
+        )
         assert r.success is True
         assert calls[0][:2] == ("https://github.com/a/b", "n")
         assert calls[0][3:] == ([".py"], 3)
@@ -804,9 +884,11 @@ class TestDataImporter:
                 return "pypdf page"
 
         monkeypatch.setitem(sys.modules, "fitz", None)
-        monkeypatch.setitem(sys.modules, "PyPDF2",
-                            SimpleNamespace(PdfReader=lambda f: SimpleNamespace(
-                                pages=[Page(), Page()])))
+        monkeypatch.setitem(
+            sys.modules,
+            "PyPDF2",
+            SimpleNamespace(PdfReader=lambda f: SimpleNamespace(pages=[Page(), Page()])),
+        )
         p = tmp_path / "doc.pdf"
         p.write_bytes(b"%PDF-1.4")
         assert DataImporter._extract_pdf_text(p) == "pypdf page\npypdf page"
@@ -874,6 +956,7 @@ class TestDataImporter:
 # import_data
 # ---------------------------------------------------------------------------
 
+
 class TestImportData:
     def _patch_method(self, monkeypatch, method, out_dir):
         calls = []
@@ -913,15 +996,17 @@ class TestImportData:
     def test_explicit_local(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         calls = self._patch_method(monkeypatch, "import_from_local", str(tmp_path))
-        import_data("https://github.com/org/repo", "ds", source_type="local",
-                    output_dir=str(tmp_path))
+        import_data(
+            "https://github.com/org/repo", "ds", source_type="local", output_dir=str(tmp_path)
+        )
         assert calls[0][0][1] == "https://github.com/org/repo"
 
     def test_kwargs_forwarded(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         calls = self._patch_method(monkeypatch, "import_from_github", str(tmp_path))
-        import_data("https://github.com/org/repo", "ds", extensions=[".py"],
-                    output_dir=str(tmp_path))
+        import_data(
+            "https://github.com/org/repo", "ds", extensions=[".py"], output_dir=str(tmp_path)
+        )
         assert calls[0][1]["extensions"] == [".py"]
 
     def test_auto_git_at_github(self, tmp_path, monkeypatch):
@@ -941,9 +1026,11 @@ class TestImportData:
 # _retry
 # ---------------------------------------------------------------------------
 
+
 class TestRetry:
     def test_succeeds_first_try(self):
         from domain.training._internal.data_import import _retry
+
         counter = {"n": 0}
 
         def fn():
@@ -956,6 +1043,7 @@ class TestRetry:
 
     def test_retries_on_transient_error(self):
         from domain.training._internal.data_import import _retry
+
         counter = {"n": 0}
 
         def fn():
@@ -988,6 +1076,7 @@ class TestRetry:
 
     def test_zero_retries(self):
         from domain.training._internal.data_import import _retry
+
         counter = {"n": 0}
 
         def fn():
@@ -999,8 +1088,9 @@ class TestRetry:
         assert counter["n"] == 1
 
     def test_default_exceptions_tuple(self):
-        from domain.training._internal.data_import import _retry
         import urllib.error
+
+        from domain.training._internal.data_import import _retry
 
         counter = {"n": 0}
 
@@ -1020,6 +1110,7 @@ class TestRetry:
 # ---------------------------------------------------------------------------
 # RepoImporter — branch validation
 # ---------------------------------------------------------------------------
+
 
 class TestRepoImporterBranchValidation:
     def test_invalid_branch_rejected(self, tmp_path):
@@ -1044,6 +1135,7 @@ class TestRepoImporterBranchValidation:
 # ---------------------------------------------------------------------------
 # RepoImporter — _iter_files edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestRepoImporterIterFiles:
     def test_skips_dotfiles(self, tmp_path):
@@ -1089,6 +1181,7 @@ class TestRepoImporterIterFiles:
 # ---------------------------------------------------------------------------
 # RepoImporter — _detect_language extended
 # ---------------------------------------------------------------------------
+
 
 class TestRepoImporterDetectLanguageExtended:
     def setup_method(self):
@@ -1212,7 +1305,9 @@ class TestRepoImporterDetectLanguageExtended:
         assert self.imp._detect_language(Path("sample"), content) == "typescript"
 
     def test_content_typescript_advanced(self):
-        content = "const x: string[] = []\nconst y: Record<string, number> = {}\nreadonly z: boolean"
+        content = (
+            "const x: string[] = []\nconst y: Record<string, number> = {}\nreadonly z: boolean"
+        )
         assert self.imp._detect_language(Path("sample"), content) == "typescript"
 
     def test_content_typescript_generic(self):
@@ -1224,7 +1319,9 @@ class TestRepoImporterDetectLanguageExtended:
         assert self.imp._detect_language(Path("sample"), content) == "javascript"
 
     def test_content_javascript_arrow(self):
-        content = "const fn = (x) => { return x + 1; };\nexport default fn;\nimport { foo } from 'bar';"
+        content = (
+            "const fn = (x) => { return x + 1; };\nexport default fn;\nimport { foo } from 'bar';"
+        )
         assert self.imp._detect_language(Path("sample"), content) == "javascript"
 
     def test_content_html_doctype(self):
@@ -1272,11 +1369,11 @@ class TestRepoImporterDetectLanguageExtended:
         assert self.imp._detect_language(Path("sample"), content) == "sql"
 
     def test_content_go_comprehensive(self):
-        content = "package main\nimport \"fmt\"\nfunc main() {\n  fmt.Println(\"hi\")\n}"
+        content = 'package main\nimport "fmt"\nfunc main() {\n  fmt.Println("hi")\n}'
         assert self.imp._detect_language(Path("sample"), content) == "go"
 
     def test_content_go_goroutine(self):
-        content = "package main\nimport \"fmt\"\ngo func() { fmt.Println(\"hi\") }()"
+        content = 'package main\nimport "fmt"\ngo func() { fmt.Println("hi") }()'
         assert self.imp._detect_language(Path("sample"), content) == "go"
 
     def test_content_rust_comprehensive(self):
@@ -1284,19 +1381,19 @@ class TestRepoImporterDetectLanguageExtended:
         assert self.imp._detect_language(Path("sample"), content) == "rust"
 
     def test_content_rust_macros(self):
-        content = "fn main() {\n    println!(\"hi\");\n    let v = vec![1, 2];\n    let s = Some(1);\n    let n: Option<i32> = None;\n}"
+        content = 'fn main() {\n    println!("hi");\n    let v = vec![1, 2];\n    let s = Some(1);\n    let n: Option<i32> = None;\n}'
         assert self.imp._detect_language(Path("sample"), content) == "rust"
 
     def test_content_java_comprehensive(self):
-        content = "public class Main {\n  public static void main(String[] args) {\n    System.out.println(\"hi\");\n  }\n}"
+        content = 'public class Main {\n  public static void main(String[] args) {\n    System.out.println("hi");\n  }\n}'
         assert self.imp._detect_language(Path("sample"), content) == "java"
 
     def test_content_cpp_iostream(self):
-        content = "#include <iostream>\nstd::cout << \"hi\";\nstd::cin >> x;\nnamespace foo {}"
+        content = '#include <iostream>\nstd::cout << "hi";\nstd::cin >> x;\nnamespace foo {}'
         assert self.imp._detect_language(Path("sample"), content) == "cpp"
 
     def test_content_c_stdio(self):
-        content = "#include <stdio.h>\nint main() { printf(\"hi\"); scanf(\"%d\", &x); void *p; malloc(10); free(p); }"
+        content = '#include <stdio.h>\nint main() { printf("hi"); scanf("%d", &x); void *p; malloc(10); free(p); }'
         assert self.imp._detect_language(Path("sample"), content) == "c"
 
     def test_content_markdown_comprehensive(self):
@@ -1318,6 +1415,7 @@ class TestRepoImporterDetectLanguageExtended:
 # ---------------------------------------------------------------------------
 # RepoImporter — export_to_corpus edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestRepoImporterExportEdgeCases:
     def test_export_empty_repo(self, tmp_path):
@@ -1360,10 +1458,13 @@ class TestRepoImporterExportEdgeCases:
 
     def test_export_nested_directories(self, tmp_path):
         repo = tmp_path / "repo"
-        write_repo(repo, {
-            "src/deep/nested/file.py": "x",
-            "lib/utils/helper.js": "y",
-        })
+        write_repo(
+            repo,
+            {
+                "src/deep/nested/file.py": "x",
+                "lib/utils/helper.js": "y",
+            },
+        )
         imp = RepoImporter(cache_dir=str(tmp_path / "cache"))
         out = tmp_path / "corpus.jsonl"
         count = imp.export_to_corpus(repo, str(out))
@@ -1376,6 +1477,7 @@ class TestRepoImporterExportEdgeCases:
 # ---------------------------------------------------------------------------
 # RepoImporter — import_from_github
 # ---------------------------------------------------------------------------
+
 
 class TestRepoImporterImportExtended:
     def test_import_from_github_total_chars(self, tmp_path, monkeypatch):
@@ -1401,8 +1503,9 @@ class TestRepoImporterImportExtended:
         write_repo(repo, {"a.py": "x", "b.js": "y", "c.md": "z"})
         imp = RepoImporter(cache_dir=str(tmp_path / "cache"))
         monkeypatch.setattr(imp, "clone_repo", lambda url: repo)
-        result = imp.import_from_github("https://github.com/o/r", "ds",
-                                         str(tmp_path / "ds"), extensions=[".py", ".js"])
+        result = imp.import_from_github(
+            "https://github.com/o/r", "ds", str(tmp_path / "ds"), extensions=[".py", ".js"]
+        )
         assert result.files_imported == 2
 
     def test_import_from_github_with_max_files(self, tmp_path, monkeypatch):
@@ -1410,14 +1513,16 @@ class TestRepoImporterImportExtended:
         write_repo(repo, {"a.py": "x", "b.py": "y", "c.py": "z"})
         imp = RepoImporter(cache_dir=str(tmp_path / "cache"))
         monkeypatch.setattr(imp, "clone_repo", lambda url: repo)
-        result = imp.import_from_github("https://github.com/o/r", "ds",
-                                         str(tmp_path / "ds"), max_files=2)
+        result = imp.import_from_github(
+            "https://github.com/o/r", "ds", str(tmp_path / "ds"), max_files=2
+        )
         assert result.files_imported == 2
 
 
 # ---------------------------------------------------------------------------
 # BooksSearch — extended
 # ---------------------------------------------------------------------------
+
 
 class TestBooksSearchExtended:
     def test_sanitize_query_empty(self):
@@ -1453,21 +1558,26 @@ class TestBooksSearchExtended:
 
     def test_search_multiple_results(self, fake_urlopen):
         _, responses = fake_urlopen
-        docs = [{"title": f"Book {i}", "key": f"/{i}", "author_name": [f"A{i}"]}
-                for i in range(3)]
+        docs = [{"title": f"Book {i}", "key": f"/{i}", "author_name": [f"A{i}"]} for i in range(3)]
         responses.append(FakeResponse(json.dumps({"docs": docs})))
         results = BooksSearch().search("test")
         assert len(results) == 3
 
     def test_search_filters_no_title(self, fake_urlopen):
         _, responses = fake_urlopen
-        responses.append(FakeResponse(json.dumps({
-            "docs": [
-                {"title": "Good", "key": "/1", "author_name": ["A"]},
-                {"key": "/2", "author_name": ["B"]},  # no title
-                {"title": "", "key": "/3", "author_name": ["C"]},  # empty title
-            ]
-        })))
+        responses.append(
+            FakeResponse(
+                json.dumps(
+                    {
+                        "docs": [
+                            {"title": "Good", "key": "/1", "author_name": ["A"]},
+                            {"key": "/2", "author_name": ["B"]},  # no title
+                            {"title": "", "key": "/3", "author_name": ["C"]},  # empty title
+                        ]
+                    }
+                )
+            )
+        )
         results = BooksSearch().search("test")
         assert len(results) == 1
         assert results[0]["title"] == "Good"
@@ -1476,6 +1586,7 @@ class TestBooksSearchExtended:
 # ---------------------------------------------------------------------------
 # HuggingFaceImporter — extended
 # ---------------------------------------------------------------------------
+
 
 class TestHuggingFaceImporterExtended:
     def test_download_datasetdict_fallback(self, tmp_path, monkeypatch):
@@ -1487,8 +1598,7 @@ class TestHuggingFaceImporterExtended:
                 raise ValueError("config needed")
             return {"train": [{"text": "data"}]}
 
-        monkeypatch.setitem(sys.modules, "datasets",
-                            SimpleNamespace(load_dataset=load))
+        monkeypatch.setitem(sys.modules, "datasets", SimpleNamespace(load_dataset=load))
         imp = HuggingFaceImporter()
         result = imp.download_dataset("owner/ds", str(tmp_path))
         assert result.success is True
@@ -1499,8 +1609,7 @@ class TestHuggingFaceImporterExtended:
         def load(*args, **kwargs):
             return {"train": [{"content": "text content"}]}
 
-        monkeypatch.setitem(sys.modules, "datasets",
-                            SimpleNamespace(load_dataset=load))
+        monkeypatch.setitem(sys.modules, "datasets", SimpleNamespace(load_dataset=load))
         imp = HuggingFaceImporter()
         result = imp.download_dataset("owner/ds", str(tmp_path))
         assert result.success is True
@@ -1512,8 +1621,7 @@ class TestHuggingFaceImporterExtended:
         def load(*args, **kwargs):
             return {"train": [{"key": "value"}]}
 
-        monkeypatch.setitem(sys.modules, "datasets",
-                            SimpleNamespace(load_dataset=load))
+        monkeypatch.setitem(sys.modules, "datasets", SimpleNamespace(load_dataset=load))
         imp = HuggingFaceImporter()
         result = imp.download_dataset("owner/ds", str(tmp_path))
         assert result.success is True
@@ -1524,8 +1632,7 @@ class TestHuggingFaceImporterExtended:
         def load(*args, **kwargs):
             return [{"text": "hi"}]
 
-        monkeypatch.setitem(sys.modules, "datasets",
-                            SimpleNamespace(load_dataset=load))
+        monkeypatch.setitem(sys.modules, "datasets", SimpleNamespace(load_dataset=load))
         imp = HuggingFaceImporter()
         result = imp.download_dataset("owner/ds", str(tmp_path), name="custom_name")
         assert result.name == "custom_name"
@@ -1535,17 +1642,17 @@ class TestHuggingFaceImporterExtended:
         def load(*args, **kwargs):
             return [{"text": "hi"}]
 
-        monkeypatch.setitem(sys.modules, "datasets",
-                            SimpleNamespace(load_dataset=load))
+        monkeypatch.setitem(sys.modules, "datasets", SimpleNamespace(load_dataset=load))
         imp = HuggingFaceImporter()
         result = imp.download_dataset("owner/my_dataset", str(tmp_path))
         assert result.name == "my_dataset"
 
     def test_search_datasets_returns_list(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "domain.infrastructure.hf_hub",
-                            SimpleNamespace(fetch_dataset_search=lambda q, limit: [
-                                {"id": "a"}, {"id": "b"}
-                            ]))
+        monkeypatch.setitem(
+            sys.modules,
+            "domain.infrastructure._internal.hf_hub",
+            SimpleNamespace(fetch_dataset_search=lambda q, limit: [{"id": "a"}, {"id": "b"}]),
+        )
         results = HuggingFaceImporter().search_datasets("q", limit=2)
         assert len(results) == 2
 
@@ -1553,6 +1660,7 @@ class TestHuggingFaceImporterExtended:
 # ---------------------------------------------------------------------------
 # URLImporter — extended
 # ---------------------------------------------------------------------------
+
 
 class TestURLImporterExtended:
     def test_download_file_url_with_multiple_dots(self, tmp_path, monkeypatch):
@@ -1573,8 +1681,9 @@ class TestURLImporterExtended:
         src = tmp_path / "data.txt"
         src.write_text(content, encoding="utf-8")
         monkeypatch.setattr(imp, "download_file", lambda url: src)
-        result = imp.import_from_url("https://example.com/data.txt", "ds",
-                                      str(tmp_path / "datasets"))
+        result = imp.import_from_url(
+            "https://example.com/data.txt", "ds", str(tmp_path / "datasets")
+        )
         assert result.total_chars == 100
 
     def test_import_from_url_creates_output_dir(self, tmp_path, monkeypatch):
@@ -1582,14 +1691,14 @@ class TestURLImporterExtended:
         src = tmp_path / "data.txt"
         src.write_text("content", encoding="utf-8")
         monkeypatch.setattr(imp, "download_file", lambda url: src)
-        result = imp.import_from_url("https://example.com/data.txt", "ds",
-                                      str(tmp_path / "new_dir"))
+        imp.import_from_url("https://example.com/data.txt", "ds", str(tmp_path / "new_dir"))
         assert (tmp_path / "new_dir" / "ds" / "corpus.jsonl").exists()
 
 
 # ---------------------------------------------------------------------------
 # GitHubSearch — extended
 # ---------------------------------------------------------------------------
+
 
 class TestGitHubSearchExtended:
     def test_sanitize_query_special_chars(self):
@@ -1609,9 +1718,9 @@ class TestGitHubSearchExtended:
 
     def test_search_repos_defaults(self, fake_urlopen):
         _, responses = fake_urlopen
-        responses.append(FakeResponse(json.dumps({
-            "items": [{"full_name": "o/r", "html_url": "https://x"}]
-        })))
+        responses.append(
+            FakeResponse(json.dumps({"items": [{"full_name": "o/r", "html_url": "https://x"}]}))
+        )
         results = GitHubSearch().search_repos("q")
         assert results[0]["description"] == ""
         assert results[0]["stargazers_count"] == 0
@@ -1623,11 +1732,13 @@ class TestGitHubSearchExtended:
 # ISBNImporter — extended
 # ---------------------------------------------------------------------------
 
+
 class TestISBNImporterExtended:
     def test_import_creates_output_dir(self, tmp_path, monkeypatch):
         imp = ISBNImporter(output_dir=str(tmp_path / "books"))
-        monkeypatch.setattr(imp._books_search, "search",
-                            lambda *a, **k: [{"title": "T", "author": "A"}])
+        monkeypatch.setattr(
+            imp._books_search, "search", lambda *a, **k: [{"title": "T", "author": "A"}]
+        )
         monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a: None)
         imp.import_from_isbn("1234567890", "mybook")
         assert (tmp_path / "books" / "mybook").is_dir()
@@ -1637,7 +1748,7 @@ class TestISBNImporterExtended:
         book = {"title": "Test Book", "author": "Author", "year": 1999}
         monkeypatch.setattr(imp._books_search, "search", lambda *a, **k: [book])
         monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a: "text")
-        result = imp.import_from_isbn("12345", "ds")
+        imp.import_from_isbn("12345", "ds")
         meta = json.loads((tmp_path / "books" / "ds" / "metadata.json").read_text())
         assert meta["title"] == "Test Book"
         assert meta["author"] == "Author"
@@ -1646,10 +1757,13 @@ class TestISBNImporterExtended:
 
     def test_import_metadata_only_info_file(self, tmp_path, monkeypatch):
         imp = ISBNImporter(output_dir=str(tmp_path / "books"))
-        monkeypatch.setattr(imp._books_search, "search",
-                            lambda *a, **k: [{"title": "T", "author": "A", "year": 2000}])
+        monkeypatch.setattr(
+            imp._books_search,
+            "search",
+            lambda *a, **k: [{"title": "T", "author": "A", "year": 2000}],
+        )
         monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a: None)
-        result = imp.import_from_isbn("999", "ds")
+        imp.import_from_isbn("999", "ds")
         info = (tmp_path / "books" / "ds" / "ds_info.txt").read_text()
         assert "Title: T" in info
         assert "Author: A" in info
@@ -1666,7 +1780,7 @@ class TestISBNImporterExtended:
     def test_fetch_gutenberg_text_encoding(self, fake_urlopen):
         _, responses = fake_urlopen
         responses.append(FakeResponse(json.dumps({"results": [{"id": 42}]})))
-        text_bytes = "Hello World".encode("utf-8")
+        text_bytes = b"Hello World"
         responses.append(FakeResponse(text_bytes))
         result = ISBNImporter()._fetch_gutenberg_text("Title", "Author")
         assert result == "Hello World"
@@ -1675,6 +1789,7 @@ class TestISBNImporterExtended:
 # ---------------------------------------------------------------------------
 # DataImporter — extended
 # ---------------------------------------------------------------------------
+
 
 class TestDataImporterExtended:
     def test_init_custom_output_dir(self, tmp_path):
@@ -1697,18 +1812,21 @@ class TestDataImporterExtended:
 
     def test_import_from_local_nested_directory(self, data_importer, tmp_path):
         root = tmp_path / "data"
-        write_repo(root, {
-            "src/a.py": "x",
-            "lib/b.py": "y",
-            "deep/nested/c.py": "z",
-        })
+        write_repo(
+            root,
+            {
+                "src/a.py": "x",
+                "lib/b.py": "y",
+                "deep/nested/c.py": "z",
+            },
+        )
         result = data_importer.import_from_local(str(root), "ds")
         assert result.files_imported == 3
 
     def test_import_from_local_preserves_relative_paths(self, data_importer, tmp_path):
         root = tmp_path / "data"
         write_repo(root, {"src/main.py": "x"})
-        result = data_importer.import_from_local(str(root), "ds")
+        data_importer.import_from_local(str(root), "ds")
         corpus = Path(data_importer.output_dir) / "ds" / "corpus.jsonl"
         record = json.loads(corpus.read_text().splitlines()[0])
         assert record["path"] == "src/main.py"
@@ -1720,9 +1838,11 @@ class TestDataImporterExtended:
             def extract_text(self):
                 return "fallback text"
 
-        monkeypatch.setitem(sys.modules, "PyPDF2",
-                            SimpleNamespace(PdfReader=lambda f: SimpleNamespace(
-                                pages=[Page()])))
+        monkeypatch.setitem(
+            sys.modules,
+            "PyPDF2",
+            SimpleNamespace(PdfReader=lambda f: SimpleNamespace(pages=[Page()])),
+        )
         p = tmp_path / "doc.pdf"
         p.write_bytes(b"%PDF-1.4")
         assert DataImporter._extract_pdf_text(p) == "fallback text"
@@ -1755,12 +1875,17 @@ class TestDataImporterExtended:
 # ImportResult — extended
 # ---------------------------------------------------------------------------
 
+
 class TestImportResultExtended:
     def test_all_fields(self):
         r = ImportResult(
-            success=True, name="test", source="src",
-            files_imported=5, total_chars=1000,
-            output_path="/out/corpus.jsonl", error=None,
+            success=True,
+            name="test",
+            source="src",
+            files_imported=5,
+            total_chars=1000,
+            output_path="/out/corpus.jsonl",
+            error=None,
         )
         assert r.success is True
         assert r.name == "test"
@@ -1772,9 +1897,13 @@ class TestImportResultExtended:
 
     def test_error_result(self):
         r = ImportResult(
-            success=False, name="fail", source="src",
-            files_imported=0, total_chars=0,
-            output_path="", error="something went wrong",
+            success=False,
+            name="fail",
+            source="src",
+            files_imported=0,
+            total_chars=0,
+            output_path="",
+            error="something went wrong",
         )
         assert r.success is False
         assert r.error == "something went wrong"
@@ -1789,12 +1918,24 @@ class TestImportResultExtended:
 # DEFAULT_IGNORES
 # ---------------------------------------------------------------------------
 
+
 class TestDefaultIgnores:
     def test_contains_expected_entries(self):
         expected = {
-            ".git", ".svn", ".hg", "node_modules", "__pycache__",
-            ".venv", "venv", "dist", "build", ".pytest_cache",
-            ".mypy_cache", ".ruff_cache", "*.egg-info", ".tox",
+            ".git",
+            ".svn",
+            ".hg",
+            "node_modules",
+            "__pycache__",
+            ".venv",
+            "venv",
+            "dist",
+            "build",
+            ".pytest_cache",
+            ".mypy_cache",
+            ".ruff_cache",
+            "*.egg-info",
+            ".tox",
         }
         assert DEFAULT_IGNORES == expected
 

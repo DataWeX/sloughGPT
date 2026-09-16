@@ -2,7 +2,7 @@
 
 import logging
 import threading
-import time
+
 from domain.shell._internal.log_buffer import (
     LogBuffer,
     LogBufferHandler,
@@ -10,10 +10,10 @@ from domain.shell._internal.log_buffer import (
     get_log_buffer,
 )
 
-
 # =============================================================================
 # LogEntry
 # =============================================================================
+
 
 class TestLogEntry:
     def test_create_entry(self):
@@ -51,6 +51,7 @@ class TestLogEntry:
 # =============================================================================
 # LogBuffer
 # =============================================================================
+
 
 class TestLogBuffer:
     def test_append_and_get(self):
@@ -227,6 +228,7 @@ class TestLogBuffer:
 # Thread Safety
 # =============================================================================
 
+
 class TestLogBufferThreadSafety:
     def test_concurrent_appends(self):
         b = LogBuffer(max_size=1000)
@@ -308,6 +310,7 @@ class TestLogBufferThreadSafety:
 # LogBufferSingleton
 # =============================================================================
 
+
 class TestLogBufferSingleton:
     def test_singleton_returns_same_instance(self):
         a = get_log_buffer()
@@ -325,6 +328,7 @@ class TestLogBufferSingleton:
 # =============================================================================
 # LogBufferHandler
 # =============================================================================
+
 
 class TestLogBufferHandler:
     def test_handler_feeds_buffer(self):

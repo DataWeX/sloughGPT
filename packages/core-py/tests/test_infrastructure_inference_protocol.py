@@ -1,4 +1,5 @@
 """Tests for inference IPC protocol — wire format and message types."""
+
 from __future__ import annotations
 
 import struct

@@ -2,8 +2,9 @@
 Tests for the rate-limit router — status, check, burst behavior, wait time.
 """
 
-import pytest
 import time
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -64,6 +65,7 @@ class TestCheckLimit:
 
     def test_rate_limit_blocks_after_burst(self, client):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=5, burst_size=5)
         for _ in range(5):
             assert limiter.is_allowed("test_key") is True
@@ -71,11 +73,13 @@ class TestCheckLimit:
 
     def test_wait_time_zero_when_under_limit(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=60, burst_size=10)
         assert limiter.get_wait_time("key") == 0.0
 
     def test_wait_time_positive_when_at_limit(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=2, burst_size=2)
         limiter.is_allowed("k")
         limiter.is_allowed("k")
@@ -84,6 +88,7 @@ class TestCheckLimit:
 
     def test_different_keys_independent(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=1, burst_size=1)
         assert limiter.is_allowed("a") is True
         assert limiter.is_allowed("b") is True
@@ -106,6 +111,7 @@ class TestCheckLimit:
 class TestRateLimiterInternal:
     def test_history_expires_after_window(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=2, burst_size=2)
         limiter.is_allowed("k")
         limiter._history["k"] = [time.time() - 120]  # old entry
@@ -113,12 +119,14 @@ class TestRateLimiterInternal:
 
     def test_stale_entries_pruned_before_decision(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=2, burst_size=2)
         limiter._history["k"] = [time.time() - 120, time.time() - 120]
         assert limiter.is_allowed("k") is True  # stale entries dropped, slot free
 
     def test_wait_time_uses_oldest_entry(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=60, burst_size=60)
         now = time.time()
         limiter._history["k"] = [now - 30.0] * 60
@@ -127,12 +135,14 @@ class TestRateLimiterInternal:
 
     def test_wait_time_expired_entries_reset_to_zero(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=2, burst_size=2)
         limiter._history["k"] = [time.time() - 120]
         assert limiter.get_wait_time("k") == 0.0
 
     def test_is_allowed_tracks_max_burst(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=3, burst_size=3)
         for _ in range(3):
             assert limiter.is_allowed("k") is True
@@ -141,6 +151,7 @@ class TestRateLimiterInternal:
 
     def test_requests_per_minute_independent_of_burst_size(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=5, burst_size=0)
         for _ in range(5):
             assert limiter.is_allowed("k") is True
@@ -152,7 +163,6 @@ class TestRateLimiterInternal:
 
     def test_check_uses_per_client_key(self, router):
         router._rate_limiter._history.clear()
-        first = set()
         for _ in range(3):
             router._rate_limiter.is_allowed("client-a")
         assert len(router._rate_limiter._history) == 1
@@ -172,6 +182,7 @@ class TestMethodCoverage:
 class TestRateLimiterEdgeCases:
     def test_is_allowed_records_timestamps(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=60, burst_size=10)
         ok = limiter.is_allowed("k")
         assert ok is True
@@ -180,6 +191,7 @@ class TestRateLimiterEdgeCases:
 
     def test_is_allowed_blocks_at_exact_limit(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=1, burst_size=1)
         assert limiter.is_allowed("k") is True
         assert limiter.is_allowed("k") is False
@@ -187,17 +199,20 @@ class TestRateLimiterEdgeCases:
 
     def test_burst_does_not_exceed_requests_per_minute(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=10, burst_size=1000)
         allowed = [limiter.is_allowed("k") for _ in range(12)]
         assert sum(allowed) == 10
 
     def test_wait_time_zero_for_unknown_key(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=60, burst_size=10)
         assert limiter.get_wait_time("fresh-key") == 0.0
 
     def test_wait_time_bounded_at_window(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=1, burst_size=1)
         limiter._history["k"] = [time.time()]
         wait = limiter.get_wait_time("k")
@@ -205,6 +220,7 @@ class TestRateLimiterEdgeCases:
 
     def test_is_allowed_with_zero_rate(self):
         from apps.api.server.routers.ratelimit import _RateLimiter
+
         limiter = _RateLimiter(requests_per_minute=0, burst_size=0)
         assert limiter.is_allowed("k") is False
 

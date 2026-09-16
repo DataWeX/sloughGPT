@@ -11,11 +11,12 @@ import threading
 import uuid
 from typing import Any
 
-from domain.mobile import get_notification_service
-from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
+
+from domain.mobile import get_notification_service
+from domain.training._internal.executor import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async, _sloughgpt_trainer_kwds
@@ -60,7 +61,9 @@ router.include_router(builds_router)
 
 
 @router.post("/training/start")
-async def start_training(request: TrainingRequest, auth_user: dict = Depends(require_auth_if_enabled)):
+async def start_training(
+    request: TrainingRequest, auth_user: dict = Depends(require_auth_if_enabled)
+):
     """Start a tracked training job (web UI).
 
     ``*.soul`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
@@ -88,15 +91,31 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
         if _size == 0:
             raise_error("Dataset file is empty (0 bytes)", "E_BAD_REQUEST", status_code=400)
         if _size < 100:
-            raise_error(f"Dataset file is too small ({_size} bytes). Need at least 100 bytes.", "E_BAD_REQUEST", status_code=400)
+            raise_error(
+                f"Dataset file is too small ({_size} bytes). Need at least 100 bytes.",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
     elif _data_path.is_dir():
         _files = list(_data_path.rglob("*"))
-        _data_files = [f for f in _files if f.is_file() and f.suffix in (".jsonl", ".json", ".txt", ".csv", ".parquet")]
+        _data_files = [
+            f
+            for f in _files
+            if f.is_file() and f.suffix in (".jsonl", ".json", ".txt", ".csv", ".parquet")
+        ]
         if len(_data_files) == 0:
-            raise_error(f"No data files found in directory (expected .jsonl, .json, .txt, .csv, or .parquet)", "E_BAD_REQUEST", status_code=400)
+            raise_error(
+                "No data files found in directory (expected .jsonl, .json, .txt, .csv, or .parquet)",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
         _total_size = sum(f.stat().st_size for f in _data_files)
         if _total_size < 100:
-            raise_error(f"Total dataset size too small ({_total_size} bytes across {len(_data_files)} files)", "E_BAD_REQUEST", status_code=400)
+            raise_error(
+                f"Total dataset size too small ({_total_size} bytes across {len(_data_files)} files)",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
 
     # Pre-flight quality gate: check data quality before wasting compute
     try:
@@ -105,16 +124,25 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
 
         _q_path = _PQ(data_path_str)
         if _q_path.is_file():
-            _raw = await _aio.to_thread(lambda: _q_path.read_text(encoding="utf-8", errors="replace")[:200_000])
+            _raw = await _aio.to_thread(
+                lambda: _q_path.read_text(encoding="utf-8", errors="replace")[:200_000]
+            )
         elif _q_path.is_dir():
             _candidates = [_q_path / "input.txt", _q_path / "corpus.jsonl", _q_path / "train.txt"]
             _q_file = next((c for c in _candidates if c.exists()), None)
-            _raw = await _aio.to_thread(lambda: _q_file.read_text(encoding="utf-8", errors="replace")[:200_000]) if _q_file else ""
+            _raw = (
+                await _aio.to_thread(
+                    lambda: _q_file.read_text(encoding="utf-8", errors="replace")[:200_000]
+                )
+                if _q_file
+                else ""
+            )
         else:
             _raw = ""
 
         if _raw:
             from domain.training._internal.quality_scorer import compute_data_quality
+
             _quality = await _aio.to_thread(compute_data_quality, _raw)
             _avg = _quality.get("avg_quality", 0)
             _tox = _quality.get("toxicity_rate", 0)
@@ -137,6 +165,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                 )
     except Exception as e:
         from schemas.common import AppError
+
         if isinstance(e, AppError):
             raise
         logger.warning("Quality gate check failed (proceeding): %s", e)
@@ -145,6 +174,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
     try:
         import asyncio as _aio
         from pathlib import Path as _PJ
+
         from domain.training._internal.train_pipeline import validate_conversation_data
 
         _j_path = _PJ(data_path_str)
@@ -185,6 +215,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                     )
     except Exception as e:
         from schemas.common import AppError
+
         if isinstance(e, AppError):
             raise
         logger.warning("JSONL validation failed (proceeding): %s", e)

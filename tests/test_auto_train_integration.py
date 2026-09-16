@@ -1,8 +1,8 @@
-import pytest
-import asyncio
 import json
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch
+
 import httpx
+import pytest
 
 pytestmark = pytest.mark.slow
 
@@ -11,6 +11,7 @@ def _server_available() -> bool:
     """Check if the API server is running on localhost:8000."""
     try:
         import urllib.request
+
         req = urllib.request.Request("http://localhost:8000/health")
         resp = urllib.request.urlopen(req, timeout=2)
         return resp.status == 200
@@ -32,7 +33,12 @@ class TestAutoTrainIntegration:
         async with httpx.AsyncClient(timeout=300.0) as client:
             start_resp = await client.post(
                 f"{api_base_url}/auto-train/start",
-                json={"teacher_model": "gpt2", "temperature": 0.8, "epochs": 2, "soul_name": "assistant"}
+                json={
+                    "teacher_model": "gpt2",
+                    "temperature": 0.8,
+                    "epochs": 2,
+                    "soul_name": "assistant",
+                },
             )
             assert start_resp.status_code == 200, f"Start failed: {start_resp.text}"
 
@@ -80,7 +86,9 @@ class TestAutoTrainErrorHandling:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from apps.api.server.main import app
+
         return TestClient(app)
 
     def test_start_with_invalid_model(self, client):

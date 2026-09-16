@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Dict, Any
+from typing import Any
 
 
 class ModelSize(Enum):
@@ -31,7 +31,7 @@ class HFModelInfo:
     memory_int8_gb: float
     memory_q4_gb: float
     organization: str
-    tags: List[str]
+    tags: list[str]
 
 
 HF_MODELS = {
@@ -332,16 +332,16 @@ HF_MODELS = {
 }
 
 
-def get_model_info(model_id: str) -> Optional[HFModelInfo]:
+def get_model_info(model_id: str) -> HFModelInfo | None:
     """Get information about a model."""
     return HF_MODELS.get(model_id)
 
 
 def search_models(
-    organization: Optional[str] = None,
-    size: Optional[ModelSize] = None,
-    tags: Optional[List[str]] = None,
-) -> List[HFModelInfo]:
+    organization: str | None = None,
+    size: ModelSize | None = None,
+    tags: list[str] | None = None,
+) -> list[HFModelInfo]:
     """Search for models by organization, size, or tags."""
     results = list(HF_MODELS.values())
 
@@ -365,7 +365,7 @@ def get_recommended_quantization(model_id: str) -> str:
     return "q4_k_m"
 
 
-def get_model_requirements(model_id: str, precision: str = "bf16") -> Dict[str, Any]:
+def get_model_requirements(model_id: str, precision: str = "bf16") -> dict[str, Any]:
     """Get memory requirements for a model."""
     model = get_model_info(model_id)
 
@@ -400,7 +400,7 @@ def get_model_requirements(model_id: str, precision: str = "bf16") -> Dict[str, 
     }
 
 
-def map_to_sloughgpt_config(model_id: str) -> Dict[str, Any]:
+def map_to_sloughgpt_config(model_id: str) -> dict[str, Any]:
     """Map HuggingFace model to SloughGPT config."""
     model = get_model_info(model_id)
 

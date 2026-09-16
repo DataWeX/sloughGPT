@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import io
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from domain.shell._internal.cmds import models_cmd
 
@@ -75,6 +76,7 @@ def _run(cmd, args=None, api=None, out=None):
 
 # ── models ────────────────────────────────────────────────────────────────────
 
+
 class TestModels:
     def test_empty(self, api, out):
         assert _run("models", api=api, out=out) == 0
@@ -109,6 +111,7 @@ class TestModels:
 
 # ── unload ────────────────────────────────────────────────────────────────────
 
+
 class TestUnload:
     def test_success(self, api, out):
         assert _run("unload", api=api, out=out) == 0
@@ -124,6 +127,7 @@ class TestUnload:
 
 
 # ── precision ─────────────────────────────────────────────────────────────────
+
 
 class TestPrecision:
     def test_default_auto(self, api, out):
@@ -147,6 +151,7 @@ class TestPrecision:
 
 
 # ── quantize ──────────────────────────────────────────────────────────────────
+
 
 class TestQuantize:
     def test_default_4bit_symmetric(self, api, out):
@@ -179,6 +184,7 @@ class TestQuantize:
 
 # ── dequantize ────────────────────────────────────────────────────────────────
 
+
 class TestDequantize:
     def test_success(self, api, out):
         assert _run("dequantize", api=api, out=out) == 0
@@ -194,6 +200,7 @@ class TestDequantize:
 
 
 # ── module metadata ───────────────────────────────────────────────────────────
+
 
 class TestModuleMeta:
     def test_names(self):

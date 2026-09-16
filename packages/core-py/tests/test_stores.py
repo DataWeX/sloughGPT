@@ -2,20 +2,17 @@
 
 from __future__ import annotations
 
-import pytest
-from pathlib import Path
-
 from domain.collections._internal.sources import Record
 from domain.collections._internal.stores import (
-    MemoryStore,
-    FileStore,
     CallbackStore,
     ChainedStore,
+    FileStore,
+    MemoryStore,
     StatsStore,
 )
 
-
 # ── MemoryStore ───────────────────────────────────────────────────────────────
+
 
 class TestMemoryStore:
     def test_write_and_read(self):
@@ -73,6 +70,7 @@ class TestMemoryStore:
 
 # ── FileStore ─────────────────────────────────────────────────────────────────
 
+
 class TestFileStore:
     def test_write_and_read(self, tmp_path):
         store = FileStore(str(tmp_path / "test.jsonl"))
@@ -107,6 +105,7 @@ class TestFileStore:
 
 # ── CallbackStore ─────────────────────────────────────────────────────────────
 
+
 class TestCallbackStore:
     def test_write_calls_callback(self):
         received = []
@@ -127,6 +126,7 @@ class TestCallbackStore:
 
 
 # ── ChainedStore ──────────────────────────────────────────────────────────────
+
 
 class TestChainedStore:
     def test_write_to_all(self):
@@ -156,6 +156,7 @@ class TestChainedStore:
 
 
 # ── StatsStore ────────────────────────────────────────────────────────────────
+
 
 class TestStatsStore:
     def test_write_stats(self):

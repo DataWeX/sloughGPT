@@ -3,6 +3,7 @@ WorkerStreamStalledError, constants.
 
 Covers: dataclass creation, session ID generation, error class, timeout constants.
 """
+
 from __future__ import annotations
 
 import os
@@ -16,12 +17,12 @@ if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
 from domain.infrastructure._internal.model_worker import (
-    WorkerHealth,
-    _new_session_id,
-    WorkerStreamStalledError,
-    _STREAM_PUT_TIMEOUT_S,
     _STALL_TIMEOUT_S,
+    _STREAM_PUT_TIMEOUT_S,
     ModelWorkerProcess,
+    WorkerHealth,
+    WorkerStreamStalledError,
+    _new_session_id,
     _session_ids,
 )
 

@@ -1,15 +1,19 @@
 """Tests for domain.training._internal.status — TrainingStage, CompletionStatus, StageStatus, TrainingCompletionReport; domain.training._internal.auto_config — DatasetAnalysis, TrainingConfig; domain.infrastructure.download_manager — DownloadStatus, DownloadProgress."""
 
-from domain.training._internal.status import (
-    TrainingStage, CompletionStatus, StageStatus, TrainingCompletionReport,
-)
+from domain.infrastructure._internal.download_manager import DownloadProgress, DownloadStatus
 from domain.training._internal.auto_config import DatasetAnalysis, TrainingConfig
-from domain.infrastructure._internal.download_manager import DownloadStatus, DownloadProgress
+from domain.training._internal.status import (
+    CompletionStatus,
+    StageStatus,
+    TrainingCompletionReport,
+    TrainingStage,
+)
 
 
 class TestTrainingStage:
     def test_all_members(self):
         assert len(TrainingStage) == 6
+
     def test_values(self):
         assert TrainingStage.NOT_STARTED.value == "not_started"
         assert TrainingStage.PRETRAINING.value == "pretraining"
@@ -20,6 +24,7 @@ class TestTrainingStage:
 class TestCompletionStatus:
     def test_all_members(self):
         assert len(CompletionStatus) == 5
+
     def test_values(self):
         assert CompletionStatus.IN_PROGRESS.value == "in_progress"
         assert CompletionStatus.COMPLETED.value == "completed"
@@ -98,6 +103,7 @@ class TestTrainingConfig:
 class TestDownloadStatus:
     def test_all_members(self):
         assert len(DownloadStatus) == 6
+
     def test_values(self):
         assert DownloadStatus.QUEUED.value == "queued"
         assert DownloadStatus.DOWNLOADING.value == "downloading"
@@ -122,8 +128,11 @@ class TestDownloadProgress:
 
     def test_custom(self):
         dp = DownloadProgress(
-            model_id="llama", status=DownloadStatus.DOWNLOADING,
-            bytes_downloaded=500, total_bytes=1000, percentage=50.0,
+            model_id="llama",
+            status=DownloadStatus.DOWNLOADING,
+            bytes_downloaded=500,
+            total_bytes=1000,
+            percentage=50.0,
         )
         assert dp.bytes_downloaded == 500
         assert dp.total_bytes == 1000

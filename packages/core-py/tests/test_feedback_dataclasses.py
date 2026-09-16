@@ -2,14 +2,19 @@
 
 import dataclasses
 import threading
+
 import numpy as np
 import pytest
 
-from domain.feedback._internal.message_feedback import MessageData, MessageFeedback, get_message_feedback, _feedback_instance
-from domain.feedback._internal.response_tracker import ResponseLog
+from domain.feedback._internal.database import Feedback, Message, SimilarPattern
+from domain.feedback._internal.message_feedback import (
+    MessageData,
+    MessageFeedback,
+    get_message_feedback,
+)
 from domain.feedback._internal.meta_weights import MetaWeights
 from domain.feedback._internal.model_health import HealthSnapshot
-from domain.feedback._internal.database import Message, Feedback, SimilarPattern
+from domain.feedback._internal.response_tracker import ResponseLog
 
 
 class TestMessageData:
@@ -84,6 +89,7 @@ class TestMessageData:
     def test_copy_semantics(self):
         md = MessageData(role="user", content="hello")
         import dataclasses
+
         md2 = dataclasses.replace(md, content="world")
         assert md.content == "hello"
         assert md2.content == "world"
@@ -302,6 +308,7 @@ class TestMessageFeedback:
 class TestMessageFeedbackSingleton:
     def test_get_message_feedback_singleton(self):
         import domain.feedback._internal.message_feedback as mod
+
         old = mod._feedback_instance
         try:
             mod._feedback_instance = None
@@ -314,6 +321,7 @@ class TestMessageFeedbackSingleton:
 
     def test_singleton_not_none_after_first_call(self):
         import domain.feedback._internal.message_feedback as mod
+
         old = mod._feedback_instance
         try:
             mod._feedback_instance = None
@@ -324,6 +332,7 @@ class TestMessageFeedbackSingleton:
 
     def test_singleton_returns_same_type(self):
         import domain.feedback._internal.message_feedback as mod
+
         old = mod._feedback_instance
         try:
             mod._feedback_instance = None
@@ -334,6 +343,7 @@ class TestMessageFeedbackSingleton:
 
     def test_singleton_preserves_state_across_calls(self):
         import domain.feedback._internal.message_feedback as mod
+
         old = mod._feedback_instance
         try:
             mod._feedback_instance = None
@@ -348,6 +358,7 @@ class TestMessageFeedbackSingleton:
 
     def test_singleton_resets_cleanly(self):
         import domain.feedback._internal.message_feedback as mod
+
         old = mod._feedback_instance
         try:
             mod._feedback_instance = None
@@ -363,18 +374,32 @@ class TestMessageFeedbackSingleton:
 class TestResponseLog:
     def test_fields(self):
         rl = ResponseLog(
-            timestamp="2024-01-01", user_message="hi", assistant_response="hello",
-            model="gpt2", temperature=0.7, max_tokens=100, session_id="s1",
-            user_id="u1", tokens_generated=5, duration_ms=100.0,
+            timestamp="2024-01-01",
+            user_message="hi",
+            assistant_response="hello",
+            model="gpt2",
+            temperature=0.7,
+            max_tokens=100,
+            session_id="s1",
+            user_id="u1",
+            tokens_generated=5,
+            duration_ms=100.0,
         )
         assert rl.user_message == "hi"
         assert rl.tokens_generated == 5
 
     def test_default_optional_fields(self):
         rl = ResponseLog(
-            timestamp="t", user_message="u", assistant_response="a",
-            model="m", temperature=0.5, max_tokens=64, session_id="s",
-            user_id="u", tokens_generated=0, duration_ms=0.0,
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="m",
+            temperature=0.5,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=0,
+            duration_ms=0.0,
         )
         assert rl.has_images is False
         assert rl.context_tokens == 0
@@ -382,118 +407,267 @@ class TestResponseLog:
 
     def test_with_images(self):
         rl = ResponseLog(
-            timestamp="t", user_message="u", assistant_response="a",
-            model="m", temperature=0.5, max_tokens=64, session_id="s",
-            user_id="u", tokens_generated=10, duration_ms=50.0, has_images=True,
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="m",
+            temperature=0.5,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=10,
+            duration_ms=50.0,
+            has_images=True,
         )
         assert rl.has_images is True
 
     def test_with_eval_scores(self):
         scores = {"fluency": 0.9, "relevance": 0.8}
         rl = ResponseLog(
-            timestamp="t", user_message="u", assistant_response="a",
-            model="m", temperature=0.5, max_tokens=64, session_id="s",
-            user_id="u", tokens_generated=10, duration_ms=50.0,
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="m",
+            temperature=0.5,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=10,
+            duration_ms=50.0,
             eval_scores=scores,
         )
         assert rl.eval_scores == scores
 
     def test_all_fields_assignable(self):
         rl = ResponseLog(
-            timestamp="ts", user_message="um", assistant_response="ar",
-            model="md", temperature=1.0, max_tokens=512, session_id="sid",
-            user_id="uid", tokens_generated=100, duration_ms=999.9,
-            has_images=True, context_tokens=50,
+            timestamp="ts",
+            user_message="um",
+            assistant_response="ar",
+            model="md",
+            temperature=1.0,
+            max_tokens=512,
+            session_id="sid",
+            user_id="uid",
+            tokens_generated=100,
+            duration_ms=999.9,
+            has_images=True,
+            context_tokens=50,
         )
         assert rl.context_tokens == 50
         assert rl.duration_ms == 999.9
 
     def test_repr(self):
         rl = ResponseLog(
-            timestamp="t", user_message="u", assistant_response="a",
-            model="m", temperature=0.5, max_tokens=64, session_id="s",
-            user_id="u", tokens_generated=10, duration_ms=50.0,
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="m",
+            temperature=0.5,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=10,
+            duration_ms=50.0,
         )
         r = repr(rl)
         assert "ResponseLog" in r
 
     def test_equality(self):
-        kw = dict(timestamp="t", user_message="u", assistant_response="a",
-                  model="m", temperature=0.5, max_tokens=64, session_id="s",
-                  user_id="u", tokens_generated=10, duration_ms=50.0)
+        kw = {
+            "timestamp": "t",
+            "user_message": "u",
+            "assistant_response": "a",
+            "model": "m",
+            "temperature": 0.5,
+            "max_tokens": 64,
+            "session_id": "s",
+            "user_id": "u",
+            "tokens_generated": 10,
+            "duration_ms": 50.0,
+        }
         rl1 = ResponseLog(**kw)
         rl2 = ResponseLog(**kw)
         assert rl1 == rl2
 
     def test_inequality_different_model(self):
-        rl1 = ResponseLog(timestamp="t", user_message="u", assistant_response="a",
-                          model="gpt2", temperature=0.5, max_tokens=64, session_id="s",
-                          user_id="u", tokens_generated=10, duration_ms=50.0)
-        rl2 = ResponseLog(timestamp="t", user_message="u", assistant_response="a",
-                          model="gpt4", temperature=0.5, max_tokens=64, session_id="s",
-                          user_id="u", tokens_generated=10, duration_ms=50.0)
+        rl1 = ResponseLog(
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="gpt2",
+            temperature=0.5,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=10,
+            duration_ms=50.0,
+        )
+        rl2 = ResponseLog(
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="gpt4",
+            temperature=0.5,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=10,
+            duration_ms=50.0,
+        )
         assert rl1 != rl2
 
     def test_inequality_different_tokens(self):
-        rl1 = ResponseLog(timestamp="t", user_message="u", assistant_response="a",
-                          model="m", temperature=0.5, max_tokens=64, session_id="s",
-                          user_id="u", tokens_generated=10, duration_ms=50.0)
-        rl2 = ResponseLog(timestamp="t", user_message="u", assistant_response="a",
-                          model="m", temperature=0.5, max_tokens=64, session_id="s",
-                          user_id="u", tokens_generated=20, duration_ms=50.0)
+        rl1 = ResponseLog(
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="m",
+            temperature=0.5,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=10,
+            duration_ms=50.0,
+        )
+        rl2 = ResponseLog(
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="m",
+            temperature=0.5,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=20,
+            duration_ms=50.0,
+        )
         assert rl1 != rl2
 
     def test_eval_scores_empty_dict(self):
-        rl = ResponseLog(timestamp="t", user_message="u", assistant_response="a",
-                         model="m", temperature=0.5, max_tokens=64, session_id="s",
-                         user_id="u", tokens_generated=0, duration_ms=0.0,
-                         eval_scores={})
+        rl = ResponseLog(
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="m",
+            temperature=0.5,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=0,
+            duration_ms=0.0,
+            eval_scores={},
+        )
         assert rl.eval_scores == {}
 
     def test_eval_scores_multiple_keys(self):
         scores = {"fluency": 0.9, "relevance": 0.8, "coherence": 0.7, "safety": 0.95}
-        rl = ResponseLog(timestamp="t", user_message="u", assistant_response="a",
-                         model="m", temperature=0.5, max_tokens=64, session_id="s",
-                         user_id="u", tokens_generated=0, duration_ms=0.0,
-                         eval_scores=scores)
+        rl = ResponseLog(
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="m",
+            temperature=0.5,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=0,
+            duration_ms=0.0,
+            eval_scores=scores,
+        )
         assert len(rl.eval_scores) == 4
 
     def test_dataclass_fields(self):
         fields = {f.name for f in dataclasses.fields(ResponseLog)}
-        expected = {"timestamp", "user_message", "assistant_response", "model",
-                    "temperature", "max_tokens", "session_id", "user_id",
-                    "tokens_generated", "duration_ms", "has_images",
-                    "context_tokens", "eval_scores"}
+        expected = {
+            "timestamp",
+            "user_message",
+            "assistant_response",
+            "model",
+            "temperature",
+            "max_tokens",
+            "session_id",
+            "user_id",
+            "tokens_generated",
+            "duration_ms",
+            "has_images",
+            "context_tokens",
+            "eval_scores",
+        }
         assert fields == expected
 
     def test_tokens_generated_zero(self):
-        rl = ResponseLog(timestamp="t", user_message="u", assistant_response="a",
-                         model="m", temperature=0.5, max_tokens=64, session_id="s",
-                         user_id="u", tokens_generated=0, duration_ms=0.0)
+        rl = ResponseLog(
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="m",
+            temperature=0.5,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=0,
+            duration_ms=0.0,
+        )
         assert rl.tokens_generated == 0
 
     def test_duration_ms_negative(self):
-        rl = ResponseLog(timestamp="t", user_message="u", assistant_response="a",
-                         model="m", temperature=0.5, max_tokens=64, session_id="s",
-                         user_id="u", tokens_generated=0, duration_ms=-1.0)
+        rl = ResponseLog(
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="m",
+            temperature=0.5,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=0,
+            duration_ms=-1.0,
+        )
         assert rl.duration_ms == -1.0
 
     def test_max_tokens_large(self):
-        rl = ResponseLog(timestamp="t", user_message="u", assistant_response="a",
-                         model="m", temperature=0.5, max_tokens=100000, session_id="s",
-                         user_id="u", tokens_generated=0, duration_ms=0.0)
+        rl = ResponseLog(
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="m",
+            temperature=0.5,
+            max_tokens=100000,
+            session_id="s",
+            user_id="u",
+            tokens_generated=0,
+            duration_ms=0.0,
+        )
         assert rl.max_tokens == 100000
 
     def test_temperature_boundary_zero(self):
-        rl = ResponseLog(timestamp="t", user_message="u", assistant_response="a",
-                         model="m", temperature=0.0, max_tokens=64, session_id="s",
-                         user_id="u", tokens_generated=0, duration_ms=0.0)
+        rl = ResponseLog(
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="m",
+            temperature=0.0,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=0,
+            duration_ms=0.0,
+        )
         assert rl.temperature == 0.0
 
     def test_temperature_boundary_two(self):
-        rl = ResponseLog(timestamp="t", user_message="u", assistant_response="a",
-                         model="m", temperature=2.0, max_tokens=64, session_id="s",
-                         user_id="u", tokens_generated=0, duration_ms=0.0)
+        rl = ResponseLog(
+            timestamp="t",
+            user_message="u",
+            assistant_response="a",
+            model="m",
+            temperature=2.0,
+            max_tokens=64,
+            session_id="s",
+            user_id="u",
+            tokens_generated=0,
+            duration_ms=0.0,
+        )
         assert rl.temperature == 2.0
 
 
@@ -610,7 +784,10 @@ class TestMetaWeights:
 class TestHealthSnapshot:
     def test_fields(self):
         hs = HealthSnapshot(
-            timestamp=1.0, perplexity=5.0, loss=1.5, num_sentences=10,
+            timestamp=1.0,
+            perplexity=5.0,
+            loss=1.5,
+            num_sentences=10,
         )
         assert hs.perplexity == 5.0
         assert hs.loss == 1.5
@@ -639,7 +816,7 @@ class TestHealthSnapshot:
         assert fields == {"timestamp", "perplexity", "loss", "num_sentences"}
 
     def test_equality(self):
-        kw = dict(timestamp=1.0, perplexity=5.0, loss=1.5, num_sentences=10)
+        kw = {"timestamp": 1.0, "perplexity": 5.0, "loss": 1.5, "num_sentences": 10}
         hs1 = HealthSnapshot(**kw)
         hs2 = HealthSnapshot(**kw)
         assert hs1 == hs2
@@ -650,7 +827,9 @@ class TestHealthSnapshot:
         assert hs1 != hs2
 
     def test_float_precision(self):
-        hs = HealthSnapshot(timestamp=1.123456789, perplexity=2.987654321, loss=0.111111, num_sentences=1)
+        hs = HealthSnapshot(
+            timestamp=1.123456789, perplexity=2.987654321, loss=0.111111, num_sentences=1
+        )
         assert abs(hs.perplexity - 2.987654321) < 1e-6
 
     def test_copy_via_replace(self):
@@ -708,7 +887,9 @@ class TestDatabaseDataclasses:
         assert f.rating == "thumbs_up"
 
     def test_similar_pattern(self):
-        sp = SimilarPattern(content="hello", rating="thumbs_up", similarity=0.9, pattern_type="exact")
+        sp = SimilarPattern(
+            content="hello", rating="thumbs_up", similarity=0.9, pattern_type="exact"
+        )
         assert sp.similarity == 0.9
 
     def test_message_optional_embedding(self):
@@ -746,7 +927,9 @@ class TestDatabaseDataclasses:
         assert "thumbs_up" in r
 
     def test_similar_pattern_repr(self):
-        sp = SimilarPattern(content="hello", rating="thumbs_up", similarity=0.9, pattern_type="exact")
+        sp = SimilarPattern(
+            content="hello", rating="thumbs_up", similarity=0.9, pattern_type="exact"
+        )
         r = repr(sp)
         assert "0.9" in r
 
@@ -827,11 +1010,19 @@ class TestDatabaseDataclasses:
             assert f.rating == rating
 
     def test_message_with_created_at(self):
-        m = Message(id="m1", conversation_id="c1", role="user", content="hi", created_at="2024-01-01T00:00:00Z")
+        m = Message(
+            id="m1",
+            conversation_id="c1",
+            role="user",
+            content="hi",
+            created_at="2024-01-01T00:00:00Z",
+        )
         assert m.created_at == "2024-01-01T00:00:00Z"
 
     def test_feedback_with_created_at(self):
-        f = Feedback(id="f1", message_id="m1", rating="thumbs_up", created_at="2024-01-01T00:00:00Z")
+        f = Feedback(
+            id="f1", message_id="m1", rating="thumbs_up", created_at="2024-01-01T00:00:00Z"
+        )
         assert f.created_at == "2024-01-01T00:00:00Z"
 
     def test_similar_pattern_negative_similarity(self):

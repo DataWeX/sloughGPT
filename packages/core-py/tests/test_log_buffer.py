@@ -4,13 +4,16 @@ import logging
 import threading
 import time
 from unittest.mock import MagicMock
-import pytest
+
 from domain.shell._internal.log_buffer import (
-    LogEntry, LogBuffer, LogBufferHandler, get_log_buffer,
+    LogBuffer,
+    LogBufferHandler,
+    LogEntry,
+    get_log_buffer,
 )
 
-
 # ── LogEntry ─────────────────────────────────────────────────────────
+
 
 class TestLogEntry:
     def test_creation(self):
@@ -22,8 +25,9 @@ class TestLogEntry:
         assert e.context == {}
 
     def test_with_context(self):
-        e = LogEntry(timestamp=1.0, level="INFO", source="slo", message="ok",
-                      context={"req": "123"})
+        e = LogEntry(
+            timestamp=1.0, level="INFO", source="slo", message="ok", context={"req": "123"}
+        )
         assert e.context["req"] == "123"
 
     def test_timestamp_is_float(self):
@@ -67,8 +71,9 @@ class TestLogEntry:
         assert len(e.message) == 10000
 
     def test_context_multiple_keys(self):
-        e = LogEntry(timestamp=0.0, level="INFO", source="slo", message="x",
-                      context={"a": 1, "b": 2, "c": 3})
+        e = LogEntry(
+            timestamp=0.0, level="INFO", source="slo", message="x", context={"a": 1, "b": 2, "c": 3}
+        )
         assert len(e.context) == 3
 
     def test_zero_timestamp(self):
@@ -86,6 +91,7 @@ class TestLogEntry:
 
 
 # ── LogBuffer ────────────────────────────────────────────────────────
+
 
 class TestLogBuffer:
     def test_append_and_len(self):
@@ -401,13 +407,19 @@ class TestLogBuffer:
 
 # ── LogBufferHandler ─────────────────────────────────────────────────
 
+
 class TestLogBufferHandler:
     def test_emit_feeds_buffer(self):
         buf = LogBuffer()
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo.test", level=logging.INFO, pathname="", lineno=0,
-            msg="hello %s", args=("world",), exc_info=None,
+            name="slo.test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="hello %s",
+            args=("world",),
+            exc_info=None,
         )
         handler.emit(record)
         entries = buf.get()
@@ -420,8 +432,13 @@ class TestLogBufferHandler:
         buf = LogBuffer()
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo.err", level=logging.ERROR, pathname="", lineno=0,
-            msg="fail", args=(), exc_info=(ValueError, ValueError("bad"), None),
+            name="slo.err",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="fail",
+            args=(),
+            exc_info=(ValueError, ValueError("bad"), None),
         )
         handler.emit(record)
         entries = buf.get()
@@ -432,8 +449,13 @@ class TestLogBufferHandler:
         buf.append.side_effect = RuntimeError("disk full")
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="x", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="x",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)  # should not raise
 
@@ -442,8 +464,13 @@ class TestLogBufferHandler:
         handler = LogBufferHandler(buffer=buf)
         ts = 1234567890.5
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="x", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="x",
+            args=(),
+            exc_info=None,
         )
         record.created = ts
         handler.emit(record)
@@ -454,8 +481,13 @@ class TestLogBufferHandler:
         buf = LogBuffer()
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo.debug", level=logging.DEBUG, pathname="", lineno=0,
-            msg="debug msg", args=(), exc_info=None,
+            name="slo.debug",
+            level=logging.DEBUG,
+            pathname="",
+            lineno=0,
+            msg="debug msg",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
         entries = buf.get()
@@ -465,8 +497,13 @@ class TestLogBufferHandler:
         buf = LogBuffer()
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo.warn", level=logging.WARNING, pathname="", lineno=0,
-            msg="warn msg", args=(), exc_info=None,
+            name="slo.warn",
+            level=logging.WARNING,
+            pathname="",
+            lineno=0,
+            msg="warn msg",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
         entries = buf.get()
@@ -476,8 +513,13 @@ class TestLogBufferHandler:
         buf = LogBuffer()
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo.crit", level=logging.CRITICAL, pathname="", lineno=0,
-            msg="crit msg", args=(), exc_info=None,
+            name="slo.crit",
+            level=logging.CRITICAL,
+            pathname="",
+            lineno=0,
+            msg="crit msg",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
         entries = buf.get()
@@ -487,8 +529,13 @@ class TestLogBufferHandler:
         buf = LogBuffer()
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo.infrastructure.model_server", level=logging.INFO, pathname="", lineno=0,
-            msg="x", args=(), exc_info=None,
+            name="slo.infrastructure.model_server",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="x",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
         entries = buf.get()
@@ -498,8 +545,13 @@ class TestLogBufferHandler:
         buf = LogBuffer()
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="loaded %d items", args=(1000,), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="loaded %d items",
+            args=(1000,),
+            exc_info=None,
         )
         handler.emit(record)
         entries = buf.get()
@@ -509,8 +561,13 @@ class TestLogBufferHandler:
         buf = LogBuffer()
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="simple message", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="simple message",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
         entries = buf.get()
@@ -519,8 +576,13 @@ class TestLogBufferHandler:
     def test_default_buffer_uses_singleton(self):
         handler = LogBufferHandler()
         record = logging.LogRecord(
-            name="slo.test", level=logging.INFO, pathname="", lineno=0,
-            msg="x", args=(), exc_info=None,
+            name="slo.test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="x",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
         singleton = get_log_buffer()
@@ -532,8 +594,13 @@ class TestLogBufferHandler:
         handler = LogBufferHandler(buffer=buf)
         for i in range(10):
             record = logging.LogRecord(
-                name="slo", level=logging.INFO, pathname="", lineno=0,
-                msg=f"msg{i}", args=(), exc_info=None,
+                name="slo",
+                level=logging.INFO,
+                pathname="",
+                lineno=0,
+                msg=f"msg{i}",
+                args=(),
+                exc_info=None,
             )
             handler.emit(record)
         assert len(buf) == 10
@@ -542,8 +609,13 @@ class TestLogBufferHandler:
         buf = LogBuffer()
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="values: %s, %d, %.2f", args=("a", 42, 3.14), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="values: %s, %d, %.2f",
+            args=("a", 42, 3.14),
+            exc_info=None,
         )
         handler.emit(record)
         entries = buf.get()
@@ -555,8 +627,13 @@ class TestLogBufferHandler:
         buf = LogBuffer()
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="x", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="x",
+            args=(),
+            exc_info=None,
         )
         result = handler.emit(record)
         assert result is None
@@ -564,10 +641,21 @@ class TestLogBufferHandler:
     def test_emit_preserves_level_case(self):
         buf = LogBuffer()
         handler = LogBufferHandler(buffer=buf)
-        for level in [logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL]:
+        for level in [
+            logging.DEBUG,
+            logging.INFO,
+            logging.WARNING,
+            logging.ERROR,
+            logging.CRITICAL,
+        ]:
             record = logging.LogRecord(
-                name="slo", level=level, pathname="", lineno=0,
-                msg="x", args=(), exc_info=None,
+                name="slo",
+                level=level,
+                pathname="",
+                lineno=0,
+                msg="x",
+                args=(),
+                exc_info=None,
             )
             handler.emit(record)
         entries = buf.get()
@@ -582,8 +670,13 @@ class TestLogBufferHandler:
         buf = LogBuffer()
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="no args here", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="no args here",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
         entries = buf.get()
@@ -593,8 +686,13 @@ class TestLogBufferHandler:
         buf = LogBuffer()
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo", level=logging.INFO, pathname="", lineno=0,
-            msg="", args=(), exc_info=None,
+            name="slo",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
         entries = buf.get()
@@ -602,6 +700,7 @@ class TestLogBufferHandler:
 
 
 # ── Singleton ────────────────────────────────────────────────────────
+
 
 class TestSingleton:
     def test_get_log_buffer_returns_same_instance(self):
@@ -617,8 +716,13 @@ class TestSingleton:
         initial_count = len(buf)
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo.singleton", level=logging.INFO, pathname="", lineno=0,
-            msg="singleton test", args=(), exc_info=None,
+            name="slo.singleton",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="singleton test",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
         assert len(buf) == initial_count + 1
@@ -641,8 +745,13 @@ class TestSingleton:
         initial = len(buf)
         handler = LogBufferHandler(buffer=buf)
         record = logging.LogRecord(
-            name="slo.persist", level=logging.INFO, pathname="", lineno=0,
-            msg="persist", args=(), exc_info=None,
+            name="slo.persist",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="persist",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
         buf2 = get_log_buffer()

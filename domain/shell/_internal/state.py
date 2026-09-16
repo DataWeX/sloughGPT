@@ -9,9 +9,9 @@ entries.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger("slo.shell.state")
 
@@ -22,14 +22,16 @@ _db = None
 _collection = None
 
 
-def _get_collection(db_path: Optional[str] = None):
+def _get_collection(db_path: str | None = None):
     """Return the ``shell_state`` collection, creating it on first call."""
     global _db, _collection
     if _collection is not None:
         return _collection
     from mogdb import MogDB
+
     if db_path is None:
         from domain.shared import find_repo_root
+
         repo = find_repo_root(Path(__file__).resolve())
         db_path = str(repo / "data" / "shell_state_mogdb")
     _db = MogDB(db_path)
@@ -41,6 +43,7 @@ def set_shell_state_db(db_path: str) -> None:
     """Replace the module-level collection with one at *db_path* (for tests)."""
     global _db, _collection
     from mogdb import MogDB
+
     _db = MogDB(db_path)
     _collection = _db.collection("shell_state")
 
@@ -55,7 +58,7 @@ def reset_shell_state_db() -> None:
 class ShellState:
     """Persistent shell state backed by MogDB."""
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         self.history: list[str] = []
         self.aliases: dict[str, str] = {}
         self.env: dict[str, str] = {}
@@ -78,7 +81,9 @@ class ShellState:
             self.first_run = doc.get("first_run", True)
             logger.debug(
                 "Loaded shell state (%d entries, %d aliases, %d env vars)",
-                len(self.history), len(self.aliases), len(self.env),
+                len(self.history),
+                len(self.aliases),
+                len(self.env),
             )
         except Exception as e:
             logger.warning("Failed to load shell state: %s", e, extra={"tag": "INFRA"})
@@ -88,7 +93,7 @@ class ShellState:
             "history": self.history[-_MAX_HISTORY:],
             "aliases": self.aliases,
             "env": self.env,
-            "last_session": datetime.now(timezone.utc).isoformat(),
+            "last_session": datetime.now(UTC).isoformat(),
             "first_run": self.first_run,
         }
         try:

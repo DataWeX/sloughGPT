@@ -1,19 +1,17 @@
 """Unit tests for PGQ facade (pugqeep)."""
 
-import time
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
 from domain.infrastructure._internal.pugqeep.facade import PGQ
-from domain.infrastructure._internal.pugqeep.task_queue import Task, TaskStatus, TaskPriority
-
+from domain.infrastructure._internal.pugqeep.task_queue import Task, TaskPriority, TaskStatus
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_array(shape=(4, 4), seed=0):
     rng = np.random.RandomState(seed)
@@ -24,6 +22,7 @@ def _make_point(name="test_point", n=100):
     centroids = np.arange(n, dtype=np.float32)
     assignments = np.arange(n) % len(centroids)
     from domain.infrastructure._internal.pugqeep.point import Point
+
     return Point(
         identity=name,
         function_type="cluster",
@@ -36,6 +35,7 @@ def _make_point(name="test_point", n=100):
 # Construction
 # ---------------------------------------------------------------------------
 
+
 class TestPGQConstruction:
     def test_default_construction(self):
         pgq = PGQ()
@@ -43,8 +43,7 @@ class TestPGQConstruction:
         assert pgq._config.n_clusters == 16
 
     def test_custom_construction(self):
-        pgq = PGQ(name="custom", n_clusters=8, method="function",
-                  memory_max_mb=64, hot_max_mb=32)
+        pgq = PGQ(name="custom", n_clusters=8, method="function", memory_max_mb=64, hot_max_mb=32)
         assert pgq.name == "custom"
         assert pgq._config.n_clusters == 8
         assert pgq._config.method == "function"
@@ -62,6 +61,7 @@ class TestPGQConstruction:
 # ---------------------------------------------------------------------------
 # put / get / has / remove
 # ---------------------------------------------------------------------------
+
 
 class TestPutGetHasRemove:
     def test_put_compress_returns_point(self):
@@ -135,6 +135,7 @@ class TestPutGetHasRemove:
 # put_many / get_many / exists_many / remove_many
 # ---------------------------------------------------------------------------
 
+
 class TestBatchOperations:
     def test_put_many(self):
         pgq = PGQ(name="test", n_clusters=4)
@@ -178,6 +179,7 @@ class TestBatchOperations:
 # ---------------------------------------------------------------------------
 # Task queue
 # ---------------------------------------------------------------------------
+
 
 class TestTaskQueue:
     def test_submit_task(self):
@@ -257,7 +259,7 @@ class TestTaskQueue:
 
     def test_list_tasks_by_status(self):
         pgq = PGQ(name="test")
-        t1 = pgq.submit_task(Task(name="a"))
+        pgq.submit_task(Task(name="a"))
         pgq.submit_task(Task(name="b"))
         pgq.next_task()  # starts first task
         completed = pgq.list_tasks(status=TaskStatus.RUNNING)
@@ -275,6 +277,7 @@ class TestTaskQueue:
 # ---------------------------------------------------------------------------
 # Search / best
 # ---------------------------------------------------------------------------
+
 
 class TestSearchAndBest:
     def test_search(self):
@@ -304,6 +307,7 @@ class TestSearchAndBest:
 # ---------------------------------------------------------------------------
 # Stats / cache_stats / queue_stats / cleanup / export
 # ---------------------------------------------------------------------------
+
 
 class TestStatsAndCleanup:
     def test_stats(self):
@@ -345,6 +349,7 @@ class TestStatsAndCleanup:
 # ---------------------------------------------------------------------------
 # Save / load round-trip
 # ---------------------------------------------------------------------------
+
 
 class TestSaveLoad:
     def test_save_load_roundtrip(self, tmp_path):
@@ -417,6 +422,7 @@ class TestSaveLoad:
 # from_model (mocked — heavy dependency)
 # ---------------------------------------------------------------------------
 
+
 class TestFromModel:
     @pytest.mark.slow
     @patch("domain.infrastructure._internal.pugqeep.facade.load_model_to_points")
@@ -427,7 +433,10 @@ class TestFromModel:
 
         pgq = PGQ.from_model("test-model", n_clusters=8, method="cluster")
         mock_load.assert_called_once_with(
-            "test-model", n_clusters=8, method="cluster", storage_dir=None,
+            "test-model",
+            n_clusters=8,
+            method="cluster",
+            storage_dir=None,
         )
         assert pgq.name == "test-model"
 
@@ -435,6 +444,7 @@ class TestFromModel:
 # ---------------------------------------------------------------------------
 # Queue factory
 # ---------------------------------------------------------------------------
+
 
 class TestQueueFactory:
     @pytest.mark.slow
@@ -444,7 +454,7 @@ class TestQueueFactory:
         mock_queue_instance = MagicMock()
         mock_queue.return_value = mock_queue_instance
 
-        result = PGQ.queue(["model_a", "model_b"], n_clusters=8)
+        PGQ.queue(["model_a", "model_b"], n_clusters=8)
         mock_queue.assert_called_once()
         assert mock_queue_instance.load_model.call_count == 2
 
@@ -452,6 +462,7 @@ class TestQueueFactory:
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     def test_put_many_empty(self):
@@ -532,8 +543,8 @@ class TestEdgeCases:
 
     def test_list_tasks_all_statuses(self):
         pgq = PGQ(name="test")
-        t1 = pgq.submit_task(Task(name="a", max_retries=0))
-        t2 = pgq.submit_task(Task(name="b", max_retries=0))
+        pgq.submit_task(Task(name="a", max_retries=0))
+        pgq.submit_task(Task(name="b", max_retries=0))
         t3 = pgq.submit_task(Task(name="c"))
         # Complete t1
         running = pgq.next_task()

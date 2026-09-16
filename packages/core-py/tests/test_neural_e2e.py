@@ -1,26 +1,35 @@
 """End-to-end test: NeuralKernel boots inside DaitRuntime, tokenize → generate → detokenize."""
 
-import math
 import numpy as np
 import pytest
 
-from domain.shell._internal.runtime import DaitRuntime
 from domain.shell._internal.kernel import Kernel
 from domain.shell._internal.kernel_neural import (
-    NeuralKernel, NeuralProcess, NeuralProcessType,
-    NeuralKVCache, NeuralEngineDevice,
-    NeuralSyscall, NeuralState, NeuralOp, NeuralMemoryType,
-    CacheStrategy, KVCacheEntry, NeuralEmbeddingStore,
-    EmbeddingEntry, TokenizerDevice, EmbeddingStoreDevice,
-    MultiHeadAttentionDevice, NeuralInterrupt,
-    GradientAccumulator, BatchRequest, BatchResult, BatchProcessor,
+    BatchProcessor,
+    BatchRequest,
+    CacheStrategy,
+    EmbeddingEntry,
+    EmbeddingStoreDevice,
+    GradientAccumulator,
+    KVCacheEntry,
+    MultiHeadAttentionDevice,
+    NeuralEmbeddingStore,
+    NeuralEngineDevice,
+    NeuralInterrupt,
+    NeuralMemoryType,
+    NeuralOp,
+    NeuralProcessType,
+    NeuralState,
+    NeuralSyscall,
+    TokenizerDevice,
 )
 from domain.shell._internal.kernel_process import ProcessState
-
+from domain.shell._internal.runtime import DaitRuntime
 
 # ---------------------------------------------------------------------------
 # Boot
 # ---------------------------------------------------------------------------
+
 
 def test_boot_creates_neural_kernel():
     rt = DaitRuntime()
@@ -60,6 +69,7 @@ def test_shutdown_twice_is_idempotent():
 # ---------------------------------------------------------------------------
 # Tokenize / Detokenize
 # ---------------------------------------------------------------------------
+
 
 def test_tokenize_through_kernel():
     rt = DaitRuntime()
@@ -106,6 +116,7 @@ def test_detokenize_empty_list():
 # ---------------------------------------------------------------------------
 # Generate
 # ---------------------------------------------------------------------------
+
 
 def test_generate_with_mock_model():
     rt = DaitRuntime()
@@ -158,11 +169,12 @@ def test_generate_returns_token_list():
 # Embed
 # ---------------------------------------------------------------------------
 
+
 def test_embed_through_kernel():
     rt = DaitRuntime()
     rt.boot()
     nk = rt.kernel
-    store = nk.create_embedding_store("test_store", 1000, 64)
+    nk.create_embedding_store("test_store", 1000, 64)
     vecs = nk.embed(np.array([1, 2, 3]), "test_store")
     assert vecs is not None
     assert vecs.shape == (3, 64)
@@ -172,7 +184,7 @@ def test_embed_through_kernel():
 def test_embed_returns_array():
     rt = DaitRuntime()
     rt.boot()
-    store = rt.kernel.create_embedding_store("norm_store", 100, 32)
+    rt.kernel.create_embedding_store("norm_store", 100, 32)
     vecs = rt.kernel.embed(np.array([0, 1]), "norm_store")
     assert vecs is not None
     assert vecs.shape == (2, 32)
@@ -182,7 +194,7 @@ def test_embed_returns_array():
 def test_embed_text():
     rt = DaitRuntime()
     rt.boot()
-    store = rt.kernel.create_embedding_store("txt_store", 100, 32)
+    rt.kernel.create_embedding_store("txt_store", 100, 32)
     vec = rt.kernel.embed_text("hello world")
     assert vec is not None
     assert vec.ndim == 1
@@ -203,6 +215,7 @@ def test_embed_different_stores():
 # ---------------------------------------------------------------------------
 # KV Cache
 # ---------------------------------------------------------------------------
+
 
 def test_kv_cache_through_kernel():
     rt = DaitRuntime()
@@ -283,6 +296,7 @@ def test_kv_cache_get_position():
 # ---------------------------------------------------------------------------
 # Neural Process
 # ---------------------------------------------------------------------------
+
 
 def test_neural_process_through_kernel():
     rt = DaitRuntime()
@@ -398,6 +412,7 @@ def test_neural_process_status_line():
 # Syscalls
 # ---------------------------------------------------------------------------
 
+
 def test_neural_syscall_tokenize():
     rt = DaitRuntime()
     rt.boot()
@@ -420,6 +435,7 @@ def test_neural_syscall_tokenize_empty():
 # Stats
 # ---------------------------------------------------------------------------
 
+
 def test_neural_stats():
     rt = DaitRuntime()
     rt.boot()
@@ -435,6 +451,7 @@ def test_neural_stats():
 # ---------------------------------------------------------------------------
 # NeuralEngineDevice
 # ---------------------------------------------------------------------------
+
 
 class TestNeuralEngineDevice:
     def test_load_and_info(self):
@@ -525,6 +542,7 @@ class TestNeuralEngineDevice:
 # TokenizerDevice
 # ---------------------------------------------------------------------------
 
+
 class TestTokenizerDevice:
     def test_tokenize_encode(self):
         dev = TokenizerDevice()
@@ -565,6 +583,7 @@ class TestTokenizerDevice:
 # EmbeddingStoreDevice
 # ---------------------------------------------------------------------------
 
+
 class TestEmbeddingStoreDevice:
     def test_create_store(self):
         dev = EmbeddingStoreDevice()
@@ -602,6 +621,7 @@ class TestEmbeddingStoreDevice:
 # ---------------------------------------------------------------------------
 # MultiHeadAttentionDevice
 # ---------------------------------------------------------------------------
+
 
 class TestMultiHeadAttentionDevice:
     def test_attention(self):
@@ -647,6 +667,7 @@ class TestMultiHeadAttentionDevice:
 # GradientAccumulator
 # ---------------------------------------------------------------------------
 
+
 class TestGradientAccumulator:
     def test_accumulate(self):
         ga = GradientAccumulator(accumulation_steps=2)
@@ -683,6 +704,7 @@ class TestGradientAccumulator:
 # ---------------------------------------------------------------------------
 # BatchProcessor
 # ---------------------------------------------------------------------------
+
 
 class TestBatchProcessor:
     def test_submit(self):
@@ -734,6 +756,7 @@ class TestBatchProcessor:
     def test_process_fn_error(self):
         def bad_fn(inputs):
             raise ValueError("bad")
+
         bp = BatchProcessor(max_batch_size=5, process_fn=bad_fn)
         bp.submit(BatchRequest(id="e1", inputs={}))
         results = bp.process_batch()
@@ -743,6 +766,7 @@ class TestBatchProcessor:
 # ---------------------------------------------------------------------------
 # NeuralInterrupt
 # ---------------------------------------------------------------------------
+
 
 class TestNeuralInterrupt:
     def test_inference_done(self):
@@ -767,6 +791,7 @@ class TestNeuralInterrupt:
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
+
 
 class TestEnums:
     def test_neural_op_values(self):
@@ -797,6 +822,7 @@ class TestEnums:
 # EmbeddingEntry
 # ---------------------------------------------------------------------------
 
+
 class TestEmbeddingEntry:
     def test_create(self):
         e = EmbeddingEntry(id="e1", vector=np.array([1.0]), text="hello")
@@ -813,6 +839,7 @@ class TestEmbeddingEntry:
 # KVCacheEntry
 # ---------------------------------------------------------------------------
 
+
 class TestKVCacheEntry:
     def test_create(self):
         e = KVCacheEntry(layer_idx=0)
@@ -824,6 +851,7 @@ class TestKVCacheEntry:
 # ---------------------------------------------------------------------------
 # NeuralEmbeddingStore
 # ---------------------------------------------------------------------------
+
 
 class TestNeuralEmbeddingStore:
     def test_create(self):

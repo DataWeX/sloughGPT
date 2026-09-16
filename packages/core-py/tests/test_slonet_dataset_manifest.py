@@ -5,21 +5,21 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-import pytest
 from pathlib import Path
+
+import pytest
+
 from domain.training._internal.dataset_manifest import (
     ManifestError,
+    _glob_train_files,
     load_manifest,
     resolve_training_data_path,
-    _glob_train_files,
 )
-
 
 # ── ManifestError ───────────────────────────────────────────────────────────
 
 
 class TestManifestError:
-
     def test_is_value_error(self):
         assert issubclass(ManifestError, ValueError)
 
@@ -28,7 +28,6 @@ class TestManifestError:
 
 
 class TestLoadManifest:
-
     def test_not_found(self):
         with pytest.raises(ManifestError, match="not found"):
             load_manifest("/nonexistent/path/manifest.json")
@@ -65,14 +64,17 @@ class TestLoadManifest:
 
     def test_empty_sources(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump({
-                "schema_version": "1.0",
-                "dataset_id": "test",
-                "version": "1.0",
-                "domain": "test",
-                "pii_policy": "none",
-                "sources": [],
-            }, f)
+            json.dump(
+                {
+                    "schema_version": "1.0",
+                    "dataset_id": "test",
+                    "version": "1.0",
+                    "domain": "test",
+                    "pii_policy": "none",
+                    "sources": [],
+                },
+                f,
+            )
             path = f.name
         try:
             with pytest.raises(ManifestError, match="non-empty list"):
@@ -103,7 +105,6 @@ class TestLoadManifest:
 
 
 class TestGlobTrainFiles:
-
     def test_exact_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             p = Path(tmpdir)
@@ -123,7 +124,6 @@ class TestGlobTrainFiles:
 
 
 class TestResolveTrainingDataPath:
-
     def test_not_found(self):
         with pytest.raises(ManifestError, match="not a file"):
             resolve_training_data_path("/nonexistent/manifest.json")

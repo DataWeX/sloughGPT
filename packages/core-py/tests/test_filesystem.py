@@ -3,21 +3,19 @@
 from __future__ import annotations
 
 import os
-import pytest
-from pathlib import Path
 
 from domain.shell._internal.addons.filesystem import (
+    VFS,
+    VFSDirectory,
     VFSEntry,
     VFSGeneratedFile,
     VFSWriteOnlyFile,
-    VFSDirectory,
-    VFS,
     _dir_stat,
     _file_stat,
 )
 
-
 # ── VFSEntry ──────────────────────────────────────────────────────────────────
+
 
 class TestVFSEntry:
     def test_defaults(self):
@@ -38,6 +36,7 @@ class TestVFSEntry:
 
 # ── VFSGeneratedFile ─────────────────────────────────────────────────────────
 
+
 class TestVFSGeneratedFile:
     def test_read_calls_fn(self):
         f = VFSGeneratedFile("gen.txt", lambda: "generated content")
@@ -49,6 +48,7 @@ class TestVFSGeneratedFile:
 
 
 # ── VFSWriteOnlyFile ─────────────────────────────────────────────────────────
+
 
 class TestVFSWriteOnlyFile:
     def test_write_calls_fn(self):
@@ -63,6 +63,7 @@ class TestVFSWriteOnlyFile:
 
 
 # ── VFSDirectory ──────────────────────────────────────────────────────────────
+
 
 class TestVFSDirectory:
     def test_is_dir(self):
@@ -96,6 +97,7 @@ class TestVFSDirectory:
 
 
 # ── VFS ───────────────────────────────────────────────────────────────────────
+
 
 class TestVFS:
     def test_mount_unmount(self):
@@ -218,6 +220,7 @@ class TestVFS:
 
 
 # ── _dir_stat / _file_stat ───────────────────────────────────────────────────
+
 
 class TestStatHelpers:
     def test_dir_stat(self):

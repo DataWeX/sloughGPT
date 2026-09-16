@@ -7,8 +7,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "packages" / "planner" / "src"))
 from planner.kanban import (  # noqa: E402
-    KanbanStore, Card, ColumnDef, Board, Note,
-    _make_id, _abbrev, _render_board,
+    Board,
+    Card,
+    ColumnDef,
+    KanbanStore,
+    Note,
+    _abbrev,
+    _make_id,
+    _render_board,
 )
 
 
@@ -46,8 +52,9 @@ def test_card_priority_icon() -> None:
 
 
 def test_card_to_dict_roundtrip() -> None:
-    c = Card(id="x", title="Test", priority="high",
-             tags=["a", "b"], notes=[Note(id="n1", text="hello")])
+    c = Card(
+        id="x", title="Test", priority="high", tags=["a", "b"], notes=[Note(id="n1", text="hello")]
+    )
     d = c.to_dict()
     c2 = Card.from_dict(d)
     assert c2.title == "Test"
@@ -356,6 +363,7 @@ def test_render_board_no_columns(tmp_path):
 
 def test_get_kanban_store(tmp_path):
     from planner.kanban import get_kanban_store, reset_kanban_store
+
     reset_kanban_store()
     s1 = get_kanban_store(tmp_path)
     s2 = get_kanban_store()
@@ -364,6 +372,7 @@ def test_get_kanban_store(tmp_path):
 
 def test_reset_kanban_store(tmp_path):
     from planner.kanban import get_kanban_store, reset_kanban_store
+
     reset_kanban_store()
     s1 = get_kanban_store(tmp_path)
     reset_kanban_store()

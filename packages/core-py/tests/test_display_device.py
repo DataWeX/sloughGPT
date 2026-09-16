@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -19,7 +19,6 @@ def dev():
 
 
 class TestDisplayDeviceBasics:
-
     def test_name(self, dev):
         assert dev.name == "test-display"
 
@@ -52,7 +51,6 @@ class TestDisplayDeviceBasics:
 
 
 class TestDisplayDeviceIoctl:
-
     def test_ioctl_unknown_command(self, dev):
         result = dev.ioctl("NONEXISTENT")
         assert isinstance(result, SyscallResult)
@@ -117,7 +115,6 @@ class TestDisplayDeviceIoctl:
 
 
 class TestDisplayDeviceCall:
-
     def test_call_success(self, dev):
         with patch.object(dev, "print_text", return_value=5):
             assert dev.call("PRINT", "hello") == 5
@@ -131,7 +128,6 @@ class TestDisplayDeviceCall:
 
 
 class TestDisplayDeviceFunctions:
-
     def test_print_text(self, dev, capsys):
         n = dev.print_text("hello")
         assert n == 5

@@ -3,13 +3,12 @@
 Covers: list_docs, get_doc, put_doc, patch_doc, delete_doc, clear_collection, bulk_put.
 MogDB is mocked to avoid filesystem side effects.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -17,8 +16,7 @@ if _server_dir not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from routers.docstore import DocStoreRouter, _strip_meta, COLLECTIONS
+from routers.docstore import COLLECTIONS, DocStoreRouter, _strip_meta
 
 
 def _mock_collection():
@@ -41,6 +39,7 @@ def _app() -> tuple[FastAPI, MagicMock]:
     app = FastAPI()
     app.include_router(dsr.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app, coll
 
@@ -60,8 +59,16 @@ class TestStripMeta:
 
 class TestCollections:
     def test_all_expected_collections(self):
-        expected = {"sessions", "pendingMessages", "knowledge", "bookmarks",
-                    "prompts", "drafts", "kv", "errors"}
+        expected = {
+            "sessions",
+            "pendingMessages",
+            "knowledge",
+            "bookmarks",
+            "prompts",
+            "drafts",
+            "kv",
+            "errors",
+        }
         assert COLLECTIONS == expected
 
 

@@ -1,9 +1,13 @@
 """Tests for domain.training._internal.huggingface.model_map — model registry and lookup."""
 
-import pytest
 from domain.training._internal.huggingface.model_map import (
-    ModelSize, get_model_info, search_models, get_recommended_quantization,
-    get_model_requirements, map_to_sloughgpt_config, HF_MODELS,
+    HF_MODELS,
+    ModelSize,
+    get_model_info,
+    get_model_requirements,
+    get_recommended_quantization,
+    map_to_sloughgpt_config,
+    search_models,
 )
 
 

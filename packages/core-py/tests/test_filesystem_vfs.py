@@ -5,9 +5,12 @@ import stat as stat_mod
 import tempfile
 from pathlib import Path
 
-import pytest
 from domain.shell._internal.addons.filesystem import (
-    VFSEntry, VFSGeneratedFile, VFSWriteOnlyFile, VFSDirectory, VFS,
+    VFS,
+    VFSDirectory,
+    VFSEntry,
+    VFSGeneratedFile,
+    VFSWriteOnlyFile,
 )
 
 

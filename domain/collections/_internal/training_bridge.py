@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import hashlib
-import numpy as np
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
 
-from .sources import Record, Source
+import numpy as np
+
 from .collector import Collector
+from .sources import Record, Source
 
 
 @dataclass
@@ -56,11 +57,13 @@ class TrainingDataAdapter:
         self.stats["accepted"] += 1
         return record.content
 
-    def records_to_training_data(self, records: list[Record]) -> tuple[np.ndarray, dict[str, int], dict[int, str]]:
+    def records_to_training_data(
+        self, records: list[Record]
+    ) -> tuple[np.ndarray, dict[str, int], dict[int, str]]:
         text = self.records_to_text(records)
         chars = sorted(set(text))
         stoi = {c: i for i, c in enumerate(chars)}
-        itos = {i: c for i, c in enumerate(chars)}
+        itos = dict(enumerate(chars))
         data = np.array([stoi[c] for c in text], dtype=np.int64)
         return data, stoi, itos
 

@@ -10,26 +10,27 @@ import asyncio
 import threading
 from unittest.mock import MagicMock, patch
 
-import pytest
 import numpy as np
+import pytest
 
-from domain.infrastructure._internal.slonet_server import SloNetServer
 from domain.inference._internal.slonet_provider import SloNetChatProvider
+from domain.infrastructure._internal.slonet_server import SloNetServer
 from domain.models._internal.provider import (
-    setup_providers,
+    ProviderRouter,
     get_provider,
     list_providers,
-    ProviderRouter,
+    setup_providers,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _clean_registries():
     import domain.models._internal.provider as mod
+
     mod._providers.clear()
     mod._processors.clear()
     yield
@@ -85,6 +86,7 @@ def _make_provider(mock_model, mock_tokenizer):
 # Server -> Provider attachment
 # ---------------------------------------------------------------------------
 
+
 class TestServerAttachment:
     def test_set_server_stores_reference(self, server):
         provider = _make_provider(MagicMock(), MagicMock())
@@ -107,6 +109,7 @@ class TestServerAttachment:
 # chat() delegation
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 class TestChatDelegation:
     async def test_chat_delegates_to_server(self, server):
@@ -114,7 +117,8 @@ class TestChatDelegation:
         provider.set_server(server)
         result = await provider.chat(
             [{"role": "user", "content": "hello"}],
-            max_tokens=50, temperature=0.8,
+            max_tokens=50,
+            temperature=0.8,
         )
         assert result == "hello world"
 
@@ -141,6 +145,7 @@ class TestChatDelegation:
 # chat_stream() delegation
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 class TestChatStreamDelegation:
     async def test_chat_stream_delegates_to_server(self, server):
@@ -149,7 +154,8 @@ class TestChatStreamDelegation:
         tokens = []
         async for token in provider.chat_stream(
             [{"role": "user", "content": "hello"}],
-            max_tokens=50, temperature=0.8,
+            max_tokens=50,
+            temperature=0.8,
         ):
             tokens.append(token)
         assert len(tokens) == 2
@@ -190,6 +196,7 @@ class TestChatStreamDelegation:
 # ---------------------------------------------------------------------------
 # setup_providers() wiring
 # ---------------------------------------------------------------------------
+
 
 class TestSetupProvidersWiring:
     def test_attaches_server_to_provider(self, server, mock_model, mock_tokenizer):
@@ -248,15 +255,20 @@ class TestSetupProvidersWiring:
 
         fake_mod = MagicMock()
         fake_mod.get_config = MagicMock(return_value=mock_cfg)
-        sys.modules["domain.infrastructure.config"] = fake_mod
+        sys.modules["domain.infrastructure._internal.config"] = fake_mod
 
         mock_provider = MagicMock()
         mock_provider.model_id = model_id
         mock_provider.set_server = MagicMock()
 
         try:
-            with patch("domain.infrastructure.model_resolver.get_model_dir", return_value=tmp_path):
-                with patch("domain.inference._internal.slonet_provider.SloNetChatProvider") as mock_cls:
+            with patch(
+                "domain.infrastructure._internal.model_resolver.get_model_dir",
+                return_value=tmp_path,
+            ):
+                with patch(
+                    "domain.inference._internal.slonet_provider.SloNetChatProvider"
+                ) as mock_cls:
                     mock_cls.from_slnc.return_value = mock_provider
                     setup_providers()
                     mock_cls.from_slnc.assert_called_once()
@@ -266,13 +278,14 @@ class TestSetupProvidersWiring:
             assert isinstance(router, ProviderRouter)
             assert router._text_name == "slonet-native"
         finally:
-            if "domain.infrastructure.config" in sys.modules:
-                del sys.modules["domain.infrastructure.config"]
+            if "domain.infrastructure._internal.config" in sys.modules:
+                del sys.modules["domain.infrastructure._internal.config"]
 
 
 # ---------------------------------------------------------------------------
 # Pool server integration
 # ---------------------------------------------------------------------------
+
 
 class TestPoolServerIntegration:
     @pytest.fixture
@@ -299,7 +312,8 @@ class TestPoolServerIntegration:
         provider.set_server(pool_server)
         result = await provider.chat(
             [{"role": "user", "content": "hello"}],
-            max_tokens=50, temperature=0.8,
+            max_tokens=50,
+            temperature=0.8,
         )
         assert result == "pool result"
         stats = pool_server.pool_stats()
@@ -321,10 +335,9 @@ class TestPoolServerIntegration:
     async def test_pool_chat_concurrent_requests(self, pool_server):
         provider = _make_provider(MagicMock(), MagicMock())
         provider.set_server(pool_server)
-        results = await asyncio.gather(*[
-            provider.chat([{"role": "user", "content": "hi"}])
-            for _ in range(3)
-        ])
+        results = await asyncio.gather(
+            *[provider.chat([{"role": "user", "content": "hi"}]) for _ in range(3)]
+        )
         assert all(r == "pool result" for r in results)
         stats = pool_server.pool_stats()
         assert stats["created"] <= 3

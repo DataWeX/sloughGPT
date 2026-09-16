@@ -3,20 +3,20 @@
 Replaces the FileRepository-based session storage with MogDB + JSON sync.
 Provides a clean API for CRUD operations on chat sessions.
 """
+
 from __future__ import annotations
 
 import logging
-import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger("slo.session_store")
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class SessionStore:
@@ -73,7 +73,7 @@ class SessionStore:
         logger.info("Created session '%s' (id=%s)", name, doc["id"])
         return doc
 
-    def get(self, session_id: str) -> Optional[dict[str, Any]]:
+    def get(self, session_id: str) -> dict[str, Any] | None:
         """Get a session by ID. Returns None if not found."""
         return self._col.find_one({"id": session_id})
 
@@ -90,7 +90,9 @@ class SessionStore:
         sessions = self._col.find(query, sort=[("updated_at", -1)])
         return sessions
 
-    def list_by_workspace(self, workspace_id: str, include_archived: bool = False) -> list[dict[str, Any]]:
+    def list_by_workspace(
+        self, workspace_id: str, include_archived: bool = False
+    ) -> list[dict[str, Any]]:
         """List sessions for a workspace."""
         query: dict[str, Any] = {"workspace_id": workspace_id}
         if not include_archived:

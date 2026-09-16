@@ -5,7 +5,9 @@ from pathlib import Path
 import pytest
 
 
-def test_sloughgpt_trainer_runs_short_cpu_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sloughgpt_trainer_runs_short_cpu_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Mirrors ``cli.py train`` local path: tiny data, CPU, few steps."""
     monkeypatch.chdir(tmp_path)
     corpus = tmp_path / "corpus.txt"

@@ -4,8 +4,9 @@ import sys
 import types
 
 import pytest
+
 pytestmark = pytest.mark.slow
-from domain.agents._internal.tools import ToolRegistry, ToolSpec, ToolParam, ToolResult
+from domain.agents._internal.tools import ToolParam, ToolRegistry, ToolResult, ToolSpec
 
 
 @pytest.fixture
@@ -15,17 +16,24 @@ def registry():
 
 # ── ToolSpec / ToolParam Dataclasses ──────────────────────────────────────
 
+
 class TestToolSpec:
     def test_defaults(self):
-        async def fake(**kw): return {}
+        async def fake(**kw):
+            return {}
+
         spec = ToolSpec(name="test", description="A test", parameters=[], execute=fake)
         assert spec.name == "test"
         assert spec.requires_approval is False
         assert spec.pattern is None
 
     def test_with_approval(self):
-        async def fake(**kw): return {}
-        spec = ToolSpec(name="risky", description="Risky", parameters=[], execute=fake, requires_approval=True)
+        async def fake(**kw):
+            return {}
+
+        spec = ToolSpec(
+            name="risky", description="Risky", parameters=[], execute=fake, requires_approval=True
+        )
         assert spec.requires_approval is True
 
 
@@ -41,13 +49,20 @@ class TestToolParam:
 
 # ── ToolRegistry ──────────────────────────────────────────────────────────
 
+
 class TestToolRegistryInit:
     def test_default_tools_registered(self, registry):
         tools = registry.list_tools()
         names = {t["name"] for t in tools}
         assert names == {
-            "calculator", "current_time", "web_search", "run_code",
-            "file_read", "knowledge_retrieval", "image_analysis", "data_analysis",
+            "calculator",
+            "current_time",
+            "web_search",
+            "run_code",
+            "file_read",
+            "knowledge_retrieval",
+            "image_analysis",
+            "data_analysis",
         }
 
     def test_get_returns_spec(self, registry):
@@ -61,20 +76,30 @@ class TestToolRegistryInit:
 
 class TestToolRegistryRegister:
     def test_register_new_tool(self, registry):
-        async def my_tool(**kw): return {"output": "done"}
-        spec = ToolSpec(name="my_tool", description="My custom tool", parameters=[], execute=my_tool)
+        async def my_tool(**kw):
+            return {"output": "done"}
+
+        spec = ToolSpec(
+            name="my_tool", description="My custom tool", parameters=[], execute=my_tool
+        )
         registry.register(spec)
         assert registry.get("my_tool") is spec
 
     def test_register_overwrites(self, registry):
-        async def a(**kw): return {"output": "a"}
-        async def b(**kw): return {"output": "b"}
+        async def a(**kw):
+            return {"output": "a"}
+
+        async def b(**kw):
+            return {"output": "b"}
+
         registry.register(ToolSpec(name="dupe", description="first", parameters=[], execute=a))
         registry.register(ToolSpec(name="dupe", description="second", parameters=[], execute=b))
         assert registry.get("dupe").description == "second"
 
     def test_register_increases_list_count(self, registry):
-        async def dummy(**kw): return {}
+        async def dummy(**kw):
+            return {}
+
         before = len(registry.list_tools())
         registry.register(ToolSpec(name="extra", description="", parameters=[], execute=dummy))
         assert len(registry.list_tools()) == before + 1
@@ -106,6 +131,7 @@ class TestToolRegistryListTools:
 
 # ── Tool Detection ────────────────────────────────────────────────────────
 
+
 class TestDetectToolIntent:
     def test_detect_calculator_explicit(self, registry):
         result = registry.detect_tool_intent("calculate 2+2")
@@ -134,7 +160,12 @@ class TestDetectToolIntent:
         assert "Python" in args["query"]
 
     def test_detect_web_search_variants(self, registry):
-        for msg in ["look up weather", "find restaurants", "google ai news", "web search quantum computing"]:
+        for msg in [
+            "look up weather",
+            "find restaurants",
+            "google ai news",
+            "web search quantum computing",
+        ]:
             result = registry.detect_tool_intent(msg)
             assert result is not None, f"Failed to detect: {msg}"
             assert result[0] == "web_search"
@@ -189,6 +220,7 @@ class TestDetectApprovalRequired:
 
 
 # ── Tool Execution ────────────────────────────────────────────────────────
+
 
 class TestExecuteCalculator:
     @pytest.mark.asyncio
@@ -280,6 +312,7 @@ class TestExecuteWebSearch:
                 {"title": "T", "url": "http://x", "snippet": "snippet"},
                 {"title": "U", "url": "http://y", "snippet": ""},
             ]
+
         monkeypatch.setitem(sys.modules, "web_search", types.SimpleNamespace(web_search=fake_ws))
         result = await registry.execute("web_search", {"query": "q", "num_results": 3})
         assert result.success is True
@@ -291,6 +324,7 @@ class TestExecuteWebSearch:
     async def test_success_scalar_result(self, registry, monkeypatch):
         async def fake_ws(query, num_results=3):
             return "plain string"
+
         monkeypatch.setitem(sys.modules, "web_search", types.SimpleNamespace(web_search=fake_ws))
         result = await registry.execute("web_search", {"query": "q"})
         assert result.success is True
@@ -300,6 +334,7 @@ class TestExecuteWebSearch:
     async def test_empty_results_list(self, registry, monkeypatch):
         async def fake_ws(query, num_results=3):
             return []
+
         monkeypatch.setitem(sys.modules, "web_search", types.SimpleNamespace(web_search=fake_ws))
         result = await registry.execute("web_search", {"query": "q"})
         assert result.success is True
@@ -309,7 +344,9 @@ class TestExecuteWebSearch:
 class TestExecuteRunCode:
     @pytest.mark.asyncio
     async def test_run_python(self, registry):
-        result = await registry.execute("run_code", {"language": "python", "code": "print('hello')"})
+        result = await registry.execute(
+            "run_code", {"language": "python", "code": "print('hello')"}
+        )
         assert result.success is True
         assert result.output == "hello"
 
@@ -321,15 +358,21 @@ class TestExecuteRunCode:
 
     @pytest.mark.asyncio
     async def test_run_bash(self, registry):
-        result = await registry.execute("run_code", {"language": "bash", "code": "echo hello_world"})
+        result = await registry.execute(
+            "run_code", {"language": "bash", "code": "echo hello_world"}
+        )
         assert result.success is True
         assert "hello_world" in result.output
 
     @pytest.mark.asyncio
     async def test_timeout_handling(self, registry):
-        result = await registry.execute("run_code", {"language": "python", "code": "import time; time.sleep(20)"})
+        result = await registry.execute(
+            "run_code", {"language": "python", "code": "import time; time.sleep(20)"}
+        )
         assert result.success is False
-        assert "timeout" in (result.error or "").lower() or "timed out" in (result.error or "").lower()
+        assert (
+            "timeout" in (result.error or "").lower() or "timed out" in (result.error or "").lower()
+        )
 
     @pytest.mark.asyncio
     async def test_unknown_language(self, registry):
@@ -341,6 +384,7 @@ class TestExecuteRunCode:
     async def test_subprocess_creation_error(self, registry, monkeypatch):
         async def boom(*args, **kwargs):
             raise RuntimeError("spawn failed")
+
         monkeypatch.setattr("asyncio.create_subprocess_exec", boom)
         result = await registry.execute("run_code", {"language": "python", "code": "print(1)"})
         assert result.success is False
@@ -350,6 +394,7 @@ class TestExecuteRunCode:
     async def test_cleanup_error_is_swallowed(self, registry, monkeypatch):
         def boom(path):
             raise OSError("already gone")
+
         monkeypatch.setattr("os.unlink", boom)
         result = await registry.execute("run_code", {"language": "python", "code": "print('ok')"})
         assert result.success is True
@@ -380,15 +425,18 @@ class TestExecuteEdgeCases:
 
 # ── Singleton Registry ────────────────────────────────────────────────────
 
+
 class TestGetToolRegistry:
     def test_singleton_returns_same_instance(self):
         from domain.agents._internal.tools import get_tool_registry
+
         r1 = get_tool_registry()
         r2 = get_tool_registry()
         assert r1 is r2
 
     def test_singleton_has_default_tools(self):
         from domain.agents._internal.tools import get_tool_registry
+
         r = get_tool_registry()
         assert r.get("calculator") is not None
         assert r.get("current_time") is not None
@@ -396,10 +444,13 @@ class TestGetToolRegistry:
 
 # ── Security ──────────────────────────────────────────────────────────────
 
+
 class TestSecurity:
     @pytest.mark.asyncio
     async def test_calculator_cannot_access_os(self, registry):
-        result = await registry.execute("calculator", {"expression": "__import__('os').system('ls')"})
+        result = await registry.execute(
+            "calculator", {"expression": "__import__('os').system('ls')"}
+        )
         assert result.success is False
 
     @pytest.mark.asyncio
@@ -410,10 +461,9 @@ class TestSecurity:
     @pytest.mark.asyncio
     async def test_run_code_limited_by_subprocess(self, registry):
         """run_code should NOT be able to escape the temp file sandbox easily."""
-        result = await registry.execute("run_code", {
-            "language": "python",
-            "code": "import os; print(os.listdir('.'))"
-        })
+        result = await registry.execute(
+            "run_code", {"language": "python", "code": "import os; print(os.listdir('.'))"}
+        )
         # It runs but output comes from temp dir, not server root
         assert isinstance(result, ToolResult)
 

@@ -10,24 +10,27 @@ Usage:
 """
 
 import sys
-import os
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "core-py"))
 
 import numpy as np
-from domain.training._internal.slonet import (
-    SloNet, SloEmbedding, SloLSTM, SloAdam,
-    cross_entropy, tensor, no_grad, _sample_from_logits,
-    save_checkpoint_npz,
-)
 from domain.inference.slo_format import SloProfile, save_soul
 
+from domain.training._internal.slonet import (
+    SloAdam,
+    SloEmbedding,
+    SloLSTM,
+    SloNet,
+    cross_entropy,
+    tensor,
+)
 
 # ── Shakespeare training data ────────────────────────────────────────────
 
-SHAKESPEARE_TEXT = """
+SHAKESPEARE_TEXT = (
+    """
 To be, or not to be, that is the question:
 Whether 'tis nobler in the mind to suffer
 The slings and arrows of outrageous fortune,
@@ -63,14 +66,16 @@ With this regard their currents turn awry,
 And lose the name of action.-Soft you now!
 The fair Ophelia! Nymph, in thy orisons
 Be all my sins remember'd.
-""".strip() * 2
+""".strip()
+    * 2
+)
 
 
 def train_benchmark_model(epochs: int = 150, output_path: str = "models/bench_shakespeare.soul"):
     """Train a proper SloNet model and save as .soul checkpoint."""
     chars = sorted(set(SHAKESPEARE_TEXT))
     stoi = {c: i + 1 for i, c in enumerate(chars)}
-    itos = {i + 1: c for i, c in enumerate(chars)}
+    {i + 1: c for i, c in enumerate(chars)}
     vocab_size = len(chars) + 1
 
     def encode(text):
@@ -81,7 +86,9 @@ def train_benchmark_model(epochs: int = 150, output_path: str = "models/bench_sh
     n_hidden = 128
     n_layers = 1
 
-    print(f"Training benchmark model: vocab={vocab_size}, embed={n_embed}, hidden={n_hidden}, layers={n_layers}")
+    print(
+        f"Training benchmark model: vocab={vocab_size}, embed={n_embed}, hidden={n_hidden}, layers={n_layers}"
+    )
     print(f"Training data: {len(SHAKESPEARE_TEXT)} chars, {epochs} epochs")
 
     net = SloNet(
@@ -103,8 +110,8 @@ def train_benchmark_model(epochs: int = 150, output_path: str = "models/bench_sh
         ep_loss = 0.0
         steps = 0
         for pos in order[:20]:
-            x = tensor(data[pos:pos + chunk].reshape(1, -1), requires_grad=True)
-            y = tensor(data[pos + 1:pos + chunk + 1].reshape(1, -1))
+            x = tensor(data[pos : pos + chunk].reshape(1, -1), requires_grad=True)
+            y = tensor(data[pos + 1 : pos + chunk + 1].reshape(1, -1))
             h = lstm.init_hidden()
             logits, _ = lstm.forward(x, h)
             loss = cross_entropy(logits, y.reshape(-1))
@@ -143,6 +150,7 @@ def train_benchmark_model(epochs: int = 150, output_path: str = "models/bench_sh
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=150)
     parser.add_argument("--output", default="models/bench_shakespeare.soul")

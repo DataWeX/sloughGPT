@@ -9,7 +9,6 @@ from __future__ import annotations
 from enum import Enum
 
 
-
 class IoctlCommand(Enum):
     """Ioctl commands — type-safe command identifiers."""
 

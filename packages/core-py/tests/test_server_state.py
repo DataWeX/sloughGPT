@@ -6,12 +6,11 @@ Covers: AtomicRef get/set/swap/version/listeners, ServerState request recording,
 latency tracking, inference metrics, tokens_per_second, model metrics,
 rate limiting, memory pressure, health history, singleton reset.
 """
+
 from __future__ import annotations
 
 import time
 from threading import Thread
-
-import pytest
 
 from domain.infrastructure._internal.server_state import (
     AtomicRef,
@@ -20,10 +19,10 @@ from domain.infrastructure._internal.server_state import (
     reset_server_state,
 )
 
-
 # ---------------------------------------------------------------------------
 # AtomicRef
 # ---------------------------------------------------------------------------
+
 
 class TestAtomicRef:
     def test_initial_value(self):
@@ -73,15 +72,16 @@ class TestAtomicRef:
 
     def test_listener_exception_doesnt_break_set(self):
         ref = AtomicRef(0)
+
         def bad_listener(old, new):
             raise RuntimeError("boom")
+
         ref.on_change(bad_listener)
         ref.set(1)  # should not raise
         assert ref.get() == 1
 
     def test_thread_safety(self):
         ref = AtomicRef(0)
-        errors = []
 
         def writer(start):
             for i in range(100):
@@ -103,6 +103,7 @@ class TestAtomicRef:
 # ---------------------------------------------------------------------------
 # ServerState — construction
 # ---------------------------------------------------------------------------
+
 
 class TestServerStateInit:
     def test_initial_state(self):
@@ -136,6 +137,7 @@ class TestServerStateInit:
 # ---------------------------------------------------------------------------
 # Request recording
 # ---------------------------------------------------------------------------
+
 
 class TestRequestRecording:
     def test_record_request(self):
@@ -204,6 +206,7 @@ class TestRequestRecording:
 # Error recording
 # ---------------------------------------------------------------------------
 
+
 class TestErrorRecording:
     def test_record_error_detail(self):
         s = ServerState()
@@ -234,6 +237,7 @@ class TestErrorRecording:
 # Path latency
 # ---------------------------------------------------------------------------
 
+
 class TestPathLatency:
     def test_record_and_get(self):
         s = ServerState()
@@ -261,6 +265,7 @@ class TestPathLatency:
 # ---------------------------------------------------------------------------
 # Inference metrics
 # ---------------------------------------------------------------------------
+
 
 class TestInferenceMetrics:
     def test_record_inference(self):
@@ -316,6 +321,7 @@ class TestInferenceMetrics:
 # Rate limiting
 # ---------------------------------------------------------------------------
 
+
 class TestRateLimiting:
     def test_check_rate_limit_allowed(self):
         s = ServerState()
@@ -348,6 +354,7 @@ class TestRateLimiting:
 # ---------------------------------------------------------------------------
 # Memory tracking
 # ---------------------------------------------------------------------------
+
 
 class TestMemoryTracking:
     def test_record_memory_snapshot(self):
@@ -384,6 +391,7 @@ class TestMemoryTracking:
 # Model events
 # ---------------------------------------------------------------------------
 
+
 class TestModelEvents:
     def test_record_model_event(self):
         s = ServerState()
@@ -411,6 +419,7 @@ class TestModelEvents:
 # Health history
 # ---------------------------------------------------------------------------
 
+
 class TestHealthHistory:
     def test_get_health_history_empty(self):
         s = ServerState()
@@ -420,6 +429,7 @@ class TestHealthHistory:
 # ---------------------------------------------------------------------------
 # Trend snapshots
 # ---------------------------------------------------------------------------
+
 
 class TestTrendSnapshots:
     def test_record_trend_snapshots_throttled(self):
@@ -437,6 +447,7 @@ class TestTrendSnapshots:
 # ---------------------------------------------------------------------------
 # Singleton
 # ---------------------------------------------------------------------------
+
 
 class TestSingleton:
     def test_get_server_state(self):

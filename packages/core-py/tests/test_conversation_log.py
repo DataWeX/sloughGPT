@@ -13,16 +13,16 @@ Covers:
 """
 
 import json
-import os
-import tempfile
 import threading
-import pytest
 from pathlib import Path
+
+import pytest
+
 from domain.infrastructure._internal.conversation_log import (
     ConversationLogger,
+    capture,
     get_conversation_logger,
     reset_conversation_logger,
-    capture,
 )
 
 
@@ -33,20 +33,21 @@ def tmp_log_dir(tmp_path):
 
 # ── ConversationLogger.__init__ ──────────────────────────────────────────────
 
+
 class TestInit:
     def test_creates_directory(self, tmp_log_dir):
-        logger = ConversationLogger(tmp_log_dir)
+        ConversationLogger(tmp_log_dir)
         assert tmp_log_dir.exists()
 
     def test_creates_nested_directory(self, tmp_log_dir):
         nested = tmp_log_dir / "a" / "b" / "c"
-        logger = ConversationLogger(nested)
+        ConversationLogger(nested)
         assert nested.exists()
 
     def test_existing_directory_not_overwritten(self, tmp_log_dir):
         tmp_log_dir.mkdir(parents=True, exist_ok=True)
         (tmp_log_dir / "existing.txt").write_text("keep")
-        logger = ConversationLogger(tmp_log_dir)
+        ConversationLogger(tmp_log_dir)
         assert (tmp_log_dir / "existing.txt").read_text() == "keep"
 
     def test_corpus_path(self, tmp_log_dir):
@@ -59,6 +60,7 @@ class TestInit:
 
 
 # ── ConversationLogger.enabled ───────────────────────────────────────────────
+
 
 class TestEnabled:
     def test_enabled_default(self, tmp_log_dir, monkeypatch):
@@ -89,6 +91,7 @@ class TestEnabled:
 
 
 # ── ConversationLogger.record() ──────────────────────────────────────────────
+
 
 class TestRecord:
     def test_record_writes_corpus(self, tmp_log_dir):
@@ -224,7 +227,7 @@ class TestRecord:
 
     def test_record_special_characters(self, tmp_log_dir):
         logger = ConversationLogger(tmp_log_dir)
-        logger.record("line1\nline2\ttab", "backslash \\ quote \"")
+        logger.record("line1\nline2\ttab", 'backslash \\ quote "')
         row = json.loads(logger.corpus_path.read_text().strip())
         assert "line1\nline2\ttab" in row["messages"][0]["content"]
 
@@ -270,6 +273,7 @@ class TestRecord:
 
 # ── Thread safety ────────────────────────────────────────────────────────────
 
+
 class TestThreadSafety:
     def test_concurrent_records(self, tmp_log_dir):
         logger = ConversationLogger(tmp_log_dir)
@@ -294,9 +298,11 @@ class TestThreadSafety:
 
 # ── capture() ────────────────────────────────────────────────────────────────
 
+
 class TestCapture:
     def test_capture_returns_true(self, tmp_log_dir):
         from domain.infrastructure._internal import conversation_log
+
         old = conversation_log._logger
         try:
             conversation_log._logger = ConversationLogger(tmp_log_dir)
@@ -307,6 +313,7 @@ class TestCapture:
     def test_capture_returns_false_when_disabled(self, tmp_log_dir, monkeypatch):
         monkeypatch.setenv("MAN_CAPTURE_CONVERSATIONS", "0")
         from domain.infrastructure._internal import conversation_log
+
         old = conversation_log._logger
         try:
             conversation_log._logger = ConversationLogger(tmp_log_dir)
@@ -316,11 +323,13 @@ class TestCapture:
 
     def test_capture_with_all_params(self, tmp_log_dir):
         from domain.infrastructure._internal import conversation_log
+
         old = conversation_log._logger
         try:
             conversation_log._logger = ConversationLogger(tmp_log_dir)
             result = capture(
-                "Q", "A",
+                "Q",
+                "A",
                 model="test-model",
                 tokens_generated=10,
                 elapsed_ms=50.0,
@@ -338,6 +347,7 @@ class TestCapture:
 
     def test_capture_returns_false_when_empty(self, tmp_log_dir):
         from domain.infrastructure._internal import conversation_log
+
         old = conversation_log._logger
         try:
             conversation_log._logger = ConversationLogger(tmp_log_dir)
@@ -348,6 +358,7 @@ class TestCapture:
 
 
 # ── Singleton / reset ────────────────────────────────────────────────────────
+
 
 class TestSingleton:
     def test_get_returns_same_instance(self):
@@ -370,6 +381,7 @@ class TestSingleton:
 
 
 # ── Independent directories ──────────────────────────────────────────────────
+
 
 class TestIndependentDirs:
     def test_separate_loggers_different_dirs(self, tmp_path):
@@ -395,6 +407,7 @@ class TestIndependentDirs:
 
 
 # ── Record edge cases ────────────────────────────────────────────────────────
+
 
 class TestRecordEdgeCases:
     def test_record_disabled_no_files_created(self, tmp_log_dir, monkeypatch):
@@ -468,10 +481,12 @@ class TestRecordEdgeCases:
 
 # ── capture() edge cases ─────────────────────────────────────────────────────
 
+
 class TestCaptureEdgeCases:
     def test_capture_returns_false_on_exception(self, tmp_log_dir, monkeypatch):
         monkeypatch.setenv("MAN_CAPTURE_CONVERSATIONS", "1")
         from domain.infrastructure._internal import conversation_log
+
         old = conversation_log._logger
         try:
             broken_logger = ConversationLogger(tmp_log_dir)
@@ -483,6 +498,7 @@ class TestCaptureEdgeCases:
 
     def test_capture_returns_false_when_none_prompt(self, tmp_log_dir):
         from domain.infrastructure._internal import conversation_log
+
         old = conversation_log._logger
         try:
             conversation_log._logger = ConversationLogger(tmp_log_dir)
@@ -492,6 +508,7 @@ class TestCaptureEdgeCases:
 
     def test_capture_returns_false_when_none_response(self, tmp_log_dir):
         from domain.infrastructure._internal import conversation_log
+
         old = conversation_log._logger
         try:
             conversation_log._logger = ConversationLogger(tmp_log_dir)
@@ -501,6 +518,7 @@ class TestCaptureEdgeCases:
 
     def test_capture_default_params(self, tmp_log_dir):
         from domain.infrastructure._internal import conversation_log
+
         old = conversation_log._logger
         try:
             conversation_log._logger = ConversationLogger(tmp_log_dir)
@@ -513,6 +531,7 @@ class TestCaptureEdgeCases:
 
 
 # ── Singleton thread safety ──────────────────────────────────────────────────
+
 
 class TestSingletonThreadSafety:
     def test_concurrent_get_singleton(self):
@@ -537,11 +556,12 @@ class TestSingletonThreadSafety:
         for _ in range(5):
             reset_conversation_logger()
             instances.append(get_conversation_logger())
-        assert len(set(id(i) for i in instances)) == 5
+        assert len({id(i) for i in instances}) == 5
         reset_conversation_logger()
 
 
 # ── Content edge cases ──────────────────────────────────────────────────────
+
 
 class TestContentEdgeCases:
     def test_record_single_char_only(self, tmp_log_dir):
@@ -598,6 +618,7 @@ class TestContentEdgeCases:
 
 # ── Thread safety extended ──────────────────────────────────────────────────
 
+
 class TestThreadSafetyExtended:
     def test_concurrent_records_same_content(self, tmp_log_dir):
         logger = ConversationLogger(tmp_log_dir)
@@ -605,7 +626,7 @@ class TestThreadSafetyExtended:
 
         def writer():
             try:
-                for i in range(5):
+                for _i in range(5):
                     logger.record("Q", "A")
             except Exception as e:
                 errors.append(e)
@@ -639,8 +660,9 @@ class TestThreadSafetyExtended:
             except Exception as e:
                 errors.append(e)
 
-        threads = ([threading.Thread(target=writer) for _ in range(2)] +
-                   [threading.Thread(target=reader) for _ in range(2)])
+        threads = [threading.Thread(target=writer) for _ in range(2)] + [
+            threading.Thread(target=reader) for _ in range(2)
+        ]
         for t in threads:
             t.start()
         for t in threads:
@@ -650,22 +672,27 @@ class TestThreadSafetyExtended:
 
 # ── Logger module constants ─────────────────────────────────────────────────
 
+
 class TestModuleConstants:
     def test_default_dir_exists(self):
         from domain.infrastructure._internal import conversation_log
+
         # _DEFAULT_DIR is set at import time
         assert isinstance(conversation_log._DEFAULT_DIR, Path)
 
     def test_logger_lock_exists(self):
         from domain.infrastructure._internal import conversation_log
+
         assert isinstance(conversation_log._logger_lock, type(threading.Lock()))
 
     def test_singleton_lock_exists(self):
         from domain.infrastructure._internal import conversation_log
-        assert hasattr(conversation_log, '_logger_lock')
+
+        assert hasattr(conversation_log, "_logger_lock")
 
     def test_capture_with_extra_meta(self, tmp_log_dir):
         from domain.infrastructure._internal import conversation_log
+
         old = conversation_log._logger
         try:
             conversation_log._logger = ConversationLogger(tmp_log_dir)
@@ -677,6 +704,7 @@ class TestModuleConstants:
 
     def test_capture_with_zero_tokens(self, tmp_log_dir):
         from domain.infrastructure._internal import conversation_log
+
         old = conversation_log._logger
         try:
             conversation_log._logger = ConversationLogger(tmp_log_dir)
@@ -689,6 +717,7 @@ class TestModuleConstants:
 
     def test_capture_with_negative_elapsed(self, tmp_log_dir):
         from domain.infrastructure._internal import conversation_log
+
         old = conversation_log._logger
         try:
             conversation_log._logger = ConversationLogger(tmp_log_dir)
@@ -701,6 +730,7 @@ class TestModuleConstants:
 
 
 # ── Persistence and file format ─────────────────────────────────────────────
+
 
 class TestFileFormat:
     def test_corpus_is_valid_jsonl(self, tmp_log_dir):

@@ -2,8 +2,9 @@
 Tests for the session router — context store, messages, inspector, regenerate.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -32,14 +33,19 @@ class TestSetSessionContext:
     @patch("domains.infrastructure.session_core.SessionCore.store_context")
     def test_set_context_with_messages(self, mock_store, client):
         mock_store.return_value = {
-            "status": "stored", "session_id": "sess-1", "message_count": 2,
+            "status": "stored",
+            "session_id": "sess-1",
+            "message_count": 2,
         }
-        resp = client.post("/session/sess-1/context", json={
-            "messages": [
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi there"},
-            ],
-        })
+        resp = client.post(
+            "/session/sess-1/context",
+            json={
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi there"},
+                ],
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "success"
@@ -53,12 +59,17 @@ class TestSetSessionContext:
     @patch("domains.infrastructure.session_core.SessionCore.store_context")
     def test_set_context_with_system_prompt(self, mock_store, client):
         mock_store.return_value = {
-            "status": "stored", "session_id": "sess-2", "message_count": 1,
+            "status": "stored",
+            "session_id": "sess-2",
+            "message_count": 1,
         }
-        resp = client.post("/session/sess-2/context", json={
-            "system_prompt": "You are helpful.",
-            "messages": [{"role": "user", "content": "Hi"}],
-        })
+        resp = client.post(
+            "/session/sess-2/context",
+            json={
+                "system_prompt": "You are helpful.",
+                "messages": [{"role": "user", "content": "Hi"}],
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["data"]["session_id"] == "sess-2"
@@ -66,12 +77,17 @@ class TestSetSessionContext:
     @patch("domains.infrastructure.session_core.SessionCore.store_context")
     def test_set_context_with_knowledge(self, mock_store, client):
         mock_store.return_value = {
-            "status": "stored", "session_id": "sess-3", "message_count": 1,
+            "status": "stored",
+            "session_id": "sess-3",
+            "message_count": 1,
         }
-        resp = client.post("/session/sess-3/context", json={
-            "knowledge": ["fact1", "fact2"],
-            "messages": [{"role": "user", "content": "Hi"}],
-        })
+        resp = client.post(
+            "/session/sess-3/context",
+            json={
+                "knowledge": ["fact1", "fact2"],
+                "messages": [{"role": "user", "content": "Hi"}],
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["data"]["session_id"] == "sess-3"
@@ -79,9 +95,12 @@ class TestSetSessionContext:
     @patch("domains.infrastructure.session_core.SessionCore.store_context")
     def test_set_context_store_via_kwargs_passes_messages(self, mock_store, client):
         mock_store.return_value = {"status": "stored", "message_count": 1}
-        client.post("/session/sess-x/context", json={
-            "messages": [{"role": "assistant", "content": "ok"}],
-        })
+        client.post(
+            "/session/sess-x/context",
+            json={
+                "messages": [{"role": "assistant", "content": "ok"}],
+            },
+        )
         args, kwargs = mock_store.call_args
         assert args[0] == "sess-x"
         assert args[1][0]["role"] == "assistant"
@@ -89,11 +108,15 @@ class TestSetSessionContext:
     @patch("domains.infrastructure.session_core.SessionCore.store_context")
     def test_set_context_store_propagates_error(self, mock_store):
         from fastapi.testclient import TestClient
+
         client = TestClient(_make_app(), raise_server_exceptions=False)
         mock_store.side_effect = RuntimeError("disk full")
-        resp = client.post("/session/sess-x/context", json={
-            "messages": [{"role": "user", "content": "Hi"}],
-        })
+        resp = client.post(
+            "/session/sess-x/context",
+            json={
+                "messages": [{"role": "user", "content": "Hi"}],
+            },
+        )
         assert resp.status_code == 500
 
 
@@ -135,7 +158,10 @@ class TestGetSessionMessages:
 
     @patch("domains.infrastructure.session_core.SessionCore.get_messages")
     def test_get_messages_long_history(self, mock_get, client):
-        messages = [{"role": "user" if i % 2 == 0 else "assistant", "content": f"msg-{i}"} for i in range(50)]
+        messages = [
+            {"role": "user" if i % 2 == 0 else "assistant", "content": f"msg-{i}"}
+            for i in range(50)
+        ]
         mock_get.return_value = messages
         resp = client.get("/session/sess-long/messages")
         assert resp.status_code == 200
@@ -187,7 +213,7 @@ class TestSessionInspector:
         body = resp.json()["data"]
         assert "workspace" in body
         assert "modes" in body
-        assert set(("personality", "memory", "style", "task")) <= set(body["modes"])
+        assert {"personality", "memory", "style", "task"} <= set(body["modes"])
 
 
 class TestRegenerateSession:

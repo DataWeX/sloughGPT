@@ -18,13 +18,13 @@ from numpy.lib.stride_tricks import sliding_window_view
 
 from domain.training._internal.gpu import accelerator as acc
 
-
 _CUPY_AVAILABLE = importlib.util.find_spec("cupy") is not None
 
 
 # =============================================================================
 # Independent numpy references
 # =============================================================================
+
 
 def _ref_softmax(a, axis=-1):
     e = np.exp(a - np.max(a, axis=axis, keepdims=True))
@@ -74,7 +74,10 @@ def _ref_conv2d(input, weight, bias=None, stride=1, padding=0):
             for ci in range(ic):
                 for a in range(kh):
                     for b in range(kw):
-                        plane += weight[j, ci, a, b] * x[i, ci, a:a + oh * stride:stride, b:b + ow * stride:stride]
+                        plane += (
+                            weight[j, ci, a, b]
+                            * x[i, ci, a : a + oh * stride : stride, b : b + ow * stride : stride]
+                        )
             if bias is not None:
                 plane += bias[j]
             out[i, j] = plane
@@ -105,7 +108,7 @@ def _ref_maxpool2d(input, kernel_size, stride=None, padding=0):
                 for b in range(ow):
                     ih = a * sh - padding
                     iw = b * sw - padding
-                    win = x[i, ci, max(0, ih):min(h, ih + kh), max(0, iw):min(w, iw + kw)]
+                    win = x[i, ci, max(0, ih) : min(h, ih + kh), max(0, iw) : min(w, iw + kw)]
                     if win.size > 0:
                         out[i, ci, a, b] = win.max()
     return out
@@ -126,6 +129,7 @@ def _pd_matrix(n, seed):
 # =============================================================================
 # CPU accelerator
 # =============================================================================
+
 
 class TestCPUAccelerator:
     def setup_method(self):
@@ -163,7 +167,7 @@ class TestCPUAccelerator:
 
     def test_gelu_matches_formula(self):
         a = np.random.rand(5, 5) - 0.5
-        ref = 0.5 * a * (1 + np.tanh(np.sqrt(2 / np.pi) * (a + 0.044715 * a ** 3)))
+        ref = 0.5 * a * (1 + np.tanh(np.sqrt(2 / np.pi) * (a + 0.044715 * a**3)))
         np.testing.assert_allclose(self.cpu.gelu(a), ref)
 
     def test_silu_matches_formula(self):
@@ -185,7 +189,9 @@ class TestCPUAccelerator:
         q = np.random.rand(2, 3)
         k = np.random.rand(2, 3)
         v = np.random.rand(2, 4)
-        np.testing.assert_allclose(self.cpu.attention(q, k, v, scale=0.5), _ref_attention(q, k, v, 0.5))
+        np.testing.assert_allclose(
+            self.cpu.attention(q, k, v, scale=0.5), _ref_attention(q, k, v, 0.5)
+        )
 
     def test_scaled_dot_attention_batched_with_mask(self):
         q = np.random.rand(2, 3, 4)
@@ -220,7 +226,9 @@ class TestCPUAccelerator:
     def test_conv2d_stride(self):
         x = np.random.rand(1, 1, 3, 3)
         w = np.random.rand(1, 1, 2, 2)
-        np.testing.assert_allclose(self.cpu.conv2d(x, w, stride=2), _ref_conv2d(x, w, stride=2), atol=1e-5)
+        np.testing.assert_allclose(
+            self.cpu.conv2d(x, w, stride=2), _ref_conv2d(x, w, stride=2), atol=1e-5
+        )
 
     def test_conv2d_padded_multichannel(self):
         x = np.random.rand(2, 2, 4, 4)
@@ -238,11 +246,15 @@ class TestCPUAccelerator:
 
     def test_max_pool2d_stride_one(self):
         x = np.random.rand(2, 1, 4, 4)
-        np.testing.assert_allclose(self.cpu.max_pool2d(x, kernel_size=2, stride=1), _ref_maxpool_sliding(x, 2, 1))
+        np.testing.assert_allclose(
+            self.cpu.max_pool2d(x, kernel_size=2, stride=1), _ref_maxpool_sliding(x, 2, 1)
+        )
 
     def test_max_pool2d_kernel_three(self):
         x = np.random.rand(1, 2, 6, 6)
-        np.testing.assert_allclose(self.cpu.max_pool2d(x, kernel_size=3, stride=2), _ref_maxpool_sliding(x, 3, 2))
+        np.testing.assert_allclose(
+            self.cpu.max_pool2d(x, kernel_size=3, stride=2), _ref_maxpool_sliding(x, 3, 2)
+        )
 
     def test_embedding_2d_indices_clipped(self):
         weight = np.random.rand(5, 4)
@@ -255,7 +267,9 @@ class TestCPUAccelerator:
     def test_cross_entropy_matches_reference(self):
         logits = np.random.rand(4, 7)
         targets = np.array([0, 3, 6, 1])
-        np.testing.assert_allclose(self.cpu.cross_entropy(logits, targets), _ref_cross_entropy(logits, targets))
+        np.testing.assert_allclose(
+            self.cpu.cross_entropy(logits, targets), _ref_cross_entropy(logits, targets)
+        )
 
     def test_cross_entropy_skips_out_of_range_targets(self):
         logits = np.random.rand(3, 5)
@@ -288,6 +302,7 @@ class TestCPUAccelerator:
 # Metal accelerator (pure-numpy compute, backend unavailable here)
 # =============================================================================
 
+
 class TestMetalAccelerator:
     def setup_method(self):
         self.metal = acc._MetalAccelerator()
@@ -312,7 +327,7 @@ class TestMetalAccelerator:
 
     def test_gelu_and_silu(self):
         a = np.random.rand(4, 4) - 0.5
-        ref_gelu = 0.5 * a * (1 + np.tanh(np.sqrt(2 / np.pi) * (a + 0.044715 * a ** 3)))
+        ref_gelu = 0.5 * a * (1 + np.tanh(np.sqrt(2 / np.pi) * (a + 0.044715 * a**3)))
         np.testing.assert_allclose(self.metal.gelu(a), ref_gelu)
         np.testing.assert_allclose(self.metal.silu(a), a / (1 + np.exp(-np.clip(a, -500, 500))))
 
@@ -327,13 +342,15 @@ class TestMetalAccelerator:
         q = np.random.rand(2, 3)
         k = np.random.rand(2, 3)
         v = np.random.rand(2, 4)
-        np.testing.assert_allclose(self.metal.attention(q, k, v, scale=0.5), _ref_attention(q, k, v, 0.5))
+        np.testing.assert_allclose(
+            self.metal.attention(q, k, v, scale=0.5), _ref_attention(q, k, v, 0.5)
+        )
 
     def test_check_metal_exception_returns_false(self, monkeypatch):
         def boom():
             raise ImportError("mps unavailable")
 
-        monkeypatch.setattr("domain.infrastructure.ml_types._mps_available", boom)
+        monkeypatch.setattr("domain.infrastructure._internal.ml_types._mps_available", boom)
         assert acc._MetalAccelerator()._available is False
 
     def test_scaled_dot_attention_explicit_scale_no_mask(self):
@@ -387,7 +404,9 @@ class TestMetalAccelerator:
     def test_cross_entropy_matches_reference(self):
         logits = np.random.rand(4, 7)
         targets = np.array([0, 3, 6, 1])
-        np.testing.assert_allclose(self.metal.cross_entropy(logits, targets), _ref_cross_entropy(logits, targets))
+        np.testing.assert_allclose(
+            self.metal.cross_entropy(logits, targets), _ref_cross_entropy(logits, targets)
+        )
 
     def test_conv2d_matches_reference(self):
         x = np.random.rand(1, 1, 3, 3)
@@ -417,6 +436,7 @@ class TestMetalAccelerator:
 # =============================================================================
 # CUDA accelerator (numpy fallback path, cupy not installed)
 # =============================================================================
+
 
 class TestCUDAFallbackAccelerator:
     def setup_method(self):
@@ -467,7 +487,7 @@ class TestCUDAFallbackAccelerator:
 
     def test_gelu_fallback(self):
         a = np.random.rand(4, 4) - 0.5
-        ref = 0.5 * a * (1 + np.tanh(np.sqrt(2 / np.pi) * (a + 0.044715 * a ** 3)))
+        ref = 0.5 * a * (1 + np.tanh(np.sqrt(2 / np.pi) * (a + 0.044715 * a**3)))
         np.testing.assert_allclose(self.cuda.gelu(a), ref)
 
     def test_layernorm_fallback(self):
@@ -480,13 +500,19 @@ class TestCUDAFallbackAccelerator:
         q = np.random.rand(2, 3)
         k = np.random.rand(2, 3)
         v = np.random.rand(2, 4)
-        np.testing.assert_allclose(self.cuda.attention(q, k, v, scale=0.5), _ref_attention(q, k, v, 0.5))
+        np.testing.assert_allclose(
+            self.cuda.attention(q, k, v, scale=0.5), _ref_attention(q, k, v, 0.5)
+        )
 
     def test_conv2d_fallback(self):
         x = np.random.rand(1, 1, 3, 3)
         w = np.random.rand(1, 1, 2, 2)
         b = np.random.rand(1)
-        np.testing.assert_allclose(self.cuda.conv2d(x, w, b, stride=1, padding=1), _ref_conv2d(x, w, b, padding=1), atol=1e-5)
+        np.testing.assert_allclose(
+            self.cuda.conv2d(x, w, b, stride=1, padding=1),
+            _ref_conv2d(x, w, b, padding=1),
+            atol=1e-5,
+        )
 
     def test_conv2d_impl_static_no_bias(self):
         x = np.random.rand(2, 2, 4, 4)
@@ -501,6 +527,7 @@ class TestCUDAFallbackAccelerator:
 # =============================================================================
 # Global accelerator helpers
 # =============================================================================
+
 
 class TestGlobalAccelerator:
     def test_reset_and_get_caches_singleton(self):
@@ -526,6 +553,7 @@ class TestGlobalAccelerator:
 # Cholesky solvers
 # =============================================================================
 
+
 class TestSolvers:
     def test_cholesky_matches_numpy(self):
         a = _pd_matrix(5, 7)
@@ -536,12 +564,16 @@ class TestSolvers:
     def test_solve_triangular_lower(self):
         a = np.tril(np.random.RandomState(1).rand(5, 5)) + np.eye(5)
         b = np.random.RandomState(2).rand(5)
-        np.testing.assert_allclose(acc.solve_triangular(a, b, lower=True), np.linalg.solve(a, b), atol=1e-4)
+        np.testing.assert_allclose(
+            acc.solve_triangular(a, b, lower=True), np.linalg.solve(a, b), atol=1e-4
+        )
 
     def test_solve_triangular_upper(self):
         a = np.triu(np.random.RandomState(3).rand(5, 5)) + np.eye(5)
         b = np.random.RandomState(4).rand(5)
-        np.testing.assert_allclose(acc.solve_triangular(a, b, lower=False), np.linalg.solve(a, b), atol=1e-4)
+        np.testing.assert_allclose(
+            acc.solve_triangular(a, b, lower=False), np.linalg.solve(a, b), atol=1e-4
+        )
 
     def test_solve_cholesky_matches_numpy(self):
         a = _pd_matrix(5, 11)
@@ -552,6 +584,7 @@ class TestSolvers:
 # =============================================================================
 # Power-iteration dominant eigen decomposition
 # =============================================================================
+
 
 class TestDominantEigen:
     def test_dominant_eigen_defaults(self):

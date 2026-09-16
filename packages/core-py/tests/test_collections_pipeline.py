@@ -3,26 +3,22 @@
 Covers: Record dataclass, FileSource, FileStore, MemoryStore, LengthFilter,
 DedupFilter, KeywordFilter, RegexFilter, FilterChain, Collector.
 """
+
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-
-import pytest
-
-from domain.collections._internal.sources import Record, FileSource
-from domain.collections._internal.stores import FileStore, MemoryStore
-from domain.collections._internal.filters import (
-    LengthFilter,
-    DedupFilter,
-    KeywordFilter,
-    RegexFilter,
-    FilterChain,
-)
 from domain.collections._internal.collector import Collector
-
+from domain.collections._internal.filters import (
+    DedupFilter,
+    FilterChain,
+    KeywordFilter,
+    LengthFilter,
+    RegexFilter,
+)
+from domain.collections._internal.sources import FileSource, Record
+from domain.collections._internal.stores import FileStore, MemoryStore
 
 # ── Record ───────────────────────────────────────────────────────────
+
 
 class TestRecord:
     def test_creation(self):
@@ -43,6 +39,7 @@ class TestRecord:
 
 # ── FileSource ───────────────────────────────────────────────────────
 
+
 class TestFileSource:
     def test_read(self, tmp_path):
         p = tmp_path / "data.jsonl"
@@ -60,6 +57,7 @@ class TestFileSource:
 
 
 # ── MemoryStore ──────────────────────────────────────────────────────
+
 
 class TestMemoryStore:
     def test_write_and_read(self):
@@ -79,6 +77,7 @@ class TestMemoryStore:
 
 # ── FileStore ────────────────────────────────────────────────────────
 
+
 class TestFileStore:
     def test_write_and_read(self, tmp_path):
         p = tmp_path / "out.jsonl"
@@ -97,6 +96,7 @@ class TestFileStore:
 
 
 # ── Filters ──────────────────────────────────────────────────────────
+
 
 class TestLengthFilter:
     def test_in_range(self):
@@ -164,6 +164,7 @@ class TestFilterChain:
 
 
 # ── Collector ────────────────────────────────────────────────────────
+
 
 class TestCollector:
     def test_collect(self, tmp_path):

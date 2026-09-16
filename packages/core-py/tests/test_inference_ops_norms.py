@@ -1,7 +1,6 @@
 """Tests for inference/ops/layernorm.py and inference/ops/rmsnorm.py."""
 
 import numpy as np
-import pytest
 
 from domain.inference._internal.ops.layernorm import layernorm
 from domain.inference._internal.ops.rmsnorm import rmsnorm
@@ -14,11 +13,12 @@ def _expected_layernorm(x, weight, bias, eps):
 
 
 def _expected_rmsnorm(x, weight, eps):
-    rms = np.sqrt(np.mean(x ** 2, axis=-1, keepdims=True) + eps)
+    rms = np.sqrt(np.mean(x**2, axis=-1, keepdims=True) + eps)
     return x / rms * weight
 
 
 # ── LayerNorm ────────────────────────────────────────────────────────────────
+
 
 class TestLayerNormNormalization:
     def test_normalizes_mean_to_zero(self):
@@ -161,6 +161,7 @@ class TestLayerNormOutputType:
 
 # ── RMSNorm ──────────────────────────────────────────────────────────────────
 
+
 class TestRMSNormManualFormula:
     def test_matches_expected(self):
         rng = np.random.default_rng(1)
@@ -292,6 +293,7 @@ class TestRMSNormDeterministic:
 
 
 # ── Additional cross-cutting tests ──────────────────────────────────────────
+
 
 class TestLayerNormInputDtype:
     def test_int_input_cast_to_float(self):

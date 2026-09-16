@@ -11,16 +11,16 @@ The Queue:
   - Manages shared PointLibraries (dedup across trees)
   - Provides model switching and weight sharing
 """
+
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from .config import QueueConfig, TreeConfig
+from .dedup import PointDeduplicator
 from .library import PointLibrary
 from .model_tree import ModelTree
-from .dedup import PointDeduplicator
 
 logger = logging.getLogger("slo.pdqeep")
 
@@ -28,10 +28,10 @@ logger = logging.getLogger("slo.pdqeep")
 class ModelQueue:
     """Top-level manager for multiple Trees."""
 
-    def __init__(self, config: Optional[QueueConfig] = None):
+    def __init__(self, config: QueueConfig | None = None):
         self.config = config or QueueConfig()
-        self._trees: Dict[str, ModelTree] = {}
-        self._shared_library: Optional[PointLibrary] = None
+        self._trees: dict[str, ModelTree] = {}
+        self._shared_library: PointLibrary | None = None
 
         if self.config.storage_dir:
             self._shared_library = PointLibrary(
@@ -39,38 +39,40 @@ class ModelQueue:
                 storage_dir=self.config.storage_dir,
             )
 
-    def add_tree(self, name: str, tree: Optional[ModelTree] = None,
-                 config: Optional[TreeConfig] = None) -> ModelTree:
+    def add_tree(
+        self, name: str, tree: ModelTree | None = None, config: TreeConfig | None = None
+    ) -> ModelTree:
         """Add a ModelTree to the queue."""
         if len(self._trees) >= self.config.max_trees:
             raise ValueError(f"Queue full (max {self.config.max_trees} trees)")
 
         if tree is None:
             tc = config or TreeConfig(name=name, n_clusters=self.config.default_n_clusters)
-            lib = self._shared_library if self._shared_library is not None else PointLibrary(name=f"{name}_points")
+            lib = (
+                self._shared_library
+                if self._shared_library is not None
+                else PointLibrary(name=f"{name}_points")
+            )
             tree = ModelTree(tc.name, lib, n_clusters=tc.n_clusters)
 
         self._trees[name] = tree
-        logger.info("ModelQueue: added tree '%s'", name,
-            extra={"tag": "INFRA"})
+        logger.info("ModelQueue: added tree '%s'", name, extra={"tag": "INFRA"})
         return tree
 
-    def get_tree(self, name: str) -> Optional[ModelTree]:
+    def get_tree(self, name: str) -> ModelTree | None:
         return self._trees.get(name)
 
     def remove_tree(self, name: str) -> bool:
         if name in self._trees:
             del self._trees[name]
-            logger.info("ModelQueue: removed tree '%s'", name,
-                extra={"tag": "INFRA"})
+            logger.info("ModelQueue: removed tree '%s'", name, extra={"tag": "INFRA"})
             return True
         return False
 
-    def list_trees(self) -> List[str]:
+    def list_trees(self) -> list[str]:
         return list(self._trees.keys())
 
-    def load_model(self, model_id: str, n_clusters: int = 16,
-                   method: str = "cluster") -> ModelTree:
+    def load_model(self, model_id: str, n_clusters: int = 16, method: str = "cluster") -> ModelTree:
         """Load a HuggingFace model into a new tree."""
         from .tree import load_model_to_points
 

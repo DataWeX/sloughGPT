@@ -3,12 +3,13 @@ Tests for TrainerProtocol and TrainResult.
 """
 
 from dataclasses import dataclass
-from domain.training._internal.trainer_protocol import TrainerProtocol, TrainResult
 
+from domain.training._internal.trainer_protocol import TrainerProtocol, TrainResult
 
 # ---------------------------------------------------------------------------
 # TrainResult — construction & defaults
 # ---------------------------------------------------------------------------
+
 
 def test_train_result_defaults():
     """Default TrainResult should be successful."""
@@ -129,6 +130,7 @@ def test_trainer_protocol_structural_missing_method():
 # TrainResult — additional field tests
 # ---------------------------------------------------------------------------
 
+
 def test_train_result_backward_compat_aliases():
     """message, elapsed, phases are backward-compat fields."""
     r = TrainResult(message="done", elapsed=3.5, phases=["train", "eval"])
@@ -162,7 +164,7 @@ def test_train_result_getitem_key_error():
     r = TrainResult()
     try:
         _ = r["nonexistent"]
-        assert False, "Should have raised KeyError"
+        raise AssertionError("Should have raised KeyError")
     except KeyError:
         pass
 
@@ -261,16 +263,21 @@ def test_train_result_to_dict_all_none():
 # TrainerProtocol — additional structural tests
 # ---------------------------------------------------------------------------
 
+
 def test_trainer_protocol_with_kwargs():
     """TrainerProtocol.train() accepts **kwargs."""
+
     @dataclass
     class KwargsTrainer:
         done: bool = False
+
         def train(self, lr=0.001, epochs=3, **kwargs) -> TrainResult:
             return TrainResult(success=True, method="kwargs")
+
         @property
         def is_training(self) -> bool:
             return not self.done
+
         def stop(self) -> None:
             self.done = True
 
@@ -286,6 +293,7 @@ def test_trainer_protocol_missing_is_training():
     class NoIsTraining:
         def train(self, **kwargs) -> TrainResult:
             return TrainResult()
+
         def stop(self) -> None:
             pass
 
@@ -298,6 +306,7 @@ def test_trainer_protocol_missing_stop():
     class NoStop:
         def train(self, **kwargs) -> TrainResult:
             return TrainResult()
+
         @property
         def is_training(self) -> bool:
             return False
@@ -311,11 +320,14 @@ def test_trainer_protocol_return_type():
     @dataclass
     class TypedTrainer:
         done: bool = False
+
         def train(self, **kwargs) -> TrainResult:
             return TrainResult(success=True)
+
         @property
         def is_training(self) -> bool:
             return not self.done
+
         def stop(self) -> None:
             self.done = True
 
@@ -331,12 +343,15 @@ def test_trainer_protocol_multiple_instances():
     class CounterTrainer:
         count: int = 0
         done: bool = False
+
         def train(self, **kwargs) -> TrainResult:
             self.count += 1
             return TrainResult(success=True, method=f"run-{self.count}")
+
         @property
         def is_training(self) -> bool:
             return not self.done
+
         def stop(self) -> None:
             self.done = True
 
@@ -351,12 +366,14 @@ def test_trainer_protocol_multiple_instances():
 
 def test_train_result_metrics_complex():
     """TrainResult handles complex nested metrics."""
-    r = TrainResult(metrics={
-        "perplexity": 12.5,
-        "bleu": 0.85,
-        "rouge": {"r": 0.7, "p": 0.8, "f": 0.75},
-        "loss_curve": [1.0, 0.8, 0.6],
-    })
+    r = TrainResult(
+        metrics={
+            "perplexity": 12.5,
+            "bleu": 0.85,
+            "rouge": {"r": 0.7, "p": 0.8, "f": 0.75},
+            "loss_curve": [1.0, 0.8, 0.6],
+        }
+    )
     d = r.to_dict()
     assert d["perplexity"] == 12.5
     assert d["bleu"] == 0.85
@@ -385,12 +402,13 @@ def test_train_result_repr():
 # Additional comprehensive tests
 # ---------------------------------------------------------------------------
 
+
 def test_train_result_getitem_missing_key():
     """__getitem__ raises KeyError with correct key name."""
     r = TrainResult()
     try:
         _ = r["missing_key"]
-        assert False, "Should have raised KeyError"
+        raise AssertionError("Should have raised KeyError")
     except KeyError as e:
         assert "missing_key" in str(e)
 
@@ -399,10 +417,23 @@ def test_train_result_contains_all_fields():
     """__contains__ returns True for all valid field names."""
     r = TrainResult()
     for field_name in [
-        "success", "status", "final_loss", "best_eval_loss", "global_step",
-        "total_steps", "epochs_completed", "model_path", "checkpoint_name",
-        "method", "metrics", "avg_quality", "data_quality", "error",
-        "message", "elapsed", "phases",
+        "success",
+        "status",
+        "final_loss",
+        "best_eval_loss",
+        "global_step",
+        "total_steps",
+        "epochs_completed",
+        "model_path",
+        "checkpoint_name",
+        "method",
+        "metrics",
+        "avg_quality",
+        "data_quality",
+        "error",
+        "message",
+        "elapsed",
+        "phases",
     ]:
         assert field_name in r
 
@@ -425,10 +456,23 @@ def test_train_result_to_dict_all_fields_present():
     r = TrainResult()
     d = r.to_dict()
     expected_keys = {
-        "success", "status", "final_loss", "best_eval_loss", "global_step",
-        "total_steps", "epochs_completed", "model_path", "checkpoint_name",
-        "method", "error", "message", "elapsed", "phases", "checkpoint",
-        "avg_quality", "data_quality",
+        "success",
+        "status",
+        "final_loss",
+        "best_eval_loss",
+        "global_step",
+        "total_steps",
+        "epochs_completed",
+        "model_path",
+        "checkpoint_name",
+        "method",
+        "error",
+        "message",
+        "elapsed",
+        "phases",
+        "checkpoint",
+        "avg_quality",
+        "data_quality",
     }
     assert expected_keys.issubset(set(d.keys()))
 
@@ -442,13 +486,25 @@ def test_train_result_to_dict_metrics_override():
 
 def test_train_result_equality_fields():
     """TrainResult with same values for all fields are equal."""
-    kwargs = dict(
-        success=True, status="completed", final_loss=0.5, best_eval_loss=0.4,
-        global_step=100, total_steps=200, epochs_completed=3,
-        model_path="/tmp/m", checkpoint_name="ckpt", method="slonet",
-        metrics={"ppl": 10.0}, avg_quality=4.0, data_quality={"div": 0.9},
-        error=None, message="ok", elapsed=1.5, phases=["train"],
-    )
+    kwargs = {
+        "success": True,
+        "status": "completed",
+        "final_loss": 0.5,
+        "best_eval_loss": 0.4,
+        "global_step": 100,
+        "total_steps": 200,
+        "epochs_completed": 3,
+        "model_path": "/tmp/m",
+        "checkpoint_name": "ckpt",
+        "method": "slonet",
+        "metrics": {"ppl": 10.0},
+        "avg_quality": 4.0,
+        "data_quality": {"div": 0.9},
+        "error": None,
+        "message": "ok",
+        "elapsed": 1.5,
+        "phases": ["train"],
+    }
     r1 = TrainResult(**kwargs)
     r2 = TrainResult(**kwargs)
     assert r1 == r2
@@ -569,14 +625,18 @@ def test_train_result_phases_variants():
 
 def test_trainer_protocol_train_with_no_kwargs():
     """TrainerProtocol.train() works with no arguments."""
+
     @dataclass
     class SimpleTrainer:
         done: bool = False
+
         def train(self) -> TrainResult:
             return TrainResult(success=True)
+
         @property
         def is_training(self) -> bool:
             return not self.done
+
         def stop(self) -> None:
             self.done = True
 
@@ -588,14 +648,18 @@ def test_trainer_protocol_train_with_no_kwargs():
 
 def test_trainer_protocol_stop_multiple_times():
     """Calling stop() multiple times is safe."""
+
     @dataclass
     class Trainer:
         done: bool = False
+
         def train(self, **kwargs) -> TrainResult:
             return TrainResult()
+
         @property
         def is_training(self) -> bool:
             return not self.done
+
         def stop(self) -> None:
             self.done = True
 
@@ -608,16 +672,20 @@ def test_trainer_protocol_stop_multiple_times():
 
 def test_trainer_protocol_train_returns_result():
     """Every train() call returns a TrainResult instance."""
+
     @dataclass
     class MultiTrainer:
         run_count: int = 0
         done: bool = False
+
         def train(self, **kwargs) -> TrainResult:
             self.run_count += 1
             return TrainResult(success=True, total_steps=self.run_count)
+
         @property
         def is_training(self) -> bool:
             return not self.done
+
         def stop(self) -> None:
             self.done = True
 
@@ -631,10 +699,19 @@ def test_trainer_protocol_train_returns_result():
 def test_train_result_dataclass_field_access():
     """TrainResult fields are accessible as attributes."""
     r = TrainResult(
-        final_loss=1.5, best_eval_loss=1.2, global_step=50,
-        total_steps=100, epochs_completed=2, model_path="/m",
-        checkpoint_name="c", method="slonet", avg_quality=4.5,
-        error="OOM", message="done", elapsed=2.0, phases=["a"],
+        final_loss=1.5,
+        best_eval_loss=1.2,
+        global_step=50,
+        total_steps=100,
+        epochs_completed=2,
+        model_path="/m",
+        checkpoint_name="c",
+        method="slonet",
+        avg_quality=4.5,
+        error="OOM",
+        message="done",
+        elapsed=2.0,
+        phases=["a"],
     )
     assert r.final_loss == 1.5
     assert r.best_eval_loss == 1.2
@@ -654,13 +731,22 @@ def test_train_result_dataclass_field_access():
 def test_train_result_to_dict_combined():
     """to_dict() works correctly with all fields set."""
     r = TrainResult(
-        success=True, status="completed", final_loss=0.1,
-        best_eval_loss=0.2, global_step=200, total_steps=200,
-        epochs_completed=5, model_path="/models/v3",
-        checkpoint_name="best", method="hf",
+        success=True,
+        status="completed",
+        final_loss=0.1,
+        best_eval_loss=0.2,
+        global_step=200,
+        total_steps=200,
+        epochs_completed=5,
+        model_path="/models/v3",
+        checkpoint_name="best",
+        method="hf",
         metrics={"perplexity": 5.0, "accuracy": 0.95},
-        avg_quality=4.8, data_quality={"diversity": 0.9},
-        error=None, message="completed", elapsed=120.0,
+        avg_quality=4.8,
+        data_quality={"diversity": 0.9},
+        error=None,
+        message="completed",
+        elapsed=120.0,
         phases=["train", "eval"],
     )
     d = r.to_dict()

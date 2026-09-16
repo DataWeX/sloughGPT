@@ -9,9 +9,6 @@ Usage:
     source ~/.android-sdk-env   # after first run
 """
 
-import os
-import platform
-import shutil
 import subprocess
 import sys
 import zipfile
@@ -53,6 +50,7 @@ def download_cmdtools() -> Path:
     print("Downloading Android command-line tools...")
     try:
         from downcraft import download
+
         download(
             url=CMD_TOOLS_URL,
             dest=zip_path,
@@ -156,7 +154,7 @@ def verify() -> bool:
 
 
 def main() -> None:
-    print(f"=== Android SDK Setup ===")
+    print("=== Android SDK Setup ===")
     print(f"  SDK root: {SDK_ROOT}")
     print(f"  Java: {subprocess.getoutput('java -version 2>&1 | head -1')}")
 

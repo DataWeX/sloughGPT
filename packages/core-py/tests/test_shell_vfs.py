@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-
-from domain.shell._internal.vfs import get_vfs, reset_vfs, VFS
-
+from domain.shell._internal.vfs import VFS, get_vfs, reset_vfs
 
 # ── Singleton accessors ───────────────────────────────────────────────────
 
 
 class TestVFSSingleton:
-
     def setup_method(self):
         reset_vfs()
 
@@ -45,23 +41,27 @@ class TestVFSSingleton:
 
 
 class TestVFSReExports:
-
     def test_vfs_class_importable(self):
         from domain.shell._internal.vfs import VFS
+
         assert VFS is not None
 
     def test_vfs_entry_importable(self):
         from domain.shell._internal.vfs import VFSEntry
+
         assert VFSEntry is not None
 
     def test_vfs_directory_importable(self):
         from domain.shell._internal.vfs import VFSDirectory
+
         assert VFSDirectory is not None
 
     def test_vfs_generated_file_importable(self):
         from domain.shell._internal.vfs import VFSGeneratedFile
+
         assert VFSGeneratedFile is not None
 
     def test_vfs_write_only_file_importable(self):
         from domain.shell._internal.vfs import VFSWriteOnlyFile
+
         assert VFSWriteOnlyFile is not None

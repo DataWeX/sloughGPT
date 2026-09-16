@@ -10,58 +10,58 @@ Phoneme set based on IPA/ARPAbet hybrid for Spanish.
 from __future__ import annotations
 
 import re
-import numpy as np
 
+import numpy as np
 
 # ── Spanish Phoneme inventory ──────────────────────────────────────────────
 
 # Vowels
 SPANISH_VOWELS = {
-    "AA": 0,   # padre (father)
-    "AE": 1,   # gato (cat)
-    "AH": 2,   #-but (butterfly)
-    "AO": 3,   # boca (mouth)
-    "AW": 4,   #auto (car)
-    "AY": 5,   #aire (air)
-    "EH": 6,   # bebe (baby)
-    "ER": 7,   # comer (to eat)
-    "EY": 8,   # pez (fish)
-    "IH": 9,   # si (if)
+    "AA": 0,  # padre (father)
+    "AE": 1,  # gato (cat)
+    "AH": 2,  # -but (butterfly)
+    "AO": 3,  # boca (mouth)
+    "AW": 4,  # auto (car)
+    "AY": 5,  # aire (air)
+    "EH": 6,  # bebe (baby)
+    "ER": 7,  # comer (to eat)
+    "EY": 8,  # pez (fish)
+    "IH": 9,  # si (if)
     "IY": 10,  # chica (girl)
     "OW": 11,  # oso (bear)
     "OY": 12,  # oye (listen)
-    "UH": 13,  #乌拉圭 (Uruguay)
-    "UW": 14,  #乌龟 (turtle)
-    "UX": 15,  #乌龟 (turtle)
+    "UH": 13,  # 乌拉圭 (Uruguay)
+    "UW": 14,  # 乌龟 (turtle)
+    "UX": 15,  # 乌龟 (turtle)
 }
 
 # Consonants
 SPANISH_CONSONANTS = {
-    "B": 16,   # bueno (good)
+    "B": 16,  # bueno (good)
     "CH": 17,  # chico (boy)
-    "D": 18,   # bueno (good)
+    "D": 18,  # bueno (good)
     "DH": 19,  # this (English loan)
-    "F": 20,   # fan (fan)
-    "G": 21,   # gato (cat)
+    "F": 20,  # fan (fan)
+    "G": 21,  # gato (cat)
     "HH": 22,  # house (English loan)
     "JH": 23,  # Joy (English loan)
-    "K": 24,   # casa (house)
-    "L": 25,   # luna (moon)
-    "M": 26,   # mama (mom)
-    "N": 27,   # nino (boy)
+    "K": 24,  # casa (house)
+    "L": 25,  # luna (moon)
+    "M": 26,  # mama (mom)
+    "N": 27,  # nino (boy)
     "NG": 28,  # singing (English loan)
     "NY": 29,  # nino (boy)
-    "P": 30,   # pan (bread)
-    "R": 31,   # pero (but)
+    "P": 30,  # pan (bread)
+    "R": 31,  # pero (but)
     "RR": 32,  # perro (dog)
-    "S": 33,   # sol (sun)
+    "S": 33,  # sol (sun)
     "SH": 34,  # shoe (English loan)
-    "T": 35,   # casa (house)
+    "T": 35,  # casa (house)
     "TH": 36,  # think (English loan)
-    "V": 37,   # vino (wine)
+    "V": 37,  # vino (wine)
     "W": 38,  # yes (English loan)
-    "Y": 39,   #ll (llama)
-    "Z": 40,   #zapato (shoe)
+    "Y": 39,  # ll (llama)
+    "Z": 40,  # zapato (shoe)
     "ZH": 41,  # vision (English loan)
 }
 
@@ -85,19 +85,49 @@ SPANISH_ID_TO_PHONEME[SILENCE] = "-"
 # Phoneme-to-grapheme mapping for decode
 SPANISH_PHONEME_TO_GRAPHEME: dict[str, str] = {
     # Vowels
-    "AA": "a", "AE": "a", "AH": "u", "AO": "o",
-    "AW": "au", "AY": "ai", "EH": "e", "ER": "er",
-    "EY": "e", "IH": "i", "IY": "i", "OW": "o",
-    "OY": "oy", "UH": "u", "UW": "u",
+    "AA": "a",
+    "AE": "a",
+    "AH": "u",
+    "AO": "o",
+    "AW": "au",
+    "AY": "ai",
+    "EH": "e",
+    "ER": "er",
+    "EY": "e",
+    "IH": "i",
+    "IY": "i",
+    "OW": "o",
+    "OY": "oy",
+    "UH": "u",
+    "UW": "u",
     "UX": "u",
     # Consonants
-    "B": "b", "CH": "ch", "D": "d", "DH": "th",
-    "F": "f", "G": "g", "HH": "h", "JH": "j",
-    "K": "c", "L": "l", "M": "m", "N": "n",
-    "NG": "ng", "NY": "n", "P": "p", "R": "r",
-    "RR": "rr", "S": "s", "SH": "sh", "T": "t",
-    "TH": "th", "V": "v", "W": "w", "Y": "ll",
-    "Z": "z", "ZH": "zh",
+    "B": "b",
+    "CH": "ch",
+    "D": "d",
+    "DH": "th",
+    "F": "f",
+    "G": "g",
+    "HH": "h",
+    "JH": "j",
+    "K": "c",
+    "L": "l",
+    "M": "m",
+    "N": "n",
+    "NG": "ng",
+    "NY": "n",
+    "P": "p",
+    "R": "r",
+    "RR": "rr",
+    "S": "s",
+    "SH": "sh",
+    "T": "t",
+    "TH": "th",
+    "V": "v",
+    "W": "w",
+    "Y": "ll",
+    "Z": "z",
+    "ZH": "zh",
 }
 
 
@@ -239,7 +269,7 @@ def _spanish_apply_rules(word: str) -> list[str]:
 
         # Try longest match first (2 chars)
         for length in (2,):
-            chunk = w[i:i + length]
+            chunk = w[i : i + length]
             for pattern, sounds in spanish_digraphs:
                 if chunk == pattern:
                     result.extend(sounds)
@@ -253,15 +283,32 @@ def _spanish_apply_rules(word: str) -> list[str]:
             ch = w[i]
             # Spanish single letter rules
             spanish_letter_rules = {
-                "a": ["AH"], "b": ["B"], "c": ["K"],
-                "d": ["D"], "e": ["EH"], "f": ["F"],
-                "g": ["G"], "h": [], "i": ["I"],
-                "j": ["H"], "k": ["K"], "l": ["L"],
-                "m": ["M"], "n": ["N"], "o": ["OW"],
-                "p": ["P"], "q": ["K"], "r": ["R"],
-                "s": ["S"], "t": ["T"], "u": ["UW"],
-                "v": ["B"], "w": ["W"], "x": ["K", "S"],
-                "y": ["I"], "z": ["S"],
+                "a": ["AH"],
+                "b": ["B"],
+                "c": ["K"],
+                "d": ["D"],
+                "e": ["EH"],
+                "f": ["F"],
+                "g": ["G"],
+                "h": [],
+                "i": ["I"],
+                "j": ["H"],
+                "k": ["K"],
+                "l": ["L"],
+                "m": ["M"],
+                "n": ["N"],
+                "o": ["OW"],
+                "p": ["P"],
+                "q": ["K"],
+                "r": ["R"],
+                "s": ["S"],
+                "t": ["T"],
+                "u": ["UW"],
+                "v": ["B"],
+                "w": ["W"],
+                "x": ["K", "S"],
+                "y": ["I"],
+                "z": ["S"],
             }
             if ch in spanish_letter_rules:
                 result.extend(spanish_letter_rules[ch])
@@ -303,8 +350,13 @@ class SpanishPhonemeEncoder:
 
     def __init__(self):
         self.phoneme_to_id: dict[str, int] = {
-            **SPANISH_VOWELS, **SPANISH_CONSONANTS,
-            "_": PAD, "<": BOS, ">": EOS, " ": SPACE, "-": SILENCE,
+            **SPANISH_VOWELS,
+            **SPANISH_CONSONANTS,
+            "_": PAD,
+            "<": BOS,
+            ">": EOS,
+            " ": SPACE,
+            "-": SILENCE,
         }
 
     def encode(self, text: str) -> np.ndarray:
@@ -381,8 +433,12 @@ class SpanishPhonemeEncoder:
         target_ids = self.encode(target).flatten()
         spoken_ids = self.encode(spoken).flatten()
 
-        target_phonemes = [SPANISH_ID_TO_PHONEME.get(i, "?") for i in target_ids if i not in (BOS, EOS, PAD)]
-        spoken_phonemes = [SPANISH_ID_TO_PHONEME.get(i, "?") for i in spoken_ids if i not in (BOS, EOS, PAD)]
+        target_phonemes = [
+            SPANISH_ID_TO_PHONEME.get(i, "?") for i in target_ids if i not in (BOS, EOS, PAD)
+        ]
+        spoken_phonemes = [
+            SPANISH_ID_TO_PHONEME.get(i, "?") for i in spoken_ids if i not in (BOS, EOS, PAD)
+        ]
 
         lcs_len = self._lcs_length(target_phonemes, spoken_phonemes)
         target_len = len(target_phonemes)
@@ -412,10 +468,10 @@ class SpanishPhonemeEncoder:
         dp = [[0] * (n + 1) for _ in range(m + 1)]
         for i in range(1, m + 1):
             for j in range(1, n + 1):
-                if a[i-1] == b[j-1]:
-                    dp[i][j] = dp[i-1][j-1] + 1
+                if a[i - 1] == b[j - 1]:
+                    dp[i][j] = dp[i - 1][j - 1] + 1
                 else:
-                    dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+                    dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
         return dp[m][n]
 
     @property

@@ -10,11 +10,18 @@ import sys
 from pathlib import Path
 
 import state as server_state
-from domain.infrastructure._internal.errors import AppError
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
+
+from domain.infrastructure._internal.errors import AppError
 
 logger = logging.getLogger("slo.api.self_train")
 
@@ -72,8 +79,10 @@ class SelfTrainRouter:
                         "E_VAL_REQUEST",
                         status_code=422,
                     )
-                if '..' in req.model:
-                    raise_error("Model name cannot contain path traversal", "E_VAL_REQUEST", status_code=422)
+                if ".." in req.model:
+                    raise_error(
+                        "Model name cannot contain path traversal", "E_VAL_REQUEST", status_code=422
+                    )
                 cmd.extend(["--model", req.model])
             if req and req.temperature is not None:
                 cmd.extend(["--temperature", str(req.temperature)])

@@ -2,12 +2,15 @@
 
 import asyncio
 import time
-import pytest
-from domain.infrastructure._internal.model_server import (
-    PriorityRequestQueue, Priority, QueueMetrics, _QueueItem,
-    SessionKVCache,
-)
 
+import pytest
+
+from domain.infrastructure._internal.model_server import (
+    Priority,
+    PriorityRequestQueue,
+    SessionKVCache,
+    _QueueItem,
+)
 
 # ── PriorityRequestQueue ──────────────────────────────────────────────
 
@@ -45,8 +48,10 @@ class TestPriorityOrdering:
 
         results = []
         for i in range(5):
+
             async def val(v=i):
                 return v
+
             r = await q.submit(val(), Priority.MEDIUM, f"r{i}")
             results.append(r)
 
@@ -140,6 +145,7 @@ class TestQueueFull:
     @pytest.mark.asyncio
     async def test_submit_raises_when_full(self):
         q = PriorityRequestQueue(max_concurrent=1, max_queue=1)
+
         # Fill the queue
         async def slow():
             await asyncio.sleep(10)
@@ -158,6 +164,7 @@ class TestQueueFull:
 
 
 # ── SessionKVCache ────────────────────────────────────────────────────
+
 
 class TestSessionKVCacheGet:
     def test_get_empty(self):

@@ -15,7 +15,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 
 class LearnSearchRequest(BaseModel):
@@ -127,9 +133,7 @@ class LearnerRouter:
         learner = get_learner()
         result = learner.ingest_url(url)
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log(
-            "learner.ingest_url", resource=url, detail=f"elapsed={_elapsed_ms:.0f}ms"
-        )
+        safe_audit_log("learner.ingest_url", resource=url, detail=f"elapsed={_elapsed_ms:.0f}ms")
         return success_response(data={**result, "elapsed_ms": round(_elapsed_ms, 1)})
 
     @staticmethod

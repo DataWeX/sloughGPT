@@ -14,10 +14,10 @@ import numpy as np
 
 from .vm import Device, DeviceFault
 
-
 # ---------------------------------------------------------------------------
 # TensorDevice – wraps numpy
 # ---------------------------------------------------------------------------
+
 
 class TensorDevice(Device):
     """
@@ -81,6 +81,7 @@ class TensorDevice(Device):
             return np.array(v, dtype=np.float64)
         if isinstance(v, str):
             import json
+
             try:
                 parsed = json.loads(v)
                 if isinstance(parsed, list):
@@ -185,6 +186,7 @@ class TensorDevice(Device):
 # PythonExecDevice – execute arbitrary Python from assembly
 # ---------------------------------------------------------------------------
 
+
 class PythonExecDevice(Device):
     """
     Execute arbitrary Python from assembly.
@@ -198,13 +200,31 @@ class PythonExecDevice(Device):
     """
 
     _SAFE_BUILTINS = {
-        "len": len, "range": range, "int": int, "float": float,
-        "str": str, "bool": bool, "list": list, "dict": dict,
-        "print": print, "min": min, "max": max, "sum": sum,
-        "abs": abs, "round": round, "sorted": sorted, "reversed": reversed,
-        "enumerate": enumerate, "zip": zip, "map": map, "filter": filter,
-        "isinstance": isinstance, "type": type, "hasattr": hasattr,
-        "getattr": getattr, "setattr": setattr,
+        "len": len,
+        "range": range,
+        "int": int,
+        "float": float,
+        "str": str,
+        "bool": bool,
+        "list": list,
+        "dict": dict,
+        "print": print,
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "abs": abs,
+        "round": round,
+        "sorted": sorted,
+        "reversed": reversed,
+        "enumerate": enumerate,
+        "zip": zip,
+        "map": map,
+        "filter": filter,
+        "isinstance": isinstance,
+        "type": type,
+        "hasattr": hasattr,
+        "getattr": getattr,
+        "setattr": setattr,
     }
 
     def __init__(self):
@@ -249,6 +269,7 @@ class PythonExecDevice(Device):
 
     def _py_import(self, module_name):
         import importlib
+
         mod = importlib.import_module(str(module_name))
         self._scope[str(module_name)] = mod
         return mod
@@ -270,6 +291,7 @@ class PythonExecDevice(Device):
 # ---------------------------------------------------------------------------
 # SlonetDevice – text inference via SlonetChatProvider
 # ---------------------------------------------------------------------------
+
 
 class SlonetDevice(Device):
     """
@@ -309,8 +331,15 @@ class SlonetDevice(Device):
         ids = np.asarray(token_ids).ravel().tolist()
         return self._provider._tokenizer.decode(ids)
 
-    def _generate(self, token_ids, max_tokens=50, temperature=1.0,
-                  top_k=None, top_p=None, repetition_penalty=1.0):
+    def _generate(
+        self,
+        token_ids,
+        max_tokens=50,
+        temperature=1.0,
+        top_k=None,
+        top_p=None,
+        repetition_penalty=1.0,
+    ):
         input_ids = np.asarray(token_ids, dtype=np.int64)
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
@@ -329,17 +358,22 @@ class SlonetDevice(Device):
         input_ids = np.asarray(token_ids, dtype=np.int64)
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
-        for token_id in self._provider._model.generate_numpy_stream(
-            input_ids, max_new_tokens=int(max_tokens), eos_token=int(eos_token),
-            temperature=1.0, top_k=None, top_p=None, repetition_penalty=1.0,
-        ):
-            yield token_id
+        yield from self._provider._model.generate_numpy_stream(
+            input_ids,
+            max_new_tokens=int(max_tokens),
+            eos_token=int(eos_token),
+            temperature=1.0,
+            top_k=None,
+            top_p=None,
+            repetition_penalty=1.0,
+        )
 
     def _forward(self, token_ids):
         input_ids = np.asarray(token_ids, dtype=np.int64)
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
         from domain.training._internal.slonet import Tensor as _Tensor
+
         inp = _Tensor(input_ids, requires_grad=False)
         logits, _ = self._provider._model.forward(inp)
         return logits.data
@@ -350,14 +384,15 @@ class SlonetDevice(Device):
             "model_id": self._provider._model_id,
             "vocab_size": m.vocab_size,
             "n_embed": m.n_embed,
-            "n_layer": len(m.layers) if hasattr(m, 'layers') else 0,
-            "block_size": m.block_size if hasattr(m, 'block_size') else 0,
+            "n_layer": len(m.layers) if hasattr(m, "layers") else 0,
+            "block_size": m.block_size if hasattr(m, "block_size") else 0,
         }
 
 
 # ---------------------------------------------------------------------------
 # MultimodalDevice – vision + text inference via MultimodalEngine
 # ---------------------------------------------------------------------------
+
 
 class MultimodalDevice(Device):
     """
@@ -391,7 +426,9 @@ class MultimodalDevice(Device):
         if img is not None and img.ndim == 3:
             img = img[np.newaxis, ...]
         result = self._engine.generate(
-            image_np=img, max_len=int(max_len), temperature=float(temperature),
+            image_np=img,
+            max_len=int(max_len),
+            temperature=float(temperature),
         )
         return result.text
 
@@ -400,18 +437,21 @@ class MultimodalDevice(Device):
         if img.ndim == 3:
             img = img[np.newaxis, ...]
         embed, patches, _ = self._engine._concat_modalities(img, None, None)
-        return embed.data if hasattr(embed, 'data') else np.asarray(embed)
+        return embed.data if hasattr(embed, "data") else np.asarray(embed)
 
     def _info(self):
         return {
             "trained": self._engine._trained,
-            "embed_dim": self._engine.vision.embed_dim if hasattr(self._engine.vision, 'embed_dim') else 0,
+            "embed_dim": self._engine.vision.embed_dim
+            if hasattr(self._engine.vision, "embed_dim")
+            else 0,
         }
 
 
 # ---------------------------------------------------------------------------
 # EngineDevice – generic inference via any engine with generate()
 # ---------------------------------------------------------------------------
+
 
 class EngineDevice(Device):
     """
@@ -439,7 +479,10 @@ class EngineDevice(Device):
 
     def _generate(self, prompt, max_tokens=50, temperature=1.0, **kwargs):
         return self._engine.generate(
-            str(prompt), max_tokens=int(max_tokens), temperature=float(temperature), **kwargs,
+            str(prompt),
+            max_tokens=int(max_tokens),
+            temperature=float(temperature),
+            **kwargs,
         )
 
     def _info(self):
@@ -452,6 +495,7 @@ class EngineDevice(Device):
 # ---------------------------------------------------------------------------
 # SlonetTrainingDevice – full training device (train/eval/checkpoint)
 # ---------------------------------------------------------------------------
+
 
 class SlonetTrainingDevice(Device):
     """
@@ -471,8 +515,17 @@ class SlonetTrainingDevice(Device):
         2. Create from config:   SlonetTrainingDevice(vocab_size=256, n_embed=256, ...)
     """
 
-    def __init__(self, model=None, *, vocab_size=256, n_embed=256, n_layer=6,
-                 n_head=8, block_size=128, dropout=0.1):
+    def __init__(
+        self,
+        model=None,
+        *,
+        vocab_size=256,
+        n_embed=256,
+        n_layer=6,
+        n_head=8,
+        block_size=128,
+        dropout=0.1,
+    ):
         if model is not None:
             self._model = model
             self._created_model = False
@@ -516,6 +569,7 @@ class SlonetTrainingDevice(Device):
     def _ensure_model(self):
         if self._model is None:
             from domain.training._internal.slonet import SloTransformer
+
             self._model = SloTransformer(**self._model_config)
 
     def call(self, method, *args):
@@ -527,11 +581,13 @@ class SlonetTrainingDevice(Device):
     def _load_dataset(self, path: str, max_seq_len: int):
         try:
             from domain.shell._internal.file_manager import get_file_manager
+
             fm = get_file_manager()
             content = fm.read_text(path)
         except ImportError:
             import os
             from pathlib import Path
+
             expanded = os.path.expanduser(str(path))
             try:
                 content = Path(expanded).read_text()
@@ -547,13 +603,12 @@ class SlonetTrainingDevice(Device):
         token_ids = np.array([stoi[c] for c in content], dtype=np.int64)
         return token_ids, vocab_size
 
-    def _train(self, epochs=10, dataset_path="", lr=3e-4,
-               batch_size=8, max_seq_len=128, save_interval=0):
+    def _train(
+        self, epochs=10, dataset_path="", lr=3e-4, batch_size=8, max_seq_len=128, save_interval=0
+    ):
         self._ensure_model()
 
-        from domain.training._internal.slonet import (
-            SloAdam, clip_grad_norm_, Tensor, export_to_sou
-        )
+        from domain.training._internal.slonet import SloAdam, Tensor, clip_grad_norm_, export_to_sou
 
         data = self._load_dataset(dataset_path, max_seq_len)
         if data is None:
@@ -570,8 +625,10 @@ class SlonetTrainingDevice(Device):
         warmup_steps = min(self._train_config["warmup_steps"], max(1, total_steps // 4))
         try:
             from domain.training._internal.slonet import WarmupCosineScheduler
-            scheduler = WarmupCosineScheduler(optimizer, warmup_steps=warmup_steps,
-                                              total_steps=total_steps, min_lr=lr * 0.1)
+
+            scheduler = WarmupCosineScheduler(
+                optimizer, warmup_steps=warmup_steps, total_steps=total_steps, min_lr=lr * 0.1
+            )
             has_scheduler = True
         except ImportError:
             has_scheduler = False
@@ -579,14 +636,18 @@ class SlonetTrainingDevice(Device):
         global_step = 0
         losses = []
 
-        for epoch in range(epochs):
+        for _epoch in range(epochs):
             indices = np.random.permutation(max(1, n_tokens - max_seq_len))
 
             for step in range(steps_per_epoch):
                 batch_indices = indices[step * batch_size : (step + 1) * batch_size]
 
-                x_batch = np.array([token_ids[i:i + max_seq_len] for i in batch_indices], dtype=np.int64)
-                y_batch = np.array([token_ids[i + 1:i + max_seq_len + 1] for i in batch_indices], dtype=np.int64)
+                x_batch = np.array(
+                    [token_ids[i : i + max_seq_len] for i in batch_indices], dtype=np.int64
+                )
+                y_batch = np.array(
+                    [token_ids[i + 1 : i + max_seq_len + 1] for i in batch_indices], dtype=np.int64
+                )
 
                 x_tensor = Tensor(x_batch)
                 y_tensor = Tensor(y_batch)
@@ -605,23 +666,33 @@ class SlonetTrainingDevice(Device):
 
                 if save_interval > 0 and global_step % save_interval == 0:
                     import os
+
                     os.makedirs(self._train_config["checkpoint_dir"], exist_ok=True)
                     ckpt_path = f"{self._train_config['checkpoint_dir']}/step_{global_step}.soul"
-                    export_to_sou(self._model, ckpt_path,
-                                  metadata={"step": global_step, "loss": raw_loss})
+                    export_to_sou(
+                        self._model, ckpt_path, metadata={"step": global_step, "loss": raw_loss}
+                    )
 
         final_loss = float(np.mean(losses[-100:])) if losses else 0.0
         perplexity = float(np.exp(np.clip(final_loss, -10, 10)))
 
-        import os, time
+        import os
+        import time
+
         os.makedirs(self._train_config["checkpoint_dir"], exist_ok=True)
         ckpt_name = f"train_{int(time.time())}.soul"
         ckpt_path = os.path.join(self._train_config["checkpoint_dir"], ckpt_name)
-        export_to_sou(self._model, ckpt_path, metadata={
-            "final_loss": final_loss, "perplexity": perplexity,
-            "epochs": epochs, "steps": global_step,
-            "tokens": global_step * batch_size * max_seq_len,
-        })
+        export_to_sou(
+            self._model,
+            ckpt_path,
+            metadata={
+                "final_loss": final_loss,
+                "perplexity": perplexity,
+                "epochs": epochs,
+                "steps": global_step,
+                "tokens": global_step * batch_size * max_seq_len,
+            },
+        )
 
         return {
             "final_loss": round(final_loss, 4),
@@ -649,8 +720,8 @@ class SlonetTrainingDevice(Device):
         losses = []
         for _ in range(actual_batches):
             idx = np.random.randint(0, max(1, n_tokens - max_seq_len))
-            x = token_ids[idx:idx + max_seq_len]
-            y = token_ids[idx + 1:idx + max_seq_len + 1]
+            x = token_ids[idx : idx + max_seq_len]
+            y = token_ids[idx + 1 : idx + max_seq_len + 1]
             x_tensor = Tensor(x.reshape(1, -1))
             y_tensor = Tensor(y.reshape(1, -1))
             logits, loss = self._model(x_tensor, y_tensor)
@@ -666,17 +737,22 @@ class SlonetTrainingDevice(Device):
 
     def _save(self, path=""):
         self._ensure_model()
+        import os
+        import time
+
         from domain.training._internal.slonet import export_to_sou
-        import os, time
+
         if not path:
             os.makedirs(self._train_config["checkpoint_dir"], exist_ok=True)
-            path = os.path.join(self._train_config["checkpoint_dir"],
-                                f"manual_{int(time.time())}.soul")
+            path = os.path.join(
+                self._train_config["checkpoint_dir"], f"manual_{int(time.time())}.soul"
+            )
         export_to_sou(self._model, path)
         return path
 
     def _load(self, path=""):
         from domain.training._internal.slonet import import_from_sou
+
         try:
             self._model = import_from_sou(path)
             self._created_model = False
@@ -718,6 +794,7 @@ class SlonetTrainingDevice(Device):
     def _generate(self, prompt, max_tokens=50, temperature=1.0):
         self._ensure_model()
         from domain.training._internal.slonet import Tensor
+
         tokens = self._tokenize(str(prompt))
         if len(tokens) == 0:
             return ""
@@ -732,6 +809,7 @@ class SlonetTrainingDevice(Device):
     def _forward(self, input_ids):
         self._ensure_model()
         from domain.training._internal.slonet import Tensor
+
         if isinstance(input_ids, np.ndarray):
             x = Tensor(input_ids.reshape(1, -1) if input_ids.ndim == 1 else input_ids)
         else:
@@ -751,6 +829,7 @@ class SlonetTrainingDevice(Device):
 # ---------------------------------------------------------------------------
 # NPUVMDevice – VM-level NPU device bridging to kernel NPUDevice
 # ---------------------------------------------------------------------------
+
 
 class NPUVMDevice(Device):
     """
@@ -826,7 +905,7 @@ class NPUVMDevice(Device):
         return result.value.get("token_ids", [])
 
     def _detokenize(self, name, token_ids):
-        if hasattr(token_ids, 'tolist'):
+        if hasattr(token_ids, "tolist"):
             token_ids = token_ids.tolist()
         elif not isinstance(token_ids, list):
             token_ids = list(token_ids)
@@ -842,7 +921,7 @@ class NPUVMDevice(Device):
         return result.value.get("text", "")
 
     def _forward(self, name, input_ids):
-        if hasattr(input_ids, 'tolist'):
+        if hasattr(input_ids, "tolist"):
             input_ids = input_ids.tolist()
         elif not isinstance(input_ids, list):
             input_ids = list(input_ids)
@@ -858,9 +937,9 @@ class NPUVMDevice(Device):
         return result.value.get("embedding", None)
 
     def _train_step(self, name, input_ids, targets, lr=0.001, **kwargs):
-        if hasattr(input_ids, 'tolist'):
+        if hasattr(input_ids, "tolist"):
             input_ids = input_ids.tolist()
-        if hasattr(targets, 'tolist'):
+        if hasattr(targets, "tolist"):
             targets = targets.tolist()
         result = self._npu.train_step(str(name), input_ids, targets, float(lr), **kwargs)
         if not result.success:

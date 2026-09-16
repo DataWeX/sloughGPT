@@ -1,12 +1,12 @@
 """Backward-compatibility shim — imports from the new ``domain.context`` package."""
 
 from domain.context import (
-    TraitWeightsConfig,
-    PersonalityManager,
+    ConsciousnessManager,
     MemoryManager,
+    PersonalityManager,
     StyleManager,
     TaskManager,
-    ConsciousnessManager,
+    TraitWeightsConfig,
     get_trait_config,
     reset_trait_config,
 )

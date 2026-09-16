@@ -6,9 +6,18 @@ Run: PYTHONPATH=packages/core-py .venv/bin/python -m pytest tests/test_cycles.py
 
 import numpy as np
 import pytest
+
 from domain.shell._internal.cycles import (
-    CyclesRenderer, Scene, Camera, Material, Light, BVH, Mesh,
-    create_sphere, create_plane, create_cube,
+    BVH,
+    Camera,
+    CyclesRenderer,
+    Light,
+    Material,
+    Mesh,
+    Scene,
+    create_cube,
+    create_plane,
+    create_sphere,
 )
 from domain.shell._internal.cycles_device import CyclesDevice
 from domain.shell._internal.render_neural import RenderNeuralDevice
@@ -138,7 +147,9 @@ class TestCamera:
 
 class TestRendering:
     def _make_scene(self):
-        scene = Scene(camera=Camera(origin=np.array([0, 2, 4]), look_at=np.array([0, 0, 0]), fov=50))
+        scene = Scene(
+            camera=Camera(origin=np.array([0, 2, 4]), look_at=np.array([0, 0, 0]), fov=50)
+        )
         scene.materials = [
             Material(base_color=np.array([0.3, 0.3, 0.3]), roughness=0.8),
             Material(base_color=np.array([0.8, 0.1, 0.1]), roughness=0.3),
@@ -147,7 +158,9 @@ class TestRendering:
             create_plane(size=6, y=-1, mat_idx=0),
             create_sphere(radius=0.6, center=np.array([0, 0, 0]), segments=8, mat_idx=1),
         ]
-        scene.lights = [Light(position=np.array([2, 3, 2]), color=np.array([1, 0.95, 0.9]), strength=6)]
+        scene.lights = [
+            Light(position=np.array([2, 3, 2]), color=np.array([1, 0.95, 0.9]), strength=6)
+        ]
         return scene
 
     def test_render_returns_image(self):
@@ -424,29 +437,38 @@ class TestBarycentricAndMaterials:
         assert mesh.material_idx[0] == 0
 
     def test_triangle_barycentric_interpolates(self):
-        scene = Scene(camera=Camera(origin=np.array([0, 0, 0]), look_at=np.array([0, 0, -1]), fov=50))
+        scene = Scene(
+            camera=Camera(origin=np.array([0, 0, 0]), look_at=np.array([0, 0, -1]), fov=50)
+        )
         renderer = CyclesRenderer(scene, width=4, height=4, samples=1)
         v0 = np.array([0.0, 0.0, 0.0])
         v1 = np.array([1.0, 0.0, 0.0])
         v2 = np.array([0.0, 1.0, 0.0])
         bary = renderer._triangle_barycentric(
-            np.array([0.25, 0.25, 1.0]), np.array([0.0, 0.0, -1.0]), 1.0, v0, v1, v2)
+            np.array([0.25, 0.25, 1.0]), np.array([0.0, 0.0, -1.0]), 1.0, v0, v1, v2
+        )
         assert np.allclose(bary, [0.5, 0.25, 0.25])
 
     def test_triangle_barycentric_degenerate_falls_back(self):
-        scene = Scene(camera=Camera(origin=np.array([0, 0, 0]), look_at=np.array([0, 0, -1]), fov=50))
+        scene = Scene(
+            camera=Camera(origin=np.array([0, 0, 0]), look_at=np.array([0, 0, -1]), fov=50)
+        )
         renderer = CyclesRenderer(scene, width=4, height=4, samples=1)
         v = np.array([0.0, 0.0, 0.0])
         bary = renderer._triangle_barycentric(
-            np.array([0.0, 0.0, 1.0]), np.array([0.0, 0.0, -1.0]), 1.0, v, v, v)
+            np.array([0.0, 0.0, 1.0]), np.array([0.0, 0.0, -1.0]), 1.0, v, v, v
+        )
         assert np.allclose(bary, 1.0 / 3.0)
 
     def test_render_transmissive_material(self):
-        scene = Scene(camera=Camera(origin=np.array([0, 2, 4]), look_at=np.array([0, 0, 0]), fov=50))
+        scene = Scene(
+            camera=Camera(origin=np.array([0, 2, 4]), look_at=np.array([0, 0, 0]), fov=50)
+        )
         scene.materials = [
             Material(base_color=np.array([0.3, 0.3, 0.3]), roughness=0.8),
-            Material(base_color=np.array([0.8, 0.8, 0.8]), roughness=0.1,
-                     transmission=0.9, ior=1.5),
+            Material(
+                base_color=np.array([0.8, 0.8, 0.8]), roughness=0.1, transmission=0.9, ior=1.5
+            ),
         ]
         scene.meshes = [
             create_plane(size=6, y=-1, mat_idx=0),

@@ -6,7 +6,9 @@ comparing wall-clock time and recomputed tokens.
 Usage:
     pytest tests/test_slonet_kv_benchmark.py -v -s
 """
+
 import time
+
 import numpy as np
 import pytest
 
@@ -15,11 +17,19 @@ import pytest
 def tiny_model():
     """Minimal SloTransformer with GQA for benchmarking."""
     from domain.training._internal.slonet import SloTransformer
+
     model = SloTransformer(
-        vocab_size=256, n_embed=64, n_layer=2,
-        n_head=4, n_kv_head=2, intermediate_size=128,
-        block_size=128, max_seq_len=128,
-        use_rope=True, dropout=0.0, tie_weights=True,
+        vocab_size=256,
+        n_embed=64,
+        n_layer=2,
+        n_head=4,
+        n_kv_head=2,
+        intermediate_size=128,
+        block_size=128,
+        max_seq_len=128,
+        use_rope=True,
+        dropout=0.0,
+        tie_weights=True,
     )
     rng = np.random.RandomState(42)
     for p in model.parameters():
@@ -33,15 +43,19 @@ class TestCrossTurnBenchmark:
     def _generate_fresh(self, model, input_ids, max_new_tokens, temperature=0.0):
         """Generate without KV cache — full recompute every turn."""
         return model.generate_numpy(
-            input_ids, max_new_tokens=max_new_tokens,
-            temperature=temperature, kv_state=None,
+            input_ids,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            kv_state=None,
         )
 
     def _generate_cached(self, model, state, input_ids, max_new_tokens, temperature=0.0):
         """Generate with KV cache — prefix reuse across turns."""
         return model.generate_numpy(
-            input_ids, max_new_tokens=max_new_tokens,
-            temperature=temperature, kv_state=state,
+            input_ids,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            kv_state=state,
         )
 
     def test_two_turn_speedup(self, tiny_model):
@@ -73,24 +87,24 @@ class TestCrossTurnBenchmark:
 
         total_fresh = t1_fresh + t2_fresh
         total_cached = t1_cached + t2_cached
-        speedup = total_fresh / total_cached if total_cached > 0 else float('inf')
+        speedup = total_fresh / total_cached if total_cached > 0 else float("inf")
 
-        print(f"\n{'='*60}")
-        print(f"Two-Turn KV Cache Benchmark")
-        print(f"{'='*60}")
-        print(f"Turn 1 (fresh):   {t1_fresh*1000:8.2f} ms  |  {r1.shape[1]} tokens out")
-        print(f"Turn 1 (cached):  {t1_cached*1000:8.2f} ms  |  {r1c.shape[1]} tokens out")
-        print(f"Turn 2 (fresh):   {t2_fresh*1000:8.2f} ms  |  {r2_fresh.shape[1]} tokens out")
-        print(f"Turn 2 (cached):  {t2_cached*1000:8.2f} ms  |  {r2_cached.shape[1]} tokens out")
-        print(f"{'─'*60}")
-        print(f"Total fresh:      {total_fresh*1000:8.2f} ms")
-        print(f"Total cached:     {total_cached*1000:8.2f} ms")
+        print(f"\n{'=' * 60}")
+        print("Two-Turn KV Cache Benchmark")
+        print(f"{'=' * 60}")
+        print(f"Turn 1 (fresh):   {t1_fresh * 1000:8.2f} ms  |  {r1.shape[1]} tokens out")
+        print(f"Turn 1 (cached):  {t1_cached * 1000:8.2f} ms  |  {r1c.shape[1]} tokens out")
+        print(f"Turn 2 (fresh):   {t2_fresh * 1000:8.2f} ms  |  {r2_fresh.shape[1]} tokens out")
+        print(f"Turn 2 (cached):  {t2_cached * 1000:8.2f} ms  |  {r2_cached.shape[1]} tokens out")
+        print(f"{'─' * 60}")
+        print(f"Total fresh:      {total_fresh * 1000:8.2f} ms")
+        print(f"Total cached:     {total_cached * 1000:8.2f} ms")
         print(f"Speedup:          {speedup:8.2f}x")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         assert total_cached <= total_fresh * 1.5, (
-            f"KV cache should not be slower: cached={total_cached*1000:.2f}ms "
-            f"vs fresh={total_fresh*1000:.2f}ms"
+            f"KV cache should not be slower: cached={total_cached * 1000:.2f}ms "
+            f"vs fresh={total_fresh * 1000:.2f}ms"
         )
 
     def test_three_turn_cumulative_speedup(self, tiny_model):
@@ -105,7 +119,7 @@ class TestCrossTurnBenchmark:
 
         for turn in range(3):
             t0 = time.perf_counter()
-            r_fresh = self._generate_fresh(m, ids, max_new)
+            self._generate_fresh(m, ids, max_new)
             fresh_times.append(time.perf_counter() - t0)
 
             t0 = time.perf_counter()
@@ -116,19 +130,19 @@ class TestCrossTurnBenchmark:
 
         total_fresh = sum(fresh_times)
         total_cached = sum(cached_times)
-        speedup = total_fresh / total_cached if total_cached > 0 else float('inf')
+        speedup = total_fresh / total_cached if total_cached > 0 else float("inf")
 
-        print(f"\n{'='*60}")
-        print(f"Three-Turn Cumulative KV Cache Benchmark")
-        print(f"{'='*60}")
+        print(f"\n{'=' * 60}")
+        print("Three-Turn Cumulative KV Cache Benchmark")
+        print(f"{'=' * 60}")
         for i in range(3):
-            print(f"Turn {i+1} fresh:  {fresh_times[i]*1000:8.2f} ms")
-            print(f"Turn {i+1} cached: {cached_times[i]*1000:8.2f} ms")
-        print(f"{'─'*60}")
-        print(f"Total fresh:   {total_fresh*1000:8.2f} ms")
-        print(f"Total cached:  {total_cached*1000:8.2f} ms")
+            print(f"Turn {i + 1} fresh:  {fresh_times[i] * 1000:8.2f} ms")
+            print(f"Turn {i + 1} cached: {cached_times[i] * 1000:8.2f} ms")
+        print(f"{'─' * 60}")
+        print(f"Total fresh:   {total_fresh * 1000:8.2f} ms")
+        print(f"Total cached:  {total_cached * 1000:8.2f} ms")
         print(f"Speedup:       {speedup:8.2f}x")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         assert speedup >= 0.85, f"Three-turn should not regress >15%, got {speedup:.2f}x"
 
@@ -142,9 +156,14 @@ class TestCrossTurnBenchmark:
         r_batch = self._generate_cached(m, state_b, ids, max_new)
 
         state_s = m.new_kv_state()
-        stream_tokens = list(m.generate_numpy_stream(
-            ids, max_new_tokens=max_new, temperature=0.0, kv_state=state_s,
-        ))
+        stream_tokens = list(
+            m.generate_numpy_stream(
+                ids,
+                max_new_tokens=max_new,
+                temperature=0.0,
+                kv_state=state_s,
+            )
+        )
 
         batch_new_tokens = r_batch.shape[1] - ids.shape[1]
         print(f"\nStream vs Batch: batch_new={batch_new_tokens} stream={len(stream_tokens)} tokens")
@@ -164,8 +183,9 @@ class TestCrossTurnBenchmark:
             ids = np.concatenate([r, np.array([[90 + turn]])], axis=1)
 
             kv_len = state.kv_len[0]
-            print(f"Turn {turn+1}: ids_len={ids.shape[1]}, kv_len={kv_len}, "
-                  f"output_len={r.shape[1]}")
+            print(
+                f"Turn {turn + 1}: ids_len={ids.shape[1]}, kv_len={kv_len}, output_len={r.shape[1]}"
+            )
 
         assert state.kv_len[0] > 20, f"kv_len too small after 4 turns: {state.kv_len[0]}"
 
@@ -195,13 +215,13 @@ class TestCrossTurnBenchmark:
 
         savings = 1.0 - (cached_tokens_processed / fresh_tokens_processed)
 
-        print(f"\n{'='*60}")
-        print(f"Compute Savings (tokens through transformer)")
-        print(f"{'='*60}")
+        print(f"\n{'=' * 60}")
+        print("Compute Savings (tokens through transformer)")
+        print(f"{'=' * 60}")
         print(f"Fresh total:   {fresh_tokens_processed:6d} tokens")
         print(f"Cached total:  {cached_tokens_processed:6d} tokens")
-        print(f"Savings:       {savings*100:6.1f}%")
-        print(f"{'='*60}")
+        print(f"Savings:       {savings * 100:6.1f}%")
+        print(f"{'=' * 60}")
 
         assert savings > 0, (
             f"KV cache should reduce compute: fresh={fresh_tokens_processed} "
@@ -288,6 +308,7 @@ class TestSingleTurnGeneration:
 
     def test_generate_returns_generate_result(self, tiny_model):
         from domain.training._internal.slonet import GenerateResult
+
         ids = np.array([[10, 20, 30]])
         r = tiny_model.generate_numpy(ids, max_new_tokens=5, temperature=0.0)
         assert isinstance(r, GenerateResult)
@@ -339,14 +360,18 @@ class TestCachedVsFreshConsistency:
 
     def _generate_fresh(self, model, input_ids, max_new_tokens, temperature=0.0):
         return model.generate_numpy(
-            input_ids, max_new_tokens=max_new_tokens,
-            temperature=temperature, kv_state=None,
+            input_ids,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            kv_state=None,
         )
 
     def _generate_cached(self, model, state, input_ids, max_new_tokens, temperature=0.0):
         return model.generate_numpy(
-            input_ids, max_new_tokens=max_new_tokens,
-            temperature=temperature, kv_state=state,
+            input_ids,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            kv_state=state,
         )
 
 
@@ -423,14 +448,16 @@ class TestStreamGeneration:
         r_batch = m.generate_numpy(ids, max_new_tokens=max_new, temperature=0.0)
         stream_tokens = list(m.generate_numpy_stream(ids, max_new_tokens=max_new, temperature=0.0))
 
-        batch_new = r_batch[0, ids.shape[1]:].tolist()
+        batch_new = r_batch[0, ids.shape[1] :].tolist()
         assert batch_new == stream_tokens
 
     def test_stream_with_kv_state(self, tiny_model):
         m = tiny_model
         ids = np.array([[10, 20, 30]])
         state = m.new_kv_state()
-        tokens = list(m.generate_numpy_stream(ids, max_new_tokens=4, temperature=0.0, kv_state=state))
+        tokens = list(
+            m.generate_numpy_stream(ids, max_new_tokens=4, temperature=0.0, kv_state=state)
+        )
         assert len(tokens) == 4
         assert state.kv_len[0] > 0
 
@@ -445,10 +472,10 @@ class TestGenerationMetrics:
     """Test GenerateResult metrics and properties."""
 
     def test_result_has_metrics(self, tiny_model):
-        from domain.training._internal.slonet import GenerateResult
+
         ids = np.array([[10, 20, 30]])
         r = tiny_model.generate_numpy(ids, max_new_tokens=5, temperature=0.0)
-        assert hasattr(r, 'metrics')
+        assert hasattr(r, "metrics")
 
     def test_metrics_n_tokens(self, tiny_model):
         ids = np.array([[10, 20, 30]])
@@ -462,6 +489,7 @@ class TestGenerationMetrics:
 
     def test_metrics_finalize(self, tiny_model):
         from domain.training._internal.slonet import GenerationMetrics
+
         m = GenerationMetrics()
         m.n_tokens = 10
         m.t_start = 0.1
@@ -474,6 +502,7 @@ class TestGenerationMetrics:
 
     def test_metrics_total_ms(self, tiny_model):
         from domain.training._internal.slonet import GenerationMetrics
+
         m = GenerationMetrics()
         m.t_start = 0.0
         m.t_end = 0.5
@@ -481,6 +510,7 @@ class TestGenerationMetrics:
 
     def test_metrics_ttft_ms(self, tiny_model):
         from domain.training._internal.slonet import GenerationMetrics
+
         m = GenerationMetrics()
         m.t_start = 0.0
         m.t_first_token = 0.1
@@ -504,6 +534,7 @@ class TestStackCrossTurn:
 
     class _CharTokenizer:
         """Deterministic char-level tokenizer for the tiny vocab."""
+
         def __init__(self):
             self.eos_token_id = 0
 
@@ -519,8 +550,10 @@ class TestStackCrossTurn:
 
     class _StubProvider:
         """Minimal provider exposing the session KV map used by the server."""
+
         def __init__(self, model):
             import threading
+
             self._model = model
             self._kv_states = {}
             self._kv_last_access = {}
@@ -537,16 +570,16 @@ class TestStackCrossTurn:
     @pytest.fixture
     def stack(self, tiny_model):
         from types import MethodType
-        from domain.infrastructure._internal.slonet_server import SloNetServer
+
         from domain.inference._internal.slonet_provider import SloNetChatProvider
+        from domain.infrastructure._internal.slonet_server import SloNetServer
 
         provider = self._StubProvider(tiny_model)
-        provider._resolve_session_kv = MethodType(
-            SloNetChatProvider._resolve_session_kv, provider)
+        provider._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, provider)
         provider._evict_stale_sessions = MethodType(
-            SloNetChatProvider._evict_stale_sessions, provider)
-        provider._evict_lru_session = MethodType(
-            SloNetChatProvider._evict_lru_session, provider)
+            SloNetChatProvider._evict_stale_sessions, provider
+        )
+        provider._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, provider)
         server = SloNetServer(
             model=tiny_model,
             tokenizer=self._CharTokenizer(),
@@ -560,7 +593,11 @@ class TestStackCrossTurn:
     async def test_three_turn_through_server(self, stack):
         """Three-turn chat through the server reuses KV and grows cached tokens."""
         server, provider = stack
-        turns = ["Hello there", "Hello there, how are you today", "Hello there, how are you today? What is your name"]
+        turns = [
+            "Hello there",
+            "Hello there, how are you today",
+            "Hello there, how are you today? What is your name",
+        ]
         times = []
 
         for i, t in enumerate(turns):
@@ -570,18 +607,18 @@ class TestStackCrossTurn:
             assert isinstance(out, str) and out
 
         cached = provider._cached_tokens()
-        print(f"\n{'='*60}")
-        print(f"Stack Cross-Turn Benchmark (SloNetServer.generate)")
-        print(f"{'='*60}")
+        print(f"\n{'=' * 60}")
+        print("Stack Cross-Turn Benchmark (SloNetServer.generate)")
+        print(f"{'=' * 60}")
         for i, t in enumerate(times):
-            print(f"Turn {i+1}: {t*1000:8.2f} ms")
-        print(f"Total:        {sum(times)*1000:8.2f} ms")
+            print(f"Turn {i + 1}: {t * 1000:8.2f} ms")
+        print(f"Total:        {sum(times) * 1000:8.2f} ms")
         print(f"Cached tokens after 3 turns: {cached}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         assert cached > 0, "cross-turn KV state must grow after 3 turns"
         assert times[1] <= times[0] * 3.0, (
-            f"Turn 2 should be near turn 1 (suffix-only), got {times[1]*1000:.2f} vs {times[0]*1000:.2f} ms"
+            f"Turn 2 should be near turn 1 (suffix-only), got {times[1] * 1000:.2f} vs {times[0] * 1000:.2f} ms"
         )
 
     @pytest.mark.asyncio
@@ -603,13 +640,17 @@ class TestStackCrossTurn:
         server, provider = stack
         await server.generate("Hello", max_new_tokens=4, temperature=0.0, session_id="reuse-sess")
         assert len(provider._kv_states) == 1
-        await server.generate("Hello again", max_new_tokens=4, temperature=0.0, session_id="reuse-sess")
+        await server.generate(
+            "Hello again", max_new_tokens=4, temperature=0.0, session_id="reuse-sess"
+        )
         assert len(provider._kv_states) == 1
 
     @pytest.mark.asyncio
     async def test_server_returns_string(self, stack):
         server, _ = stack
-        result = await server.generate("test", max_new_tokens=3, temperature=0.0, session_id="str-test")
+        result = await server.generate(
+            "test", max_new_tokens=3, temperature=0.0, session_id="str-test"
+        )
         assert isinstance(result, str)
 
 

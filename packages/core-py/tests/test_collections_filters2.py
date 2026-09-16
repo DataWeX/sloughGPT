@@ -1,17 +1,17 @@
 """Tests for domain.collections._internal.filters — all filter classes and FilterChain."""
 
 from domain.collections._internal.filters import (
-    LengthFilter,
     DedupFilter,
-    KeywordFilter,
-    RegexFilter,
-    LanguageFilter,
     FilterChain,
+    KeywordFilter,
+    LanguageFilter,
+    LengthFilter,
+    MetadataFilter,
+    PrefixFilter,
+    RegexFilter,
     SamplerFilter,
     TransformFilter,
     TruncateFilter,
-    PrefixFilter,
-    MetadataFilter,
 )
 from domain.collections._internal.sources import Record
 
@@ -218,10 +218,12 @@ class TestFilterChain:
         assert fc.accept(_rec("hi")) is False
 
     def test_all_must_pass(self):
-        fc = FilterChain([
-            LengthFilter(min_length=3),
-            KeywordFilter(keywords=["hi"], mode="include"),
-        ])
+        fc = FilterChain(
+            [
+                LengthFilter(min_length=3),
+                KeywordFilter(keywords=["hi"], mode="include"),
+            ]
+        )
         assert fc.accept(_rec("hi there")) is True
         assert fc.accept(_rec("lo")) is False
         assert fc.accept(_rec("bye there")) is False
@@ -303,7 +305,9 @@ class TestTransformFilter:
         assert result.content == "hello"
 
     def test_custom_transform(self):
-        f = TransformFilter(transform_fn=lambda r: Record(content=r.content.upper(), metadata=r.metadata))
+        f = TransformFilter(
+            transform_fn=lambda r: Record(content=r.content.upper(), metadata=r.metadata)
+        )
         result = f.transform(_rec("hello"))
         assert result.content == "HELLO"
 
@@ -413,6 +417,7 @@ class TestMetadataFilter:
 class TestFilterProtocolCompliance:
     def test_all_filters_are_filter_protocol(self):
         from domain.collections._internal.filters import Filter
+
         instances = [
             LengthFilter(),
             DedupFilter(),

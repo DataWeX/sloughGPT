@@ -1,18 +1,37 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Iterator
+from collections.abc import Callable, Iterator
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from .sources import Record, Source, FileSource, UrlSource, RssSource, ApiSource, SseSource, WatchSource, GeneratorSource
-from .stores import Store, FileStore, MemoryStore, CallbackStore, StatsStore
+from .collector import BatchCollector, Collector, ParallelCollector
 from .filters import (
-    Filter, LengthFilter, DedupFilter, KeywordFilter, RegexFilter,
-    LanguageFilter, SamplerFilter, TransformFilter,
-    TruncateFilter, PrefixFilter, MetadataFilter,
+    DedupFilter,
+    Filter,
+    KeywordFilter,
+    LanguageFilter,
+    LengthFilter,
+    MetadataFilter,
+    PrefixFilter,
+    RegexFilter,
+    SamplerFilter,
+    TransformFilter,
+    TruncateFilter,
 )
-from .collector import Collector, ParallelCollector, BatchCollector
+from .sources import (
+    ApiSource,
+    FileSource,
+    GeneratorSource,
+    Record,
+    RssSource,
+    Source,
+    SseSource,
+    UrlSource,
+    WatchSource,
+)
+from .stores import CallbackStore, FileStore, MemoryStore, StatsStore, Store
 
 
 class CollectorBuilder:
@@ -121,7 +140,9 @@ class CollectorBuilder:
         self._filters.append(PrefixFilter(prefix=prefix))
         return self
 
-    def metadata_filter(self, key: str, values: list[str], mode: str = "include") -> CollectorBuilder:
+    def metadata_filter(
+        self, key: str, values: list[str], mode: str = "include"
+    ) -> CollectorBuilder:
         self._filters.append(MetadataFilter(key=key, values=values, mode=mode))
         return self
 
@@ -248,6 +269,7 @@ class DataTransformer:
         def transform(r: Record) -> Record:
             r.metadata[key] = value
             return r
+
         self._transforms.append(transform)
         return self
 
@@ -255,6 +277,7 @@ class DataTransformer:
         def transform(r: Record) -> Record:
             r.metadata[key] = fn(r)
             return r
+
         self._transforms.append(transform)
         return self
 
@@ -262,6 +285,7 @@ class DataTransformer:
         def transform(r: Record) -> Record:
             r.content = fn(r.content)
             return r
+
         self._transforms.append(transform)
         return self
 

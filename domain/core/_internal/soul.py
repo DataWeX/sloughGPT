@@ -17,11 +17,10 @@ This is how chain-of-thought prompting works - text-based, not binary.
 from __future__ import annotations
 
 import asyncio
-import time
 import logging
-from typing import TYPE_CHECKING
-from typing import Any, Dict, List, Optional, Tuple, Union
+import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from domain.soul._internal.hd_memory import HDMemoryStore
@@ -55,12 +54,12 @@ class GenerationContext:
     top_k: int = 40
     top_p: float = 0.9
     max_tokens: int = 2048
-    stop_tokens: List[str] = field(default_factory=list)
+    stop_tokens: list[str] = field(default_factory=list)
     reasoning_depth: str = "balanced"
     cognitive_boost: bool = True
-    emotional_context: Dict[str, Any] = field(default_factory=dict)
-    soul_overrides: Dict[str, Any] = field(default_factory=dict)
-    reasoning_chain: List[str] = field(default_factory=list)
+    emotional_context: dict[str, Any] = field(default_factory=dict)
+    soul_overrides: dict[str, Any] = field(default_factory=dict)
+    reasoning_chain: list[str] = field(default_factory=list)
     repetition_penalty: float = 1.2
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
@@ -109,15 +108,15 @@ class SloEngine:
 
     def __init__(
         self,
-        model: Optional[ModelInterface] = None,
-        soul: Optional[SloProfile] = None,
+        model: ModelInterface | None = None,
+        soul: SloProfile | None = None,
         device: str = "cpu",
-        stoi: Optional[Dict[int, str]] = None,
-        itos: Optional[Dict[int, str]] = None,
+        stoi: dict[int, str] | None = None,
+        itos: dict[int, str] | None = None,
         max_history_messages: int = 24,
-        tokenizer: Optional[object] = None,
+        tokenizer: object | None = None,
     ):
-        self._model: Optional[ModelInterface] = model
+        self._model: ModelInterface | None = model
         self._soul: SloProfile = soul or SloProfile(name="default")
         self._device = device
         self._stoi = stoi or {}
@@ -125,14 +124,14 @@ class SloEngine:
         self._tokenizer = tokenizer
         self._max_history_messages = max(4, int(max_history_messages))
 
-        self._session_history: List[Dict[str, str]] = []
-        self._cognitive_state: Dict[str, Any] = {
+        self._session_history: list[dict[str, str]] = []
+        self._cognitive_state: dict[str, Any] = {
             "session_turns": 0,
             "last_sentiment": 0.0,
             "last_emotion": "neutral",
         }
 
-        self._generation_stats: Dict[str, Any] = {
+        self._generation_stats: dict[str, Any] = {
             "total_generations": 0,
             "total_tokens": 0,
             "avg_latency_ms": 0.0,
@@ -140,23 +139,28 @@ class SloEngine:
 
         self._reasoning_engine = None
         self._sentiment_analyzer = None
-        self._hebbian_connections: Dict[str, Dict[str, float]] = {}
-        self._grounding: Optional[Any] = None
-        self._hd_memory: Optional["HDMemoryStore"] = None
-        self._semantic_cache: Optional["SemanticCache"] = None  # noqa: F821
+        self._hebbian_connections: dict[str, dict[str, float]] = {}
+        self._grounding: Any | None = None
+        self._hd_memory: HDMemoryStore | None = None
+        self._semantic_cache: SemanticCache | None = None  # noqa: F821
         self._cache_enabled: bool = False
         self._init_cognitive()
         self._init_hd_memory()
 
-        logger.info("SloEngine initialized: soul=%s, device=%s", self._soul.name, device, extra={"tag": "MODEL"})
+        logger.info(
+            "SloEngine initialized: soul=%s, device=%s",
+            self._soul.name,
+            device,
+            extra={"tag": "MODEL"},
+        )
 
     def _init_cognitive(self):
         """Lazy-load cognitive components."""
         try:
             from domain.cognitive._internal.reasoning import (
-                ReasoningEngine,
                 DeepReasoning,
                 FormalLogicEngine,
+                ReasoningEngine,
                 WorkingMemory,
             )
 
@@ -212,7 +216,7 @@ class SloEngine:
         return self._soul
 
     @property
-    def model(self) -> Optional[ModelInterface]:
+    def model(self) -> ModelInterface | None:
         return self._model
 
     @property
@@ -238,20 +242,27 @@ class SloEngine:
             self._itos = cfg.get("itos", {})
 
         # Load BPE tokenizer if available in soul metadata
-        metadata = getattr(soul, 'metadata', {})
-        tok_config = metadata.get('tokenizer_config') if isinstance(metadata, dict) else None
+        metadata = getattr(soul, "metadata", {})
+        tok_config = metadata.get("tokenizer_config") if isinstance(metadata, dict) else None
         if tok_config:
             try:
                 from domain.training._internal.tokenizer import SloBPE
+
                 self._tokenizer = SloBPE.from_dict(tok_config)
-                logger.info("BPE tokenizer loaded from soul metadata (vocab=%d)", self._tokenizer.vocab_size, extra={"tag": "MODEL"})
+                logger.info(
+                    "BPE tokenizer loaded from soul metadata (vocab=%d)",
+                    self._tokenizer.vocab_size,
+                    extra={"tag": "MODEL"},
+                )
             except Exception as e:
-                logger.warning("Failed to load BPE tokenizer from soul: %s", e, extra={"tag": "MODEL"})
+                logger.warning(
+                    "Failed to load BPE tokenizer from soul: %s", e, extra={"tag": "MODEL"}
+                )
 
         logger.info("Loaded soul: %s from %s", soul.name, sou_path, extra={"tag": "MODEL"})
         return soul
 
-    def load_model(self, model_path: str, **kwargs) -> "SloEngine":
+    def load_model(self, model_path: str, **kwargs) -> SloEngine:
         """Load just the model - creates a DEFAULT soul if none exists."""
         self._model = ModelLoader.load(model_path, device=self._device, **kwargs)
 
@@ -267,7 +278,7 @@ class SloEngine:
         logger.info("Loaded model: %s", model_path, extra={"tag": "MODEL"})
         return self
 
-    def set_soul(self, soul: SloProfile) -> "SloEngine":
+    def set_soul(self, soul: SloProfile) -> SloEngine:
         """Set the soul profile."""
         self._soul = soul
         return self
@@ -277,13 +288,13 @@ class SloEngine:
         if self._soul:
             self._soul.system_prompt = prompt
 
-    def set_vocab(self, stoi: Dict[int, str], itos: Dict[int, str]) -> "SloEngine":
+    def set_vocab(self, stoi: dict[int, str], itos: dict[int, str]) -> SloEngine:
         """Set vocabulary mappings."""
         self._stoi = stoi
         self._itos = itos
         return self
 
-    def set_tokenizer(self, tokenizer: object) -> "SloEngine":
+    def set_tokenizer(self, tokenizer: object) -> SloEngine:
         """Set BPE tokenizer (SloBPE) for subword-level tokenization."""
         self._tokenizer = tokenizer
         return self
@@ -427,27 +438,29 @@ class SloEngine:
         # Knowledge: Auto-inject relevant facts from learner KnowledgeMemory
         try:
             from domain.learner._internal.knowledge import get_knowledge_memory
+
             km = get_knowledge_memory()
             kb_results = km.search(prompt, top_k=5)
             if kb_results:
-                knowledge_text = "\n".join(
-                    f"- {fact['content'][:200]}" for fact in kb_results
-                )
+                knowledge_text = "\n".join(f"- {fact['content'][:200]}" for fact in kb_results)
                 parts.append("[KNOWN_FACTS]")
                 parts.append(knowledge_text)
                 parts.append("[/KNOWN_FACTS]")
                 parts.append("")
         except Exception as e:
-            logger.debug("soul: knowledge memory retrieval failed", extra={
-                "error": str(e),
-            })
+            logger.debug(
+                "soul: knowledge memory retrieval failed",
+                extra={
+                    "error": str(e),
+                },
+            )
 
         parts.append(f"User: {prompt}")
         parts.append("Assistant:")
 
         return "\n".join(parts)
 
-    def _get_generation_params(self, context: GenerationContext) -> Dict[str, Any]:
+    def _get_generation_params(self, context: GenerationContext) -> dict[str, Any]:
         """Derive generation parameters from soul profile + context."""
         gen = self._soul.generation
 
@@ -464,9 +477,9 @@ class SloEngine:
             "max_tokens": context.max_tokens
             if "max_tokens" not in context.soul_overrides
             else context.soul_overrides.get("max_tokens", gen.max_tokens),
-            "repetition_penalty": getattr(context, 'repetition_penalty', 1.0),
-            "frequency_penalty": getattr(context, 'frequency_penalty', 0.0),
-            "presence_penalty": getattr(context, 'presence_penalty', 0.0),
+            "repetition_penalty": getattr(context, "repetition_penalty", 1.0),
+            "frequency_penalty": getattr(context, "frequency_penalty", 0.0),
+            "presence_penalty": getattr(context, "presence_penalty", 0.0),
         }
 
         if context.reasoning_depth == "deep":
@@ -480,7 +493,7 @@ class SloEngine:
 
         return params
 
-    def _apply_hebbian_learning(self, prompt_tokens: List[str], response_tokens: List[str]) -> None:
+    def _apply_hebbian_learning(self, prompt_tokens: list[str], response_tokens: list[str]) -> None:
         """
         Hebbian learning: "neurons that fire together, wire together"
         Updates connection strengths between concept tokens.
@@ -497,20 +510,20 @@ class SloEngine:
     def generate(
         self,
         prompt: str,
-        max_new_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        top_k: Optional[int] = None,
-        top_p: Optional[float] = None,
-        system_prompt: Optional[str] = None,
-        stop_tokens: Optional[List[str]] = None,
+        max_new_tokens: int | None = None,
+        temperature: float | None = None,
+        top_k: int | None = None,
+        top_p: float | None = None,
+        system_prompt: str | None = None,
+        stop_tokens: list[str] | None = None,
         include_reasoning: bool = True,
         return_reasoning: bool = False,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         repetition_penalty: float = 1.0,
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
         **kwargs,
-    ) -> Union[str, Tuple[str, Dict[str, Any]]]:
+    ) -> str | tuple[str, dict[str, Any]]:
         """
         Main generation entry point. ALL generation goes through SloEngine.
 
@@ -518,8 +531,8 @@ class SloEngine:
         Reasoning chain is embedded as structured TEXT in the prompt.
         """
         start_time = time.time()
-        reasoning_chain: List[str] = []
-        cached_response: Optional[str] = None
+        reasoning_chain: list[str] = []
+        cached_response: str | None = None
 
         # Semantic Cache: Check for cached response
         if self._cache_enabled and self._semantic_cache:
@@ -601,9 +614,9 @@ class SloEngine:
             context.prompt_tokens = idx
 
             try:
-                if user_id and hasattr(self._model, 'set_active_user'):
+                if user_id and hasattr(self._model, "set_active_user"):
                     self._model.set_active_user(user_id)
-                if hasattr(self._model, 'generate'):
+                if hasattr(self._model, "generate"):
                     output_ids = self._model.generate(
                         idx,
                         max_new_tokens=gen_params["max_tokens"],
@@ -613,7 +626,12 @@ class SloEngine:
                         **kwargs,
                     )
                 else:
-                    from domain.training._internal.slonet import SloLSTM, tensor, _sample_from_logits
+                    from domain.training._internal.slonet import (
+                        SloLSTM,
+                        _sample_from_logits,
+                        tensor,
+                    )
+
                     lstm_layers = [l for l in self._model.layers if isinstance(l, SloLSTM)]
                     if not lstm_layers:
                         raise AttributeError(f"No generation path for {type(self._model).__name__}")
@@ -621,7 +639,7 @@ class SloEngine:
                     n_max = gen_params["max_tokens"]
                     lstm_layer = lstm_layers[0]
                     generated_ids = idx.flatten().tolist()
-                    pad_id = getattr(self._tokenizer, 'pad_id', 0)
+                    pad_id = getattr(self._tokenizer, "pad_id", 0)
 
                     for step_i in range(n_max):
                         seq = np.array([generated_ids[-128:]], dtype=np.int64)
@@ -629,7 +647,9 @@ class SloEngine:
                         h = lstm_layer.init_hidden()
                         logits_t, _ = lstm_layer.forward(in_t, h)
                         logit_data = logits_t.data[np.newaxis, :, :]
-                        generated_arr = np.array(generated_ids[len(idx.flatten()):], dtype=np.int64)
+                        generated_arr = np.array(
+                            generated_ids[len(idx.flatten()) :], dtype=np.int64
+                        )
                         nid = _sample_from_logits(
                             logit_data,
                             temperature=gen_params.get("temperature", 0.8),
@@ -656,7 +676,10 @@ class SloEngine:
 
             except Exception as e:
                 import traceback as _tb
-                logger.error("Generation failed: %s\n%s", e, _tb.format_exc(), extra={"tag": "MODEL"})
+
+                logger.error(
+                    "Generation failed: %s\n%s", e, _tb.format_exc(), extra={"tag": "MODEL"}
+                )
                 generated_text = f"[Error: {e}]"
 
         self._session_history.append({"role": "user", "content": prompt})
@@ -736,9 +759,9 @@ class SloEngine:
 
     def chat(
         self,
-        messages: List[Dict[str, str]],
-        max_new_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        messages: list[dict[str, str]],
+        max_new_tokens: int | None = None,
+        temperature: float | None = None,
         **kwargs,
     ) -> str:
         """
@@ -758,7 +781,7 @@ class SloEngine:
         if last.get("role") != "user":
             raise ValueError("chat(): last message must have role 'user'")
 
-        prior: List[Dict[str, str]] = []
+        prior: list[dict[str, str]] = []
         for m in msgs[:-1]:
             role = m.get("role", "user")
             if role not in ("user", "assistant", "system"):
@@ -775,9 +798,9 @@ class SloEngine:
 
     def chat_with_soul(
         self,
-        messages: List[Dict[str, str]],
-        max_new_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        messages: list[dict[str, str]],
+        max_new_tokens: int | None = None,
+        temperature: float | None = None,
         **kwargs,
     ) -> str:
         """
@@ -793,7 +816,7 @@ class SloEngine:
 
     def _tokenize(self, text: str) -> np.ndarray:
         """Tokenize using BPE tokenizer (preferred) or char-level vocab."""
-        if self._tokenizer is not None and hasattr(self._tokenizer, 'encode'):
+        if self._tokenizer is not None and hasattr(self._tokenizer, "encode"):
             indices = self._tokenizer.encode(text)
         elif self._stoi:
             indices = [self._stoi.get(c, 0) for c in text]
@@ -803,7 +826,7 @@ class SloEngine:
 
     def _detokenize(self, tokens: np.ndarray) -> str:
         """Detokenize tokens back to text using BPE tokenizer (preferred) or char-level vocab."""
-        if self._tokenizer is not None and hasattr(self._tokenizer, 'decode'):
+        if self._tokenizer is not None and hasattr(self._tokenizer, "decode"):
             return self._tokenizer.decode(tokens.flatten().tolist())
         if self._itos:
             return "".join([self._itos.get(int(t), "?") for t in tokens.flatten()])
@@ -825,7 +848,7 @@ class SloEngine:
         logger.info("Saved soul to %s", output_path, extra={"tag": "MODEL"})
         return output_path
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get soul engine statistics."""
         return {
             "soul": {
@@ -853,13 +876,13 @@ class SloEngine:
 
     def apply_personality(
         self,
-        warmth: Optional[float] = None,
-        creativity: Optional[float] = None,
-        empathy: Optional[float] = None,
-        curiosity: Optional[float] = None,
-        humor: Optional[float] = None,
+        warmth: float | None = None,
+        creativity: float | None = None,
+        empathy: float | None = None,
+        curiosity: float | None = None,
+        humor: float | None = None,
         **kwargs,
-    ) -> "SloEngine":
+    ) -> SloEngine:
         """Adjust soul personality traits at runtime."""
         if warmth is not None:
             self._soul.personality.warmth = warmth
@@ -875,14 +898,14 @@ class SloEngine:
         self._soul.integrity_hash = self._soul.compute_hash()
         return self
 
-    def to(self, device: str) -> "SloEngine":
+    def to(self, device: str) -> SloEngine:
         """Move model to device."""
         self._device = device
         if self._model:
             self._model.to(device)
         return self
 
-    async def deep_reason(self, problem: str, max_depth: int = 3) -> Dict[str, Any]:
+    async def deep_reason(self, problem: str, max_depth: int = 3) -> dict[str, Any]:
         """
         Perform deep reasoning with retrieval and self-correction.
 
@@ -907,10 +930,10 @@ class SloEngine:
 
     def prove_syllogism(
         self,
-        premise1: Tuple[str, str, str],
-        premise2: Tuple[str, str, str],
-        conclusion: Tuple[str, str, str],
-    ) -> Dict[str, Any]:
+        premise1: tuple[str, str, str],
+        premise2: tuple[str, str, str],
+        conclusion: tuple[str, str, str],
+    ) -> dict[str, Any]:
         """
         Prove a categorical syllogism using formal logic.
 
@@ -951,7 +974,7 @@ class SloEngine:
         if self._working_memory:
             self._working_memory.add(item)
 
-    def get_working_memory(self, n: int = 5) -> List[str]:
+    def get_working_memory(self, n: int = 5) -> list[str]:
         """Get n most relevant items from working memory."""
         if self._working_memory:
             return self._working_memory.get_recent(n)
@@ -962,7 +985,7 @@ class SloEngine:
         if self._working_memory:
             self._working_memory.clear()
 
-    def get_reasoning_stats(self) -> Dict[str, Any]:
+    def get_reasoning_stats(self) -> dict[str, Any]:
         """Get reasoning system statistics."""
         return {
             "deep_reasoning": self._deep_reasoning is not None,
@@ -978,7 +1001,7 @@ class SloEngine:
         use_flash_attention: bool = True,
         use_quantization: bool = False,
         quantization_bits: int = 8,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Enable inference optimizations.
 
@@ -992,7 +1015,10 @@ class SloEngine:
             Optimization status
         """
         try:
-            return {"success": False, "error": "optimize_inference removed — SloNet is the sole inference engine"}
+            return {
+                "success": False,
+                "error": "optimize_inference removed — SloNet is the sole inference engine",
+            }
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -1001,7 +1027,7 @@ class SloEngine:
         prompt_tokens: int = 50,
         generated_tokens: int = 50,
         num_runs: int = 10,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Benchmark inference performance.
 
@@ -1015,7 +1041,7 @@ class SloEngine:
         """
         return {"error": "benchmark_inference removed — SloNet is the sole inference engine"}
 
-    def enable_grounding(self) -> Dict[str, bool]:
+    def enable_grounding(self) -> dict[str, bool]:
         """
         Enable grounding system to prevent hallucinations and ensure accuracy.
 
@@ -1038,7 +1064,7 @@ class SloEngine:
         except Exception as e:
             return {"enabled": False, "error": str(e)}
 
-    def add_knowledge(self, text: str, source: str = "user") -> Dict[str, Any]:
+    def add_knowledge(self, text: str, source: str = "user") -> dict[str, Any]:
         """
         Add knowledge for grounding.
 
@@ -1056,7 +1082,7 @@ class SloEngine:
 
         return {"success": False, "error": "Grounding not available"}
 
-    def ground_output(self, response: str, query: str) -> Dict[str, Any]:
+    def ground_output(self, response: str, query: str) -> dict[str, Any]:
         """
         Ground an LLM output in real data.
 
@@ -1082,7 +1108,7 @@ class SloEngine:
 
     # ===== HYPERDIMENSIONAL MEMORY =====
 
-    def get_hd_memory_stats(self) -> Dict[str, Any]:
+    def get_hd_memory_stats(self) -> dict[str, Any]:
         """
         Get hyperdimensional memory statistics.
 
@@ -1097,7 +1123,7 @@ class SloEngine:
         except Exception as e:
             return {"enabled": True, "error": str(e)}
 
-    def search_hd_memory(self, query: str, top_k: int = 5) -> List[Tuple[str, str, float]]:
+    def search_hd_memory(self, query: str, top_k: int = 5) -> list[tuple[str, str, float]]:
         """
         Search hyperdimensional memory for relevant content.
 
@@ -1180,7 +1206,7 @@ class SloEngine:
         max_entries: int = 500,
         similarity_threshold: float = 0.30,
         ttl_seconds: float = 3600,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Enable semantic caching.
 
@@ -1218,7 +1244,7 @@ class SloEngine:
         self._cache_enabled = False
         return True
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> dict[str, Any]:
         """
         Get semantic cache statistics.
 
@@ -1272,7 +1298,7 @@ class SloEngine:
 
     def learn(
         self,
-        texts: List[str],
+        texts: list[str],
         soul_name: str = "assistant",
         epochs: int = 10,
         learning_rate: float = 0.001,
@@ -1280,7 +1306,7 @@ class SloEngine:
         teacher_model=None,
         teacher_tokenizer=None,
         algo: str = "bpe",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Train this soul on text data using SloNet + tokenizer.
 
         This is the primary learning pathway.  It:
@@ -1305,11 +1331,15 @@ class SloEngine:
         """
         import time as _time
 
-        from domain.training._internal.tokenizer_manager import get_tokenizer_manager
         from domain.training._internal.slonet import (
-            SloNet, SloEmbedding, SloLSTM,
-            SloAdam, cross_entropy, tensor,
+            SloAdam,
+            SloEmbedding,
+            SloLSTM,
+            SloNet,
+            cross_entropy,
+            tensor,
         )
+        from domain.training._internal.tokenizer_manager import get_tokenizer_manager
 
         if not texts:
             return {"success": False, "error": "No training texts provided"}
@@ -1319,15 +1349,21 @@ class SloEngine:
         algo_kwargs = {}
         if algo == "unigram":
             algo_kwargs = {"seed_max_len": 6, "em_iters": 3}
-        mgr.train(texts, vocab_size=vocab_size, min_frequency=2, lowercase=True, algo=algo, **algo_kwargs)
+        mgr.train(
+            texts, vocab_size=vocab_size, min_frequency=2, lowercase=True, algo=algo, **algo_kwargs
+        )
         tok = mgr.get_tokenizer()
         self._tokenizer = tok
         logger.info("%s tokenizer trained: vocab=%d", algo, tok.vocab_size, extra={"tag": "MODEL"})
 
         # 2. Create SloNet with matching vocab
         traits = {}
-        if hasattr(self._soul, 'personality') and self._soul.personality:
-            traits = self._soul.personality.to_dict() if hasattr(self._soul.personality, 'to_dict') else {}
+        if hasattr(self._soul, "personality") and self._soul.personality:
+            traits = (
+                self._soul.personality.to_dict()
+                if hasattr(self._soul.personality, "to_dict")
+                else {}
+            )
 
         net = SloNet(
             layers=[
@@ -1349,7 +1385,7 @@ class SloEngine:
         loss_history = []
         start = _time.perf_counter()
 
-        for epoch in range(epochs):
+        for _epoch in range(epochs):
             for text in texts:
                 input_ids = tok.encode(text[:128])
                 if len(input_ids) < 2:
@@ -1400,7 +1436,7 @@ class SloEngine:
 
         logger.info(
             f"Training complete: {step} steps, loss={avg_loss:.4f}, "
-            f"{elapsed:.1f}s, tokens/sec={step/elapsed:.0f}",
+            f"{elapsed:.1f}s, tokens/sec={step / elapsed:.0f}",
             extra={"tag": "MODEL"},
         )
 
@@ -1426,7 +1462,7 @@ class SloEngine:
         top_p: float = 0.9,
         topn: int = 5,
         **kwargs,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """Generate tokens one by one, returning top-k probabilities per step.
 
         Args:
@@ -1447,6 +1483,7 @@ class SloEngine:
         full_prompt = self._build_full_prompt(prompt, include_reasoning=True)
         idx = self._tokenize(full_prompt)
         from domain.training._internal.slonet import SloLSTM, tensor
+
         lstm_layers = [l for l in self._model.layers if isinstance(l, SloLSTM)]
         if not lstm_layers:
             return [{"token_id": 0, "token_text": "[no LSTM]", "prob": 1.0, "top_candidates": []}]
@@ -1455,7 +1492,7 @@ class SloEngine:
         generated = list(idx.flatten())
         lstm_layer = lstm_layers[0]
 
-        for step_i in range(max_new_tokens):
+        for _step_i in range(max_new_tokens):
             seq = np.array([generated[-128:]], dtype=np.int64)
             in_t = tensor(seq, requires_grad=False)
             h = lstm_layer.init_hidden()
@@ -1485,26 +1522,30 @@ class SloEngine:
             candidates = []
             for ti in top_indices:
                 t_text = self._detokenize(np.array([int(ti)], dtype=np.int64)).strip()
-                candidates.append({
-                    "token_id": int(ti),
-                    "token_text": t_text,
-                    "prob": round(float(ps[ti]), 4),
-                })
+                candidates.append(
+                    {
+                        "token_id": int(ti),
+                        "token_text": t_text,
+                        "prob": round(float(ps[ti]), 4),
+                    }
+                )
 
             token_text = self._detokenize(np.array([nid], dtype=np.int64))
-            steps.append({
-                "token_id": nid,
-                "token_text": token_text,
-                "prob": round(float(ps[nid]), 4),
-                "top_candidates": candidates,
-            })
+            steps.append(
+                {
+                    "token_id": nid,
+                    "token_text": token_text,
+                    "prob": round(float(ps[nid]), 4),
+                    "top_candidates": candidates,
+                }
+            )
 
             if nid == self._tokenizer.pad_id:
                 break
 
         return steps
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         """Return comprehensive soul + model + tokenizer status.
 
         This is the single status endpoint for the entire soul lifecycle.
@@ -1520,10 +1561,10 @@ class SloEngine:
             "base_model": self._soul.base_model,
             "description": self._soul.description,
         }
-        if hasattr(self._soul, 'personality') and self._soul.personality:
+        if hasattr(self._soul, "personality") and self._soul.personality:
             soul_info["personality"] = (
                 self._soul.personality.to_dict()
-                if hasattr(self._soul.personality, 'to_dict')
+                if hasattr(self._soul.personality, "to_dict")
                 else {}
             )
 
@@ -1535,12 +1576,18 @@ class SloEngine:
 
         tok = self._tokenizer
         tokenizer_info = {
-            "trained": tok is not None and tok.vocab_size > 0 if hasattr(tok, 'vocab_size') else False,
-            "vocab_size": tok.vocab_size if tok and hasattr(tok, 'vocab_size') else 0,
-            "merges": len(tok.merges) if tok and hasattr(tok, 'merges') else 0,
+            "trained": tok is not None and tok.vocab_size > 0
+            if hasattr(tok, "vocab_size")
+            else False,
+            "vocab_size": tok.vocab_size if tok and hasattr(tok, "vocab_size") else 0,
+            "merges": len(tok.merges) if tok and hasattr(tok, "merges") else 0,
         }
 
-        training_info = dict(self._soul.metadata) if hasattr(self._soul, 'metadata') and self._soul.metadata else {}
+        training_info = (
+            dict(self._soul.metadata)
+            if hasattr(self._soul, "metadata") and self._soul.metadata
+            else {}
+        )
 
         return {
             "soul": soul_info,

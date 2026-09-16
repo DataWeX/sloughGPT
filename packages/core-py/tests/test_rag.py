@@ -1,15 +1,15 @@
 """Tests for production RAG system."""
 
-import pytest
 import numpy as np
+
 from domain.cognitive._internal.rag import (
-    TextChunk,
-    RetrievalResult,
     BM25Indexer,
-    HybridRetriever,
     CitationTracker,
     HallucinationDetector,
+    HybridRetriever,
     ProductionRAG,
+    RetrievalResult,
+    TextChunk,
 )
 
 
@@ -35,7 +35,9 @@ class TestTextChunk:
 class TestRetrievalResult:
     def test_fields(self):
         chunk = TextChunk(id="c1", content="test", metadata={})
-        rr = RetrievalResult(chunk=chunk, dense_score=0.8, sparse_score=0.5, combined_score=0.7, rank=1)
+        rr = RetrievalResult(
+            chunk=chunk, dense_score=0.8, sparse_score=0.5, combined_score=0.7, rank=1
+        )
         assert rr.dense_score == 0.8
         assert rr.sparse_score == 0.5
         assert rr.combined_score == 0.7
@@ -221,7 +223,13 @@ class TestCitationTracker:
 
     def test_cite_with_support(self):
         ct = CitationTracker()
-        claim = {"subject": "Python", "predicate": "is a language", "text": "Python is a language", "start": 0, "end": 10}
+        claim = {
+            "subject": "Python",
+            "predicate": "is a language",
+            "text": "Python is a language",
+            "start": 0,
+            "end": 10,
+        }
         sources = [TextChunk(id="s1", content="Python is a language", metadata={"source": "wiki"})]
         cited = ct.cite(claim, sources)
         assert cited["supported"] is True
@@ -230,7 +238,13 @@ class TestCitationTracker:
 
     def test_cite_no_support(self):
         ct = CitationTracker()
-        claim = {"subject": "Python", "predicate": "is a language", "text": "Python is a language", "start": 0, "end": 10}
+        claim = {
+            "subject": "Python",
+            "predicate": "is a language",
+            "text": "Python is a language",
+            "start": 0,
+            "end": 10,
+        }
         cited = ct.cite(claim, [])
         assert cited["supported"] is False
 

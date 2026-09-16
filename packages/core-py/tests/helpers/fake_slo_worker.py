@@ -5,10 +5,9 @@ Replaces _slo_worker_main with a fake that uses the same Queue protocol
 but no actual model loading. The subprocess imports this module instead
 of domain.inference._internal.slonet_provider.
 """
+
 import os
 import queue
-import time
-import multiprocessing as mp
 
 
 def fake_slo_generate(slnc_path, model_id, req_q, resp_q, hb_q, worker_id):
@@ -28,11 +27,17 @@ def fake_slo_generate(slnc_path, model_id, req_q, resp_q, hb_q, worker_id):
         if cmd == "generate":
             session_id, prompt, kwargs = payload
             try:
-                resp_q.put_nowait(("result", session_id, {
-                    "text": f"fake-slo({model_id}): {prompt}",
-                    "tokens_generated": 1,
-                    "elapsed_ms": 1.0,
-                }))
+                resp_q.put_nowait(
+                    (
+                        "result",
+                        session_id,
+                        {
+                            "text": f"fake-slo({model_id}): {prompt}",
+                            "tokens_generated": 1,
+                            "elapsed_ms": 1.0,
+                        },
+                    )
+                )
             except Exception:
                 pass
 
@@ -41,11 +46,17 @@ def fake_slo_generate(slnc_path, model_id, req_q, resp_q, hb_q, worker_id):
             try:
                 for word in f"fake-slo({model_id}): {prompt}".split():
                     resp_q.put_nowait(("token", session_id, word + " "))
-                resp_q.put_nowait(("result", session_id, {
-                    "text": "",
-                    "tokens_generated": 5,
-                    "elapsed_ms": 1.0,
-                }))
+                resp_q.put_nowait(
+                    (
+                        "result",
+                        session_id,
+                        {
+                            "text": "",
+                            "tokens_generated": 5,
+                            "elapsed_ms": 1.0,
+                        },
+                    )
+                )
             except Exception:
                 pass
 

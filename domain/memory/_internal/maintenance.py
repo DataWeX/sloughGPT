@@ -20,17 +20,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional
 
 from domain.memory._internal.config import MemoryConfig
 from domain.memory._internal.task_memory import prune_archive, submit_memory_consolidate
 
 logger = logging.getLogger("slo.memory_maintenance")
 
-_maintenance_task: Optional[asyncio.Task] = None
+_maintenance_task: asyncio.Task | None = None
 
 
-async def maintenance_tick() -> Optional[str]:
+async def maintenance_tick() -> str | None:
     """
     Run a single maintenance pass: prune the archive, enqueue consolidation.
 
@@ -59,16 +58,18 @@ async def maintenance_tick() -> Optional[str]:
     try:
         pruned = prune_archive()
         if pruned:
-            logger.info("Memory maintenance pruned %d archive record(s)",
-                        pruned, extra={"tag": "INFRA"})
+            logger.info(
+                "Memory maintenance pruned %d archive record(s)", pruned, extra={"tag": "INFRA"}
+            )
     except Exception as e:
-        logger.warning("Memory maintenance archive prune failed: %s", e,
-                       extra={"tag": "INFRA"})
+        logger.warning("Memory maintenance archive prune failed: %s", e, extra={"tag": "INFRA"})
     try:
         from domain.infrastructure._internal.task_queue import get_task_queue
+
         task_id = await submit_memory_consolidate(queue=get_task_queue())
-        logger.info("Memory maintenance enqueued consolidate task %s", task_id,
-                    extra={"tag": "INFRA"})
+        logger.info(
+            "Memory maintenance enqueued consolidate task %s", task_id, extra={"tag": "INFRA"}
+        )
         return task_id
     except Exception as e:
         logger.warning("Memory maintenance enqueue failed: %s", e, extra={"tag": "INFRA"})
@@ -103,7 +104,7 @@ async def run_memory_maintenance() -> None:
         await maintenance_tick()
 
 
-def start_memory_maintenance() -> Optional[asyncio.Task]:
+def start_memory_maintenance() -> asyncio.Task | None:
     """
     Start the periodic maintenance scheduler as a background asyncio task.
 

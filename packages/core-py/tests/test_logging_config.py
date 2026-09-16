@@ -21,7 +21,6 @@ import os
 import sys
 import tempfile
 import threading
-import time
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
@@ -34,20 +33,19 @@ if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
 from domain.logging._internal.config import (
-    LogFormatter,
     ClientExtensionFilter,
-    _enriched_record_factory,
+    LogFormatter,
     _collect_extras,
-    setup_logging,
-    get_request_id,
-    set_request_id,
-    get_log_context,
-    set_log_context,
-    clear_log_context,
-    _request_id,
+    _enriched_record_factory,
     _log_context,
+    _request_id,
+    clear_log_context,
+    get_log_context,
+    get_request_id,
+    set_log_context,
+    set_request_id,
+    setup_logging,
 )
-
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
@@ -60,8 +58,13 @@ def _make_record(
 ) -> logging.LogRecord:
     """Create a LogRecord for testing."""
     record = logging.LogRecord(
-        name=name, level=level, pathname="", lineno=0,
-        msg=msg, args=(), exc_info=None,
+        name=name,
+        level=level,
+        pathname="",
+        lineno=0,
+        msg=msg,
+        args=(),
+        exc_info=None,
     )
     for k, v in extra.items():
         setattr(record, k, v)
@@ -204,6 +207,7 @@ class TestLogFormatterHuman:
             raise ValueError("bad value")
         except ValueError:
             import sys
+
             exc_info = sys.exc_info()
         record = _make_record(exc_info=exc_info)
         output = fmt.format(record)
@@ -222,6 +226,7 @@ class TestLogFormatterHuman:
 
 class TestLogFormatterJSON:
     """Tests for LogFormatter in JSON mode."""
+
     def test_basic_output(self):
         fmt = LogFormatter(fmt="json", colors=False)
         record = _make_record(msg="hello")
@@ -257,6 +262,7 @@ class TestLogFormatterJSON:
             raise RuntimeError("boom")
         except RuntimeError:
             import sys
+
             exc_info = sys.exc_info()
         record = _make_record(exc_info=exc_info)
         data = json.loads(fmt.format(record))
@@ -333,32 +339,62 @@ class TestRecordFactory:
     def test_injects_request_id(self):
         set_request_id("factory-test")
         record = _enriched_record_factory(
-            "slo.test", logging.INFO, "", 0, "msg", (), None,
+            "slo.test",
+            logging.INFO,
+            "",
+            0,
+            "msg",
+            (),
+            None,
         )
         assert record.request_id == "factory-test"
 
     def test_no_request_id_when_none(self):
         record = _enriched_record_factory(
-            "slo.test", logging.INFO, "", 0, "msg", (), None,
+            "slo.test",
+            logging.INFO,
+            "",
+            0,
+            "msg",
+            (),
+            None,
         )
         assert not hasattr(record, "request_id") or getattr(record, "request_id", None) is None
 
     def test_injects_log_context(self):
         set_log_context(model="gpt2", device="cpu")
         record = _enriched_record_factory(
-            "slo.test", logging.INFO, "", 0, "msg", (), None,
+            "slo.test",
+            logging.INFO,
+            "",
+            0,
+            "msg",
+            (),
+            None,
         )
         assert record.model == "gpt2"
         assert record.device == "cpu"
 
     def test_does_not_overwrite_existing(self):
         record = _enriched_record_factory(
-            "slo.test", logging.INFO, "", 0, "msg", (), None,
+            "slo.test",
+            logging.INFO,
+            "",
+            0,
+            "msg",
+            (),
+            None,
         )
         record.request_id = "existing"
         # Factory should not overwrite
-        record2 = _enriched_record_factory(
-            "slo.test", logging.INFO, "", 0, "msg", (), None,
+        _enriched_record_factory(
+            "slo.test",
+            logging.INFO,
+            "",
+            0,
+            "msg",
+            (),
+            None,
         )
         # record2 is a new record, not the same as record
 
@@ -395,19 +431,20 @@ class TestSetupLogging:
         assert result["file_handler"] is None
 
     def test_console_handler_installed(self):
-        result = setup_logging(enable_output_buffer=False)
+        setup_logging(enable_output_buffer=False)
         root = logging.getLogger()
         # Should have at least one StreamHandler
         stream_handlers = [h for h in root.handlers if isinstance(h, logging.StreamHandler)]
         assert len(stream_handlers) >= 1
 
     def test_console_handler_disabled(self):
-        result = setup_logging(enable_console=False, enable_output_buffer=False)
+        setup_logging(enable_console=False, enable_output_buffer=False)
         # When console disabled, only file handler should be present
         # (no StreamHandler on root)
         root = logging.getLogger()
         stream_handlers = [
-            h for h in root.handlers
+            h
+            for h in root.handlers
             if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
         ]
         assert len(stream_handlers) == 0

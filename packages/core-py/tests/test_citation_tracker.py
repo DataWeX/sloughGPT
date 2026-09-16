@@ -159,8 +159,10 @@ class TestCite:
         ct = CitationTracker()
         claim = {"subject": "Paris", "predicate": "a city", "text": "Paris is a city."}
         chunk = TextChunk(
-            id="c1", content="Paris is the capital of France",
-            metadata={"source": "wiki"}, embedding=None
+            id="c1",
+            content="Paris is the capital of France",
+            metadata={"source": "wiki"},
+            embedding=None,
         )
         cited = ct.cite(claim, [chunk])
         assert cited["supported"] is True
@@ -203,7 +205,9 @@ class TestCite:
     def test_cite_source_metadata_included(self):
         ct = CitationTracker()
         claim = {"subject": "X", "predicate": "y", "text": "X y."}
-        chunk = TextChunk(id="c1", content="data", metadata={"source": "book", "page": 5}, embedding=None)
+        chunk = TextChunk(
+            id="c1", content="data", metadata={"source": "book", "page": 5}, embedding=None
+        )
         cited = ct.cite(claim, [chunk])
         assert cited["sources"][0]["metadata"]["source"] == "book"
         assert cited["sources"][0]["metadata"]["page"] == 5
@@ -275,27 +279,20 @@ class TestFormatCitations:
 
     def test_format_multiple_claims_numbered(self):
         ct = CitationTracker()
-        ct.claims = [
-            {"text": f"Claim {i}", "sources": []}
-            for i in range(5)
-        ]
+        ct.claims = [{"text": f"Claim {i}", "sources": []} for i in range(5)]
         output = ct.format_citations()
         for i in range(1, 6):
             assert f"[{i}]" in output
 
     def test_format_unknown_source(self):
         ct = CitationTracker()
-        ct.claims = [
-            {"text": "X is Y", "sources": [{"metadata": {}}]}
-        ]
+        ct.claims = [{"text": "X is Y", "sources": [{"metadata": {}}]}]
         output = ct.format_citations()
         assert "→ Unknown" in output
 
     def test_format_source_with_missing_metadata_key(self):
         ct = CitationTracker()
-        ct.claims = [
-            {"text": "X is Y", "sources": [{"metadata": {"author": "test"}}]}
-        ]
+        ct.claims = [{"text": "X is Y", "sources": [{"metadata": {"author": "test"}}]}]
         output = ct.format_citations()
         assert "→ Unknown" in output
 
@@ -331,10 +328,13 @@ class TestFormatCitations:
     def test_format_claim_with_multiple_sources(self):
         ct = CitationTracker()
         ct.claims = [
-            {"text": "X is Y", "sources": [
-                {"metadata": {"source": "wiki"}},
-                {"metadata": {"source": "book"}},
-            ]}
+            {
+                "text": "X is Y",
+                "sources": [
+                    {"metadata": {"source": "wiki"}},
+                    {"metadata": {"source": "book"}},
+                ],
+            }
         ]
         output = ct.format_citations()
         assert "→ wiki" in output

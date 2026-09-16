@@ -13,7 +13,13 @@ import psutil
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 logger = logging.getLogger("slo.routers.system")
 
@@ -92,6 +98,7 @@ class SystemRouter:
     async def get_info(self) -> dict:
         """Retrieve host system information including platform and CPU details."""
         try:
+
             def _read():
                 try:
                     from domain.infrastructure.resource_manager import get_resource_manager
@@ -118,6 +125,7 @@ class SystemRouter:
     async def get_disk(self) -> dict:
         """Retrieve disk usage statistics for the root filesystem."""
         try:
+
             def _read():
                 disk = psutil.disk_usage("/")
                 return {
@@ -141,6 +149,7 @@ class SystemRouter:
             return success_response(data=mgr.get_results())
         except Exception:
             return success_response(data={"phase": "unavailable"})
+
     @endpoint("system.stream_output")
     async def stream_output(
         self, request: Request, tail: int = Query(50, ge=0, le=500)
@@ -186,6 +195,7 @@ class SystemRouter:
         return success_response(
             data={"lines": buf.tail_dicts(n), "size": buf.count, "seq": buf.seq}
         )
+
     @endpoint("system.get_executor_status")
     async def get_executor_status(self) -> dict:
         """Get TrainingExecutor pool status and job list."""
@@ -210,6 +220,7 @@ class SystemRouter:
                 "jobs": _instance.list_jobs(),
             }
         )
+
     @endpoint("system.get_executor_job")
     async def get_executor_job(self, job_id: str) -> dict:
         """Get metadata for a single training job by ID."""
@@ -221,6 +232,7 @@ class SystemRouter:
         if status is None:
             raise_error(f"job {job_id} not found", "E_NOT_FOUND")
         return success_response(data=status)
+
     @endpoint("system.get_executor_job_result")
     async def get_executor_job_result(self, job_id: str) -> dict:
         """Get shape/dtype summary for a completed job's trained weights."""
@@ -235,6 +247,7 @@ class SystemRouter:
                 raise_error(f"job {job_id} not found", "E_NOT_FOUND")
             raise_error("job not completed or has no weight result", "E_DOMAIN")
         return success_response(data=summary)
+
     @endpoint("system.purge_executor_jobs")
     async def purge_executor_jobs(
         self,
@@ -293,4 +306,6 @@ class SystemRouter:
             return success_response(
                 data={"initialized": False, "max_workers": 0, "queue_timeout": 0}
             )
+
+
 router = SystemRouter().router

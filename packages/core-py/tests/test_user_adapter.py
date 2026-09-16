@@ -1,7 +1,7 @@
 """Tests for domain.feedback._internal.per_user_lora — UserAdapter."""
 
 import numpy as np
-import pytest
+
 from domain.feedback._internal.per_user_lora import UserAdapter
 
 
@@ -651,14 +651,14 @@ class TestUserAdapter:
         assert norm > 0
 
     def test_dataclass_equality_with_same_values(self):
-        kw = dict(
-            W_a=np.ones((2, 4), dtype=np.float32),
-            W_b=np.ones((4, 2), dtype=np.float32),
-            rank=2,
-            alpha=4.0,
-            created_at="2026-01-01",
-            updated_at="2026-01-01",
-        )
+        kw = {
+            "W_a": np.ones((2, 4), dtype=np.float32),
+            "W_b": np.ones((4, 2), dtype=np.float32),
+            "rank": 2,
+            "alpha": 4.0,
+            "created_at": "2026-01-01",
+            "updated_at": "2026-01-01",
+        }
         ua1 = UserAdapter(user_id="same", **kw)
         ua2 = UserAdapter(user_id="same", **kw)
         assert ua1.user_id == ua2.user_id

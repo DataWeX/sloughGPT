@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from ..console import Console
 from ..commands import ShellCommands
+from ..console import Console
 
 help = "Show quick system status"
 
 
-def run(argv: list[str], out: Console, api: ShellCommands,
-        env: dict[str, str]) -> int:
+def run(argv: list[str], out: Console, api: ShellCommands, env: dict[str, str]) -> int:
     # Parse flags
     json_output = "--json" in argv or "-j" in argv
 
@@ -31,13 +30,18 @@ def run(argv: list[str], out: Console, api: ShellCommands,
 
     if json_output:
         import json
-        print(json.dumps({
-            "status": status,
-            "model": h.get("model_type", ""),
-            "soul": h.get("soul_name", ""),
-            "uptime": h.get("uptime", 0),
-            "model_loaded": h.get("model_loaded", False),
-        }))
+
+        print(
+            json.dumps(
+                {
+                    "status": status,
+                    "model": h.get("model_type", ""),
+                    "soul": h.get("soul_name", ""),
+                    "uptime": h.get("uptime", 0),
+                    "model_loaded": h.get("model_loaded", False),
+                }
+            )
+        )
         return 0
 
     # One-liner: ● online | gpt2 | default | up 2h 30m

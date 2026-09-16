@@ -18,6 +18,7 @@ Usage:
 """
 
 from __future__ import annotations
+
 from typing import Any
 
 
@@ -28,6 +29,7 @@ def with_ioctl(command_map: dict[str, str]):
         command_map: Maps ioctl command names to method names.
                      Example: {"MATMUL": "matmul", "RELU": "relu"}
     """
+
     def decorator(cls):
         def ioctl(self, command: str, *args: Any) -> Any:
             method_name = command_map.get(command)
@@ -50,15 +52,16 @@ def with_ioctl(command_map: dict[str, str]):
 
 def add_ioctl_command(cls, command: str, method_name: str):
     """Add a single command to an existing device class."""
-    if not hasattr(cls, '_ioctl_commands'):
+    if not hasattr(cls, "_ioctl_commands"):
         cls._ioctl_commands = {}
 
     cls._ioctl_commands[command] = method_name
 
     # Add ioctl if not exists
-    if not hasattr(cls, 'ioctl'):
+    if not hasattr(cls, "ioctl"):
+
         def ioctl(self, command: str, *args: Any) -> Any:
-            if not hasattr(self, '_ioctl_commands'):
+            if not hasattr(self, "_ioctl_commands"):
                 raise ValueError("no commands registered")
             method_name = self._ioctl_commands.get(command)
             if method_name is None:
@@ -71,9 +74,10 @@ def add_ioctl_command(cls, command: str, method_name: str):
         cls.ioctl = ioctl
 
     # Add list_commands if not exists
-    if not hasattr(cls, 'list_commands'):
+    if not hasattr(cls, "list_commands"):
+
         def list_commands(self) -> list[str]:
-            return sorted(self._ioctl_commands.keys()) if hasattr(self, '_ioctl_commands') else []
+            return sorted(self._ioctl_commands.keys()) if hasattr(self, "_ioctl_commands") else []
 
         cls.list_commands = list_commands
 

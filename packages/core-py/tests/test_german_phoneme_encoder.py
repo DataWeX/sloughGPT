@@ -1,10 +1,12 @@
 """Tests for multimodal/german_phoneme_encoder.py — GermanPhonemeEncoder."""
 
 import numpy as np
-import pytest
+
 from domain.multimodal._internal.german_phoneme_encoder import (
-    GermanPhonemeEncoder, german_text_to_phonemes,
-    GERMAN_ID_TO_PHONEME, BOS, EOS, PAD, SPACE, NUM_GERMAN_PHONEMES,
+    BOS,
+    EOS,
+    NUM_GERMAN_PHONEMES,
+    GermanPhonemeEncoder,
 )
 
 

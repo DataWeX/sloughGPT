@@ -6,12 +6,12 @@ Public API:
 """
 
 from domain.context._internal.managers import (
-    TraitWeightsConfig,
-    PersonalityManager,
+    ConsciousnessManager,
     MemoryManager,
+    PersonalityManager,
     StyleManager,
     TaskManager,
-    ConsciousnessManager,
+    TraitWeightsConfig,
     get_trait_config,
     reset_trait_config,
 )

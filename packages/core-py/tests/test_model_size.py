@@ -1,8 +1,6 @@
 """Tests for the shared model size calculator."""
 
-import time
 
-import numpy as np
 import pytest
 
 from domain.infrastructure._internal import model_size as ms
@@ -78,18 +76,22 @@ def _model_info(*siblings):
 
 
 def _patch_fetch(monkeypatch, info):
-    import domain.infrastructure.hf_hub as hub
+    import domain.infrastructure._internal.hf_hub as hub
+
     monkeypatch.setattr(hub, "fetch_model_info", lambda model_id: info)
 
 
 class TestGetHubFileSize:
     def test_sums_weight_siblings(self, monkeypatch):
-        _patch_fetch(monkeypatch, _model_info(
-            _Sib("model.safetensors", 1000 * 1024 * 1024),
-            _Sib("model-00001-of-00002.safetensors", 500 * 1024 * 1024),
-            _Sib("config.json", 2048),
-            _Sib("tokenizer.bin", 512 * 1024 * 1024),
-        ))
+        _patch_fetch(
+            monkeypatch,
+            _model_info(
+                _Sib("model.safetensors", 1000 * 1024 * 1024),
+                _Sib("model-00001-of-00002.safetensors", 500 * 1024 * 1024),
+                _Sib("config.json", 2048),
+                _Sib("tokenizer.bin", 512 * 1024 * 1024),
+            ),
+        )
         result = ms._get_hub_file_size_gb("org/model")
         assert result == round((1000 + 500 + 512) * 1024 * 1024 / 1024**3, 2)
 
@@ -102,7 +104,7 @@ class TestGetHubFileSize:
         assert ms._get_hub_file_size_gb("org/model") is None
 
     def test_hub_error_returns_none(self, monkeypatch):
-        import domain.infrastructure.hf_hub as hub
+        import domain.infrastructure._internal.hf_hub as hub
 
         def boom(model_id):
             raise RuntimeError("network down")
@@ -111,10 +113,15 @@ class TestGetHubFileSize:
         assert ms._get_hub_file_size_gb("org/model") is None
 
     def test_ignores_non_dict_siblings(self, monkeypatch):
-        _patch_fetch(monkeypatch, {"siblings": [
-            "not-a-dict",
-            {"rfilename": "model.safetensors", "size": 500 * 1024**2},
-        ]})
+        _patch_fetch(
+            monkeypatch,
+            {
+                "siblings": [
+                    "not-a-dict",
+                    {"rfilename": "model.safetensors", "size": 500 * 1024**2},
+                ]
+            },
+        )
         assert ms._get_hub_file_size_gb("org/model") == round(500 * 1024**2 / 1024**3, 2)
 
 
@@ -138,7 +145,7 @@ class TestComputeModelSize:
 
     def test_caches_result(self, monkeypatch, clear_caches, fake_clock):
         calls = []
-        monkeypatch.setattr(ms, "is_download_complete", lambda model_id: (calls.append(1) or False))
+        monkeypatch.setattr(ms, "is_download_complete", lambda model_id: calls.append(1) or False)
         monkeypatch.setattr(ms, "_get_hub_file_size_gb", lambda model_id: 2.0)
         assert ms.compute_model_size_gb("org/model") == 2.0
         assert ms.compute_model_size_gb("org/model") == 2.0
@@ -146,7 +153,7 @@ class TestComputeModelSize:
 
     def test_cache_expires_after_ttl(self, monkeypatch, clear_caches, fake_clock):
         calls = []
-        monkeypatch.setattr(ms, "is_download_complete", lambda model_id: (calls.append(1) or False))
+        monkeypatch.setattr(ms, "is_download_complete", lambda model_id: calls.append(1) or False)
         monkeypatch.setattr(ms, "_get_hub_file_size_gb", lambda model_id: 2.0)
         ms.compute_model_size_gb("org/model")
         fake_clock[0] += ms._SIZE_CACHE_TTL + 1
@@ -155,7 +162,7 @@ class TestComputeModelSize:
 
     def test_none_result_cached(self, monkeypatch, clear_caches, fake_clock):
         calls = []
-        monkeypatch.setattr(ms, "is_download_complete", lambda model_id: (calls.append(1) or False))
+        monkeypatch.setattr(ms, "is_download_complete", lambda model_id: calls.append(1) or False)
         monkeypatch.setattr(ms, "_get_hub_file_size_gb", lambda model_id: None)
         assert ms.compute_model_size_gb("org/model") is None
         assert ms.compute_model_size_gb("org/model") is None
@@ -170,7 +177,8 @@ class TestIsModelCached:
     def test_deep_check_passes_flag(self, monkeypatch, clear_caches):
         seen = {}
         monkeypatch.setattr(
-            ms, "is_download_complete",
+            ms,
+            "is_download_complete",
             lambda model_id, deep_check=False: seen.setdefault("deep", deep_check) or True,
         )
         assert ms.is_model_cached("org/model", deep_check=True) is True
@@ -178,7 +186,7 @@ class TestIsModelCached:
 
     def test_result_cached(self, monkeypatch, clear_caches, fake_clock):
         calls = []
-        monkeypatch.setattr(ms, "is_download_complete", lambda model_id: (calls.append(1) or False))
+        monkeypatch.setattr(ms, "is_download_complete", lambda model_id: calls.append(1) or False)
         ms.is_model_cached("org/model")
         ms.is_model_cached("org/model")
         assert len(calls) == 1
@@ -186,8 +194,9 @@ class TestIsModelCached:
     def test_deep_check_not_cached(self, monkeypatch, clear_caches):
         calls = []
         monkeypatch.setattr(
-            ms, "is_download_complete",
-            lambda model_id, deep_check=False: (calls.append(1) or False),
+            ms,
+            "is_download_complete",
+            lambda model_id, deep_check=False: calls.append(1) or False,
         )
         ms.is_model_cached("org/model", deep_check=True)
         ms.is_model_cached("org/model", deep_check=True)
@@ -199,7 +208,7 @@ class TestImportFallback:
         import importlib
         import sys
 
-        monkeypatch.setitem(sys.modules, "domain.infrastructure.hf_hub", None)
+        monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.hf_hub", None)
         importlib.reload(ms)
         assert ms.is_download_complete("org/model") is False
         assert ms.get_cache_dir("org/model") == "~/.cache/huggingface/hub/models--org--model/"

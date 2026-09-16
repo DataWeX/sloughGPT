@@ -9,7 +9,13 @@ import time as _time
 from fastapi import APIRouter, Depends, Request
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 logger = logging.getLogger("slo.routers.meta_weights")
 

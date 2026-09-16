@@ -3,11 +3,12 @@ Tests for Training Status & Checkpoint Management
 """
 
 import pytest
-from domains.training.status import (
-    TrainingStage,
+
+from domain.training._internal.status import (
     CompletionStatus,
     StageStatus,
     TrainingCompletionReport,
+    TrainingStage,
     TrainingStatusTracker,
 )
 
@@ -83,22 +84,22 @@ class TestTrainingStatusTracker:
         """Test completion check."""
         tracker = TrainingStatusTracker("test_model")
 
-        assert tracker.report.is_complete() == False
+        assert not tracker.report.is_complete()
 
         tracker.report.completion_status = CompletionStatus.COMPLETED
 
-        assert tracker.report.is_complete() == True
+        assert tracker.report.is_complete()
 
     def test_can_resume(self):
         """Test resume capability check."""
         tracker = TrainingStatusTracker("test_model")
 
-        assert tracker.report.can_resume() == False
+        assert not tracker.report.can_resume()
 
         tracker.report.completion_status = CompletionStatus.IN_PROGRESS
         tracker.report.checkpoint_path = "checkpoint.soul"
 
-        assert tracker.report.can_resume() == True
+        assert tracker.report.can_resume()
 
     def test_progress_summary(self):
         """Test progress summary."""

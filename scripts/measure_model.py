@@ -26,16 +26,17 @@ Usage:
     python scripts/measure_model.py --quick
 """
 
-import sys
-import json
-import time
-import math
 import argparse
-import numpy as np
-from pathlib import Path
-from dataclasses import dataclass, field, asdict
-from typing import List, Optional, Dict, Any
+import json
+import math
+import sys
+import time
 from collections import Counter
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packages" / "core-py"))
 
@@ -87,15 +88,16 @@ CORPUS_SENTENCES = [
 
 # ── Metrics Dataclass ─────────────────────────────────────────
 
+
 @dataclass
 class ModelMeasurement:
     model_name: str
     timestamp: float = 0.0
 
     # Perplexity
-    perplexity: Optional[float] = None
-    perplexity_std: Optional[float] = None
-    loss: Optional[float] = None
+    perplexity: float | None = None
+    perplexity_std: float | None = None
+    loss: float | None = None
 
     # Latency
     mean_latency_ms: float = 0.0
@@ -119,13 +121,14 @@ class ModelMeasurement:
     peak_memory_mb: float = 0.0
 
     # Per-response data
-    responses: List[Dict[str, Any]] = field(default_factory=list)
+    responses: list[dict[str, Any]] = field(default_factory=list)
 
     # Comparison
-    vs_baseline: Optional[Dict[str, Any]] = None
+    vs_baseline: dict[str, Any] | None = None
 
 
 # ── BLEU Scorer ───────────────────────────────────────────────
+
 
 class SimpleBLEU:
     """Simple BLEU scorer without external dependencies."""
@@ -133,16 +136,21 @@ class SimpleBLEU:
     @staticmethod
     def score(candidate: str, reference: str, max_n: int = 4) -> float:
         import re
-        cand_tokens = re.findall(r'\w+', candidate.lower())
-        ref_tokens = re.findall(r'\w+', reference.lower())
+
+        cand_tokens = re.findall(r"\w+", candidate.lower())
+        ref_tokens = re.findall(r"\w+", reference.lower())
 
         if not cand_tokens or not ref_tokens:
             return 0.0
 
         scores = []
         for n in range(1, max_n + 1):
-            cand_ngrams = Counter(tuple(cand_tokens[i:i+n]) for i in range(len(cand_tokens) - n + 1))
-            ref_ngrams = Counter(tuple(ref_tokens[i:i+n]) for i in range(len(ref_tokens) - n + 1))
+            cand_ngrams = Counter(
+                tuple(cand_tokens[i : i + n]) for i in range(len(cand_tokens) - n + 1)
+            )
+            ref_ngrams = Counter(
+                tuple(ref_tokens[i : i + n]) for i in range(len(ref_tokens) - n + 1)
+            )
 
             clipped = sum(min(count, ref_ngrams.get(ng, 0)) for ng, count in cand_ngrams.items())
             total = sum(cand_ngrams.values())
@@ -162,13 +170,14 @@ class SimpleBLEU:
 
 # ── Measurement Functions ─────────────────────────────────────
 
-def measure_perplexity(model, tokenizer, sentences: List[str]) -> Dict[str, float]:
+
+def measure_perplexity(model, tokenizer, sentences: list[str]) -> dict[str, float]:
     """Measure perplexity on a corpus of sentences."""
     losses = []
 
     for sentence in sentences:
         try:
-            tokens = tokenizer.encode(sentence) if hasattr(tokenizer, 'encode') else list(sentence)
+            tokens = tokenizer.encode(sentence) if hasattr(tokenizer, "encode") else list(sentence)
             if len(tokens) < 2:
                 continue
 
@@ -177,7 +186,7 @@ def measure_perplexity(model, tokenizer, sentences: List[str]) -> Dict[str, floa
             targets = np.array([tokens[1:]], dtype=np.int64)
 
             logits = model.forward(input_ids)
-            if hasattr(logits, 'logits'):
+            if hasattr(logits, "logits"):
                 logits = logits.logits
 
             # Compute cross-entropy loss
@@ -198,7 +207,7 @@ def measure_perplexity(model, tokenizer, sentences: List[str]) -> Dict[str, floa
             continue
 
     if not losses:
-        return {"perplexity": float('inf'), "loss": float('inf'), "std": 0.0}
+        return {"perplexity": float("inf"), "loss": float("inf"), "std": 0.0}
 
     mean_loss = np.mean(losses)
     perplexity = float(np.exp(mean_loss))
@@ -207,14 +216,14 @@ def measure_perplexity(model, tokenizer, sentences: List[str]) -> Dict[str, floa
     return {"perplexity": perplexity, "loss": float(mean_loss), "std": std}
 
 
-def measure_latency(model, tokenizer, prompts: List[str], warmup: int = 2) -> Dict[str, float]:
+def measure_latency(model, tokenizer, prompts: list[str], warmup: int = 2) -> dict[str, float]:
     """Measure inference latency across prompts."""
     latencies = []
 
     # Warmup
     for prompt in prompts[:warmup]:
         try:
-            tokens = tokenizer.encode(prompt) if hasattr(tokenizer, 'encode') else list(prompt)
+            tokens = tokenizer.encode(prompt) if hasattr(tokenizer, "encode") else list(prompt)
             input_ids = np.array([tokens], dtype=np.int64)
             model.generate(input_ids, max_new_tokens=20)
         except Exception:
@@ -223,11 +232,11 @@ def measure_latency(model, tokenizer, prompts: List[str], warmup: int = 2) -> Di
     # Measurement
     for prompt in prompts:
         try:
-            tokens = tokenizer.encode(prompt) if hasattr(tokenizer, 'encode') else list(prompt)
+            tokens = tokenizer.encode(prompt) if hasattr(tokenizer, "encode") else list(prompt)
             input_ids = np.array([tokens], dtype=np.int64)
 
             start = time.perf_counter()
-            output = model.generate(input_ids, max_new_tokens=50)
+            model.generate(input_ids, max_new_tokens=50)
             elapsed = (time.perf_counter() - start) * 1000  # ms
 
             latencies.append(elapsed)
@@ -246,21 +255,21 @@ def measure_latency(model, tokenizer, prompts: List[str], warmup: int = 2) -> Di
     }
 
 
-def measure_throughput(model, tokenizer, prompts: List[str]) -> Dict[str, Any]:
+def measure_throughput(model, tokenizer, prompts: list[str]) -> dict[str, Any]:
     """Measure tokens/sec throughput."""
     total_tokens = 0
     total_time = 0
 
     for prompt in prompts:
         try:
-            tokens = tokenizer.encode(prompt) if hasattr(tokenizer, 'encode') else list(prompt)
+            tokens = tokenizer.encode(prompt) if hasattr(tokenizer, "encode") else list(prompt)
             input_ids = np.array([tokens], dtype=np.int64)
 
             start = time.perf_counter()
             output = model.generate(input_ids, max_new_tokens=50)
             elapsed = time.perf_counter() - start
 
-            if hasattr(output, 'shape'):
+            if hasattr(output, "shape"):
                 num_tokens = output.shape[-1] - len(tokens)
             else:
                 num_tokens = len(output) - len(tokens)
@@ -279,7 +288,7 @@ def measure_throughput(model, tokenizer, prompts: List[str]) -> Dict[str, Any]:
     }
 
 
-def measure_quality(model, tokenizer, prompts: Dict[str, str]) -> Dict[str, float]:
+def measure_quality(model, tokenizer, prompts: dict[str, str]) -> dict[str, float]:
     """Measure output quality: BLEU, repetition, diversity, coherence."""
     bleu_scores = []
     repetition_rates = []
@@ -288,21 +297,21 @@ def measure_quality(model, tokenizer, prompts: Dict[str, str]) -> Dict[str, floa
 
     for prompt, reference in prompts.items():
         try:
-            tokens = tokenizer.encode(prompt) if hasattr(tokenizer, 'encode') else list(prompt)
+            tokens = tokenizer.encode(prompt) if hasattr(tokenizer, "encode") else list(prompt)
             input_ids = np.array([tokens], dtype=np.int64)
             output = model.generate(input_ids, max_new_tokens=80)
 
-            if hasattr(output, 'tolist'):
+            if hasattr(output, "tolist"):
                 output_tokens = output.tolist()[0]
             else:
                 output_tokens = output[0] if isinstance(output[0], list) else output
 
             # Decode response (skip input tokens)
-            response_tokens = output_tokens[len(tokens):]
-            if hasattr(tokenizer, 'decode'):
+            response_tokens = output_tokens[len(tokens) :]
+            if hasattr(tokenizer, "decode"):
                 response = tokenizer.decode(response_tokens)
             else:
-                response = ''.join(chr(t) if 32 <= t < 127 else ' ' for t in response_tokens)
+                response = "".join(chr(t) if 32 <= t < 127 else " " for t in response_tokens)
 
             all_responses.append(response)
 
@@ -313,7 +322,7 @@ def measure_quality(model, tokenizer, prompts: Dict[str, str]) -> Dict[str, floa
             # Repetition rate (bigram repetition)
             words = response.lower().split()
             if len(words) > 1:
-                bigrams = list(zip(words[:-1], words[1:]))
+                bigrams = list(zip(words[:-1], words[1:], strict=False))
                 unique_bigrams = len(set(bigrams))
                 total_bigrams = len(bigrams)
                 rep_rate = 1.0 - (unique_bigrams / total_bigrams) if total_bigrams > 0 else 0
@@ -325,7 +334,7 @@ def measure_quality(model, tokenizer, prompts: Dict[str, str]) -> Dict[str, floa
             continue
 
     # Diversity (type-token ratio across all responses)
-    all_words = ' '.join(all_responses).lower().split()
+    all_words = " ".join(all_responses).lower().split()
     diversity = len(set(all_words)) / len(all_words) if all_words else 0
 
     # Coherence (inverse of repetition, weighted by BLEU)
@@ -349,6 +358,7 @@ def measure_memory() -> float:
     """Measure current process memory in MB."""
     try:
         import resource
+
         usage = resource.getrusage(resource.RUSAGE_SELF)
         return usage.ru_maxrss / 1024  # Convert KB to MB on Linux
     except Exception:
@@ -357,8 +367,9 @@ def measure_memory() -> float:
 
 # ── Main Measurement ──────────────────────────────────────────
 
+
 def measure_model(
-    soul_path: Optional[str] = None,
+    soul_path: str | None = None,
     quick: bool = False,
 ) -> ModelMeasurement:
     """Run full measurement suite on a model."""
@@ -414,7 +425,9 @@ def measure_model(
     measurement.diversity_score = qual["diversity_score"]
     measurement.coherence_score = qual["coherence_score"]
     measurement.quality_score = qual["quality_score"]
-    log(f"  Quality: BLEU={qual['bleu_score']:.3f} rep={qual['repetition_rate']:.3f} div={qual['diversity_score']:.3f}")
+    log(
+        f"  Quality: BLEU={qual['bleu_score']:.3f} rep={qual['repetition_rate']:.3f} div={qual['diversity_score']:.3f}"
+    )
     log(f"  Overall: {qual['quality_score']:.2f}/5.0")
 
     # Memory
@@ -426,8 +439,8 @@ def measure_model(
 
 def compare_measurements(
     current: ModelMeasurement,
-    baseline: Optional[ModelMeasurement] = None,
-) -> Dict[str, Any]:
+    baseline: ModelMeasurement | None = None,
+) -> dict[str, Any]:
     """Compare current measurement against baseline."""
     if baseline is None:
         return {"status": "no_baseline"}
@@ -482,8 +495,12 @@ def compare_measurements(
 
     # Overall verdict
     improved = sum(1 for v in comparison.values() if v.get("improved"))
-    degraded = sum(1 for v in comparison.values() if not v.get("improved") and v.get("delta", 0) != 0)
-    comparison["verdict"] = "improved" if improved > degraded else "degraded" if degraded > improved else "mixed"
+    degraded = sum(
+        1 for v in comparison.values() if not v.get("improved") and v.get("delta", 0) != 0
+    )
+    comparison["verdict"] = (
+        "improved" if improved > degraded else "degraded" if degraded > improved else "mixed"
+    )
 
     return comparison
 
@@ -511,6 +528,7 @@ def save_measurement(measurement: ModelMeasurement, output_path: str):
 
 
 # ── CLI ───────────────────────────────────────────────────────
+
 
 def main():
     parser = argparse.ArgumentParser(description="Measure model quality and performance")
@@ -542,7 +560,9 @@ def main():
                 log(f"  Verdict: {data}")
             elif isinstance(data, dict) and "delta" in data:
                 direction = "↑" if data.get("improved") else "↓"
-                log(f"  {metric}: {data.get('current', 0):.3f} vs {data.get('baseline', 0):.3f} ({direction} {abs(data.get('pct_change', 0)):.1f}%)")
+                log(
+                    f"  {metric}: {data.get('current', 0):.3f} vs {data.get('baseline', 0):.3f} ({direction} {abs(data.get('pct_change', 0)):.1f}%)"
+                )
 
     # Save results
     save_measurement(measurement, args.output)
@@ -551,7 +571,11 @@ def main():
     log("\n" + "=" * 60)
     log("Summary:")
     log("=" * 60)
-    log(f"  Perplexity:     {measurement.perplexity:.2f}" if measurement.perplexity else "  Perplexity:     N/A")
+    log(
+        f"  Perplexity:     {measurement.perplexity:.2f}"
+        if measurement.perplexity
+        else "  Perplexity:     N/A"
+    )
     log(f"  Latency (p50):  {measurement.p50_latency_ms:.1f}ms")
     log(f"  Throughput:     {measurement.tokens_per_sec:.1f} tokens/sec")
     log(f"  BLEU:           {measurement.bleu_score:.3f}")

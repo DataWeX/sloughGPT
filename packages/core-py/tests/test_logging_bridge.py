@@ -2,24 +2,33 @@
 
 import logging
 
-import pytest
-from domain.logging._internal.bridge import BridgeHandler, record_extra_context, _LEVEL_MAP
-from domain.logging._internal.base import Logger, LogLevel, LogRecord
+from domain.logging._internal.base import LogLevel
+from domain.logging._internal.bridge import _LEVEL_MAP, BridgeHandler, record_extra_context
 from domain.logging._internal.console_logger import ConsoleLogger
 
 
 class TestRecordExtraContext:
     def test_empty_record(self):
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         assert record_extra_context(record) == {}
 
     def test_explicit_context(self):
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         record.context = {"key": "value"}
         ctx = record_extra_context(record)
@@ -27,8 +36,13 @@ class TestRecordExtraContext:
 
     def test_auto_capture_non_standard_extra(self):
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         record.mode = "guard"
         record.elapsed_ms = 100
@@ -38,8 +52,13 @@ class TestRecordExtraContext:
 
     def test_standard_attrs_excluded(self):
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="/foo", lineno=42,
-            msg="test", args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="/foo",
+            lineno=42,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         ctx = record_extra_context(record)
         assert "name" not in ctx
@@ -48,8 +67,13 @@ class TestRecordExtraContext:
 
     def test_handled_attrs_excluded(self):
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         record.error_code = "E_001"
         record.tag = "INFRA"
@@ -59,8 +83,13 @@ class TestRecordExtraContext:
 
     def test_context_wins_over_auto(self):
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg="test", args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test",
+            args=(),
+            exc_info=None,
         )
         record.context = {"mode": "explicit"}
         record.mode = "auto"
@@ -76,24 +105,39 @@ class TestBridgeHandler:
     def test_emit_debug(self):
         handler = self._make_handler()
         record = logging.LogRecord(
-            name="slo.test", level=logging.DEBUG, pathname="/foo", lineno=10,
-            msg="debug msg", args=(), exc_info=None,
+            name="slo.test",
+            level=logging.DEBUG,
+            pathname="/foo",
+            lineno=10,
+            msg="debug msg",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)  # should not raise
 
     def test_emit_info(self):
         handler = self._make_handler()
         record = logging.LogRecord(
-            name="slo.test", level=logging.INFO, pathname="", lineno=0,
-            msg="info msg", args=(), exc_info=None,
+            name="slo.test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="info msg",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
 
     def test_emit_error(self):
         handler = self._make_handler()
         record = logging.LogRecord(
-            name="slo.test", level=logging.ERROR, pathname="", lineno=0,
-            msg="error msg", args=(), exc_info=None,
+            name="slo.test",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="error msg",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
 
@@ -103,18 +147,29 @@ class TestBridgeHandler:
             raise ValueError("boom")
         except ValueError:
             import sys
+
             exc_info = sys.exc_info()
         record = logging.LogRecord(
-            name="slo.test", level=logging.ERROR, pathname="", lineno=0,
-            msg="failed", args=(), exc_info=exc_info,
+            name="slo.test",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="failed",
+            args=(),
+            exc_info=exc_info,
         )
         handler.emit(record)
 
     def test_emit_with_extra_fields(self):
         handler = self._make_handler()
         record = logging.LogRecord(
-            name="slo.test", level=logging.INFO, pathname="", lineno=0,
-            msg="msg", args=(), exc_info=None,
+            name="slo.test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="msg",
+            args=(),
+            exc_info=None,
         )
         record.error_code = "E_MODEL_OOM"
         record.tag = "MODEL"
@@ -124,8 +179,13 @@ class TestBridgeHandler:
     def test_emit_with_context_extra(self):
         handler = self._make_handler()
         record = logging.LogRecord(
-            name="slo.test", level=logging.INFO, pathname="", lineno=0,
-            msg="msg", args=(), exc_info=None,
+            name="slo.test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="msg",
+            args=(),
+            exc_info=None,
         )
         record.context = {"model": "gpt2", "tokens": 512}
         handler.emit(record)
@@ -133,16 +193,26 @@ class TestBridgeHandler:
     def test_debug_includes_path_and_line(self):
         handler = self._make_handler()
         record = logging.LogRecord(
-            name="slo.test", level=logging.DEBUG, pathname="/foo/bar.py", lineno=42,
-            msg="trace", args=(), exc_info=None,
+            name="slo.test",
+            level=logging.DEBUG,
+            pathname="/foo/bar.py",
+            lineno=42,
+            msg="trace",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
 
     def test_unknown_level_maps_to_info(self):
         handler = self._make_handler()
         record = logging.LogRecord(
-            name="slo.test", level=999, pathname="", lineno=0,
-            msg="unknown", args=(), exc_info=None,
+            name="slo.test",
+            level=999,
+            pathname="",
+            lineno=0,
+            msg="unknown",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)  # should not raise, defaults to INFO
 

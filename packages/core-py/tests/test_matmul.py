@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+
 from domain.inference._internal.ops.matmul import matmul
 
 
@@ -244,8 +245,9 @@ class TestMatmul:
 
     def test_rotation_matrix(self):
         theta = np.pi / 4
-        rot = np.array([[np.cos(theta), -np.sin(theta)],
-                        [np.sin(theta), np.cos(theta)]], dtype=np.float32)
+        rot = np.array(
+            [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]], dtype=np.float32
+        )
         v = np.array([1, 0], dtype=np.float32)
         result = matmul(rot, v)
         assert np.allclose(result, [np.cos(theta), np.sin(theta)], atol=1e-5)

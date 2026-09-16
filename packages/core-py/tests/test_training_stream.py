@@ -5,16 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from domain.training._internal.stream import process_training_completion, cleanup_stream_state
-
+from domain.training._internal.stream import cleanup_stream_state, process_training_completion
 
 # ── process_training_completion ────────────────────────────────────────────
 
 
 class TestProcessTrainingCompletion:
-
     @patch("domain.training._internal.stream.update_job")
     @patch("domain.training._internal.stream.log_experiment_param")
     @patch("domain.training._internal.stream.log_experiment_metric")
@@ -41,7 +37,9 @@ class TestProcessTrainingCompletion:
         finish_fn = MagicMock()
         ev = {"status": "failed", "data": "crash reason"}
         process_training_completion(ev, "t1", {}, Path("/tmp"), finish_fn)
-        mock_update.assert_called_once_with("t1", status="failed", error="crash reason", checkpoint=None)
+        mock_update.assert_called_once_with(
+            "t1", status="failed", error="crash reason", checkpoint=None
+        )
 
     @patch("domain.training._internal.stream.update_job")
     def test_failed_uses_default_message(self, mock_update):
@@ -100,7 +98,6 @@ class TestProcessTrainingCompletion:
 
 
 class TestCleanupStreamState:
-
     @patch("domain.training.runtime_protocol.get_training_runtime")
     @patch("domain.training._internal.stream.update_job")
     def test_sets_running_false(self, mock_update, mock_runtime):

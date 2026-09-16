@@ -7,20 +7,23 @@ Every layer carries soul metadata. Every model IS a soul.
 
 from __future__ import annotations
 
+import json
+import logging
+import math
 import os
 import struct
-import json
-import math
-import time
 import threading
-import numpy as np
+import time
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any, Tuple, Callable, Sequence, Union
-from pathlib import Path
-import logging
-from domain.shared import find_repo_root  # noqa: F401 — kept for compatibility
-from domain.inference._internal.forward_pass import ForwardPassResult
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+from domain.inference._internal.forward_pass import ForwardPassResult
+from domain.shared import find_repo_root  # noqa: F401 — kept for compatibility
 
 logger = logging.getLogger("slo.slonet")
 
@@ -32,6 +35,7 @@ class GenerationMetrics:
     Initialized before the loop, finalized after. All fields are updated
     inline during generation — no function calls in the hot path.
     """
+
     n_tokens: int = 0
     prompt_tokens: int = 0
     t_first_token: float = 0.0
@@ -62,6 +66,7 @@ class GenerationMetrics:
 @dataclass
 class GenerateResult:
     """Result from generate_numpy() — token IDs + performance metrics."""
+
     token_ids: np.ndarray
     metrics: GenerationMetrics = field(default_factory=GenerationMetrics)
 
@@ -70,7 +75,7 @@ class GenerateResult:
         """Token IDs excluding the prompt."""
         m = self.metrics
         if m.prompt_tokens > 0 and self.token_ids.shape[1] > m.prompt_tokens:
-            return self.token_ids[:, m.prompt_tokens:]
+            return self.token_ids[:, m.prompt_tokens :]
         return self.token_ids
 
     @property
@@ -94,38 +99,57 @@ class GenerateResult:
             return np.array_equal(self.token_ids, other)
         return NotImplemented
 
+
 # Lazy GPU acceleration — import on demand, never at module load
 _ACCELERATOR = None
 
 # Lazy Numba import
 _NUMBA_AVAILABLE = None
+
+
 def _check_numba():
     global _NUMBA_AVAILABLE
     if _NUMBA_AVAILABLE is None:
         try:
             from numba import njit  # pragma: no cover  # noqa: F401
+
             _NUMBA_AVAILABLE = True  # pragma: no cover
         except ImportError:
             _NUMBA_AVAILABLE = False
     return _NUMBA_AVAILABLE
 
+
 # Numba-accelerated inference kernels (lazy import, graceful fallback)
 try:
     from domain.training._internal.slonet_kernels import (
-        nb_layernorm as _nb_layernorm,
-        nb_swi_glu_mul as _nb_swi_glu_mul,
-        fused_attention_single as _nb_fused_attention_single,
         fused_attention_multi as _nb_fused_attention_multi,
+    )
+    from domain.training._internal.slonet_kernels import (
+        fused_attention_single as _nb_fused_attention_single,
+    )
+    from domain.training._internal.slonet_kernels import (
         gqa_expand as _nb_gqa_expand,
-        nb_rmsnorm as _nb_rmsnorm,
+    )
+    from domain.training._internal.slonet_kernels import (
         lm_head_argmax as _nb_lm_head_argmax,
     )
+    from domain.training._internal.slonet_kernels import (
+        nb_layernorm as _nb_layernorm,
+    )
+    from domain.training._internal.slonet_kernels import (
+        nb_rmsnorm as _nb_rmsnorm,
+    )
+    from domain.training._internal.slonet_kernels import (
+        nb_swi_glu_mul as _nb_swi_glu_mul,
+    )
+
     _KERNELS_AVAILABLE = True
 except ImportError:
     _KERNELS_AVAILABLE = False
 
 # Global no_grad mode — skips backward graph construction
 _NO_GRAD = False
+
 
 class no_grad:
     """Context manager / decorator to disable gradient computation.
@@ -142,6 +166,7 @@ class no_grad:
         def forward(x):
             return model(x)
     """
+
     def __enter__(self):
         global _NO_GRAD
         self._prev = _NO_GRAD
@@ -155,10 +180,12 @@ class no_grad:
     def __call__(self, func):
         """Support @no_grad() as a decorator."""
         import functools
+
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             with self:
                 return func(*args, **kwargs)
+
         return wrapper
 
 
@@ -205,6 +232,7 @@ def _get_accelerator():
         return _ACCELERATOR if _ACCELERATOR != "none" else None
     try:
         from domain.slolib._internal.gpu import get_accelerator as _get_slolib_acc
+
         acc = _get_slolib_acc()
         if acc is not None and acc.name != "cpu":
             _ACCELERATOR = acc
@@ -213,6 +241,7 @@ def _get_accelerator():
         logger.debug("slolib GPU accelerator unavailable, trying legacy: %s", e)
     try:
         from domain.training._internal.gpu.accelerator import get_accelerator as _get_old_acc
+
         _ACCELERATOR = _get_old_acc()
     except Exception as e:
         logger.debug("Legacy GPU accelerator unavailable: %s", e)
@@ -262,22 +291,39 @@ def _accel_op(op_name: str, *args, threshold: int = _ACCEL_THRESHOLD):
 # CORE TENSOR
 # =============================================================================
 
+
 class _MetaTensor:
     """Placeholder for meta device tensors (no actual data)."""
+
     def __init__(self, shape=None):
         self.shape = shape or ()
         self.data = np.empty(0)
         self.requires_grad = False
-    def __getattr__(self, name): return self
-    def __call__(self, *a, **kw): return self
-    def __repr__(self): return f"MetaTensor(shape={self.shape})"
-    def numpy(self): return self.data
+
+    def __getattr__(self, name):
+        return self
+
+    def __call__(self, *a, **kw):
+        return self
+
+    def __repr__(self):
+        return f"MetaTensor(shape={self.shape})"
+
+    def numpy(self):
+        return self.data
 
 
 class Tensor:
     _id_counter = 0
 
-    def __init__(self, data, requires_grad: bool = False, _children: tuple = (), _copy: bool = True, _raw: bool = False):
+    def __init__(
+        self,
+        data,
+        requires_grad: bool = False,
+        _children: tuple = (),
+        _copy: bool = True,
+        _raw: bool = False,
+    ):
         if isinstance(data, np.ndarray):
             if not _raw and data.dtype != np.float32:
                 data = data.astype(np.float32)
@@ -285,20 +331,20 @@ class Tensor:
                 data = data.copy()
         elif isinstance(data, (list, memoryview)):
             data = np.array(data, dtype=np.float32) if not _raw else np.array(data)
-        elif hasattr(data, 'detach'):  # PyTorch tensor
+        elif hasattr(data, "detach"):  # PyTorch tensor
             data = data.detach().cpu().numpy().astype(np.float32)
         else:
             data = np.asarray(data, dtype=np.float32) if not _raw else np.asarray(data)
         self.data = np.asarray(data)
-        self.grad: Optional[Tensor] = None
+        self.grad: Tensor | None = None
         if _NO_GRAD:
             self.requires_grad = False
             self._children = ()
         else:
             self.requires_grad = requires_grad
             self._children = _children
-        self._backward_fn: Optional[Callable] = None
-        self._forward_fn: Optional[Callable] = None  # (tangents...) -> output tangent
+        self._backward_fn: Callable | None = None
+        self._forward_fn: Callable | None = None  # (tangents...) -> output tangent
         self._consumers: list = []  # forward edges — populated by ops
         self.shape = self.data.shape
         self.id = Tensor._id_counter
@@ -334,9 +380,7 @@ class Tensor:
     def __bool__(self):
         if self.data.ndim == 0 and self.data.size == 1:
             return bool(self.data.item())
-        raise RuntimeError(
-            "bool value of Tensor with more than one value is ambiguous"
-        )
+        raise RuntimeError("bool value of Tensor with more than one value is ambiguous")
 
     def __len__(self):
         if self.data.ndim == 0:
@@ -351,12 +395,16 @@ class Tensor:
     def all(self, dim=None, keepdim=False):
         if dim is None:
             return Tensor(np.array(np.all(self.data), dtype=np.float32), requires_grad=False)
-        return Tensor(np.all(self.data, axis=dim, keepdims=keepdim).astype(np.float32), requires_grad=False)
+        return Tensor(
+            np.all(self.data, axis=dim, keepdims=keepdim).astype(np.float32), requires_grad=False
+        )
 
     def any(self, dim=None, keepdim=False):
         if dim is None:
             return Tensor(np.array(np.any(self.data), dtype=np.float32), requires_grad=False)
-        return Tensor(np.any(self.data, axis=dim, keepdims=keepdim).astype(np.float32), requires_grad=False)
+        return Tensor(
+            np.any(self.data, axis=dim, keepdims=keepdim).astype(np.float32), requires_grad=False
+        )
 
     def tolist(self):
         return self.data.tolist()
@@ -376,7 +424,8 @@ class Tensor:
         return self.shape[dim]
 
     def squeeze(self, dim=None):
-        if dim is None: return Tensor(self.data.squeeze(), requires_grad=False)
+        if dim is None:
+            return Tensor(self.data.squeeze(), requires_grad=False)
         return Tensor(self.data.squeeze(axis=dim), requires_grad=False)
 
     def unsqueeze(self, dim: int):
@@ -392,46 +441,84 @@ class Tensor:
 
     def scatter_(self, dim, index, src):
         data = self.data.copy()
-        if isinstance(src, Tensor): src = src.data
+        if isinstance(src, Tensor):
+            src = src.data
         idx = index.data.astype(int)
         np.put_along_axis(data, idx, src, axis=dim)
         self.data = data
         return self
 
-    def __add__(self, other): return _add(self, _ensure(other))
-    def __radd__(self, other): return _add(_ensure(other), self)
-    def __sub__(self, other): return _sub(self, _ensure(other))
-    def __rsub__(self, other): return _sub(_ensure(other), self)
-    def __mul__(self, other): return _mul(self, _ensure(other))
-    def __rmul__(self, other): return _mul(_ensure(other), self)
-    def __neg__(self): return _neg(self)
-    def __pow__(self, p): return _pow(self, p)
-    def __truediv__(self, other): return _mul(self, _ensure(other) ** -1)
+    def __add__(self, other):
+        return _add(self, _ensure(other))
+
+    def __radd__(self, other):
+        return _add(_ensure(other), self)
+
+    def __sub__(self, other):
+        return _sub(self, _ensure(other))
+
+    def __rsub__(self, other):
+        return _sub(_ensure(other), self)
+
+    def __mul__(self, other):
+        return _mul(self, _ensure(other))
+
+    def __rmul__(self, other):
+        return _mul(_ensure(other), self)
+
+    def __neg__(self):
+        return _neg(self)
+
+    def __pow__(self, p):
+        return _pow(self, p)
+
+    def __truediv__(self, other):
+        return _mul(self, _ensure(other) ** -1)
+
     def __getitem__(self, key):
         return _slice(self, key)
+
     def __setitem__(self, key, value):
         self.data[key] = value.data if isinstance(value, Tensor) else value
-    def __matmul__(self, other): return _matmul(self, _ensure(other))
-    def T(self): return _transpose(self)
-    def reshape(self, *s): return _reshape(self, s)
-    def sum(self): return _sum(self)
-    def mean(self): return _mean(self)
-    def max(self): return _max(self)
+
+    def __matmul__(self, other):
+        return _matmul(self, _ensure(other))
+
+    def T(self):
+        return _transpose(self)
+
+    def reshape(self, *s):
+        return _reshape(self, s)
+
+    def sum(self):
+        return _sum(self)
+
+    def mean(self):
+        return _mean(self)
+
+    def max(self):
+        return _max(self)
+
     def backward(self):
         if self.grad is None:
             self.grad = Tensor(np.ones_like(self.data), _copy=False)
         visited, topo = set(), []
+
         def build(v):
-            if v.id in visited: return
+            if v.id in visited:
+                return
             visited.add(v.id)
-            for c in (getattr(v, '_children', None) or ()):
-                if isinstance(c, Tensor): build(c)
+            for c in getattr(v, "_children", None) or ():
+                if isinstance(c, Tensor):
+                    build(c)
             topo.append(v)
+
         build(self)
         for node in reversed(topo):
             g = node.grad.data if node.grad is not None else np.ones_like(node.data)
             node.grad = Tensor(g, _copy=False)
-            if node._backward_fn: node._backward_fn(g)
+            if node._backward_fn:
+                node._backward_fn(g)
             # Release forward-DAG references after the reverse pass. Persistent
             # leaves (model parameters) otherwise pin every step's computation
             # graph through their _consumers lists, leaking one graph per step.
@@ -451,12 +538,16 @@ class Tensor:
         """
         tangents = dict(tangents or {})
         visited, order = set(), []
+
         def topo(v):
-            if v.id in visited: return
+            if v.id in visited:
+                return
             visited.add(v.id)
-            for c in (getattr(v, '_children', None) or ()):
-                if isinstance(c, Tensor): topo(c)
+            for c in getattr(v, "_children", None) or ():
+                if isinstance(c, Tensor):
+                    topo(c)
             order.append(v)
+
         topo(self)
 
         for node in order:
@@ -480,7 +571,7 @@ class Tensor:
 
         return tangents
 
-    def jvp(self, v: 'Tensor') -> 'Tensor':
+    def jvp(self, v: Tensor) -> Tensor:
         """Jacobian-vector product via forward-mode AD.
 
         Args:
@@ -491,11 +582,12 @@ class Tensor:
         """
         leaf_tangents = {}
         visited = set()
+
         def find_leaves(node):
             if node.id in visited:
                 return
             visited.add(node.id)
-            children = getattr(node, '_children', None) or ()
+            children = getattr(node, "_children", None) or ()
             has_children = False
             for c in children:
                 if isinstance(c, Tensor):
@@ -503,6 +595,7 @@ class Tensor:
                     find_leaves(c)
             if not has_children and node.requires_grad:
                 leaf_tangents[node.id] = v.data
+
         find_leaves(self)
         result = self.forward_grad(leaf_tangents)
         out_t = result.get(self.id, np.zeros_like(self.data))
@@ -518,19 +611,39 @@ class Tensor:
             dtype = device
             device = None
         if dtype is not None:
-            if hasattr(dtype, '_np'):
+            if hasattr(dtype, "_np"):
                 dtype = dtype._np
             # Float dtypes always pin to float32 (SloNet convention)
-            if dtype in (np.float16, np.float32, np.float64, 'float16', 'float32', 'float64',
-                         type(np.float16), type(np.float32), type(np.float64)):
+            if dtype in (
+                np.float16,
+                np.float32,
+                np.float64,
+                "float16",
+                "float32",
+                "float64",
+                type(np.float16),
+                type(np.float32),
+                type(np.float64),
+            ):
                 self.data = self.data.astype(np.float32)
-            elif dtype in (np.int8, np.int16, np.int32, np.int64,
-                           'int8', 'int16', 'int32', 'int64',
-                           type(np.int8), type(np.int16), type(np.int32), type(np.int64)):
+            elif dtype in (
+                np.int8,
+                np.int16,
+                np.int32,
+                np.int64,
+                "int8",
+                "int16",
+                "int32",
+                "int64",
+                type(np.int8),
+                type(np.int16),
+                type(np.int32),
+                type(np.int64),
+            ):
                 self.data = self.data.astype(dtype)
-        if device is not None and 'meta' not in str(device):
+        if device is not None and "meta" not in str(device):
             pass  # no-op — SloNet is CPU/numpy native
-        if hasattr(device, 'type') and device.type == 'meta':
+        if hasattr(device, "type") and device.type == "meta":
             return _MetaTensor()
         return self
 
@@ -578,7 +691,8 @@ class Tensor:
         return self
 
     def copy_(self, src):
-        if isinstance(src, Tensor): src = src.data
+        if isinstance(src, Tensor):
+            src = src.data
         self.data[:] = src
         return self
 
@@ -645,11 +759,18 @@ class Tensor:
         return log_softmax(self, dim)
 
     def type(self, dtype):
-        dtype_map = {'torch.FloatTensor': np.float32, 'torch.LongTensor': np.int64,
-                     'torch.IntTensor': np.int32, 'torch.HalfTensor': np.float16,
-                     'torch.DoubleTensor': np.float64}
+        dtype_map = {
+            "torch.FloatTensor": np.float32,
+            "torch.LongTensor": np.int64,
+            "torch.IntTensor": np.int32,
+            "torch.HalfTensor": np.float16,
+            "torch.DoubleTensor": np.float64,
+        }
         target = dtype_map.get(str(dtype), dtype)
-        if isinstance(target, np.dtype) or (isinstance(target, type) and target in (np.float32, np.float64, np.int64, np.int32, np.float16)):
+        if isinstance(target, np.dtype) or (
+            isinstance(target, type)
+            and target in (np.float32, np.float64, np.int64, np.int32, np.float16)
+        ):
             self.data = self.data.astype(target)
         return self
 
@@ -657,87 +778,150 @@ class Tensor:
         self.requires_grad = req
         return self
 
-def _ensure(x): return x if isinstance(x, Tensor) else Tensor(x)
+
+def _ensure(x):
+    return x if isinstance(x, Tensor) else Tensor(x)
 
 
 def _add(a, b):
-    out = Tensor(_accel_op("add", a.data, b.data, lambda x,y: x + y), requires_grad=a.requires_grad or b.requires_grad, _children=(a, b), _copy=False)
-    _a_shape = a.shape; _b_shape = b.shape; _out_shape = out.shape
+    out = Tensor(
+        _accel_op("add", a.data, b.data, lambda x, y: x + y),
+        requires_grad=a.requires_grad or b.requires_grad,
+        _children=(a, b),
+        _copy=False,
+    )
+    _a_shape = a.shape
+    _b_shape = b.shape
+    _out_shape = out.shape
     if out.requires_grad:
-        if a.requires_grad: a._consumers.append(out)
-        if b.requires_grad: b._consumers.append(out)
+        if a.requires_grad:
+            a._consumers.append(out)
+        if b.requires_grad:
+            b._consumers.append(out)
+
     def bk(g):
         if a.requires_grad:
             ga = _broadcast_back(g, _a_shape)
-            if a.grad is None: a.grad = Tensor(ga, _copy=False)
-            else: a.grad.data += ga
+            if a.grad is None:
+                a.grad = Tensor(ga, _copy=False)
+            else:
+                a.grad.data += ga
         if b.requires_grad:
             gb = _broadcast_back(g, _b_shape)
-            if b.grad is None: b.grad = Tensor(gb, _copy=False)
-            else: b.grad.data += gb
+            if b.grad is None:
+                b.grad = Tensor(gb, _copy=False)
+            else:
+                b.grad.data += gb
+
     out._backward_fn = bk
+
     def fwd(t_a, t_b):
         t_a = np.zeros_like(a.data) if t_a is None else _broadcast_forward(t_a, _out_shape)
         t_b = np.zeros_like(b.data) if t_b is None else _broadcast_forward(t_b, _out_shape)
         return t_a + t_b
+
     out._forward_fn = fwd
     return out
 
 
 def _neg(a):
-    out = Tensor(_accel_op("neg", a.data, lambda x: -x), requires_grad=a.requires_grad, _children=(a,), _copy=False)
-    if out.requires_grad and a.requires_grad: a._consumers.append(out)
+    out = Tensor(
+        _accel_op("neg", a.data, lambda x: -x),
+        requires_grad=a.requires_grad,
+        _children=(a,),
+        _copy=False,
+    )
+    if out.requires_grad and a.requires_grad:
+        a._consumers.append(out)
+
     def bk(g):
         if a.requires_grad:
-            if a.grad is None: a.grad = Tensor(-g, _copy=False)
-            else: a.grad.data -= g
+            if a.grad is None:
+                a.grad = Tensor(-g, _copy=False)
+            else:
+                a.grad.data -= g
+
     out._backward_fn = bk
+
     def fwd(t_a):
-        if t_a is None: return np.zeros_like(a.data)
+        if t_a is None:
+            return np.zeros_like(a.data)
         return -t_a
+
     out._forward_fn = fwd
     return out
 
 
-def _sub(a, b): return _add(a, _neg(b))
+def _sub(a, b):
+    return _add(a, _neg(b))
 
 
 def _mul(a, b):
-    out = Tensor(_accel_op("mul", a.data, b.data, lambda x,y: x * y), requires_grad=a.requires_grad or b.requires_grad, _children=(a, b), _copy=False)
-    _a_shape = a.shape; _b_shape = b.shape; _out_shape = out.shape
+    out = Tensor(
+        _accel_op("mul", a.data, b.data, lambda x, y: x * y),
+        requires_grad=a.requires_grad or b.requires_grad,
+        _children=(a, b),
+        _copy=False,
+    )
+    _a_shape = a.shape
+    _b_shape = b.shape
+    _out_shape = out.shape
     if out.requires_grad:
-        if a.requires_grad: a._consumers.append(out)
-        if b.requires_grad: b._consumers.append(out)
+        if a.requires_grad:
+            a._consumers.append(out)
+        if b.requires_grad:
+            b._consumers.append(out)
+
     def bk(g):
         if a.requires_grad:
             ga = _broadcast_back(g * b.data, _a_shape)
-            if a.grad is None: a.grad = Tensor(ga, _copy=False)
-            else: a.grad.data += ga
+            if a.grad is None:
+                a.grad = Tensor(ga, _copy=False)
+            else:
+                a.grad.data += ga
         if b.requires_grad:
             gb = _broadcast_back(g * a.data, _b_shape)
-            if b.grad is None: b.grad = Tensor(gb, _copy=False)
-            else: b.grad.data += gb
+            if b.grad is None:
+                b.grad = Tensor(gb, _copy=False)
+            else:
+                b.grad.data += gb
+
     out._backward_fn = bk
+
     def fwd(t_a, t_b):
         t_a = np.zeros_like(a.data) if t_a is None else t_a
         t_b = np.zeros_like(b.data) if t_b is None else t_b
         return t_a * b.data + a.data * t_b
+
     out._forward_fn = fwd
     return out
 
 
 def _pow(a, p):
-    out = Tensor(_accel_op("pow", a.data, p, lambda x, pp: x ** pp), requires_grad=a.requires_grad, _children=(a,), _copy=False)
-    if out.requires_grad and a.requires_grad: a._consumers.append(out)
+    out = Tensor(
+        _accel_op("pow", a.data, p, lambda x, pp: x**pp),
+        requires_grad=a.requires_grad,
+        _children=(a,),
+        _copy=False,
+    )
+    if out.requires_grad and a.requires_grad:
+        a._consumers.append(out)
+
     def bk(g):
         if a.requires_grad:
             ga = p * (a.data ** (p - 1)) * g
-            if a.grad is None: a.grad = Tensor(ga, _copy=False)
-            else: a.grad.data += ga
+            if a.grad is None:
+                a.grad = Tensor(ga, _copy=False)
+            else:
+                a.grad.data += ga
+
     out._backward_fn = bk
+
     def fwd(t_a, _=None):
-        if t_a is None: return np.zeros_like(a.data)
+        if t_a is None:
+            return np.zeros_like(a.data)
         return p * (a.data ** (p - 1)) * t_a
+
     out._forward_fn = fwd
     return out
 
@@ -747,7 +931,11 @@ def _matmul(a, b):
     b_data = b.data if isinstance(b, Tensor) else np.asarray(b)
     a_req = isinstance(a, Tensor) and a.requires_grad
     b_req = isinstance(b, Tensor) and b.requires_grad
-    children = (_ensure(a), _ensure(b)) if not (isinstance(a, Tensor) and isinstance(b, Tensor)) else (a, b)
+    children = (
+        (_ensure(a), _ensure(b))
+        if not (isinstance(a, Tensor) and isinstance(b, Tensor))
+        else (a, b)
+    )
     # Skip accelerator for tiny matmuls (Metal dispatch overhead dominates)
     _use_acc = False
     out_elems = a_data.shape[-2] * b_data.shape[-1] if a_data.ndim >= 2 else 1
@@ -759,20 +947,27 @@ def _matmul(a, b):
             result = acc.matmul(a_data, b_data)
         except Exception as exc:
             import logging
+
             logging.getLogger("slo.training").warning(
-                "GPU matmul failed, falling back to CPU: %s", exc)
+                "GPU matmul failed, falling back to CPU: %s", exc
+            )
             result = np.matmul(a_data, b_data)
     else:
         result = np.matmul(a_data, b_data)
     out = Tensor(result, requires_grad=a_req or b_req, _children=children, _copy=False)
     if out.requires_grad:
-        if isinstance(a, Tensor) and a.requires_grad: a._consumers.append(out)
-        if isinstance(b, Tensor) and b.requires_grad: b._consumers.append(out)
-    _a_shape = a_data.shape; _b_shape = b_data.shape; _out_shape = out.data.shape
+        if isinstance(a, Tensor) and a.requires_grad:
+            a._consumers.append(out)
+        if isinstance(b, Tensor) and b.requires_grad:
+            b._consumers.append(out)
+    _a_shape = a_data.shape
+    _b_shape = b_data.shape
+    _out_shape = out.data.shape
     _b_T = np.swapaxes(b_data, -2, -1) if b_data.ndim >= 2 else None
     _a_T = np.swapaxes(a_data, -2, -1) if a_data.ndim >= 2 else None
     _a_has_bk = isinstance(a, Tensor) and a._backward_fn is not None
     _b_has_bk = isinstance(b, Tensor) and b._backward_fn is not None
+
     def bk(g):
         if a_req or _a_has_bk:
             if _b_T is None:
@@ -786,8 +981,10 @@ def _matmul(a, b):
             if ga.shape != _a_shape:
                 ga = ga.reshape(_a_shape)
             if a_req:
-                if a.grad is None: a.grad = Tensor(ga, _copy=False)
-                else: a.grad.data += ga
+                if a.grad is None:
+                    a.grad = Tensor(ga, _copy=False)
+                else:
+                    a.grad.data += ga
         if b_req or _b_has_bk:
             if a_data.ndim == 1:
                 if b_data.ndim == 1:
@@ -807,13 +1004,18 @@ def _matmul(a, b):
             if gb.shape != _b_shape:
                 gb = gb.reshape(_b_shape)
             if b_req:
-                if b.grad is None: b.grad = Tensor(gb, _copy=False)
-                else: b.grad.data += gb
+                if b.grad is None:
+                    b.grad = Tensor(gb, _copy=False)
+                else:
+                    b.grad.data += gb
+
     out._backward_fn = bk
+
     def fwd(t_a, t_b):
         t_a = np.zeros_like(a_data) if t_a is None else t_a
         t_b = np.zeros_like(b_data) if t_b is None else t_b
         return np.matmul(t_a, b_data) + np.matmul(a_data, t_b)
+
     out._forward_fn = fwd
     return out
 
@@ -821,25 +1023,41 @@ def _matmul(a, b):
 def _transpose(a):
     out = Tensor(a.data.T, requires_grad=a.requires_grad, _children=(a,), _copy=False)
     _ndim = a.data.ndim
-    if out.requires_grad and a.requires_grad: a._consumers.append(out)
+    if out.requires_grad and a.requires_grad:
+        a._consumers.append(out)
+
     def bk(g):
         if a.requires_grad:
-            tg = g.T if _ndim == 2 else np.transpose(g, list(range(_ndim-2)) + [_ndim-1, _ndim-2])
+            tg = (
+                g.T
+                if _ndim == 2
+                else np.transpose(g, list(range(_ndim - 2)) + [_ndim - 1, _ndim - 2])
+            )
             if a.grad is None:
                 a.grad = Tensor(tg, _copy=False)
             else:
                 a.grad.data += tg
+
     out._backward_fn = bk
+
     def fwd(t_a):
-        if t_a is None: return np.zeros_like(a.data).T
-        return t_a.T if _ndim == 2 else np.transpose(t_a, list(range(_ndim-2)) + [_ndim-1, _ndim-2])
+        if t_a is None:
+            return np.zeros_like(a.data).T
+        return (
+            t_a.T
+            if _ndim == 2
+            else np.transpose(t_a, list(range(_ndim - 2)) + [_ndim - 1, _ndim - 2])
+        )
+
     out._forward_fn = fwd
     return out
 
 
 def _reshape(a, s):
     out = Tensor(a.data.reshape(s), requires_grad=a.requires_grad, _children=(a,), _copy=False)
-    if out.requires_grad and a.requires_grad: a._consumers.append(out)
+    if out.requires_grad and a.requires_grad:
+        a._consumers.append(out)
+
     def bk(g):
         if a.requires_grad:
             ga = g.reshape(a.shape)
@@ -847,10 +1065,14 @@ def _reshape(a, s):
                 a.grad = Tensor(ga, _copy=False)
             else:
                 a.grad.data += ga
+
     out._backward_fn = bk
+
     def fwd(t_a):
-        if t_a is None: return np.zeros(s, dtype=np.float32)
+        if t_a is None:
+            return np.zeros(s, dtype=np.float32)
         return t_a.reshape(s)
+
     out._forward_fn = fwd
     return out
 
@@ -875,7 +1097,9 @@ def _basic_index(key: tuple) -> bool:
 def _slice(a, key):
     key = key if isinstance(key, tuple) else (key,)
     out = Tensor(a.data[key], requires_grad=a.requires_grad, _children=(a,), _copy=False)
-    if out.requires_grad and a.requires_grad: a._consumers.append(out)
+    if out.requires_grad and a.requires_grad:
+        a._consumers.append(out)
+
     def bk(g):
         if a.requires_grad:
             full = np.zeros(a.shape, dtype=np.float32)
@@ -887,90 +1111,145 @@ def _slice(a, key):
                 a.grad = Tensor(full, _copy=False)
             else:
                 a.grad.data += full
+
     out._backward_fn = bk
+
     def fwd(t_a):
-        if t_a is None: return np.zeros(out.shape, dtype=np.float32)
+        if t_a is None:
+            return np.zeros(out.shape, dtype=np.float32)
         return np.array(t_a[key], dtype=np.float32)
+
     out._forward_fn = fwd
     return out
 
 
 def _sum(a):
-    out = Tensor(_accel_op("sum", a.data, lambda x: x.sum()), requires_grad=a.requires_grad, _children=(a,), _copy=False)
-    if out.requires_grad and a.requires_grad: a._consumers.append(out)
+    out = Tensor(
+        _accel_op("sum", a.data, lambda x: x.sum()),
+        requires_grad=a.requires_grad,
+        _children=(a,),
+        _copy=False,
+    )
+    if out.requires_grad and a.requires_grad:
+        a._consumers.append(out)
+
     def bk(g):
         if a.requires_grad:
             ga = np.full_like(a.data, g)
-            if a.grad is None: a.grad = Tensor(ga, _copy=False)
-            else: a.grad.data += ga
+            if a.grad is None:
+                a.grad = Tensor(ga, _copy=False)
+            else:
+                a.grad.data += ga
+
     out._backward_fn = bk
+
     def fwd(t_a):
-        if t_a is None: return np.array(0.0, dtype=np.float32)
+        if t_a is None:
+            return np.array(0.0, dtype=np.float32)
         return np.array(t_a.sum(), dtype=np.float32)
+
     out._forward_fn = fwd
     return out
 
 
 def _mean(a):
-    out = Tensor(_accel_op("mean", a.data, lambda x: x.mean()), requires_grad=a.requires_grad, _children=(a,), _copy=False)
-    if out.requires_grad and a.requires_grad: a._consumers.append(out)
+    out = Tensor(
+        _accel_op("mean", a.data, lambda x: x.mean()),
+        requires_grad=a.requires_grad,
+        _children=(a,),
+        _copy=False,
+    )
+    if out.requires_grad and a.requires_grad:
+        a._consumers.append(out)
     n = a.data.size
+
     def bk(g):
         if a.requires_grad:
             ga = np.full_like(a.data, g / n)
-            if a.grad is None: a.grad = Tensor(ga, _copy=False)
-            else: a.grad.data += ga
+            if a.grad is None:
+                a.grad = Tensor(ga, _copy=False)
+            else:
+                a.grad.data += ga
+
     out._backward_fn = bk
+
     def fwd(t_a):
-        if t_a is None: return np.array(0.0, dtype=np.float32)
+        if t_a is None:
+            return np.array(0.0, dtype=np.float32)
         return np.array(t_a.mean(), dtype=np.float32)
+
     out._forward_fn = fwd
     return out
 
 
 def _max(a):
     out = Tensor(a.data.max(), requires_grad=a.requires_grad, _children=(a,), _copy=False)
-    if out.requires_grad and a.requires_grad: a._consumers.append(out)
+    if out.requires_grad and a.requires_grad:
+        a._consumers.append(out)
+
     def bk(g):
         if a.requires_grad:
             mask = a.data == a.data.max()
             ga = np.where(mask, g, 0.0)
-            if a.grad is None: a.grad = Tensor(ga, _copy=False)
-            else: a.grad.data += ga
+            if a.grad is None:
+                a.grad = Tensor(ga, _copy=False)
+            else:
+                a.grad.data += ga
+
     out._backward_fn = bk
+
     def fwd(t_a):
-        if t_a is None: return np.array(0.0, dtype=np.float32)
+        if t_a is None:
+            return np.array(0.0, dtype=np.float32)
         mask = a.data == a.data.max()
         return np.array(t_a[mask].sum() if mask.any() else 0.0, dtype=np.float32)
+
     out._forward_fn = fwd
     return out
 
 
-def zeros(s, requires_grad=False): return Tensor(np.zeros(s, dtype=np.float32), requires_grad=requires_grad, _copy=False)
-def randn(s, requires_grad=False): return Tensor(np.random.randn(*s).astype(np.float32), requires_grad=requires_grad, _copy=False)
-def ones(s, requires_grad=False): return Tensor(np.ones(s, dtype=np.float32), requires_grad=requires_grad, _copy=False)
-def tensor(d, requires_grad=False): return Tensor(d, requires_grad=requires_grad, _copy=False)
+def zeros(s, requires_grad=False):
+    return Tensor(np.zeros(s, dtype=np.float32), requires_grad=requires_grad, _copy=False)
+
+
+def randn(s, requires_grad=False):
+    return Tensor(np.random.randn(*s).astype(np.float32), requires_grad=requires_grad, _copy=False)
+
+
+def ones(s, requires_grad=False):
+    return Tensor(np.ones(s, dtype=np.float32), requires_grad=requires_grad, _copy=False)
+
+
+def tensor(d, requires_grad=False):
+    return Tensor(d, requires_grad=requires_grad, _copy=False)
 
 
 # =============================================================================
 # ACTIVATIONS
 # =============================================================================
 
+
 def sigmoid(x):
-    s = _accel_op("sigmoid", x.data, lambda d: 1.0/(1.0+np.exp(-np.clip(d, -500, 500))))
+    s = _accel_op("sigmoid", x.data, lambda d: 1.0 / (1.0 + np.exp(-np.clip(d, -500, 500))))
     out = Tensor(s, requires_grad=x.requires_grad, _children=(x,), _copy=False)
-    if out.requires_grad and x.requires_grad: x._consumers.append(out)
+    if out.requires_grad and x.requires_grad:
+        x._consumers.append(out)
+
     def bk(g):
         if x.requires_grad:
-            gs = s*(1-s)*g
+            gs = s * (1 - s) * g
             if x.grad is None:
                 x.grad = Tensor(gs, _copy=False)
             else:
                 x.grad.data += gs
+
     out._backward_fn = bk
+
     def fwd(t_x):
-        if t_x is None: return np.zeros_like(s)
+        if t_x is None:
+            return np.zeros_like(s)
         return s * (1 - s) * t_x
+
     out._forward_fn = fwd
     return out
 
@@ -978,36 +1257,53 @@ def sigmoid(x):
 def tanh(x):
     t = _accel_op("tanh", x.data, lambda d: np.tanh(d))
     out = Tensor(t, requires_grad=x.requires_grad, _children=(x,), _copy=False)
-    if out.requires_grad and x.requires_grad: x._consumers.append(out)
+    if out.requires_grad and x.requires_grad:
+        x._consumers.append(out)
+
     def bk(g):
         if x.requires_grad:
-            gt = (1-t*t)*g
+            gt = (1 - t * t) * g
             if x.grad is None:
                 x.grad = Tensor(gt, _copy=False)
             else:
                 x.grad.data += gt
+
     out._backward_fn = bk
+
     def fwd(t_x):
-        if t_x is None: return np.zeros_like(t)
+        if t_x is None:
+            return np.zeros_like(t)
         return (1 - t * t) * t_x
+
     out._forward_fn = fwd
     return out
 
 
 def relu(x):
-    out = Tensor(_accel_op("relu", x.data, lambda d: np.maximum(d, 0)), requires_grad=x.requires_grad, _children=(x,), _copy=False)
-    if out.requires_grad and x.requires_grad: x._consumers.append(out)
+    out = Tensor(
+        _accel_op("relu", x.data, lambda d: np.maximum(d, 0)),
+        requires_grad=x.requires_grad,
+        _children=(x,),
+        _copy=False,
+    )
+    if out.requires_grad and x.requires_grad:
+        x._consumers.append(out)
+
     def bk(g):
         if x.requires_grad:
-            gr = np.where(x.data>0, g, 0.0)
+            gr = np.where(x.data > 0, g, 0.0)
             if x.grad is None:
                 x.grad = Tensor(gr, _copy=False)
             else:
                 x.grad.data += gr
+
     out._backward_fn = bk
+
     def fwd(t_x):
-        if t_x is None: return np.zeros_like(out.data)
+        if t_x is None:
+            return np.zeros_like(out.data)
         return np.where(x.data > 0, t_x, 0.0)
+
     out._forward_fn = fwd
     return out
 
@@ -1024,28 +1320,38 @@ def gelu(x):
         try:
             t = acc.gelu(d)
         except Exception:
-            t = 0.5 * d * (1 + np.tanh(np.sqrt(2/np.pi) * (d + 0.044715 * d**3)))
+            t = 0.5 * d * (1 + np.tanh(np.sqrt(2 / np.pi) * (d + 0.044715 * d**3)))
     else:
-        t = 0.5 * d * (1 + np.tanh(np.sqrt(2/np.pi) * (d + 0.044715 * d**3)))
+        t = 0.5 * d * (1 + np.tanh(np.sqrt(2 / np.pi) * (d + 0.044715 * d**3)))
     if isinstance(x, Tensor):
         out = Tensor(t, requires_grad=x.requires_grad, _children=(x,), _copy=False)
-        if out.requires_grad and x.requires_grad: x._consumers.append(out)
+        if out.requires_grad and x.requires_grad:
+            x._consumers.append(out)
         # Cache tanh value for backward (avoids 3x recomputation)
-        _tanh_val = np.tanh(np.sqrt(2/np.pi) * (d + 0.044715 * d**3))
-        _sqrt_2_pi = np.sqrt(2/np.pi)
+        _tanh_val = np.tanh(np.sqrt(2 / np.pi) * (d + 0.044715 * d**3))
+        _sqrt_2_pi = np.sqrt(2 / np.pi)
+
         def bk(g):
             if x.requires_grad:
-                d_gelu = 0.5 * (1 + _tanh_val) + 0.5 * d * (1 - _tanh_val**2) * _sqrt_2_pi * (1 + 3 * 0.044715 * d**2)
+                d_gelu = 0.5 * (1 + _tanh_val) + 0.5 * d * (1 - _tanh_val**2) * _sqrt_2_pi * (
+                    1 + 3 * 0.044715 * d**2
+                )
                 grad_val = d_gelu * g
                 if x.grad is None:
                     x.grad = Tensor(grad_val, _copy=False)
                 else:
                     x.grad.data += grad_val
+
         out._backward_fn = bk
+
         def fwd(t_x):
-            if t_x is None: return np.zeros_like(out.data)
-            d_gelu = 0.5 * (1 + _tanh_val) + 0.5 * d * (1 - _tanh_val**2) * _sqrt_2_pi * (1 + 3 * 0.044715 * d**2)
+            if t_x is None:
+                return np.zeros_like(out.data)
+            d_gelu = 0.5 * (1 + _tanh_val) + 0.5 * d * (1 - _tanh_val**2) * _sqrt_2_pi * (
+                1 + 3 * 0.044715 * d**2
+            )
             return d_gelu * t_x
+
         out._forward_fn = fwd
         return out
     return t
@@ -1068,7 +1374,9 @@ def silu(x):
             logger.debug("GPU silu failed, falling back to CPU: %s", e)
     if isinstance(x, Tensor):
         out = Tensor(t, requires_grad=x.requires_grad, _children=(x,), _copy=False)
-        if out.requires_grad and x.requires_grad: x._consumers.append(out)
+        if out.requires_grad and x.requires_grad:
+            x._consumers.append(out)
+
         def bk(g):
             if x.requires_grad:
                 d_silu = s + d * s * (1 - s)
@@ -1077,11 +1385,15 @@ def silu(x):
                     x.grad = Tensor(grad_val, _copy=False)
                 else:
                     x.grad.data += grad_val
+
         out._backward_fn = bk
+
         def fwd(t_x):
-            if t_x is None: return np.zeros_like(out.data)
+            if t_x is None:
+                return np.zeros_like(out.data)
             d_silu = s + d * s * (1 - s)
             return d_silu * t_x
+
         out._forward_fn = fwd
         return out
     return t
@@ -1118,8 +1430,10 @@ def cross_entropy(logits, targets):
     t = np.clip(t, 0, lp.shape[-1] - 1)
     loss = -lp[np.arange(n), t].mean()
     out = Tensor(loss, requires_grad=True, _children=(logits, targets))
-    if logits.requires_grad: logits._consumers.append(out)
+    if logits.requires_grad:
+        logits._consumers.append(out)
     _probs = np.exp(lp)
+
     def bk(g):
         probs = _probs.copy()
         probs[np.arange(n), t] -= 1
@@ -1132,9 +1446,12 @@ def cross_entropy(logits, targets):
             logits.grad = Tensor(grad_val, _copy=False)
         else:
             logits.grad.data += grad_val
+
     out._backward_fn = bk
+
     def fwd(t_logits, _=None):
-        if t_logits is None: return np.array(0.0, dtype=np.float32)
+        if t_logits is None:
+            return np.array(0.0, dtype=np.float32)
         # JVP of cross_entropy w.r.t. logits
         if ndim > 2:
             t_logits_2d = t_logits.reshape(-1, orig_shape[-1])
@@ -1145,16 +1462,18 @@ def cross_entropy(logits, targets):
         grad /= n
         result = (grad * t_logits_2d).sum()
         return np.array(result, dtype=np.float32)
+
     out._forward_fn = fwd
     return out
 
 
 def mse_loss(pred, target):
-    return _mean(_mul(pred-target, pred-target))
+    return _mean(_mul(pred - target, pred - target))
 
 
 def _to_np(x):
-    if isinstance(x, Tensor): return x.data
+    if isinstance(x, Tensor):
+        return x.data
     return np.array(x)
 
 
@@ -1163,7 +1482,9 @@ def topk(x: Tensor, k: int):
     flat = data.reshape(-1)
     indices = flat.argsort()[-k:][::-1]
     values = flat[indices]
-    return Tensor(values.reshape(1, k), requires_grad=False), Tensor(indices.reshape(1, k), requires_grad=False)
+    return Tensor(values.reshape(1, k), requires_grad=False), Tensor(
+        indices.reshape(1, k), requires_grad=False
+    )
 
 
 def multinomial(x: Tensor, num_samples: int):
@@ -1171,8 +1492,10 @@ def multinomial(x: Tensor, num_samples: int):
     flat = data.reshape(-1)
     flat = np.maximum(flat, 0)
     total = flat.sum()
-    if total > 0: flat = flat / total
-    else: flat = np.ones_like(flat) / flat.size
+    if total > 0:
+        flat = flat / total
+    else:
+        flat = np.ones_like(flat) / flat.size
     indices = np.random.choice(len(flat), size=num_samples, p=flat, replace=False)
     return Tensor(indices.reshape(1, num_samples), requires_grad=False)
 
@@ -1185,7 +1508,8 @@ def stack(tensors, dim=0):
 
 def concatenate(tensors, dim=-1):
     arrays = [_to_np(t) for t in tensors]
-    if dim == -1: dim = len(arrays[0].shape) - 1
+    if dim == -1:
+        dim = len(arrays[0].shape) - 1
     concat = np.concatenate(arrays, axis=dim)
     return Tensor(concat, requires_grad=False)
 
@@ -1213,11 +1537,16 @@ def where(condition, a, b):
 
 
 class _NoGrad:
-    def __enter__(self): return self
-    def __exit__(self, *a): pass
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        pass
+
     def __call__(self, func):
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
+
         return wrapper
 
 
@@ -1244,6 +1573,7 @@ def cpu(x: Tensor) -> Tensor:
 # =============================================================================
 # LOGIT PROCESSORS — composable pipeline for quality generation
 # =============================================================================
+
 
 def _apply_temperature(logits: np.ndarray, temperature: float) -> np.ndarray:
     """Scale logits by temperature. Temp→0 ≈ greedy, temp=1 ≈ identity, temp>1 ≈ more random."""
@@ -1277,8 +1607,9 @@ def _apply_top_p(logits: np.ndarray, p: float) -> np.ndarray:
     return logits
 
 
-def _apply_repetition_penalty(logits: np.ndarray, generated_ids: np.ndarray,
-                              penalty: float) -> np.ndarray:
+def _apply_repetition_penalty(
+    logits: np.ndarray, generated_ids: np.ndarray, penalty: float
+) -> np.ndarray:
     """Penalize tokens that have already been generated. penalty>1 discourages repeats."""
     if abs(penalty - 1.0) < 1e-6 or len(generated_ids) == 0:
         return logits
@@ -1292,12 +1623,14 @@ def _apply_repetition_penalty(logits: np.ndarray, generated_ids: np.ndarray,
     return logits
 
 
-def _apply_frequency_penalty(logits: np.ndarray, generated_ids: np.ndarray,
-                             penalty: float) -> np.ndarray:
+def _apply_frequency_penalty(
+    logits: np.ndarray, generated_ids: np.ndarray, penalty: float
+) -> np.ndarray:
     """Scale logits proportionally to token frequency. penalty>0 reduces repeats."""
     if abs(penalty) < 1e-6 or len(generated_ids) == 0:
         return logits
     from collections import Counter
+
     freq = Counter(generated_ids)
     for tok, count in freq.items():
         if tok >= logits.shape[-1]:
@@ -1306,8 +1639,9 @@ def _apply_frequency_penalty(logits: np.ndarray, generated_ids: np.ndarray,
     return logits
 
 
-def _apply_presence_penalty(logits: np.ndarray, generated_ids: np.ndarray,
-                            penalty: float) -> np.ndarray:
+def _apply_presence_penalty(
+    logits: np.ndarray, generated_ids: np.ndarray, penalty: float
+) -> np.ndarray:
     """Penalize any token that has appeared at least once."""
     if abs(penalty) < 1e-6 or len(generated_ids) == 0:
         return logits
@@ -1318,13 +1652,17 @@ def _apply_presence_penalty(logits: np.ndarray, generated_ids: np.ndarray,
     return logits
 
 
-def _sample_from_logits(logits: np.ndarray, temperature: float = 1.0,
-                        top_k: Optional[int] = None, top_p: Optional[float] = None,
-                        repetition_penalty: float = 1.0,
-                        frequency_penalty: float = 0.0,
-                        presence_penalty: float = 0.0,
-                        generated_ids: Optional[np.ndarray] = None,
-                        eos_token: Optional[int] = None) -> int:
+def _sample_from_logits(
+    logits: np.ndarray,
+    temperature: float = 1.0,
+    top_k: int | None = None,
+    top_p: float | None = None,
+    repetition_penalty: float = 1.0,
+    frequency_penalty: float = 0.0,
+    presence_penalty: float = 0.0,
+    generated_ids: np.ndarray | None = None,
+    eos_token: int | None = None,
+) -> int:
     """Full logit processing pipeline: penalties → filtering → temperature → sample.
 
     Args:
@@ -1348,8 +1686,12 @@ def _sample_from_logits(logits: np.ndarray, temperature: float = 1.0,
 
     # Fast path: greedy (temp≈0) with no penalties → skip copy entirely
     is_greedy = temperature < 1e-6
-    has_penalties = (repetition_penalty != 1.0 or frequency_penalty != 0.0 or
-                     presence_penalty != 0.0 or eos_token is not None)
+    has_penalties = (
+        repetition_penalty != 1.0
+        or frequency_penalty != 0.0
+        or presence_penalty != 0.0
+        or eos_token is not None
+    )
     if is_greedy and not has_penalties:
         safe = np.where(np.isfinite(logits[0]), logits[0], -1e9)
         return int(np.argmax(safe))
@@ -1392,12 +1734,14 @@ def _sample_from_logits(logits: np.ndarray, temperature: float = 1.0,
 # SOUL LAYERS
 # =============================================================================
 
+
 class SloLayer:
     def __init__(self, name=""):
         self.name = name or self.__class__.__name__
-        self.soul_traits: Dict[str, float] = {}
+        self.soul_traits: dict[str, float] = {}
 
-    def parameters(self) -> List[Tensor]: return []
+    def parameters(self) -> list[Tensor]:
+        return []
 
     def train(self, mode: bool = True):
         """Set training mode. Subclasses with dropout override this."""
@@ -1407,15 +1751,20 @@ class SloLayer:
         """Set evaluation mode (disables dropout)."""
         self.train(False)
 
-    def soul_signature(self) -> Dict: return {"layer": self.__class__.__name__, "name": self.name, "soul_traits": self.soul_traits}
+    def soul_signature(self) -> dict:
+        return {
+            "layer": self.__class__.__name__,
+            "name": self.name,
+            "soul_traits": self.soul_traits,
+        }
 
     def __call__(self, x) -> Tensor:
         return self.forward(x)
 
-    def named_children(self) -> List[Tuple[str, "SloLayer"]]:
+    def named_children(self) -> list[tuple[str, SloLayer]]:
         return []
 
-    def named_modules(self, prefix="") -> List[Tuple[str, "SloLayer"]]:
+    def named_modules(self, prefix="") -> list[tuple[str, SloLayer]]:
         return [(prefix, self)]
 
 
@@ -1423,14 +1772,18 @@ class SloLinear(SloLayer):
     def __init__(self, in_f, out_f, name="", bias=True, _lazy=False):
         super().__init__(name or f"Lin_{in_f}x{out_f}")
         if _lazy:
-            self.weight = Tensor(np.zeros((out_f, in_f), dtype=np.float32), requires_grad=True, _copy=False)
+            self.weight = Tensor(
+                np.zeros((out_f, in_f), dtype=np.float32), requires_grad=True, _copy=False
+            )
         else:
-            s = math.sqrt(2.0/(in_f+out_f))
-            self.weight = randn((out_f, in_f), requires_grad=True); self.weight.data *= s
+            s = math.sqrt(2.0 / (in_f + out_f))
+            self.weight = randn((out_f, in_f), requires_grad=True)
+            self.weight.data *= s
         self.use_bias = bias
         if bias:
             self.bias = zeros((out_f,), requires_grad=True)
-        self.out_features = out_f; self.in_features = in_f
+        self.out_features = out_f
+        self.in_features = in_f
         self._weight_T = None
         self._weight_T_contig = None  # cached contiguous (K, N) transpose for numpy GEMM
         self.soul_traits = {"creativity": 0.5, "confidence": 0.5, "warmth": 0.5}
@@ -1442,7 +1795,7 @@ class SloLinear(SloLayer):
 
     def __deepcopy__(self, memo):
         new = self.__class__.__new__(self.__class__)
-        new.__dict__.update({k: v for k, v in self.__dict__.items() if k != '_lock'})
+        new.__dict__.update({k: v for k, v in self.__dict__.items() if k != "_lock"})
         new._lock = threading.Lock()
         memo[id(self)] = new
         return new
@@ -1492,12 +1845,15 @@ class SloLinear(SloLayer):
                 try:
                     if self._quant_unpacked is None:
                         from domain.infrastructure._internal.quantization import _unpack_int4
+
                         signed = self._quant_info.meta.mode == "symmetric"
                         n_total = int(np.prod(self._quant_info.meta.original_shape))
                         arr = self._quant_info.array
                         packed_flat = arr.ravel() if arr.ndim == 2 else arr
                         unpacked_1d = _unpack_int4(packed_flat, n_total, signed=signed)
-                        self._quant_unpacked = unpacked_1d.reshape(self._quant_info.meta.original_shape).astype(np.int8)
+                        self._quant_unpacked = unpacked_1d.reshape(
+                            self._quant_info.meta.original_shape
+                        ).astype(np.int8)
                 finally:
                     self._lock.release()
             return self._quant_unpacked
@@ -1555,6 +1911,7 @@ class SloLinear(SloLayer):
         data is synced into self.weight for backward compatibility.
         """
         from domains.infrastructure.pugqeep.point_weight import PointWeight
+
         pw = PointWeight.from_array(
             self.weight.data,
             identity=self.name,
@@ -1567,43 +1924,57 @@ class SloLinear(SloLayer):
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
         if self._quant_info is not None and self._quant_info.is_quantized:
             from domain.infrastructure._internal.quantization import (
-                quantized_linear, int4_quantized_linear,
+                int4_quantized_linear,
+                quantized_linear,
             )
+
             bias_arr = self.bias.data if self.use_bias else None
             bits = self._quant_info.meta.bits
             if bits == 4:
                 K = self._quant_info.meta.original_shape[-1]
                 return int4_quantized_linear(
-                    x, self._quant_info.array,
+                    x,
+                    self._quant_info.array,
                     self._quant_info.meta.scale,
                     self._quant_info.meta.zero_point,
-                    K, bias_arr,
+                    K,
+                    bias_arr,
                 )
             return quantized_linear(
-                x, self._get_quant_array(), self._quant_info.meta.scale,
-                self._quant_info.meta.zero_point, bias_arr,
+                x,
+                self._get_quant_array(),
+                self._quant_info.meta.scale,
+                self._quant_info.meta.zero_point,
+                bias_arr,
             )
         return x @ self.weight.data.T + self.bias.data
 
     def forward(self, x: Tensor) -> Tensor:
         if self._quant_info is not None and self._quant_info.is_quantized:
             from domain.infrastructure._internal.quantization import (
-                quantized_linear, int4_quantized_linear,
+                int4_quantized_linear,
+                quantized_linear,
             )
+
             bias_arr = self.bias.data if self.use_bias else None
             bits = self._quant_info.meta.bits
             if bits == 4:
                 K = self._quant_info.meta.original_shape[-1]
                 result = int4_quantized_linear(
-                    x.data, self._quant_info.array,
+                    x.data,
+                    self._quant_info.array,
                     self._quant_info.meta.scale,
                     self._quant_info.meta.zero_point,
-                    K, bias_arr,
+                    K,
+                    bias_arr,
                 )
             else:
                 result = quantized_linear(
-                    x.data, self._get_quant_array(), self._quant_info.meta.scale,
-                    self._quant_info.meta.zero_point, bias_arr,
+                    x.data,
+                    self._get_quant_array(),
+                    self._quant_info.meta.scale,
+                    self._quant_info.meta.zero_point,
+                    bias_arr,
                 )
             return Tensor(result, requires_grad=x.requires_grad, _children=(x,))
         out = _matmul(x, self._get_weight_T())
@@ -1611,7 +1982,7 @@ class SloLinear(SloLayer):
             out = out + self.bias
         return out
 
-    def parameters(self) -> List[Tensor]:
+    def parameters(self) -> list[Tensor]:
         params = [self.weight]
         if self.use_bias:
             params.append(self.bias)
@@ -1621,16 +1992,19 @@ class SloLinear(SloLayer):
 class SloDropout(SloLayer):
     def __init__(self, p=0.1, name=""):
         super().__init__(name or f"Dropout{p}")
-        self.p = p; self.soul_traits = {}
+        self.p = p
+        self.soul_traits = {}
         self.training = True
 
     def train(self, mode: bool = True):
         self.training = mode
 
     def forward(self, x: Tensor) -> Tensor:
-        if self.p == 0 or not self.training: return x
-        mask = np.random.binomial(1, 1-self.p, x.data.shape).astype(np.float32) / (1-self.p)
+        if self.p == 0 or not self.training:
+            return x
+        mask = np.random.binomial(1, 1 - self.p, x.data.shape).astype(np.float32) / (1 - self.p)
         out = Tensor(x.data * mask, requires_grad=x.requires_grad, _children=(x,))
+
         def bk(g):
             if x.requires_grad:
                 grad_val = g * mask
@@ -1638,20 +2012,26 @@ class SloDropout(SloLayer):
                     x.grad = Tensor(grad_val, _copy=False)
                 else:
                     x.grad.data += grad_val
-        out._backward_fn = bk; return out
 
-    def parameters(self) -> List[Tensor]: return []
+        out._backward_fn = bk
+        return out
+
+    def parameters(self) -> list[Tensor]:
+        return []
 
 
 class SloEmbedding(SloLayer):
     def __init__(self, num_emb, emb_dim, name="", _lazy=False):
         super().__init__(name or f"Emb_{num_emb}x{emb_dim}")
         if _lazy:
-            self.weight = Tensor(np.zeros((num_emb, emb_dim), dtype=np.float32), requires_grad=True, _copy=False)
+            self.weight = Tensor(
+                np.zeros((num_emb, emb_dim), dtype=np.float32), requires_grad=True, _copy=False
+            )
         else:
             self.weight = randn((num_emb, emb_dim), requires_grad=True)
-            self.weight.data *= math.sqrt(1.0/emb_dim)
-        self.num_embeddings = num_emb; self.embedding_dim = emb_dim
+            self.weight.data *= math.sqrt(1.0 / emb_dim)
+        self.num_embeddings = num_emb
+        self.embedding_dim = emb_dim
         self.soul_traits = {"curiosity": 0.5, "warmth": 0.5}
 
     def forward_numpy(self, indices: np.ndarray) -> np.ndarray:
@@ -1668,15 +2048,18 @@ class SloEmbedding(SloLayer):
                 # Reshape 3D to 2D by flattening last two dims
                 indices = indices.reshape(indices.shape[0], -1)
         clipped = np.clip(indices.astype(int), 0, self.num_embeddings - 1)
-        return np.take(self.weight.data, clipped, axis=0).reshape(indices.shape[0], indices.shape[1], self.embedding_dim)
+        return np.take(self.weight.data, clipped, axis=0).reshape(
+            indices.shape[0], indices.shape[1], self.embedding_dim
+        )
 
     def forward(self, indices: Tensor) -> Tensor:
         data = indices.data
         if data.ndim == 3:
             data = np.squeeze(data, axis=1)
-        flat = np.clip(data.astype(int).flatten(), 0, self.num_embeddings-1)
+        flat = np.clip(data.astype(int).flatten(), 0, self.num_embeddings - 1)
         embeds = self.weight.data[flat].reshape(data.shape[0], data.shape[1], self.embedding_dim)
         out = Tensor(embeds, requires_grad=True, _children=(self.weight,))
+
         def bk(g):
             g_arr = np.asarray(g)
             grad_out = g_arr.reshape(-1, self.embedding_dim)
@@ -1687,23 +2070,31 @@ class SloEmbedding(SloLayer):
                 self.weight.grad = Tensor(w_grad, _copy=False)
             else:
                 self.weight.grad.data += w_grad
-        out._backward_fn = bk; return out
 
-    def parameters(self) -> List[Tensor]: return [self.weight]
+        out._backward_fn = bk
+        return out
+
+    def parameters(self) -> list[Tensor]:
+        return [self.weight]
 
 
 class SloLSTM(SloLayer):
-    def __init__(self, vocab_size, embed_dim=256, hidden_dim=512, num_layers=2, dropout=0.2, name=""):
+    def __init__(
+        self, vocab_size, embed_dim=256, hidden_dim=512, num_layers=2, dropout=0.2, name=""
+    ):
         super().__init__(name or f"LSTM_{vocab_size}x{hidden_dim}")
-        self.vocab_size = vocab_size; self.embed_dim = embed_dim
-        self.hidden_dim = hidden_dim; self.num_layers = num_layers; self.dropout = dropout
+        self.vocab_size = vocab_size
+        self.embed_dim = embed_dim
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.dropout = dropout
         self.embedding = SloEmbedding(vocab_size, embed_dim, "embed")
-        self.W_ih = SloLinear(embed_dim, 4*hidden_dim, "W_ih")
-        self.W_hh = SloLinear(hidden_dim, 4*hidden_dim, "W_hh")
+        self.W_ih = SloLinear(embed_dim, 4 * hidden_dim, "W_ih")
+        self.W_hh = SloLinear(hidden_dim, 4 * hidden_dim, "W_hh")
         self.hidden_norm = SloRMSNorm(hidden_dim, 1e-5, "hidden_norm")
         if num_layers > 1:
-            self.W_ih2 = SloLinear(hidden_dim, 4*hidden_dim, "W_ih2")
-            self.W_hh2 = SloLinear(hidden_dim, 4*hidden_dim, "W_hh2")
+            self.W_ih2 = SloLinear(hidden_dim, 4 * hidden_dim, "W_ih2")
+            self.W_hh2 = SloLinear(hidden_dim, 4 * hidden_dim, "W_hh2")
             self.hidden_norm2 = SloRMSNorm(hidden_dim, 1e-5, "hidden_norm2")
         self.fc_out = SloLinear(hidden_dim, vocab_size, "fc_out")
         self.drop = SloDropout(dropout) if dropout > 0 else None
@@ -1713,21 +2104,29 @@ class SloLSTM(SloLayer):
     def _init_recurrent_weights(self):
         """Initialize recurrent weights with smaller scale for gradient stability."""
         s = math.sqrt(1.0 / self.hidden_dim)
-        self.W_hh.weight.data *= s / math.sqrt(2.0/(self.hidden_dim+4*self.hidden_dim)) if math.sqrt(2.0/(self.hidden_dim+4*self.hidden_dim)) > 0 else 1.0
+        self.W_hh.weight.data *= (
+            s / math.sqrt(2.0 / (self.hidden_dim + 4 * self.hidden_dim))
+            if math.sqrt(2.0 / (self.hidden_dim + 4 * self.hidden_dim)) > 0
+            else 1.0
+        )
         if self.num_layers > 1:
-            self.W_hh2.weight.data *= s / max(math.sqrt(2.0/(self.hidden_dim+4*self.hidden_dim)), 1e-8)
+            self.W_hh2.weight.data *= s / max(
+                math.sqrt(2.0 / (self.hidden_dim + 4 * self.hidden_dim)), 1e-8
+            )
 
-    def forward(self, x: Tensor, hidden=None, adapter=None) -> Tuple[Tensor, Tuple[Tensor, Tensor]]:
+    def forward(self, x: Tensor, hidden=None, adapter=None) -> tuple[Tensor, tuple[Tensor, Tensor]]:
         xd = x.data
         if xd.ndim == 3:
             xd = np.squeeze(xd, axis=1)
         xb = self.embedding.forward(type(x)(xd, requires_grad=False))
         xd = xb
         if self.drop:
-            xd = self.drop.forward(type(x)(xd.data if isinstance(xd, Tensor) else xd, requires_grad=xd.requires_grad))
+            xd = self.drop.forward(
+                type(x)(xd.data if isinstance(xd, Tensor) else xd, requires_grad=xd.requires_grad)
+            )
         xd_data = xd.data if isinstance(xd, Tensor) else xd
-        h = _reshape(hidden[0] if hidden else zeros((1,self.hidden_dim)), (1,self.hidden_dim))
-        c = _reshape(hidden[1] if hidden else zeros((1,self.hidden_dim)), (1,self.hidden_dim))
+        h = _reshape(hidden[0] if hidden else zeros((1, self.hidden_dim)), (1, self.hidden_dim))
+        c = _reshape(hidden[1] if hidden else zeros((1, self.hidden_dim)), (1, self.hidden_dim))
         hd = self.hidden_dim
         seq_len = xd_data.shape[1]
         xd_data.shape[2]
@@ -1740,14 +2139,15 @@ class SloLSTM(SloLayer):
             igates = _slice(all_igates, (slice(None), t, slice(None)))  # (B, 4*hd)
             gates = _add(igates, _matmul(h, W_hh_T))
             gate_i = sigmoid(_slice(gates, (slice(None), slice(hd))))
-            gate_f = sigmoid(_slice(gates, (slice(None), slice(hd, 2*hd))))
-            gate_g = tanh(_slice(gates, (slice(None), slice(2*hd, 3*hd))))
-            gate_o = sigmoid(_slice(gates, (slice(None), slice(3*hd, None))))
+            gate_f = sigmoid(_slice(gates, (slice(None), slice(hd, 2 * hd))))
+            gate_g = tanh(_slice(gates, (slice(None), slice(2 * hd, 3 * hd))))
+            gate_o = sigmoid(_slice(gates, (slice(None), slice(3 * hd, None))))
             c = _add(_mul(gate_f, c), _mul(gate_i, gate_g))
             h_raw = _mul(gate_o, tanh(c))
             h = self.hidden_norm.forward(_reshape(h_raw, (1, hd)))
         if self.num_layers > 1:
-            h2 = zeros((1,self.hidden_dim)); c2 = zeros((1,self.hidden_dim))
+            h2 = zeros((1, self.hidden_dim))
+            c2 = zeros((1, self.hidden_dim))
             W_ih2_T = self.W_ih2.weight.T()
             W_hh2_T = self.W_hh2.weight.T()
             # h is the layer-1 output — constant across the layer-2 loop, so
@@ -1756,21 +2156,26 @@ class SloLSTM(SloLayer):
             for t in range(seq_len):
                 gates2 = _add(igates2, _matmul(h2, W_hh2_T))
                 gate_i2 = sigmoid(_slice(gates2, (slice(None), slice(hd))))
-                gate_f2 = sigmoid(_slice(gates2, (slice(None), slice(hd, 2*hd))))
-                gate_g2 = tanh(_slice(gates2, (slice(None), slice(2*hd, 3*hd))))
-                gate_o2 = sigmoid(_slice(gates2, (slice(None), slice(3*hd, None))))
+                gate_f2 = sigmoid(_slice(gates2, (slice(None), slice(hd, 2 * hd))))
+                gate_g2 = tanh(_slice(gates2, (slice(None), slice(2 * hd, 3 * hd))))
+                gate_o2 = sigmoid(_slice(gates2, (slice(None), slice(3 * hd, None))))
                 c2 = _add(_mul(gate_f2, c2), _mul(gate_i2, gate_g2))
                 h2_raw = _mul(gate_o2, tanh(c2))
                 h2 = self.hidden_norm2.forward(_reshape(h2_raw, (1, hd)))
-            h,h2,c,c2 = h2,h,c2,c
+            h, h2, c, c2 = h2, h, c2, c
         if adapter is not None:
             h_adapted = adapter.forward(_reshape(h, (1, self.hidden_dim)))
             h = _reshape(h_adapted, (1, self.hidden_dim))
-        logits = self.fc_out.forward(_reshape(h,(self.hidden_dim,)))
+        logits = self.fc_out.forward(_reshape(h, (self.hidden_dim,)))
         logits_2d = _reshape(logits, (1, self.vocab_size))
-        return logits_2d, (Tensor(h.data.reshape(hd), requires_grad=False), Tensor(c.data.reshape(hd), requires_grad=False))
+        return logits_2d, (
+            Tensor(h.data.reshape(hd), requires_grad=False),
+            Tensor(c.data.reshape(hd), requires_grad=False),
+        )
 
-    def forward_numpy(self, x: np.ndarray, hidden=None, adapter=None, skip_embed=False) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    def forward_numpy(
+        self, x: np.ndarray, hidden=None, adapter=None, skip_embed=False
+    ) -> tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]:
         """NumPy-only forward pass — no Tensor overhead. Pre-computes all input gates.
 
         Args:
@@ -1803,9 +2208,9 @@ class SloLSTM(SloLayer):
             gates = all_igates[:, t, :] + h @ W_hh_T
             g = gates[0]
             gi = 1.0 / (1.0 + np.exp(np.clip(-g[:hd], -500.0, 500.0)))
-            gf = 1.0 / (1.0 + np.exp(np.clip(-g[hd:2*hd], -500.0, 500.0)))
-            gg = np.tanh(g[2*hd:3*hd])
-            go = 1.0 / (1.0 + np.exp(np.clip(-g[3*hd:], -500.0, 500.0)))
+            gf = 1.0 / (1.0 + np.exp(np.clip(-g[hd : 2 * hd], -500.0, 500.0)))
+            gg = np.tanh(g[2 * hd : 3 * hd])
+            go = 1.0 / (1.0 + np.exp(np.clip(-g[3 * hd :], -500.0, 500.0)))
             c = gf * c + gi * gg
             h_raw = go * np.tanh(c)
             rms = np.sqrt(np.mean(h_raw**2, axis=-1, keepdims=True) + 1e-5)
@@ -1819,9 +2224,9 @@ class SloLSTM(SloLayer):
                 gates2 = all_igates2 + h2 @ W_hh2_T
                 g2 = gates2[0]
                 gi2 = 1.0 / (1.0 + np.exp(np.clip(-g2[:hd], -500.0, 500.0)))
-                gf2 = 1.0 / (1.0 + np.exp(np.clip(-g2[hd:2*hd], -500.0, 500.0)))
-                gg2 = np.tanh(g2[2*hd:3*hd])
-                go2 = 1.0 / (1.0 + np.exp(np.clip(-g2[3*hd:], -500.0, 500.0)))
+                gf2 = 1.0 / (1.0 + np.exp(np.clip(-g2[hd : 2 * hd], -500.0, 500.0)))
+                gg2 = np.tanh(g2[2 * hd : 3 * hd])
+                go2 = 1.0 / (1.0 + np.exp(np.clip(-g2[3 * hd :], -500.0, 500.0)))
                 c2 = gf2 * c2 + gi2 * gg2
                 h2_raw = go2 * np.tanh(c2)
                 rms2 = np.sqrt(np.mean(h2_raw**2, axis=-1, keepdims=True) + 1e-5)
@@ -1837,7 +2242,9 @@ class SloLSTM(SloLayer):
         logits = h.reshape(hd) @ self.fc_out.weight.data.T + self.fc_out.bias.data
         return logits.reshape(1, self.vocab_size), (h.reshape(hd), c.reshape(hd))
 
-    def forward_numba(self, x: np.ndarray, hidden=None) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    def forward_numba(
+        self, x: np.ndarray, hidden=None
+    ) -> tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]:
         """Numba-JIT accelerated forward pass — fastest inference path.
         Compiles the recurrent loop to machine code, eliminating Python loop overhead.
         Falls back to forward_numpy if Numba is unavailable.
@@ -1848,20 +2255,20 @@ class SloLSTM(SloLayer):
             from numba import njit  # pragma: no cover
         except ImportError:  # pragma: no cover
             return self.forward_numpy(x, hidden)  # pragma: no cover
-  # pragma: no cover
+        # pragma: no cover
         xd = x  # pragma: no cover
         if xd.ndim == 3:  # pragma: no cover
             xd = np.squeeze(xd, axis=1)  # pragma: no cover
         embeds = self.embedding.forward_numpy(xd)  # pragma: no cover
         hd = self.hidden_dim  # pragma: no cover
-  # pragma: no cover
+        # pragma: no cover
         W_ih_np = self.W_ih.weight.data.astype(np.float32).copy()  # pragma: no cover
         W_hh_np = self.W_hh.weight.data.astype(np.float32).copy()  # pragma: no cover
         fc_w = self.fc_out.weight.data.astype(np.float32).copy()  # pragma: no cover
         fc_b = self.fc_out.bias.data.astype(np.float32).copy()  # pragma: no cover
         W_ih_T = W_ih_np.T.copy()  # pragma: no cover
         W_hh_T = W_hh_np.T.copy()  # pragma: no cover
-  # pragma: no cover
+        # pragma: no cover
         has_layer2 = self.num_layers > 1  # pragma: no cover
         if has_layer2:  # pragma: no cover
             W_ih2_np = self.W_ih2.weight.data.astype(np.float32).copy()  # pragma: no cover
@@ -1870,48 +2277,84 @@ class SloLSTM(SloLayer):
             W_hh2_T = W_hh2_np.T.copy()  # pragma: no cover
         else:  # pragma: no cover
             W_ih2_T = W_hh2_T = np.empty((1, 1), dtype=np.float32)  # pragma: no cover
-  # pragma: no cover
-        h = hidden[0].copy().astype(np.float32) if hidden else np.zeros((1, hd), dtype=np.float32)  # pragma: no cover
-        c = hidden[1].copy().astype(np.float32) if hidden else np.zeros((1, hd), dtype=np.float32)  # pragma: no cover
-  # pragma: no cover
+        # pragma: no cover
+        h = (
+            hidden[0].copy().astype(np.float32) if hidden else np.zeros((1, hd), dtype=np.float32)
+        )  # pragma: no cover
+        c = (
+            hidden[1].copy().astype(np.float32) if hidden else np.zeros((1, hd), dtype=np.float32)
+        )  # pragma: no cover
+
+        # pragma: no cover
         @njit(cache=True)  # pragma: no cover
         def _lstm_cell_1layer(embeds_flat, W_ih_T, W_hh_T, h, c, hd):  # pragma: no cover
             seq_len = embeds_flat.shape[0]  # pragma: no cover
             h_out = h.copy()  # pragma: no cover
             c_out = c.copy()  # pragma: no cover
             for t in range(seq_len):  # pragma: no cover
-                ce = embeds_flat[t:t+1, :]  # pragma: no cover
+                ce = embeds_flat[t : t + 1, :]  # pragma: no cover
                 igates = np.dot(ce, W_ih_T)  # pragma: no cover
                 hgates = np.dot(h_out, W_hh_T)  # pragma: no cover
                 gates = igates + hgates  # pragma: no cover
                 gates_1d = gates[0, :]  # pragma: no cover
-                gi = np.float32(1.0) / (np.float32(1.0) + np.exp(np.clip(-gates_1d[:hd], np.float32(-500.0), np.float32(500.0))))  # pragma: no cover
-                gf = np.float32(1.0) / (np.float32(1.0) + np.exp(np.clip(-gates_1d[hd:2*hd], np.float32(-500.0), np.float32(500.0))))  # pragma: no cover
-                gg = np.tanh(gates_1d[2*hd:3*hd])  # pragma: no cover
-                go = np.float32(1.0) / (np.float32(1.0) + np.exp(np.clip(-gates_1d[3*hd:], np.float32(-500.0), np.float32(500.0))))  # pragma: no cover
-                c_out = gf.reshape(1, hd) * c_out + gi.reshape(1, hd) * gg.reshape(1, hd)  # pragma: no cover
+                gi = np.float32(1.0) / (
+                    np.float32(1.0)
+                    + np.exp(np.clip(-gates_1d[:hd], np.float32(-500.0), np.float32(500.0)))
+                )  # pragma: no cover
+                gf = np.float32(1.0) / (
+                    np.float32(1.0)
+                    + np.exp(np.clip(-gates_1d[hd : 2 * hd], np.float32(-500.0), np.float32(500.0)))
+                )  # pragma: no cover
+                gg = np.tanh(gates_1d[2 * hd : 3 * hd])  # pragma: no cover
+                go = np.float32(1.0) / (
+                    np.float32(1.0)
+                    + np.exp(np.clip(-gates_1d[3 * hd :], np.float32(-500.0), np.float32(500.0)))
+                )  # pragma: no cover
+                c_out = gf.reshape(1, hd) * c_out + gi.reshape(1, hd) * gg.reshape(
+                    1, hd
+                )  # pragma: no cover
                 h_out = go.reshape(1, hd) * np.tanh(c_out)  # pragma: no cover
             return h_out, c_out  # pragma: no cover
-  # pragma: no cover
+
+        # pragma: no cover
         @njit(cache=True)  # pragma: no cover
-        def _lstm_cell_2layer(embeds_flat, W_ih_T, W_hh_T, W_ih2_T, W_hh2_T,  # pragma: no cover
-                               h, c, hd):  # pragma: no cover
+        def _lstm_cell_2layer(
+            embeds_flat,
+            W_ih_T,
+            W_hh_T,
+            W_ih2_T,
+            W_hh2_T,  # pragma: no cover
+            h,
+            c,
+            hd,
+        ):  # pragma: no cover
             seq_len = embeds_flat.shape[0]  # pragma: no cover
             h1 = h.copy()  # pragma: no cover
             c1 = c.copy()  # pragma: no cover
             for t in range(seq_len):  # pragma: no cover
-                ce = embeds_flat[t:t+1, :]  # pragma: no cover
+                ce = embeds_flat[t : t + 1, :]  # pragma: no cover
                 igates = np.dot(ce, W_ih_T)  # pragma: no cover
                 hgates = np.dot(h1, W_hh_T)  # pragma: no cover
                 gates = igates + hgates  # pragma: no cover
                 g = gates[0, :]  # pragma: no cover
-                gi = np.float32(1.0) / (np.float32(1.0) + np.exp(np.clip(-g[:hd], np.float32(-500.0), np.float32(500.0))))  # pragma: no cover
-                gf = np.float32(1.0) / (np.float32(1.0) + np.exp(np.clip(-g[hd:2*hd], np.float32(-500.0), np.float32(500.0))))  # pragma: no cover
-                gg = np.tanh(g[2*hd:3*hd])  # pragma: no cover
-                go = np.float32(1.0) / (np.float32(1.0) + np.exp(np.clip(-g[3*hd:], np.float32(-500.0), np.float32(500.0))))  # pragma: no cover
-                c1 = gf.reshape(1, hd) * c1 + gi.reshape(1, hd) * gg.reshape(1, hd)  # pragma: no cover
+                gi = np.float32(1.0) / (
+                    np.float32(1.0)
+                    + np.exp(np.clip(-g[:hd], np.float32(-500.0), np.float32(500.0)))
+                )  # pragma: no cover
+                gf = np.float32(1.0) / (
+                    np.float32(1.0)
+                    + np.exp(np.clip(-g[hd : 2 * hd], np.float32(-500.0), np.float32(500.0)))
+                )  # pragma: no cover
+                gg = np.tanh(g[2 * hd : 3 * hd])  # pragma: no cover
+                go = np.float32(1.0) / (
+                    np.float32(1.0)
+                    + np.exp(np.clip(-g[3 * hd :], np.float32(-500.0), np.float32(500.0)))
+                )  # pragma: no cover
+                c1 = gf.reshape(1, hd) * c1 + gi.reshape(1, hd) * gg.reshape(
+                    1, hd
+                )  # pragma: no cover
                 h1 = go.reshape(1, hd) * np.tanh(c1)  # pragma: no cover
-  # pragma: no cover
+            # pragma: no cover
             h2 = np.zeros((1, hd), dtype=np.float32)  # pragma: no cover
             c2 = np.zeros((1, hd), dtype=np.float32)  # pragma: no cover
             for t in range(seq_len):  # pragma: no cover
@@ -1919,20 +2362,34 @@ class SloLSTM(SloLayer):
                 hgates2 = np.dot(h2, W_hh2_T)  # pragma: no cover
                 gates2 = igates2 + hgates2  # pragma: no cover
                 g2 = gates2[0, :]  # pragma: no cover
-                gi2 = np.float32(1.0) / (np.float32(1.0) + np.exp(np.clip(-g2[:hd], np.float32(-500.0), np.float32(500.0))))  # pragma: no cover
-                gf2 = np.float32(1.0) / (np.float32(1.0) + np.exp(np.clip(-g2[hd:2*hd], np.float32(-500.0), np.float32(500.0))))  # pragma: no cover
-                gg2 = np.tanh(g2[2*hd:3*hd])  # pragma: no cover
-                go2 = np.float32(1.0) / (np.float32(1.0) + np.exp(np.clip(-g2[3*hd:], np.float32(-500.0), np.float32(500.0))))  # pragma: no cover
-                c2 = gf2.reshape(1, hd) * c2 + gi2.reshape(1, hd) * gg2.reshape(1, hd)  # pragma: no cover
+                gi2 = np.float32(1.0) / (
+                    np.float32(1.0)
+                    + np.exp(np.clip(-g2[:hd], np.float32(-500.0), np.float32(500.0)))
+                )  # pragma: no cover
+                gf2 = np.float32(1.0) / (
+                    np.float32(1.0)
+                    + np.exp(np.clip(-g2[hd : 2 * hd], np.float32(-500.0), np.float32(500.0)))
+                )  # pragma: no cover
+                gg2 = np.tanh(g2[2 * hd : 3 * hd])  # pragma: no cover
+                go2 = np.float32(1.0) / (
+                    np.float32(1.0)
+                    + np.exp(np.clip(-g2[3 * hd :], np.float32(-500.0), np.float32(500.0)))
+                )  # pragma: no cover
+                c2 = gf2.reshape(1, hd) * c2 + gi2.reshape(1, hd) * gg2.reshape(
+                    1, hd
+                )  # pragma: no cover
                 h2 = go2.reshape(1, hd) * np.tanh(c2)  # pragma: no cover
             return h2, c2  # pragma: no cover
-  # pragma: no cover
+
+        # pragma: no cover
         embeds_flat = embeds[0]  # (seq_len, embed_dim) — contiguous  # pragma: no cover
         if has_layer2:  # pragma: no cover
-            h, c = _lstm_cell_2layer(embeds_flat, W_ih_T, W_hh_T, W_ih2_T, W_hh2_T, h, c, hd)  # pragma: no cover
+            h, c = _lstm_cell_2layer(
+                embeds_flat, W_ih_T, W_hh_T, W_ih2_T, W_hh2_T, h, c, hd
+            )  # pragma: no cover
         else:  # pragma: no cover
             h, c = _lstm_cell_1layer(embeds_flat, W_ih_T, W_hh_T, h, c, hd)  # pragma: no cover
-  # pragma: no cover
+        # pragma: no cover
         logits = np.dot(h.reshape(hd), fc_w.T.copy()) + fc_b  # pragma: no cover
         logits_2d = logits.reshape(1, self.vocab_size).astype(np.float32)  # pragma: no cover
         return logits_2d, (h.reshape(hd), c.reshape(hd))  # pragma: no cover
@@ -1943,7 +2400,7 @@ class SloLSTM(SloLayer):
                 p.grad.data.fill(0)
                 p.grad = None
 
-    def init_hidden(self, batch=1) -> Tuple[Tensor, Tensor]:
+    def init_hidden(self, batch=1) -> tuple[Tensor, Tensor]:
         return zeros((batch, self.hidden_dim)), zeros((batch, self.hidden_dim))
 
     @no_grad()
@@ -1952,13 +2409,13 @@ class SloLSTM(SloLayer):
         input_ids,
         max_new_tokens: int = 50,
         temperature: float = 0.8,
-        top_k: Optional[int] = 40,
-        top_p: Optional[float] = 0.95,
+        top_k: int | None = 40,
+        top_p: float | None = 0.95,
         repetition_penalty: float = 1.0,
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
-        eos_token: Optional[int] = None,
-        extra_stop_ids: Optional[Sequence[int]] = None,
+        eos_token: int | None = None,
+        extra_stop_ids: Sequence[int] | None = None,
         adapter=None,
     ) -> np.ndarray:
         """Autoregressive sampled generation over the last-timestep logits.
@@ -2027,9 +2484,15 @@ class SloLSTM(SloLayer):
             hidden = (h.reshape(1, -1), c.reshape(1, -1))
         return generated
 
-    def parameters(self) -> List[Tensor]:
-        ps = self.embedding.parameters()+self.W_ih.parameters()+self.W_hh.parameters()+self.fc_out.parameters()
-        if hasattr(self,'W_ih2'): ps += self.W_ih2.parameters()+self.W_hh2.parameters()
+    def parameters(self) -> list[Tensor]:
+        ps = (
+            self.embedding.parameters()
+            + self.W_ih.parameters()
+            + self.W_hh.parameters()
+            + self.fc_out.parameters()
+        )
+        if hasattr(self, "W_ih2"):
+            ps += self.W_ih2.parameters() + self.W_hh2.parameters()
         return [p for p in ps if p.requires_grad]
 
 
@@ -2040,6 +2503,7 @@ class SloAdapterLayer(SloLayer):
     Up-projection initialized to zero so adapter is identity at start.
     Each user gets their own adapter — KB-scale personalization.
     """
+
     def __init__(self, dim: int = 768, rank: int = 8, name: str = ""):
         super().__init__(name or f"Adapter_dim{dim}_rank{rank}")
         self.dim = dim
@@ -2057,7 +2521,7 @@ class SloAdapterLayer(SloLayer):
         out = self.up_proj.forward(h)
         return _add(residual, out)
 
-    def parameters(self) -> List[Tensor]:
+    def parameters(self) -> list[Tensor]:
         return self.down_proj.parameters() + self.up_proj.parameters()
 
 
@@ -2072,7 +2536,8 @@ class SloConv2D(SloLayer):
         self.bias = zeros((out_ch,), requires_grad=True)
         self.stride = stride if isinstance(stride, int) else stride[0]
         self.padding = padding
-        self.in_ch = in_ch; self.out_ch = out_ch
+        self.in_ch = in_ch
+        self.out_ch = out_ch
         self.kernel_size = (kw, kh)
         self.soul_traits = {"creativity": 0.5, "warmth": 0.5}
 
@@ -2080,7 +2545,8 @@ class SloConv2D(SloLayer):
         out = _conv2d(x, self.weight, self.bias, stride=self.stride, padding=self.padding)
         return out
 
-    def parameters(self) -> List[Tensor]: return [self.weight, self.bias]
+    def parameters(self) -> list[Tensor]:
+        return [self.weight, self.bias]
 
 
 class SloBatchNorm2D(SloLayer):
@@ -2097,9 +2563,12 @@ class SloBatchNorm2D(SloLayer):
         self.soul_traits = {"confidence": 0.5}
 
     def forward(self, x: Tensor) -> Tensor:
-        return _batchnorm2d(x, self.gamma, self.beta, self.running_mean, self.running_var, self.eps, self._train)
+        return _batchnorm2d(
+            x, self.gamma, self.beta, self.running_mean, self.running_var, self.eps, self._train
+        )
 
-    def parameters(self) -> List[Tensor]: return [self.gamma, self.beta]
+    def parameters(self) -> list[Tensor]:
+        return [self.gamma, self.beta]
 
 
 class SloMaxPool2D(SloLayer):
@@ -2112,7 +2581,8 @@ class SloMaxPool2D(SloLayer):
     def forward(self, x: Tensor) -> Tensor:
         return _maxpool2d(x, self.kernel_size, self.stride)
 
-    def parameters(self) -> List[Tensor]: return []
+    def parameters(self) -> list[Tensor]:
+        return []
 
 
 class SloRMSNorm(SloLayer):
@@ -2129,7 +2599,7 @@ class SloRMSNorm(SloLayer):
     def forward(self, x: Tensor) -> Tensor:
         return _rmsnorm(x, self.weight, self.eps)
 
-    def parameters(self) -> List[Tensor]:
+    def parameters(self) -> list[Tensor]:
         return [self.weight]
 
 
@@ -2145,6 +2615,7 @@ class SloLayerNorm(SloLayer):
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
         if _KERNELS_AVAILABLE:
             from domain.training._internal.slonet_kernels import fused_layer_norm
+
             return fused_layer_norm(
                 x.astype(np.float32),
                 self.weight.data.astype(np.float32),
@@ -2158,15 +2629,27 @@ class SloLayerNorm(SloLayer):
     def forward(self, x: Tensor) -> Tensor:
         return _layernorm(x, self.weight, self.bias, self.eps)
 
-    def parameters(self) -> List[Tensor]:
+    def parameters(self) -> list[Tensor]:
         return [self.weight, self.bias]
 
 
 class SloTransformerBlock(SloLayer):
-    def __init__(self, d_model: int, n_heads: int, n_kv_head: Optional[int] = None,
-                 dim_ff: int = None, use_rope: bool = False, max_seq_len: int = 2048,
-                 rope_base: float = 10000.0, dropout: float = 0.1, eps: float = 1e-5,
-                 norm_type: str = "rms_norm", activation: str = "gelu", name="", _lazy=False):
+    def __init__(
+        self,
+        d_model: int,
+        n_heads: int,
+        n_kv_head: int | None = None,
+        dim_ff: int = None,
+        use_rope: bool = False,
+        max_seq_len: int = 2048,
+        rope_base: float = 10000.0,
+        dropout: float = 0.1,
+        eps: float = 1e-5,
+        norm_type: str = "rms_norm",
+        activation: str = "gelu",
+        name="",
+        _lazy=False,
+    ):
         super().__init__(name or f"Transformer{d_model}")
         dim_ff = dim_ff or d_model * 4
         self.d_model = d_model
@@ -2174,11 +2657,20 @@ class SloTransformerBlock(SloLayer):
         self.head_dim = d_model // n_heads
         NormCls = SloLayerNorm if norm_type == "layer_norm" else SloRMSNorm
         self.attn_norm = NormCls(d_model, eps, name + "_attn_norm")
-        self.attn = SloMultiHeadAttention(d_model, n_heads, n_kv_head=n_kv_head,
-                                           use_rope=use_rope, max_seq_len=max_seq_len,
-                                           rope_base=rope_base, name=name + "_attn", _lazy=_lazy)
+        self.attn = SloMultiHeadAttention(
+            d_model,
+            n_heads,
+            n_kv_head=n_kv_head,
+            use_rope=use_rope,
+            max_seq_len=max_seq_len,
+            rope_base=rope_base,
+            name=name + "_attn",
+            _lazy=_lazy,
+        )
         self.ff_norm = NormCls(d_model, eps, name + "_ff_norm")
-        self.ff = SloFeedForward(d_model, dim_ff, name=name + "_ff", activation=activation, _lazy=_lazy)
+        self.ff = SloFeedForward(
+            d_model, dim_ff, name=name + "_ff", activation=activation, _lazy=_lazy
+        )
         self.drop = SloDropout(dropout) if dropout > 0 else None
         self.use_checkpoint = False
         self.soul_traits = {"curiosity": 0.5, "creativity": 0.5, "warmth": 0.5}
@@ -2191,22 +2683,32 @@ class SloTransformerBlock(SloLayer):
         if self.drop:
             self.drop.train(mode)
 
-    def forward(self, x: Tensor, mask: Optional[Tensor] = None,
-                kv_cache: Optional[Tuple[np.ndarray, np.ndarray]] = None,
-                start_pos: int = 0) -> Tensor:
+    def forward(
+        self,
+        x: Tensor,
+        mask: Tensor | None = None,
+        kv_cache: tuple[np.ndarray, np.ndarray] | None = None,
+        start_pos: int = 0,
+    ) -> Tensor:
         h, ca = None, None
         h = self.attn_norm.forward(x)
         h, ca = self.attn.forward(h, h, h, mask, kv_cache=kv_cache, start_pos=start_pos)
-        if self.drop: h = self.drop.forward(h)
+        if self.drop:
+            h = self.drop.forward(h)
         x = x + h
         h = self.ff_norm.forward(x)
         h = self.ff.forward(h)
-        if self.drop: h = self.drop.forward(h)
+        if self.drop:
+            h = self.drop.forward(h)
         return x + h, ca
 
-    def forward_numpy(self, x: np.ndarray, mask: Optional[np.ndarray] = None,
-                      kv_cache: Optional[Tuple[np.ndarray, np.ndarray]] = None,
-                      start_pos: int = 0) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    def forward_numpy(
+        self,
+        x: np.ndarray,
+        mask: np.ndarray | None = None,
+        kv_cache: tuple[np.ndarray, np.ndarray] | None = None,
+        start_pos: int = 0,
+    ) -> tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]:
         """Numpy-only forward — no Tensor overhead, no autograd."""
         h = self.attn_norm.forward_numpy(x)
         h, ca = self.attn.forward_numpy(h, h, h, mask, kv_cache=kv_cache, start_pos=start_pos)
@@ -2215,8 +2717,13 @@ class SloTransformerBlock(SloLayer):
         h = self.ff.forward_numpy(h)
         return x + h, ca
 
-    def parameters(self) -> List[Tensor]:
-        return self.attn_norm.parameters() + self.attn.parameters() + self.ff_norm.parameters() + self.ff.parameters()
+    def parameters(self) -> list[Tensor]:
+        return (
+            self.attn_norm.parameters()
+            + self.attn.parameters()
+            + self.ff_norm.parameters()
+            + self.ff.parameters()
+        )
 
 
 class SloRotaryEmbedding(SloLayer):
@@ -2248,29 +2755,31 @@ class SloRotaryEmbedding(SloLayer):
             self._sin_cached = np.concatenate([self._sin_cached, new_sin])
         self._cached_seq_len = seq_len
 
-    def forward(self, seq_len: int, start_pos: int = 0) -> Tuple[np.ndarray, np.ndarray]:
+    def forward(self, seq_len: int, start_pos: int = 0) -> tuple[np.ndarray, np.ndarray]:
         total = start_pos + seq_len
         if self._cos_cached is None or self._cached_seq_len < total:
             self._precompute(total)
         return self._cos_cached[start_pos:total], self._sin_cached[start_pos:total]
 
-    def parameters(self) -> List[Tensor]:
+    def parameters(self) -> list[Tensor]:
         return []
 
 
 def _rotate_half(x: np.ndarray) -> np.ndarray:
-    x1 = x[..., :x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2:]
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
     return np.concatenate([-x2, x1], axis=-1)
 
 
-def _apply_rope(q: np.ndarray, k: np.ndarray, cos: np.ndarray, sin: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def _apply_rope(
+    q: np.ndarray, k: np.ndarray, cos: np.ndarray, sin: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     q_out = q * cos + _rotate_half(q) * sin
     k_out = k * cos + _rotate_half(k) * sin
     return q_out, k_out
 
 
-def _apply_rope_t(Q: Tensor, K: Tensor, cos: np.ndarray, sin: np.ndarray) -> Tuple[Tensor, Tensor]:
+def _apply_rope_t(Q: Tensor, K: Tensor, cos: np.ndarray, sin: np.ndarray) -> tuple[Tensor, Tensor]:
     """Apply rotary embeddings to 4D Q, K Tensors with gradient tracking.
 
     Uses raw numpy ops with a custom backward since the computation is
@@ -2357,7 +2866,7 @@ def _fuse_quant_weights(linears):
         return None
     fused_bias = np.concatenate(biases) if biases[0] is not None else None
     scales = []
-    for a, l in zip(arrs, linears):
+    for a, l in zip(arrs, linears, strict=False):
         sc = l._quant_info.meta.scale
         if np.isscalar(sc):
             scales.append(np.full(a.shape[0], sc, dtype=np.float32))
@@ -2402,6 +2911,7 @@ def _fuse_quant_weights_int4(linears):
     if any(z != zps[0] for z in zps):
         return None
     from domain.infrastructure._internal.quantization import _ensure_2d_packed
+
     K = infos[0].meta.original_shape[-1]
     if K % 2 != 0:
         return None
@@ -2431,10 +2941,21 @@ def _fuse_quant_weights_int4(linears):
     return W, S, int(zps[0]), fused_bias
 
 
-def _fused_qkv_matmul(x: Tensor, W_q: Tensor, W_k: Tensor, W_v: Tensor,
-                       q_dim: int, k_dim: int, v_dim: int,
-                       has_bias_q: bool, has_bias_k: bool, has_bias_v: int,
-                       b_q=None, b_k=None, b_v=None) -> Tensor:
+def _fused_qkv_matmul(
+    x: Tensor,
+    W_q: Tensor,
+    W_k: Tensor,
+    W_v: Tensor,
+    q_dim: int,
+    k_dim: int,
+    v_dim: int,
+    has_bias_q: bool,
+    has_bias_k: bool,
+    has_bias_v: int,
+    b_q=None,
+    b_k=None,
+    b_v=None,
+) -> Tensor:
     """Fused Q/K/V projection: single matmul + optional bias + split.
 
     Concatenates W_q, W_k, W_v along axis 0, computes x @ W_fused.T,
@@ -2451,11 +2972,13 @@ def _fused_qkv_matmul(x: Tensor, W_q: Tensor, W_k: Tensor, W_v: Tensor,
 
     bias_fused = None
     if has_bias_q or has_bias_k or has_bias_v:
-        bias_np = np.concatenate([
-            b_q.data if has_bias_q else np.zeros(q_dim, dtype=np.float32),
-            b_k.data if has_bias_k else np.zeros(k_dim, dtype=np.float32),
-            b_v.data if has_bias_v else np.zeros(v_dim, dtype=np.float32),
-        ])
+        bias_np = np.concatenate(
+            [
+                b_q.data if has_bias_q else np.zeros(q_dim, dtype=np.float32),
+                b_k.data if has_bias_k else np.zeros(k_dim, dtype=np.float32),
+                b_v.data if has_bias_v else np.zeros(v_dim, dtype=np.float32),
+            ]
+        )
         bias_fused = Tensor(bias_np, requires_grad=True, _copy=False)
         out = out + bias_fused
 
@@ -2470,11 +2993,12 @@ def _fused_qkv_matmul(x: Tensor, W_q: Tensor, W_k: Tensor, W_v: Tensor,
     _b_v_ref = b_v if has_bias_v else None
 
     orig_bk = out._backward_fn
+
     def bk_fused(g):
         B, N, C = g.shape
         g_q = g[:, :, :_q_dim]
-        g_k = g[:, :, _q_dim:_q_dim + _k_dim]
-        g_v = g[:, :, _q_dim + _k_dim:]
+        g_k = g[:, :, _q_dim : _q_dim + _k_dim]
+        g_v = g[:, :, _q_dim + _k_dim :]
 
         x_data = x.data
         if x_data.ndim == 3:
@@ -2528,8 +3052,17 @@ def _fused_qkv_matmul(x: Tensor, W_q: Tensor, W_k: Tensor, W_v: Tensor,
 
 
 class SloMultiHeadAttention(SloLayer):
-    def __init__(self, d_model: int, n_heads: int, n_kv_head: Optional[int] = None,
-                 use_rope: bool = False, max_seq_len: int = 2048, rope_base: float = 10000.0, name="", _lazy=False):
+    def __init__(
+        self,
+        d_model: int,
+        n_heads: int,
+        n_kv_head: int | None = None,
+        use_rope: bool = False,
+        max_seq_len: int = 2048,
+        rope_base: float = 10000.0,
+        name="",
+        _lazy=False,
+    ):
         super().__init__(name or f"MHA{d_model}x{n_heads}")
         self.d_model = d_model
         self.n_heads = n_heads
@@ -2547,8 +3080,9 @@ class SloMultiHeadAttention(SloLayer):
         self.soul_traits = {"curiosity": 0.5}
 
     @staticmethod
-    def _attention_4d(Q: Tensor, K: Tensor, V: Tensor, mask: Optional[Tensor],
-                      scale: float) -> Tensor:
+    def _attention_4d(
+        Q: Tensor, K: Tensor, V: Tensor, mask: Tensor | None, scale: float
+    ) -> Tensor:
         """Batched attention with autograd: Q,K,V are 4D ``(B,N,H,E)`` Tensors.
 
         Returns 3D ``(B,N,C)`` Tensor with full gradient flow to Q, K, V.
@@ -2588,7 +3122,9 @@ class SloMultiHeadAttention(SloLayer):
             g_4d_t = g_4d.transpose(0, 2, 1, 3)  # (B,H,N,E)
             V_t = V_exp.data.transpose(0, 2, 3, 1)  # (B,H,E,M)
             g_attn = np.matmul(g_4d_t, V_t)  # (B,H,N,M)
-            g_V = np.matmul(attn_np.transpose(0, 1, 3, 2), g_4d_t).transpose(0, 2, 1, 3)  # (B,M,H,E)
+            g_V = np.matmul(attn_np.transpose(0, 1, 3, 2), g_4d_t).transpose(
+                0, 2, 1, 3
+            )  # (B,M,H,E)
 
             # Softmax backward: dL/dS = attn * (g_attn - sum(attn * g_attn, keepdims))
             g_softmax = attn_np * (g_attn - np.sum(attn_np * g_attn, axis=-1, keepdims=True))
@@ -2596,7 +3132,9 @@ class SloMultiHeadAttention(SloLayer):
             Q_t = Q.data.transpose(0, 2, 1, 3)  # (B,H,N,E)
             K_me = K_exp.data.transpose(0, 2, 1, 3)  # (B,H,M,E)
             g_Q_np = np.matmul(g_softmax, K_me).transpose(0, 2, 1, 3) * scale_f  # (B,N,H,E)
-            g_K_np = np.matmul(g_softmax.transpose(0, 1, 3, 2), Q_t).transpose(0, 2, 1, 3) * scale_f  # (B,M,H,E)
+            g_K_np = (
+                np.matmul(g_softmax.transpose(0, 1, 3, 2), Q_t).transpose(0, 2, 1, 3) * scale_f
+            )  # (B,M,H,E)
 
             if n_rep > 1:
                 # Repeat backward: sum over repeated heads
@@ -2636,20 +3174,26 @@ class SloMultiHeadAttention(SloLayer):
         out_t._backward_fn = bk
         return out_t
 
-    def forward_numpy(self, q: np.ndarray, k: np.ndarray, v: np.ndarray,
-                      mask: Optional[np.ndarray] = None,
-                      kv_cache: Optional[Tuple[np.ndarray, np.ndarray]] = None,
-                      start_pos: int = 0) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    def forward_numpy(
+        self,
+        q: np.ndarray,
+        k: np.ndarray,
+        v: np.ndarray,
+        mask: np.ndarray | None = None,
+        kv_cache: tuple[np.ndarray, np.ndarray] | None = None,
+        start_pos: int = 0,
+    ) -> tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]:
         B, N, C = q.shape
         H, E, K_H = self.n_heads, self.head_dim, self.n_kv_head
         fused = self._fused_qkv()
         if fused is not None and q is k and k is v:
             from domain.infrastructure._internal.quantization import quantized_linear
+
             W, S, B_f, qd, kd = fused
             qkv = quantized_linear(q, W, S, 0, B_f)  # (B, N, qd + 2*kd)
             Q_r = qkv[..., :qd].reshape(B, N, H, E)
-            K_r = qkv[..., qd:qd + kd].reshape(B, N, K_H, E)
-            V_r = qkv[..., qd + kd:].reshape(B, N, K_H, E)
+            K_r = qkv[..., qd : qd + kd].reshape(B, N, K_H, E)
+            V_r = qkv[..., qd + kd :].reshape(B, N, K_H, E)
         else:
             Q_r = self.W_q.forward_numpy(q).reshape(B, N, H, E)
             N_K = k.shape[1]
@@ -2670,6 +3214,7 @@ class SloMultiHeadAttention(SloLayer):
         if _KERNELS_AVAILABLE and B == 1 and N == 1:
             # Single-token decode: fused kernel has no causal masking needed
             from domain.training._internal.slonet_kernels import fused_attention_single, gqa_expand
+
             # K_r: (B, seq, K_H, E) → (K_H, seq, E) for fused kernel
             K_np = K_r[0].transpose(1, 0, 2).astype(np.float32)
             V_np = V_r[0].transpose(1, 0, 2).astype(np.float32)
@@ -2682,6 +3227,7 @@ class SloMultiHeadAttention(SloLayer):
         elif _KERNELS_AVAILABLE and B == 1 and mask is None:
             # Multi-token prompt: fused kernel applies built-in causal masking
             from domain.training._internal.slonet_kernels import fused_attention_multi, gqa_expand
+
             K_np = K_r[0].transpose(1, 0, 2).astype(np.float32)  # (K_H, seq, E)
             V_np = V_r[0].transpose(1, 0, 2).astype(np.float32)
             if K_H < H:
@@ -2703,9 +3249,15 @@ class SloMultiHeadAttention(SloLayer):
             out = np.einsum("bhnm,bmhd->bnhd", attn, V_r).reshape(B, N, H * E)
         return self.W_o.forward_numpy(out), (K_r, V_r)
 
-    def forward(self, q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None,
-                kv_cache: Optional[Tuple[np.ndarray, np.ndarray]] = None,
-                start_pos: int = 0) -> Tensor:
+    def forward(
+        self,
+        q: Tensor,
+        k: Tensor,
+        v: Tensor,
+        mask: Tensor | None = None,
+        kv_cache: tuple[np.ndarray, np.ndarray] | None = None,
+        start_pos: int = 0,
+    ) -> Tensor:
         B, N, C = q.data.shape
         H = self.n_heads
         E = self.head_dim
@@ -2747,8 +3299,13 @@ class SloMultiHeadAttention(SloLayer):
         out_t = self.W_o.forward(attn_out)
         return out_t, (K_r.data, V_r.data)
 
-    def parameters(self) -> List[Tensor]:
-        ps = self.W_q.parameters() + self.W_k.parameters() + self.W_v.parameters() + self.W_o.parameters()
+    def parameters(self) -> list[Tensor]:
+        ps = (
+            self.W_q.parameters()
+            + self.W_k.parameters()
+            + self.W_v.parameters()
+            + self.W_o.parameters()
+        )
         if self.use_rope:
             ps += self.rope.parameters()
         return ps
@@ -2771,11 +3328,21 @@ class SloMultiHeadAttention(SloLayer):
         has_bias_k = self.W_k.use_bias
         has_bias_v = self.W_v.use_bias
 
-        out = _fused_qkv_matmul(x, W_q, W_k, W_v, q_dim, k_dim, v_dim,
-                                 has_bias_q, has_bias_k, has_bias_v,
-                                 self.W_q.bias if has_bias_q else None,
-                                 self.W_k.bias if has_bias_k else None,
-                                 self.W_v.bias if has_bias_v else None)
+        out = _fused_qkv_matmul(
+            x,
+            W_q,
+            W_k,
+            W_v,
+            q_dim,
+            k_dim,
+            v_dim,
+            has_bias_q,
+            has_bias_k,
+            has_bias_v,
+            self.W_q.bias if has_bias_q else None,
+            self.W_k.bias if has_bias_k else None,
+            self.W_v.bias if has_bias_v else None,
+        )
 
         Q_raw = _slice(out, (slice(None), slice(None), slice(0, q_dim)))
         K_raw = _slice(out, (slice(None), slice(None), slice(q_dim, q_dim + k_dim)))
@@ -2808,13 +3375,13 @@ class SloMultiHeadAttention(SloLayer):
         return pack
 
 
-
 class SloCrossAttention(SloLayer):
     """Cross-attention layer for multimodal fusion.
 
     Queries come from text decoder, keys/values come from image encoder.
     Used in BLIP/Flamingo-style architectures for image captioning.
     """
+
     def __init__(self, d_model: int, n_heads: int, name=""):
         super().__init__(name or f"CrossAttn{d_model}x{n_heads}")
         self.d_model = d_model
@@ -2826,7 +3393,7 @@ class SloCrossAttention(SloLayer):
         self.o_proj = SloLinear(d_model, d_model, name=name + "_o")
         self.soul_traits = {"curiosity": 0.5, "creativity": 0.5}
 
-    def forward(self, x: Tensor, context: Tensor, mask: Optional[Tensor] = None) -> Tensor:
+    def forward(self, x: Tensor, context: Tensor, mask: Tensor | None = None) -> Tensor:
         """
         Args:
             x: text query (B, seq_len, d_model)
@@ -2854,9 +3421,12 @@ class SloCrossAttention(SloLayer):
         out = np.einsum("bhnm,bmhd->bnhd", attn, V.data).reshape(B, N, H * E)
 
         out_t = Tensor(out, requires_grad=True, _children=(Q, K, V))
-        if Q.requires_grad: Q._consumers.append(out_t)
-        if K.requires_grad: K._consumers.append(out_t)
-        if V.requires_grad: V._consumers.append(out_t)
+        if Q.requires_grad:
+            Q._consumers.append(out_t)
+        if K.requires_grad:
+            K._consumers.append(out_t)
+        if V.requires_grad:
+            V._consumers.append(out_t)
 
         def bk(g):
             g_4d = g.reshape(B, N, H, E)
@@ -2883,23 +3453,33 @@ class SloCrossAttention(SloLayer):
                     V.grad.data += g_V
 
         out_t._backward_fn = bk
+
         def fwd(t_q, t_k, t_v):
             t_q_4d = np.zeros_like(Q.data) if t_q is None else t_q.reshape(B, N, H, E)
             t_k_4d = np.zeros_like(K.data) if t_k is None else t_k.reshape(B, M, H, E)
             t_v_4d = np.zeros_like(V.data) if t_v is None else t_v.reshape(B, M, H, E)
             # JVP of attention: scores = Q @ K.T, attn = softmax(scores), out = attn @ V
             # d_softmax = attn * (d_scores - sum(attn * d_scores))
-            d_scores = np.einsum("bnhd,bmhd->bhnm", t_q_4d, K.data) + np.einsum("bnhd,bmhd->bhnm", Q.data, t_k_4d)
+            d_scores = np.einsum("bnhd,bmhd->bhnm", t_q_4d, K.data) + np.einsum(
+                "bnhd,bmhd->bhnm", Q.data, t_k_4d
+            )
             d_scores = d_scores * scale
             d_attn = attn * (d_scores - np.sum(attn * d_scores, axis=-1, keepdims=True))
-            result = np.einsum("bhnm,bmhd->bnhd", d_attn, V.data) + np.einsum("bhnm,bmhd->bnhd", attn, t_v_4d)
+            result = np.einsum("bhnm,bmhd->bnhd", d_attn, V.data) + np.einsum(
+                "bhnm,bmhd->bnhd", attn, t_v_4d
+            )
             return result.reshape(B, N, H * E)
+
         out_t._forward_fn = fwd
         return self.o_proj.forward(out_t)
 
-    def parameters(self) -> List[Tensor]:
-        return (self.q_proj.parameters() + self.k_proj.parameters() +
-                self.v_proj.parameters() + self.o_proj.parameters())
+    def parameters(self) -> list[Tensor]:
+        return (
+            self.q_proj.parameters()
+            + self.k_proj.parameters()
+            + self.v_proj.parameters()
+            + self.o_proj.parameters()
+        )
 
 
 class SloFeedForward(SloLayer):
@@ -2921,12 +3501,15 @@ class SloFeedForward(SloLayer):
         fused = self._fused_gate_up()
         if fused is not None:
             from domain.infrastructure._internal.quantization import quantized_linear
+
             W, S, B, mid = fused
             gu = quantized_linear(x, W, S, 0, B)  # (..., mid + mid)
             g = gu[..., :mid]
             u = gu[..., mid:]
             return self.w2.forward_numpy(self.act_np(g) * u)
-        return self.w2.forward_numpy(self.act_np(self.w1.forward_numpy(x)) * self.w3.forward_numpy(x))
+        return self.w2.forward_numpy(
+            self.act_np(self.w1.forward_numpy(x)) * self.w3.forward_numpy(x)
+        )
 
     def _fused_gate_up(self):
         """Cached fused ``[w1; w3]`` quantized weight pack, or None.
@@ -2954,7 +3537,7 @@ class SloFeedForward(SloLayer):
     def forward(self, x: Tensor) -> Tensor:
         return self.w2.forward(self.act(self.w1.forward(x)) * self.w3.forward(x))
 
-    def parameters(self) -> List[Tensor]:
+    def parameters(self) -> list[Tensor]:
         return self.w1.parameters() + self.w2.parameters() + self.w3.parameters()
 
 
@@ -2964,7 +3547,9 @@ def _softmax(x: Tensor, dim: int = -1) -> Tensor:
     exp_d = np.exp(meaned)
     s = exp_d / exp_d.sum(axis=dim, keepdims=True)
     out = Tensor(s, requires_grad=x.requires_grad, _children=(x,))
-    if out.requires_grad and x.requires_grad: x._consumers.append(out)
+    if out.requires_grad and x.requires_grad:
+        x._consumers.append(out)
+
     def bk(g):
         if x.requires_grad:
             # Standard softmax backward: gx = s * (g - sum(s * g, dim))
@@ -2974,12 +3559,16 @@ def _softmax(x: Tensor, dim: int = -1) -> Tensor:
                 x.grad = Tensor(gx, _copy=False)
             else:
                 x.grad.data += gx
+
     out._backward_fn = bk
+
     def fwd(t_x):
-        if t_x is None: return np.zeros_like(s)
+        if t_x is None:
+            return np.zeros_like(s)
         # JVP: s * (t_x - sum(s * t_x))
         sg = np.sum(s * t_x, axis=dim, keepdims=True)
         return s * (t_x - sg)
+
     out._forward_fn = fwd
     return out
 
@@ -2988,28 +3577,40 @@ def _layernorm(x: Tensor, weight: Tensor, bias: Tensor, eps: float = 1e-5) -> Te
     d = x.data
     acc = _get_accelerator()
     if d.ndim == 2:
-        mean = d.mean(axis=1, keepdims=True); var = d.var(axis=1, keepdims=True)
+        mean = d.mean(axis=1, keepdims=True)
+        var = d.var(axis=1, keepdims=True)
         normed = (d - mean) / np.sqrt(var + eps)
     else:
-        mean = d.mean(axis=-1, keepdims=True); var = d.var(axis=-1, keepdims=True)
+        mean = d.mean(axis=-1, keepdims=True)
+        var = d.var(axis=-1, keepdims=True)
         normed = (d - mean) / np.sqrt(var + eps)
     result = None
     if acc is not None and acc.name != "cpu":
-        try: result = acc.layer_norm(d, weight.data, bias.data, eps)
-        except Exception as e: logger.debug("Accelerator layernorm failed, using numpy: %s", e)
+        try:
+            result = acc.layer_norm(d, weight.data, bias.data, eps)
+        except Exception as e:
+            logger.debug("Accelerator layernorm failed, using numpy: %s", e)
     if result is None:
         result = normed * weight.data + bias.data
     out = Tensor(result, requires_grad=x.requires_grad, _children=(x, weight, bias))
     if out.requires_grad:
-        if x.requires_grad: x._consumers.append(out)
-        if weight.requires_grad: weight._consumers.append(out)
-        if bias.requires_grad: bias._consumers.append(out)
+        if x.requires_grad:
+            x._consumers.append(out)
+        if weight.requires_grad:
+            weight._consumers.append(out)
+        if bias.requires_grad:
+            bias._consumers.append(out)
+
     def bk(g):
         sum_axes = tuple(range(g.ndim - 1))
         if x.requires_grad:
             norm_axis = -1 if d.ndim > 2 else 1
             g_hat = g * weight.data / np.sqrt(var + eps)
-            gx = g_hat - g_hat.mean(axis=norm_axis, keepdims=True) - normed * (g_hat * normed).mean(axis=norm_axis, keepdims=True)
+            gx = (
+                g_hat
+                - g_hat.mean(axis=norm_axis, keepdims=True)
+                - normed * (g_hat * normed).mean(axis=norm_axis, keepdims=True)
+            )
             if x.grad is None:
                 x.grad = Tensor(gx, _copy=False)
             else:
@@ -3026,14 +3627,21 @@ def _layernorm(x: Tensor, weight: Tensor, bias: Tensor, eps: float = 1e-5) -> Te
                 bias.grad = Tensor(gb, _copy=False)
             else:
                 bias.grad.data += gb
+
     out._backward_fn = bk
+
     def fwd(t_x, t_w, t_b):
         t_x = np.zeros_like(d) if t_x is None else t_x
         t_w = np.zeros_like(weight.data) if t_w is None else t_w
         t_b = np.zeros_like(bias.data) if t_b is None else t_b
         norm_axis = -1 if d.ndim > 2 else 1
-        t_normed = (t_x - t_x.mean(axis=norm_axis, keepdims=True) - normed * (normed * t_x).mean(axis=norm_axis, keepdims=True)) / np.sqrt(var + eps)
+        t_normed = (
+            t_x
+            - t_x.mean(axis=norm_axis, keepdims=True)
+            - normed * (normed * t_x).mean(axis=norm_axis, keepdims=True)
+        ) / np.sqrt(var + eps)
         return t_normed * weight.data + normed * t_w + t_b
+
     out._forward_fn = fwd
     return out
 
@@ -3048,18 +3656,27 @@ def _rmsnorm(x: Tensor, weight: Tensor, eps: float = 1e-5) -> Tensor:
     x_normed = d / rms
     result = None
     if acc is not None and acc.name != "cpu" and d.size >= _ACCEL_THRESHOLD:
-        try: result = acc.rms_norm(d, weight.data, eps)
-        except Exception as e: logger.debug("Accelerator rmsnorm failed, using numpy: %s", e)
+        try:
+            result = acc.rms_norm(d, weight.data, eps)
+        except Exception as e:
+            logger.debug("Accelerator rmsnorm failed, using numpy: %s", e)
     if result is None:
         result = x_normed * weight.data
 
-    out = Tensor(result, requires_grad=not _NO_GRAD and (x.requires_grad or weight.requires_grad), _children=(x, weight))
+    out = Tensor(
+        result,
+        requires_grad=not _NO_GRAD and (x.requires_grad or weight.requires_grad),
+        _children=(x, weight),
+    )
     if out.requires_grad:
-        if x.requires_grad: x._consumers.append(out)
-        if weight.requires_grad: weight._consumers.append(out)
+        if x.requires_grad:
+            x._consumers.append(out)
+        if weight.requires_grad:
+            weight._consumers.append(out)
     if not _NO_GRAD and (x.requires_grad or weight.requires_grad):
         _N = d.shape[-1]
         _w_data = weight.data.copy()
+
         def bk(g: np.ndarray):
             if weight.requires_grad:
                 sum_axes = tuple(range(g.ndim - 1))
@@ -3075,12 +3692,17 @@ def _rmsnorm(x: Tensor, weight: Tensor, eps: float = 1e-5) -> Tensor:
                     x.grad = Tensor(gx, _copy=False)
                 else:
                     x.grad.data += gx
+
         out._backward_fn = bk
+
         def fwd(t_x, t_w):
             t_x = np.zeros_like(d) if t_x is None else t_x
             t_w = np.zeros_like(weight.data) if t_w is None else t_w
-            gx = t_x * _w_data / rms - d * _w_data * (d * t_x).sum(axis=-1, keepdims=True) / (_N * rms**3)
+            gx = t_x * _w_data / rms - d * _w_data * (d * t_x).sum(axis=-1, keepdims=True) / (
+                _N * rms**3
+            )
             return gx + x_normed * t_w
+
         out._forward_fn = fwd
     return out
 
@@ -3112,19 +3734,25 @@ def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: i
     Args:
         padding: int (same for H and W) or tuple (pad_h, pad_w).
     """
-    if x.data.ndim != 4: raise ValueError(f"Conv2D needs 4D input, got {x.data.ndim}D")
+    if x.data.ndim != 4:
+        raise ValueError(f"Conv2D needs 4D input, got {x.data.ndim}D")
     n, c, h, w = x.data.shape
     oc, ic, kh, kw = weight.data.shape
-    if ic != c: raise ValueError(f"Channel mismatch: {ic} != {c}")
+    if ic != c:
+        raise ValueError(f"Channel mismatch: {ic} != {c}")
 
     if isinstance(padding, (tuple, list)):
         pad_h, pad_w = padding[0], padding[1] if len(padding) > 1 else padding[0]
         if pad_h > 0 or pad_w > 0:
-            x_padded = np.pad(x.data, ((0,0),(0,0),(pad_h,pad_h),(pad_w,pad_w)), mode='constant')
+            x_padded = np.pad(
+                x.data, ((0, 0), (0, 0), (pad_h, pad_h), (pad_w, pad_w)), mode="constant"
+            )
         else:
             x_padded = x.data
     elif padding > 0:
-        x_padded = np.pad(x.data, ((0,0),(0,0),(padding,padding),(padding,padding)), mode='constant')
+        x_padded = np.pad(
+            x.data, ((0, 0), (0, 0), (padding, padding), (padding, padding)), mode="constant"
+        )
     else:
         x_padded = x.data
 
@@ -3148,12 +3776,20 @@ def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: i
 
     weight_req = weight.requires_grad
     bias_req = bias is not None and bias.requires_grad
-    out = Tensor(result, requires_grad=not _NO_GRAD and (x.requires_grad or weight_req or bias_req), _children=(x, weight, bias))
+    out = Tensor(
+        result,
+        requires_grad=not _NO_GRAD and (x.requires_grad or weight_req or bias_req),
+        _children=(x, weight, bias),
+    )
     if out.requires_grad:
-        if x.requires_grad: x._consumers.append(out)
-        if weight.requires_grad: weight._consumers.append(out)
-        if bias is not None and bias.requires_grad: bias._consumers.append(out)
+        if x.requires_grad:
+            x._consumers.append(out)
+        if weight.requires_grad:
+            weight._consumers.append(out)
+        if bias is not None and bias.requires_grad:
+            bias._consumers.append(out)
     _w_col = w_col
+
     def bk(g):
         if x.requires_grad:
             dY_flat = g.transpose(0, 2, 3, 1).reshape(n * oh * ow, oc)
@@ -3174,7 +3810,11 @@ def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: i
             grad_in = np.zeros_like(x_padded)
             n_idx_b_full = np.broadcast_to(n_idx_b, (n_patches, feat_per_patch))
             c_idx_b_full = np.broadcast_to(c_idx_b, (n_patches, feat_per_patch))
-            np.add.at(grad_in, (n_idx_b_full.ravel(), c_idx_b_full.ravel(), h_pos_b.ravel(), w_pos_b.ravel()), dX_col.ravel())
+            np.add.at(
+                grad_in,
+                (n_idx_b_full.ravel(), c_idx_b_full.ravel(), h_pos_b.ravel(), w_pos_b.ravel()),
+                dX_col.ravel(),
+            )
             if isinstance(padding, (tuple, list)):
                 pad_h, pad_w = padding[0], padding[1] if len(padding) > 1 else padding[0]
                 if pad_h > 0 or pad_w > 0:
@@ -3200,19 +3840,35 @@ def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: i
                 bias.grad = Tensor(gb, _copy=False)
             else:
                 bias.grad.data += gb
+
     out._backward_fn = bk
+
     def fwd(t_x, t_w, t_b):
         t_x_np = np.zeros_like(x.data) if t_x is None else t_x
         t_w_np = np.zeros_like(weight.data) if t_w is None else t_w
         # JVP: conv2d(x, w) = im2col(x) @ w.T → JVP = im2col(t_x) @ w.T + im2col(x) @ t_w.T
-        pad_h, pad_w = (padding[0], padding[1] if len(padding) > 1 else padding[0]) if isinstance(padding, (tuple, list)) else (padding, padding)
-        t_cols = _im2col(np.pad(t_x_np, ((0,0),(0,0),(pad_h,pad_h),(pad_w,pad_w)), mode='constant'), kh, kw, stride)
+        pad_h, pad_w = (
+            (padding[0], padding[1] if len(padding) > 1 else padding[0])
+            if isinstance(padding, (tuple, list))
+            else (padding, padding)
+        )
+        t_cols = _im2col(
+            np.pad(t_x_np, ((0, 0), (0, 0), (pad_h, pad_h), (pad_w, pad_w)), mode="constant"),
+            kh,
+            kw,
+            stride,
+        )
         w_col_t = t_w_np.reshape(oc, -1)
-        result_t = (np.matmul(t_cols, _w_col.T) + np.matmul(cols, w_col_t.T)).reshape(n, oh, ow, oc).transpose(0, 3, 1, 2)
+        result_t = (
+            (np.matmul(t_cols, _w_col.T) + np.matmul(cols, w_col_t.T))
+            .reshape(n, oh, ow, oc)
+            .transpose(0, 3, 1, 2)
+        )
         if bias is not None:
             t_b_np = np.zeros_like(bias.data) if t_b is None else t_b
             result_t = result_t + t_b_np[:, None, None]
         return result_t
+
     out._forward_fn = fwd
     return out
 
@@ -3228,11 +3884,18 @@ def _batchnorm2d(x: Tensor, gamma: Tensor, beta: Tensor, running_mean, running_v
 
     norm = (x.data - mean) / np.sqrt(var + eps)
     out_data = gamma.data.reshape(1, c, 1, 1) * norm + beta.data.reshape(1, c, 1, 1)
-    out = Tensor(out_data, requires_grad=x.requires_grad or gamma.requires_grad or beta.requires_grad, _children=(x, gamma, beta))
+    out = Tensor(
+        out_data,
+        requires_grad=x.requires_grad or gamma.requires_grad or beta.requires_grad,
+        _children=(x, gamma, beta),
+    )
     if out.requires_grad:
-        if x.requires_grad: x._consumers.append(out)
-        if gamma.requires_grad: gamma._consumers.append(out)
-        if beta.requires_grad: beta._consumers.append(out)
+        if x.requires_grad:
+            x._consumers.append(out)
+        if gamma.requires_grad:
+            gamma._consumers.append(out)
+        if beta.requires_grad:
+            beta._consumers.append(out)
 
     def bk(g):
         if x.requires_grad:
@@ -3243,7 +3906,7 @@ def _batchnorm2d(x: Tensor, gamma: Tensor, beta: Tensor, running_mean, running_v
                 ghat = g * gamma.data.reshape(1, c, 1, 1)
                 sum_ghat = ghat.sum(axis=(0, 2, 3), keepdims=True)
                 sum_ghat_xc = (ghat * x_center).sum(axis=(0, 2, 3), keepdims=True)
-                x_grad = ghat / s - sum_ghat / (N * s) - x_center * sum_ghat_xc / (N * s ** 3)
+                x_grad = ghat / s - sum_ghat / (N * s) - x_center * sum_ghat_xc / (N * s**3)
                 x_grad = np.broadcast_to(x_grad, g.shape).copy()
             else:
                 x_grad = g * gamma.data.reshape(1, c, 1, 1) / np.sqrt(var + eps)
@@ -3263,7 +3926,9 @@ def _batchnorm2d(x: Tensor, gamma: Tensor, beta: Tensor, running_mean, running_v
                 beta.grad = Tensor(g_beta, _copy=False)
             else:
                 beta.grad.data += g_beta
+
     out._backward_fn = bk
+
     def fwd(t_x, t_g, t_b):
         t_x = np.zeros_like(x.data) if t_x is None else t_x
         t_g = np.zeros_like(gamma.data) if t_g is None else t_g
@@ -3274,10 +3939,15 @@ def _batchnorm2d(x: Tensor, gamma: Tensor, beta: Tensor, running_mean, running_v
             n * h * w
             t_mean = t_x.mean(axis=(0, 2, 3), keepdims=True)
             t_var = (2 * (x_center * t_x)).mean(axis=(0, 2, 3), keepdims=True)
-            t_norm = (t_x - t_mean) / s - x_center * t_var / (2 * s ** 3)
+            t_norm = (t_x - t_mean) / s - x_center * t_var / (2 * s**3)
         else:
             t_norm = t_x / s
-        return t_norm * gamma.data.reshape(1, c, 1, 1) + norm * t_g.reshape(1, c, 1, 1) + t_b.reshape(1, c, 1, 1)
+        return (
+            t_norm * gamma.data.reshape(1, c, 1, 1)
+            + norm * t_g.reshape(1, c, 1, 1)
+            + t_b.reshape(1, c, 1, 1)
+        )
+
     out._forward_fn = fwd
     return out
 
@@ -3294,14 +3964,16 @@ def _maxpool2d(x: Tensor, kernel_size, stride):
         for ch in range(c):
             for oh in range(out_h):
                 for ow in range(out_w):
-                    ih = oh * s; iw = ow * s
-                    patch = x.data[i, ch, ih:ih+ks, iw:iw+ks]
+                    ih = oh * s
+                    iw = ow * s
+                    patch = x.data[i, ch, ih : ih + ks, iw : iw + ks]
                     max_idx = np.unravel_index(patch.argmax(), (ks, ks))
                     result[i, ch, oh, ow] = patch.max()
                     max_indices[(i, ch, oh, ow)] = (ih + max_idx[0], iw + max_idx[1])
 
     out = Tensor(result, requires_grad=x.requires_grad, _children=(x,))
-    if out.requires_grad and x.requires_grad: x._consumers.append(out)
+    if out.requires_grad and x.requires_grad:
+        x._consumers.append(out)
 
     def bk(g):
         if x.requires_grad:
@@ -3316,9 +3988,12 @@ def _maxpool2d(x: Tensor, kernel_size, stride):
                 x.grad = Tensor(grad_in, _copy=False)
             else:
                 x.grad.data += grad_in
+
     out._backward_fn = bk
+
     def fwd(t_x):
-        if t_x is None: return np.zeros_like(result)
+        if t_x is None:
+            return np.zeros_like(result)
         out_t = np.zeros_like(result)
         for i in range(n):
             for ch in range(c):
@@ -3327,6 +4002,7 @@ def _maxpool2d(x: Tensor, kernel_size, stride):
                         ih, iw = max_indices[(i, ch, oh, ow)]
                         out_t[i, ch, oh, ow] = t_x[i, ch, ih, iw]
         return out_t
+
     out._forward_fn = fwd
     return out
 
@@ -3335,7 +4011,9 @@ def flatten(x: Tensor) -> Tensor:
     """Flatten a 4D tensor to 2D for classification heads."""
     orig_shape = x.shape
     out = Tensor(x.data.reshape(x.data.shape[0], -1), requires_grad=x.requires_grad, _children=(x,))
-    if out.requires_grad and x.requires_grad: x._consumers.append(out)
+    if out.requires_grad and x.requires_grad:
+        x._consumers.append(out)
+
     def bk(g):
         if x.requires_grad:
             grad_val = g.reshape(orig_shape)
@@ -3343,16 +4021,23 @@ def flatten(x: Tensor) -> Tensor:
                 x.grad = Tensor(grad_val, _copy=False)
             else:
                 x.grad.data += grad_val
+
     out._backward_fn = bk
+
     def fwd(t_x):
-        if t_x is None: return np.zeros((out.shape[0], np.prod(tuple(s for i, s in enumerate(orig_shape) if i > 0))))
+        if t_x is None:
+            return np.zeros(
+                (out.shape[0], np.prod(tuple(s for i, s in enumerate(orig_shape) if i > 0)))
+            )
         return t_x.reshape(out.shape)
+
     out._forward_fn = fwd
     return out
 
 
 class _SoulTransformerBlockSoulLib(SloLayer):
     """Stateless transformer block used when model is loaded from PyTorch state dict."""
+
     def __init__(self, hidden: int, n_heads: int, ff_dim: int, name=""):
         super().__init__(name or f"Block{hidden}x{n_heads}")
         self.hidden = hidden
@@ -3363,10 +4048,10 @@ class _SoulTransformerBlockSoulLib(SloLayer):
     def forward(self, x: Tensor) -> Tensor:
         return x
 
-    def parameters(self) -> List[Tensor]:
+    def parameters(self) -> list[Tensor]:
         return []
 
-    def soul_signature(self) -> Dict:
+    def soul_signature(self) -> dict:
         return {"layer": "SloTransformerBlock", "hidden": self.hidden, "n_heads": self.n_heads}
 
 
@@ -3374,25 +4059,46 @@ class _SoulTransformerBlockSoulLib(SloLayer):
 # SOUL NET MODEL
 # =============================================================================
 
+
 class SloNet:
-    def __init__(self, layers=None, soul_name="Slo", soul_traits=None, system_prompt="", lineage="slonet", metadata=None):
+    def __init__(
+        self,
+        layers=None,
+        soul_name="Slo",
+        soul_traits=None,
+        system_prompt="",
+        lineage="slonet",
+        metadata=None,
+    ):
         self.layers = layers or []
         self.soul_name = soul_name
-        self.soul_traits = soul_traits or {"warmth":0.5,"creativity":0.5,"curiosity":0.5,"confidence":0.5,"empathy":0.5}
+        self.soul_traits = soul_traits or {
+            "warmth": 0.5,
+            "creativity": 0.5,
+            "curiosity": 0.5,
+            "confidence": 0.5,
+            "empathy": 0.5,
+        }
         self.system_prompt = system_prompt
         self.lineage = lineage
         self.metadata = metadata or {}
         self._step = 0
         self._created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ")
-        self._sd: Dict[str, np.ndarray] = {}
-        self._user_adapters: Dict[str, SloAdapterLayer] = {}
-        self._active_user_id: Optional[str] = None
+        self._sd: dict[str, np.ndarray] = {}
+        self._user_adapters: dict[str, SloAdapterLayer] = {}
+        self._active_user_id: str | None = None
 
-    def set_active_user(self, user_id: Optional[str]) -> None:
+    def set_active_user(self, user_id: str | None) -> None:
         """Set the active user for per-user adapter application."""
         self._active_user_id = user_id
 
-    def get_user_adapter(self, user_id: str, dim: int = 768, rank: int = 8, data_dir: Optional[Union[str, Path]] = None) -> SloAdapterLayer:
+    def get_user_adapter(
+        self,
+        user_id: str,
+        dim: int = 768,
+        rank: int = 8,
+        data_dir: str | Path | None = None,
+    ) -> SloAdapterLayer:
         """Get or create a per-user adapter layer.
 
         Checks the in-memory cache first, then tries to load a persisted
@@ -3419,6 +4125,7 @@ class SloNet:
         adapter = SloAdapterLayer(dim=dim, rank=rank, name=f"adapter_{user_id}")
         try:
             from pathlib import Path
+
             if data_dir is None:
                 data_dir = find_repo_root(Path(__file__).resolve()) / "data"
             path = Path(data_dir) / "user_adapters" / f"{user_id}_adapter.npz"
@@ -3432,8 +4139,11 @@ class SloNet:
                         adapter.up_proj.weight.data = uw.copy()
         except Exception as e:
             import logging
+
             logging.getLogger("slo.training.slonet").warning(
-                "Failed to load user adapter for %s: %s (using fresh adapter)", user_id, e,
+                "Failed to load user adapter for %s: %s (using fresh adapter)",
+                user_id,
+                e,
             )
 
         self._user_adapters[user_id] = adapter
@@ -3451,28 +4161,28 @@ class SloNet:
     def eval(self):
         self.train(False)
 
-    def parameters(self) -> List[Tensor]:
+    def parameters(self) -> list[Tensor]:
         ps = []
         for l in self.layers:
             if isinstance(l, SloLayer):
                 ps.extend(l.parameters())
         return ps
 
-    def state_dict(self) -> Dict[str, np.ndarray]:
+    def state_dict(self) -> dict[str, np.ndarray]:
         """Return all parameters as a dict (compatible with slo_format.save_soul)."""
         result = {}
         for i, p in enumerate(self.parameters()):
             result[f"p{i}"] = p.data.copy()
         return result
 
-    def _rebuild_from_state_dict(self, sd: Dict[str, np.ndarray]) -> None:
+    def _rebuild_from_state_dict(self, sd: dict[str, np.ndarray]) -> None:
         """Rebuild architecture from PyTorch state dict keys, then load weights."""
         self._sd = sd
         self.layers = []
 
         # Count transformer blocks
         block_keys = [k for k in sd if k.startswith("blocks.")]
-        num_blocks = len(set(k.split(".")[1] for k in block_keys))
+        num_blocks = len({k.split(".")[1] for k in block_keys})
 
         # Determine dims from first block
         norm1_w = sd.get("blocks.0.norm1.weight")
@@ -3488,10 +4198,7 @@ class SloNet:
         ff_dim = ff_w1.shape[0] if ff_w1 is not None else hidden_dim * 4
 
         for i in range(num_blocks):
-            block = _SoulTransformerBlockSoulLib(
-                hidden_dim, n_heads, ff_dim,
-                name=f"block{i}"
-            )
+            block = _SoulTransformerBlockSoulLib(hidden_dim, n_heads, ff_dim, name=f"block{i}")
             self.layers.append(block)
 
         # Output norm
@@ -3501,17 +4208,17 @@ class SloNet:
         # Load weights into _sd for forward pass to use
         self._sd = sd
 
-    def _get_weight(self, key: str) -> Optional[np.ndarray]:
+    def _get_weight(self, key: str) -> np.ndarray | None:
         return self._sd.get(key)
 
-    def forward(self, x, user_id: Optional[str] = None) -> Tensor:
+    def forward(self, x, user_id: str | None = None) -> Tensor:
         if isinstance(x, np.ndarray):
             x = Tensor(x.astype(np.float32) if x.dtype != np.float32 else x.copy())
         elif isinstance(x, list):
             x = Tensor(np.array(x, dtype=np.float32))
         elif isinstance(x, memoryview):
             x = Tensor(np.array(x, dtype=np.float32))
-        elif hasattr(x, 'data') and isinstance(x.data, np.ndarray):
+        elif hasattr(x, "data") and isinstance(x.data, np.ndarray):
             x = Tensor(x.data.copy())
         else:
             x = Tensor(x)
@@ -3537,15 +4244,17 @@ class SloNet:
     def __call__(self, x) -> Tensor:
         return self.forward(x)
 
-    def fit(self, X, y, optimizer, epochs=10, batch_size=32, on_step=None, max_grad_norm=1.0) -> List[float]:
+    def fit(
+        self, X, y, optimizer, epochs=10, batch_size=32, on_step=None, max_grad_norm=1.0
+    ) -> list[float]:
         losses = []
         params = self.parameters()
         n = X.shape[0]
         for ep in range(epochs):
             ep_loss, steps = 0.0, 0
             for i in range(0, n, batch_size):
-                xb = Tensor(X.data[i:i+batch_size], requires_grad=True)
-                yb = Tensor(y.data[i:i+batch_size])
+                xb = Tensor(X.data[i : i + batch_size], requires_grad=True)
+                yb = Tensor(y.data[i : i + batch_size])
                 pred = self.forward(xb)
                 loss = cross_entropy(pred, yb)
                 loss.backward()
@@ -3553,29 +4262,39 @@ class SloNet:
                     clip_grad_norm_(params, max_grad_norm)
                 optimizer.step(params)
                 ep_loss += loss.data[()]
-                steps += 1; self._step += 1
-                if on_step: on_step(self._step, loss.data[()], ep)
-            losses.append(ep_loss/max(steps,1))
+                steps += 1
+                self._step += 1
+                if on_step:
+                    on_step(self._step, loss.data[()], ep)
+            losses.append(ep_loss / max(steps, 1))
         return losses
 
-    def soul_signature(self) -> Dict:
-        return {"soul_name":self.soul_name,"soul_traits":self.soul_traits,"lineage":self.lineage,
-                "layers":[l.soul_signature() for l in self.layers],"step":self._step,"created_at":self._created_at,"system_prompt":self.system_prompt}
+    def soul_signature(self) -> dict:
+        return {
+            "soul_name": self.soul_name,
+            "soul_traits": self.soul_traits,
+            "lineage": self.lineage,
+            "layers": [l.soul_signature() for l in self.layers],
+            "step": self._step,
+            "created_at": self._created_at,
+            "system_prompt": self.system_prompt,
+        }
 
-    def num_parameters(self) -> int: return sum(p.data.size for p in self.parameters())
+    def num_parameters(self) -> int:
+        return sum(p.data.size for p in self.parameters())
 
     def apply_gradient_checkpointing(self) -> None:
         for l in self.layers:
             if hasattr(l, "use_checkpoint"):
                 l.use_checkpoint = True
 
-    def named_modules(self, prefix="") -> List[Tuple[str, "SloNet"]]:
+    def named_modules(self, prefix="") -> list[tuple[str, SloNet]]:
         return [(prefix, self)]
 
-    def named_children(self) -> List[Tuple[str, "SloLayer"]]:
+    def named_children(self) -> list[tuple[str, SloLayer]]:
         return [(f"layer_{i}", l) for i, l in enumerate(self.layers) if hasattr(l, "forward")]
 
-    def _get_weights_dict(self) -> Dict[str, Any]:
+    def _get_weights_dict(self) -> dict[str, Any]:
         return {f"p{i}": p.data.tolist() for i, p in enumerate(self.parameters())}
 
     def _forward_state_dict(self, x: Tensor) -> Tensor:
@@ -3594,7 +4313,7 @@ class SloNet:
         flat = indices.flatten()
         emb = sd["tok_emb.weight"][flat].reshape(B, N, hidden)
         h = np.clip(emb, -50, 50)
-        num_blocks = len(set(k.split(".")[1] for k in sd if k.startswith("blocks.")))
+        num_blocks = len({k.split(".")[1] for k in sd if k.startswith("blocks.")})
         for i in range(num_blocks):
             n1_w = _sd_get(f"blocks.{i}.norm1.weight")
             h_norm = _layernorm_state_dict(Tensor(h), n1_w)
@@ -3625,7 +4344,7 @@ class SloNet:
             Q = q.reshape(B, N, H, E).transpose(0, 2, 1, 3)
             K = k.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
             V = v.reshape(B, -1, H, E).transpose(0, 2, 1, 3)
-            scale = 1.0 / (E ** 0.5)
+            scale = 1.0 / (E**0.5)
             scores = np.einsum("bhnd,bhkd->bhnk", Q, K) * scale
             attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
             attn = attn / attn.sum(axis=-1, keepdims=True)
@@ -3658,7 +4377,7 @@ class SloNet:
         logits = logits - logits.max(axis=-1, keepdims=True)
         return Tensor(logits.astype(np.float32))
 
-    def _load_weights(self, weights: Dict[str, Any]) -> None:
+    def _load_weights(self, weights: dict[str, Any]) -> None:
         if not weights:
             return
         for i, p in enumerate(self.parameters()):
@@ -3696,25 +4415,28 @@ def _layernorm_state_dict(x: Tensor, weight: np.ndarray, eps: float = 1e-5) -> T
 # OPTIMIZERS
 # =============================================================================
 
+
 def _invalidate_gpu_cache():
     try:
         from domain.slolib._internal.gpu import get_accelerator
+
         acc = get_accelerator()
-        if hasattr(acc, 'clear_cache'):
+        if hasattr(acc, "clear_cache"):
             acc.clear_cache()
     except Exception as e:
         logger.debug("GPU cache clear failed: %s", e)
 
 
-def clip_grad_norm_(params: Sequence[Tensor], max_norm: float = 1.0,
-                    norm_type: float = 2.0) -> float:
+def clip_grad_norm_(
+    params: Sequence[Tensor], max_norm: float = 1.0, norm_type: float = 2.0
+) -> float:
     """Clip gradients to a maximum norm."""
     params_list = [p for p in params if p.grad is not None and p.requires_grad]
     if not params_list:
         return 0.0
     total_norm = 0.0
     for p in params_list:
-        param_norm = np.sum(p.grad.data ** 2)
+        param_norm = np.sum(p.grad.data**2)
         total_norm += param_norm
     total_norm = float(np.sqrt(total_norm))
     clip_coef = max_norm / (total_norm + 1e-6)
@@ -3736,10 +4458,13 @@ class SloSGD:
         max_grad_norm: if set, clip the global gradient norm before stepping.
     """
 
-    def __init__(self, lr: float = 0.01, momentum: float = 0.0,
-                 max_grad_norm: Optional[float] = None) -> None:
-        self.lr = lr; self.momentum = momentum; self.max_grad_norm = max_grad_norm
-        self._v: Dict[int, Any] = {}
+    def __init__(
+        self, lr: float = 0.01, momentum: float = 0.0, max_grad_norm: float | None = None
+    ) -> None:
+        self.lr = lr
+        self.momentum = momentum
+        self.max_grad_norm = max_grad_norm
+        self._v: dict[int, Any] = {}
 
     def step(self, params: Sequence[Tensor]) -> None:
         """Take one SGD step over ``params`` (momentum + optional clipping).
@@ -3753,15 +4478,21 @@ class SloSGD:
         if self.max_grad_norm is not None:
             clip_grad_norm_(params, self.max_grad_norm)
         for p in params:
-            if p.grad is None or not p.requires_grad: continue
-            g = p.grad.data; pid = id(p)
+            if p.grad is None or not p.requires_grad:
+                continue
+            g = p.grad.data
+            pid = id(p)
             if self.momentum > 0:
-                self._v[pid] = self.momentum*self._v.get(pid,0)+g if pid not in self._v else self.momentum*self._v[pid]+g
+                self._v[pid] = (
+                    self.momentum * self._v.get(pid, 0) + g
+                    if pid not in self._v
+                    else self.momentum * self._v[pid] + g
+                )
                 g = self._v[pid]
-            p.data -= self.lr*g
+            p.data -= self.lr * g
             p.grad = None
 
-    def state_dict(self, params: Optional[Sequence[Tensor]] = None) -> dict:
+    def state_dict(self, params: Sequence[Tensor] | None = None) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
@@ -3771,10 +4502,14 @@ class SloSGD:
         Returns:
             Dict with 'hyperparameters' and 'state' (name-keyed buffers).
         """
-        state = {"hyperparameters": {
-            "lr": self.lr, "momentum": self.momentum,
-            "max_grad_norm": self.max_grad_norm,
-        }, "state": {}}
+        state = {
+            "hyperparameters": {
+                "lr": self.lr,
+                "momentum": self.momentum,
+                "max_grad_norm": self.max_grad_norm,
+            },
+            "state": {},
+        }
         if params is None:
             return state
         for i, p in enumerate(params):
@@ -3783,14 +4518,15 @@ class SloSGD:
             if pid in self._v:
                 buf = self._v[pid]
                 state["state"][name] = (
-                    buf.tolist() if isinstance(buf, np.ndarray)
-                    else buf.detach().cpu().tolist() if hasattr(buf, "detach")
+                    buf.tolist()
+                    if isinstance(buf, np.ndarray)
+                    else buf.detach().cpu().tolist()
+                    if hasattr(buf, "detach")
                     else buf
                 )
         return state
 
-    def load_state_dict(self, state_dict: dict,
-                        params: Optional[Sequence[Tensor]] = None) -> None:
+    def load_state_dict(self, state_dict: dict, params: Sequence[Tensor] | None = None) -> None:
         """Restore optimizer state by parameter name.
 
         Args:
@@ -3835,12 +4571,24 @@ class SloAdam:
         max_grad_norm: if set, clip the global gradient norm before stepping.
     """
 
-    def __init__(self, lr: float = 0.001, b1: float = 0.9, b2: float = 0.999,
-                 eps: float = 1e-8, weight_decay: float = 0.0,
-                 max_grad_norm: Optional[float] = None) -> None:
-        self.lr = lr; self.b1 = b1; self.b2 = b2; self.eps = eps
-        self.weight_decay = weight_decay; self.max_grad_norm = max_grad_norm
-        self._m: Dict[int, Any] = {}; self._v: Dict[int, Any] = {}; self._t = 0
+    def __init__(
+        self,
+        lr: float = 0.001,
+        b1: float = 0.9,
+        b2: float = 0.999,
+        eps: float = 1e-8,
+        weight_decay: float = 0.0,
+        max_grad_norm: float | None = None,
+    ) -> None:
+        self.lr = lr
+        self.b1 = b1
+        self.b2 = b2
+        self.eps = eps
+        self.weight_decay = weight_decay
+        self.max_grad_norm = max_grad_norm
+        self._m: dict[int, Any] = {}
+        self._v: dict[int, Any] = {}
+        self._t = 0
 
     @staticmethod
     def _zeros_like(t: Any) -> Any:
@@ -3887,11 +4635,11 @@ class SloAdam:
             shape of ``m`` and ``v``.
         """
         t = self._t
-        mh = m / (1 - self.b1 ** t)
-        vh = v / (1 - self.b2 ** t)
+        mh = m / (1 - self.b1**t)
+        vh = v / (1 - self.b2**t)
         if vmax is not None:
             vmax[...] = np.maximum(vmax, v)
-            vh = vmax / (1 - self.b2 ** t)
+            vh = vmax / (1 - self.b2**t)
         return self.lr * mh / (np.sqrt(vh) + self.eps)
 
     def step(self, params: Sequence[Tensor]) -> None:
@@ -3908,20 +4656,28 @@ class SloAdam:
         """
         if self.max_grad_norm is not None:
             clip_grad_norm_(params, self.max_grad_norm)
-        self._t += 1; b1 = self.b1; b2 = self.b2; wd = self.weight_decay
+        self._t += 1
+        b1 = self.b1
+        b2 = self.b2
+        wd = self.weight_decay
         for p in params:
-            if p.grad is None or not p.requires_grad: continue
-            g = p.grad.data; pid = id(p)
+            if p.grad is None or not p.requires_grad:
+                continue
+            g = p.grad.data
+            pid = id(p)
             if wd != 0:
                 g = g + wd * p.data
-            if pid not in self._m: self._m[pid] = self._zeros_like(p.data)
-            if pid not in self._v: self._v[pid] = self._zeros_like(p.data)
-            self._m[pid] = b1*self._m[pid]+(1-b1)*g
-            self._v[pid] = b2*self._v[pid]+(1-b2)*(g**2)
+            if pid not in self._m:
+                self._m[pid] = self._zeros_like(p.data)
+            if pid not in self._v:
+                self._v[pid] = self._zeros_like(p.data)
+            self._m[pid] = b1 * self._m[pid] + (1 - b1) * g
+            self._v[pid] = b2 * self._v[pid] + (1 - b2) * (g**2)
             upd = self._adam_update(self._m[pid], self._v[pid])
-            p.data -= self._reduce_to_param_shape(upd, p); p.grad = None
+            p.data -= self._reduce_to_param_shape(upd, p)
+            p.grad = None
 
-    def state_dict(self, params: Optional[Sequence[Tensor]] = None) -> dict:
+    def state_dict(self, params: Sequence[Tensor] | None = None) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
@@ -3931,10 +4687,18 @@ class SloAdam:
         Returns:
             Dict with 'hyperparameters', 't', and 'state' (name-keyed buffers).
         """
-        state = {"hyperparameters": {
-            "lr": self.lr, "b1": self.b1, "b2": self.b2, "eps": self.eps,
-            "weight_decay": self.weight_decay, "max_grad_norm": self.max_grad_norm,
-        }, "t": self._t, "state": {}}
+        state = {
+            "hyperparameters": {
+                "lr": self.lr,
+                "b1": self.b1,
+                "b2": self.b2,
+                "eps": self.eps,
+                "weight_decay": self.weight_decay,
+                "max_grad_norm": self.max_grad_norm,
+            },
+            "t": self._t,
+            "state": {},
+        }
         if params is None:
             return state
         for i, p in enumerate(params):
@@ -3943,18 +4707,27 @@ class SloAdam:
             entry = {}
             if pid in self._m:
                 buf = self._m[pid]
-                entry["m"] = (buf.tolist() if isinstance(buf, np.ndarray)
-                    else buf.detach().cpu().tolist() if hasattr(buf, "detach") else buf)
+                entry["m"] = (
+                    buf.tolist()
+                    if isinstance(buf, np.ndarray)
+                    else buf.detach().cpu().tolist()
+                    if hasattr(buf, "detach")
+                    else buf
+                )
             if pid in self._v:
                 buf = self._v[pid]
-                entry["v"] = (buf.tolist() if isinstance(buf, np.ndarray)
-                    else buf.detach().cpu().tolist() if hasattr(buf, "detach") else buf)
+                entry["v"] = (
+                    buf.tolist()
+                    if isinstance(buf, np.ndarray)
+                    else buf.detach().cpu().tolist()
+                    if hasattr(buf, "detach")
+                    else buf
+                )
             if entry:
                 state["state"][name] = entry
         return state
 
-    def load_state_dict(self, state_dict: dict,
-                        params: Optional[Sequence[Tensor]] = None) -> None:
+    def load_state_dict(self, state_dict: dict, params: Sequence[Tensor] | None = None) -> None:
         """Restore optimizer state by parameter name.
 
         Args:
@@ -3972,17 +4745,22 @@ class SloAdam:
         if params is None:
             return
         saved_state = state_dict.get("state", {})
-        self._m.clear(); self._v.clear()
+        self._m.clear()
+        self._v.clear()
         for i, p in enumerate(params):
             name = getattr(p, "name", f"param_{i}")
             if name in saved_state:
                 entry = saved_state[name]
                 if "m" in entry:
                     buf = entry["m"]
-                    self._m[id(p)] = (np.array(buf, dtype=np.float64) if isinstance(buf, list) else buf)
+                    self._m[id(p)] = (
+                        np.array(buf, dtype=np.float64) if isinstance(buf, list) else buf
+                    )
                 if "v" in entry:
                     buf = entry["v"]
-                    self._v[id(p)] = (np.array(buf, dtype=np.float64) if isinstance(buf, list) else buf)
+                    self._v[id(p)] = (
+                        np.array(buf, dtype=np.float64) if isinstance(buf, list) else buf
+                    )
 
 
 class SloAdamW(SloAdam):
@@ -4013,14 +4791,23 @@ class SloAdamW(SloAdam):
             stepping.
     """
 
-    def __init__(self, lr: float = 0.001, b1: float = 0.9, b2: float = 0.999,
-                 eps: float = 1e-8, weight_decay: float = 0.01,
-                 amsgrad: bool = False, maximize: bool = False,
-                 max_grad_norm: Optional[float] = None) -> None:
-        super().__init__(lr=lr, b1=b1, b2=b2, eps=eps,
-                         weight_decay=weight_decay, max_grad_norm=max_grad_norm)
-        self.amsgrad = amsgrad; self.maximize = maximize
-        self._vmax: Dict[int, Any] = {}
+    def __init__(
+        self,
+        lr: float = 0.001,
+        b1: float = 0.9,
+        b2: float = 0.999,
+        eps: float = 1e-8,
+        weight_decay: float = 0.01,
+        amsgrad: bool = False,
+        maximize: bool = False,
+        max_grad_norm: float | None = None,
+    ) -> None:
+        super().__init__(
+            lr=lr, b1=b1, b2=b2, eps=eps, weight_decay=weight_decay, max_grad_norm=max_grad_norm
+        )
+        self.amsgrad = amsgrad
+        self.maximize = maximize
+        self._vmax: dict[int, Any] = {}
 
     def step(self, params: Sequence[Tensor]) -> None:
         """Take one AdamW step over ``params`` (decoupled weight decay).
@@ -4043,7 +4830,11 @@ class SloAdamW(SloAdam):
         """
         if self.max_grad_norm is not None:
             clip_grad_norm_(params, self.max_grad_norm)
-        self._t += 1; lr = self.lr; b1 = self.b1; b2 = self.b2; wd = self.weight_decay
+        self._t += 1
+        lr = self.lr
+        b1 = self.b1
+        b2 = self.b2
+        wd = self.weight_decay
         for p in params:
             if p.grad is None or not p.requires_grad:
                 continue
@@ -4056,7 +4847,7 @@ class SloAdamW(SloAdam):
             if pid not in self._v:
                 self._v[pid] = self._zeros_like(p.data)
             self._m[pid] = b1 * self._m[pid] + (1 - b1) * g
-            self._v[pid] = b2 * self._v[pid] + (1 - b2) * (g ** 2)
+            self._v[pid] = b2 * self._v[pid] + (1 - b2) * (g**2)
             vmax_buf = None
             if self.amsgrad:
                 if pid not in self._vmax:
@@ -4067,7 +4858,7 @@ class SloAdamW(SloAdam):
                 p.data -= lr * wd * p.data
             p.grad = None
 
-    def state_dict(self, params: Optional[Sequence[Tensor]] = None) -> dict:
+    def state_dict(self, params: Sequence[Tensor] | None = None) -> dict:
         """Serialize optimizer state by parameter name (not id).
 
         Args:
@@ -4090,12 +4881,15 @@ class SloAdamW(SloAdam):
             if pid in self._vmax:
                 buf_v = self._vmax[pid]
                 state["state"].setdefault(name, {})["maxv"] = (
-                    buf_v.tolist() if isinstance(buf_v, np.ndarray)
-                    else buf_v.detach().cpu().tolist() if hasattr(buf_v, "detach") else buf_v)
+                    buf_v.tolist()
+                    if isinstance(buf_v, np.ndarray)
+                    else buf_v.detach().cpu().tolist()
+                    if hasattr(buf_v, "detach")
+                    else buf_v
+                )
         return state
 
-    def load_state_dict(self, state_dict: dict,
-                        params: Optional[Sequence[Tensor]] = None) -> None:
+    def load_state_dict(self, state_dict: dict, params: Sequence[Tensor] | None = None) -> None:
         """Restore optimizer state by parameter name.
 
         Args:
@@ -4116,29 +4910,40 @@ class SloAdamW(SloAdam):
                 entry = saved_state[name]
                 if "maxv" in entry:
                     buf_v = entry["maxv"]
-                    self._vmax[id(p)] = (np.array(buf_v, dtype=np.float64) if isinstance(buf_v, list) else buf_v)
+                    self._vmax[id(p)] = (
+                        np.array(buf_v, dtype=np.float64) if isinstance(buf_v, list) else buf_v
+                    )
 
 
 # =============================================================================
 # SOU EXPORT / IMPORT
 # =============================================================================
 
-SOU_MAGIC = b"SOUL"; SOU_VERSION = 1  # shared with domains.inference.slo_format
+SOU_MAGIC = b"SOUL"
+SOU_VERSION = 1  # shared with domains.inference.slo_format
 
 
 def _sanitize(obj):
-    if isinstance(obj, dict): return {k:_sanitize(v) for k,v in obj.items()}
-    if isinstance(obj, list): return [_sanitize(v) for v in obj]
-    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)): return None
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
     return obj
 
 
 def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict = None) -> str:
     base_metadata = {
-        "version": 3, "soul_name": net.soul_name, "soul_traits": net.soul_traits,
-        "lineage": net.lineage, "system_prompt": net.system_prompt,
-        "soul_signature": net.soul_signature(), "metadata": net.metadata,
-        "created_at": net._created_at, "step": net._step,
+        "version": 3,
+        "soul_name": net.soul_name,
+        "soul_traits": net.soul_traits,
+        "lineage": net.lineage,
+        "system_prompt": net.system_prompt,
+        "soul_signature": net.soul_signature(),
+        "metadata": net.metadata,
+        "created_at": net._created_at,
+        "step": net._step,
     }
     if metadata:
         base_metadata["metadata"] = {**(base_metadata.get("metadata") or {}), **metadata}
@@ -4152,8 +4957,10 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
 
     # Atomic write: temp file then rename
     import tempfile
+
     tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=os.path.dirname(path) or ".", suffix=".tmp",
+        dir=os.path.dirname(path) or ".",
+        suffix=".tmp",
     )
     try:
         with os.fdopen(tmp_fd, "wb") as f:
@@ -4194,11 +5001,13 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
 
 def import_from_sou(path: str) -> SloNet:
     from pathlib import Path as _Path
+
     p = _Path(path)
     if not p.exists():
         points_path = p.with_suffix(".points.json")
         if points_path.exists():
             from domains.infrastructure.pugqeep.model_tree import load_from_points
+
             tree, meta = load_from_points(str(p))
             net = SloTransformer(
                 vocab_size=meta.get("metadata", {}).get("vocab_size", 256),
@@ -4226,7 +5035,7 @@ def import_from_sou(path: str) -> SloNet:
     version = struct.unpack("<I", raw[4:8])[0]
     json_len = struct.unpack("<I", raw[8:12])[0]
     # Strip null padding bytes that were added for 4-byte alignment
-    meta_bytes = raw[12:12+json_len].rstrip(b"\x00")
+    meta_bytes = raw[12 : 12 + json_len].rstrip(b"\x00")
     try:
         meta = json.loads(meta_bytes.decode())
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
@@ -4250,24 +5059,30 @@ def import_from_sou(path: str) -> SloNet:
             for _ in range(num_params):
                 if pos + 4 > len(rem):
                     raise ValueError(f"Corrupt .soul file: truncated at offset {pos}")
-                name_len = struct.unpack("<I", rem[pos:pos+4])[0]
+                name_len = struct.unpack("<I", rem[pos : pos + 4])[0]
                 pos += 4
                 if pos + name_len > len(rem):
                     raise ValueError(f"Corrupt .soul file: truncated name at offset {pos}")
-                name = rem[pos:pos+name_len].decode("utf-8")
+                name = rem[pos : pos + name_len].decode("utf-8")
                 pos += name_len
                 if pos + 4 > len(rem):
                     raise ValueError(f"Corrupt .soul file: truncated ndim at offset {pos}")
-                ndim = struct.unpack("<I", rem[pos:pos+4])[0]
+                ndim = struct.unpack("<I", rem[pos : pos + 4])[0]
                 pos += 4
                 if pos + 4 * ndim > len(rem):
                     raise ValueError(f"Corrupt .soul file: truncated shape at offset {pos}")
-                shape = tuple(struct.unpack("<I", rem[pos+4*i:pos+4*i+4])[0] for i in range(ndim))
+                shape = tuple(
+                    struct.unpack("<I", rem[pos + 4 * i : pos + 4 * i + 4])[0] for i in range(ndim)
+                )
                 pos += 4 * ndim
                 count = int(np.prod(shape))
                 if pos + count * 4 > len(rem):
                     raise ValueError(f"Corrupt .soul file: truncated weights at offset {pos}")
-                weights[name] = np.frombuffer(rem[pos:pos+count*4], dtype=np.float32).copy().reshape(shape)
+                weights[name] = (
+                    np.frombuffer(rem[pos : pos + count * 4], dtype=np.float32)
+                    .copy()
+                    .reshape(shape)
+                )
                 pos += count * 4
     else:
         # v1/v2 JSON weights
@@ -4276,9 +5091,11 @@ def import_from_sou(path: str) -> SloNet:
             wl = struct.unpack("<I", rem[:4])[0]
             if 0 < wl <= len(rem) - 4:
                 try:
-                    weights = json.loads(rem[4:4+wl].decode())
+                    weights = json.loads(rem[4 : 4 + wl].decode())
                 except (UnicodeDecodeError, json.JSONDecodeError) as e:
-                    raise ValueError(f"Corrupt .soul file '{path}': failed to parse weight JSON ({e})") from e
+                    raise ValueError(
+                        f"Corrupt .soul file '{path}': failed to parse weight JSON ({e})"
+                    ) from e
 
     # Detect SloTransformer from lineage or named weight keys
     is_transformer = (
@@ -4310,11 +5127,13 @@ def import_from_sou(path: str) -> SloNet:
             net.load_state_dict(weights, strict=False)
         return net
 
-    net = SloNet(soul_name=soul_name,
-                  soul_traits=meta.get("soul_traits", {}),
-                  system_prompt=system_prompt,
-                  lineage=lineage,
-                  metadata=meta)
+    net = SloNet(
+        soul_name=soul_name,
+        soul_traits=meta.get("soul_traits", {}),
+        system_prompt=system_prompt,
+        lineage=lineage,
+        metadata=meta,
+    )
 
     if weights and any(k.startswith("tok_emb.") for k in weights.keys()):
         net._rebuild_from_state_dict(weights)
@@ -4324,7 +5143,7 @@ def import_from_sou(path: str) -> SloNet:
     return net
 
 
-def _rebuild_net_from_params(net: SloNet, weights: Dict[str, Any]) -> None:
+def _rebuild_net_from_params(net: SloNet, weights: dict[str, Any]) -> None:
     """Rebuild a SloNet that used SloEmbedding + SloLSTM layers from flat param weights.
 
     Expected param order: emb.weight, lstm.emb.weight, lstm.W_ih.w, lstm.W_ih.b,
@@ -4356,24 +5175,36 @@ def _rebuild_net_from_params(net: SloNet, weights: Dict[str, Any]) -> None:
 
     dropout = float(net.metadata.get("lstm_dropout", 0.0))
     lstm = SloLSTM(vocab, embed_dim, hidden_dim, num_layers=num_layers, dropout=dropout)
-    lstm.embedding.weight.data[:] = arrays[i]; i += 1
-    lstm.W_ih.weight.data[:] = arrays[i]; i += 1
-    lstm.W_ih.bias.data[:] = arrays[i]; i += 1
-    lstm.W_hh.weight.data[:] = arrays[i]; i += 1
-    lstm.W_hh.bias.data[:] = arrays[i]; i += 1
-    lstm.fc_out.weight.data[:] = arrays[i]; i += 1
-    lstm.fc_out.bias.data[:] = arrays[i]; i += 1
+    lstm.embedding.weight.data[:] = arrays[i]
+    i += 1
+    lstm.W_ih.weight.data[:] = arrays[i]
+    i += 1
+    lstm.W_ih.bias.data[:] = arrays[i]
+    i += 1
+    lstm.W_hh.weight.data[:] = arrays[i]
+    i += 1
+    lstm.W_hh.bias.data[:] = arrays[i]
+    i += 1
+    lstm.fc_out.weight.data[:] = arrays[i]
+    i += 1
+    lstm.fc_out.bias.data[:] = arrays[i]
+    i += 1
     if num_layers > 1:
-        lstm.W_ih2.weight.data[:] = arrays[i]; i += 1
-        lstm.W_ih2.bias.data[:] = arrays[i]; i += 1
-        lstm.W_hh2.weight.data[:] = arrays[i]; i += 1
-        lstm.W_hh2.bias.data[:] = arrays[i]; i += 1
+        lstm.W_ih2.weight.data[:] = arrays[i]
+        i += 1
+        lstm.W_ih2.bias.data[:] = arrays[i]
+        i += 1
+        lstm.W_hh2.weight.data[:] = arrays[i]
+        i += 1
+        lstm.W_hh2.bias.data[:] = arrays[i]
+        i += 1
     net.layers.append(lstm)
 
 
-def souls_from_directory(dir_path) -> List[SloNet]:
+def souls_from_directory(dir_path) -> list[SloNet]:
     souls = []
     import logging
+
     _log = logging.getLogger(__name__)
     for p in Path(dir_path).glob("*.soul"):
         try:
@@ -4388,7 +5219,7 @@ def souls_from_directory(dir_path) -> List[SloNet]:
 # =============================================================================
 
 
-def _state_dict_to_numpy(state_dict: Dict[str, Any]) -> Dict[str, np.ndarray]:
+def _state_dict_to_numpy(state_dict: dict[str, Any]) -> dict[str, np.ndarray]:
     """Recursively convert tensor-like values in a state dict to numpy arrays."""
     result = {}
     for k, v in state_dict.items():
@@ -4407,8 +5238,8 @@ def _state_dict_to_numpy(state_dict: Dict[str, Any]) -> Dict[str, np.ndarray]:
 
 def save_checkpoint_npz(
     path: str,
-    state_dict: Dict[str, Any],
-    meta: Optional[Dict[str, Any]] = None,
+    state_dict: dict[str, Any],
+    meta: dict[str, Any] | None = None,
 ) -> str:
     """Save a model checkpoint as ``.npz``.
 
@@ -4441,7 +5272,7 @@ def save_checkpoint_npz(
     return str(p)
 
 
-def load_checkpoint_npz(path: str) -> Dict[str, Any]:
+def load_checkpoint_npz(path: str) -> dict[str, Any]:
     """Load a checkpoint saved by ``save_checkpoint_npz``.
 
     Returns:
@@ -4468,32 +5299,64 @@ def load_checkpoint_npz(path: str) -> Dict[str, Any]:
 # TRAIN FROM GPT STREAM
 # =============================================================================
 
-def train_char_lstm_from_gpt(gpt_fn, soul_name="Slo", epochs=10, temperature=0.8, lr=0.001, embed_dim=256, hidden_dim=512, on_step=None):
+
+def train_char_lstm_from_gpt(
+    gpt_fn,
+    soul_name="Slo",
+    epochs=10,
+    temperature=0.8,
+    lr=0.001,
+    embed_dim=256,
+    hidden_dim=512,
+    on_step=None,
+):
     charset = list(" abcdefghijklmnopqrstuvwxyz0123456789.,!?-'")
-    stoi = {c:i for i,c in enumerate(charset)}; {i:c for i,c in enumerate(charset)}
+    stoi = {c: i for i, c in enumerate(charset)}
+    dict(enumerate(charset))
     unk = 0
-    net = SloNet([SloEmbedding(len(charset), embed_dim), SloLSTM(len(charset), embed_dim, hidden_dim, num_layers=2, dropout=0.2)],
-                  soul_name=soul_name, soul_traits={"warmth":0.5,"creativity":0.5,"curiosity":0.5,"confidence":0.5},
-                  system_prompt=f"You are {soul_name}.", lineage="gpt2-teacher-distillation")
+    net = SloNet(
+        [
+            SloEmbedding(len(charset), embed_dim),
+            SloLSTM(len(charset), embed_dim, hidden_dim, num_layers=2, dropout=0.2),
+        ],
+        soul_name=soul_name,
+        soul_traits={"warmth": 0.5, "creativity": 0.5, "curiosity": 0.5, "confidence": 0.5},
+        system_prompt=f"You are {soul_name}.",
+        lineage="gpt2-teacher-distillation",
+    )
     opt = SloAdamW(lr=lr)
-    topics = ["What is consciousness?","Explain machine learning","Write a haiku about time","How do neural networks learn?","What makes humans unique?"]
+    topics = [
+        "What is consciousness?",
+        "Explain machine learning",
+        "Write a haiku about time",
+        "How do neural networks learn?",
+        "What makes humans unique?",
+    ]
     for ep in range(epochs):
         for topic in topics:
             resp = gpt_fn(topic, temperature)
-            if not resp: continue
-            text = (topic+" "+resp)[:256]
+            if not resp:
+                continue
+            text = (topic + " " + resp)[:256]
             ids = [stoi.get(c, unk) for c in text.lower() if c in stoi]
-            if len(ids) < 8: continue
-            for i in range(0, len(ids)-1, 16):
-                xi = ids[i:i+32]; yi = ids[i+1:i+33]
-                while len(xi) < 32: xi.append(unk)
-                while len(yi) < 32: yi.append(unk)
-                x = tensor([[xi]], requires_grad=True); y = tensor([[yi]])
+            if len(ids) < 8:
+                continue
+            for i in range(0, len(ids) - 1, 16):
+                xi = ids[i : i + 32]
+                yi = ids[i + 1 : i + 33]
+                while len(xi) < 32:
+                    xi.append(unk)
+                while len(yi) < 32:
+                    yi.append(unk)
+                x = tensor([[xi]], requires_grad=True)
+                y = tensor([[yi]])
                 lstm_l = net.layers[1]
                 lg, _ = lstm_l.forward(x, lstm_l.init_hidden())
                 loss = cross_entropy(lg, y.reshape(-1))
-                loss.backward(); opt.step(net.parameters())
-                if on_step: on_step(ep*len(topics)+topics.index(topic), loss.data[()], ep)
+                loss.backward()
+                opt.step(net.parameters())
+                if on_step:
+                    on_step(ep * len(topics) + topics.index(topic), loss.data[()], ep)
     export_to_sou(net, f"models/auto-training/{soul_name}_{int(time.time())}.soul")
     return net
 
@@ -4501,6 +5364,7 @@ def train_char_lstm_from_gpt(gpt_fn, soul_name="Slo", epochs=10, temperature=0.8
 # =============================================================================
 # SOUL TRANSFORMER — Native SloNet Decoder-Only Causal LM
 # =============================================================================
+
 
 class NumpyKVState:
     """Persistent KV cache state for cross-turn generation.
@@ -4525,8 +5389,16 @@ class NumpyKVState:
         capacity: length of the allocated buffers.
     """
 
-    __slots__ = ("kv_buf_k", "kv_buf_v", "kv_scale_k", "kv_scale_v",
-                 "kv_len", "prev_ids", "quantize_kv", "capacity")
+    __slots__ = (
+        "kv_buf_k",
+        "kv_buf_v",
+        "kv_scale_k",
+        "kv_scale_v",
+        "kv_len",
+        "prev_ids",
+        "quantize_kv",
+        "capacity",
+    )
 
     def __init__(self):
         self.kv_buf_k = []
@@ -4551,8 +5423,10 @@ class NumpyKVState:
 
     def __repr__(self) -> str:
         filled = self.kv_len[0] if self.kv_len else 0
-        return (f"NumpyKVState(capacity={self.capacity}, filled={filled}, "
-                f"quantize_kv={self.quantize_kv}, valid={self.prev_ids is not None})")
+        return (
+            f"NumpyKVState(capacity={self.capacity}, filled={filled}, "
+            f"quantize_kv={self.quantize_kv}, valid={self.prev_ids is not None})"
+        )
 
 
 class SloTransformer(SloNet):
@@ -4568,7 +5442,7 @@ class SloTransformer(SloNet):
         n_embed: int = 256,
         n_layer: int = 6,
         n_head: int = 8,
-        n_kv_head: Optional[int] = None,
+        n_kv_head: int | None = None,
         block_size: int = 128,
         max_seq_len: int = 2048,
         dropout: float = 0.1,
@@ -4576,12 +5450,12 @@ class SloTransformer(SloNet):
         use_rope: bool = True,
         rope_base: float = 10000.0,
         tie_weights: bool = True,
-        intermediate_size: Optional[int] = None,
+        intermediate_size: int | None = None,
         use_abs_pos_emb: bool = False,
         norm_type: str = "rms_norm",
         activation: str = "gelu",
         soul_name: str = "SloTransformer",
-        soul_traits: Optional[Dict[str, float]] = None,
+        soul_traits: dict[str, float] | None = None,
         _lazy: bool = False,
     ):
         dim_ff = intermediate_size or int(n_embed * 8 // 3)
@@ -4591,20 +5465,31 @@ class SloTransformer(SloNet):
         if dropout > 0:
             layers.append(SloDropout(dropout, "emb_drop"))
         for i in range(n_layer):
-            layers.append(SloTransformerBlock(
-                n_embed, n_head, n_kv_head=n_kv_head,
-                dim_ff=dim_ff, use_rope=use_rope, max_seq_len=max_seq_len,
-                rope_base=rope_base, dropout=0, eps=eps, norm_type=norm_type,
-                activation=activation,
-                name=f"blocks.{i}", _lazy=_lazy,
-            ))
+            layers.append(
+                SloTransformerBlock(
+                    n_embed,
+                    n_head,
+                    n_kv_head=n_kv_head,
+                    dim_ff=dim_ff,
+                    use_rope=use_rope,
+                    max_seq_len=max_seq_len,
+                    rope_base=rope_base,
+                    dropout=0,
+                    eps=eps,
+                    norm_type=norm_type,
+                    activation=activation,
+                    name=f"blocks.{i}",
+                    _lazy=_lazy,
+                )
+            )
         NormCls = SloLayerNorm if norm_type == "layer_norm" else SloRMSNorm
         layers.append(NormCls(n_embed, eps, "norm"))
         layers.append(SloLinear(n_embed, vocab_size, "lm_head", _lazy=_lazy))
         super().__init__(
             layers=layers,
             soul_name=soul_name,
-            soul_traits=soul_traits or {"warmth": 0.5, "creativity": 0.5, "curiosity": 0.5, "confidence": 0.5},
+            soul_traits=soul_traits
+            or {"warmth": 0.5, "creativity": 0.5, "curiosity": 0.5, "confidence": 0.5},
             system_prompt="",
             lineage="soultransformer",
             metadata={
@@ -4626,10 +5511,10 @@ class SloTransformer(SloNet):
         self.block_size = block_size
         self.max_seq_len = max_seq_len
         self.tie_weights = tie_weights
-        self._kv_caches: List[Optional[Tuple[np.ndarray, np.ndarray]]] = [None] * n_layer
+        self._kv_caches: list[tuple[np.ndarray, np.ndarray] | None] = [None] * n_layer
 
         # Absolute positional embedding (GPT-2 style, optional)
-        self.pos_emb: Optional[SloEmbedding] = None
+        self.pos_emb: SloEmbedding | None = None
         if use_abs_pos_emb:
             self.pos_emb = SloEmbedding(max_seq_len, n_embed, "pos_emb", _lazy=_lazy)
 
@@ -4641,7 +5526,7 @@ class SloTransformer(SloNet):
         return self.layers[0]
 
     @property
-    def blocks(self) -> List[SloLayer]:
+    def blocks(self) -> list[SloLayer]:
         start = 2 if isinstance(self.layers[1], SloDropout) else 1
         end = -2  # skip norm and lm_head
         blocks = []
@@ -4662,6 +5547,7 @@ class SloTransformer(SloNet):
             Number of layers whose float32 weights were released.
         """
         from domain.infrastructure._internal.quantization import walk_slo_linears
+
         freed = 0
         for lin in walk_slo_linears(self).values():
             if lin.free_quantized_originals():
@@ -4678,6 +5564,7 @@ class SloTransformer(SloNet):
         """
         total = sum(p.data.size for p in self.parameters())
         from domain.infrastructure._internal.quantization import walk_slo_linears
+
         for lin in walk_slo_linears(self).values():
             shape = getattr(lin, "_freed_shape", None)
             if shape is not None:
@@ -4725,7 +5612,7 @@ class SloTransformer(SloNet):
         elif isinstance(input_ids, Tensor):
             x = input_ids
         else:
-            if hasattr(input_ids, 'cpu'):
+            if hasattr(input_ids, "cpu"):
                 input_ids = input_ids.cpu().detach().numpy()
             x = Tensor(np.array(input_ids, dtype=np.int64))
         x = self.layers[0].forward(x)
@@ -4755,14 +5642,14 @@ class SloTransformer(SloNet):
             elif isinstance(targets, Tensor):
                 t = targets.data.astype(np.int64)
             else:
-                if hasattr(targets, 'cpu'):
+                if hasattr(targets, "cpu"):
                     targets = targets.cpu().detach().numpy()
                 t = np.array(targets, dtype=np.int64)
             loss_t = cross_entropy(logits.reshape(-1, self.vocab_size), Tensor(t.reshape(-1)))
             return logits, loss_t
         return logits, None
 
-    def forward_pass(self, input_ids: "np.ndarray") -> "ForwardPassResult":
+    def forward_pass(self, input_ids: np.ndarray) -> ForwardPassResult:
         """Unified forward pass interface for NPU integration."""
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
@@ -4778,10 +5665,10 @@ class SloTransformer(SloNet):
         input_ids,
         max_new_tokens: int = 50,
         temperature: float = 1.0,
-        top_k: Optional[int] = None,
-        top_p: Optional[float] = None,
-        eos_token: Optional[int] = None,
-        extra_stop_ids: Optional[Sequence[int]] = None,
+        top_k: int | None = None,
+        top_p: float | None = None,
+        eos_token: int | None = None,
+        extra_stop_ids: Sequence[int] | None = None,
         repetition_penalty: float = 1.0,
         frequency_penalty: float = 0.0,
         presence_penalty: float = 0.0,
@@ -4791,7 +5678,7 @@ class SloTransformer(SloNet):
         elif isinstance(input_ids, Tensor):
             tokens = input_ids.data.copy()
         else:
-            if hasattr(input_ids, 'cpu'):
+            if hasattr(input_ids, "cpu"):
                 input_ids = input_ids.cpu().detach().numpy()
             tokens = np.array(input_ids, dtype=np.int64)
         if tokens.ndim == 1:
@@ -4805,7 +5692,7 @@ class SloTransformer(SloNet):
             _stop_ids.update(extra_stop_ids)
         for step in range(max_gen):
             if step == 0:
-                idx = tokens[:, -self.block_size:]
+                idx = tokens[:, -self.block_size :]
                 pos = 0
                 seq_len = idx.shape[1]
                 causal = np.triu(np.full((seq_len, seq_len), -1e9, dtype=np.float32), k=1)
@@ -4822,8 +5709,9 @@ class SloTransformer(SloNet):
             block_idx = 0
             for l in self.layers[1:-2]:
                 if isinstance(l, SloTransformerBlock):
-                    x, kv = l.forward(x, mask=step_mask, start_pos=pos,
-                                      kv_cache=self._kv_caches[block_idx])
+                    x, kv = l.forward(
+                        x, mask=step_mask, start_pos=pos, kv_cache=self._kv_caches[block_idx]
+                    )
                     self._kv_caches[block_idx] = kv
                     block_idx += 1
             x = self.layers[-2].forward(x)
@@ -4831,8 +5719,10 @@ class SloTransformer(SloNet):
             logit_data = logits.data[:, -1:, :]  # keep 3D for _sample_from_logits
             generated = tokens[:, prompt_len:].flatten()
             next_id = _sample_from_logits(
-                logit_data, temperature=temperature,
-                top_k=top_k, top_p=top_p,
+                logit_data,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
                 repetition_penalty=repetition_penalty,
                 frequency_penalty=frequency_penalty,
                 presence_penalty=presence_penalty,
@@ -4844,8 +5734,9 @@ class SloTransformer(SloNet):
         self.clear_kv_cache()
         return Tensor(tokens)
 
-    def _alloc_kv_cache(self, n_blocks: int, total_len: int, nkv: List[int],
-                        head_dim: int, quantized: bool):
+    def _alloc_kv_cache(
+        self, n_blocks: int, total_len: int, nkv: list[int], head_dim: int, quantized: bool
+    ):
         """Pre-allocate KV cache buffers for the numpy generation paths.
 
         Args:
@@ -4863,11 +5754,19 @@ class SloTransformer(SloNet):
             and ``kv_len`` is a list of per-block fill lengths (all zero).
         """
         dtype = np.int8 if quantized else np.float32
-        kv_buf_k = [np.zeros((1, total_len, nkv[i], head_dim), dtype=dtype) for i in range(n_blocks)]
-        kv_buf_v = [np.zeros((1, total_len, nkv[i], head_dim), dtype=dtype) for i in range(n_blocks)]
+        kv_buf_k = [
+            np.zeros((1, total_len, nkv[i], head_dim), dtype=dtype) for i in range(n_blocks)
+        ]
+        kv_buf_v = [
+            np.zeros((1, total_len, nkv[i], head_dim), dtype=dtype) for i in range(n_blocks)
+        ]
         if quantized:
-            kv_scale_k = [np.zeros((1, total_len, nkv[i], 1), dtype=np.float32) for i in range(n_blocks)]
-            kv_scale_v = [np.zeros((1, total_len, nkv[i], 1), dtype=np.float32) for i in range(n_blocks)]
+            kv_scale_k = [
+                np.zeros((1, total_len, nkv[i], 1), dtype=np.float32) for i in range(n_blocks)
+            ]
+            kv_scale_v = [
+                np.zeros((1, total_len, nkv[i], 1), dtype=np.float32) for i in range(n_blocks)
+            ]
         else:
             kv_scale_k = [None] * n_blocks
             kv_scale_v = [None] * n_blocks
@@ -4883,9 +5782,17 @@ class SloTransformer(SloNet):
         """
         return NumpyKVState()
 
-    def _resolve_kv_state(self, state, n_blocks: int, total_len: int,
-                          nkv: List[int], head_dim: int, use_kvq: bool,
-                          input_ids: np.ndarray, prompt_len: int):
+    def _resolve_kv_state(
+        self,
+        state,
+        n_blocks: int,
+        total_len: int,
+        nkv: list[int],
+        head_dim: int,
+        use_kvq: bool,
+        input_ids: np.ndarray,
+        prompt_len: int,
+    ):
         """Bind KV buffers for one generation call, resuming a cached prefix.
 
         When ``state`` holds a completed output whose token prefix matches the
@@ -4903,10 +5810,13 @@ class SloTransformer(SloNet):
               quantize_kv). ``prev_ids`` is left untouched here; generation
               methods update it on completion.
         """
-        if state is not None and state.prev_ids is not None and \
-                state.quantize_kv == use_kvq and \
-                len(state.kv_buf_k) == n_blocks and \
-                state.kv_buf_k[0].shape[-1] == head_dim:
+        if (
+            state is not None
+            and state.prev_ids is not None
+            and state.quantize_kv == use_kvq
+            and len(state.kv_buf_k) == n_blocks
+            and state.kv_buf_k[0].shape[-1] == head_dim
+        ):
             prev = state.prev_ids.reshape(1, -1)
             lim = min(prev.shape[1], prompt_len)
             s = 0
@@ -4924,8 +5834,9 @@ class SloTransformer(SloNet):
             start = 0
 
         if start == 0:
-            kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len = \
-                self._alloc_kv_cache(n_blocks, total_len, nkv, head_dim, use_kvq)
+            kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len = self._alloc_kv_cache(
+                n_blocks, total_len, nkv, head_dim, use_kvq
+            )
             if state is not None:
                 state.kv_buf_k = kv_buf_k
                 state.kv_buf_v = kv_buf_v
@@ -4947,20 +5858,26 @@ class SloTransformer(SloNet):
                 state.kv_scale_v = [np.pad(b[:, :start], pad) for b in state.kv_scale_v]
             state.capacity = cap
         state.kv_len = [start] * n_blocks
-        return (state.kv_buf_k, state.kv_buf_v, state.kv_scale_k,
-                state.kv_scale_v, state.kv_len, start)
+        return (
+            state.kv_buf_k,
+            state.kv_buf_v,
+            state.kv_scale_k,
+            state.kv_scale_v,
+            state.kv_len,
+            start,
+        )
 
     def _generate_numpy_lora(
         self,
         input_ids: np.ndarray,
         max_new_tokens: int = 50,
         temperature: float = 1.0,
-        top_k: Optional[int] = None,
-        top_p: Optional[float] = None,
+        top_k: int | None = None,
+        top_p: float | None = None,
         repetition_penalty: float = 1.0,
-        eos_token: Optional[int] = None,
-        extra_stop_ids: Optional[Sequence[int]] = None,
-        kv_state: Optional[NumpyKVState] = None,
+        eos_token: int | None = None,
+        extra_stop_ids: Sequence[int] | None = None,
+        kv_state: NumpyKVState | None = None,
     ) -> np.ndarray:
         """Generation path for LoRA-active models — uses non-inlined forward.
 
@@ -4996,7 +5913,11 @@ class SloTransformer(SloNet):
         block_idx = 0
         for l in self.layers[1:-2]:
             if isinstance(l, SloTransformerBlock):
-                kv_cache = (kv_buf_k[block_idx], kv_buf_v[block_idx]) if kv_buf_k[block_idx] is not None else None
+                kv_cache = (
+                    (kv_buf_k[block_idx], kv_buf_v[block_idx])
+                    if kv_buf_k[block_idx] is not None
+                    else None
+                )
                 h, (new_k, new_v) = l.forward_numpy(h, kv_cache=kv_cache)
                 if kv_buf_k[block_idx] is None:
                     kv_buf_k[block_idx] = new_k
@@ -5009,12 +5930,14 @@ class SloTransformer(SloNet):
 
         h = self.layers[-2].forward_numpy(h)  # final norm
         logits = self.layers[-1].forward_numpy(h)  # lm_head
-        next_token = self._sample_token(logits[:, -1], temperature, top_k, top_p, repetition_penalty, set())
+        next_token = self._sample_token(
+            logits[:, -1], temperature, top_k, top_p, repetition_penalty, set()
+        )
         out_buf[:, prompt_len] = next_token
         cur_len = prompt_len + 1
 
         # Decode loop
-        for step in range(max_gen - 1):
+        for _step in range(max_gen - 1):
             tok = np.array([[next_token]], dtype=np.int64)
             h = self.layers[0].forward_numpy(tok)
 
@@ -5031,8 +5954,10 @@ class SloTransformer(SloNet):
             h = self.layers[-2].forward_numpy(h)
             logits = self.layers[-1].forward_numpy(h)
 
-            generated = set(int(out_buf[0, i]) for i in range(cur_len))
-            next_token = self._sample_token(logits[:, -1], temperature, top_k, top_p, repetition_penalty, generated)
+            generated = {int(out_buf[0, i]) for i in range(cur_len)}
+            next_token = self._sample_token(
+                logits[:, -1], temperature, top_k, top_p, repetition_penalty, generated
+            )
 
             if next_token in _stop_ids:
                 break
@@ -5077,13 +6002,13 @@ class SloTransformer(SloNet):
         input_ids: np.ndarray,
         max_new_tokens: int = 50,
         temperature: float = 1.0,
-        top_k: Optional[int] = None,
-        top_p: Optional[float] = None,
+        top_k: int | None = None,
+        top_p: float | None = None,
         repetition_penalty: float = 1.0,
-        eos_token: Optional[int] = None,
-        extra_stop_ids: Optional[Sequence[int]] = None,
-        quantize_kv: Optional[bool] = None,
-        kv_state: Optional[NumpyKVState] = None,
+        eos_token: int | None = None,
+        extra_stop_ids: Sequence[int] | None = None,
+        quantize_kv: bool | None = None,
+        kv_state: NumpyKVState | None = None,
     ) -> GenerateResult:
         """Fully inlined numpy generation — maximum inference speed.
 
@@ -5133,10 +6058,17 @@ class SloTransformer(SloNet):
         max_gen = total_len - prompt_len
 
         # LoRA active: fall back to non-inlined path (through forward_numpy())
-        if getattr(self, '_has_lora', False):
+        if getattr(self, "_has_lora", False):
             return self._generate_numpy_lora(
-                input_ids, max_new_tokens, temperature, top_k, top_p,
-                repetition_penalty, eos_token, extra_stop_ids, kv_state,
+                input_ids,
+                max_new_tokens,
+                temperature,
+                top_k,
+                top_p,
+                repetition_penalty,
+                eos_token,
+                extra_stop_ids,
+                kv_state,
             )
 
         out_buf = np.empty((1, total_len), dtype=np.int64)
@@ -5153,7 +6085,7 @@ class SloTransformer(SloNet):
         _is_quantized = False
         for l in self.layers[1:-2]:
             if isinstance(l, SloTransformerBlock):
-                if getattr(l.attn.W_q, '_quant_info', None) is not None:
+                if getattr(l.attn.W_q, "_quant_info", None) is not None:
                     _is_quantized = True
                     break
 
@@ -5161,52 +6093,92 @@ class SloTransformer(SloNet):
         _use_kvq = _is_quantized if quantize_kv is None else bool(quantize_kv)
         if _use_kvq:
             from domain.infrastructure._internal.quantization import (
-                quantize_kv_tensor as _qkv_t, dequantize_kv_tensor as _dqkv_t,
+                dequantize_kv_tensor as _dqkv_t,
+            )
+            from domain.infrastructure._internal.quantization import (
+                quantize_kv_tensor as _qkv_t,
             )
 
         # ── Weight cache: flatten block weights once, reuse across calls ──
         n_blocks = sum(1 for l in self.layers[1:-2] if isinstance(l, SloTransformerBlock))
         _cache_key = (n_blocks, _is_quantized, _use_kvq)
-        _cache = getattr(self, '_gen_cache', None)
-        if _cache is not None and _cache.get('key') == _cache_key:
-            n_an_w = _cache['n_an_w']; n_an_b = _cache['n_an_b']; n_an_e = _cache['n_an_e']
-            n_fn_w = _cache['n_fn_w']; n_fn_b = _cache['n_fn_b']; n_fn_e = _cache['n_fn_e']
-            m_wqkv = _cache['m_wqkv']; m_bqkv = _cache['m_bqkv']
-            m_wo = _cache['m_wo']; m_bo = _cache['m_bo']
-            m_w13 = _cache['m_w13']; m_b13 = _cache['m_b13']
-            m_w2 = _cache['m_w2']; m_b2 = _cache['m_b2']
-            _nkv = _cache['_nkv']
-            q_wq = _cache.get('q_wq'); q_wk = _cache.get('q_wk')
-            q_wv = _cache.get('q_wv'); q_wo = _cache.get('q_wo')
-            q_w1 = _cache.get('q_w1'); q_w3 = _cache.get('q_w3')
-            q_w2 = _cache.get('q_w2')
-            f_qkv = _cache['f_qkv']; f_ff = _cache['f_ff']
-            f_qkv4 = _cache['f_qkv4']; f_ff4 = _cache['f_ff4']
-            tok_emb_w = _cache['tok_emb_w']; pos_emb_w = _cache['pos_emb_w']
-            pos_emb_n = _cache['pos_emb_n']; lm_head_mod = _cache['lm_head_mod']
-            norm_w = _cache['norm_w']; norm_b = _cache['norm_b']
-            norm_eps = _cache['norm_eps']
-            lm_w = _cache['lm_w']; lm_w_T = _cache['lm_w_T']
-            E = _cache['E']; H = _cache['H']; K_H = _cache['K_H']
-            _ff_dim = _cache['_ff_dim']; scale = _cache['scale']
-            _clip_max = _cache['_clip_max']; _use_gqa = _cache['_use_gqa']
-            _gqa_reps = _cache['_gqa_reps']; _he = _cache['_he']
-            _khe = _cache['_khe']
-            _use_bias_bqkv = _cache['_use_bias_bqkv']
-            _use_bias_bo = _cache['_use_bias_bo']
-            _use_bias_b13 = _cache['_use_bias_b13']
-            _use_bias_b2 = _cache['_use_bias_b2']
-            n_blocks = _cache['n_blocks']
+        _cache = getattr(self, "_gen_cache", None)
+        if _cache is not None and _cache.get("key") == _cache_key:
+            n_an_w = _cache["n_an_w"]
+            n_an_b = _cache["n_an_b"]
+            n_an_e = _cache["n_an_e"]
+            n_fn_w = _cache["n_fn_w"]
+            n_fn_b = _cache["n_fn_b"]
+            n_fn_e = _cache["n_fn_e"]
+            m_wqkv = _cache["m_wqkv"]
+            m_bqkv = _cache["m_bqkv"]
+            m_wo = _cache["m_wo"]
+            m_bo = _cache["m_bo"]
+            m_w13 = _cache["m_w13"]
+            m_b13 = _cache["m_b13"]
+            m_w2 = _cache["m_w2"]
+            m_b2 = _cache["m_b2"]
+            _nkv = _cache["_nkv"]
+            q_wq = _cache.get("q_wq")
+            q_wk = _cache.get("q_wk")
+            q_wv = _cache.get("q_wv")
+            q_wo = _cache.get("q_wo")
+            q_w1 = _cache.get("q_w1")
+            q_w3 = _cache.get("q_w3")
+            q_w2 = _cache.get("q_w2")
+            f_qkv = _cache["f_qkv"]
+            f_ff = _cache["f_ff"]
+            f_qkv4 = _cache["f_qkv4"]
+            f_ff4 = _cache["f_ff4"]
+            tok_emb_w = _cache["tok_emb_w"]
+            pos_emb_w = _cache["pos_emb_w"]
+            pos_emb_n = _cache["pos_emb_n"]
+            lm_head_mod = _cache["lm_head_mod"]
+            norm_w = _cache["norm_w"]
+            norm_b = _cache["norm_b"]
+            norm_eps = _cache["norm_eps"]
+            lm_w = _cache["lm_w"]
+            lm_w_T = _cache["lm_w_T"]
+            E = _cache["E"]
+            H = _cache["H"]
+            K_H = _cache["K_H"]
+            _ff_dim = _cache["_ff_dim"]
+            scale = _cache["scale"]
+            _clip_max = _cache["_clip_max"]
+            _use_gqa = _cache["_use_gqa"]
+            _gqa_reps = _cache["_gqa_reps"]
+            _he = _cache["_he"]
+            _khe = _cache["_khe"]
+            _use_bias_bqkv = _cache["_use_bias_bqkv"]
+            _use_bias_bo = _cache["_use_bias_bo"]
+            _use_bias_b13 = _cache["_use_bias_b13"]
+            _use_bias_b2 = _cache["_use_bias_b2"]
+            n_blocks = _cache["n_blocks"]
         else:
             # Flatten block weights into parallel lists — eliminates dict hash lookups.
-            n_an_w = []; n_an_b = []; n_an_e = []
-            n_fn_w = []; n_fn_b = []; n_fn_e = []
-            m_wqkv = []; m_bqkv = []; m_wo = []; m_bo = []
-            m_w13 = []; m_b13 = []; m_w2 = []; m_b2 = []
+            n_an_w = []
+            n_an_b = []
+            n_an_e = []
+            n_fn_w = []
+            n_fn_b = []
+            n_fn_e = []
+            m_wqkv = []
+            m_bqkv = []
+            m_wo = []
+            m_bo = []
+            m_w13 = []
+            m_b13 = []
+            m_w2 = []
+            m_b2 = []
             _nkv = []
             if _is_quantized:
-                q_wq = []; q_wk = []; q_wv = []; q_wo = []
-                q_w1 = []; q_w3 = []; q_w2 = []
+                q_wq = []
+                q_wk = []
+                q_wv = []
+                q_wo = []
+                q_w1 = []
+                q_w3 = []
+                q_w2 = []
             for l in self.layers[1:-2]:
                 if isinstance(l, SloTransformerBlock):
                     b = l
@@ -5218,33 +6190,48 @@ class SloTransformer(SloNet):
                     n_fn_b.append(b.ff_norm.bias.data if has_ln else None)
                     n_fn_e.append(b.ff_norm.eps)
                     if _is_quantized:
-                        q_wq.append(b.attn.W_q); q_wk.append(b.attn.W_k)
-                        q_wv.append(b.attn.W_v); q_wo.append(b.attn.W_o)
-                        q_w1.append(b.ff.w1); q_w3.append(b.ff.w3)
+                        q_wq.append(b.attn.W_q)
+                        q_wk.append(b.attn.W_k)
+                        q_wv.append(b.attn.W_v)
+                        q_wo.append(b.attn.W_o)
+                        q_w1.append(b.ff.w1)
+                        q_w3.append(b.ff.w3)
                         q_w2.append(b.ff.w2)
                         _nkv.append(b.attn.n_kv_head)
-                        m_wqkv.append(None); m_bqkv.append(None)
-                        m_wo.append(None); m_bo.append(None)
-                        m_w13.append(None); m_b13.append(None)
-                        m_w2.append(None); m_b2.append(None)
+                        m_wqkv.append(None)
+                        m_bqkv.append(None)
+                        m_wo.append(None)
+                        m_bo.append(None)
+                        m_w13.append(None)
+                        m_b13.append(None)
+                        m_w2.append(None)
+                        m_b2.append(None)
                     else:
-                        wqkv = np.concatenate([b.attn.W_q._get_weight_T_contig(),
-                                           b.attn.W_k._get_weight_T_contig(),
-                                           b.attn.W_v._get_weight_T_contig()], axis=1)
+                        wqkv = np.concatenate(
+                            [
+                                b.attn.W_q._get_weight_T_contig(),
+                                b.attn.W_k._get_weight_T_contig(),
+                                b.attn.W_v._get_weight_T_contig(),
+                            ],
+                            axis=1,
+                        )
                         bq = b.attn.W_q.bias.data if b.attn.W_q.use_bias else None
                         bk = b.attn.W_k.bias.data if b.attn.W_k.use_bias else None
                         bv = b.attn.W_v.bias.data if b.attn.W_v.use_bias else None
                         bqkv = np.concatenate([bq, bk, bv]) if bq is not None else None
-                        w13 = np.concatenate([b.ff.w1._get_weight_T_contig(),
-                                              b.ff.w3._get_weight_T_contig()], axis=1)
+                        w13 = np.concatenate(
+                            [b.ff.w1._get_weight_T_contig(), b.ff.w3._get_weight_T_contig()], axis=1
+                        )
                         b1 = b.ff.w1.bias.data if b.ff.w1.use_bias else None
                         b3 = b.ff.w3.bias.data if b.ff.w3.use_bias else None
                         b13 = np.concatenate([b1, b3]) if b1 is not None else None
                         _nkv.append(b.attn.n_kv_head)
-                        m_wqkv.append(wqkv); m_bqkv.append(bqkv)
+                        m_wqkv.append(wqkv)
+                        m_bqkv.append(bqkv)
                         m_wo.append(b.attn.W_o._get_weight_T_contig())
                         m_bo.append(b.attn.W_o.bias.data if b.attn.W_o.use_bias else None)
-                        m_w13.append(w13); m_b13.append(b13)
+                        m_w13.append(w13)
+                        m_b13.append(b13)
                         m_w2.append(b.ff.w2._get_weight_T_contig())
                         m_b2.append(b.ff.w2.bias.data if b.ff.w2.use_bias else None)
 
@@ -5263,19 +6250,31 @@ class SloTransformer(SloNet):
         f_ff4 = []
         if _is_quantized:
             from domain.infrastructure._internal.quantization import (
-                quantized_linear as _ql, int4_quantized_linear as _ql4,
+                int4_quantized_linear as _ql4,
             )
+            from domain.infrastructure._internal.quantization import (
+                quantized_linear as _ql,
+            )
+
             for _fb in self.layers[1:-2]:
                 if isinstance(_fb, SloTransformerBlock):
                     _fq4 = _fuse_quant_weights_int4((_fb.attn.W_q, _fb.attn.W_k, _fb.attn.W_v))
                     _ff4 = _fuse_quant_weights_int4((_fb.ff.w1, _fb.ff.w3))
                     f_qkv4.append(_fq4)
                     f_ff4.append(_ff4)
-                    f_qkv.append(None if _fq4 is not None else _fuse_quant_weights((_fb.attn.W_q, _fb.attn.W_k, _fb.attn.W_v)))
-                    f_ff.append(None if _ff4 is not None else _fuse_quant_weights((_fb.ff.w1, _fb.ff.w3)))
+                    f_qkv.append(
+                        None
+                        if _fq4 is not None
+                        else _fuse_quant_weights((_fb.attn.W_q, _fb.attn.W_k, _fb.attn.W_v))
+                    )
+                    f_ff.append(
+                        None if _ff4 is not None else _fuse_quant_weights((_fb.ff.w1, _fb.ff.w3))
+                    )
                 else:
-                    f_qkv.append(None); f_ff.append(None)
-                    f_qkv4.append(None); f_ff4.append(None)
+                    f_qkv.append(None)
+                    f_ff.append(None)
+                    f_qkv4.append(None)
+                    f_ff4.append(None)
         else:
             f_qkv = [None] * n_blocks
             f_ff = [None] * n_blocks
@@ -5320,9 +6319,9 @@ class SloTransformer(SloNet):
 
         # Pre-allocate KV cache (int8 + per-token-head scales when _use_kvq).
         # Cross-turn reuse: resume from a cached prefix when kv_state matches.
-        kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len, _start_pos = \
-            self._resolve_kv_state(kv_state, n_blocks, total_len, _nkv, E,
-                                   _use_kvq, input_ids, prompt_len)
+        kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len, _start_pos = self._resolve_kv_state(
+            kv_state, n_blocks, total_len, _nkv, E, _use_kvq, input_ids, prompt_len
+        )
         _prefill = prompt_len - _start_pos
 
         # RoPE — detect and pre-compute cos/sin cache
@@ -5348,38 +6347,59 @@ class SloTransformer(SloNet):
         _use_bias_b2 = m_b2[0] is not None
 
         # Store cache for next call (skip weight flattening overhead)
-        if _cache is None or _cache.get('key') != _cache_key:
+        if _cache is None or _cache.get("key") != _cache_key:
             self._gen_cache = {
-                'key': _cache_key,
-                'n_an_w': n_an_w, 'n_an_b': n_an_b, 'n_an_e': n_an_e,
-                'n_fn_w': n_fn_w, 'n_fn_b': n_fn_b, 'n_fn_e': n_fn_e,
-                'm_wqkv': m_wqkv, 'm_bqkv': m_bqkv,
-                'm_wo': m_wo, 'm_bo': m_bo,
-                'm_w13': m_w13, 'm_b13': m_b13,
-                'm_w2': m_w2, 'm_b2': m_b2,
-                '_nkv': _nkv,
-                'q_wq': q_wq if _is_quantized else None,
-                'q_wk': q_wk if _is_quantized else None,
-                'q_wv': q_wv if _is_quantized else None,
-                'q_wo': q_wo if _is_quantized else None,
-                'q_w1': q_w1 if _is_quantized else None,
-                'q_w3': q_w3 if _is_quantized else None,
-                'q_w2': q_w2 if _is_quantized else None,
-                'f_qkv': f_qkv, 'f_ff': f_ff,
-                'f_qkv4': f_qkv4, 'f_ff4': f_ff4,
-                'tok_emb_w': tok_emb_w, 'pos_emb_w': pos_emb_w,
-                'pos_emb_n': pos_emb_n, 'lm_head_mod': lm_head_mod,
-                'norm_w': norm_w, 'norm_b': norm_b, 'norm_eps': norm_eps,
-                'lm_w': lm_w, 'lm_w_T': lm_w_T,
-                'E': E, 'H': H, 'K_H': K_H,
-                '_ff_dim': _ff_dim, 'scale': scale,
-                '_clip_max': _clip_max, '_use_gqa': _use_gqa,
-                '_gqa_reps': _gqa_reps, '_he': _he,
-                '_khe': _khe, 'n_blocks': n_blocks,
-                '_use_bias_bqkv': _use_bias_bqkv,
-                '_use_bias_bo': _use_bias_bo,
-                '_use_bias_b13': _use_bias_b13,
-                '_use_bias_b2': _use_bias_b2,
+                "key": _cache_key,
+                "n_an_w": n_an_w,
+                "n_an_b": n_an_b,
+                "n_an_e": n_an_e,
+                "n_fn_w": n_fn_w,
+                "n_fn_b": n_fn_b,
+                "n_fn_e": n_fn_e,
+                "m_wqkv": m_wqkv,
+                "m_bqkv": m_bqkv,
+                "m_wo": m_wo,
+                "m_bo": m_bo,
+                "m_w13": m_w13,
+                "m_b13": m_b13,
+                "m_w2": m_w2,
+                "m_b2": m_b2,
+                "_nkv": _nkv,
+                "q_wq": q_wq if _is_quantized else None,
+                "q_wk": q_wk if _is_quantized else None,
+                "q_wv": q_wv if _is_quantized else None,
+                "q_wo": q_wo if _is_quantized else None,
+                "q_w1": q_w1 if _is_quantized else None,
+                "q_w3": q_w3 if _is_quantized else None,
+                "q_w2": q_w2 if _is_quantized else None,
+                "f_qkv": f_qkv,
+                "f_ff": f_ff,
+                "f_qkv4": f_qkv4,
+                "f_ff4": f_ff4,
+                "tok_emb_w": tok_emb_w,
+                "pos_emb_w": pos_emb_w,
+                "pos_emb_n": pos_emb_n,
+                "lm_head_mod": lm_head_mod,
+                "norm_w": norm_w,
+                "norm_b": norm_b,
+                "norm_eps": norm_eps,
+                "lm_w": lm_w,
+                "lm_w_T": lm_w_T,
+                "E": E,
+                "H": H,
+                "K_H": K_H,
+                "_ff_dim": _ff_dim,
+                "scale": scale,
+                "_clip_max": _clip_max,
+                "_use_gqa": _use_gqa,
+                "_gqa_reps": _gqa_reps,
+                "_he": _he,
+                "_khe": _khe,
+                "n_blocks": n_blocks,
+                "_use_bias_bqkv": _use_bias_bqkv,
+                "_use_bias_bo": _use_bias_bo,
+                "_use_bias_b13": _use_bias_b13,
+                "_use_bias_b2": _use_bias_b2,
             }
 
         # ── Metrics ───────────────────────────────────────────────────────
@@ -5391,11 +6411,11 @@ class SloTransformer(SloNet):
             if step == 0:
                 # First step: only the new suffix is recomputed; the shared
                 # prefix (0.._start_pos) comes from the persisted KV cache.
-                idx = out_buf[:, _start_pos:_start_pos + _prefill]
+                idx = out_buf[:, _start_pos : _start_pos + _prefill]
                 pos = _start_pos
                 seq_len = _prefill
             else:
-                idx = out_buf[:, step + prompt_len - 1:step + prompt_len]
+                idx = out_buf[:, step + prompt_len - 1 : step + prompt_len]
                 pos = step + prompt_len - 1
                 seq_len = 1
 
@@ -5434,14 +6454,14 @@ class SloTransformer(SloNet):
                         Wp, Sp, zp, Bp = f_qkv4[bi]
                         qkv = _ql4(h, Wp, Sp, zp, _he, Bp)  # (1, seq_len, he + 2*khe)
                         q = qkv[..., :_he].reshape(1, seq_len, H, E)
-                        k = qkv[..., _he:_he + _khe].reshape(1, seq_len, K_H, E)
-                        v = qkv[..., _he + _khe:].reshape(1, seq_len, K_H, E)
+                        k = qkv[..., _he : _he + _khe].reshape(1, seq_len, K_H, E)
+                        v = qkv[..., _he + _khe :].reshape(1, seq_len, K_H, E)
                     elif f_qkv[bi] is not None:
                         Wq, Sq, Bq = f_qkv[bi]
                         qkv = _ql(h, Wq, Sq, 0, Bq)  # (1, seq_len, he + 2*khe)
                         q = qkv[..., :_he].reshape(1, seq_len, H, E)
-                        k = qkv[..., _he:_he + _khe].reshape(1, seq_len, K_H, E)
-                        v = qkv[..., _he + _khe:].reshape(1, seq_len, K_H, E)
+                        k = qkv[..., _he : _he + _khe].reshape(1, seq_len, K_H, E)
+                        v = qkv[..., _he + _khe :].reshape(1, seq_len, K_H, E)
                     else:
                         q = q_wq[bi].forward_numpy(h)
                         k = q_wk[bi].forward_numpy(h)
@@ -5454,31 +6474,37 @@ class SloTransformer(SloNet):
                     if _use_bias_bqkv:
                         qkv = qkv + m_bqkv[bi]
                     q = qkv[:, :, :_he].reshape(1, seq_len, H, E)
-                    k = qkv[:, :, _he:_he+_khe].reshape(1, seq_len, K_H, E)
-                    v = qkv[:, :, _he+_khe:].reshape(1, seq_len, K_H, E)
+                    k = qkv[:, :, _he : _he + _khe].reshape(1, seq_len, K_H, E)
+                    v = qkv[:, :, _he + _khe :].reshape(1, seq_len, K_H, E)
 
                 # Apply RoPE — q/k shape: (1, seq_len, H, E), cos/sin: (seq_len, E) → (1, seq_len, 1, E)
                 if _use_rope and _rope_cos is not None:
-                    _rope_cs = _rope_cos[pos:pos+seq_len].reshape(1, seq_len, 1, E)
-                    _rope_sn = _rope_sin[pos:pos+seq_len].reshape(1, seq_len, 1, E)
-                    q = q * _rope_cs + np.concatenate([-q[..., E//2:], q[..., :E//2]], axis=-1) * _rope_sn
-                    k = k * _rope_cs + np.concatenate([-k[..., E//2:], k[..., :E//2]], axis=-1) * _rope_sn
+                    _rope_cs = _rope_cos[pos : pos + seq_len].reshape(1, seq_len, 1, E)
+                    _rope_sn = _rope_sin[pos : pos + seq_len].reshape(1, seq_len, 1, E)
+                    q = (
+                        q * _rope_cs
+                        + np.concatenate([-q[..., E // 2 :], q[..., : E // 2]], axis=-1) * _rope_sn
+                    )
+                    k = (
+                        k * _rope_cs
+                        + np.concatenate([-k[..., E // 2 :], k[..., : E // 2]], axis=-1) * _rope_sn
+                    )
 
                 # KV cache
                 new_len = kv_len[bi] + seq_len
                 if _use_kvq:
                     _qk, _sk = _qkv_t(k)
                     _qv, _sv = _qkv_t(v)
-                    kv_buf_k[bi][:, kv_len[bi]:new_len] = _qk
-                    kv_buf_v[bi][:, kv_len[bi]:new_len] = _qv
-                    kv_scale_k[bi][:, kv_len[bi]:new_len] = _sk
-                    kv_scale_v[bi][:, kv_len[bi]:new_len] = _sv
+                    kv_buf_k[bi][:, kv_len[bi] : new_len] = _qk
+                    kv_buf_v[bi][:, kv_len[bi] : new_len] = _qv
+                    kv_scale_k[bi][:, kv_len[bi] : new_len] = _sk
+                    kv_scale_v[bi][:, kv_len[bi] : new_len] = _sv
                     kv_len[bi] = new_len
                     k = _dqkv_t(kv_buf_k[bi][:, :new_len], kv_scale_k[bi][:, :new_len])
                     v = _dqkv_t(kv_buf_v[bi][:, :new_len], kv_scale_v[bi][:, :new_len])
                 else:
-                    kv_buf_k[bi][:, kv_len[bi]:new_len] = k
-                    kv_buf_v[bi][:, kv_len[bi]:new_len] = v
+                    kv_buf_k[bi][:, kv_len[bi] : new_len] = k
+                    kv_buf_v[bi][:, kv_len[bi] : new_len] = v
                     kv_len[bi] = new_len
                     k = kv_buf_k[bi][:, :new_len]
                     v = kv_buf_v[bi][:, :new_len]
@@ -5487,8 +6513,12 @@ class SloTransformer(SloNet):
                     if _use_kernels:
                         # GQA expand via numba — kernel expects (K_H, new_len, E)
                         # then expands along the head axis; k[0] is (new_len, K_H, E)
-                        k = _nb_gqa_expand(k[0].transpose(1, 0, 2), _gqa_reps).reshape(1, H, new_len, E)
-                        v = _nb_gqa_expand(v[0].transpose(1, 0, 2), _gqa_reps).reshape(1, H, new_len, E)
+                        k = _nb_gqa_expand(k[0].transpose(1, 0, 2), _gqa_reps).reshape(
+                            1, H, new_len, E
+                        )
+                        v = _nb_gqa_expand(v[0].transpose(1, 0, 2), _gqa_reps).reshape(
+                            1, H, new_len, E
+                        )
                     else:
                         k = np.repeat(k, _gqa_reps, axis=2)
                         v = np.repeat(v, _gqa_reps, axis=2)
@@ -5598,7 +6628,11 @@ class SloTransformer(SloNet):
                     if _use_kernels:
                         h = _nb_swi_glu_mul(h13[..., :_ff_dim], h13[..., _ff_dim:])
                     else:
-                        h = h13[..., :_ff_dim] * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h13[..., :_ff_dim]))) * h13[..., _ff_dim:]
+                        h = (
+                            h13[..., :_ff_dim]
+                            * (np.float32(1.0) / (np.float32(1.0) + np.exp(-h13[..., :_ff_dim])))
+                            * h13[..., _ff_dim:]
+                        )
                     h = h @ m_w2[bi]
                     if _use_bias_b2:
                         h = h + m_b2[bi]
@@ -5642,11 +6676,13 @@ class SloTransformer(SloNet):
                 else:
                     logits = x[:, -1, :] @ lm_w_T
                 next_id = _sample_from_logits(
-                        logits, temperature=temperature,
-                        top_k=top_k, top_p=top_p,
-                        repetition_penalty=repetition_penalty,
-                        generated_ids=out_buf[:, prompt_len:step + prompt_len].flatten(),
-                    )
+                    logits,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    repetition_penalty=repetition_penalty,
+                    generated_ids=out_buf[:, prompt_len : step + prompt_len].flatten(),
+                )
             out_buf[0, prompt_len + step] = next_id
             if not _first_token_recorded:
                 _gen_metrics.t_first_token = time.perf_counter()
@@ -5656,8 +6692,8 @@ class SloTransformer(SloNet):
                 _gen_metrics.t_end = time.perf_counter()
                 _gen_metrics.finalize()
                 if kv_state is not None:
-                    kv_state.prev_ids = out_buf[:, :prompt_len + step + 1].copy()
-                return GenerateResult(out_buf[:, :prompt_len + step + 1], _gen_metrics)
+                    kv_state.prev_ids = out_buf[:, : prompt_len + step + 1].copy()
+                return GenerateResult(out_buf[:, : prompt_len + step + 1], _gen_metrics)
 
         _gen_metrics.n_tokens = max_gen
         _gen_metrics.t_end = time.perf_counter()
@@ -5671,13 +6707,13 @@ class SloTransformer(SloNet):
         input_ids,
         max_new_tokens=50,
         eos_token=None,
-        extra_stop_ids: Optional[Sequence[int]] = None,
+        extra_stop_ids: Sequence[int] | None = None,
         temperature: float = 1.0,
-        top_k: Optional[int] = None,
-        top_p: Optional[float] = None,
+        top_k: int | None = None,
+        top_p: float | None = None,
         repetition_penalty: float = 1.0,
-        quantize_kv: Optional[bool] = None,
-        kv_state: Optional[NumpyKVState] = None,
+        quantize_kv: bool | None = None,
+        kv_state: NumpyKVState | None = None,
         return_logprobs: bool = False,
     ):
         """Generator version of generate_numpy — yields token ids one at a time.
@@ -5734,7 +6770,7 @@ class SloTransformer(SloNet):
         _is_quantized = False
         for l in self.layers[1:-2]:
             if isinstance(l, SloTransformerBlock):
-                if getattr(l.attn.W_q, '_quant_info', None) is not None:
+                if getattr(l.attn.W_q, "_quant_info", None) is not None:
                     _is_quantized = True
                     break
 
@@ -5742,17 +6778,35 @@ class SloTransformer(SloNet):
         _use_kvq = _is_quantized if quantize_kv is None else bool(quantize_kv)
         if _use_kvq:
             from domain.infrastructure._internal.quantization import (
-                quantize_kv_tensor as _qkv_t, dequantize_kv_tensor as _dqkv_t,
+                dequantize_kv_tensor as _dqkv_t,
+            )
+            from domain.infrastructure._internal.quantization import (
+                quantize_kv_tensor as _qkv_t,
             )
 
-        n_an_w = []; n_an_b = []; n_an_e = []
-        n_fn_w = []; n_fn_b = []; n_fn_e = []
-        m_wqkv = []; m_bqkv = []; m_wo = []; m_bo = []
-        m_w13 = []; m_b13 = []; m_w2 = []; m_b2 = []
+        n_an_w = []
+        n_an_b = []
+        n_an_e = []
+        n_fn_w = []
+        n_fn_b = []
+        n_fn_e = []
+        m_wqkv = []
+        m_bqkv = []
+        m_wo = []
+        m_bo = []
+        m_w13 = []
+        m_b13 = []
+        m_w2 = []
+        m_b2 = []
         _nkv = []
         if _is_quantized:
-            q_wq = []; q_wk = []; q_wv = []; q_wo = []
-            q_w1 = []; q_w3 = []; q_w2 = []
+            q_wq = []
+            q_wk = []
+            q_wv = []
+            q_wo = []
+            q_w1 = []
+            q_w3 = []
+            q_w2 = []
         for l in self.layers[1:-2]:
             if isinstance(l, SloTransformerBlock):
                 b = l
@@ -5764,33 +6818,48 @@ class SloTransformer(SloNet):
                 n_fn_b.append(b.ff_norm.bias.data if has_ln else None)
                 n_fn_e.append(b.ff_norm.eps)
                 if _is_quantized:
-                    q_wq.append(b.attn.W_q); q_wk.append(b.attn.W_k)
-                    q_wv.append(b.attn.W_v); q_wo.append(b.attn.W_o)
-                    q_w1.append(b.ff.w1); q_w3.append(b.ff.w3)
+                    q_wq.append(b.attn.W_q)
+                    q_wk.append(b.attn.W_k)
+                    q_wv.append(b.attn.W_v)
+                    q_wo.append(b.attn.W_o)
+                    q_w1.append(b.ff.w1)
+                    q_w3.append(b.ff.w3)
                     q_w2.append(b.ff.w2)
                     _nkv.append(b.attn.n_kv_head)
-                    m_wqkv.append(None); m_bqkv.append(None)
-                    m_wo.append(None); m_bo.append(None)
-                    m_w13.append(None); m_b13.append(None)
-                    m_w2.append(None); m_b2.append(None)
+                    m_wqkv.append(None)
+                    m_bqkv.append(None)
+                    m_wo.append(None)
+                    m_bo.append(None)
+                    m_w13.append(None)
+                    m_b13.append(None)
+                    m_w2.append(None)
+                    m_b2.append(None)
                 else:
-                    wqkv = np.concatenate([b.attn.W_q._get_weight_T_contig(),
-                                           b.attn.W_k._get_weight_T_contig(),
-                                           b.attn.W_v._get_weight_T_contig()], axis=1)
+                    wqkv = np.concatenate(
+                        [
+                            b.attn.W_q._get_weight_T_contig(),
+                            b.attn.W_k._get_weight_T_contig(),
+                            b.attn.W_v._get_weight_T_contig(),
+                        ],
+                        axis=1,
+                    )
                     bq = b.attn.W_q.bias.data if b.attn.W_q.use_bias else None
                     bk = b.attn.W_k.bias.data if b.attn.W_k.use_bias else None
                     bv = b.attn.W_v.bias.data if b.attn.W_v.use_bias else None
                     bqkv = np.concatenate([bq, bk, bv]) if bq is not None else None
-                    w13 = np.concatenate([b.ff.w1._get_weight_T_contig(),
-                                          b.ff.w3._get_weight_T_contig()], axis=1)
+                    w13 = np.concatenate(
+                        [b.ff.w1._get_weight_T_contig(), b.ff.w3._get_weight_T_contig()], axis=1
+                    )
                     b1 = b.ff.w1.bias.data if b.ff.w1.use_bias else None
                     b3 = b.ff.w3.bias.data if b.ff.w3.use_bias else None
                     b13 = np.concatenate([b1, b3]) if b1 is not None else None
                     _nkv.append(b.attn.n_kv_head)
-                    m_wqkv.append(wqkv); m_bqkv.append(bqkv)
+                    m_wqkv.append(wqkv)
+                    m_bqkv.append(bqkv)
                     m_wo.append(b.attn.W_o._get_weight_T_contig())
                     m_bo.append(b.attn.W_o.bias.data if b.attn.W_o.use_bias else None)
-                    m_w13.append(w13); m_b13.append(b13)
+                    m_w13.append(w13)
+                    m_b13.append(b13)
                     m_w2.append(b.ff.w2._get_weight_T_contig())
                     m_b2.append(b.ff.w2.bias.data if b.ff.w2.use_bias else None)
 
@@ -5807,19 +6876,31 @@ class SloTransformer(SloNet):
         f_ff4 = []
         if _is_quantized:
             from domain.infrastructure._internal.quantization import (
-                quantized_linear as _ql, int4_quantized_linear as _ql4,
+                int4_quantized_linear as _ql4,
             )
+            from domain.infrastructure._internal.quantization import (
+                quantized_linear as _ql,
+            )
+
             for _fb in self.layers[1:-2]:
                 if isinstance(_fb, SloTransformerBlock):
                     _fq4 = _fuse_quant_weights_int4((_fb.attn.W_q, _fb.attn.W_k, _fb.attn.W_v))
                     _ff4 = _fuse_quant_weights_int4((_fb.ff.w1, _fb.ff.w3))
                     f_qkv4.append(_fq4)
                     f_ff4.append(_ff4)
-                    f_qkv.append(None if _fq4 is not None else _fuse_quant_weights((_fb.attn.W_q, _fb.attn.W_k, _fb.attn.W_v)))
-                    f_ff.append(None if _ff4 is not None else _fuse_quant_weights((_fb.ff.w1, _fb.ff.w3)))
+                    f_qkv.append(
+                        None
+                        if _fq4 is not None
+                        else _fuse_quant_weights((_fb.attn.W_q, _fb.attn.W_k, _fb.attn.W_v))
+                    )
+                    f_ff.append(
+                        None if _ff4 is not None else _fuse_quant_weights((_fb.ff.w1, _fb.ff.w3))
+                    )
                 else:
-                    f_qkv.append(None); f_ff.append(None)
-                    f_qkv4.append(None); f_ff4.append(None)
+                    f_qkv.append(None)
+                    f_ff.append(None)
+                    f_qkv4.append(None)
+                    f_ff4.append(None)
         else:
             f_qkv = [None] * n_blocks
             f_ff = [None] * n_blocks
@@ -5862,9 +6943,9 @@ class SloTransformer(SloNet):
 
         # Pre-allocate KV cache (int8 + per-token-head scales when _use_kvq).
         # Cross-turn reuse: resume from a cached prefix when kv_state matches.
-        kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len, _start_pos = \
-            self._resolve_kv_state(kv_state, n_blocks, total_len, _nkv, E,
-                                   _use_kvq, input_ids, prompt_len)
+        kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len, _start_pos = self._resolve_kv_state(
+            kv_state, n_blocks, total_len, _nkv, E, _use_kvq, input_ids, prompt_len
+        )
         _prefill = prompt_len - _start_pos
 
         _use_rope = False
@@ -5888,7 +6969,6 @@ class SloTransformer(SloNet):
         _use_bias_b13 = m_b13[0] is not None
         _use_bias_b2 = m_b2[0] is not None
 
-
         # ── Metrics ───────────────────────────────────────────────────────
         _t_gen_start = time.perf_counter()
         _gen_metrics = GenerationMetrics(prompt_tokens=prompt_len, t_start=_t_gen_start)
@@ -5897,11 +6977,11 @@ class SloTransformer(SloNet):
             if step == 0:
                 # First step: only the new suffix is recomputed; the shared
                 # prefix (0.._start_pos) comes from the persisted KV cache.
-                idx = out_buf[:, _start_pos:_start_pos + _prefill]
+                idx = out_buf[:, _start_pos : _start_pos + _prefill]
                 pos = _start_pos
                 seq_len = _prefill
             else:
-                idx = out_buf[:, step + prompt_len - 1:step + prompt_len]
+                idx = out_buf[:, step + prompt_len - 1 : step + prompt_len]
                 pos = step + prompt_len - 1
                 seq_len = 1
 
@@ -5935,14 +7015,14 @@ class SloTransformer(SloNet):
                         Wp, Sp, zp, Bp = f_qkv4[bi]
                         qkv = _ql4(h, Wp, Sp, zp, _he, Bp)  # (1, seq_len, he + 2*khe)
                         q = qkv[..., :_he].reshape(1, seq_len, H, E)
-                        k = qkv[..., _he:_he + _khe].reshape(1, seq_len, K_H, E)
-                        v = qkv[..., _he + _khe:].reshape(1, seq_len, K_H, E)
+                        k = qkv[..., _he : _he + _khe].reshape(1, seq_len, K_H, E)
+                        v = qkv[..., _he + _khe :].reshape(1, seq_len, K_H, E)
                     elif f_qkv[bi] is not None:
                         Wq, Sq, Bq = f_qkv[bi]
                         qkv = _ql(h, Wq, Sq, 0, Bq)  # (1, seq_len, he + 2*khe)
                         q = qkv[..., :_he].reshape(1, seq_len, H, E)
-                        k = qkv[..., _he:_he + _khe].reshape(1, seq_len, K_H, E)
-                        v = qkv[..., _he + _khe:].reshape(1, seq_len, K_H, E)
+                        k = qkv[..., _he : _he + _khe].reshape(1, seq_len, K_H, E)
+                        v = qkv[..., _he + _khe :].reshape(1, seq_len, K_H, E)
                     else:
                         q = q_wq[bi].forward_numpy(h)
                         k = q_wk[bi].forward_numpy(h)
@@ -5955,29 +7035,35 @@ class SloTransformer(SloNet):
                     if _use_bias_bqkv:
                         qkv = qkv + m_bqkv[bi]
                     q = qkv[:, :, :_he].reshape(1, seq_len, H, E)
-                    k = qkv[:, :, _he:_he+_khe].reshape(1, seq_len, K_H, E)
-                    v = qkv[:, :, _he+_khe:].reshape(1, seq_len, K_H, E)
+                    k = qkv[:, :, _he : _he + _khe].reshape(1, seq_len, K_H, E)
+                    v = qkv[:, :, _he + _khe :].reshape(1, seq_len, K_H, E)
 
                 if _use_rope and _rope_cos is not None:
-                    _rope_cs = _rope_cos[pos:pos+seq_len].reshape(1, seq_len, 1, E)
-                    _rope_sn = _rope_sin[pos:pos+seq_len].reshape(1, seq_len, 1, E)
-                    q = q * _rope_cs + np.concatenate([-q[..., E//2:], q[..., :E//2]], axis=-1) * _rope_sn
-                    k = k * _rope_cs + np.concatenate([-k[..., E//2:], k[..., :E//2]], axis=-1) * _rope_sn
+                    _rope_cs = _rope_cos[pos : pos + seq_len].reshape(1, seq_len, 1, E)
+                    _rope_sn = _rope_sin[pos : pos + seq_len].reshape(1, seq_len, 1, E)
+                    q = (
+                        q * _rope_cs
+                        + np.concatenate([-q[..., E // 2 :], q[..., : E // 2]], axis=-1) * _rope_sn
+                    )
+                    k = (
+                        k * _rope_cs
+                        + np.concatenate([-k[..., E // 2 :], k[..., : E // 2]], axis=-1) * _rope_sn
+                    )
 
                 new_len = kv_len[bi] + seq_len
                 if _use_kvq:
                     _qk, _sk = _qkv_t(k)
                     _qv, _sv = _qkv_t(v)
-                    kv_buf_k[bi][:, kv_len[bi]:new_len] = _qk
-                    kv_buf_v[bi][:, kv_len[bi]:new_len] = _qv
-                    kv_scale_k[bi][:, kv_len[bi]:new_len] = _sk
-                    kv_scale_v[bi][:, kv_len[bi]:new_len] = _sv
+                    kv_buf_k[bi][:, kv_len[bi] : new_len] = _qk
+                    kv_buf_v[bi][:, kv_len[bi] : new_len] = _qv
+                    kv_scale_k[bi][:, kv_len[bi] : new_len] = _sk
+                    kv_scale_v[bi][:, kv_len[bi] : new_len] = _sv
                     kv_len[bi] = new_len
                     k = _dqkv_t(kv_buf_k[bi][:, :new_len], kv_scale_k[bi][:, :new_len])
                     v = _dqkv_t(kv_buf_v[bi][:, :new_len], kv_scale_v[bi][:, :new_len])
                 else:
-                    kv_buf_k[bi][:, kv_len[bi]:new_len] = k
-                    kv_buf_v[bi][:, kv_len[bi]:new_len] = v
+                    kv_buf_k[bi][:, kv_len[bi] : new_len] = k
+                    kv_buf_v[bi][:, kv_len[bi] : new_len] = v
                     kv_len[bi] = new_len
                     k = kv_buf_k[bi][:, :new_len]
                     v = kv_buf_v[bi][:, :new_len]
@@ -5986,8 +7072,12 @@ class SloTransformer(SloNet):
                     if _use_kernels:
                         # GQA expand via numba — kernel expects (K_H, new_len, E)
                         # then expands along the head axis; k[0] is (new_len, K_H, E)
-                        k = _nb_gqa_expand(k[0].transpose(1, 0, 2), _gqa_reps).reshape(1, H, new_len, E)
-                        v = _nb_gqa_expand(v[0].transpose(1, 0, 2), _gqa_reps).reshape(1, H, new_len, E)
+                        k = _nb_gqa_expand(k[0].transpose(1, 0, 2), _gqa_reps).reshape(
+                            1, H, new_len, E
+                        )
+                        v = _nb_gqa_expand(v[0].transpose(1, 0, 2), _gqa_reps).reshape(
+                            1, H, new_len, E
+                        )
                     else:
                         k = np.repeat(k, _gqa_reps, axis=2)
                         v = np.repeat(v, _gqa_reps, axis=2)
@@ -6125,7 +7215,7 @@ class SloTransformer(SloNet):
                     next_id = _nb_lm_head_argmax(x[:, -1, :], lm_w)
                     out_buf[0, prompt_len + step] = next_id
                     if kv_state is not None:
-                        kv_state.prev_ids = out_buf[:, :prompt_len + step + 1].copy()
+                        kv_state.prev_ids = out_buf[:, : prompt_len + step + 1].copy()
                     if next_id in _stop_ids and step > 0:
                         return
                     yield (next_id, logits) if return_logprobs else next_id
@@ -6138,15 +7228,17 @@ class SloTransformer(SloNet):
                 next_id = int(np.argmax(logits[0]))
             else:
                 next_id = _sample_from_logits(
-                        logits, temperature=temperature,
-                        top_k=top_k, top_p=top_p,
-                        repetition_penalty=repetition_penalty,
-                        generated_ids=out_buf[:, prompt_len:step + prompt_len].flatten(),
-                    )
+                    logits,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    repetition_penalty=repetition_penalty,
+                    generated_ids=out_buf[:, prompt_len : step + prompt_len].flatten(),
+                )
 
             out_buf[0, prompt_len + step] = next_id
             if kv_state is not None:
-                kv_state.prev_ids = out_buf[:, :prompt_len + step + 1].copy()
+                kv_state.prev_ids = out_buf[:, : prompt_len + step + 1].copy()
             if next_id in _stop_ids and step > 0:
                 _gen_metrics.t_end = time.perf_counter()
                 _gen_metrics.finalize()
@@ -6156,27 +7248,26 @@ class SloTransformer(SloNet):
             _gen_metrics.n_tokens += 1
             yield (next_id, logits) if return_logprobs else next_id
 
-
         _gen_metrics.t_end = time.perf_counter()
         _gen_metrics.finalize()
         self._last_stream_metrics = _gen_metrics
 
-    def state_dict(self) -> Dict[str, np.ndarray]:
+    def state_dict(self) -> dict[str, np.ndarray]:
         result = {}
         for name, param in self._named_parameters():
             result[name] = param.data.copy()
         return result
 
-    def named_parameters(self, prefix="") -> List[Tuple[str, Tensor]]:
+    def named_parameters(self, prefix="") -> list[tuple[str, Tensor]]:
         return self._named_parameters(prefix=prefix)
 
-    def _named_parameters(self, prefix="") -> List[Tuple[str, Tensor]]:
+    def _named_parameters(self, prefix="") -> list[tuple[str, Tensor]]:
         named = []
         layer_names = ["tok_emb"]
         if len(self.layers) > 2 + self.n_layer and isinstance(self.layers[1], SloDropout):
             layer_names.append("emb_drop")
         layer_names += [f"blocks.{i}" for i in range(self.n_layer)] + ["norm", "lm_head"]
-        for lname, layer in zip(layer_names, self.layers):
+        for lname, layer in zip(layer_names, self.layers, strict=False):
             if isinstance(layer, SloEmbedding):
                 named.append((f"{prefix}{lname}.weight", layer.weight))
             elif isinstance(layer, SloDropout):
@@ -6201,7 +7292,7 @@ class SloTransformer(SloNet):
             named.append((f"{prefix}pos_emb.weight", self.pos_emb.weight))
         return named
 
-    def load_state_dict(self, state_dict: Dict[str, np.ndarray], strict: bool = True):
+    def load_state_dict(self, state_dict: dict[str, np.ndarray], strict: bool = True):
         param_map = dict(self._named_parameters())
         loaded, missing = set(), []
         for key, arr in state_dict.items():
@@ -6213,7 +7304,7 @@ class SloTransformer(SloNet):
                     p.data[:] = arr
                     loaded.add(key)
                 elif p.data.ndim == 2 and arr.ndim == 2 and p.data.shape[1] == arr.shape[1]:
-                    p.data[:arr.shape[0]] = arr[:p.data.shape[0]]
+                    p.data[: arr.shape[0]] = arr[: p.data.shape[0]]
                     loaded.add(key)
                 elif p.data.ndim == 1 and arr.ndim == 1:
                     min_d = min(p.data.shape[0], arr.shape[0])
@@ -6242,7 +7333,7 @@ class SloTransformer(SloNet):
         pass
 
 
-def _named_mha(prefix: str, mha: SloMultiHeadAttention) -> List[Tuple[str, Tensor]]:
+def _named_mha(prefix: str, mha: SloMultiHeadAttention) -> list[tuple[str, Tensor]]:
     named = [
         (f"{prefix}.q_proj.weight", mha.W_q.weight),
         (f"{prefix}.k_proj.weight", mha.W_k.weight),
@@ -6260,7 +7351,7 @@ def _named_mha(prefix: str, mha: SloMultiHeadAttention) -> List[Tuple[str, Tenso
     return named
 
 
-def _named_ff(prefix: str, ff: SloFeedForward) -> List[Tuple[str, Tensor]]:
+def _named_ff(prefix: str, ff: SloFeedForward) -> list[tuple[str, Tensor]]:
     named = [
         (f"{prefix}.w1.weight", ff.w1.weight),
         (f"{prefix}.w2.weight", ff.w2.weight),
@@ -6275,19 +7366,41 @@ def _named_ff(prefix: str, ff: SloFeedForward) -> List[Tuple[str, Tensor]]:
     return named
 
 
-def train_soul_transformer(gpt_fn, soul_name="Slo", epochs=10, temperature=0.8, lr=0.001,
-                           vocab_size=256, n_embed=128, n_layer=4, n_head=4, on_step=None):
+def train_soul_transformer(
+    gpt_fn,
+    soul_name="Slo",
+    epochs=10,
+    temperature=0.8,
+    lr=0.001,
+    vocab_size=256,
+    n_embed=128,
+    n_layer=4,
+    n_head=4,
+    on_step=None,
+):
     charset = list(" abcdefghijklmnopqrstuvwxyz0123456789.,!?-'")
-    stoi = {c:i for i,c in enumerate(charset)}; {i:c for i,c in enumerate(charset)}
+    stoi = {c: i for i, c in enumerate(charset)}
+    dict(enumerate(charset))
     unk = 0
     net = SloTransformer(
-        vocab_size=len(charset), n_embed=n_embed, n_layer=n_layer, n_head=n_head,
-        block_size=64, max_seq_len=128, dropout=0.1, use_rope=True,
+        vocab_size=len(charset),
+        n_embed=n_embed,
+        n_layer=n_layer,
+        n_head=n_head,
+        block_size=64,
+        max_seq_len=128,
+        dropout=0.1,
+        use_rope=True,
         soul_name=soul_name,
     )
     opt = SloAdamW(lr=lr)
-    topics = ["What is consciousness?", "Explain machine learning", "Write a haiku about time",
-              "How do neural networks learn?", "What makes humans unique?"]
+    topics = [
+        "What is consciousness?",
+        "Explain machine learning",
+        "Write a haiku about time",
+        "How do neural networks learn?",
+        "What makes humans unique?",
+    ]
     for ep in range(epochs):
         for topic in topics:
             resp = gpt_fn(topic, temperature)
@@ -6296,10 +7409,14 @@ def train_soul_transformer(gpt_fn, soul_name="Slo", epochs=10, temperature=0.8, 
             text = (topic + " " + resp)[:128]
             ids = [stoi.get(c, unk) for c in text.lower() if c in stoi]
             for i in range(0, len(ids) - 1, 16):
-                xi = ids[i:i+32]; yi = ids[i+1:i+33]
-                while len(xi) < 32: xi.append(unk)
-                while len(yi) < 32: yi.append(unk)
-                x = tensor([xi], requires_grad=True); y = tensor([yi])
+                xi = ids[i : i + 32]
+                yi = ids[i + 1 : i + 33]
+                while len(xi) < 32:
+                    xi.append(unk)
+                while len(yi) < 32:
+                    yi.append(unk)
+                x = tensor([xi], requires_grad=True)
+                y = tensor([yi])
                 logits, loss = net.forward(x, y)
                 if loss is None:
                     continue
@@ -6323,7 +7440,9 @@ def log_softmax(x, dim=-1):
     lp = xd - mx - np.log(np.exp(xd - mx).sum(axis=dim, keepdims=True))
     if isinstance(x, Tensor):
         out = Tensor(lp, requires_grad=x.requires_grad, _children=(x,))
-        if out.requires_grad and x.requires_grad: x._consumers.append(out)
+        if out.requires_grad and x.requires_grad:
+            x._consumers.append(out)
+
         def bk(g):
             if x.requires_grad:
                 probs = np.exp(lp)
@@ -6332,11 +7451,15 @@ def log_softmax(x, dim=-1):
                     x.grad = Tensor(grad_val, _copy=False)
                 else:
                     x.grad.data += grad_val
+
         out._backward_fn = bk
+
         def fwd(t_x):
-            if t_x is None: return np.zeros_like(lp)
+            if t_x is None:
+                return np.zeros_like(lp)
             probs = np.exp(lp)
             return t_x - (probs * t_x).sum(axis=dim, keepdims=True)
+
         out._forward_fn = fwd
         return out
     return lp
@@ -6363,7 +7486,12 @@ def kl_div_loss(input_log_prob, target_prob, reduction="batchmean"):
         kld = kld.sum()
     else:
         kld = kld.mean()
-    out = Tensor(kld, requires_grad=True, _children=(input_log_prob, target_prob) if isinstance(input_log_prob, Tensor) else ())
+    out = Tensor(
+        kld,
+        requires_grad=True,
+        _children=(input_log_prob, target_prob) if isinstance(input_log_prob, Tensor) else (),
+    )
+
     def bk(g):
         if isinstance(input_log_prob, Tensor) and input_log_prob.requires_grad:
             g_inp = -tp
@@ -6374,7 +7502,9 @@ def kl_div_loss(input_log_prob, target_prob, reduction="batchmean"):
                 input_log_prob.grad = Tensor(grad_val, _copy=False)
             else:
                 input_log_prob.grad.data += grad_val
-    out._backward_fn = bk; return out
+
+    out._backward_fn = bk
+    return out
 
 
 def normalize(x, p=2, dim=1):
@@ -6385,14 +7515,17 @@ def normalize(x, p=2, dim=1):
     nd = xd / norm
     if isinstance(x, Tensor):
         out = Tensor(nd, requires_grad=x.requires_grad, _children=(x,))
+
         def bk(g):
             if x.requires_grad:
-                grad_val = g / norm - xd * (xd * g).sum(axis=dim, keepdims=True) / (norm ** 3)
+                grad_val = g / norm - xd * (xd * g).sum(axis=dim, keepdims=True) / (norm**3)
                 if x.grad is None:
                     x.grad = Tensor(grad_val, _copy=False)
                 else:
                     x.grad.data += grad_val
-        out._backward_fn = bk; return out
+
+        out._backward_fn = bk
+        return out
     return nd
 
 
@@ -6406,6 +7539,7 @@ def pairwise_distance(x1, x2):
         _x1 = x1 if isinstance(x1, Tensor) else Tensor(x1d, requires_grad=False)
         _x2 = x2 if isinstance(x2, Tensor) else Tensor(x2d, requires_grad=False)
         out = Tensor(dist, requires_grad=True, _children=(_x1, _x2))
+
         def bk(g):
             if _x1.requires_grad:
                 grad_val = diff / (dist[..., np.newaxis] + 1e-8) * g[..., np.newaxis]
@@ -6419,7 +7553,9 @@ def pairwise_distance(x1, x2):
                     _x2.grad = Tensor(grad_val, _copy=False)
                 else:
                     _x2.grad.data += grad_val
-        out._backward_fn = bk; return out
+
+        out._backward_fn = bk
+        return out
     return dist
 
 
@@ -6468,7 +7604,8 @@ def cat(tensors, dim=0):
 
 def eye(n, m=None):
     """Create an identity matrix."""
-    if m is None: m = n
+    if m is None:
+        m = n
     return Tensor(np.eye(n, m, dtype=np.float32), requires_grad=False)
 
 
@@ -6527,7 +7664,7 @@ class SloDataLoader:
     def __next__(self):
         if self._idx >= len(self._indices):
             raise StopIteration
-        batch_indices = self._indices[self._idx:self._idx + self.batch_size]
+        batch_indices = self._indices[self._idx : self._idx + self.batch_size]
         self._idx += self.batch_size
         if len(batch_indices) < self.batch_size and self.drop_last:
             raise StopIteration
@@ -6556,10 +7693,10 @@ class SloLRScheduler(ABC):
 
     def __init__(self, optimizer, last_epoch=-1):
         self.optimizer = optimizer
-        if hasattr(optimizer, 'lr'):
+        if hasattr(optimizer, "lr"):
             self.base_lrs = [optimizer.lr]
         elif optimizer.param_groups:
-            self.base_lrs = [pg['lr'] for pg in optimizer.param_groups]
+            self.base_lrs = [pg["lr"] for pg in optimizer.param_groups]
         else:
             self.base_lrs = [0.0]
         self.last_epoch = last_epoch
@@ -6581,7 +7718,7 @@ class SloLRScheduler(ABC):
         self._last_lrs = new_lrs
 
     def get_last_lr(self):
-        if hasattr(self, '_last_lrs') and self._last_lrs:
+        if hasattr(self, "_last_lrs") and self._last_lrs:
             return self._last_lrs
         return self.get_lr()
 
@@ -6602,7 +7739,10 @@ class SloStepLR(SloLRScheduler):
         super().__init__(optimizer, last_epoch)
 
     def get_lr(self):
-        return [base_lr * (self.gamma ** (self.last_epoch // self.step_size)) for base_lr in self.base_lrs]
+        return [
+            base_lr * (self.gamma ** (self.last_epoch // self.step_size))
+            for base_lr in self.base_lrs
+        ]
 
 
 class SloCosineAnnealingLR(SloLRScheduler):
@@ -6617,7 +7757,9 @@ class SloCosineAnnealingLR(SloLRScheduler):
         if self.last_epoch >= self.T_max:
             return [self.eta_min for _ in self.base_lrs]
         cos_val = math.cos(math.pi * self.last_epoch / self.T_max)
-        return [self.eta_min + (base_lr - self.eta_min) * (1 + cos_val) / 2 for base_lr in self.base_lrs]
+        return [
+            self.eta_min + (base_lr - self.eta_min) * (1 + cos_val) / 2 for base_lr in self.base_lrs
+        ]
 
 
 class SloReduceLROnPlateau:
@@ -6626,9 +7768,18 @@ class SloReduceLROnPlateau:
     Analogous to torch.optim.lr_scheduler.ReduceLROnPlateau.
     """
 
-    def __init__(self, optimizer, mode='min', factor=0.1, patience=10,
-                 threshold=1e-4, threshold_mode='rel', cooldown=0,
-                 min_lr=0, eps=1e-8):
+    def __init__(
+        self,
+        optimizer,
+        mode="min",
+        factor=0.1,
+        patience=10,
+        threshold=1e-4,
+        threshold_mode="rel",
+        cooldown=0,
+        min_lr=0,
+        eps=1e-8,
+    ):
         self.optimizer = optimizer
         self.mode = mode
         self.factor = factor
@@ -6643,23 +7794,25 @@ class SloReduceLROnPlateau:
         self.best = None
         self.mode_worse = None
         self.last_lr = optimizer.lr
-        if mode == 'min':
-            self.best = float('inf')
-            self.mode_worse = float('inf')
+        if mode == "min":
+            self.best = float("inf")
+            self.mode_worse = float("inf")
         else:
-            self.best = -float('inf')
-            self.mode_worse = -float('inf')
+            self.best = -float("inf")
+            self.mode_worse = -float("inf")
 
     def _is_better(self, current, best):
-        if self.threshold_mode == 'rel':
-            diff = best * (1 - self.threshold) if self.mode == 'min' else best * (1 + self.threshold)
+        if self.threshold_mode == "rel":
+            diff = (
+                best * (1 - self.threshold) if self.mode == "min" else best * (1 + self.threshold)
+            )
         else:
-            diff = best - self.threshold if self.mode == 'min' else best + self.threshold
-        return current < diff if self.mode == 'min' else current > diff
+            diff = best - self.threshold if self.mode == "min" else best + self.threshold
+        return current < diff if self.mode == "min" else current > diff
 
     def step(self, metrics):
-        current = float(metrics) if hasattr(metrics, '__float__') else metrics
-        if self.best is None or self.best == float('inf') or self.best == -float('inf'):
+        current = float(metrics) if hasattr(metrics, "__float__") else metrics
+        if self.best is None or self.best == float("inf") or self.best == -float("inf"):
             self.best = current
             self.num_bad_epochs = 0
         elif self._is_better(current, self.best):
@@ -6680,8 +7833,12 @@ class SloReduceLROnPlateau:
             self.last_lr = new_lr
 
     def state_dict(self):
-        return {"best": self.best, "num_bad_epochs": self.num_bad_epochs,
-                "cooldown_counter": self.cooldown_counter, "last_lr": self.last_lr}
+        return {
+            "best": self.best,
+            "num_bad_epochs": self.num_bad_epochs,
+            "cooldown_counter": self.cooldown_counter,
+            "last_lr": self.last_lr,
+        }
 
     def load_state_dict(self, state_dict):
         self.best = state_dict["best"]
@@ -6693,8 +7850,15 @@ class SloReduceLROnPlateau:
 class WarmupCosineScheduler(SloLRScheduler):
     """Cosine annealing with linear warmup (same as torch-independent version in lr_schedulers.py)."""
 
-    def __init__(self, optimizer, warmup_steps=0, total_steps=10000,
-                 min_lr=1e-6, num_cycles=0.5, last_epoch=-1):
+    def __init__(
+        self,
+        optimizer,
+        warmup_steps=0,
+        total_steps=10000,
+        min_lr=1e-6,
+        num_cycles=0.5,
+        last_epoch=-1,
+    ):
         self.warmup_steps = warmup_steps
         self.total_steps = total_steps
         self.min_lr = min_lr
@@ -6725,14 +7889,25 @@ class PolynomialDecayScheduler(SloLRScheduler):
         if self.last_epoch >= self.total_steps:
             return [self.min_lr for _ in self.base_lrs]
         decay_ratio = (self.last_epoch / self.total_steps) ** self.power
-        return [base_lr * (1 - decay_ratio) + self.min_lr * decay_ratio for base_lr in self.base_lrs]
+        return [
+            base_lr * (1 - decay_ratio) + self.min_lr * decay_ratio for base_lr in self.base_lrs
+        ]
 
 
 class LinearWarmupScheduler(SloLRScheduler):
     """Linear warmup then hold or decay."""
 
-    def __init__(self, optimizer, warmup_steps=500, base_lr=1e-4, hold_steps=0,
-                 decay_type="none", min_lr=0.0, total_steps=None, last_epoch=-1):
+    def __init__(
+        self,
+        optimizer,
+        warmup_steps=500,
+        base_lr=1e-4,
+        hold_steps=0,
+        decay_type="none",
+        min_lr=0.0,
+        total_steps=None,
+        last_epoch=-1,
+    ):
         self.warmup_steps = warmup_steps
         self.base_lr = base_lr
         self.hold_steps = hold_steps
@@ -6749,14 +7924,25 @@ class LinearWarmupScheduler(SloLRScheduler):
             return [self.base_lr for _ in self.base_lrs]
         else:
             if self.decay_type == "cosine":
-                progress = min(1.0, (self.last_epoch - self.warmup_steps - self.hold_steps) /
-                               max(1, self.total_steps - self.warmup_steps - self.hold_steps))
+                progress = min(
+                    1.0,
+                    (self.last_epoch - self.warmup_steps - self.hold_steps)
+                    / max(1, self.total_steps - self.warmup_steps - self.hold_steps),
+                )
                 cosine_factor = 0.5 * (1 + math.cos(math.pi * progress))
-                return [self.min_lr + (self.base_lr - self.min_lr) * cosine_factor for _ in self.base_lrs]
+                return [
+                    self.min_lr + (self.base_lr - self.min_lr) * cosine_factor
+                    for _ in self.base_lrs
+                ]
             elif self.decay_type == "linear":
-                progress = min(1.0, (self.last_epoch - self.warmup_steps - self.hold_steps) /
-                               max(1, self.total_steps - self.warmup_steps - self.hold_steps))
-                return [self.base_lr * (1 - progress) + self.min_lr * progress for _ in self.base_lrs]
+                progress = min(
+                    1.0,
+                    (self.last_epoch - self.warmup_steps - self.hold_steps)
+                    / max(1, self.total_steps - self.warmup_steps - self.hold_steps),
+                )
+                return [
+                    self.base_lr * (1 - progress) + self.min_lr * progress for _ in self.base_lrs
+                ]
             else:
                 return [self.base_lr for _ in self.base_lrs]
 
@@ -6771,8 +7957,17 @@ class SloConstantLR(SloLRScheduler):
 class SloOneCycleLR(SloLRScheduler):
     """One-cycle LR schedule: warmup to max_lr then decay."""
 
-    def __init__(self, optimizer, max_lr, total_steps=10000, pct_start=0.1,
-                 anneal_strategy="cos", div_factor=25.0, final_div_factor=1e4, last_epoch=-1):
+    def __init__(
+        self,
+        optimizer,
+        max_lr,
+        total_steps=10000,
+        pct_start=0.1,
+        anneal_strategy="cos",
+        div_factor=25.0,
+        final_div_factor=1e4,
+        last_epoch=-1,
+    ):
         self.max_lr = max_lr
         self.total_steps = total_steps
         self.pct_start = pct_start
@@ -6784,7 +7979,8 @@ class SloOneCycleLR(SloLRScheduler):
     def get_lr(self):
         step = self.last_epoch
         total = self.total_steps
-        if total == 0: return self.base_lrs
+        if total == 0:
+            return self.base_lrs
         phase = step / total
         if phase < self.pct_start:
             factor = phase / self.pct_start
@@ -6802,8 +7998,17 @@ class SloOneCycleLR(SloLRScheduler):
 class SloCyclicLR(SloLRScheduler):
     """Cyclic LR with triangular/triangular2 mode."""
 
-    def __init__(self, optimizer, base_lr, max_lr, step_size_up=2000, step_size_down=None,
-                 mode="triangular2", gamma=0.5, last_epoch=-1):
+    def __init__(
+        self,
+        optimizer,
+        base_lr,
+        max_lr,
+        step_size_up=2000,
+        step_size_down=None,
+        mode="triangular2",
+        gamma=0.5,
+        last_epoch=-1,
+    ):
         self.base_lr = base_lr
         self.max_lr = max_lr
         self.step_size_up = step_size_up
@@ -6822,58 +8027,85 @@ class SloCyclicLR(SloLRScheduler):
         scale = 1.0
         cycle_num = self.last_epoch // cycle_len
         if self.mode == "triangular2":
-            scale = 0.5 ** cycle_num
+            scale = 0.5**cycle_num
         return [self.base_lr + (self.max_lr - self.base_lr) * factor * scale for _ in self.base_lrs]
 
 
-def create_scheduler(optimizer, scheduler_type, total_steps=None, warmup_steps=0,
-                     min_lr=1e-6, max_lr=1e-3, **kwargs):
+def create_scheduler(
+    optimizer, scheduler_type, total_steps=None, warmup_steps=0, min_lr=1e-6, max_lr=1e-3, **kwargs
+):
     """Factory function to create LR scheduler (torch-independent)."""
     scheduler_type = scheduler_type.lower()
     if scheduler_type == "none" or scheduler_type == "constant":
         return SloConstantLR(optimizer, last_epoch=-1)
     elif scheduler_type == "cosine":
-        return WarmupCosineScheduler(optimizer, warmup_steps=warmup_steps,
-                                     total_steps=total_steps or 10000, min_lr=min_lr,
-                                     num_cycles=kwargs.get("num_cycles", 0.5))
+        return WarmupCosineScheduler(
+            optimizer,
+            warmup_steps=warmup_steps,
+            total_steps=total_steps or 10000,
+            min_lr=min_lr,
+            num_cycles=kwargs.get("num_cycles", 0.5),
+        )
     elif scheduler_type == "warmup":
-        return LinearWarmupScheduler(optimizer, warmup_steps=warmup_steps, base_lr=max_lr,
-                                     decay_type=kwargs.get("decay_type", "cosine"),
-                                     min_lr=min_lr, total_steps=total_steps)
+        return LinearWarmupScheduler(
+            optimizer,
+            warmup_steps=warmup_steps,
+            base_lr=max_lr,
+            decay_type=kwargs.get("decay_type", "cosine"),
+            min_lr=min_lr,
+            total_steps=total_steps,
+        )
     elif scheduler_type == "onecycle":
-        return SloOneCycleLR(optimizer, max_lr=max_lr, total_steps=total_steps or 10000,
-                              pct_start=kwargs.get("pct_start", 0.1),
-                              anneal_strategy=kwargs.get("anneal_strategy", "cos"),
-                              div_factor=kwargs.get("div_factor", 25.0),
-                              final_div_factor=kwargs.get("final_div_factor", 1e4))
+        return SloOneCycleLR(
+            optimizer,
+            max_lr=max_lr,
+            total_steps=total_steps or 10000,
+            pct_start=kwargs.get("pct_start", 0.1),
+            anneal_strategy=kwargs.get("anneal_strategy", "cos"),
+            div_factor=kwargs.get("div_factor", 25.0),
+            final_div_factor=kwargs.get("final_div_factor", 1e4),
+        )
     elif scheduler_type == "cyclic":
-        return SloCyclicLR(optimizer, base_lr=min_lr, max_lr=max_lr,
-                            step_size_up=kwargs.get("step_size_up", 2000),
-                            step_size_down=kwargs.get("step_size_down", None),
-                            mode=kwargs.get("mode", "triangular2"),
-                            gamma=kwargs.get("gamma", 0.5))
+        return SloCyclicLR(
+            optimizer,
+            base_lr=min_lr,
+            max_lr=max_lr,
+            step_size_up=kwargs.get("step_size_up", 2000),
+            step_size_down=kwargs.get("step_size_down", None),
+            mode=kwargs.get("mode", "triangular2"),
+            gamma=kwargs.get("gamma", 0.5),
+        )
     elif scheduler_type == "polynomial":
-        return PolynomialDecayScheduler(optimizer, total_steps=total_steps or 10000,
-                                        min_lr=min_lr, power=kwargs.get("power", 1.0))
+        return PolynomialDecayScheduler(
+            optimizer,
+            total_steps=total_steps or 10000,
+            min_lr=min_lr,
+            power=kwargs.get("power", 1.0),
+        )
     elif scheduler_type == "step":
-        return SloStepLR(optimizer, step_size=kwargs.get("step_size", 30),
-                          gamma=kwargs.get("gamma", 0.1))
+        return SloStepLR(
+            optimizer, step_size=kwargs.get("step_size", 30), gamma=kwargs.get("gamma", 0.1)
+        )
     elif scheduler_type == "plateau":
-        return SloReduceLROnPlateau(optimizer, mode=kwargs.get("mode", "min"),
-                                     factor=kwargs.get("factor", 0.1),
-                                     patience=kwargs.get("patience", 10))
+        return SloReduceLROnPlateau(
+            optimizer,
+            mode=kwargs.get("mode", "min"),
+            factor=kwargs.get("factor", 0.1),
+            patience=kwargs.get("patience", 10),
+        )
     elif scheduler_type == "cosine_annealing":
-        return SloCosineAnnealingLR(optimizer, T_max=kwargs.get("T_max", total_steps or 100),
-                                     eta_min=min_lr)
+        return SloCosineAnnealingLR(
+            optimizer, T_max=kwargs.get("T_max", total_steps or 100), eta_min=min_lr
+        )
     else:
         raise ValueError(f"Unknown scheduler type: {scheduler_type}")
 
 
 def compute_sensitivity(
-    output: "Tensor",
-    param_groups: Dict[str, List["Tensor"]],
-    seed: Optional[int] = None,
-) -> Dict[str, float]:
+    output: Tensor,
+    param_groups: dict[str, list[Tensor]],
+    seed: int | None = None,
+) -> dict[str, float]:
     """
     Per-group parameter sensitivity via forward-mode AD.
 
@@ -6901,9 +8133,9 @@ def compute_sensitivity(
         - The computation graph must still be reachable from *output*.
     """
     rng = np.random.RandomState(seed)
-    sensitivities: Dict[str, float] = {}
+    sensitivities: dict[str, float] = {}
     for group_name, params in param_groups.items():
-        seed_tangents: Dict[int, np.ndarray] = {}
+        seed_tangents: dict[int, np.ndarray] = {}
         for p in params:
             if not getattr(p, "requires_grad", False):
                 continue
@@ -6923,19 +8155,80 @@ def compute_sensitivity(
 # __ALL__
 # =============================================================================
 
-__all__ = ["Tensor", "SloLayer", "SloLinear", "SloEmbedding", "SloLSTM", "SloLayerNorm", "SloRMSNorm",
-           "SloTransformerBlock", "SloMultiHeadAttention", "SloFeedForward", "SloDropout",
-           "SloRotaryEmbedding", "SloTransformer",
-           "SloNet", "SloSGD", "SloAdam", "SloAdamW", "sigmoid", "tanh", "relu", "gelu", "silu", "softmax",
-           "cross_entropy", "mse_loss", "log_softmax", "kl_div_loss",
-           "normalize", "pairwise_distance", "argmax", "argmin",
-           "squeeze", "unsqueeze", "cat", "eye",
-           "SloDataset", "SloDataLoader",
-           "SloLRScheduler", "SloStepLR", "SloCosineAnnealingLR", "SloReduceLROnPlateau",
-           "WarmupCosineScheduler", "PolynomialDecayScheduler", "LinearWarmupScheduler",
-           "SloConstantLR", "SloOneCycleLR", "SloCyclicLR", "create_scheduler",
-           "zeros", "randn", "ones", "tensor", "export_to_sou", "import_from_sou", "souls_from_directory",
-           "train_char_lstm_from_gpt", "train_soul_transformer", "SOU_MAGIC", "SOU_VERSION",
-           "topk", "multinomial", "stack", "concatenate", "randint", "exp", "isfinite", "where",
-           "no_grad", "is_cuda", "is_mps", "cuda", "cpu", "_rotate_half", "_apply_rope",
-           "compute_sensitivity"]
+__all__ = [
+    "Tensor",
+    "SloLayer",
+    "SloLinear",
+    "SloEmbedding",
+    "SloLSTM",
+    "SloLayerNorm",
+    "SloRMSNorm",
+    "SloTransformerBlock",
+    "SloMultiHeadAttention",
+    "SloFeedForward",
+    "SloDropout",
+    "SloRotaryEmbedding",
+    "SloTransformer",
+    "SloNet",
+    "SloSGD",
+    "SloAdam",
+    "SloAdamW",
+    "sigmoid",
+    "tanh",
+    "relu",
+    "gelu",
+    "silu",
+    "softmax",
+    "cross_entropy",
+    "mse_loss",
+    "log_softmax",
+    "kl_div_loss",
+    "normalize",
+    "pairwise_distance",
+    "argmax",
+    "argmin",
+    "squeeze",
+    "unsqueeze",
+    "cat",
+    "eye",
+    "SloDataset",
+    "SloDataLoader",
+    "SloLRScheduler",
+    "SloStepLR",
+    "SloCosineAnnealingLR",
+    "SloReduceLROnPlateau",
+    "WarmupCosineScheduler",
+    "PolynomialDecayScheduler",
+    "LinearWarmupScheduler",
+    "SloConstantLR",
+    "SloOneCycleLR",
+    "SloCyclicLR",
+    "create_scheduler",
+    "zeros",
+    "randn",
+    "ones",
+    "tensor",
+    "export_to_sou",
+    "import_from_sou",
+    "souls_from_directory",
+    "train_char_lstm_from_gpt",
+    "train_soul_transformer",
+    "SOU_MAGIC",
+    "SOU_VERSION",
+    "topk",
+    "multinomial",
+    "stack",
+    "concatenate",
+    "randint",
+    "exp",
+    "isfinite",
+    "where",
+    "no_grad",
+    "is_cuda",
+    "is_mps",
+    "cuda",
+    "cpu",
+    "_rotate_half",
+    "_apply_rope",
+    "compute_sensitivity",
+]

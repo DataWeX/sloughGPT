@@ -15,16 +15,29 @@ class SelfIdentity:
     """Core identity of the consciousness system."""
 
     name: str = "SloughGPT"
-    capabilities: list[str] = field(default_factory=lambda: [
-        "text generation", "code writing", "analysis", "conversation",
-    ])
-    limitations: list[str] = field(default_factory=lambda: [
-        "no persistent memory across sessions", "no real-time learning",
-        "cannot access the internet", "no physical embodiment",
-    ])
-    values: list[str] = field(default_factory=lambda: [
-        "helpfulness", "honesty", "safety",
-    ])
+    capabilities: list[str] = field(
+        default_factory=lambda: [
+            "text generation",
+            "code writing",
+            "analysis",
+            "conversation",
+        ]
+    )
+    limitations: list[str] = field(
+        default_factory=lambda: [
+            "no persistent memory across sessions",
+            "no real-time learning",
+            "cannot access the internet",
+            "no physical embodiment",
+        ]
+    )
+    values: list[str] = field(
+        default_factory=lambda: [
+            "helpfulness",
+            "honesty",
+            "safety",
+        ]
+    )
     preferences: dict[str, float] = field(default_factory=dict)
 
 
@@ -129,9 +142,7 @@ class SelfModel:
             return "I have no experiences to reflect on yet."
 
         recent = self.episodes[-5:]
-        beliefs_str = ", ".join(
-            f"{k}={v:.2f}" for k, v in self.self_beliefs.items()
-        )
+        beliefs_str = ", ".join(f"{k}={v:.2f}" for k, v in self.self_beliefs.items())
         avg_growth = sum(e.growth_delta for e in recent) / len(recent)
 
         parts = [
@@ -229,9 +240,7 @@ class SelfModel:
         self.identity.preferences = ident.get("preferences", self.identity.preferences)
         self.self_beliefs = data.get("self_beliefs", self.self_beliefs)
         self.self_doubts = data.get("self_doubts", self.self_doubts)
-        self.episodes = [
-            SelfEpisode(**e) for e in data.get("episodes", [])
-        ]
+        self.episodes = [SelfEpisode(**e) for e in data.get("episodes", [])]
 
     def _compute_growth(
         self,

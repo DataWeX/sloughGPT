@@ -13,7 +13,7 @@ is required.
 from __future__ import annotations
 
 import threading
-from typing import Any, Dict, List
+from typing import Any
 
 
 class _MemoryDB:
@@ -21,20 +21,20 @@ class _MemoryDB:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._collections: Dict[str, List[Dict[str, Any]]] = {}
+        self._collections: dict[str, list[dict[str, Any]]] = {}
 
-    def find(self, collection: str, query: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def find(self, collection: str, query: dict[str, Any]) -> list[dict[str, Any]]:
         with self._lock:
             docs = self._collections.get(collection, [])
         if not query:
             return list(docs)
         return [d for d in docs if all(d.get(k) == v for k, v in query.items())]
 
-    def insert(self, collection: str, data: Dict[str, Any]) -> None:
+    def insert(self, collection: str, data: dict[str, Any]) -> None:
         with self._lock:
             self._collections.setdefault(collection, []).append(dict(data))
 
-    def upsert(self, collection: str, query: Dict[str, Any], data: Dict[str, Any]) -> None:
+    def upsert(self, collection: str, query: dict[str, Any], data: dict[str, Any]) -> None:
         with self._lock:
             docs = self._collections.setdefault(collection, [])
             for doc in docs:

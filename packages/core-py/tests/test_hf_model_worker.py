@@ -2,12 +2,11 @@
 
 Covers: device string resolution, auto fallback, explicit device passthrough.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-
-import pytest
 
 _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
@@ -149,16 +148,19 @@ class TestResolveDeviceCallable:
 
     def test_single_arg(self):
         import inspect
+
         sig = inspect.signature(_resolve_device)
         assert len(sig.parameters) == 1
 
     def test_parameter_name(self):
         import inspect
+
         sig = inspect.signature(_resolve_device)
         assert "device" in sig.parameters
 
     def test_has_return_annotation(self):
         import inspect
+
         sig = inspect.signature(_resolve_device)
         assert sig.return_annotation is not inspect.Parameter.empty or True
 
@@ -169,11 +171,13 @@ class TestHfModelLoaderCallable:
 
     def test_has_two_params(self):
         import inspect
+
         sig = inspect.signature(hf_model_loader)
         assert len(sig.parameters) == 2
 
     def test_param_names(self):
         import inspect
+
         sig = inspect.signature(hf_model_loader)
         params = list(sig.parameters.keys())
         assert "model_id" in params
@@ -181,6 +185,7 @@ class TestHfModelLoaderCallable:
 
     def test_default_device_is_cpu(self):
         import inspect
+
         sig = inspect.signature(hf_model_loader)
         assert sig.parameters["device"].default == "cpu"
 

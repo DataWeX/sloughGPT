@@ -144,16 +144,12 @@ class ComputerUseAgent:
             "timestamp": time.time(),
         }
         self._console_messages.append(entry)
-        self._devtools_log.append(
-            DevToolsEntry(kind="console", timestamp=time.time(), data=entry)
-        )
+        self._devtools_log.append(DevToolsEntry(kind="console", timestamp=time.time(), data=entry))
 
     def _on_page_error(self, error) -> None:
         entry = {"message": str(error), "timestamp": time.time()}
         self._errors.append(entry)
-        self._devtools_log.append(
-            DevToolsEntry(kind="error", timestamp=time.time(), data=entry)
-        )
+        self._devtools_log.append(DevToolsEntry(kind="error", timestamp=time.time(), data=entry))
 
     def _on_request(self, request) -> None:
         entry = {
@@ -208,7 +204,11 @@ class ComputerUseAgent:
             )
         except Exception as exc:
             return NavigationResult(
-                url=self._page.url, status=0, body_length=0, duration_s=time.time() - t0, errors=[str(exc)]
+                url=self._page.url,
+                status=0,
+                body_length=0,
+                duration_s=time.time() - t0,
+                errors=[str(exc)],
             )
 
     # ── Interaction ────────────────────────────────────────────
@@ -219,7 +219,9 @@ class ComputerUseAgent:
             await btn.click(timeout=timeout, force=True)
             return ClickResult(element=name, found=True, duration_s=time.time() - t0)
         except Exception as exc:
-            return ClickResult(element=name, found=False, duration_s=time.time() - t0, error=str(exc))
+            return ClickResult(
+                element=name, found=False, duration_s=time.time() - t0, error=str(exc)
+            )
 
     async def click_link(self, name: str, timeout: int = 5000) -> ClickResult:
         t0 = time.time()
@@ -228,7 +230,9 @@ class ComputerUseAgent:
             await link.click(timeout=timeout)
             return ClickResult(element=name, found=True, duration_s=time.time() - t0)
         except Exception as exc:
-            return ClickResult(element=name, found=False, duration_s=time.time() - t0, error=str(exc))
+            return ClickResult(
+                element=name, found=False, duration_s=time.time() - t0, error=str(exc)
+            )
 
     async def click_selector(self, selector: str, timeout: int = 5000) -> ClickResult:
         t0 = time.time()
@@ -237,7 +241,9 @@ class ComputerUseAgent:
             await el.click(timeout=timeout, force=True)
             return ClickResult(element=selector, found=True, duration_s=time.time() - t0)
         except Exception as exc:
-            return ClickResult(element=selector, found=False, duration_s=time.time() - t0, error=str(exc))
+            return ClickResult(
+                element=selector, found=False, duration_s=time.time() - t0, error=str(exc)
+            )
 
     async def fill_input(self, placeholder: str, value: str) -> FillResult:
         try:
@@ -262,7 +268,9 @@ class ComputerUseAgent:
             await sel.select_option(value)
             return ClickResult(element=label, found=True, duration_s=time.time() - t0)
         except Exception as exc:
-            return ClickResult(element=label, found=False, duration_s=time.time() - t0, error=str(exc))
+            return ClickResult(
+                element=label, found=False, duration_s=time.time() - t0, error=str(exc)
+            )
 
     async def press_key(self, key: str) -> None:
         await self._page.keyboard.press(key)

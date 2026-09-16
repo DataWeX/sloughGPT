@@ -7,8 +7,9 @@ No inheritance. No decorators. Just a device.
 
 from __future__ import annotations
 
-import numpy as np
 from typing import Any
+
+import numpy as np
 
 from .ioctl import IoctlCommand
 from .kernel_syscall import SyscallResult
@@ -30,7 +31,6 @@ class TensorDevice:
             IoctlCommand.INV: self._inv,
             IoctlCommand.SVD: self._svd,
             IoctlCommand.EIG: self._eig,
-
             # Activation functions
             IoctlCommand.RELU: self._relu,
             IoctlCommand.LEAKY_RELU: self._leaky_relu,
@@ -42,7 +42,6 @@ class TensorDevice:
             IoctlCommand.SILU: self._silu,
             IoctlCommand.ELU: self._elu,
             IoctlCommand.SELU: self._selu,
-
             # Arithmetic
             IoctlCommand.ADD: self._add,
             IoctlCommand.SUB: self._sub,
@@ -54,7 +53,6 @@ class TensorDevice:
             IoctlCommand.SQRT: self._sqrt,
             IoctlCommand.EXP: self._exp,
             IoctlCommand.LOG: self._log,
-
             # Reduction
             IoctlCommand.SUM: self._sum,
             IoctlCommand.MEAN: self._mean,
@@ -64,7 +62,6 @@ class TensorDevice:
             IoctlCommand.MIN: self._min,
             IoctlCommand.ARGMAX: self._argmax,
             IoctlCommand.ARGMIN: self._argmin,
-
             # Shape
             IoctlCommand.RESHAPE: self._reshape,
             IoctlCommand.TRANSPOSE: self._transpose,
@@ -73,34 +70,27 @@ class TensorDevice:
             IoctlCommand.UNSQUEEZE: self._unsqueeze,
             IoctlCommand.CAT: self._cat,
             IoctlCommand.STACK: self._stack,
-
             # Convolution
             IoctlCommand.CONV1D: self._conv1d,
             IoctlCommand.CONV2D: self._conv2d,
-
             # Pooling
             IoctlCommand.MAX_POOL1D: self._max_pool1d,
             IoctlCommand.MAX_POOL2D: self._max_pool2d,
             IoctlCommand.AVG_POOL1D: self._avg_pool1d,
             IoctlCommand.AVG_POOL2D: self._avg_pool2d,
-
             # Normalization
             IoctlCommand.BATCH_NORM: self._batch_norm,
             IoctlCommand.LAYER_NORM: self._layer_norm,
             IoctlCommand.RMS_NORM: self._rms_norm,
-
             # Attention
             IoctlCommand.ATTENTION: self._attention,
-
             # Loss functions
             IoctlCommand.CROSS_ENTROPY: self._cross_entropy,
             IoctlCommand.MSE: self._mse,
             IoctlCommand.MAE: self._mae,
-
             # Optimizers
             IoctlCommand.SGD_STEP: self._sgd_step,
             IoctlCommand.ADAM_STEP: self._adam_step,
-
             # Utility
             IoctlCommand.CLIP_GRAD_NORM: self._clip_grad_norm,
             IoctlCommand.DROPOUT: self._dropout,
@@ -399,10 +389,10 @@ class TensorDevice:
         out_channels, _, kernel_size = w.shape
         out_seq = (seq_len + 2 * padding - kernel_size) // stride + 1
         if padding > 0:
-            x = np.pad(x, ((0, 0), (0, 0), (padding, padding)), mode='constant')
+            x = np.pad(x, ((0, 0), (0, 0), (padding, padding)), mode="constant")
         cols = np.zeros((batch, in_channels, kernel_size, out_seq))
         for i in range(kernel_size):
-            cols[:, :, i, :] = x[:, :, i:i + out_seq * stride:stride]
+            cols[:, :, i, :] = x[:, :, i : i + out_seq * stride : stride]
         cols = cols.transpose(0, 3, 1, 2).reshape(batch * out_seq, in_channels * kernel_size)
         w_flat = w.reshape(out_channels, -1)
         out = cols @ w_flat.T
@@ -419,12 +409,16 @@ class TensorDevice:
         h_out = (h + 2 * padding - kh) // stride + 1
         w_out = (w_in + 2 * padding - kw) // stride + 1
         if padding > 0:
-            x = np.pad(x, ((0, 0), (0, 0), (padding, padding), (padding, padding)), mode='constant')
+            x = np.pad(x, ((0, 0), (0, 0), (padding, padding), (padding, padding)), mode="constant")
         cols = np.zeros((batch, in_channels, kh, kw, h_out, w_out))
         for i in range(kh):
             for j in range(kw):
-                cols[:, :, i, j, :, :] = x[:, :, i:i + h_out * stride:stride, j:j + w_out * stride:stride]
-        cols = cols.transpose(0, 4, 5, 1, 2, 3).reshape(batch * h_out * w_out, in_channels * kh * kw)
+                cols[:, :, i, j, :, :] = x[
+                    :, :, i : i + h_out * stride : stride, j : j + w_out * stride : stride
+                ]
+        cols = cols.transpose(0, 4, 5, 1, 2, 3).reshape(
+            batch * h_out * w_out, in_channels * kh * kw
+        )
         w_flat = w.reshape(out_channels, -1)
         out = cols @ w_flat.T
         return out.reshape(batch, h_out, w_out, out_channels).transpose(0, 3, 1, 2)
@@ -437,11 +431,13 @@ class TensorDevice:
         batch, channels, seq_len = x.shape
         out_len = (seq_len + 2 * padding - kernel_size) // stride + 1
         if padding > 0:
-            x = np.pad(x, ((0, 0), (0, 0), (padding, padding)), mode='constant', constant_values=-np.inf)
+            x = np.pad(
+                x, ((0, 0), (0, 0), (padding, padding)), mode="constant", constant_values=-np.inf
+            )
         out = np.zeros((batch, channels, out_len))
         for i in range(out_len):
             start = i * stride
-            out[:, :, i] = np.max(x[:, :, start:start + kernel_size], axis=2)
+            out[:, :, i] = np.max(x[:, :, start : start + kernel_size], axis=2)
         return out
 
     def _max_pool2d(self, *args):
@@ -453,13 +449,21 @@ class TensorDevice:
         h_out = (h + 2 * padding - kernel_size) // stride + 1
         w_out = (w + 2 * padding - kernel_size) // stride + 1
         if padding > 0:
-            x = np.pad(x, ((0, 0), (0, 0), (padding, padding), (padding, padding)), mode='constant', constant_values=-np.inf)
+            x = np.pad(
+                x,
+                ((0, 0), (0, 0), (padding, padding), (padding, padding)),
+                mode="constant",
+                constant_values=-np.inf,
+            )
         out = np.zeros((batch, channels, h_out, w_out))
         for i in range(h_out):
             for j in range(w_out):
                 h_start = i * stride
                 w_start = j * stride
-                out[:, :, i, j] = np.max(x[:, :, h_start:h_start + kernel_size, w_start:w_start + kernel_size], axis=(2, 3))
+                out[:, :, i, j] = np.max(
+                    x[:, :, h_start : h_start + kernel_size, w_start : w_start + kernel_size],
+                    axis=(2, 3),
+                )
         return out
 
     def _avg_pool1d(self, *args):
@@ -470,11 +474,11 @@ class TensorDevice:
         batch, channels, seq_len = x.shape
         out_len = (seq_len + 2 * padding - kernel_size) // stride + 1
         if padding > 0:
-            x = np.pad(x, ((0, 0), (0, 0), (padding, padding)), mode='constant')
+            x = np.pad(x, ((0, 0), (0, 0), (padding, padding)), mode="constant")
         out = np.zeros((batch, channels, out_len))
         for i in range(out_len):
             start = i * stride
-            out[:, :, i] = np.mean(x[:, :, start:start + kernel_size], axis=2)
+            out[:, :, i] = np.mean(x[:, :, start : start + kernel_size], axis=2)
         return out
 
     def _avg_pool2d(self, *args):
@@ -486,13 +490,16 @@ class TensorDevice:
         h_out = (h + 2 * padding - kernel_size) // stride + 1
         w_out = (w + 2 * padding - kernel_size) // stride + 1
         if padding > 0:
-            x = np.pad(x, ((0, 0), (0, 0), (padding, padding), (padding, padding)), mode='constant')
+            x = np.pad(x, ((0, 0), (0, 0), (padding, padding), (padding, padding)), mode="constant")
         out = np.zeros((batch, channels, h_out, w_out))
         for i in range(h_out):
             for j in range(w_out):
                 h_start = i * stride
                 w_start = j * stride
-                out[:, :, i, j] = np.mean(x[:, :, h_start:h_start + kernel_size, w_start:w_start + kernel_size], axis=(2, 3))
+                out[:, :, i, j] = np.mean(
+                    x[:, :, h_start : h_start + kernel_size, w_start : w_start + kernel_size],
+                    axis=(2, 3),
+                )
         return out
 
     def _batch_norm(self, *args):
@@ -522,7 +529,7 @@ class TensorDevice:
         eps = args[2] if len(args) > 2 else 1e-6
         x = self._to_arr(input)
         w = self._to_arr(weight)
-        rms = np.sqrt(np.mean(x ** 2, axis=-1, keepdims=True) + eps)
+        rms = np.sqrt(np.mean(x**2, axis=-1, keepdims=True) + eps)
         return x / rms * w
 
     def _attention(self, *args):
@@ -573,7 +580,7 @@ class TensorDevice:
             g = self._to_arr(grad)
             if state is not None:
                 m = b1 * state.get(f"{name}_m", np.zeros_like(g)) + (1 - b1) * g
-                v = b2 * state.get(f"{name}_v", np.zeros_like(g)) + (1 - b2) * g ** 2
+                v = b2 * state.get(f"{name}_v", np.zeros_like(g)) + (1 - b2) * g**2
                 state[f"{name}_m"] = m
                 state[f"{name}_v"] = v
                 m_hat = m / (1 - b1)
@@ -588,7 +595,7 @@ class TensorDevice:
         total_norm = 0.0
         for g in grads.values():
             arr = self._to_arr(g)
-            total_norm += np.sum(arr ** 2)
+            total_norm += np.sum(arr**2)
         total_norm = np.sqrt(total_norm)
         clip_coef = max_norm / (total_norm + 1e-8)
         if clip_coef < 1:

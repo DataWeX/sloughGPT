@@ -6,10 +6,12 @@ Public API:
 """
 
 from domain.shared._internal.test_framework import (
+    BenchmarkRunner,
     TestFramework,
     TestResult,
     TestSuite,
-    BenchmarkRunner,
+)
+from domain.shared._internal.test_framework import (
     mark_test as test_decorator,
 )
 from domain.shared._internal.utils import (

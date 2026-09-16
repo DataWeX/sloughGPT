@@ -38,27 +38,31 @@ class Permission(IntEnum):
 
 
 _ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
-    Role.USER: frozenset({
-        Permission.FILE_READ,
-        Permission.FILE_WRITE,
-        Permission.FILE_META,
-        Permission.PROCESS_SELF,
-        Permission.PROCESS_SPAWN,
-    }),
-    Role.ADMIN: frozenset({
-        Permission.FILE_READ,
-        Permission.FILE_WRITE,
-        Permission.FILE_META,
-        Permission.PROCESS_SPAWN,
-        Permission.PROCESS_KILL,
-        Permission.PROCESS_SELF,
-        Permission.DEVICE_SERIAL,
-        Permission.DEVICE_MOUSE,
-        Permission.DEVICE_DISK,
-        Permission.DEVICE_RTC,
-        Permission.DEVICE_NET,
-        Permission.TRAINING,
-    }),
+    Role.USER: frozenset(
+        {
+            Permission.FILE_READ,
+            Permission.FILE_WRITE,
+            Permission.FILE_META,
+            Permission.PROCESS_SELF,
+            Permission.PROCESS_SPAWN,
+        }
+    ),
+    Role.ADMIN: frozenset(
+        {
+            Permission.FILE_READ,
+            Permission.FILE_WRITE,
+            Permission.FILE_META,
+            Permission.PROCESS_SPAWN,
+            Permission.PROCESS_KILL,
+            Permission.PROCESS_SELF,
+            Permission.DEVICE_SERIAL,
+            Permission.DEVICE_MOUSE,
+            Permission.DEVICE_DISK,
+            Permission.DEVICE_RTC,
+            Permission.DEVICE_NET,
+            Permission.TRAINING,
+        }
+    ),
     Role.KERNEL: frozenset(Permission),
 }
 

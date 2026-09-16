@@ -6,9 +6,9 @@ Speech-to-text using Web Speech API (browser) with server fallback.
 
 from __future__ import annotations
 
-from typing import Optional, Protocol
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
+from typing import Protocol
 
 logger = logging.getLogger("slo.speech")
 
@@ -16,10 +16,11 @@ logger = logging.getLogger("slo.speech")
 @dataclass
 class TranscriptionResult:
     """Result from speech recognition."""
+
     text: str
     confidence: float
     language: str
-    duration: Optional[float] = None
+    duration: float | None = None
     is_valid: bool = True
 
 
@@ -75,6 +76,7 @@ class ServerSpeechRecognizer:
         """Load an ASR backend if one is installed."""
         try:
             import vosk  # type: ignore  # noqa: F401
+
             self._backend = "vosk"
             logger.info("Loaded vosk ASR backend", extra={"tag": "MODEL"})
             return
@@ -83,6 +85,7 @@ class ServerSpeechRecognizer:
 
         try:
             import speech_recognition as sr  # type: ignore
+
             self._backend = "speech_recognition"
             self._model = sr.Recognizer()
             logger.info("Loaded speech_recognition backend", extra={"tag": "MODEL"})
@@ -113,6 +116,7 @@ class ServerSpeechRecognizer:
         try:
             if self._backend == "speech_recognition":
                 from speech_recognition import AudioData
+
                 audio = AudioData(audio_data, sample_rate=16000, sample_width=2)
                 text = self._model.recognize_google(audio, language=language)
                 return TranscriptionResult(text=text, confidence=0.9, language=language)
@@ -134,7 +138,7 @@ class ServerSpeechRecognizer:
         import os
 
         try:
-            from vosk import Model, KaldiRecognizer
+            from vosk import KaldiRecognizer, Model
         except ImportError:
             return ""
 
@@ -144,7 +148,8 @@ class ServerSpeechRecognizer:
             )
             if not os.path.isdir(model_path):
                 logger.warning(
-                    "vosk model not found at %s (set VOSK_MODEL_PATH)", model_path,
+                    "vosk model not found at %s (set VOSK_MODEL_PATH)",
+                    model_path,
                     extra={"tag": "MODEL"},
                 )
                 return ""

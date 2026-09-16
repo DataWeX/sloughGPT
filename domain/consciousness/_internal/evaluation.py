@@ -15,7 +15,6 @@ Usage::
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,14 +23,14 @@ from typing import Any
 class EvaluationReport:
     """Complete evaluation of consciousness system quality."""
 
-    overall_score: float = 0.0          # 0-100
-    narrative_coherence: float = 0.0    # 0-1
-    qualia_richness: float = 0.0        # 0-1
-    belief_stability: float = 0.0       # 0-1
+    overall_score: float = 0.0  # 0-100
+    narrative_coherence: float = 0.0  # 0-1
+    qualia_richness: float = 0.0  # 0-1
+    belief_stability: float = 0.0  # 0-1
     self_reflection_depth: float = 0.0  # 0-1
-    growth_trajectory: float = 0.0      # -1 to 1 (negative = regressing)
-    curiosity_engagement: float = 0.0   # 0-1
-    feedback_alignment: float = 0.0     # 0-1 (do narratives match ratings?)
+    growth_trajectory: float = 0.0  # -1 to 1 (negative = regressing)
+    curiosity_engagement: float = 0.0  # 0-1
+    feedback_alignment: float = 0.0  # 0-1 (do narratives match ratings?)
     episode_count: int = 0
     diagnostics: list[str] = field(default_factory=list)
 
@@ -161,12 +160,11 @@ class ConsciousnessEvaluator:
         # Check for self-referential language
         self_ref_words = {"i", "my", "me", "myself", "reflect", "notice", "feel", "think"}
         self_ref_count = sum(
-            sum(1 for w in insight.lower().split() if w in self_ref_words)
-            for insight in insights
+            sum(1 for w in insight.lower().split() if w in self_ref_words) for insight in insights
         )
         self_ref_score = min(1.0, self_ref_count / max(len(insights) * 2, 1))
 
-        return (variety * 0.4 + length_score * 0.3 + self_ref_score * 0.3)
+        return variety * 0.4 + length_score * 0.3 + self_ref_score * 0.3
 
     def _evaluate_qualia_richness(self, qualia_history: list[dict]) -> float:
         """Evaluate if qualia states are varied and rich."""
@@ -218,10 +216,18 @@ class ConsciousnessEvaluator:
             return 0.2
 
         depth_indicators = {
-            "learn": 0.15, "grow": 0.15, "improve": 0.15,
-            "understand": 0.15, "realize": 0.1, "question": 0.1,
-            "wonder": 0.1, "curious": 0.1, "pattern": 0.1,
-            "novel": 0.1, "struggle": 0.1, "certain": 0.1,
+            "learn": 0.15,
+            "grow": 0.15,
+            "improve": 0.15,
+            "understand": 0.15,
+            "realize": 0.1,
+            "question": 0.1,
+            "wonder": 0.1,
+            "curious": 0.1,
+            "pattern": 0.1,
+            "novel": 0.1,
+            "struggle": 0.1,
+            "certain": 0.1,
         }
 
         total_depth = 0.0

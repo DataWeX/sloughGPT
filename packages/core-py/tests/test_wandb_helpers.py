@@ -162,16 +162,22 @@ def fake_tracking(monkeypatch):
 class TestCreateTrainingTrackerForApiJob:
     def test_disabled_returns_none(self, tracking_config, monkeypatch):
         tracking_config.tracking.wandb_training_enabled = False
-        assert create_training_tracker_for_api_job(
-            job_id="j1", job_name="n", data_path="p", hyperparams={}
-        ) is None
+        assert (
+            create_training_tracker_for_api_job(
+                job_id="j1", job_name="n", data_path="p", hyperparams={}
+            )
+            is None
+        )
 
     def test_missing_tracking_module_returns_none(self, tracking_config, monkeypatch):
         tracking_config.tracking.wandb_training_enabled = True
         monkeypatch.setitem(sys.modules, "domain.training.tracking", None)
-        assert create_training_tracker_for_api_job(
-            job_id="j1", job_name="n", data_path="p", hyperparams={}
-        ) is None
+        assert (
+            create_training_tracker_for_api_job(
+                job_id="j1", job_name="n", data_path="p", hyperparams={}
+            )
+            is None
+        )
 
     def test_starts_run_and_logs_params(self, tracking_config, fake_tracking):
         tracking_config.tracking.wandb_training_enabled = True
@@ -200,9 +206,12 @@ class TestCreateTrainingTrackerForApiJob:
     def test_init_failure_returns_none(self, tracking_config, fake_tracking):
         tracking_config.tracking.wandb_training_enabled = True
         fake_tracking.ExperimentTracker.side_effect = RuntimeError("no wandb")
-        assert create_training_tracker_for_api_job(
-            job_id="j1", job_name="n", data_path="p", hyperparams={}
-        ) is None
+        assert (
+            create_training_tracker_for_api_job(
+                job_id="j1", job_name="n", data_path="p", hyperparams={}
+            )
+            is None
+        )
 
     def test_run_name_truncated(self, tracking_config, fake_tracking):
         tracking_config.tracking.wandb_training_enabled = True

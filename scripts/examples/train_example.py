@@ -4,11 +4,14 @@ Example: Train a custom SloughGPT model
 """
 
 import sys
+
 sys.path.insert(0, "..")
 
-from domain.models import SloughGPTModel
-from domain.training.performance import get_optimal_device
 import torch
+from domain.training.performance import get_optimal_device
+
+from domain.models import SloughGPTModel
+
 
 def main():
     print("=" * 60)
@@ -18,13 +21,9 @@ def main():
     device = get_optimal_device()
     print(f"\nUsing device: {device}")
 
-    model = SloughGPTModel(
-        vocab_size=1000,
-        n_embed=128,
-        n_layer=4,
-        n_head=4,
-        block_size=64
-    ).to(device)
+    model = SloughGPTModel(vocab_size=1000, n_embed=128, n_layer=4, n_head=4, block_size=64).to(
+        device
+    )
 
     print(f"\nModel parameters: {model.num_parameters:,}")
 
@@ -49,6 +48,7 @@ def main():
 
     print("\nTraining complete!")
     print(f"Final loss: {loss.item():.4f}")
+
 
 if __name__ == "__main__":
     main()

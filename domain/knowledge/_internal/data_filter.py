@@ -14,11 +14,8 @@ keyed by ``_id: "config"``).
 
 from __future__ import annotations
 
-import re
-
-
 import logging
-from typing import Optional
+import re
 from pathlib import Path
 
 logger = logging.getLogger("slo.learner.filter")
@@ -29,14 +26,16 @@ _db = None
 _collection = None
 
 
-def _get_collection(db_path: Optional[str] = None):
+def _get_collection(db_path: str | None = None):
     """Return the ``data_filter_config`` collection, creating it on first call."""
     global _db, _collection
     if _collection is not None:
         return _collection
     from mogdb import MogDB
+
     if db_path is None:
         from domain.shared import find_repo_root
+
         repo = find_repo_root(Path(__file__).resolve())
         db_path = str(repo / "data" / "data_filter_mogdb")
     _db = MogDB(db_path)
@@ -48,6 +47,7 @@ def set_data_filter_db(db_path: str) -> None:
     """Replace the module-level collection (for tests)."""
     global _db, _collection
     from mogdb import MogDB
+
     _db = MogDB(db_path)
     _collection = _db.collection("data_filter_config")
 
@@ -73,8 +73,17 @@ DEFAULT_CONFIG = {
     "topic_whitelist": [],
     # Topic blacklist. Content matching these topics is rejected.
     "topic_blacklist": [
-        "porn", "xxx", "adult", "nsfw", "gambling", "casino",
-        "crack", "warez", "hack", "cheat", "botnet",
+        "porn",
+        "xxx",
+        "adult",
+        "nsfw",
+        "gambling",
+        "casino",
+        "crack",
+        "warez",
+        "hack",
+        "cheat",
+        "botnet",
     ],
     # If True, whitelist acts as a hard gate (no whitelist = nothing passes).
     "whitelist_is_hard_gate": False,
@@ -87,10 +96,26 @@ DEFAULT_CONFIG = {
 # ─── Quality heuristics ─────────────────────────────────────────────────────
 
 _TOXIC_WORDS = {
-    "porn", "xxx", "adult", "nsfw", "gambling", "casino",
-    "crack", "warez", "hackz", "botnet", "milf", "teen",
-    "viagra", "cialis", "casino", "free money", "click here",
-    "buy now", "act now", "limited offer", "congratulations you won",
+    "porn",
+    "xxx",
+    "adult",
+    "nsfw",
+    "gambling",
+    "casino",
+    "crack",
+    "warez",
+    "hackz",
+    "botnet",
+    "milf",
+    "teen",
+    "viagra",
+    "cialis",
+    "free money",
+    "click here",
+    "buy now",
+    "act now",
+    "limited offer",
+    "congratulations you won",
 }
 
 
@@ -107,7 +132,7 @@ def _score_quality(text: str) -> float:
     scores = []
 
     # 1. Sentence count (≥3 sentences is good)
-    sentences = len(re.findall(r'[.!?]+', text))
+    sentences = len(re.findall(r"[.!?]+", text))
     scores.append(min(1.0, sentences / 8))
 
     # 2. Average word length (3-8 chars is normal prose)
@@ -132,7 +157,7 @@ def _score_quality(text: str) -> float:
         scores.append(0.0)
 
     # 4. Punctuation variety (.,!?;: — more variety = better writing)
-    punct = sum(1 for c in text if c in '.,!?;:-')
+    punct = sum(1 for c in text if c in ".,!?;:-")
     punct_ratio = punct / max(1, len(text))
     if 0.03 <= punct_ratio <= 0.15:
         scores.append(1.0)
@@ -143,7 +168,7 @@ def _score_quality(text: str) -> float:
 
     # 5. Unique word ratio (>50% unique is good)
     if words:
-        unique_ratio = len(set(w.lower() for w in words)) / len(words)
+        unique_ratio = len({w.lower() for w in words}) / len(words)
         if unique_ratio > 0.5:
             scores.append(1.0)
         elif unique_ratio > 0.3:
@@ -152,7 +177,7 @@ def _score_quality(text: str) -> float:
             scores.append(0.2)
 
     # 6. Penalize excessive short lines (listicles, nav menus)
-    lines = text.split('\n')
+    lines = text.split("\n")
     short_lines = sum(1 for l in lines if 0 < len(l.strip()) < 20)
     if lines and short_lines / max(1, len(lines)) > 0.5:
         scores.append(0.2)
@@ -199,6 +224,7 @@ def _matches_whitelist(text: str, whitelist: list[str]) -> bool:
 
 # ─── Config ─────────────────────────────────────────────────────────────────
 
+
 def _load_config() -> dict:
     """Load filter config from MogDB."""
     col = _get_collection()
@@ -227,6 +253,7 @@ def _save_config(cfg: dict):
 
 # ─── Filter ─────────────────────────────────────────────────────────────────
 
+
 class DataFilter:
     """Quality gate for ingested content.
 
@@ -240,7 +267,7 @@ class DataFilter:
     Stats tracked: total_seen, passed, rejected (by reason).
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         self.config = _load_config()
         if config:
             self.config.update(config)
@@ -272,7 +299,7 @@ class DataFilter:
         url: str,
         title: str,
         content: str,
-        existing_facts: Optional[list[str]] = None,
+        existing_facts: list[str] | None = None,
     ) -> tuple[bool, str]:
         """Run all filters on an article. Returns (pass: bool, reason: str).
 
@@ -358,7 +385,7 @@ class DataFilter:
 
 
 # Global singleton
-_filter: Optional[DataFilter] = None
+_filter: DataFilter | None = None
 
 
 def get_data_filter() -> DataFilter:

@@ -13,7 +13,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Protocol
+from typing import Protocol
 
 from .point import Point
 
@@ -22,10 +22,11 @@ logger = logging.getLogger("slo.pugqeep")
 
 class Store(Protocol):
     """Protocol for function stores."""
+
     def save(self, point: Point) -> None: ...
-    def load(self, identity: str) -> Optional[Point]: ...
+    def load(self, identity: str) -> Point | None: ...
     def remove(self, identity: str) -> bool: ...
-    def list_all(self) -> List[Point]: ...
+    def list_all(self) -> list[Point]: ...
     def clear(self) -> None: ...
     def count(self) -> int: ...
 
@@ -34,18 +35,18 @@ class MemoryStore:
     """In-memory store. Fast, no persistence."""
 
     def __init__(self):
-        self._points: Dict[str, Point] = {}
+        self._points: dict[str, Point] = {}
 
     def save(self, point: Point) -> None:
         self._points[point.identity] = point
 
-    def load(self, identity: str) -> Optional[Point]:
+    def load(self, identity: str) -> Point | None:
         return self._points.get(identity)
 
     def remove(self, identity: str) -> bool:
         return self._points.pop(identity, None) is not None
 
-    def list_all(self) -> List[Point]:
+    def list_all(self) -> list[Point]:
         return list(self._points.values())
 
     def clear(self) -> None:
@@ -60,7 +61,7 @@ class JSONStore:
 
     def __init__(self, path: Path):
         self._path = path
-        self._points: Dict[str, Point] = {}
+        self._points: dict[str, Point] = {}
         self._load()
 
     def _load(self) -> None:
@@ -82,7 +83,7 @@ class JSONStore:
         self._points[point.identity] = point
         self._save()
 
-    def load(self, identity: str) -> Optional[Point]:
+    def load(self, identity: str) -> Point | None:
         return self._points.get(identity)
 
     def remove(self, identity: str) -> bool:
@@ -91,7 +92,7 @@ class JSONStore:
             return True
         return False
 
-    def list_all(self) -> List[Point]:
+    def list_all(self) -> list[Point]:
         return list(self._points.values())
 
     def clear(self) -> None:
@@ -117,7 +118,7 @@ class DirectoryStore:
         path = self._point_path(point.identity)
         path.write_text(json.dumps(point.to_dict(), indent=2))
 
-    def load(self, identity: str) -> Optional[Point]:
+    def load(self, identity: str) -> Point | None:
         path = self._point_path(identity)
         if not path.exists():
             return None
@@ -130,7 +131,7 @@ class DirectoryStore:
             return True
         return False
 
-    def list_all(self) -> List[Point]:
+    def list_all(self) -> list[Point]:
         points = []
         for f in sorted(self._dir.glob("*.point.json")):
             points.append(Point.from_dict(json.loads(f.read_text())))

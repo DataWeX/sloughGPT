@@ -1,11 +1,10 @@
 """Meaningful tests for RelationshipMemory, BM25Indexer, HybridRetriever."""
 
-import time
+from domain.cognitive._internal.rag import BM25Indexer, HybridRetriever, TextChunk
 from domain.soul._internal.cognitive import RelationshipMemory
-from domain.cognitive._internal.rag import BM25Indexer, HybridRetriever, TextChunk, RetrievalResult
-
 
 # ── RelationshipMemory ────────────────────────────────────────────────
+
 
 class TestRelationshipMemoryProfile:
     def test_get_creates_profile(self):
@@ -41,7 +40,9 @@ class TestRelationshipMemoryUpdate:
 
     def test_update_tracks_topics(self):
         rm = RelationshipMemory()
-        rm.update_from_interaction("u1", "quantum computing is fascinating", "tell me more", 0.5, "neutral")
+        rm.update_from_interaction(
+            "u1", "quantum computing is fascinating", "tell me more", 0.5, "neutral"
+        )
         profile = rm.get_user_profile("u1")
         # "quantum" is 6 chars, should be tracked
         topics = dict(profile["topics_of_interest"])
@@ -49,14 +50,14 @@ class TestRelationshipMemoryUpdate:
 
     def test_update_mood_history_capped(self):
         rm = RelationshipMemory()
-        for i in range(60):
+        for _i in range(60):
             rm.update_from_interaction("u1", "msg", "resp", 0.5, "neutral")
         profile = rm.get_user_profile("u1")
         assert len(profile["mood_history"]) == 50
 
     def test_update_interaction_history_capped(self):
         rm = RelationshipMemory()
-        for i in range(110):
+        for _i in range(110):
             rm.update_from_interaction("u1", "msg", "resp", 0.5, "neutral")
         assert len(rm.interaction_history["u1"]) == 100
 
@@ -106,6 +107,7 @@ class TestRelationshipMemorySummary:
 
 # ── BM25Indexer ───────────────────────────────────────────────────────
 
+
 class TestBM25Indexer:
     def test_index(self):
         bm25 = BM25Indexer()
@@ -151,11 +153,26 @@ class TestBM25Indexer:
 
 # ── HybridRetriever ───────────────────────────────────────────────────
 
+
 class TestHybridRetriever:
     def test_add_and_retrieve(self):
         hr = HybridRetriever()
-        hr.add_chunk(TextChunk(id="c1", content="Python is a programming language", metadata={"source": "wiki"}, embedding=None))
-        hr.add_chunk(TextChunk(id="c2", content="Java is also a language", metadata={"source": "wiki"}, embedding=None))
+        hr.add_chunk(
+            TextChunk(
+                id="c1",
+                content="Python is a programming language",
+                metadata={"source": "wiki"},
+                embedding=None,
+            )
+        )
+        hr.add_chunk(
+            TextChunk(
+                id="c2",
+                content="Java is also a language",
+                metadata={"source": "wiki"},
+                embedding=None,
+            )
+        )
         hr.build_index()
         results = hr.retrieve("Python programming", top_k=2)
         assert len(results) >= 1
@@ -172,7 +189,11 @@ class TestHybridRetriever:
     def test_retrieve_top_k(self):
         hr = HybridRetriever()
         for i in range(10):
-            hr.add_chunk(TextChunk(id=f"c{i}", content=f"Document {i} about Python", metadata={}, embedding=None))
+            hr.add_chunk(
+                TextChunk(
+                    id=f"c{i}", content=f"Document {i} about Python", metadata={}, embedding=None
+                )
+            )
         hr.build_index()
         results = hr.retrieve("Python", top_k=3)
         assert len(results) <= 3

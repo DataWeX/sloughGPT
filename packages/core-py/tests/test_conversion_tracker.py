@@ -34,8 +34,9 @@ class TestConversionStatus:
         assert s.message == ""
 
     def test_to_dict(self):
-        s = ConversionStatus(model_id="gpt2", stage=ConversionStage.CONVERTING,
-                             progress=0.5, message="half")
+        s = ConversionStatus(
+            model_id="gpt2", stage=ConversionStage.CONVERTING, progress=0.5, message="half"
+        )
         d = s.to_dict()
         assert d["model_id"] == "gpt2"
         assert d["stage"] == "converting"
@@ -180,9 +181,13 @@ class TestConversionTrackerGet:
 
     def test_get_active_includes_all_mid_stages(self):
         t = ConversionTracker()
-        for stage in (ConversionStage.IDLE, ConversionStage.DOWNLOADING,
-                      ConversionStage.CONVERTING, ConversionStage.PROTECTING,
-                      ConversionStage.LOADING):
+        for stage in (
+            ConversionStage.IDLE,
+            ConversionStage.DOWNLOADING,
+            ConversionStage.CONVERTING,
+            ConversionStage.PROTECTING,
+            ConversionStage.LOADING,
+        ):
             t.start(stage.value, stage=stage)
         assert len(t.get_active()) == 5
 

@@ -4,10 +4,12 @@ Supplementary tests for Shell Init System — subprocess lifecycle, respawn, use
 
 import json
 import logging
-import pytest
+
 import domain.shell._internal.init as init_mod
 from domain.shell._internal.init import (
-    ServiceDef, ServiceManager, InitSystem,
+    InitSystem,
+    ServiceDef,
+    ServiceManager,
 )
 
 
@@ -69,6 +71,7 @@ class TestServiceManagerStart:
     def test_start_process_exception(self, monkeypatch):
         def boom(*a, **k):
             raise OSError("spawn failed")
+
         monkeypatch.setattr(init_mod.subprocess, "Popen", boom)
         m = ServiceManager(ServiceDef(name="worker", command="sleep 100", builtin=False))
         assert m.start() is False
@@ -83,8 +86,7 @@ class TestWaitUntilHealthy:
 
     def test_health_check_success(self, monkeypatch):
         calls = []
-        monkeypatch.setattr(init_mod.subprocess, "run",
-                           lambda *a, **k: calls.append(True) or None)
+        monkeypatch.setattr(init_mod.subprocess, "run", lambda *a, **k: calls.append(True) or None)
         m = ServiceManager(ServiceDef(name="x", builtin=False, health_check="curl health"))
         assert m.wait_until_healthy() is True
         assert m.instance.state == "running"
@@ -93,6 +95,7 @@ class TestWaitUntilHealthy:
     def test_health_check_failure(self, monkeypatch):
         def boom(*a, **k):
             raise FileNotFoundError("no curl")
+
         monkeypatch.setattr(init_mod.subprocess, "run", boom)
         m = ServiceManager(ServiceDef(name="x", builtin=False, health_check="curl health"))
         assert m.wait_until_healthy() is False
@@ -136,8 +139,10 @@ class TestStop:
 
     def test_stop_kill_raises_again(self, monkeypatch):
         fake = FakeProc(pid=5, poll_result=None, wait_raises=TimeoutError("wait"))
+
         def kill_boom():
             raise OSError("kill failed")
+
         fake.kill = kill_boom
         _patch_proc(monkeypatch, fake)
         monkeypatch.setattr(init_mod.os, "getpgid", lambda pid: 1234)
@@ -191,16 +196,18 @@ class TestWait:
     def test_wait_respawn(self, monkeypatch):
         monkeypatch.setattr(init_mod.time, "sleep", lambda s: None)
         _patch_proc(monkeypatch)
-        m = ServiceManager(ServiceDef(name="x", command="sleep 1", builtin=False,
-                                      respawn=True, max_respawns=3))
+        m = ServiceManager(
+            ServiceDef(name="x", command="sleep 1", builtin=False, respawn=True, max_respawns=3)
+        )
         m.instance.process = FakeProc(pid=5)
         m._wait()
         assert m.instance.respawn_count == 1
         assert any("respawn" in line for line in m.instance.log)
 
     def test_wait_max_respawns(self, monkeypatch):
-        m = ServiceManager(ServiceDef(name="x", command="sleep 1", builtin=False,
-                                      respawn=True, max_respawns=1))
+        m = ServiceManager(
+            ServiceDef(name="x", command="sleep 1", builtin=False, respawn=True, max_respawns=1)
+        )
         m.instance.process = FakeProc(pid=5)
         m.instance.respawn_count = 1
         m._wait()
@@ -295,8 +302,16 @@ class TestBootBranches:
         monkeypatch.setattr(init_mod.time, "sleep", lambda s: None)
         _patch_proc(monkeypatch)
         monkeypatch.setattr(init_mod.subprocess, "run", lambda *a, **k: None)
-        svc = ServiceManager(ServiceDef(name="db", runlevel=1, command="sleep 1", builtin=False,
-                                        health_check="echo ok", description="db service"))
+        svc = ServiceManager(
+            ServiceDef(
+                name="db",
+                runlevel=1,
+                command="sleep 1",
+                builtin=False,
+                health_check="echo ok",
+                description="db service",
+            )
+        )
         system = _bare_init()
         system._managers = {"db": svc}
         out = system.boot(target_runlevel=1)
@@ -309,12 +324,21 @@ class TestBootBranches:
 
         def boom(*a, **k):
             raise RuntimeError("unhealthy")
+
         monkeypatch.setattr(init_mod.subprocess, "run", boom)
-        svc = ServiceManager(ServiceDef(name="db", runlevel=1, command="sleep 1", builtin=False,
-                                        health_check="echo ok", timeout=0.01))
+        svc = ServiceManager(
+            ServiceDef(
+                name="db",
+                runlevel=1,
+                command="sleep 1",
+                builtin=False,
+                health_check="echo ok",
+                timeout=0.01,
+            )
+        )
         system = _bare_init()
         system._managers = {"db": svc}
-        out = system.boot(target_runlevel=1)
+        system.boot(target_runlevel=1)
         assert svc.instance.state == "failed"
 
     def test_boot_health_check_breaks_on_failed(self, monkeypatch):
@@ -323,13 +347,22 @@ class TestBootBranches:
 
         def boom(*a, **k):
             raise RuntimeError("unhealthy")
+
         monkeypatch.setattr(init_mod.subprocess, "run", boom)
-        svc = ServiceManager(ServiceDef(name="db", runlevel=1, command="sleep 1", builtin=False,
-                                        health_check="echo ok", timeout=10.0))
-        svc.wait_until_healthy = lambda: (setattr(svc.instance, "state", "failed") or False)
+        svc = ServiceManager(
+            ServiceDef(
+                name="db",
+                runlevel=1,
+                command="sleep 1",
+                builtin=False,
+                health_check="echo ok",
+                timeout=10.0,
+            )
+        )
+        svc.wait_until_healthy = lambda: setattr(svc.instance, "state", "failed") or False
         system = _bare_init()
         system._managers = {"db": svc}
-        out = system.boot(target_runlevel=1)
+        system.boot(target_runlevel=1)
         assert svc.instance.state == "failed"
 
 

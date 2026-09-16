@@ -1,14 +1,12 @@
 """Tests for domain.cognitive._internal.grounding — HierarchicalContext, CurriculumLearner, RAGGrounder, KnowledgeGrounding, GroundingOrchestrator."""
 
 from domain.cognitive._internal.grounding import (
-    HierarchicalContext,
     CurriculumLearner,
-    RAGGrounder,
     Document,
-    KnowledgeGrounding,
-    KnowledgeNode,
-    KnowledgeEdge,
     GroundingOrchestrator,
+    HierarchicalContext,
+    KnowledgeGrounding,
+    RAGGrounder,
 )
 
 
@@ -220,6 +218,7 @@ class TestRAGGrounder:
 
     def test_retrieve(self):
         import asyncio
+
         rag = RAGGrounder()
         rag.add_text("machine learning is great", source="test")
         results = asyncio.run(rag.retrieve("machine learning", top_k=5))
@@ -227,6 +226,7 @@ class TestRAGGrounder:
 
     def test_retrieve_empty(self):
         import asyncio
+
         rag = RAGGrounder()
         results = asyncio.run(rag.retrieve("query", top_k=5))
         assert results == []

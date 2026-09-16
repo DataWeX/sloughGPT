@@ -4,11 +4,17 @@ Tests for Data Repository (repository.py).
 
 import json
 import time
-import pytest
 from dataclasses import dataclass
+
+import pytest
+
 from domain.infrastructure._internal.repository import (
-    FileRepository, MemoryRepository, CachedRepository,
-    Migration, MigrationRunner, JsonSerializer,
+    CachedRepository,
+    FileRepository,
+    JsonSerializer,
+    MemoryRepository,
+    Migration,
+    MigrationRunner,
 )
 
 
@@ -47,11 +53,13 @@ class TestJsonSerializer:
         class _M:
             def model_dump(self):
                 return {"a": 1}
+
         s = JsonSerializer[_M](_M)
         assert s.serialize(_M()) == {"a": 1}
 
     def test_namedtuple_serialize(self):
         from collections import namedtuple
+
         Point = namedtuple("Point", "x y")
         s = JsonSerializer[Point](Point)
         assert s.serialize(Point(1, 2)) == {"x": 1, "y": 2}
@@ -69,6 +77,7 @@ class TestJsonSerializer:
             @classmethod
             def model_validate(cls, data):
                 return cls(data)
+
         s = JsonSerializer[_M](_M)
         m = s.deserialize({"a": 1})
         assert m.data == {"a": 1}
@@ -122,6 +131,7 @@ class TestMigrationRunner:
 
         def boom(d):
             raise RuntimeError("migration failed")
+
         r.add(Migration(1, "boom", boom))
         with pytest.raises(RuntimeError, match="migration failed"):
             r.run({"key": "val"})
@@ -253,6 +263,7 @@ class TestFileRepository:
 
             def deserialize(self, data):
                 return data["value"]
+
         repo = FileRepository(tmp_path, serializer=_Ser())
         assert repo.save("k", 42) is True
         assert repo.get("k") == 42
@@ -307,6 +318,7 @@ class TestFileRepository:
 
             def deserialize(self, data):
                 return data
+
         repo = FileRepository(tmp_path, serializer=_BoomSer())
         assert repo.save("x", object()) is False
 

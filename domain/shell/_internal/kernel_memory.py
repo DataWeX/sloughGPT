@@ -9,14 +9,16 @@ handles defragmentation.
 from __future__ import annotations
 
 import threading
-import numpy as np
 from dataclasses import dataclass
 from typing import Any
+
+import numpy as np
 
 
 @dataclass
 class MemoryBlock:
     """A contiguous allocation of tensor memory."""
+
     block_id: int
     shape: tuple[int, ...]
     dtype: str
@@ -73,8 +75,9 @@ class TensorMemory:
         with self._lock:
             return self._used / self._capacity if self._capacity > 0 else 0.0
 
-    def allocate(self, shape: tuple[int, ...], dtype: str = "float32",
-                 owner_pid: int | None = None) -> MemoryBlock:
+    def allocate(
+        self, shape: tuple[int, ...], dtype: str = "float32", owner_pid: int | None = None
+    ) -> MemoryBlock:
         """
         Allocate a tensor block of given shape and dtype.
 

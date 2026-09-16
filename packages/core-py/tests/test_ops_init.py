@@ -22,30 +22,28 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 _CORE_PY = Path(__file__).resolve().parents[1]
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
 from domain.ops import (
+    ChunkedOperation,
+    FusedAttentionBias,
+    FusedCrossEntropyLoss,
     FusedLayerNorm,
     FusedRMSNorm,
-    FusedCrossEntropyLoss,
-    FusedAttentionBias,
-    ChunkedOperation,
-    MemoryEfficientSoftmax,
     FusedScaleBias,
+    MemoryEfficientSoftmax,
     OptimizedEmbedding,
-    fused_swiglu,
-    efficient_cross_entropy,
     chunked_matmul,
-    ragged_to_padded,
+    efficient_cross_entropy,
     estimate_attention_memory,
-    silu,
+    fused_swiglu,
     gelu,
+    ragged_to_padded,
+    silu,
 )
-
 
 # ── FusedLayerNorm ────────────────────────────────────────────────────
 
@@ -100,7 +98,7 @@ class TestFusedRMSNorm:
         x = np.random.randn(4, 32).astype(np.float32) * 5
         y = norm(x)
         # RMS of each row should be ~1 (since weight=1)
-        rms_vals = np.sqrt(np.mean(y ** 2, axis=-1))
+        rms_vals = np.sqrt(np.mean(y**2, axis=-1))
         np.testing.assert_allclose(rms_vals, 1.0, atol=0.1)
 
     def test_float64_input(self):
@@ -234,7 +232,7 @@ class TestMemoryEfficientSoftmax:
 
     def test_unstable_large(self):
         logits = np.array([[1000.0, 1001.0, 1002.0]], dtype=np.float32)
-        result = MemoryEfficientSoftmax.forward(logits, stable=False)
+        MemoryEfficientSoftmax.forward(logits, stable=False)
         # May produce NaN/Inf for very large logits without stabilization
         # Just check it doesn't crash
 
@@ -381,12 +379,12 @@ class TestRaggedToPadded:
 class TestEstimateAttentionMemory:
     def test_formula(self):
         mem = estimate_attention_memory(2, 128, 8, 64, precision_bytes=2)
-        expected = 2 * 8 * 128 * 128 * 2 / (1024 ** 2)
+        expected = 2 * 8 * 128 * 128 * 2 / (1024**2)
         assert abs(mem - expected) < 1e-10
 
     def test_single_head(self):
         mem = estimate_attention_memory(1, 64, 1, 32, precision_bytes=4)
-        expected = 1 * 1 * 64 * 64 * 4 / (1024 ** 2)
+        expected = 1 * 1 * 64 * 64 * 4 / (1024**2)
         assert abs(mem - expected) < 1e-10
 
 

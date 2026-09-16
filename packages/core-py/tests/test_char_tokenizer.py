@@ -3,6 +3,7 @@
 Covers: vocab building, encode/decode round-trip, special tokens, save/load,
 pad_to, unknown character handling, vocab_size property.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,10 +18,10 @@ if _core_dir not in sys.path:
 
 from domain.multimodal._internal.char_tokenizer import CharTokenizer
 
-
 # ---------------------------------------------------------------------------
 # Vocab Building
 # ---------------------------------------------------------------------------
+
 
 class TestBuildVocab:
     def test_build_vocab(self):
@@ -111,6 +112,7 @@ class TestBuildVocab:
 # ---------------------------------------------------------------------------
 # Encoding
 # ---------------------------------------------------------------------------
+
 
 class TestEncode:
     def test_encode_bos_eos(self):
@@ -216,6 +218,7 @@ class TestEncode:
 # Decoding
 # ---------------------------------------------------------------------------
 
+
 class TestDecode:
     def test_decode_strips_special_tokens(self):
         tok = CharTokenizer()
@@ -290,6 +293,7 @@ class TestDecode:
 # Encode/Decode Roundtrip
 # ---------------------------------------------------------------------------
 
+
 class TestRoundtrip:
     def test_encode_decode_roundtrip(self):
         tok = CharTokenizer()
@@ -343,6 +347,7 @@ class TestRoundtrip:
 # vocab_size Property
 # ---------------------------------------------------------------------------
 
+
 class TestVocabSize:
     def test_vocab_size(self):
         tok = CharTokenizer()
@@ -383,6 +388,7 @@ class TestVocabSize:
 # ---------------------------------------------------------------------------
 # Save/Load
 # ---------------------------------------------------------------------------
+
 
 class TestSaveLoad:
     def test_save_and_load(self, tmp_path):
@@ -499,6 +505,7 @@ class TestSaveLoad:
 # pad_to
 # ---------------------------------------------------------------------------
 
+
 class TestPadTo:
     def test_pad_to(self):
         tok = CharTokenizer(pad_to=20)
@@ -531,6 +538,7 @@ class TestPadTo:
 # Special Tokens
 # ---------------------------------------------------------------------------
 
+
 class TestSpecialTokens:
     def test_special_tokens(self):
         assert CharTokenizer.SPECIAL_TOKENS == ["<BOS>", "<EOS>", "<PAD>", "<UNK>"]
@@ -559,6 +567,7 @@ class TestSpecialTokens:
 # ---------------------------------------------------------------------------
 # Edge Cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     def test_build_vocab_then_rebuild(self):

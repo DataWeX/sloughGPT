@@ -39,12 +39,16 @@ from domain.shell._internal.simulation import (
 )
 
 
-def _baby(params: WorldParams, energy: float, position,
-          group_id: int = 0, role_bias: float = -10.0) -> SimBaby:
+def _baby(
+    params: WorldParams, energy: float, position, group_id: int = 0, role_bias: float = -10.0
+) -> SimBaby:
     """A baby with all decision gates pinned off and a fixed role posture."""
-    b = SimBaby(initial_energy=energy,
-                position=np.array(position, dtype=np.float64),
-                params=params, group_id=group_id)
+    b = SimBaby(
+        initial_energy=energy,
+        position=np.array(position, dtype=np.float64),
+        params=params,
+        group_id=group_id,
+    )
     b.perceptron_cells.W[:] = 0.0
     b.perceptron_cells.b[:] = -10.0
     b.perceptron_body.W[:] = 0.0
@@ -64,33 +68,43 @@ def _baby(params: WorldParams, energy: float, position,
     return b
 
 
-def _builder(params: WorldParams, energy: float = 200.0,
-             position=(4.0, 1.0, 4.0), group_id: int = 0) -> SimBaby:
+def _builder(
+    params: WorldParams, energy: float = 200.0, position=(4.0, 1.0, 4.0), group_id: int = 0
+) -> SimBaby:
     """A baby whose role gate is pinned far below the threshold (Builder)."""
-    return _baby(params, energy, position, group_id=group_id,
-                 role_bias=-10.0)
+    return _baby(params, energy, position, group_id=group_id, role_bias=-10.0)
 
 
-def _warrior(params: WorldParams, energy: float = 200.0,
-             position=(4.0, 1.0, 4.0), group_id: int = 0) -> SimBaby:
+def _warrior(
+    params: WorldParams, energy: float = 200.0, position=(4.0, 1.0, 4.0), group_id: int = 0
+) -> SimBaby:
     """A baby whose role gate is pinned far above the threshold (Warrior)."""
-    return _baby(params, energy, position, group_id=group_id,
-                 role_bias=10.0)
+    return _baby(params, energy, position, group_id=group_id, role_bias=10.0)
 
 
 def _params(**kw) -> WorldParams:
-    base = dict(grid_size=(8, 4, 8), specialization_enabled=True,
-                structure_enabled=True, social_enabled=False,
-                message_enabled=False, teaching_enabled=False,
-                predation_enabled=False, territoriality_enabled=False,
-                lifecycle_enabled=False)
+    base = {
+        "grid_size": (8, 4, 8),
+        "specialization_enabled": True,
+        "structure_enabled": True,
+        "social_enabled": False,
+        "message_enabled": False,
+        "teaching_enabled": False,
+        "predation_enabled": False,
+        "territoriality_enabled": False,
+        "lifecycle_enabled": False,
+    }
     base.update(kw)
     return WorldParams(**base)
 
 
 def _nest(position, group_id: int = 0, stored_energy: float = 100.0) -> Nest:
-    return Nest(id=1, position=np.array(position, dtype=np.float64),
-                stored_energy=stored_energy, owner_group_id=group_id)
+    return Nest(
+        id=1,
+        position=np.array(position, dtype=np.float64),
+        stored_energy=stored_energy,
+        owner_group_id=group_id,
+    )
 
 
 class TestRoleBrain:
@@ -103,7 +117,8 @@ class TestRoleBrain:
         on = SimBaby(params=_params())
         assert on.perceptron_role is not None
         assert on.perceptron_role.W.shape == (
-            _params().body_input_dim, 1,
+            _params().body_input_dim,
+            1,
         )
 
     def test_gate_below_threshold_is_builder(self):
@@ -187,8 +202,7 @@ class TestDepositScene:
         scene.add_baby(b)
         before = b.energy + nest.stored_energy
         moved = scene.deposit_nest(b)
-        assert moved == pytest.approx(
-            (200.0 - params.start_energy) * params.role_deposit_fraction)
+        assert moved == pytest.approx((200.0 - params.start_energy) * params.role_deposit_fraction)
         assert nest.stored_energy == pytest.approx(110.0)
         assert b.energy == pytest.approx(190.0)
         assert b.energy + nest.stored_energy == pytest.approx(before)
@@ -204,8 +218,7 @@ class TestDepositScene:
         b = _builder(params, 200.0, (4.0, 1.0, 4.0), group_id=0)
         scene.add_baby(b)
         assert scene.deposit_nest(b) == 0.0
-        assert all(n.stored_energy == pytest.approx(100.0)
-                   for n in scene.nests)
+        assert all(n.stored_energy == pytest.approx(100.0) for n in scene.nests)
 
     def test_deposit_keeps_start_energy_buffer(self):
         # The bank is capped at the surplus: a baby can never bank below its
@@ -243,8 +256,7 @@ class TestRaidScene:
         b = _warrior(params, 200.0, (4.0, 1.0, 4.0), group_id=0)
         scene.add_baby(b)
         assert scene.role_raid(b) == 0.0
-        assert all(n.stored_energy == pytest.approx(100.0)
-                   for n in scene.nests)
+        assert all(n.stored_energy == pytest.approx(100.0) for n in scene.nests)
 
     def test_raid_transfers_capped_by_rate_conservation_safe(self):
         # The steal is role_raid_fraction of the owner's draw rate, moved
@@ -258,8 +270,7 @@ class TestRaidScene:
         scene.add_baby(b)
         before = b.energy + nest.stored_energy
         steal = scene.role_raid(b)
-        assert steal == pytest.approx(
-            params.nest_draw_rate * params.role_raid_fraction)
+        assert steal == pytest.approx(params.nest_draw_rate * params.role_raid_fraction)
         assert nest.stored_energy == pytest.approx(100.0 - steal)
         assert b.energy == pytest.approx(200.0 + steal)
         assert b.energy + nest.stored_energy == pytest.approx(before)
@@ -321,10 +332,12 @@ class TestSpecializationSimulation:
         raid = [r for r in sim._tick_log if r.get("role_raided", 0.0) > 0.0]
         assert sim.summary()["role_deposits"] == len(dep)
         assert sim.summary()["role_deposit_energy"] == pytest.approx(
-            sum(r["role_deposited"] for r in dep))
+            sum(r["role_deposited"] for r in dep)
+        )
         assert sim.summary()["role_raids"] == len(raid)
         assert sim.summary()["role_raid_energy"] == pytest.approx(
-            sum(r["role_raided"] for r in raid))
+            sum(r["role_raided"] for r in raid)
+        )
 
     def test_serialization_roundtrip_preserves_role_brain(self):
         params = _params()
@@ -349,16 +362,26 @@ class TestSpecializationSimulation:
             sim = Simulation(scene, max_ticks=2)
             sim.run()
             s = sim.summary()
-            outs.append((s["role_deposits"], s["role_deposit_energy"],
-                         s["role_raids"], s["role_raid_energy"]))
+            outs.append(
+                (
+                    s["role_deposits"],
+                    s["role_deposit_energy"],
+                    s["role_raids"],
+                    s["role_raid_energy"],
+                )
+            )
         assert outs[0] == outs[1]
 
 
 class TestSpecializationEvolution:
     @staticmethod
     def _params(**kw) -> WorldParams:
-        base = dict(grid_size=(16, 8, 16), specialization_enabled=True,
-                    teaching_enabled=False, memory_enabled=False)
+        base = {
+            "grid_size": (16, 8, 16),
+            "specialization_enabled": True,
+            "teaching_enabled": False,
+            "memory_enabled": False,
+        }
         base.update(kw)
         return WorldParams(**base)
 
@@ -389,24 +412,30 @@ class TestSpecializationEvolution:
         g_off = Genome.random(off, np.random.default_rng(9), group_id=0)
         g_on = Genome.random(on, np.random.default_rng(9), group_id=0)
         for name in ("cells", "body", "entity", "move"):
-            assert np.allclose(g_off.tensors[f"{name}.W"],
-                               g_on.tensors[f"{name}.W"])
-            assert np.allclose(g_off.tensors[f"{name}.b"],
-                               g_on.tensors[f"{name}.b"])
+            assert np.allclose(g_off.tensors[f"{name}.W"], g_on.tensors[f"{name}.W"])
+            assert np.allclose(g_off.tensors[f"{name}.b"], g_on.tensors[f"{name}.b"])
         assert "role.W" in g_on.tensors
         assert "role.W" not in g_off.tensors
 
     def test_run_history_carries_role_fields(self):
         eng = EvolutionEngine(
             params=self._params(),
-            population_size=4, generations=2, ticks_per_generation=3,
-            organic_pools=1, seed=3,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=3,
+            organic_pools=1,
+            seed=3,
         )
         result = eng.run()
         entry = result["history"][0]
-        for key in ("role_deposits", "role_deposit_rate",
-                    "role_deposit_energy", "role_raids",
-                    "role_raid_rate", "role_raid_energy"):
+        for key in (
+            "role_deposits",
+            "role_deposit_rate",
+            "role_deposit_energy",
+            "role_raids",
+            "role_raid_rate",
+            "role_raid_energy",
+        ):
             assert key in entry
         assert entry["role_deposits"] >= 0
         assert entry["role_deposit_rate"] >= 0.0
@@ -417,8 +446,11 @@ class TestSpecializationEvolution:
 
     def test_run_off_default_has_no_role_brains(self):
         eng = EvolutionEngine(
-            population_size=4, generations=2, ticks_per_generation=3,
-            organic_pools=1, seed=3,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=3,
+            organic_pools=1,
+            seed=3,
         )
         result = eng.run()
         assert result["history"][0]["role_deposits"] == 0
@@ -426,27 +458,43 @@ class TestSpecializationEvolution:
 
     def test_benchmark_structure_and_verdict_keys(self):
         result = benchmark_specialization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         assert set(result) >= {
-            "control", "specialization", "group_count", "group_weight",
-            "control_role_deposit_rate", "control_role_raid_rate",
-            "specialization_role_deposit_rate", "specialization_role_raid_rate",
-            "control_final_avg_fitness", "specialization_final_avg_fitness",
+            "control",
+            "specialization",
+            "group_count",
+            "group_weight",
+            "control_role_deposit_rate",
+            "control_role_raid_rate",
+            "specialization_role_deposit_rate",
+            "specialization_role_raid_rate",
+            "control_final_avg_fitness",
+            "specialization_final_avg_fitness",
             "specialization_emerged",
         }
         assert len(result["control"]["history"]) == 3
         assert len(result["specialization"]["history"]) == 3
-        assert result["specialization_role_deposit_rate"] == \
-            result["specialization"]["history"][-1]["role_deposit_rate"]
-        assert result["specialization_role_raid_rate"] == \
-            result["specialization"]["history"][-1]["role_raid_rate"]
+        assert (
+            result["specialization_role_deposit_rate"]
+            == result["specialization"]["history"][-1]["role_deposit_rate"]
+        )
+        assert (
+            result["specialization_role_raid_rate"]
+            == result["specialization"]["history"][-1]["role_raid_rate"]
+        )
 
     def test_control_arm_never_roles(self):
         result = benchmark_specialization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         for entry in result["control"]["history"]:
             assert entry["role_deposits"] == 0
@@ -454,17 +502,20 @@ class TestSpecializationEvolution:
 
     def test_benchmark_deterministic(self):
         a = benchmark_specialization(
-            population_size=4, generations=2, ticks_per_generation=8,
-            organic_pools=1, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=5,
         )
         b = benchmark_specialization(
-            population_size=4, generations=2, ticks_per_generation=8,
-            organic_pools=1, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=5,
         )
-        assert a["specialization_final_avg_fitness"] == \
-            b["specialization_final_avg_fitness"]
-        assert a["specialization_role_deposit_rate"] == \
-            b["specialization_role_deposit_rate"]
-        assert a["specialization_role_raid_rate"] == \
-            b["specialization_role_raid_rate"]
+        assert a["specialization_final_avg_fitness"] == b["specialization_final_avg_fitness"]
+        assert a["specialization_role_deposit_rate"] == b["specialization_role_deposit_rate"]
+        assert a["specialization_role_raid_rate"] == b["specialization_role_raid_rate"]
         assert a["specialization_emerged"] == b["specialization_emerged"]

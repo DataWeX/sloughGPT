@@ -22,11 +22,16 @@ class TestMultimodalCapabilitiesDefaults:
 
     def test_field_count(self):
         import dataclasses
+
         fields = [f.name for f in dataclasses.fields(MultimodalCapabilities)]
         assert len(fields) == 6
         assert set(fields) == {
-            "speech_to_text", "image_caption", "object_detection",
-            "vqa", "speech_model", "vision_model",
+            "speech_to_text",
+            "image_caption",
+            "object_detection",
+            "vqa",
+            "speech_model",
+            "vision_model",
         }
 
 
@@ -55,8 +60,10 @@ class TestMultimodalCapabilitiesCustom:
 
     def test_all_bools_true(self):
         mc = MultimodalCapabilities(
-            speech_to_text=True, image_caption=True,
-            object_detection=True, vqa=True,
+            speech_to_text=True,
+            image_caption=True,
+            object_detection=True,
+            vqa=True,
         )
         assert mc.speech_to_text is True
         assert mc.image_caption is True
@@ -65,8 +72,10 @@ class TestMultimodalCapabilitiesCustom:
 
     def test_all_bools_explicit_false(self):
         mc = MultimodalCapabilities(
-            speech_to_text=False, image_caption=False,
-            object_detection=False, vqa=False,
+            speech_to_text=False,
+            image_caption=False,
+            object_detection=False,
+            vqa=False,
         )
         assert mc.speech_to_text is False
         assert mc.image_caption is False
@@ -112,8 +121,10 @@ class TestMultimodalCapabilitiesCustom:
 
     def test_mixed_bools(self):
         mc = MultimodalCapabilities(
-            speech_to_text=False, image_caption=True,
-            object_detection=True, vqa=False,
+            speech_to_text=False,
+            image_caption=True,
+            object_detection=True,
+            vqa=False,
         )
         assert mc.speech_to_text is False
         assert mc.image_caption is True
@@ -122,8 +133,10 @@ class TestMultimodalCapabilitiesCustom:
 
     def test_partial_bools_with_models(self):
         mc = MultimodalCapabilities(
-            speech_to_text=True, vqa=True,
-            speech_model="server", vision_model="resnet",
+            speech_to_text=True,
+            vqa=True,
+            speech_model="server",
+            vision_model="resnet",
         )
         assert mc.speech_to_text is True
         assert mc.image_caption is False
@@ -232,9 +245,12 @@ class TestMultimodalCapabilitiesEdgeCases:
 
     def test_construct_kwargs_only(self):
         mc = MultimodalCapabilities(
-            speech_to_text=False, image_caption=False,
-            object_detection=False, vqa=False,
-            speech_model=None, vision_model=None,
+            speech_to_text=False,
+            image_caption=False,
+            object_detection=False,
+            vqa=False,
+            speech_model=None,
+            vision_model=None,
         )
         assert mc.speech_to_text is False
         assert mc.speech_model is None
@@ -257,6 +273,7 @@ class TestMultimodalCapabilitiesEdgeCases:
 
     def test_copy_semantics(self):
         import dataclasses
+
         mc = MultimodalCapabilities(speech_to_text=True, speech_model="whisper")
         mc2 = dataclasses.replace(mc, speech_to_text=False)
         assert mc.speech_to_text is True
@@ -265,6 +282,7 @@ class TestMultimodalCapabilitiesEdgeCases:
 
     def test_field_types(self):
         import dataclasses
+
         fields = {f.name: f.type for f in dataclasses.fields(MultimodalCapabilities)}
         assert fields["speech_to_text"] is bool
         assert fields["image_caption"] is bool
@@ -273,9 +291,12 @@ class TestMultimodalCapabilitiesEdgeCases:
 
     def test_construct_with_all_none(self):
         mc = MultimodalCapabilities(
-            speech_to_text=None, image_caption=None,
-            object_detection=None, vqa=None,
-            speech_model=None, vision_model=None,
+            speech_to_text=None,
+            image_caption=None,
+            object_detection=None,
+            vqa=None,
+            speech_model=None,
+            vision_model=None,
         )
         assert mc.speech_to_text is None
         assert mc.image_caption is None

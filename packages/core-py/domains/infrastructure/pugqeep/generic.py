@@ -30,16 +30,16 @@ Usage:
 from __future__ import annotations
 
 import base64
+import builtins
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
 from .point import Point
-from .store import MemoryStore, JSONStore, DirectoryStore
+from .store import DirectoryStore, JSONStore, MemoryStore
 
 logger = logging.getLogger("slo.pugqeep")
 
@@ -47,6 +47,7 @@ logger = logging.getLogger("slo.pugqeep")
 # ══════════════════════════════════════════════════════════════════════════════
 # ABCs
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class CompressionStrategy(ABC):
     """Base class for compression strategies.
@@ -103,7 +104,7 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
-    def load(self, identity: str) -> Optional[Point]:
+    def load(self, identity: str) -> Point | None:
         """Load a Point by identity. Returns None if not found."""
         ...
 
@@ -113,7 +114,7 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
-    def list_all(self) -> List[Point]:
+    def list_all(self) -> list[Point]:
         """List all stored Points."""
         ...
 
@@ -149,12 +150,12 @@ class FunctionType(ABC):
         ...
 
     @abstractmethod
-    def to_bytes(self, params: dict, residual: Optional[np.ndarray] = None) -> bytes:
+    def to_bytes(self, params: dict, residual: np.ndarray | None = None) -> bytes:
         """Serialize params + residual to bytes."""
         ...
 
     @abstractmethod
-    def from_bytes(self, data: bytes) -> Tuple[dict, Optional[np.ndarray]]:
+    def from_bytes(self, data: bytes) -> tuple[dict, np.ndarray | None]:
         """Deserialize bytes to (params, residual)."""
         ...
 
@@ -173,21 +174,22 @@ class FunctionType(ABC):
 # Registries
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class _CompressorRegistry:
     """Registry of compression strategies."""
 
     def __init__(self):
-        self._strategies: Dict[str, CompressionStrategy] = {}
+        self._strategies: dict[str, CompressionStrategy] = {}
 
     def register(self, strategy: CompressionStrategy) -> None:
         """Register a compression strategy."""
         self._strategies[strategy.name] = strategy
 
-    def get(self, name: str) -> Optional[CompressionStrategy]:
+    def get(self, name: str) -> CompressionStrategy | None:
         """Get a strategy by name."""
         return self._strategies.get(name)
 
-    def list(self) -> List[str]:
+    def list(self) -> builtins.list[str]:
         """List registered strategy names."""
         return list(self._strategies.keys())
 
@@ -199,17 +201,17 @@ class _StorageRegistry:
     """Registry of storage backends."""
 
     def __init__(self):
-        self._backends: Dict[str, StorageBackend] = {}
+        self._backends: dict[str, StorageBackend] = {}
 
     def register(self, backend: StorageBackend) -> None:
         """Register a storage backend."""
         self._backends[backend.name] = backend
 
-    def get(self, name: str) -> Optional[StorageBackend]:
+    def get(self, name: str) -> StorageBackend | None:
         """Get a backend by name."""
         return self._backends.get(name)
 
-    def list(self) -> List[str]:
+    def list(self) -> builtins.list[str]:
         """List registered backend names."""
         return list(self._backends.keys())
 
@@ -221,24 +223,24 @@ class _FunctionTypeRegistry:
     """Registry of custom function types."""
 
     def __init__(self):
-        self._types: Dict[str, FunctionType] = {}
-        self._code_map: Dict[bytes, str] = {}
+        self._types: dict[str, FunctionType] = {}
+        self._code_map: dict[bytes, str] = {}
 
     def register(self, ft: FunctionType) -> None:
         """Register a function type."""
         self._types[ft.type_name] = ft
         self._code_map[ft.type_code] = ft.type_name
 
-    def get(self, name: str) -> Optional[FunctionType]:
+    def get(self, name: str) -> FunctionType | None:
         """Get a function type by name."""
         return self._types.get(name)
 
-    def get_by_code(self, code: bytes) -> Optional[FunctionType]:
+    def get_by_code(self, code: bytes) -> FunctionType | None:
         """Get a function type by 4-byte code."""
         type_name = self._code_map.get(code)
         return self._types.get(type_name) if type_name else None
 
-    def list(self) -> List[str]:
+    def list(self) -> builtins.list[str]:
         """List registered type names."""
         return list(self._types.keys())
 
@@ -249,6 +251,7 @@ class _FunctionTypeRegistry:
 @dataclass
 class Registry:
     """Global registry for all pluggable components."""
+
     compressors: _CompressorRegistry = field(default_factory=_CompressorRegistry)
     storages: _StorageRegistry = field(default_factory=_StorageRegistry)
     function_types: _FunctionTypeRegistry = field(default_factory=_FunctionTypeRegistry)
@@ -262,20 +265,27 @@ registry = Registry()
 # Built-in strategies (registered on import)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class ClusterStrategy(CompressionStrategy):
     """Vector quantization with Lloyd's refinement."""
 
     name = "cluster"
 
-    def __init__(self, n_clusters: int = 16, lloyd_iterations: int = 5,
-                 gap_fill_iterations: int = 4, gap_fill_max_elements: int = 100_000):
+    def __init__(
+        self,
+        n_clusters: int = 16,
+        lloyd_iterations: int = 5,
+        gap_fill_iterations: int = 4,
+        gap_fill_max_elements: int = 100_000,
+    ):
         self.n_clusters = n_clusters
         self.lloyd_iterations = lloyd_iterations
         self.gap_fill_iterations = gap_fill_iterations
         self.gap_fill_max_elements = gap_fill_max_elements
 
-    def compress(self, data: np.ndarray, identity: str = "unknown",
-                 n_clusters: Optional[int] = None, **kwargs) -> Point:
+    def compress(
+        self, data: np.ndarray, identity: str = "unknown", n_clusters: int | None = None, **kwargs
+    ) -> Point:
         nc = n_clusters or self.n_clusters
         flat = data.flatten().astype(np.float32)
         n = len(flat)
@@ -420,8 +430,9 @@ class AutoStrategy(CompressionStrategy):
         self._cluster = ClusterStrategy()
         self._function = FunctionStrategy()
 
-    def compress(self, data: np.ndarray, identity: str = "unknown",
-                 n_clusters: int = 16, **kwargs) -> Point:
+    def compress(
+        self, data: np.ndarray, identity: str = "unknown", n_clusters: int = 16, **kwargs
+    ) -> Point:
         flat = data.flatten().astype(np.float32)
 
         if len(flat) < n_clusters * 2:
@@ -450,13 +461,13 @@ class MemoryStorage(StorageBackend):
     def save(self, point: Point) -> None:
         self._store.save(point)
 
-    def load(self, identity: str) -> Optional[Point]:
+    def load(self, identity: str) -> Point | None:
         return self._store.load(identity)
 
     def remove(self, identity: str) -> bool:
         return self._store.remove(identity)
 
-    def list_all(self) -> List[Point]:
+    def list_all(self) -> list[Point]:
         return self._store.list_all()
 
     def clear(self) -> None:
@@ -471,19 +482,19 @@ class JSONStorage(StorageBackend):
 
     name = "json"
 
-    def __init__(self, path: Union[Path, str]):
+    def __init__(self, path: Path | str):
         self._store = JSONStore(Path(path))
 
     def save(self, point: Point) -> None:
         self._store.save(point)
 
-    def load(self, identity: str) -> Optional[Point]:
+    def load(self, identity: str) -> Point | None:
         return self._store.load(identity)
 
     def remove(self, identity: str) -> bool:
         return self._store.remove(identity)
 
-    def list_all(self) -> List[Point]:
+    def list_all(self) -> list[Point]:
         return self._store.list_all()
 
     def clear(self) -> None:
@@ -498,19 +509,19 @@ class DirectoryStorage(StorageBackend):
 
     name = "directory"
 
-    def __init__(self, directory: Union[Path, str]):
+    def __init__(self, directory: Path | str):
         self._store = DirectoryStore(Path(directory))
 
     def save(self, point: Point) -> None:
         self._store.save(point)
 
-    def load(self, identity: str) -> Optional[Point]:
+    def load(self, identity: str) -> Point | None:
         return self._store.load(identity)
 
     def remove(self, identity: str) -> bool:
         return self._store.remove(identity)
 
-    def list_all(self) -> List[Point]:
+    def list_all(self) -> list[Point]:
         return self._store.list_all()
 
     def clear(self) -> None:
@@ -524,6 +535,7 @@ class DirectoryStorage(StorageBackend):
 # Generic facade
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class PGQGeneric:
     """Generic, pluggable pugqeep system.
 
@@ -536,10 +548,13 @@ class PGQGeneric:
         function_types: List of FunctionType instances to register.
     """
 
-    def __init__(self, name: str = "generic",
-                 compressor: Union[str, CompressionStrategy] = "auto",
-                 storage: Union[str, StorageBackend] = "memory",
-                 function_types: Optional[List[FunctionType]] = None):
+    def __init__(
+        self,
+        name: str = "generic",
+        compressor: str | CompressionStrategy = "auto",
+        storage: str | StorageBackend = "memory",
+        function_types: list[FunctionType] | None = None,
+    ):
         self.name = name
 
         # Resolve compressor
@@ -547,8 +562,7 @@ class PGQGeneric:
             self._compressor = registry.compressors.get(compressor)
             if self._compressor is None:
                 raise ValueError(
-                    f"Unknown compressor '{compressor}'. "
-                    f"Available: {registry.compressors.list()}"
+                    f"Unknown compressor '{compressor}'. Available: {registry.compressors.list()}"
                 )
         else:
             self._compressor = compressor
@@ -558,22 +572,21 @@ class PGQGeneric:
             self._storage = registry.storages.get(storage)
             if self._storage is None:
                 raise ValueError(
-                    f"Unknown storage '{storage}'. "
-                    f"Available: {registry.storages.list()}"
+                    f"Unknown storage '{storage}'. Available: {registry.storages.list()}"
                 )
         else:
             self._storage = storage
 
         # Register custom function types
-        self._custom_types: Dict[str, FunctionType] = {}
+        self._custom_types: dict[str, FunctionType] = {}
         if function_types:
             for ft in function_types:
                 self._custom_types[ft.type_name] = ft
                 registry.function_types.register(ft)
 
         # Metadata
-        self._shapes: Dict[str, Tuple[int, ...]] = {}
-        self._dtypes: Dict[str, np.dtype] = {}
+        self._shapes: dict[str, tuple[int, ...]] = {}
+        self._dtypes: dict[str, np.dtype] = {}
 
     # ── Core operations ──
 
@@ -594,7 +607,7 @@ class PGQGeneric:
         self._dtypes[name] = data.dtype
         return point
 
-    def get(self, name: str) -> Optional[np.ndarray]:
+    def get(self, name: str) -> np.ndarray | None:
         """Load and decompress data.
 
         Returns:
@@ -607,7 +620,11 @@ class PGQGeneric:
         # Check custom types first
         custom = self._custom_types.get(point.function_type)
         if custom:
-            n = int(np.prod(self._shapes[name])) if name in self._shapes else len(point.params.get("centroids", [])) * 100
+            n = (
+                int(np.prod(self._shapes[name]))
+                if name in self._shapes
+                else len(point.params.get("centroids", [])) * 100
+            )
             flat = custom.generate(point.params, n)
         else:
             flat = point.generate(self._estimate_n(name, point))
@@ -629,7 +646,7 @@ class PGQGeneric:
         self._dtypes.pop(name, None)
         return removed
 
-    def list_all(self) -> List[Point]:
+    def list_all(self) -> list[Point]:
         """List all stored Points."""
         return self._storage.list_all()
 
@@ -645,7 +662,7 @@ class PGQGeneric:
 
     # ── Batch operations ──
 
-    def put_many(self, data: Dict[str, np.ndarray], **kwargs) -> dict:
+    def put_many(self, data: dict[str, np.ndarray], **kwargs) -> dict:
         """Store multiple arrays."""
         total_bytes = 0
         for name, arr in data.items():
@@ -653,17 +670,17 @@ class PGQGeneric:
             total_bytes += arr.nbytes
         return {"count": len(data), "total_bytes": total_bytes}
 
-    def get_many(self, names: List[str]) -> Dict[str, Optional[np.ndarray]]:
+    def get_many(self, names: list[str]) -> dict[str, np.ndarray | None]:
         """Load multiple arrays."""
         return {name: self.get(name) for name in names}
 
     # ── Search ──
 
-    def search(self, query: str) -> List[Point]:
+    def search(self, query: str) -> list[Point]:
         """Search Points by identity substring."""
         return [p for p in self._storage.list_all() if query in p.identity]
 
-    def best(self, n: int = 10) -> List[Point]:
+    def best(self, n: int = 10) -> list[Point]:
         """Top-N Points by accuracy."""
         return sorted(self._storage.list_all(), key=lambda p: p.accuracy, reverse=True)[:n]
 
@@ -673,8 +690,7 @@ class PGQGeneric:
         """System statistics."""
         points = self._storage.list_all()
         total_raw = sum(
-            int(np.prod(self._shapes[p.identity])) * 4
-            if p.identity in self._shapes else p.nbytes()
+            int(np.prod(self._shapes[p.identity])) * 4 if p.identity in self._shapes else p.nbytes()
             for p in points
         )
         total_compressed = sum(p.nbytes() for p in points)

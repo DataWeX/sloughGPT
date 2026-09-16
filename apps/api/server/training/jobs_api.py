@@ -8,11 +8,12 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import raise_error
+
+from domain.training._internal.executor import get_training_executor
 
 from .jobs import training_jobs
 
@@ -92,6 +93,7 @@ async def list_training_jobs(
     Filters by user_id when auth is enabled.
     """
     import time as _time
+
     now = _time.time()
 
     # Get jobs, filtered by user if auth is enabled
@@ -102,7 +104,8 @@ async def list_training_jobs(
         jobs = list(training_jobs.values())
 
     stale = [
-        jid for jid, j in training_jobs.items()
+        jid
+        for jid, j in training_jobs.items()
         if j.get("status") in ("completed", "failed", "stopped")
         and now - _to_timestamp(j.get("updated_at") or j.get("started_at")) > 3600
     ]

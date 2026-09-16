@@ -1,4 +1,5 @@
 """Tests for checkpoint utilities — normalize, extract, resolve hyperparams."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -64,32 +65,60 @@ class TestExtractStateDict:
     def test_invalid_raises(self):
         try:
             extract_state_dict({KEY_MODEL_STATE: "not a dict"})
-            assert False, "should raise"
+            raise AssertionError("should raise")
         except ValueError:
             pass
 
 
 class TestResolveSloughgptHyperparams:
     def test_uses_fallbacks(self):
-        hp = resolve_sloughgpt_hyperparams({}, fallback_vocab_size=100, fallback_n_embed=64, fallback_n_layer=4, fallback_n_head=8, fallback_block_size=32)
+        hp = resolve_sloughgpt_hyperparams(
+            {},
+            fallback_vocab_size=100,
+            fallback_n_embed=64,
+            fallback_n_layer=4,
+            fallback_n_head=8,
+            fallback_block_size=32,
+        )
         assert hp["vocab_size"] == 100
         assert hp["n_embed"] == 64
         assert hp["n_layer"] == 4
 
     def test_bundle_overrides(self):
         bundle = {KEY_TRAINING_INFO: {"vocab_size": 200, "n_embed": 128}}
-        hp = resolve_sloughgpt_hyperparams(bundle, fallback_vocab_size=100, fallback_n_embed=64, fallback_n_layer=4, fallback_n_head=8, fallback_block_size=32)
+        hp = resolve_sloughgpt_hyperparams(
+            bundle,
+            fallback_vocab_size=100,
+            fallback_n_embed=64,
+            fallback_n_layer=4,
+            fallback_n_head=8,
+            fallback_block_size=32,
+        )
         assert hp["vocab_size"] == 200
         assert hp["n_embed"] == 128
 
     def test_chars_sets_vocab_size(self):
         bundle = {"chars": list("abcde")}
-        hp = resolve_sloughgpt_hyperparams(bundle, fallback_vocab_size=100, fallback_n_embed=64, fallback_n_layer=4, fallback_n_head=8, fallback_block_size=32)
+        hp = resolve_sloughgpt_hyperparams(
+            bundle,
+            fallback_vocab_size=100,
+            fallback_n_embed=64,
+            fallback_n_layer=4,
+            fallback_n_head=8,
+            fallback_block_size=32,
+        )
         assert hp["vocab_size"] == 5
 
     def test_config_dict_merges(self):
         bundle = {"config": {"n_layer": 8}, KEY_TRAINING_INFO: {"n_layer": 16}}
-        hp = resolve_sloughgpt_hyperparams(bundle, fallback_vocab_size=100, fallback_n_embed=64, fallback_n_layer=4, fallback_n_head=8, fallback_block_size=32)
+        hp = resolve_sloughgpt_hyperparams(
+            bundle,
+            fallback_vocab_size=100,
+            fallback_n_embed=64,
+            fallback_n_layer=4,
+            fallback_n_head=8,
+            fallback_block_size=32,
+        )
         assert hp["n_layer"] == 16  # training_info wins
 
 

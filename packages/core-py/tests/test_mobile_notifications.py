@@ -2,15 +2,14 @@
 PushNotificationService with MogDB persistence."""
 
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-import pytest
 from domain.mobile._internal.notifications import (
     DeviceToken,
     NotificationPayload,
     PushNotificationService,
-    set_mogdb_path,
     reset_mogdb,
+    set_mogdb_path,
 )
 
 
@@ -28,6 +27,7 @@ def _fresh_service(db_path=None):
 
 def _mock_send_success(svc):
     """Patch httpx.Client.post to return success for send_notification calls."""
+
     def _make_response(batch):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -442,8 +442,11 @@ class TestPushNotificationServiceSend:
         svc = _fresh_service()
         svc.register_device("tok1", "ios")
         payload = NotificationPayload(
-            title="Test Title", body="Test Body",
-            data={"key": "val"}, sound="silent", badge=5,
+            title="Test Title",
+            body="Test Body",
+            data={"key": "val"},
+            sound="silent",
+            badge=5,
         )
         with _mock_send_success(svc):
             result = svc.send_notification(payload)
@@ -714,10 +717,12 @@ class TestPushNotificationServiceMessageBuilding:
 class TestNotificationServiceSingleton:
     def test_get_notification_service(self):
         from domains.mobile import notifications as mod
+
         old = mod._service
         try:
             mod._service = None
             from domain.mobile._internal.notifications import get_notification_service
+
             svc1 = get_notification_service()
             svc2 = get_notification_service()
             assert svc1 is svc2

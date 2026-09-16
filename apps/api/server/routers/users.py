@@ -3,21 +3,20 @@
 Provides CRUD operations for managing users, with role-based access control.
 Only admins and owners can manage users.
 """
+
 from __future__ import annotations
 
 import logging
-import secrets
 import uuid
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
+from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
+from schemas.common import endpoint, raise_error, success_response
 
 from domain.auth._internal.models import Role, User, UserRole
 from domain.auth._internal.repositories import UserRepository
-from infrastructure.auth import get_jwt_auth, require_auth_if_enabled
-from schemas.common import classify_and_raise, endpoint, raise_error, success_response
 
 logger = logging.getLogger("slo.users")
 
@@ -138,6 +137,7 @@ class UsersRouter:
                 raise_error("Email already registered", "E_INFRA_BUSY", status_code=409)
 
             from routers.auth import AuthRouter
+
             password_hash = AuthRouter._hash_password(req.password)
 
             role = Role(req.role) if req.role in [r.value for r in Role] else Role.USER
@@ -175,12 +175,14 @@ class UsersRouter:
                 user.role = Role(req.role) if req.role in [r.value for r in Role] else user.role
             if req.status is not None:
                 user.status = (
-                    UserRole(req.status) if req.status in [s.value for s in UserRole] else user.status
+                    UserRole(req.status)
+                    if req.status in [s.value for s in UserRole]
+                    else user.status
                 )
             if req.display_name is not None:
                 user.display_name = req.display_name
 
-            user.updated_at = datetime.now(timezone.utc).isoformat()
+            user.updated_at = datetime.now(UTC).isoformat()
             self._repo.update(user)
             return success_response(data=self._to_response(user).model_dump())
 
@@ -199,9 +201,7 @@ class UsersRouter:
 
         # ─── Change password (self-service) ────────────────────
         @endpoint("users.change_password")
-        async def change_password(
-            req: PasswordChangeRequest, auth_user: dict = auth_dep
-        ) -> dict:
+        async def change_password(req: PasswordChangeRequest, auth_user: dict = auth_dep) -> dict:
             if not auth_user:
                 raise_error("Authentication required", "E_AUTH_MISSING", status_code=401)
             user = self._repo.get(auth_user.get("sub", ""))
@@ -209,19 +209,18 @@ class UsersRouter:
                 raise_error("User not found", "E_NOT_FOUND", status_code=404)
 
             from routers.auth import AuthRouter
+
             if not AuthRouter._verify_password(req.current_password, user.password_hash):
                 raise_error("Current password is incorrect", "E_AUTH_MISSING", status_code=401)
 
             user.password_hash = AuthRouter._hash_password(req.new_password)
-            user.updated_at = datetime.now(timezone.utc).isoformat()
+            user.updated_at = datetime.now(UTC).isoformat()
             self._repo.update(user)
             return success_response(data={"changed": True})
 
         # ─── Update own profile (self-service) ─────────────────
         @endpoint("users.update_profile")
-        async def update_profile(
-            req: ProfileUpdateRequest, auth_user: dict = auth_dep
-        ) -> dict:
+        async def update_profile(req: ProfileUpdateRequest, auth_user: dict = auth_dep) -> dict:
             if not auth_user:
                 raise_error("Authentication required", "E_AUTH_MISSING", status_code=401)
             user = self._repo.get(auth_user.get("sub", ""))
@@ -236,7 +235,7 @@ class UsersRouter:
             if req.display_name is not None:
                 user.display_name = req.display_name
 
-            user.updated_at = datetime.now(timezone.utc).isoformat()
+            user.updated_at = datetime.now(UTC).isoformat()
             self._repo.update(user)
             return success_response(data=self._to_response(user).model_dump())
 

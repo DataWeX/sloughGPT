@@ -40,9 +40,7 @@ class RenderLine:
 # CSI / OSC / charset / single-byte ANSI escapes emitted by console helpers
 # (e.g. ``_C_CYAN``) or relayed subprocess output.  A text surface stores plain
 # text only — curses would otherwise render these as literal ``^[[..`` glyphs.
-_ANSI_RE = re.compile(
-    r"\x1b(?:\[[0-9;:?]*[ -/]*[@-~]|[\]()].|[PX^_].*?\x1b\\|.)"
-)
+_ANSI_RE = re.compile(r"\x1b(?:\[[0-9;:?]*[ -/]*[@-~]|[\]()].|[PX^_].*?\x1b\\|.)")
 
 
 def strip_ansi(text: str) -> str:
@@ -165,7 +163,7 @@ class TextSurface(Surface):
                 lines.append(self._partial)
             if offset > 0:
                 start = max(len(lines) - rows - offset, 0)
-                lines = lines[start:start + rows]
+                lines = lines[start : start + rows]
             else:
                 lines = lines[-rows:]
         return [RenderLine(clip(ln, self._width)) for ln in lines]
@@ -205,7 +203,7 @@ class LogSurface(Surface):
         all_rows = self._format()
         if offset > 0:
             start = max(len(all_rows) - rows - offset, 0)
-            window = all_rows[start:start + rows]
+            window = all_rows[start : start + rows]
         else:
             window = all_rows[-rows:]
         return [RenderLine(clip(t, self._width), s) for t, s in window]

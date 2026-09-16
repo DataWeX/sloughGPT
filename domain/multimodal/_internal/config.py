@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 
 @dataclass
 class MultiModalConfig:
     """Configuration for multi-modal models."""
+
     image_size: int = 224
     patch_size: int = 16
     vision_hidden_size: int = 768

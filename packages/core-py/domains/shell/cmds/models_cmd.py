@@ -3,6 +3,7 @@
 Follows the cmds/ protocol:
     def run(argv, out, api, env) -> int
 """
+
 from __future__ import annotations
 
 help = "List, unload, or configure models"
@@ -16,6 +17,7 @@ _VALID_SCHEME = {"symmetric", "asymmetric"}
 def _format_error(e: Exception, cmd: str = "") -> str:
     """Format an exception into a user-friendly error message."""
     from domain.shell._internal.error import format_error
+
     return format_error(e, cmd, color=False)
 
 
@@ -79,7 +81,9 @@ def _unload(args, out, api):
 def _precision(args, out, api):
     mode = args[0] if args else "auto"
     if mode not in _VALID_PRECISION:
-        out.write(f"Invalid precision: {mode!r}. Must be one of: {', '.join(sorted(_VALID_PRECISION))}")
+        out.write(
+            f"Invalid precision: {mode!r}. Must be one of: {', '.join(sorted(_VALID_PRECISION))}"
+        )
         return 1
     try:
         result = api.set_precision(mode)

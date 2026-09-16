@@ -1,13 +1,14 @@
 """Tests for ProcessGuard — resolve_memory_limit_mb, health, callbacks."""
 
-import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+
 from domain.infrastructure._internal.process_guard import (
     ProcessGuard,
-    resolve_memory_limit_mb,
     create_model_guard,
     create_slo_guard,
+    resolve_memory_limit_mb,
 )
 
 
@@ -227,6 +228,7 @@ class TestCreateSloGuardFactory:
 
 # ── Lifecycle tests (mocked worker) ────────────────────────────────────
 
+
 class TestProcessGuardStartStop:
     def test_start_launches_worker(self):
         guard = ProcessGuard(max_restarts=1, restart_delay=0.0)
@@ -294,6 +296,7 @@ class TestProcessGuardGenerate:
 
     def test_generate_recover_from_stall(self):
         from domain.infrastructure._internal.model_worker import WorkerStreamStalledError
+
         guard = ProcessGuard(max_restarts=3, restart_delay=0.0)
         mock_worker = MagicMock()
         mock_worker.alive = True
@@ -360,7 +363,9 @@ class TestProcessGuardMemoryMb:
         mock_worker = MagicMock()
         mock_worker._process.pid = 12345
         guard._worker = mock_worker
-        with patch.dict("sys.modules", {"psutil": MagicMock(Process=MagicMock(return_value=mock_process))}):
+        with patch.dict(
+            "sys.modules", {"psutil": MagicMock(Process=MagicMock(return_value=mock_process))}
+        ):
             result = guard._memory_mb()
         assert result == 500.0
 

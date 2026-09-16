@@ -1,6 +1,6 @@
 """Coverage tests for the x86 VM RBAC layer (domain.shell._internal.vm_permissions)."""
 
-from domain.shell._internal.vm_permissions import Permission, Role, X86RBAC
+from domain.shell._internal.vm_permissions import X86RBAC, Permission, Role
 
 
 class TestX86RBAC:
@@ -24,9 +24,13 @@ class TestX86RBAC:
     def test_admin_has_device_and_training(self):
         rbac = X86RBAC()
         rbac.assign(20, Role.ADMIN)
-        for perm in (Permission.DEVICE_DISK, Permission.DEVICE_NET,
-                     Permission.DEVICE_SERIAL, Permission.TRAINING,
-                     Permission.PROCESS_KILL):
+        for perm in (
+            Permission.DEVICE_DISK,
+            Permission.DEVICE_NET,
+            Permission.DEVICE_SERIAL,
+            Permission.TRAINING,
+            Permission.PROCESS_KILL,
+        ):
             assert rbac.check(20, perm) is True
         assert rbac.check(20, Permission.RAW_MEMORY) is False
         assert rbac.check(20, Permission.RAW_CPU) is False
@@ -141,8 +145,13 @@ class TestX86RBAC:
     def test_admin_all_user_permissions(self):
         rbac = X86RBAC()
         rbac.assign(20, Role.ADMIN)
-        user_perms = [Permission.FILE_READ, Permission.FILE_WRITE, Permission.FILE_META,
-                      Permission.PROCESS_SPAWN, Permission.PROCESS_SELF]
+        user_perms = [
+            Permission.FILE_READ,
+            Permission.FILE_WRITE,
+            Permission.FILE_META,
+            Permission.PROCESS_SPAWN,
+            Permission.PROCESS_SELF,
+        ]
         for perm in user_perms:
             assert rbac.check(20, perm) is True
 
@@ -244,10 +253,20 @@ class TestX86RBAC:
 
     def test_permission_all_values(self):
         expected = {
-            "FILE_READ", "FILE_WRITE", "FILE_META",
-            "PROCESS_SPAWN", "PROCESS_KILL", "PROCESS_SELF",
-            "DEVICE_SERIAL", "DEVICE_MOUSE", "DEVICE_DISK", "DEVICE_RTC", "DEVICE_NET",
-            "RAW_MEMORY", "RAW_CPU", "TRAINING",
+            "FILE_READ",
+            "FILE_WRITE",
+            "FILE_META",
+            "PROCESS_SPAWN",
+            "PROCESS_KILL",
+            "PROCESS_SELF",
+            "DEVICE_SERIAL",
+            "DEVICE_MOUSE",
+            "DEVICE_DISK",
+            "DEVICE_RTC",
+            "DEVICE_NET",
+            "RAW_MEMORY",
+            "RAW_CPU",
+            "TRAINING",
         }
         actual = {p.name for p in Permission}
         assert expected == actual
@@ -379,8 +398,10 @@ class TestX86RBAC:
 
     def test_permission_is_intenum(self):
         from enum import IntEnum
+
         assert issubclass(Permission, IntEnum)
 
     def test_role_is_intenum(self):
         from enum import IntEnum
+
         assert issubclass(Role, IntEnum)

@@ -18,28 +18,30 @@ from __future__ import annotations
 
 from .local_loader import (
     HFLocalConfig,
-    HuggingFaceLocalLoader,
     HuggingFaceLocalClient,
+    HuggingFaceLocalLoader,
     download_model,
-    load_model,
     generate_local,
+    load_model,
 )
 
 # Back-compat name used in older docs / archives
 LocalModelLoader = HuggingFaceLocalLoader
 
-from .model_map import (
-    ModelSize,
-    HFModelInfo as ModelInfo,
-    HF_MODELS,
-    get_model_info,
-    search_models,
-    get_recommended_quantization,
-    get_model_requirements,
-    map_to_sloughgpt_config,
-)
-
 import logging
+
+from .model_map import (
+    HF_MODELS,
+    ModelSize,
+    get_model_info,
+    get_model_requirements,
+    get_recommended_quantization,
+    map_to_sloughgpt_config,
+    search_models,
+)
+from .model_map import (
+    HFModelInfo as ModelInfo,
+)
 
 logger = logging.getLogger("slo.huggingface")
 
@@ -47,12 +49,11 @@ MODEL_REGISTRY = HF_MODELS  # legacy alias (not every call site needs the traini
 
 from .client import (
     HFClient,
+    chat,
+    generate,
     get_model_memory,
     list_models,
-    generate,
-    chat,
 )
-
 
 __all__ = [
     # Primary - Local Loading

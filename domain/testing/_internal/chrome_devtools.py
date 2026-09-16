@@ -12,25 +12,26 @@ Usage:
     await browser.wait_for_text("train")
     snapshot = await browser.take_snapshot()
 """
+
 from __future__ import annotations
 
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
 class BrowserState:
     """Current browser state."""
 
-    page_id: Optional[str] = None
+    page_id: str | None = None
     url: str = ""
     title: str = ""
     body_text: str = ""
-    console_messages: List[Dict[str, Any]] = field(default_factory=list)
-    network_requests: List[Dict[str, Any]] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
+    console_messages: list[dict[str, Any]] = field(default_factory=list)
+    network_requests: list[dict[str, Any]] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 class ChromeDevToolsBrowser:
@@ -43,29 +44,33 @@ class ChromeDevToolsBrowser:
     def __init__(self, base_url: str = "http://localhost:3000"):
         self.base_url = base_url.rstrip("/")
         self.state = BrowserState()
-        self.commands: List[Dict[str, Any]] = []
+        self.commands: list[dict[str, Any]] = []
 
     async def setup(self) -> bool:
         """Open a new browser page."""
         try:
-            self.commands.append({
-                "tool": "chrome-devtools_new_page",
-                "args": {"url": self.base_url},
-            })
+            self.commands.append(
+                {
+                    "tool": "chrome-devtools_new_page",
+                    "args": {"url": self.base_url},
+                }
+            )
             self.state.page_id = "pending"
             return True
         except Exception as e:
             self.state.errors.append(f"Setup failed: {e}")
             return False
 
-    async def navigate(self, url: str) -> Dict[str, Any]:
+    async def navigate(self, url: str) -> dict[str, Any]:
         """Navigate to a URL."""
         start = time.time()
 
-        self.commands.append({
-            "tool": "chrome-devtools_navigate_page",
-            "args": {"url": url},
-        })
+        self.commands.append(
+            {
+                "tool": "chrome-devtools_navigate_page",
+                "args": {"url": url},
+            }
+        )
 
         result = {
             "success": True,
@@ -77,18 +82,22 @@ class ChromeDevToolsBrowser:
 
     async def wait_for_text(self, text: str, timeout_s: float = 10.0) -> bool:
         """Wait for text to appear on the page."""
-        self.commands.append({
-            "tool": "chrome-devtools_wait_for",
-            "args": {"text": [text], "timeout": timeout_s * 1000},
-        })
+        self.commands.append(
+            {
+                "tool": "chrome-devtools_wait_for",
+                "args": {"text": [text], "timeout": timeout_s * 1000},
+            }
+        )
         return True
 
-    async def take_snapshot(self) -> Dict[str, Any]:
+    async def take_snapshot(self) -> dict[str, Any]:
         """Take a snapshot of the page."""
-        self.commands.append({
-            "tool": "chrome-devtools_take_snapshot",
-            "args": {},
-        })
+        self.commands.append(
+            {
+                "tool": "chrome-devtools_take_snapshot",
+                "args": {},
+            }
+        )
 
         return {
             "url": self.state.url,
@@ -97,44 +106,54 @@ class ChromeDevToolsBrowser:
 
     async def click(self, selector: str) -> bool:
         """Click an element."""
-        self.commands.append({
-            "tool": "chrome-devtools_click",
-            "args": {"uid": selector},
-        })
+        self.commands.append(
+            {
+                "tool": "chrome-devtools_click",
+                "args": {"uid": selector},
+            }
+        )
         return True
 
     async def fill(self, selector: str, text: str) -> bool:
         """Fill an input."""
-        self.commands.append({
-            "tool": "chrome-devtools_fill",
-            "args": {"uid": selector, "value": text},
-        })
+        self.commands.append(
+            {
+                "tool": "chrome-devtools_fill",
+                "args": {"uid": selector, "value": text},
+            }
+        )
         return True
 
-    async def get_console_errors(self) -> List[str]:
+    async def get_console_errors(self) -> list[str]:
         """Get console errors."""
-        self.commands.append({
-            "tool": "chrome-devtools_list_console_messages",
-            "args": {"types": ["error"]},
-        })
+        self.commands.append(
+            {
+                "tool": "chrome-devtools_list_console_messages",
+                "args": {"types": ["error"]},
+            }
+        )
         return self.state.errors
 
-    async def get_network_errors(self) -> List[str]:
+    async def get_network_errors(self) -> list[str]:
         """Get network errors."""
-        self.commands.append({
-            "tool": "chrome-devtools_list_network_requests",
-            "args": {"resourceTypes": ["xhr", "fetch"]},
-        })
+        self.commands.append(
+            {
+                "tool": "chrome-devtools_list_network_requests",
+                "args": {"resourceTypes": ["xhr", "fetch"]},
+            }
+        )
         return []
 
     async def teardown(self) -> None:
         """Clean up the browser."""
-        self.commands.append({
-            "tool": "chrome-devtools_close_page",
-            "args": {},
-        })
+        self.commands.append(
+            {
+                "tool": "chrome-devtools_close_page",
+                "args": {},
+            }
+        )
 
-    def get_commands(self) -> List[Dict[str, Any]]:
+    def get_commands(self) -> list[dict[str, Any]]:
         """Get all MCP commands to execute."""
         return self.commands
 

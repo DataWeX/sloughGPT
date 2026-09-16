@@ -4,8 +4,9 @@ import json
 import logging
 import threading
 from collections import deque
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from .sources import Record
 
@@ -35,7 +36,7 @@ class FileStore:
     def read_all(self) -> Iterator[Record]:
         if not self.path.exists():
             return
-        with open(self.path, "r", encoding="utf-8") as f:
+        with open(self.path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -51,7 +52,7 @@ class FileStore:
     def count(self) -> int:
         if not self.path.exists():
             return 0
-        with open(self.path, "r", encoding="utf-8") as f:
+        with open(self.path, encoding="utf-8") as f:
             return sum(1 for line in f if line.strip())
 
     def clear(self) -> None:

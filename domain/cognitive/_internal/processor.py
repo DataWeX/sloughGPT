@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from domains import (
     BaseComponent,
@@ -25,9 +25,9 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
 
     def __init__(
         self,
-        memory_manager: Optional[Any] = None,
-        reasoning_engine: Optional[Any] = None,
-        metacognitive_monitor: Optional[Any] = None,
+        memory_manager: Any | None = None,
+        reasoning_engine: Any | None = None,
+        metacognitive_monitor: Any | None = None,
     ) -> None:
         super().__init__("cognitive_processor")
         self.logger = logging.getLogger(f"slo.{self.component_name}")
@@ -38,7 +38,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
         self.metacognitive_monitor = metacognitive_monitor
 
         # Processing state
-        self.current_thoughts: List[Thought] = []
+        self.current_thoughts: list[Thought] = []
         self.processing_queue: asyncio.Queue[Any] = asyncio.Queue()
         self.is_processing = False
 
@@ -51,7 +51,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
         }
 
         # Background processing
-        self.processing_task: Optional[asyncio.Task[Any]] = None
+        self.processing_task: asyncio.Task[Any] | None = None
 
         self.is_initialized = False
 
@@ -77,7 +77,9 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             self.logger.info("Cognitive Processor initialized successfully", extra={"tag": "COG"})
 
         except Exception as e:
-            self.logger.error("Failed to initialize Cognitive Processor: %s", e, extra={"tag": "COG"})
+            self.logger.error(
+                "Failed to initialize Cognitive Processor: %s", e, extra={"tag": "COG"}
+            )
             raise ComponentException(f"Cognitive Processor initialization failed: {e}")
 
     async def shutdown(self) -> None:
@@ -193,7 +195,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
 
     # Private methods
 
-    async def _retrieve_relevant_memories(self, thought: Thought) -> Dict[str, Any]:
+    async def _retrieve_relevant_memories(self, thought: Thought) -> dict[str, Any]:
         """Retrieve memories relevant to the thought"""
         if not self.memory_manager:
             return {}
@@ -225,8 +227,8 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             return {}
 
     async def _apply_reasoning(
-        self, thought: Thought, memory_context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, thought: Thought, memory_context: dict[str, Any]
+    ) -> dict[str, Any]:
         """Apply reasoning to the thought"""
         if not self.reasoning_engine:
             return {}
@@ -235,7 +237,9 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             # Prepare reasoning context
             reasoning_context = {
                 "memory_context": memory_context,
-                "thought_type": thought.thought_type.value if hasattr(thought.thought_type, "value") else thought.thought_type,
+                "thought_type": thought.thought_type.value
+                if hasattr(thought.thought_type, "value")
+                else thought.thought_type,
                 "confidence": thought.confidence,
             }
 
@@ -267,7 +271,9 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             memory_id = await self.memory_manager.store_memory(
                 {
                     "thought_content": thought.content,
-                    "thought_type": thought.thought_type.value if hasattr(thought.thought_type, "value") else thought.thought_type,
+                    "thought_type": thought.thought_type.value
+                    if hasattr(thought.thought_type, "value")
+                    else thought.thought_type,
                     "reasoning_result": thought.metadata.get("reasoning_result"),
                     "confidence": thought.confidence,
                 },
@@ -288,14 +294,18 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
         base_importance = thought.confidence
 
         # Boost for certain thought types
-        type_boosts: Dict[str, float] = {
+        type_boosts: dict[str, float] = {
             "analytical": 0.1,
             "creative": 0.2,
             "metacognitive": 0.3,
             "intuitive": 0.05,
         }
 
-        tt = thought.thought_type.value if hasattr(thought.thought_type, "value") else thought.thought_type
+        tt = (
+            thought.thought_type.value
+            if hasattr(thought.thought_type, "value")
+            else thought.thought_type
+        )
         type_boost = type_boosts.get(tt, 0.0)
 
         # Boost for reasoning results
@@ -342,7 +352,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
                 await self.process_thought(thought)
                 self.processing_queue.task_done()
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # No thoughts to process, continue
                 continue
             except asyncio.CancelledError:
@@ -357,7 +367,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
         """Queue a thought for background processing"""
         await self.processing_queue.put(thought)
 
-    async def get_processing_statistics(self) -> Dict[str, Any]:
+    async def get_processing_statistics(self) -> dict[str, Any]:
         """Get processing statistics"""
         stats = self.processing_stats.copy()
 
@@ -374,7 +384,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
 
         return stats
 
-    async def batch_process_thoughts(self, thoughts: List[Thought]) -> List[Thought]:
+    async def batch_process_thoughts(self, thoughts: list[Thought]) -> list[Thought]:
         """Process multiple thoughts in batch"""
         processed_thoughts = []
 
@@ -389,7 +399,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
 
         return processed_thoughts
 
-    async def trigger_cognitive_assessment(self) -> Dict[str, Any]:
+    async def trigger_cognitive_assessment(self) -> dict[str, Any]:
         """Trigger comprehensive cognitive assessment"""
         assessment = {
             "timestamp": time.time(),

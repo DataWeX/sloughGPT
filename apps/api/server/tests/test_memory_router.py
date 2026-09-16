@@ -163,7 +163,7 @@ def test_config_clamps_negative_retention_to_zero():
 def test_delete_item_removes_entry():
     client = get_test_client()
     _cleanup()
-    add = client.post(
+    client.post(
         "/memory/store", json={"content": "Deletable fact", "topic": "test", "source": "api"}
     )
     item_id = _d(client.get("/memory/list"))["items"][0]["id"]

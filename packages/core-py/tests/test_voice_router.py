@@ -8,13 +8,12 @@ on an anonymous instance (router = VoiceRouter().router). We patch
 _TTSBackend to control what __init__ creates, then access the instance
 via the closure or just re-instantiate.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -33,6 +32,7 @@ from routers.voice import VoiceRouter  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _app_with_backend(backend):
     """Create a fresh test app with a VoiceRouter using the given backend mock."""
     app = FastAPI()
@@ -41,6 +41,7 @@ def _app_with_backend(backend):
     vr._tts_backend = backend
     # Re-register routes on a fresh router
     from fastapi import APIRouter
+
     vr.router = APIRouter(prefix="/voice", tags=["voice"])
 
     # Register the same endpoints as the real __init__
@@ -48,6 +49,7 @@ def _app_with_backend(backend):
     vr.router.add_api_route("/status", vr.voice_status, methods=["GET"])
     app.include_router(vr.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 
@@ -67,6 +69,7 @@ def _mock_backend(**overrides):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestVoiceStatus:
     def test_status_when_unavailable(self):
@@ -113,8 +116,9 @@ class TestTextToSpeech:
         assert resp.json()["backend"] == "browser-fallback"
 
     def test_successful_generation(self):
-        import wave
         import io
+        import wave
+
         import numpy as np
 
         # Build a minimal WAV file

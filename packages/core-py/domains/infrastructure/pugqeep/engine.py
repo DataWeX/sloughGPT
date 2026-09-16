@@ -30,10 +30,11 @@ import multiprocessing
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, Future
+from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Optional
 
 from .config import RestartPolicy
 
@@ -86,6 +87,7 @@ class Process:
     A Process wraps a callable with args/kwargs and tracks its state
     through CREATED -> READY -> RUNNING -> COMPLETED/FAILED.
     """
+
     fn: Callable[..., Any]
     args: tuple = ()
     kwargs: dict = field(default_factory=dict)
@@ -93,31 +95,31 @@ class Process:
     name: str = ""
     status: ProcessStatus = ProcessStatus.CREATED
     result: Any = None
-    error: Optional[str] = None
-    parent_id: Optional[str] = None
-    children_ids: List[str] = field(default_factory=list)
+    error: str | None = None
+    parent_id: str | None = None
+    children_ids: list[str] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
-    started_at: Optional[float] = None
-    completed_at: Optional[float] = None
-    timeout: Optional[float] = None  # seconds, None = no timeout
-    depends_on: List[str] = field(default_factory=list)
-    _future: Optional[Future] = field(default=None, repr=False)
-    _tree_name: Optional[str] = field(default=None, repr=False)
+    started_at: float | None = None
+    completed_at: float | None = None
+    timeout: float | None = None  # seconds, None = no timeout
+    depends_on: list[str] = field(default_factory=list)
+    _future: Future | None = field(default=None, repr=False)
+    _tree_name: str | None = field(default=None, repr=False)
     _cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
     _done_event: threading.Event = field(default_factory=threading.Event, repr=False)
     _priority: int = field(default=2, repr=False)
     _restart_count: int = field(default=0, repr=False)
-    _pid: Optional[int] = field(default=None, repr=False)
-    _last_heartbeat: Optional[float] = field(default=None, repr=False)
+    _pid: int | None = field(default=None, repr=False)
+    _last_heartbeat: float | None = field(default=None, repr=False)
     _restart_policy: Optional["RestartPolicy"] = field(default=None, repr=False)
-    _stream_results: List[Any] = field(default_factory=list, repr=False)
+    _stream_results: list[Any] = field(default_factory=list, repr=False)
     _progress: float = field(default=0.0, repr=False)
     _progress_message: str = field(default="", repr=False)
-    _on_complete: List[Callable] = field(default_factory=list, repr=False)
-    _on_fail: List[Callable] = field(default_factory=list, repr=False)
-    _on_cancel: List[Callable] = field(default_factory=list, repr=False)
-    _on_stream: List[Callable] = field(default_factory=list, repr=False)
-    _on_progress: List[Callable] = field(default_factory=list, repr=False)
+    _on_complete: list[Callable] = field(default_factory=list, repr=False)
+    _on_fail: list[Callable] = field(default_factory=list, repr=False)
+    _on_cancel: list[Callable] = field(default_factory=list, repr=False)
+    _on_stream: list[Callable] = field(default_factory=list, repr=False)
+    _on_progress: list[Callable] = field(default_factory=list, repr=False)
 
     def ready(self) -> None:
         self.status = ProcessStatus.READY
@@ -171,7 +173,7 @@ class Process:
                 pass
 
     @property
-    def stream_results(self) -> List[Any]:
+    def stream_results(self) -> list[Any]:
         return self._stream_results
 
     @property
@@ -211,7 +213,7 @@ class Process:
         return self.status == ProcessStatus.CANCELLED
 
     @property
-    def elapsed(self) -> Optional[float]:
+    def elapsed(self) -> float | None:
         if self.started_at is None:
             return None
         end = self.completed_at or time.time()
@@ -251,12 +253,13 @@ class Process:
 @dataclass
 class Stem:
     """A branch of parallel execution from a Tree."""
+
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     tree_id: str = ""
-    processes: List[Process] = field(default_factory=list)
+    processes: list[Process] = field(default_factory=list)
     status: StemStatus = StemStatus.CREATED
     created_at: float = field(default_factory=time.time)
-    completed_at: Optional[float] = None
+    completed_at: float | None = None
     _done_event: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def running(self) -> None:
@@ -280,10 +283,10 @@ class Stem:
     def all_done(self) -> bool:
         return all(p.is_done for p in self.processes)
 
-    def results(self) -> List[Any]:
+    def results(self) -> list[Any]:
         return [p.result for p in self.processes if p.status == ProcessStatus.COMPLETED]
 
-    def errors(self) -> List[str]:
+    def errors(self) -> list[str]:
         return [p.error for p in self.processes if p.status == ProcessStatus.FAILED and p.error]
 
     def to_dict(self) -> dict:
@@ -299,25 +302,23 @@ class Stem:
 
 class Tree:
     """Model instance that branches Stems of parallel tasks."""
-    def __init__(self, name: str, max_stems: int = 8,
-                 pool_workers: int = 4):
+
+    def __init__(self, name: str, max_stems: int = 8, pool_workers: int = 4):
         self.name = name
         self.status = TreeStatus.IDLE
         self.max_stems = max_stems
-        self._stems: Dict[str, Stem] = {}
+        self._stems: dict[str, Stem] = {}
         self._pool = ThreadPoolExecutor(
             max_workers=pool_workers,
             thread_name_prefix=f"tree-{name}",
         )
         self._lock = threading.Lock()
-        self._graph: Dict[str, Any] = {}
+        self._graph: dict[str, Any] = {}
 
-    def branch(self, processes: List[Process]) -> Stem:
+    def branch(self, processes: list[Process]) -> Stem:
         with self._lock:
             if len(self._stems) >= self.max_stems:
-                raise RuntimeError(
-                    f"Tree '{self.name}' at max stems ({self.max_stems})"
-                )
+                raise RuntimeError(f"Tree '{self.name}' at max stems ({self.max_stems})")
 
         stem = Stem(tree_id=self.name, processes=processes)
         self._stems[stem.id] = stem
@@ -328,16 +329,17 @@ class Tree:
             future = self._pool.submit(self._execute, proc, stem)
             proc._future = future
 
-        logger.debug("Tree[%s]: branched stem %s with %d processes",
-                      self.name, stem.id, len(processes))
+        logger.debug(
+            "Tree[%s]: branched stem %s with %d processes", self.name, stem.id, len(processes)
+        )
         return stem
 
     def _execute(self, proc: Process, stem: Stem) -> Any:
         proc.running()
         try:
             if proc.timeout is not None and proc.timeout > 0:
-                result_container: List[Any] = []
-                error_container: List[Optional[Exception]] = [None]
+                result_container: list[Any] = []
+                error_container: list[Exception | None] = [None]
 
                 def _target():
                     try:
@@ -372,14 +374,14 @@ class Tree:
                     self.status = TreeStatus.IDLE
         return proc.result
 
-    def wait_stem(self, stem: Stem, timeout: Optional[float] = None) -> Stem:
+    def wait_stem(self, stem: Stem, timeout: float | None = None) -> Stem:
         stem._done_event.wait(timeout=timeout)
         return stem
 
     def store(self, key: str, value: Any) -> None:
         self._graph[key] = value
 
-    def recall(self, key: str) -> Optional[Any]:
+    def recall(self, key: str) -> Any | None:
         return self._graph.get(key)
 
     @property
@@ -402,14 +404,21 @@ class Tree:
 
 class GuardTree(Tree):
     """Tree that wraps processes in SubprocessProcess for subprocess isolation."""
-    def __init__(self, name: str, config=None, max_stems: int = 8,
-                 pool_workers: int = 4, default_timeout: float = None):
+
+    def __init__(
+        self,
+        name: str,
+        config=None,
+        max_stems: int = 8,
+        pool_workers: int = 4,
+        default_timeout: float = None,
+    ):
         super().__init__(name, max_stems=max_stems, pool_workers=pool_workers)
         self.subprocess_config = config
         self.default_timeout = default_timeout
-        self._subprocesses: Dict[str, SubprocessProcess] = {}
+        self._subprocesses: dict[str, SubprocessProcess] = {}
 
-    def branch(self, processes: List[Process]) -> Stem:
+    def branch(self, processes: list[Process]) -> Stem:
         for proc in processes:
             if self.subprocess_config and self.subprocess_config.enabled:
                 sub = SubprocessProcess(proc, self.subprocess_config)
@@ -430,7 +439,9 @@ class GuardTree(Tree):
 
     def to_dict(self) -> dict:
         d = super().to_dict()
-        d["subprocess_enabled"] = self.subprocess_config is not None and self.subprocess_config.enabled
+        d["subprocess_enabled"] = (
+            self.subprocess_config is not None and self.subprocess_config.enabled
+        )
         d["subprocess_count"] = self.subprocess_count
         return d
 
@@ -439,13 +450,15 @@ class GuardTree(Tree):
             "name": self.name,
             "status": self.status.value,
             "active_stems": self.active_stems,
-            "subprocess_enabled": self.subprocess_config is not None and self.subprocess_config.enabled,
+            "subprocess_enabled": self.subprocess_config is not None
+            and self.subprocess_config.enabled,
             "subprocess_count": self.subprocess_count,
         }
 
 
 class EngineMetrics:
     """Track engine-wide metrics: spawned, completed, failed, etc."""
+
     def __init__(self):
         self._lock = threading.Lock()
         self._spawned = 0
@@ -546,27 +559,28 @@ class SubprocessProcess:
     def __init__(self, proc: Process, config):
         self.proc = proc
         self.config = config
-        self._process: Optional[multiprocessing.Process] = None
+        self._process: multiprocessing.Process | None = None
         self._parent_conn = None
-        self._start_time: Optional[float] = None
-        self._end_time: Optional[float] = None
+        self._start_time: float | None = None
+        self._end_time: float | None = None
         self._lock = threading.Lock()
-        self._watchdog: Optional[threading.Thread] = None
-        self._reader_thread: Optional[threading.Thread] = None
+        self._watchdog: threading.Thread | None = None
+        self._reader_thread: threading.Thread | None = None
         self._cancel_event = threading.Event()
-        self._last_heartbeat: Optional[float] = None
-        self._stdout: Optional[str] = None
-        self._stderr: Optional[str] = None
+        self._last_heartbeat: float | None = None
+        self._stdout: str | None = None
+        self._stderr: str | None = None
 
     def start(self) -> None:
         import os
+
         parent_r, child_w = multiprocessing.Pipe(duplex=False)
         self._start_time = time.monotonic()
         capture = self.config.capture_output
 
         def _worker():
-            import sys
             import io
+            import sys
 
             stdout_capture = None
             stderr_capture = None
@@ -581,6 +595,7 @@ class SubprocessProcess:
                 if self.config.memory_limit_mb is not None:
                     try:
                         import resource
+
                         limit_bytes = self.config.memory_limit_mb * 1024 * 1024
                         resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
                     except (ImportError, ValueError, OSError):
@@ -623,8 +638,12 @@ class SubprocessProcess:
             finally:
                 if capture:
                     try:
-                        child_w.send(("stdout", stdout_capture.getvalue() if stdout_capture else ""))
-                        child_w.send(("stderr", stderr_capture.getvalue() if stderr_capture else ""))
+                        child_w.send(
+                            ("stdout", stdout_capture.getvalue() if stdout_capture else "")
+                        )
+                        child_w.send(
+                            ("stderr", stderr_capture.getvalue() if stderr_capture else "")
+                        )
                     except Exception:
                         logger.warning("Failed to send captured output to parent pipe")
                 try:
@@ -640,14 +659,17 @@ class SubprocessProcess:
         self.proc.running()
 
         self._reader_thread = threading.Thread(
-            target=self._read_result, args=(parent_r,),
-            daemon=True, name=f"reader-{self.proc.name}",
+            target=self._read_result,
+            args=(parent_r,),
+            daemon=True,
+            name=f"reader-{self.proc.name}",
         )
         self._reader_thread.start()
 
         if self.proc.timeout is not None and self.proc.timeout > 0:
             self._watchdog = threading.Thread(
-                target=self._watchdog_loop, daemon=True,
+                target=self._watchdog_loop,
+                daemon=True,
                 name=f"watchdog-{self.proc.name}",
             )
             self._watchdog.start()
@@ -699,7 +721,9 @@ class SubprocessProcess:
             if self._process and self._process.exitcode == 0:
                 self.proc.complete()
             else:
-                self.proc.fail(f"exit code {self._process.exitcode}" if self._process else "no process")
+                self.proc.fail(
+                    f"exit code {self._process.exitcode}" if self._process else "no process"
+                )
 
     def _watchdog_loop(self) -> None:
         while not self._cancel_event.is_set():
@@ -735,12 +759,12 @@ class SubprocessProcess:
         return self._process is not None and self._process.is_alive()
 
     @property
-    def elapsed(self) -> Optional[float]:
+    def elapsed(self) -> float | None:
         end = self._end_time or time.monotonic()
         return end - (self._start_time or end) if self._start_time else None
 
     @property
-    def pid(self) -> Optional[int]:
+    def pid(self) -> int | None:
         return self._process.pid if self._process else None
 
     def cancel(self) -> None:
@@ -753,11 +777,12 @@ class SubprocessProcess:
             "elapsed": self.elapsed,
         }
 
-    def resource_usage(self) -> Optional[dict]:
+    def resource_usage(self) -> dict | None:
         if self._process is None or self._process.pid is None:
             return None
         try:
             import resource
+
             if self._process.is_alive():
                 self._process.join(timeout=0.1)
             usage = resource.getrusage(resource.RUSAGE_CHILDREN)
@@ -772,20 +797,21 @@ class SubprocessProcess:
             return None
 
     @property
-    def stdout(self) -> Optional[str]:
+    def stdout(self) -> str | None:
         return self._stdout
 
     @property
-    def stderr(self) -> Optional[str]:
+    def stderr(self) -> str | None:
         return self._stderr
 
 
 class ProcessGroup:
     """Batch operations on a set of processes."""
+
     def __init__(self, name: str, engine: "Engine" = None):
         self.name = name
         self.engine = engine
-        self._processes: List[Process] = []
+        self._processes: list[Process] = []
         self._done_event = threading.Event()
 
     def add(self, proc: Process) -> None:
@@ -807,17 +833,17 @@ class ProcessGroup:
         return all(p.is_done for p in self._processes)
 
     @property
-    def elapsed(self) -> Optional[float]:
+    def elapsed(self) -> float | None:
         starts = [p.started_at for p in self._processes if p.started_at]
         ends = [p.completed_at or time.time() for p in self._processes]
         if not starts:
             return 0.0
         return max(ends) - min(starts)
 
-    def results(self) -> List[Any]:
+    def results(self) -> list[Any]:
         return [p.result for p in self._processes if p.status == ProcessStatus.COMPLETED]
 
-    def errors(self) -> List[str]:
+    def errors(self) -> list[str]:
         return [p.error for p in self._processes if p.status == ProcessStatus.FAILED and p.error]
 
     def cancel(self) -> int:
@@ -828,7 +854,7 @@ class ProcessGroup:
                 count += 1
         return count
 
-    def gather(self, timeout: float = None) -> List[Any]:
+    def gather(self, timeout: float = None) -> list[Any]:
         self.wait(timeout=timeout)
         return self.results()
 
@@ -849,27 +875,32 @@ class ProcessGroup:
             "elapsed": self.elapsed,
             "all_done": self.all_done,
             "status_counts": {
-                s.value: sum(1 for p in self._processes if p.status == s)
-                for s in ProcessStatus
+                s.value: sum(1 for p in self._processes if p.status == s) for s in ProcessStatus
             },
         }
 
 
 class ProcessMonitor:
     """Background thread for stall detection and restart callbacks."""
-    def __init__(self, config=None, restart_policy=None,
-                 poll_interval: float = 1.0, stall_timeout: float = 30.0):
+
+    def __init__(
+        self,
+        config=None,
+        restart_policy=None,
+        poll_interval: float = 1.0,
+        stall_timeout: float = 30.0,
+    ):
         self.config = config
         self.restart_policy = restart_policy
         self.poll_interval = config.poll_interval if config else poll_interval
         self.stall_timeout = config.stall_timeout if config else stall_timeout
-        self._processes: Dict[str, Process] = {}
+        self._processes: dict[str, Process] = {}
         self._lock = threading.Lock()
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._running = False
-        self._on_stall: List[Callable] = []
-        self._on_restart: List[Callable] = []
-        self._restart_count: Dict[str, int] = {}
+        self._on_stall: list[Callable] = []
+        self._on_restart: list[Callable] = []
+        self._restart_count: dict[str, int] = {}
 
     @property
     def active_count(self) -> int:
@@ -895,7 +926,7 @@ class ProcessMonitor:
             return 1.0
         base = self.restart_policy.restart_delay
         if self.restart_policy.backoff == "exponential":
-            delay = base * (2 ** attempt)
+            delay = base * (2**attempt)
         elif self.restart_policy.backoff == "linear":
             delay = base * (attempt + 1)
         else:
@@ -934,7 +965,9 @@ class ProcessMonitor:
                                 try:
                                     cb(proc)
                                 except Exception:
-                                    logger.debug("Non-critical pugqeep stall callback error", exc_info=True)
+                                    logger.debug(
+                                        "Non-critical pugqeep stall callback error", exc_info=True
+                                    )
                     if proc.status == ProcessStatus.FAILED:
                         policy = proc._restart_policy or self.restart_policy
                         if policy and policy.max_restarts > 0:
@@ -946,7 +979,10 @@ class ProcessMonitor:
                                     try:
                                         cb(proc)
                                     except Exception:
-                                        logger.debug("Non-critical pugqeep restart callback error", exc_info=True)
+                                        logger.debug(
+                                            "Non-critical pugqeep restart callback error",
+                                            exc_info=True,
+                                        )
 
     def stats(self) -> dict:
         with self._lock:
@@ -986,11 +1022,12 @@ class ProcessMonitor:
 
 class ResultCache:
     """LRU + TTL cache for deduplicating identical function calls."""
+
     def __init__(self, maxsize: int = 128, ttl: float = None):
         self.maxsize = maxsize
         self.ttl = ttl
-        self._cache: Dict[str, Any] = {}
-        self._timestamps: Dict[str, float] = {}
+        self._cache: dict[str, Any] = {}
+        self._timestamps: dict[str, float] = {}
         self._lock = threading.Lock()
         self._hits = 0
         self._misses = 0
@@ -1086,25 +1123,25 @@ class Engine:
             self.name = name
             self.max_trees = max_trees
             self._config = None
-        self._trees: Dict[str, Tree] = {}
-        self._processes: Dict[str, Process] = {}
-        self._pending: List[Process] = []
+        self._trees: dict[str, Tree] = {}
+        self._processes: dict[str, Process] = {}
+        self._pending: list[Process] = []
         self._running = False
         self._lock = threading.Lock()
-        self._routing: Dict[str, str] = {}
-        self._default_tree: Optional[str] = None
-        self._on_complete: List[Callable[[Process], None]] = []
-        self._completed: List[Process] = []
+        self._routing: dict[str, str] = {}
+        self._default_tree: str | None = None
+        self._on_complete: list[Callable[[Process], None]] = []
+        self._completed: list[Process] = []
         self._dispatch_batch_size: int = 8
         self._round_robin_idx: int = 0
         self._scheduling_policy: SchedulingPolicy = SchedulingPolicy.ROUND_ROBIN
-        self._dependents: Dict[str, List[str]] = {}
+        self._dependents: dict[str, list[str]] = {}
         self._spawn_queue = None
         self._metrics = EngineMetrics()
-        self._cache: Optional[ResultCache] = None
-        self._monitor: Optional[ProcessMonitor] = None
+        self._cache: ResultCache | None = None
+        self._monitor: ProcessMonitor | None = None
         self._signal_handlers_installed = False
-        self._old_signal_handlers: Dict = {}
+        self._old_signal_handlers: dict = {}
         self._all_done_event = threading.Event()
 
         if self._config and self._config.monitor.enabled:
@@ -1126,13 +1163,19 @@ class Engine:
             raise TypeError("policy must be a SchedulingPolicy")
         self._scheduling_policy = policy
 
-    def spawn(self, fn: Callable[..., Any], *args: Any,
-              name: str = "", tree: Optional[str] = None,
-              priority: int = 2, timeout: Optional[float] = None,
-              depends_on: Optional[List[str]] = None,
-              subprocess: bool = False,
-              register_cancel: bool = False,
-              **kwargs: Any) -> Process:
+    def spawn(
+        self,
+        fn: Callable[..., Any],
+        *args: Any,
+        name: str = "",
+        tree: str | None = None,
+        priority: int = 2,
+        timeout: float | None = None,
+        depends_on: list[str] | None = None,
+        subprocess: bool = False,
+        register_cancel: bool = False,
+        **kwargs: Any,
+    ) -> Process:
         proc = Process(fn=fn, args=args, kwargs=kwargs, name=name, timeout=timeout)
         proc._priority = priority
         if tree:
@@ -1163,22 +1206,34 @@ class Engine:
         if self._spawn_queue is not None:
             self._spawn_queue.put(proc, priority=priority)
 
-        logger.debug("Engine[%s]: spawned process %s (%s) -> pending",
-                      self.name, proc.id, proc.name or fn.__name__)
+        logger.debug(
+            "Engine[%s]: spawned process %s (%s) -> pending",
+            self.name,
+            proc.id,
+            proc.name or fn.__name__,
+        )
         return proc
 
-    def tree(self, name: str, max_stems: int = 8,
-             pool_workers: int = 4, guarded: bool = False,
-             default_timeout: float = None) -> Tree:
+    def tree(
+        self,
+        name: str,
+        max_stems: int = 8,
+        pool_workers: int = 4,
+        guarded: bool = False,
+        default_timeout: float = None,
+    ) -> Tree:
         with self._lock:
             if len(self._trees) >= self.max_trees:
-                raise RuntimeError(
-                    f"Engine '{self.name}' at max trees ({self.max_trees})"
-                )
+                raise RuntimeError(f"Engine '{self.name}' at max trees ({self.max_trees})")
             if guarded:
                 config = self._config.subprocess if self._config else None
-                tree = GuardTree(name, config=config, max_stems=max_stems,
-                                pool_workers=pool_workers, default_timeout=default_timeout)
+                tree = GuardTree(
+                    name,
+                    config=config,
+                    max_stems=max_stems,
+                    pool_workers=pool_workers,
+                    default_timeout=default_timeout,
+                )
             else:
                 tree = Tree(name, max_stems=max_stems, pool_workers=pool_workers)
             self._trees[name] = tree
@@ -1191,13 +1246,12 @@ class Engine:
         if tree_name not in self._trees:
             raise ValueError(f"Tree '{tree_name}' not found")
         self._routing[process_name] = tree_name
-        logger.debug("Engine[%s]: route '%s' -> tree '%s'",
-                      self.name, process_name, tree_name)
+        logger.debug("Engine[%s]: route '%s' -> tree '%s'", self.name, process_name, tree_name)
 
     def on_complete(self, callback: Callable[[Process], None]) -> None:
         self._on_complete.append(callback)
 
-    def branch(self, tree_name: str, processes: List[Process]) -> Stem:
+    def branch(self, tree_name: str, processes: list[Process]) -> Stem:
         tree = self._trees.get(tree_name)
         if tree is None:
             raise ValueError(f"Tree '{tree_name}' not found")
@@ -1210,8 +1264,8 @@ class Engine:
         if not self._pending:
             return 0
 
-        dispatchable: List[Process] = []
-        held: List[Process] = []
+        dispatchable: list[Process] = []
+        held: list[Process] = []
         for proc in self._pending:
             if proc.depends_on and not self._deps_met(proc):
                 held.append(proc)
@@ -1223,8 +1277,8 @@ class Engine:
 
         dispatchable.sort(key=lambda p: p._priority)
 
-        groups: Dict[str, List[Process]] = {}
-        ungrouped: List[Process] = []
+        groups: dict[str, list[Process]] = {}
+        ungrouped: list[Process] = []
 
         for proc in dispatchable:
             tree_name = proc._tree_name or self._routing.get(proc.name)
@@ -1247,20 +1301,25 @@ class Engine:
         for tree_name, procs in groups.items():
             tree = self._trees.get(tree_name)
             if tree is None:
-                logger.warning("Engine[%s]: tree '%s' not found, skipping %d processes",
-                               self.name, tree_name, len(procs))
+                logger.warning(
+                    "Engine[%s]: tree '%s' not found, skipping %d processes",
+                    self.name,
+                    tree_name,
+                    len(procs),
+                )
                 for p in procs:
                     p.fail(f"tree '{tree_name}' not found")
                 continue
 
             for i in range(0, len(procs), self._dispatch_batch_size):
-                batch = procs[i:i + self._dispatch_batch_size]
+                batch = procs[i : i + self._dispatch_batch_size]
                 try:
                     tree.branch(batch)
                     dispatched += len(batch)
                 except RuntimeError as e:
-                    logger.error("Engine[%s]: failed to dispatch to '%s': %s",
-                                 self.name, tree_name, e)
+                    logger.error(
+                        "Engine[%s]: failed to dispatch to '%s': %s", self.name, tree_name, e
+                    )
                     for p in batch:
                         p.fail(str(e))
 
@@ -1268,8 +1327,9 @@ class Engine:
         self._metrics.record_dispatch(dispatched)
         return dispatched
 
-    def run(self, poll_interval: float = 0.1,
-            on_progress: Optional[Callable[[dict], None]] = None) -> None:
+    def run(
+        self, poll_interval: float = 0.1, on_progress: Callable[[dict], None] | None = None
+    ) -> None:
         self._running = True
         logger.info("Engine[%s]: starting main loop", self.name)
 
@@ -1277,8 +1337,7 @@ class Engine:
             if self._pending and self._spawn_queue is None:
                 dispatched = self.dispatch()
                 if dispatched > 0:
-                    logger.info("Engine[%s]: dispatched %d processes",
-                                self.name, dispatched)
+                    logger.info("Engine[%s]: dispatched %d processes", self.name, dispatched)
 
             with self._lock:
                 active = sum(t.active_stems for t in self._trees.values())
@@ -1294,35 +1353,40 @@ class Engine:
                         try:
                             cb(proc)
                         except Exception as e:
-                            logger.error("Engine[%s]: on_complete callback error: %s",
-                                         self.name, e)
+                            logger.error("Engine[%s]: on_complete callback error: %s", self.name, e)
 
             if on_progress is not None:
                 try:
-                    on_progress({
-                        "pending": len(self._pending),
-                        "active_stems": active,
-                        "completed": len(self._completed),
-                        "running": sum(1 for p in self._processes.values()
-                                       if p.status == ProcessStatus.RUNNING),
-                        "failed": sum(1 for p in self._processes.values()
-                                      if p.status == ProcessStatus.FAILED),
-                    })
+                    on_progress(
+                        {
+                            "pending": len(self._pending),
+                            "active_stems": active,
+                            "completed": len(self._completed),
+                            "running": sum(
+                                1
+                                for p in self._processes.values()
+                                if p.status == ProcessStatus.RUNNING
+                            ),
+                            "failed": sum(
+                                1
+                                for p in self._processes.values()
+                                if p.status == ProcessStatus.FAILED
+                            ),
+                        }
+                    )
                 except Exception as e:
-                    logger.error("Engine[%s]: on_progress callback error: %s",
-                                 self.name, e)
+                    logger.error("Engine[%s]: on_progress callback error: %s", self.name, e)
 
-            if not self._pending and all(
-                p.is_done for p in self._processes.values()
-            ):
+            if not self._pending and all(p.is_done for p in self._processes.values()):
                 self._all_done_event.set()
 
             time.sleep(poll_interval)
 
         logger.info("Engine[%s]: main loop stopped", self.name)
 
-    def run_background(self, poll_interval: float = 0.1,
-                       as_future: bool = False) -> Union[threading.Thread, Future]:
+    def run_background(
+        self, poll_interval: float = 0.1, as_future: bool = False
+    ) -> threading.Thread | Future:
         if as_future:
             executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"engine-{self.name}")
             future = executor.submit(self.run, poll_interval)
@@ -1338,18 +1402,16 @@ class Engine:
         thread.start()
         return thread
 
-    def wait(self, timeout: Optional[float] = None) -> None:
-        if not self._pending and all(
-            p.is_done for p in self._processes.values()
-        ):
+    def wait(self, timeout: float | None = None) -> None:
+        if not self._pending and all(p.is_done for p in self._processes.values()):
             return
         self._all_done_event.wait(timeout=timeout)
 
-    def wait_all(self, timeout: Optional[float] = None) -> List[Process]:
+    def wait_all(self, timeout: float | None = None) -> list[Process]:
         self.wait(timeout=timeout)
         return [p for p in self._processes.values() if p.is_done]
 
-    def get_completed(self) -> List[Process]:
+    def get_completed(self) -> list[Process]:
         done = list(self._completed)
         self._completed.clear()
         return done
@@ -1366,22 +1428,22 @@ class Engine:
         for tree in self._trees.values():
             tree.shutdown()
 
-    def get_process(self, proc_id: str) -> Optional[Process]:
+    def get_process(self, proc_id: str) -> Process | None:
         return self._processes.get(proc_id)
 
-    def get_tree(self, name: str) -> Optional[Tree]:
+    def get_tree(self, name: str) -> Tree | None:
         return self._trees.get(name)
 
-    def list_trees(self) -> List[str]:
+    def list_trees(self) -> list[str]:
         return list(self._trees.keys())
 
-    def list_processes(self, status: Optional[ProcessStatus] = None) -> List[Process]:
+    def list_processes(self, status: ProcessStatus | None = None) -> list[Process]:
         procs = list(self._processes.values())
         if status:
             procs = [p for p in procs if p.status == status]
         return procs
 
-    def wait_for(self, proc_id: str, timeout: float = None) -> Optional[Process]:
+    def wait_for(self, proc_id: str, timeout: float = None) -> Process | None:
         proc = self._processes.get(proc_id)
         if proc is None:
             raise KeyError(f"Process '{proc_id}' not found")
@@ -1390,7 +1452,7 @@ class Engine:
         proc._done_event.wait(timeout=timeout)
         return proc if proc.is_done else None
 
-    def wait_for_any(self, proc_ids: List[str], timeout: float = None) -> Optional[Process]:
+    def wait_for_any(self, proc_ids: list[str], timeout: float = None) -> Process | None:
         # Check if any already done
         for pid in proc_ids:
             proc = self._processes.get(pid)
@@ -1451,7 +1513,7 @@ class Engine:
                 count += 1
         return count
 
-    def spawn_chain(self, *steps: tuple, name: str = "", tree: str = None) -> List[Process]:
+    def spawn_chain(self, *steps: tuple, name: str = "", tree: str = None) -> list[Process]:
         procs = []
         prev_id = None
         for i, step in enumerate(steps):
@@ -1470,13 +1532,16 @@ class Engine:
             if i == 0:
                 p = self.spawn(fn, *args, name=step_name, tree=tree, **kwargs)
             else:
+
                 def _make_wrapped(base_fn, base_args, base_kwargs, _prev_id=prev_id):
                     def _wrapped():
                         prev_proc = self._processes.get(_prev_id)
                         prev_result = prev_proc.result if prev_proc else None
                         return base_fn(prev_result, *base_args, **base_kwargs)
+
                     _wrapped.__name__ = f"chain_{base_fn.__name__}"
                     return _wrapped
+
                 p = self.spawn(_make_wrapped(fn, args, kwargs), name=step_name, tree=tree)
                 p.depends_on = [prev_id]
                 self._dependents.setdefault(prev_id, []).append(p.id)
@@ -1484,13 +1549,20 @@ class Engine:
             prev_id = p.id
         return procs
 
-    def run_subprocess(self, fn: Callable, *args, name: str = "",
-                       cwd: str = None, env: dict = None,
-                       memory_limit_mb: int = None,
-                       timeout: float = None,
-                       capture_output: bool = False,
-                       **kwargs) -> Process:
+    def run_subprocess(
+        self,
+        fn: Callable,
+        *args,
+        name: str = "",
+        cwd: str = None,
+        env: dict = None,
+        memory_limit_mb: int = None,
+        timeout: float = None,
+        capture_output: bool = False,
+        **kwargs,
+    ) -> Process:
         from .config import SubprocessConfig
+
         sub_config = SubprocessConfig(
             enabled=True,
             cwd=cwd,
@@ -1499,7 +1571,7 @@ class Engine:
             capture_output=capture_output,
         )
         old_config = None
-        if hasattr(self, '_subprocess_config'):
+        if hasattr(self, "_subprocess_config"):
             old_config = self._subprocess_config
         self._subprocess_config = sub_config
 
@@ -1507,7 +1579,7 @@ class Engine:
 
         if old_config is not None:
             self._subprocess_config = old_config
-        elif hasattr(self, '_subprocess_config'):
+        elif hasattr(self, "_subprocess_config"):
             del self._subprocess_config
 
         return proc
@@ -1540,7 +1612,7 @@ class Engine:
 
     def to_dict(self) -> dict:
         subprocess_config = None
-        if self._config and hasattr(self._config, 'subprocess'):
+        if self._config and hasattr(self._config, "subprocess"):
             sc = self._config.subprocess
             subprocess_config = {
                 "enabled": sc.enabled,
@@ -1615,17 +1687,18 @@ class Engine:
                 edges.append({"from": dep_id, "to": proc.id})
         return {"nodes": nodes, "edges": edges}
 
-    def critical_path(self) -> List[str]:
+    def critical_path(self) -> list[str]:
         if not self._processes:
             return []
         # Build adjacency and find longest path via DFS
-        dep_of: Dict[str, List[str]] = {}
+        dep_of: dict[str, list[str]] = {}
         for proc in self._processes.values():
             for dep_id in proc.depends_on:
                 dep_of.setdefault(dep_id, []).append(proc.id)
 
-        memo: Dict[str, List[str]] = {}
-        def _longest_path(pid: str) -> List[str]:
+        memo: dict[str, list[str]] = {}
+
+        def _longest_path(pid: str) -> list[str]:
             if pid in memo:
                 return memo[pid]
             children = dep_of.get(pid, [])
@@ -1656,10 +1729,10 @@ class Engine:
                 best_path = path
         return best_path
 
-    def orphan_processes(self) -> List[Process]:
+    def orphan_processes(self) -> list[Process]:
         return [p for p in self._processes.values() if p.depends_on and not self._deps_met(p)]
 
-    def spawn_batch(self, items: list) -> List[Process]:
+    def spawn_batch(self, items: list) -> list[Process]:
         procs = []
         for item in items:
             if not item:
@@ -1671,6 +1744,7 @@ class Engine:
 
     def save_state(self, path: str) -> None:
         import json
+
         state = {
             "name": self.name,
             "processes": {pid: p.to_dict() for pid, p in self._processes.items()},
@@ -1681,6 +1755,7 @@ class Engine:
 
     def install_signal_handlers(self) -> None:
         import signal
+
         self._old_signal_handlers = {
             signal.SIGTERM: signal.getsignal(signal.SIGTERM),
             signal.SIGINT: signal.getsignal(signal.SIGINT),
@@ -1691,6 +1766,7 @@ class Engine:
 
     def restore_signal_handlers(self) -> None:
         import signal
+
         for sig, handler in self._old_signal_handlers.items():
             signal.signal(sig, handler)
         self._old_signal_handlers.clear()
@@ -1722,9 +1798,13 @@ class Engine:
             name=f"engine-{self.name}",
         )
         self._spawn_queue.start()
-        logger.info("Engine[%s]: started %d workers (max_queue=%d)",
-                     self.name, num_workers, max_queue,
-                     extra={"tag": "INFRA"})
+        logger.info(
+            "Engine[%s]: started %d workers (max_queue=%d)",
+            self.name,
+            num_workers,
+            max_queue,
+            extra={"tag": "INFRA"},
+        )
 
     def stop_workers(self, timeout: float = 5.0) -> None:
         if self._spawn_queue is not None:
@@ -1739,14 +1819,14 @@ class Engine:
 
         tree = self._trees.get(tree_name)
         if tree is None:
-            logger.warning("Engine[%s]: tree '%s' not found for process '%s'",
-                           self.name, tree_name, proc.name)
+            logger.warning(
+                "Engine[%s]: tree '%s' not found for process '%s'", self.name, tree_name, proc.name
+            )
             proc.fail(f"tree '{tree_name}' not found")
             return
 
         try:
             tree.branch([proc])
         except RuntimeError as e:
-            logger.error("Engine[%s]: branch failed for '%s': %s",
-                         self.name, tree_name, e)
+            logger.error("Engine[%s]: branch failed for '%s': %s", self.name, tree_name, e)
             proc.fail(str(e))

@@ -7,17 +7,28 @@ import threading
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.slnc.spec import (
-    ALIGNMENT, DTYPE_FLOAT32, MAGIC, VERSION,
-    compute_header_size, compute_tensor_entry_size,
-    dtype_to_code, _align,
-)
 from domain.infrastructure._internal.slnc.parser import SLNCParser
+from domain.infrastructure._internal.slnc.spec import (
+    ALIGNMENT,
+    DTYPE_FLOAT32,
+    MAGIC,
+    VERSION,
+    _align,
+    compute_header_size,
+    compute_tensor_entry_size,
+    dtype_to_code,
+)
 from domain.infrastructure._internal.weight_loader import (
-    DirectWeightLoader, build_load_plan, LoadPlan, TensorMapping,
-    load_into_model, WeightLoadResult,
-    infer_arch_from_state_dict, build_model_from_config,
-    WeightLoaderRegistry, get_weight_loader_registry,
+    DirectWeightLoader,
+    LoadPlan,
+    TensorMapping,
+    WeightLoaderRegistry,
+    WeightLoadResult,
+    build_load_plan,
+    build_model_from_config,
+    get_weight_loader_registry,
+    infer_arch_from_state_dict,
+    load_into_model,
 )
 from domain.training._internal.slonet import SloTransformer
 
@@ -42,7 +53,7 @@ def _build_slnc_file(tensors, config, n_layer, n_embd, n_head):
         current += t["data"].nbytes
 
     tensor_table = bytearray()
-    for t, data_off in zip(tensors, data_offsets):
+    for t, data_off in zip(tensors, data_offsets, strict=False):
         name = t["name"]
         data = t["data"]
         name_bytes = name.encode()
@@ -91,40 +102,123 @@ def _build_slnc_file(tensors, config, n_layer, n_embd, n_head):
 def _make_gpt2_tensors(n_embed=64, n_layer=2, vocab_size=1000):
     """Create GPT-2 style tensors for testing."""
     tensors = []
-    tensors.append({"name": "wte.weight", "data": np.random.randn(vocab_size, n_embed).astype(np.float32)})
+    tensors.append(
+        {"name": "wte.weight", "data": np.random.randn(vocab_size, n_embed).astype(np.float32)}
+    )
     tensors.append({"name": "ln_f.weight", "data": np.ones(n_embed, dtype=np.float32)})
     tensors.append({"name": "ln_f.bias", "data": np.zeros(n_embed, dtype=np.float32)})
     for i in range(n_layer):
         tensors.append({"name": f"h.{i}.ln_1.weight", "data": np.ones(n_embed, dtype=np.float32)})
         tensors.append({"name": f"h.{i}.ln_1.bias", "data": np.zeros(n_embed, dtype=np.float32)})
-        tensors.append({"name": f"h.{i}.attn.c_attn.weight", "data": np.random.randn(n_embed, 3 * n_embed).astype(np.float32)})
-        tensors.append({"name": f"h.{i}.attn.c_attn.bias", "data": np.random.randn(3 * n_embed).astype(np.float32)})
-        tensors.append({"name": f"h.{i}.attn.c_proj.weight", "data": np.random.randn(n_embed, n_embed).astype(np.float32)})
-        tensors.append({"name": f"h.{i}.attn.c_proj.bias", "data": np.zeros(n_embed, dtype=np.float32)})
+        tensors.append(
+            {
+                "name": f"h.{i}.attn.c_attn.weight",
+                "data": np.random.randn(n_embed, 3 * n_embed).astype(np.float32),
+            }
+        )
+        tensors.append(
+            {
+                "name": f"h.{i}.attn.c_attn.bias",
+                "data": np.random.randn(3 * n_embed).astype(np.float32),
+            }
+        )
+        tensors.append(
+            {
+                "name": f"h.{i}.attn.c_proj.weight",
+                "data": np.random.randn(n_embed, n_embed).astype(np.float32),
+            }
+        )
+        tensors.append(
+            {"name": f"h.{i}.attn.c_proj.bias", "data": np.zeros(n_embed, dtype=np.float32)}
+        )
         tensors.append({"name": f"h.{i}.ln_2.weight", "data": np.ones(n_embed, dtype=np.float32)})
         tensors.append({"name": f"h.{i}.ln_2.bias", "data": np.zeros(n_embed, dtype=np.float32)})
-        tensors.append({"name": f"h.{i}.mlp.c_fc.weight", "data": np.random.randn(n_embed, 4 * n_embed).astype(np.float32)})
-        tensors.append({"name": f"h.{i}.mlp.c_fc.bias", "data": np.zeros(4 * n_embed, dtype=np.float32)})
-        tensors.append({"name": f"h.{i}.mlp.c_proj.weight", "data": np.random.randn(4 * n_embed, n_embed).astype(np.float32)})
-        tensors.append({"name": f"h.{i}.mlp.c_proj.bias", "data": np.zeros(n_embed, dtype=np.float32)})
+        tensors.append(
+            {
+                "name": f"h.{i}.mlp.c_fc.weight",
+                "data": np.random.randn(n_embed, 4 * n_embed).astype(np.float32),
+            }
+        )
+        tensors.append(
+            {"name": f"h.{i}.mlp.c_fc.bias", "data": np.zeros(4 * n_embed, dtype=np.float32)}
+        )
+        tensors.append(
+            {
+                "name": f"h.{i}.mlp.c_proj.weight",
+                "data": np.random.randn(4 * n_embed, n_embed).astype(np.float32),
+            }
+        )
+        tensors.append(
+            {"name": f"h.{i}.mlp.c_proj.bias", "data": np.zeros(n_embed, dtype=np.float32)}
+        )
     return tensors
 
 
 def _make_llama_tensors(n_embed=64, n_layer=2, vocab_size=1000):
     """Create LLaMA style tensors for testing."""
     tensors = []
-    tensors.append({"name": "model.embed_tokens.weight", "data": np.random.randn(vocab_size, n_embed).astype(np.float32)})
+    tensors.append(
+        {
+            "name": "model.embed_tokens.weight",
+            "data": np.random.randn(vocab_size, n_embed).astype(np.float32),
+        }
+    )
     tensors.append({"name": "model.norm.weight", "data": np.ones(n_embed, dtype=np.float32)})
     for i in range(n_layer):
-        tensors.append({"name": f"model.layers.{i}.input_layernorm.weight", "data": np.ones(n_embed, dtype=np.float32)})
-        tensors.append({"name": f"model.layers.{i}.self_attn.q_proj.weight", "data": np.random.randn(n_embed, n_embed).astype(np.float32)})
-        tensors.append({"name": f"model.layers.{i}.self_attn.k_proj.weight", "data": np.random.randn(n_embed, n_embed).astype(np.float32)})
-        tensors.append({"name": f"model.layers.{i}.self_attn.v_proj.weight", "data": np.random.randn(n_embed, n_embed).astype(np.float32)})
-        tensors.append({"name": f"model.layers.{i}.self_attn.o_proj.weight", "data": np.random.randn(n_embed, n_embed).astype(np.float32)})
-        tensors.append({"name": f"model.layers.{i}.post_attention_layernorm.weight", "data": np.ones(n_embed, dtype=np.float32)})
-        tensors.append({"name": f"model.layers.{i}.mlp.gate_proj.weight", "data": np.random.randn(4 * n_embed, n_embed).astype(np.float32)})
-        tensors.append({"name": f"model.layers.{i}.mlp.up_proj.weight", "data": np.random.randn(4 * n_embed, n_embed).astype(np.float32)})
-        tensors.append({"name": f"model.layers.{i}.mlp.down_proj.weight", "data": np.random.randn(n_embed, 4 * n_embed).astype(np.float32)})
+        tensors.append(
+            {
+                "name": f"model.layers.{i}.input_layernorm.weight",
+                "data": np.ones(n_embed, dtype=np.float32),
+            }
+        )
+        tensors.append(
+            {
+                "name": f"model.layers.{i}.self_attn.q_proj.weight",
+                "data": np.random.randn(n_embed, n_embed).astype(np.float32),
+            }
+        )
+        tensors.append(
+            {
+                "name": f"model.layers.{i}.self_attn.k_proj.weight",
+                "data": np.random.randn(n_embed, n_embed).astype(np.float32),
+            }
+        )
+        tensors.append(
+            {
+                "name": f"model.layers.{i}.self_attn.v_proj.weight",
+                "data": np.random.randn(n_embed, n_embed).astype(np.float32),
+            }
+        )
+        tensors.append(
+            {
+                "name": f"model.layers.{i}.self_attn.o_proj.weight",
+                "data": np.random.randn(n_embed, n_embed).astype(np.float32),
+            }
+        )
+        tensors.append(
+            {
+                "name": f"model.layers.{i}.post_attention_layernorm.weight",
+                "data": np.ones(n_embed, dtype=np.float32),
+            }
+        )
+        tensors.append(
+            {
+                "name": f"model.layers.{i}.mlp.gate_proj.weight",
+                "data": np.random.randn(4 * n_embed, n_embed).astype(np.float32),
+            }
+        )
+        tensors.append(
+            {
+                "name": f"model.layers.{i}.mlp.up_proj.weight",
+                "data": np.random.randn(4 * n_embed, n_embed).astype(np.float32),
+            }
+        )
+        tensors.append(
+            {
+                "name": f"model.layers.{i}.mlp.down_proj.weight",
+                "data": np.random.randn(n_embed, 4 * n_embed).astype(np.float32),
+            }
+        )
     return tensors
 
 
@@ -150,6 +244,7 @@ def _make_model(n_embed=64, n_layer=2, vocab_size=1000, activation="gelu"):
 
 # ── TensorMapping ─────────────────────────────────────────────────────
 
+
 class TestTensorMapping:
     def test_creation(self):
         tm = TensorMapping(param_name="weight", needs_transpose=True, canonical="layers.0.weight")
@@ -173,6 +268,7 @@ class TestTensorMapping:
 
 
 # ── WeightLoadResult ──────────────────────────────────────────────────
+
 
 class TestWeightLoadResult:
     def test_defaults(self):
@@ -208,11 +304,17 @@ class TestWeightLoadResult:
 
 # ── LoadPlan ──────────────────────────────────────────────────────────
 
+
 class TestLoadPlan:
     def test_creation(self):
         plan = LoadPlan(
-            tensor_map={}, tied_weights=[], synthesized_params=[],
-            fused_qkv={}, n_layer=2, n_embed=64, arch_name="test"
+            tensor_map={},
+            tied_weights=[],
+            synthesized_params=[],
+            fused_qkv={},
+            n_layer=2,
+            n_embed=64,
+            arch_name="test",
         )
         assert plan.n_layer == 2
         assert plan.n_embed == 64
@@ -226,7 +328,9 @@ class TestLoadPlan:
             tied_weights=[("lm_head", "tok_emb")],
             synthesized_params=[("w3", "0", "w1")],
             fused_qkv={"qkv": ["q", "k", "v"]},
-            n_layer=4, n_embed=256, arch_name="GPT2"
+            n_layer=4,
+            n_embed=256,
+            arch_name="GPT2",
         )
         assert len(plan.tensor_map) == 1
         assert len(plan.tied_weights) == 1
@@ -234,14 +338,20 @@ class TestLoadPlan:
 
     def test_empty_plan(self):
         plan = LoadPlan(
-            tensor_map={}, tied_weights=[], synthesized_params=[],
-            fused_qkv={}, n_layer=0, n_embed=0, arch_name=""
+            tensor_map={},
+            tied_weights=[],
+            synthesized_params=[],
+            fused_qkv={},
+            n_layer=0,
+            n_embed=0,
+            arch_name="",
         )
         assert plan.n_layer == 0
         assert plan.n_embed == 0
 
 
 # ── SLNC Spec helpers ─────────────────────────────────────────────────
+
 
 class TestSLNCSpec:
     def test_compute_header_size(self):
@@ -286,18 +396,22 @@ class TestSLNCSpec:
 
     def test_dtype_to_code_float16(self):
         from domain.infrastructure._internal.slnc.spec import DTYPE_FLOAT16
+
         assert dtype_to_code(np.float16) == DTYPE_FLOAT16
 
     def test_dtype_to_code_int32(self):
         from domain.infrastructure._internal.slnc.spec import DTYPE_INT32
+
         assert dtype_to_code(np.int32) == DTYPE_INT32
 
     def test_dtype_to_code_int64(self):
         from domain.infrastructure._internal.slnc.spec import DTYPE_INT64
+
         assert dtype_to_code(np.int64) == DTYPE_INT64
 
     def test_dtype_to_code_uint8(self):
         from domain.infrastructure._internal.slnc.spec import DTYPE_UINT8
+
         assert dtype_to_code(np.uint8) == DTYPE_UINT8
 
     def test_dtype_to_code_unsupported(self):
@@ -306,11 +420,13 @@ class TestSLNCSpec:
 
     def test_code_to_dtype_roundtrip(self):
         from domain.infrastructure._internal.slnc.spec import code_to_dtype
+
         assert code_to_dtype(DTYPE_FLOAT32) == np.float32
         assert code_to_dtype(0) == np.float32
 
 
 # ── build_load_plan ───────────────────────────────────────────────────
+
 
 class TestBuildLoadPlan:
     def test_gpt2_plan(self):
@@ -322,7 +438,9 @@ class TestBuildLoadPlan:
         for i in range(n_layer):
             sd[f"h.{i}.ln_1.weight"] = np.ones(n_embed, dtype=np.float32)
             sd[f"h.{i}.ln_1.bias"] = np.zeros(n_embed, dtype=np.float32)
-            sd[f"h.{i}.attn.c_attn.weight"] = np.random.randn(n_embed, 3 * n_embed).astype(np.float32)
+            sd[f"h.{i}.attn.c_attn.weight"] = np.random.randn(n_embed, 3 * n_embed).astype(
+                np.float32
+            )
             sd[f"h.{i}.attn.c_attn.bias"] = np.random.randn(3 * n_embed).astype(np.float32)
             sd[f"h.{i}.attn.c_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
             sd[f"h.{i}.attn.c_proj.bias"] = np.zeros(n_embed, dtype=np.float32)
@@ -330,11 +448,20 @@ class TestBuildLoadPlan:
             sd[f"h.{i}.ln_2.bias"] = np.zeros(n_embed, dtype=np.float32)
             sd[f"h.{i}.mlp.c_fc.weight"] = np.random.randn(n_embed, 4 * n_embed).astype(np.float32)
             sd[f"h.{i}.mlp.c_fc.bias"] = np.zeros(4 * n_embed, dtype=np.float32)
-            sd[f"h.{i}.mlp.c_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(np.float32)
+            sd[f"h.{i}.mlp.c_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(
+                np.float32
+            )
             sd[f"h.{i}.mlp.c_proj.bias"] = np.zeros(n_embed, dtype=np.float32)
 
-        config = {"architectures": ["GPT2LMHeadModel"], "vocab_size": 1000, "n_positions": 512,
-                  "n_embd": n_embed, "n_head": 4, "n_layer": n_layer, "n_inner": n_embed * 4}
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 1000,
+            "n_positions": 512,
+            "n_embd": n_embed,
+            "n_head": 4,
+            "n_layer": n_layer,
+            "n_inner": n_embed * 4,
+        }
         plan = build_load_plan(sd, n_layer, config)
 
         assert plan.arch_name == "GPT2LMHeadModel"
@@ -349,18 +476,42 @@ class TestBuildLoadPlan:
         sd["model.norm.weight"] = np.ones(n_embed, dtype=np.float32)
         for i in range(n_layer):
             sd[f"model.layers.{i}.input_layernorm.weight"] = np.ones(n_embed, dtype=np.float32)
-            sd[f"model.layers.{i}.self_attn.q_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
-            sd[f"model.layers.{i}.self_attn.k_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
-            sd[f"model.layers.{i}.self_attn.v_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
-            sd[f"model.layers.{i}.self_attn.o_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
-            sd[f"model.layers.{i}.post_attention_layernorm.weight"] = np.ones(n_embed, dtype=np.float32)
-            sd[f"model.layers.{i}.mlp.gate_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(np.float32)
-            sd[f"model.layers.{i}.mlp.up_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(np.float32)
-            sd[f"model.layers.{i}.mlp.down_proj.weight"] = np.random.randn(n_embed, 4 * n_embed).astype(np.float32)
+            sd[f"model.layers.{i}.self_attn.q_proj.weight"] = np.random.randn(
+                n_embed, n_embed
+            ).astype(np.float32)
+            sd[f"model.layers.{i}.self_attn.k_proj.weight"] = np.random.randn(
+                n_embed, n_embed
+            ).astype(np.float32)
+            sd[f"model.layers.{i}.self_attn.v_proj.weight"] = np.random.randn(
+                n_embed, n_embed
+            ).astype(np.float32)
+            sd[f"model.layers.{i}.self_attn.o_proj.weight"] = np.random.randn(
+                n_embed, n_embed
+            ).astype(np.float32)
+            sd[f"model.layers.{i}.post_attention_layernorm.weight"] = np.ones(
+                n_embed, dtype=np.float32
+            )
+            sd[f"model.layers.{i}.mlp.gate_proj.weight"] = np.random.randn(
+                4 * n_embed, n_embed
+            ).astype(np.float32)
+            sd[f"model.layers.{i}.mlp.up_proj.weight"] = np.random.randn(
+                4 * n_embed, n_embed
+            ).astype(np.float32)
+            sd[f"model.layers.{i}.mlp.down_proj.weight"] = np.random.randn(
+                n_embed, 4 * n_embed
+            ).astype(np.float32)
 
-        config = {"architectures": ["LlamaForCausalLM"], "vocab_size": 1000, "n_positions": 512,
-                  "n_embd": n_embed, "n_head": 4, "n_layer": n_layer, "n_inner": n_embed * 4,
-                  "hidden_act": "silu", "rms_norm_eps": 1e-5}
+        config = {
+            "architectures": ["LlamaForCausalLM"],
+            "vocab_size": 1000,
+            "n_positions": 512,
+            "n_embd": n_embed,
+            "n_head": 4,
+            "n_layer": n_layer,
+            "n_inner": n_embed * 4,
+            "hidden_act": "silu",
+            "rms_norm_eps": 1e-5,
+        }
         plan = build_load_plan(sd, n_layer, config)
 
         assert "llama" in plan.arch_name.lower() or "LlamaForCausalLM" in plan.arch_name
@@ -368,38 +519,63 @@ class TestBuildLoadPlan:
 
     def test_single_layer(self):
         sd = {"wte.weight": np.zeros((100, 64), dtype=np.float32)}
-        config = {"architectures": ["GPT2LMHeadModel"], "vocab_size": 100, "n_embd": 64, "n_layer": 1, "n_head": 4}
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_embd": 64,
+            "n_layer": 1,
+            "n_head": 4,
+        }
         plan = build_load_plan(sd, 1, config)
         assert plan.n_layer == 1
 
     def test_empty_state_dict(self):
-        config = {"architectures": ["unknown"], "vocab_size": 256, "n_embd": 128, "n_layer": 1, "n_head": 8}
+        config = {
+            "architectures": ["unknown"],
+            "vocab_size": 256,
+            "n_embd": 128,
+            "n_layer": 1,
+            "n_head": 8,
+        }
         plan = build_load_plan({}, 1, config)
         assert len(plan.tensor_map) == 0
 
     def test_plan_has_fused_qkv(self):
-        n_embed, n_layer = 32, 1
+        n_embed, _n_layer = 32, 1
         sd = {
             "wte.weight": np.zeros((100, n_embed), dtype=np.float32),
             "h.0.attn.c_attn.weight": np.random.randn(n_embed, 3 * n_embed).astype(np.float32),
         }
-        config = {"architectures": ["GPT2LMHeadModel"], "vocab_size": 100, "n_embd": n_embed, "n_layer": 1, "n_head": 4}
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_embd": n_embed,
+            "n_layer": 1,
+            "n_head": 4,
+        }
         plan = build_load_plan(sd, 1, config)
         assert len(plan.fused_qkv) > 0
 
     def test_plan_tensor_map_contains_mapping(self):
-        n_embed, n_layer = 32, 1
+        n_embed, _n_layer = 32, 1
         sd = {
             "wte.weight": np.zeros((100, n_embed), dtype=np.float32),
             "h.0.ln_1.weight": np.ones(n_embed, dtype=np.float32),
         }
-        config = {"architectures": ["GPT2LMHeadModel"], "vocab_size": 100, "n_embd": n_embed, "n_layer": 1, "n_head": 4}
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_embd": n_embed,
+            "n_layer": 1,
+            "n_head": 4,
+        }
         plan = build_load_plan(sd, 1, config)
         assert "wte.weight" in plan.tensor_map
         assert plan.tensor_map["wte.weight"].param_name == "tok_emb.weight"
 
 
 # ── DirectWeightLoader ────────────────────────────────────────────────
+
 
 class TestDirectWeightLoader:
     def test_gpt2_direct_load_matches_fused(self, tmp_path):
@@ -413,7 +589,9 @@ class TestDirectWeightLoader:
         for i in range(n_layer):
             sd[f"h.{i}.ln_1.weight"] = np.ones(n_embed, dtype=np.float32)
             sd[f"h.{i}.ln_1.bias"] = np.zeros(n_embed, dtype=np.float32)
-            sd[f"h.{i}.attn.c_attn.weight"] = np.random.randn(n_embed, 3 * n_embed).astype(np.float32)
+            sd[f"h.{i}.attn.c_attn.weight"] = np.random.randn(n_embed, 3 * n_embed).astype(
+                np.float32
+            )
             sd[f"h.{i}.attn.c_attn.bias"] = np.random.randn(3 * n_embed).astype(np.float32)
             sd[f"h.{i}.attn.c_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
             sd[f"h.{i}.attn.c_proj.bias"] = np.zeros(n_embed, dtype=np.float32)
@@ -421,11 +599,20 @@ class TestDirectWeightLoader:
             sd[f"h.{i}.ln_2.bias"] = np.zeros(n_embed, dtype=np.float32)
             sd[f"h.{i}.mlp.c_fc.weight"] = np.random.randn(n_embed, 4 * n_embed).astype(np.float32)
             sd[f"h.{i}.mlp.c_fc.bias"] = np.zeros(4 * n_embed, dtype=np.float32)
-            sd[f"h.{i}.mlp.c_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(np.float32)
+            sd[f"h.{i}.mlp.c_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(
+                np.float32
+            )
             sd[f"h.{i}.mlp.c_proj.bias"] = np.zeros(n_embed, dtype=np.float32)
 
-        config = {"architectures": ["GPT2LMHeadModel"], "vocab_size": 1000, "n_positions": 512,
-                  "n_embd": n_embed, "n_head": 4, "n_layer": n_layer, "n_inner": n_embed * 4}
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 1000,
+            "n_positions": 512,
+            "n_embd": n_embed,
+            "n_head": 4,
+            "n_layer": n_layer,
+            "n_inner": n_embed * 4,
+        }
         tensors = [{"name": k, "data": v} for k, v in sd.items()]
         path = tmp_path / "test.slnc"
         path.write_bytes(_build_slnc_file(tensors, config, n_layer, n_embed, 4))
@@ -439,12 +626,15 @@ class TestDirectWeightLoader:
         model_direct = _make_model(n_embed, n_layer)
         loader = DirectWeightLoader(parser, sd, config)
         loader.load(model_direct)
-        direct_params = {k: v.data.copy() for k, v in dict(model_direct._named_parameters()).items()}
+        direct_params = {
+            k: v.data.copy() for k, v in dict(model_direct._named_parameters()).items()
+        }
 
         for key in ref_params:
             assert key in direct_params, f"Missing key in direct path: {key}"
             np.testing.assert_array_equal(
-                ref_params[key], direct_params[key],
+                ref_params[key],
+                direct_params[key],
                 err_msg=f"Mismatch for {key}",
             )
 
@@ -459,18 +649,42 @@ class TestDirectWeightLoader:
         sd["model.norm.weight"] = np.ones(n_embed, dtype=np.float32)
         for i in range(n_layer):
             sd[f"model.layers.{i}.input_layernorm.weight"] = np.ones(n_embed, dtype=np.float32)
-            sd[f"model.layers.{i}.self_attn.q_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
-            sd[f"model.layers.{i}.self_attn.k_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
-            sd[f"model.layers.{i}.self_attn.v_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
-            sd[f"model.layers.{i}.self_attn.o_proj.weight"] = np.random.randn(n_embed, n_embed).astype(np.float32)
-            sd[f"model.layers.{i}.post_attention_layernorm.weight"] = np.ones(n_embed, dtype=np.float32)
-            sd[f"model.layers.{i}.mlp.gate_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(np.float32)
-            sd[f"model.layers.{i}.mlp.up_proj.weight"] = np.random.randn(4 * n_embed, n_embed).astype(np.float32)
-            sd[f"model.layers.{i}.mlp.down_proj.weight"] = np.random.randn(n_embed, 4 * n_embed).astype(np.float32)
+            sd[f"model.layers.{i}.self_attn.q_proj.weight"] = np.random.randn(
+                n_embed, n_embed
+            ).astype(np.float32)
+            sd[f"model.layers.{i}.self_attn.k_proj.weight"] = np.random.randn(
+                n_embed, n_embed
+            ).astype(np.float32)
+            sd[f"model.layers.{i}.self_attn.v_proj.weight"] = np.random.randn(
+                n_embed, n_embed
+            ).astype(np.float32)
+            sd[f"model.layers.{i}.self_attn.o_proj.weight"] = np.random.randn(
+                n_embed, n_embed
+            ).astype(np.float32)
+            sd[f"model.layers.{i}.post_attention_layernorm.weight"] = np.ones(
+                n_embed, dtype=np.float32
+            )
+            sd[f"model.layers.{i}.mlp.gate_proj.weight"] = np.random.randn(
+                4 * n_embed, n_embed
+            ).astype(np.float32)
+            sd[f"model.layers.{i}.mlp.up_proj.weight"] = np.random.randn(
+                4 * n_embed, n_embed
+            ).astype(np.float32)
+            sd[f"model.layers.{i}.mlp.down_proj.weight"] = np.random.randn(
+                n_embed, 4 * n_embed
+            ).astype(np.float32)
 
-        config = {"architectures": ["LlamaForCausalLM"], "vocab_size": 1000, "n_positions": 512,
-                  "n_embd": n_embed, "n_head": 4, "n_layer": n_layer, "n_inner": n_embed * 4,
-                  "hidden_act": "silu", "rms_norm_eps": 1e-5}
+        config = {
+            "architectures": ["LlamaForCausalLM"],
+            "vocab_size": 1000,
+            "n_positions": 512,
+            "n_embd": n_embed,
+            "n_head": 4,
+            "n_layer": n_layer,
+            "n_inner": n_embed * 4,
+            "hidden_act": "silu",
+            "rms_norm_eps": 1e-5,
+        }
         tensors = [{"name": k, "data": v} for k, v in sd.items()]
         path = tmp_path / "test.slnc"
         path.write_bytes(_build_slnc_file(tensors, config, n_layer, n_embed, 4))
@@ -484,12 +698,15 @@ class TestDirectWeightLoader:
         model_direct = _make_model(n_embed, n_layer, activation="silu")
         loader = DirectWeightLoader(parser, sd, config)
         loader.load(model_direct)
-        direct_params = {k: v.data.copy() for k, v in dict(model_direct._named_parameters()).items()}
+        direct_params = {
+            k: v.data.copy() for k, v in dict(model_direct._named_parameters()).items()
+        }
 
         for key in ref_params:
             assert key in direct_params, f"Missing key in direct path: {key}"
             np.testing.assert_array_equal(
-                ref_params[key], direct_params[key],
+                ref_params[key],
+                direct_params[key],
                 err_msg=f"Mismatch for {key}",
             )
 
@@ -497,9 +714,15 @@ class TestDirectWeightLoader:
 
     def test_from_plan(self, tmp_path):
         """Test _from_plan classmethod constructs loader correctly."""
-        n_embed, n_layer = 32, 1
+        n_embed, _n_layer = 32, 1
         sd = {"wte.weight": np.zeros((100, n_embed), dtype=np.float32)}
-        config = {"architectures": ["GPT2LMHeadModel"], "vocab_size": 100, "n_embd": n_embed, "n_layer": 1, "n_head": 4}
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_embd": n_embed,
+            "n_layer": 1,
+            "n_head": 4,
+        }
         tensors = [{"name": k, "data": v} for k, v in sd.items()]
         path = tmp_path / "test.slnc"
         path.write_bytes(_build_slnc_file(tensors, config, 1, n_embed, 4))
@@ -510,9 +733,15 @@ class TestDirectWeightLoader:
         parser.close()
 
     def test_plan_property(self, tmp_path):
-        n_embed, n_layer = 32, 1
+        n_embed, _n_layer = 32, 1
         sd = {"wte.weight": np.zeros((100, n_embed), dtype=np.float32)}
-        config = {"architectures": ["GPT2LMHeadModel"], "vocab_size": 100, "n_embd": n_embed, "n_layer": 1, "n_head": 4}
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_embd": n_embed,
+            "n_layer": 1,
+            "n_head": 4,
+        }
         tensors = [{"name": k, "data": v} for k, v in sd.items()]
         path = tmp_path / "test.slnc"
         path.write_bytes(_build_slnc_file(tensors, config, 1, n_embed, 4))
@@ -524,7 +753,13 @@ class TestDirectWeightLoader:
     def test_load_result_timing(self, tmp_path):
         n_embed, n_layer = 32, 1
         sd = {"wte.weight": np.random.randn(100, n_embed).astype(np.float32)}
-        config = {"architectures": ["GPT2LMHeadModel"], "vocab_size": 100, "n_embd": n_embed, "n_layer": 1, "n_head": 4}
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_embd": n_embed,
+            "n_layer": 1,
+            "n_head": 4,
+        }
         tensors = [{"name": k, "data": v} for k, v in sd.items()]
         path = tmp_path / "test.slnc"
         path.write_bytes(_build_slnc_file(tensors, config, 1, n_embed, 4))
@@ -541,6 +776,7 @@ class TestDirectWeightLoader:
 
 # ── load_into_model (generic loader) ──────────────────────────────────
 
+
 class TestLoadIntoModel:
     def test_basic_load(self):
         """Test loading GPT-2 state dict into model via generic loader."""
@@ -551,7 +787,13 @@ class TestLoadIntoModel:
             "h.0.ln_1.weight": np.ones(n_embed, dtype=np.float32),
             "ln_f.weight": np.ones(n_embed, dtype=np.float32),
         }
-        config = {"architectures": ["GPT2LMHeadModel"], "vocab_size": 100, "n_embd": n_embed, "n_layer": 1, "n_head": 4}
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_embd": n_embed,
+            "n_layer": 1,
+            "n_head": 4,
+        }
         plan = build_load_plan(sd, 1, config)
         result = load_into_model(model, plan, sd)
         assert result.success is True
@@ -562,7 +804,13 @@ class TestLoadIntoModel:
         n_embed, n_layer = 32, 1
         model = _make_model(n_embed, n_layer, vocab_size=100)
         sd = {"wte.weight": np.zeros((100, n_embed), dtype=np.float32)}
-        config = {"architectures": ["GPT2LMHeadModel"], "vocab_size": 100, "n_embd": n_embed, "n_layer": 1, "n_head": 4}
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_embd": n_embed,
+            "n_layer": 1,
+            "n_head": 4,
+        }
         plan = build_load_plan(sd, 1, config)
         result = load_into_model(model, plan, {})
         assert result.success is True
@@ -572,7 +820,13 @@ class TestLoadIntoModel:
         n_embed, n_layer = 32, 1
         model = _make_model(n_embed, n_layer, vocab_size=100)
         sd = {"wte.weight": np.ones((100, n_embed), dtype=np.float32)}
-        config = {"architectures": ["GPT2LMHeadModel"], "vocab_size": 100, "n_embd": n_embed, "n_layer": 1, "n_head": 4}
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_embd": n_embed,
+            "n_layer": 1,
+            "n_head": 4,
+        }
         plan = build_load_plan(sd, 1, config)
         load_into_model(model, plan, sd)
         param_map = dict(model._named_parameters())
@@ -585,7 +839,13 @@ class TestLoadIntoModel:
         n_embed, n_layer = 32, 1
         model = _make_model(n_embed, n_layer, vocab_size=100)
         sd = {"wte.weight": np.zeros((100, n_embed), dtype=np.float32)}
-        config = {"architectures": ["GPT2LMHeadModel"], "vocab_size": 100, "n_embd": n_embed, "n_layer": 1, "n_head": 4}
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_embd": n_embed,
+            "n_layer": 1,
+            "n_head": 4,
+        }
         plan = build_load_plan(sd, 1, config)
         if plan.synthesized_params:
             load_into_model(model, plan, sd)
@@ -600,7 +860,15 @@ class TestLoadIntoModel:
     def test_empty_plan(self):
         n_embed, n_layer = 32, 1
         model = _make_model(n_embed, n_layer, vocab_size=100)
-        plan = LoadPlan(tensor_map={}, tied_weights=[], synthesized_params=[], fused_qkv={}, n_layer=1, n_embed=64, arch_name="test")
+        plan = LoadPlan(
+            tensor_map={},
+            tied_weights=[],
+            synthesized_params=[],
+            fused_qkv={},
+            n_layer=1,
+            n_embed=64,
+            arch_name="test",
+        )
         result = load_into_model(model, plan, {})
         assert result.success is True
         assert result.n_written == 0
@@ -610,7 +878,13 @@ class TestLoadIntoModel:
         n_embed, n_layer = 32, 1
         model = _make_model(n_embed, n_layer, vocab_size=100)
         sd = {"wte.weight": np.random.randn(100, n_embed).astype(np.float32)}
-        config = {"architectures": ["GPT2LMHeadModel"], "vocab_size": 100, "n_embd": n_embed, "n_layer": 1, "n_head": 4}
+        config = {
+            "architectures": ["GPT2LMHeadModel"],
+            "vocab_size": 100,
+            "n_embd": n_embed,
+            "n_layer": 1,
+            "n_head": 4,
+        }
         plan = build_load_plan(sd, 1, config)
         result = load_into_model(model, plan, sd)
         assert "direct" in result.timing
@@ -619,6 +893,7 @@ class TestLoadIntoModel:
 
 
 # ── WeightLoaderRegistry ──────────────────────────────────────────────
+
 
 class TestWeightLoaderRegistry:
     def test_register_and_get_loader(self):
@@ -645,6 +920,7 @@ class TestWeightLoaderRegistry:
     def test_specific_overrides_default(self):
         class Specific:
             pass
+
         class Fallback:
             pass
 
@@ -669,6 +945,7 @@ class TestWeightLoaderRegistry:
             def __init__(self, path, extra_kw=None):
                 loaded["path"] = path
                 loaded["extra"] = extra_kw
+
             def load(self, model):
                 return WeightLoadResult(success=True, n_written=42)
 
@@ -686,6 +963,7 @@ class TestWeightLoaderRegistry:
         class BadLoader:
             def __init__(self, path, **kw):
                 pass
+
             def load(self, model):
                 raise RuntimeError("corrupt file")
 
@@ -706,6 +984,7 @@ class TestWeightLoaderRegistry:
     def test_multiple_suffixes(self):
         class LoaderA:
             pass
+
         class LoaderB:
             pass
 
@@ -726,6 +1005,7 @@ class TestWeightLoaderRegistry:
     def test_register_overwrites(self):
         class LoaderV1:
             pass
+
         class LoaderV2:
             pass
 
@@ -738,6 +1018,7 @@ class TestWeightLoaderRegistry:
         class SlowLoader:
             def __init__(self, path, **kw):
                 pass
+
             def load(self, model):
                 return WeightLoadResult(success=True, n_written=5)
 
@@ -749,22 +1030,33 @@ class TestWeightLoaderRegistry:
 
 # ── SoulWeightLoader ──────────────────────────────────────────────────
 
+
 class TestSoulWeightLoader:
     def test_soul_loader_loads_weights(self, tmp_path):
-        from domain.infrastructure._internal.weight_loader import SoulWeightLoader
         from domain.inference._internal.slo_format import save_soul
+        from domain.infrastructure._internal.weight_loader import SoulWeightLoader
 
         n_embed, n_layer = 32, 2
         model = SloTransformer(
-            vocab_size=100, n_embed=n_embed, n_layer=n_layer,
-            n_head=4, block_size=64, dropout=0.0, _lazy=True,
+            vocab_size=100,
+            n_embed=n_embed,
+            n_layer=n_layer,
+            n_head=4,
+            block_size=64,
+            dropout=0.0,
+            _lazy=True,
         )
         soul_path = str(tmp_path / "test.soul")
         save_soul(model, soul_path)
 
         model2 = SloTransformer(
-            vocab_size=100, n_embed=n_embed, n_layer=n_layer,
-            n_head=4, block_size=64, dropout=0.0, _lazy=True,
+            vocab_size=100,
+            n_embed=n_embed,
+            n_layer=n_layer,
+            n_head=4,
+            block_size=64,
+            dropout=0.0,
+            _lazy=True,
         )
         loader = SoulWeightLoader(soul_path)
         result = loader.load(model2)
@@ -774,23 +1066,36 @@ class TestSoulWeightLoader:
         assert result.timing["total"] > 0
 
     def test_registry_auto_registers_soul(self):
-        from domain.infrastructure._internal.weight_loader import get_weight_loader_registry, SoulWeightLoader
+        from domain.infrastructure._internal.weight_loader import (
+            SoulWeightLoader,
+            get_weight_loader_registry,
+        )
+
         reg = get_weight_loader_registry()
         assert reg.get_loader("model.soul") is SoulWeightLoader
 
     def test_registry_auto_registers_slnc(self):
-        from domain.infrastructure._internal.weight_loader import get_weight_loader_registry, DirectWeightLoader
+        from domain.infrastructure._internal.weight_loader import (
+            DirectWeightLoader,
+            get_weight_loader_registry,
+        )
+
         reg = get_weight_loader_registry()
         assert reg.get_loader("model.slnc") is DirectWeightLoader
 
     def test_soul_load_metadata(self, tmp_path):
-        from domain.infrastructure._internal.weight_loader import SoulWeightLoader
         from domain.inference._internal.slo_format import save_soul
+        from domain.infrastructure._internal.weight_loader import SoulWeightLoader
 
         n_embed, n_layer = 32, 2
         model = SloTransformer(
-            vocab_size=100, n_embed=n_embed, n_layer=n_layer,
-            n_head=4, block_size=64, dropout=0.0, _lazy=True,
+            vocab_size=100,
+            n_embed=n_embed,
+            n_layer=n_layer,
+            n_head=4,
+            block_size=64,
+            dropout=0.0,
+            _lazy=True,
         )
         soul_path = str(tmp_path / "test.soul")
         save_soul(model, soul_path)
@@ -802,24 +1107,38 @@ class TestSoulWeightLoader:
         assert meta["vocab_size"] == 100
 
     def test_soul_load_timing_keys(self, tmp_path):
-        from domain.infrastructure._internal.weight_loader import SoulWeightLoader
         from domain.inference._internal.slo_format import save_soul
+        from domain.infrastructure._internal.weight_loader import SoulWeightLoader
 
         n_embed, n_layer = 32, 1
         model = SloTransformer(
-            vocab_size=50, n_embed=n_embed, n_layer=n_layer,
-            n_head=4, block_size=32, dropout=0.0, _lazy=True,
+            vocab_size=50,
+            n_embed=n_embed,
+            n_layer=n_layer,
+            n_head=4,
+            block_size=32,
+            dropout=0.0,
+            _lazy=True,
         )
         soul_path = str(tmp_path / "timing.soul")
         save_soul(model, soul_path)
         loader = SoulWeightLoader(soul_path)
-        model2 = SloTransformer(vocab_size=50, n_embed=n_embed, n_layer=n_layer, n_head=4, block_size=32, dropout=0.0, _lazy=True)
+        model2 = SloTransformer(
+            vocab_size=50,
+            n_embed=n_embed,
+            n_layer=n_layer,
+            n_head=4,
+            block_size=32,
+            dropout=0.0,
+            _lazy=True,
+        )
         result = loader.load(model2)
         assert "load_soul" in result.timing
         assert "apply" in result.timing
 
 
 # ── infer_arch_from_state_dict ────────────────────────────────────────
+
 
 class TestInferArch:
     def test_gpt2_arch(self):
@@ -914,11 +1233,15 @@ class TestInferArch:
 
 # ── build_model_from_config ──────────────────────────────────────────
 
+
 class TestBuildModelFromConfig:
     def test_gpt2_config(self):
         config = {
             "architectures": ["GPT2LMHeadModel"],
-            "vocab_size": 1000, "n_embd": 128, "n_layer": 2, "n_head": 4,
+            "vocab_size": 1000,
+            "n_embd": 128,
+            "n_layer": 2,
+            "n_head": 4,
         }
         model = build_model_from_config(config)
         assert model.vocab_size == 1000
@@ -928,8 +1251,12 @@ class TestBuildModelFromConfig:
     def test_llama_config(self):
         config = {
             "architectures": ["LlamaForCausalLM"],
-            "vocab_size": 32000, "hidden_size": 256, "num_hidden_layers": 4,
-            "num_attention_heads": 8, "hidden_act": "silu", "rms_norm_eps": 1e-5,
+            "vocab_size": 32000,
+            "hidden_size": 256,
+            "num_hidden_layers": 4,
+            "num_attention_heads": 8,
+            "hidden_act": "silu",
+            "rms_norm_eps": 1e-5,
         }
         model = build_model_from_config(config)
         assert model.vocab_size == 32000
@@ -938,7 +1265,10 @@ class TestBuildModelFromConfig:
 
     def test_rope_config(self):
         config = {
-            "vocab_size": 100, "n_embd": 64, "n_layer": 1, "n_head": 4,
+            "vocab_size": 100,
+            "n_embd": 64,
+            "n_layer": 1,
+            "n_head": 4,
             "rope_theta": 10000.0,
         }
         model = build_model_from_config(config)
@@ -948,7 +1278,10 @@ class TestBuildModelFromConfig:
 
     def test_explicit_norm_type(self):
         config = {
-            "vocab_size": 100, "n_embd": 64, "n_layer": 1, "n_head": 4,
+            "vocab_size": 100,
+            "n_embd": 64,
+            "n_layer": 1,
+            "n_head": 4,
             "layer_norm_type": "rms_norm",
         }
         model = build_model_from_config(config)
@@ -967,21 +1300,35 @@ class TestBuildModelFromConfig:
         assert model.n_embed == 768
 
     def test_max_pos_embeddings(self):
-        config = {"vocab_size": 100, "n_embd": 64, "n_layer": 1, "n_head": 4, "max_position_embeddings": 256}
+        config = {
+            "vocab_size": 100,
+            "n_embd": 64,
+            "n_layer": 1,
+            "n_head": 4,
+            "max_position_embeddings": 256,
+        }
         model = build_model_from_config(config)
         assert model.block_size == 256
 
     def test_intermediate_size_key(self):
-        config = {"vocab_size": 100, "n_embd": 64, "n_layer": 1, "n_head": 4, "intermediate_size": 128}
+        config = {
+            "vocab_size": 100,
+            "n_embd": 64,
+            "n_layer": 1,
+            "n_head": 4,
+            "intermediate_size": 128,
+        }
         model = build_model_from_config(config)
         assert model is not None
 
 
 # ── Thread safety ─────────────────────────────────────────────────────
 
+
 class TestRegistryThreadSafety:
     def test_concurrent_get_loader(self):
         from domain.infrastructure._internal.weight_loader import WeightLoaderRegistry
+
         reg = WeightLoaderRegistry()
         results = []
 

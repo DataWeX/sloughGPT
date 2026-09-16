@@ -8,8 +8,8 @@ import pytest
 
 from domain.shell._internal.realm_live import _parse_grid, main
 
-
 # ── _parse_grid ─────────────────────────────────────────────────────────────
+
 
 class TestParseGrid:
     def test_valid_grid(self):
@@ -51,6 +51,7 @@ class TestParseGrid:
 
 # ── main argument parsing ────────────────────────────────────────────────────
 
+
 class TestMainArgParsing:
     def test_help_exits(self):
         with pytest.raises(SystemExit) as exc_info:
@@ -69,6 +70,7 @@ class TestMainArgParsing:
 
 # ── main execution (lightweight) ─────────────────────────────────────────────
 
+
 class TestMainExecution:
     def test_defaults_run(self, capsys):
         result = main(["--ticks", "2", "--fps", "0"])
@@ -81,10 +83,17 @@ class TestMainExecution:
         assert result == 0
 
     def test_with_seasons(self, capsys):
-        result = main([
-            "--seasons", "--seasons-per-year", "4",
-            "--ticks", "2", "--fps", "0",
-        ])
+        result = main(
+            [
+                "--seasons",
+                "--seasons-per-year",
+                "4",
+                "--ticks",
+                "2",
+                "--fps",
+                "0",
+            ]
+        )
         assert result == 0
 
     def test_custom_population(self, capsys):
@@ -113,10 +122,17 @@ class TestMainExecution:
         assert result == 0
 
     def test_custom_seasonality(self, capsys):
-        result = main([
-            "--seasons", "--seasonality", "0.5",
-            "--ticks", "2", "--fps", "0",
-        ])
+        result = main(
+            [
+                "--seasons",
+                "--seasonality",
+                "0.5",
+                "--ticks",
+                "2",
+                "--fps",
+                "0",
+            ]
+        )
         assert result == 0
 
     def test_multiple_days(self, capsys):

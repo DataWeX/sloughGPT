@@ -2,16 +2,25 @@
 
 import asyncio
 import os
-import time
-from unittest.mock import MagicMock
 
 import pytest
 
 from domain.infrastructure._internal.lifecycle import (
-    LifecyclePhase, StartupProfile, StartupHook, ShutdownHook, _HookResult,
-    _topological_sort, _dependency_levels, LifecycleManager,
-    EVT_PHASE_CHANGED, EVT_HOOK_STARTED, EVT_HOOK_COMPLETED, EVT_HOOK_FAILED,
-    ALL_PROFILES, get_lifecycle_manager, reset_lifecycle_manager,
+    ALL_PROFILES,
+    EVT_HOOK_COMPLETED,
+    EVT_HOOK_FAILED,
+    EVT_HOOK_STARTED,
+    EVT_PHASE_CHANGED,
+    LifecycleManager,
+    LifecyclePhase,
+    ShutdownHook,
+    StartupHook,
+    StartupProfile,
+    _dependency_levels,
+    _HookResult,
+    _topological_sort,
+    get_lifecycle_manager,
+    reset_lifecycle_manager,
 )
 
 
@@ -156,133 +165,182 @@ class TestStartupProfile:
 
 class TestStartupHook:
     def test_defaults(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop)
         assert h.depends_on == []
         assert h.critical is True
         assert h.timeout == 30.0
 
     def test_custom(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop, depends_on=["b"], critical=False)
         assert h.depends_on == ["b"]
         assert h.critical is False
 
     def test_custom_timeout(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop, timeout=60.0)
         assert h.timeout == 60.0
 
     def test_profiles_default(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop)
         assert h.profiles == ALL_PROFILES
 
     def test_profiles_custom(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop, profiles=frozenset({StartupProfile.FULL}))
         assert StartupProfile.FULL in h.profiles
         assert StartupProfile.QUICK not in h.profiles
 
     def test_multiple_depends_on(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop, depends_on=["b", "c", "d"])
         assert len(h.depends_on) == 3
 
     def test_handler_is_callable(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop)
         assert callable(h.handler)
 
     def test_profiles_multiple(self):
-        async def noop(): pass
-        h = StartupHook(name="a", handler=noop,
-                        profiles=frozenset({StartupProfile.FULL, StartupProfile.QUICK}))
+        async def noop():
+            pass
+
+        h = StartupHook(
+            name="a", handler=noop, profiles=frozenset({StartupProfile.FULL, StartupProfile.QUICK})
+        )
         assert StartupProfile.FULL in h.profiles
         assert StartupProfile.QUICK in h.profiles
         assert StartupProfile.MINIMAL not in h.profiles
 
     def test_timeout_zero(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop, timeout=0.0)
         assert h.timeout == 0.0
 
     def test_timeout_very_large(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop, timeout=3600.0)
         assert h.timeout == 3600.0
 
     def test_depends_on_empty(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop, depends_on=[])
         assert h.depends_on == []
 
     def test_name_preserved(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="my_hook_123", handler=noop)
         assert h.name == "my_hook_123"
 
     def test_profiles_frozen_set(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop)
         assert isinstance(h.profiles, frozenset)
 
     def test_depends_on_returns_list(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop, depends_on=["x"])
         assert isinstance(h.depends_on, list)
 
 
 class TestShutdownHook:
     def test_defaults(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = ShutdownHook(name="a", handler=noop)
         assert h.critical is False
 
     def test_custom_critical(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = ShutdownHook(name="a", handler=noop, critical=True)
         assert h.critical is True
 
     def test_depends_on(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = ShutdownHook(name="a", handler=noop, depends_on=["b"])
         assert h.depends_on == ["b"]
 
     def test_timeout(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = ShutdownHook(name="a", handler=noop, timeout=10.0)
         assert h.timeout == 10.0
 
     def test_name_preserved(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = ShutdownHook(name="shutdown_db", handler=noop)
         assert h.name == "shutdown_db"
 
     def test_handler_callable(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = ShutdownHook(name="a", handler=noop)
         assert callable(h.handler)
 
     def test_depends_on_empty(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = ShutdownHook(name="a", handler=noop, depends_on=[])
         assert h.depends_on == []
 
     def test_timeout_zero(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = ShutdownHook(name="a", handler=noop, timeout=0.0)
         assert h.timeout == 0.0
 
     def test_critical_default_false(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h1 = ShutdownHook(name="a", handler=noop)
         h2 = ShutdownHook(name="b", handler=noop)
         assert h1.critical is False
         assert h2.critical is False
 
     def test_multiple_depends_on(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = ShutdownHook(name="a", handler=noop, depends_on=["b", "c"])
         assert len(h.depends_on) == 2
 
@@ -333,20 +391,26 @@ class TestHookResult:
 
 class TestTopologicalSort:
     def test_no_deps(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         hooks = [StartupHook(name="b", handler=noop), StartupHook(name="a", handler=noop)]
         ordered = _topological_sort(hooks)
         assert [h.name for h in ordered] == ["b", "a"]
 
     def test_with_deps(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h1 = StartupHook(name="db", handler=noop, depends_on=[])
         h2 = StartupHook(name="api", handler=noop, depends_on=["db"])
         ordered = _topological_sort([h2, h1])
         assert [h.name for h in ordered] == ["db", "api"]
 
     def test_cycle_detected(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h1 = StartupHook(name="a", handler=noop, depends_on=["b"])
         h2 = StartupHook(name="b", handler=noop, depends_on=["a"])
         ordered = _topological_sort([h1, h2])
@@ -357,14 +421,18 @@ class TestTopologicalSort:
         assert ordered == []
 
     def test_single_hook(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="only", handler=noop)
         ordered = _topological_sort([h])
         assert len(ordered) == 1
         assert ordered[0].name == "only"
 
     def test_diamond_dependency(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h1 = StartupHook(name="a", handler=noop)
         h2 = StartupHook(name="b", handler=noop, depends_on=["a"])
         h3 = StartupHook(name="c", handler=noop, depends_on=["a"])
@@ -377,7 +445,9 @@ class TestTopologicalSort:
         assert names.index("c") < names.index("d")
 
     def test_three_level_chain(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h1 = StartupHook(name="a", handler=noop)
         h2 = StartupHook(name="b", handler=noop, depends_on=["a"])
         h3 = StartupHook(name="c", handler=noop, depends_on=["b"])
@@ -385,25 +455,33 @@ class TestTopologicalSort:
         assert [h.name for h in ordered] == ["a", "b", "c"]
 
     def test_no_deps_many_hooks(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         hooks = [StartupHook(name=f"h{i}", handler=noop) for i in range(10)]
         ordered = _topological_sort(hooks)
         assert len(ordered) == 10
 
     def test_preserves_handler(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop)
         ordered = _topological_sort([h])
         assert ordered[0].handler is noop
 
     def test_depends_on_nonexistent(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h = StartupHook(name="a", handler=noop, depends_on=["nonexistent"])
         ordered = _topological_sort([h])
         assert len(ordered) == 1
 
     def test_complex_graph(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h1 = StartupHook(name="a", handler=noop)
         h2 = StartupHook(name="b", handler=noop, depends_on=["a"])
         h3 = StartupHook(name="c", handler=noop, depends_on=["a"])
@@ -418,7 +496,9 @@ class TestTopologicalSort:
         assert names.index("d") < names.index("e")
 
     def test_three_way_cycle(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h1 = StartupHook(name="a", handler=noop, depends_on=["c"])
         h2 = StartupHook(name="b", handler=noop, depends_on=["a"])
         h3 = StartupHook(name="c", handler=noop, depends_on=["b"])
@@ -428,14 +508,18 @@ class TestTopologicalSort:
 
 class TestDependencyLevels:
     def test_no_deps(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         hooks = [StartupHook(name="a", handler=noop), StartupHook(name="b", handler=noop)]
         levels = _dependency_levels(hooks)
         assert len(levels) == 1
         assert len(levels[0]) == 2
 
     def test_linear_chain(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h1 = StartupHook(name="a", handler=noop)
         h2 = StartupHook(name="b", handler=noop, depends_on=["a"])
         h3 = StartupHook(name="c", handler=noop, depends_on=["b"])
@@ -450,12 +534,16 @@ class TestDependencyLevels:
         assert levels == []
 
     def test_single_hook(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         levels = _dependency_levels([StartupHook(name="a", handler=noop)])
         assert len(levels) == 1
 
     def test_parallel_hooks(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h1 = StartupHook(name="a", handler=noop)
         h2 = StartupHook(name="b", handler=noop)
         h3 = StartupHook(name="c", handler=noop)
@@ -464,7 +552,9 @@ class TestDependencyLevels:
         assert len(levels[0]) == 3
 
     def test_diamond(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h1 = StartupHook(name="a", handler=noop)
         h2 = StartupHook(name="b", handler=noop, depends_on=["a"])
         h3 = StartupHook(name="c", handler=noop, depends_on=["a"])
@@ -476,7 +566,9 @@ class TestDependencyLevels:
         assert levels[2][0].name == "d"
 
     def test_level_0_has_no_deps(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h1 = StartupHook(name="a", handler=noop)
         h2 = StartupHook(name="b", handler=noop, depends_on=["a"])
         levels = _dependency_levels([h2, h1])
@@ -484,7 +576,9 @@ class TestDependencyLevels:
             assert h.depends_on == []
 
     def test_levels_are_sequential(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h1 = StartupHook(name="a", handler=noop)
         h2 = StartupHook(name="b", handler=noop, depends_on=["a"])
         h3 = StartupHook(name="c", handler=noop, depends_on=["b"])
@@ -493,7 +587,9 @@ class TestDependencyLevels:
         assert len(levels) == 4
 
     def test_all_hooks_in_some_level(self):
-        async def noop(): pass
+        async def noop():
+            pass
+
         h1 = StartupHook(name="a", handler=noop)
         h2 = StartupHook(name="b", handler=noop, depends_on=["a"])
         h3 = StartupHook(name="c", handler=noop, depends_on=["b"])
@@ -567,21 +663,30 @@ class TestLifecycleManagerProperties:
 class TestLifecycleManagerHookRegistration:
     def test_register_startup_hook(self):
         mgr = LifecycleManager()
-        async def noop(): pass
+
+        async def noop():
+            pass
+
         hook = StartupHook(name="test", handler=noop)
         mgr.register_startup_hook(hook)
         assert len(mgr._startup_hooks) == 1
 
     def test_register_shutdown_hook(self):
         mgr = LifecycleManager()
-        async def noop(): pass
+
+        async def noop():
+            pass
+
         hook = ShutdownHook(name="test", handler=noop)
         mgr.register_shutdown_hook(hook)
         assert len(mgr._shutdown_hooks) == 1
 
     def test_duplicate_startup_hook_skipped(self):
         mgr = LifecycleManager()
-        async def noop(): pass
+
+        async def noop():
+            pass
+
         hook1 = StartupHook(name="test", handler=noop)
         hook2 = StartupHook(name="test", handler=noop)
         mgr.register_startup_hook(hook1)
@@ -590,7 +695,10 @@ class TestLifecycleManagerHookRegistration:
 
     def test_duplicate_shutdown_hook_skipped(self):
         mgr = LifecycleManager()
-        async def noop(): pass
+
+        async def noop():
+            pass
+
         hook1 = ShutdownHook(name="test", handler=noop)
         hook2 = ShutdownHook(name="test", handler=noop)
         mgr.register_shutdown_hook(hook1)
@@ -599,14 +707,20 @@ class TestLifecycleManagerHookRegistration:
 
     def test_multiple_startup_hooks(self):
         mgr = LifecycleManager()
-        async def noop(): pass
+
+        async def noop():
+            pass
+
         for i in range(5):
             mgr.register_startup_hook(StartupHook(name=f"h{i}", handler=noop))
         assert len(mgr._startup_hooks) == 5
 
     def test_multiple_shutdown_hooks(self):
         mgr = LifecycleManager()
-        async def noop(): pass
+
+        async def noop():
+            pass
+
         for i in range(3):
             mgr.register_shutdown_hook(ShutdownHook(name=f"h{i}", handler=noop))
         assert len(mgr._shutdown_hooks) == 3
@@ -669,7 +783,10 @@ class TestLifecycleManagerPreview:
 
     def test_preview_with_hooks(self):
         mgr = LifecycleManager()
-        async def noop(): pass
+
+        async def noop():
+            pass
+
         mgr.register_startup_hook(StartupHook(name="a", handler=noop))
         mgr.register_startup_hook(StartupHook(name="b", handler=noop, depends_on=["a"]))
         result = mgr.preview()
@@ -679,13 +796,16 @@ class TestLifecycleManagerPreview:
 
     def test_preview_profile_filter(self):
         mgr = LifecycleManager()
-        async def noop(): pass
-        mgr.register_startup_hook(StartupHook(
-            name="full_only", handler=noop,
-            profiles=frozenset({StartupProfile.FULL})))
-        mgr.register_startup_hook(StartupHook(
-            name="quick_only", handler=noop,
-            profiles=frozenset({StartupProfile.QUICK})))
+
+        async def noop():
+            pass
+
+        mgr.register_startup_hook(
+            StartupHook(name="full_only", handler=noop, profiles=frozenset({StartupProfile.FULL}))
+        )
+        mgr.register_startup_hook(
+            StartupHook(name="quick_only", handler=noop, profiles=frozenset({StartupProfile.QUICK}))
+        )
         result = mgr.preview(profile=StartupProfile.FULL)
         names = [h["name"] for h in result]
         assert "full_only" in names
@@ -704,7 +824,10 @@ class TestLifecycleManagerGetResults:
 
     def test_get_results_with_hooks(self):
         mgr = LifecycleManager()
-        async def noop(): pass
+
+        async def noop():
+            pass
+
         mgr.register_startup_hook(StartupHook(name="a", handler=noop))
         mgr.register_shutdown_hook(ShutdownHook(name="b", handler=noop))
         r = mgr.get_results()

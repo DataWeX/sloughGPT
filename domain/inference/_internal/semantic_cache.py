@@ -12,12 +12,12 @@ Architecture:
 
 from __future__ import annotations
 
-import time
 import hashlib
-import threading
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass
 import logging
+import threading
+import time
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("slo.semantic_cache")
 
@@ -29,8 +29,8 @@ class CacheEntry:
     id: str
     query: str
     response: str
-    hypervector: List[float]
-    metadata: Dict[str, Any]
+    hypervector: list[float]
+    metadata: dict[str, Any]
     timestamp: float
     hit_count: int = 0
     last_accessed: float = 0
@@ -60,7 +60,7 @@ class SemanticCache:
         self.similarity_threshold = similarity_threshold
         self.ttl_seconds = ttl_seconds
 
-        self.entries: Dict[str, CacheEntry] = {}
+        self.entries: dict[str, CacheEntry] = {}
         self._lock = threading.Lock()
         self._hyperdim = None
         self._stats = {
@@ -78,12 +78,12 @@ class SemanticCache:
             self._hyperdim = HyperdimensionalProcessor(dim=self.dim)
         return self._hyperdim
 
-    def encode_query(self, query: str) -> List[float]:
+    def encode_query(self, query: str) -> list[float]:
         """Encode query as hypervector."""
         hd = self._get_hyperdim()
         return hd.encode_text(query)
 
-    def get(self, query: str) -> Optional[str]:
+    def get(self, query: str) -> str | None:
         """
         Get cached response for query.
 
@@ -107,9 +107,9 @@ class SemanticCache:
             # Strip punctuation from words
             import re
 
-            query_words = set(re.sub(r"[^\w\s]", "", w.lower()) for w in query.split())
+            query_words = {re.sub(r"[^\w\s]", "", w.lower()) for w in query.split()}
 
-            best_entry: Optional[CacheEntry] = None
+            best_entry: CacheEntry | None = None
             best_score = 0.0
             current_time = time.time()
 
@@ -196,7 +196,7 @@ class SemanticCache:
         self,
         query: str,
         response: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """
         Store query-response pair in cache.
@@ -292,7 +292,7 @@ class SemanticCache:
             self.entries.clear()
         return count
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         total_requests = self._stats["hits"] + self._stats["misses"]
         hit_rate = self._stats["hits"] / total_requests if total_requests > 0 else 0.0
@@ -333,7 +333,7 @@ class CachedSoulEngine:
     def __init__(
         self,
         soul_engine,
-        cache: Optional[SemanticCache] = None,
+        cache: SemanticCache | None = None,
         cache_responses: bool = True,
     ):
         self.engine = soul_engine
@@ -360,7 +360,7 @@ class CachedSoulEngine:
 
         return response
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         return self.cache.get_stats()
 

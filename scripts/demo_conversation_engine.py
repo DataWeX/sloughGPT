@@ -2,11 +2,10 @@
 Demonstration: How the ConversationEngine integrates with existing infrastructure.
 """
 
-import sys
 import os
 import tempfile
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
-from importlib.util import spec_from_file_location, module_from_spec
 
 
 def demo_conversation_engine():
@@ -33,7 +32,7 @@ def demo_conversation_engine():
     msg1 = engine.add_message(
         session_id="chat_abc123", role="user", content="Hello, how are you?", model="gpt2"
     )
-    print(f"   User: Hello, how are you?")
+    print("   User: Hello, how are you?")
     print(f"   -> Saved to DB (id: {msg1.id[:20]}...)")
 
     # Simulate: Model generates response
@@ -44,7 +43,7 @@ def demo_conversation_engine():
         model="gpt2",
         tokens=10,
     )
-    print(f"   Assistant: I'm doing great! How can I help you today?")
+    print("   Assistant: I'm doing great! How can I help you today?")
     print(f"   -> Saved to DB (id: {msg2.id[:20]}...)")
 
     # Continue conversation

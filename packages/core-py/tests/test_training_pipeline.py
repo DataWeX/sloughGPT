@@ -4,13 +4,12 @@ Covers: dataclasses, validation, quality scoring, conversation CRUD, training
 pairs, training runs, export (jsonl/json), stats, backup, singleton, migration.
 Uses tmp_path to avoid filesystem side effects.
 """
+
 from __future__ import annotations
 
-import dataclasses
 import json
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -19,17 +18,15 @@ if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
 from domain.infrastructure._internal.training_pipeline import (
-    Conversation,
-    TrainingPair,
-    TrainingRun,
-    TrainingDataPipeline,
-    get_pipeline,
-    FEEDBACK_UP,
     FEEDBACK_DOWN,
     FEEDBACK_NEUTRAL,
+    FEEDBACK_UP,
     NEUTRAL_QUALITY,
-    GOOD_QUALITY,
-    BAD_QUALITY,
+    Conversation,
+    TrainingDataPipeline,
+    TrainingPair,
+    TrainingRun,
+    get_pipeline,
 )
 
 
@@ -42,8 +39,12 @@ def pipeline(tmp_path):
 class TestConversationDataclass:
     def test_fields(self):
         c = Conversation(
-            id="c1", session_id="s1", user_message="hi",
-            assistant_message="hello", model="m1", timestamp="2024-01-01",
+            id="c1",
+            session_id="s1",
+            user_message="hi",
+            assistant_message="hello",
+            model="m1",
+            timestamp="2024-01-01",
         )
         assert c.id == "c1"
         assert c.feedback is None
@@ -51,9 +52,14 @@ class TestConversationDataclass:
 
     def test_with_feedback(self):
         c = Conversation(
-            id="c1", session_id="s1", user_message="hi",
-            assistant_message="hello", model="m1", timestamp="2024-01-01",
-            feedback=FEEDBACK_UP, tokens=10,
+            id="c1",
+            session_id="s1",
+            user_message="hi",
+            assistant_message="hello",
+            model="m1",
+            timestamp="2024-01-01",
+            feedback=FEEDBACK_UP,
+            tokens=10,
         )
         assert c.feedback == FEEDBACK_UP
         assert c.tokens == 10
@@ -62,8 +68,12 @@ class TestConversationDataclass:
 class TestTrainingPairDataclass:
     def test_fields(self):
         p = TrainingPair(
-            id="p1", conversation_id="c1", prompt="hi",
-            response="hello", quality_score=0.8, feedback=FEEDBACK_UP,
+            id="p1",
+            conversation_id="c1",
+            prompt="hi",
+            response="hello",
+            quality_score=0.8,
+            feedback=FEEDBACK_UP,
             created_at="2024-01-01",
         )
         assert p.quality_score == 0.8
@@ -73,8 +83,12 @@ class TestTrainingPairDataclass:
 class TestTrainingRunDataclass:
     def test_fields(self):
         r = TrainingRun(
-            id="r1", created_at="2024-01-01", dataset_version="v1",
-            pairs_count=10, model_used="gpt2", status="pending",
+            id="r1",
+            created_at="2024-01-01",
+            dataset_version="v1",
+            pairs_count=10,
+            model_used="gpt2",
+            status="pending",
         )
         assert r.status == "pending"
         assert r.metrics == {}
@@ -120,8 +134,14 @@ class TestScoreQuality:
 
 class TestToModel:
     def test_conversation_from_doc(self):
-        doc = {"id": "c1", "session_id": "s1", "user_message": "hi",
-               "assistant_message": "hello", "model": "m1", "timestamp": "t"}
+        doc = {
+            "id": "c1",
+            "session_id": "s1",
+            "user_message": "hi",
+            "assistant_message": "hello",
+            "model": "m1",
+            "timestamp": "t",
+        }
         c = TrainingDataPipeline._to_model(Conversation, doc)
         assert c.id == "c1"
         assert c.feedback is None
@@ -132,9 +152,15 @@ class TestToModel:
         assert c.session_id is None
 
     def test_pair_from_doc(self):
-        doc = {"id": "p1", "conversation_id": "c1", "prompt": "hi",
-               "response": "hello", "quality_score": 0.8, "feedback": None,
-               "created_at": "t"}
+        doc = {
+            "id": "p1",
+            "conversation_id": "c1",
+            "prompt": "hi",
+            "response": "hello",
+            "quality_score": 0.8,
+            "feedback": None,
+            "created_at": "t",
+        }
         p = TrainingDataPipeline._to_model(TrainingPair, doc)
         assert p.id == "p1"
 
@@ -142,8 +168,10 @@ class TestToModel:
 class TestAddConversation:
     def test_add_conversation(self, pipeline):
         conv = pipeline.add_conversation(
-            session_id="s1", user_message="hi",
-            assistant_message="hello", model="gpt2",
+            session_id="s1",
+            user_message="hi",
+            assistant_message="hello",
+            model="gpt2",
         )
         assert conv.session_id == "s1"
         assert conv.user_message == "hi"
@@ -151,8 +179,10 @@ class TestAddConversation:
 
     def test_creates_training_pair(self, pipeline):
         pipeline.add_conversation(
-            session_id="s1", user_message="hi",
-            assistant_message="hello", model="gpt2",
+            session_id="s1",
+            user_message="hi",
+            assistant_message="hello",
+            model="gpt2",
         )
         pairs = pipeline.get_training_pairs()
         assert len(pairs) == 1
@@ -161,8 +191,10 @@ class TestAddConversation:
 
     def test_with_feedback(self, pipeline):
         conv = pipeline.add_conversation(
-            session_id="s1", user_message="hi",
-            assistant_message="hello", model="gpt2",
+            session_id="s1",
+            user_message="hi",
+            assistant_message="hello",
+            model="gpt2",
             feedback=FEEDBACK_UP,
         )
         assert conv.feedback == FEEDBACK_UP
@@ -171,8 +203,10 @@ class TestAddConversation:
 
     def test_with_metadata(self, pipeline):
         conv = pipeline.add_conversation(
-            session_id="s1", user_message="hi",
-            assistant_message="hello", model="gpt2",
+            session_id="s1",
+            user_message="hi",
+            assistant_message="hello",
+            model="gpt2",
             metadata={"key": "val"},
         )
         assert conv.metadata == {"key": "val"}
@@ -180,16 +214,20 @@ class TestAddConversation:
     def test_invalid_metadata(self, pipeline):
         with pytest.raises(TypeError, match="metadata must be a dict"):
             pipeline.add_conversation(
-                session_id="s1", user_message="hi",
-                assistant_message="hello", model="gpt2",
+                session_id="s1",
+                user_message="hi",
+                assistant_message="hello",
+                model="gpt2",
                 metadata="not a dict",
             )
 
     def test_invalid_feedback(self, pipeline):
         with pytest.raises(ValueError, match="Invalid feedback"):
             pipeline.add_conversation(
-                session_id="s1", user_message="hi",
-                assistant_message="hello", model="gpt2",
+                session_id="s1",
+                user_message="hi",
+                assistant_message="hello",
+                model="gpt2",
                 feedback="bad",
             )
 
@@ -197,8 +235,10 @@ class TestAddConversation:
 class TestAddFeedback:
     def test_add_feedback(self, pipeline):
         conv = pipeline.add_conversation(
-            session_id="s1", user_message="hi",
-            assistant_message="hello", model="gpt2",
+            session_id="s1",
+            user_message="hi",
+            assistant_message="hello",
+            model="gpt2",
         )
         result = pipeline.add_feedback(conv.id, FEEDBACK_UP)
         assert result is True
@@ -207,8 +247,10 @@ class TestAddFeedback:
 
     def test_feedback_updates_quality(self, pipeline):
         conv = pipeline.add_conversation(
-            session_id="s1", user_message="hi",
-            assistant_message="hello", model="gpt2",
+            session_id="s1",
+            user_message="hi",
+            assistant_message="hello",
+            model="gpt2",
         )
         pipeline.add_feedback(conv.id, FEEDBACK_DOWN)
         pairs = pipeline.get_training_pairs()
@@ -264,7 +306,7 @@ class TestGetTrainingPairs:
         assert len(pairs) == 1
 
     def test_exclude_used(self, pipeline):
-        conv = pipeline.add_conversation("s1", "a", "b", "m1", feedback=FEEDBACK_UP)
+        pipeline.add_conversation("s1", "a", "b", "m1", feedback=FEEDBACK_UP)
         pairs = pipeline.get_training_pairs()
         pipeline.mark_pairs_used([pairs[0].id], "run_1")
         pairs = pipeline.get_training_pairs(include_used=False)
@@ -279,7 +321,7 @@ class TestGetTrainingPairs:
 
 class TestMarkPairsUsed:
     def test_mark_used(self, pipeline):
-        conv = pipeline.add_conversation("s1", "a", "b", "m1")
+        pipeline.add_conversation("s1", "a", "b", "m1")
         pairs = pipeline.get_training_pairs()
         pipeline.mark_pairs_used([pairs[0].id], "run_1")
         updated = pipeline.get_training_pairs()
@@ -344,7 +386,7 @@ class TestExportTrainingData:
         assert latest.exists()
 
     def test_export_marks_pairs_used(self, pipeline):
-        conv = pipeline.add_conversation("s1", "hi", "hello", "m1", feedback=FEEDBACK_UP)
+        pipeline.add_conversation("s1", "hi", "hello", "m1", feedback=FEEDBACK_UP)
         pipeline.export_training_data(version="v1")
         pairs = pipeline.get_training_pairs(include_used=False)
         assert len(pairs) == 0
@@ -386,7 +428,8 @@ class TestCreateBackup:
 
 class TestSingleton:
     def test_get_pipeline_singleton(self, tmp_path):
-        import domain.infrastructure.training_pipeline as mod
+        import domain.infrastructure._internal.training_pipeline as mod
+
         old = mod._pipeline
         try:
             mod._pipeline = None
@@ -397,7 +440,8 @@ class TestSingleton:
             mod._pipeline = old
 
     def test_get_pipeline_wrong_dir(self, tmp_path):
-        import domain.infrastructure.training_pipeline as mod
+        import domain.infrastructure._internal.training_pipeline as mod
+
         old = mod._pipeline
         try:
             mod._pipeline = None
@@ -414,8 +458,14 @@ class TestMigration:
         data_dir.mkdir()
         legacy = {
             "records": [
-                {"id": "c1", "session_id": "s1", "user_message": "hi",
-                 "assistant_message": "hello", "model": "m1", "timestamp": "t"},
+                {
+                    "id": "c1",
+                    "session_id": "s1",
+                    "user_message": "hi",
+                    "assistant_message": "hello",
+                    "model": "m1",
+                    "timestamp": "t",
+                },
             ]
         }
         (data_dir / "conversations.db").write_text(json.dumps(legacy))
@@ -430,8 +480,14 @@ class TestMigration:
         data_dir.mkdir()
         legacy = {
             "records": [
-                {"id": "c1", "session_id": "s1", "user_message": "hi",
-                 "assistant_message": "hello", "model": "m1", "timestamp": "t"},
+                {
+                    "id": "c1",
+                    "session_id": "s1",
+                    "user_message": "hi",
+                    "assistant_message": "hello",
+                    "model": "m1",
+                    "timestamp": "t",
+                },
             ]
         }
         (data_dir / "conversations.db").write_text(json.dumps(legacy))

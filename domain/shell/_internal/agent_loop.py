@@ -7,10 +7,10 @@ Plans shell commands via LLM, executes with user approval, loops until done.
 from __future__ import annotations
 
 import json
-import re
-import time
 import logging
-from typing import Any, Callable, Optional
+import re
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("slo.shell.agent")
 
@@ -127,13 +127,17 @@ class AgentLoop:
         self.repl._print(f"\n  {_C_BOLD}Agent loop started{_C_RESET}")
         self.repl._print(f"  Request: {user_request}")
         self.repl._print(f"  Max iterations: {self.max_iterations}")
-        self.repl._print(f"  Type {_C_YELLOW}yes{_C_RESET} to approve, {_C_YELLOW}no{_C_RESET} to skip, {_C_YELLOW}quit{_C_RESET} to abort\n")
+        self.repl._print(
+            f"  Type {_C_YELLOW}yes{_C_RESET} to approve, {_C_YELLOW}no{_C_RESET} to skip, {_C_YELLOW}quit{_C_RESET} to abort\n"
+        )
 
         final_answer = ""
 
         while self._iteration < self.max_iterations:
             self._iteration += 1
-            self.repl._print(f"  {_C_DIM}── iteration {self._iteration}/{self.max_iterations} ──{_C_RESET}")
+            self.repl._print(
+                f"  {_C_DIM}── iteration {self._iteration}/{self.max_iterations} ──{_C_RESET}"
+            )
 
             # Get LLM plan
             plan = self._get_plan()
@@ -165,7 +169,9 @@ class AgentLoop:
                 break
 
             # Execute
-            result = self._execute_tool(tool, args) if approved else {"success": False, "skipped": True}
+            result = (
+                self._execute_tool(tool, args) if approved else {"success": False, "skipped": True}
+            )
 
             # Feed result back
             result_str = json.dumps(result, default=str)
@@ -179,7 +185,11 @@ class AgentLoop:
                     # Truncate long output
                     lines = output.strip().split("\n")
                     if len(lines) > 30:
-                        truncated = "\n".join(lines[:15]) + f"\n  {_C_DIM}... ({len(lines)-30} lines omitted) ...{_C_RESET}\n" + "\n".join(lines[-15:])
+                        truncated = (
+                            "\n".join(lines[:15])
+                            + f"\n  {_C_DIM}... ({len(lines) - 30} lines omitted) ...{_C_RESET}\n"
+                            + "\n".join(lines[-15:])
+                        )
                         self.repl._print(f"  Output ({len(lines)} lines):\n{truncated}")
                     else:
                         self.repl._print(f"  Output:\n{output}")
@@ -209,7 +219,7 @@ class AgentLoop:
         # Parse JSON from response
         response = response.strip()
         # Try to find JSON object in the response
-        match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response, re.DOTALL)
+        match = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", response, re.DOTALL)
         if match:
             try:
                 return json.loads(match.group())
@@ -223,7 +233,11 @@ class AgentLoop:
             pass
 
         # Fallback: treat as a command
-        return {"tool": "run_command", "args": {"command": response}, "thinking": "Treating response as command"}
+        return {
+            "tool": "run_command",
+            "args": {"command": response},
+            "thinking": "Treating response as command",
+        }
 
     def _show_plan(self, tool: str, args: dict) -> None:
         """Display the planned action."""
@@ -259,9 +273,7 @@ class AgentLoop:
             return True
 
         try:
-            self.repl.io.write(
-                f"  {_C_YELLOW}Approve?{_C_RESET} [y/n/quit]: ", end=""
-            )
+            self.repl.io.write(f"  {_C_YELLOW}Approve?{_C_RESET} [y/n/quit]: ", end="")
             answer = self.repl.io.read("").strip().lower()
         except (EOFError, KeyboardInterrupt):
             return None
@@ -310,6 +322,7 @@ class AgentLoop:
     def _exec_read_file(self, path: str) -> dict:
         """Read a file."""
         from pathlib import Path
+
         p = Path(path).expanduser()
         if not p.exists():
             return {"success": False, "error": f"File not found: {path}"}
@@ -323,6 +336,7 @@ class AgentLoop:
     def _exec_write_file(self, path: str, content: str) -> dict:
         """Write content to a file."""
         from pathlib import Path
+
         p = Path(path).expanduser()
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content)
@@ -332,6 +346,7 @@ class AgentLoop:
     def _exec_edit_file(self, path: str, old_text: str, new_text: str) -> dict:
         """Replace text in a file."""
         from pathlib import Path
+
         p = Path(path).expanduser()
         if not p.exists():
             return {"success": False, "error": f"File not found: {path}"}
@@ -346,19 +361,31 @@ class AgentLoop:
     def _exec_search(self, pattern: str, path: str) -> dict:
         """Search for patterns in files."""
         import subprocess
+
         try:
             result = subprocess.run(
-                ["grep", "-rn", "--include=*.py", "--include=*.ts", "--include=*.tsx",
-                 "--include=*.js", "--include=*.jsx", "--include=*.md",
-                 pattern, path],
-                capture_output=True, text=True, timeout=30,
+                [
+                    "grep",
+                    "-rn",
+                    "--include=*.py",
+                    "--include=*.ts",
+                    "--include=*.tsx",
+                    "--include=*.js",
+                    "--include=*.jsx",
+                    "--include=*.md",
+                    pattern,
+                    path,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             output = result.stdout
             if not output:
                 return {"success": True, "output": "No matches found"}
             lines = output.strip().split("\n")
             if len(lines) > 50:
-                output = "\n".join(lines[:50]) + f"\n... ({len(lines)-50} more matches)"
+                output = "\n".join(lines[:50]) + f"\n... ({len(lines) - 50} more matches)"
             return {"success": True, "output": output}
         except subprocess.TimeoutExpired:
             return {"success": False, "error": "Search timed out"}
@@ -368,6 +395,7 @@ class AgentLoop:
 
 # Color constants (local to avoid circular import with repl.py)
 import os as _os
+
 _NO_COLOR = _os.environ.get("NO_COLOR")
 if _NO_COLOR:
     _C_CYAN = _C_GREEN = _C_RED = _C_YELLOW = _C_DIM = _C_BOLD = _C_RESET = ""

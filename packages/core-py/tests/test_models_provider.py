@@ -1,47 +1,47 @@
 """Tests for domain.models._internal.provider.py."""
 
-import pytest
 import threading
-from dataclasses import dataclass
-from typing import AsyncIterator, List, Optional
+
+import pytest
 
 from domain.models._internal.provider import (
+    KnowledgeProcessor,
+    MessageProcessor,
     ModelCapabilities,
     ModelProvider,
-    register_provider,
-    get_provider,
-    list_providers,
-    clear_providers,
-    register_processor,
-    get_processor,
-    list_processors,
-    apply_processors,
-    attach_process_guard_to_provider,
-    VisionProcessor,
-    KnowledgeProcessor,
-    ToolDef,
-    ToolUseProcessor,
     PersonalityProcessor,
-    StyleProcessor,
     ProviderRouter,
     SloTransformerProvider,
+    StyleProcessor,
+    ToolDef,
+    ToolUseProcessor,
+    VisionProcessor,
+    apply_processors,
+    attach_process_guard_to_provider,
+    clear_providers,
+    get_processor,
+    get_provider,
+    list_processors,
+    list_providers,
+    register_processor,
+    register_provider,
     update_personality_traits,
-    MessageProcessor,
-    ChatMessage,
 )
-
 
 # =============================================================================
 # Helpers
 # =============================================================================
 
+
 def _clear_providers():
     import domain.models._internal.provider as p
+
     p._providers.clear()
 
 
 def _clear_processors():
     import domain.models._internal.provider as p
+
     p._processors.clear()
 
 
@@ -106,6 +106,7 @@ class PassthroughProcessor:
 # ModelCapabilities
 # =============================================================================
 
+
 class TestModelCapabilities:
     def test_defaults(self):
         c = ModelCapabilities()
@@ -121,7 +122,9 @@ class TestModelCapabilities:
         assert c.streaming is False
 
     def test_all_true(self):
-        c = ModelCapabilities(chat=True, streaming=True, embedding=True, vision=True, functions=True)
+        c = ModelCapabilities(
+            chat=True, streaming=True, embedding=True, vision=True, functions=True
+        )
         assert all([c.chat, c.streaming, c.embedding, c.vision, c.functions])
 
     def test_equality(self):
@@ -142,6 +145,7 @@ class TestModelCapabilities:
 # =============================================================================
 # Provider Registry
 # =============================================================================
+
 
 class TestProviderRegistry:
     def setup_method(self):
@@ -185,6 +189,7 @@ class TestProviderRegistry:
         class FakeProvider:
             def __init__(self, v):
                 self.v = v
+
         p = FakeProvider(42)
         register_provider("complex", p)
         assert get_provider("complex").v == 42
@@ -205,6 +210,7 @@ class TestProviderRegistry:
 # =============================================================================
 # Processor Registry
 # =============================================================================
+
 
 class TestProcessorRegistry:
     def setup_method(self):
@@ -243,6 +249,7 @@ class TestProcessorRegistry:
 # apply_processors
 # =============================================================================
 
+
 class TestApplyProcessors:
     async def test_empty_processors(self):
         result = await apply_processors([{"role": "user", "content": "hi"}], [])
@@ -252,6 +259,7 @@ class TestApplyProcessors:
         class UpperProcessor:
             async def process(self, msgs):
                 return [{"role": m["role"], "content": m["content"].upper()} for m in msgs]
+
         result = await apply_processors([{"role": "user", "content": "hello"}], [UpperProcessor()])
         assert result[0]["content"] == "HELLO"
 
@@ -259,10 +267,14 @@ class TestApplyProcessors:
         class AddExclamation:
             async def process(self, msgs):
                 return [{"role": m["role"], "content": m["content"] + "!"} for m in msgs]
+
         class AddQuestion:
             async def process(self, msgs):
                 return [{"role": m["role"], "content": m["content"] + "?"} for m in msgs]
-        result = await apply_processors([{"role": "user", "content": "hi"}], [AddExclamation(), AddQuestion()])
+
+        result = await apply_processors(
+            [{"role": "user", "content": "hi"}], [AddExclamation(), AddQuestion()]
+        )
         assert result[0]["content"] == "hi!?"
 
     async def test_processor_failure_logged(self):
@@ -273,6 +285,7 @@ class TestApplyProcessors:
         class AppendAfter:
             async def process(self, msgs):
                 return [{"role": m["role"], "content": m["content"] + "+after"} for m in msgs]
+
         result = await apply_processors(
             [{"role": "user", "content": "hi"}],
             [FailingProcessor(), AppendAfter()],
@@ -283,6 +296,7 @@ class TestApplyProcessors:
         class Echo:
             async def process(self, msgs):
                 return msgs
+
         result = await apply_processors([], [Echo()])
         assert result == []
 
@@ -296,6 +310,7 @@ class TestApplyProcessors:
 # attach_process_guard_to_provider
 # =============================================================================
 
+
 class TestAttachProcessGuardToProvider:
     def setup_method(self):
         _clear_providers()
@@ -306,6 +321,7 @@ class TestAttachProcessGuardToProvider:
     def test_provider_without_get_server(self):
         class FakeProvider:
             pass
+
         register_provider("slonet-native", FakeProvider())
         assert attach_process_guard_to_provider(None) is False
 
@@ -313,26 +329,32 @@ class TestAttachProcessGuardToProvider:
         class FakeProvider:
             def get_server(self):
                 return None
+
         register_provider("slonet-native", FakeProvider())
         assert attach_process_guard_to_provider(None) is False
 
     def test_server_without_set_process_guard(self):
         class FakeServer:
             pass
+
         class FakeProvider:
             def get_server(self):
                 return FakeServer()
+
         register_provider("slonet-native", FakeProvider())
         assert attach_process_guard_to_provider(None) is False
 
     def test_successful_attach(self):
         attached_guard = [None]
+
         class FakeServer:
             def set_process_guard(self, guard):
                 attached_guard[0] = guard
+
         class FakeProvider:
             def get_server(self):
                 return FakeServer()
+
         register_provider("slonet-native", FakeProvider())
         mock_guard = object()
         result = attach_process_guard_to_provider(mock_guard)
@@ -347,6 +369,7 @@ class TestAttachProcessGuardToProvider:
 # =============================================================================
 # VisionProcessor
 # =============================================================================
+
 
 class TestVisionProcessor:
     def test_init(self):
@@ -370,7 +393,9 @@ class TestVisionProcessor:
 
     def test_extract_images_list_content(self):
         vp = VisionProcessor()
-        msgs = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:img"}}]}]
+        msgs = [
+            {"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:img"}}]}
+        ]
         images = vp._extract_images(msgs)
         assert len(images) == 1
 
@@ -381,10 +406,15 @@ class TestVisionProcessor:
 
     def test_extract_images_mixed_content(self):
         vp = VisionProcessor()
-        msgs = [{"role": "user", "content": [
-            {"type": "text", "text": "hello"},
-            {"type": "image_url", "image_url": {"url": "img1"}}
-        ]}]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "hello"},
+                    {"type": "image_url", "image_url": {"url": "img1"}},
+                ],
+            }
+        ]
         images = vp._extract_images(msgs)
         assert len(images) == 1
 
@@ -436,6 +466,7 @@ class TestVisionProcessor:
 # =============================================================================
 # KnowledgeProcessor
 # =============================================================================
+
 
 class TestKnowledgeProcessor:
     async def test_init_no_knowledge(self):
@@ -509,6 +540,7 @@ class TestKnowledgeProcessor:
 # ToolDef
 # =============================================================================
 
+
 class TestToolDef:
     def test_minimal(self):
         t = ToolDef(name="describe_image", provider_name="multimodal")
@@ -535,6 +567,7 @@ class TestToolDef:
 # ToolUseProcessor
 # =============================================================================
 
+
 class TestToolUseProcessor:
     def test_init_default_tools(self):
         tp = ToolUseProcessor()
@@ -548,7 +581,14 @@ class TestToolUseProcessor:
 
     async def test_process_adds_tool_prompt_no_system(self):
         tp = ToolUseProcessor()
-        msgs = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}
+                ],
+            }
+        ]
         result = await tp.process(msgs)
         assert len(result) == 2
         assert result[0]["role"] == "system"
@@ -558,7 +598,12 @@ class TestToolUseProcessor:
         tp = ToolUseProcessor()
         msgs = [
             {"role": "system", "content": "Be helpful."},
-            {"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}
+                ],
+            },
         ]
         result = await tp.process(msgs)
         assert result[0]["role"] == "system"
@@ -646,7 +691,14 @@ class TestToolUseProcessor:
 
     async def test_process_no_tools_empty_list(self):
         tp = ToolUseProcessor(tools=[])
-        msgs = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}
+                ],
+            }
+        ]
         result = await tp.process(msgs)
         assert len(result) == 2
         assert result[0]["role"] == "system"
@@ -655,6 +707,7 @@ class TestToolUseProcessor:
 # =============================================================================
 # PersonalityProcessor
 # =============================================================================
+
 
 class TestPersonalityProcessor:
     def test_init_empty(self):
@@ -706,16 +759,26 @@ class TestPersonalityProcessor:
 
     async def test_process_appends_to_existing_system(self):
         pp = PersonalityProcessor(traits={"directness": 0.9})
-        msgs = [{"role": "system", "content": "Base instruction."}, {"role": "user", "content": "hi"}]
+        msgs = [
+            {"role": "system", "content": "Base instruction."},
+            {"role": "user", "content": "hi"},
+        ]
         result = await pp.process(msgs)
         assert "Base instruction" in result[0]["content"]
         assert "direct" in result[0]["content"]
 
     async def test_process_all_10_traits(self):
         traits_all_high = {
-            "warmth": 0.9, "creativity": 0.9, "empathy": 0.9, "formality": 0.9,
-            "humor": 0.9, "patience": 0.9, "confidence": 0.9, "curiosity": 0.9,
-            "directness": 0.9, "optimism": 0.9,
+            "warmth": 0.9,
+            "creativity": 0.9,
+            "empathy": 0.9,
+            "formality": 0.9,
+            "humor": 0.9,
+            "patience": 0.9,
+            "confidence": 0.9,
+            "curiosity": 0.9,
+            "directness": 0.9,
+            "optimism": 0.9,
         }
         pp = PersonalityProcessor(traits=traits_all_high)
         result = await pp.process([{"role": "user", "content": "hi"}])
@@ -762,53 +825,64 @@ class TestPersonalityProcessor:
 class TestPersonalityProcessorTraitAdjectives:
     """Verify specific trait->adjective mappings."""
 
-    @pytest.mark.parametrize("trait,value,expected", [
-        ("warmth", 0.0, "neutral"),
-        ("warmth", 0.2, "neutral"),
-        ("warmth", 0.3, "reserved"),
-        ("warmth", 0.4, "reserved"),
-        ("warmth", 0.5, "friendly"),
-        ("warmth", 0.6, "friendly"),
-        ("warmth", 0.7, "warm"),
-        ("warmth", 0.8, "warm"),
-        ("warmth", 0.9, "very warm and empathetic"),
-        ("warmth", 1.0, "very warm and empathetic"),
-        ("creativity", 0.0, "factual"),
-        ("creativity", 0.5, "balanced"),
-        ("creativity", 0.9, "highly creative and imaginative"),
-        ("formality", 0.0, "casual"),
-        ("formality", 0.5, "professional"),
-        ("formality", 0.9, "highly formal and precise"),
-        ("humor", 0.0, "serious"),
-        ("humor", 0.5, "witty"),
-        ("humor", 0.9, "very humorous and playful"),
-        ("confidence", 0.0, "cautious"),
-        ("confidence", 0.5, "confident"),
-        ("confidence", 0.9, "very confident and decisive"),
-        ("curiosity", 0.0, "direct"),
-        ("curiosity", 0.5, "curious"),
-        ("curiosity", 0.9, "deeply curious and exploratory"),
-        ("optimism", 0.0, "realistic"),
-        ("optimism", 0.5, "optimistic"),
-        ("optimism", 0.9, "very optimistic and encouraging"),
-        ("empathy", 0.0, "detached"),
-        ("empathy", 0.5, "understanding"),
-        ("empathy", 0.9, "deeply empathetic and compassionate"),
-        ("patience", 0.0, "brisk"),
-        ("patience", 0.5, "patient"),
-        ("patience", 0.9, "extremely patient and methodical"),
-        ("directness", 0.0, "indirect"),
-        ("directness", 0.5, "balanced"),
-        ("directness", 0.9, "very direct and to the point"),
-    ])
+    @pytest.mark.parametrize(
+        "trait,value,expected",
+        [
+            ("warmth", 0.0, "neutral"),
+            ("warmth", 0.2, "neutral"),
+            ("warmth", 0.3, "reserved"),
+            ("warmth", 0.4, "reserved"),
+            ("warmth", 0.5, "friendly"),
+            ("warmth", 0.6, "friendly"),
+            ("warmth", 0.7, "warm"),
+            ("warmth", 0.8, "warm"),
+            ("warmth", 0.9, "very warm and empathetic"),
+            ("warmth", 1.0, "very warm and empathetic"),
+            ("creativity", 0.0, "factual"),
+            ("creativity", 0.5, "balanced"),
+            ("creativity", 0.9, "highly creative and imaginative"),
+            ("formality", 0.0, "casual"),
+            ("formality", 0.5, "professional"),
+            ("formality", 0.9, "highly formal and precise"),
+            ("humor", 0.0, "serious"),
+            ("humor", 0.5, "witty"),
+            ("humor", 0.9, "very humorous and playful"),
+            ("confidence", 0.0, "cautious"),
+            ("confidence", 0.5, "confident"),
+            ("confidence", 0.9, "very confident and decisive"),
+            ("curiosity", 0.0, "direct"),
+            ("curiosity", 0.5, "curious"),
+            ("curiosity", 0.9, "deeply curious and exploratory"),
+            ("optimism", 0.0, "realistic"),
+            ("optimism", 0.5, "optimistic"),
+            ("optimism", 0.9, "very optimistic and encouraging"),
+            ("empathy", 0.0, "detached"),
+            ("empathy", 0.5, "understanding"),
+            ("empathy", 0.9, "deeply empathetic and compassionate"),
+            ("patience", 0.0, "brisk"),
+            ("patience", 0.5, "patient"),
+            ("patience", 0.9, "extremely patient and methodical"),
+            ("directness", 0.0, "indirect"),
+            ("directness", 0.5, "balanced"),
+            ("directness", 0.9, "very direct and to the point"),
+        ],
+    )
     def test_trait_mapping(self, trait, value, expected):
         pp = PersonalityProcessor()
         assert pp._describe_trait(trait, value) == expected
 
     def test_all_traits_have_adjective_tables(self):
         expected_traits = {
-            "warmth", "creativity", "empathy", "formality", "humor",
-            "patience", "confidence", "curiosity", "directness", "optimism",
+            "warmth",
+            "creativity",
+            "empathy",
+            "formality",
+            "humor",
+            "patience",
+            "confidence",
+            "curiosity",
+            "directness",
+            "optimism",
         }
         assert set(PersonalityProcessor.TRAIT_ADJECTIVES.keys()) == expected_traits
 
@@ -816,6 +890,7 @@ class TestPersonalityProcessorTraitAdjectives:
 # =============================================================================
 # StyleProcessor
 # =============================================================================
+
 
 class TestStyleProcessor:
     def test_init_defaults(self):
@@ -921,6 +996,7 @@ class TestStyleProcessor:
 # =============================================================================
 # ProviderRouter
 # =============================================================================
+
 
 class TestProviderRouter:
     def setup_method(self):
@@ -1085,11 +1161,9 @@ class TestProviderRouterWithMockProvider:
         router.add_processor(ToolUseProcessor())
         router.set_text_provider("mock_text")
         tokens = []
-        async for token in router.chat_stream(
-            [{"role": "user", "content": "describe this"}]
-        ):
+        async for token in router.chat_stream([{"role": "user", "content": "describe this"}]):
             tokens.append(token)
-        text = "".join(tokens)
+        "".join(tokens)
         assert len(tokens) > 0
 
     async def test_chat_stream_passes_kwargs(self):
@@ -1119,15 +1193,11 @@ class TestProviderRouterWithMockProvider:
     async def test_multiple_processors_all_applied(self):
         class AppendA:
             async def process(self, msgs):
-                return [
-                    {"role": m["role"], "content": m["content"] + "A"} for m in msgs
-                ]
+                return [{"role": m["role"], "content": m["content"] + "A"} for m in msgs]
 
         class AppendB:
             async def process(self, msgs):
-                return [
-                    {"role": m["role"], "content": m["content"] + "B"} for m in msgs
-                ]
+                return [{"role": m["role"], "content": m["content"] + "B"} for m in msgs]
 
         register_provider("mock_text", MockTextProvider())
         router = ProviderRouter()
@@ -1155,6 +1225,7 @@ class TestProviderRouterWithMockProvider:
 # =============================================================================
 # update_personality_traits
 # =============================================================================
+
 
 class TestUpdatePersonalityTraits:
     def setup_method(self):
@@ -1213,6 +1284,7 @@ class TestUpdatePersonalityTraits:
 # =============================================================================
 # SloTransformerProvider
 # =============================================================================
+
 
 class TestSloTransformerProviderEncodeDecode:
     """Test encode/decode logic without needing a real model."""
@@ -1355,6 +1427,7 @@ class TestSloTransformerProviderEncodeDecode:
 # Protocol compliance checks
 # =============================================================================
 
+
 class TestProtocolCompliance:
     def test_provider_router_implements_model_provider(self):
         router = ProviderRouter()
@@ -1384,6 +1457,7 @@ class TestProtocolCompliance:
 # =============================================================================
 # Regression / edge cases
 # =============================================================================
+
 
 class TestEdgeCases:
     def setup_method(self):
@@ -1456,4 +1530,3 @@ class TestEdgeCases:
         ]
         images = vp._extract_images(msgs)
         assert len(images) == 2
-

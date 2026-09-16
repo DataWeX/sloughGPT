@@ -7,17 +7,24 @@ Uses a simple transformer encoder with the BPE tokenizer.
 
 from __future__ import annotations
 
-from typing import List
-import numpy as np
 import logging
+
+import numpy as np
 
 logger = logging.getLogger("slo.multimodal.text_encoder")
 
-from domain.training._internal.slonet import (
-    Tensor, SloEmbedding, SloTransformerBlock, SloLayerNorm, SloLinear,
-    SloAdam, tensor as _tensor,
-)
 from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
+from domain.training._internal.slonet import (
+    SloAdam,
+    SloEmbedding,
+    SloLayerNorm,
+    SloLinear,
+    SloTransformerBlock,
+    Tensor,
+)
+from domain.training._internal.slonet import (
+    tensor as _tensor,
+)
 
 
 class TextEncoder:
@@ -37,14 +44,14 @@ class TextEncoder:
 
         # Positional embedding (learned)
         self.pos_embedding = Tensor(
-            np.random.randn(1, max_seq_len, embed_dim).astype(np.float32) * 0.02,
-            requires_grad=True
+            np.random.randn(1, max_seq_len, embed_dim).astype(np.float32) * 0.02, requires_grad=True
         )
 
         # Transformer blocks
         self.blocks = [
-            SloTransformerBlock(embed_dim, n_heads, use_rope=True, dropout=0.1,
-                              name=f"text_block_{i}")
+            SloTransformerBlock(
+                embed_dim, n_heads, use_rope=True, dropout=0.1, name=f"text_block_{i}"
+            )
             for i in range(n_layers)
         ]
 
@@ -84,7 +91,7 @@ class TextEncoder:
         x = self.norm.forward(x)
         return self.context_proj.forward(x)
 
-    def encode_text(self, texts: List[str]) -> np.ndarray:
+    def encode_text(self, texts: list[str]) -> np.ndarray:
         """
         Encode raw text strings to embeddings.
 
@@ -98,14 +105,20 @@ class TextEncoder:
         """
         if not self.tokenizer._built:
             default_texts = [
-                "the cat sat on the mat", "a quick brown fox jumps over the lazy dog",
-                "hello world how are you today", "this is a test sentence for training",
-                "the sky is blue and the grass is green", "i love to learn new things",
-                "what is the meaning of life", "the sun rises in the east",
+                "the cat sat on the mat",
+                "a quick brown fox jumps over the lazy dog",
+                "hello world how are you today",
+                "this is a test sentence for training",
+                "the sky is blue and the grass is green",
+                "i love to learn new things",
+                "what is the meaning of life",
+                "the sun rises in the east",
                 "one two three four five six seven eight nine ten",
-                "machine learning is fun and interesting", "please generate an image of",
+                "machine learning is fun and interesting",
+                "please generate an image of",
                 "a beautiful landscape with mountains and trees",
-                "portrait of a person with blue eyes", "still life with fruit and flowers",
+                "portrait of a person with blue eyes",
+                "still life with fruit and flowers",
                 "abstract art with geometric shapes and bright colors",
             ]
             self.tokenizer.train(default_texts)
@@ -116,13 +129,13 @@ class TextEncoder:
 
         token_ids = np.zeros((len(texts), max_len), dtype=np.int32)
         for i, tokens in enumerate(token_lists):
-            token_ids[i, :min(len(tokens), max_len)] = tokens[:max_len]
+            token_ids[i, : min(len(tokens), max_len)] = tokens[:max_len]
 
         # Encode
         embeddings = self.encode_tokens(token_ids)
         return embeddings.data
 
-    def train_tokenizer(self, texts: List[str]):
+    def train_tokenizer(self, texts: list[str]):
         """Train the BPE tokenizer on text corpus."""
         self.tokenizer.train(texts)
 

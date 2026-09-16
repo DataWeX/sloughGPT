@@ -2,24 +2,22 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+
 from domain.training._internal.lora import (
-    LoRALinear,
-    LoRAEmbedding,
     LoRAConfig,
+    LoRAEmbedding,
+    LoRALinear,
     LoRAType,
     _to_np,
     _to_tensor,
 )
-from domain.training._internal.slonet import Tensor, SloLayer
-
+from domain.training._internal.slonet import SloLayer, Tensor
 
 # ── _to_np / _to_tensor helpers ────────────────────────────────────────────
 
 
 class TestHelperFunctions:
-
     def test_to_np_tensor(self):
         t = Tensor(np.array([1.0, 2.0]))
         result = _to_np(t)
@@ -50,7 +48,6 @@ class TestHelperFunctions:
 
 
 class TestLoRAConfig:
-
     def test_default(self):
         config = LoRAConfig()
         assert config.rank == 8
@@ -73,7 +70,6 @@ class TestLoRAConfig:
 
 
 class TestLoRALinear:
-
     def test_init(self):
         layer = LoRALinear(10, 5)
         assert layer.in_features == 10
@@ -138,7 +134,6 @@ class TestLoRALinear:
 
 
 class TestLoRAEmbedding:
-
     def test_init(self):
         emb = LoRAEmbedding(100, 32)
         assert emb.num_embeddings == 100
@@ -160,14 +155,13 @@ class TestLoRAEmbedding:
 
     def test_train_eval(self):
         emb = LoRAEmbedding(100, 32)
-        assert hasattr(emb, 'lora_A')
+        assert hasattr(emb, "lora_A")
 
 
 # ── LoRA merge/unmerge ─────────────────────────────────────────────────────
 
 
 class TestLoRAMerge:
-
     def test_lora_a_b(self):
         layer = LoRALinear(10, 5, rank=4, alpha=8.0)
         assert layer.lora_A.shape == (4, 10)

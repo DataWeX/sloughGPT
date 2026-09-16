@@ -58,6 +58,7 @@ class TestMultiModalConfigDefaults:
 
     def test_field_count(self):
         import dataclasses
+
         fields = [f.name for f in dataclasses.fields(MultiModalConfig)]
         assert len(fields) == 12
 
@@ -93,12 +94,18 @@ class TestMultiModalConfigCustom:
 
     def test_all_fields_custom(self):
         cfg = MultiModalConfig(
-            image_size=384, patch_size=14,
-            vision_hidden_size=1024, vision_num_layers=24,
-            vision_num_heads=16, vocab_size=250000,
-            text_hidden_size=1024, text_num_layers=24,
-            text_num_heads=16, max_seq_length=2048,
-            fusion_type="concat", projection_dim=1024,
+            image_size=384,
+            patch_size=14,
+            vision_hidden_size=1024,
+            vision_num_layers=24,
+            vision_num_heads=16,
+            vocab_size=250000,
+            text_hidden_size=1024,
+            text_num_layers=24,
+            text_num_heads=16,
+            max_seq_length=2048,
+            fusion_type="concat",
+            projection_dim=1024,
         )
         assert cfg.image_size == 384
         assert cfg.patch_size == 14
@@ -253,6 +260,7 @@ class TestMultiModalConfigEdgeCases:
 
     def test_copy_semantics(self):
         import dataclasses
+
         a = MultiModalConfig(image_size=384, fusion_type="concat")
         b = dataclasses.replace(a, image_size=128)
         assert a.image_size == 384
@@ -261,6 +269,7 @@ class TestMultiModalConfigEdgeCases:
 
     def test_field_names(self):
         import dataclasses
+
         names = [f.name for f in dataclasses.fields(MultiModalConfig)]
         assert "image_size" in names
         assert "patch_size" in names

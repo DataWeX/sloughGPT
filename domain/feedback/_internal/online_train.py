@@ -7,12 +7,13 @@ that can update model weights in seconds (not minutes/hours).
 
 from __future__ import annotations
 
-import numpy as np
-from typing import Optional, Dict, Any
-from dataclasses import dataclass
 import logging
 import threading
 import time
+from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
 
 logger = logging.getLogger("slo.online_train")
 
@@ -59,7 +60,7 @@ class OnlineLoRAUpdater:
         self._buffer_lock = threading.Lock()
 
         # LoRA state
-        self._lora_weights: Dict[str, np.ndarray] = {}
+        self._lora_weights: dict[str, np.ndarray] = {}
         self._is_initialized = False
         self._is_updating = False
 
@@ -148,14 +149,19 @@ class OnlineLoRAUpdater:
                 self._stats["average_update_ms"] * (self._stats["total_updates"] - 1) + elapsed
             ) / self._stats["total_updates"]
 
-            logger.info("Updated with %d samples in %.1fms", len(feedback_batch), elapsed, extra={"tag": "INFRA"})
+            logger.info(
+                "Updated with %d samples in %.1fms",
+                len(feedback_batch),
+                elapsed,
+                extra={"tag": "INFRA"},
+            )
 
         except Exception as e:
             logger.error("Update failed: %s", e, extra={"tag": "INFRA"})
         finally:
             self._is_updating = False
 
-    def _compute_gradients(self, feedback_batch: list) -> Dict[str, np.ndarray]:
+    def _compute_gradients(self, feedback_batch: list) -> dict[str, np.ndarray]:
         """
         Compute gradients from feedback using real backpropagation.
 
@@ -168,8 +174,6 @@ class OnlineLoRAUpdater:
             return gradients
 
         try:
-            from domain.training._internal.slonet import Tensor
-
             positive = [f for f in feedback_batch if f["rating"] == "thumbs_up"]
             negative = [f for f in feedback_batch if f["rating"] == "thumbs_down"]
 
@@ -191,11 +195,13 @@ class OnlineLoRAUpdater:
                 # For positive feedback: maximize probability of the response tokens
                 # Cross-entropy loss: -log(p(correct_token))
                 response_start = len(prompt_ids)
-                response_logits = logits.data[0, response_start-1:-1]
+                response_logits = logits.data[0, response_start - 1 : -1]
                 response_targets = np.array(response_ids, dtype=np.int64)
 
                 # Compute gradients via cross-entropy
-                exp_logits = np.exp(response_logits - np.max(response_logits, axis=-1, keepdims=True))
+                exp_logits = np.exp(
+                    response_logits - np.max(response_logits, axis=-1, keepdims=True)
+                )
                 probs = exp_logits / np.sum(exp_logits, axis=-1, keepdims=True)
 
                 # Gradient of cross-entropy: p - one_hot(target)
@@ -205,7 +211,9 @@ class OnlineLoRAUpdater:
 
                 # Scale by positive reinforcement
                 scale = self.learning_rate * 0.5
-                gradients["W_a"] = gradients.get("W_a", np.zeros_like(grad)) + grad.mean(axis=0) * scale
+                gradients["W_a"] = (
+                    gradients.get("W_a", np.zeros_like(grad)) + grad.mean(axis=0) * scale
+                )
 
             # Process negative examples: suppress them
             for item in negative[:3]:
@@ -221,10 +229,12 @@ class OnlineLoRAUpdater:
                 logits, _ = self.engine.forward(input_ids)
 
                 response_start = len(prompt_ids)
-                response_logits = logits.data[0, response_start-1:-1]
+                response_logits = logits.data[0, response_start - 1 : -1]
                 response_targets = np.array(response_ids, dtype=np.int64)
 
-                exp_logits = np.exp(response_logits - np.max(response_logits, axis=-1, keepdims=True))
+                exp_logits = np.exp(
+                    response_logits - np.max(response_logits, axis=-1, keepdims=True)
+                )
                 probs = exp_logits / np.sum(exp_logits, axis=-1, keepdims=True)
 
                 grad = probs.copy()
@@ -233,10 +243,14 @@ class OnlineLoRAUpdater:
 
                 # For negative: move AWAY from the bad response (negative scale)
                 scale = self.learning_rate * -0.5
-                gradients["W_a"] = gradients.get("W_a", np.zeros_like(grad)) + grad.mean(axis=0) * scale
+                gradients["W_a"] = (
+                    gradients.get("W_a", np.zeros_like(grad)) + grad.mean(axis=0) * scale
+                )
 
         except Exception as e:
-            logger.debug("Real gradient computation failed, falling back to pseudo-gradients: %s", e)
+            logger.debug(
+                "Real gradient computation failed, falling back to pseudo-gradients: %s", e
+            )
             # Fallback to simple pseudo-gradients
             positive_count = sum(1 for f in feedback_batch if f["rating"] == "thumbs_up")
             negative_count = sum(1 for f in feedback_batch if f["rating"] == "thumbs_down")
@@ -249,7 +263,7 @@ class OnlineLoRAUpdater:
 
         return gradients
 
-    def _apply_gradients(self, gradients: Dict[str, np.ndarray]):
+    def _apply_gradients(self, gradients: dict[str, np.ndarray]):
         """Apply computed gradients to LoRA weights."""
         for key, grad in gradients.items():
             if key in self._lora_weights:
@@ -296,7 +310,7 @@ class OnlineLoRAUpdater:
 
         return float(total_norm)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get updater statistics."""
         return {
             **self._stats,
@@ -320,7 +334,7 @@ class OnlineLoRAUpdater:
 
 
 # Global instance
-_online_lora: Optional[OnlineLoRAUpdater] = None
+_online_lora: OnlineLoRAUpdater | None = None
 
 
 def get_online_lora_updater() -> OnlineLoRAUpdater:

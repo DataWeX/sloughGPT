@@ -1,10 +1,5 @@
 """Tests for lora_eval — BLEUScorer, EvalResult, PersonalityScore, LoRAEvaluator pure logic."""
 
-import json
-import os
-import time
-from pathlib import Path
-
 import numpy as np
 import pytest
 
@@ -16,10 +11,10 @@ from domain.feedback._internal.lora_eval import (
     get_lora_evaluator,
 )
 
-
 # ---------------------------------------------------------------------------
 # EvalResult
 # ---------------------------------------------------------------------------
+
 
 class TestEvalResult:
     def test_basic_fields(self):
@@ -91,17 +86,31 @@ class TestEvalResult:
         )
         d = r.to_dict()
         expected = {
-            "timestamp", "adapter_path", "prompts", "references",
-            "perplexity", "bleu", "avg_response_len", "inference_time_sec",
-            "tokens_per_sec", "personality_score",
+            "timestamp",
+            "adapter_path",
+            "prompts",
+            "references",
+            "perplexity",
+            "bleu",
+            "avg_response_len",
+            "inference_time_sec",
+            "tokens_per_sec",
+            "personality_score",
         }
         assert expected == set(d.keys())
 
     def test_to_dict_preserves_none_quality_delta(self):
         r = EvalResult(
-            timestamp="t", adapter_path=None, prompts=0, references=0,
-            perplexity=None, bleu=None, avg_response_len=0.0,
-            inference_time_sec=0.0, tokens_per_sec=None, personality_score=None,
+            timestamp="t",
+            adapter_path=None,
+            prompts=0,
+            references=0,
+            perplexity=None,
+            bleu=None,
+            avg_response_len=0.0,
+            inference_time_sec=0.0,
+            tokens_per_sec=None,
+            personality_score=None,
             quality_delta=None,
         )
         d = r.to_dict()
@@ -109,9 +118,16 @@ class TestEvalResult:
 
     def test_to_dict_with_quality_delta_set(self):
         r = EvalResult(
-            timestamp="t", adapter_path=None, prompts=0, references=0,
-            perplexity=None, bleu=None, avg_response_len=0.0,
-            inference_time_sec=0.0, tokens_per_sec=None, personality_score=None,
+            timestamp="t",
+            adapter_path=None,
+            prompts=0,
+            references=0,
+            perplexity=None,
+            bleu=None,
+            avg_response_len=0.0,
+            inference_time_sec=0.0,
+            tokens_per_sec=None,
+            personality_score=None,
             quality_delta=3.14,
         )
         d = r.to_dict()
@@ -121,6 +137,7 @@ class TestEvalResult:
 # ---------------------------------------------------------------------------
 # BLEUScorer
 # ---------------------------------------------------------------------------
+
 
 class TestBLEUScorer:
     def test_identical_strings(self):
@@ -209,6 +226,7 @@ class TestBLEUScorer:
 # PersonalityScore
 # ---------------------------------------------------------------------------
 
+
 class TestPersonalityScore:
     def test_to_dict(self):
         ps = PersonalityScore(
@@ -239,16 +257,31 @@ class TestPersonalityScore:
 
     def test_to_dict_all_keys(self):
         ps = PersonalityScore(
-            soul_name="x", warmth_score=0.1, creativity_score=0.2,
-            formality_score=0.3, coherence_score=0.4, overall=0.5,
+            soul_name="x",
+            warmth_score=0.1,
+            creativity_score=0.2,
+            formality_score=0.3,
+            coherence_score=0.4,
+            overall=0.5,
         )
         d = ps.to_dict()
-        assert set(d.keys()) == {"soul", "warmth", "creativity", "formality", "coherence", "overall"}
+        assert set(d.keys()) == {
+            "soul",
+            "warmth",
+            "creativity",
+            "formality",
+            "coherence",
+            "overall",
+        }
 
     def test_to_dict_preserves_values(self):
         ps = PersonalityScore(
-            soul_name="test", warmth_score=1.0, creativity_score=0.0,
-            formality_score=0.75, coherence_score=0.25, overall=0.5,
+            soul_name="test",
+            warmth_score=1.0,
+            creativity_score=0.0,
+            formality_score=0.75,
+            coherence_score=0.25,
+            overall=0.5,
         )
         d = ps.to_dict()
         assert d["warmth"] == 1.0
@@ -260,6 +293,7 @@ class TestPersonalityScore:
 # ---------------------------------------------------------------------------
 # LoRAEvaluator — _fmt
 # ---------------------------------------------------------------------------
+
 
 class TestLoRAEvaluatorFmt:
     def test_format_float(self):
@@ -291,13 +325,16 @@ class TestLoRAEvaluatorFmt:
 # LoRAEvaluator — _score_personality
 # ---------------------------------------------------------------------------
 
+
 class TestLoRAEvaluatorScorePersonality:
     @pytest.fixture
     def evaluator(self, tmp_path):
         return LoRAEvaluator(eval_dir=str(tmp_path / "eval"))
 
     def test_assistant_keywords(self, evaluator):
-        ps = evaluator._score_personality("I'm here to help you. Thank you for asking!", "assistant")
+        ps = evaluator._score_personality(
+            "I'm here to help you. Thank you for asking!", "assistant"
+        )
         assert ps.soul_name == "assistant"
         assert ps.warmth_score > 0
         assert ps.overall >= 0
@@ -307,7 +344,9 @@ class TestLoRAEvaluatorScorePersonality:
         assert ps.creativity_score > 0
 
     def test_teacher_keywords(self, evaluator):
-        ps = evaluator._score_personality("First, understand the concept. Next, try the example.", "teacher")
+        ps = evaluator._score_personality(
+            "First, understand the concept. Next, try the example.", "teacher"
+        )
         assert ps.creativity_score > 0
 
     def test_unknown_soul_falls_back(self, evaluator):
@@ -350,7 +389,15 @@ class TestLoRAEvaluatorScorePersonality:
     def test_overall_weighted_average(self, evaluator):
         ps = evaluator._score_personality("help and assist thank", "assistant")
         # warmth is NOT capped before overall calc (capped only in return value)
-        raw_warmth = sum(1 for k in ["thank", "great", "help", "appreciate", "wonderful"] if k in "help and assist thank") / max(len("help and assist thank".split()), 1) * 10
+        raw_warmth = (
+            sum(
+                1
+                for k in ["thank", "great", "help", "appreciate", "wonderful"]
+                if k in "help and assist thank"
+            )
+            / max(len("help and assist thank".split()), 1)
+            * 10
+        )
         expected = (
             raw_warmth * 0.3
             + ps.creativity_score * 0.3
@@ -363,6 +410,7 @@ class TestLoRAEvaluatorScorePersonality:
 # ---------------------------------------------------------------------------
 # LoRAEvaluator — compare
 # ---------------------------------------------------------------------------
+
 
 class TestLoRAEvaluatorCompare:
     def _make_result(self, ppl=None, bleu=None, tps=None, personality=None):
@@ -485,20 +533,33 @@ class TestLoRAEvaluatorCompare:
 # LoRAEvaluator — compare_with_report
 # ---------------------------------------------------------------------------
 
+
 class TestLoRAEvaluatorCompareWithReport:
     def test_report_contains_verdict(self, tmp_path):
         ev = LoRAEvaluator(eval_dir=str(tmp_path / "eval"))
         baseline = EvalResult(
             timestamp="2025-01-01T00:00:00",
-            adapter_path=None, prompts=2, references=1,
-            perplexity=50.0, bleu=20.0, avg_response_len=10.0,
-            inference_time_sec=1.0, tokens_per_sec=100.0, personality_score=0.5,
+            adapter_path=None,
+            prompts=2,
+            references=1,
+            perplexity=50.0,
+            bleu=20.0,
+            avg_response_len=10.0,
+            inference_time_sec=1.0,
+            tokens_per_sec=100.0,
+            personality_score=0.5,
         )
         after = EvalResult(
             timestamp="2025-01-01T00:01:00",
-            adapter_path="test.npz", prompts=2, references=1,
-            perplexity=40.0, bleu=25.0, avg_response_len=12.0,
-            inference_time_sec=0.8, tokens_per_sec=120.0, personality_score=0.6,
+            adapter_path="test.npz",
+            prompts=2,
+            references=1,
+            perplexity=40.0,
+            bleu=25.0,
+            avg_response_len=12.0,
+            inference_time_sec=0.8,
+            tokens_per_sec=120.0,
+            personality_score=0.6,
         )
         report = ev.compare_with_report(baseline, after)
         assert "IMPROVED" in report.upper()
@@ -512,15 +573,27 @@ class TestLoRAEvaluatorCompareWithReport:
         ev = LoRAEvaluator(eval_dir=str(tmp_path / "eval"))
         baseline = EvalResult(
             timestamp="2025-01-01T00:00:00",
-            adapter_path=None, prompts=1, references=1,
-            perplexity=30.0, bleu=40.0, avg_response_len=10.0,
-            inference_time_sec=1.0, tokens_per_sec=100.0, personality_score=0.9,
+            adapter_path=None,
+            prompts=1,
+            references=1,
+            perplexity=30.0,
+            bleu=40.0,
+            avg_response_len=10.0,
+            inference_time_sec=1.0,
+            tokens_per_sec=100.0,
+            personality_score=0.9,
         )
         after = EvalResult(
             timestamp="2025-01-01T00:01:00",
-            adapter_path="bad.npz", prompts=1, references=1,
-            perplexity=60.0, bleu=10.0, avg_response_len=5.0,
-            inference_time_sec=2.0, tokens_per_sec=50.0, personality_score=0.2,
+            adapter_path="bad.npz",
+            prompts=1,
+            references=1,
+            perplexity=60.0,
+            bleu=10.0,
+            avg_response_len=5.0,
+            inference_time_sec=2.0,
+            tokens_per_sec=50.0,
+            personality_score=0.2,
         )
         report = ev.compare_with_report(baseline, after)
         assert "DEGRADED" in report.upper()
@@ -529,15 +602,27 @@ class TestLoRAEvaluatorCompareWithReport:
         ev = LoRAEvaluator(eval_dir=str(tmp_path / "eval"))
         baseline = EvalResult(
             timestamp="2025-01-01T00:00:00",
-            adapter_path=None, prompts=1, references=0,
-            perplexity=None, bleu=None, avg_response_len=5.0,
-            inference_time_sec=0.1, tokens_per_sec=None, personality_score=None,
+            adapter_path=None,
+            prompts=1,
+            references=0,
+            perplexity=None,
+            bleu=None,
+            avg_response_len=5.0,
+            inference_time_sec=0.1,
+            tokens_per_sec=None,
+            personality_score=None,
         )
         after = EvalResult(
             timestamp="2025-01-01T00:01:00",
-            adapter_path=None, prompts=1, references=0,
-            perplexity=None, bleu=None, avg_response_len=5.0,
-            inference_time_sec=0.1, tokens_per_sec=None, personality_score=None,
+            adapter_path=None,
+            prompts=1,
+            references=0,
+            perplexity=None,
+            bleu=None,
+            avg_response_len=5.0,
+            inference_time_sec=0.1,
+            tokens_per_sec=None,
+            personality_score=None,
         )
         report = ev.compare_with_report(baseline, after)
         assert "n/a" in report
@@ -546,14 +631,28 @@ class TestLoRAEvaluatorCompareWithReport:
     def test_report_shows_adapter_paths(self, tmp_path):
         ev = LoRAEvaluator(eval_dir=str(tmp_path / "eval"))
         baseline = EvalResult(
-            timestamp="t", adapter_path="base.npz", prompts=1, references=0,
-            perplexity=None, bleu=None, avg_response_len=5.0,
-            inference_time_sec=0.0, tokens_per_sec=None, personality_score=None,
+            timestamp="t",
+            adapter_path="base.npz",
+            prompts=1,
+            references=0,
+            perplexity=None,
+            bleu=None,
+            avg_response_len=5.0,
+            inference_time_sec=0.0,
+            tokens_per_sec=None,
+            personality_score=None,
         )
         after = EvalResult(
-            timestamp="t", adapter_path="adapted.npz", prompts=1, references=0,
-            perplexity=None, bleu=None, avg_response_len=5.0,
-            inference_time_sec=0.0, tokens_per_sec=None, personality_score=None,
+            timestamp="t",
+            adapter_path="adapted.npz",
+            prompts=1,
+            references=0,
+            perplexity=None,
+            bleu=None,
+            avg_response_len=5.0,
+            inference_time_sec=0.0,
+            tokens_per_sec=None,
+            personality_score=None,
         )
         report = ev.compare_with_report(baseline, after)
         assert "base.npz" in report
@@ -562,14 +661,28 @@ class TestLoRAEvaluatorCompareWithReport:
     def test_report_mixed_verdict(self, tmp_path):
         ev = LoRAEvaluator(eval_dir=str(tmp_path / "eval"))
         baseline = EvalResult(
-            timestamp="t", adapter_path=None, prompts=1, references=0,
-            perplexity=50.0, bleu=30.0, avg_response_len=10.0,
-            inference_time_sec=1.0, tokens_per_sec=100.0, personality_score=0.5,
+            timestamp="t",
+            adapter_path=None,
+            prompts=1,
+            references=0,
+            perplexity=50.0,
+            bleu=30.0,
+            avg_response_len=10.0,
+            inference_time_sec=1.0,
+            tokens_per_sec=100.0,
+            personality_score=0.5,
         )
         after = EvalResult(
-            timestamp="t", adapter_path="a.npz", prompts=1, references=0,
-            perplexity=55.0, bleu=35.0, avg_response_len=10.0,
-            inference_time_sec=1.0, tokens_per_sec=100.0, personality_score=0.5,
+            timestamp="t",
+            adapter_path="a.npz",
+            prompts=1,
+            references=0,
+            perplexity=55.0,
+            bleu=35.0,
+            avg_response_len=10.0,
+            inference_time_sec=1.0,
+            tokens_per_sec=100.0,
+            personality_score=0.5,
         )
         report = ev.compare_with_report(baseline, after)
         assert "MIXED" in report.upper()
@@ -577,14 +690,28 @@ class TestLoRAEvaluatorCompareWithReport:
     def test_report_perplexity_improvement_line(self, tmp_path):
         ev = LoRAEvaluator(eval_dir=str(tmp_path / "eval"))
         baseline = EvalResult(
-            timestamp="t", adapter_path=None, prompts=1, references=0,
-            perplexity=100.0, bleu=None, avg_response_len=10.0,
-            inference_time_sec=1.0, tokens_per_sec=None, personality_score=None,
+            timestamp="t",
+            adapter_path=None,
+            prompts=1,
+            references=0,
+            perplexity=100.0,
+            bleu=None,
+            avg_response_len=10.0,
+            inference_time_sec=1.0,
+            tokens_per_sec=None,
+            personality_score=None,
         )
         after = EvalResult(
-            timestamp="t", adapter_path="a.npz", prompts=1, references=0,
-            perplexity=80.0, bleu=None, avg_response_len=10.0,
-            inference_time_sec=1.0, tokens_per_sec=None, personality_score=None,
+            timestamp="t",
+            adapter_path="a.npz",
+            prompts=1,
+            references=0,
+            perplexity=80.0,
+            bleu=None,
+            avg_response_len=10.0,
+            inference_time_sec=1.0,
+            tokens_per_sec=None,
+            personality_score=None,
         )
         report = ev.compare_with_report(baseline, after)
         assert "improved" in report.lower()
@@ -594,6 +721,7 @@ class TestLoRAEvaluatorCompareWithReport:
 # ---------------------------------------------------------------------------
 # LoRAEvaluator — available
 # ---------------------------------------------------------------------------
+
 
 class TestLoRAEvaluatorAvailable:
     def test_available_with_generator(self, tmp_path):
@@ -614,6 +742,7 @@ class TestLoRAEvaluatorAvailable:
 # ---------------------------------------------------------------------------
 # LoRAEvaluator — _simulate_generation
 # ---------------------------------------------------------------------------
+
 
 class TestLoRAEvaluatorSimulateGeneration:
     def test_simulate_returns_tuple(self, tmp_path):
@@ -667,11 +796,21 @@ class TestLoRAEvaluatorSimulateGeneration:
 # LoRAEvaluator — run
 # ---------------------------------------------------------------------------
 
+
 class TestLoRAEvaluatorRun:
     def test_run_with_generator(self, tmp_path):
-        responses = iter(["Hello there", "Python is great", "ML is cool",
-                          "Roses are red", "I am an AI", "Use def keyword",
-                          "42 is the answer", "Season of drifts"])
+        responses = iter(
+            [
+                "Hello there",
+                "Python is great",
+                "ML is cool",
+                "Roses are red",
+                "I am an AI",
+                "Use def keyword",
+                "42 is the answer",
+                "Season of drifts",
+            ]
+        )
         ev = LoRAEvaluator(
             eval_dir=str(tmp_path / "eval"),
             generator=lambda p: next(responses),
@@ -748,11 +887,13 @@ class TestLoRAEvaluatorRun:
             generator=lambda p: "resp",
         )
         counter = {"n": 0}
+
         def fake_strftime(fmt, *a, **kw):
             counter["n"] += 1
             return f"2025-01-01T00-00-{counter['n']:02d}"
 
         import domain.feedback._internal.lora_eval as mod
+
         with pytest.MonkeyPatch.context() as m:
             m.setattr(mod.time, "strftime", fake_strftime)
             ev.run(save=True)
@@ -809,6 +950,7 @@ class TestLoRAEvaluatorRun:
 # LoRAEvaluator — _compute_perplexity
 # ---------------------------------------------------------------------------
 
+
 class TestLoRAEvaluatorComputePerplexity:
     def test_returns_none_without_model(self, tmp_path):
         ev = LoRAEvaluator(eval_dir=str(tmp_path / "eval"))
@@ -819,6 +961,7 @@ class TestLoRAEvaluatorComputePerplexity:
 # ---------------------------------------------------------------------------
 # LoRAEvaluator — get_history
 # ---------------------------------------------------------------------------
+
 
 class TestLoRAEvaluatorGetHistory:
     def test_empty_history(self, tmp_path):
@@ -842,11 +985,13 @@ class TestLoRAEvaluatorGetHistory:
             generator=lambda p: "test",
         )
         counter = {"n": 0}
+
         def fake_strftime(fmt, *a, **kw):
             counter["n"] += 1
             return f"2025-01-01T00-00-{counter['n']:02d}"
 
         import domain.feedback._internal.lora_eval as mod
+
         with pytest.MonkeyPatch.context() as m:
             m.setattr(mod.time, "strftime", fake_strftime)
             for _ in range(5):
@@ -860,11 +1005,13 @@ class TestLoRAEvaluatorGetHistory:
             generator=lambda p: "test",
         )
         counter = {"n": 0}
+
         def fake_strftime(fmt, *a, **kw):
             counter["n"] += 1
             return f"2025-01-01T00-00-{counter['n']:02d}"
 
         import domain.feedback._internal.lora_eval as mod
+
         with pytest.MonkeyPatch.context() as m:
             m.setattr(mod.time, "strftime", fake_strftime)
             ev.run(save=True)
@@ -898,6 +1045,7 @@ class TestLoRAEvaluatorGetHistory:
 # LoRAEvaluator — _load_inference_engine
 # ---------------------------------------------------------------------------
 
+
 class TestLoRAEvaluatorLoadInferenceEngine:
     def test_no_model_sets_none(self, tmp_path):
         ev = LoRAEvaluator(eval_dir=str(tmp_path / "eval"))
@@ -923,6 +1071,7 @@ class TestLoRAEvaluatorLoadInferenceEngine:
 # ---------------------------------------------------------------------------
 # LoRAEvaluator — _generate
 # ---------------------------------------------------------------------------
+
 
 class TestLoRAEvaluatorGenerate:
     def test_generate_with_generator(self, tmp_path):
@@ -962,6 +1111,7 @@ class TestLoRAEvaluatorGenerate:
 # LoRAEvaluator — export_adapter_as_sou (signature + config)
 # ---------------------------------------------------------------------------
 
+
 class TestLoRAEvaluatorExportConfig:
     def test_eval_prompts_class_default(self):
         assert len(LoRAEvaluator.EVAL_PROMPTS) == 8
@@ -985,9 +1135,11 @@ class TestLoRAEvaluatorExportConfig:
 # get_lora_evaluator singleton
 # ---------------------------------------------------------------------------
 
+
 class TestGetLoraEvaluatorSingleton:
     def test_returns_same_instance(self, tmp_path, monkeypatch):
         import domain.feedback._internal.lora_eval as mod
+
         mod._global_eval = None
         ev1 = get_lora_evaluator()
         ev2 = get_lora_evaluator()
@@ -996,6 +1148,7 @@ class TestGetLoraEvaluatorSingleton:
 
     def test_singleton_reset(self, monkeypatch):
         import domain.feedback._internal.lora_eval as mod
+
         mod._global_eval = None
         ev1 = get_lora_evaluator()
         mod._global_eval = None

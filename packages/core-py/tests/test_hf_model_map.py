@@ -1,10 +1,15 @@
 """Tests for domain.training._internal.huggingface.model_map — ModelSize, HFModelInfo, lookup functions."""
 
 from domain.training._internal.huggingface.model_map import (
-    ModelSize, HFModelInfo, HF_MODELS, get_model_info, search_models,
-    get_recommended_quantization, get_model_requirements, map_to_sloughgpt_config,
+    HF_MODELS,
+    HFModelInfo,
+    ModelSize,
+    get_model_info,
+    get_model_requirements,
+    get_recommended_quantization,
+    map_to_sloughgpt_config,
+    search_models,
 )
-
 
 # ── ModelSize ────────────────────────────────────────────────────────────────
 
@@ -38,6 +43,7 @@ class TestModelSize:
 
     def test_invalid_value_raises(self):
         import pytest
+
         with pytest.raises(ValueError):
             ModelSize("huge")
 
@@ -48,10 +54,17 @@ class TestModelSize:
 class TestHFModelInfo:
     def test_fields(self):
         info = HFModelInfo(
-            model_id="gpt2", name="GPT-2", description="base",
-            size=ModelSize.SMALL, params=124_000_000, context_length=1024,
-            recommended_quantization="int8", memory_fp16_gb=0.5,
-            memory_int8_gb=0.3, memory_q4_gb=0.2, organization="openai",
+            model_id="gpt2",
+            name="GPT-2",
+            description="base",
+            size=ModelSize.SMALL,
+            params=124_000_000,
+            context_length=1024,
+            recommended_quantization="int8",
+            memory_fp16_gb=0.5,
+            memory_int8_gb=0.3,
+            memory_q4_gb=0.2,
+            organization="openai",
             tags=["text", "causal"],
         )
         assert info.model_id == "gpt2"
@@ -59,10 +72,17 @@ class TestHFModelInfo:
 
     def test_all_fields_stored(self):
         info = HFModelInfo(
-            model_id="test", name="Test", description="desc",
-            size=ModelSize.LARGE, params=7_000_000_000, context_length=4096,
-            recommended_quantization="q4_k_m", memory_fp16_gb=14.0,
-            memory_int8_gb=7.0, memory_q4_gb=4.0, organization="meta",
+            model_id="test",
+            name="Test",
+            description="desc",
+            size=ModelSize.LARGE,
+            params=7_000_000_000,
+            context_length=4096,
+            recommended_quantization="q4_k_m",
+            memory_fp16_gb=14.0,
+            memory_int8_gb=7.0,
+            memory_q4_gb=4.0,
+            organization="meta",
             tags=["llama", "chat"],
         )
         assert info.model_id == "test"
@@ -80,30 +100,51 @@ class TestHFModelInfo:
 
     def test_dataclass_type(self):
         info = HFModelInfo(
-            model_id="x", name="X", description="d",
-            size=ModelSize.SMALL, params=100, context_length=128,
-            recommended_quantization="fp16", memory_fp16_gb=0.1,
-            memory_int8_gb=0.05, memory_q4_gb=0.03, organization="org",
+            model_id="x",
+            name="X",
+            description="d",
+            size=ModelSize.SMALL,
+            params=100,
+            context_length=128,
+            recommended_quantization="fp16",
+            memory_fp16_gb=0.1,
+            memory_int8_gb=0.05,
+            memory_q4_gb=0.03,
+            organization="org",
             tags=[],
         )
         assert isinstance(info, HFModelInfo)
 
     def test_tags_list(self):
         info = HFModelInfo(
-            model_id="x", name="X", description="d",
-            size=ModelSize.SMALL, params=100, context_length=128,
-            recommended_quantization="fp16", memory_fp16_gb=0.1,
-            memory_int8_gb=0.05, memory_q4_gb=0.03, organization="org",
+            model_id="x",
+            name="X",
+            description="d",
+            size=ModelSize.SMALL,
+            params=100,
+            context_length=128,
+            recommended_quantization="fp16",
+            memory_fp16_gb=0.1,
+            memory_int8_gb=0.05,
+            memory_q4_gb=0.03,
+            organization="org",
             tags=["a", "b", "c"],
         )
         assert len(info.tags) == 3
 
     def test_memory_ordering(self):
         info = HFModelInfo(
-            model_id="x", name="X", description="d",
-            size=ModelSize.SMALL, params=100, context_length=128,
-            recommended_quantization="fp16", memory_fp16_gb=2.0,
-            memory_int8_gb=1.0, memory_q4_gb=0.5, organization="org",
+            model_id="x",
+            name="X",
+            description="d",
+            size=ModelSize.SMALL,
+            params=100,
+            context_length=128,
+            recommended_quantization="fp16",
+            memory_fp16_gb=2.0,
+            memory_int8_gb=1.0,
+            memory_q4_gb=0.5,
+            organization="org",
             tags=[],
         )
         assert info.memory_fp16_gb > info.memory_int8_gb > info.memory_q4_gb

@@ -1,13 +1,15 @@
 """Tests for domain.collections._internal.registry — CollectionRegistry, get_registry."""
 
+from domain.collections._internal.filters import KeywordFilter, LengthFilter
 from domain.collections._internal.registry import CollectionRegistry, get_registry
 from domain.collections._internal.sources import GeneratorSource, Record
 from domain.collections._internal.stores import MemoryStore
-from domain.collections._internal.filters import LengthFilter, KeywordFilter
 
 
 def _source(name="src1"):
-    return GeneratorSource(lambda: [Record(content="hello world"), Record(content="foo bar")], name=name)
+    return GeneratorSource(
+        lambda: [Record(content="hello world"), Record(content="foo bar")], name=name
+    )
 
 
 def _store(name="st1"):
@@ -252,6 +254,7 @@ class TestGetRegistrySingleton:
 
     def test_singleton_resets_on_new_registry(self):
         import domain.collections._internal.registry as mod
+
         old = mod._default_registry
         mod._default_registry = None
         r = get_registry()

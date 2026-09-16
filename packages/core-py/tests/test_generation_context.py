@@ -1,7 +1,7 @@
 """Tests for domain.core.soul — GenerationContext."""
 
 import numpy as np
-import pytest
+
 from domain.core._internal.soul import GenerationContext
 
 
@@ -134,14 +134,16 @@ class TestGenerationContextCustomMaxTokens:
 class TestGenerationContextSystemPrompt:
     def test_custom_system_prompt(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             system_prompt="Be helpful.",
         )
         assert gc.system_prompt == "Be helpful."
 
     def test_custom_system_prompt_empty(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             system_prompt="",
         )
         assert gc.system_prompt == ""
@@ -149,7 +151,8 @@ class TestGenerationContextSystemPrompt:
     def test_custom_system_prompt_long(self):
         long_prompt = "x " * 500
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             system_prompt=long_prompt,
         )
         assert len(gc.system_prompt) > 500
@@ -158,28 +161,32 @@ class TestGenerationContextSystemPrompt:
 class TestGenerationContextStopTokens:
     def test_custom_stop_tokens(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             stop_tokens=["EOF", "STOP"],
         )
         assert gc.stop_tokens == ["EOF", "STOP"]
 
     def test_stop_tokens_single(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             stop_tokens=["END"],
         )
         assert len(gc.stop_tokens) == 1
 
     def test_stop_tokens_multiple(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             stop_tokens=["A", "B", "C"],
         )
         assert len(gc.stop_tokens) == 3
 
     def test_stop_tokens_empty_string(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             stop_tokens=[""],
         )
         assert gc.stop_tokens == [""]
@@ -188,28 +195,32 @@ class TestGenerationContextStopTokens:
 class TestGenerationContextReasoningDepth:
     def test_custom_reasoning_depth_deep(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             reasoning_depth="deep",
         )
         assert gc.reasoning_depth == "deep"
 
     def test_custom_reasoning_depth_creative(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             reasoning_depth="creative",
         )
         assert gc.reasoning_depth == "creative"
 
     def test_custom_reasoning_depth_balanced(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             reasoning_depth="balanced",
         )
         assert gc.reasoning_depth == "balanced"
 
     def test_custom_reasoning_depth_analytical(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             reasoning_depth="analytical",
         )
         assert gc.reasoning_depth == "analytical"
@@ -218,14 +229,16 @@ class TestGenerationContextReasoningDepth:
 class TestGenerationContextCognitiveBoost:
     def test_custom_cognitive_boost_false(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             cognitive_boost=False,
         )
         assert gc.cognitive_boost is False
 
     def test_custom_cognitive_boost_true(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             cognitive_boost=True,
         )
         assert gc.cognitive_boost is True
@@ -235,14 +248,16 @@ class TestGenerationContextEmotionalContext:
     def test_custom_emotional_context(self):
         ec = {"sentiment": 0.5, "emotion": "happy"}
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             emotional_context=ec,
         )
         assert gc.emotional_context == ec
 
     def test_emotional_context_empty(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             emotional_context={},
         )
         assert gc.emotional_context == {}
@@ -250,7 +265,8 @@ class TestGenerationContextEmotionalContext:
     def test_emotional_context_nested(self):
         ec = {"primary": {"emotion": "joy", "intensity": 0.9}, "secondary": "calm"}
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             emotional_context=ec,
         )
         assert gc.emotional_context["primary"]["intensity"] == 0.9
@@ -258,7 +274,8 @@ class TestGenerationContextEmotionalContext:
     def test_emotional_context_many_keys(self):
         ec = {f"key_{i}": i * 0.1 for i in range(10)}
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             emotional_context=ec,
         )
         assert len(gc.emotional_context) == 10
@@ -268,14 +285,16 @@ class TestGenerationContextSoulOverrides:
     def test_custom_soul_overrides(self):
         so = {"temperature": 0.3}
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             soul_overrides=so,
         )
         assert gc.soul_overrides == so
 
     def test_soul_overrides_empty(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             soul_overrides={},
         )
         assert gc.soul_overrides == {}
@@ -283,7 +302,8 @@ class TestGenerationContextSoulOverrides:
     def test_soul_overrides_many_keys(self):
         so = {"temperature": 0.1, "top_k": 1, "top_p": 0.1, "max_tokens": 10}
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             soul_overrides=so,
         )
         assert len(gc.soul_overrides) == 4
@@ -291,7 +311,8 @@ class TestGenerationContextSoulOverrides:
     def test_soul_overrides_nested(self):
         so = {"nested": {"key": "value"}}
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             soul_overrides=so,
         )
         assert gc.soul_overrides["nested"]["key"] == "value"
@@ -301,21 +322,24 @@ class TestGenerationContextReasoningChain:
     def test_custom_reasoning_chain(self):
         chain = ["step 1", "step 2"]
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             reasoning_chain=chain,
         )
         assert gc.reasoning_chain == chain
 
     def test_reasoning_chain_empty(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             reasoning_chain=[],
         )
         assert gc.reasoning_chain == []
 
     def test_reasoning_chain_single(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             reasoning_chain=["only step"],
         )
         assert len(gc.reasoning_chain) == 1
@@ -323,7 +347,8 @@ class TestGenerationContextReasoningChain:
     def test_reasoning_chain_multiple(self):
         chain = [f"step_{i}" for i in range(20)]
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             reasoning_chain=chain,
         )
         assert len(gc.reasoning_chain) == 20
@@ -332,42 +357,48 @@ class TestGenerationContextReasoningChain:
 class TestGenerationContextPenalties:
     def test_custom_repetition_penalty(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             repetition_penalty=2.0,
         )
         assert gc.repetition_penalty == 2.0
 
     def test_custom_repetition_penalty_one(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             repetition_penalty=1.0,
         )
         assert gc.repetition_penalty == 1.0
 
     def test_custom_frequency_penalty(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             frequency_penalty=0.5,
         )
         assert gc.frequency_penalty == 0.5
 
     def test_custom_frequency_penalty_zero(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             frequency_penalty=0.0,
         )
         assert gc.frequency_penalty == 0.0
 
     def test_custom_presence_penalty(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             presence_penalty=0.3,
         )
         assert gc.presence_penalty == 0.3
 
     def test_custom_presence_penalty_zero(self):
         gc = GenerationContext(
-            prompt="t", prompt_tokens=np.array([1]),
+            prompt="t",
+            prompt_tokens=np.array([1]),
             presence_penalty=0.0,
         )
         assert gc.presence_penalty == 0.0

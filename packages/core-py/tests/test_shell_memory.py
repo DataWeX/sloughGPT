@@ -2,10 +2,11 @@
 
 import numpy as np
 import pytest
+
 from domain.shell._internal.memory import Episode, EpisodicMemory, WorldEpisode, WorldMemory
 
-
 # ── Episode ───────────────────────────────────────────────────────────
+
 
 class TestEpisode:
     def test_fields(self):
@@ -45,6 +46,7 @@ class TestEpisode:
 
 
 # ── EpisodicMemory ────────────────────────────────────────────────────
+
 
 class TestEpisodicMemory:
     def test_init(self):
@@ -192,10 +194,7 @@ class TestEpisodicMemory:
         em.record(np.array([1.0, 2.0, 3.0]), action=(0.5,), reward=1.0, tick=0)
         d = em.to_dict()
         em2 = EpisodicMemory.from_dict(d)
-        np.testing.assert_array_equal(
-            em2.recall(k=1)[0].features,
-            em.recall(k=1)[0].features
-        )
+        np.testing.assert_array_equal(em2.recall(k=1)[0].features, em.recall(k=1)[0].features)
 
     def test_from_dict_preserves_head(self):
         em = EpisodicMemory(capacity=2)
@@ -252,6 +251,7 @@ class TestEpisodicMemory:
 
 # ── WorldEpisode ──────────────────────────────────────────────────────
 
+
 class TestWorldEpisode:
     def test_fields(self):
         we = WorldEpisode(
@@ -274,6 +274,7 @@ class TestWorldEpisode:
 
 
 # ── WorldMemory ───────────────────────────────────────────────────────
+
 
 class TestWorldMemory:
     def test_init_empty(self):

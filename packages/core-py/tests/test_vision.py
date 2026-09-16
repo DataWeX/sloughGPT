@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
@@ -17,8 +16,8 @@ if _core_dir not in sys.path:
 
 from domain.multimodal._internal.vision import (
     ImageCaption,
-    VisualObject,
     VisionCNN,
+    VisualObject,
     get_vision_model,
 )
 

@@ -1,19 +1,22 @@
 """Tests for SloTextEmbedder — train, embed, save/load, vector store integration."""
 
 import pytest
+
 pytestmark = pytest.mark.slow
-import numpy as np
 import os
 import tempfile
 from pathlib import Path
 
+import numpy as np
 
 # ---------------------------------------------------------------------------
 # Unit tests for tokenizer helpers
 # ---------------------------------------------------------------------------
 
+
 def test_tokenize_simple():
     from domain.inference._internal.slo_embedder import _tokenize_simple
+
     tokens = _tokenize_simple("The quick brown fox jumps over the lazy dog")
     assert "quick" in tokens
     assert "brown" in tokens
@@ -23,12 +26,14 @@ def test_tokenize_simple():
 
 def test_tokenize_simple_empty():
     from domain.inference._internal.slo_embedder import _tokenize_simple
+
     assert _tokenize_simple("") == []
     assert _tokenize_simple("   ") == []
 
 
 def test_build_vocab():
     from domain.inference._internal.slo_embedder import _build_vocab
+
     texts = ["hello world", "foo bar baz", "hello foo"]
     vocab, itos = _build_vocab(texts, vocab_size=100)
     assert "<PAD>" in vocab
@@ -43,12 +48,14 @@ def test_build_vocab():
 
 def test_build_vocab_small():
     from domain.inference._internal.slo_embedder import _build_vocab
+
     vocab, itos = _build_vocab(["a b c"], vocab_size=10)
     assert len(vocab) <= 10
 
 
 def test_encode_tokens():
-    from domain.inference._internal.slo_embedder import _encode_tokens, _build_vocab
+    from domain.inference._internal.slo_embedder import _build_vocab, _encode_tokens
+
     vocab, _ = _build_vocab(["hello world test"], vocab_size=100)
     ids = _encode_tokens("hello world", vocab, max_len=16)
     assert ids.shape == (16,)
@@ -57,7 +64,8 @@ def test_encode_tokens():
 
 
 def test_encode_tokens_truncation():
-    from domain.inference._internal.slo_embedder import _encode_tokens, _build_vocab
+    from domain.inference._internal.slo_embedder import _build_vocab, _encode_tokens
+
     vocab, _ = _build_vocab(["a b c d e f g h i j k l m n o p"], vocab_size=100)
     ids = _encode_tokens("a b c d e f g h i j", vocab, max_len=5)
     assert ids.shape == (5,)
@@ -68,8 +76,10 @@ def test_encode_tokens_truncation():
 # Encoder building
 # ---------------------------------------------------------------------------
 
+
 def test_build_encoder():
     from domain.inference._internal.slo_embedder import _build_encoder
+
     enc = _build_encoder(vocab_size=256, embed_dim=64, max_seq_len=32, n_heads=4, n_layers=2)
     assert hasattr(enc, "tok_emb")
     assert hasattr(enc, "pos_emb")
@@ -83,6 +93,7 @@ def test_build_encoder():
 
 def test_encoder_forward():
     from domain.inference._internal.slo_embedder import _build_encoder
+
     enc = _build_encoder(vocab_size=256, embed_dim=64, max_seq_len=32, n_heads=4, n_layers=2)
     ids = np.random.randint(0, 256, size=(2, 32))
     out = enc.forward(ids)
@@ -93,8 +104,10 @@ def test_encoder_forward():
 # Contrastive loss
 # ---------------------------------------------------------------------------
 
+
 def test_contrastive_loss():
     from domain.inference._internal.slo_embedder import _contrastive_loss
+
     B, D = 8, 64
     # Perfect alignment — loss should be low
     z = np.random.randn(B, D).astype(np.float32)
@@ -106,6 +119,7 @@ def test_contrastive_loss():
 
 def test_contrastive_loss_random():
     from domain.inference._internal.slo_embedder import _contrastive_loss
+
     B, D = 8, 64
     z_i = np.random.randn(B, D).astype(np.float32)
     z_j = np.random.randn(B, D).astype(np.float32)
@@ -120,8 +134,10 @@ def test_contrastive_loss_random():
 # Augmentation
 # ---------------------------------------------------------------------------
 
+
 def test_augment_text():
     from domain.inference._internal.slo_embedder import _augment_text
+
     rng = np.random.RandomState(42)
     text = "the quick brown fox jumps over the lazy dog"
     aug = _augment_text(text, rng)
@@ -131,6 +147,7 @@ def test_augment_text():
 
 def test_augment_text_empty():
     from domain.inference._internal.slo_embedder import _augment_text
+
     rng = np.random.RandomState(42)
     assert _augment_text("", rng) == ""
     assert _augment_text("a", rng) == "a"
@@ -140,8 +157,10 @@ def test_augment_text_empty():
 # Training (tiny corpus)
 # ---------------------------------------------------------------------------
 
+
 def test_train_embedder_minimal():
     from domain.inference._internal.slo_embedder import train_embedder
+
     texts = [f"this is sentence number {i} about topic {i % 5}" for i in range(20)]
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "test-embedder.sou")
@@ -167,6 +186,7 @@ def test_train_embedder_minimal():
 
 def test_train_embedder_too_few():
     from domain.inference._internal.slo_embedder import train_embedder
+
     with pytest.raises(ValueError, match="at least 2"):
         train_embedder(["only one"], epochs=1)
 
@@ -175,13 +195,23 @@ def test_train_embedder_too_few():
 # SloTextEmbedder save/load/embed
 # ---------------------------------------------------------------------------
 
+
 def test_embedder_embed_dim():
     from domain.inference._internal.slo_embedder import SloTextEmbedder, train_embedder
+
     texts = [f"training text sample {i} for embedding" for i in range(30)]
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "test-embed.sou")
-        train_embedder(texts, vocab_size=256, embed_dim=64, max_seq_len=32,
-                        n_heads=4, n_layers=2, epochs=2, save_path=path)
+        train_embedder(
+            texts,
+            vocab_size=256,
+            embed_dim=64,
+            max_seq_len=32,
+            n_heads=4,
+            n_layers=2,
+            epochs=2,
+            save_path=path,
+        )
         embedder = SloTextEmbedder.load(path)
         assert embedder is not None
         vec = embedder.embed("hello world")
@@ -192,17 +222,27 @@ def test_embedder_embed_dim():
 
 def test_embedder_load_nonexistent():
     from domain.inference._internal.slo_embedder import SloTextEmbedder
+
     embedder = SloTextEmbedder.load("/nonexistent/path.sou")
     assert embedder is None
 
 
 def test_embedder_deterministic():
     from domain.inference._internal.slo_embedder import SloTextEmbedder, train_embedder
+
     texts = [f"sample {i} for determinism test" for i in range(20)]
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "det-embed.sou")
-        train_embedder(texts, vocab_size=256, embed_dim=64, max_seq_len=32,
-                        n_heads=4, n_layers=2, epochs=2, save_path=path)
+        train_embedder(
+            texts,
+            vocab_size=256,
+            embed_dim=64,
+            max_seq_len=32,
+            n_heads=4,
+            n_layers=2,
+            epochs=2,
+            save_path=path,
+        )
         embedder = SloTextEmbedder.load(path)
         v1 = embedder.embed("test sentence")
         v2 = embedder.embed("test sentence")
@@ -216,11 +256,20 @@ def test_embedder_deterministic():
 
 def test_embedder_different_texts_different_vectors():
     from domain.inference._internal.slo_embedder import SloTextEmbedder, train_embedder
+
     texts = [f"unique topic {i} with different words" for i in range(30)]
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "diff-embed.sou")
-        train_embedder(texts, vocab_size=256, embed_dim=128, max_seq_len=32,
-                        n_heads=4, n_layers=2, epochs=10, save_path=path)
+        train_embedder(
+            texts,
+            vocab_size=256,
+            embed_dim=128,
+            max_seq_len=32,
+            n_heads=4,
+            n_layers=2,
+            epochs=10,
+            save_path=path,
+        )
         embedder = SloTextEmbedder.load(path)
         v1 = embedder.embed("neural network training")
         v2 = embedder.embed("cooking recipes for dinner")
@@ -233,20 +282,30 @@ def test_embedder_different_texts_different_vectors():
 # Quality gate
 # ---------------------------------------------------------------------------
 
+
 def test_quality_metadata_saved_and_accepted():
     """A small trained model collapses toward uniform embeddings, but the
     mean-subtraction debias at save/inference time re-centers the space
     (mean cosine ~0.0). The quality gate measures the deployed, debiased
     space and must accept it."""
     from domain.inference._internal.slo_embedder import SloTextEmbedder, train_embedder
+
     rng_state = np.random.get_state()
     np.random.seed(0)  # collapse degree varies with init; seed for determinism
     try:
         texts = [f"this is sentence number {i} about topic {i % 5}" for i in range(30)]
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "qual-embed.sou")
-            train_embedder(texts, vocab_size=256, embed_dim=64, max_seq_len=32,
-                            n_heads=4, n_layers=2, epochs=2, save_path=path)
+            train_embedder(
+                texts,
+                vocab_size=256,
+                embed_dim=64,
+                max_seq_len=32,
+                n_heads=4,
+                n_layers=2,
+                epochs=2,
+                save_path=path,
+            )
             embedder = SloTextEmbedder.load(path)
             assert embedder is not None
             assert embedder.quality, "quality metadata must be recorded at train time"
@@ -264,7 +323,14 @@ def test_quality_metadata_saved_and_accepted():
             assert len(embedder.embed_mean) == 64
             # Retrieval benchmark vs the n-gram reference is recorded
             retrieval = embedder.quality.get("retrieval") or {}
-            for key in ("queries", "trained_mrr", "ngram_mrr", "trained_hit", "ngram_hit", "better"):
+            for key in (
+                "queries",
+                "trained_mrr",
+                "ngram_mrr",
+                "trained_hit",
+                "ngram_hit",
+                "better",
+            ):
                 assert key in retrieval, f"missing retrieval metric {key}"
             assert retrieval["queries"] >= 2
             assert 0.0 <= retrieval["trained_mrr"] <= 1.0
@@ -279,26 +345,47 @@ def test_embed_mean_debiases_collapsed_space():
     raw encoder embeddings sit at ~0.93 cosine while the debiased embed()
     outputs sit near 0 and discriminate different texts."""
     from domain.inference._internal.slo_embedder import (
-        SloTextEmbedder, train_embedder, _compute_quality,
+        SloTextEmbedder,
+        _compute_quality,
+        train_embedder,
     )
+
     rng_state = np.random.get_state()
     np.random.seed(0)
     try:
         texts = [f"this is sentence number {i} about topic {i % 5}" for i in range(30)]
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "debias-embed.sou")
-            train_embedder(texts, vocab_size=256, embed_dim=64, max_seq_len=32,
-                            n_heads=4, n_layers=2, epochs=2, save_path=path)
+            train_embedder(
+                texts,
+                vocab_size=256,
+                embed_dim=64,
+                max_seq_len=32,
+                n_heads=4,
+                n_layers=2,
+                epochs=2,
+                save_path=path,
+            )
             embedder = SloTextEmbedder.load(path)
             # Raw space (no debias) is collapsed
-            raw_q = _compute_quality(texts, embedder.encoder, embedder.vocab,
-                                     embedder.max_seq_len, embedder.encode_fn)
-            assert raw_q["mean_cosine"] > 0.90, f"expected collapsed raw space, got {raw_q['mean_cosine']}"
+            raw_q = _compute_quality(
+                texts, embedder.encoder, embedder.vocab, embedder.max_seq_len, embedder.encode_fn
+            )
+            assert raw_q["mean_cosine"] > 0.90, (
+                f"expected collapsed raw space, got {raw_q['mean_cosine']}"
+            )
             # Debiased space (what inference uses) is spread
-            deb_q = _compute_quality(texts, embedder.encoder, embedder.vocab,
-                                     embedder.max_seq_len, embedder.encode_fn,
-                                     embed_mean=embedder.embed_mean)
-            assert deb_q["mean_cosine"] < 0.50, f"expected spread debiased space, got {deb_q['mean_cosine']}"
+            deb_q = _compute_quality(
+                texts,
+                embedder.encoder,
+                embedder.vocab,
+                embedder.max_seq_len,
+                embedder.encode_fn,
+                embed_mean=embedder.embed_mean,
+            )
+            assert deb_q["mean_cosine"] < 0.50, (
+                f"expected spread debiased space, got {deb_q['mean_cosine']}"
+            )
             assert embedder.acceptable()
     finally:
         np.random.set_state(rng_state)
@@ -307,6 +394,7 @@ def test_embed_mean_debiases_collapsed_space():
 def test_quality_gate_accepts_healthy_space():
     """A non-degenerate, spread embedding space passes the gate."""
     from domain.inference._internal.slo_embedder import SloTextEmbedder
+
     quality = {
         "probes": 24,
         "degenerate_fraction": 0.0,
@@ -319,12 +407,14 @@ def test_quality_gate_accepts_healthy_space():
 
 def test_quality_gate_rejects_degenerate_pairs():
     from domain.inference._internal.slo_embedder import SloTextEmbedder
+
     quality = {"probes": 24, "degenerate_fraction": 0.80, "mean_cosine": 0.60, "nn_agreement": 0.0}
     assert not SloTextEmbedder(None, {}, quality=quality).acceptable()
 
 
 def test_quality_gate_rejects_collapsed_vectors():
     from domain.inference._internal.slo_embedder import SloTextEmbedder
+
     quality = {"probes": 24, "degenerate_fraction": 0.0, "mean_cosine": 0.98, "nn_agreement": 0.0}
     assert not SloTextEmbedder(None, {}, quality=quality).acceptable()
 
@@ -332,19 +422,26 @@ def test_quality_gate_rejects_collapsed_vectors():
 def test_quality_gate_requires_metadata():
     """Legacy checkpoints (no quality metadata) are unverifiable → rejected."""
     from domain.inference._internal.slo_embedder import SloTextEmbedder
+
     embedder = SloTextEmbedder(None, {}, quality={})
     assert not embedder.acceptable()
 
 
 def test_quality_gate_too_few_probes():
     from domain.inference._internal.slo_embedder import SloTextEmbedder
+
     quality = {"probes": 1, "degenerate_fraction": 0.0, "mean_cosine": 0.5, "nn_agreement": 0.0}
     assert not SloTextEmbedder(None, {}, quality=quality).acceptable()
 
 
 def test_compute_quality_returns_valid_metrics():
     """_compute_quality runs the real encoder on corpus probes."""
-    from domain.inference._internal.slo_embedder import _compute_quality, _build_encoder, _build_vocab
+    from domain.inference._internal.slo_embedder import (
+        _build_encoder,
+        _build_vocab,
+        _compute_quality,
+    )
+
     texts = [f"sample text {i} with distinct keywords" for i in range(12)]
     vocab, _ = _build_vocab(texts, vocab_size=64)
     encoder = _build_encoder(64, 16, 24, 2, 1)
@@ -359,6 +456,7 @@ def test_perturb_text_drops_words_deterministically():
     """Word-drop perturbation must shorten the text, stay deterministic and
     leave very short texts untouched."""
     from domain.inference._internal.slo_embedder import _perturb_text
+
     text = "the quick brown fox jumps over the lazy dog"
     a = _perturb_text(text)
     b = _perturb_text(text)
@@ -394,6 +492,7 @@ def test_retrieval_benchmark_scores_both_embedders():
 def test_retrieval_benchmark_short_corpus():
     """A corpus too small for the benchmark returns a zeroed dict, not a crash."""
     from domain.inference._internal.slo_embedder import _retrieval_benchmark
+
     res = _retrieval_benchmark(["only one text"], lambda t: np.zeros(8), lambda t: np.zeros(8))
     assert res["queries"] == 0
     assert res["better"] == "n_gram"
@@ -402,16 +501,28 @@ def test_retrieval_benchmark_short_corpus():
 def test_quality_metadata_survives_roundtrip():
     """Quality stored in the .sou meta must survive load."""
     from domain.inference._internal.slo_embedder import SloTextEmbedder, train_embedder
+
     texts = [f"this is sentence number {i} about topic {i % 5}" for i in range(20)]
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "rt-embed.sou")
-        train_embedder(texts, vocab_size=256, embed_dim=64, max_seq_len=32,
-                        n_heads=4, n_layers=2, epochs=1, save_path=path)
+        train_embedder(
+            texts,
+            vocab_size=256,
+            embed_dim=64,
+            max_seq_len=32,
+            n_heads=4,
+            n_layers=2,
+            epochs=1,
+            save_path=path,
+        )
         loaded = SloTextEmbedder.load(path)
         assert loaded is not None and loaded.quality
         assert loaded.quality["probes"] >= 2
         assert set(loaded.quality) == {
-            "probes", "degenerate_fraction", "mean_cosine", "nn_agreement",
+            "probes",
+            "degenerate_fraction",
+            "mean_cosine",
+            "nn_agreement",
             "retrieval",
         }
         assert "trained_mrr" in loaded.quality["retrieval"]
@@ -421,9 +532,11 @@ def test_quality_metadata_survives_roundtrip():
 # Integration: simple_embed fallback
 # ---------------------------------------------------------------------------
 
+
 def test_simple_embed_fallback():
     """Verify simple_embed falls through to n-gram when no model is available."""
     from domain.inference._internal.vector_store import simple_embed
+
     # This should not crash regardless of which backend is active
     vec = simple_embed("hello world test")
     assert isinstance(vec, list)
@@ -434,8 +547,10 @@ def test_simple_embed_fallback():
 
 
 def test_simple_embed_deterministic():
-    from domain.inference._internal.vector_store import simple_embed
     import numpy as np
+
+    from domain.inference._internal.vector_store import simple_embed
+
     v1 = simple_embed("deterministic test")
     v2 = simple_embed("deterministic test")
     # SloNet embedder: Metal GPU accelerator causes minor floating-point variance
@@ -446,15 +561,17 @@ def test_simple_embed_deterministic():
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_train_embed_exists():
     """Verify cmd_train_embed function exists in train.py."""
-    import importlib.util
+
     # Try the CLI path first, then fall back
     cli_path = str(Path(__file__).resolve().parents[4] / "apps" / "cli" / "src")
     if cli_path not in __import__("sys").path:
         __import__("sys").path.insert(0, cli_path)
     try:
         from commands.train import cmd_train_embed
+
         assert callable(cmd_train_embed)
     except ImportError:
         pytest.skip("commands.train module not importable")
@@ -464,9 +581,11 @@ def test_cmd_train_embed_exists():
 # Binary log-sum-exp tree
 # ---------------------------------------------------------------------------
 
+
 class TestLSETree:
     def test_lse_pair_standard(self):
         from domain.inference._internal.slo_embedder import _lse_pair
+
         a = np.array([1.0, 2.0, 3.0])
         b = np.array([1.0, 2.0, 3.0])
         result = _lse_pair(a, b, coeff=1.0)
@@ -476,6 +595,7 @@ class TestLSETree:
 
     def test_lse_pair_contract(self):
         from domain.inference._internal.slo_embedder import _lse_pair
+
         a = np.array([5.0, 10.0])
         b = np.array([1.0, 2.0])
         result = _lse_pair(a, b, coeff=0.0)
@@ -485,6 +605,7 @@ class TestLSETree:
 
     def test_lse_pair_threshold(self):
         from domain.inference._internal.slo_embedder import _lse_pair
+
         # Large diff → negligible correction
         a = np.array([50.0])
         b = np.array([0.0])
@@ -494,12 +615,14 @@ class TestLSETree:
 
     def test_lse_tree_single(self):
         from domain.inference._internal.slo_embedder import _lse_tree
+
         x = np.array([[5.0]])
         result = _lse_tree(x, axis=1)
         assert np.allclose(result, [5.0], atol=1e-5)
 
     def test_lse_tree_pair(self):
         from domain.inference._internal.slo_embedder import _lse_tree
+
         x = np.array([[1.0, 2.0]])
         result = _lse_tree(x, axis=1)
         expected = np.log(np.exp(1.0) + np.exp(2.0))
@@ -507,6 +630,7 @@ class TestLSETree:
 
     def test_lse_tree_matches_softmax(self):
         from domain.inference._internal.slo_embedder import _lse_tree
+
         np.random.seed(42)
         x = np.random.randn(32, 64) * 3
         # Flat softmax
@@ -517,28 +641,34 @@ class TestLSETree:
 
     def test_lse_tree_no_spillover(self):
         from domain.inference._internal.slo_embedder import _lse_tree
+
         x = np.full((2, 8), 50.0)
         tree = _lse_tree(x, axis=1)
         assert not np.any(np.isinf(tree))
 
     def test_lse_tree_preserves_ranking(self):
         from domain.inference._internal.slo_embedder import _lse_tree
-        x = np.array([
-            [1.0, 2.0, 3.0, 4.0],
-            [10.0, 20.0, 30.0, 40.0],
-        ])
+
+        x = np.array(
+            [
+                [1.0, 2.0, 3.0, 4.0],
+                [10.0, 20.0, 30.0, 40.0],
+            ]
+        )
         tree = _lse_tree(x, axis=1)
         # Row 1 should have higher LSE than row 0
         assert tree[1] > tree[0]
 
     def test_lse_tree_batch(self):
         from domain.inference._internal.slo_embedder import _lse_tree
+
         x = np.random.randn(8, 32)
         tree = _lse_tree(x, axis=1)
         assert tree.shape == (8,)
 
     def test_lse_tree_negative_values(self):
         from domain.inference._internal.slo_embedder import _lse_tree
+
         x = np.array([[-10.0, -20.0, -30.0, -40.0]])
         tree = _lse_tree(x, axis=1)
         # Should be close to max = -10
@@ -549,20 +679,30 @@ class TestLSETree:
 # Canonical .soul extension + extension-agnostic sidecars
 # ---------------------------------------------------------------------------
 
+
 def test_embedder_default_path_uses_soul_extension():
     from domain.inference._internal.slo_embedder import _EMBEDDER_PATH
+
     assert _EMBEDDER_PATH.name == "text-embedder.soul"
     assert _EMBEDDER_PATH.suffix == ".soul"
 
 
 def test_train_embedder_soul_path_sidecars():
-    from domain.inference._internal.slo_embedder import train_embedder, SloTextEmbedder
+    from domain.inference._internal.slo_embedder import SloTextEmbedder, train_embedder
+
     texts = [f"this is sentence number {i} about topic {i % 5}" for i in range(20)]
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "embedder.soul")
         result = train_embedder(
-            texts=texts, vocab_size=256, embed_dim=64, max_seq_len=32,
-            n_heads=4, n_layers=2, epochs=2, batch_size=8, save_path=path,
+            texts=texts,
+            vocab_size=256,
+            embed_dim=64,
+            max_seq_len=32,
+            n_heads=4,
+            n_layers=2,
+            epochs=2,
+            batch_size=8,
+            save_path=path,
         )
         assert os.path.exists(path)
         assert os.path.exists(os.path.join(tmpdir, "embedder-vocab.json"))
@@ -574,13 +714,21 @@ def test_train_embedder_soul_path_sidecars():
 
 
 def test_embedder_legacy_sou_path_still_loads():
-    from domain.inference._internal.slo_embedder import train_embedder, SloTextEmbedder
+    from domain.inference._internal.slo_embedder import SloTextEmbedder, train_embedder
+
     texts = [f"this is sentence number {i} about topic {i % 5}" for i in range(20)]
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "embedder.sou")
         train_embedder(
-            texts=texts, vocab_size=256, embed_dim=64, max_seq_len=32,
-            n_heads=4, n_layers=2, epochs=2, batch_size=8, save_path=path,
+            texts=texts,
+            vocab_size=256,
+            embed_dim=64,
+            max_seq_len=32,
+            n_heads=4,
+            n_layers=2,
+            epochs=2,
+            batch_size=8,
+            save_path=path,
         )
         assert os.path.exists(path)
         assert os.path.exists(os.path.join(tmpdir, "embedder-vocab.json"))

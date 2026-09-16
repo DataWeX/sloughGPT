@@ -2,7 +2,7 @@
 
 import time
 
-from domain.shell._internal.kernel_process import Process, ProcessState, Priority
+from domain.shell._internal.kernel_process import Priority, Process, ProcessState
 from domain.shell._internal.kernel_scheduler import Scheduler
 
 

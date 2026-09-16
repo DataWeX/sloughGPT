@@ -1,19 +1,20 @@
 """Tests for online LoRA updater — config, initialization, feedback, gradients."""
 
 import time
-import pytest
-import numpy as np
-from unittest.mock import patch
-from domain.feedback._internal.online_train import (
-    LoRAConfig, OnlineLoRAUpdater, get_online_lora_updater,
-    _online_lora,
-)
 
+import numpy as np
+import pytest
+
+from domain.feedback._internal.online_train import (
+    LoRAConfig,
+    OnlineLoRAUpdater,
+    get_online_lora_updater,
+)
 
 # ── LoRAConfig ─────────────────────────────────────────────────────────────
 
-class TestLoRAConfig:
 
+class TestLoRAConfig:
     def test_defaults(self):
         cfg = LoRAConfig()
         assert cfg.rank == 8
@@ -37,13 +38,13 @@ class TestLoRAConfig:
 
 # ── OnlineLoRAUpdater ─────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def updater():
     return OnlineLoRAUpdater(update_interval=3)
 
 
 class TestOnlineLoRAUpdater:
-
     def test_init_default_config(self):
         u = OnlineLoRAUpdater()
         assert u.config.rank == 8
@@ -114,7 +115,7 @@ class TestOnlineLoRAUpdater:
     def test_compute_gradients_negative_feedback(self, updater):
         updater.initialize(model_dim=64)
         batch = [{"rating": "thumbs_down", "quality_score": 0.0}] * 3
-        grads = updater._compute_gradients(batch)
+        updater._compute_gradients(batch)
         scale = updater.learning_rate * (-1.0)
         assert scale < 0
 
@@ -131,16 +132,20 @@ class TestOnlineLoRAUpdater:
     def test_apply_gradients(self, updater):
         updater.initialize(model_dim=64)
         w_before = updater._lora_weights["W_a"].copy()
-        grads = {"W_a": np.ones((8, 64), dtype=np.float32) * 0.01,
-                 "W_b": np.ones((64, 8), dtype=np.float32) * 0.01}
+        grads = {
+            "W_a": np.ones((8, 64), dtype=np.float32) * 0.01,
+            "W_b": np.ones((64, 8), dtype=np.float32) * 0.01,
+        }
         updater._apply_gradients(grads)
         assert not np.array_equal(updater._lora_weights["W_a"], w_before)
 
     def test_apply_gradients_clips_to_minus_1_1(self, updater):
         updater.initialize(model_dim=64)
         updater._lora_weights["W_a"] = np.full((8, 64), 0.9, dtype=np.float32)
-        grads = {"W_a": np.full((8, 64), -0.5, dtype=np.float32),
-                 "W_b": np.zeros((64, 8), dtype=np.float32)}
+        grads = {
+            "W_a": np.full((8, 64), -0.5, dtype=np.float32),
+            "W_b": np.zeros((64, 8), dtype=np.float32),
+        }
         updater._apply_gradients(grads)
         assert updater._lora_weights["W_a"].max() <= 1.0
         assert updater._lora_weights["W_a"].min() >= -1.0
@@ -196,6 +201,7 @@ class TestOnlineLoRAUpdater:
 
     def test_thread_safety_concurrent_add(self, updater):
         import threading
+
         def add_many():
             for i in range(20):
                 updater.add_feedback(f"p{i}", f"r{i}", "thumbs_up")
@@ -211,10 +217,11 @@ class TestOnlineLoRAUpdater:
 
 # ── Global singleton ──────────────────────────────────────────────────────
 
-class TestGetOnlineLoRAUpdater:
 
+class TestGetOnlineLoRAUpdater:
     def test_returns_singleton(self):
         import domain.feedback._internal.online_train as mod
+
         original = mod._online_lora
         mod._online_lora = None
         try:

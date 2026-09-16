@@ -1,21 +1,21 @@
 """Tests for domain.feedback._internal.workflow — WorkflowConfig, FeedbackWorkflowManager."""
 
-import copy
 import time
-import numpy as np
-from unittest.mock import MagicMock, patch, PropertyMock
 from dataclasses import fields
+from unittest.mock import MagicMock, patch
+
+import numpy as np
 
 from domain.feedback._internal.workflow import (
-    WorkflowConfig,
     FeedbackWorkflowManager,
+    WorkflowConfig,
     get_feedback_workflow,
 )
-
 
 # ---------------------------------------------------------------------------
 # WorkflowConfig
 # ---------------------------------------------------------------------------
+
 
 class TestWorkflowConfig:
     def test_defaults(self):
@@ -81,12 +81,14 @@ class TestWorkflowConfig:
 
     def test_is_dataclass(self):
         import dataclasses
+
         assert dataclasses.is_dataclass(WorkflowConfig)
 
 
 # ---------------------------------------------------------------------------
 # Helper to build a FeedbackWorkflowManager with mock dependencies
 # ---------------------------------------------------------------------------
+
 
 def _make_manager(**overrides):
     """Build a FeedbackWorkflowManager with lightweight mock dependencies."""
@@ -127,6 +129,7 @@ def _make_manager(**overrides):
 # ---------------------------------------------------------------------------
 # FeedbackWorkflowManager — initialisation
 # ---------------------------------------------------------------------------
+
 
 class TestManagerInit:
     def test_default_config(self):
@@ -176,6 +179,7 @@ class TestManagerInit:
 # set_model
 # ---------------------------------------------------------------------------
 
+
 class TestSetModel:
     def test_sets_model_and_tokenizer(self):
         mgr = _make_manager()
@@ -198,6 +202,7 @@ class TestSetModel:
 # ---------------------------------------------------------------------------
 # record_feedback — pure logic path
 # ---------------------------------------------------------------------------
+
 
 class TestRecordFeedback:
     def test_calls_meta_manager_record_feedback(self):
@@ -275,6 +280,7 @@ class TestRecordFeedback:
 # _snapshot_weights / _restore_weights
 # ---------------------------------------------------------------------------
 
+
 class TestSnapshotRestore:
     def _make_layer(self, data):
         layer = MagicMock()
@@ -345,6 +351,7 @@ class TestSnapshotRestore:
 # run_scheduled_tasks — time-based state machine
 # ---------------------------------------------------------------------------
 
+
 class TestRunScheduledTasks:
     def test_aggregation_runs_when_interval_elapsed(self):
         mgr = _make_manager(config=WorkflowConfig(aggregate_interval_minutes=1))
@@ -395,12 +402,14 @@ class TestRunScheduledTasks:
         assert mgr._stats["aggregations_performed"] == 1
 
     def test_multiple_intervals_independent(self):
-        mgr = _make_manager(config=WorkflowConfig(
-            aggregate_interval_minutes=0,
-            prune_interval_minutes=999,
-            export_interval_hours=999,
-            auto_dpo_interval_minutes=999,
-        ))
+        mgr = _make_manager(
+            config=WorkflowConfig(
+                aggregate_interval_minutes=0,
+                prune_interval_minutes=999,
+                export_interval_hours=999,
+                auto_dpo_interval_minutes=999,
+            )
+        )
         mgr._last_aggregate_time = 0
         mgr._last_prune_time = time.time()
         mgr._last_export_time = time.time()
@@ -414,6 +423,7 @@ class TestRunScheduledTasks:
 # ---------------------------------------------------------------------------
 # _health_check
 # ---------------------------------------------------------------------------
+
 
 class TestHealthCheck:
     def test_increments_workflow_runs(self):
@@ -439,6 +449,7 @@ class TestHealthCheck:
 # _do_aggregate
 # ---------------------------------------------------------------------------
 
+
 class TestDoAggregate:
     def test_calls_lora_store_aggregate_best_adapters(self):
         mgr = _make_manager()
@@ -460,6 +471,7 @@ class TestDoAggregate:
 # ---------------------------------------------------------------------------
 # _do_prune
 # ---------------------------------------------------------------------------
+
 
 class TestDoPrune:
     def test_calls_lora_store_prune_low_quality(self):
@@ -492,6 +504,7 @@ class TestDoPrune:
 # _do_export
 # ---------------------------------------------------------------------------
 
+
 class TestDoExport:
     def test_calls_db_export_feedback_jsonl(self):
         mgr = _make_manager()
@@ -514,6 +527,7 @@ class TestDoExport:
 # ---------------------------------------------------------------------------
 # trigger_* manual methods
 # ---------------------------------------------------------------------------
+
 
 class TestTriggerMethods:
     def test_trigger_aggregate(self):
@@ -541,6 +555,7 @@ class TestTriggerMethods:
 # ---------------------------------------------------------------------------
 # get_status
 # ---------------------------------------------------------------------------
+
 
 class TestGetStatus:
     def test_running_key(self):
@@ -609,21 +624,26 @@ class TestGetStatus:
 # start / stop
 # ---------------------------------------------------------------------------
 
+
 class TestStartStop:
     def test_start_sets_running(self):
-        mgr = _make_manager(config=WorkflowConfig(
-            health_check_interval_seconds=999,
-            background_training_enabled=False,
-        ))
+        mgr = _make_manager(
+            config=WorkflowConfig(
+                health_check_interval_seconds=999,
+                background_training_enabled=False,
+            )
+        )
         mgr.start()
         assert mgr._running is True
         mgr.stop()
 
     def test_start_sets_start_time(self):
-        mgr = _make_manager(config=WorkflowConfig(
-            health_check_interval_seconds=999,
-            background_training_enabled=False,
-        ))
+        mgr = _make_manager(
+            config=WorkflowConfig(
+                health_check_interval_seconds=999,
+                background_training_enabled=False,
+            )
+        )
         before = time.time()
         mgr.start()
         after = time.time()
@@ -632,40 +652,48 @@ class TestStartStop:
         mgr.stop()
 
     def test_stop_sets_running_false(self):
-        mgr = _make_manager(config=WorkflowConfig(
-            health_check_interval_seconds=999,
-            background_training_enabled=False,
-        ))
+        mgr = _make_manager(
+            config=WorkflowConfig(
+                health_check_interval_seconds=999,
+                background_training_enabled=False,
+            )
+        )
         mgr.start()
         mgr.stop()
         assert mgr._running is False
 
     def test_start_idempotent(self):
-        mgr = _make_manager(config=WorkflowConfig(
-            health_check_interval_seconds=999,
-            background_training_enabled=False,
-        ))
+        mgr = _make_manager(
+            config=WorkflowConfig(
+                health_check_interval_seconds=999,
+                background_training_enabled=False,
+            )
+        )
         mgr.start()
         mgr.start()  # second call should be no-op
         assert mgr._running is True
         mgr.stop()
 
     def test_background_training_thread_created_when_enabled(self):
-        mgr = _make_manager(config=WorkflowConfig(
-            health_check_interval_seconds=999,
-            background_training_enabled=True,
-            background_training_interval_seconds=999,
-        ))
+        mgr = _make_manager(
+            config=WorkflowConfig(
+                health_check_interval_seconds=999,
+                background_training_enabled=True,
+                background_training_interval_seconds=999,
+            )
+        )
         mgr.start()
         assert hasattr(mgr, "_training_thread")
         assert mgr._training_thread.is_alive()
         mgr.stop()
 
     def test_background_training_not_created_when_disabled(self):
-        mgr = _make_manager(config=WorkflowConfig(
-            health_check_interval_seconds=999,
-            background_training_enabled=False,
-        ))
+        mgr = _make_manager(
+            config=WorkflowConfig(
+                health_check_interval_seconds=999,
+                background_training_enabled=False,
+            )
+        )
         mgr.start()
         assert not hasattr(mgr, "_training_thread") or not mgr._training_thread.is_alive()
         mgr.stop()
@@ -675,9 +703,11 @@ class TestStartStop:
 # get_feedback_workflow singleton
 # ---------------------------------------------------------------------------
 
+
 class TestGetFeedbackWorkflow:
     def test_returns_manager(self):
         import domain.feedback._internal.workflow as mod
+
         original = mod._workflow_manager
         try:
             mod._workflow_manager = None
@@ -688,6 +718,7 @@ class TestGetFeedbackWorkflow:
 
     def test_returns_same_instance(self):
         import domain.feedback._internal.workflow as mod
+
         original = mod._workflow_manager
         try:
             mod._workflow_manager = None
@@ -699,6 +730,7 @@ class TestGetFeedbackWorkflow:
 
     def test_accepts_config(self):
         import domain.feedback._internal.workflow as mod
+
         original = mod._workflow_manager
         try:
             mod._workflow_manager = None
@@ -712,6 +744,7 @@ class TestGetFeedbackWorkflow:
 # ---------------------------------------------------------------------------
 # record_feedback — thumbs_up auto-train threshold
 # ---------------------------------------------------------------------------
+
 
 class TestAutoTrainThreshold:
     def test_thumbs_up_resets_counter_at_threshold(self):
@@ -738,14 +771,17 @@ class TestAutoTrainThreshold:
 # run_scheduled_tasks — exception safety
 # ---------------------------------------------------------------------------
 
+
 class TestScheduledTasksExceptionSafety:
     def test_aggregate_exception_does_not_block_prune(self):
-        mgr = _make_manager(config=WorkflowConfig(
-            aggregate_interval_minutes=0,
-            prune_interval_minutes=0,
-            export_interval_hours=999,
-            auto_dpo_interval_minutes=999,
-        ))
+        mgr = _make_manager(
+            config=WorkflowConfig(
+                aggregate_interval_minutes=0,
+                prune_interval_minutes=0,
+                export_interval_hours=999,
+                auto_dpo_interval_minutes=999,
+            )
+        )
         mgr._last_aggregate_time = 0
         mgr._last_prune_time = 0
         mgr.lora_store.aggregate_best_adapters.side_effect = RuntimeError("boom")
@@ -753,12 +789,14 @@ class TestScheduledTasksExceptionSafety:
         mgr.lora_store.prune_low_quality.assert_called_once()
 
     def test_prune_exception_does_not_block_export(self):
-        mgr = _make_manager(config=WorkflowConfig(
-            aggregate_interval_minutes=999,
-            prune_interval_minutes=0,
-            export_interval_hours=0,
-            auto_dpo_interval_minutes=999,
-        ))
+        mgr = _make_manager(
+            config=WorkflowConfig(
+                aggregate_interval_minutes=999,
+                prune_interval_minutes=0,
+                export_interval_hours=0,
+                auto_dpo_interval_minutes=999,
+            )
+        )
         mgr._last_prune_time = 0
         mgr._last_export_time = 0
         mgr.lora_store.prune_low_quality.side_effect = RuntimeError("boom")

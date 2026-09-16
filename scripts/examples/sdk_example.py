@@ -4,14 +4,14 @@ SloughGPT SDK Example
 Demonstrates usage of the SloughGPT Python SDK.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sloughgpt_sdk import (
-    SloughGPTClient,
     ChatMessage,
-    GenerateRequest,
+    SloughGPTClient,
 )
 
 
@@ -19,12 +19,8 @@ def example_basic_generation(client):
     """Basic text generation example."""
     print("\n=== Basic Generation ===")
 
-    result = client.generate(
-        prompt="The capital of France is",
-        max_new_tokens=20,
-        temperature=0.7
-    )
-    print(f"Prompt: The capital of France is")
+    result = client.generate(prompt="The capital of France is", max_new_tokens=20, temperature=0.7)
+    print("Prompt: The capital of France is")
     print(f"Generated: {result.generated_text}")
     print(f"Tokens: {result.tokens_generated}")
     print(f"Time: {result.inference_time_ms:.2f}ms")
@@ -40,7 +36,7 @@ def example_chat(client):
     ]
 
     result = client.chat(messages)
-    print(f"User: What is machine learning?")
+    print("User: What is machine learning?")
     print(f"Assistant: {result.message.content}")
 
 
@@ -50,9 +46,7 @@ def example_streaming(client):
 
     print("Generating: ", end="", flush=True)
     for token in client.generate_stream(
-        prompt="Once upon a time in a distant galaxy",
-        max_new_tokens=50,
-        temperature=0.8
+        prompt="Once upon a time in a distant galaxy", max_new_tokens=50, temperature=0.8
     ):
         print(token, end="", flush=True)
     print()

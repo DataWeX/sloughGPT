@@ -14,13 +14,13 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class AlertSeverity(str, Enum):
+class AlertSeverity(StrEnum):
     """Alert severity levels."""
 
     INFO = "info"
@@ -29,7 +29,7 @@ class AlertSeverity(str, Enum):
     CRITICAL = "critical"
 
 
-class AlertType(str, Enum):
+class AlertType(StrEnum):
     """Types of training alerts."""
 
     LOSS_DIVERGENCE = "loss_divergence"
@@ -159,7 +159,7 @@ class TrainingMonitor:
 
             # Check for loss stagnation
             if len(self._loss_history) >= self.loss_stagnation_window:
-                recent = list(self._loss_history)[-self.loss_stagnation_window:]
+                recent = list(self._loss_history)[-self.loss_stagnation_window :]
                 loss_range = max(recent) - min(recent)
                 if loss_range < self.loss_stagnation_threshold:
                     self._add_alert(
@@ -272,10 +272,7 @@ class TrainingMonitor:
         # Deduplicate: don't add same type within 60 seconds
         now = time.time()
         for existing in self._alerts:
-            if (
-                existing.alert_type == alert_type
-                and now - existing.timestamp < 60
-            ):
+            if existing.alert_type == alert_type and now - existing.timestamp < 60:
                 return
 
         alert = TrainingAlert(
@@ -287,7 +284,7 @@ class TrainingMonitor:
         self._alerts.append(alert)
 
         if len(self._alerts) > self._max_alerts:
-            self._alerts = self._alerts[-self._max_alerts:]
+            self._alerts = self._alerts[-self._max_alerts :]
 
         log_fn = {
             AlertSeverity.INFO: logger.info,
@@ -308,7 +305,7 @@ class TrainingMonitor:
                 return True
 
             recent = list(self._loss_history)[-window:]
-            previous = list(self._loss_history)[-window * 2:-window]
+            previous = list(self._loss_history)[-window * 2 : -window]
 
             recent_avg = sum(recent) / len(recent)
             previous_avg = sum(previous) / len(previous)
@@ -337,7 +334,6 @@ class TrainingMonitor:
 
     def check_resources(self) -> dict:
         """Check system resources and generate alerts if needed."""
-        import os
 
         resources = {
             "cpu_percent": 0.0,
@@ -348,13 +344,14 @@ class TrainingMonitor:
 
         try:
             import psutil
+
             cpu = psutil.cpu_percent(interval=0.1)
             mem = psutil.virtual_memory()
 
             resources["cpu_percent"] = cpu
             resources["memory_percent"] = mem.percent
-            resources["memory_used_gb"] = mem.used / (1024 ** 3)
-            resources["memory_total_gb"] = mem.total / (1024 ** 3)
+            resources["memory_used_gb"] = mem.used / (1024**3)
+            resources["memory_total_gb"] = mem.total / (1024**3)
 
             if mem.percent > 90:
                 self._add_alert(
@@ -411,12 +408,10 @@ class TrainingMonitor:
             return {
                 "total_alerts": len(self._alerts),
                 "alerts_by_severity": {
-                    s.value: sum(1 for a in self._alerts if a.severity == s)
-                    for s in AlertSeverity
+                    s.value: sum(1 for a in self._alerts if a.severity == s) for s in AlertSeverity
                 },
                 "alerts_by_type": {
-                    t.value: sum(1 for a in self._alerts if a.alert_type == t)
-                    for t in AlertType
+                    t.value: sum(1 for a in self._alerts if a.alert_type == t) for t in AlertType
                 },
                 "total_metrics": len(self._metrics),
                 "loss_history_size": len(self._loss_history),

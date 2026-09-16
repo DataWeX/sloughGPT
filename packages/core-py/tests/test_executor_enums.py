@@ -1,9 +1,11 @@
 """Tests for domain.training._internal.executor — JobStatus, JobInfo."""
 
 import time
+
 import numpy as np
 import pytest
-from domain.training._internal.executor import JobStatus, JobInfo, TrainingExecutor
+
+from domain.training._internal.executor import JobInfo, JobStatus, TrainingExecutor
 
 
 class TestJobStatus:
@@ -157,6 +159,7 @@ class TestJobInfo:
 
     def test_to_dict_completed_with_dict_result(self):
         import numpy as np
+
         ji = JobInfo(
             job_id="j1",
             status=JobStatus.COMPLETED,
@@ -192,8 +195,15 @@ class TestJobInfo:
         ji = JobInfo(job_id="j1")
         d = ji.to_dict()
         expected_keys = {
-            "job_id", "tree_id", "status", "submitted_at", "started_at",
-            "completed_at", "elapsed_s", "error", "cancel_requested",
+            "job_id",
+            "tree_id",
+            "status",
+            "submitted_at",
+            "started_at",
+            "completed_at",
+            "elapsed_s",
+            "error",
+            "cancel_requested",
         }
         assert expected_keys == set(d.keys())
 
@@ -262,8 +272,10 @@ class TestTrainingExecutor:
     def test_submit_and_status(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid):
                 return {"loss": 0.5}
+
             job_id = exec_.submit(fn, "test_job")
             time.sleep(0.1)
             status = exec_.status(job_id)
@@ -275,8 +287,10 @@ class TestTrainingExecutor:
     def test_submit_completed_result(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid):
                 return {"w": np.array([1.0])}
+
             job_id = exec_.submit(fn, "res_job")
             time.sleep(0.2)
             info = exec_._jobs[job_id]
@@ -287,8 +301,10 @@ class TestTrainingExecutor:
     def test_submit_failed_result(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid):
                 raise ValueError("test error")
+
             job_id = exec_.submit(fn, "fail_job")
             time.sleep(0.2)
             info = exec_._jobs[job_id]
@@ -300,8 +316,10 @@ class TestTrainingExecutor:
     def test_list_jobs(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid):
                 return True
+
             exec_.submit(fn, "job_a")
             exec_.submit(fn, "job_b")
             time.sleep(0.1)
@@ -348,8 +366,10 @@ class TestTrainingExecutor:
     def test_result_summary_not_completed(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def slow_fn(jid):
                 time.sleep(10)
+
             exec_.submit(slow_fn, "slow")
             time.sleep(0.05)
             assert exec_.result_summary("slow") is None
@@ -359,8 +379,10 @@ class TestTrainingExecutor:
     def test_result_summary_completed_with_weights(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid):
                 return {"w1": np.zeros((3, 3)), "w2": np.ones((2,))}
+
             job_id = exec_.submit(fn, "weight_job")
             time.sleep(0.3)
             summary = exec_.result_summary(job_id)
@@ -376,8 +398,10 @@ class TestTrainingExecutor:
     def test_purge_completed(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid):
                 return True
+
             exec_.submit(fn, "purge_job")
             time.sleep(0.3)
             purged = exec_.purge_completed(max_age_s=0.0)
@@ -388,8 +412,10 @@ class TestTrainingExecutor:
     def test_purge_no_old_jobs(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid):
                 return True
+
             exec_.submit(fn, "new_job")
             time.sleep(0.1)
             purged = exec_.purge_completed(max_age_s=99999)
@@ -400,8 +426,10 @@ class TestTrainingExecutor:
     def test_submit_with_tree_id(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid):
                 return True
+
             job_id = exec_.submit(fn, "tree_job", tree_id="tree_1")
             time.sleep(0.1)
             d = exec_.status(job_id)
@@ -412,8 +440,10 @@ class TestTrainingExecutor:
     def test_submit_with_call_args(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid, extra=None):
                 return extra
+
             job_id = exec_.submit(fn, "call_args_job", _call_args={"extra": "hello"})
             time.sleep(0.2)
             info = exec_._jobs[job_id]
@@ -424,8 +454,10 @@ class TestTrainingExecutor:
     def test_submit_with_kwargs(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid, lr=0.001):
                 return lr
+
             job_id = exec_.submit(fn, "kwarg_job", lr=0.01)
             time.sleep(0.2)
             info = exec_._jobs[job_id]
@@ -435,12 +467,15 @@ class TestTrainingExecutor:
 
     def test_cancel_queued_job(self):
         import threading
+
         exec_ = TrainingExecutor(max_workers=1)
         try:
             lock = threading.Event()
+
             def blocking_fn(jid):
                 lock.wait(timeout=5)
                 return True
+
             exec_.submit(blocking_fn, "blocker")
             time.sleep(0.05)
             job_id2 = exec_.submit(lambda jid: True, "queued_job")
@@ -497,12 +532,15 @@ class TestTrainingExecutor:
 
     def test_is_cancelled_after_cancel(self):
         import threading as _threading
+
         exec_ = TrainingExecutor(max_workers=2)
         try:
             lock = _threading.Event()
+
             def blocking(jid):
                 lock.wait(timeout=5)
                 return True
+
             exec_.submit(blocking, "blocker")
             time.sleep(0.05)
             job_id2 = exec_.submit(lambda jid: True, "queued")
@@ -515,8 +553,10 @@ class TestTrainingExecutor:
     def test_purge_failed_jobs(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def failing(jid):
                 raise RuntimeError("fail")
+
             exec_.submit(failing, "fail1")
             time.sleep(0.2)
             purged = exec_.purge_completed(max_age_s=0.0)
@@ -526,12 +566,15 @@ class TestTrainingExecutor:
 
     def test_active_count_running(self):
         import threading
+
         exec_ = TrainingExecutor(max_workers=2)
         try:
             lock = threading.Event()
+
             def blocking(jid):
                 lock.wait(timeout=5)
                 return True
+
             exec_.submit(blocking, "b1")
             time.sleep(0.05)
             assert exec_.active_count() >= 1
@@ -550,8 +593,10 @@ class TestTrainingExecutor:
     def test_result_summary_dict_with_arrays(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid):
                 return {"w": np.array([1.0, 2.0, 3.0])}
+
             job_id = exec_.submit(fn, "arr_job")
             time.sleep(0.3)
             summary = exec_.result_summary(job_id)
@@ -564,8 +609,10 @@ class TestTrainingExecutor:
     def test_result_summary_non_dict_result(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid):
                 return 42
+
             job_id = exec_.submit(fn, "scalar")
             time.sleep(0.2)
             summary = exec_.result_summary(job_id)
@@ -611,12 +658,15 @@ class TestTrainingExecutor:
 
     def test_purge_does_not_remove_running(self):
         import threading
+
         exec_ = TrainingExecutor(max_workers=1)
         try:
             lock = threading.Event()
+
             def blocking(jid):
                 lock.wait(timeout=5)
                 return True
+
             exec_.submit(blocking, "running_job")
             time.sleep(0.05)
             purged = exec_.purge_completed(max_age_s=0.0)
@@ -628,8 +678,10 @@ class TestTrainingExecutor:
     def test_purge_mixed_ages(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid):
                 return True
+
             exec_.submit(fn, "old")
             time.sleep(0.3)
             exec_.submit(fn, "new")
@@ -642,8 +694,10 @@ class TestTrainingExecutor:
     def test_submit_multiple_args(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid, a, b):
                 return a + b
+
             job_id = exec_.submit(fn, "args_job", 3, 4)
             time.sleep(0.2)
             info = exec_._jobs[job_id]
@@ -654,8 +708,10 @@ class TestTrainingExecutor:
     def test_result_summary_none_for_failed(self):
         exec_ = TrainingExecutor(max_workers=1)
         try:
+
             def fn(jid):
                 raise RuntimeError("boom")
+
             job_id = exec_.submit(fn, "fail_summary")
             time.sleep(0.2)
             summary = exec_.result_summary(job_id)

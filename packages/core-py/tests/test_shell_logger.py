@@ -52,8 +52,8 @@ def ansi_on(monkeypatch):
 
 # ── Construction ──────────────────────────────────────────────────────
 
-class TestConstruction:
 
+class TestConstruction:
     def test_default_stream(self):
         log = ShellLogger("slo.shell")
         assert log.name == "slo.shell"
@@ -94,8 +94,8 @@ class TestConstruction:
 
 # ── Formatting ────────────────────────────────────────────────────────
 
-class TestFormatting:
 
+class TestFormatting:
     def test_plain_line(self):
         log = ShellLogger("slo.shell", colors=False)
         line = log._format_record(_record(message="model loaded", context={"model": "gpt2"}))
@@ -200,8 +200,8 @@ class TestFormatting:
 
 # ── Emit ──────────────────────────────────────────────────────────────
 
-class TestEmit:
 
+class TestEmit:
     def test_emit_writes_line(self):
         buf = io.StringIO()
         log = ShellLogger("slo.shell", stream=buf, colors=False)
@@ -298,8 +298,8 @@ class TestEmit:
 
 # ── Thread Safety ─────────────────────────────────────────────────────
 
-class TestThreadSafety:
 
+class TestThreadSafety:
     def test_concurrent_emits(self):
         buf = io.StringIO()
         log = ShellLogger("slo.shell", stream=buf, colors=False)
@@ -318,8 +318,8 @@ class TestThreadSafety:
 
 # ── LogRecord ─────────────────────────────────────────────────────────
 
-class TestLogRecord:
 
+class TestLogRecord:
     def test_default_timestamp(self):
         rec = _record()
         assert isinstance(rec.timestamp, float)
@@ -348,8 +348,8 @@ class TestLogRecord:
 
 # ── LogLevel Comparison ───────────────────────────────────────────────
 
-class TestLogLevelComparison:
 
+class TestLogLevelComparison:
     def test_debug_lt_info(self):
         assert LogLevel.DEBUG < LogLevel.INFO
 
@@ -377,8 +377,8 @@ class TestLogLevelComparison:
 
 # ── ErrorCode ─────────────────────────────────────────────────────────
 
-class TestErrorCode:
 
+class TestErrorCode:
     def test_has_auth_codes(self):
         assert ErrorCode.E_AUTH_MISSING == "E_AUTH_MISSING"
         assert ErrorCode.E_AUTH_EXPIRED == "E_AUTH_EXPIRED"
@@ -413,8 +413,8 @@ class TestErrorCode:
 
 # ── LogTag ────────────────────────────────────────────────────────────
 
-class TestLogTag:
 
+class TestLogTag:
     def test_has_required_tags(self):
         assert LogTag.REQ == "REQ"
         assert LogTag.AUTH == "AUTH"
@@ -429,8 +429,8 @@ class TestLogTag:
 
 # ── Edge Cases ────────────────────────────────────────────────────────
 
-class TestEdgeCases:
 
+class TestEdgeCases:
     def test_empty_message(self):
         log = ShellLogger("slo.shell", colors=False)
         line = log._format_record(_record(message=""))
@@ -459,6 +459,7 @@ class TestEdgeCases:
 
     def test_colors_none_defaults_to_auto(self):
         import domain.logging._internal.shell_logger as sh
+
         log = ShellLogger("slo.shell", colors=None)
         assert log._colors == sh._COLOR_ENABLED
 
@@ -557,10 +558,13 @@ class TestEdgeCases:
             def __init__(self):
                 self.flushed = False
                 self._buf = io.StringIO()
+
             def write(self, s):
                 self._buf.write(s)
+
             def flush(self):
                 self.flushed = True
+
         cap = FlushCapture()
         log = ShellLogger("slo.shell", stream=cap, colors=False)
         log.info("test")
@@ -570,8 +574,10 @@ class TestEdgeCases:
         class BadWrite:
             def write(self, _):
                 raise ValueError("bad")
+
             def flush(self):
                 pass
+
         log = ShellLogger("slo.shell", stream=BadWrite(), colors=False)
         log.info("won't raise")
 
@@ -579,8 +585,10 @@ class TestEdgeCases:
         class BadWrite:
             def write(self, _):
                 raise OSError("closed")
+
             def flush(self):
                 pass
+
         log = ShellLogger("slo.shell", stream=BadWrite(), colors=False)
         log.info("won't raise")
 
@@ -673,6 +681,7 @@ class TestEdgeCases:
     def test_format_record_timestamp_midnight(self):
         log = ShellLogger("slo.shell", colors=False)
         import datetime
+
         ts = datetime.datetime(2024, 1, 1, 0, 0, 0).timestamp()
         line = log._format_record(_record(timestamp=ts))
         assert "00:00:00" in line
@@ -680,6 +689,7 @@ class TestEdgeCases:
     def test_format_record_timestamp_end_of_day(self):
         log = ShellLogger("slo.shell", colors=False)
         import datetime
+
         ts = datetime.datetime(2024, 1, 1, 23, 59, 59).timestamp()
         line = log._format_record(_record(timestamp=ts))
         assert "23:59:59" in line

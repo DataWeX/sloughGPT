@@ -1,10 +1,11 @@
 """Tests for plugins router."""
 
+import sys
+from pathlib import Path
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import sys
-from pathlib import Path
 
 # Add API server to path
 api_server = Path(__file__).resolve().parent.parent.parent.parent / "apps" / "api" / "server"

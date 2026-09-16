@@ -12,11 +12,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
+
+from domain.shared import find_repo_root
+from domain.training._internal.executor import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async
@@ -56,7 +57,9 @@ async def start_lora_finetune(
     if not str(model_path.resolve()).startswith(str(repo_root.resolve())):
         raise_error("Invalid model path", "E_BAD_REQUEST", status_code=400)
     if model_path.suffix != ".slnc":
-        raise_error(f"Model must be .slnc format, got {model_path.suffix}", "E_BAD_REQUEST", status_code=400)
+        raise_error(
+            f"Model must be .slnc format, got {model_path.suffix}", "E_BAD_REQUEST", status_code=400
+        )
     # Validate dataset
     datasets_dir = repo_root / "datasets"
     data_dir = datasets_dir / request.dataset

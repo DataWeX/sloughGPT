@@ -2,33 +2,30 @@
 
 from __future__ import annotations
 
-import gzip
 import hashlib
 import io
 import os
 import struct
+
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock
 
 from domain.infrastructure._internal.compressed_transfer import (
-    MAGIC,
     HEADER_SIZE,
-    CHUNK_SIZE,
+    MAGIC,
     CompressionResult,
     DownloadResult,
-    compress_stream,
-    decompress_stream,
-    compress_file,
-    decompress_file,
     compress_bytes,
-    decompress_bytes,
+    compress_file,
+    compress_stream,
     compressed_file_iterator,
+    decompress_bytes,
+    decompress_file,
+    decompress_stream,
     peek_compressed_header,
 )
 
-
 # ── CompressionResult ─────────────────────────────────────────────────────────
+
 
 class TestCompressionResult:
     def test_ratio(self):
@@ -57,6 +54,7 @@ class TestCompressionResult:
 
 # ── DownloadResult ────────────────────────────────────────────────────────────
 
+
 class TestDownloadResult:
     def test_defaults(self):
         r = DownloadResult()
@@ -67,6 +65,7 @@ class TestDownloadResult:
 
 
 # ── compress_bytes / decompress_bytes ─────────────────────────────────────────
+
 
 class TestCompressDecompressBytes:
     def test_roundtrip(self):
@@ -106,6 +105,7 @@ class TestCompressDecompressBytes:
 
     def test_random_data_compresses_less(self):
         import random
+
         random.seed(42)
         data = bytes(random.getrandbits(8) for _ in range(10000))
         compressed, result = compress_bytes(data)
@@ -113,6 +113,7 @@ class TestCompressDecompressBytes:
 
 
 # ── compress_stream / decompress_stream ───────────────────────────────────────
+
 
 class TestCompressDecompressStream:
     def test_roundtrip_no_header(self):
@@ -177,14 +178,16 @@ class TestCompressDecompressStream:
 
     def test_no_header_no_seek(self):
         data = b"non-seekable test"
-        source = io.BytesIO(data)
+        io.BytesIO(data)
+
         # Wrap to remove seek
         class NonSeekable:
             def __init__(self, data):
                 self._data = data
                 self._pos = 0
+
             def read(self, n=-1):
-                chunk = self._data[self._pos:self._pos + n]
+                chunk = self._data[self._pos : self._pos + n]
                 self._pos += len(chunk)
                 return chunk
 
@@ -195,6 +198,7 @@ class TestCompressDecompressStream:
 
 
 # ── compress_file / decompress_file ───────────────────────────────────────────
+
 
 class TestCompressDecompressFile:
     def test_roundtrip(self, tmp_path):
@@ -235,6 +239,7 @@ class TestCompressDecompressFile:
 
 # ── peek_compressed_header ────────────────────────────────────────────────────
 
+
 class TestPeekCompressedHeader:
     def test_valid_header(self):
         data = b"peek test data"
@@ -257,7 +262,7 @@ class TestPeekCompressedHeader:
         assert info is None
 
     def test_invalid_magic(self):
-        source = io.BytesIO(b"bad magic")
+        io.BytesIO(b"bad magic")
         bad = io.BytesIO(b"XXXX" + b"\x00" * 40)
         info = peek_compressed_header(bad)
         assert info is None
@@ -272,6 +277,7 @@ class TestPeekCompressedHeader:
 
 
 # ── compressed_file_iterator ──────────────────────────────────────────────────
+
 
 class TestCompressedFileIterator:
     def test_iterate_compressed(self, tmp_path):
@@ -313,6 +319,7 @@ class TestCompressedFileIterator:
 
 # ── Edge cases ────────────────────────────────────────────────────────────────
 
+
 class TestEdgeCases:
     def test_corrupt_lz4_data(self):
         corrupt = io.BytesIO(b"SLZ4" + b"\x00" * 40 + b"NOT_VALID_LZ4")
@@ -344,6 +351,7 @@ class TestEdgeCases:
 
 
 # ── CompressedDownloader roundtrip (serve → download → verify) ────────────────
+
 
 class TestCompressedDownloaderRoundtrip:
     def test_known_size_compresses_smaller(self, tmp_path):

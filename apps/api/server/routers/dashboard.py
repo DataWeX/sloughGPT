@@ -150,6 +150,7 @@ def _get_health_summary() -> dict:
     """Fast health summary from existing sources."""
     try:
         import psutil
+
         from domain.infrastructure.server_state import get_server_state
 
         ss = get_server_state()
@@ -227,6 +228,7 @@ class DashboardRouter:
         services_total = 0
         try:
             from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
+
             tracker = TrainingOutcomeTracker()
             stats = tracker.get_stats()
             services_total += 1
@@ -237,20 +239,25 @@ class DashboardRouter:
 
         try:
             from domain.settings._internal.persistent import get_settings
+
             get_settings()
             services_total += 1
             services_ok += 1
         except Exception:
             services_total += 1
 
-        return success_response(data={
-            "health": health,
-            "active_processes": len(processes),
-            "processes": processes,
-            "services": {"total": services_total, "healthy": services_ok},
-        })
+        return success_response(
+            data={
+                "health": health,
+                "active_processes": len(processes),
+                "processes": processes,
+                "services": {"total": services_total, "healthy": services_ok},
+            }
+        )
 
-    async def dashboard_stream(self, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> StreamingResponse:
+    async def dashboard_stream(
+        self, request: Request, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> StreamingResponse:
         """SSE endpoint pushing dashboard snapshots every 2 seconds."""
 
         async def generate() -> AsyncGenerator[str, None]:
@@ -288,7 +295,9 @@ class DashboardRouter:
         )
 
     @endpoint("dashboard.events")
-    async def dashboard_events(self, n: int = 20, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def dashboard_events(
+        self, n: int = 20, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Return the last N dashboard events as JSON."""
         from domain.infrastructure.event_buffer import get_event_buffer
 

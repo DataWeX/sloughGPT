@@ -1,10 +1,9 @@
 """Tests for domain.training._internal.ewc — EWCParameters, TaskSnapshot; domain.training._internal.train_pipeline — TrainerConfig."""
 
 import numpy as np
-import pytest
+
 from domain.training._internal.ewc import EWCParameters, TaskSnapshot
 from domain.training._internal.train_pipeline import TrainerConfig
-
 
 # ── EWCParameters ────────────────────────────────────────────────────────
 
@@ -57,8 +56,12 @@ class TestEWCParameters:
 
     def test_all_fields_custom(self):
         ep = EWCParameters(
-            lambda_ewc=200.0, diagonal_approx=False, batch_size=64,
-            num_samples=500, clip_grad_norm=5.0, ema_decay=0.95,
+            lambda_ewc=200.0,
+            diagonal_approx=False,
+            batch_size=64,
+            num_samples=500,
+            clip_grad_norm=5.0,
+            ema_decay=0.95,
         )
         assert ep.lambda_ewc == 200.0
         assert ep.diagonal_approx is False
@@ -109,8 +112,12 @@ class TestTaskSnapshot:
     def test_parameters_dict(self):
         params = {"w1": np.array([1.0]), "w2": np.array([2.0, 3.0])}
         ts = TaskSnapshot(
-            task_id="t1", task_name="n", parameters=params,
-            fisher_diagonal={}, optimal_loss=0.0, num_samples=0,
+            task_id="t1",
+            task_name="n",
+            parameters=params,
+            fisher_diagonal={},
+            optimal_loss=0.0,
+            num_samples=0,
         )
         assert len(ts.parameters) == 2
         assert "w1" in ts.parameters
@@ -119,84 +126,132 @@ class TestTaskSnapshot:
     def test_fisher_diagonal_dict(self):
         fisher = {"w1": np.array([0.1, 0.2, 0.3])}
         ts = TaskSnapshot(
-            task_id="t1", task_name="n", parameters={},
-            fisher_diagonal=fisher, optimal_loss=0.0, num_samples=0,
+            task_id="t1",
+            task_name="n",
+            parameters={},
+            fisher_diagonal=fisher,
+            optimal_loss=0.0,
+            num_samples=0,
         )
         assert "w1" in ts.fisher_diagonal
         assert len(ts.fisher_diagonal["w1"]) == 3
 
     def test_empty_parameters(self):
         ts = TaskSnapshot(
-            task_id="t1", task_name="n", parameters={},
-            fisher_diagonal={}, optimal_loss=0.0, num_samples=0,
+            task_id="t1",
+            task_name="n",
+            parameters={},
+            fisher_diagonal={},
+            optimal_loss=0.0,
+            num_samples=0,
         )
         assert ts.parameters == {}
 
     def test_zero_optimal_loss(self):
         ts = TaskSnapshot(
-            task_id="t1", task_name="n", parameters={},
-            fisher_diagonal={}, optimal_loss=0.0, num_samples=0,
+            task_id="t1",
+            task_name="n",
+            parameters={},
+            fisher_diagonal={},
+            optimal_loss=0.0,
+            num_samples=0,
         )
         assert ts.optimal_loss == 0.0
 
     def test_negative_optimal_loss(self):
         ts = TaskSnapshot(
-            task_id="t1", task_name="n", parameters={},
-            fisher_diagonal={}, optimal_loss=-1.5, num_samples=0,
+            task_id="t1",
+            task_name="n",
+            parameters={},
+            fisher_diagonal={},
+            optimal_loss=-1.5,
+            num_samples=0,
         )
         assert ts.optimal_loss == -1.5
 
     def test_large_num_samples(self):
         ts = TaskSnapshot(
-            task_id="t1", task_name="n", parameters={},
-            fisher_diagonal={}, optimal_loss=0.0, num_samples=1000000,
+            task_id="t1",
+            task_name="n",
+            parameters={},
+            fisher_diagonal={},
+            optimal_loss=0.0,
+            num_samples=1000000,
         )
         assert ts.num_samples == 1000000
 
     def test_many_parameters(self):
         params = {f"w{i}": np.array([float(i)]) for i in range(50)}
         ts = TaskSnapshot(
-            task_id="t1", task_name="n", parameters=params,
-            fisher_diagonal={}, optimal_loss=0.0, num_samples=0,
+            task_id="t1",
+            task_name="n",
+            parameters=params,
+            fisher_diagonal={},
+            optimal_loss=0.0,
+            num_samples=0,
         )
         assert len(ts.parameters) == 50
 
     def test_numpy_array_values_preserved(self):
         arr = np.array([1.0, 2.0, 3.0])
         ts = TaskSnapshot(
-            task_id="t1", task_name="n", parameters={"w": arr},
-            fisher_diagonal={"w": arr * 0.1}, optimal_loss=0.0, num_samples=0,
+            task_id="t1",
+            task_name="n",
+            parameters={"w": arr},
+            fisher_diagonal={"w": arr * 0.1},
+            optimal_loss=0.0,
+            num_samples=0,
         )
         np.testing.assert_array_equal(ts.parameters["w"], arr)
         np.testing.assert_array_almost_equal(ts.fisher_diagonal["w"], arr * 0.1)
 
     def test_repr(self):
         ts = TaskSnapshot(
-            task_id="t1", task_name="n", parameters={},
-            fisher_diagonal={}, optimal_loss=0.0, num_samples=0,
+            task_id="t1",
+            task_name="n",
+            parameters={},
+            fisher_diagonal={},
+            optimal_loss=0.0,
+            num_samples=0,
         )
         r = repr(ts)
         assert "TaskSnapshot" in r
 
     def test_equality(self):
         ts1 = TaskSnapshot(
-            task_id="t1", task_name="n", parameters={"w": np.array([1.0])},
-            fisher_diagonal={}, optimal_loss=0.5, num_samples=10,
+            task_id="t1",
+            task_name="n",
+            parameters={"w": np.array([1.0])},
+            fisher_diagonal={},
+            optimal_loss=0.5,
+            num_samples=10,
         )
         ts2 = TaskSnapshot(
-            task_id="t1", task_name="n", parameters={"w": np.array([1.0])},
-            fisher_diagonal={}, optimal_loss=0.5, num_samples=10,
+            task_id="t1",
+            task_name="n",
+            parameters={"w": np.array([1.0])},
+            fisher_diagonal={},
+            optimal_loss=0.5,
+            num_samples=10,
         )
         assert ts1 == ts2
 
     def test_inequality_different_id(self):
         ts1 = TaskSnapshot(
-            task_id="t1", task_name="n", parameters={},
-            fisher_diagonal={}, optimal_loss=0.0, num_samples=0,
+            task_id="t1",
+            task_name="n",
+            parameters={},
+            fisher_diagonal={},
+            optimal_loss=0.0,
+            num_samples=0,
         )
         ts2 = TaskSnapshot(
-            task_id="t2", task_name="n", parameters={},
-            fisher_diagonal={}, optimal_loss=0.0, num_samples=0,
+            task_id="t2",
+            task_name="n",
+            parameters={},
+            fisher_diagonal={},
+            optimal_loss=0.0,
+            num_samples=0,
         )
         assert ts1 != ts2
 
@@ -310,15 +365,33 @@ class TestTrainerConfig:
 
     def test_all_fields_custom(self):
         tc = TrainerConfig(
-            vocab_size=1000, n_embed=128, n_layer=6, n_head=8,
-            block_size=128, dropout=0.2, batch_size=64, epochs=50,
-            learning_rate=5e-4, weight_decay=0.1, max_grad_norm=2.0,
-            scheduler_type="linear", warmup_steps=200, min_lr=1e-6,
-            checkpoint_dir="custom/checkpoints", checkpoint_interval=100,
-            save_best_only=True, max_checkpoints=3, use_lora=True,
-            lora_rank=16, lora_alpha=32, log_interval=5, eval_interval=50,
-            early_stopping_patience=5, gradient_accumulation_steps=4,
-            max_steps=1000, device="cpu",
+            vocab_size=1000,
+            n_embed=128,
+            n_layer=6,
+            n_head=8,
+            block_size=128,
+            dropout=0.2,
+            batch_size=64,
+            epochs=50,
+            learning_rate=5e-4,
+            weight_decay=0.1,
+            max_grad_norm=2.0,
+            scheduler_type="linear",
+            warmup_steps=200,
+            min_lr=1e-6,
+            checkpoint_dir="custom/checkpoints",
+            checkpoint_interval=100,
+            save_best_only=True,
+            max_checkpoints=3,
+            use_lora=True,
+            lora_rank=16,
+            lora_alpha=32,
+            log_interval=5,
+            eval_interval=50,
+            early_stopping_patience=5,
+            gradient_accumulation_steps=4,
+            max_steps=1000,
+            device="cpu",
         )
         assert tc.vocab_size == 1000
         assert tc.n_embed == 128

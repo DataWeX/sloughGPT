@@ -14,8 +14,8 @@ Available ops:
 
 from __future__ import annotations
 
-from .matmul import matmul
 from .layernorm import layernorm
+from .matmul import matmul
 from .rmsnorm import rmsnorm
 
 __all__ = ["matmul", "layernorm", "rmsnorm"]

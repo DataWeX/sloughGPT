@@ -1,22 +1,39 @@
 """Tests for domain.cognitive.reasoning.__init__ — ReasoningEngine."""
 
 import asyncio
+
 import pytest
+
 from domain.cognitive._internal.reasoning import (
-    ReasoningEngine, ReasoningMode, WorkingMemory,
-    ChainOfThought, TreeOfThoughts, SelfConsistency,
-    ConstitutionalAI, CausalReasoning, SyllogismReasoning,
-    ReActReasoning, ReasoningResult, ThoughtStep,
-    DeepReasoning, DeepReasoningContext, RetrievedKnowledge, RetrievalSource,
-    FormalLogicEngine, LogicalOperator, Term, Predicate,
-    WellFormedFormula, Substitution,
+    CausalReasoning,
+    ChainOfThought,
+    ConstitutionalAI,
+    DeepReasoning,
+    DeepReasoningContext,
+    FormalLogicEngine,
+    LogicalOperator,
+    Predicate,
+    ReActReasoning,
+    ReasoningEngine,
+    ReasoningMode,
+    ReasoningResult,
+    RetrievalSource,
+    RetrievedKnowledge,
+    SelfConsistency,
+    Substitution,
+    SyllogismReasoning,
+    Term,
+    ThoughtStep,
+    TreeOfThoughts,
+    WellFormedFormula,
+    WorkingMemory,
     advanced_reasoning,
 )
-
 
 # ---------------------------------------------------------------------------
 # ReasoningEngine
 # ---------------------------------------------------------------------------
+
 
 class TestReasoningEngine:
     def test_init(self):
@@ -80,11 +97,13 @@ class TestReasoningEngine:
 
     def test_logical_proof(self):
         engine = ReasoningEngine()
-        result = asyncio.run(engine.logical_proof(
-            ("All", "are", "mortal"),
-            ("Some", "are", "human"),
-            ("Some", "are", "mortal"),
-        ))
+        result = asyncio.run(
+            engine.logical_proof(
+                ("All", "are", "mortal"),
+                ("Some", "are", "human"),
+                ("Some", "are", "mortal"),
+            )
+        )
         assert "valid" in result
 
     def test_assert_and_query_chain(self):
@@ -116,6 +135,7 @@ class TestReasoningEngine:
 # ---------------------------------------------------------------------------
 # WorkingMemory
 # ---------------------------------------------------------------------------
+
 
 class TestWorkingMemory:
     def test_init(self):
@@ -242,6 +262,7 @@ class TestWorkingMemory:
 # ThoughtStep
 # ---------------------------------------------------------------------------
 
+
 class TestThoughtStep:
     def test_defaults(self):
         step = ThoughtStep(step_id=0, thought="test", reasoning_type="decomp", confidence=0.8)
@@ -252,9 +273,14 @@ class TestThoughtStep:
 
     def test_custom_fields(self):
         step = ThoughtStep(
-            step_id=1, thought="analysis", reasoning_type="analysis",
-            confidence=0.9, parent_id=0, children_ids=[2, 3],
-            value=0.7, is_final=True,
+            step_id=1,
+            thought="analysis",
+            reasoning_type="analysis",
+            confidence=0.9,
+            parent_id=0,
+            children_ids=[2, 3],
+            value=0.7,
+            is_final=True,
         )
         assert step.parent_id == 0
         assert step.children_ids == [2, 3]
@@ -275,7 +301,9 @@ class TestThoughtStep:
         assert step2.confidence == 1.0
 
     def test_children_ids_custom(self):
-        step = ThoughtStep(step_id=5, thought="x", reasoning_type="branch", confidence=0.6, children_ids=[6, 7, 8])
+        step = ThoughtStep(
+            step_id=5, thought="x", reasoning_type="branch", confidence=0.6, children_ids=[6, 7, 8]
+        )
         assert step.children_ids == [6, 7, 8]
 
     def test_value_default(self):
@@ -283,7 +311,9 @@ class TestThoughtStep:
         assert step.value == 0.0
 
     def test_value_custom(self):
-        step = ThoughtStep(step_id=0, thought="a", reasoning_type="root", confidence=1.0, value=0.95)
+        step = ThoughtStep(
+            step_id=0, thought="a", reasoning_type="root", confidence=1.0, value=0.95
+        )
         assert step.value == 0.95
 
 
@@ -291,54 +321,73 @@ class TestThoughtStep:
 # ReasoningResult
 # ---------------------------------------------------------------------------
 
+
 class TestReasoningResult:
     def test_construction(self):
         result = ReasoningResult(
-            conclusion="42", confidence=0.95,
+            conclusion="42",
+            confidence=0.95,
             mode=ReasoningMode.CHAIN_OF_THOUGHT,
-            steps=[], metadata={}, execution_time_ms=1.0,
+            steps=[],
+            metadata={},
+            execution_time_ms=1.0,
         )
         assert result.conclusion == "42"
         assert result.confidence == 0.95
 
     def test_metadata_dict(self):
         result = ReasoningResult(
-            conclusion="x", confidence=0.5,
+            conclusion="x",
+            confidence=0.5,
             mode=ReasoningMode.CAUSAL,
-            steps=[], metadata={"key": "value"}, execution_time_ms=0.1,
+            steps=[],
+            metadata={"key": "value"},
+            execution_time_ms=0.1,
         )
         assert result.metadata["key"] == "value"
 
     def test_mode_stored(self):
         result = ReasoningResult(
-            conclusion="c", confidence=0.5,
+            conclusion="c",
+            confidence=0.5,
             mode=ReasoningMode.REACT,
-            steps=[], metadata={}, execution_time_ms=0.0,
+            steps=[],
+            metadata={},
+            execution_time_ms=0.0,
         )
         assert result.mode == ReasoningMode.REACT
 
     def test_steps_stored(self):
         steps = [ThoughtStep(0, "a", "root", 1.0)]
         result = ReasoningResult(
-            conclusion="c", confidence=0.5,
+            conclusion="c",
+            confidence=0.5,
             mode=ReasoningMode.CHAIN_OF_THOUGHT,
-            steps=steps, metadata={}, execution_time_ms=0.0,
+            steps=steps,
+            metadata={},
+            execution_time_ms=0.0,
         )
         assert len(result.steps) == 1
 
     def test_execution_time_ms(self):
         result = ReasoningResult(
-            conclusion="c", confidence=0.5,
+            conclusion="c",
+            confidence=0.5,
             mode=ReasoningMode.CHAIN_OF_THOUGHT,
-            steps=[], metadata={}, execution_time_ms=123.45,
+            steps=[],
+            metadata={},
+            execution_time_ms=123.45,
         )
         assert result.execution_time_ms == 123.45
 
     def test_empty_metadata(self):
         result = ReasoningResult(
-            conclusion="c", confidence=0.5,
+            conclusion="c",
+            confidence=0.5,
             mode=ReasoningMode.CHAIN_OF_THOUGHT,
-            steps=[], metadata={}, execution_time_ms=0.0,
+            steps=[],
+            metadata={},
+            execution_time_ms=0.0,
         )
         assert result.metadata == {}
 
@@ -349,9 +398,12 @@ class TestReasoningResult:
             ThoughtStep(2, "c", "synthesis", 0.95),
         ]
         result = ReasoningResult(
-            conclusion="c", confidence=0.9,
+            conclusion="c",
+            confidence=0.9,
             mode=ReasoningMode.CHAIN_OF_THOUGHT,
-            steps=steps, metadata={}, execution_time_ms=50.0,
+            steps=steps,
+            metadata={},
+            execution_time_ms=50.0,
         )
         assert len(result.steps) == 3
 
@@ -359,6 +411,7 @@ class TestReasoningResult:
 # ---------------------------------------------------------------------------
 # ChainOfThought
 # ---------------------------------------------------------------------------
+
 
 class TestChainOfThought:
     def test_basic_reason(self):
@@ -370,6 +423,7 @@ class TestChainOfThought:
     def test_custom_llm(self):
         async def my_llm(prompt):
             return "therefore the answer is 42"
+
         cot = ChainOfThought(llm_call=my_llm)
         result = asyncio.run(cot.reason("Problem"))
         assert "42" in result.conclusion
@@ -417,6 +471,7 @@ class TestChainOfThought:
     def test_max_steps_limit(self):
         async def slow_llm(prompt):
             return "thinking step"
+
         cot = ChainOfThought(llm_call=slow_llm)
         result = asyncio.run(cot.reason("Problem", max_steps=2))
         assert len(result.steps) <= 2
@@ -424,6 +479,7 @@ class TestChainOfThought:
     def test_confidence_threshold_early_stop(self):
         async def confident_llm(prompt):
             return "therefore the solution is found"
+
         cot = ChainOfThought(llm_call=confident_llm)
         result = asyncio.run(cot.reason("Problem", confidence_threshold=0.5))
         assert result.steps[-1].is_final is True
@@ -471,6 +527,7 @@ class TestChainOfThought:
     def test_result_metadata_solved(self):
         async def confident_llm(prompt):
             return "therefore the solution is found"
+
         cot = ChainOfThought(llm_call=confident_llm)
         result = asyncio.run(cot.reason("Problem", confidence_threshold=0.5))
         assert result.metadata["solved"] is True
@@ -479,6 +536,7 @@ class TestChainOfThought:
 # ---------------------------------------------------------------------------
 # TreeOfThoughts
 # ---------------------------------------------------------------------------
+
 
 class TestTreeOfThoughts:
     def test_basic_reason(self):
@@ -531,7 +589,7 @@ class TestTreeOfThoughts:
 
     def test_nodes_created(self):
         tot = TreeOfThoughts(beam_width=2)
-        result = asyncio.run(tot.reason("Problem", max_depth=2))
+        asyncio.run(tot.reason("Problem", max_depth=2))
         assert len(tot.nodes) > 1
 
     def test_is_solution_solution_keyword(self):
@@ -589,6 +647,7 @@ class TestTreeOfThoughts:
 # SelfConsistency
 # ---------------------------------------------------------------------------
 
+
 class TestSelfConsistency:
     def test_basic_reason(self):
         sc = SelfConsistency(num_paths=3)
@@ -627,7 +686,9 @@ class TestSelfConsistency:
 
     def test_extract_conclusion_no_answer_keyword(self):
         sc = SelfConsistency()
-        conc = sc._extract_conclusion("this is a long reasoning text that goes beyond one hundred characters to test the fallback path properly")
+        conc = sc._extract_conclusion(
+            "this is a long reasoning text that goes beyond one hundred characters to test the fallback path properly"
+        )
         assert isinstance(conc, str)
 
     def test_metadata_num_paths(self):
@@ -644,6 +705,7 @@ class TestSelfConsistency:
 # ---------------------------------------------------------------------------
 # ConstitutionalAI
 # ---------------------------------------------------------------------------
+
 
 class TestConstitutionalAI:
     def test_basic_reason(self):
@@ -691,6 +753,7 @@ class TestConstitutionalAI:
 # ---------------------------------------------------------------------------
 # CausalReasoning
 # ---------------------------------------------------------------------------
+
 
 class TestCausalReasoning:
     def test_basic_reason(self):
@@ -758,7 +821,9 @@ class TestCausalReasoning:
 
     def test_build_causal_conclusion_multiple(self):
         cr = CausalReasoning()
-        conc = cr._build_causal_conclusion(["A", "B"], ["C", "D"], [("A", "C", 0.8), ("B", "D", 0.9)])
+        conc = cr._build_causal_conclusion(
+            ["A", "B"], ["C", "D"], [("A", "C", 0.8), ("B", "D", 0.9)]
+        )
         assert "A" in conc
         assert "C" in conc
 
@@ -777,6 +842,7 @@ class TestCausalReasoning:
 # SyllogismReasoning
 # ---------------------------------------------------------------------------
 
+
 class TestSyllogismReasoning:
     def test_basic_reason(self):
         sr = SyllogismReasoning()
@@ -786,7 +852,9 @@ class TestSyllogismReasoning:
 
     def test_parse_premises(self):
         sr = SyllogismReasoning()
-        premises = sr._parse_premises("All A are B are long enough text. Some C are D are also long. No E is F has length.")
+        premises = sr._parse_premises(
+            "All A are B are long enough text. Some C are D are also long. No E is F has length."
+        )
         assert len(premises) >= 2
 
     def test_identify_figure(self):
@@ -876,6 +944,7 @@ class TestSyllogismReasoning:
 # ReActReasoning
 # ---------------------------------------------------------------------------
 
+
 class TestReActReasoning:
     def test_basic_reason(self):
         rr = ReActReasoning()
@@ -943,6 +1012,7 @@ class TestReActReasoning:
 # advanced_reasoning factory
 # ---------------------------------------------------------------------------
 
+
 class TestAdvancedReasoning:
     @pytest.mark.asyncio
     async def test_cot_mode(self):
@@ -988,7 +1058,10 @@ class TestAdvancedReasoning:
     async def test_custom_llm(self):
         async def my_llm(prompt):
             return "therefore answer is 42"
-        result = await advanced_reasoning("Problem", ReasoningMode.CHAIN_OF_THOUGHT, llm_call=my_llm)
+
+        result = await advanced_reasoning(
+            "Problem", ReasoningMode.CHAIN_OF_THOUGHT, llm_call=my_llm
+        )
         assert "42" in result.conclusion
 
     @pytest.mark.asyncio
@@ -1005,6 +1078,7 @@ class TestAdvancedReasoning:
 # ---------------------------------------------------------------------------
 # FormalLogicEngine — Term, Predicate, WellFormedFormula
 # ---------------------------------------------------------------------------
+
 
 class TestTerm:
     def test_basic_term(self):
@@ -1086,7 +1160,9 @@ class TestWellFormedFormula:
 
     def test_not_formula(self):
         pred = Predicate(name="human", terms=[Term("socrates")])
-        wff = WellFormedFormula(operator=LogicalOperator.NOT, left=WellFormedFormula(predicate=pred))
+        wff = WellFormedFormula(
+            operator=LogicalOperator.NOT, left=WellFormedFormula(predicate=pred)
+        )
         assert wff.operator == LogicalOperator.NOT
 
     def test_formula_defaults(self):
@@ -1118,9 +1194,15 @@ class TestSubstitution:
 
 class TestLogicalOperator:
     def test_all_operators(self):
-        ops = [LogicalOperator.AND, LogicalOperator.OR, LogicalOperator.NOT,
-               LogicalOperator.IMPLIES, LogicalOperator.IFF,
-               LogicalOperator.FORALL, LogicalOperator.EXISTS]
+        ops = [
+            LogicalOperator.AND,
+            LogicalOperator.OR,
+            LogicalOperator.NOT,
+            LogicalOperator.IMPLIES,
+            LogicalOperator.IFF,
+            LogicalOperator.FORALL,
+            LogicalOperator.EXISTS,
+        ]
         assert len(ops) == 7
 
     def test_operator_values(self):
@@ -1137,6 +1219,7 @@ class TestLogicalOperator:
 # FormalLogicEngine
 # ---------------------------------------------------------------------------
 
+
 class TestFormalLogicEngine:
     def test_init(self):
         engine = FormalLogicEngine()
@@ -1144,9 +1227,7 @@ class TestFormalLogicEngine:
 
     def test_assert_fact(self):
         engine = FormalLogicEngine()
-        wff = WellFormedFormula(
-            predicate=Predicate(name="human", terms=[Term("socrates")])
-        )
+        wff = WellFormedFormula(predicate=Predicate(name="human", terms=[Term("socrates")]))
         engine.assert_fact(wff)
         assert len(engine.knowledge_base) == 1
 
@@ -1168,8 +1249,12 @@ class TestFormalLogicEngine:
 
     def test_modus_ponens(self):
         engine = FormalLogicEngine()
-        human_x = WellFormedFormula(predicate=Predicate(name="human", terms=[Term("x", is_variable=True)]))
-        mortal_x = WellFormedFormula(predicate=Predicate(name="mortal", terms=[Term("x", is_variable=True)]))
+        human_x = WellFormedFormula(
+            predicate=Predicate(name="human", terms=[Term("x", is_variable=True)])
+        )
+        mortal_x = WellFormedFormula(
+            predicate=Predicate(name="mortal", terms=[Term("x", is_variable=True)])
+        )
         implication = WellFormedFormula(
             operator=LogicalOperator.IMPLIES,
             left=human_x,
@@ -1282,7 +1367,9 @@ class TestFormalLogicEngine:
 
     def test_inference_history(self):
         engine = FormalLogicEngine()
-        engine.prove_syllogism(("All", "are", "mortal"), ("Some", "are", "human"), ("Some", "are", "mortal"))
+        engine.prove_syllogism(
+            ("All", "are", "mortal"), ("Some", "are", "human"), ("Some", "are", "mortal")
+        )
         assert len(engine.inference_history) == 1
 
     def test_multiple_assertions(self):
@@ -1321,8 +1408,12 @@ class TestFormalLogicEngine:
 
     def test_prove_syllogism_records_history(self):
         engine = FormalLogicEngine()
-        engine.prove_syllogism(("All", "are", "mortal"), ("Some", "are", "human"), ("Some", "are", "mortal"))
-        engine.prove_syllogism(("No", "are", "mortal"), ("Some", "are", "human"), ("Some", "are", "mortal"))
+        engine.prove_syllogism(
+            ("All", "are", "mortal"), ("Some", "are", "human"), ("Some", "are", "mortal")
+        )
+        engine.prove_syllogism(
+            ("No", "are", "mortal"), ("Some", "are", "human"), ("Some", "are", "mortal")
+        )
         assert len(engine.inference_history) == 2
 
     def test_format_categorical(self):
@@ -1355,7 +1446,9 @@ class TestFormalLogicEngine:
         engine = FormalLogicEngine()
         var = Term("X", is_variable=True)
         inner = Term("Y", is_variable=True)
-        term = Term("f", is_function=True, arguments=[Term("g", is_function=True, arguments=[inner])])
+        term = Term(
+            "f", is_function=True, arguments=[Term("g", is_function=True, arguments=[inner])]
+        )
         assert engine._occurs_check(var, term, Substitution()) is False
 
     def test_unify_different_arity(self):
@@ -1369,6 +1462,7 @@ class TestFormalLogicEngine:
 # ---------------------------------------------------------------------------
 # DeepReasoning
 # ---------------------------------------------------------------------------
+
 
 class TestDeepReasoning:
     def test_basic_reason(self):
@@ -1404,7 +1498,9 @@ class TestDeepReasoning:
 
     def test_build_context_with_knowledge(self):
         dr = DeepReasoning()
-        know = RetrievedKnowledge(content="info", source=RetrievalSource.WORKING_MEMORY, relevance=0.8)
+        know = RetrievedKnowledge(
+            content="info", source=RetrievalSource.WORKING_MEMORY, relevance=0.8
+        )
         ctx = DeepReasoningContext(query="test")
         context = asyncio.run(dr._build_context("Problem", [know], ctx))
         assert "info" in context
@@ -1447,7 +1543,9 @@ class TestDeepReasoning:
 
     def test_build_context_with_knowledge_and_constraints(self):
         dr = DeepReasoning()
-        know = RetrievedKnowledge(content="fact1", source=RetrievalSource.WORKING_MEMORY, relevance=0.9)
+        know = RetrievedKnowledge(
+            content="fact1", source=RetrievalSource.WORKING_MEMORY, relevance=0.9
+        )
         ctx = DeepReasoningContext(query="test", constraints=["limit"])
         context = asyncio.run(dr._build_context("Problem", [know], ctx))
         assert "fact1" in context
@@ -1469,11 +1567,14 @@ class TestDeepReasoning:
 # RetrievedKnowledge
 # ---------------------------------------------------------------------------
 
+
 class TestRetrievedKnowledge:
     def test_construction(self):
         rk = RetrievedKnowledge(
-            content="fact", source=RetrievalSource.VECTOR_STORE,
-            relevance=0.9, source_id="doc1",
+            content="fact",
+            source=RetrievalSource.VECTOR_STORE,
+            relevance=0.9,
+            source_id="doc1",
         )
         assert rk.content == "fact"
         assert rk.source == RetrievalSource.VECTOR_STORE
@@ -1500,6 +1601,7 @@ class TestRetrievedKnowledge:
 # DeepReasoningContext
 # ---------------------------------------------------------------------------
 
+
 class TestDeepReasoningContext:
     def test_defaults(self):
         ctx = DeepReasoningContext(query="test")
@@ -1510,7 +1612,9 @@ class TestDeepReasoningContext:
 
     def test_with_lists(self):
         ctx = DeepReasoningContext(
-            query="q", constraints=["c1"], assumptions=["a1"],
+            query="q",
+            constraints=["c1"],
+            assumptions=["a1"],
             working_memory=["w1"],
         )
         assert len(ctx.constraints) == 1

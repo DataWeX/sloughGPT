@@ -3,6 +3,7 @@
 Covers: softmax, rmsnorm, layer_norm, gelu, silu, rope, to_float32.
 Edge cases, boundary values, different dtypes, axis handling.
 """
+
 from __future__ import annotations
 
 import sys
@@ -16,17 +17,17 @@ if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
 from domain.infrastructure._internal.numpy_ops import (
-    to_float32,
-    softmax,
-    rmsnorm,
-    layer_norm,
     gelu,
-    silu,
+    layer_norm,
+    rmsnorm,
     rope,
+    silu,
+    softmax,
+    to_float32,
 )
 
-
 # ── to_float32 ───────────────────────────────────────────────────────────────
+
 
 class TestToFloat32:
     def test_already_float32(self):
@@ -97,6 +98,7 @@ class TestToFloat32:
 
 # ── softmax ──────────────────────────────────────────────────────────────────
 
+
 class TestSoftmax:
     def test_basic(self):
         x = np.array([1.0, 2.0, 3.0])
@@ -127,7 +129,7 @@ class TestSoftmax:
     def test_equal_values(self):
         x = np.array([1.0, 1.0, 1.0])
         result = softmax(x)
-        np.testing.assert_allclose(result, [1/3, 1/3, 1/3], rtol=1e-5)
+        np.testing.assert_allclose(result, [1 / 3, 1 / 3, 1 / 3], rtol=1e-5)
 
     def test_large_negative_values(self):
         x = np.array([-1000.0, -1001.0, -1002.0])
@@ -137,7 +139,7 @@ class TestSoftmax:
     def test_zero_values(self):
         x = np.array([0.0, 0.0, 0.0])
         result = softmax(x)
-        np.testing.assert_allclose(result, [1/3, 1/3, 1/3], rtol=1e-5)
+        np.testing.assert_allclose(result, [1 / 3, 1 / 3, 1 / 3], rtol=1e-5)
 
     def test_all_positive(self):
         x = np.array([1.0, 2.0, 3.0])
@@ -167,19 +169,20 @@ class TestSoftmax:
 
 # ── rmsnorm ──────────────────────────────────────────────────────────────────
 
+
 class TestRmsnorm:
     def test_basic(self):
         x = np.array([1.0, 2.0, 3.0])
         w = np.ones(3)
         result = rmsnorm(x, w)
         assert result.shape == x.shape
-        assert np.abs(np.sqrt(np.mean(result ** 2)) - 1.0) < 0.1
+        assert np.abs(np.sqrt(np.mean(result**2)) - 1.0) < 0.1
 
     def test_weighted(self):
         x = np.array([1.0, 2.0, 3.0])
         w = np.array([2.0, 2.0, 2.0])
         result = rmsnorm(x, w)
-        assert np.sqrt(np.mean(result ** 2)) > 1.0
+        assert np.sqrt(np.mean(result**2)) > 1.0
 
     def test_zero_weights(self):
         x = np.array([1.0, 2.0, 3.0])
@@ -197,13 +200,13 @@ class TestRmsnorm:
         x = np.array([1000.0, 2000.0, 3000.0])
         w = np.ones(3)
         result = rmsnorm(x, w)
-        assert np.abs(np.sqrt(np.mean(result ** 2)) - 1.0) < 0.1
+        assert np.abs(np.sqrt(np.mean(result**2)) - 1.0) < 0.1
 
     def test_small_values(self):
         x = np.array([0.001, 0.002, 0.003])
         w = np.ones(3)
         result = rmsnorm(x, w)
-        assert np.abs(np.sqrt(np.mean(result ** 2)) - 1.0) < 0.1
+        assert np.abs(np.sqrt(np.mean(result**2)) - 1.0) < 0.1
 
     def test_custom_eps(self):
         x = np.array([1.0, 2.0, 3.0])
@@ -219,6 +222,7 @@ class TestRmsnorm:
 
 
 # ── layer_norm ───────────────────────────────────────────────────────────────
+
 
 class TestLayerNorm:
     def test_basic(self):
@@ -287,6 +291,7 @@ class TestLayerNorm:
 
 # ── gelu ─────────────────────────────────────────────────────────────────────
 
+
 class TestGelu:
     def test_basic(self):
         x = np.array([-1.0, 0.0, 1.0])
@@ -340,6 +345,7 @@ class TestGelu:
 
 # ── silu ─────────────────────────────────────────────────────────────────────
 
+
 class TestSilu:
     def test_basic(self):
         x = np.array([-1.0, 0.0, 1.0])
@@ -389,6 +395,7 @@ class TestSilu:
 
 
 # ── rope ─────────────────────────────────────────────────────────────────────
+
 
 class TestRope:
     def test_basic(self):
@@ -444,9 +451,7 @@ class TestRope:
         x = np.ones((1, 1, 4))
         result = rope(x, pos=0, dim=4)
         # Rotation should preserve magnitude
-        np.testing.assert_allclose(
-            np.linalg.norm(result), np.linalg.norm(x), rtol=1e-5
-        )
+        np.testing.assert_allclose(np.linalg.norm(result), np.linalg.norm(x), rtol=1e-5)
 
     def test_2d_input_no_head(self):
         x = np.ones((3, 4))  # (seq, head_dim) — no heads dim
@@ -462,6 +467,7 @@ class TestRope:
 
 
 # ── to_float32 additional edge cases ────────────────────────────────────────
+
 
 class TestToFloat32Extended:
     def test_bfloat16(self):
@@ -512,6 +518,7 @@ class TestToFloat32Extended:
 
 # ── softmax extended ────────────────────────────────────────────────────────
 
+
 class TestSoftmaxExtended:
     def test_1d_array(self):
         x = np.array([1.0, 2.0, 3.0, 4.0])
@@ -547,6 +554,7 @@ class TestSoftmaxExtended:
 
 # ── rmsnorm extended ────────────────────────────────────────────────────────
 
+
 class TestRmsnormExtended:
     def test_uniform_output(self):
         x = np.array([1.0, 1.0, 1.0])
@@ -572,7 +580,7 @@ class TestRmsnormExtended:
         x = np.array([-1.0, -2.0, -3.0])
         w = np.ones(3)
         result = rmsnorm(x, w)
-        assert np.abs(np.sqrt(np.mean(result ** 2)) - 1.0) < 0.1
+        assert np.abs(np.sqrt(np.mean(result**2)) - 1.0) < 0.1
 
     def test_1d_output(self):
         x = np.array([1.0, 2.0, 3.0, 4.0])
@@ -588,6 +596,7 @@ class TestRmsnormExtended:
 
 
 # ── layer_norm extended ─────────────────────────────────────────────────────
+
 
 class TestLayerNormExtended:
     def test_mean_zero(self):
@@ -636,6 +645,7 @@ class TestLayerNormExtended:
 
 # ── gelu extended ───────────────────────────────────────────────────────────
 
+
 class TestGeluExtended:
     def test_monotonic_positive(self):
         x = np.array([0.0, 0.5, 1.0, 2.0, 5.0])
@@ -678,6 +688,7 @@ class TestGeluExtended:
 
 
 # ── silu extended ───────────────────────────────────────────────────────────
+
 
 class TestSiluExtended:
     def test_at_zero(self):
@@ -724,6 +735,7 @@ class TestSiluExtended:
 
 
 # ── rope extended ───────────────────────────────────────────────────────────
+
 
 class TestRopeExtended:
     def test_pos_100(self):

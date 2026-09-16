@@ -2,7 +2,6 @@
 
 from domain.infrastructure._internal.serving_profiles import (
     ProfileTier,
-    ServingProfile,
     apply_profile,
     detect_recommended_profile,
     get_active_profile_id,
@@ -24,8 +23,16 @@ class TestServingProfile:
         assert p is not None
         d = p.to_dict()
         required = [
-            "id", "name", "description", "tier", "device", "quantize",
-            "quant_bits", "inference_pool_size", "enable_guard", "tags",
+            "id",
+            "name",
+            "description",
+            "tier",
+            "device",
+            "quantize",
+            "quant_bits",
+            "inference_pool_size",
+            "enable_guard",
+            "tags",
         ]
         for key in required:
             assert key in d, f"missing key: {key}"
@@ -85,6 +92,7 @@ class TestApplyProfile:
 
     def test_apply_unknown_raises(self):
         import pytest
+
         with pytest.raises(ValueError, match="Unknown profile"):
             apply_profile("nonexistent")
 

@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 
 from domain.infrastructure._internal.auto_ingest import (
+    DEFAULT_IGNORE_DIRS,
     AutoIngester,
     CodeChunker,
     FileChunk,
     RepoScanner,
-    DEFAULT_IGNORE_DIRS,
     main,
 )
 
@@ -63,7 +63,10 @@ class TestRepoScanner:
             ignore_exts={".zzz"},
             ignore_files={"custom.txt"},
         )
-        assert DEFAULT_IGNORE_DIRS.isdisjoint(scanner.ignore_dirs) or "custom_ignore" in scanner.ignore_dirs
+        assert (
+            DEFAULT_IGNORE_DIRS.isdisjoint(scanner.ignore_dirs)
+            or "custom_ignore" in scanner.ignore_dirs
+        )
         f = tmp_path / "keep.py"
         f.write_text("x")
         assert scanner.should_ignore(f) is False
@@ -105,7 +108,6 @@ class TestRepoScanner:
     def test_unreadable_file_falls_back(self, tmp_path, monkeypatch):
         target = tmp_path / "weird.txt"
         target.write_bytes(b"\xff\xfe\x00")
-        from pathlib import Path
         original = Path.read_text
 
         def fake_read_text(self, *args, **kwargs):
@@ -120,7 +122,6 @@ class TestRepoScanner:
         assert results[0][1] == "[Binary or unreadable file]"
 
     def test_iter_files_skips_stat_errors(self, tmp_path, monkeypatch):
-        from pathlib import Path
         target = tmp_path / "locked.txt"
         target.write_text("x")
         original_stat = Path.stat
@@ -322,6 +323,7 @@ class TestAutoIngester:
 
         async def fake_get_store():
             from domain.inference._internal.vector_store import create_vector_store
+
             if shared.get("store") is None:
                 shared["store"] = await create_vector_store(provider="in_memory", dimension=384)
             return shared["store"]
@@ -338,29 +340,45 @@ class TestAutoIngester:
         assert results[0]["file"] == "doc.txt"
 
     def test_main_dry_run(self, tmp_path, monkeypatch, caplog):
-        monkeypatch.setattr(sys, "argv",
-                            ["auto_ingest", "--path", str(tmp_path), "--dry-run"])
+        monkeypatch.setattr(sys, "argv", ["auto_ingest", "--path", str(tmp_path), "--dry-run"])
         with caplog.at_level("INFO"):
             asyncio.run(main())
         assert "Done" in caplog.text
 
     def test_main_file(self, tmp_path, monkeypatch, caplog):
         (tmp_path / "one.py").write_text("def f():\n    return 1\n")
-        monkeypatch.setattr(sys, "argv",
-                            ["auto_ingest", "--path", str(tmp_path), "--file", str(tmp_path / "one.py")])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["auto_ingest", "--path", str(tmp_path), "--file", str(tmp_path / "one.py")],
+        )
         with caplog.at_level("INFO"):
             asyncio.run(main())
         assert "Ingested" in caplog.text
 
     def test_module_main_block(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr(sys, "argv", ["auto_ingest", "--path", str(tmp_path), "--dry-run"])
-        module_path = os.path.abspath(os.path.normpath(
-            os.path.join(os.path.dirname(__file__), "..", "domains",
-                         "infrastructure", "auto_ingest.py")))
+        module_path = os.path.abspath(
+            os.path.normpath(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "..",
+                    "..",
+                    "..",
+                    "domain",
+                    "infrastructure",
+                    "_internal",
+                    "auto_ingest.py",
+                )
+            )
+        )
         with open(module_path) as fh:
             source = fh.read()
         with caplog.at_level("INFO"):
-            exec(compile(source, module_path, "exec"), {"__name__": "__main__", "__file__": module_path})
+            exec(
+                compile(source, module_path, "exec"),
+                {"__name__": "__main__", "__file__": module_path},
+            )
         assert "Done" in caplog.text
 
     @pytest.mark.asyncio

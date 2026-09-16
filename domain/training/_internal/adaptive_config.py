@@ -7,9 +7,8 @@ improves over time as more training runs are recorded.
 from __future__ import annotations
 
 import logging
-import math
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any
 
 from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 
@@ -50,7 +49,7 @@ class AdaptiveConfigEngine:
       when confidence is low.
     """
 
-    def __init__(self, tracker: Optional[TrainingOutcomeTracker] = None):
+    def __init__(self, tracker: TrainingOutcomeTracker | None = None):
         self.tracker = tracker or TrainingOutcomeTracker()
 
     def recommend(
@@ -58,7 +57,7 @@ class AdaptiveConfigEngine:
         dataset_size: int,
         model: str = "gpt2",
         method: str = "finetune",
-        available_models: Optional[List[str]] = None,
+        available_models: list[str] | None = None,
     ) -> AdaptiveRecommendation:
         """Recommend training config based on historical outcomes.
 
@@ -73,7 +72,8 @@ class AdaptiveConfigEngine:
 
         # Find similar runs
         similar = [
-            o for o in outcomes
+            o
+            for o in outcomes
             if self._size_category(o.dataset_size) == size_cat
             and o.model == model
             and o.method == method
@@ -82,17 +82,17 @@ class AdaptiveConfigEngine:
         if not similar:
             # Try relaxing to same model regardless of method
             similar = [
-                o for o in outcomes
-                if self._size_category(o.dataset_size) == size_cat
-                and o.model == model
+                o
+                for o in outcomes
+                if self._size_category(o.dataset_size) == size_cat and o.model == model
             ]
 
         if not similar:
             # Try relaxing to same method regardless of model
             similar = [
-                o for o in outcomes
-                if self._size_category(o.dataset_size) == size_cat
-                and o.method == method
+                o
+                for o in outcomes
+                if self._size_category(o.dataset_size) == size_cat and o.method == method
             ]
 
         if not similar:
@@ -109,6 +109,7 @@ class AdaptiveConfigEngine:
         This is how the system learns which direction is better.
         """
         import copy
+
         varied = copy.deepcopy(base)
 
         # Only explore when confidence is low
@@ -152,7 +153,7 @@ class AdaptiveConfigEngine:
             extra={"tag": "TRAIN"},
         )
 
-    def get_insights(self, model: str = "", method: str = "") -> Dict[str, Any]:
+    def get_insights(self, model: str = "", method: str = "") -> dict[str, Any]:
         """Get insights from training history for display in UI."""
         outcomes = self.tracker.load_outcomes()
         if not outcomes:
@@ -194,16 +195,14 @@ class AdaptiveConfigEngine:
                 "lora_rank": best.lora_rank,
             },
             "trend": trend,
-            "recommendation": self.recommend(
-                best.dataset_size, best.model, best.method
-            ).reason,
+            "recommendation": self.recommend(best.dataset_size, best.model, best.method).reason,
         }
 
     # ── Internal helpers ──────────────────────────────────────────────────
 
     def _recommend_from_history(
         self,
-        similar: List[TrainingOutcome],
+        similar: list[TrainingOutcome],
         dataset_size: int,
         model: str,
         method: str,
@@ -218,12 +217,12 @@ class AdaptiveConfigEngine:
             weights = [o.quality_score / total_weight for o in similar]
 
         # Weighted average of hyperparameters
-        lr = sum(o.learning_rate * w for o, w in zip(similar, weights))
-        bs = sum(o.batch_size * w for o, w in zip(similar, weights))
-        epochs = sum(o.epochs * w for o, w in zip(similar, weights))
-        warmup = sum(o.warmup_steps * w for o, w in zip(similar, weights))
-        lora_rank = sum(o.lora_rank * w for o, w in zip(similar, weights))
-        lora_alpha = sum(o.lora_alpha * w for o, w in zip(similar, weights))
+        lr = sum(o.learning_rate * w for o, w in zip(similar, weights, strict=False))
+        bs = sum(o.batch_size * w for o, w in zip(similar, weights, strict=False))
+        epochs = sum(o.epochs * w for o, w in zip(similar, weights, strict=False))
+        warmup = sum(o.warmup_steps * w for o, w in zip(similar, weights, strict=False))
+        lora_rank = sum(o.lora_rank * w for o, w in zip(similar, weights, strict=False))
+        lora_alpha = sum(o.lora_alpha * w for o, w in zip(similar, weights, strict=False))
 
         # Round to sensible values
         bs = max(2, int(round(bs / 2) * 2))  # Round to nearest even

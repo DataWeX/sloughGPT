@@ -1,4 +1,5 @@
 """Tests for device decorators — adds ioctl to any class."""
+
 from __future__ import annotations
 
 import pytest
@@ -55,9 +56,14 @@ class TestWithIoctl:
     def test_list_commands_sorted(self):
         @with_ioctl({"Z": "z", "A": "a", "M": "m"})
         class Device:
-            def z(self): pass
-            def a(self): pass
-            def m(self): pass
+            def z(self):
+                pass
+
+            def a(self):
+                pass
+
+            def m(self):
+                pass
 
         dev = Device()
         assert dev.list_commands() == ["A", "M", "Z"]
@@ -89,8 +95,11 @@ class TestAddIoctlCommand:
 
     def test_list_commands(self):
         class Device:
-            def a(self): pass
-            def b(self): pass
+            def a(self):
+                pass
+
+            def b(self):
+                pass
 
         add_ioctl_command(Device, "CMD_A", "a")
         add_ioctl_command(Device, "CMD_B", "b")

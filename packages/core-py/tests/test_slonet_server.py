@@ -3,19 +3,18 @@
 import asyncio
 import threading
 import time
-import queue
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 import numpy as np
+import pytest
 
 from domain.infrastructure._internal.model_server import CircuitBreakerState
 from domain.infrastructure._internal.slonet_server import SloNetServer
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_model():
@@ -53,19 +52,24 @@ def server(mock_model, mock_tokenizer):
 # Init
 # ---------------------------------------------------------------------------
 
+
 class TestInit:
     def test_creates_semaphore(self, server):
-        assert hasattr(server, '_read_semaphores')
+        assert hasattr(server, "_read_semaphores")
 
     def test_read_semaphores_empty_initially(self, server):
         assert len(server._read_semaphores) == 0
 
     def test_creates_circuit_breaker_by_default(self, mock_model, mock_tokenizer):
-        s = SloNetServer(mock_model, mock_tokenizer, enable_circuit_breaker=True, enable_warmup=False)
+        s = SloNetServer(
+            mock_model, mock_tokenizer, enable_circuit_breaker=True, enable_warmup=False
+        )
         assert s._circuit_breaker is not None
 
     def test_can_disable_circuit_breaker(self, mock_model, mock_tokenizer):
-        s = SloNetServer(mock_model, mock_tokenizer, enable_circuit_breaker=False, enable_warmup=False)
+        s = SloNetServer(
+            mock_model, mock_tokenizer, enable_circuit_breaker=False, enable_warmup=False
+        )
         assert s._circuit_breaker is None
 
     def test_warmup_disabled(self, server):
@@ -82,6 +86,7 @@ class TestInit:
 # ---------------------------------------------------------------------------
 # Warmup
 # ---------------------------------------------------------------------------
+
 
 class TestWarmup:
     def test_warmup_success(self, mock_model, mock_tokenizer):
@@ -109,6 +114,7 @@ class TestWarmup:
 # Tokenize / Count
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 class TestTokenize:
     async def test_tokenize_delegates(self, server):
@@ -129,6 +135,7 @@ class TestTokenize:
 # ---------------------------------------------------------------------------
 # Generate
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 class TestGenerate:
@@ -171,6 +178,7 @@ class TestGenerate:
         def _slow(*a, **kw):
             time.sleep(10)
             return "done"
+
         mock_model.generate_numpy.side_effect = _slow
         s = SloNetServer(mock_model, mock_tokenizer, generate_timeout=0.05, enable_warmup=False)
         with pytest.raises(TimeoutError):
@@ -227,6 +235,7 @@ class TestGenerate:
         def _slow(*a, **kw):
             time.sleep(10)
             return "done"
+
         mock_model.generate_numpy.side_effect = _slow
         s = SloNetServer(mock_model, mock_tokenizer, generate_timeout=0.05, enable_warmup=False)
         with pytest.raises((TimeoutError, asyncio.TimeoutError)):
@@ -262,11 +271,18 @@ class TestGenerate:
         await server.generate("hello")
         s = server.get_metrics()
         expected = {
-            "requests_total", "requests_completed", "requests_failed",
-            "requests_timed_out", "consecutive_failures",
-            "avg_generation_time_ms", "max_generation_time_ms",
-            "min_generation_time_ms", "last_generation_time_ms",
-            "tokens_generated_total", "last_error", "error_rate",
+            "requests_total",
+            "requests_completed",
+            "requests_failed",
+            "requests_timed_out",
+            "consecutive_failures",
+            "avg_generation_time_ms",
+            "max_generation_time_ms",
+            "min_generation_time_ms",
+            "last_generation_time_ms",
+            "tokens_generated_total",
+            "last_error",
+            "error_rate",
             "last_request_time",
         }
         assert set(s.keys()) == expected
@@ -282,6 +298,7 @@ class TestGenerate:
 # ---------------------------------------------------------------------------
 # Generate Stream
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 class TestGenerateStream:
@@ -320,9 +337,10 @@ class TestGenerateStream:
         def _stream_gen(*a, **kw):
             yield np.int64(42)
             raise RuntimeError("mid-stream fail")
+
         server._model.generate_numpy_stream.return_value = _stream_gen()
         with pytest.raises(RuntimeError, match="mid-stream fail"):
-            async for t in server.generate_stream("hello"):
+            async for _t in server.generate_stream("hello"):
                 pass
 
     async def test_stream_circuit_breaker_records_success(self, mock_model, mock_tokenizer):
@@ -345,7 +363,12 @@ class TestGenerateStream:
     async def test_stream_passes_parameters(self, server):
         tokens = []
         async for t in server.generate_stream(
-            "test", max_new_tokens=10, temperature=0.3, top_p=0.7, top_k=5, repetition_penalty=1.5,
+            "test",
+            max_new_tokens=10,
+            temperature=0.3,
+            top_p=0.7,
+            top_k=5,
+            repetition_penalty=1.5,
         ):
             tokens.append(t)
         _, kwargs = server._model.generate_numpy_stream.call_args
@@ -354,9 +377,11 @@ class TestGenerateStream:
 
     async def test_stream_cancelled_error_during_active_stream(self, mock_model, mock_tokenizer):
         wait_forever = threading.Event()
+
         def _blocking_stream(*a, **kw):
             yield np.int64(42)
             wait_forever.wait()
+
         mock_model.generate_numpy_stream.return_value = _blocking_stream()
         s = SloNetServer(mock_model, mock_tokenizer, enable_warmup=False)
 
@@ -410,7 +435,7 @@ class TestGenerateStream:
             if state["calls"] == 1:
                 await asyncio.sleep(0.05)
                 aw.close()
-                raise asyncio.TimeoutError()
+                raise TimeoutError()
             return await real_wait_for(aw, timeout)
 
         monkeypatch.setattr(asyncio, "wait_for", _fake_wait_for)
@@ -432,6 +457,7 @@ class TestGenerateStream:
 # ---------------------------------------------------------------------------
 # Observability
 # ---------------------------------------------------------------------------
+
 
 class TestObservability:
     def test_metadata_contains_keys(self, server):
@@ -472,7 +498,9 @@ class TestObservability:
         assert md["warmup_error"] is None
 
     def test_metadata_circuit_breaker_disabled(self, mock_model, mock_tokenizer):
-        s = SloNetServer(mock_model, mock_tokenizer, enable_circuit_breaker=False, enable_warmup=False)
+        s = SloNetServer(
+            mock_model, mock_tokenizer, enable_circuit_breaker=False, enable_warmup=False
+        )
         md = s.metadata()
         assert md["circuit_breaker_state"] == "disabled"
 
@@ -482,11 +510,13 @@ class TestObservability:
 
     def test_metadata_kv_sessions_reports_provider_stats(self, mock_model, mock_tokenizer):
         """kv_sessions metadata reflects provider session_stats() when attached."""
+
         class FakeProvider:
             def __init__(self):
                 self._kv_states = {"a": object(), "b": object()}
-                self._kv_last_access = {k: 0.0 for k in ("a", "b")}
+                self._kv_last_access = dict.fromkeys(("a", "b"), 0.0)
                 self._kv_ttl = 3600.0
+
             def session_stats(self):
                 return {
                     "active_sessions": len(self._kv_states),
@@ -496,8 +526,10 @@ class TestObservability:
                 }
 
         s = SloNetServer(
-            model=mock_model, tokenizer=mock_tokenizer,
-            enable_warmup=False, provider=FakeProvider(),
+            model=mock_model,
+            tokenizer=mock_tokenizer,
+            enable_warmup=False,
+            provider=FakeProvider(),
         )
         md = s.metadata()
         assert md["kv_sessions"]["enabled"] is True
@@ -507,13 +539,16 @@ class TestObservability:
 
     def test_metadata_kv_sessions_graceful_on_error(self, mock_model, mock_tokenizer):
         """kv_sessions metadata survives a provider whose stats raise."""
+
         class BrokenProvider:
             def session_stats(self):
                 raise RuntimeError("boom")
 
         s = SloNetServer(
-            model=mock_model, tokenizer=mock_tokenizer,
-            enable_warmup=False, provider=BrokenProvider(),
+            model=mock_model,
+            tokenizer=mock_tokenizer,
+            enable_warmup=False,
+            provider=BrokenProvider(),
         )
         md = s.metadata()
         assert md["kv_sessions"]["enabled"] is False
@@ -529,6 +564,7 @@ class TestObservability:
 # ---------------------------------------------------------------------------
 # Pool mode
 # ---------------------------------------------------------------------------
+
 
 class TestPoolMode:
     def test_pool_mode_active_with_factory(self):
@@ -726,6 +762,7 @@ class TestPoolMode:
 # Process guard delegation
 # ---------------------------------------------------------------------------
 
+
 class _FakeGuard:
     """Stands in for ProcessGuard: alive flag + generate/generate_stream/health."""
 
@@ -756,7 +793,6 @@ class _FakeGuard:
 
 
 class TestProcessGuardDelegation:
-
     @pytest.fixture
     def guard(self):
         return _FakeGuard(alive=True)
@@ -776,7 +812,9 @@ class TestProcessGuardDelegation:
         assert out == "guarded:hi"
         mock_model.generate_numpy.assert_not_called()
 
-    async def test_generate_falls_back_to_direct_model_when_guard_dead(self, mock_model, mock_tokenizer):
+    async def test_generate_falls_back_to_direct_model_when_guard_dead(
+        self, mock_model, mock_tokenizer
+    ):
         dead = _FakeGuard(alive=False)
         srv = SloNetServer(
             model=mock_model,
@@ -842,7 +880,9 @@ class TestProcessGuardDelegation:
             def on_restart(self, cb):
                 pass
 
-        s = SloNetServer(mock_model, mock_tokenizer, process_guard=_BrokenGuard(), enable_warmup=False)
+        s = SloNetServer(
+            mock_model, mock_tokenizer, process_guard=_BrokenGuard(), enable_warmup=False
+        )
         assert s.metadata()["process_guard"] == {"alive": False}
 
     def test_generate_stream_sync_guard_cancel(self, mock_model, mock_tokenizer):
@@ -922,6 +962,3 @@ class TestCrossTurnKV:
         await srv.generate("hello", session_id="unbound")
         _, kwargs = srv._model.generate_numpy.call_args
         assert kwargs["kv_state"] is None
-
-
-

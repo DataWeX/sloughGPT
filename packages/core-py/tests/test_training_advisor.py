@@ -2,23 +2,25 @@
 
 from __future__ import annotations
 
-import pytest
-
 from domain.training._internal.training_advisor import (
-    TrainingRecommendation, recommend_training_config, get_training_tips,
+    TrainingRecommendation,
+    get_training_tips,
+    recommend_training_config,
 )
-
 
 # ── TrainingRecommendation ─────────────────────────────────────────────────
 
 
 class TestTrainingRecommendation:
-
     def test_init(self):
         r = TrainingRecommendation(
-            learning_rate=0.001, batch_size=8, epochs=10,
-            warmup_steps=50, early_stopping_patience=3,
-            reason="test", confidence=0.8,
+            learning_rate=0.001,
+            batch_size=8,
+            epochs=10,
+            warmup_steps=50,
+            early_stopping_patience=3,
+            reason="test",
+            confidence=0.8,
         )
         assert r.learning_rate == 0.001
         assert r.confidence == 0.8
@@ -28,7 +30,6 @@ class TestTrainingRecommendation:
 
 
 class TestRecommendTrainingConfig:
-
     def test_very_small_dataset(self):
         r = recommend_training_config(dataset_size=50)
         assert r.confidence == 0.6
@@ -107,7 +108,6 @@ class TestRecommendTrainingConfig:
 
 
 class TestGetTrainingTips:
-
     def test_small_dataset_tips(self):
         tips = get_training_tips(dataset_size=50)
         assert any("Very small" in t for t in tips)

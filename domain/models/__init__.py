@@ -9,8 +9,8 @@ from domain.models._internal.models import (
     ModelInterface,
     ModelLoader,
     SloughGPTModel,
-    rotate_half,
     apply_rotary_pos_emb,
+    rotate_half,
 )
 
 __all__ = [

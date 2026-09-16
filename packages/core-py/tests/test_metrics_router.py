@@ -2,13 +2,12 @@
 
 Covers: get_metrics, prometheus_metrics, edge cases.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -37,6 +36,7 @@ def _app(mr: MetricsRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(mr.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 

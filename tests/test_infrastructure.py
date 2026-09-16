@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import os
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch
 
 import numpy as np
 import pytest
+
 torch = pytest.importorskip("torch")
 
 
@@ -115,8 +115,8 @@ class TestMetaWeightManagerSimple:
 
     def test_aggregate_patterns_thumbs_up(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
             from domains.feedback.database import SimilarPattern
+            from domains.feedback.meta_weights import MetaWeightManager
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             patterns = [SimilarPattern(content="good", rating="thumbs_up", similarity=0.8, pattern_type="msg")]
             result = mwm._aggregate_patterns(patterns)
@@ -124,8 +124,8 @@ class TestMetaWeightManagerSimple:
 
     def test_aggregate_patterns_thumbs_down(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
             from domains.feedback.database import SimilarPattern
+            from domains.feedback.meta_weights import MetaWeightManager
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             patterns = [SimilarPattern(content="bad", rating="thumbs_down", similarity=0.9, pattern_type="msg")]
             result = mwm._aggregate_patterns(patterns)
@@ -141,8 +141,8 @@ class TestMetaWeightManagerSimple:
 
     def test_get_adjustment_clamps_values(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
             from domains.feedback.database import SimilarPattern
+            from domains.feedback.meta_weights import MetaWeightManager
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             patterns = [SimilarPattern(content="good", rating="thumbs_up", similarity=1.0, pattern_type="msg")]
             # Turn off text fallback so only vector search is used
@@ -240,7 +240,7 @@ class TestMetaWeightManagerSimple:
         with tempfile.TemporaryDirectory() as tmp:
             from domains.feedback.meta_weights import MetaWeightManager
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
-            for i in range(150):
+            for _i in range(150):
                 mwm._weight_history.append({"temperature": 0.8, "repetition_penalty": 1.0, "pattern_count": 0})
             mwm.get_adjustment("hello")
             assert len(mwm._weight_history) <= 100

@@ -2,7 +2,8 @@
 
 import numpy as np
 import pytest
-from domain.inference._internal.ops.blas import sgemm, is_available
+
+from domain.inference._internal.ops.blas import is_available, sgemm
 
 
 class TestSgemm:
@@ -223,24 +224,29 @@ class TestSgemm:
 
 class TestSgemmExtended:
     def test_cblas_constants(self):
-        from domain.inference._internal.ops.blas import CBLAS_ROW_MAJOR, CBLAS_NO_TRANS, CBLAS_TRANS
+        from domain.inference._internal.ops.blas import CBLAS_NO_TRANS, CBLAS_ROW_MAJOR, CBLAS_TRANS
+
         assert CBLAS_ROW_MAJOR == 101
         assert CBLAS_NO_TRANS == 111
         assert CBLAS_TRANS == 112
 
     def test_load_accelerate_returns_none_on_linux(self):
         import sys
+
         if sys.platform != "linux":
             pytest.skip("not Linux")
         from domain.inference._internal.ops.blas import _load_accelerate
+
         result = _load_accelerate()
         assert result is None
 
     def test_unavailable_flag_set_on_linux(self):
         import sys
+
         if sys.platform != "linux":
             pytest.skip("not Linux")
         import domain.inference._internal.ops.blas as blas_mod
+
         _load = blas_mod._load_accelerate()
         assert blas_mod._unavailable is True
 
@@ -382,6 +388,7 @@ class TestIsAvailable:
 
     def test_on_linux_returns_false(self):
         import sys
+
         if sys.platform != "linux":
             pytest.skip("not Linux")
         assert is_available() is False
@@ -393,6 +400,7 @@ class TestIsAvailable:
 
     def test_cached_result_matches(self):
         import domain.inference._internal.ops.blas as blas_mod
+
         first = is_available()
         if blas_mod._unavailable:
             assert first is False

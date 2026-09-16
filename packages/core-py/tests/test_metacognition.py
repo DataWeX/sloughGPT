@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+
 import pytest
-from domains import Thought, ThoughtType
+from domains import Thought
+
 from domain.cognitive._internal.metacognition import (
-    MetacognitiveMonitor,
-    MetacognitiveLevel,
     CognitiveProcess,
-    MetacognitiveAssessment,
-    ReflectionInsight,
     CognitiveStateSnapshot,
+    MetacognitiveAssessment,
+    MetacognitiveLevel,
+    MetacognitiveMonitor,
+    ReflectionInsight,
 )
 
 
@@ -77,8 +79,15 @@ class TestDataclasses:
 
 
 class TestMetacognitiveMonitor:
-    def make_thought(self, content: str = "think about x", confidence: float = 0.8, thought_type: str = "reasoning"):
-        return Thought(thought_id="t1", content=content, thought_type=thought_type, confidence=confidence)
+    def make_thought(
+        self,
+        content: str = "think about x",
+        confidence: float = 0.8,
+        thought_type: str = "reasoning",
+    ):
+        return Thought(
+            thought_id="t1", content=content, thought_type=thought_type, confidence=confidence
+        )
 
     async def test_initial_state(self):
         mm = MetacognitiveMonitor()
@@ -389,10 +398,7 @@ class TestMetacognitiveMonitor:
 
     async def test_assess_context_confidence_empty(self):
         mm = MetacognitiveMonitor()
-        states = [
-            CognitiveStateSnapshot(0.3, 0.5, 0.5, 0.5, 0.5, 0.5, i)
-            for i in range(10)
-        ]
+        states = [CognitiveStateSnapshot(0.3, 0.5, 0.5, 0.5, 0.5, 0.5, i) for i in range(10)]
         trends = await mm._calculate_trends(states)
         assert isinstance(trends, dict)
 

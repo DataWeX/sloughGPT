@@ -1,14 +1,20 @@
 """Tests for domain.shell._internal.kernel_interrupts and domain.shell.vm_engine."""
 
-from domain.shell._internal.kernel_interrupts import InterruptType, Interrupt, InterruptVector
+from domain.shell._internal.kernel_interrupts import Interrupt, InterruptType, InterruptVector
 from domain.shell._internal.vm_engine import (
-    Breakpoint, StepEvent, ExecutionTrace, SyscallEvent, FaultEvent, BreakpointEvent,
+    Breakpoint,
+    BreakpointEvent,
+    ExecutionTrace,
+    FaultEvent,
+    StepEvent,
+    SyscallEvent,
 )
 
 
 class TestInterruptType:
     def test_all_members(self):
         assert len(InterruptType) == 11
+
     def test_values(self):
         assert InterruptType.TIMER.value == 0
         assert InterruptType.INFERENCE_DONE.value == 1
@@ -18,6 +24,7 @@ class TestInterrupt:
     def test_fields(self):
         i = Interrupt(vector=InterruptType.TIMER, source_pid=1, data="x", priority=0)
         assert i.vector == InterruptType.TIMER
+
     def test_defaults(self):
         i = Interrupt(vector=InterruptType.CUSTOM)
         assert i.source_pid is None
@@ -30,6 +37,7 @@ class TestInterruptVector:
         iv.register(InterruptType.TIMER, lambda i: called.append(i.vector))
         iv.fire(Interrupt(vector=InterruptType.TIMER))
         assert len(called) == 1
+
     def test_fire_no_handler(self):
         InterruptVector().fire(Interrupt(vector=InterruptType.CUSTOM))
 
@@ -37,12 +45,20 @@ class TestInterruptVector:
 class TestBreakpoint:
     def test_trigger_enabled(self):
         assert Breakpoint(address=0x100, enabled=True).should_trigger() is True
+
     def test_trigger_disabled(self):
         assert Breakpoint(address=0x100, enabled=False).should_trigger() is False
+
     def test_trigger_condition_false(self):
-        assert Breakpoint(address=0x100, enabled=True, condition=lambda: False).should_trigger() is False
+        assert (
+            Breakpoint(address=0x100, enabled=True, condition=lambda: False).should_trigger()
+            is False
+        )
+
     def test_trigger_condition_true(self):
-        assert Breakpoint(address=0x100, enabled=True, condition=lambda: True).should_trigger() is True
+        assert (
+            Breakpoint(address=0x100, enabled=True, condition=lambda: True).should_trigger() is True
+        )
 
 
 class TestStepEvent:

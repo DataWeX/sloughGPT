@@ -16,14 +16,14 @@ The protocol enables:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from enum import Enum
-from typing import Optional, Tuple, Union
+from enum import StrEnum
 
 import numpy as np
 
 
-class FunctionType(str, Enum):
+class FunctionType(StrEnum):
     """Supported compression function types."""
+
     PERIODIC = "periodic"
     LINEAR = "linear"
     POLYNOMIAL = "polynomial"
@@ -31,11 +31,13 @@ class FunctionType(str, Enum):
     RAW = "raw"
 
     @classmethod
-    def from_str(cls, s: str) -> "FunctionType":
+    def from_str(cls, s: str) -> FunctionType:
         try:
             return cls(s)
         except ValueError:
-            raise ValueError(f"Unknown function type: {s!r}. Must be one of: {[ft.value for ft in cls]}")
+            raise ValueError(
+                f"Unknown function type: {s!r}. Must be one of: {[ft.value for ft in cls]}"
+            )
 
 
 class PointProtocol(ABC):
@@ -63,7 +65,7 @@ class PointProtocol(ABC):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         # Skip validation for abstract subclasses
-        if getattr(cls, '__abstractmethods__', None):
+        if getattr(cls, "__abstractmethods__", None):
             return
         # For concrete subclasses, just ensure the class is usable
         # (full validation happens at add-time in PointLibrary)
@@ -90,7 +92,7 @@ class PointProtocol(ABC):
 
     @classmethod
     @abstractmethod
-    def from_dict(cls, d: dict) -> "PointProtocol":
+    def from_dict(cls, d: dict) -> PointProtocol:
         """Deserialize from dict."""
         raise NotImplementedError
 
@@ -101,7 +103,7 @@ class PointProtocol(ABC):
 
     @classmethod
     @abstractmethod
-    def from_bytes(cls, data: bytes, identity: str = "unknown") -> "PointProtocol":
+    def from_bytes(cls, data: bytes, identity: str = "unknown") -> PointProtocol:
         """Deserialize from binary format."""
         raise NotImplementedError
 
@@ -126,15 +128,20 @@ class PointProtocol(ABC):
         return self.nbytes()
 
     def __repr__(self) -> str:
-        ft = self.function_type.value if isinstance(self.function_type, FunctionType) else self.function_type
-        return (f"Point(id={self.identity!r}, type={ft}, "
-                f"accuracy={self.accuracy:.4f}, nbytes={self.nbytes()})")
+        ft = (
+            self.function_type.value
+            if isinstance(self.function_type, FunctionType)
+            else self.function_type
+        )
+        return (
+            f"Point(id={self.identity!r}, type={ft}, "
+            f"accuracy={self.accuracy:.4f}, nbytes={self.nbytes()})"
+        )
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, PointProtocol):
             return NotImplemented
-        return (self.identity == other.identity and
-                self.function_type == other.function_type)
+        return self.identity == other.identity and self.function_type == other.function_type
 
     def __hash__(self) -> int:
         return hash((self.identity, str(self.function_type)))
@@ -163,12 +170,11 @@ class PointView:
 
     __slots__ = ("_point", "_shape", "_dtype", "_cache")
 
-    def __init__(self, point: PointProtocol, shape: Tuple[int, ...] = (),
-                 dtype: str = "float32"):
+    def __init__(self, point: PointProtocol, shape: tuple[int, ...] = (), dtype: str = "float32"):
         self._point = point
         self._shape = tuple(shape)
         self._dtype = dtype
-        self._cache: Optional[np.ndarray] = None
+        self._cache: np.ndarray | None = None
 
     @property
     def point(self) -> PointProtocol:
@@ -180,11 +186,11 @@ class PointView:
         return self._point.identity
 
     @property
-    def function_type(self) -> Union[str, FunctionType]:
+    def function_type(self) -> str | FunctionType:
         return self._point.function_type
 
     @property
-    def shape(self) -> Tuple[int, ...]:
+    def shape(self) -> tuple[int, ...]:
         return self._shape
 
     @property
@@ -226,11 +232,12 @@ class PointView:
     def __getitem__(self, key) -> np.ndarray:
         """Slice access — optimized for cluster points (partial decompression)."""
         # Fast path for cluster points: decompress only the needed slice
-        if (self._point.function_type == "cluster" and
-            self._cache is None and
-            isinstance(key, slice) and
-            self._shape):
-
+        if (
+            self._point.function_type == "cluster"
+            and self._cache is None
+            and isinstance(key, slice)
+            and self._shape
+        ):
             centroids = self._point.params.get("centroids")
             assignments = self._point.params.get("assignments")
             if centroids is not None and assignments is not None:
@@ -249,12 +256,13 @@ class PointView:
 
     def __repr__(self) -> str:
         cached = "cached" if self._cache is not None else "lazy"
-        return (f"PointView(id={self.identity!r}, shape={self._shape}, "
-                f"dtype={self._dtype}, {cached})")
+        return (
+            f"PointView(id={self.identity!r}, shape={self._shape}, dtype={self._dtype}, {cached})"
+        )
 
     @classmethod
-    def from_point_and_meta(cls, point: PointProtocol,
-                            shape: Tuple[int, ...] = (),
-                            dtype: str = "float32") -> "PointView":
+    def from_point_and_meta(
+        cls, point: PointProtocol, shape: tuple[int, ...] = (), dtype: str = "float32"
+    ) -> PointView:
         """Create a PointView from a Point and metadata."""
         return cls(point, shape=shape, dtype=dtype)

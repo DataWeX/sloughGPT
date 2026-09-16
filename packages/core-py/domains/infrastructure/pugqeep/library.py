@@ -11,21 +11,22 @@ This is the "Graph" in the Point-Graph-Queue architecture:
   - Statistics and introspection
   - Persistence to disk as JSON with base64-encoded numpy arrays
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import threading
 import time
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 
-from .point import Point
-from .point_interface import PointProtocol, PointView, FunctionType
 from .compressor import PointCompressor
 from .config import LibraryConfig
+from .point import Point
+from .point_interface import FunctionType, PointProtocol, PointView
 
 logger = logging.getLogger("slo.pugqeep")
 
@@ -40,8 +41,13 @@ class PointLibrary:
         validate: Whether to validate points on add (default True).
     """
 
-    def __init__(self, name: str = "default", storage_dir: Optional[Path] = None,
-                 config: Optional[LibraryConfig] = None, validate: bool = True):
+    def __init__(
+        self,
+        name: str = "default",
+        storage_dir: Path | None = None,
+        config: LibraryConfig | None = None,
+        validate: bool = True,
+    ):
         if config is not None:
             self.name = config.name
             self._storage_dir = config.storage_dir or storage_dir
@@ -51,9 +57,9 @@ class PointLibrary:
             self._storage_dir = storage_dir
             self._auto_save = False
         self._validate = validate
-        self._points: Dict[str, Point] = {}
-        self._by_type: Dict[str, List[str]] = {}
-        self._views: Dict[str, PointView] = {}
+        self._points: dict[str, Point] = {}
+        self._by_type: dict[str, list[str]] = {}
+        self._views: dict[str, PointView] = {}
         self._created_at = time.time()
         self._compressor = PointCompressor()
         self._lock = threading.RLock()
@@ -83,8 +89,9 @@ class PointLibrary:
         if not isinstance(point, Point):
             point = Point(
                 identity=point.identity,
-                function_type=point.function_type.value if isinstance(point.function_type, FunctionType)
-                             else point.function_type,
+                function_type=point.function_type.value
+                if isinstance(point.function_type, FunctionType)
+                else point.function_type,
                 params=dict(point.params),
                 residual=point.residual,
                 accuracy=point.accuracy,
@@ -96,8 +103,10 @@ class PointLibrary:
             is_new = point.identity not in self._points
             self._points[point.identity] = point
             by_type = self._by_type.setdefault(
-                point.function_type if isinstance(point.function_type, str)
-                else point.function_type.value, []
+                point.function_type
+                if isinstance(point.function_type, str)
+                else point.function_type.value,
+                [],
             )
             if point.identity not in by_type:
                 by_type.append(point.identity)
@@ -110,7 +119,7 @@ class PointLibrary:
 
         return is_new
 
-    def get(self, identity: str) -> Optional[Point]:
+    def get(self, identity: str) -> Point | None:
         """Get a point by identity (thread-safe)."""
         with self._lock:
             point = self._points.get(identity)
@@ -126,7 +135,11 @@ class PointLibrary:
             point = self._points.pop(identity, None)
             if point is None:
                 return False
-            ft = point.function_type if isinstance(point.function_type, str) else point.function_type.value
+            ft = (
+                point.function_type
+                if isinstance(point.function_type, str)
+                else point.function_type.value
+            )
             by_type = self._by_type.get(ft, [])
             if identity in by_type:
                 by_type.remove(identity)
@@ -158,7 +171,7 @@ class PointLibrary:
 
     # ── Batch operations ─────────────────────────────────────────────
 
-    def add_many(self, points: List[PointProtocol]) -> int:
+    def add_many(self, points: list[PointProtocol]) -> int:
         """Add multiple points (thread-safe, single lock acquisition).
 
         Returns:
@@ -172,8 +185,9 @@ class PointLibrary:
                 if not isinstance(point, Point):
                     point = Point(
                         identity=point.identity,
-                        function_type=point.function_type.value if isinstance(point.function_type, FunctionType)
-                                     else point.function_type,
+                        function_type=point.function_type.value
+                        if isinstance(point.function_type, FunctionType)
+                        else point.function_type,
                         params=dict(point.params),
                         residual=point.residual,
                         accuracy=point.accuracy,
@@ -181,7 +195,11 @@ class PointLibrary:
                         shape=point.shape,
                     )
                 self._points[point.identity] = point
-                ft = point.function_type if isinstance(point.function_type, str) else point.function_type.value
+                ft = (
+                    point.function_type
+                    if isinstance(point.function_type, str)
+                    else point.function_type.value
+                )
                 by_type = self._by_type.setdefault(ft, [])
                 if point.identity not in by_type:
                     by_type.append(point.identity)
@@ -193,7 +211,7 @@ class PointLibrary:
             self.save()
         return count
 
-    def get_many(self, identities: List[str]) -> Dict[str, Optional[Point]]:
+    def get_many(self, identities: list[str]) -> dict[str, Point | None]:
         """Get multiple points by identity (thread-safe)."""
         with self._lock:
             result = {}
@@ -206,14 +224,18 @@ class PointLibrary:
                 result[ident] = point
             return result
 
-    def remove_many(self, identities: List[str]) -> int:
+    def remove_many(self, identities: list[str]) -> int:
         """Remove multiple points (thread-safe). Returns count removed."""
         count = 0
         with self._lock:
             for ident in identities:
                 point = self._points.pop(ident, None)
                 if point is not None:
-                    ft = point.function_type if isinstance(point.function_type, str) else point.function_type.value
+                    ft = (
+                        point.function_type
+                        if isinstance(point.function_type, str)
+                        else point.function_type.value
+                    )
                     by_type = self._by_type.get(ft, [])
                     if ident in by_type:
                         by_type.remove(ident)
@@ -225,31 +247,31 @@ class PointLibrary:
             self.save()
         return count
 
-    def exists_many(self, identities: List[str]) -> Dict[str, bool]:
+    def exists_many(self, identities: list[str]) -> dict[str, bool]:
         """Check existence of multiple identities."""
         with self._lock:
             return {ident: ident in self._points for ident in identities}
 
     # ── Listing and iteration ────────────────────────────────────────
 
-    def list_all(self) -> List[Point]:
+    def list_all(self) -> list[Point]:
         """Return all points (thread-safe copy)."""
         with self._lock:
             return list(self._points.values())
 
-    def list_by_type(self, function_type: Union[str, FunctionType]) -> List[Point]:
+    def list_by_type(self, function_type: str | FunctionType) -> list[Point]:
         """Return all points of a given type."""
         ft = function_type.value if isinstance(function_type, FunctionType) else function_type
         with self._lock:
             identities = self._by_type.get(ft, [])
             return [self._points[i] for i in identities if i in self._points]
 
-    def list_identities(self) -> List[str]:
+    def list_identities(self) -> list[str]:
         """Return all point identities."""
         with self._lock:
             return list(self._points.keys())
 
-    def list_types(self) -> Dict[str, int]:
+    def list_types(self) -> dict[str, int]:
         """Return count of points per type."""
         with self._lock:
             return {ft: len(ids) for ft, ids in self._by_type.items()}
@@ -258,14 +280,15 @@ class PointLibrary:
         """Iterate over all points (snapshot)."""
         return iter(self.list_all())
 
-    def iter_by_type(self, function_type: Union[str, FunctionType]) -> Iterator[Point]:
+    def iter_by_type(self, function_type: str | FunctionType) -> Iterator[Point]:
         """Iterate over points of a given type."""
         return iter(self.list_by_type(function_type))
 
     # ── PointView (lazy decompression) ───────────────────────────────
 
-    def view(self, identity: str, shape: Tuple[int, ...] = (),
-             dtype: str = "float32") -> Optional[PointView]:
+    def view(
+        self, identity: str, shape: tuple[int, ...] = (), dtype: str = "float32"
+    ) -> PointView | None:
         """Get a lazy PointView for deferred decompression.
 
         The view caches the numpy array after first generate() call.
@@ -291,8 +314,9 @@ class PointLibrary:
             self._views[identity] = view
             return view
 
-    def views(self, identities: List[str], shape: Tuple[int, ...] = (),
-              dtype: str = "float32") -> Dict[str, Optional[PointView]]:
+    def views(
+        self, identities: list[str], shape: tuple[int, ...] = (), dtype: str = "float32"
+    ) -> dict[str, PointView | None]:
         """Get multiple PointViews at once."""
         return {ident: self.view(ident, shape=shape, dtype=dtype) for ident in identities}
 
@@ -305,8 +329,9 @@ class PointLibrary:
 
     # ── Compress & store ─────────────────────────────────────────────
 
-    def compress_and_store(self, weights: np.ndarray, identity: str,
-                           method: str = "cluster", n_clusters: int = 16) -> Point:
+    def compress_and_store(
+        self, weights: np.ndarray, identity: str, method: str = "cluster", n_clusters: int = 16
+    ) -> Point:
         """Compress a numpy array and store the resulting Point."""
         if method == "cluster":
             point = self._compressor.compress_cluster(weights, identity, n_clusters)
@@ -315,7 +340,9 @@ class PointLibrary:
         self.add(point)
         return point
 
-    def decompress_to(self, identity: str, shape: Optional[Tuple[int, ...]] = None) -> Optional[np.ndarray]:
+    def decompress_to(
+        self, identity: str, shape: tuple[int, ...] | None = None
+    ) -> np.ndarray | None:
         """Decompress a point back to numpy (uses PointView internally)."""
         point = self.get(identity)
         if point is None:
@@ -339,35 +366,31 @@ class PointLibrary:
 
     # ── Search ───────────────────────────────────────────────────────
 
-    def search(self, query: str) -> List[Point]:
+    def search(self, query: str) -> list[Point]:
         """Search points by identity substring (case-insensitive)."""
         q = query.lower()
         with self._lock:
             return [p for p in self._points.values() if q in p.identity.lower()]
 
-    def search_by_type(self, function_type: Union[str, FunctionType],
-                       query: str = "") -> List[Point]:
+    def search_by_type(self, function_type: str | FunctionType, query: str = "") -> list[Point]:
         """Search points by type and optional identity substring."""
         ft = function_type.value if isinstance(function_type, FunctionType) else function_type
         q = query.lower()
         with self._lock:
             identities = self._by_type.get(ft, [])
             if q:
-                return [self._points[i] for i in identities
-                        if i in self._points and q in i.lower()]
+                return [self._points[i] for i in identities if i in self._points and q in i.lower()]
             return [self._points[i] for i in identities if i in self._points]
 
-    def best_points(self, n: int = 10) -> List[Point]:
+    def best_points(self, n: int = 10) -> list[Point]:
         """Get top-n points by accuracy."""
         with self._lock:
-            return sorted(self._points.values(),
-                         key=lambda p: p.accuracy, reverse=True)[:n]
+            return sorted(self._points.values(), key=lambda p: p.accuracy, reverse=True)[:n]
 
-    def worst_points(self, n: int = 10) -> List[Point]:
+    def worst_points(self, n: int = 10) -> list[Point]:
         """Get bottom-n points by accuracy."""
         with self._lock:
-            return sorted(self._points.values(),
-                         key=lambda p: p.accuracy)[:n]
+            return sorted(self._points.values(), key=lambda p: p.accuracy)[:n]
 
     # ── Validation ───────────────────────────────────────────────────
 
@@ -395,7 +418,9 @@ class PointLibrary:
             params = point.params
             if params is not None:
                 if "centroids" not in params or "assignments" not in params:
-                    raise ValueError("Cluster points must have 'centroids' and 'assignments' params")
+                    raise ValueError(
+                        "Cluster points must have 'centroids' and 'assignments' params"
+                    )
                 if not isinstance(params["centroids"], np.ndarray):
                     raise ValueError("centroids must be numpy array")
                 if not isinstance(params["assignments"], np.ndarray):
@@ -417,8 +442,12 @@ class PointLibrary:
                     "avg_accuracy": 0.0,
                     "types": {},
                     "views_cached": 0,
-                    "ops": {"adds": self._stats_adds, "removes": self._stats_removes,
-                            "hits": self._stats_hits, "misses": self._stats_misses},
+                    "ops": {
+                        "adds": self._stats_adds,
+                        "removes": self._stats_removes,
+                        "hits": self._stats_hits,
+                        "misses": self._stats_misses,
+                    },
                 }
 
             total_raw = 0
@@ -436,8 +465,12 @@ class PointLibrary:
                 "avg_accuracy": sum(p.accuracy for p in points) / len(points),
                 "types": {ft: len(ids) for ft, ids in self._by_type.items()},
                 "views_cached": len(self._views),
-                "ops": {"adds": self._stats_adds, "removes": self._stats_removes,
-                        "hits": self._stats_hits, "misses": self._stats_misses},
+                "ops": {
+                    "adds": self._stats_adds,
+                    "removes": self._stats_removes,
+                    "hits": self._stats_hits,
+                    "misses": self._stats_misses,
+                },
             }
 
     @property
@@ -448,7 +481,7 @@ class PointLibrary:
 
     # ── Persistence ──────────────────────────────────────────────────
 
-    def save(self, path: Optional[Path] = None) -> Path:
+    def save(self, path: Path | None = None) -> Path:
         """Save library to disk (thread-safe, atomic write)."""
         if path is None:
             if self._storage_dir is None:
@@ -470,7 +503,7 @@ class PointLibrary:
         return path
 
     @classmethod
-    def load(cls, path: Path, validate: bool = True) -> "PointLibrary":
+    def load(cls, path: Path, validate: bool = True) -> PointLibrary:
         """Load library from disk. Handles corrupted JSON gracefully."""
         try:
             data = json.loads(path.read_text())
@@ -494,7 +527,7 @@ class PointLibrary:
 
     # ── Context manager ──────────────────────────────────────────────
 
-    def __enter__(self) -> "PointLibrary":
+    def __enter__(self) -> PointLibrary:
         return self
 
     def __exit__(self, *args) -> None:

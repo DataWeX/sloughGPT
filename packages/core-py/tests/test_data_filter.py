@@ -1,25 +1,22 @@
 """Tests for domain.learner._internal.data_filter.py — quality scoring, config, gates."""
 
-import json
-
 import pytest
 
 from domain.learner._internal import data_filter as df
 from domain.learner._internal.data_filter import (
-    DataFilter,
     DEFAULT_CONFIG,
+    DataFilter,
     _hashed,
-    _score_quality,
-    _score_relevance,
+    _load_config,
     _matches_blacklist,
     _matches_whitelist,
-    _load_config,
     _save_config,
+    _score_quality,
+    _score_relevance,
     get_data_filter,
-    set_data_filter_db,
     reset_data_filter_db,
+    set_data_filter_db,
 )
-
 
 GOOD_ARTICLE = (
     "The oak stood by the river, its limbs bare. Farmers picked ripe apples, "
@@ -73,7 +70,10 @@ class TestScoreQuality:
         assert _score_quality(text) < _score_quality(GOOD_ARTICLE)
 
     def test_listicle_short_lines_penalized(self):
-        text = "Nav\nMenu\nHome\nAbout\nPricing\nContact\nBlog\nShop\nCart\nLogin\nSign up\n" + GOOD_ARTICLE
+        text = (
+            "Nav\nMenu\nHome\nAbout\nPricing\nContact\nBlog\nShop\nCart\nLogin\nSign up\n"
+            + GOOD_ARTICLE
+        )
         assert _score_quality(text) < _score_quality(GOOD_ARTICLE)
 
     def test_long_words_penalized(self):
@@ -114,7 +114,9 @@ class TestScoreRelevance:
         assert score == 1.0
 
     def test_partial_match_scores_less(self):
-        score = _score_relevance("Artificial Intelligence is a fascinating field of study", ["artificial intelligence"])
+        score = _score_relevance(
+            "Artificial Intelligence is a fascinating field of study", ["artificial intelligence"]
+        )
         assert 0.0 < score < 1.0
 
     def test_no_match_scores_zero(self):
@@ -215,7 +217,9 @@ class TestDataFilter:
         assert f.get_stats()["rejected_blacklist"] == 1
 
     def test_whitelist_hard_gate_rejects(self):
-        f = DataFilter({"topic_whitelist": ["artificial intelligence"], "whitelist_is_hard_gate": True})
+        f = DataFilter(
+            {"topic_whitelist": ["artificial intelligence"], "whitelist_is_hard_gate": True}
+        )
         ok, reason = f.filter_article("u", "t", GOOD_ARTICLE)
         assert ok is False
         assert reason == "not_in_whitelist"
@@ -228,7 +232,9 @@ class TestDataFilter:
         assert reason == ""
 
     def test_whitelist_without_hard_gate_does_not_block(self):
-        f = DataFilter({"topic_whitelist": ["artificial intelligence"], "whitelist_is_hard_gate": False})
+        f = DataFilter(
+            {"topic_whitelist": ["artificial intelligence"], "whitelist_is_hard_gate": False}
+        )
         ok, reason = f.filter_article("u", "t", GOOD_ARTICLE)
         assert ok is True
         assert reason == ""

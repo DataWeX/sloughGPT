@@ -4,13 +4,12 @@ Covers: list_pipelines, create_pipeline, run_pipeline, collect_direct,
 get_stats, get_pipeline, delete_pipeline, collect, get_records.
 Registry and pipeline are mocked.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -18,10 +17,10 @@ if _server_dir not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from routers.collections import (
-    CollectionsRouter, PipelineConfigRequest, CollectRequest,
-    _build_source, _build_store, _build_filter,
+    CollectionsRouter,
+    CollectRequest,
+    PipelineConfigRequest,
 )
 
 
@@ -53,6 +52,7 @@ def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(cr.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 
@@ -121,14 +121,17 @@ class TestCreatePipeline:
         mock_gr.return_value = mock_reg
         app = _app()
         client = TestClient(app)
-        resp = client.post("/collections/create", json={
-            "name": "pipe1",
-            "source_type": "generator",
-            "source_config": {},
-            "store_type": "memory",
-            "store_config": {},
-            "filter_chain": [],
-        })
+        resp = client.post(
+            "/collections/create",
+            json={
+                "name": "pipe1",
+                "source_type": "generator",
+                "source_config": {},
+                "store_type": "memory",
+                "store_config": {},
+                "filter_chain": [],
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["name"] == "pipe1"
@@ -139,12 +142,15 @@ class TestCreatePipeline:
         mock_gr.return_value = _mock_registry()
         app = _app()
         client = TestClient(app)
-        resp = client.post("/collections/create", json={
-            "name": "pipe2",
-            "source_type": "generator",
-            "source_config": {},
-            "filter_chain": [{"type": "length", "min_length": 5}],
-        })
+        resp = client.post(
+            "/collections/create",
+            json={
+                "name": "pipe2",
+                "source_type": "generator",
+                "source_config": {},
+                "filter_chain": [{"type": "length", "min_length": 5}],
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["filters"] == 1
 

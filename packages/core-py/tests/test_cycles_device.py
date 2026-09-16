@@ -2,9 +2,9 @@
 
 import numpy as np
 import pytest
+
 from domain.shell._internal.cycles_device import CyclesDevice
 from domain.shell._internal.vm import DeviceFault
-
 
 # ── Basic Info ─────────────────────────────────────────────────────────
 
@@ -33,9 +33,18 @@ class TestCyclesDeviceInfo:
     def test_info_ops_list(self):
         info = self.dev.info()
         expected_ops = [
-            "render", "state_tensors", "add_sphere", "add_cube",
-            "add_plane", "add_light", "set_camera", "set_material",
-            "set_background", "info", "clear", "set_samples",
+            "render",
+            "state_tensors",
+            "add_sphere",
+            "add_cube",
+            "add_plane",
+            "add_light",
+            "set_camera",
+            "set_material",
+            "set_background",
+            "info",
+            "clear",
+            "set_samples",
             "set_resolution",
         ]
         assert set(info["ops"]) == set(expected_ops)
@@ -519,8 +528,8 @@ class TestRender:
     def test_render_overwrites_last_image(self):
         self.dev._add_sphere()
         self.dev._add_light()
-        img1 = self.dev.call("render")
-        img2 = self.dev.call("render")
+        self.dev.call("render")
+        self.dev.call("render")
         assert self.dev._last_image is not None
 
     def test_render_state_tensors(self):

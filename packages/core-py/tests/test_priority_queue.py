@@ -1,10 +1,10 @@
 """Tests for PriorityRequestQueue in model_server.py."""
 
 import asyncio
-import time
 
 import pytest
-from domain.infrastructure._internal.model_server import PriorityRequestQueue, Priority
+
+from domain.infrastructure._internal.model_server import Priority, PriorityRequestQueue
 
 
 @pytest.fixture
@@ -40,14 +40,16 @@ class TestBasicExecution:
     async def test_submit_returns_result(self, queue):
         async def fn():
             return 42
+
         result = await queue.submit(fn(), priority=Priority.HIGH)
         assert result == 42
 
     @pytest.mark.asyncio
     async def test_submit_multiple(self, queue):
-        results = []
+
         async def fn(i):
             return i
+
         t1 = queue.submit(fn(1), priority=Priority.HIGH)
         t2 = queue.submit(fn(2), priority=Priority.HIGH)
         r1, r2 = await asyncio.gather(t1, t2)
@@ -56,12 +58,13 @@ class TestBasicExecution:
     @pytest.mark.asyncio
     async def test_queue_full_raises(self):
         q = PriorityRequestQueue(max_concurrent=1, max_queue=2)
+
         async def blocking():
             await asyncio.Event().wait()
+
         wk = asyncio.get_event_loop().create_task(q.worker())
         await asyncio.sleep(0.02)
-        tasks = [asyncio.create_task(q.submit(blocking(), priority=Priority.LOW))
-                 for _ in range(4)]
+        tasks = [asyncio.create_task(q.submit(blocking(), priority=Priority.LOW)) for _ in range(4)]
         done, pending = await asyncio.wait(tasks, timeout=5, return_when=asyncio.FIRST_COMPLETED)
         for t in pending:
             t.cancel()
@@ -94,9 +97,11 @@ class TestPriorityOrdering:
     @pytest.mark.asyncio
     async def test_high_before_low(self, queue):
         order = []
+
         async def fn(i):
             order.append(i)
             return i
+
         # Submit LOW first, then HIGH
         t1 = queue.submit(fn(1), priority=Priority.LOW)
         t2 = queue.submit(fn(2), priority=Priority.HIGH)
@@ -106,9 +111,11 @@ class TestPriorityOrdering:
     @pytest.mark.asyncio
     async def test_fifo_within_same_priority(self, queue):
         order = []
+
         async def fn(i):
             order.append(i)
             return i
+
         t1 = queue.submit(fn(1), priority=Priority.MEDIUM)
         t2 = queue.submit(fn(2), priority=Priority.MEDIUM)
         await asyncio.gather(t1, t2)
@@ -117,9 +124,11 @@ class TestPriorityOrdering:
     @pytest.mark.asyncio
     async def test_three_tier_ordering(self, queue):
         order = []
+
         async def fn(i):
             order.append(i)
             return i
+
         # Submit in reverse priority order
         t1 = queue.submit(fn("low"), priority=Priority.LOW)
         t2 = queue.submit(fn("med"), priority=Priority.MEDIUM)
@@ -155,6 +164,7 @@ class TestConcurrency:
     async def test_in_flight_property(self, queue):
         async def slow():
             await asyncio.sleep(0.2)
+
         t = asyncio.create_task(queue.submit(slow(), priority=Priority.LOW))
         await asyncio.sleep(0.05)
         assert queue.in_flight >= 1
@@ -171,6 +181,7 @@ class TestMetrics:
     async def test_served_count(self, queue):
         async def fn():
             return 1
+
         await queue.submit(fn(), priority=Priority.HIGH)
         await queue.submit(fn(), priority=Priority.LOW)
         m = queue.metrics_snapshot()
@@ -181,11 +192,21 @@ class TestMetrics:
         """Items queued should appear in depth before execution."""
         q2 = PriorityRequestQueue(max_concurrent=1, max_queue=32)
         import heapq
+
         from domain.infrastructure._internal.model_server import _QueueItem
+
         loop = asyncio.get_running_loop()
         for p in range(3):
-            heapq.heappush(q2._heap,
-                _QueueItem(priority=p, enqueue_order=-p, coro=None, future=loop.create_future(), request_id=f"r{p}"))
+            heapq.heappush(
+                q2._heap,
+                _QueueItem(
+                    priority=p,
+                    enqueue_order=-p,
+                    coro=None,
+                    future=loop.create_future(),
+                    request_id=f"r{p}",
+                ),
+            )
         m = q2.metrics_snapshot()
         d = await q2.depth()
         assert d == [1, 1, 1]
@@ -199,6 +220,7 @@ class TestMetrics:
         async def fn():
             await asyncio.sleep(0.05)
             return 1
+
         await queue.submit(fn(), priority=Priority.HIGH)
         m = queue.metrics_snapshot()
         assert m.avg_wait_ms > 0
@@ -213,6 +235,7 @@ class TestEdgeCases:
     async def test_exception_propagation(self, queue):
         async def fails():
             raise ValueError("boom")
+
         with pytest.raises(ValueError, match="boom"):
             await queue.submit(fails(), priority=Priority.HIGH)
 
@@ -229,12 +252,30 @@ class TestEdgeCases:
     async def test_depth_api(self, queue):
         q2 = PriorityRequestQueue(max_concurrent=1)
         import heapq
+
         from domain.infrastructure._internal.model_server import _QueueItem
+
         loop = asyncio.get_running_loop()
-        heapq.heappush(q2._heap,
-            _QueueItem(priority=0, enqueue_order=-1, coro=None, future=loop.create_future(), request_id="r0"))
-        heapq.heappush(q2._heap,
-            _QueueItem(priority=1, enqueue_order=-2, coro=None, future=loop.create_future(), request_id="r1"))
+        heapq.heappush(
+            q2._heap,
+            _QueueItem(
+                priority=0,
+                enqueue_order=-1,
+                coro=None,
+                future=loop.create_future(),
+                request_id="r0",
+            ),
+        )
+        heapq.heappush(
+            q2._heap,
+            _QueueItem(
+                priority=1,
+                enqueue_order=-2,
+                coro=None,
+                future=loop.create_future(),
+                request_id="r1",
+            ),
+        )
         d = await q2.depth()
         assert d[0] == 1  # HIGH
         assert d[1] == 1  # MEDIUM
@@ -342,6 +383,7 @@ class TestSlotReservation:
 
         async def fn():
             return 42
+
         t = asyncio.create_task(q.submit(fn(), priority=Priority.MEDIUM))
         await asyncio.sleep(0.05)
         assert not t.done()
@@ -392,9 +434,7 @@ class TestSlotReservation:
         await asyncio.sleep(0.02)
 
         # Acquire pushes a marker, blocks on grant (worker busy)
-        acq = asyncio.create_task(
-            q.acquire(priority=Priority.MEDIUM, request_id="cancel-me")
-        )
+        acq = asyncio.create_task(q.acquire(priority=Priority.MEDIUM, request_id="cancel-me"))
         await asyncio.sleep(0.02)
         assert not acq.done()
 

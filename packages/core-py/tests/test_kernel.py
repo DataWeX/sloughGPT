@@ -1,18 +1,34 @@
 """Tests for AI-Native Kernel primitives."""
 
-import pytest
 import time
-import numpy as np
-from domain.shell._internal.kernel_process import Process, ProcessState, Priority, TensorRef
-from domain.shell._internal.kernel_memory import TensorMemory, MemoryBlock
-from domain.shell._internal.kernel_scheduler import Scheduler
-from domain.shell._internal.kernel_interrupts import InterruptManager, InterruptVector, InterruptType, Interrupt
-from domain.shell._internal.kernel_devices import DeviceDriver, DeviceManager, DeviceType, DeviceState
-from domain.shell._internal.kernel_syscall import SyscallTable, SyscallNumber, SyscallResult, SYSCALLS
-from domain.shell._internal.kernel import Kernel, get_kernel, reset_kernel
 
+import numpy as np
+import pytest
+
+from domain.shell._internal.kernel import Kernel, get_kernel, reset_kernel
+from domain.shell._internal.kernel_devices import (
+    DeviceDriver,
+    DeviceManager,
+    DeviceState,
+    DeviceType,
+)
+from domain.shell._internal.kernel_interrupts import (
+    Interrupt,
+    InterruptManager,
+    InterruptType,
+    InterruptVector,
+)
+from domain.shell._internal.kernel_memory import TensorMemory
+from domain.shell._internal.kernel_process import Priority, Process, ProcessState, TensorRef
+from domain.shell._internal.kernel_scheduler import Scheduler
+from domain.shell._internal.kernel_syscall import (
+    SyscallNumber,
+    SyscallResult,
+    SyscallTable,
+)
 
 # ── Process tests ────────────────────────────────────────────────────────────
+
 
 class TestProcess:
     def test_create(self):
@@ -74,6 +90,7 @@ class TestProcess:
 
 
 # ── Memory tests ─────────────────────────────────────────────────────────────
+
 
 class TestTensorMemory:
     def test_allocate(self):
@@ -147,6 +164,7 @@ class TestTensorMemory:
 
 # ── Scheduler tests ──────────────────────────────────────────────────────────
 
+
 class TestScheduler:
     def test_add_process(self):
         sched = Scheduler()
@@ -214,6 +232,7 @@ class TestScheduler:
 
 # ── Interrupt tests ──────────────────────────────────────────────────────────
 
+
 class TestInterruptManager:
     def test_fire_and_handle(self):
         mgr = InterruptManager()
@@ -260,13 +279,16 @@ class TestInterruptManager:
 
 # ── Device tests ─────────────────────────────────────────────────────────────
 
+
 class TestDeviceDriver:
     def test_register_open_close(self):
         class TestDev(DeviceDriver):
             def __init__(self):
                 super().__init__("test_dev", DeviceType.CUSTOM)
+
             def read(self, offset=0, size=-1):
                 return "hello"
+
             def write(self, data):
                 return True
 
@@ -302,6 +324,7 @@ class TestDeviceDriver:
         class Dev1(DeviceDriver):
             def __init__(self):
                 super().__init__("d1", DeviceType.INFERENCE)
+
         class Dev2(DeviceDriver):
             def __init__(self):
                 super().__init__("d2", DeviceType.TRAINING)
@@ -314,6 +337,7 @@ class TestDeviceDriver:
 
 
 # ── Syscall tests ────────────────────────────────────────────────────────────
+
 
 class TestSyscallTable:
     def test_dispatch(self):
@@ -337,8 +361,10 @@ class TestSyscallTable:
 
     def test_exception_handling(self):
         table = SyscallTable()
+
         def bad_handler(k):
             raise ValueError("boom")
+
         table.register(SyscallNumber.UPTIME, bad_handler)
         kernel = Kernel()
         kernel.boot()
@@ -349,6 +375,7 @@ class TestSyscallTable:
 
 
 # ── Full Kernel tests ────────────────────────────────────────────────────────
+
 
 class TestKernel:
     def setup_method(self):
@@ -427,6 +454,7 @@ class TestKernel:
         k = Kernel()
         k.boot()
         from domain.shell._internal.kernel_syscall import SyscallNumber
+
         result = k.syscall(SyscallNumber.TENSOR_ALLOC, (5, 5), "float64")
         assert result.success
         assert result.value["size_bytes"] == 200
@@ -469,7 +497,9 @@ class TestKernel:
     def test_run_program_with_trace(self):
         k = Kernel()
         k.boot()
-        result = k.run_program("MOV R0, 10\nMOV R1, 20\nIADD R2, R0, R1\nPRINT R2\nHALT", trace=True)
+        result = k.run_program(
+            "MOV R0, 10\nMOV R1, 20\nIADD R2, R0, R1\nPRINT R2\nHALT", trace=True
+        )
         assert len(result["trace"]) > 0
         assert result["output"] == ["30"]
         k.shutdown()
@@ -487,6 +517,7 @@ class TestKernel:
 
     def test_process_entry_executes(self):
         import time as _time
+
         k = Kernel()
         k.boot()
         results = []
@@ -501,6 +532,7 @@ class TestKernel:
 
     def test_process_error_captured(self):
         import time as _time
+
         k = Kernel()
         k.boot()
         proc = k.spawn_process("crasher", entry=lambda: (_ for _ in ()).throw(RuntimeError("boom")))
@@ -514,20 +546,21 @@ class TestKernel:
 
     def test_spawn_kernel_shell(self):
         import time as _time
+
         output = []
-        inputs = ['help', 'halt']
+        inputs = ["help", "halt"]
         input_iter = iter(inputs)
 
         k = Kernel()
         k.boot()
         proc = k.spawn_kernel_shell(
-            stdin_fn=lambda: next(input_iter, 'halt'),
+            stdin_fn=lambda: next(input_iter, "halt"),
             stdout_fn=lambda v: output.append(v),
         )
         for _ in range(20):
             k.tick()
             _time.sleep(0.02)
-            if proc.state.name == 'ZOMBIE':
+            if proc.state.name == "ZOMBIE":
                 break
 
         assert any("help" in line or "commands" in line for line in output)
@@ -536,19 +569,20 @@ class TestKernel:
 
     def test_spawn_vm_process(self):
         import time as _time
+
         k = Kernel()
         k.boot()
         k.register_devices()
         proc = k.spawn_vm_process(
-            'test-vm',
-            'LOAD_CONST R0, 99\nOUT 1, R0\nHALT',
+            "test-vm",
+            "LOAD_CONST R0, 99\nOUT 1, R0\nHALT",
         )
         for _ in range(10):
             k.tick()
             _time.sleep(0.05)
-            if proc.state.name == 'ZOMBIE':
+            if proc.state.name == "ZOMBIE":
                 break
 
-        log = proc.metadata.get('output_log', [])
-        assert '99' in log
+        log = proc.metadata.get("output_log", [])
+        assert "99" in log
         k.shutdown()

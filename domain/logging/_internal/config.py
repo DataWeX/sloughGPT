@@ -39,24 +39,22 @@ import logging
 import logging.handlers
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # ── Correlation ID via contextvars (thread-safe, async-safe) ──────────
 
-_request_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+_request_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "slo_request_id", default=None
 )
 
-_log_context: contextvars.ContextVar[dict] = contextvars.ContextVar(
-    "slo_log_context", default={}
-)
+_log_context: contextvars.ContextVar[dict] = contextvars.ContextVar("slo_log_context", default={})
 
 
-def get_request_id() -> Optional[str]:
+def get_request_id() -> str | None:
     """Return the current request's correlation ID."""
     return _request_id.get()
 
@@ -104,58 +102,59 @@ def _color_enabled(stream=None) -> bool:
 
 class _A:
     """ANSI escape codes."""
-    RESET    = "\033[0m"
-    BOLD     = "\033[1m"
-    DIM      = "\033[2m"
-    RED      = "\033[31m"
-    GREEN    = "\033[32m"
-    YELLOW   = "\033[33m"
-    BLUE     = "\033[34m"
-    MAGENTA  = "\033[35m"
-    CYAN     = "\033[36m"
-    WHITE    = "\033[37m"
-    GREY     = "\033[90m"
-    BG_RED   = "\033[41m"
+
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
+    GREY = "\033[90m"
+    BG_RED = "\033[41m"
 
 
 # ── Level formatting ──────────────────────────────────────────────────
 
 _LEVEL_ABBR = {
-    logging.DEBUG:    "DBG",
-    logging.INFO:     "INF",
-    logging.WARNING:  "WRN",
-    logging.ERROR:    "ERR",
+    logging.DEBUG: "DBG",
+    logging.INFO: "INF",
+    logging.WARNING: "WRN",
+    logging.ERROR: "ERR",
     logging.CRITICAL: "CRI",
 }
 
 _LEVEL_STYLE = {
-    logging.DEBUG:    (_A.DIM,                            "DBG"),
-    logging.INFO:     (_A.GREEN,                          "INF"),
-    logging.WARNING:  (_A.YELLOW + _A.BOLD,               "WRN"),
-    logging.ERROR:    (_A.RED + _A.BOLD,                  "ERR"),
-    logging.CRITICAL: (_A.BG_RED + _A.BOLD + _A.WHITE,   "CRI"),
+    logging.DEBUG: (_A.DIM, "DBG"),
+    logging.INFO: (_A.GREEN, "INF"),
+    logging.WARNING: (_A.YELLOW + _A.BOLD, "WRN"),
+    logging.ERROR: (_A.RED + _A.BOLD, "ERR"),
+    logging.CRITICAL: (_A.BG_RED + _A.BOLD + _A.WHITE, "CRI"),
 }
 
 _TAG_STYLE = {
-    "REQ":    (_A.CYAN + _A.BOLD,     "REQ"),
-    "AUTH":   (_A.MAGENTA + _A.BOLD,  "AUTH"),
-    "MODEL":  (_A.BLUE + _A.BOLD,     "MODEL"),
-    "SOUL":   (_A.CYAN,               "SOUL"),
-    "TRAIN":  (_A.GREEN + _A.BOLD,    "TRAIN"),
-    "INFRA":  (_A.GREY + _A.BOLD,     "INFRA"),
-    "START":  (_A.GREEN + _A.BOLD,    "START"),
-    "SLOW":   (_A.YELLOW + _A.DIM,    "SLOW"),
-    "ERROR":  (_A.RED + _A.BOLD,      "ERROR"),
-    "WARN":   (_A.YELLOW + _A.BOLD,   "WARN"),
-    "OK":     (_A.GREEN,              "OK"),
-    "INF":    (_A.CYAN,               "INF"),
-    "COG":    (_A.MAGENTA,            "COG"),
-    "IDLE":   (_A.GREY,               "IDLE"),
-    "KV":     (_A.BLUE,               "KV"),
-    "GPU":    (_A.YELLOW,             "GPU"),
-    "LEARN":  (_A.GREEN,              "LEARN"),
-    "BENCH":  (_A.MAGENTA,            "BENCH"),
-    "EVENT":  (_A.CYAN,               "EVENT"),
+    "REQ": (_A.CYAN + _A.BOLD, "REQ"),
+    "AUTH": (_A.MAGENTA + _A.BOLD, "AUTH"),
+    "MODEL": (_A.BLUE + _A.BOLD, "MODEL"),
+    "SOUL": (_A.CYAN, "SOUL"),
+    "TRAIN": (_A.GREEN + _A.BOLD, "TRAIN"),
+    "INFRA": (_A.GREY + _A.BOLD, "INFRA"),
+    "START": (_A.GREEN + _A.BOLD, "START"),
+    "SLOW": (_A.YELLOW + _A.DIM, "SLOW"),
+    "ERROR": (_A.RED + _A.BOLD, "ERROR"),
+    "WARN": (_A.YELLOW + _A.BOLD, "WARN"),
+    "OK": (_A.GREEN, "OK"),
+    "INF": (_A.CYAN, "INF"),
+    "COG": (_A.MAGENTA, "COG"),
+    "IDLE": (_A.GREY, "IDLE"),
+    "KV": (_A.BLUE, "KV"),
+    "GPU": (_A.YELLOW, "GPU"),
+    "LEARN": (_A.GREEN, "LEARN"),
+    "BENCH": (_A.MAGENTA, "BENCH"),
+    "EVENT": (_A.CYAN, "EVENT"),
 }
 
 
@@ -172,6 +171,7 @@ def _enriched_record_factory(*args, **kwargs):
     if not rid:
         try:
             from schemas.common import get_correlation_id
+
             rid = get_correlation_id()
         except (ImportError, AttributeError):
             pass
@@ -187,6 +187,7 @@ def _enriched_record_factory(*args, **kwargs):
 
 
 # ── Human-readable formatter ─────────────────────────────────────────
+
 
 class HumanFormatter(logging.Formatter):
     """Colored terminal output: HH:MM:SS LVL [TAG] logger message key=val"""
@@ -260,19 +261,40 @@ class HumanFormatter(logging.Formatter):
 
 # ── JSON formatter ────────────────────────────────────────────────────
 
+
 class JSONFormatter(logging.Formatter):
     """Structured JSON lines: one JSON object per line."""
 
-    _KNOWN = frozenset({
-        "name", "levelno", "levelname", "pathname", "filename", "module",
-        "lineno", "funcName", "created", "msecs", "relativeCreated",
-        "thread", "threadName", "process", "processName", "args", "msg",
-        "exc_info", "exc_text", "stack_info", "taskName", "message",
-    })
+    _KNOWN = frozenset(
+        {
+            "name",
+            "levelno",
+            "levelname",
+            "pathname",
+            "filename",
+            "module",
+            "lineno",
+            "funcName",
+            "created",
+            "msecs",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "process",
+            "processName",
+            "args",
+            "msg",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "taskName",
+            "message",
+        }
+    )
 
     def format(self, record: logging.LogRecord) -> str:
         entry: dict[str, Any] = {
-            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec="milliseconds"),
+            "ts": datetime.fromtimestamp(record.created, tz=UTC).isoformat(timespec="milliseconds"),
             "level": record.levelname,
             "logger": record.name,
             "msg": record.getMessage(),
@@ -303,29 +325,29 @@ class JSONFormatter(logging.Formatter):
 # ── Legacy tag → slo.log op mapping (backward compat) ────────────────
 
 _LEGACY_TAG_TO_OP = {
-    "REQ":    "http.request",
-    "AUTH":   "http.auth",
-    "MODEL":  "model.load",
-    "SOUL":   "model.load",
-    "TRAIN":  "train.step",
-    "INFRA":  "infra.error",
-    "START":  "sys.startup",
-    "SLOW":   "http.request",
-    "ERROR":  "infra.error",
-    "WARN":   "infra.error",
-    "OK":     "sys.info",
-    "INF":    "sys.info",
-    "COG":    "rag.query",
-    "IDLE":   "sys.info",
-    "KV":     "sys.info",
-    "GPU":    "infer.generate",
-    "LEARN":  "train.step",
-    "BENCH":  "sys.info",
-    "EVENT":  "sys.info",
-    "CHAT":   "http.request",
+    "REQ": "http.request",
+    "AUTH": "http.auth",
+    "MODEL": "model.load",
+    "SOUL": "model.load",
+    "TRAIN": "train.step",
+    "INFRA": "infra.error",
+    "START": "sys.startup",
+    "SLOW": "http.request",
+    "ERROR": "infra.error",
+    "WARN": "infra.error",
+    "OK": "sys.info",
+    "INF": "sys.info",
+    "COG": "rag.query",
+    "IDLE": "sys.info",
+    "KV": "sys.info",
+    "GPU": "infer.generate",
+    "LEARN": "train.step",
+    "BENCH": "sys.info",
+    "EVENT": "sys.info",
+    "CHAT": "http.request",
     "DOWNLOAD": "download.start",
     "WORKFLOW": "workflow.start",
-    "SYSTEM":   "sys.info",
+    "SYSTEM": "sys.info",
 }
 
 
@@ -347,6 +369,7 @@ def _derive_op(record: logging.LogRecord) -> str:
 
 
 # ── Unified formatter ─────────────────────────────────────────────────
+
 
 class LogFormatter(logging.Formatter):
     """Single unified formatter for console and file output.
@@ -406,7 +429,9 @@ class LogFormatter(logging.Formatter):
 
         entry: dict[str, Any] = {
             "v": 1,
-            "ts": datetime.fromtimestamp(record.timestamp, tz=timezone.utc).isoformat(timespec="milliseconds"),
+            "ts": datetime.fromtimestamp(record.timestamp, tz=UTC).isoformat(
+                timespec="milliseconds"
+            ),
             "lvl": _level_name_map.get(record.level, "UNKNOWN"),
             "op": getattr(record, "tag", None) or record.logger or "unknown",
             "msg": record.message,
@@ -430,6 +455,7 @@ class LogFormatter(logging.Formatter):
     def _format_custom_human(self, record) -> str:
         """Human/slo format for custom base.LogRecord."""
         from .base import LogLevel as _LogLevel
+
         parts = []
         c = self._colors
 
@@ -452,7 +478,9 @@ class LogFormatter(logging.Formatter):
         }
         color, abbrev = _level_map.get(record.level, (_A.WHITE, "???"))
         icon = _icon_map.get(record.level, "")
-        parts.append(f"{color}{_A.BOLD}{abbrev:>3}{icon}{_A.RESET}" if c else f"{abbrev.rjust(3)}{icon}")
+        parts.append(
+            f"{color}{_A.BOLD}{abbrev:>3}{icon}{_A.RESET}" if c else f"{abbrev.rjust(3)}{icon}"
+        )
 
         # Tag
         tag = getattr(record, "tag", None)
@@ -573,7 +601,7 @@ class LogFormatter(logging.Formatter):
 
         entry: dict[str, Any] = {
             "v": 1,
-            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec="milliseconds"),
+            "ts": datetime.fromtimestamp(record.created, tz=UTC).isoformat(timespec="milliseconds"),
             "lvl": record.levelname,
             "op": op,
             "msg": record.getMessage(),
@@ -615,6 +643,7 @@ SloFormatter = LogFormatter
 
 # ── slo.log v1 JSON formatter ─────────────────────────────────────────
 
+
 class SloJSONFormatter(logging.Formatter):
     """slo.log v1 structured JSON lines.
 
@@ -624,12 +653,32 @@ class SloJSONFormatter(logging.Formatter):
          "dur_ms":null,"ok":true,"logger":"slo.model","model":{"id":"gpt2",...}}
     """
 
-    _KNOWN = frozenset({
-        "name", "levelno", "levelname", "pathname", "filename", "module",
-        "lineno", "funcName", "created", "msecs", "relativeCreated",
-        "thread", "threadName", "process", "processName", "args", "msg",
-        "exc_info", "exc_text", "stack_info", "taskName", "message",
-    })
+    _KNOWN = frozenset(
+        {
+            "name",
+            "levelno",
+            "levelname",
+            "pathname",
+            "filename",
+            "module",
+            "lineno",
+            "funcName",
+            "created",
+            "msecs",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "process",
+            "processName",
+            "args",
+            "msg",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "taskName",
+            "message",
+        }
+    )
 
     def format(self, record: logging.LogRecord) -> str:
         op = _derive_op(record)
@@ -640,7 +689,7 @@ class SloJSONFormatter(logging.Formatter):
 
         entry: dict[str, Any] = {
             "v": 1,
-            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec="milliseconds"),
+            "ts": datetime.fromtimestamp(record.created, tz=UTC).isoformat(timespec="milliseconds"),
             "lvl": record.levelname,
             "op": op,
             "corr": rid,
@@ -667,14 +716,14 @@ class SloJSONFormatter(logging.Formatter):
 def _collect_domain_payload(record: logging.LogRecord, domain: str) -> dict:
     """Extract domain-specific payload from record extras."""
     _DOMAIN_KEYS = {
-        "http":    {"method", "path", "status", "elapsed_s"},
-        "train":   {"job_id", "epoch", "step", "total_steps", "loss", "lr"},
-        "model":   {"id", "layers", "weights_count", "file_mb", "source"},
-        "infer":   {"model_id", "tokens", "session_id", "prompt_len", "timeout_s"},
-        "infra":   {"component", "worker_id", "model_id", "reason", "restart_count", "max_restarts"},
-        "sys":     {"phase", "signal", "version"},
-        "web":     {"event", "path"},
-        "rag":     {"chunks", "chars", "top_k", "results", "verified", "confidence", "citations"},
+        "http": {"method", "path", "status", "elapsed_s"},
+        "train": {"job_id", "epoch", "step", "total_steps", "loss", "lr"},
+        "model": {"id", "layers", "weights_count", "file_mb", "source"},
+        "infer": {"model_id", "tokens", "session_id", "prompt_len", "timeout_s"},
+        "infra": {"component", "worker_id", "model_id", "reason", "restart_count", "max_restarts"},
+        "sys": {"phase", "signal", "version"},
+        "web": {"event", "path"},
+        "rag": {"chunks", "chars", "top_k", "results", "verified", "confidence", "citations"},
         "download": {"resource", "elapsed_s", "url", "bytes", "speed"},
         "workflow": {"job_id", "kind", "status"},
     }
@@ -696,11 +745,31 @@ def _collect_extras(record: logging.LogRecord) -> dict:
         if key in _KNOWN_KEYS or key.startswith("_"):
             continue
         # Skip standard attributes
-        if key in ("msg", "args", "levelname", "levelno", "pathname", "filename",
-                    "module", "exc_info", "exc_text", "stack_info", "lineno",
-                    "funcName", "created", "msecs", "relativeCreated", "thread",
-                    "threadName", "processName", "process", "taskName", "message",
-                    "name", "asctime"):
+        if key in (
+            "msg",
+            "args",
+            "levelname",
+            "levelno",
+            "pathname",
+            "filename",
+            "module",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "lineno",
+            "funcName",
+            "created",
+            "msecs",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "processName",
+            "process",
+            "taskName",
+            "message",
+            "name",
+            "asctime",
+        ):
             continue
         # Skip already-handled fields
         if key in ("tag", "request_id", "error_code", "op", "corr", "dur_ms", "ok", "err"):
@@ -709,35 +778,64 @@ def _collect_extras(record: logging.LogRecord) -> dict:
     return ctx
 
 
-_KNOWN_KEYS = frozenset({
-    "name", "levelno", "levelname", "pathname", "filename", "module",
-    "lineno", "funcName", "created", "msecs", "relativeCreated",
-    "thread", "threadName", "process", "processName", "args", "msg",
-    "exc_info", "exc_text", "stack_info", "taskName", "message",
-    "asctime", "tag", "request_id", "error_code",
-    # slo.log v1 envelope fields
-    "op", "corr", "dur_ms", "ok", "err",
-})
+_KNOWN_KEYS = frozenset(
+    {
+        "name",
+        "levelno",
+        "levelname",
+        "pathname",
+        "filename",
+        "module",
+        "lineno",
+        "funcName",
+        "created",
+        "msecs",
+        "relativeCreated",
+        "thread",
+        "threadName",
+        "process",
+        "processName",
+        "args",
+        "msg",
+        "exc_info",
+        "exc_text",
+        "stack_info",
+        "taskName",
+        "message",
+        "asctime",
+        "tag",
+        "request_id",
+        "error_code",
+        # slo.log v1 envelope fields
+        "op",
+        "corr",
+        "dur_ms",
+        "ok",
+        "err",
+    }
+)
 
 
 # ── Third-party logger suppression ───────────────────────────────────
 
 _NOISY_LOGGERS = {
-    "httpx":                  logging.WARNING,
-    "httpcore":               logging.WARNING,
-    "urllib3":                logging.WARNING,
-    "uvicorn.access":         logging.WARNING,
-    "watchfiles":             logging.WARNING,
-    "asyncio":                logging.WARNING,
-    "PIL":                    logging.WARNING,
-    "urllib3.connectionpool":  logging.WARNING,
+    "httpx": logging.WARNING,
+    "httpcore": logging.WARNING,
+    "urllib3": logging.WARNING,
+    "uvicorn.access": logging.WARNING,
+    "watchfiles": logging.WARNING,
+    "asyncio": logging.WARNING,
+    "PIL": logging.WARNING,
+    "urllib3.connectionpool": logging.WARNING,
 }
 
 
 # ── Client extension filter ───────────────────────────────────────────
 
+
 class ClientExtensionFilter(logging.Filter):
     """Suppress noisy client errors from browser extensions."""
+
     _PATTERNS = ("CLIENT ERROR", "0 0", "chrome-extension://", "moz-extension://")
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -746,6 +844,7 @@ class ClientExtensionFilter(logging.Filter):
 
 
 # ── File handler with rotation ────────────────────────────────────────
+
 
 def _create_file_handler(
     log_dir: Path,
@@ -775,10 +874,15 @@ def _create_file_handler(
 
 # ── OutputBuffer integration ──────────────────────────────────────────
 
-def _install_output_buffer_bridge(root: logging.Logger) -> Optional[Any]:
+
+def _install_output_buffer_bridge(root: logging.Logger) -> Any | None:
     """Install the OutputBuffer log handler if available."""
     try:
-        from domain.infrastructure._internal.output_buffer import install_log_bridge, install_stdio_bridge
+        from domain.infrastructure._internal.output_buffer import (
+            install_log_bridge,
+            install_stdio_bridge,
+        )
+
         buf_handler = install_log_bridge()
         install_stdio_bridge()
         return buf_handler
@@ -789,11 +893,12 @@ def _install_output_buffer_bridge(root: logging.Logger) -> Optional[Any]:
 
 # ── Main setup function ──────────────────────────────────────────────
 
+
 def setup_logging(
-    level: Optional[str] = None,
-    format: Optional[str] = None,
-    log_dir: Optional[str] = None,
-    enable_file: Optional[bool] = None,
+    level: str | None = None,
+    format: str | None = None,
+    log_dir: str | None = None,
+    enable_file: bool | None = None,
     enable_console: bool = True,
     enable_output_buffer: bool = True,
 ) -> dict[str, Any]:
@@ -831,6 +936,7 @@ def setup_logging(
             # Default: logs/ relative to repo root
             try:
                 from domain.shared import find_repo_root
+
                 repo = find_repo_root(Path(__file__).resolve())
                 log_path = repo / "logs"
             except Exception as e:
@@ -882,6 +988,7 @@ def setup_logging(
     # Dashboard event buffer filter (captures tagged events for CLI monitor)
     try:
         from domain.logging._internal.dashboard_filter import DashboardFilter
+
         root.addFilter(DashboardFilter())
     except Exception as exc:
         print(f"Warning: DashboardFilter unavailable: {exc}", file=sys.stderr)

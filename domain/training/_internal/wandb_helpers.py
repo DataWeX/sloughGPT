@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
-from typing import Any, Dict
+from typing import Any
 
 from domain.infrastructure._internal.config import get_config
 
@@ -11,6 +11,7 @@ from domain.infrastructure._internal.config import get_config
 def wandb_training_enabled_from_env() -> bool:
     """Enable W&B for ``POST /training/start`` background jobs when API key or offline mode is usable."""
     import os
+
     if os.environ.get("MAN_WANDB_TRAINING") in ("1", "true", "yes"):
         return True
     return get_config().tracking.wandb_training_enabled
@@ -25,9 +26,9 @@ def default_wandb_project() -> str:
     return get_config().tracking.wandb_project
 
 
-def flatten_for_wandb_config(obj: Any, prefix: str = "") -> Dict[str, Any]:
+def flatten_for_wandb_config(obj: Any, prefix: str = "") -> dict[str, Any]:
     """Flatten nested dataclasses / dicts into dotted keys wandb can display."""
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     if obj is None:
         return out
     if is_dataclass(obj) and not isinstance(obj, type):
@@ -59,7 +60,7 @@ def create_training_tracker_for_api_job(
     job_id: str,
     job_name: str,
     data_path: str,
-    hyperparams: Dict[str, Any],
+    hyperparams: dict[str, Any],
 ):
     """Start a W&B run for a ``POST /training/start`` job when ``SLO_WANDB_TRAINING`` is set.
 
@@ -68,7 +69,11 @@ def create_training_tracker_for_api_job(
     if not wandb_training_enabled_from_env():
         return None
     try:
-        from domain.training._internal.tracking import ExperimentTracker, TrackerBackend, TrackingConfig
+        from domain.training._internal.tracking import (
+            ExperimentTracker,
+            TrackerBackend,
+            TrackingConfig,
+        )
     except ImportError:
         return None
 

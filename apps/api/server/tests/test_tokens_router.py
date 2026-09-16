@@ -15,6 +15,7 @@ _AUTH_USER = {"id": "user1", "sub": "user1", "tenant_id": "t1"}
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def mock_service():
     return MagicMock()
@@ -39,9 +40,11 @@ def client(app):
 
 # ── Balance ──────────────────────────────────────────────────────────────────
 
+
 class TestBalance:
     def test_get_balance(self, client, mock_service):
         from domain.billing._internal.token_service import Tier, TokenAccount
+
         account = TokenAccount(user_id="user1", balance=5000, tier=Tier.PRO)
         mock_service.get_balance.return_value = account
         resp = client.get("/tokens/balance")
@@ -56,6 +59,7 @@ class TestBalance:
 
 # ── Usage summary ────────────────────────────────────────────────────────────
 
+
 class TestUsageSummary:
     def test_get_usage_summary(self, client, mock_service):
         mock_service.get_usage_summary.return_value = {"totalTokens": 1000}
@@ -66,13 +70,20 @@ class TestUsageSummary:
 
 # ── Usage history ────────────────────────────────────────────────────────────
 
+
 class TestUsageHistory:
     def test_get_usage_history(self, client, mock_service):
         from domain.billing._internal.token_service import UsageRecord
+
         record = UsageRecord(
-            id="r1", user_id="user1", model="gpt-4",
-            input_tokens=100, output_tokens=200, total_tokens=300,
-            cost=0.015, timestamp=1000.0,
+            id="r1",
+            user_id="user1",
+            model="gpt-4",
+            input_tokens=100,
+            output_tokens=200,
+            total_tokens=300,
+            cost=0.015,
+            timestamp=1000.0,
         )
         mock_service.get_usage_history.return_value = [record]
         resp = client.get("/tokens/usage/history")
@@ -90,9 +101,11 @@ class TestUsageHistory:
 
 # ── Topup ────────────────────────────────────────────────────────────────────
 
+
 class TestTopup:
     def test_topup_success(self, client, mock_service):
         from domain.billing._internal.token_service import Tier, TokenAccount
+
         account = TokenAccount(user_id="user1", balance=6000, tier=Tier.FREE)
         mock_service.add_credits.return_value = account
         resp = client.post("/tokens/topup", json={"amount": 1000})
@@ -106,9 +119,11 @@ class TestTopup:
 
 # ── Upgrade ──────────────────────────────────────────────────────────────────
 
+
 class TestUpgrade:
     def test_upgrade_success(self, client, mock_service):
         from domain.billing._internal.token_service import Tier, TokenAccount
+
         account = TokenAccount(user_id="user1", balance=5000, tier=Tier.PRO)
         mock_service.upgrade_tier.return_value = account
         resp = client.post("/tokens/upgrade", json={"tier": "pro"})
@@ -122,16 +137,21 @@ class TestUpgrade:
 
 # ── Check ────────────────────────────────────────────────────────────────────
 
+
 class TestCheck:
     def test_check_can_afford(self, client, mock_service):
         from domain.billing._internal.token_service import Tier, TokenAccount
+
         account = TokenAccount(user_id="user1", balance=10000, tier=Tier.PRO)
         mock_service.get_balance.return_value = account
-        resp = client.post("/tokens/check", json={
-            "model": "gpt-4",
-            "input_tokens": 100,
-            "output_tokens": 50,
-        })
+        resp = client.post(
+            "/tokens/check",
+            json={
+                "model": "gpt-4",
+                "input_tokens": 100,
+                "output_tokens": 50,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["canAfford"] is True
@@ -139,13 +159,17 @@ class TestCheck:
 
     def test_check_cannot_afford(self, client, mock_service):
         from domain.billing._internal.token_service import Tier, TokenAccount
+
         account = TokenAccount(user_id="user1", balance=10, tier=Tier.FREE)
         mock_service.get_balance.return_value = account
-        resp = client.post("/tokens/check", json={
-            "model": "gpt-4",
-            "input_tokens": 100,
-            "output_tokens": 50,
-        })
+        resp = client.post(
+            "/tokens/check",
+            json={
+                "model": "gpt-4",
+                "input_tokens": 100,
+                "output_tokens": 50,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["canAfford"] is False

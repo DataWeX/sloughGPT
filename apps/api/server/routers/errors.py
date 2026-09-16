@@ -13,16 +13,17 @@ import os
 import re
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-from domain.infrastructure.output_buffer import get_server_buffer
-from domain.logging._internal.base import LogTag
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
+from schemas.common import endpoint, safe_audit_log, success_response
+
+from domain.infrastructure.output_buffer import get_server_buffer
+from domain.logging._internal.base import LogTag
 
 logger = logging.getLogger("slo.errors")
 
@@ -158,7 +159,7 @@ class ErrorsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Log one or more client-side JavaScript errors for server-side monitoring."""
-        now_ts = datetime.now(timezone.utc)
+        now_ts = datetime.now(UTC)
         now_iso = now_ts.isoformat()
         now_epoch = now_ts.timestamp()
         client_host = request.client.host if request.client else "unknown"
@@ -241,9 +242,7 @@ class ErrorsRouter:
         self, batch: FrontendLogBatch, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Ingest frontend logs through the core logging pipeline."""
-        user_id = (
-            (auth_user or {}).get("id") or (auth_user or {}).get("username") or "anonymous"
-        )
+        user_id = (auth_user or {}).get("id") or (auth_user or {}).get("username") or "anonymous"
 
         for entry in batch.logs:
             context: dict = {}
@@ -320,7 +319,7 @@ class ErrorsRouter:
     @endpoint("errors.trends")
     async def get_error_trends(self, hours: int = 24) -> dict:
         """Get error counts per hour for the last N hours."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         buckets: dict[str, int] = {}
 
         for h in range(hours):
@@ -375,7 +374,7 @@ class ErrorsRouter:
         return JSONResponse(
             content={"errors": errors, "total": total, "exported": len(errors)},
             headers={
-                "Content-Disposition": f'attachment; filename="errors-{datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")}.json"'
+                "Content-Disposition": f'attachment; filename="errors-{datetime.now(UTC).strftime("%Y%m%d-%H%M%S")}.json"'
             },
         )
 

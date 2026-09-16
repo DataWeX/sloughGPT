@@ -2,42 +2,40 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+import pytest
+
 from domain.training._internal.slonet import (
     Tensor,
-    relu,
-    gelu,
-    gelu_np,
-    silu,
-    silu_np,
-    softmax,
-    cross_entropy,
-    mse_loss,
-    topk,
-    multinomial,
-    stack,
-    concatenate,
-    randint,
-    exp,
-    isfinite,
-    where,
-    no_grad,
-    is_cuda,
-    is_mps,
-    cpu,
+    _apply_repetition_penalty,
     _apply_temperature,
     _apply_top_k,
     _apply_top_p,
-    _apply_repetition_penalty,
+    concatenate,
+    cpu,
+    cross_entropy,
+    exp,
+    gelu,
+    gelu_np,
+    is_cuda,
+    is_mps,
+    isfinite,
+    mse_loss,
+    multinomial,
+    randint,
+    relu,
+    silu,
+    silu_np,
+    softmax,
+    stack,
+    topk,
+    where,
 )
-
 
 # ── relu ────────────────────────────────────────────────────────────────────
 
 
 class TestRelu:
-
     def test_positive(self):
         t = Tensor(np.array([1.0, 2.0, 3.0]))
         out = relu(t)
@@ -60,7 +58,6 @@ class TestRelu:
 
 
 class TestGelu:
-
     def test_numpy(self):
         d = np.array([-1.0, 0.0, 1.0])
         out = gelu_np(d)
@@ -85,7 +82,6 @@ class TestGelu:
 
 
 class TestSilu:
-
     def test_numpy(self):
         d = np.array([0.0, 1.0, -1.0])
         out = silu_np(d)
@@ -109,7 +105,6 @@ class TestSilu:
 
 
 class TestSoftmax:
-
     def test_sums_to_one(self):
         t = Tensor(np.array([[1.0, 2.0, 3.0]]))
         out = softmax(t, dim=-1)
@@ -130,7 +125,6 @@ class TestSoftmax:
 
 
 class TestCrossEntropy:
-
     def test_perfect_prediction(self):
         logits = Tensor(np.array([[10.0, 0.0, 0.0]]))
         targets = Tensor(np.array([0]))
@@ -156,7 +150,6 @@ class TestCrossEntropy:
 
 
 class TestMseLoss:
-
     def test_perfect(self):
         pred = Tensor(np.array([1.0, 2.0, 3.0]))
         target = Tensor(np.array([1.0, 2.0, 3.0]))
@@ -174,7 +167,6 @@ class TestMseLoss:
 
 
 class TestTopk:
-
     def test_basic(self):
         t = Tensor(np.array([3.0, 1.0, 4.0, 1.0, 5.0]))
         values, indices = topk(t, k=2)
@@ -186,7 +178,6 @@ class TestTopk:
 
 
 class TestMultinomial:
-
     def test_basic(self):
         t = Tensor(np.array([0.1, 0.5, 0.4]))
         out = multinomial(t, num_samples=1)
@@ -202,7 +193,6 @@ class TestMultinomial:
 
 
 class TestStackConcat:
-
     def test_stack(self):
         t1 = Tensor(np.array([1.0, 2.0]))
         t2 = Tensor(np.array([3.0, 4.0]))
@@ -220,7 +210,6 @@ class TestStackConcat:
 
 
 class TestUtilities:
-
     def test_randint(self):
         out = randint(0, 10, (2, 3))
         assert out.shape == (2, 3)
@@ -249,7 +238,6 @@ class TestUtilities:
 
 
 class TestDeviceUtils:
-
     def test_is_cuda(self):
         assert is_cuda(Tensor([1.0])) is False
 
@@ -265,7 +253,6 @@ class TestDeviceUtils:
 
 
 class TestLogitProcessors:
-
     def test_temperature(self):
         logits = np.array([[1.0, 2.0, 3.0]])
         out = _apply_temperature(logits, 2.0)
@@ -312,15 +299,17 @@ class TestLogitProcessors:
 
 
 class TestNoGradClass:
-
     def test_context(self):
         from domain.training._internal.slonet import _NoGrad
+
         with _NoGrad():
             pass
 
     def test_decorator(self):
         from domain.training._internal.slonet import _NoGrad
+
         @_NoGrad()
         def fn():
             return 42
+
         assert fn() == 42

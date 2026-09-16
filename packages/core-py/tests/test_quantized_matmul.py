@@ -14,30 +14,27 @@ Tests:
   - QuantizedLinear wrapper
 """
 
-import time
-import json
 
 import numpy as np
 import pytest
 
 from domain.infrastructure._internal.quantization import (
+    QuantDtype,
     Quantine,
-    TensorInfo,
     QuantMeta,
     QuantMode,
-    QuantDtype,
-    quantize_activation,
-    int8_matmul,
-    quantized_linear,
-    quantize_kv_tensor,
-    dequantize_kv_tensor,
-    quantize_state_dict,
+    TensorInfo,
+    _cosine_similarity,
+    _dequantize,
     _pack_int4,
     _unpack_int4,
-    _dequantize,
-    _cosine_similarity,
+    dequantize_kv_tensor,
+    int8_matmul,
+    quantize_activation,
+    quantize_kv_tensor,
+    quantize_state_dict,
+    quantized_linear,
 )
-
 
 # ── quantize_activation ────────────────────────────────────────────────
 
@@ -162,8 +159,7 @@ class TestInt8Matmul:
         """Asymmetric matmul with nonzero zero_points produces valid output."""
         a = np.array([[1, 2]], dtype=np.int8)
         b = np.array([[3, 4]], dtype=np.int8)
-        result = int8_matmul(a, b, a_scale=0.1, b_scale=0.2,
-                             a_zero_point=1, b_zero_point=1)
+        result = int8_matmul(a, b, a_scale=0.1, b_scale=0.2, a_zero_point=1, b_zero_point=1)
         # (1,2) @ (2,1).T -> (1,1)
         assert result.dtype == np.float32
         assert result.shape == (1, 1)
@@ -487,8 +483,13 @@ class TestTensorInfo:
 
     def test_quantized_properties(self):
         meta = QuantMeta(
-            scale=0.01, zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(8,), original_dtype="float32",
+            scale=0.01,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(8,),
+            original_dtype="float32",
         )
         arr = np.array([0, 1, 2, 3, 4, 5, 6, 7], dtype=np.int8)
         info = TensorInfo(name="t", array=arr, meta=meta)
@@ -503,8 +504,13 @@ class TestTensorInfo:
 
     def test_compression_ratio_quantized(self):
         meta = QuantMeta(
-            scale=0.01, zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(100,), original_dtype="float32",
+            scale=0.01,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(100,),
+            original_dtype="float32",
         )
         arr = np.zeros(100, dtype=np.int8)
         info = TensorInfo(name="t", array=arr, meta=meta)
@@ -513,8 +519,13 @@ class TestTensorInfo:
 
     def test_quantized_bytes(self):
         meta = QuantMeta(
-            scale=0.01, zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(10,), original_dtype="float32",
+            scale=0.01,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(10,),
+            original_dtype="float32",
         )
         arr = np.zeros(10, dtype=np.int8)
         info = TensorInfo(name="t", array=arr, meta=meta)
@@ -532,8 +543,13 @@ class TestTensorInfo:
 
     def test_quantized_bytes_equals_array_nbytes(self):
         meta = QuantMeta(
-            scale=0.01, zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(10,), original_dtype="float32",
+            scale=0.01,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(10,),
+            original_dtype="float32",
         )
         arr = np.zeros(10, dtype=np.int8)
         info = TensorInfo(name="t", array=arr, meta=meta)
@@ -546,9 +562,16 @@ class TestTensorInfo:
 class TestQuantMeta:
     def test_to_dict(self):
         meta = QuantMeta(
-            scale=0.01, zero_point=5, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(10,), original_dtype="float32",
-            mse=0.001, max_abs_error=0.1, cosine_sim=0.99,
+            scale=0.01,
+            zero_point=5,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(10,),
+            original_dtype="float32",
+            mse=0.001,
+            max_abs_error=0.1,
+            cosine_sim=0.99,
         )
         d = meta.to_dict()
         assert d["scale"] == 0.01
@@ -558,8 +581,13 @@ class TestQuantMeta:
 
     def test_from_dict(self):
         d = {
-            "scale": 0.01, "zero_point": 0, "bits": 8, "mode": "symmetric",
-            "dtype_code": 5, "original_shape": [10], "original_dtype": "float32",
+            "scale": 0.01,
+            "zero_point": 0,
+            "bits": 8,
+            "mode": "symmetric",
+            "dtype_code": 5,
+            "original_shape": [10],
+            "original_dtype": "float32",
         }
         meta = QuantMeta.from_dict(d)
         assert meta.scale == 0.01
@@ -567,8 +595,13 @@ class TestQuantMeta:
 
     def test_from_dict_per_channel(self):
         d = {
-            "scale": [0.1, 0.2, 0.3], "zero_point": 0, "bits": 8, "mode": "symmetric",
-            "dtype_code": 5, "original_shape": [3, 10], "original_dtype": "float32",
+            "scale": [0.1, 0.2, 0.3],
+            "zero_point": 0,
+            "bits": 8,
+            "mode": "symmetric",
+            "dtype_code": 5,
+            "original_shape": [3, 10],
+            "original_dtype": "float32",
         }
         meta = QuantMeta.from_dict(d)
         assert isinstance(meta.scale, np.ndarray)
@@ -576,15 +609,25 @@ class TestQuantMeta:
 
     def test_is_per_channel_float(self):
         meta = QuantMeta(
-            scale=0.01, zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(10,), original_dtype="float32",
+            scale=0.01,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(10,),
+            original_dtype="float32",
         )
         assert not meta.is_per_channel
 
     def test_to_dict_roundtrip(self):
         meta = QuantMeta(
-            scale=0.05, zero_point=3, bits=8, mode="asymmetric",
-            dtype_code=5, original_shape=(16, 32), original_dtype="float32",
+            scale=0.05,
+            zero_point=3,
+            bits=8,
+            mode="asymmetric",
+            dtype_code=5,
+            original_shape=(16, 32),
+            original_dtype="float32",
         )
         d = meta.to_dict()
         meta2 = QuantMeta.from_dict(d)
@@ -594,17 +637,29 @@ class TestQuantMeta:
 
     def test_to_dict_with_per_channel_scale(self):
         meta = QuantMeta(
-            scale=np.array([0.1, 0.2]), zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(2, 10), original_dtype="float32",
+            scale=np.array([0.1, 0.2]),
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(2, 10),
+            original_dtype="float32",
         )
         d = meta.to_dict()
         assert isinstance(d["scale"], list)
 
     def test_from_dict_with_optional_fields(self):
         d = {
-            "scale": 0.01, "zero_point": 0, "bits": 8, "mode": "symmetric",
-            "dtype_code": 5, "original_shape": [10], "original_dtype": "float32",
-            "mse": 0.001, "max_abs_error": 0.1, "cosine_sim": 0.99,
+            "scale": 0.01,
+            "zero_point": 0,
+            "bits": 8,
+            "mode": "symmetric",
+            "dtype_code": 5,
+            "original_shape": [10],
+            "original_dtype": "float32",
+            "mse": 0.001,
+            "max_abs_error": 0.1,
+            "cosine_sim": 0.99,
         }
         meta = QuantMeta.from_dict(d)
         assert meta.mse == 0.001
@@ -613,8 +668,13 @@ class TestQuantMeta:
 
     def test_from_dict_without_optional_fields(self):
         d = {
-            "scale": 0.01, "zero_point": 0, "bits": 8, "mode": "symmetric",
-            "dtype_code": 5, "original_shape": [10], "original_dtype": "float32",
+            "scale": 0.01,
+            "zero_point": 0,
+            "bits": 8,
+            "mode": "symmetric",
+            "dtype_code": 5,
+            "original_shape": [10],
+            "original_dtype": "float32",
         }
         meta = QuantMeta.from_dict(d)
         assert meta.mse == 0.0
@@ -623,8 +683,13 @@ class TestQuantMeta:
 
     def test_to_dict_has_all_keys(self):
         meta = QuantMeta(
-            scale=0.01, zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(10,), original_dtype="float32",
+            scale=0.01,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(10,),
+            original_dtype="float32",
         )
         d = meta.to_dict()
         assert "scale" in d
@@ -862,9 +927,7 @@ class TestKVQuantization:
         x_deq = dequantize_kv_tensor(x_int8, scale)
         assert x_deq.shape == x.shape
         # Should be close but not exact (int8 quantization error)
-        cosine = np.dot(x.flatten(), x_deq.flatten()) / (
-            np.linalg.norm(x) * np.linalg.norm(x_deq)
-        )
+        cosine = np.dot(x.flatten(), x_deq.flatten()) / (np.linalg.norm(x) * np.linalg.norm(x_deq))
         assert cosine > 0.99
 
     def test_zero_input(self):
@@ -888,9 +951,7 @@ class TestKVQuantization:
         x = np.array([[[[1000.0, -1000.0, 500.0, -500.0]]]]).astype(np.float32)
         x_int8, scale = quantize_kv_tensor(x)
         x_deq = dequantize_kv_tensor(x_int8, scale)
-        cosine = np.dot(x.flatten(), x_deq.flatten()) / (
-            np.linalg.norm(x) * np.linalg.norm(x_deq)
-        )
+        cosine = np.dot(x.flatten(), x_deq.flatten()) / (np.linalg.norm(x) * np.linalg.norm(x_deq))
         assert cosine > 0.99
 
     def test_ones_input(self):
@@ -908,6 +969,7 @@ class TestSloLinearQuantized:
 
     def test_quantized_forward_matches_float(self):
         from domain.training._internal.slonet import SloLinear, Tensor
+
         layer = SloLinear(16, 8, bias=True)
         x = Tensor(np.random.randn(1, 16).astype(np.float32))
         y_float = layer.forward_numpy(x.data)
@@ -923,6 +985,7 @@ class TestSloLinearQuantized:
 
     def test_quantized_forward_uses_int8_matmul(self):
         from domain.training._internal.slonet import SloLinear, Tensor
+
         layer = SloLinear(16, 8, bias=True)
         x = Tensor(np.random.randn(1, 16).astype(np.float32))
         engine = Quantine(bits=8, mode="symmetric")
@@ -930,15 +993,18 @@ class TestSloLinearQuantized:
         assert info.is_quantized
         layer.set_quantized_weight(info)
         from domain.infrastructure._internal.quantization import quantized_linear
+
         bias_arr = layer.bias.data if layer.use_bias else None
-        y_direct = quantized_linear(x.data, info.array, info.meta.scale,
-                                     info.meta.zero_point, bias_arr)
+        y_direct = quantized_linear(
+            x.data, info.array, info.meta.scale, info.meta.zero_point, bias_arr
+        )
         y_via_layer = layer.forward_numpy(x.data)
         np.testing.assert_allclose(y_direct, y_via_layer, atol=1e-5)
         assert y_via_layer.shape == y_direct.shape
 
     def test_autograd_tensor_forward_quantized(self):
         from domain.training._internal.slonet import SloLinear, Tensor
+
         layer = SloLinear(16, 8, bias=True)
         x = Tensor(np.random.randn(2, 16).astype(np.float32))
         engine = Quantine(bits=8, mode="symmetric")
@@ -950,6 +1016,7 @@ class TestSloLinearQuantized:
 
     def test_no_quantize_uses_float(self):
         from domain.training._internal.slonet import SloLinear, Tensor
+
         layer = SloLinear(16, 8, bias=True)
         x = Tensor(np.random.randn(1, 16).astype(np.float32))
         y = layer.forward(x)
@@ -965,6 +1032,7 @@ class TestSloLinearQuantized:
 class TestQuantizedLinearWrapper:
     def test_dequantize(self):
         from domain.infrastructure._internal.quantization import QuantizedLinear
+
         w = np.random.randn(8, 16).astype(np.float32) * 0.02
         engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test", w)
@@ -977,13 +1045,12 @@ class TestQuantizedLinearWrapper:
             original_shape=info.meta.original_shape,
         )
         w_deq = ql.dequantize()
-        cosine = np.dot(w.flatten(), w_deq.flatten()) / (
-            np.linalg.norm(w) * np.linalg.norm(w_deq)
-        )
+        cosine = np.dot(w.flatten(), w_deq.flatten()) / (np.linalg.norm(w) * np.linalg.norm(w_deq))
         assert cosine > 0.95
 
     def test_forward_numpy(self):
         from domain.infrastructure._internal.quantization import QuantizedLinear
+
         w = np.random.randn(8, 16).astype(np.float32) * 0.02
         engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test", w)
@@ -1001,6 +1068,7 @@ class TestQuantizedLinearWrapper:
 
     def test_forward_numpy_with_bias(self):
         from domain.infrastructure._internal.quantization import QuantizedLinear
+
         w = np.random.randn(4, 8).astype(np.float32) * 0.02
         bias = np.random.randn(4).astype(np.float32) * 0.01
         engine = Quantine(bits=8, mode="symmetric")
@@ -1019,6 +1087,7 @@ class TestQuantizedLinearWrapper:
 
     def test_call(self):
         from domain.infrastructure._internal.quantization import QuantizedLinear
+
         w = np.random.randn(4, 8).astype(np.float32) * 0.02
         engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test", w)
@@ -1036,6 +1105,7 @@ class TestQuantizedLinearWrapper:
 
     def test_dequantize_cached(self):
         from domain.infrastructure._internal.quantization import QuantizedLinear
+
         w = np.random.randn(4, 8).astype(np.float32) * 0.02
         engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test", w)
@@ -1053,6 +1123,7 @@ class TestQuantizedLinearWrapper:
 
     def test_mode_stored(self):
         from domain.infrastructure._internal.quantization import QuantizedLinear
+
         w = np.random.randn(4, 8).astype(np.float32) * 0.02
         engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test", w)
@@ -1069,6 +1140,7 @@ class TestQuantizedLinearWrapper:
 
     def test_bits_stored(self):
         from domain.infrastructure._internal.quantization import QuantizedLinear
+
         w = np.random.randn(4, 8).astype(np.float32) * 0.02
         engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test", w)

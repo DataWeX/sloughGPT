@@ -10,5 +10,5 @@ Re-exports for backward compatibility::
     from domain.inference._internal.vector_stores import ChromaDBVectorStore
 """
 
-from .pinecone_store import PineconeVectorStore as PineconeVectorStore
 from .chromadb_store import ChromaDBVectorStore as ChromaDBVectorStore
+from .pinecone_store import PineconeVectorStore as PineconeVectorStore

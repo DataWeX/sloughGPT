@@ -1,21 +1,30 @@
 """Tests for compute_sensitivity — forward-mode AD parameter importance."""
 
-import sys, math
+import math
+import sys
+
 sys.path.insert(0, "packages/core-py")
 
 import numpy as np
 import pytest
+
 from domain.training._internal.slonet import (
-    Tensor, cross_entropy, SloLinear, SloSGD,
+    SloLinear,
+    SloSGD,
     compute_sensitivity,
-    tensor, relu, sigmoid, tanh, gelu,
-    zeros, ones, randn,
-    softmax, log_softmax, _softmax,
+    cross_entropy,
+    gelu,
+    log_softmax,
     mse_loss,
+    relu,
+    sigmoid,
+    softmax,
+    tanh,
+    tensor,
 )
 
-
 # ── Basic functionality ──────────────────────────────────────────────
+
 
 def test_sensitivity_basic():
     """Single linear layer: sensitivity > 0 for trainable params."""
@@ -160,6 +169,7 @@ def test_sensitivity_training_tracking():
 
 # ── Sigmoid / Tanh / GELU activation sensitivity ────────────────────
 
+
 def test_sensitivity_sigmoid():
     """Sigmoid activation produces finite sensitivity."""
     lin = SloLinear(4, 2)
@@ -195,6 +205,7 @@ def test_sensitivity_gelu():
 
 # ── Deep / wide network sensitivity ─────────────────────────────────
 
+
 def test_sensitivity_deep_network():
     """3-layer network: all layers show finite sensitivity."""
     lin1 = SloLinear(8, 6)
@@ -205,9 +216,9 @@ def test_sensitivity_deep_network():
     h = relu(lin2.forward(h))
     out = lin3.forward(h)
     loss = out.sum()
-    sens = compute_sensitivity(loss, {
-        "l1": lin1.parameters(), "l2": lin2.parameters(), "l3": lin3.parameters()
-    })
+    sens = compute_sensitivity(
+        loss, {"l1": lin1.parameters(), "l2": lin2.parameters(), "l3": lin3.parameters()}
+    )
     for key in ("l1", "l2", "l3"):
         assert key in sens
         assert math.isfinite(sens[key])
@@ -236,6 +247,7 @@ def test_sensitivity_narrow_layer():
 
 
 # ── Loss function variants ──────────────────────────────────────────
+
 
 def test_sensitivity_mse_loss():
     """MSE loss produces finite sensitivity."""
@@ -274,6 +286,7 @@ def test_sensitivity_softmax_output():
 
 
 # ── Edge cases ──────────────────────────────────────────────────────
+
 
 def test_sensitivity_zero_input():
     """Zero input produces finite sensitivity."""
@@ -343,6 +356,7 @@ def test_sensitivity_bias_only_group():
 
 # ── Different seeds produce different results ───────────────────────
 
+
 def test_sensitivity_different_seeds_differ():
     """Different seeds produce different sensitivity scores."""
     lin = SloLinear(4, 2)
@@ -370,6 +384,7 @@ def test_sensitivity_negative_sensitivity():
 
 # ── Multiple batches ────────────────────────────────────────────────
 
+
 def test_sensitivity_large_batch():
     """Large batch size produces finite sensitivity."""
     lin = SloLinear(8, 4)
@@ -395,6 +410,7 @@ def test_sensitivity_single_sample():
 
 
 # ── Activation combinations ─────────────────────────────────────────
+
 
 def test_sensitivity_relu_chain():
     """Chain of ReLU activations produces finite sensitivity."""
@@ -424,9 +440,11 @@ def test_sensitivity_mixed_activations():
 
 # ── Symmetry / consistency ──────────────────────────────────────────
 
+
 def test_sensitivity_no_grad_context():
     """compute_sensitivity inside no_grad still returns finite values."""
     from domain.training._internal.slonet import no_grad
+
     lin = SloLinear(4, 2)
     x = tensor([[1.0, 2.0, 3.0, 4.0]], requires_grad=True)
     with no_grad():
@@ -465,6 +483,7 @@ def test_sensitivity_reproducible_across_calls():
 
 # ── Random seed default ─────────────────────────────────────────────
 
+
 def test_sensitivity_default_seed():
     """Default seed (None) produces finite sensitivity."""
     lin = SloLinear(4, 2)
@@ -478,9 +497,11 @@ def test_sensitivity_default_seed():
 
 # ── Additional coverage ──────────────────────────────────────────────
 
+
 def test_sensitivity_silu_activation():
     """Silu activation produces finite sensitivity."""
     from domain.training._internal.slonet import silu
+
     lin = SloLinear(4, 2)
     x = tensor([[1.0, 2.0, 3.0, 4.0]], requires_grad=True)
     out = silu(lin.forward(x))
@@ -520,10 +541,13 @@ def test_sensitivity_closer_layer_higher():
     h = relu(lin_far.forward(x))
     out = lin_near.forward(h)
     loss = out.sum()
-    sens = compute_sensitivity(loss, {
-        "near": lin_near.parameters(),
-        "far": lin_far.parameters(),
-    })
+    sens = compute_sensitivity(
+        loss,
+        {
+            "near": lin_near.parameters(),
+            "far": lin_far.parameters(),
+        },
+    )
     assert sens["near"] > 0
     assert sens["far"] > 0
 
@@ -578,6 +602,7 @@ def test_sensitivity_mixed_requires_grad_in_group():
 def test_sensitivity_with_eye():
     """Eye matrix as input produces finite sensitivity."""
     from domain.training._internal.slonet import eye
+
     lin = SloLinear(4, 2)
     inp = eye(4)
     x = tensor(inp.data.copy(), requires_grad=True)
@@ -597,9 +622,7 @@ def test_sensitivity_skip_connection():
     h2 = lin2.forward(h1)
     out = h2 + x
     loss = out.sum()
-    sens = compute_sensitivity(loss, {
-        "l1": lin1.parameters(), "l2": lin2.parameters()
-    })
+    sens = compute_sensitivity(loss, {"l1": lin1.parameters(), "l2": lin2.parameters()})
     assert math.isfinite(sens["l1"])
     assert math.isfinite(sens["l2"])
 

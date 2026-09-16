@@ -18,6 +18,7 @@ def get_optimal_device() -> str:
     (MPS via Apple Silicon, CUDA via CuPy) with no torch import.
     """
     from domain.infrastructure._internal.ml_types import auto_device
+
     return auto_device()
 
 
@@ -27,6 +28,7 @@ def get_device_name() -> str:
     if device == "cuda":
         try:
             import cupy as cp
+
             props = cp.cuda.runtime.getDeviceProperties(0)
             return str(props["name"])
         except Exception:
@@ -47,6 +49,7 @@ def setup_device_environment():
 @dataclass
 class TrainingOptimizations:
     """Training-specific performance knobs."""
+
     use_compile: bool = True
     compile_mode: str = "reduce-overhead"
     compile_fullgraph: bool = False
@@ -72,6 +75,7 @@ class TrainingOptimizations:
 @dataclass
 class InferenceOptimizations:
     """Inference-specific performance knobs."""
+
     use_compile: bool = True
     compile_mode: str = "default"
     channel_last: bool = True
@@ -91,6 +95,7 @@ class InferenceOptimizations:
 @dataclass
 class PerformanceConfig:
     """Top-level performance configuration."""
+
     device: str = "auto"
     training: TrainingOptimizations = field(default_factory=TrainingOptimizations)
     inference: InferenceOptimizations = field(default_factory=InferenceOptimizations)
@@ -175,15 +180,14 @@ class FastInferenceSampler:
 
         probs = np.exp(scaled - scaled.max(axis=-1, keepdims=True))
         probs = probs / probs.sum(axis=-1, keepdims=True)
-        result = np.array([
-            np.random.choice(p.shape[-1], p=p) for p in probs
-        ]).reshape(-1, 1)
+        result = np.array([np.random.choice(p.shape[-1], p=p) for p in probs]).reshape(-1, 1)
         return result
 
     @staticmethod
     def _apply_top_k(logits, k: int):
         """Mask all but top-k logits to -inf."""
         import numpy as np
+
         logits = np.asarray(logits, dtype=np.float64)
         if k <= 0 or k >= logits.shape[-1]:
             return logits
@@ -203,6 +207,7 @@ class FastInferenceSampler:
     def _apply_top_p(logits, p: float):
         """Nucleus sampling: mask tokens outside cumulative probability p."""
         import numpy as np
+
         logits = np.asarray(logits, dtype=np.float64)
         if logits.ndim == 1:
             sorted_indices = np.argsort(-logits)
@@ -231,6 +236,7 @@ class FastInferenceSampler:
     def _apply_repetition_penalty_vectorized(logits, recent_tokens, penalty: float):
         """Penalize recently generated tokens."""
         import numpy as np
+
         recent_tokens = np.asarray(recent_tokens)
         if len(recent_tokens) == 0:
             return logits
@@ -264,11 +270,11 @@ class PerformanceMonitor:
 
     @property
     def step_times(self):
-        return list(self._step_times[-self._window_size:])
+        return list(self._step_times[-self._window_size :])
 
     @property
     def losses(self):
-        return list(self._losses[-self._window_size:])
+        return list(self._losses[-self._window_size :])
 
     @property
     def tokens_processed(self) -> int:
@@ -277,13 +283,15 @@ class PerformanceMonitor:
     def record(self, name: str, duration: float, tokens: int = 0):
         self._records.append({"name": name, "duration": duration, "tokens": tokens})
 
-    def record_step(self, loss: float = 0.0, step_time: float = 0.0, batch_size: int = 1, seq_len: int = 1):
+    def record_step(
+        self, loss: float = 0.0, step_time: float = 0.0, batch_size: int = 1, seq_len: int = 1
+    ):
         self._losses.append(loss)
         self._step_times.append(step_time)
         self._tokens_processed += batch_size * seq_len
         if len(self._step_times) > self._window_size:
-            self._step_times = self._step_times[-self._window_size:]
-            self._losses = self._losses[-self._window_size:]
+            self._step_times = self._step_times[-self._window_size :]
+            self._losses = self._losses[-self._window_size :]
 
     def get_stats(self) -> dict:
         if not self._step_times:
@@ -356,6 +364,7 @@ class OptimizedBatchCache:
 def _softmax(x, axis=-1):
     """Numerically stable softmax."""
     import numpy as np
+
     x_max = x.max(axis=axis, keepdims=True)
     e_x = np.exp(x - x_max)
     return e_x / e_x.sum(axis=axis, keepdims=True)
@@ -367,6 +376,7 @@ def _collate(batch):
     If arrays have different shapes, pad shorter ones with zeros.
     """
     import numpy as np
+
     if not batch:
         return np.array([]), np.array([])
     if isinstance(batch[0], tuple):
@@ -380,7 +390,7 @@ def _collate(batch):
         max_y = max(y.shape for y in ys)
         padded_x = np.zeros((len(xs),) + max_x, dtype=xs[0].dtype)
         padded_y = np.zeros((len(ys),) + max_y, dtype=ys[0].dtype)
-        for i, (x, y) in enumerate(zip(xs, ys)):
+        for i, (x, y) in enumerate(zip(xs, ys, strict=False)):
             padded_x[i, : x.shape[0]] = x
             padded_y[i, : y.shape[0]] = y
         return padded_x, padded_y
@@ -390,6 +400,7 @@ def _collate(batch):
 def _pad_last(a, target_len: int = 0, pad_value=0):
     """Pad 1D array to target length (or its own length = no-op)."""
     import numpy as np
+
     a = np.asarray(a)
     if target_len <= 0:
         target_len = len(a)
@@ -405,6 +416,7 @@ class _NumpyBatchIterator:
 
     def __init__(self, data, batch_size: int, shuffle: bool = True):
         import numpy as np
+
         self._data = data
         self._batch_size = batch_size
         self._shuffle = shuffle
@@ -420,6 +432,7 @@ class _NumpyBatchIterator:
 
     def __len__(self):
         import numpy as np
+
         return int(np.ceil(len(self._data) / self._batch_size))
 
 
@@ -443,6 +456,7 @@ class PreallocatedBatchDataset:
 
     def __init__(self, data, block_size: int = 10, batch_size: int = 8):
         import numpy as np
+
         self._data = np.asarray(data)
         self._block_size = block_size
         self._batch_size = batch_size
@@ -454,7 +468,7 @@ class PreallocatedBatchDataset:
         return self._n_samples
 
     def __getitem__(self, idx):
-        import numpy as np
+
         if idx < 0 or idx >= self._n_samples:
             raise IndexError(f"index {idx} out of range for {self._n_samples} samples")
         x = self._data[idx : idx + self._block_size]
@@ -479,6 +493,7 @@ class OptimizedBatchCache:
     def allocate(self, batch_size: int, block_size: int):
         """Allocate or reuse cached (x, y) arrays."""
         import numpy as np
+
         key = self._key(batch_size, block_size)
         if key in self._cache:
             return self._cache[key]
@@ -490,6 +505,7 @@ class OptimizedBatchCache:
     def fill(self, batch_size: int, block_size: int, data, indices):
         """Fill and return (x, y) from data at given indices."""
         import numpy as np
+
         x, y = self.allocate(batch_size, block_size)
         data = np.asarray(data)
         indices = np.asarray(indices)
@@ -509,7 +525,9 @@ class OptimizedInferenceEngine:
         self._model = model
         self._config = config or InferenceOptimizations()
         self._monitor = PerformanceMonitor()
-        self._cuda_graph_manager = CUDAGraphManager(model, config) if config and config.use_cuda_graphs else None
+        self._cuda_graph_manager = (
+            CUDAGraphManager(model, config) if config and config.use_cuda_graphs else None
+        )
 
     @property
     def cuda_graph_manager(self):
@@ -518,6 +536,7 @@ class OptimizedInferenceEngine:
     def generate(self, prompt_ids, max_new_tokens: int = 100, temperature: float = 1.0, **kwargs):
         """Generate tokens from prompt."""
         import numpy as np
+
         prompt_ids = np.asarray(prompt_ids)
         if prompt_ids.ndim == 1:
             prompt_ids = prompt_ids.reshape(1, -1)
@@ -534,6 +553,7 @@ class OptimizedInferenceEngine:
 def _as_array(x):
     """Convert input to numpy array if needed."""
     import numpy as np
+
     if isinstance(x, np.ndarray):
         return x
     return np.asarray(x)
@@ -547,6 +567,7 @@ def _clip_grad_norm_(parameters, max_norm: float = 1.0):
 def effective_dataloader_workers(max_workers: int = 4) -> int:
     """Return safe number of dataloader workers (caps at cpu_count, 0 for invalid)."""
     import os
+
     try:
         n = int(max_workers)
     except (TypeError, ValueError):
@@ -599,8 +620,8 @@ def benchmark_inference(model, input_ids, n_tokens: int = 50, **kwargs) -> dict:
         for _ in range(n_tokens // 8 + 1):
             try:
                 out = model.forward(x[:, -64:] if x.shape[1] > 64 else x)
-                if hasattr(out, 'logits'):
-                    total_generated += out.logits.shape[-1] if hasattr(out.logits, 'shape') else 8
+                if hasattr(out, "logits"):
+                    total_generated += out.logits.shape[-1] if hasattr(out.logits, "shape") else 8
                 x = np.concatenate([x, np.zeros((1, 1), dtype=np.int64)], axis=1)
             except Exception:
                 break
@@ -632,8 +653,10 @@ def benchmark_training(model, dataset, n_steps: int = 10, **kwargs) -> dict:
         if len(dataset) < block_size * batch_size:
             return {"n_steps": 0, "steps_per_sec": 0.0, "loss": 0.0}
 
-        data = np.array(dataset[:block_size * batch_size], dtype=np.int64).reshape(batch_size, block_size)
-        targets = np.roll(data, -1, axis=1)
+        data = np.array(dataset[: block_size * batch_size], dtype=np.int64).reshape(
+            batch_size, block_size
+        )
+        np.roll(data, -1, axis=1)
 
         # Warmup
         for _ in range(2):
@@ -648,9 +671,9 @@ def benchmark_training(model, dataset, n_steps: int = 10, **kwargs) -> dict:
         for step in range(n_steps):
             try:
                 out = model.forward(data)
-                loss = out.loss if hasattr(out, 'loss') else 0.0
+                loss = out.loss if hasattr(out, "loss") else 0.0
                 last_loss = float(loss) if loss else 0.0
-                if hasattr(model, 'zero_grad'):
+                if hasattr(model, "zero_grad"):
                     model.zero_grad()
             except Exception:
                 break

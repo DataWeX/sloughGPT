@@ -1,4 +1,5 @@
 """Tests for scripts/benchmark_kv_reuse.py cross-turn KV reuse benchmark."""
+
 import sys
 from pathlib import Path
 
@@ -8,8 +9,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
 import benchmark_kv_reuse as bk  # noqa: E402
 
-
 # ── prefix_match ────────────────────────────────────────────────────────────
+
 
 def test_prefix_match_identical():
     """Equal sequences match fully."""
@@ -39,6 +40,7 @@ def test_prefix_match_disjoint():
 
 # ── benchmark invariants ────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="module")
 def model():
     return bk.create_model()
@@ -54,8 +56,15 @@ def test_benchmark_structure(metrics):
     """Metrics dict has per-turn rows plus aggregates."""
     assert metrics["turns"] == 2
     assert len(metrics["rows"]) == 2
-    assert {"turn", "prompt_len", "reused_tokens", "warm_ms",
-            "cold_ms", "speedup", "consistency_pct"} <= set(metrics["rows"][0])
+    assert {
+        "turn",
+        "prompt_len",
+        "reused_tokens",
+        "warm_ms",
+        "cold_ms",
+        "speedup",
+        "consistency_pct",
+    } <= set(metrics["rows"][0])
 
 
 def test_benchmark_prompt_grows(metrics):
@@ -68,7 +77,7 @@ def test_benchmark_reuse_grows_monotonically(metrics):
     """Reused tokens increase each turn as the cached history grows."""
     reused = [r["reused_tokens"] for r in metrics["rows"]]
     assert reused[0] == 0
-    assert all(b > a for a, b in zip(reused, reused[1:]))
+    assert all(b > a for a, b in zip(reused, reused[1:], strict=False))
 
 
 def test_benchmark_warm_cold_consistency(metrics):
@@ -86,13 +95,12 @@ def test_benchmark_positive_timings(metrics):
 
 def test_benchmark_aggregates(metrics):
     """Aggregate fields derive from per-turn rows."""
-    assert metrics["total_warm_ms"] == pytest.approx(
-        sum(r["warm_ms"] for r in metrics["rows"]))
-    assert metrics["total_reused_tokens"] == sum(
-        r["reused_tokens"] for r in metrics["rows"])
+    assert metrics["total_warm_ms"] == pytest.approx(sum(r["warm_ms"] for r in metrics["rows"]))
+    assert metrics["total_reused_tokens"] == sum(r["reused_tokens"] for r in metrics["rows"])
 
 
 # ── stack benchmark mode ────────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def stack_metrics():
@@ -105,9 +113,15 @@ def test_stack_benchmark_structure(stack_metrics):
     """Stack metrics expose the same row shape plus cached-token totals."""
     assert stack_metrics["mode"] == "stack"
     assert len(stack_metrics["rows"]) == 2
-    assert {"turn", "prompt_len", "reused_tokens", "warm_ms",
-            "cold_ms", "speedup", "consistency_pct"} <= set(
-        stack_metrics["rows"][0])
+    assert {
+        "turn",
+        "prompt_len",
+        "reused_tokens",
+        "warm_ms",
+        "cold_ms",
+        "speedup",
+        "consistency_pct",
+    } <= set(stack_metrics["rows"][0])
     assert stack_metrics["cached_tokens"] > 0
 
 
@@ -115,7 +129,7 @@ def test_stack_benchmark_reuse_grows(stack_metrics):
     """Server-side session KV grows monotonically across turns."""
     reused = [r["reused_tokens"] for r in stack_metrics["rows"]]
     assert reused[0] == 0
-    assert all(b > a for a, b in zip(reused, reused[1:]))
+    assert all(b > a for a, b in zip(reused, reused[1:], strict=False))
 
 
 def test_stack_benchmark_consistency(stack_metrics):
@@ -125,12 +139,12 @@ def test_stack_benchmark_consistency(stack_metrics):
 
 # ── streaming stack benchmark mode ──────────────────────────────────────────
 
+
 @pytest.fixture(scope="module")
 def stack_stream_metrics():
     """Tiny 2-turn streaming serving-stack benchmark (the /chat/stream path)."""
     model = bk.create_model(vocab=256)
-    return bk.benchmark_stack(model, [7], step=2, turns=2, max_tokens=2,
-                              steps=1, stream=True)
+    return bk.benchmark_stack(model, [7], step=2, turns=2, max_tokens=2, steps=1, stream=True)
 
 
 def test_stack_stream_benchmark_structure(stack_stream_metrics):
@@ -150,7 +164,7 @@ def test_stack_stream_benchmark_reuse_grows(stack_stream_metrics):
     """Session KV reuse grows monotonically under token-by-token streaming."""
     reused = [r["reused_tokens"] for r in stack_stream_metrics["rows"]]
     assert reused[0] == 0
-    assert all(b > a for a, b in zip(reused, reused[1:]))
+    assert all(b > a for a, b in zip(reused, reused[1:], strict=False))
 
 
 def test_stack_stream_benchmark_consistency(stack_stream_metrics):
@@ -167,6 +181,7 @@ def test_stack_reuse_matches_prefix_of_prev_output(stack_metrics):
 
 
 # ── temperature-0 determinism regression ────────────────────────────────────
+
 
 def test_temp_zero_with_top_p_is_deterministic_greedy():
     """temperature≈0 must be argmax even when the serving stack sets
@@ -185,35 +200,35 @@ def test_temp_zero_with_top_p_is_deterministic_greedy():
 
 # ── int8 quantized KV cache (--quantize-kv) ─────────────────────────────────
 
+
 @pytest.fixture(scope="module")
 def quant_metrics():
     """Tiny 2-turn direct-mode benchmark with the KV cache stored as int8."""
     model = bk.create_model()
-    return bk.benchmark(model, [7], step=2, turns=2, max_tokens=2, steps=1,
-                        quantize_kv=True)
+    return bk.benchmark(model, [7], step=2, turns=2, max_tokens=2, steps=1, quantize_kv=True)
 
 
 @pytest.fixture(scope="module")
 def quant_stack_metrics():
     """Tiny 2-turn serving-stack benchmark with int8 KV via the server."""
     model = bk.create_model(vocab=256)
-    return bk.benchmark_stack(model, [7], step=2, turns=2, max_tokens=2,
-                              steps=1, quantize_kv=True)
+    return bk.benchmark_stack(model, [7], step=2, turns=2, max_tokens=2, steps=1, quantize_kv=True)
 
 
 @pytest.fixture(scope="module")
 def quant_stack_stream_metrics():
     """Tiny 2-turn streaming serving-stack benchmark with int8 KV."""
     model = bk.create_model(vocab=256)
-    return bk.benchmark_stack(model, [7], step=2, turns=2, max_tokens=2,
-                              steps=1, stream=True, quantize_kv=True)
+    return bk.benchmark_stack(
+        model, [7], step=2, turns=2, max_tokens=2, steps=1, stream=True, quantize_kv=True
+    )
 
 
 def test_quant_benchmark_reuse_grows(quant_metrics):
     """int8 KV state still accumulates the cross-turn prefix."""
     reused = [r["reused_tokens"] for r in quant_metrics["rows"]]
     assert reused[0] == 0
-    assert all(b > a for a, b in zip(reused, reused[1:]))
+    assert all(b > a for a, b in zip(reused, reused[1:], strict=False))
 
 
 def test_quant_benchmark_consistency(quant_metrics):
@@ -225,45 +240,46 @@ def test_quant_stack_benchmark_reuse_grows(quant_stack_metrics):
     """Server-side int8 session KV grows across turns."""
     reused = [r["reused_tokens"] for r in quant_stack_metrics["rows"]]
     assert reused[0] == 0
-    assert all(b > a for a, b in zip(reused, reused[1:]))
+    assert all(b > a for a, b in zip(reused, reused[1:], strict=False))
 
 
 def test_quant_stack_benchmark_consistency(quant_stack_metrics):
     """int8 through the serving stack is deterministic greedy."""
-    assert all(r["consistency_pct"] == 100.0
-               for r in quant_stack_metrics["rows"])
+    assert all(r["consistency_pct"] == 100.0 for r in quant_stack_metrics["rows"])
 
 
 def test_quant_stack_stream_benchmark_reuse_grows(quant_stack_stream_metrics):
     """int8 session KV reuse grows under token-by-token streaming."""
     reused = [r["reused_tokens"] for r in quant_stack_stream_metrics["rows"]]
     assert reused[0] == 0
-    assert all(b > a for a, b in zip(reused, reused[1:]))
+    assert all(b > a for a, b in zip(reused, reused[1:], strict=False))
 
 
 def test_quant_stack_stream_benchmark_consistency(quant_stack_stream_metrics):
     """Streamed int8 warm and cold outputs agree bit-for-bit."""
-    assert all(r["consistency_pct"] == 100.0
-               for r in quant_stack_stream_metrics["rows"])
+    assert all(r["consistency_pct"] == 100.0 for r in quant_stack_stream_metrics["rows"])
 
 
 def test_quant_reuse_matches_float_reuse():
     """Reuse is a prefix-match quantity — independent of KV dtype. The int8
     path must report the exact same cached-token growth as float32."""
     model = bk.create_model()
-    float_metrics = bk.benchmark(model, [7], step=2, turns=2,
-                                 max_tokens=2, steps=1)
-    quant_metrics = bk.benchmark(model, [7], step=2, turns=2,
-                                 max_tokens=2, steps=1, quantize_kv=True)
-    assert [r["reused_tokens"] for r in float_metrics["rows"]] == \
-        [r["reused_tokens"] for r in quant_metrics["rows"]]
+    float_metrics = bk.benchmark(model, [7], step=2, turns=2, max_tokens=2, steps=1)
+    quant_metrics = bk.benchmark(
+        model, [7], step=2, turns=2, max_tokens=2, steps=1, quantize_kv=True
+    )
+    assert [r["reused_tokens"] for r in float_metrics["rows"]] == [
+        r["reused_tokens"] for r in quant_metrics["rows"]
+    ]
 
 
 # ── KV cache memory accounting (kv_memory_kb) ───────────────────────────────
 
+
 def test_kv_state_memory_empty():
     """An empty state owns no buffers → 0 KiB."""
     from domain.training._internal.slonet import NumpyKVState
+
     assert bk.kv_state_memory_kb(NumpyKVState()) == 0
 
 
@@ -276,11 +292,13 @@ def test_kv_state_memory_quantized_is_smaller():
     model = bk.create_model()
     base = np.array([[7]], dtype=np.int64)
     state_f = model.new_kv_state()
-    model.generate_numpy(base, max_new_tokens=4, temperature=0.0,
-                         kv_state=state_f, quantize_kv=False)
+    model.generate_numpy(
+        base, max_new_tokens=4, temperature=0.0, kv_state=state_f, quantize_kv=False
+    )
     state_q = model.new_kv_state()
-    model.generate_numpy(base, max_new_tokens=4, temperature=0.0,
-                         kv_state=state_q, quantize_kv=True)
+    model.generate_numpy(
+        base, max_new_tokens=4, temperature=0.0, kv_state=state_q, quantize_kv=True
+    )
 
     mem_f = bk.kv_state_memory_kb(state_f)
     mem_q = bk.kv_state_memory_kb(state_q)
@@ -293,17 +311,17 @@ def test_benchmark_kv_memory_grows_with_turns(metrics):
     """KV memory grows as the cached sequence lengthens each turn."""
     mem = [r["kv_memory_kb"] for r in metrics["rows"]]
     assert mem[0] > 0
-    assert all(b > a for a, b in zip(mem, mem[1:]))
+    assert all(b > a for a, b in zip(mem, mem[1:], strict=False))
 
 
 def test_quant_benchmark_kv_memory_below_float():
     """At matched turns the int8 benchmark holds strictly less KV memory."""
     model = bk.create_model()
-    float_metrics = bk.benchmark(model, [7], step=2, turns=2,
-                                 max_tokens=2, steps=1)
-    quant_metrics = bk.benchmark(model, [7], step=2, turns=2,
-                                 max_tokens=2, steps=1, quantize_kv=True)
-    for rf, rq in zip(float_metrics["rows"], quant_metrics["rows"]):
+    float_metrics = bk.benchmark(model, [7], step=2, turns=2, max_tokens=2, steps=1)
+    quant_metrics = bk.benchmark(
+        model, [7], step=2, turns=2, max_tokens=2, steps=1, quantize_kv=True
+    )
+    for rf, rq in zip(float_metrics["rows"], quant_metrics["rows"], strict=False):
         assert rq["kv_memory_kb"] < rf["kv_memory_kb"]
 
 
@@ -313,6 +331,7 @@ def test_stack_benchmark_kv_memory_present(stack_metrics):
 
 
 # ── float32 vs int8 KV quality (--compare-kv) ───────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def kv_quality():
@@ -325,8 +344,14 @@ def test_kv_quality_structure(kv_quality):
     """Quality metrics carry per-turn rows and an overall agreement."""
     assert kv_quality["mode"] == "compare-kv"
     assert len(kv_quality["rows"]) == 2
-    assert {"turn", "prompt_len", "generated", "identical_pct",
-            "prefix_agree", "prefix_pct"} <= set(kv_quality["rows"][0])
+    assert {
+        "turn",
+        "prompt_len",
+        "generated",
+        "identical_pct",
+        "prefix_agree",
+        "prefix_pct",
+    } <= set(kv_quality["rows"][0])
     assert 0.0 <= kv_quality["overall_identical_pct"] <= 100.0
 
 
@@ -358,39 +383,43 @@ def test_kv_quality_metrics_bounds(kv_quality):
 def test_kv_quality_main_exit_zero(monkeypatch):
     """`--compare-kv` with healthy agreement exits 0."""
     import benchmark_kv_reuse as _bk  # noqa: F811 (fresh module, cached above)
+
     monkeypatch.setattr(
-        sys, "argv", ["benchmark_kv_reuse.py", "--compare-kv",
-                      "--turns", "2", "--max-tokens", "4"])
+        sys, "argv", ["benchmark_kv_reuse.py", "--compare-kv", "--turns", "2", "--max-tokens", "4"]
+    )
     assert _bk.main() == 0
 
 
 def test_kv_quality_main_warns_on_low_agreement(monkeypatch):
     """Agreement below 50% fails loudly with a warning."""
     import benchmark_kv_reuse as _bk
+
     monkeypatch.setattr(
-        _bk, "compare_kv_quality",
-        lambda *a, **k: {"mode": "compare-kv", "rows": [], "overall_identical_pct": 20.0})
-    monkeypatch.setattr(
-        sys, "argv", ["benchmark_kv_reuse.py", "--compare-kv"])
+        _bk,
+        "compare_kv_quality",
+        lambda *a, **k: {"mode": "compare-kv", "rows": [], "overall_identical_pct": 20.0},
+    )
+    monkeypatch.setattr(sys, "argv", ["benchmark_kv_reuse.py", "--compare-kv"])
     assert _bk.main() == 1
 
 
 # ── concurrent sessions (--sessions N) ──────────────────────────────────────
 
+
 @pytest.fixture(scope="module")
 def session_metrics():
     """Tiny 2-session interleaved serving-stack benchmark."""
     model = bk.create_model(vocab=256)
-    return bk.benchmark_sessions(model, [7], step=2, turns=2, max_tokens=2,
-                                 steps=1, n_sessions=2)
+    return bk.benchmark_sessions(model, [7], step=2, turns=2, max_tokens=2, steps=1, n_sessions=2)
 
 
 @pytest.fixture(scope="module")
 def session_stream_metrics():
     """Tiny 2-session interleaved streaming stack benchmark."""
     model = bk.create_model(vocab=256)
-    return bk.benchmark_sessions(model, [7], step=2, turns=2, max_tokens=2,
-                                 steps=1, n_sessions=2, stream=True)
+    return bk.benchmark_sessions(
+        model, [7], step=2, turns=2, max_tokens=2, steps=1, n_sessions=2, stream=True
+    )
 
 
 def test_sessions_structure(session_metrics):
@@ -398,9 +427,17 @@ def test_sessions_structure(session_metrics):
     assert session_metrics["mode"] == "stack-sessions"
     assert session_metrics["n_sessions"] == 2
     assert len(session_metrics["rows"]) == 4  # 2 sessions × 2 turns
-    assert {"session", "turn", "prompt_len", "reused_tokens",
-            "kv_memory_kb", "warm_ms", "cold_ms", "speedup",
-            "consistency_pct"} <= set(session_metrics["rows"][0])
+    assert {
+        "session",
+        "turn",
+        "prompt_len",
+        "reused_tokens",
+        "kv_memory_kb",
+        "warm_ms",
+        "cold_ms",
+        "speedup",
+        "consistency_pct",
+    } <= set(session_metrics["rows"][0])
     assert session_metrics["isolation_ok"]
 
 
@@ -408,23 +445,20 @@ def test_sessions_per_session_reuse_grows(session_metrics):
     """Each session's reuse grows monotonically despite interleaving."""
     for reuse in session_metrics["per_session_reuse"]:
         assert reuse[0] == 0
-        assert all(b > a for a, b in zip(reuse, reuse[1:]))
+        assert all(b > a for a, b in zip(reuse, reuse[1:], strict=False))
 
 
 def test_sessions_consistency(session_metrics):
     """Warm and cold agree bit-for-bit for every interleaved request."""
-    assert all(r["consistency_pct"] == 100.0
-               for r in session_metrics["rows"])
+    assert all(r["consistency_pct"] == 100.0 for r in session_metrics["rows"])
 
 
 def test_sessions_isolation_matches_single_session():
     """Session 0's reuse under interleaving equals a lone-session stack run —
     evidence no session leaks another session's cached prefix."""
     model = bk.create_model(vocab=256)
-    solo = bk.benchmark_stack(model, [7], step=2, turns=2, max_tokens=2,
-                              steps=1)
-    multi = bk.benchmark_sessions(model, [7], step=2, turns=2, max_tokens=2,
-                                  steps=1, n_sessions=2)
+    solo = bk.benchmark_stack(model, [7], step=2, turns=2, max_tokens=2, steps=1)
+    multi = bk.benchmark_sessions(model, [7], step=2, turns=2, max_tokens=2, steps=1, n_sessions=2)
     solo_reuse = [r["reused_tokens"] for r in solo["rows"]]
     assert multi["per_session_reuse"][0] == solo_reuse
     assert multi["per_session_reuse"][1] == solo_reuse
@@ -433,8 +467,7 @@ def test_sessions_isolation_matches_single_session():
 def test_sessions_streaming_isolation(session_stream_metrics):
     """Streaming interleaved sessions keep isolation and consistency."""
     assert session_stream_metrics["isolation_ok"]
-    assert all(r["consistency_pct"] == 100.0
-               for r in session_stream_metrics["rows"])
+    assert all(r["consistency_pct"] == 100.0 for r in session_stream_metrics["rows"])
     for reuse in session_stream_metrics["per_session_reuse"]:
         assert reuse[0] == 0
-        assert all(b > a for a, b in zip(reuse, reuse[1:]))
+        assert all(b > a for a, b in zip(reuse, reuse[1:], strict=False))

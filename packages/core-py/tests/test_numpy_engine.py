@@ -2,8 +2,12 @@
 
 import numpy as np
 import pytest
-from domain.infrastructure._internal.numpy_engine import NumpyEngine, KVCache, _CompressedWeight, _LRUCache
 
+from domain.infrastructure._internal.numpy_engine import (
+    KVCache,
+    NumpyEngine,
+    _CompressedWeight,
+)
 from domain.infrastructure._internal.safetensors_loader import _find_safetensors, _get_model_dir
 
 QWEN_ID = "Qwen/Qwen2.5-0.5B-Instruct"
@@ -241,6 +245,7 @@ class TestNumpyEngineErrors:
         with pytest.raises(FileNotFoundError):
             NumpyEngine.from_pretrained("nonexistent/model-xyz")
 
+
 class TestHierarchicalCompression:
     """Tests for hierarchical centroid compression (linear function for centroids)."""
 
@@ -265,9 +270,13 @@ class TestHierarchicalCompression:
         assert accuracy > 0.98  # should be near-perfect for linear centroids
 
         cw = _CompressedWeight(
-            centroids=centroids, assignments=assignments, residual=residual,
-            shape=(1024,), dtype=np.float32,
-            centroid_fn="linear", centroid_fn_params={"a": float(a), "b": float(b)},
+            centroids=centroids,
+            assignments=assignments,
+            residual=residual,
+            shape=(1024,),
+            dtype=np.float32,
+            centroid_fn="linear",
+            centroid_fn_params={"a": float(a), "b": float(b)},
         )
         assert cw.centroid_fn == "linear"
         # Compressed size: 8 bytes (a, b) + assignments + residual
@@ -287,9 +296,13 @@ class TestHierarchicalCompression:
         a, b = result
 
         cw = _CompressedWeight(
-            centroids=centroids, assignments=assignments, residual=residual,
-            shape=(6,), dtype=np.float32,
-            centroid_fn="linear", centroid_fn_params={"a": float(a), "b": float(b)},
+            centroids=centroids,
+            assignments=assignments,
+            residual=residual,
+            shape=(6,),
+            dtype=np.float32,
+            centroid_fn="linear",
+            centroid_fn_params={"a": float(a), "b": float(b)},
         )
         decompressed = cw.decompress()
         # Should be close to centroids[assignments]
@@ -301,13 +314,18 @@ class TestHierarchicalCompression:
         from domain.infrastructure._internal.numpy_engine import _CompressedWeight
 
         # Random centroids — not linear
-        centroids = np.array([0.1, -0.5, 0.9, -0.1, 0.3, 0.7, -0.8, 0.2,
-                              0.4, -0.3, 0.6, -0.7, 0.8, -0.2, 0.5, -0.6], dtype=np.float32)
+        centroids = np.array(
+            [0.1, -0.5, 0.9, -0.1, 0.3, 0.7, -0.8, 0.2, 0.4, -0.3, 0.6, -0.7, 0.8, -0.2, 0.5, -0.6],
+            dtype=np.float32,
+        )
         assignments = np.random.randint(0, 16, size=512).astype(np.uint8)
 
         cw = _CompressedWeight(
-            centroids=centroids, assignments=assignments, residual=None,
-            shape=(512,), dtype=np.float32,
+            centroids=centroids,
+            assignments=assignments,
+            residual=None,
+            shape=(512,),
+            dtype=np.float32,
         )
         assert cw.centroid_fn is None
         # Raw size: centroids + assignments
@@ -332,7 +350,7 @@ class TestHierarchicalCompression:
         }
         engine = NumpyEngine(config=config, weights=weights, compress=True, n_clusters=16)
         # The linear weight should have hierarchical compression
-        ln_cw = engine._compressed_weights["h.0.ln_1.weight"]
+        engine._compressed_weights["h.0.ln_1.weight"]
         # Depending on accuracy threshold, may or may not use linear
         # Just verify it works either way
         w = engine._get_weight("h.0.ln_1.weight")

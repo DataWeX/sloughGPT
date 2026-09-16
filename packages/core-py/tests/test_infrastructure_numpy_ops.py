@@ -1,4 +1,5 @@
 """Tests for numpy_ops — softmax, activations, rope, type conversion."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -36,7 +37,7 @@ class TestRmsnorm:
         x = np.random.randn(2, 4).astype(np.float32)
         w = np.ones(4, dtype=np.float32)
         out = rmsnorm(x, w)
-        rms = np.sqrt(np.mean(out ** 2, axis=-1, keepdims=True))
+        rms = np.sqrt(np.mean(out**2, axis=-1, keepdims=True))
         np.testing.assert_allclose(rms, 1.0, atol=1e-5)
 
 
@@ -62,7 +63,7 @@ class TestGelu:
         x = np.array([-1.0, 0.0, 1.0], dtype=np.float32)
         out = gelu(x)
         assert out[1] == 0.0  # gelu(0) = 0
-        assert out[2] > 0.5   # gelu(1) > 0.5
+        assert out[2] > 0.5  # gelu(1) > 0.5
 
     def test_preserves_shape(self):
         x = np.random.randn(3, 4).astype(np.float32)

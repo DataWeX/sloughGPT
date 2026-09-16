@@ -147,6 +147,7 @@ class ChatDomain:
 
         try:
             from domain.models._internal.provider import get_provider
+
             provider = get_provider("default")
             if provider is None:
                 return "[Error: No provider available]"
@@ -167,7 +168,7 @@ class ChatDomain:
             )
             return result or ""
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return "[Error: Generation timed out after 300 seconds]"
         except Exception as e:
             logger.error("Chat generation failed: %s", e, exc_info=True)
@@ -212,6 +213,7 @@ class ChatDomain:
         """Log response via ResponseTracker (MogDB + JSONL)."""
         try:
             from domain.feedback._internal.response_tracker import get_response_tracker
+
             get_response_tracker().log(
                 user_message=user_message[:500],
                 assistant_response=assistant_response[:1000],
@@ -229,6 +231,7 @@ class ChatDomain:
         """Get recent logged responses from MogDB."""
         try:
             from domain.feedback._internal.response_tracker import get_response_tracker
+
             responses = get_response_tracker().get_responses(limit=limit)
             return [
                 {

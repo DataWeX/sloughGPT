@@ -9,9 +9,9 @@ Usage:
     MAN_AUTOLOAD_MODEL=gpt2 pytest tests/test_e2e_inference.py -v
 """
 
-import os
-import time
 import json
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -53,6 +53,7 @@ def model_loaded(client):
 # Health
 # ------------------------------------------------------------------
 
+
 class TestModelHealth:
     def test_health_shows_model_loaded(self, client, model_loaded):
         assert model_loaded["model_loaded"] is True
@@ -66,32 +67,42 @@ class TestModelHealth:
 # Non-streaming chat
 # ------------------------------------------------------------------
 
+
 class TestChatNonStreaming:
     def test_chat_returns_text(self, client, model_loaded):
-        resp = client.post("/chat", json={
-            "messages": [{"role": "user", "content": "Hello"}],
-            "max_tokens": 20,
-        })
+        resp = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 20,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert "message" in data
         assert len(data["message"]) > 0
 
     def test_chat_returns_session_id(self, client, model_loaded):
-        resp = client.post("/chat", json={
-            "messages": [{"role": "user", "content": "Hi"}],
-            "max_tokens": 10,
-            "session_id": "integration-test-session",
-        })
+        resp = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 10,
+                "session_id": "integration-test-session",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("session_id") == "integration-test-session"
 
     def test_chat_returns_done(self, client, model_loaded):
-        resp = client.post("/chat", json={
-            "messages": [{"role": "user", "content": "Hello"}],
-            "max_tokens": 10,
-        })
+        resp = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 10,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("done") is True
@@ -101,37 +112,45 @@ class TestChatNonStreaming:
 # Streaming chat
 # ------------------------------------------------------------------
 
+
 class TestChatStreaming:
     def test_chat_stream_returns_sse(self, client, model_loaded):
-        resp = client.post("/chat/stream", json={
-            "messages": [{"role": "user", "content": "Hi"}],
-            "max_tokens": 20,
-        })
+        resp = client.post(
+            "/chat/stream",
+            json={
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 20,
+            },
+        )
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
         events = _sse_events(resp)
         assert len(events) >= 1
         tokens = "".join(
-            e.get("data", {}).get("token", "")
-            for e in events
-            if e.get("data", {}).get("token")
+            e.get("data", {}).get("token", "") for e in events if e.get("data", {}).get("token")
         )
         assert len(tokens) > 0
 
     def test_chat_stream_has_complete_event(self, client, model_loaded):
-        resp = client.post("/chat/stream", json={
-            "messages": [{"role": "user", "content": "Hi"}],
-            "max_tokens": 20,
-        })
+        resp = client.post(
+            "/chat/stream",
+            json={
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 20,
+            },
+        )
         events = _sse_events(resp)
         complete = [e for e in events if e.get("status") == "complete"]
         assert len(complete) >= 1
 
     def test_chat_stream_has_token_in_standard_envelope(self, client, model_loaded):
-        resp = client.post("/chat/stream", json={
-            "messages": [{"role": "user", "content": "Hello"}],
-            "max_tokens": 15,
-        })
+        resp = client.post(
+            "/chat/stream",
+            json={
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 15,
+            },
+        )
         events = _sse_events(resp)
         for event in events:
             assert "stream" in event or "status" in event
@@ -143,22 +162,29 @@ class TestChatStreaming:
 # Non-streaming generate
 # ------------------------------------------------------------------
 
+
 class TestGenerate:
     def test_generate_returns_text(self, client, model_loaded):
-        resp = client.post("/inference/generate", json={
-            "prompt": "Hello",
-            "max_new_tokens": 20,
-        })
+        resp = client.post(
+            "/inference/generate",
+            json={
+                "prompt": "Hello",
+                "max_new_tokens": 20,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert "text" in data
         assert len(data["text"]) > 0
 
     def test_generate_returns_model_and_tokens(self, client, model_loaded):
-        resp = client.post("/inference/generate", json={
-            "prompt": "Hello world",
-            "max_new_tokens": 20,
-        })
+        resp = client.post(
+            "/inference/generate",
+            json={
+                "prompt": "Hello world",
+                "max_new_tokens": 20,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert "model" in data
@@ -167,9 +193,13 @@ class TestGenerate:
 
     def test_generate_increases_inference_count(self, client, model_loaded):
         before = client.get("/health").json().get("inference_count", 0)
-        client.post("/inference/generate", json={
-            "prompt": "Test", "max_new_tokens": 10,
-        })
+        client.post(
+            "/inference/generate",
+            json={
+                "prompt": "Test",
+                "max_new_tokens": 10,
+            },
+        )
         after = client.get("/health").json().get("inference_count", 0)
         assert after >= before
 
@@ -178,37 +208,45 @@ class TestGenerate:
 # Streaming generate
 # ------------------------------------------------------------------
 
+
 class TestGenerateStream:
     def test_generate_stream_returns_sse(self, client, model_loaded):
-        resp = client.post("/inference/generate/stream", json={
-            "prompt": "Hi",
-            "max_new_tokens": 20,
-        })
+        resp = client.post(
+            "/inference/generate/stream",
+            json={
+                "prompt": "Hi",
+                "max_new_tokens": 20,
+            },
+        )
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
         events = _sse_events(resp)
         assert len(events) >= 1
 
     def test_generate_stream_has_tokens_and_complete(self, client, model_loaded):
-        resp = client.post("/inference/generate/stream", json={
-            "prompt": "Hello",
-            "max_new_tokens": 20,
-        })
+        resp = client.post(
+            "/inference/generate/stream",
+            json={
+                "prompt": "Hello",
+                "max_new_tokens": 20,
+            },
+        )
         events = _sse_events(resp)
         tokens = "".join(
-            e.get("data", {}).get("token", "")
-            for e in events
-            if e.get("data", {}).get("token")
+            e.get("data", {}).get("token", "") for e in events if e.get("data", {}).get("token")
         )
         assert len(tokens) > 0
         complete = [e for e in events if e.get("status") == "complete"]
         assert len(complete) >= 1
 
     def test_generate_stream_meta_has_elapsed(self, client, model_loaded):
-        resp = client.post("/inference/generate/stream", json={
-            "prompt": "Hi",
-            "max_new_tokens": 15,
-        })
+        resp = client.post(
+            "/inference/generate/stream",
+            json={
+                "prompt": "Hi",
+                "max_new_tokens": 15,
+            },
+        )
         events = _sse_events(resp)
         complete = next((e for e in events if e.get("status") == "complete"), None)
         if complete and "meta" in complete:
@@ -219,14 +257,18 @@ class TestGenerateStream:
 # Session context (save + retrieve)
 # ------------------------------------------------------------------
 
+
 class TestSessionContext:
     def test_save_session_context(self, client, model_loaded):
-        resp = client.post("/session/int-test-context/context", json={
-            "messages": [
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi there"},
-            ],
-        })
+        resp = client.post(
+            "/session/int-test-context/context",
+            json={
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi there"},
+                ],
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("status") == "stored"
@@ -243,11 +285,15 @@ class TestSessionContext:
 # Chat sessions CRUD
 # ------------------------------------------------------------------
 
+
 class TestChatSessions:
     def test_create_session(self, client, model_loaded):
-        resp = client.post("/chat/sessions", json={
-            "session_id": "int-test-session",
-        })
+        resp = client.post(
+            "/chat/sessions",
+            json={
+                "session_id": "int-test-session",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("status") == "created"
@@ -265,27 +311,34 @@ class TestChatSessions:
 # Feedback recording
 # ------------------------------------------------------------------
 
+
 class TestFeedback:
     def test_record_thumbs_up(self, client, model_loaded):
-        resp = client.post("/feedback/workflow-record", json={
-            "session_id": "int-test-session",
-            "message_id": "int-test-msg-1",
-            "user_id": "integration-test",
-            "feedback_type": "thumbs_up",
-            "message_text": "Great response!",
-        })
+        resp = client.post(
+            "/feedback/workflow-record",
+            json={
+                "session_id": "int-test-session",
+                "message_id": "int-test-msg-1",
+                "user_id": "integration-test",
+                "feedback_type": "thumbs_up",
+                "message_text": "Great response!",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("status") in ("recorded", "ok", "accepted")
 
     def test_record_thumbs_down(self, client, model_loaded):
-        resp = client.post("/feedback/workflow-record", json={
-            "session_id": "int-test-session",
-            "message_id": "int-test-msg-2",
-            "user_id": "integration-test",
-            "feedback_type": "thumbs_down",
-            "message_text": "Not helpful",
-        })
+        resp = client.post(
+            "/feedback/workflow-record",
+            json={
+                "session_id": "int-test-session",
+                "message_id": "int-test-msg-2",
+                "user_id": "integration-test",
+                "feedback_type": "thumbs_down",
+                "message_text": "Not helpful",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("status") in ("recorded", "ok", "accepted")
@@ -295,6 +348,7 @@ class TestFeedback:
 # Regenerate
 # ------------------------------------------------------------------
 
+
 class TestRegenerate:
     """Regenerate the last assistant response for a session."""
 
@@ -302,12 +356,15 @@ class TestRegenerate:
 
     def test_regen_prerequisite_save_context(self, client, model_loaded):
         """Save session context that regenerate will use."""
-        resp = client.post(f"/session/{self.REGEN_SESSION}/context", json={
-            "messages": [
-                {"role": "user", "content": "What is 2+2?"},
-                {"role": "assistant", "content": "4"},
-            ],
-        })
+        resp = client.post(
+            f"/session/{self.REGEN_SESSION}/context",
+            json={
+                "messages": [
+                    {"role": "user", "content": "What is 2+2?"},
+                    {"role": "assistant", "content": "4"},
+                ],
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("status") == "stored"
@@ -320,9 +377,7 @@ class TestRegenerate:
         events = _sse_events(resp)
         assert len(events) >= 1
         tokens = "".join(
-            e.get("data", {}).get("token", "")
-            for e in events
-            if e.get("data", {}).get("token")
+            e.get("data", {}).get("token", "") for e in events if e.get("data", {}).get("token")
         )
         assert len(tokens) > 0
 
@@ -345,6 +400,7 @@ class TestRegenerate:
 # Full cycle: stream → context → regenerate → feedback
 # ------------------------------------------------------------------
 
+
 class TestFullCycle:
     """End-to-end cycle: chat stream, save context, regenerate, feedback."""
 
@@ -352,23 +408,29 @@ class TestFullCycle:
 
     def test_cycle_stream(self, client, model_loaded):
         """Step 1: Stream a chat message."""
-        resp = client.post("/chat/stream", json={
-            "session_id": self.CYCLE_SESSION,
-            "messages": [{"role": "user", "content": "Hello from full cycle"}],
-            "max_tokens": 20,
-        })
+        resp = client.post(
+            "/chat/stream",
+            json={
+                "session_id": self.CYCLE_SESSION,
+                "messages": [{"role": "user", "content": "Hello from full cycle"}],
+                "max_tokens": 20,
+            },
+        )
         assert resp.status_code == 200
         events = _sse_events(resp)
         assert any(e.get("status") == "complete" for e in events)
 
     def test_cycle_save_context(self, client, model_loaded):
         """Step 2: Save the conversation context."""
-        resp = client.post(f"/session/{self.CYCLE_SESSION}/context", json={
-            "messages": [
-                {"role": "user", "content": "Hello from full cycle"},
-                {"role": "assistant", "content": "Hi there!"},
-            ],
-        })
+        resp = client.post(
+            f"/session/{self.CYCLE_SESSION}/context",
+            json={
+                "messages": [
+                    {"role": "user", "content": "Hello from full cycle"},
+                    {"role": "assistant", "content": "Hi there!"},
+                ],
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("status") == "stored"
@@ -379,21 +441,22 @@ class TestFullCycle:
         assert resp.status_code == 200
         events = _sse_events(resp)
         tokens = "".join(
-            e.get("data", {}).get("token", "")
-            for e in events
-            if e.get("data", {}).get("token")
+            e.get("data", {}).get("token", "") for e in events if e.get("data", {}).get("token")
         )
         assert len(tokens) > 0
         assert any(e.get("status") == "complete" for e in events)
 
     def test_cycle_feedback(self, client, model_loaded):
         """Step 4: Record feedback on the regenerated response."""
-        resp = client.post("/feedback/workflow-record", json={
-            "session_id": self.CYCLE_SESSION,
-            "message_id": "cycle-msg-regen",
-            "user_id": "integration-test",
-            "feedback_type": "thumbs_up",
-        })
+        resp = client.post(
+            "/feedback/workflow-record",
+            json={
+                "session_id": self.CYCLE_SESSION,
+                "message_id": "cycle-msg-regen",
+                "user_id": "integration-test",
+                "feedback_type": "thumbs_up",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("status") in ("recorded", "ok", "accepted")

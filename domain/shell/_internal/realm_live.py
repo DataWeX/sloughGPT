@@ -34,30 +34,39 @@ def _parse_grid(value: str) -> tuple[int, int, int]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="realm_live",
-        description="Watch the Programmable World Realm run, tick by tick.")
-    parser.add_argument("--grid", type=_parse_grid, default=(24, 12, 24),
-                        help="world dimensions x,y,z (default 24,12,24)")
-    parser.add_argument("--population", type=int, default=8,
-                        help="babies spawned on the surface")
-    parser.add_argument("--pools", type=int, default=3,
-                        help="organic food pools")
-    parser.add_argument("--day", type=int, default=24,
-                        help="ticks per day/night cycle")
-    parser.add_argument("--rate", type=float, default=0.4,
-                        help="noon energy per lit surface cell")
-    parser.add_argument("--seasons", action="store_true",
-                        help="ride the sun on the seasonal year envelope (Stage 14)")
-    parser.add_argument("--seasons-per-year", type=int, default=4,
-                        help="days per year (only with --seasons)")
-    parser.add_argument("--seasonality", type=float, default=1.0,
-                        help="year envelope swing 0..1 (only with --seasons)")
-    parser.add_argument("--ticks", type=int, default=240,
-                        help="total ticks to watch (default 240 = 10 days)")
-    parser.add_argument("--fps", type=float, default=8.0,
-                        help="frames per second (0 = as fast as possible)")
-    parser.add_argument("--seed", type=int, default=7,
-                        help="world + RNG seed")
+        prog="realm_live", description="Watch the Programmable World Realm run, tick by tick."
+    )
+    parser.add_argument(
+        "--grid",
+        type=_parse_grid,
+        default=(24, 12, 24),
+        help="world dimensions x,y,z (default 24,12,24)",
+    )
+    parser.add_argument("--population", type=int, default=8, help="babies spawned on the surface")
+    parser.add_argument("--pools", type=int, default=3, help="organic food pools")
+    parser.add_argument("--day", type=int, default=24, help="ticks per day/night cycle")
+    parser.add_argument("--rate", type=float, default=0.4, help="noon energy per lit surface cell")
+    parser.add_argument(
+        "--seasons",
+        action="store_true",
+        help="ride the sun on the seasonal year envelope (Stage 14)",
+    )
+    parser.add_argument(
+        "--seasons-per-year", type=int, default=4, help="days per year (only with --seasons)"
+    )
+    parser.add_argument(
+        "--seasonality",
+        type=float,
+        default=1.0,
+        help="year envelope swing 0..1 (only with --seasons)",
+    )
+    parser.add_argument(
+        "--ticks", type=int, default=240, help="total ticks to watch (default 240 = 10 days)"
+    )
+    parser.add_argument(
+        "--fps", type=float, default=8.0, help="frames per second (0 = as fast as possible)"
+    )
+    parser.add_argument("--seed", type=int, default=7, help="world + RNG seed")
     args = parser.parse_args(argv)
 
     scene = make_live_scene(

@@ -1,14 +1,13 @@
 """Tests for domain.core.database — in-memory document store."""
 
 import threading
-import pytest
 
 from domain.core._internal.database import _MemoryDB, get_db
-
 
 # ---------------------------------------------------------------------------
 # _MemoryDB unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestMemoryDBInsert:
     def test_insert_single(self):
@@ -169,6 +168,7 @@ class TestMemoryDBThreadSafety:
 # ---------------------------------------------------------------------------
 # Singleton get_db()
 # ---------------------------------------------------------------------------
+
 
 class TestGetDb:
     def test_returns_same_instance(self):

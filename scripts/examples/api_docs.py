@@ -4,9 +4,10 @@ Generate API documentation from the FastAPI server
 """
 
 import sys
+
 sys.path.insert(0, "..")
 
-from pathlib import Path
+
 
 def main():
     print("=" * 70)
@@ -19,7 +20,7 @@ def main():
     print("\n📍 BASE URL")
     print("-" * 70)
     print(f"  Development: {base}")
-    print(f"  Production: https://api.sloughgpt.example.com")
+    print("  Production: https://api.sloughgpt.example.com")
 
     print("\n\n📍 HEALTH ENDPOINTS")
     print("-" * 70)
@@ -50,7 +51,7 @@ def main():
         ("POST", "/inference/generate", "Generate using inference engine"),
         ("POST", "/inference/generate/stream", "Streaming inference"),
         ("POST", "/inference/batch", "Batch processing (up to 50 prompts)"),
-        ("GET",  "/inference/stats", "Inference engine statistics"),
+        ("GET", "/inference/stats", "Inference engine statistics"),
     ]
     for method, path, desc in endpoints:
         print(f"  {method:6} {path:30} - {desc}")
@@ -58,9 +59,9 @@ def main():
     print("\n\n📍 RATE LIMITING & CACHE")
     print("-" * 70)
     endpoints = [
-        ("GET",  "/rate-limit/status", "Rate limit configuration"),
-        ("GET",  "/rate-limit/check", "Check current usage"),
-        ("GET",  "/cache/stats", "Cache statistics"),
+        ("GET", "/rate-limit/status", "Rate limit configuration"),
+        ("GET", "/rate-limit/check", "Check current usage"),
+        ("GET", "/cache/stats", "Cache statistics"),
         ("DELETE", "/cache", "Clear cache"),
     ]
     for method, path, desc in endpoints:
@@ -81,8 +82,8 @@ def main():
     print("-" * 70)
     endpoints = [
         ("POST", "/train", "Start training job"),
-        ("GET",  "/training/jobs", "List training jobs"),
-        ("GET",  "/training/jobs/{id}", "Get job status"),
+        ("GET", "/training/jobs", "List training jobs"),
+        ("GET", "/training/jobs/{id}", "Get job status"),
     ]
     for method, path, desc in endpoints:
         print(f"  {method:6} {path:30} - {desc}")
@@ -90,9 +91,9 @@ def main():
     print("\n\n📍 MODELS ENDPOINTS")
     print("-" * 70)
     endpoints = [
-        ("GET",  "/models", "List available models"),
+        ("GET", "/models", "List available models"),
         ("POST", "/models/load", "Load a model"),
-        ("GET",  "/model/export/formats", "Export formats"),
+        ("GET", "/model/export/formats", "Export formats"),
         ("POST", "/model/export", "Export model"),
     ]
     for method, path, desc in endpoints:
@@ -102,8 +103,14 @@ def main():
     print("-" * 70)
     examples = [
         ("Health check", f"curl {base}/health"),
-        ("Generate text", f"curl -X POST {base}/generate -H 'Content-Type: application/json' -d '{{\"prompt\": \"Hello\", \"max_new_tokens\": 50}}'"),
-        ("Batch process", f"curl -X POST {base}/inference/batch -H 'Content-Type: application/json' -d '{{\"prompts\": [\"Hello\", \"Hi\"], \"max_new_tokens\": 20}}'"),
+        (
+            "Generate text",
+            f'curl -X POST {base}/generate -H \'Content-Type: application/json\' -d \'{{"prompt": "Hello", "max_new_tokens": 50}}\'',
+        ),
+        (
+            "Batch process",
+            f'curl -X POST {base}/inference/batch -H \'Content-Type: application/json\' -d \'{{"prompts": ["Hello", "Hi"], "max_new_tokens": 20}}\'',
+        ),
         ("Get metrics", f"curl {base}/metrics/prometheus"),
     ]
     for title, cmd in examples:
@@ -124,6 +131,7 @@ def main():
     print("\n" + "=" * 70)
     print("For full API docs, visit: http://localhost:8000/docs")
     print("=" * 70 + "\n")
+
 
 if __name__ == "__main__":
     main()

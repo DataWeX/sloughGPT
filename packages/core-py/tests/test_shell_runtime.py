@@ -4,19 +4,14 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock, patch
 
-import pytest
-
-from domain.shell._internal.runtime import Resource, APIServerProcess, _probe_api, _default_api_url
-
+from domain.shell._internal.runtime import APIServerProcess, Resource, _default_api_url, _probe_api
 
 # ── Resource ────────────────────────────────────────────────────────────────
 
 
 class TestResource:
-
     def test_init(self):
         r = Resource(name="test", kind="model", path="/tmp/test.soul")
         assert r.name == "test"
@@ -45,7 +40,6 @@ class TestResource:
 
 
 class TestDefaultApiUrl:
-
     def test_default(self):
         with patch.dict("os.environ", {}, clear=True):
             url = _default_api_url()
@@ -60,13 +54,14 @@ class TestDefaultApiUrl:
 
 
 class TestProbeApi:
-
     def test_available(self):
         mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps({
-            "status": "success",
-            "data": {"status": "ready", "model_loaded": True, "model_type": "slonet"},
-        }).encode()
+        mock_resp.read.return_value = json.dumps(
+            {
+                "status": "success",
+                "data": {"status": "ready", "model_loaded": True, "model_type": "slonet"},
+            }
+        ).encode()
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
@@ -78,6 +73,7 @@ class TestProbeApi:
 
     def test_unavailable(self):
         import urllib.error
+
         with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("refused")):
             result = _probe_api("http://localhost:8000")
         assert result["available"] is False
@@ -88,9 +84,9 @@ class TestProbeApi:
 
 
 class TestAPIServerProcess:
-
     def setup_method(self):
         import domain.shell._internal.runtime as mod
+
         mod._shared_proc = None
         mod._shared_started_at = 0.0
 
@@ -127,13 +123,17 @@ class TestAPIServerProcess:
 
     def test_start_already_healthy(self):
         api = APIServerProcess()
-        with patch("domain.shell._internal.runtime._probe_api", return_value={"available": True, "model_id": "slonet"}):
+        with patch(
+            "domain.shell._internal.runtime._probe_api",
+            return_value={"available": True, "model_id": "slonet"},
+        ):
             result = api.start()
         assert result["ok"] is True
         assert "connected" in result["message"]
 
     def test_start_already_spawned(self):
         import domain.shell._internal.runtime as mod
+
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None
         mod._shared_proc = mock_proc
@@ -146,6 +146,7 @@ class TestAPIServerProcess:
 
     def test_start_stale_process(self):
         import domain.shell._internal.runtime as mod
+
         mock_proc = MagicMock()
         mock_proc.poll.return_value = 0  # exited
         mod._shared_proc = mock_proc
@@ -161,15 +162,16 @@ class TestAPIServerProcess:
 
 
 class TestDaitRuntime:
-
     def setup_method(self):
         import domain.shell._internal.runtime as mod
+
         mod._shared_proc = None
         mod._shared_started_at = 0.0
 
     def test_init(self):
         with patch("domain.shell._internal.kernel.Kernel"):
             from domain.shell._internal.runtime import DaitRuntime
+
             rt = DaitRuntime()
             assert rt._model_loaded is False
             assert rt._boot_complete is False
@@ -177,14 +179,18 @@ class TestDaitRuntime:
     def test_api_property(self):
         with patch("domain.shell._internal.kernel.Kernel"):
             from domain.shell._internal.runtime import DaitRuntime
+
             rt = DaitRuntime()
             assert isinstance(rt.api, APIServerProcess)
 
     def test_api_status(self):
         with patch("domain.shell._internal.kernel.Kernel"):
             from domain.shell._internal.runtime import DaitRuntime
+
             rt = DaitRuntime()
-            with patch.object(rt._api, "status", return_value={"available": True, "model_loaded": True}):
+            with patch.object(
+                rt._api, "status", return_value={"available": True, "model_loaded": True}
+            ):
                 result = rt.api_status
             assert result["available"] is True
             assert rt._model_loaded is True
@@ -195,6 +201,7 @@ class TestDaitRuntime:
             mock_kernel.uptime = 100
             mock_kernel.list_processes.return_value = []
             from domain.shell._internal.runtime import DaitRuntime
+
             rt = DaitRuntime()
             with patch.object(rt._api, "status", return_value={"available": False}):
                 summary = rt.status_summary
@@ -203,17 +210,20 @@ class TestDaitRuntime:
     def test_init_system_property(self):
         with patch("domain.shell._internal.kernel.Kernel"):
             from domain.shell._internal.runtime import DaitRuntime
+
             rt = DaitRuntime()
             assert rt.init_system is None
 
     def test_devices_property(self):
         with patch("domain.shell._internal.kernel.Kernel"):
             from domain.shell._internal.runtime import DaitRuntime
+
             rt = DaitRuntime()
             assert rt.devices is None
 
     def test_vfs_property(self):
         with patch("domain.shell._internal.kernel.Kernel"):
             from domain.shell._internal.runtime import DaitRuntime
+
             rt = DaitRuntime()
             assert rt.vfs is None

@@ -2,33 +2,28 @@
 
 from __future__ import annotations
 
-import math
-import pytest
 import numpy as np
+import pytest
+
 from domain.training._internal.slonet import (
-    Tensor,
-    SloLayer,
-    SloLinear,
+    SloAdapterLayer,
+    SloBatchNorm2D,
+    SloConv2D,
     SloDropout,
     SloEmbedding,
-    SloRMSNorm,
+    SloLayer,
     SloLayerNorm,
-    SloAdapterLayer,
-    SloConv2D,
-    SloBatchNorm2D,
+    SloLinear,
     SloMaxPool2D,
+    SloRMSNorm,
+    Tensor,
     no_grad,
-    ones,
-    zeros,
-    randn,
 )
-
 
 # ── SloLayer ────────────────────────────────────────────────────────────────
 
 
 class TestSloLayer:
-
     def test_default_name(self):
         layer = SloLayer()
         assert layer.name == "SloLayer"
@@ -68,7 +63,6 @@ class TestSloLayer:
 
 
 class TestSloLinear:
-
     def test_init(self):
         layer = SloLinear(10, 5)
         assert layer.in_features == 10
@@ -105,6 +99,7 @@ class TestSloLinear:
 
     def test_deepcopy(self):
         import copy
+
         layer = SloLinear(10, 5)
         try:
             layer_copy = copy.deepcopy(layer)
@@ -120,7 +115,6 @@ class TestSloLinear:
 
 
 class TestSloDropout:
-
     def test_init(self):
         layer = SloDropout(p=0.1)
         assert layer.p == 0.1
@@ -147,7 +141,6 @@ class TestSloDropout:
 
 
 class TestSloEmbedding:
-
     def test_init(self):
         layer = SloEmbedding(100, 16)
         assert layer.num_embeddings == 100
@@ -189,7 +182,6 @@ class TestSloEmbedding:
 
 
 class TestSloRMSNorm:
-
     def test_init(self):
         layer = SloRMSNorm(64)
         assert layer.weight.shape == (64,)
@@ -216,7 +208,6 @@ class TestSloRMSNorm:
 
 
 class TestSloLayerNorm:
-
     def test_init(self):
         layer = SloLayerNorm(64)
         assert layer.weight.shape == (64,)
@@ -243,7 +234,6 @@ class TestSloLayerNorm:
 
 
 class TestSloAdapterLayer:
-
     def test_init(self):
         layer = SloAdapterLayer(dim=64, rank=8)
         assert layer.dim == 64
@@ -271,7 +261,6 @@ class TestSloAdapterLayer:
 
 
 class TestSloConv2D:
-
     def test_init(self):
         layer = SloConv2D(3, 16, kernel_size=3, padding=1)
         assert layer.in_ch == 3
@@ -293,7 +282,6 @@ class TestSloConv2D:
 
 
 class TestSloBatchNorm2D:
-
     def test_init(self):
         layer = SloBatchNorm2D(16)
         assert layer.channels == 16
@@ -315,7 +303,6 @@ class TestSloBatchNorm2D:
 
 
 class TestSloMaxPool2D:
-
     def test_init(self):
         layer = SloMaxPool2D(kernel_size=2)
         assert layer.kernel_size == 2
@@ -336,7 +323,6 @@ class TestSloMaxPool2D:
 
 
 class TestIntegration:
-
     def test_linear_no_grad(self):
         layer = SloLinear(10, 5)
         x = Tensor(np.ones((1, 10)))

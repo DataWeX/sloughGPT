@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import os
-import tempfile
 
 import pytest
 
-from domain.shell._internal.storage_device import StorageDevice
 from domain.shell._internal.kernel_syscall import SyscallResult
+from domain.shell._internal.storage_device import StorageDevice
 
 
 @pytest.fixture
@@ -27,7 +26,6 @@ def dev_with_file(dev, tmp_path):
 
 
 class TestStorageDeviceBasics:
-
     def test_name(self, dev):
         assert dev.name == "test-storage"
 
@@ -58,7 +56,6 @@ class TestStorageDeviceBasics:
 
 
 class TestStorageDeviceIoctl:
-
     def test_ioctl_unknown_command(self, dev):
         result = dev.ioctl("NONEXISTENT")
         assert isinstance(result, SyscallResult)
@@ -128,7 +125,6 @@ class TestStorageDeviceIoctl:
 
 
 class TestStorageDeviceCall:
-
     def test_call_success(self, dev_with_file):
         result = dev_with_file.call("EXISTS", "test.txt")
         assert result is True
@@ -142,7 +138,6 @@ class TestStorageDeviceCall:
 
 
 class TestStorageDeviceFileOps:
-
     def test_open_and_read(self, dev_with_file):
         fd = dev_with_file.open_file("test.txt", "rb")
         data = dev_with_file.read(fd)

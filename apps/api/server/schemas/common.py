@@ -15,17 +15,18 @@ passed explicitly — callers never need to thread it manually.
 from __future__ import annotations
 
 import logging
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
+
+from pydantic import BaseModel, Field
 
 from domain.infrastructure.correlation import get_correlation_id
-from pydantic import BaseModel, Field
 
 _audit_logger = logging.getLogger("audit")
 
 T = TypeVar("T")
 
 
-class StandardResponse(BaseModel, Generic[T]):
+class StandardResponse[T](BaseModel):
     """Unified response envelope for all API endpoints.
 
     Attributes:
@@ -207,8 +208,12 @@ def safe_audit_log(
 
         merged = {**(extra or {}), **kwargs} if kwargs else extra
         get_audit_logger().log(
-            action, user=user, resource=resource, detail=detail,
-            extra=merged, workspace_id=workspace_id,
+            action,
+            user=user,
+            resource=resource,
+            detail=detail,
+            extra=merged,
+            workspace_id=workspace_id,
         )
     except Exception:
         _audit_logger.info(
@@ -280,5 +285,7 @@ def endpoint(source: str):
                 return fn(*args, **kwargs)
             except Exception as e:
                 classify_and_raise(e, source=source)
+
         return wrapper
+
     return decorator

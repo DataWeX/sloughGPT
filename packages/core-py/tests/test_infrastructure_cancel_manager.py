@@ -1,4 +1,5 @@
 """Tests for CancelManager — operation registration, lifecycle, cancellation."""
+
 from __future__ import annotations
 
 import time

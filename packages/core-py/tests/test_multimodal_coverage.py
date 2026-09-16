@@ -8,10 +8,10 @@ multimodal manager. Uses small model sizes to keep the suite fast.
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pytest
-from unittest.mock import patch
 
 pytestmark = pytest.mark.slow
 
@@ -22,24 +22,44 @@ from PIL import Image
 from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
 from domain.multimodal._internal.char_tokenizer import CharTokenizer
 from domain.multimodal._internal.diffusion import (
-    TimestepEmbedder, LatentDiffusionModel, LatentUNet,
-    _group_norm as diffusion_group_norm, _timestep_embedding,
+    LatentDiffusionModel,
+    LatentUNet,
+    TimestepEmbedder,
+    _timestep_embedding,
+)
+from domain.multimodal._internal.diffusion import (
+    _group_norm as diffusion_group_norm,
 )
 from domain.multimodal._internal.engine import (
-    AudioEncoder, MultimodalEngine, ReplayBuffer, TextDecoder,
-    VisionEncoder, augment_image, contrastive_loss, contrastive_step,
-    get_multimodal_engine, replay_train_step,
+    AudioEncoder,
+    MultimodalEngine,
+    ReplayBuffer,
+    TextDecoder,
+    VisionEncoder,
+    augment_image,
+    contrastive_loss,
+    contrastive_step,
+    get_multimodal_engine,
+    replay_train_step,
 )
 from domain.multimodal._internal.manager import (
-    MultimodalManager, get_multimodal_manager, initialize_multimodal,
+    MultimodalManager,
+    get_multimodal_manager,
+    initialize_multimodal,
 )
 from domain.multimodal._internal.text_encoder import TextEncoder
 from domain.multimodal._internal.vae import (
-    SloVAE, SloVAEDecoder, SloVAEEncoder, _group_norm as vae_group_norm,
+    SloVAE,
+    SloVAEDecoder,
+    SloVAEEncoder,
+)
+from domain.multimodal._internal.vae import (
+    _group_norm as vae_group_norm,
 )
 from domain.multimodal._internal.video import TemporalEncoder, VideoProcessor
 from domain.multimodal._internal.vision import VisionCNN, get_vision_model
-from domain.training._internal.slonet import Tensor, tensor as _tensor
+from domain.training._internal.slonet import Tensor
+from domain.training._internal.slonet import tensor as _tensor
 
 
 def _sample_image() -> np.ndarray:
@@ -50,8 +70,12 @@ def _sample_image() -> np.ndarray:
 def _make_engine() -> MultimodalEngine:
     """Small multimodal engine with a character vocabulary."""
     engine = MultimodalEngine(
-        embed_dim=64, hidden_dim=128, n_vit_layers=1, n_heads=2,
-        n_decoder_layers=1, n_audio_layers=1,
+        embed_dim=64,
+        hidden_dim=128,
+        n_vit_layers=1,
+        n_heads=2,
+        n_decoder_layers=1,
+        n_audio_layers=1,
     )
     engine.build_vocab(["a red circle on a dark background"])
     return engine
@@ -127,6 +151,7 @@ class TestBPETokenizer:
 
     def test_merge_helpers(self):
         from collections import Counter
+
         tok = BPETokenizer(vocab_size=64)
         vocab = Counter({"l o w </w>": 5, "l o w e r </w>": 2})
         pairs = tok._get_stats(vocab)
@@ -144,7 +169,11 @@ class TestBPETokenizer:
         tok = BPETokenizer(vocab_size=64)
         tok.train(["a red circle"])
         ids = tok.encode("a red circle")
-        ids = [tok.vocab["<BOS>"]] + ids + [tok.vocab["<EOS>"], tok.vocab["<PAD>"], tok.vocab["<UNK>"]]
+        ids = (
+            [tok.vocab["<BOS>"]]
+            + ids
+            + [tok.vocab["<EOS>"], tok.vocab["<PAD>"], tok.vocab["<UNK>"]]
+        )
         decoded = tok.decode(ids)
         assert "<" not in decoded
 
@@ -278,8 +307,8 @@ class TestVideoProcessor:
         assert frames[0].shape == (224, 224, 3)
 
     def test_extract_frames_cv2_path(self, monkeypatch):
-        import types
         import sys
+        import types
 
         class FakeCapture:
             def __init__(self, path):
@@ -318,8 +347,8 @@ class TestVideoProcessor:
         assert 0.0 <= frames[0].min() <= frames[0].max() <= 1.0
 
     def test_extract_frames_cv2_unopenable(self, monkeypatch):
-        import types
         import sys
+        import types
 
         class ClosedCapture:
             def isOpened(self):
@@ -336,8 +365,8 @@ class TestVideoProcessor:
         assert len(frames) == 2
 
     def test_extract_frames_cv2_read_failure(self, monkeypatch):
-        import types
         import sys
+        import types
 
         class FailingCapture:
             def isOpened(self):
@@ -366,8 +395,8 @@ class TestVideoProcessor:
         assert frames[0].shape == (224, 224, 3)
 
     def test_extract_frames_cv2_zero_frames(self, monkeypatch):
-        import types
         import sys
+        import types
 
         class ZeroCapture:
             def isOpened(self):
@@ -483,16 +512,18 @@ class TestDiffusion:
         assert len(emb.parameters()) > 0
 
     def test_latent_unet_forward(self):
-        unet = LatentUNet(in_channels=4, model_channels=8, out_channels=4,
-                          temb_dim=8, context_dim=8, n_heads=2)
+        unet = LatentUNet(
+            in_channels=4, model_channels=8, out_channels=4, temb_dim=8, context_dim=8, n_heads=2
+        )
         x = _tensor(np.random.rand(1, 4, 7, 7).astype(np.float32), requires_grad=False)
         ctx = _tensor(np.random.rand(1, 3, 8).astype(np.float32), requires_grad=False)
         out = unet.forward(x, np.array([3]), ctx)
         assert out.data.shape == (1, 4, 7, 7)
 
     def test_diffusion_noise_and_train_step(self):
-        model = LatentDiffusionModel(latent_dim=4, model_channels=8, temb_dim=8,
-                                     context_dim=8, n_heads=2, num_timesteps=100)
+        model = LatentDiffusionModel(
+            latent_dim=4, model_channels=8, temb_dim=8, context_dim=8, n_heads=2, num_timesteps=100
+        )
         latents = np.random.rand(1, 4, 7, 7).astype(np.float32)
         noisy, noise = model.add_noise(latents, np.array([5]))
         assert noisy.shape == (1, 4, 7, 7)
@@ -502,20 +533,23 @@ class TestDiffusion:
         assert np.isfinite(loss)
 
     def test_diffusion_sample_shape(self):
-        model = LatentDiffusionModel(latent_dim=4, model_channels=8, temb_dim=8,
-                                     context_dim=8, n_heads=2, num_timesteps=50)
+        model = LatentDiffusionModel(
+            latent_dim=4, model_channels=8, temb_dim=8, context_dim=8, n_heads=2, num_timesteps=50
+        )
         text_emb = np.random.rand(1, 3, 8).astype(np.float32)
         latents = model.sample(text_emb, num_steps=2)
         assert latents.shape == (1, 4, 7, 7)
 
     def test_diffusion_parameters(self):
-        model = LatentDiffusionModel(latent_dim=4, model_channels=8, temb_dim=8,
-                                     context_dim=8, n_heads=2, num_timesteps=50)
+        model = LatentDiffusionModel(
+            latent_dim=4, model_channels=8, temb_dim=8, context_dim=8, n_heads=2, num_timesteps=50
+        )
         assert len(model.parameters()) > 0
 
     def test_latent_unet_parameters(self):
-        unet = LatentUNet(in_channels=4, model_channels=8, out_channels=4,
-                          temb_dim=8, context_dim=8, n_heads=2)
+        unet = LatentUNet(
+            in_channels=4, model_channels=8, out_channels=4, temb_dim=8, context_dim=8, n_heads=2
+        )
         assert len(unet.parameters()) > 0
 
 
@@ -669,7 +703,9 @@ class TestMultimodalEngine:
 
     def test_generate_greedy_and_sampling(self):
         engine = _make_engine()
-        engine.train_step(_sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64))
+        engine.train_step(
+            _sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64)
+        )
         img = _sample_image()
         out_greedy = engine.generate(img, max_len=8, temperature=0.0)
         assert isinstance(out_greedy.text, str)
@@ -709,7 +745,9 @@ class TestMultimodalEngine:
         embed_a, patches_a, opts_a = engine._concat_modalities(audio_patches=audio_patches)
         assert embed_a.data.shape == (1, 1, 64)
         assert patches_a.data.shape[1] == engine.audio.max_patches + 1
-        embed_b, patches_b, _ = engine._concat_modalities(images_np=img, audio_patches=audio_patches)
+        embed_b, patches_b, _ = engine._concat_modalities(
+            images_np=img, audio_patches=audio_patches
+        )
         assert patches_b.data.shape[1] == 50 + engine.audio.max_patches + 1
         with pytest.raises(ValueError):
             engine._concat_modalities()
@@ -717,7 +755,9 @@ class TestMultimodalEngine:
     def test_embed_property_untrained_then_trained(self):
         engine = _make_engine()
         assert engine.embed("a red circle") == [0.0] * 128
-        engine.train_step(_sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64))
+        engine.train_step(
+            _sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64)
+        )
         vec = engine.embed("a red circle")
         assert len(vec) == 128
 
@@ -734,6 +774,7 @@ class TestMultimodalEngine:
 
     def test_causal_mask_shape(self):
         from domain.multimodal._internal.engine import _causal_mask
+
         mask = _causal_mask(6)
         assert mask.data.shape == (1, 1, 6, 6)
 
@@ -767,7 +808,9 @@ class TestMultimodalEngine:
 
     def test_sum_grads_and_empty_train_batch(self):
         engine = _make_engine()
-        engine.train_step(_sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64))
+        engine.train_step(
+            _sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64)
+        )
         params = list(engine.vision.parameters())
         p = params[0]
         p.grad = Tensor(np.ones_like(p.data), requires_grad=False)
@@ -783,7 +826,9 @@ class TestMultimodalEngine:
 
     def test_beam_search_all_eos(self):
         engine = _make_engine()
-        engine.train_step(_sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64))
+        engine.train_step(
+            _sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64)
+        )
         out = engine.generate(_sample_image(), max_len=2, temperature=0.5, beam_width=2)
         assert isinstance(out.text, str)
 
@@ -813,8 +858,10 @@ class TestMultimodalEngine:
 
     def test_params_for_optimizer_unknown(self):
         engine = _make_engine()
+
         class _Dummy:
             pass
+
         dummy = _Dummy()
         assert engine._params_for_optimizer(dummy, None, None) == []
 
@@ -843,68 +890,90 @@ class TestMultimodalEngine:
         buf.add(img, "a red circle")
         buf.add(img, "a blue square")
         import domain.multimodal._internal.engine as engine_mod
+
         with patch.object(engine_mod.ReplayBuffer, "sample", return_value=([img], ["bad caption"])):
             with patch.object(engine_mod.TextDecoder, "encode", side_effect=RuntimeError("boom")):
                 assert replay_train_step(engine, buf, batch_size=2) == 0.0
 
     def test_beam_search_no_completed(self):
         engine = _make_engine()
-        engine.train_step(_sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64))
+        engine.train_step(
+            _sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64)
+        )
         out = engine.generate(_sample_image(), max_len=6, temperature=0.99, beam_width=2, top_k=3)
         assert isinstance(out.text, str)
 
     def test_beam_search_all_eos_break(self):
         engine = _make_engine()
-        engine.train_step(_sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64))
+        engine.train_step(
+            _sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64)
+        )
         out = engine.generate(_sample_image(), max_len=30, temperature=0.5, beam_width=1, top_k=1)
         assert isinstance(out.text, str)
 
     def test_chat_stream_valid_image(self):
         engine = _make_engine()
-        import io
-        import base64
         import asyncio
+        import base64
+        import io
+
         buf = io.BytesIO()
         Image.new("RGB", (32, 32), (255, 0, 0)).save(buf, "PNG")
         b64 = base64.b64encode(buf.getvalue()).decode()
         chunks = []
+
         class _Cap:
             text = "a red circle"
+
         class _Mgr:
             def caption_image(self, img):
                 return _Cap()
-        with patch("domain.multimodal._internal.manager.get_multimodal_manager", return_value=_Mgr()):
+
+        with patch(
+            "domain.multimodal._internal.manager.get_multimodal_manager", return_value=_Mgr()
+        ):
+
             async def _run():
                 async for chunk in engine.chat_stream(
                     [{"role": "user", "content": "data:image/png;base64," + b64}]
                 ):
                     chunks.append(chunk)
+
             asyncio.run(_run())
         assert chunks[0] == "a red circle"
 
     def test_chat_stream_no_image(self):
         engine = _make_engine()
         import asyncio
+
         chunks = []
+
         async def _run():
             async for chunk in engine.chat_stream([{"role": "user", "content": "hello"}]):
                 chunks.append(chunk)
+
         asyncio.run(_run())
         assert "no image" in chunks[0]
 
     def test_chat_stream_bad_image(self):
         engine = _make_engine()
         import asyncio
+
         chunks = []
+
         async def _run():
-            async for chunk in engine.chat_stream([{"role": "user", "content": "data:image/png;base64,notvalid!!!"}]):
+            async for chunk in engine.chat_stream(
+                [{"role": "user", "content": "data:image/png;base64,notvalid!!!"}]
+            ):
                 chunks.append(chunk)
+
         asyncio.run(_run())
         assert "[error:" in chunks[0]
 
     def test_chat_no_image(self):
         engine = _make_engine()
         import asyncio
+
         out = asyncio.run(engine.chat([{"role": "user", "content": "hi"}]))
         assert "no image" in out
 
@@ -924,7 +993,9 @@ class TestMultimodalEngine:
 
     def test_save_load_roundtrip(self, tmp_path):
         engine = _make_engine()
-        engine.train_step(_sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64))
+        engine.train_step(
+            _sample_image(), np.array([engine.text.encode("a red circle")], dtype=np.int64)
+        )
         path = str(tmp_path / "mm" / "engine.npz")
         saved = engine.save(path, extra_meta={"images_learned": 3})
         assert saved == path
@@ -935,8 +1006,14 @@ class TestMultimodalEngine:
         assert loaded.model_id == "multimodal-v1"
 
     def test_get_multimodal_engine(self):
-        engine = get_multimodal_engine(embed_dim=16, hidden_dim=32, n_vit_layers=1,
-                                       n_heads=2, n_decoder_layers=1, n_audio_layers=1)
+        engine = get_multimodal_engine(
+            embed_dim=16,
+            hidden_dim=32,
+            n_vit_layers=1,
+            n_heads=2,
+            n_decoder_layers=1,
+            n_audio_layers=1,
+        )
         assert isinstance(engine, MultimodalEngine)
 
 
@@ -969,10 +1046,12 @@ class TestMultimodalManager:
 
     def test_count_trained_images(self, tmp_path, monkeypatch):
         from domains.multimodal import engine as engine_mod
+
         monkeypatch.setattr(engine_mod.MultimodalEngine, "SAVE_PATH", str(tmp_path / "mm.npz"))
         mgr = MultimodalManager()
         assert mgr._count_trained_images() == 0
         import json
+
         with open(str(tmp_path / "mm.npz.json"), "w") as f:
             json.dump({"images_learned": 7}, f)
         assert mgr._count_trained_images() == 7
@@ -1024,6 +1103,7 @@ class TestMultimodalManager:
 
     def test_caption_image_auto_save_every_five(self, tmp_path, monkeypatch):
         from domains.multimodal import engine as engine_mod
+
         monkeypatch.setattr(engine_mod.MultimodalEngine, "SAVE_PATH", str(tmp_path / "mm.npz"))
         engine = _make_engine()
         mgr = _make_manager(engine)
@@ -1060,6 +1140,7 @@ class TestMultimodalManager:
 
     def test_initialize_multimodal(self, monkeypatch):
         from domains.multimodal import manager as manager_mod
+
         fresh = MultimodalManager()
         monkeypatch.setattr(manager_mod, "_multimodal_manager", fresh)
         monkeypatch.setattr(MultimodalManager, "_pretrain_engine", lambda self, **kw: 0.0)
@@ -1070,6 +1151,7 @@ class TestMultimodalManager:
 
     def test_initialize_speech_server_mode(self, monkeypatch):
         from domains.multimodal import manager as manager_mod
+
         fresh = MultimodalManager()
         monkeypatch.setattr(manager_mod, "_multimodal_manager", fresh)
         monkeypatch.setattr(MultimodalManager, "_pretrain_engine", lambda self, **kw: 0.0)
@@ -1081,11 +1163,13 @@ class TestMultimodalManager:
 
     def test_initialize_loads_saved_engine(self, tmp_path, monkeypatch):
         from domains.multimodal import engine as engine_mod
+
         saved = _make_engine()
         saved._trained = True
         monkeypatch.setattr(engine_mod.MultimodalEngine, "SAVE_PATH", str(tmp_path / "mm.npz"))
         monkeypatch.setattr(engine_mod.MultimodalEngine, "load", classmethod(lambda cls: saved))
         import json
+
         with open(str(tmp_path / "mm.npz.json"), "w") as f:
             json.dump({"images_learned": 3}, f)
         mgr = MultimodalManager()
@@ -1096,12 +1180,15 @@ class TestMultimodalManager:
 
     def test_initialize_saved_engine_fails(self, tmp_path, monkeypatch):
         from domains.multimodal import engine as engine_mod
-        from domains.multimodal import manager as manager_mod
+
         monkeypatch.setattr(engine_mod.MultimodalEngine, "SAVE_PATH", str(tmp_path / "mm.npz"))
+
         def boom(cls):
             raise RuntimeError("corrupt")
+
         monkeypatch.setattr(engine_mod.MultimodalEngine, "load", classmethod(boom))
         import json
+
         with open(str(tmp_path / "mm.npz.json"), "w") as f:
             json.dump({"images_learned": 3}, f)
         mgr = MultimodalManager()
@@ -1142,10 +1229,10 @@ class TestMultimodalManager:
         engine._trained = True
         mgr = _make_manager(engine)
         mgr._learning_count = 12
-        orig = engine.generate
 
         def fake_generate(img, max_len=16, temperature=0.8):
             return type("R", (), {"text": "a red circle", "confidence": 0.5})()
+
         monkeypatch.setattr(engine, "generate", fake_generate)
         cap = mgr.caption_image(Image.new("RGB", (224, 224), (10, 200, 10)))
         assert cap.text == "a red circle"
@@ -1156,17 +1243,21 @@ class TestMultimodalManager:
         engine._trained = True
         mgr = _make_manager(engine)
         mgr._learning_count = 12
-        monkeypatch.setattr(engine, "generate",
-                            lambda img, max_len=16, temperature=0.8: type("R", (), {"text": ""})())
+        monkeypatch.setattr(
+            engine,
+            "generate",
+            lambda img, max_len=16, temperature=0.8: type("R", (), {"text": ""})(),
+        )
         cap = mgr.caption_image(Image.new("RGB", (224, 224), (10, 200, 10)))
         assert cap.text in mgr._SEED_CAPTIONS
 
     def test_caption_image_decoder_train_skipped(self, monkeypatch):
         engine = _make_engine()
         mgr = _make_manager(engine)
-        orig_encode = engine.text.encode
+
         def boom(s):
             raise RuntimeError("encode fail")
+
         monkeypatch.setattr(engine.text, "encode", boom)
         cap = mgr.caption_image(Image.new("RGB", (224, 224), (10, 200, 10)))
         assert cap.text in mgr._SEED_CAPTIONS
@@ -1174,12 +1265,15 @@ class TestMultimodalManager:
 
     def test_caption_image_replay_and_save_failure(self, tmp_path, monkeypatch):
         from domains.multimodal import engine as engine_mod
+
         monkeypatch.setattr(engine_mod.MultimodalEngine, "SAVE_PATH", str(tmp_path / "mm.npz"))
         engine = _make_engine()
         mgr = _make_manager(engine)
         mgr._learning_count = 4
+
         def boom_save(self, **kwargs):
-            raise IOError("disk full")
+            raise OSError("disk full")
+
         monkeypatch.setattr(engine_mod.MultimodalEngine, "save", boom_save)
         cap = mgr.caption_image(Image.new("RGB", (224, 224), (10, 200, 10)))
         assert cap.text in mgr._SEED_CAPTIONS
@@ -1190,19 +1284,24 @@ class TestMultimodalManager:
         mgr = _make_manager(engine)
         mgr._learning_count = 5
         for i in range(3):
-            mgr._replay_buffer.add(np.random.rand(1, 224, 224, 3).astype(np.float32), f"a red circle {i}")
+            mgr._replay_buffer.add(
+                np.random.rand(1, 224, 224, 3).astype(np.float32), f"a red circle {i}"
+            )
         cap = mgr.caption_image(Image.new("RGB", (224, 224), (10, 200, 10)))
         assert cap.text in mgr._SEED_CAPTIONS
         assert mgr._learning_count == 6
 
     def test_initialize_register_provider_failure(self, monkeypatch):
         from domains.multimodal import manager as manager_mod
+
         fresh = MultimodalManager()
         monkeypatch.setattr(manager_mod, "_multimodal_manager", fresh)
         monkeypatch.setattr(MultimodalManager, "_pretrain_engine", lambda self, **kw: 0.0)
         import domain.models._internal.provider as provider_mod
+
         def boom(*a, **kw):
             raise RuntimeError("no provider")
+
         monkeypatch.setattr(provider_mod, "register_provider", boom)
         fresh.initialize(speech_server=False, vision_model="slonet")
         assert fresh._initialized is True

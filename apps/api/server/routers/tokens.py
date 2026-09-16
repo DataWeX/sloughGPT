@@ -14,14 +14,15 @@ from __future__ import annotations
 
 import logging
 
-from domain.billing._internal.token_service import (
-    Tier,
-    get_token_billing_service,
-)
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import endpoint, raise_error, success_response
+
+from domain.billing._internal.token_service import (
+    Tier,
+    get_token_billing_service,
+)
 
 logger = logging.getLogger("slo.routers.tokens")
 

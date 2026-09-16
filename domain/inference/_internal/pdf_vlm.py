@@ -25,6 +25,7 @@ class PDFVLMProcessor:
         """Convert PDF pages to PNG images."""
         try:
             import pdf2image
+
             images = pdf2image.convert_from_path(
                 pdf_path,
                 first_page=1,
@@ -32,6 +33,7 @@ class PDFVLMProcessor:
                 fmt="png",
             )
             import io
+
             result = []
             for img in images:
                 buf = io.BytesIO()
@@ -39,7 +41,9 @@ class PDFVLMProcessor:
                 result.append(buf.getvalue())
             return result
         except ImportError:  # pragma: no cover — pdf2image is a required dependency here
-            logger.warning("pdf2image not installed, using text-only fallback", extra={"tag": "INF"})
+            logger.warning(
+                "pdf2image not installed, using text-only fallback", extra={"tag": "INF"}
+            )
             return []
         except Exception as e:
             logger.warning("PDF page rendering failed: %s", e, extra={"tag": "INF"})
@@ -49,6 +53,7 @@ class PDFVLMProcessor:
         """Extract text from PDF using PyMuPDF."""
         try:
             import fitz
+
             doc = fitz.open(pdf_path)
             text = ""
             for i, page in enumerate(doc):
@@ -61,6 +66,7 @@ class PDFVLMProcessor:
             logger.warning("PyMuPDF not installed, trying pypdf...", extra={"tag": "INF"})
         try:
             import pypdf
+
             with open(pdf_path, "rb") as f:
                 reader = pypdf.PdfReader(f)
                 text = ""
@@ -92,6 +98,7 @@ class PDFVLMProcessor:
         if vlm is not None:  # pragma: no cover — VLM backend not available
             try:  # pragma: no cover
                 import base64  # pragma: no cover
+
                 pages = self._page_images(pdf_path)  # pragma: no cover
                 if pages:  # pragma: no cover
                     # Use first page image
@@ -104,7 +111,9 @@ class PDFVLMProcessor:
                     )
                     return result.get("text", "No analysis generated.")  # pragma: no cover
             except Exception as e:  # pragma: no cover
-                logger.warning("VLM PDF analysis failed: %s", e, extra={"tag": "INF"})  # pragma: no cover
+                logger.warning(
+                    "VLM PDF analysis failed: %s", e, extra={"tag": "INF"}
+                )  # pragma: no cover
 
         # Fallback: text-only
         try:
@@ -133,22 +142,27 @@ class PDFVLMProcessor:
         if vlm is not None:  # pragma: no cover — VLM backend not available
             try:  # pragma: no cover
                 import base64  # pragma: no cover
+
                 page_images = self._page_images(pdf_path)  # pragma: no cover
                 for i, img_bytes in enumerate(page_images):  # pragma: no cover
                     b64 = base64.b64encode(img_bytes).decode("utf-8")  # pragma: no cover
                     result = vlm.generate(  # pragma: no cover
                         image_base64=b64,
-                        prompt=f"Page {i+1}: {question}",
+                        prompt=f"Page {i + 1}: {question}",
                         max_new_tokens=max_new_tokens,
                         temperature=temperature,
                     )
-                    results.append({  # pragma: no cover
-                        "page": i + 1,
-                        "text": result.get("text", ""),
-                    })
+                    results.append(
+                        {  # pragma: no cover
+                            "page": i + 1,
+                            "text": result.get("text", ""),
+                        }
+                    )
                 return results  # pragma: no cover
             except Exception as e:  # pragma: no cover
-                logger.warning("VLM per-page analysis failed: %s", e, extra={"tag": "INF"})  # pragma: no cover
+                logger.warning(
+                    "VLM per-page analysis failed: %s", e, extra={"tag": "INF"}
+                )  # pragma: no cover
 
         # Fallback
         text = self._extract_text(pdf_path)

@@ -7,6 +7,7 @@ training state management, and training queue event handling.
 Usage:
     .venv/bin/python -m pytest tests/test_training_infrastructure.py -x -v
 """
+
 import tempfile
 import time
 
@@ -173,18 +174,23 @@ class TestOutcomeTrackerBasics:
     """Tests for TrainingOutcomeTracker core functionality."""
 
     def test_tracker_record_and_load(self):
-        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import (
+            TrainingOutcome,
+            TrainingOutcomeTracker,
+        )
 
         tracker = TrainingOutcomeTracker()
         initial = len(tracker.load_outcomes())
-        tracker.record(TrainingOutcome(
-            run_id=f"test_{int(time.time())}",
-            timestamp=time.time(),
-            dataset_size=500,
-            model="test",
-            method="sft",
-            final_loss=0.5,
-        ))
+        tracker.record(
+            TrainingOutcome(
+                run_id=f"test_{int(time.time())}",
+                timestamp=time.time(),
+                dataset_size=500,
+                model="test",
+                method="sft",
+                final_loss=0.5,
+            )
+        )
         after = len(tracker.load_outcomes())
         assert after >= initial
 

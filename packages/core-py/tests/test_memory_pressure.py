@@ -1,10 +1,9 @@
 """Tests for domain.infrastructure.memory_pressure — MemoryPressureMonitor."""
 
-import gc
-import time
-import sys
 from unittest.mock import MagicMock, patch
+
 import pytest
+
 from domain.infrastructure._internal.memory_pressure import (
     MemoryPressureMonitor,
     PressureLevel,
@@ -138,11 +137,11 @@ class TestMemoryPressureMonitor:
 
         mock_mem_normal = MagicMock()
         mock_mem_normal.percent = 50.0
-        mock_mem_normal.available = 8 * 1024 ** 3
+        mock_mem_normal.available = 8 * 1024**3
 
         mock_mem_critical = MagicMock()
         mock_mem_critical.percent = 92.0
-        mock_mem_critical.available = 500 * 1024 ** 2
+        mock_mem_critical.available = 500 * 1024**2
 
         with patch("psutil.virtual_memory", return_value=mock_mem_normal):
             level = m.check()
@@ -193,7 +192,7 @@ class TestMemoryPressureMonitor:
 
         mock_mem = MagicMock()
         mock_mem.percent = 92.0
-        mock_mem.available = 500 * 1024 ** 2
+        mock_mem.available = 500 * 1024**2
 
         with patch("psutil.virtual_memory", return_value=mock_mem):
             with patch.object(m, "_get_rss_mb", return_value=500.0):
@@ -281,7 +280,9 @@ class TestMemoryPressureMonitor:
         assert m._emergency == 92.0
 
     def test_configure_no_args_unchanged(self):
-        m = MemoryPressureMonitor(warning_threshold=70.0, critical_threshold=85.0, emergency_threshold=92.0)
+        m = MemoryPressureMonitor(
+            warning_threshold=70.0, critical_threshold=85.0, emergency_threshold=92.0
+        )
         m.configure()
         assert m._warning == 70.0
         assert m._critical == 85.0

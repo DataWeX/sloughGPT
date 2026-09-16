@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
-import math
-import pytest
 import numpy as np
+
 from domain.training._internal.slonet import (
-    Tensor,
     SloMultiHeadAttention,
     SloRotaryEmbedding,
+    Tensor,
     no_grad,
 )
-
 
 # ── SloRotaryEmbedding ──────────────────────────────────────────────────────
 
 
 class TestSloRotaryEmbedding:
-
     def test_init(self):
         rope = SloRotaryEmbedding(dim=64, max_seq_len=2048)
         assert rope.dim == 64
@@ -50,7 +47,6 @@ class TestSloRotaryEmbedding:
 
 
 class TestSloMultiHeadAttention:
-
     def test_init(self):
         attn = SloMultiHeadAttention(d_model=64, n_heads=4)
         assert attn.d_model == 64
@@ -125,7 +121,6 @@ class TestSloMultiHeadAttention:
 
 
 class TestAttentionIntegration:
-
     def test_attention_no_grad(self):
         attn = SloMultiHeadAttention(d_model=64, n_heads=4)
         x = Tensor(np.ones((1, 10, 64)))

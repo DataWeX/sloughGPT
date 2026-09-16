@@ -4,19 +4,29 @@ import numpy as np
 import pytest
 
 from domain.shell._internal.cycles import (
-    BVH, Camera, CyclesRenderer, Light, Material, Mesh, Scene,
-    create_cube, create_plane, create_sphere,
-    _refract, _normalize, _reflect,
+    BVH,
+    Camera,
+    CyclesRenderer,
+    Light,
+    Material,
+    Mesh,
+    Scene,
+    _normalize,
+    _reflect,
+    _refract,
+    create_cube,
+    create_plane,
+    create_sphere,
 )
 
 
 def _scene_with_mesh(mat_idx=0):
     scene = Scene()
     scene.add_mesh(create_plane(size=3.0, y=-1.0, mat_idx=mat_idx))
-    scene.add_mesh(create_sphere(radius=0.6, center=np.array([0.0, 0.0, 0.0]),
-                                 segments=12, mat_idx=mat_idx))
-    scene.lights.append(Light(position=np.array([0.0, 3.0, 0.0]),
-                              color=np.ones(3), strength=2.0))
+    scene.add_mesh(
+        create_sphere(radius=0.6, center=np.array([0.0, 0.0, 0.0]), segments=12, mat_idx=mat_idx)
+    )
+    scene.lights.append(Light(position=np.array([0.0, 3.0, 0.0]), color=np.ones(3), strength=2.0))
     return scene
 
 
@@ -131,7 +141,7 @@ class TestBVH:
         scene.build_bvh()
         bvh = scene._bvh_list[0]
         assert bvh._root >= 0
-        for i in range(20):
+        for _i in range(20):
             orig = np.random.rand(3) * 1.5 - 0.75
             orig[1] = 2.0
             dire = np.array([0.0, -1.0, 0.0])
@@ -265,12 +275,14 @@ class TestForcedBranches:
 
         def _always_hit(orig, dire):
             n = len(orig)
-            return (np.full(n, 1.0, dtype=np.float32),
-                    np.zeros(n, dtype=np.int32),
-                    orig + 0.5 * dire,
-                    np.tile(np.array([0.0, 1.0, 0.0]), (n, 1)),
-                    np.zeros(n, dtype=np.int32),
-                    np.zeros(n, dtype=np.int32))
+            return (
+                np.full(n, 1.0, dtype=np.float32),
+                np.zeros(n, dtype=np.int32),
+                orig + 0.5 * dire,
+                np.tile(np.array([0.0, 1.0, 0.0]), (n, 1)),
+                np.zeros(n, dtype=np.int32),
+                np.zeros(n, dtype=np.int32),
+            )
 
         monkeypatch.setattr(r, "_intersect_scene", _always_hit)
         img = r.render()

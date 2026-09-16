@@ -6,6 +6,7 @@ Tests for training modules that don't have dedicated test files.
 Usage:
     .venv/bin/python -m pytest tests/test_training_module_coverage.py -x -v
 """
+
 import tempfile
 import time
 
@@ -53,7 +54,7 @@ class TestPresetsModule:
         assert len(presets) > 0
 
     def test_apply_preset(self):
-        from domain.training._internal.presets import apply_preset, PRESETS
+        from domain.training._internal.presets import PRESETS, apply_preset
 
         preset_names = list(PRESETS.keys())
         if preset_names:
@@ -168,10 +169,10 @@ class TestLRSchedulersModule:
 
     def test_scheduler_classes_importable(self):
         from domain.training._internal.lr_schedulers import (
+            LinearWarmupScheduler,
+            PolynomialDecayScheduler,
             SchedulerConfig,
             WarmupCosineScheduler,
-            PolynomialDecayScheduler,
-            LinearWarmupScheduler,
         )
 
         assert SchedulerConfig is not None
@@ -185,10 +186,10 @@ class TestEWCModule:
 
     def test_ewc_classes_importable(self):
         from domain.training._internal.ewc import (
-            EWCParameters,
-            TaskSnapshot,
             DiagonalFisherEstimator,
             EwcContinualLearner,
+            EWCParameters,
+            TaskSnapshot,
         )
 
         assert EWCParameters is not None

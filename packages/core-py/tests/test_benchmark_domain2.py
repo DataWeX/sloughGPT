@@ -1,24 +1,22 @@
 """Tests for domain.benchmark.domain — pure logic, no external mocks."""
 
 import json
-import os
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from domain.benchmark._internal.domain import (
+    _RESPONSES_DIR,
     BenchmarkDomain,
     BenchmarkResult,
-    _RESPONSES_DIR,
     get_benchmark_domain,
     reset_benchmark_domain,
 )
 
-
 # ---------------------------------------------------------------------------
 # BenchmarkResult dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestBenchmarkResult:
     def test_fields(self):
@@ -53,6 +51,7 @@ class TestBenchmarkResult:
 # Singleton helpers
 # ---------------------------------------------------------------------------
 
+
 class TestSingleton:
     def test_get_returns_same_instance(self):
         reset_benchmark_domain()
@@ -71,6 +70,7 @@ class TestSingleton:
 # BenchmarkDomain — responses dir creation
 # ---------------------------------------------------------------------------
 
+
 class TestInit:
     def test_responses_dir_created(self, tmp_path):
         d = BenchmarkDomain()
@@ -86,6 +86,7 @@ class TestInit:
 # ---------------------------------------------------------------------------
 # _load_responses
 # ---------------------------------------------------------------------------
+
 
 class TestLoadResponses:
     def test_empty_dir(self, tmp_path):
@@ -151,6 +152,7 @@ class TestLoadResponses:
 # get_stats
 # ---------------------------------------------------------------------------
 
+
 class TestGetStats:
     def test_empty(self, tmp_path):
         d = BenchmarkDomain()
@@ -206,6 +208,7 @@ class TestGetStats:
 # ---------------------------------------------------------------------------
 # evaluate_latest
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluateLatest:
     def test_empty(self, tmp_path):
@@ -329,6 +332,7 @@ class TestEvaluateLatest:
 # clear_history
 # ---------------------------------------------------------------------------
 
+
 class TestClearHistory:
     def test_clear_removes_files(self, tmp_path):
         d = BenchmarkDomain()
@@ -355,6 +359,7 @@ class TestClearHistory:
 # ---------------------------------------------------------------------------
 # _RESPONSES_DIR constant
 # ---------------------------------------------------------------------------
+
 
 class TestResponsesDir:
     def test_is_path(self):

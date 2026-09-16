@@ -1,6 +1,5 @@
 """Tests for the /token-tree router — tokenizer BPE tree management."""
 
-import pytest
 from test_support import get_test_client
 
 

@@ -3,14 +3,14 @@
 Covers: render_world, render_world_image, neural_process, run_tick, get_stats.
 All domain imports are mocked to avoid heavy computation.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-import numpy as np
 
-import pytest
+import numpy as np
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -18,9 +18,10 @@ if _server_dir not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from routers.world_render import (
-    WorldRenderRouter, RenderConfigRequest, SimTickRequest,
+    RenderConfigRequest,
+    SimTickRequest,
+    WorldRenderRouter,
 )
 
 
@@ -58,6 +59,7 @@ def _app():
     app = FastAPI()
     app.include_router(wrr.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 

@@ -4,7 +4,7 @@ Tests for ChromeDevTools and sloughGPT Journey Test Helpers.
 Usage:
     .venv/bin/python -m pytest tests/test_ui_journey_chrome_devtools.py -x -v
 """
-import pytest
+
 
 
 class TestChromeDevToolsBrowser:
@@ -97,10 +97,10 @@ class TestJourneyIntegration:
     """Integration tests for the journey testing library."""
 
     def test_import_all_modules(self):
-        from domain.testing import Journey, SiteConfig, Page
+        from domain.testing import Journey
         from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
-        from domain.testing._internal.sloughgpt import SloughGPTJourney, SLOUGHPGPT_SITE
-        from domain.testing._internal.journeys import PageJourney, FullSuiteJourney
+        from domain.testing._internal.journeys import FullSuiteJourney, PageJourney
+        from domain.testing._internal.sloughgpt import SloughGPTJourney
 
         assert Journey is not None
         assert ChromeDevToolsBrowser is not None

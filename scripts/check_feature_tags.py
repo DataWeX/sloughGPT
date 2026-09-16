@@ -20,10 +20,9 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from typing import List, Tuple
 
 
-def find_feature_tagged_files(root: Path) -> List[Tuple[Path, str, str]]:
+def find_feature_tagged_files(root: Path) -> list[tuple[Path, str, str]]:
     """Find all files with FEATURE tags in their docstrings.
 
     Returns list of (filepath, feature_name, description) tuples.
@@ -32,7 +31,11 @@ def find_feature_tagged_files(root: Path) -> List[Tuple[Path, str, str]]:
     pattern = re.compile(r"FEATURE:\s*([a-z][a-z\-]+)\s+—\s+(.+?)(?:\n|$)")
 
     for py_file in root.rglob("*.py"):
-        if "__pycache__" in str(py_file) or "node_modules" in str(py_file) or "scripts/" in str(py_file):
+        if (
+            "__pycache__" in str(py_file)
+            or "node_modules" in str(py_file)
+            or "scripts/" in str(py_file)
+        ):
             continue
         try:
             content = py_file.read_text(encoding="utf-8", errors="ignore")
@@ -48,7 +51,7 @@ def find_feature_tagged_files(root: Path) -> List[Tuple[Path, str, str]]:
     return results
 
 
-def check_deletions(root: Path) -> List[str]:
+def check_deletions(root: Path) -> list[str]:
     """Check if any FEATURE-tagged files have been deleted (git diff)."""
     import subprocess
 
@@ -58,7 +61,9 @@ def check_deletions(root: Path) -> List[str]:
     try:
         result = subprocess.run(
             ["git", "diff", "--name-status", "--diff-filter=D", "HEAD~1", "HEAD"],
-            capture_output=True, text=True, cwd=str(root)
+            capture_output=True,
+            text=True,
+            cwd=str(root),
         )
         deleted = [
             line.split("\t")[1]
@@ -76,7 +81,9 @@ def check_deletions(root: Path) -> List[str]:
             try:
                 prev_content = subprocess.run(
                     ["git", "show", f"HEAD~1:{deleted_file}"],
-                    capture_output=True, text=True, cwd=str(root)
+                    capture_output=True,
+                    text=True,
+                    cwd=str(root),
                 )
                 if "FEATURE:" in prev_content.stdout:
                     match = re.search(r"FEATURE:\s*([\w_]+)", prev_content.stdout)
@@ -108,7 +115,7 @@ def list_features(root: Path) -> None:
     print(f"\nTotal: {len(files)} feature-tagged files")
 
 
-def validate_feature_flags(root: Path) -> List[str]:
+def validate_feature_flags(root: Path) -> list[str]:
     """Validate that all FEATURE tags have corresponding feature flag entries."""
     from domain.shared.feature_flags import FeatureFlags
 
@@ -116,7 +123,7 @@ def validate_feature_flags(root: Path) -> List[str]:
     files = find_feature_tagged_files(root)
     all_flags = FeatureFlags.list_all()
 
-    for filepath, feature_name, description in files:
+    for filepath, feature_name, _description in files:
         # Normalize: tags use hyphens, flags use underscores
         normalized = feature_name.replace("-", "_")
         if normalized not in all_flags:
@@ -129,10 +136,14 @@ def validate_feature_flags(root: Path) -> List[str]:
 
 def main():
     parser = argparse.ArgumentParser(description="Check FEATURE tags")
-    parser.add_argument("--check-deletions", action="store_true", help="Check for deleted feature files")
+    parser.add_argument(
+        "--check-deletions", action="store_true", help="Check for deleted feature files"
+    )
     parser.add_argument("--list", action="store_true", help="List all feature-tagged files")
     parser.add_argument("--validate", action="store_true", help="Validate feature flags match tags")
-    parser.add_argument("--root", type=Path, default=Path(__file__).parent.parent, help="Root directory")
+    parser.add_argument(
+        "--root", type=Path, default=Path(__file__).parent.parent, help="Root directory"
+    )
     args = parser.parse_args()
 
     root = args.root.resolve()

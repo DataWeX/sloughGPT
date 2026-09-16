@@ -1,14 +1,18 @@
 """Comprehensive tests for domain.chat.domain — dataclasses, prompt building, logging, stats, singleton, respond logic."""
 
 import json
-import pytest
-from pathlib import Path
+from datetime import UTC
 from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from domain.chat._internal.domain import (
     ChatDomain,
     ChatRequest,
     ChatResponse,
     get_chat_domain,
+)
+from domain.chat._internal.domain import (
     __all__ as domain_all,
 )
 from domain.feedback._internal.response_tracker import ResponseTracker
@@ -18,13 +22,16 @@ from domain.feedback._internal.response_tracker import ResponseTracker
 def _isolate_response_tracker(tmp_path):
     """Mock get_response_tracker to return a fresh tracker per test."""
     tracker = ResponseTracker(log_dir=str(tmp_path / "logs"))
-    with patch("domain.feedback._internal.response_tracker.get_response_tracker", return_value=tracker):
+    with patch(
+        "domain.feedback._internal.response_tracker.get_response_tracker", return_value=tracker
+    ):
         yield
 
 
 # ---------------------------------------------------------------------------
 # ChatRequest
 # ---------------------------------------------------------------------------
+
 
 class TestChatRequestConstruction:
     def test_minimal(self):
@@ -94,6 +101,7 @@ class TestChatRequestConstruction:
 # ChatResponse
 # ---------------------------------------------------------------------------
 
+
 class TestChatResponseConstruction:
     def test_minimal(self):
         resp = ChatResponse(text="hi", session_id="s1")
@@ -145,6 +153,7 @@ class TestChatResponseConstruction:
 # ---------------------------------------------------------------------------
 # _build_prompt  (static method)
 # ---------------------------------------------------------------------------
+
 
 class TestBuildPrompt:
     def test_system_only_no_messages(self):
@@ -292,11 +301,15 @@ class TestBuildPrompt:
 # Logging (_log, get_recent_responses)
 # ---------------------------------------------------------------------------
 
+
 class TestLoggingRoundTrip:
     def test_log_writes_jsonl(self, tmp_path):
         from domain.feedback._internal.response_tracker import ResponseTracker
+
         tracker = ResponseTracker(log_dir=str(tmp_path / "logs"))
-        with patch("domain.feedback._internal.response_tracker.get_response_tracker", return_value=tracker):
+        with patch(
+            "domain.feedback._internal.response_tracker.get_response_tracker", return_value=tracker
+        ):
             domain = ChatDomain(log_dir=str(tmp_path / "logs"))
             domain._log("user msg", "assistant resp", "gpt2", 0.8, 256, "s1", "u1", 10, 50)
 
@@ -313,8 +326,11 @@ class TestLoggingRoundTrip:
 
     def test_log_truncates_user_message_500(self, tmp_path):
         from domain.feedback._internal.response_tracker import ResponseTracker
+
         tracker = ResponseTracker(log_dir=str(tmp_path / "logs"))
-        with patch("domain.feedback._internal.response_tracker.get_response_tracker", return_value=tracker):
+        with patch(
+            "domain.feedback._internal.response_tracker.get_response_tracker", return_value=tracker
+        ):
             domain = ChatDomain(log_dir=str(tmp_path / "logs"))
             domain._log("A" * 600, "short", "m", 0.5, 100, "s", "u", 0, 0)
         responses = domain.get_recent_responses()
@@ -331,9 +347,16 @@ class TestLoggingRoundTrip:
         domain._log("u", "a", "gpt2", 0.8, 256, "s1", "u1", 5, 100)
         entry = domain.get_recent_responses()[0]
         required_keys = {
-            "timestamp", "user_message", "assistant_response", "model",
-            "temperature", "max_tokens", "session_id", "user_id",
-            "tokens_generated", "duration_ms",
+            "timestamp",
+            "user_message",
+            "assistant_response",
+            "model",
+            "temperature",
+            "max_tokens",
+            "session_id",
+            "user_id",
+            "tokens_generated",
+            "duration_ms",
         }
         assert required_keys.issubset(set(entry.keys()))
 
@@ -381,10 +404,13 @@ class TestLoggingRoundTrip:
     def test_corrupted_jsonl_skips_bad_lines(self, tmp_path):
         domain = ChatDomain(log_dir=str(tmp_path / "logs"))
         # get_recent_responses reads today's file — write to that
-        from datetime import datetime, timezone
-        today = datetime.now(timezone.utc).strftime("%Y%m%d")
+        from datetime import datetime
+
+        today = datetime.now(UTC).strftime("%Y%m%d")
         log_file = domain.log_dir / f"responses_{today}.jsonl"
-        log_file.write_text('{"timestamp":"t","user_message":"u","assistant_response":"a","model":"m","temperature":0.5,"max_tokens":100,"session_id":"s","user_id":"u","tokens_generated":10,"duration_ms":1.0}\nnot json\n')
+        log_file.write_text(
+            '{"timestamp":"t","user_message":"u","assistant_response":"a","model":"m","temperature":0.5,"max_tokens":100,"session_id":"s","user_id":"u","tokens_generated":10,"duration_ms":1.0}\nnot json\n'
+        )
         responses = domain.get_recent_responses()
         assert len(responses) == 1
         assert responses[0]["model"] == "m"
@@ -405,6 +431,7 @@ class TestLoggingRoundTrip:
 # ---------------------------------------------------------------------------
 # get_stats
 # ---------------------------------------------------------------------------
+
 
 class TestStatsComputation:
     def test_empty(self, tmp_path):
@@ -461,10 +488,11 @@ class TestStatsComputation:
 # ChatDomain __init__
 # ---------------------------------------------------------------------------
 
+
 class TestChatDomainInit:
     def test_creates_log_dir(self, tmp_path):
         log_dir = tmp_path / "custom_logs"
-        domain = ChatDomain(log_dir=str(log_dir))
+        ChatDomain(log_dir=str(log_dir))
         assert log_dir.exists()
         assert log_dir.is_dir()
 
@@ -485,6 +513,7 @@ class TestChatDomainInit:
 # ---------------------------------------------------------------------------
 # set_engine
 # ---------------------------------------------------------------------------
+
 
 class TestSetEngine:
     def test_set_engine(self, tmp_path):
@@ -509,9 +538,11 @@ class TestSetEngine:
 # get_chat_domain singleton
 # ---------------------------------------------------------------------------
 
+
 class TestGetChatDomainSingleton:
     def test_returns_same_instance(self):
         import domain.chat._internal.domain as mod
+
         original = mod._chat_domain
         mod._chat_domain = None
         try:
@@ -523,6 +554,7 @@ class TestGetChatDomainSingleton:
 
     def test_returns_chat_domain_type(self):
         import domain.chat._internal.domain as mod
+
         original = mod._chat_domain
         mod._chat_domain = None
         try:
@@ -535,6 +567,7 @@ class TestGetChatDomainSingleton:
 # ---------------------------------------------------------------------------
 # respond (async, mocked _generate)
 # ---------------------------------------------------------------------------
+
 
 class TestRespondLogic:
     @pytest.mark.asyncio
@@ -693,6 +726,7 @@ class TestRespondLogic:
 # ---------------------------------------------------------------------------
 # __all__ exports
 # ---------------------------------------------------------------------------
+
 
 class TestAllExports:
     def test_all_exports(self):

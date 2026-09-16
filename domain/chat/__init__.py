@@ -5,9 +5,9 @@ Public API:
 """
 
 from domain.chat._internal.domain import (
+    ChatDomain,
     ChatRequest,
     ChatResponse,
-    ChatDomain,
     get_chat_domain,
 )
 

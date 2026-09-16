@@ -1,15 +1,17 @@
 """Tests for session core — store, retrieve, list sessions."""
 
-import pytest
-from unittest.mock import patch, MagicMock
-from domain.infrastructure._internal.session_core import SessionCore
+from unittest.mock import MagicMock, patch
 
+import pytest
+
+from domain.infrastructure._internal.session_core import SessionCore
 
 # ── Fixtures ───────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(autouse=True)
 def mock_feedback():
-    with patch('domain.infrastructure.session_core.get_message_feedback') as mock:
+    with patch("domain.infrastructure.session_core.get_message_feedback") as mock:
         mock_fb = MagicMock()
         mock.return_value = mock_fb
         yield mock_fb
@@ -17,8 +19,8 @@ def mock_feedback():
 
 # ── store_context ─────────────────────────────────────────────────────────
 
-class TestStoreContext:
 
+class TestStoreContext:
     def test_returns_stored_status(self, mock_feedback):
         result = SessionCore.store_context("s1", [{"role": "user", "content": "hi"}])
         assert result["status"] == "stored"
@@ -69,8 +71,8 @@ class TestStoreContext:
 
 # ── get_messages ──────────────────────────────────────────────────────────
 
-class TestGetMessages:
 
+class TestGetMessages:
     def test_returns_stored_messages(self, mock_feedback):
         msg1 = MagicMock(role="user", content="hi")
         msg2 = MagicMock(role="assistant", content="hello")
@@ -108,8 +110,8 @@ class TestGetMessages:
 
 # ── list_sessions ─────────────────────────────────────────────────────────
 
-class TestListSessions:
 
+class TestListSessions:
     def test_returns_list(self, mock_feedback):
         mock_feedback.list_conversations.return_value = [
             {"session_id": "s1", "message_count": 5},

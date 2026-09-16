@@ -2,17 +2,18 @@
 PersonalityManager, MemoryManager, StyleManager, TaskManager, helpers."""
 
 import json
-import pytest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from domain.context._internal.managers import (
-    TraitWeightsConfig,
-    PersonalityManager,
+    ALL_TRAITS,
+    TRAIT_SCHEMA,
     MemoryManager,
+    PersonalityManager,
     StyleManager,
     TaskManager,
-    TRAIT_SCHEMA,
-    ALL_TRAITS,
+    TraitWeightsConfig,
     _describe_trait,
     _if_above,
     reset_trait_config,
@@ -31,6 +32,7 @@ def _isolate_trait_config():
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
+
 
 class TestDescribeTrait:
     def test_high_value(self):
@@ -70,6 +72,7 @@ class TestIfAbove:
 
 
 # ── TraitWeightsConfig ──────────────────────────────────────────────────
+
 
 class TestTraitWeightsConfig:
     def test_init_creates_directory(self, tmp_path):
@@ -175,6 +178,7 @@ class TestTraitWeightsConfig:
 
 # ── TraitWeightsConfig snapshots ────────────────────────────────────────
 
+
 class TestTraitSnapshots:
     def test_save_and_list(self, tmp_path):
         cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
@@ -231,6 +235,7 @@ class TestTraitSnapshots:
 
 # ── Feedback-driven update ──────────────────────────────────────────────
 
+
 class TestUpdateFromFeedback:
     def test_thumbs_up_increases(self, tmp_path):
         cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
@@ -284,6 +289,7 @@ class TestUpdateFromFeedback:
 
 
 # ── PersonalityManager ──────────────────────────────────────────────────
+
 
 class TestPersonalityManager:
     def test_apply_returns_block(self, tmp_path):
@@ -380,6 +386,7 @@ class TestPersonalityManager:
 
 
 # ── MemoryManager ──────────────────────────────────────────────────────
+
 
 class TestMemoryManager:
     def test_working_capacity_default(self, tmp_path):
@@ -479,7 +486,9 @@ class TestMemoryManager:
 
     def test_get_mode_expansive(self, tmp_path):
         cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
-        cfg.set_many({"long_context_handling": 0.1, "pattern_recognition": 0.1, "learning_adaptability": 0.9})
+        cfg.set_many(
+            {"long_context_handling": 0.1, "pattern_recognition": 0.1, "learning_adaptability": 0.9}
+        )
         mm = MemoryManager(config=cfg)
         mode = mm.get_mode()
         assert mode["label"] == "Expansive"
@@ -494,6 +503,7 @@ class TestMemoryManager:
 
 
 # ── StyleManager ───────────────────────────────────────────────────────
+
 
 class TestStyleManager:
     def test_apply_returns_block(self, tmp_path):
@@ -559,6 +569,7 @@ class TestStyleManager:
 
 # ── TaskManager ────────────────────────────────────────────────────────
 
+
 class TestTaskManager:
     def test_apply_returns_block(self, tmp_path):
         tm = TaskManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
@@ -609,7 +620,9 @@ class TestTaskManager:
 
     def test_get_mode_analytical(self, tmp_path):
         cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
-        cfg.set_many({"abstract_reasoning": 0.9, "metacognitive_awareness": 0.8, "systematic_planning": 0.7})
+        cfg.set_many(
+            {"abstract_reasoning": 0.9, "metacognitive_awareness": 0.8, "systematic_planning": 0.7}
+        )
         mode = TaskManager(config=cfg).get_mode()
         assert mode["label"] == "Analytical"
 
@@ -633,7 +646,9 @@ class TestTaskManager:
 
     def test_get_mode_structured(self, tmp_path):
         cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
-        cfg.set_many({"systematic_planning": 0.9, "abstract_reasoning": 0.8, "metacognitive_awareness": 0.7})
+        cfg.set_many(
+            {"systematic_planning": 0.9, "abstract_reasoning": 0.8, "metacognitive_awareness": 0.7}
+        )
         mode = TaskManager(config=cfg).get_mode()
         assert mode["label"] == "Structured"
 
@@ -654,8 +669,10 @@ class TestTaskManager:
 
 # ── reset_trait_config ─────────────────────────────────────────────────
 
+
 class TestResetTraitConfig:
     def test_reset_clears_singleton(self):
         reset_trait_config()
         from domain.context._internal.managers import _trait_config
+
         assert _trait_config is None

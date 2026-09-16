@@ -15,16 +15,16 @@ Adds:
 
 from __future__ import annotations
 
-import random
 import hashlib
-import time
-from datetime import datetime
-from typing import Any, Dict, List, Optional
-from collections import defaultdict
 import logging
+import random
+import time
+from collections import defaultdict
+from datetime import datetime
+from typing import Any
 
 try:
-    from .foundation import FoundationSLO, SLOConfig, Experience, Thought, EvolutionStage
+    from .foundation import EvolutionStage, Experience, FoundationSLO, SLOConfig, Thought
 except ImportError:
     FoundationSLO = SLOConfig = Experience = Thought = EvolutionStage = None
 
@@ -126,7 +126,7 @@ class SentimentAnalyzer:
 
         return max(emotion_scores.keys(), key=lambda e: emotion_scores[e])
 
-    def analyze(self, text: str) -> Dict[str, Any]:
+    def analyze(self, text: str) -> dict[str, Any]:
         """
         Complete emotional analysis.
         """
@@ -240,10 +240,10 @@ class RelationshipMemory:
     """
 
     def __init__(self):
-        self.user_profiles: Dict[str, Dict[str, Any]] = {}
-        self.interaction_history: Dict[str, List[Dict]] = defaultdict(list)
+        self.user_profiles: dict[str, dict[str, Any]] = {}
+        self.interaction_history: dict[str, list[dict]] = defaultdict(list)
 
-    def get_user_profile(self, user_id: str) -> Dict[str, Any]:
+    def get_user_profile(self, user_id: str) -> dict[str, Any]:
         """Get user profile."""
         if user_id not in self.user_profiles:
             self.user_profiles[user_id] = {
@@ -266,7 +266,7 @@ class RelationshipMemory:
         response: str,
         sentiment: float,
         emotion: str,
-        feedback: Optional[str] = None,
+        feedback: str | None = None,
     ) -> None:
         """
         Update user profile from interaction.
@@ -313,7 +313,7 @@ class RelationshipMemory:
         if len(self.interaction_history[user_id]) > 100:
             self.interaction_history[user_id] = self.interaction_history[user_id][-100:]
 
-    def get_user_summary(self, user_id: str) -> Dict[str, Any]:
+    def get_user_summary(self, user_id: str) -> dict[str, Any]:
         """Get user summary."""
         profile = self.get_user_profile(user_id)
 
@@ -347,9 +347,7 @@ class RelationshipMemory:
         if profile["total_interactions"] > 5:
             tendencies = profile["emotional_tendencies"]
             dominant = max(tendencies, key=tendencies.get) if tendencies else "neutral"
-            context_parts.append(
-                f"You've been feeling {dominant} lately."
-            )
+            context_parts.append(f"You've been feeling {dominant} lately.")
 
         if current_emotion != "neutral":
             context_parts.append(f"Currently feeling {current_emotion}.")
@@ -370,14 +368,14 @@ class SessionMemory:
 
     def __init__(self, max_turns: int = 20):
         self.max_turns = max_turns
-        self.conversation: List[Dict] = []
+        self.conversation: list[dict] = []
         self.session_id = self._generate_session_id()
         self.session_start = datetime.now().isoformat()
 
     def _generate_session_id(self) -> str:
         return f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000, 9999)}"
 
-    def add(self, role: str, content: str) -> Dict:
+    def add(self, role: str, content: str) -> dict:
         """Add a message to the session."""
         message = {
             "role": role,
@@ -393,11 +391,11 @@ class SessionMemory:
 
         return message
 
-    def get_context(self, n: int = 5) -> List[Dict]:
+    def get_context(self, n: int = 5) -> list[dict]:
         """Get recent context."""
         return self.conversation[-n:]
 
-    def get_full_session(self) -> List[Dict]:
+    def get_full_session(self) -> list[dict]:
         """Get entire session."""
         return self.conversation.copy()
 
@@ -407,7 +405,7 @@ class SessionMemory:
         self.session_id = self._generate_session_id()
         self.session_start = datetime.now().isoformat()
 
-    def get_summary(self) -> Dict:
+    def get_summary(self) -> dict:
         """Get session summary."""
         return {
             "session_id": self.session_id,
@@ -425,10 +423,10 @@ class EpisodicMemoryStore:
 
     def __init__(self, max_episodes: int = 100):
         self.max_episodes = max_episodes
-        self.episodes: Dict[str, List[Dict]] = {}
-        self.episode_metadata: Dict[str, Dict] = {}
+        self.episodes: dict[str, list[dict]] = {}
+        self.episode_metadata: dict[str, dict] = {}
 
-    def save_episode(self, session_id: str, conversation: List[Dict]) -> str:
+    def save_episode(self, session_id: str, conversation: list[dict]) -> str:
         """Save a complete conversation episode."""
         episode_id = f"conv_{hashlib.md5(session_id.encode()).hexdigest()[:12]}"
 
@@ -446,7 +444,7 @@ class EpisodicMemoryStore:
 
         return episode_id
 
-    def _calculate_importance(self, conversation: List[Dict]) -> float:
+    def _calculate_importance(self, conversation: list[dict]) -> float:
         """Calculate importance score for conversation."""
         if not conversation:
             return 0.0
@@ -475,11 +473,11 @@ class EpisodicMemoryStore:
         del self.episodes[episode_id]
         del self.episode_metadata[episode_id]
 
-    def get_episode(self, episode_id: str) -> Optional[List[Dict]]:
+    def get_episode(self, episode_id: str) -> list[dict] | None:
         """Retrieve a specific episode."""
         return self.episodes.get(episode_id)
 
-    def search_episodes(self, query: str, limit: int = 5) -> List[Dict]:
+    def search_episodes(self, query: str, limit: int = 5) -> list[dict]:
         """Search episodes for relevant conversations."""
         results = []
         query_lower = query.lower()
@@ -499,7 +497,7 @@ class EpisodicMemoryStore:
 
         return results[:limit]
 
-    def get_recent_episodes(self, n: int = 10) -> List[str]:
+    def get_recent_episodes(self, n: int = 10) -> list[str]:
         """Get most recent episode IDs."""
         sorted_episodes = sorted(
             self.episode_metadata.items(), key=lambda x: x[1]["saved"], reverse=True
@@ -519,8 +517,8 @@ class CognitiveArchitecture:
 
     def __init__(self, working_capacity: int = 7):
         # Memory layers
-        self.sensory_buffer: List[Any] = []
-        self.working_memory: List[Any] = []
+        self.sensory_buffer: list[Any] = []
+        self.working_memory: list[Any] = []
         self.working_capacity = working_capacity  # Miller's law (7±2)
 
         # Session memory (current conversation)
@@ -530,7 +528,7 @@ class CognitiveArchitecture:
         self.episodic_store = EpisodicMemoryStore()
 
         # Semantic memory (facts/concepts)
-        self.semantic_memory: Dict[str, Any] = {}
+        self.semantic_memory: dict[str, Any] = {}
 
     def process_sensory(self, input_data: Any) -> bool:
         """Process sensory input."""
@@ -568,11 +566,11 @@ class CognitiveArchitecture:
             pass
         return True
 
-    def add_to_session(self, role: str, content: str) -> Dict:
+    def add_to_session(self, role: str, content: str) -> dict:
         """Add message to current session memory."""
         return self.session_memory.add(role, content)
 
-    def get_session_context(self, n: int = 5) -> List[Dict]:
+    def get_session_context(self, n: int = 5) -> list[dict]:
         """Get recent session context."""
         return self.session_memory.get_context(n)
 
@@ -583,7 +581,7 @@ class CognitiveArchitecture:
         )
         return episode_id
 
-    def recall_episodes(self, query: str, limit: int = 5) -> List[Dict]:
+    def recall_episodes(self, query: str, limit: int = 5) -> list[dict]:
         """Recall relevant past episodes."""
         return self.episodic_store.search_episodes(query, limit)
 
@@ -600,7 +598,7 @@ class CognitiveArchitecture:
             }
         return True
 
-    def retrieve_semantic(self, key: str) -> Optional[Any]:
+    def retrieve_semantic(self, key: str) -> Any | None:
         """Retrieve from semantic memory."""
         if key in self.semantic_memory:
             self.semantic_memory[key]["last_accessed"] = datetime.now().isoformat()
@@ -617,8 +615,8 @@ class NeuralPlasticityEngine:
 
     def __init__(self, learning_rate: float = 0.01):
         self.learning_rate = learning_rate
-        self.connections: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
-        self.activation_history: Dict[str, List[float]] = defaultdict(list)
+        self.connections: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        self.activation_history: dict[str, list[float]] = defaultdict(list)
 
     def activate(self, neuron_id: str, strength: float = 1.0) -> None:
         """Record neuron activation."""
@@ -662,7 +660,7 @@ class MetaLearningEngine:
     """
 
     def __init__(self):
-        self.strategies: Dict[str, Dict] = {
+        self.strategies: dict[str, dict] = {
             "rote": {"success": 0, "attempts": 0, "weight": 1.0},
             "spaced": {"success": 0, "attempts": 0, "weight": 1.0},
             "interleaved": {"success": 0, "attempts": 0, "weight": 1.0},
@@ -679,7 +677,7 @@ class MetaLearningEngine:
 
     def update_weights(self) -> None:
         """Update strategy weights based on performance."""
-        for name, data in self.strategies.items():
+        for _name, data in self.strategies.items():
             if data["attempts"] > 0:
                 success_rate = data["success"] / data["attempts"]
                 data["weight"] = 0.7 * data["weight"] + 0.3 * success_rate
@@ -702,7 +700,7 @@ class DreamProcessingEngine:
         self.dream_cycles = 0
         self.consolidated = 0
 
-    def dream(self, memories: List[Experience], plasticity: NeuralPlasticityEngine) -> List[str]:
+    def dream(self, memories: list[Experience], plasticity: NeuralPlasticityEngine) -> list[str]:
         """
         Process memories during 'sleep'.
         Returns insights generated during dreaming.

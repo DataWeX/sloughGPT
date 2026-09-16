@@ -14,11 +14,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends, Request
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
+
+from domain.shared import find_repo_root
+from domain.training._internal.executor import get_training_executor
 
 from .control import router as control_router
 from .controller import get_training_controller
@@ -501,8 +502,9 @@ async def get_recovery_stats():
 
 @router.get("/training/log")
 async def training_log():
-    from domain.training._internal.service import get_log
     from schemas.common import success_response
+
+    from domain.training._internal.service import get_log
 
     lines = await get_log()
     return success_response(data={"lines": lines, "total": len(lines)})
@@ -521,8 +523,9 @@ async def training_stop():
 
 @router.get("/training/checkpoints")
 async def training_list_checkpoints():
-    from domain.training._internal.service import list_checkpoints
     from schemas.common import success_response
+
+    from domain.training._internal.service import list_checkpoints
 
     checkpoints = await list_checkpoints()
     return success_response(data=checkpoints)
@@ -530,9 +533,10 @@ async def training_list_checkpoints():
 
 @router.delete("/training/checkpoints/{name}")
 async def training_delete_checkpoint(name: str):
+    from schemas.common import safe_audit_log, success_response
+
     from domain.training._internal.service import delete_checkpoint
     from domain.training._internal.state import VALID_CKPT_NAME
-    from schemas.common import safe_audit_log, success_response
 
     if not VALID_CKPT_NAME.match(name):
         raise_error("Invalid checkpoint name", "E_BAD_REQUEST", status_code=400)
@@ -544,8 +548,9 @@ async def training_delete_checkpoint(name: str):
 
 @router.post("/training/checkpoints/{name}/load")
 async def training_load_checkpoint(name: str):
-    from domain.training._internal.service import load_checkpoint
     from schemas.common import classify_and_raise, success_response
+
+    from domain.training._internal.service import load_checkpoint
 
     try:
         result = await load_checkpoint(name)
@@ -556,9 +561,10 @@ async def training_load_checkpoint(name: str):
 
 @router.get("/training/checkpoints/{name}/download")
 async def training_download_checkpoint(name: str):
-    from domain.training._internal.service import download_checkpoint_path
     from fastapi.responses import FileResponse
     from schemas.common import raise_error
+
+    from domain.training._internal.service import download_checkpoint_path
 
     fp = await download_checkpoint_path(name)
     if fp:
@@ -568,8 +574,9 @@ async def training_download_checkpoint(name: str):
 
 @router.get("/training/checkpoints/{name}/info")
 async def training_checkpoint_info(name: str):
-    from domain.training._internal.service import checkpoint_info
     from schemas.common import classify_and_raise, success_response
+
+    from domain.training._internal.service import checkpoint_info
 
     try:
         info = await checkpoint_info(name)
@@ -582,8 +589,9 @@ async def training_checkpoint_info(name: str):
 async def training_metrics_export():
     import json as _json
 
-    from domain.training._internal.service import get_all_checkpoint_data
     from fastapi.responses import Response
+
+    from domain.training._internal.service import get_all_checkpoint_data
 
     checkpoints = await get_all_checkpoint_data()
     export = {
@@ -717,15 +725,18 @@ async def get_training_recommendation(
 ):
     """Get training configuration recommendations based on dataset characteristics."""
     from schemas.common import success_response
-    
+
     try:
         from pathlib import Path as _P
 
-        from domain.training._internal.training_advisor import get_training_tips, recommend_training_config
-        
+        from domain.training._internal.training_advisor import (
+            get_training_tips,
+            recommend_training_config,
+        )
+
         dataset_size = 0
         avg_quality = None
-        
+
         if dataset_path:
             dp = _P(dataset_path).resolve()
             repo_root = find_repo_root(Path(__file__).resolve())
@@ -735,53 +746,61 @@ async def get_training_recommendation(
                 if dp.exists():
                     if dp.is_file():
                         try:
-                            with open(dp, 'r', encoding='utf-8', errors='ignore') as f:
+                            with open(dp, encoding="utf-8", errors="ignore") as f:
                                 dataset_size = sum(1 for _ in f)
                         except Exception:
                             dataset_size = 0
                     elif dp.is_dir():
-                        data_files = list(dp.rglob("*.jsonl")) + list(dp.rglob("*.json")) + list(dp.rglob("*.txt"))
+                        data_files = (
+                            list(dp.rglob("*.jsonl"))
+                            + list(dp.rglob("*.json"))
+                            + list(dp.rglob("*.txt"))
+                        )
                         dataset_size = len(data_files)
-        
+
         # Get recommendation
         recommendation = recommend_training_config(
             dataset_size=dataset_size,
             method=method,
             avg_quality=avg_quality,
         )
-        
+
         # Get tips
         tips = get_training_tips(dataset_size=dataset_size)
-        
-        return success_response(data={
-            "dataset_size": dataset_size,
-            "recommendation": {
-                "learning_rate": recommendation.learning_rate,
-                "batch_size": recommendation.batch_size,
-                "epochs": recommendation.epochs,
-                "warmup_steps": recommendation.warmup_steps,
-                "early_stopping_patience": recommendation.early_stopping_patience,
-                "reason": recommendation.reason,
-                "confidence": recommendation.confidence,
-            },
-            "tips": tips,
-        })
-        
+
+        return success_response(
+            data={
+                "dataset_size": dataset_size,
+                "recommendation": {
+                    "learning_rate": recommendation.learning_rate,
+                    "batch_size": recommendation.batch_size,
+                    "epochs": recommendation.epochs,
+                    "warmup_steps": recommendation.warmup_steps,
+                    "early_stopping_patience": recommendation.early_stopping_patience,
+                    "reason": recommendation.reason,
+                    "confidence": recommendation.confidence,
+                },
+                "tips": tips,
+            }
+        )
+
     except Exception as e:
         logger.warning("Failed to generate training recommendation: %s", e)
-        return success_response(data={
-            "dataset_size": 0,
-            "recommendation": {
-                "learning_rate": 3e-4,
-                "batch_size": 32,
-                "epochs": 20,
-                "warmup_steps": 50,
-                "early_stopping_patience": 5,
-                "reason": "Default recommendation",
-                "confidence": 0.5,
-            },
-            "tips": ["Could not analyze dataset. Using default configuration."],
-        })
+        return success_response(
+            data={
+                "dataset_size": 0,
+                "recommendation": {
+                    "learning_rate": 3e-4,
+                    "batch_size": 32,
+                    "epochs": 20,
+                    "warmup_steps": 50,
+                    "early_stopping_patience": 5,
+                    "reason": "Default recommendation",
+                    "confidence": 0.5,
+                },
+                "tips": ["Could not analyze dataset. Using default configuration."],
+            }
+        )
 
 
 # ── Training Trends ─────────────────────────────────────────────────────
@@ -820,39 +839,43 @@ async def get_training_trends(
             outcomes = outcomes[-limit:]
 
         if not outcomes:
-            return success_response(data={
-                "runs": [],
-                "models": [],
-                "summary": {
-                    "total_runs": 0,
-                    "avg_quality": 0,
-                    "best_quality": 0,
-                    "avg_loss": 0,
-                    "trend": "stable",
-                },
-            })
+            return success_response(
+                data={
+                    "runs": [],
+                    "models": [],
+                    "summary": {
+                        "total_runs": 0,
+                        "avg_quality": 0,
+                        "best_quality": 0,
+                        "avg_loss": 0,
+                        "trend": "stable",
+                    },
+                }
+            )
 
         # Build run list
         runs = []
         for o in outcomes:
-            runs.append({
-                "run_id": o.run_id,
-                "timestamp": o.timestamp,
-                "dataset": o.dataset,
-                "dataset_size": o.dataset_size,
-                "model": o.model,
-                "method": o.method,
-                "epochs": o.epochs,
-                "batch_size": o.batch_size,
-                "learning_rate": o.learning_rate,
-                "final_loss": o.final_loss,
-                "best_loss": o.best_loss,
-                "perplexity": o.perplexity,
-                "converged": o.converged,
-                "early_stopped": o.early_stopped,
-                "quality_score": o.quality_score,
-                "training_time_s": o.training_time_s,
-            })
+            runs.append(
+                {
+                    "run_id": o.run_id,
+                    "timestamp": o.timestamp,
+                    "dataset": o.dataset,
+                    "dataset_size": o.dataset_size,
+                    "model": o.model,
+                    "method": o.method,
+                    "epochs": o.epochs,
+                    "batch_size": o.batch_size,
+                    "learning_rate": o.learning_rate,
+                    "final_loss": o.final_loss,
+                    "best_loss": o.best_loss,
+                    "perplexity": o.perplexity,
+                    "converged": o.converged,
+                    "early_stopped": o.early_stopped,
+                    "quality_score": o.quality_score,
+                    "training_time_s": o.training_time_s,
+                }
+            )
 
         # Per-model breakdown
         model_map: dict[str, list] = {}
@@ -864,15 +887,18 @@ async def get_training_trends(
         for model_name, model_runs in model_map.items():
             qualities = [r["quality_score"] for r in model_runs]
             losses = [r["final_loss"] for r in model_runs if r["final_loss"] > 0]
-            models.append({
-                "model": model_name,
-                "total_runs": len(model_runs),
-                "avg_quality": sum(qualities) / len(qualities) if qualities else 0,
-                "best_quality": max(qualities) if qualities else 0,
-                "avg_loss": sum(losses) / len(losses) if losses else 0,
-                "latest_quality": model_runs[-1]["quality_score"],
-                "improving": len(model_runs) >= 2 and model_runs[-1]["quality_score"] > model_runs[0]["quality_score"],
-            })
+            models.append(
+                {
+                    "model": model_name,
+                    "total_runs": len(model_runs),
+                    "avg_quality": sum(qualities) / len(qualities) if qualities else 0,
+                    "best_quality": max(qualities) if qualities else 0,
+                    "avg_loss": sum(losses) / len(losses) if losses else 0,
+                    "latest_quality": model_runs[-1]["quality_score"],
+                    "improving": len(model_runs) >= 2
+                    and model_runs[-1]["quality_score"] > model_runs[0]["quality_score"],
+                }
+            )
 
         models.sort(key=lambda m: m["best_quality"], reverse=True)
 
@@ -899,25 +925,29 @@ async def get_training_trends(
             "trend": trend,
         }
 
-        return success_response(data={
-            "runs": runs,
-            "models": models,
-            "summary": summary,
-        })
+        return success_response(
+            data={
+                "runs": runs,
+                "models": models,
+                "summary": summary,
+            }
+        )
 
     except Exception as e:
         logger.warning("Failed to load training trends: %s", e)
-        return success_response(data={
-            "runs": [],
-            "models": [],
-            "summary": {
-                "total_runs": 0,
-                "avg_quality": 0,
-                "best_quality": 0,
-                "avg_loss": 0,
-                "trend": "stable",
-            },
-        })
+        return success_response(
+            data={
+                "runs": [],
+                "models": [],
+                "summary": {
+                    "total_runs": 0,
+                    "avg_quality": 0,
+                    "best_quality": 0,
+                    "avg_loss": 0,
+                    "trend": "stable",
+                },
+            }
+        )
 
 
 @router.get("/monitor")
@@ -929,6 +959,7 @@ async def training_monitor_status():
     gradient explosion, or resource exhaustion.
     """
     from domain.training._internal.monitor import get_training_monitor
+    from schemas.common import success_response
 
     monitor = get_training_monitor()
     return success_response(data=monitor.get_status())
@@ -943,14 +974,17 @@ async def training_monitor_alerts(severity: str | None = None, limit: int = 50):
         limit: Maximum number of alerts to return
     """
     from domain.training._internal.monitor import AlertSeverity, get_training_monitor
+    from schemas.common import success_response
 
     monitor = get_training_monitor()
     severity_filter = AlertSeverity(severity) if severity else None
     alerts = monitor.get_alerts(severity=severity_filter, limit=limit)
-    return success_response(data={
-        "alerts": [a.to_dict() for a in alerts],
-        "total": len(alerts),
-    })
+    return success_response(
+        data={
+            "alerts": [a.to_dict() for a in alerts],
+            "total": len(alerts),
+        }
+    )
 
 
 @router.get("/monitor/metrics")
@@ -961,19 +995,23 @@ async def training_monitor_metrics(limit: int = 100):
         limit: Maximum number of metrics snapshots to return
     """
     from domain.training._internal.monitor import get_training_monitor
+    from schemas.common import success_response
 
     monitor = get_training_monitor()
     metrics = monitor.get_metrics_history(limit=limit)
-    return success_response(data={
-        "metrics": [m.to_dict() for m in metrics],
-        "total": len(metrics),
-    })
+    return success_response(
+        data={
+            "metrics": [m.to_dict() for m in metrics],
+            "total": len(metrics),
+        }
+    )
 
 
 @router.post("/monitor/reset")
 async def training_monitor_reset():
     """Reset training monitor state."""
     from domain.training._internal.monitor import get_training_monitor
+    from schemas.common import success_response
 
     monitor = get_training_monitor()
     monitor.reset()
@@ -987,6 +1025,7 @@ async def training_monitor_resources():
     Returns CPU, memory, and GPU usage with alerts if thresholds exceeded.
     """
     from domain.training._internal.monitor import get_training_monitor
+    from schemas.common import success_response
 
     monitor = get_training_monitor()
     resources = monitor.check_resources()

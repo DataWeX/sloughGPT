@@ -1,9 +1,14 @@
 """Tests for domain.infrastructure.deployment — enums, dataclass, manager init."""
 
 import asyncio
+
 import pytest
+
 from domain.infrastructure._internal.deployment import (
-    DeploymentEnvironment, DeploymentStatus, Deployment, DeploymentManager,
+    Deployment,
+    DeploymentEnvironment,
+    DeploymentManager,
+    DeploymentStatus,
 )
 
 
@@ -95,8 +100,11 @@ class TestDeploymentStatus:
         assert "COMPLETED" in r
 
     def test_status_ordering(self):
-        statuses = [DeploymentStatus.PENDING, DeploymentStatus.IN_PROGRESS,
-                    DeploymentStatus.COMPLETED]
+        statuses = [
+            DeploymentStatus.PENDING,
+            DeploymentStatus.IN_PROGRESS,
+            DeploymentStatus.COMPLETED,
+        ]
         assert len(statuses) == 3
 
 

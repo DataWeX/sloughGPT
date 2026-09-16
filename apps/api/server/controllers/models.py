@@ -154,9 +154,8 @@ class ModelsController:
             "Loading %s into SloTransformer (pure NumPy)...", model_id, extra={"tag": "MODEL"}
         )
         try:
-            from domain.models._internal.provider import setup_providers
-
             from config import ServerConfig
+            from domain.models._internal.provider import setup_providers
 
             cfg = ServerConfig.from_env()
 
@@ -164,9 +163,8 @@ class ModelsController:
             # ProcessGuard + .slnc are available. The guard worker materializes
             # weights; the parent only loads on guard death (lazy _get_model).
             try:
-                from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
-
                 from config import get_process_guard_enabled
+                from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
                 _slnc = _get_model_dir(model_id) / "model.slnc"
                 use_lazy = (
@@ -314,11 +312,10 @@ class ModelsController:
             return None
 
         try:
-            from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
-            from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
-            from domain.models._internal.provider import attach_process_guard_to_provider
-
             from config import ServerConfig
+            from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+            from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
+            from domain.models._internal.provider import attach_process_guard_to_provider
 
             cfg = ServerConfig.from_env()
 
@@ -724,9 +721,8 @@ class ModelsController:
         if not get_process_guard_enabled():
             return None
         try:
-            from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
-
             from config import ServerConfig
+            from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
 
             cfg = ServerConfig.from_env()
             guard = ProcessGuard(

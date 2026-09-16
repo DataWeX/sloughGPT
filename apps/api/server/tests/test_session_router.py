@@ -1,7 +1,5 @@
 """Tests for the /session router — context, messages, inspector."""
 
-import pytest
-from unittest.mock import patch, MagicMock
 from test_support import _data, get_test_client
 
 

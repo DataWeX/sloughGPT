@@ -5,13 +5,15 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from domain.auth._internal.models import Role, User, UserRole
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.exception_handlers import register_app_error_handler
 
+from domain.auth._internal.models import Role, User, UserRole
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_user(
     user_id: str = "u1",
@@ -38,6 +40,7 @@ _AUTH_USER = {"sub": "user1", "tenant_id": "t1"}
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def mock_repo():
@@ -69,6 +72,7 @@ def _build_app(mock_repo, auth_user_dict=_AUTH_ADMIN):
 
 # ── List users ───────────────────────────────────────────────────────────────
 
+
 class TestListUsers:
     def test_list_returns_all(self, mock_repo, admin_user):
         mock_repo.get.side_effect = lambda uid: admin_user if uid == "admin1" else None
@@ -89,6 +93,7 @@ class TestListUsers:
 
 
 # ── Get user ─────────────────────────────────────────────────────────────────
+
 
 class TestGetUser:
     def test_admin_can_get_any_user(self, mock_repo, admin_user):
@@ -123,18 +128,22 @@ class TestGetUser:
 
 # ── Create user ──────────────────────────────────────────────────────────────
 
+
 class TestCreateUser:
     def test_admin_creates_user(self, mock_repo, admin_user):
         mock_repo.get.side_effect = lambda uid: admin_user if uid == "admin1" else None
         mock_repo.get_by_username.return_value = None
         mock_repo.get_by_email.return_value = None
         _app, _ = _build_app(mock_repo)
-        resp = TestClient(_app).post("/users", json={
-            "username": "newuser",
-            "email": "new@example.com",
-            "password": "password123",
-            "role": "user",
-        })
+        resp = TestClient(_app).post(
+            "/users",
+            json={
+                "username": "newuser",
+                "email": "new@example.com",
+                "password": "password123",
+                "role": "user",
+            },
+        )
         assert resp.status_code == 200
         mock_repo.create.assert_called_once()
 
@@ -142,11 +151,14 @@ class TestCreateUser:
         mock_repo.get.side_effect = lambda uid: admin_user if uid == "admin1" else None
         mock_repo.get_by_username.return_value = _make_user("x", "newuser")
         _app, _ = _build_app(mock_repo)
-        resp = TestClient(_app).post("/users", json={
-            "username": "newuser",
-            "email": "new@example.com",
-            "password": "password123",
-        })
+        resp = TestClient(_app).post(
+            "/users",
+            json={
+                "username": "newuser",
+                "email": "new@example.com",
+                "password": "password123",
+            },
+        )
         assert resp.status_code == 409
 
     def test_duplicate_email_rejected(self, mock_repo, admin_user):
@@ -154,25 +166,32 @@ class TestCreateUser:
         mock_repo.get_by_username.return_value = None
         mock_repo.get_by_email.return_value = _make_user("x", "other", email="new@example.com")
         _app, _ = _build_app(mock_repo)
-        resp = TestClient(_app).post("/users", json={
-            "username": "newuser",
-            "email": "new@example.com",
-            "password": "password123",
-        })
+        resp = TestClient(_app).post(
+            "/users",
+            json={
+                "username": "newuser",
+                "email": "new@example.com",
+                "password": "password123",
+            },
+        )
         assert resp.status_code == 409
 
     def test_non_admin_cannot_create(self, mock_repo, regular_user):
         mock_repo.get.side_effect = lambda uid: regular_user if uid == "user1" else None
         _app, _ = _build_app(mock_repo, auth_user_dict=_AUTH_USER)
-        resp = TestClient(_app).post("/users", json={
-            "username": "newuser",
-            "email": "new@example.com",
-            "password": "password123",
-        })
+        resp = TestClient(_app).post(
+            "/users",
+            json={
+                "username": "newuser",
+                "email": "new@example.com",
+                "password": "password123",
+            },
+        )
         assert resp.status_code == 403
 
 
 # ── Update user ──────────────────────────────────────────────────────────────
+
 
 class TestUpdateUser:
     def test_admin_updates_email(self, mock_repo, admin_user):
@@ -202,6 +221,7 @@ class TestUpdateUser:
 
 # ── Delete user ──────────────────────────────────────────────────────────────
 
+
 class TestDeleteUser:
     def test_admin_deletes_user(self, mock_repo, admin_user):
         target = _make_user("u2", "bob")
@@ -226,16 +246,22 @@ class TestDeleteUser:
 
 # ── Change password ──────────────────────────────────────────────────────────
 
+
 class TestChangePassword:
     def test_success(self, mock_repo, admin_user):
         mock_repo.get.return_value = admin_user
         _app, _ = _build_app(mock_repo)
-        with patch("routers.auth.AuthRouter._verify_password", return_value=True), \
-             patch("routers.auth.AuthRouter._hash_password", return_value="new_hash"):
-            resp = TestClient(_app).post("/users/me/password", json={
-                "current_password": "oldpass123",
-                "new_password": "newpass123",
-            })
+        with (
+            patch("routers.auth.AuthRouter._verify_password", return_value=True),
+            patch("routers.auth.AuthRouter._hash_password", return_value="new_hash"),
+        ):
+            resp = TestClient(_app).post(
+                "/users/me/password",
+                json={
+                    "current_password": "oldpass123",
+                    "new_password": "newpass123",
+                },
+            )
         assert resp.status_code == 200
         assert resp.json()["data"]["changed"] is True
 
@@ -243,23 +269,30 @@ class TestChangePassword:
         mock_repo.get.return_value = admin_user
         _app, _ = _build_app(mock_repo)
         with patch("routers.auth.AuthRouter._verify_password", return_value=False):
-            resp = TestClient(_app).post("/users/me/password", json={
-                "current_password": "wrongpass",
-                "new_password": "newpass123",
-            })
+            resp = TestClient(_app).post(
+                "/users/me/password",
+                json={
+                    "current_password": "wrongpass",
+                    "new_password": "newpass123",
+                },
+            )
         assert resp.status_code == 401
 
     def test_user_not_found(self, mock_repo):
         mock_repo.get.return_value = None
         _app, _ = _build_app(mock_repo)
-        resp = TestClient(_app).post("/users/me/password", json={
-            "current_password": "oldpass123",
-            "new_password": "newpass123",
-        })
+        resp = TestClient(_app).post(
+            "/users/me/password",
+            json={
+                "current_password": "oldpass123",
+                "new_password": "newpass123",
+            },
+        )
         assert resp.status_code == 404
 
 
 # ── Update profile ───────────────────────────────────────────────────────────
+
 
 class TestUpdateProfile:
     def test_update_own_display_name(self, mock_repo, regular_user):
@@ -292,6 +325,7 @@ class TestUpdateProfile:
 
 
 # ── Get profile ──────────────────────────────────────────────────────────────
+
 
 class TestGetProfile:
     def test_get_own_profile(self, mock_repo, regular_user):

@@ -3,18 +3,18 @@
 import pytest
 
 from domain.ai_personality import (
-    PersonalityType,
+    PERSONALITIES,
     Personality,
     PersonalityManager,
-    PERSONALITIES,
+    PersonalityType,
     get_personality_manager,
     list_personalities,
 )
 
-
 # ---------------------------------------------------------------------------
 # PersonalityType enum
 # ---------------------------------------------------------------------------
+
 
 class TestPersonalityType:
     def test_all_values_are_strings(self):
@@ -32,6 +32,7 @@ class TestPersonalityType:
 # ---------------------------------------------------------------------------
 # Personality dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestPersonality:
     def test_apply_returns_text_unchanged(self):
@@ -85,6 +86,7 @@ class TestPersonality:
 # PersonalityManager
 # ---------------------------------------------------------------------------
 
+
 class TestPersonalityManager:
     def test_default_personality(self):
         mgr = PersonalityManager()
@@ -133,6 +135,7 @@ class TestPersonalityManager:
 # Module-level singletons / convenience functions
 # ---------------------------------------------------------------------------
 
+
 class TestModuleSingletons:
     def test_get_personality_manager_returns_manager(self):
         mgr = get_personality_manager()
@@ -143,4 +146,5 @@ class TestModuleSingletons:
 
     def test_list_personalities_matches_manager(self):
         from domains.ai_personality import _default_manager
+
         assert list_personalities() == _default_manager.list_personalities()

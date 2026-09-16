@@ -14,11 +14,11 @@ declarative - enabling or tuning memory never requires a code change.
 | ``SLO_MEMORY_MAINTENANCE_INTERVAL_MINUTES`` | ``60`` | How often the server schedules a ``memory.consolidate`` pass; ``0`` disables |
 | ``SLO_MEMORY_ARCHIVE_RETENTION_DAYS`` | ``30`` | Default retention window for ``prune_archive`` / ``memory archive --prune-days`` |
 """
+
 from __future__ import annotations
 
 import os
 import threading
-from typing import Optional
 
 
 class MemoryConfig:
@@ -51,27 +51,50 @@ class MemoryConfig:
     DEFAULT_MAINTENANCE_INTERVAL_MINUTES = 60
     DEFAULT_ARCHIVE_RETENTION_DAYS = 30
 
-    _instance: Optional["MemoryConfig"] = None
+    _instance: MemoryConfig | None = None
     _lock = threading.Lock()
 
     def __init__(self, **kwargs):
-        self.enabled = bool(kwargs.get("enabled", self._from_bool("SLO_MEMORY_ENABLED", self.DEFAULT_ENABLED)))
-        self.min_chars = int(kwargs.get("min_chars", os.environ.get("SLO_MEMORY_MIN_CHARS", self.DEFAULT_MIN_CHARS)))
-        self.max_facts = int(kwargs.get("max_facts", os.environ.get("SLO_MEMORY_MAX_FACTS", self.DEFAULT_MAX_FACTS)))
-        self.store_path = kwargs.get("store_path", os.environ.get("SLO_MEMORY_STORE_PATH", self.DEFAULT_STORE_PATH))
-        self.sync_remember = bool(kwargs.get("sync_remember", self._from_bool("SLO_MEMORY_SYNC", False)))
-        self.consolidation_threshold = float(kwargs.get(
-            "consolidation_threshold",
-            os.environ.get("SLO_MEMORY_CONSOLIDATION_THRESHOLD", self.DEFAULT_CONSOLIDATION_THRESHOLD),
-        ))
-        self.maintenance_interval_minutes = float(kwargs.get(
-            "maintenance_interval_minutes",
-            os.environ.get("SLO_MEMORY_MAINTENANCE_INTERVAL_MINUTES", self.DEFAULT_MAINTENANCE_INTERVAL_MINUTES),
-        ))
-        self.archive_retention_days = float(kwargs.get(
-            "archive_retention_days",
-            os.environ.get("SLO_MEMORY_ARCHIVE_RETENTION_DAYS", self.DEFAULT_ARCHIVE_RETENTION_DAYS),
-        ))
+        self.enabled = bool(
+            kwargs.get("enabled", self._from_bool("SLO_MEMORY_ENABLED", self.DEFAULT_ENABLED))
+        )
+        self.min_chars = int(
+            kwargs.get("min_chars", os.environ.get("SLO_MEMORY_MIN_CHARS", self.DEFAULT_MIN_CHARS))
+        )
+        self.max_facts = int(
+            kwargs.get("max_facts", os.environ.get("SLO_MEMORY_MAX_FACTS", self.DEFAULT_MAX_FACTS))
+        )
+        self.store_path = kwargs.get(
+            "store_path", os.environ.get("SLO_MEMORY_STORE_PATH", self.DEFAULT_STORE_PATH)
+        )
+        self.sync_remember = bool(
+            kwargs.get("sync_remember", self._from_bool("SLO_MEMORY_SYNC", False))
+        )
+        self.consolidation_threshold = float(
+            kwargs.get(
+                "consolidation_threshold",
+                os.environ.get(
+                    "SLO_MEMORY_CONSOLIDATION_THRESHOLD", self.DEFAULT_CONSOLIDATION_THRESHOLD
+                ),
+            )
+        )
+        self.maintenance_interval_minutes = float(
+            kwargs.get(
+                "maintenance_interval_minutes",
+                os.environ.get(
+                    "SLO_MEMORY_MAINTENANCE_INTERVAL_MINUTES",
+                    self.DEFAULT_MAINTENANCE_INTERVAL_MINUTES,
+                ),
+            )
+        )
+        self.archive_retention_days = float(
+            kwargs.get(
+                "archive_retention_days",
+                os.environ.get(
+                    "SLO_MEMORY_ARCHIVE_RETENTION_DAYS", self.DEFAULT_ARCHIVE_RETENTION_DAYS
+                ),
+            )
+        )
 
     @staticmethod
     def _from_bool(name: str, default: bool) -> bool:
@@ -82,7 +105,7 @@ class MemoryConfig:
         return value.strip().lower() in ("1", "true", "yes", "on")
 
     @classmethod
-    def get(cls) -> "MemoryConfig":
+    def get(cls) -> MemoryConfig:
         """Return the process-wide MemoryConfig singleton."""
         with cls._lock:
             if cls._instance is None:

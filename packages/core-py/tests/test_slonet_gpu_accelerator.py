@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+
 from domain.training._internal.gpu.accelerator import (
-    _MetalAccelerator,
-    _CUDAAccelerator,
     _CPUAccelerator,
+    _CUDAAccelerator,
+    _MetalAccelerator,
     get_accelerator,
 )
-
 
 # ── _CPUAccelerator ────────────────────────────────────────────────────────
 
 
 class TestCPUAccelerator:
-
     def test_init(self):
         acc = _CPUAccelerator()
         assert acc.name == "cpu"
@@ -51,7 +49,6 @@ class TestCPUAccelerator:
 
 
 class TestMetalAccelerator:
-
     def test_init(self):
         acc = _MetalAccelerator()
         assert acc.name == "metal"
@@ -70,7 +67,6 @@ class TestMetalAccelerator:
 
 
 class TestCUDAAccelerator:
-
     def test_init(self):
         acc = _CUDAAccelerator()
         assert acc.name == "cuda"
@@ -93,7 +89,6 @@ class TestCUDAAccelerator:
 
 
 class TestGetAccelerator:
-
     def test_returns_accelerator(self):
         acc = get_accelerator()
         assert acc is not None

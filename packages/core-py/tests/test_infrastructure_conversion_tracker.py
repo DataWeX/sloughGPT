@@ -1,4 +1,5 @@
 """Tests for ConversionTracker — SLNC conversion lifecycle tracking."""
+
 from __future__ import annotations
 
 import pytest

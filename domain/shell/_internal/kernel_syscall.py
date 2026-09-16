@@ -7,11 +7,12 @@ device access, scheduling, inference, training, etc.
 
 from __future__ import annotations
 
-import time
 import logging
-from enum import IntEnum
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from enum import IntEnum
+from typing import Any
 
 from .kernel_process import Process, ProcessState
 
@@ -20,6 +21,7 @@ logger = logging.getLogger("slo.kernel.syscall")
 
 class SyscallNumber(IntEnum):
     """System call numbers."""
+
     NONE = 0
     # Process management
     FORK = 1
@@ -81,6 +83,7 @@ class SyscallNumber(IntEnum):
 @dataclass
 class SyscallResult:
     """Result of a system call."""
+
     success: bool
     value: Any = None
     error: str | None = None
@@ -105,6 +108,7 @@ class SyscallResult:
 @dataclass
 class SyscallEntry:
     """A registered syscall handler."""
+
     number: SyscallNumber
     name: str
     handler: Callable[..., Any]
@@ -126,9 +130,14 @@ class SyscallTable:
         self._last_call: dict[int, float] = {}
         self._pid_open_fds: dict[int, list[int]] = {}
 
-    def register(self, number: SyscallNumber, name_or_handler: Any = None,
-                 handler: Callable[..., Any] | None = None, min_args: int = 0,
-                 description: str = "") -> None:
+    def register(
+        self,
+        number: SyscallNumber,
+        name_or_handler: Any = None,
+        handler: Callable[..., Any] | None = None,
+        min_args: int = 0,
+        description: str = "",
+    ) -> None:
         """Register a syscall handler. Supports both 2-arg and 3-arg forms."""
         if handler is None:
             # 2-arg form: register(number, handler)
@@ -156,8 +165,9 @@ class SyscallTable:
     def has(self, number: SyscallNumber) -> bool:
         return int(number) in self._entries
 
-    def dispatch(self, first_arg: Any, second_arg: Any = None,
-                 *args: Any, **kwargs: Any) -> SyscallResult:
+    def dispatch(
+        self, first_arg: Any, second_arg: Any = None, *args: Any, **kwargs: Any
+    ) -> SyscallResult:
         """
         Dispatch a syscall. Supports both calling conventions:
           - dispatch(caller, number) — test/old style (caller can be Kernel or Process)
@@ -172,7 +182,7 @@ class SyscallTable:
             number, caller = first_arg, second_arg
 
         # Validate caller state (skip for Kernel objects which don't have .state)
-        if hasattr(caller, 'state') and caller.state == ProcessState.STOPPED:
+        if hasattr(caller, "state") and caller.state == ProcessState.STOPPED:
             return SyscallResult(
                 success=False,
                 error="Process is stopped",
@@ -222,8 +232,7 @@ class SyscallTable:
             "registered": len(self._entries),
             "total_calls": sum(self._call_count.values()),
             "calls_by_number": {
-                SyscallNumber(k).name: v
-                for k, v in sorted(self._call_count.items())
+                SyscallNumber(k).name: v for k, v in sorted(self._call_count.items())
             },
         }
 
@@ -231,13 +240,15 @@ class SyscallTable:
         entries = []
         for num in sorted(self._entries):
             entry = self._entries[num]
-            entries.append({
-                "number": int(entry.number),
-                "name": entry.name,
-                "description": entry.description,
-                "min_args": entry.min_args,
-                "call_count": self._call_count.get(num, 0),
-            })
+            entries.append(
+                {
+                    "number": int(entry.number),
+                    "name": entry.name,
+                    "description": entry.description,
+                    "min_args": entry.min_args,
+                    "call_count": self._call_count.get(num, 0),
+                }
+            )
         return entries
 
 
@@ -265,6 +276,7 @@ def _syscall_getpid(caller: Process, *args: Any) -> tuple[bool, int]:
 def _syscall_set_priority(caller: Process, priority: int, *args: Any) -> tuple[bool, None]:
     """Set process priority."""
     from .kernel_process import Priority
+
     for p in Priority:
         if int(p) == priority:
             caller.priority = p
@@ -272,8 +284,9 @@ def _syscall_set_priority(caller: Process, priority: int, *args: Any) -> tuple[b
     return True, None
 
 
-def _syscall_malloc(caller: Process, shape: tuple, dtype: str = "float32",
-                    *args: Any) -> tuple[bool, int]:
+def _syscall_malloc(
+    caller: Process, shape: tuple, dtype: str = "float32", *args: Any
+) -> tuple[bool, int]:
     """Allocate tensor memory. Returns block_id."""
     return True, 0
 
@@ -289,8 +302,7 @@ def _syscall_sched_yield(caller: Process, *args: Any) -> tuple[bool, None]:
     return True, None
 
 
-def _syscall_sched_sleep(caller: Process, duration: float = 0,
-                         *args: Any) -> tuple[bool, None]:
+def _syscall_sched_sleep(caller: Process, duration: float = 0, *args: Any) -> tuple[bool, None]:
     """Put process to sleep."""
     caller.transition(ProcessState.WAITING)
     return True, None
@@ -319,8 +331,7 @@ def _syscall_nop(caller: Process, *args: Any) -> tuple[bool, None]:
     return True, None
 
 
-def _syscall_open_device(caller: Process, device_name: str,
-                         *args: Any) -> tuple[bool, int]:
+def _syscall_open_device(caller: Process, device_name: str, *args: Any) -> tuple[bool, int]:
     """Open a device. Returns fd."""
     return True, 1
 
@@ -330,14 +341,14 @@ def _syscall_close_device(caller: Process, fd: int, *args: Any) -> tuple[bool, b
     return True, True
 
 
-def _syscall_read_device(caller: Process, fd: int, size: int = -1,
-                         *args: Any) -> tuple[bool, bytes]:
+def _syscall_read_device(
+    caller: Process, fd: int, size: int = -1, *args: Any
+) -> tuple[bool, bytes]:
     """Read from device."""
     return True, b""
 
 
-def _syscall_write_device(caller: Process, fd: int, data: Any,
-                          *args: Any) -> tuple[bool, int]:
+def _syscall_write_device(caller: Process, fd: int, data: Any, *args: Any) -> tuple[bool, int]:
     """Write to device. Returns bytes written."""
     return True, 0
 
@@ -352,20 +363,19 @@ def _syscall_console_read(caller: Process, *args: Any) -> tuple[bool, str]:
     return True, ""
 
 
-def _syscall_inference_start(caller: Process, prompt: str,
-                             *args: Any) -> tuple[bool, int]:
+def _syscall_inference_start(caller: Process, prompt: str, *args: Any) -> tuple[bool, int]:
     """Start inference. Returns job_id."""
     return True, 0
 
 
-def _syscall_inference_cancel(caller: Process, job_id: int,
-                              *args: Any) -> tuple[bool, bool]:
+def _syscall_inference_cancel(caller: Process, job_id: int, *args: Any) -> tuple[bool, bool]:
     """Cancel inference."""
     return True, True
 
 
-def _syscall_train_start(caller: Process, config: dict | None = None,
-                         *args: Any) -> tuple[bool, int]:
+def _syscall_train_start(
+    caller: Process, config: dict | None = None, *args: Any
+) -> tuple[bool, int]:
     """Start training. Returns job_id."""
     return True, 0
 
@@ -375,8 +385,7 @@ def _syscall_train_stop(caller: Process, job_id: int, *args: Any) -> tuple[bool,
     return True, True
 
 
-def _syscall_train_status(caller: Process, job_id: int,
-                          *args: Any) -> tuple[bool, dict]:
+def _syscall_train_status(caller: Process, job_id: int, *args: Any) -> tuple[bool, dict]:
     """Get training status."""
     return True, {"status": "idle"}
 
@@ -390,50 +399,116 @@ def build_default_syscall_table() -> SyscallTable:
     table.register(SyscallNumber.EXIT, "exit", _syscall_exit, description="Stop calling process")
     table.register(SyscallNumber.WAIT, "wait", _syscall_wait, description="Wait for child")
     table.register(SyscallNumber.GETPID, "getpid", _syscall_getpid, description="Get PID")
-    table.register(SyscallNumber.SET_PRIORITY, "set_priority", _syscall_set_priority,
-                   min_args=1, description="Set process priority")
+    table.register(
+        SyscallNumber.SET_PRIORITY,
+        "set_priority",
+        _syscall_set_priority,
+        min_args=1,
+        description="Set process priority",
+    )
 
     # Memory
-    table.register(SyscallNumber.MALLOC, "malloc", _syscall_malloc,
-                   min_args=1, description="Allocate tensor memory")
-    table.register(SyscallNumber.FREE, "free", _syscall_free,
-                   min_args=1, description="Free tensor memory")
+    table.register(
+        SyscallNumber.MALLOC,
+        "malloc",
+        _syscall_malloc,
+        min_args=1,
+        description="Allocate tensor memory",
+    )
+    table.register(
+        SyscallNumber.FREE, "free", _syscall_free, min_args=1, description="Free tensor memory"
+    )
 
     # Devices
-    table.register(SyscallNumber.OPEN_DEVICE, "open_device", _syscall_open_device,
-                   min_args=1, description="Open a device")
-    table.register(SyscallNumber.CLOSE_DEVICE, "close_device", _syscall_close_device,
-                   min_args=1, description="Close a device")
-    table.register(SyscallNumber.READ_DEVICE, "read_device", _syscall_read_device,
-                   min_args=1, description="Read from device")
-    table.register(SyscallNumber.WRITE_DEVICE, "write_device", _syscall_write_device,
-                   min_args=2, description="Write to device")
+    table.register(
+        SyscallNumber.OPEN_DEVICE,
+        "open_device",
+        _syscall_open_device,
+        min_args=1,
+        description="Open a device",
+    )
+    table.register(
+        SyscallNumber.CLOSE_DEVICE,
+        "close_device",
+        _syscall_close_device,
+        min_args=1,
+        description="Close a device",
+    )
+    table.register(
+        SyscallNumber.READ_DEVICE,
+        "read_device",
+        _syscall_read_device,
+        min_args=1,
+        description="Read from device",
+    )
+    table.register(
+        SyscallNumber.WRITE_DEVICE,
+        "write_device",
+        _syscall_write_device,
+        min_args=2,
+        description="Write to device",
+    )
 
     # Scheduler
-    table.register(SyscallNumber.SCHED_YIELD, "sched_yield", _syscall_sched_yield,
-                   description="Yield CPU")
-    table.register(SyscallNumber.SCHED_SLEEP, "sched_sleep", _syscall_sched_sleep,
-                   description="Sleep for duration")
+    table.register(
+        SyscallNumber.SCHED_YIELD, "sched_yield", _syscall_sched_yield, description="Yield CPU"
+    )
+    table.register(
+        SyscallNumber.SCHED_SLEEP,
+        "sched_sleep",
+        _syscall_sched_sleep,
+        description="Sleep for duration",
+    )
 
     # I/O
-    table.register(SyscallNumber.CONSOLE_WRITE, "console_write", _syscall_console_write,
-                   min_args=1, description="Write to console")
-    table.register(SyscallNumber.CONSOLE_READ, "console_read", _syscall_console_read,
-                   description="Read from console")
+    table.register(
+        SyscallNumber.CONSOLE_WRITE,
+        "console_write",
+        _syscall_console_write,
+        min_args=1,
+        description="Write to console",
+    )
+    table.register(
+        SyscallNumber.CONSOLE_READ,
+        "console_read",
+        _syscall_console_read,
+        description="Read from console",
+    )
 
     # Inference
-    table.register(SyscallNumber.INFERENCE_START, "inference_start", _syscall_inference_start,
-                   min_args=1, description="Start inference")
-    table.register(SyscallNumber.INFERENCE_CANCEL, "inference_cancel", _syscall_inference_cancel,
-                   min_args=1, description="Cancel inference")
+    table.register(
+        SyscallNumber.INFERENCE_START,
+        "inference_start",
+        _syscall_inference_start,
+        min_args=1,
+        description="Start inference",
+    )
+    table.register(
+        SyscallNumber.INFERENCE_CANCEL,
+        "inference_cancel",
+        _syscall_inference_cancel,
+        min_args=1,
+        description="Cancel inference",
+    )
 
     # Training
-    table.register(SyscallNumber.TRAIN_START, "train_start", _syscall_train_start,
-                   description="Start training")
-    table.register(SyscallNumber.TRAIN_STOP, "train_stop", _syscall_train_stop,
-                   min_args=1, description="Stop training")
-    table.register(SyscallNumber.TRAIN_STATUS, "train_status", _syscall_train_status,
-                   min_args=1, description="Get training status")
+    table.register(
+        SyscallNumber.TRAIN_START, "train_start", _syscall_train_start, description="Start training"
+    )
+    table.register(
+        SyscallNumber.TRAIN_STOP,
+        "train_stop",
+        _syscall_train_stop,
+        min_args=1,
+        description="Stop training",
+    )
+    table.register(
+        SyscallNumber.TRAIN_STATUS,
+        "train_status",
+        _syscall_train_status,
+        min_args=1,
+        description="Get training status",
+    )
 
     # Misc
     table.register(SyscallNumber.UPTIME, "uptime", _syscall_uptime, description="Get uptime")
@@ -454,8 +529,7 @@ def get_syscall_table() -> SyscallTable:
     return _SYSCALL_TABLE
 
 
-def syscall(number: SyscallNumber, caller: Process, *args: Any,
-            **kwargs: Any) -> SyscallResult:
+def syscall(number: SyscallNumber, caller: Process, *args: Any, **kwargs: Any) -> SyscallResult:
     """Convenience function to dispatch a syscall using the global table."""
     return get_syscall_table().dispatch(number, caller, *args, **kwargs)
 

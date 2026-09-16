@@ -1,9 +1,16 @@
 """Tests for TokenAccount — billing dataclass with pure logic."""
+
 from __future__ import annotations
 
 import time
 
-from domain.billing._internal.token_service import MODEL_PRICING, TIER_LIMITS, Tier, TokenAccount, UsageRecord
+from domain.billing._internal.token_service import (
+    MODEL_PRICING,
+    TIER_LIMITS,
+    Tier,
+    TokenAccount,
+    UsageRecord,
+)
 
 
 class TestTokenAccountDefaults:
@@ -34,12 +41,26 @@ class TestCanAfford:
 
     def test_cannot_afford_exceeds_daily_limit(self):
         now = time.time()
-        acc = TokenAccount(user_id="u1", balance=100_000, daily_used=490, daily_limit=500, last_daily_reset=now, last_monthly_reset=now)
+        acc = TokenAccount(
+            user_id="u1",
+            balance=100_000,
+            daily_used=490,
+            daily_limit=500,
+            last_daily_reset=now,
+            last_monthly_reset=now,
+        )
         assert acc.can_afford(20) is False
 
     def test_cannot_afford_exceeds_monthly_limit(self):
         now = time.time()
-        acc = TokenAccount(user_id="u1", balance=100_000, monthly_used=9_990, monthly_limit=10_000, last_daily_reset=now, last_monthly_reset=now)
+        acc = TokenAccount(
+            user_id="u1",
+            balance=100_000,
+            monthly_used=9_990,
+            monthly_limit=10_000,
+            last_daily_reset=now,
+            last_monthly_reset=now,
+        )
         assert acc.can_afford(20) is False
 
 
@@ -101,7 +122,7 @@ class TestTierLimits:
 
 class TestModelPricing:
     def test_all_models_have_pricing(self):
-        for model, pricing in MODEL_PRICING.items():
+        for _model, pricing in MODEL_PRICING.items():
             assert "input" in pricing
             assert "output" in pricing
             assert pricing["input"] >= 0
@@ -114,9 +135,14 @@ class TestModelPricing:
 class TestUsageRecord:
     def test_to_dict(self):
         record = UsageRecord(
-            id="r1", user_id="u1", model="gpt-4",
-            input_tokens=100, output_tokens=50, total_tokens=150,
-            cost=0.01, timestamp=time.time(),
+            id="r1",
+            user_id="u1",
+            model="gpt-4",
+            input_tokens=100,
+            output_tokens=50,
+            total_tokens=150,
+            cost=0.01,
+            timestamp=time.time(),
         )
         d = record.to_dict()
         assert d["id"] == "r1"

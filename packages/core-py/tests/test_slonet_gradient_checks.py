@@ -3,15 +3,37 @@
 Uses numerical differentiation (finite differences) to verify analytical gradients.
 This catches formula bugs that pattern-matching audits miss.
 """
+
 import numpy as np
 import pytest
+
 from domain.training._internal.slonet import (
-    Tensor, _add, _mul, _pow, _matmul, _softmax, _sum, _mean, _max,
-    sigmoid, tanh, relu, gelu, silu, log_softmax,
-    _layernorm, _rmsnorm, _conv2d, _maxpool2d,
-    _reshape, _slice, flatten,
-    cross_entropy, normalize, pairwise_distance,
-    SloLinear, SloTransformer,
+    SloLinear,
+    SloTransformer,
+    Tensor,
+    _add,
+    _conv2d,
+    _layernorm,
+    _matmul,
+    _max,
+    _maxpool2d,
+    _mean,
+    _mul,
+    _pow,
+    _reshape,
+    _rmsnorm,
+    _softmax,
+    _sum,
+    cross_entropy,
+    flatten,
+    gelu,
+    log_softmax,
+    normalize,
+    pairwise_distance,
+    relu,
+    sigmoid,
+    silu,
+    tanh,
 )
 
 
@@ -24,21 +46,25 @@ def _seed():
 def _numerical_grad(fn, inputs, eps=1e-4, n_check=30):
     """Compute numerical gradient of fn w.r.t. each input using finite differences."""
     numerical = []
-    for xi, x in enumerate(inputs):
+    for _xi, x in enumerate(inputs):
         flat = x.data.ravel()
         g = np.zeros_like(flat, dtype=np.float64)
         check_indices = np.random.choice(len(flat), min(n_check, len(flat)), replace=False)
         for i in check_indices:
             orig = float(flat[i])
             flat[i] = orig + eps
-            for xx in inputs: xx.grad = None
+            for xx in inputs:
+                xx.grad = None
             r = fn()
-            if isinstance(r, tuple): r = r[0]
+            if isinstance(r, tuple):
+                r = r[0]
             y_plus = r.data.ravel().astype(np.float64).copy()
             flat[i] = orig - eps
-            for xx in inputs: xx.grad = None
+            for xx in inputs:
+                xx.grad = None
             r = fn()
-            if isinstance(r, tuple): r = r[0]
+            if isinstance(r, tuple):
+                r = r[0]
             y_minus = r.data.ravel().astype(np.float64).copy()
             flat[i] = orig
             g[i] = (y_plus.sum() - y_minus.sum()) / (2 * eps)
@@ -48,9 +74,11 @@ def _numerical_grad(fn, inputs, eps=1e-4, n_check=30):
 
 def _analytical_grad(fn, inputs):
     """Compute analytical gradient by calling backward()."""
-    for x in inputs: x.grad = None
+    for x in inputs:
+        x.grad = None
     r = fn()
-    if isinstance(r, tuple): r = r[0]
+    if isinstance(r, tuple):
+        r = r[0]
     r.backward()
     return [x.grad.data.copy().astype(np.float64) for x in inputs]
 
@@ -61,7 +89,7 @@ def _check_grad(name, fn_factory, eps=1e-4, atol=1e-3, n_check=30):
     analytical = _analytical_grad(fn, inputs)
     numerical = _numerical_grad(fn, inputs, eps=eps, n_check=n_check)
     failures = []
-    for i, (a, n) in enumerate(zip(analytical, numerical)):
+    for i, (a, n) in enumerate(zip(analytical, numerical, strict=False)):
         mask = np.abs(n.ravel()) > 1e-6
         if mask.sum() == 0:
             continue
@@ -74,7 +102,7 @@ def _check_grad(name, fn_factory, eps=1e-4, atol=1e-3, n_check=30):
     return len(failures) == 0, failures
 
 
-R = dict(requires_grad=True)
+R = {"requires_grad": True}
 
 
 class TestGradientChecks:
@@ -85,6 +113,7 @@ class TestGradientChecks:
             a = Tensor([1.0, 2.0], **R)
             b = Tensor([3.0, 4.0], **R)
             return lambda: _add(a, b), [a, b]
+
         ok, details = _check_grad("add", f)
         assert ok, "\n".join(details)
 
@@ -93,6 +122,7 @@ class TestGradientChecks:
             a = Tensor([1.0, 2.0], **R)
             b = Tensor([3.0, 4.0], **R)
             return lambda: _mul(a, b), [a, b]
+
         ok, details = _check_grad("mul", f)
         assert ok, "\n".join(details)
 
@@ -100,6 +130,7 @@ class TestGradientChecks:
         def f():
             p = Tensor([1.0, 2.0, 3.0], **R)
             return lambda: _pow(p, 3.0), [p]
+
         ok, details = _check_grad("pow", f)
         assert ok, "\n".join(details)
 
@@ -108,6 +139,7 @@ class TestGradientChecks:
             x = Tensor(np.random.randn(3, 4), **R)
             W = Tensor(np.random.randn(4, 2), **R)
             return lambda: _matmul(x, W), [x, W]
+
         ok, details = _check_grad("matmul", f)
         assert ok, "\n".join(details)
 
@@ -116,6 +148,7 @@ class TestGradientChecks:
             x = Tensor(np.random.randn(2, 3, 4), **R)
             W = Tensor(np.random.randn(2, 4, 5), **R)
             return lambda: _matmul(x, W), [x, W]
+
         ok, details = _check_grad("matmul_batched", f)
         assert ok, "\n".join(details)
 
@@ -124,6 +157,7 @@ class TestGradientChecks:
             a = Tensor(np.random.randn(4), **R)
             b = Tensor(np.random.randn(2, 4, 3), **R)
             return lambda: _matmul(a, b), [a, b]
+
         ok, details = _check_grad("matmul_1d_3d", f)
         assert ok, "\n".join(details)
 
@@ -132,6 +166,7 @@ class TestGradientChecks:
             a = Tensor(np.random.randn(2, 3, 4), **R)
             b = Tensor(np.random.randn(4, 5), **R)
             return lambda: _matmul(a, b), [a, b]
+
         ok, details = _check_grad("matmul_3d_2d", f)
         assert ok, "\n".join(details)
 
@@ -139,6 +174,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(2, 3), **R)
             return lambda: _softmax(x), [x]
+
         ok, details = _check_grad("softmax", f)
         assert ok, "\n".join(details)
 
@@ -146,6 +182,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(5), **R)
             return lambda: sigmoid(x), [x]
+
         ok, details = _check_grad("sigmoid", f)
         assert ok, "\n".join(details)
 
@@ -153,6 +190,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(5), **R)
             return lambda: tanh(x), [x]
+
         ok, details = _check_grad("tanh", f)
         assert ok, "\n".join(details)
 
@@ -160,6 +198,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(5), **R)
             return lambda: relu(x), [x]
+
         ok, details = _check_grad("relu", f)
         assert ok, "\n".join(details)
 
@@ -167,6 +206,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(5), **R)
             return lambda: gelu(x), [x]
+
         ok, details = _check_grad("gelu", f)
         assert ok, "\n".join(details)
 
@@ -174,6 +214,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(5), **R)
             return lambda: silu(x), [x]
+
         ok, details = _check_grad("silu", f)
         assert ok, "\n".join(details)
 
@@ -181,6 +222,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(5), **R)
             return lambda: log_softmax(x), [x]
+
         ok, details = _check_grad("log_softmax", f)
         assert ok, "\n".join(details)
 
@@ -189,6 +231,7 @@ class TestGradientChecks:
             x = Tensor(np.random.randn(4, 5), **R)
             t = Tensor(np.array([0, 2, 1, 3]))
             return lambda: cross_entropy(x, t), [x]
+
         ok, details = _check_grad("cross_entropy", f, eps=1e-3)
         assert ok, "\n".join(details)
 
@@ -198,6 +241,7 @@ class TestGradientChecks:
             w = Tensor(np.random.randn(4), **R)
             b = Tensor(np.random.randn(4), **R)
             return lambda: _layernorm(x, w, b), [x, w, b]
+
         ok, details = _check_grad("layernorm", f)
         assert ok, "\n".join(details)
 
@@ -206,6 +250,7 @@ class TestGradientChecks:
             x = Tensor(np.random.randn(2, 4), **R)
             w = Tensor(np.random.randn(4), **R)
             return lambda: _rmsnorm(x, w), [x, w]
+
         ok, details = _check_grad("rmsnorm", f)
         assert ok, "\n".join(details)
 
@@ -213,6 +258,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(3, 4), **R)
             return lambda: normalize(x), [x]
+
         ok, details = _check_grad("normalize", f)
         assert ok, "\n".join(details)
 
@@ -221,6 +267,7 @@ class TestGradientChecks:
             x1 = Tensor(np.random.randn(2, 4), **R)
             x2 = Tensor(np.random.randn(2, 4), **R)
             return lambda: pairwise_distance(x1, x2), [x1, x2]
+
         ok, details = _check_grad("pairwise_distance", f)
         assert ok, "\n".join(details)
 
@@ -230,6 +277,7 @@ class TestGradientChecks:
             w = Tensor(np.random.randn(2, 1, 3, 3), **R)
             b = Tensor(np.random.randn(2), **R)
             return lambda: _conv2d(x, w, b), [x, w, b]
+
         ok, details = _check_grad("conv2d", f, eps=1e-4, atol=5e-3)
         assert ok, "\n".join(details)
 
@@ -237,6 +285,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(1, 1, 4, 4), **R)
             return lambda: _maxpool2d(x, 2, 2), [x]
+
         ok, details = _check_grad("maxpool2d", f)
         assert ok, "\n".join(details)
 
@@ -244,6 +293,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(2, 3), **R)
             return lambda: flatten(x), [x]
+
         ok, details = _check_grad("flatten", f)
         assert ok, "\n".join(details)
 
@@ -251,6 +301,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(3, 4), **R)
             return lambda: x.T(), [x]
+
         ok, details = _check_grad("transpose", f)
         assert ok, "\n".join(details)
 
@@ -258,6 +309,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(3, 4), **R)
             return lambda: _reshape(x, (4, 3)), [x]
+
         ok, details = _check_grad("reshape", f)
         assert ok, "\n".join(details)
 
@@ -265,6 +317,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(3, 4), **R)
             return lambda: x[:, 1:3], [x]
+
         ok, details = _check_grad("slice", f)
         assert ok, "\n".join(details)
 
@@ -272,6 +325,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(3, 4), **R)
             return lambda: _sum(x), [x]
+
         ok, details = _check_grad("sum", f)
         assert ok, "\n".join(details)
 
@@ -279,6 +333,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(3, 4), **R)
             return lambda: _mean(x), [x]
+
         ok, details = _check_grad("mean", f)
         assert ok, "\n".join(details)
 
@@ -286,6 +341,7 @@ class TestGradientChecks:
         def f():
             x = Tensor(np.random.randn(3, 4), **R)
             return lambda: _max(x), [x]
+
         ok, details = _check_grad("max", f)
         assert ok, "\n".join(details)
 
@@ -294,6 +350,7 @@ class TestGradientChecks:
             lin = SloLinear(8, 4)
             x = Tensor(np.random.randn(2, 8), **R)
             return lambda: lin(x), [x, lin.weight, lin.bias]
+
         ok, details = _check_grad("SloLinear", f)
         assert ok, "\n".join(details)
 
@@ -482,15 +539,20 @@ class TestTrainingConvergence:
     def test_convergence(self):
         np.random.seed(42)
         model = SloTransformer(
-            vocab_size=256, n_embed=64, n_layer=2, n_head=2,
-            block_size=32, dropout=0.0,
+            vocab_size=256,
+            n_embed=64,
+            n_layer=2,
+            n_head=2,
+            block_size=32,
+            dropout=0.0,
         )
         from domain.training._internal.slonet import SloAdamW
+
         opt = SloAdamW(lr=1e-3)
         x = np.random.randint(0, 256, (4, 32))
         y = np.random.randint(0, 256, (4, 32))
         losses = []
-        for step in range(100):
+        for _step in range(100):
             logits, _ = model.forward(Tensor(x, _copy=False))
             loss = cross_entropy(logits.reshape(-1, 256), Tensor(y.reshape(-1)))
             loss.backward()

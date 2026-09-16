@@ -18,10 +18,11 @@ logger = logging.getLogger(__name__)
 
 import urllib.parse
 
-from domain.infrastructure._internal.errors import AppError
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.ssrf import is_private_ip as _is_private_ip
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+
+from domain.infrastructure._internal.errors import AppError
 
 
 class KnowledgeItemOut(BaseModel):

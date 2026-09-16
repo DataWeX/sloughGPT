@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
-import numpy as np
 from unittest.mock import MagicMock, patch
 
-from domain.shell._internal.kernel_npu import NPUDevice
-from domain.shell._internal.kernel_devices import DeviceState
-from domain.shell._internal.kernel_syscall import SyscallResult
+import numpy as np
+import pytest
 
+from domain.shell._internal.kernel_devices import DeviceState
+from domain.shell._internal.kernel_npu import NPUDevice
+from domain.shell._internal.kernel_syscall import SyscallResult
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -33,7 +33,6 @@ def _make_provider(name="test"):
 
 
 class TestNPUBasics:
-
     def test_init(self):
         npu = NPUDevice()
         assert npu.name == "npu"
@@ -68,7 +67,6 @@ class TestNPUBasics:
 
 
 class TestModelLoading:
-
     def test_load_numpy(self):
         npu = NPUDevice()
         with patch("domain.shell._internal.kernel_npu.NPUDevice._load_numpy") as mock_load:
@@ -142,7 +140,6 @@ class TestModelLoading:
 
 
 class TestExecution:
-
     def test_call_text(self):
         npu = NPUDevice()
         provider = _make_provider()
@@ -204,7 +201,6 @@ class TestExecution:
 
 
 class TestAdvancedOps:
-
     def test_batch(self):
         npu = NPUDevice()
         provider = _make_provider()
@@ -253,7 +249,6 @@ class TestAdvancedOps:
 
 
 class TestQuantization:
-
     def test_quantize(self):
         npu = NPUDevice()
         provider = _make_provider()
@@ -275,7 +270,6 @@ class TestQuantization:
 
 
 class TestCheckpoints:
-
     def test_checkpoint_save(self):
         npu = NPUDevice()
         provider = _make_provider()
@@ -300,7 +294,6 @@ class TestCheckpoints:
 
 
 class TestMemory:
-
     def test_memory_empty(self):
         npu = NPUDevice()
         with patch("psutil.Process") as MockProc:
@@ -314,7 +307,6 @@ class TestMemory:
 
 
 class TestIoctl:
-
     def test_ioctl_info(self):
         npu = NPUDevice()
         result = npu.ioctl("INFO")

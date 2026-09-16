@@ -10,61 +10,61 @@ Phoneme set based on IPA/ARPAbet hybrid for Italian.
 from __future__ import annotations
 
 import re
-import numpy as np
 
+import numpy as np
 
 # ── Italian Phoneme inventory ──────────────────────────────────────────────
 
 # Vowels
 ITALIAN_VOWELS = {
-    "AA": 0,   # padre (father)
-    "AE": 1,   # gatto (cat)
-    "AH": 2,   # but (butterfly)
-    "AO": 3,   # boca (mouth)
-    "AW": 4,   # auto (car)
-    "AY": 5,   # aire (air)
-    "EH": 6,   # bebe (baby)
-    "ER": 7,   # comer (to eat)
-    "EY": 8,   # pez (fish)
-    "IH": 9,   # si (if)
+    "AA": 0,  # padre (father)
+    "AE": 1,  # gatto (cat)
+    "AH": 2,  # but (butterfly)
+    "AO": 3,  # boca (mouth)
+    "AW": 4,  # auto (car)
+    "AY": 5,  # aire (air)
+    "EH": 6,  # bebe (baby)
+    "ER": 7,  # comer (to eat)
+    "EY": 8,  # pez (fish)
+    "IH": 9,  # si (if)
     "IY": 10,  # chica (girl)
     "OW": 11,  # oso (bear)
     "OY": 12,  # oye (listen)
-    "UH": 13,  #乌拉圭 (Uruguay)
-    "UW": 14,  #乌龟 (turtle)
+    "UH": 13,  # 乌拉圭 (Uruguay)
+    "UW": 14,  # 乌龟 (turtle)
     "IX": 15,  # Italian specific
 }
 
 # Consonants
 ITALIAN_CONSONANTS = {
-    "B": 16,   # buono (good)
+    "B": 16,  # buono (good)
     "CH": 17,  # chiesa (church)
-    "D": 18,   # dire (to say)
+    "D": 18,  # dire (to say)
     "DH": 19,  # this (English loan)
-    "F": 20,   # fare (to do)
-    "G": 21,   # gatto (cat)
+    "F": 20,  # fare (to do)
+    "G": 21,  # gatto (cat)
     "GH": 22,  # ghe (them)
     "HH": 23,  # house (English loan)
     "JH": 24,  # Joy (English loan)
-    "K": 25,   # casa (house)
-    "L": 26,   # luna (moon)
-    "M": 27,   # mama (mom)
-    "N": 28,   # nino (boy)
+    "K": 25,  # casa (house)
+    "L": 26,  # luna (moon)
+    "M": 27,  # mama (mom)
+    "N": 28,  # nino (boy)
     "NG": 29,  # singing (English loan)
     "NY": 30,  # gn (gnomo)
-    "P": 31,   # pane (bread)
-    "Q": 32,   # quadro (picture)
-    "R": 33,   # rosso (red)
-    "S": 34,   # sole (sun)
+    "P": 31,  # pane (bread)
+    "Q": 32,  # quadro (picture)
+    "R": 33,  # rosso (red)
+    "S": 34,  # sole (sun)
     "SC": 35,  # scuola (school)
     "SH": 36,  # shoe (English loan)
-    "T": 37,   # terra (earth)
+    "T": 37,  # terra (earth)
     "TH": 38,  # think (English loan)
     "TS": 39,  # zeta (pizza)
-    "V": 40,   # vino (wine)
+    "V": 40,  # vino (wine)
     "W": 41,  # yes (English loan)
-    "Y": 42,   # yacht (English loan)
-    "Z": 43,   # zero
+    "Y": 42,  # yacht (English loan)
+    "Z": 43,  # zero
     "ZH": 44,  # vision (English loan)
 }
 
@@ -88,19 +88,51 @@ ITALIAN_ID_TO_PHONEME[SILENCE] = "-"
 # Phoneme-to-grapheme mapping for decode
 ITALIAN_PHONEME_TO_GRAPHEME: dict[str, str] = {
     # Vowels
-    "AA": "a", "AE": "a", "AH": "u", "AO": "o",
-    "AW": "au", "AY": "ai", "EH": "e", "ER": "er",
-    "EY": "e", "IH": "i", "IY": "i", "OW": "o",
-    "OY": "oy", "UH": "u", "UW": "u",
+    "AA": "a",
+    "AE": "a",
+    "AH": "u",
+    "AO": "o",
+    "AW": "au",
+    "AY": "ai",
+    "EH": "e",
+    "ER": "er",
+    "EY": "e",
+    "IH": "i",
+    "IY": "i",
+    "OW": "o",
+    "OY": "oy",
+    "UH": "u",
+    "UW": "u",
     "IX": "i",
     # Consonants
-    "B": "b", "CH": "ch", "D": "d", "DH": "th",
-    "F": "f", "G": "g", "GH": "gh", "HH": "h",
-    "JH": "j", "K": "c", "L": "l", "M": "m",
-    "N": "n", "NG": "ng", "NY": "gn", "P": "p",
-    "Q": "qu", "R": "r", "S": "s", "SC": "sc",
-    "SH": "sh", "T": "t", "TH": "th", "V": "v",
-    "W": "w", "Y": "y", "Z": "z", "ZH": "zh",
+    "B": "b",
+    "CH": "ch",
+    "D": "d",
+    "DH": "th",
+    "F": "f",
+    "G": "g",
+    "GH": "gh",
+    "HH": "h",
+    "JH": "j",
+    "K": "c",
+    "L": "l",
+    "M": "m",
+    "N": "n",
+    "NG": "ng",
+    "NY": "gn",
+    "P": "p",
+    "Q": "qu",
+    "R": "r",
+    "S": "s",
+    "SC": "sc",
+    "SH": "sh",
+    "T": "t",
+    "TH": "th",
+    "V": "v",
+    "W": "w",
+    "Y": "y",
+    "Z": "z",
+    "ZH": "zh",
 }
 
 
@@ -238,7 +270,7 @@ def _italian_apply_rules(word: str) -> list[str]:
 
         # Try longest match first (2 chars)
         for length in (2,):
-            chunk = w[i:i + length]
+            chunk = w[i : i + length]
             for pattern, sounds in italian_digraphs:
                 if chunk == pattern:
                     result.extend(sounds)
@@ -252,13 +284,27 @@ def _italian_apply_rules(word: str) -> list[str]:
             ch = w[i]
             # Italian single letter rules
             italian_letter_rules = {
-                "a": ["AH"], "b": ["B"], "c": ["K"],
-                "d": ["D"], "e": ["EH"], "f": ["F"],
-                "g": ["G"], "h": [], "i": ["IY"],
-                "l": ["L"], "m": ["M"], "n": ["N"],
-                "o": ["OW"], "p": ["P"], "q": ["K"],
-                "r": ["R"], "s": ["S"], "t": ["T"],
-                "u": ["UW"], "v": ["V"], "z": ["TS"],
+                "a": ["AH"],
+                "b": ["B"],
+                "c": ["K"],
+                "d": ["D"],
+                "e": ["EH"],
+                "f": ["F"],
+                "g": ["G"],
+                "h": [],
+                "i": ["IY"],
+                "l": ["L"],
+                "m": ["M"],
+                "n": ["N"],
+                "o": ["OW"],
+                "p": ["P"],
+                "q": ["K"],
+                "r": ["R"],
+                "s": ["S"],
+                "t": ["T"],
+                "u": ["UW"],
+                "v": ["V"],
+                "z": ["TS"],
             }
             if ch in italian_letter_rules:
                 result.extend(italian_letter_rules[ch])
@@ -300,8 +346,13 @@ class ItalianPhonemeEncoder:
 
     def __init__(self):
         self.phoneme_to_id: dict[str, int] = {
-            **ITALIAN_VOWELS, **ITALIAN_CONSONANTS,
-            "_": PAD, "<": BOS, ">": EOS, " ": SPACE, "-": SILENCE,
+            **ITALIAN_VOWELS,
+            **ITALIAN_CONSONANTS,
+            "_": PAD,
+            "<": BOS,
+            ">": EOS,
+            " ": SPACE,
+            "-": SILENCE,
         }
 
     def encode(self, text: str) -> np.ndarray:
@@ -378,8 +429,12 @@ class ItalianPhonemeEncoder:
         target_ids = self.encode(target).flatten()
         spoken_ids = self.encode(spoken).flatten()
 
-        target_phonemes = [ITALIAN_ID_TO_PHONEME.get(i, "?") for i in target_ids if i not in (BOS, EOS, PAD)]
-        spoken_phonemes = [ITALIAN_ID_TO_PHONEME.get(i, "?") for i in spoken_ids if i not in (BOS, EOS, PAD)]
+        target_phonemes = [
+            ITALIAN_ID_TO_PHONEME.get(i, "?") for i in target_ids if i not in (BOS, EOS, PAD)
+        ]
+        spoken_phonemes = [
+            ITALIAN_ID_TO_PHONEME.get(i, "?") for i in spoken_ids if i not in (BOS, EOS, PAD)
+        ]
 
         lcs_len = self._lcs_length(target_phonemes, spoken_phonemes)
         target_len = len(target_phonemes)
@@ -409,10 +464,10 @@ class ItalianPhonemeEncoder:
         dp = [[0] * (n + 1) for _ in range(m + 1)]
         for i in range(1, m + 1):
             for j in range(1, n + 1):
-                if a[i-1] == b[j-1]:
-                    dp[i][j] = dp[i-1][j-1] + 1
+                if a[i - 1] == b[j - 1]:
+                    dp[i][j] = dp[i - 1][j - 1] + 1
                 else:
-                    dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+                    dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
         return dp[m][n]
 
     @property

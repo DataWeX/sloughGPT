@@ -1,8 +1,8 @@
 """Tests for SessionStore — MogDB-backed chat session persistence."""
+
 from __future__ import annotations
 
 import time
-from typing import Any
 
 import pytest
 
@@ -10,6 +10,7 @@ import pytest
 @pytest.fixture
 def store(tmp_path):
     from routers.session_store import SessionStore
+
     return SessionStore(db_path=str(tmp_path / "mogdb"), sync_dir=str(tmp_path / "json"))
 
 
@@ -45,7 +46,7 @@ class TestSessionStore:
         assert names == {"Chat 1", "Chat 2"}
 
     def test_list_excludes_archived(self, store):
-        s1 = store.create(name="Active")
+        store.create(name="Active")
         s2 = store.create(name="Archived")
         store.upsert(s2["id"], archived=True)
         sessions = store.list(include_archived=False)
@@ -53,7 +54,7 @@ class TestSessionStore:
         assert sessions[0]["name"] == "Active"
 
     def test_list_includes_archived(self, store):
-        s1 = store.create(name="Active")
+        store.create(name="Active")
         s2 = store.create(name="Archived")
         store.upsert(s2["id"], archived=True)
         sessions = store.list(include_archived=True)
@@ -120,7 +121,7 @@ class TestSessionStore:
         assert store.count() == 2
 
     def test_count_archived(self, store):
-        s1 = store.create(name="Active")
+        store.create(name="Active")
         s2 = store.create(name="Archived")
         store.upsert(s2["id"], archived=True)
         assert store.count(include_archived=False) == 1
@@ -151,7 +152,7 @@ class TestSessionStore:
     def test_list_sorted_by_updated(self, store):
         s1 = store.create(name="First")
         time.sleep(0.01)
-        s2 = store.create(name="Second")
+        store.create(name="Second")
         store.upsert(s1["id"], starred=True)  # Touch s1's updated_at
         sessions = store.list()
         assert sessions[0]["name"] == "First"

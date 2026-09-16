@@ -7,6 +7,7 @@ error recovery, and thread safety.
 Usage:
     .venv/bin/python -m pytest tests/test_training_robustness.py -x -v
 """
+
 import tempfile
 import threading
 import time
@@ -238,7 +239,10 @@ class TestConcurrentSafety:
             assert all(r.success for r in results)
 
     def test_outcome_tracker_thread_safety(self):
-        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import (
+            TrainingOutcome,
+            TrainingOutcomeTracker,
+        )
 
         tracker = TrainingOutcomeTracker()
         errors = []
@@ -246,14 +250,16 @@ class TestConcurrentSafety:
         def record_outcome():
             try:
                 for i in range(5):
-                    tracker.record(TrainingOutcome(
-                        run_id=f"thread_test_{threading.current_thread().name}_{i}",
-                        timestamp=time.time(),
-                        dataset_size=100,
-                        model="test",
-                        method="sft",
-                        final_loss=1.0,
-                    ))
+                    tracker.record(
+                        TrainingOutcome(
+                            run_id=f"thread_test_{threading.current_thread().name}_{i}",
+                            timestamp=time.time(),
+                            dataset_size=100,
+                            model="test",
+                            method="sft",
+                            final_loss=1.0,
+                        )
+                    )
             except Exception as e:
                 errors.append(e)
 

@@ -14,13 +14,18 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Any
 
-from domain.infrastructure._internal.errors import AppError
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.sse_fallback import sse_complete, sse_token
 from pydantic import BaseModel, Field
-from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 # Response cache for list_souls: avoids FS glob + per-soul metadata parse.
 _list_souls_cache: tuple[float, dict] | None = None
@@ -268,7 +273,7 @@ Be yourself — let your personality shape how you respond."""
                 all_chars += [chr(i) for i in range(192, 256)]
                 chars = all_chars[:model_vocab]
             stoi = {c: i for i, c in enumerate(chars)}
-            itos = {i: c for i, c in enumerate(chars)}
+            itos = dict(enumerate(chars))
 
             def encode(t) -> dict:
                 """encode."""
@@ -542,6 +547,7 @@ Be yourself — let your personality shape how you respond."""
                     }
                 )
         raise_error(f"Soul '{soul_name}' not found", "E_NOT_FOUND", status_code=404)
+
     @endpoint("souls.get_trait_weights")
     async def get_trait_weights(self) -> dict:
         """
@@ -564,6 +570,7 @@ Be yourself — let your personality shape how you respond."""
         manager = get_slo_manager()
         weights = manager.get_trait_weights()
         return success_response(data=weights)
+
     @endpoint("souls.save_trait_weights")
     async def save_trait_weights(
         self, body: SaveWeightsRequest, auth_user: dict = Depends(require_auth_if_enabled)
@@ -638,6 +645,7 @@ Be yourself — let your personality shape how you respond."""
                 "task": TaskManager(config).get_mode(),
             }
         )
+
     @endpoint("souls.get_current_soul")
     async def get_current_soul(self) -> dict:
         """
@@ -664,6 +672,7 @@ Be yourself — let your personality shape how you respond."""
                 }
             )
         return success_response(data={"name": None})
+
     @endpoint("souls.list_weight_snapshots")
     async def list_weight_snapshots(self) -> dict:
         """
@@ -679,6 +688,7 @@ Be yourself — let your personality shape how you respond."""
 
         config = get_trait_config()
         return success_response(data=config.list_snapshots())
+
     @endpoint("souls.save_weight_snapshot")
     async def save_weight_snapshot(
         self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
@@ -774,4 +784,6 @@ Be yourself — let your personality shape how you respond."""
         from domain.inference._internal.slo_manager import get_slo_manager
 
         return success_response(data=get_slo_manager().get_stats())
+
+
 router = SoulsRouter().router

@@ -15,9 +15,16 @@ from fastapi import APIRouter, Depends
 
 logger = logging.getLogger(__name__)
 
-from domain.infrastructure._internal.errors import AppError
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
+
+from domain.infrastructure._internal.errors import AppError
 
 
 def _numpy_perplexity(model, ids):
@@ -118,6 +125,7 @@ class BenchmarkRouter:
         """
         try:
             from controllers.models import get_models_controller
+
             from domain.infrastructure.server_state import get_server_state
 
             ctrl = get_models_controller()

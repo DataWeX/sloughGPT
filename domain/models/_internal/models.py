@@ -12,18 +12,30 @@ External architectures plug in via **ModelLoader.register** or loaders.
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Tuple, Callable
 import logging
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
 
 from domain.training._internal.slonet import (
-    SloTransformer as SloTransformer,
-    Tensor as Tensor,
-    SloRMSNorm as SloRMSNorm,
-    SloMultiHeadAttention as SloMultiHeadAttention,
     SloFeedForward as SloFeedForward,
+)
+from domain.training._internal.slonet import (
+    SloMultiHeadAttention as SloMultiHeadAttention,
+)
+from domain.training._internal.slonet import (
+    SloRMSNorm as SloRMSNorm,
+)
+from domain.training._internal.slonet import (
+    SloTransformer as SloTransformer,
+)
+from domain.training._internal.slonet import (
     SloTransformerBlock as SloTransformerBlock,
+)
+from domain.training._internal.slonet import (
+    Tensor as Tensor,
 )
 
 logger = logging.getLogger("sloughgpt.models")
@@ -33,7 +45,7 @@ class ModelInterface(ABC):
     """Generic interface every pluggable model backend must implement."""
 
     @abstractmethod
-    def load(self, path: str, device: str = "cpu", **kwargs) -> "ModelInterface":
+    def load(self, path: str, device: str = "cpu", **kwargs) -> ModelInterface:
         """Load model weights from path onto device. Returns self for chaining."""
         pass
 
@@ -43,8 +55,8 @@ class ModelInterface(ABC):
         input_ids: np.ndarray,
         max_new_tokens: int,
         temperature: float = 1.0,
-        top_k: Optional[int] = None,
-        top_p: Optional[float] = None,
+        top_k: int | None = None,
+        top_p: float | None = None,
         **kwargs,
     ) -> np.ndarray:
         """Autoregressively generate tokens. Returns array of shape (batch, seq_len + max_new_tokens)."""
@@ -52,18 +64,18 @@ class ModelInterface(ABC):
 
     @abstractmethod
     def forward(
-        self, input_ids: np.ndarray, targets: Optional[np.ndarray] = None, **kwargs
-    ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+        self, input_ids: np.ndarray, targets: np.ndarray | None = None, **kwargs
+    ) -> tuple[np.ndarray, np.ndarray | None]:
         """Forward pass. Returns (logits, loss). Loss is None if targets not provided."""
         pass
 
     @abstractmethod
-    def state_dict(self) -> Dict[str, np.ndarray]:
+    def state_dict(self) -> dict[str, np.ndarray]:
         """Return model state as dict of named weight arrays."""
         pass
 
     @abstractmethod
-    def load_state_dict(self, state_dict: Dict[str, np.ndarray], **kwargs) -> None:
+    def load_state_dict(self, state_dict: dict[str, np.ndarray], **kwargs) -> None:
         """Load model state from dict of named weight arrays."""
         pass
 
@@ -73,22 +85,22 @@ class ModelInterface(ABC):
         pass
 
     @abstractmethod
-    def config(self) -> Dict[str, Any]:
+    def config(self) -> dict[str, Any]:
         """Model configuration dict (vocab_size, n_layer, n_embd, etc.)."""
         pass
 
     @abstractmethod
-    def to(self, device: str) -> "ModelInterface":
+    def to(self, device: str) -> ModelInterface:
         """Move model to device. Returns self for chaining."""
         pass
 
     @abstractmethod
-    def eval(self) -> "ModelInterface":
+    def eval(self) -> ModelInterface:
         """Set model to evaluation mode. Returns self for chaining."""
         pass
 
     @abstractmethod
-    def train_mode(self) -> "ModelInterface":
+    def train_mode(self) -> ModelInterface:
         """Set model to training mode. Returns self for chaining."""
         pass
 
@@ -102,8 +114,8 @@ class ModelLoader:
     - External model types registered via ModelLoader.register()
     """
 
-    _registry: Dict[str, type] = {}
-    _loader_funcs: Dict[str, Callable] = {}
+    _registry: dict[str, type] = {}
+    _loader_funcs: dict[str, Callable] = {}
 
     @classmethod
     def register(cls, name: str, model_class: type):
@@ -118,6 +130,7 @@ class ModelLoader:
     @classmethod
     def load(cls, path: str, device: str = "cpu", **kwargs) -> ModelInterface:
         from pathlib import Path
+
         p = Path(path)
         suffix = p.suffix.lower()
         if suffix in cls._loader_funcs:
@@ -141,8 +154,10 @@ class ModelLoader:
 
         if model_type == "sloughgpt":
             model = SloughGPTModel(
-                vocab_size=meta["vocab_size"], n_embed=meta["n_embed"],
-                n_layer=meta["n_layer"], n_head=meta["n_head"],
+                vocab_size=meta["vocab_size"],
+                n_embed=meta["n_embed"],
+                n_layer=meta["n_layer"],
+                n_head=meta["n_head"],
                 n_kv_head=cfg.get("n_kv_head"),
                 block_size=meta["block_size"],
                 max_seq_len=cfg.get("max_seq_len", 2048),
@@ -158,6 +173,7 @@ class ModelLoader:
     def _load_gguf(cls, path: str, device: str, **kwargs):
         try:
             from llama_cpp import Llama
+
             return Llama(model_path=path, n_ctx=kwargs.get("n_ctx", 2048))
         except ImportError:
             raise NotImplementedError(
@@ -165,7 +181,7 @@ class ModelLoader:
             )
 
     @classmethod
-    def _load_external_model(cls, model_type: str, config: Dict[str, Any]) -> ModelInterface:
+    def _load_external_model(cls, model_type: str, config: dict[str, Any]) -> ModelInterface:
         if model_type in cls._registry:
             model_class = cls._registry[model_type]
             return model_class(**config)
@@ -182,6 +198,7 @@ class ModelLoader:
 # Architecture: RoPE, RMSNorm, SwiGLU, KV-cache, GQA
 # =============================================================================
 
+
 class SloughGPTModel(SloTransformer, ModelInterface):
     """First-party SloNet Transformer implementing ModelInterface.
 
@@ -195,33 +212,46 @@ class SloughGPTModel(SloTransformer, ModelInterface):
         n_embed: int = 256,
         n_layer: int = 6,
         n_head: int = 8,
-        n_kv_head: Optional[int] = None,
+        n_kv_head: int | None = None,
         dropout: float = 0.1,
         block_size: int = 128,
         max_seq_len: int = 2048,
         use_sdpa: bool = True,
         use_flash: bool = False,
         tie_weights: bool = True,
-        intermediate_size: Optional[int] = None,
+        intermediate_size: int | None = None,
     ):
         super().__init__(
-            vocab_size=vocab_size, n_embed=n_embed, n_layer=n_layer,
-            n_head=n_head, n_kv_head=n_kv_head, block_size=block_size,
-            max_seq_len=max_seq_len, dropout=dropout, use_rope=True,
-            tie_weights=tie_weights, intermediate_size=intermediate_size,
+            vocab_size=vocab_size,
+            n_embed=n_embed,
+            n_layer=n_layer,
+            n_head=n_head,
+            n_kv_head=n_kv_head,
+            block_size=block_size,
+            max_seq_len=max_seq_len,
+            dropout=dropout,
+            use_rope=True,
+            tie_weights=tie_weights,
+            intermediate_size=intermediate_size,
             soul_name="SloughGPT",
         )
         self._device = "cpu"
         self._soul = None
         self._config = {
-            "vocab_size": vocab_size, "n_embed": n_embed, "n_layer": n_layer,
-            "n_head": n_head, "n_kv_head": n_kv_head or n_head,
-            "dropout": dropout, "block_size": block_size,
-            "max_seq_len": max_seq_len, "use_sdpa": use_sdpa,
-            "use_flash": use_flash, "model_type": "sloughgpt",
+            "vocab_size": vocab_size,
+            "n_embed": n_embed,
+            "n_layer": n_layer,
+            "n_head": n_head,
+            "n_kv_head": n_kv_head or n_head,
+            "dropout": dropout,
+            "block_size": block_size,
+            "max_seq_len": max_seq_len,
+            "use_sdpa": use_sdpa,
+            "use_flash": use_flash,
+            "model_type": "sloughgpt",
         }
 
-    def load(self, path: str, device: str = "cpu", **kwargs) -> "SloughGPTModel":
+    def load(self, path: str, device: str = "cpu", **kwargs) -> SloughGPTModel:
         loaded = ModelLoader.load(path, device=device, config=self._config, **kwargs)
         self.load_state_dict(loaded.state_dict())
         self._soul = getattr(loaded, "_soul", None)
@@ -232,21 +262,23 @@ class SloughGPTModel(SloTransformer, ModelInterface):
         input_ids: np.ndarray,
         max_new_tokens: int = 50,
         temperature: float = 1.0,
-        top_k: Optional[int] = None,
-        top_p: Optional[float] = None,
+        top_k: int | None = None,
+        top_p: float | None = None,
         **kwargs,
     ) -> np.ndarray:
         result = super().generate(
-            input_ids, max_new_tokens=max_new_tokens,
-            temperature=temperature, top_k=top_k, top_p=top_p,
+            input_ids,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
             eos_token=0,
         )
         return result.data
 
-    def forward(
-        self, input_ids, targets=None, **kwargs
-    ):
+    def forward(self, input_ids, targets=None, **kwargs):
         from domain.training._internal.slonet import Tensor as SloTensor
+
         logits_t, loss_t = super().forward(input_ids, targets)
         if loss_t is not None:
             if isinstance(loss_t, (np.ndarray, float, np.floating)):
@@ -256,30 +288,32 @@ class SloughGPTModel(SloTransformer, ModelInterface):
             return logits_t, loss_t
         return logits_t, None
 
-    def state_dict(self) -> Dict[str, np.ndarray]:
+    def state_dict(self) -> dict[str, np.ndarray]:
         sd = super().state_dict()
         sd["config"] = self._config
         return sd
 
-    def load_state_dict(self, state_dict: Dict[str, np.ndarray], strict: bool = True, **kwargs) -> None:
+    def load_state_dict(
+        self, state_dict: dict[str, np.ndarray], strict: bool = True, **kwargs
+    ) -> None:
         filtered = {k: v for k, v in state_dict.items() if k != "config"}
         super().load_state_dict(filtered, strict=strict)
 
     def num_parameters(self) -> int:
         return sum(int(np.prod(p.data.shape)) for p in self.parameters())
 
-    def config(self) -> Dict[str, Any]:
+    def config(self) -> dict[str, Any]:
         return self._config.copy()
 
-    def to(self, device: str) -> "SloughGPTModel":
+    def to(self, device: str) -> SloughGPTModel:
         self._device = device
         return self
 
-    def eval(self) -> "SloughGPTModel":
+    def eval(self) -> SloughGPTModel:
         super().eval()
         return self
 
-    def train_mode(self) -> "SloughGPTModel":
+    def train_mode(self) -> SloughGPTModel:
         super().train(True)
         return self
 
@@ -290,7 +324,7 @@ class SloughGPTModel(SloTransformer, ModelInterface):
         total = sum(p.data.nbytes for p in self.parameters())
         return total / (1024 * 1024)
 
-    def freeze_embeddings(self) -> "SloughGPTModel":
+    def freeze_embeddings(self) -> SloughGPTModel:
         self.layers[0].weight.requires_grad = False
         return self
 
@@ -301,18 +335,27 @@ SloughGPTAttention = SloMultiHeadAttention
 SloughGPTBlock = SloTransformerBlock
 SwiGLU = SloFeedForward
 
+
 def rotate_half(x):
     from domain.training._internal.slonet import _rotate_half
+
     return _rotate_half(x)
+
 
 def apply_rotary_pos_emb(q, k, cos, sin):
     from domain.training._internal.slonet import _apply_rope
+
     return _apply_rope(q, k, cos, sin)
 
 
 __all__ = [
-    "ModelInterface", "ModelLoader",
-    "SloughGPTModel", "RMSNorm",
-    "SloughGPTAttention", "SloughGPTBlock", "SwiGLU",
-    "rotate_half", "apply_rotary_pos_emb",
+    "ModelInterface",
+    "ModelLoader",
+    "SloughGPTModel",
+    "RMSNorm",
+    "SloughGPTAttention",
+    "SloughGPTBlock",
+    "SwiGLU",
+    "rotate_half",
+    "apply_rotary_pos_emb",
 ]

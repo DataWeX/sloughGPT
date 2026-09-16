@@ -26,10 +26,10 @@ def _get_repo_root() -> Path:
 
 
 # Process-wide singleton cache: (db_path, sync_path) -> MogDB instance
-_POOL: dict[tuple[str, str], "MogDB"] = {}
+_POOL: dict[tuple[str, str], MogDB] = {}
 
 
-def get_db(db_name: str, *, sync_dir_name: str | None = None) -> "MogDB":
+def get_db(db_name: str, *, sync_dir_name: str | None = None) -> MogDB:
     """Return a shared MogDB instance for the given database name.
 
     Args:

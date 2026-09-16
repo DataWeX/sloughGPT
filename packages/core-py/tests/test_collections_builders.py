@@ -1,4 +1,5 @@
 """Tests for domain.collections._internal.builders — pure logic, no network."""
+
 from __future__ import annotations
 
 import os
@@ -14,27 +15,21 @@ from domain.collections._internal.builders import (
 )
 from domain.collections._internal.filters import (
     KeywordFilter,
-    LengthFilter,
-    RegexFilter,
 )
 from domain.collections._internal.sources import (
-    FileSource,
     GeneratorSource,
     Record,
     Source,
 )
 from domain.collections._internal.stores import (
-    CallbackStore,
-    FileStore,
     MemoryStore,
     StatsStore,
-    Store,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _r(content: str, **meta) -> Record:
     return Record(content=content, metadata=meta)
@@ -47,6 +42,7 @@ def _source(records: list[Record]):
 # ---------------------------------------------------------------------------
 # CollectorBuilder
 # ---------------------------------------------------------------------------
+
 
 class TestCollectorBuilder:
     def test_build_requires_source(self):
@@ -187,6 +183,7 @@ class TestCollectorBuilder:
         b.batch(batch_size=3, max_retries=2)
         c = b.build()
         from domain.collections._internal.collector import BatchCollector
+
         assert isinstance(c, BatchCollector)
         assert c.collect() == 10
 
@@ -211,6 +208,7 @@ class TestCollectorBuilder:
         b1 = CollectorBuilder().source(_source([_r("a")]))
         b2 = CollectorBuilder().source(_source([_r("b")]))
         from domain.collections._internal.collector import ParallelCollector
+
         pc = CollectorBuilder().build_parallel([b1, b2])
         assert isinstance(pc, ParallelCollector)
         assert pc.collect() == 2
@@ -230,6 +228,7 @@ class TestCollectorBuilder:
 # ---------------------------------------------------------------------------
 # DataSource
 # ---------------------------------------------------------------------------
+
 
 class TestDataSource:
     def test_add_source(self):
@@ -304,6 +303,7 @@ class TestDataSource:
 # DataSink
 # ---------------------------------------------------------------------------
 
+
 class TestDataSink:
     def test_add_memory(self):
         ds = DataSink()
@@ -377,6 +377,7 @@ class TestDataSink:
 # DataTransformer
 # ---------------------------------------------------------------------------
 
+
 class TestDataTransformer:
     def test_no_transforms(self):
         dt = DataTransformer()
@@ -388,6 +389,7 @@ class TestDataTransformer:
         def upper(r):
             r.content = r.content.upper()
             return r
+
         dt = DataTransformer().add(upper)
         result = dt.transform(_r("hello"))
         assert result.content == "HELLO"
@@ -417,6 +419,7 @@ class TestDataTransformer:
     def test_transform_error_counted(self):
         def bad(r):
             raise ValueError("oops")
+
         dt = DataTransformer().add(bad)
         result = dt.transform(_r("x"))
         assert result.content == "x"
@@ -445,7 +448,9 @@ class TestDataTransformer:
         assert result.content == "HELLO!"
 
     def test_init_with_transforms(self):
-        fn = lambda r: r
+        def fn(r):
+            return r
+
         dt = DataTransformer(transforms=[fn])
         result = dt.transform(_r("x"))
         assert result.content == "x"

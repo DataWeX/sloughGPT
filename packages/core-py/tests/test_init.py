@@ -3,12 +3,15 @@ Tests for Shell Init System — ServiceDef, ServiceManager, InitSystem.
 """
 
 import time
-import pytest
-from domain.shell._internal.init import (
-    ServiceDef, ServiceInstance, ServiceManager, InitSystem,
-    get_init_system, reset_init_system,
-)
 
+from domain.shell._internal.init import (
+    InitSystem,
+    ServiceDef,
+    ServiceInstance,
+    ServiceManager,
+    get_init_system,
+    reset_init_system,
+)
 
 # ── ServiceDef ───────────────────────────────────────────────────────────
 
@@ -28,8 +31,14 @@ class TestServiceDef:
         assert s.builtin is False
 
     def test_override_values(self):
-        s = ServiceDef(name="web", command="python server.py", deps=["db"],
-                       respawn=True, max_respawns=5, runlevel=3)
+        s = ServiceDef(
+            name="web",
+            command="python server.py",
+            deps=["db"],
+            respawn=True,
+            max_respawns=5,
+            runlevel=3,
+        )
         assert s.name == "web"
         assert s.deps == ["db"]
         assert s.max_respawns == 5
@@ -199,7 +208,8 @@ class TestInitSystem:
 
 class TestInitSystemDeps:
     def test_resolve_deps_preserves_all(self):
-        from domain.shell._internal.init import ServiceManager, ServiceDef
+        from domain.shell._internal.init import ServiceDef, ServiceManager
+
         svc1 = ServiceManager(ServiceDef(name="a", runlevel=1, deps=[], builtin=True))
         svc2 = ServiceManager(ServiceDef(name="b", runlevel=1, deps=["a"], builtin=True))
         init = InitSystem()
@@ -210,7 +220,8 @@ class TestInitSystemDeps:
         assert "b" in names
 
     def test_dependency_before_dependent(self):
-        from domain.shell._internal.init import ServiceManager, ServiceDef
+        from domain.shell._internal.init import ServiceDef, ServiceManager
+
         svc1 = ServiceManager(ServiceDef(name="a", runlevel=1, deps=[], builtin=True))
         svc2 = ServiceManager(ServiceDef(name="b", runlevel=1, deps=["a"], builtin=True))
         init = InitSystem()

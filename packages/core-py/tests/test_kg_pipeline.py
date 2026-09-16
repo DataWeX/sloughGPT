@@ -1,20 +1,15 @@
 """Tests for KG → RAG pipeline, KnowledgeGraph v2, and RAGService integration."""
 
-import json
 import threading
-import time
-from pathlib import Path
-from typing import List
 
 import pytest
 
-from domain.cognitive._internal.knowledge_graph_v2 import Entity, Fact, KnowledgeGraph
+from domain.cognitive._internal.knowledge_graph_v2 import Entity, KnowledgeGraph
 from domain.cognitive._internal.rag_service import (
-    RAGService,
     KGTrainingPipeline,
+    RAGService,
     get_rag_service,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -88,7 +83,7 @@ class TestKGEntityResolution:
         g = KnowledgeGraph()
         g.add_entity("paris", "Paris", "city")
         g.add_entity("france", "France", "country")
-        f1 = g.add_fact("Paris", "capital_of", "France", 0.95, "test")
+        g.add_fact("Paris", "capital_of", "France", 0.95, "test")
         f2 = g.add_fact("paris", "capital_of", "france", 0.8, "other")
         assert f2 is None
         assert len(g.facts) == 1
@@ -239,11 +234,13 @@ class TestKGTrainingPipeline:
             pipeline.submit_triples([])
 
     def test_submit_invalid_triple_skipped(self, pipeline):
-        result = pipeline.submit_triples([
-            {"subject": "a", "predicate": "b", "object": "c"},
-            {"bad": "triple"},
-            {"subject": "d", "predicate": "e", "object": "f"},
-        ])
+        result = pipeline.submit_triples(
+            [
+                {"subject": "a", "predicate": "b", "object": "c"},
+                {"bad": "triple"},
+                {"subject": "d", "predicate": "e", "object": "f"},
+            ]
+        )
         assert result == 2
 
     def test_process_batch(self, pipeline, kg):

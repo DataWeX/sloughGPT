@@ -2,25 +2,23 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+
 from domain.training._internal.performance import (
-    get_optimal_device,
-    get_device_name,
-    setup_device_environment,
-    TrainingOptimizations,
-    InferenceOptimizations,
-    PerformanceConfig,
     CUDAGraphManager,
     FastInferenceSampler,
+    InferenceOptimizations,
+    PerformanceConfig,
+    TrainingOptimizations,
+    get_device_name,
+    get_optimal_device,
+    setup_device_environment,
 )
-
 
 # ── Device detection ────────────────────────────────────────────────────────
 
 
 class TestDeviceDetection:
-
     def test_get_optimal_device(self):
         device = get_optimal_device()
         assert device in ("cpu", "cuda", "mps")
@@ -39,7 +37,6 @@ class TestDeviceDetection:
 
 
 class TestTrainingOptimizations:
-
     def test_default(self):
         opts = TrainingOptimizations()
         assert opts.use_compile is True
@@ -57,7 +54,6 @@ class TestTrainingOptimizations:
 
 
 class TestInferenceOptimizations:
-
     def test_default(self):
         opts = InferenceOptimizations()
         assert opts.use_kv_cache is True
@@ -74,7 +70,6 @@ class TestInferenceOptimizations:
 
 
 class TestPerformanceConfig:
-
     def test_default(self):
         config = PerformanceConfig()
         assert config.device in ("cpu", "cuda", "mps")
@@ -91,20 +86,22 @@ class TestPerformanceConfig:
 
 
 class TestCUDAGraphManager:
-
     def test_init(self):
-        model = lambda x: x
+        def model(x):
+            return x
         manager = CUDAGraphManager(model)
         assert manager.is_captured is False
 
     def test_capture(self):
-        model = lambda x: x
+        def model(x):
+            return x
         manager = CUDAGraphManager(model)
         result = manager.capture()
         assert result is False
 
     def test_replay(self):
-        model = lambda x: np.array([1.0, 2.0])
+        def model(x):
+            return np.array([1.0, 2.0])
         manager = CUDAGraphManager(model)
         result = manager.replay(np.array([0]))
         assert np.allclose(result, [1.0, 2.0])
@@ -114,7 +111,6 @@ class TestCUDAGraphManager:
 
 
 class TestFastInferenceSampler:
-
     def test_sample_basic(self):
         logits = np.random.randn(1, 10)
         result = FastInferenceSampler.sample(logits, temperature=1.0)

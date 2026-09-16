@@ -19,6 +19,7 @@ from ...__init__ import BaseComponent, ComponentException
 try:
     from ...__init__ import IDeploymentManager
 except ImportError:
+
     class IDeploymentManager:
         pass
 
@@ -49,11 +50,11 @@ class Deployment:
     deployment_id: str
     environment: DeploymentEnvironment
     status: DeploymentStatus
-    config: Dict[str, Any]
+    config: dict[str, Any]
     created_at: float
-    started_at: Optional[float]
-    completed_at: Optional[float]
-    error_message: Optional[str]
+    started_at: float | None
+    completed_at: float | None
+    error_message: str | None
 
 
 class DeploymentManager(BaseComponent, IDeploymentManager):
@@ -64,9 +65,9 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
         self.logger = logging.getLogger(f"slo.{self.component_name}")
 
         # Deployment tracking
-        self.deployments: Dict[str, Deployment] = {}
-        self.active_deployments: Dict[str, asyncio.Task] = {}
-        self._approval_events: Dict[str, asyncio.Event] = {}
+        self.deployments: dict[str, Deployment] = {}
+        self.active_deployments: dict[str, asyncio.Task] = {}
+        self._approval_events: dict[str, asyncio.Event] = {}
         self._denied_deployments: set = set()
 
         # Environment configurations
@@ -100,32 +101,30 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
         }
 
         # Service tracking
-        self._service_replicas: Dict[str, int] = {}
+        self._service_replicas: dict[str, int] = {}
 
         self.is_initialized = False
 
     async def initialize(self) -> None:
         """Initialize deployment manager"""
         try:
-            self.logger.info("Initializing Deployment Manager...",
-                extra={"tag": "INFRA"})
+            self.logger.info("Initializing Deployment Manager...", extra={"tag": "INFRA"})
             self.is_initialized = True
-            self.logger.info("Deployment Manager initialized successfully",
-                extra={"tag": "INFRA"})
+            self.logger.info("Deployment Manager initialized successfully", extra={"tag": "INFRA"})
 
         except Exception as e:
-            self.logger.error("Failed to initialize Deployment Manager: %s", e,
-                extra={"tag": "INFRA"})
+            self.logger.error(
+                "Failed to initialize Deployment Manager: %s", e, extra={"tag": "INFRA"}
+            )
             raise ComponentException(f"Deployment Manager initialization failed: {e}")
 
     async def shutdown(self) -> None:
         """Shutdown deployment manager"""
         try:
-            self.logger.info("Shutting down Deployment Manager...",
-                extra={"tag": "INFRA"})
+            self.logger.info("Shutting down Deployment Manager...", extra={"tag": "INFRA"})
 
             # Cancel active deployments
-            for deployment_id, task in self.active_deployments.items():
+            for _deployment_id, task in self.active_deployments.items():
                 task.cancel()
                 try:
                     await task
@@ -133,12 +132,12 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
                     pass
 
             self.is_initialized = False
-            self.logger.info("Deployment Manager shutdown successfully",
-                extra={"tag": "INFRA"})
+            self.logger.info("Deployment Manager shutdown successfully", extra={"tag": "INFRA"})
 
         except Exception as e:
-            self.logger.error("Failed to shutdown Deployment Manager: %s", e,
-                extra={"tag": "INFRA"})
+            self.logger.error(
+                "Failed to shutdown Deployment Manager: %s", e, extra={"tag": "INFRA"}
+            )
             raise ComponentException(f"Deployment Manager shutdown failed: {e}")
 
     async def scale(self, service_id: str, replicas: int) -> bool:
@@ -149,7 +148,10 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
         self._service_replicas[service_id] = replicas
         self.logger.info(
             "Scaled service %s: %d -> %d replicas",
-            service_id, old, replicas, extra={"tag": "INFRA"},
+            service_id,
+            old,
+            replicas,
+            extra={"tag": "INFRA"},
         )
         return True
 
@@ -157,7 +159,7 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
         """Get current replica count for a service."""
         return self._service_replicas.get(service_id, 1)
 
-    async def deploy(self, config: Dict[str, Any], environment: str) -> str:
+    async def deploy(self, config: dict[str, Any], environment: str) -> str:
         """Deploy to environment"""
         try:
             deployment_id = f"deploy_{int(time.time())}_{len(self.deployments)}"
@@ -181,16 +183,16 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             task = asyncio.create_task(self._execute_deployment(deployment))
             self.active_deployments[deployment_id] = task
 
-            self.logger.info("Started deployment %s to %s", deployment_id, environment,
-                extra={"tag": "INFRA"})
+            self.logger.info(
+                "Started deployment %s to %s", deployment_id, environment, extra={"tag": "INFRA"}
+            )
             return deployment_id
 
         except Exception as e:
-            self.logger.error("Failed to start deployment: %s", e,
-                extra={"tag": "INFRA"})
+            self.logger.error("Failed to start deployment: %s", e, extra={"tag": "INFRA"})
             raise ComponentException(f"Deployment start failed: {e}")
 
-    async def get_deployment_status(self, deployment_id: str) -> Dict[str, Any]:
+    async def get_deployment_status(self, deployment_id: str) -> dict[str, Any]:
         """Get deployment status"""
         if deployment_id not in self.deployments:
             raise ComponentException(f"Deployment {deployment_id} not found")
@@ -232,18 +234,18 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
 
             self.stats["rolled_back_deployments"] += 1
 
-            self.logger.info("Rolled back deployment %s", deployment_id,
-                extra={"tag": "INFRA"})
+            self.logger.info("Rolled back deployment %s", deployment_id, extra={"tag": "INFRA"})
             return True
 
         except Exception as e:
-            self.logger.error("Failed to rollback deployment %s: %s", deployment_id, e,
-                extra={"tag": "INFRA"})
+            self.logger.error(
+                "Failed to rollback deployment %s: %s", deployment_id, e, extra={"tag": "INFRA"}
+            )
             raise ComponentException(f"Rollback failed: {e}")
 
     async def get_deployment_history(
-        self, environment: Optional[str] = None, limit: int = 50
-    ) -> List[Dict[str, Any]]:
+        self, environment: str | None = None, limit: int = 50
+    ) -> list[dict[str, Any]]:
         """Get deployment history"""
         deployments = list(self.deployments.values())
 
@@ -293,8 +295,11 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             deployment.completed_at = time.time()
             self.stats["successful_deployments"] += 1
 
-            self.logger.info("Deployment %s completed successfully", deployment.deployment_id,
-                extra={"tag": "INFRA"})
+            self.logger.info(
+                "Deployment %s completed successfully",
+                deployment.deployment_id,
+                extra={"tag": "INFRA"},
+            )
 
         except Exception as e:
             # Mark as failed
@@ -303,8 +308,9 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             deployment.error_message = str(e)
             self.stats["failed_deployments"] += 1
 
-            self.logger.error("Deployment %s failed: %s", deployment.deployment_id, e,
-                extra={"tag": "INFRA"})
+            self.logger.error(
+                "Deployment %s failed: %s", deployment.deployment_id, e, extra={"tag": "INFRA"}
+            )
 
         finally:
             # Remove from active deployments
@@ -325,12 +331,13 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
 
         self.logger.info(
             "Deployment %s awaiting approval (timeout=%ds)",
-            deployment.deployment_id, timeout,
+            deployment.deployment_id,
+            timeout,
             extra={"tag": "INFRA"},
         )
         try:
             await asyncio.wait_for(event.wait(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise ComponentException(
                 f"Deployment {deployment.deployment_id} approval timed out after {timeout}s"
             )
@@ -365,16 +372,15 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
         import json as _json
         from pathlib import Path
 
-        self.logger.info("Preparing deployment %s", deployment.deployment_id,
-            extra={"tag": "INFRA"})
+        self.logger.info(
+            "Preparing deployment %s", deployment.deployment_id, extra={"tag": "INFRA"}
+        )
 
         # Validate required config keys
         required = {"version", "image"}
         missing = required - set(deployment.config.keys())
         if missing:
-            raise ComponentException(
-                f"Missing required config keys: {', '.join(sorted(missing))}"
-            )
+            raise ComponentException(f"Missing required config keys: {', '.join(sorted(missing))}")
 
         # Create deployment directory
         deploy_dir = Path("/tmp") / "deployments" / deployment.deployment_id
@@ -402,8 +408,9 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
         import json as _json
         from pathlib import Path
 
-        self.logger.info("Deploying application for %s", deployment.deployment_id,
-            extra={"tag": "INFRA"})
+        self.logger.info(
+            "Deploying application for %s", deployment.deployment_id, extra={"tag": "INFRA"}
+        )
 
         deploy_dir = Path(deployment.config.get("_deploy_dir", "/tmp"))
         deploy_dir.mkdir(parents=True, exist_ok=True)
@@ -418,9 +425,7 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             "image": deployment.config.get("image", ""),
             "deployed_at": time.time(),
             "environment": deployment.environment.value,
-            "environment_config": {
-                k: v for k, v in self.environment_configs[deployment.environment].items()
-            },
+            "environment_config": dict(self.environment_configs[deployment.environment].items()),
         }
         (deploy_dir / "runtime.json").write_text(_json.dumps(runtime, indent=2))
 
@@ -436,8 +441,9 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
         import json as _json
         from pathlib import Path
 
-        self.logger.info("Running health checks for %s", deployment.deployment_id,
-            extra={"tag": "INFRA"})
+        self.logger.info(
+            "Running health checks for %s", deployment.deployment_id, extra={"tag": "INFRA"}
+        )
 
         deploy_dir = Path(deployment.config.get("_deploy_dir", "/tmp"))
         version = deployment.config.get("version", "unknown")
@@ -455,7 +461,9 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
                     if runtime.get("version") == version:
                         self.logger.info(
                             "Health check passed for %s (attempt %d/%d)",
-                            deployment.deployment_id, attempt, max_attempts,
+                            deployment.deployment_id,
+                            attempt,
+                            max_attempts,
                             extra={"tag": "INFRA"},
                         )
                         return

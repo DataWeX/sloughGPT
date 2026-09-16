@@ -4,31 +4,27 @@ from __future__ import annotations
 
 import threading
 
-import pytest
-
 from domain.training._internal.state import (
+    MAX_CHECKPOINT_DISK_MB,
+    SOU_MAGIC,
+    VALID_CKPT_NAME,
     TrainingState,
+    get_cancel_event,
+    get_pause_event,
+    get_pgq,
     get_state,
-    get_turbo_state,
+    get_turbo_cancel_event,
     get_turbo_lock,
     get_turbo_pause_event,
-    get_turbo_cancel_event,
-    get_cancel_event,
+    get_turbo_state,
     set_cancel_event,
-    get_pause_event,
     set_pause_event,
-    get_pgq,
-    VALID_CKPT_NAME,
-    SOU_MAGIC,
-    MAX_CHECKPOINT_DISK_MB,
 )
-
 
 # ── TrainingState dataclass ───────────────────────────────────────────────
 
 
 class TestTrainingState:
-
     def test_defaults(self):
         s = TrainingState()
         assert s.running is False
@@ -53,7 +49,6 @@ class TestTrainingState:
 
 
 class TestStateAccessors:
-
     def test_get_state_returns_same_instance(self):
         assert get_state() is get_state()
 
@@ -69,9 +64,21 @@ class TestStateAccessors:
     def test_get_turbo_state_has_expected_keys(self):
         ts = get_turbo_state()
         expected = {
-            "status", "job_id", "global_step", "total_steps", "progress",
-            "loss", "learning_rate", "steps_per_sec", "eta_s", "elapsed_s",
-            "avg_quality", "result", "error", "paused", "last_heartbeat",
+            "status",
+            "job_id",
+            "global_step",
+            "total_steps",
+            "progress",
+            "loss",
+            "learning_rate",
+            "steps_per_sec",
+            "eta_s",
+            "elapsed_s",
+            "avg_quality",
+            "result",
+            "error",
+            "paused",
+            "last_heartbeat",
         }
         assert expected == set(ts.keys())
 
@@ -101,7 +108,6 @@ class TestStateAccessors:
 
 
 class TestCancelPauseEvents:
-
     def setup_method(self):
         set_cancel_event(None)
         set_pause_event(None)
@@ -131,7 +137,6 @@ class TestCancelPauseEvents:
 
 
 class TestConstants:
-
     def test_sou_magic(self):
         assert SOU_MAGIC == b"SOUL"
 
@@ -151,7 +156,6 @@ class TestConstants:
 
 
 class TestPGQ:
-
     def test_get_pgq_returns_something_or_none(self):
         result = get_pgq()
         assert result is None or hasattr(result, "name")

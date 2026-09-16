@@ -2,20 +2,17 @@
 
 import os
 import sys
-import threading
 import types
-from unittest.mock import patch
 
 import pytest
+
+from domain.infrastructure._internal.cpu_topology import CpuTopology
 from domain.infrastructure._internal.resource_manager import (
     ResourceAllocation,
-    ResourceManager,
     compute_allocation,
     get_resource_manager,
     reset_resource_manager,
 )
-from domain.infrastructure._internal.cpu_topology import CpuTopology, detect_topology
-
 
 # ── Fixtures ──
 
@@ -244,13 +241,11 @@ class TestResourceManager:
         assert os.environ["OMP_NUM_THREADS"] == str(rm.omp_num_threads)
 
     def test_apply_compute_limits_calls_np(self):
-        import numpy as np
         rm = get_resource_manager()
         # Should not raise
         rm.apply_compute_limits()
 
     def test_apply_compute_limits_calls_numexpr(self, monkeypatch):
-        import numpy as np
 
         calls = []
         fake_numexpr = types.ModuleType("numexpr")
@@ -266,14 +261,14 @@ class TestResourceManager:
         rm.apply_compute_limits()  # must not raise
 
     def test_lazy_init_when_singleton_none(self, monkeypatch):
-        import domain.infrastructure.resource_manager as rm_mod
+        import domain.infrastructure._internal.resource_manager as rm_mod
 
         monkeypatch.setattr(rm_mod, "_global_manager", None)
         rm = rm_mod.get_resource_manager()
         assert rm_mod._global_manager is rm
 
     def test_singleton_is_global_variable(self, monkeypatch):
-        import domain.infrastructure.resource_manager as rm_mod
+        import domain.infrastructure._internal.resource_manager as rm_mod
 
         rm = get_resource_manager()
         assert rm_mod._global_manager is rm

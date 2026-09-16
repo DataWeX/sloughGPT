@@ -5,23 +5,29 @@ Verifies that stale sessions are evicted after the TTL expires,
 active sessions survive eviction, and the resolve helper creates
 new states correctly.
 """
+
 import threading
 import time
+
 import numpy as np
 import pytest
 
-from domain.training._internal.slonet import (
-    SloTransformer, SloTransformerBlock, SloLinear, SloEmbedding,
-    SloLayerNorm, NumpyKVState,
-)
 from domain.inference._internal.slonet_provider import SloNetChatProvider
+from domain.training._internal.slonet import (
+    NumpyKVState,
+    SloTransformer,
+)
 
 
 @pytest.fixture
 def tiny_model():
     E, V, BS = 64, 256, 128
     net = SloTransformer(
-        vocab_size=V, n_embed=E, n_layer=1, n_head=4, block_size=BS,
+        vocab_size=V,
+        n_embed=E,
+        n_layer=1,
+        n_head=4,
+        block_size=BS,
         n_kv_head=2,
     )
     net.max_seq_len = BS
@@ -38,6 +44,7 @@ class TestSessionTTL:
         just the _kv_states / _kv_last_access / _evict_stale_sessions /
         _resolve_session_kv attributes and methods.
         """
+
         class _Stub:
             pass
 
@@ -51,12 +58,10 @@ class TestSessionTTL:
         stub._kv_lock = threading.Lock()
 
         from types import MethodType
-        stub._evict_stale_sessions = MethodType(
-            SloNetChatProvider._evict_stale_sessions, stub)
-        stub._evict_lru_session = MethodType(
-            SloNetChatProvider._evict_lru_session, stub)
-        stub._resolve_session_kv = MethodType(
-            SloNetChatProvider._resolve_session_kv, stub)
+
+        stub._evict_stale_sessions = MethodType(SloNetChatProvider._evict_stale_sessions, stub)
+        stub._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, stub)
+        stub._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, stub)
         return stub
 
     def test_resolve_creates_new_state(self, tiny_model):
@@ -165,8 +170,7 @@ class TestSessionTTL:
         s1 = stub._resolve_session_kv("revive")
         # Generate something to dirty the state
         ids = np.array([[10, 20, 30]])
-        list(stub._model.generate_numpy_stream(
-            ids, max_new_tokens=3, temperature=0.0, kv_state=s1))
+        list(stub._model.generate_numpy_stream(ids, max_new_tokens=3, temperature=0.0, kv_state=s1))
         assert s1.prev_ids is not None
 
         time.sleep(0.06)
@@ -207,12 +211,10 @@ class TestSessionStats:
         stub._kv_lock = threading.Lock()
 
         from types import MethodType
-        stub._evict_stale_sessions = MethodType(
-            SloNetChatProvider._evict_stale_sessions, stub)
-        stub._evict_lru_session = MethodType(
-            SloNetChatProvider._evict_lru_session, stub)
-        stub._resolve_session_kv = MethodType(
-            SloNetChatProvider._resolve_session_kv, stub)
+
+        stub._evict_stale_sessions = MethodType(SloNetChatProvider._evict_stale_sessions, stub)
+        stub._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, stub)
+        stub._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, stub)
         stub.session_stats = MethodType(SloNetChatProvider.session_stats, stub)
         return stub
 
@@ -237,8 +239,11 @@ class TestSessionStats:
         stub = self._make_provider_stub(tiny_model)
         state = stub._resolve_session_kv("s")
         ids = np.array([[10, 20, 30]])
-        list(stub._model.generate_numpy_stream(
-            ids, max_new_tokens=5, temperature=0.0, kv_state=state))
+        list(
+            stub._model.generate_numpy_stream(
+                ids, max_new_tokens=5, temperature=0.0, kv_state=state
+            )
+        )
         stats = stub.session_stats()
         assert stats["cached_tokens"] > 0
 
@@ -270,15 +275,12 @@ class TestSessionClear:
         stub._kv_lock = threading.Lock()
 
         from types import MethodType
-        stub._evict_stale_sessions = MethodType(
-            SloNetChatProvider._evict_stale_sessions, stub)
-        stub._evict_lru_session = MethodType(
-            SloNetChatProvider._evict_lru_session, stub)
-        stub._resolve_session_kv = MethodType(
-            SloNetChatProvider._resolve_session_kv, stub)
+
+        stub._evict_stale_sessions = MethodType(SloNetChatProvider._evict_stale_sessions, stub)
+        stub._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, stub)
+        stub._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, stub)
         stub.clear_session = MethodType(SloNetChatProvider.clear_session, stub)
-        stub.clear_all_sessions = MethodType(
-            SloNetChatProvider.clear_all_sessions, stub)
+        stub.clear_all_sessions = MethodType(SloNetChatProvider.clear_all_sessions, stub)
         return stub
 
     def test_clear_removes_existing_session(self, tiny_model):
@@ -315,6 +317,7 @@ class TestSessionClear:
     def test_clear_stats_reflect_removal(self, tiny_model):
         stub = self._make_provider_stub(tiny_model)
         from types import MethodType
+
         stub.session_stats = MethodType(SloNetChatProvider.session_stats, stub)
         stub._resolve_session_kv("a")
         stub._resolve_session_kv("b")
@@ -339,12 +342,10 @@ class TestKvSessionCap:
         stub._kv_lock = threading.Lock()
 
         from types import MethodType
-        stub._evict_stale_sessions = MethodType(
-            SloNetChatProvider._evict_stale_sessions, stub)
-        stub._resolve_session_kv = MethodType(
-            SloNetChatProvider._resolve_session_kv, stub)
-        stub._evict_lru_session = MethodType(
-            SloNetChatProvider._evict_lru_session, stub)
+
+        stub._evict_stale_sessions = MethodType(SloNetChatProvider._evict_stale_sessions, stub)
+        stub._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, stub)
+        stub._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, stub)
         stub.session_stats = MethodType(SloNetChatProvider.session_stats, stub)
         return stub
 
@@ -412,12 +413,10 @@ class TestKvConcurrency:
         stub._kv_lock = threading.Lock()
 
         from types import MethodType
-        stub._evict_stale_sessions = MethodType(
-            SloNetChatProvider._evict_stale_sessions, stub)
-        stub._evict_lru_session = MethodType(
-            SloNetChatProvider._evict_lru_session, stub)
-        stub._resolve_session_kv = MethodType(
-            SloNetChatProvider._resolve_session_kv, stub)
+
+        stub._evict_stale_sessions = MethodType(SloNetChatProvider._evict_stale_sessions, stub)
+        stub._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, stub)
+        stub._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, stub)
         stub.clear_session = MethodType(SloNetChatProvider.clear_session, stub)
         stub.session_stats = MethodType(SloNetChatProvider.session_stats, stub)
         return stub

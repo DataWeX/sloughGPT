@@ -1,4 +1,5 @@
 """Tests for CollectionRegistry — source/store/filter/pipeline registry."""
+
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -11,12 +12,14 @@ from domain.collections._internal.sources import Record
 @runtime_checkable
 class FakeSource(Protocol):
     name: str
+
     def fetch(self) -> Iterator[Record]: ...
 
 
 @runtime_checkable
 class FakeStore(Protocol):
     name: str
+
     def write(self, record: Record) -> None: ...
     def read_all(self) -> Iterator[Record]: ...
 
@@ -24,6 +27,7 @@ class FakeStore(Protocol):
 class _FakeSource:
     def __init__(self, name: str = "test_source"):
         self.name = name
+
     def fetch(self) -> Iterator[Record]:
         yield Record(content="hello")
 
@@ -32,8 +36,10 @@ class _FakeStore:
     def __init__(self, name: str = "test_store"):
         self.name = name
         self.records = []
+
     def write(self, record: Record) -> None:
         self.records.append(record)
+
     def read_all(self) -> Iterator[Record]:
         return iter(self.records)
 

@@ -14,16 +14,17 @@ removed — they were superseded by the unified Kernel in kernel.py.
 
 from __future__ import annotations
 
-import os
-import time
 import json
-import signal
 import logging
-import threading
+import os
+import signal
 import subprocess
-from pathlib import Path
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from pathlib import Path
+from typing import Any
 
 from domain.shared import find_repo_root, find_server_python
 
@@ -35,6 +36,7 @@ _REPO_ROOT = None  # lazy
 @dataclass
 class Resource:
     """File metadata for disk scanning (models, datasets, souls)."""
+
     name: str
     kind: str
     path: str
@@ -59,6 +61,7 @@ def _default_api_url() -> str:
 def _probe_api(api_url: str, timeout: float = 2.0) -> dict:
     """Check if the API server is reachable. Returns status dict."""
     import urllib.request
+
     try:
         req = urllib.request.Request(f"{api_url}/health", method="GET")
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -95,6 +98,7 @@ class APIServerProcess:
     def __init__(self, api_url: str = ""):
         self._api_url = api_url or _default_api_url()
         from urllib.parse import urlparse
+
         self._port = urlparse(self._api_url).port or 8000
 
     # ── Public API ──────────────────────────────────────────────────────
@@ -149,6 +153,7 @@ class APIServerProcess:
 
         # ── Phase 2: port occupied but not healthy -> loading server? ──
         import socket as _sock
+
         _port_busy = False
         try:
             with _sock.create_connection(("127.0.0.1", self._port), timeout=1.0):
@@ -157,21 +162,33 @@ class APIServerProcess:
             pass
 
         if _port_busy:
-            logger.debug("Port %d occupied but unhealthy -- waiting for server to finish loading", self._port, extra={"tag": "START"})
+            logger.debug(
+                "Port %d occupied but unhealthy -- waiting for server to finish loading",
+                self._port,
+                extra={"tag": "START"},
+            )
             deadline = time.time() + min(timeout, 60.0)
             while time.time() < deadline:
                 probe = _probe_api(self._api_url)
                 if probe.get("available"):
                     model_id = probe.get("model_id")
-                    return {"ok": True, "message": f"connected ({model_id})" if model_id else "connected"}
+                    return {
+                        "ok": True,
+                        "message": f"connected ({model_id})" if model_id else "connected",
+                    }
                 time.sleep(1.0)
-            return {"ok": False, "error": f"Port {self._port} occupied but server not healthy after {timeout:.0f}s"}
+            return {
+                "ok": False,
+                "error": f"Port {self._port} occupied but server not healthy after {timeout:.0f}s",
+            }
 
         # ── Phase 3: port is free -> spawn the server ─────────────────
         repo_root = find_repo_root(Path(__file__).resolve())
         server_python = find_server_python(repo_root)
         cmd = [server_python, "-m", "apps.api.server.main"]
-        logger.debug("Starting API server: %s (cwd=%s)", " ".join(cmd), repo_root, extra={"tag": "START"})
+        logger.debug(
+            "Starting API server: %s (cwd=%s)", " ".join(cmd), repo_root, extra={"tag": "START"}
+        )
 
         try:
             proc = subprocess.Popen(
@@ -193,7 +210,8 @@ class APIServerProcess:
         def _log_stderr():
             if _shared_proc and _shared_proc.stderr:
                 try:
-                    from domain.shell._internal.log_buffer import get_log_buffer, LogEntry
+                    from domain.shell._internal.log_buffer import LogEntry, get_log_buffer
+
                     buf = get_log_buffer()
                     for line in _shared_proc.stderr:
                         stripped = line.rstrip()
@@ -207,14 +225,17 @@ class APIServerProcess:
                             level = "ERROR"
                         elif "DBG" in upper or "DEBUG" in upper:
                             level = "DEBUG"
-                        buf.append(LogEntry(
-                            timestamp=time.time(),
-                            level=level,
-                            source="api.server",
-                            message=stripped,
-                        ))
+                        buf.append(
+                            LogEntry(
+                                timestamp=time.time(),
+                                level=level,
+                                source="api.server",
+                                message=stripped,
+                            )
+                        )
                 except Exception as e:
                     logger.warning("stderr capture thread failed: %s", e)
+
         threading.Thread(target=_log_stderr, daemon=True).start()
 
         # Poll health until ready
@@ -291,6 +312,7 @@ class DaitRuntime:
 
     def __init__(self, api_url: str = ""):
         from .kernel import Kernel
+
         self.kernel = Kernel()
         self._model_loaded: bool = False
         self._model_name: str = ""
@@ -314,15 +336,16 @@ class DaitRuntime:
         Returns:
             (boot_log, api_status) tuple.
         """
-        from .init import get_init_system
-        from .devices import create_default_devices
         from .device_system import get_device_system
+        from .devices import create_default_devices
+        from .init import get_init_system
 
         self._init = get_init_system()
         self._devices = create_default_devices(get_kernel=lambda: self.kernel)
 
         # Install addons before kernel boot
-        from .addons import neural, filesystem, shell_ui
+        from .addons import filesystem, neural, shell_ui
+
         self.kernel.install_addon(neural)
         self.kernel.install_addon(filesystem)
         self.kernel.install_addon(shell_ui)
@@ -338,8 +361,9 @@ class DaitRuntime:
             dev = self._devices.get(name)
             self._device_system.register(name, dev, registered_by="shell")
 
-        from .vm_devices import NPUVMDevice
         from .kernel_npu import NPUDevice
+        from .vm_devices import NPUVMDevice
+
         npu_device = NPUDevice(name="npu")
         self._device_system.register("npu", NPUVMDevice(npu_device), registered_by="kernel")
 
@@ -354,6 +378,7 @@ class DaitRuntime:
             Shutdown log from the init system.
         """
         from .device_system import reset_device_system
+
         self._boot_complete = False
         shutdown_log = self._init.shutdown()
         self.kernel.shutdown()
@@ -380,6 +405,7 @@ class DaitRuntime:
     def status_summary(self) -> str:
         try:
             import psutil
+
             proc = psutil.Process()
             mem = proc.memory_info()
             mem_str = f"rss={mem.rss / 1048576:.0f}M vms={mem.vms / 1048576:.0f}M"

@@ -19,18 +19,18 @@ from __future__ import annotations
 import json
 import re
 import threading
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Optional, Sequence
 
 import numpy as np
 
-from domain.training._internal.token_tree import TokenTree
 from domain.shared import find_repo_root
+from domain.training._internal.token_tree import TokenTree
 
 _REPO_ROOT = find_repo_root(Path(__file__).resolve())
 _SAVE_DIR = _REPO_ROOT / "data" / "token_trees"
 
-DEFAULT_CORPUS: List[str] = [
+DEFAULT_CORPUS: list[str] = [
     "the quick brown fox jumps over the lazy dog",
     "the quick brown fox is quick",
     "the lazy dog sleeps in the sun",
@@ -50,25 +50,23 @@ class TokenTreeManager:
     Thread-safe: tree (re)training and reads are serialized through a lock.
     """
 
-    _instance: Optional["TokenTreeManager"] = None
+    _instance: TokenTreeManager | None = None
     _instance_lock = threading.Lock()
 
     def __init__(self) -> None:
         """Initialize an empty manager (tree trained on first access)."""
-        self._tree: Optional[TokenTree] = None
+        self._tree: TokenTree | None = None
         self._lock = threading.Lock()
 
     @classmethod
-    def get_instance(cls) -> "TokenTreeManager":
+    def get_instance(cls) -> TokenTreeManager:
         """Return the process-wide singleton (created on first call)."""
         with cls._instance_lock:
             if cls._instance is None:
                 cls._instance = cls()
             return cls._instance
 
-    def _ensure_trained(
-        self, vocab_size: int = 512, embed_dim: int = 16
-    ) -> TokenTree:
+    def _ensure_trained(self, vocab_size: int = 512, embed_dim: int = 16) -> TokenTree:
         """Train the default corpus once, then return the live tree.
 
         Args:
@@ -449,7 +447,7 @@ class TokenTreeManager:
                 except (json.JSONDecodeError, OSError):
                     continue
                 entries.append(self._tree_info(name, _SAVE_DIR / name, meta))
-        entries.sort(key=lambda e: (e["saved_at"] or 0), reverse=True)
+        entries.sort(key=lambda e: e["saved_at"] or 0, reverse=True)
         return entries
 
     def delete_saved(self, name: str) -> bool:
@@ -505,8 +503,8 @@ class TokenTreeManager:
         a = TokenTree.load(str(_SAVE_DIR / a_name))
         b = TokenTree.load(str(_SAVE_DIR / b_name))
 
-        a_vocab = {t: f for t, f in self._token_freqs(a)}
-        b_vocab = {t: f for t, f in self._token_freqs(b)}
+        a_vocab = dict(self._token_freqs(a))
+        b_vocab = dict(self._token_freqs(b))
         a_merges = {f"{l}+{r}" for l, r in a.merges}
         b_merges = {f"{l}+{r}" for l, r in b.merges}
 
@@ -532,7 +530,7 @@ class TokenTreeManager:
         }
 
     @staticmethod
-    def _token_freqs(tree: TokenTree) -> List[tuple]:
+    def _token_freqs(tree: TokenTree) -> list[tuple]:
         """Return ``[(token, freq)]`` for every vocab id of a tree.
 
         Args:
@@ -544,9 +542,7 @@ class TokenTreeManager:
         return [(tree.vocab[tid], tree._freqs.get(tid, 0)) for tid in range(len(tree.vocab))]
 
     @staticmethod
-    def _top_by_freq(
-        vocab: dict, tokens: set, top_n: int
-    ) -> List[list]:
+    def _top_by_freq(vocab: dict, tokens: set, top_n: int) -> list[list]:
         """Return the ``top_n`` tokens of a subset ranked by frequency.
 
         Args:

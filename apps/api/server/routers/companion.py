@@ -6,9 +6,7 @@ Presets are stored in MogDB and synced to JSON for human readability.
 """
 
 import logging
-import os
 import time as _time
-from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends
 from infrastructure.auth import require_auth_if_enabled

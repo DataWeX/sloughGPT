@@ -7,6 +7,7 @@ Runs locally without servers.
 Usage:
     .venv/bin/python -m pytest tests/test_training_benchmarks.py -x -v -s
 """
+
 import tempfile
 import time
 
@@ -39,9 +40,15 @@ class TestTrainingThroughput:
             f.write(_make_data(2000))
             f.flush()
             config = {
-                "method": "sft", "data_quality_threshold": 0.0,
-                "epochs": 1, "batch_size": 8, "block_size": 32,
-                "max_steps": 2, "n_embed": 32, "n_layer": 2, "n_head": 2,
+                "method": "sft",
+                "data_quality_threshold": 0.0,
+                "epochs": 1,
+                "batch_size": 8,
+                "block_size": 32,
+                "max_steps": 2,
+                "n_embed": 32,
+                "n_layer": 2,
+                "n_head": 2,
             }
             trainer = ComprehensiveTrainer()
             t0 = time.time()
@@ -58,9 +65,15 @@ class TestTrainingThroughput:
             f.write(_make_data(10000))
             f.flush()
             config = {
-                "method": "sft", "data_quality_threshold": 0.0,
-                "epochs": 1, "batch_size": 8, "block_size": 32,
-                "max_steps": 2, "n_embed": 32, "n_layer": 2, "n_head": 2,
+                "method": "sft",
+                "data_quality_threshold": 0.0,
+                "epochs": 1,
+                "batch_size": 8,
+                "block_size": 32,
+                "max_steps": 2,
+                "n_embed": 32,
+                "n_layer": 2,
+                "n_head": 2,
             }
             trainer = ComprehensiveTrainer()
             t0 = time.time()
@@ -77,9 +90,15 @@ class TestTrainingThroughput:
             f.write(_make_data(5000))
             f.flush()
             config = {
-                "method": "sft", "data_quality_threshold": 0.0,
-                "epochs": 1, "batch_size": 8, "block_size": 32,
-                "max_steps": 2, "n_embed": 32, "n_layer": 2, "n_head": 2,
+                "method": "sft",
+                "data_quality_threshold": 0.0,
+                "epochs": 1,
+                "batch_size": 8,
+                "block_size": 32,
+                "max_steps": 2,
+                "n_embed": 32,
+                "n_layer": 2,
+                "n_head": 2,
             }
             trainer = ComprehensiveTrainer()
             t0 = time.time()
@@ -98,9 +117,15 @@ class TestTrainingThroughput:
             f.flush()
 
             base_config = {
-                "method": "sft", "data_quality_threshold": 0.0,
-                "epochs": 1, "batch_size": 8, "block_size": 32,
-                "max_steps": 2, "n_embed": 32, "n_layer": 2, "n_head": 2,
+                "method": "sft",
+                "data_quality_threshold": 0.0,
+                "epochs": 1,
+                "batch_size": 8,
+                "block_size": 32,
+                "max_steps": 2,
+                "n_embed": 32,
+                "n_layer": 2,
+                "n_head": 2,
             }
 
             trainer1 = ComprehensiveTrainer()
@@ -130,9 +155,17 @@ class TestPhaseTimings:
             trainer = ComprehensiveTrainer()
             result = trainer.run_full_cycle(
                 data_path=f.name,
-                config={"method": "sft", "data_quality_threshold": 0.0, "epochs": 1,
-                        "batch_size": 8, "block_size": 32, "max_steps": 1,
-                        "n_embed": 32, "n_layer": 2, "n_head": 2},
+                config={
+                    "method": "sft",
+                    "data_quality_threshold": 0.0,
+                    "epochs": 1,
+                    "batch_size": 8,
+                    "block_size": 32,
+                    "max_steps": 1,
+                    "n_embed": 32,
+                    "n_layer": 2,
+                    "n_head": 2,
+                },
             )
             validation_time = result.performance["phase_durations"].get("validating", 0)
             assert validation_time < 5
@@ -147,9 +180,18 @@ class TestPhaseTimings:
             trainer = ComprehensiveTrainer()
             result = trainer.run_full_cycle(
                 data_path=f.name,
-                config={"method": "sft", "data_quality_threshold": 0.0, "epochs": 1,
-                        "batch_size": 8, "block_size": 32, "max_steps": 1,
-                        "n_embed": 32, "n_layer": 2, "n_head": 2, "adaptive": True},
+                config={
+                    "method": "sft",
+                    "data_quality_threshold": 0.0,
+                    "epochs": 1,
+                    "batch_size": 8,
+                    "block_size": 32,
+                    "max_steps": 1,
+                    "n_embed": 32,
+                    "n_layer": 2,
+                    "n_head": 2,
+                    "adaptive": True,
+                },
             )
             config_time = result.performance["phase_durations"].get("configuring", 0)
             assert config_time < 5
@@ -164,9 +206,17 @@ class TestPhaseTimings:
             trainer = ComprehensiveTrainer()
             result = trainer.run_full_cycle(
                 data_path=f.name,
-                config={"method": "sft", "data_quality_threshold": 0.0, "epochs": 1,
-                        "batch_size": 8, "block_size": 32, "max_steps": 1,
-                        "n_embed": 32, "n_layer": 2, "n_head": 2},
+                config={
+                    "method": "sft",
+                    "data_quality_threshold": 0.0,
+                    "epochs": 1,
+                    "batch_size": 8,
+                    "block_size": 32,
+                    "max_steps": 1,
+                    "n_embed": 32,
+                    "n_layer": 2,
+                    "n_head": 2,
+                },
             )
             preprocess_time = result.performance["phase_durations"].get("preprocessing", 0)
             assert preprocess_time < 5
@@ -183,9 +233,15 @@ class TestMemoryUsage:
             f.write(_make_data(3000))
             f.flush()
             config = {
-                "method": "sft", "data_quality_threshold": 0.0,
-                "epochs": 1, "batch_size": 8, "block_size": 32,
-                "max_steps": 2, "n_embed": 32, "n_layer": 2, "n_head": 2,
+                "method": "sft",
+                "data_quality_threshold": 0.0,
+                "epochs": 1,
+                "batch_size": 8,
+                "block_size": 32,
+                "max_steps": 2,
+                "n_embed": 32,
+                "n_layer": 2,
+                "n_head": 2,
             }
             results = []
             for _ in range(3):
@@ -203,9 +259,15 @@ class TestMemoryUsage:
             f.write(_make_data(3000))
             f.flush()
             config = {
-                "method": "sft", "data_quality_threshold": 0.0,
-                "epochs": 1, "batch_size": 8, "block_size": 32,
-                "max_steps": 2, "n_embed": 32, "n_layer": 2, "n_head": 2,
+                "method": "sft",
+                "data_quality_threshold": 0.0,
+                "epochs": 1,
+                "batch_size": 8,
+                "block_size": 32,
+                "max_steps": 2,
+                "n_embed": 32,
+                "n_layer": 2,
+                "n_head": 2,
             }
             durations = []
             for _ in range(3):
@@ -234,7 +296,10 @@ class TestAdaptiveConfigPerformance:
         print(f"\n  Adaptive config: {duration:.3f}s, confidence={rec.confidence:.2f}")
 
     def test_outcome_tracker_speed(self):
-        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import (
+            TrainingOutcome,
+            TrainingOutcomeTracker,
+        )
 
         tracker = TrainingOutcomeTracker()
         t0 = time.time()
@@ -265,9 +330,17 @@ class TestComprehensiveResultPerformance:
             trainer = ComprehensiveTrainer()
             result = trainer.run_full_cycle(
                 data_path=f.name,
-                config={"method": "sft", "data_quality_threshold": 0.0, "epochs": 1,
-                        "batch_size": 8, "block_size": 32, "max_steps": 2,
-                        "n_embed": 32, "n_layer": 2, "n_head": 2},
+                config={
+                    "method": "sft",
+                    "data_quality_threshold": 0.0,
+                    "epochs": 1,
+                    "batch_size": 8,
+                    "block_size": 32,
+                    "max_steps": 2,
+                    "n_embed": 32,
+                    "n_layer": 2,
+                    "n_head": 2,
+                },
             )
             perf = result.performance
             assert "total_duration_s" in perf
@@ -286,9 +359,17 @@ class TestComprehensiveResultPerformance:
             trainer = ComprehensiveTrainer()
             result = trainer.run_full_cycle(
                 data_path=f.name,
-                config={"method": "sft", "data_quality_threshold": 0.0, "epochs": 1,
-                        "batch_size": 8, "block_size": 32, "max_steps": 2,
-                        "n_embed": 32, "n_layer": 2, "n_head": 2},
+                config={
+                    "method": "sft",
+                    "data_quality_threshold": 0.0,
+                    "epochs": 1,
+                    "batch_size": 8,
+                    "block_size": 32,
+                    "max_steps": 2,
+                    "n_embed": 32,
+                    "n_layer": 2,
+                    "n_head": 2,
+                },
             )
             summary = result.summary()
             assert "Performance:" in summary

@@ -6,11 +6,11 @@ Public API:
 """
 
 from domain.auth._internal.models import (
-    Role,
     Permission,
-    UserRole,
-    User,
+    Role,
     Tenant,
+    User,
+    UserRole,
     Workspace,
     WorkspaceMember,
 )

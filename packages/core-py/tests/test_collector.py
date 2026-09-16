@@ -4,13 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
-from domain.collections._internal.collector import Collector, ParallelCollector, BatchCollector
+from domain.collections._internal.collector import BatchCollector, Collector, ParallelCollector
+from domain.collections._internal.filters import DedupFilter, LengthFilter
 from domain.collections._internal.sources import Record
-from domain.collections._internal.filters import LengthFilter, DedupFilter
-from domain.collections._internal.stores import Store
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -61,7 +57,6 @@ class FailingStore:
 
 
 class TestCollector:
-
     def test_collect_writes_to_store(self):
         src = NameSource("s", _make_records(3))
         store = ListStore()
@@ -130,7 +125,6 @@ class TestCollector:
 
 
 class TestParallelCollector:
-
     def test_collects_from_multiple(self):
         c1 = Collector(NameSource("s1", _make_records(3)), ListStore())
         c2 = Collector(NameSource("s2", _make_records(5)), ListStore())
@@ -176,7 +170,6 @@ class TestParallelCollector:
 
 
 class TestBatchCollector:
-
     def test_collects_in_batches(self):
         src = NameSource("s", _make_records(25))
         store = ListStore()

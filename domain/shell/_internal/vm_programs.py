@@ -1965,6 +1965,7 @@ PROGRAMS = {
 
 # ── Self Test ────────────────────────────────────────────────────────────────
 
+
 def self_test() -> list[str]:
     """Run built-in programs and report results."""
     results = []
@@ -1997,9 +1998,7 @@ def self_test() -> list[str]:
     results.append(f"  float_mul: {'PASS' if float_ok else 'FAIL'} — output: {out5}")
 
     runner6 = VMRunner()
-    out6 = runner6.assemble_and_run(
-        "ALLOC R0, 256\nMEMINFO R1\nPRINT R1\nHALT"
-    )
+    out6 = runner6.assemble_and_run("ALLOC R0, 256\nMEMINFO R1\nPRINT R1\nHALT")
     mem_ok = out6 and int(out6[0]) >= 1
     results.append(f"  alloc_meminfo: {'PASS' if mem_ok else 'FAIL'} — output: {out6}")
 
@@ -2960,32 +2959,33 @@ times 4096-($-$$) db 0          ; Pad to 4KB total
 
 # ── Binary Export ────────────────────────────────────────────────────────────
 
+
 def export_x86_binary(source: str) -> bytes:
     """Assemble x86 source to raw binary bytes.
 
     Strips [BITS], [ORG], labels, and directives.
     Returns raw machine code.
     """
-    lines = source.split('\n')
+    lines = source.split("\n")
     code_lines = []
 
     for line in lines:
-        line = line.split(';')[0].strip()
+        line = line.split(";")[0].strip()
         if not line:
             continue
-        if line.startswith('['):
+        if line.startswith("["):
             continue
-        if line.startswith('times') and 'db' in line:
+        if line.startswith("times") and "db" in line:
             continue
-        if line.startswith('dw ') or line.startswith('dd '):
+        if line.startswith("dw ") or line.startswith("dd "):
             continue
-        if ':' in line and not line.startswith('db'):
-            line = line.split(':', 1)[1].strip()
+        if ":" in line and not line.startswith("db"):
+            line = line.split(":", 1)[1].strip()
             if not line:
                 continue
         code_lines.append(line)
 
-    return '\n'.join(code_lines).encode('utf-8')
+    return "\n".join(code_lines).encode("utf-8")
 
 
 def build_disk_image(bootloader: bytes, kernel: bytes, size_mb: int = 1) -> bytes:
@@ -2999,10 +2999,10 @@ def build_disk_image(bootloader: bytes, kernel: bytes, size_mb: int = 1) -> byte
     image = bytearray(size_mb * 1024 * 1024)
 
     # Write bootloader to sector 0
-    image[:len(bootloader)] = bootloader
+    image[: len(bootloader)] = bootloader
 
     # Write kernel starting at sector 1 (offset 512)
-    image[512:512 + len(kernel)] = kernel
+    image[512 : 512 + len(kernel)] = kernel
 
     return bytes(image)
 
@@ -3020,18 +3020,18 @@ def export_disk_image(source: str, output_path: str, size_mb: int = 1) -> str:
 
     # Pad kernel to at least 4KB
     if len(kernel_bytes) < 4096:
-        kernel_bytes = kernel_bytes + b'\x00' * (4096 - len(kernel_bytes))
+        kernel_bytes = kernel_bytes + b"\x00" * (4096 - len(kernel_bytes))
 
     image = bytearray(size_mb * 1024 * 1024)
 
     # Bootloader is raw binary (already valid x86 machine code)
     bootloader = export_x86_binary(X86_BOOTLOADER_ASM)
-    image[:len(bootloader)] = bootloader
+    image[: len(bootloader)] = bootloader
 
     # Kernel is assembled machine code
-    image[512:512 + len(kernel_bytes)] = kernel_bytes
+    image[512 : 512 + len(kernel_bytes)] = kernel_bytes
 
-    with open(output_path, 'wb') as f:
+    with open(output_path, "wb") as f:
         f.write(image)
 
     return output_path
@@ -3051,17 +3051,17 @@ def build_boot_image(output_path: str = "boot.img") -> str:
 
     # Pad kernel to at least 4KB
     if len(kernel) < 4096:
-        kernel = kernel + b'\x00' * (4096 - len(kernel))
+        kernel = kernel + b"\x00" * (4096 - len(kernel))
 
     image = bytearray(1024 * 1024)  # 1MB
 
     # Write bootloader to sector 0
-    image[:len(bootloader)] = bootloader
+    image[: len(bootloader)] = bootloader
 
     # Write kernel starting at sector 1 (offset 512)
-    image[512:512 + len(kernel)] = kernel
+    image[512 : 512 + len(kernel)] = kernel
 
-    with open(output_path, 'wb') as f:
+    with open(output_path, "wb") as f:
         f.write(image)
 
     return output_path
@@ -3567,7 +3567,7 @@ def build_bios(output_path: str = "bios.bin") -> str:
     rom = bytearray(BIOS_SIZE)
 
     # Write BIOS code at offset 0x0000
-    rom[:len(bios_code)] = bios_code
+    rom[: len(bios_code)] = bios_code
 
     # Find boot_code and kernel_code offsets in the assembled BIOS
     # They are at fixed positions: boot_code is right after the data section,
@@ -3582,24 +3582,24 @@ def build_bios(output_path: str = "bios.bin") -> str:
 
     # Overlay real bootloader
     if len(bootloader) <= 512:
-        rom[boot_offset:boot_offset + len(bootloader)] = bootloader
+        rom[boot_offset : boot_offset + len(bootloader)] = bootloader
     else:
-        rom[boot_offset:boot_offset + 512] = bootloader[:512]
+        rom[boot_offset : boot_offset + 512] = bootloader[:512]
 
     # Overlay real kernel
     kernel_size = min(len(kernel), 4096)
-    rom[kernel_offset:kernel_offset + kernel_size] = kernel[:kernel_size]
+    rom[kernel_offset : kernel_offset + kernel_size] = kernel[:kernel_size]
 
     # Reset vector at offset 0xFFF0:
     # JMP FAR 0xF000:0x0000 (EA 00 00 00 F0)
     reset_offset = 0xFFF0
-    rom[reset_offset] = 0xEA      # far JMP opcode
+    rom[reset_offset] = 0xEA  # far JMP opcode
     rom[reset_offset + 1] = 0x00  # offset low
     rom[reset_offset + 2] = 0x00  # offset high
     rom[reset_offset + 3] = 0x00  # segment low
     rom[reset_offset + 4] = 0xF0  # segment high
 
-    with open(output_path, 'wb') as f:
+    with open(output_path, "wb") as f:
         f.write(rom)
 
     return output_path

@@ -5,15 +5,15 @@ import struct
 
 import numpy as np
 import pytest
+
 from domain.infrastructure._internal.safetensors_loader import (
-    load_model_weights,
-    load_model_config,
-    list_cached_models,
-    _get_model_dir,
     _find_safetensors,
+    _get_model_dir,
     _load_weights_raw,
+    list_cached_models,
+    load_model_config,
+    load_model_weights,
 )
-from pathlib import Path
 
 QWEN2_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 
@@ -193,7 +193,7 @@ class TestLoadModelWeightsPaths:
         p = tmp_path / "model"
         p.mkdir()
         arr = np.arange(6, dtype=np.float32).reshape(2, 3)
-        bf16_bits = (arr.astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+        (arr.astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
         data = bytearray()
         header = {}
         entries = [
@@ -203,20 +203,26 @@ class TestLoadModelWeightsPaths:
         for name, a, dtype_str in entries:
             start = len(data)
             data.extend(a.tobytes())
-            header[name] = {"dtype": dtype_str, "shape": list(a.shape),
-                            "data_offsets": [start, len(data)]}
+            header[name] = {
+                "dtype": dtype_str,
+                "shape": list(a.shape),
+                "data_offsets": [start, len(data)],
+            }
         header["__metadata__"] = {"format": "pt"}
         encoded = json.dumps(header).encode()
         (p / "model.safetensors").write_bytes(
-            struct.pack("<Q", len(encoded)) + encoded + bytes(data))
+            struct.pack("<Q", len(encoded)) + encoded + bytes(data)
+        )
         if with_config:
             (p / "config.json").write_text(json.dumps({"n_layer": 1}))
         return p
 
     def test_loads_via_raw_parser(self, tmp_path, monkeypatch):
         model_dir = self._fake_model_dir(tmp_path)
-        monkeypatch.setattr("domain.infrastructure.safetensors_loader._get_model_dir",
-                            lambda model_id: model_dir)
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.safetensors_loader._get_model_dir",
+            lambda model_id: model_dir,
+        )
         weights = load_model_weights("fake/model", dtype=np.float32)
         assert set(weights) == {"wte.weight", "w2"}
         assert weights["wte.weight"].dtype == np.float32
@@ -224,8 +230,10 @@ class TestLoadModelWeightsPaths:
     def test_raises_value_error_when_no_safetensors(self, tmp_path, monkeypatch):
         model_dir = tmp_path / "empty"
         model_dir.mkdir()
-        monkeypatch.setattr("domain.infrastructure.safetensors_loader._get_model_dir",
-                            lambda model_id: model_dir)
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.safetensors_loader._get_model_dir",
+            lambda model_id: model_dir,
+        )
         with pytest.raises(ValueError):
             load_model_weights("fake/model")
 
@@ -292,32 +300,41 @@ class TestLoadModelWeightsFakeSafetensorsPackage:
         bf16_bits = (arr.astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
         data = bytearray()
         header = {}
-        for name, a, dtype_str in [("a", arr, "F32"), ("b", bf16_bits, "BF16"),
-                                   ("c", arr, "F32")]:
+        for name, a, dtype_str in [("a", arr, "F32"), ("b", bf16_bits, "BF16"), ("c", arr, "F32")]:
             start = len(data)
             data.extend(a.tobytes())
-            header[name] = {"dtype": dtype_str, "shape": list(a.shape),
-                            "data_offsets": [start, len(data)]}
+            header[name] = {
+                "dtype": dtype_str,
+                "shape": list(a.shape),
+                "data_offsets": [start, len(data)],
+            }
         encoded = json.dumps(header).encode()
         p = tmp_path / "model"
         p.mkdir()
         (p / "model.safetensors").write_bytes(
-            struct.pack("<Q", len(encoded)) + encoded + bytes(data))
+            struct.pack("<Q", len(encoded)) + encoded + bytes(data)
+        )
         return p, arr
 
     def test_package_path_with_bf16_fallback(self, tmp_path, monkeypatch):
         import numpy as np
+
         p, arr = self._write_fake_file(tmp_path)
         (p / "config.json").write_text(json.dumps({"n_layer": 1}))
         spec = {
             "a": np.arange(6, dtype=np.float32).reshape(2, 3),
-            "b": ("bf16", (np.arange(6, dtype=np.float32).reshape(2, 3)
-                           .view(np.uint32) >> 16).astype(np.uint16)),
+            "b": (
+                "bf16",
+                (np.arange(6, dtype=np.float32).reshape(2, 3).view(np.uint32) >> 16).astype(
+                    np.uint16
+                ),
+            ),
             "c": ("plain", np.arange(6, dtype=np.float32).reshape(2, 3)),
         }
         self._install_fake_safetensors(monkeypatch, spec)
-        monkeypatch.setattr("domain.infrastructure.safetensors_loader._get_model_dir",
-                            lambda model_id: p)
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.safetensors_loader._get_model_dir", lambda model_id: p
+        )
         weights = load_model_weights("fake/model", dtype=np.float32)
         assert set(weights) == {"a", "b", "c"}
         np.testing.assert_allclose(weights["b"], spec["a"], rtol=0.01)
@@ -325,11 +342,13 @@ class TestLoadModelWeightsFakeSafetensorsPackage:
 
     def test_package_path_conversion_failure_is_silent(self, tmp_path, monkeypatch):
         import numpy as np
+
         p, arr = self._write_fake_file(tmp_path)
         spec = {"a": np.arange(6, dtype=np.float32).reshape(2, 3)}
         self._install_fake_safetensors(monkeypatch, spec)
-        monkeypatch.setattr("domain.infrastructure.safetensors_loader._get_model_dir",
-                            lambda model_id: p)
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.safetensors_loader._get_model_dir", lambda model_id: p
+        )
         weights = load_model_weights("fake/model", dtype=np.float32)
         assert set(weights) == {"a"}
 
@@ -342,8 +361,10 @@ class TestLoadModelConfigSnapshots:
         snap = model_dir / "snapshots" / "abcdef"
         snap.mkdir(parents=True)
         (snap / "config.json").write_text(json.dumps({"model_type": "fake"}))
-        monkeypatch.setattr("domain.infrastructure.safetensors_loader._get_model_dir",
-                            lambda model_id: model_dir)
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.safetensors_loader._get_model_dir",
+            lambda model_id: model_dir,
+        )
         cfg = load_model_config("fake/model")
         assert cfg["model_type"] == "fake"
 
@@ -375,8 +396,6 @@ class TestListCachedModels:
         assert ids == sorted(ids)
 
     def test_dedupes_across_both_hubs(self, tmp_path, monkeypatch):
-        import sys
-        import types
         repo = tmp_path / "repo"
         fake_home = tmp_path / "hf"
         for hub in [fake_home / "hub", repo / "models" / "hf-cache" / "hub"]:
@@ -385,11 +404,13 @@ class TestListCachedModels:
             st = d / "model.safetensors"
             st.write_bytes(b"\x00" * 1024)
         monkeypatch.setenv("HF_HOME", str(fake_home))
-        fake_file = (repo / "packages" / "core-py" / "domains" / "infrastructure"
-                     / "safetensors_loader.py")
+        fake_file = (
+            repo / "packages" / "core-py" / "domains" / "infrastructure" / "safetensors_loader.py"
+        )
         fake_file.parent.mkdir(parents=True)
-        monkeypatch.setattr("domain.infrastructure.safetensors_loader.__file__",
-                            str(fake_file))
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.safetensors_loader.__file__", str(fake_file)
+        )
         models = list_cached_models()
         ids = [m["id"] for m in models]
         assert ids.count("shared/model") == 1

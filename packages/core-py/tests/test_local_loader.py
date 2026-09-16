@@ -4,19 +4,21 @@ Comprehensive coverage of config, device detection, dtype resolution,
 chat prompt formatting, error paths, and module-level functions.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
+
 from domain.training._internal.huggingface.local_loader import (
     HFLocalConfig,
-    HuggingFaceLocalLoader,
     HuggingFaceLocalClient,
+    HuggingFaceLocalLoader,
     download_model,
-    load_model,
     generate_local,
+    load_model,
 )
 
-
 # ── HFLocalConfig ────────────────────────────────────────────────────────────
+
 
 class TestHFLocalConfig:
     def test_defaults(self):
@@ -102,6 +104,7 @@ class TestHFLocalConfig:
 
 # ── Device detection ─────────────────────────────────────────────────────────
 
+
 class TestDeviceDetection:
     def test_auto_device(self):
         loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
@@ -117,6 +120,7 @@ class TestDeviceDetection:
 
 
 # ── Dtype resolution ─────────────────────────────────────────────────────────
+
 
 class TestGetDtype:
     def test_auto(self):
@@ -154,6 +158,7 @@ class TestGetDtype:
 
 # ── Initial state ────────────────────────────────────────────────────────────
 
+
 class TestInitialState:
     def test_model_is_none(self):
         loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
@@ -171,6 +176,7 @@ class TestInitialState:
 
 # ── Generate without model ───────────────────────────────────────────────────
 
+
 class TestGenerateWithoutModel:
     def test_generate_raises(self):
         loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
@@ -184,6 +190,7 @@ class TestGenerateWithoutModel:
 
 
 # ── Chat prompt formatting ───────────────────────────────────────────────────
+
 
 class TestFormatChatPrompt:
     def test_single_user(self):
@@ -253,6 +260,7 @@ class TestFormatChatPrompt:
 
 # ── Unload ───────────────────────────────────────────────────────────────────
 
+
 class TestUnload:
     def test_unload_clears_model(self):
         loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
@@ -283,6 +291,7 @@ class TestUnload:
 
 # ── Load without transformers ────────────────────────────────────────────────
 
+
 class TestLoadWithoutTransformers:
     def test_load_raises_import_error(self):
         with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", None):
@@ -299,6 +308,7 @@ class TestLoadWithoutTransformers:
 
 # ── Aliases ──────────────────────────────────────────────────────────────────
 
+
 class TestAliases:
     def test_client_is_loader(self):
         assert issubclass(HuggingFaceLocalClient, HuggingFaceLocalLoader)
@@ -309,14 +319,17 @@ class TestAliases:
 
 # ── __all__ exports ──────────────────────────────────────────────────────────
 
+
 class TestExports:
     def test_all_exports(self):
         from domain.training._internal.huggingface import local_loader
+
         for name in local_loader.__all__:
             assert hasattr(local_loader, name), f"Missing export: {name}"
 
     def test_expected_exports(self):
         from domain.training._internal.huggingface import local_loader
+
         expected = {
             "HFLocalConfig",
             "HuggingFaceLocalLoader",
@@ -329,6 +342,7 @@ class TestExports:
 
 
 # ── Module-level functions (require transformers mock) ───────────────────────
+
 
 class TestDownloadModel:
     def test_download_raises_without_transformers(self):
@@ -358,6 +372,7 @@ class TestGenerateLocal:
 
 
 # ── Generate with mocked model ───────────────────────────────────────────────
+
 
 class TestGenerateWithMock:
     def test_generate_calls_model(self):
@@ -412,6 +427,7 @@ class TestGenerateWithMock:
 
 # ── Additional config edge cases ────────────────────────────────────────────
 
+
 class TestConfigEdgeCases:
     def test_repetition_penalty_one(self):
         cfg = HFLocalConfig(model="gpt2", repetition_penalty=1.0)
@@ -450,6 +466,7 @@ class TestConfigEdgeCases:
 
 # ── More dtype tests ────────────────────────────────────────────────────────
 
+
 class TestGetDtypeExtended:
     def test_float32_literal(self):
         loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2", dtype="float32"))
@@ -473,6 +490,7 @@ class TestGetDtypeExtended:
 
 
 # ── More chat prompt tests ──────────────────────────────────────────────────
+
 
 class TestFormatChatPromptExtended:
     def test_system_only(self):
@@ -518,6 +536,7 @@ class TestFormatChatPromptExtended:
 
 # ── Loader state tests ──────────────────────────────────────────────────────
 
+
 class TestLoaderState:
     def test_model_none_after_init(self):
         loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
@@ -554,6 +573,7 @@ class TestLoaderState:
 
 
 # ── Generate with mocked model (more scenarios) ─────────────────────────────
+
 
 class TestGenerateExtended:
     def test_generate_empty_prompt(self):
@@ -623,6 +643,7 @@ class TestGenerateExtended:
 
 # ── Module-level functions (more tests) ─────────────────────────────────────
 
+
 class TestModuleFunctions:
     def test_download_model_no_transformers(self):
         with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", None):
@@ -641,6 +662,7 @@ class TestModuleFunctions:
 
     def test_all_exports_complete(self):
         from domain.training._internal.huggingface import local_loader
+
         assert set(local_loader.__all__) == {
             "HFLocalConfig",
             "HuggingFaceLocalLoader",
@@ -665,10 +687,13 @@ class TestModuleFunctions:
 
 # ── Load path edge cases ────────────────────────────────────────────────────
 
+
 class TestLoadPath:
     def test_load_raises_when_both_none(self):
         with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", None):
-            with patch("domain.training._internal.huggingface.local_loader.AutoModelForCausalLM", None):
+            with patch(
+                "domain.training._internal.huggingface.local_loader.AutoModelForCausalLM", None
+            ):
                 loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
                 with pytest.raises(ImportError):
                     loader.load()
@@ -681,7 +706,9 @@ class TestLoadPath:
 
     def test_load_raises_when_model_none(self):
         with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", MagicMock()):
-            with patch("domain.training._internal.huggingface.local_loader.AutoModelForCausalLM", None):
+            with patch(
+                "domain.training._internal.huggingface.local_loader.AutoModelForCausalLM", None
+            ):
                 loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
                 with pytest.raises(ImportError):
                     loader.load()

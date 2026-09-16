@@ -1,4 +1,5 @@
 """Tests for correlation ID context variable."""
+
 from __future__ import annotations
 
 import asyncio
@@ -23,11 +24,13 @@ class TestCorrelationId:
     def test_context_var_isolation(self):
         """Different contexts see different values."""
         set_correlation_id("in-main")
+
         # contextvars are task-local for asyncio
         async def child():
             assert get_correlation_id() == "in-main"
             set_correlation_id("in-child")
             assert get_correlation_id() == "in-child"
+
         asyncio.run(child())
         # Main context still has original value
         assert get_correlation_id() == "in-main"

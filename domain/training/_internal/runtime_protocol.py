@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -21,16 +21,16 @@ class TrainingRuntimeProtocol(Protocol):
         self,
         job_id: str,
         job: dict[str, Any],
-        cancel_event: Optional[threading.Event] = ...,
-        config: Optional[Dict[str, Any]] = ...,
+        cancel_event: threading.Event | None = ...,
+        config: dict[str, Any] | None = ...,
     ) -> None: ...
 
-    def get(self, job_id: str) -> Optional[dict[str, Any]]: ...
+    def get(self, job_id: str) -> dict[str, Any] | None: ...
 
     def sync(self, job_id: str) -> None: ...
 
 
-_runtime: Optional[TrainingRuntimeProtocol] = None
+_runtime: TrainingRuntimeProtocol | None = None
 
 
 def set_training_runtime(runtime: TrainingRuntimeProtocol) -> None:
@@ -46,7 +46,7 @@ def get_training_runtime() -> TrainingRuntimeProtocol:
     return _NoOpRuntime()
 
 
-def update_job(job_id: str, **fields: Any) -> Optional[dict[str, Any]]:
+def update_job(job_id: str, **fields: Any) -> dict[str, Any] | None:
     """Get a job, update fields, and sync. Returns the job or None."""
     job = get_training_runtime().get(job_id)
     if job is None:

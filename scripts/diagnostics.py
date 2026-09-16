@@ -4,22 +4,21 @@ SloughGPT Diagnostics Script
 Run comprehensive diagnostics on the SloughGPT installation.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import json
 import platform
 import subprocess
-import json
 from pathlib import Path
 
 
 def run_command(cmd, timeout=10):
     """Run a shell command and return output."""
     try:
-        result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=timeout
-        )
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
         return result.returncode, result.stdout.strip(), result.stderr.strip()
     except subprocess.TimeoutExpired:
         return -1, "", "Command timed out"
@@ -52,6 +51,7 @@ def check_gpu():
     # CUDA
     try:
         import torch
+
         cuda = torch.cuda.is_available()
         print(f"  CUDA available: {cuda}")
         if cuda:
@@ -67,9 +67,10 @@ def check_gpu():
     # MPS (Apple Silicon)
     try:
         import torch
+
         mps = torch.backends.mps.is_available()
         print(f"  MPS available: {mps}")
-        if hasattr(torch.backends.mps, 'is_built'):
+        if hasattr(torch.backends.mps, "is_built"):
             print(f"  MPS built: {torch.backends.mps.is_built()}")
     except:
         pass

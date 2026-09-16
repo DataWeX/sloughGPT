@@ -8,19 +8,18 @@ Extends Tree with:
 
 All operations delegate to Tree's generic load_data/get_data.
 """
-from __future__ import annotations
 
-from typing import Optional
+from __future__ import annotations
 
 import numpy as np
 
+from .compressor import PointCompressor
+from .config import TreeConfig
+from .library import PointLibrary
+from .strategies import ClusterStrategy, CompressStrategy, RawStrategy
 from .tree import (
     Tree,
 )
-from .strategies import CompressStrategy, RawStrategy, ClusterStrategy
-from .compressor import PointCompressor
-from .library import PointLibrary
-from .config import TreeConfig
 
 
 class ModelTree(Tree):
@@ -34,9 +33,14 @@ class ModelTree(Tree):
         compressor: Optional PointCompressor (overrides config's compressor settings).
     """
 
-    def __init__(self, name: str, library: Optional[PointLibrary] = None,
-                 n_clusters: int = 16, config: Optional[TreeConfig] = None,
-                 compressor: Optional[PointCompressor] = None):
+    def __init__(
+        self,
+        name: str,
+        library: PointLibrary | None = None,
+        n_clusters: int = 16,
+        config: TreeConfig | None = None,
+        compressor: PointCompressor | None = None,
+    ):
         super().__init__(name, library, n_clusters, config, compressor)
 
         if config is not None:

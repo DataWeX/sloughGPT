@@ -14,6 +14,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import builtins
 import logging
 import time
 from collections.abc import Callable
@@ -98,7 +99,7 @@ class InferencePool:
                 loop.run_in_executor(self._executor, lambda: fn(*args, **kwargs)),
                 timeout=timeout or self._queue_timeout,
             )
-        except asyncio.TimeoutError:
+        except builtins.TimeoutError:
             logger.warning(
                 "InferencePool task timed out (fn=%s)",
                 getattr(fn, "__name__", str(fn)),

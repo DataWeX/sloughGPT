@@ -7,11 +7,12 @@ This router just exposes manager methods as HTTP endpoints.
 
 import asyncio
 
-from domain.training._internal.tokenizer_manager import get_tokenizer_manager
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import endpoint, raise_error, safe_audit_log, success_response
+
+from domain.training._internal.tokenizer_manager import get_tokenizer_manager
 
 
 class TokenizeRequest(BaseModel):
@@ -98,9 +99,7 @@ class TokenizerRouter:
     ) -> dict:
         await TokenizerRouter._ensure_trained()
         mgr = get_tokenizer_manager()
-        return success_response(
-            data=await asyncio.to_thread(mgr.show_pretokenization, req.text)
-        )
+        return success_response(data=await asyncio.to_thread(mgr.show_pretokenization, req.text))
 
     @staticmethod
     @endpoint("tokenizer.decompose")
@@ -220,9 +219,28 @@ class TokenizerRouter:
         await TokenizerRouter._ensure_trained()
         tok = get_tokenizer_manager().get_tokenizer()
         sample_words = [
-            "the", "and", "to", "of", "a", "in", "that", "is", "was", "he",
-            "for", "it", "with", "as", "his", "on", "hello", "world",
-            "machine", "learning", "neural", "network",
+            "the",
+            "and",
+            "to",
+            "of",
+            "a",
+            "in",
+            "that",
+            "is",
+            "was",
+            "he",
+            "for",
+            "it",
+            "with",
+            "as",
+            "his",
+            "on",
+            "hello",
+            "world",
+            "machine",
+            "learning",
+            "neural",
+            "network",
         ]
 
         def _encode_all():

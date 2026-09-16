@@ -8,14 +8,18 @@ The JSON files are written to data/experiments_json/ for human readability.
 
 import logging
 import re
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 logger = logging.getLogger("slo.routers.experiments")
 
@@ -82,7 +86,7 @@ class ExperimentsRouter:
         db = _get_db()
         col = db.collection("experiments")
         docs = col.find()
-        exp_ids = sorted(set(d.get("experiment_id", "") for d in docs))
+        exp_ids = sorted({d.get("experiment_id", "") for d in docs})
         return success_response(data={"experiments": exp_ids, "count": len(exp_ids)})
 
     @endpoint("experiments.get")
@@ -177,7 +181,7 @@ class ExperimentsRouter:
         status_data = {
             "experiment_id": e_id,
             "status": "completed",
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
         }
         if existing:
             status_col.update_one(
@@ -253,7 +257,7 @@ class ExperimentsRouter:
                 "metric": metric_name,
                 "value": value,
                 "step": step,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
         safe_audit_log(
@@ -282,7 +286,7 @@ class ExperimentsRouter:
                 "experiment_id": e_id,
                 "param": param_name,
                 "value": value,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
         safe_audit_log("experiment.log_param", resource=e_id, detail=f"param={param_name}")

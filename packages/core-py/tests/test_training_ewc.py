@@ -4,20 +4,19 @@ import numpy as np
 import pytest
 
 from domain.training._internal.ewc import (
-    _as_array,
-    _scalar,
-    _batch_size,
-    _unpack_batch,
-    EWCParameters,
-    TaskSnapshot,
     DiagonalFisherEstimator,
     EwcContinualLearner,
+    EWCParameters,
+    TaskSnapshot,
+    _as_array,
+    _batch_size,
+    _scalar,
+    _unpack_batch,
 )
 from domain.training._internal.slonet import (
-    Tensor,
-    tensor,
     SloLinear,
     cross_entropy,
+    tensor,
 )
 
 
@@ -136,9 +135,12 @@ def test_ewc_parameters_defaults():
 
 def test_task_snapshot_fields():
     s = TaskSnapshot(
-        task_id="t1", task_name="first",
-        parameters={"w": np.ones(2)}, fisher_diagonal={"w": np.zeros(2)},
-        optimal_loss=0.5, num_samples=10,
+        task_id="t1",
+        task_name="first",
+        parameters={"w": np.ones(2)},
+        fisher_diagonal={"w": np.zeros(2)},
+        optimal_loss=0.5,
+        num_samples=10,
     )
     assert s.task_id == "t1"
     assert s.task_name == "first"

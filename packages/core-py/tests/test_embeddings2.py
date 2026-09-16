@@ -1,13 +1,12 @@
-import hashlib
 import numpy as np
 import pytest
 
 from domain.inference._internal.embeddings import (
+    BatchEmbedder,
+    Embedder,
     EmbeddingProvider,
     EmbeddingResult,
     InMemoryEmbedder,
-    Embedder,
-    BatchEmbedder,
     OpenAIEmbedder,
     create_embedder,
 )
@@ -139,6 +138,7 @@ class TestEmbedder:
 
     def test_explicit_openai_wrong_import(self, monkeypatch):
         import builtins
+
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):

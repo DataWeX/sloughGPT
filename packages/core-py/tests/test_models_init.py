@@ -1,7 +1,5 @@
 """Tests for domain.models — ModelInterface, ModelLoader, SloughGPTModel."""
 
-import tempfile
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -9,7 +7,7 @@ import pytest
 
 class TestModelLoader:
     def test_register_and_load_external(self):
-        from domain.models import ModelLoader, ModelInterface
+        from domain.models import ModelLoader
 
         class DummyModel:
             def __init__(self, **kwargs):
@@ -33,13 +31,16 @@ class TestModelLoader:
 
     def test_unknown_external_model_raises(self):
         from domain.models import ModelLoader
+
         with pytest.raises(ValueError, match="Unknown model_type"):
             ModelLoader._load_external_model("nonexistent_type", {})
 
     def test_gguf_without_llama_cpp_raises(self):
         from domain.models import ModelLoader
+
         try:
             import llama_cpp
+
             pytest.skip("llama-cpp-python installed, can't test ImportError")
         except ImportError:
             with pytest.raises(NotImplementedError, match="llama-cpp-python"):
@@ -50,9 +51,14 @@ class TestSloughGPTModel:
     @pytest.fixture
     def small_model(self):
         from domain.models import SloughGPTModel
+
         return SloughGPTModel(
-            vocab_size=256, n_embed=32, n_layer=2, n_head=2,
-            block_size=16, max_seq_len=64,
+            vocab_size=256,
+            n_embed=32,
+            n_layer=2,
+            n_head=2,
+            block_size=16,
+            max_seq_len=64,
         )
 
     def test_config(self, small_model):
@@ -78,15 +84,20 @@ class TestSloughGPTModel:
     def test_state_dict_load_state_dict_roundtrip(self, small_model):
         sd = small_model.state_dict()
         from domain.models import SloughGPTModel
+
         new_model = SloughGPTModel(
-            vocab_size=256, n_embed=32, n_layer=2, n_head=2,
-            block_size=16, max_seq_len=64,
+            vocab_size=256,
+            n_embed=32,
+            n_layer=2,
+            n_head=2,
+            block_size=16,
+            max_seq_len=64,
         )
         new_model.load_state_dict(sd)
         # Verify params match
         for (k1, p1), (k2, p2) in zip(
             small_model.state_dict().items(),
-            new_model.state_dict().items(),
+            new_model.state_dict().items(), strict=False,
         ):
             if k1 == "config":
                 continue
@@ -139,27 +150,33 @@ class TestAliases:
     def test_rmsnorm_alias(self):
         from domain.models import RMSNorm
         from domain.training._internal.slonet import SloRMSNorm
+
         assert RMSNorm is SloRMSNorm
 
     def test_attention_alias(self):
         from domain.models import SloughGPTAttention
         from domain.training._internal.slonet import SloMultiHeadAttention
+
         assert SloughGPTAttention is SloMultiHeadAttention
 
     def test_block_alias(self):
         from domain.models import SloughGPTBlock
         from domain.training._internal.slonet import SloTransformerBlock
+
         assert SloughGPTBlock is SloTransformerBlock
 
     def test_swiglu_alias(self):
         from domain.models import SwiGLU
         from domain.training._internal.slonet import SloFeedForward
+
         assert SwiGLU is SloFeedForward
 
     def test_rotate_half_callable(self):
         from domain.models import rotate_half
+
         assert callable(rotate_half)
 
     def test_apply_rotary_pos_emb_callable(self):
         from domain.models import apply_rotary_pos_emb
+
         assert callable(apply_rotary_pos_emb)

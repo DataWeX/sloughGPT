@@ -33,7 +33,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
@@ -113,7 +113,9 @@ class VMTrainingBridge:
 
         logger.debug(
             "TRAIN_START job=%d api_job_id=%s config=%s",
-            job_id, api_job_id, body,
+            job_id,
+            api_job_id,
+            body,
         )
         return job_id
 
@@ -172,21 +174,25 @@ class VMTrainingBridge:
             "error": data.get("error"),
         }
 
-    def get_result_json(self, job_id: int) -> Optional[str]:
+    def get_result_json(self, job_id: int) -> str | None:
         """Return completed job result as JSON string, or None."""
         with self._lock:
             job = self._jobs.get(job_id)
             if job is None or job.get("status") != "completed":
                 return None
             data = job.get("_result_data", {})
-        return json.dumps({
-            "success": data.get("status") == "completed",
-            "final_loss": data.get("loss"),
-            "eval_loss": data.get("eval_loss"),
-            "model_path": data.get("checkpoint"),
-            "checkpoint_name": data.get("checkpoint", "").split("/")[-1] if data.get("checkpoint") else None,
-            "epochs_completed": data.get("current_epoch", 0),
-        })
+        return json.dumps(
+            {
+                "success": data.get("status") == "completed",
+                "final_loss": data.get("loss"),
+                "eval_loss": data.get("eval_loss"),
+                "model_path": data.get("checkpoint"),
+                "checkpoint_name": data.get("checkpoint", "").split("/")[-1]
+                if data.get("checkpoint")
+                else None,
+                "epochs_completed": data.get("current_epoch", 0),
+            }
+        )
 
     def stop(self, job_id: int) -> bool:
         """Ask the API to stop a running training job.
@@ -224,7 +230,7 @@ class VMTrainingBridge:
         with self._lock:
             return self._jobs.pop(job_id, None) is not None
 
-    def job_info(self, job_id: int) -> Optional[dict[str, Any]]:
+    def job_info(self, job_id: int) -> dict[str, Any] | None:
         """Return the tracked record for a job, or None if unknown.
 
         Keys: ``api_job_id``, ``status``, ``progress`` (0-1), ``error``.
@@ -243,13 +249,11 @@ class VMTrainingBridge:
     def alive_count(self) -> int:
         """Return number of jobs still running."""
         with self._lock:
-            return sum(
-                1 for j in self._jobs.values() if j.get("status") == "running"
-            )
+            return sum(1 for j in self._jobs.values() if j.get("status") == "running")
 
 
 # Module-level singleton
-_bridge: Optional[VMTrainingBridge] = None
+_bridge: VMTrainingBridge | None = None
 
 
 def get_bridge() -> VMTrainingBridge:

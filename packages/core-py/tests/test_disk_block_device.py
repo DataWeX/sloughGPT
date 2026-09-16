@@ -4,23 +4,22 @@ from __future__ import annotations
 
 import os
 import tempfile
+
 import pytest
 
 from domain.shell._internal.vm import (
-    BlockDevice,
-    DiskDevice,
-    FlatFS,
     BlockCompressor,
+    BlockDevice,
     BlockMapEntry,
     CompressionAlgo,
-    BlockFlags,
-    crc8,
-    MAGIC,
     DeviceFault,
+    DiskDevice,
+    FlatFS,
+    crc8,
 )
 
-
 # ── CRC8 ─────────────────────────────────────────────────────────────────────
+
 
 class TestCRC8:
     def test_empty_data(self):
@@ -40,6 +39,7 @@ class TestCRC8:
 
 
 # ── BlockCompressor ──────────────────────────────────────────────────────────
+
 
 class TestBlockCompressor:
     def test_gzip_always_available(self):
@@ -76,6 +76,7 @@ class TestBlockCompressor:
 
 # ── BlockMapEntry ────────────────────────────────────────────────────────────
 
+
 class TestBlockMapEntry:
     def test_pack_unpack(self):
         entry = BlockMapEntry(offset=1024, compressed_size=512, flags=0x01, crc=0xAB)
@@ -97,13 +98,14 @@ class TestBlockMapEntry:
 
 # ── BlockDevice (in-memory) ──────────────────────────────────────────────────
 
+
 class TestBlockDevice:
     def test_read_write_sector(self):
         dev = BlockDevice(num_sectors=16)
         data = b"sector data"
         dev.write_sector(0, data)
         result = dev.read_sector(0)
-        assert bytes(result[:len(data)]) == data
+        assert bytes(result[: len(data)]) == data
 
     def test_sector_out_of_range(self):
         dev = BlockDevice(num_sectors=4)
@@ -121,6 +123,7 @@ class TestBlockDevice:
 
 
 # ── BlockDevice (persistent compressed) ─────────────────────────────────
+
 
 class TestBlockDevice:
     def test_create_and_open(self):
@@ -291,6 +294,7 @@ class TestBlockDevice:
 
 # ── FlatFS Integration ───────────────────────────────────────────────────────
 
+
 class TestFlatFSWithBlockDevice:
     def test_write_read_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -305,7 +309,7 @@ class TestFlatFSWithBlockDevice:
             assert fs.exists("hello.txt")
             # FlatFS reads full sectors, so data may have trailing zeros
             result = fs.read("hello.txt")
-            assert result[:len(content)] == content
+            assert result[: len(content)] == content
 
             dev.close()
 
@@ -355,10 +359,11 @@ class TestFlatFSWithBlockDevice:
             with BlockDevice(path) as dev:
                 fs = FlatFS(dev)
                 result = fs.read("persist.txt")
-                assert result[:len(content)] == content
+                assert result[: len(content)] == content
 
 
 # ── DiskDevice Integration ──────────────────────────────────────────────────
+
 
 class TestDiskDeviceWithBlockDevice:
     def test_read_write_sectors(self):

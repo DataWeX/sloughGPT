@@ -2,19 +2,17 @@
 domain.training._internal.hf_lora_finetune — HFLoraConfig, _LoRADataset."""
 
 import json
-import os
-import tempfile
 from pathlib import Path
 
 import numpy as np
-import pytest
+
 from domain.training._internal.data_import import (
-    ImportResult,
-    RepoImporter,
     DEFAULT_IGNORES,
+    BooksSearch,
     DataImporter,
     GitHubSearch,
-    BooksSearch,
+    ImportResult,
+    RepoImporter,
 )
 from domain.training._internal.hf_lora_finetune import HFLoraConfig, _LoRADataset
 
@@ -207,7 +205,7 @@ class TestDefaultIgnores:
 class TestRepoImporterInit:
     def test_creates_cache_dir(self, tmp_path):
         cache = tmp_path / "repos"
-        ri = RepoImporter(cache_dir=str(cache))
+        RepoImporter(cache_dir=str(cache))
         assert cache.exists()
 
     def test_default_cache_dir(self):
@@ -221,7 +219,7 @@ class TestRepoImporterInit:
 class TestRepoImporterBranchValidation:
     def test_valid_branch_names(self, tmp_path):
         import re
-        ri = RepoImporter(cache_dir=str(tmp_path / "c"))
+        RepoImporter(cache_dir=str(tmp_path / "c"))
         assert re.match(r'^[a-zA-Z0-9_\-/.]+$', "main")
         assert re.match(r'^[a-zA-Z0-9_\-/.]+$', "feature/x")
         assert re.match(r'^[a-zA-Z0-9_\-/.]+$', "release/1.0")

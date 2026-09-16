@@ -8,11 +8,11 @@ Public API:
 """
 
 from domain.feedback._internal.database import (
-    FeedbackDB,
-    get_feedback_db,
-    Message,
     Feedback,
+    FeedbackDB,
+    Message,
     SimilarPattern,
+    get_feedback_db,
 )
 from domain.feedback._internal.meta_weights import (
     MetaWeightManager,

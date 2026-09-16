@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterator
+from collections.abc import Iterator
 
 from .collector import Collector
 from .filters import Filter
@@ -9,7 +9,9 @@ from .stores import Store
 
 
 class CollectionPipeline:
-    def __init__(self, source: Source, store: Store, filters: list[Filter] | None = None, name: str = ""):
+    def __init__(
+        self, source: Source, store: Store, filters: list[Filter] | None = None, name: str = ""
+    ):
         self.name = name or f"{source.name}->{store.name}"
         self.source = source
         self.store = store

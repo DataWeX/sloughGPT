@@ -2,12 +2,14 @@
 Tests for the agents router — CRUD and execution.
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from apps.api.server.routers.agents import router
+
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
+from apps.api.server.routers.agents import router
 
 
 def _make_app():
@@ -42,8 +44,22 @@ class TestListAgents:
     def test_returns_passthrough_entries(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.list.return_value = [
-            {"id": "a", "name": "A", "description": "d", "instructions": "", "tools": ["search"], "avatar": ""},
-            {"id": "b", "name": "B", "description": "", "instructions": "i", "tools": [], "avatar": "x"},
+            {
+                "id": "a",
+                "name": "A",
+                "description": "d",
+                "instructions": "",
+                "tools": ["search"],
+                "avatar": "",
+            },
+            {
+                "id": "b",
+                "name": "B",
+                "description": "",
+                "instructions": "i",
+                "tools": [],
+                "avatar": "x",
+            },
         ]
         resp = client.get("/agents")
         assert resp.status_code == 200
@@ -59,8 +75,12 @@ class TestCreateAgent:
         sys = mock_get_sys.return_value
         sys.get.return_value = None
         sys.create.return_value = {
-            "id": "helper", "name": "Helper", "description": "",
-            "instructions": "", "tools": [], "avatar": "",
+            "id": "helper",
+            "name": "Helper",
+            "description": "",
+            "instructions": "",
+            "tools": [],
+            "avatar": "",
         }
         resp = client.post("/agents", json={"name": "Helper"})
         assert resp.status_code == 201
@@ -78,8 +98,12 @@ class TestCreateAgent:
         sys = mock_get_sys.return_value
         sys.get.return_value = None
         sys.create.return_value = {
-            "id": "risk", "name": "Risk", "description": "",
-            "instructions": "", "tools": [], "avatar": "",
+            "id": "risk",
+            "name": "Risk",
+            "description": "",
+            "instructions": "",
+            "tools": [],
+            "avatar": "",
         }
         client.post("/agents", json={"name": "Risk Analyst_Writer"})
         args, kwargs = sys.create.call_args
@@ -90,8 +114,12 @@ class TestCreateAgent:
         sys = mock_get_sys.return_value
         sys.get.return_value = None
         sys.create.return_value = {
-            "id": "my-agent", "name": "Name", "description": "",
-            "instructions": "", "tools": [], "avatar": "",
+            "id": "my-agent",
+            "name": "Name",
+            "description": "",
+            "instructions": "",
+            "tools": [],
+            "avatar": "",
         }
         client.post("/agents", json={"name": "Name", "id": "my-agent"})
         args, kwargs = sys.create.call_args
@@ -102,13 +130,23 @@ class TestCreateAgent:
         sys = mock_get_sys.return_value
         sys.get.return_value = None
         sys.create.return_value = {
-            "id": "helper", "name": "Helper", "description": "d",
-            "instructions": "i", "tools": ["search"], "avatar": "a",
+            "id": "helper",
+            "name": "Helper",
+            "description": "d",
+            "instructions": "i",
+            "tools": ["search"],
+            "avatar": "a",
         }
-        client.post("/agents", json={
-            "name": "Helper", "description": "d", "instructions": "i",
-            "tools": ["search"], "avatar": "a",
-        })
+        client.post(
+            "/agents",
+            json={
+                "name": "Helper",
+                "description": "d",
+                "instructions": "i",
+                "tools": ["search"],
+                "avatar": "a",
+            },
+        )
         args, kwargs = sys.create.call_args
         assert kwargs["tools"] == ["search"]
         assert kwargs["avatar"] == "a"
@@ -127,7 +165,14 @@ class TestGetAgent:
     @patch("domains.agents.system.get_agent_system")
     def test_returns_agent(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
-        sys.get.return_value = {"id": "helper", "name": "Helper", "description": "", "instructions": "", "tools": [], "avatar": ""}
+        sys.get.return_value = {
+            "id": "helper",
+            "name": "Helper",
+            "description": "",
+            "instructions": "",
+            "tools": [],
+            "avatar": "",
+        }
         resp = client.get("/agents/helper")
         assert resp.status_code == 200
 
@@ -143,7 +188,14 @@ class TestUpdateAgent:
     @patch("domains.agents.system.get_agent_system")
     def test_updates_agent(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
-        sys.update.return_value = {"id": "helper", "name": "Updated", "description": "", "instructions": "", "tools": [], "avatar": ""}
+        sys.update.return_value = {
+            "id": "helper",
+            "name": "Updated",
+            "description": "",
+            "instructions": "",
+            "tools": [],
+            "avatar": "",
+        }
         resp = client.put("/agents/helper", json={"name": "Updated"})
         assert resp.status_code == 200
 
@@ -157,11 +209,24 @@ class TestUpdateAgent:
     @patch("domains.agents.system.get_agent_system")
     def test_update_passthrough_all_fields(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
-        sys.update.return_value = {"id": "helper", "name": "U", "description": "d", "instructions": "i", "tools": ["web"], "avatar": "a"}
-        client.put("/agents/helper", json={
-            "name": "U", "description": "d", "instructions": "i",
-            "tools": ["web"], "avatar": "a",
-        })
+        sys.update.return_value = {
+            "id": "helper",
+            "name": "U",
+            "description": "d",
+            "instructions": "i",
+            "tools": ["web"],
+            "avatar": "a",
+        }
+        client.put(
+            "/agents/helper",
+            json={
+                "name": "U",
+                "description": "d",
+                "instructions": "i",
+                "tools": ["web"],
+                "avatar": "a",
+            },
+        )
         args, kwargs = sys.update.call_args
         assert kwargs["description"] == "d"
         assert kwargs["instructions"] == "i"
@@ -171,7 +236,14 @@ class TestUpdateAgent:
     @patch("domains.agents.system.get_agent_system")
     def test_update_empty_body_keeps_all_none(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
-        sys.update.return_value = {"id": "helper", "name": "U", "description": "", "instructions": "", "tools": [], "avatar": ""}
+        sys.update.return_value = {
+            "id": "helper",
+            "name": "U",
+            "description": "",
+            "instructions": "",
+            "tools": [],
+            "avatar": "",
+        }
         client.put("/agents/helper", json={})
         _, kwargs = sys.update.call_args
         assert kwargs["name"] is None
@@ -220,9 +292,14 @@ class TestExecuteAgent:
     def test_execute_passes_session_and_user(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.execute = AsyncMock(return_value={"response": "ok"})
-        client.post("/agents/helper/execute", json={
-            "request": "go", "session_id": "s1", "user_id": "u7",
-        })
+        client.post(
+            "/agents/helper/execute",
+            json={
+                "request": "go",
+                "session_id": "s1",
+                "user_id": "u7",
+            },
+        )
         args, kwargs = sys.execute.call_args
         assert kwargs["session_id"] == "s1"
         assert kwargs["user_id"] == "u7"
@@ -329,8 +406,12 @@ class TestOrchestrate:
         orch = mock_orch.return_value
 
         task = SimpleNamespace(
-            id="t1", description="do it", assigned_agent="writer",
-            status="pending", result=None, error=None,
+            id="t1",
+            description="do it",
+            assigned_agent="writer",
+            status="pending",
+            result=None,
+            error=None,
             to_dict=lambda: {"id": "t1", "status": "pending"},
         )
         orch._async_plan = AsyncMock(return_value=[task])
@@ -357,8 +438,12 @@ class TestOrchestrate:
         orch = mock_orch.return_value
 
         task = SimpleNamespace(
-            id="t2", description="do it", assigned_agent="a",
-            status=[], result=None, error=None,
+            id="t2",
+            description="do it",
+            assigned_agent="a",
+            status=[],
+            result=None,
+            error=None,
             to_dict=lambda: {"id": "t2", "status": "pending"},
         )
         orch._async_plan = AsyncMock(return_value=[task])

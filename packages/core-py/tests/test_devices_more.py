@@ -377,5 +377,11 @@ class TestDeviceManager:
     def test_create_default_devices(self):
         mgr = create_default_devices(_Kernel)
         assert set(mgr.names) == {
-            "null", "random", "llm", "embedding", "knowledge", "vision", "proc",
+            "null",
+            "random",
+            "llm",
+            "embedding",
+            "knowledge",
+            "vision",
+            "proc",
         }

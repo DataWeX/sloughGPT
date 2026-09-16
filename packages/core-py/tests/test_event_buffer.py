@@ -1,8 +1,12 @@
 """Tests for EventBuffer — thread-safe ring buffer for dashboard events."""
 
 import threading
-import time
-from domain.infrastructure._internal.event_buffer import EventBuffer, DashboardEvent, get_event_buffer
+
+from domain.infrastructure._internal.event_buffer import (
+    DashboardEvent,
+    EventBuffer,
+    get_event_buffer,
+)
 
 
 class TestDashboardEvent:
@@ -21,7 +25,7 @@ class TestDashboardEvent:
         e = DashboardEvent(ts=1.0, category="A", message="b")
         try:
             e.ts = 5.0
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 

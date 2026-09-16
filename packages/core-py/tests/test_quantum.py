@@ -2,14 +2,19 @@
 
 import math
 import random
+
 import pytest
+
 from domain.soul._internal.quantum import (
-    QuantumState, QuantumCognitiveEngine, QuantumParallelProcessor,
-    HyperdimensionalProcessor, TemporalReasoningEngine,
+    HyperdimensionalProcessor,
+    QuantumCognitiveEngine,
+    QuantumParallelProcessor,
+    QuantumState,
+    TemporalReasoningEngine,
 )
 
-
 # ── QuantumState ───────────────────────────────────────────────────────
+
 
 class TestQuantumState:
     def test_init(self):
@@ -83,6 +88,7 @@ class TestQuantumState:
 
 
 # ── QuantumCognitiveEngine ─────────────────────────────────────────────
+
 
 class TestQuantumCognitiveEngine:
     def test_init(self):
@@ -237,6 +243,7 @@ class TestQuantumCognitiveEngine:
 
 # ── QuantumParallelProcessor ───────────────────────────────────────────
 
+
 class TestQuantumParallelProcessor:
     def test_init(self):
         qpp = QuantumParallelProcessor()
@@ -283,7 +290,7 @@ class TestQuantumParallelProcessor:
 
     def test_numeric_processor(self):
         qpp = QuantumParallelProcessor()
-        result = qpp.parallel_process([1, 2, 3], lambda x: x ** 2)
+        result = qpp.parallel_process([1, 2, 3], lambda x: x**2)
         assert result == [1, 4, 9]
 
     def test_many_inputs_wraps_streams(self):
@@ -315,6 +322,7 @@ class TestQuantumParallelProcessor:
 
 
 # ── HyperdimensionalProcessor ──────────────────────────────────────────
+
 
 class TestHyperdimensionalProcessor:
     def test_init(self):
@@ -449,6 +457,7 @@ class TestHyperdimensionalProcessor:
 
 
 # ── TemporalReasoningEngine ────────────────────────────────────────────
+
 
 class TestTemporalReasoningEngine:
     def test_init(self):

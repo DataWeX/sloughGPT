@@ -2,26 +2,25 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+import pytest
+
 from domain.training._internal.slonet_kernels import (
-    nb_rmsnorm,
-    nb_layernorm,
-    nb_swiglu,
-    nb_softmax,
-    nb_embed,
-    nb_add_pos,
-    nb_swi_glu_mul,
     fused_layer_norm,
     lm_head_argmax,
+    nb_add_pos,
+    nb_embed,
+    nb_layernorm,
+    nb_rmsnorm,
+    nb_softmax,
+    nb_swi_glu_mul,
+    nb_swiglu,
 )
-
 
 # ── nb_rmsnorm ──────────────────────────────────────────────────────────────
 
 
 class TestNbRmsnorm:
-
     def test_basic(self):
         x = np.ones((1, 4), dtype=np.float32)
         w = np.ones(4, dtype=np.float32)
@@ -46,7 +45,6 @@ class TestNbRmsnorm:
 
 
 class TestNbLayernorm:
-
     def test_basic(self):
         x = np.ones((1, 4), dtype=np.float32)
         w = np.ones(4, dtype=np.float32)
@@ -73,7 +71,6 @@ class TestNbLayernorm:
 
 
 class TestNbSwiglu:
-
     def test_basic(self):
         h1 = np.array([[1.0, 2.0, 3.0]], dtype=np.float32)
         out = nb_swiglu(h1)
@@ -90,7 +87,6 @@ class TestNbSwiglu:
 
 
 class TestNbSoftmax:
-
     def test_basic(self):
         e = np.array([[1.0, 2.0, 3.0]], dtype=np.float32)
         out = nb_softmax(e)
@@ -115,7 +111,6 @@ class TestNbSoftmax:
 
 
 class TestNbEmbed:
-
     def test_basic(self):
         emb = np.ones((10, 4), dtype=np.float32)
         ids = np.array([[0, 1, 2]])
@@ -136,7 +131,6 @@ class TestNbEmbed:
 
 
 class TestNbAddPos:
-
     def test_basic(self):
         x = np.zeros((1, 4, 8), dtype=np.float32)
         pos_emb = np.ones((100, 8), dtype=np.float32)
@@ -149,7 +143,6 @@ class TestNbAddPos:
 
 
 class TestNbSwiGluMul:
-
     def test_basic(self):
         h1 = np.array([[1.0, 2.0, 3.0]], dtype=np.float32)
         h3 = np.array([[1.0, 1.0, 1.0]], dtype=np.float32)
@@ -162,7 +155,6 @@ class TestNbSwiGluMul:
 
 
 class TestFusedLayerNorm:
-
     def test_basic(self):
         x = np.ones((1, 4), dtype=np.float32)
         w = np.ones(4, dtype=np.float32)
@@ -175,7 +167,6 @@ class TestFusedLayerNorm:
 
 
 class TestLmHeadArgmax:
-
     def test_basic(self):
         # x is (embed_dim,), W is (vocab_size, embed_dim)
         x = np.array([1.0, 2.0, 3.0], dtype=np.float32)

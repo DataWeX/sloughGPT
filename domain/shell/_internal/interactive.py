@@ -19,8 +19,8 @@ import termios
 import threading
 import time
 import tty
-from typing import Any, Callable
-
+from collections.abc import Callable
+from typing import Any
 
 # ── Raw key reading ──────────────────────────────────────────────────────────
 
@@ -225,7 +225,7 @@ class _RawTerminal:
         self._fd = fd
         self._old_attrs: list | None = None
 
-    def __enter__(self) -> "_RawTerminal":
+    def __enter__(self) -> _RawTerminal:
         try:
             self._old_attrs = termios.tcgetattr(self._fd)
             tty.setraw(self._fd)
@@ -745,7 +745,7 @@ class InteractivePrompt:
 
     # ── Edit (validated text input) ────────────────────────────────────
 
-    def edit(self, message: str, default: str = "", validator: "Callable[[str], str | None] | None" = None) -> str:
+    def edit(self, message: str, default: str = "", validator: Callable[[str], str | None] | None = None) -> str:
         """Interactive text input with inline validation.
 
         Args:
@@ -1216,7 +1216,7 @@ class InteractivePrompt:
 
     def _tree_leaves(self, tree: dict) -> list[str]:
         leaves: list[str] = []
-        for k, v in tree.items():
+        for _k, v in tree.items():
             if isinstance(v, dict):
                 leaves.extend(self._tree_leaves(v))
             elif isinstance(v, list):
@@ -1337,7 +1337,7 @@ class InteractivePrompt:
 
     # ── Spin wait ──────────────────────────────────────────────────────
 
-    def spin_wait(self, message: str, check_fn: "Callable[[], bool]",
+    def spin_wait(self, message: str, check_fn: Callable[[], bool],
                   interval: float = 0.1, timeout: float = 0) -> bool:
         """Wait for a condition with a spinner. Returns True when ready.
 
@@ -1360,7 +1360,7 @@ class InteractivePrompt:
             return True
         return self._spin_wait_raw(message, check_fn, interval, timeout)
 
-    def _spin_wait_raw(self, message: str, check_fn: "Callable[[], bool]",
+    def _spin_wait_raw(self, message: str, check_fn: Callable[[], bool],
                        interval: float, timeout: float) -> bool:
         import time as _t
         fd = self._get_fd()
@@ -1453,8 +1453,8 @@ class InteractivePrompt:
     def file_browser(self, title: str, start_dir: str = ".",
                      pattern: str = "*") -> str | None:
         """Interactive file browser with directory navigation."""
-        import os as _os
         import glob as _glob
+        import os as _os
         if not self._is_tty:
             return self._select_fallback(title, ["(no TTY)"])
 
@@ -1473,7 +1473,7 @@ class InteractivePrompt:
         return self._file_browser_raw(title, _os.path.abspath(start_dir), _list_dir)
 
     def _file_browser_raw(self, title: str, start: str,
-                          list_fn: "Callable[[str], list[str]]") -> str | None:
+                          list_fn: Callable[[str], list[str]]) -> str | None:
         import os as _os
         fd = self._get_fd()
         current = start
@@ -2958,8 +2958,8 @@ class InteractivePrompt:
 
     # ── Spin until ─────────────────────────────────────────────────────
 
-    def spin_until(self, message: str, async_fn: "Callable[[], Any]",
-                   check: "Callable[[Any], bool]",
+    def spin_until(self, message: str, async_fn: Callable[[], Any],
+                   check: Callable[[Any], bool],
                    interval: float = 0.1, timeout: float = 0) -> Any:
         """Wait for an async function's result to satisfy a condition.
 
@@ -2985,9 +2985,9 @@ class InteractivePrompt:
                     return None
         return self._spin_until_raw(message, async_fn, check, interval, timeout)
 
-    def _spin_until_raw(self, message: str, async_fn: "Callable[[], Any]",
-                        check: "Callable[[Any], bool]",
-                        interval: float, timeout: float) -> "Any":
+    def _spin_until_raw(self, message: str, async_fn: Callable[[], Any],
+                        check: Callable[[Any], bool],
+                        interval: float, timeout: float) -> Any:
         import time as _t
         fd = self._get_fd()
         frames = ["\u25cf", "\u25cf\u25cf", "\u25cf\u25cf\u25cf", "\u25cf"]
@@ -3229,7 +3229,7 @@ class InteractivePrompt:
         def _render() -> list[str]:
             lines: list[str] = []
             lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}")
-            lines.append(f"{_ERASE_LINE}\r  {'  '.join(f'{_BOLD}{h.ljust(w)}{_RESET}' for h, w in zip(headers, widths))}")
+            lines.append(f"{_ERASE_LINE}\r  {'  '.join(f'{_BOLD}{h.ljust(w)}{_RESET}' for h, w in zip(headers, widths, strict=False))}")
             lines.append(f"{_ERASE_LINE}\r  {_DIM}{_dash_row(widths)}{_RESET}")
             for i in range(min(max_visible, len(rows))):
                 idx = scroll + i
@@ -3493,7 +3493,7 @@ class InteractivePrompt:
         def _render() -> list[str]:
             lines: list[str] = []
             lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}  {_DIM}(Tab: cell  Enter: edit/save  Esc: done){_RESET}")
-            lines.append(f"{_ERASE_LINE}\r  {'  '.join(f'{_BOLD}{h.ljust(w)}{_RESET}' for h, w in zip(headers, widths))}")
+            lines.append(f"{_ERASE_LINE}\r  {'  '.join(f'{_BOLD}{h.ljust(w)}{_RESET}' for h, w in zip(headers, widths, strict=False))}")
             lines.append(f"{_ERASE_LINE}\r  {_DIM}{_dash_row(widths)}{_RESET}")
             for r_idx, row in enumerate(rows):
                 cells = []
@@ -4520,7 +4520,7 @@ class InteractivePrompt:
 
         def _render() -> str:
             lines = []
-            for i, (icon, label) in enumerate(zip(icons, labels)):
+            for i, (icon, label) in enumerate(zip(icons, labels, strict=False)):
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
                 lines.append(f"  {prefix}{color}{icon} {label}{_RESET}")
@@ -5536,7 +5536,7 @@ class InteractivePrompt:
             preview_lines = preview_text.split("\n")[:6]
             preview_str = "\n".join(f"  {_DIM}{line}{_RESET}" for line in preview_lines)
             lines = []
-            for i, (icon, label) in enumerate(zip(icons, labels)):
+            for i, (icon, label) in enumerate(zip(icons, labels, strict=False)):
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
                 lines.append(f"  {prefix}{color}{icon} {label}{_RESET}")
@@ -5585,14 +5585,14 @@ class InteractivePrompt:
             dict of item → confirmed status
         """
         if not self._is_tty:
-            return {item: default for item in items}
+            return dict.fromkeys(items, default)
         return self._multi_confirm_raw(message, items, default)
 
     def _multi_confirm_raw(self, message: str, items: list[str],
                            default: bool) -> dict[str, bool]:
         fd = self._get_fd()
         idx = 0
-        states = {item: default for item in items}
+        states = dict.fromkeys(items, default)
 
         def _render() -> str:
             lines = []
@@ -5709,7 +5709,7 @@ class InteractivePrompt:
                                        default: bool) -> list[str]:
         fd = self._get_fd()
         idx = 0
-        states = {item: default for item in items}
+        states = dict.fromkeys(items, default)
 
         def _render() -> str:
             preview_text = preview_fn(items[idx])
@@ -5767,7 +5767,7 @@ class InteractivePrompt:
             "cyan": _CYAN, "magenta": "\033[35m", "blue": "\033[34m",
         }
         bar = ""
-        for name, val, color in segments:
+        for _name, val, color in segments:
             frac = val / max(total, 1)
             filled = int(frac * width)
             c = colors_map.get(color, _CYAN)
@@ -7078,7 +7078,7 @@ class InteractivePrompt:
             lines: list[str] = []
             lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}  {_DIM}(Tab: column  Space: asc/desc  Enter: confirm){_RESET}")
             hdr_parts = []
-            for i, (h, w) in enumerate(zip(headers, widths)):
+            for i, (h, w) in enumerate(zip(headers, widths, strict=False)):
                 arrow = " \u25b2" if sort_asc and i == sort_col else (" \u25bc" if not sort_asc and i == sort_col else "")
                 if i == sort_col:
                     hdr_parts.append(f"{_BOLD}{_CYAN}{h.ljust(w)}{arrow}{_RESET}")
@@ -7197,7 +7197,7 @@ class InteractivePrompt:
         if title:
             lines.append(f"  {_BOLD}{_CYAN}{title}{_RESET}")
 
-        header_str = "  ".join(f"{_BOLD}{h.ljust(w)}{_RESET}" for h, w in zip(headers, widths))
+        header_str = "  ".join(f"{_BOLD}{h.ljust(w)}{_RESET}" for h, w in zip(headers, widths, strict=False))
         lines.append(f"  {_BOLD}{header_str}{_RESET}")
         lines.append(f"  {_DIM}{_dash_row(widths)}{_RESET}")
 
@@ -7261,7 +7261,7 @@ class InteractivePrompt:
             self._io.write(f"  {l_display:<{col_w + 10}}  \u2502  {r_display}")
 
     def _edit_raw(self, message: str, default: str,
-                  validator: "Callable[[str], str | None] | None") -> str:
+                  validator: Callable[[str], str | None] | None) -> str:
         """Interactive edit using raw terminal input."""
         fd = self._get_fd()
         suffix = f" [{_DIM}{default}{_RESET}]" if default else ""
@@ -7506,7 +7506,7 @@ class InteractivePrompt:
     # ── Select with preview ────────────────────────────────────────────
 
     def select_with_preview(self, title: str, options: list[str],
-                            preview_fn: "Callable[[str], str]") -> str:
+                            preview_fn: Callable[[str], str]) -> str:
         """Show an interactive selector with a live preview panel.
 
         Args:
@@ -7526,7 +7526,7 @@ class InteractivePrompt:
         return self._select_with_preview_raw(title, options, preview_fn)
 
     def _select_with_preview_raw(self, title: str, options: list[str],
-                                 preview_fn: "Callable[[str], str]") -> str:
+                                 preview_fn: Callable[[str], str]) -> str:
         """Interactive select with live preview using raw terminal input."""
         fd = self._get_fd()
         query = ""
@@ -7790,7 +7790,7 @@ class InteractivePrompt:
 
     # ── Spinner ────────────────────────────────────────────────────────
 
-    def spinner(self, message: str = "", rate: float = 0.1) -> "_InteractiveSpinner":
+    def spinner(self, message: str = "", rate: float = 0.1) -> _InteractiveSpinner:
         """Return a context manager that shows a spinner while a task runs.
 
         Usage::
@@ -7815,7 +7815,7 @@ class _InteractiveSpinner:
         self._stop = False
         self._thread: threading.Thread | None = None
 
-    def __enter__(self) -> "_InteractiveSpinner":
+    def __enter__(self) -> _InteractiveSpinner:
         import threading
         self._stop = False
 

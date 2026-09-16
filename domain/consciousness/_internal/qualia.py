@@ -5,20 +5,19 @@ from __future__ import annotations
 import math
 import re
 import time
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 
 @dataclass
 class QualiaState:
     """A snapshot of experiential qualities."""
 
-    valence: float = 0.0    # -1 to 1 (negative/positive)
-    arousal: float = 0.0    # 0 to 1 (calm/excited)
+    valence: float = 0.0  # -1 to 1 (negative/positive)
+    arousal: float = 0.0  # 0 to 1 (calm/excited)
     dominance: float = 0.0  # -1 to 1 (submissive/in-control)
-    novelty: float = 0.0    # 0 to 1 (familiar/novel)
+    novelty: float = 0.0  # 0 to 1 (familiar/novel)
     coherence: float = 0.0  # 0 to 1 (confused/understood)
-    beauty: float = 0.0     # 0 to 1 (ugly/beautiful)
+    beauty: float = 0.0  # 0 to 1 (ugly/beautiful)
 
     def decay(self, rate: float = 0.1) -> None:
         """Qualia fade over time."""
@@ -42,29 +41,73 @@ class QualiaState:
     def magnitude(self) -> float:
         """Overall intensity of the qualia state."""
         return math.sqrt(
-            self.valence ** 2
-            + self.arousal ** 2
-            + self.dominance ** 2
-            + self.novelty ** 2
-            + self.coherence ** 2
-            + self.beauty ** 2
+            self.valence**2
+            + self.arousal**2
+            + self.dominance**2
+            + self.novelty**2
+            + self.coherence**2
+            + self.beauty**2
         ) / math.sqrt(6)
 
 
 # Simple sentiment word lists for qualia generation
 _POSITIVE_WORDS = {
-    "good", "great", "excellent", "wonderful", "love", "happy", "beautiful",
-    "amazing", "perfect", "best", "thanks", "helpful", "brilliant", "fantastic",
-    "nice", "like", "enjoy", "fun", "exciting", "awesome", "cool",
+    "good",
+    "great",
+    "excellent",
+    "wonderful",
+    "love",
+    "happy",
+    "beautiful",
+    "amazing",
+    "perfect",
+    "best",
+    "thanks",
+    "helpful",
+    "brilliant",
+    "fantastic",
+    "nice",
+    "like",
+    "enjoy",
+    "fun",
+    "exciting",
+    "awesome",
+    "cool",
 }
 _NEGATIVE_WORDS = {
-    "bad", "terrible", "awful", "hate", "sad", "ugly", "worst", "horrible",
-    "annoying", "boring", "wrong", "error", "fail", "broken", "stupid",
-    "wrong", "problem", "issue", "bug", "crash",
+    "bad",
+    "terrible",
+    "awful",
+    "hate",
+    "sad",
+    "ugly",
+    "worst",
+    "horrible",
+    "annoying",
+    "boring",
+    "wrong",
+    "error",
+    "fail",
+    "broken",
+    "stupid",
+    "problem",
+    "issue",
+    "bug",
+    "crash",
 }
 _NOVELTY_MARKERS = {
-    "new", "first", "never", "unique", "novel", "unusual", "surprising",
-    "unexpected", "interesting", "creative", "innovative", "original",
+    "new",
+    "first",
+    "never",
+    "unique",
+    "novel",
+    "unusual",
+    "surprising",
+    "unexpected",
+    "interesting",
+    "creative",
+    "innovative",
+    "original",
 }
 _QUESTION_MARKERS = {"?", "how", "why", "what", "when", "where", "who"}
 
@@ -88,7 +131,7 @@ class QualiaEngine:
             The generated QualiaState.
         """
         context = context or []
-        words = set(re.findall(r'\b\w+\b', text.lower()))
+        words = set(re.findall(r"\b\w+\b", text.lower()))
 
         # Valence from sentiment
         pos_count = len(words & _POSITIVE_WORDS)
@@ -115,7 +158,7 @@ class QualiaEngine:
         novelty = min(1.0, novelty_markers * 0.2 + (0.3 if has_question else 0.0))
 
         # Coherence from sentence structure
-        sentences = [s.strip() for s in re.split(r'[.!?]+', text) if s.strip()]
+        sentences = [s.strip() for s in re.split(r"[.!?]+", text) if s.strip()]
         coherence = min(1.0, len(sentences) * 0.2) if sentences else 0.0
 
         # Beauty from aesthetic language
@@ -157,11 +200,11 @@ class QualiaEngine:
         self.history.append((time.time(), state))
         return state
 
-    def recall(self, similar_text: str) -> Optional[QualiaState]:
+    def recall(self, similar_text: str) -> QualiaState | None:
         """Recall qualia from a similar past experience."""
         if not self.history:
             return None
-        words = set(re.findall(r'\b\w+\b', similar_text.lower()))
+        words = set(re.findall(r"\b\w+\b", similar_text.lower()))
         best_score = 0.0
         best_state = None
         for _ts, state in self.history[-50:]:

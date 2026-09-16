@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import time
 import threading
+import time
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterator, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from .sources import Record
 
@@ -29,7 +30,10 @@ class Schema:
         for field_name, expected_type in self.field_types.items():
             if field_name in record.metadata:
                 if not isinstance(record.metadata[field_name], expected_type):
-                    return False, f"Field {field_name} has wrong type: expected {expected_type.__name__}"
+                    return (
+                        False,
+                        f"Field {field_name} has wrong type: expected {expected_type.__name__}",
+                    )
 
         for field_name, validator in self.field_validators.items():
             if field_name in record.metadata:
@@ -210,8 +214,8 @@ class CollectorRunner:
             return count
         except Exception as exc:
             import logging
-            logging.getLogger("slo.collections").warning(
-                "Collector '%s' failed: %s", name, exc)
+
+            logging.getLogger("slo.collections").warning("Collector '%s' failed: %s", name, exc)
             self._stats[name]["errors"] += 1
             return 0
 

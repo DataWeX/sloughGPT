@@ -9,10 +9,10 @@ Default config: n_embed=128, n_layer=4, n_head=4, block_size=128
 ~2M params, trains in ~5-10 min on CPU (24GB RAM).
 """
 
-import sys
-import os
-import time
 import logging
+import os
+import sys
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages", "core-py"))
 
@@ -30,7 +30,9 @@ def main():
             data_path = alt
         else:
             logger.error("No training data found at %s or %s", data_path, alt)
-            logger.info("Create a text file at datasets/api_conversations/input.txt or set TRAIN_DATA env var")
+            logger.info(
+                "Create a text file at datasets/api_conversations/input.txt or set TRAIN_DATA env var"
+            )
             sys.exit(1)
 
     config = TrainerConfig(
@@ -61,9 +63,18 @@ def main():
 
     n_params = sum(p.numel() for p in trainer.model.parameters())
     logger.info("Model: %d params (~%.1fM)", n_params, n_params / 1e6)
-    logger.info("Data: %s (%d train, %d val)", data_path, len(trainer.train_data), len(trainer.val_data))
-    logger.info("Config: embed=%d layers=%d heads=%d block=%d epochs=%d lr=%s",
-        config.n_embed, config.n_layer, config.n_head, config.block_size, config.epochs, config.learning_rate)
+    logger.info(
+        "Data: %s (%d train, %d val)", data_path, len(trainer.train_data), len(trainer.val_data)
+    )
+    logger.info(
+        "Config: embed=%d layers=%d heads=%d block=%d epochs=%d lr=%s",
+        config.n_embed,
+        config.n_layer,
+        config.n_head,
+        config.block_size,
+        config.epochs,
+        config.learning_rate,
+    )
 
     def on_progress(info):
         loss = info.get("train_loss", "?")
@@ -73,7 +84,11 @@ def main():
         epochs = info.get("epochs", 0)
         pct = info.get("progress_percent", 0)
         lr = info.get("learning_rate", 0)
-        parts = [f"step={step}", f"epoch={epoch}/{epochs}", f"loss={loss:.4f}" if isinstance(loss, float) else f"loss={loss}"]
+        parts = [
+            f"step={step}",
+            f"epoch={epoch}/{epochs}",
+            f"loss={loss:.4f}" if isinstance(loss, float) else f"loss={loss}",
+        ]
         if eval_loss is not None:
             parts.append(f"eval={eval_loss:.4f}")
         parts.append(f"lr={lr:.2e}")

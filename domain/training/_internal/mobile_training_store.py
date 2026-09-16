@@ -19,7 +19,8 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.training.mobile_store")
@@ -77,8 +78,8 @@ class MobileTrainingStore:
 
     def add_batch(
         self,
-        pairs: List[Dict[str, Any]],
-    ) -> List[str]:
+        pairs: list[dict[str, Any]],
+    ) -> list[str]:
         """Insert multiple training pairs.
 
         Args:
@@ -97,15 +98,18 @@ class MobileTrainingStore:
                 model=p.get("model", ""),
             )
             ids.append(doc_id)
-        logger.info("inserted %d training pairs", len(ids),
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "inserted %d training pairs",
+            len(ids),
+            extra={"tag": "TRAIN"},
+        )
         return ids
 
-    def get_pair(self, pair_id: str) -> Optional[Dict[str, Any]]:
+    def get_pair(self, pair_id: str) -> dict[str, Any] | None:
         """Get a single pair by ID."""
         return self._col.find_one({"_id": pair_id})
 
-    def get_pending_pairs(self, limit: int = 1000) -> List[Dict[str, Any]]:
+    def get_pending_pairs(self, limit: int = 1000) -> list[dict[str, Any]]:
         """Get all pairs not yet synced to server for training.
 
         Args:
@@ -120,23 +124,21 @@ class MobileTrainingStore:
             limit=limit,
         )
 
-    def get_pairs_by_session(self, session_id: str) -> List[Dict[str, Any]]:
+    def get_pairs_by_session(self, session_id: str) -> list[dict[str, Any]]:
         """Get all pairs from a specific session."""
         return self._col.find(
             {"session_id": session_id},
             sort=[("timestamp", 1)],
         )
 
-    def get_pairs_by_quality(self, min_quality: float = 0.0) -> List[Dict[str, Any]]:
+    def get_pairs_by_quality(self, min_quality: float = 0.0) -> list[dict[str, Any]]:
         """Get pairs with quality >= min_quality."""
         return self._col.find(
             {"quality": {"$gte": min_quality}},
             sort=[("quality", -1)],
         )
 
-    def get_training_ready(
-        self, min_pairs: int = 10, limit: int = 100
-    ) -> List[Dict[str, Any]]:
+    def get_training_ready(self, min_pairs: int = 10, limit: int = 100) -> list[dict[str, Any]]:
         """Get pairs ready for training (not yet used, not synced).
 
         Args:
@@ -151,7 +153,7 @@ class MobileTrainingStore:
             return []
         return self.get_pending_pairs(limit=limit)
 
-    def mark_synced(self, pair_ids: List[str]) -> int:
+    def mark_synced(self, pair_ids: list[str]) -> int:
         """Mark pairs as synced (sent to server for training).
 
         Args:
@@ -168,7 +170,7 @@ class MobileTrainingStore:
             )
         return count
 
-    def mark_used(self, pair_ids: List[str]) -> int:
+    def mark_used(self, pair_ids: list[str]) -> int:
         """Mark pairs as used for training (consumed by fine-tune).
 
         Args:
@@ -195,10 +197,13 @@ class MobileTrainingStore:
         Returns:
             True if updated, False if not found.
         """
-        return self._col.update_one(
-            {"_id": pair_id},
-            {"$set": {"quality": quality}},
-        ) > 0
+        return (
+            self._col.update_one(
+                {"_id": pair_id},
+                {"$set": {"quality": quality}},
+            )
+            > 0
+        )
 
     def delete_pair(self, pair_id: str) -> bool:
         """Delete a single pair."""
@@ -212,10 +217,10 @@ class MobileTrainingStore:
         self,
         limit: int = 50,
         offset: int = 0,
-        min_quality: Optional[float] = None,
-        session_id: Optional[str] = None,
-        search: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        min_quality: float | None = None,
+        session_id: str | None = None,
+        search: str | None = None,
+    ) -> list[dict[str, Any]]:
         """List training pairs with optional filters.
 
         Args:
@@ -228,7 +233,7 @@ class MobileTrainingStore:
         Returns:
             List of training pair documents, newest first.
         """
-        query: Dict[str, Any] = {}
+        query: dict[str, Any] = {}
         if min_quality is not None:
             query["quality"] = {"$gte": min_quality}
         if session_id:
@@ -245,11 +250,11 @@ class MobileTrainingStore:
             skip=offset,
         )
 
-    def count(self, query: Optional[Dict] = None) -> int:
+    def count(self, query: dict | None = None) -> int:
         """Count pairs matching query (or all if None)."""
         return self._col.count(query)
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get store statistics."""
         total = self.count()
         synced = self.count({"synced": True})
@@ -261,14 +266,14 @@ class MobileTrainingStore:
             "used": used,
         }
 
-    def quality_breakdown(self) -> Dict[str, int]:
+    def quality_breakdown(self) -> dict[str, int]:
         """Get count of pairs per quality value.
 
         Returns:
             Dict mapping quality string ("0", "1", "-1") to count.
         """
         pairs = self._col.find({})
-        counts: Dict[str, int] = {}
+        counts: dict[str, int] = {}
         for p in pairs:
             q = str(p.get("quality", 0))
             counts[q] = counts.get(q, 0) + 1
@@ -283,7 +288,7 @@ class MobileTrainingStore:
         self.compact()
 
 
-def get_training_store(db_path: Optional[str] = None) -> MobileTrainingStore:
+def get_training_store(db_path: str | None = None) -> MobileTrainingStore:
     """Get or create the singleton training data store.
 
     Args:

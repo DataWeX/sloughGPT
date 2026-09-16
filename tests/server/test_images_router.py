@@ -2,8 +2,9 @@
 Tests for the images router — generate, gallery, styles.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -284,6 +285,7 @@ class TestGradientGenerator:
 
     def _first_color_pixel(self, png_bytes):
         import io
+
         from PIL import Image
         img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
         return img.getpixel((15, 0))

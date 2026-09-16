@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import sys
-import pytest
-from pathlib import Path
 from unittest.mock import MagicMock
 
-from domain.shell._internal.addons.module_loader import ModuleLoader, ModuleInfo
+import pytest
 
+from domain.shell._internal.addons.module_loader import ModuleInfo, ModuleLoader
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def tmp_addon_dir(tmp_path):
@@ -28,7 +28,7 @@ def loader(tmp_addon_dir):
 def _write_addon(addon_dir, name, content=None):
     """Write a minimal addon .py file."""
     if content is None:
-        content = f'''
+        content = """
 from domain.shell._internal.addons.base import Addon
 
 class Addon:
@@ -38,7 +38,7 @@ class Addon:
 
     def cleanup(self):
         self.cleaned = True
-'''
+"""
     p = addon_dir / f"{name}.py"
     p.write_text(content)
     return p
@@ -46,10 +46,10 @@ class Addon:
 
 def _write_setup_addon(addon_dir, name):
     """Write a legacy addon using setup() function."""
-    content = '''
+    content = """
 def setup(kernel):
     kernel._test_loaded = True
-'''
+"""
     p = addon_dir / f"{name}.py"
     p.write_text(content)
     return p
@@ -65,13 +65,14 @@ def _write_broken_addon(addon_dir, name):
 
 def _write_private_addon(addon_dir, name):
     """Write a private addon (starts with _)."""
-    content = '# private addon\nx = 1\n'
+    content = "# private addon\nx = 1\n"
     p = addon_dir / f"_{name}.py"
     p.write_text(content)
     return p
 
 
 # ── ModuleInfo ────────────────────────────────────────────────────────────────
+
 
 class TestModuleInfo:
     def test_defaults(self):
@@ -85,8 +86,11 @@ class TestModuleInfo:
 
     def test_custom_fields(self):
         info = ModuleInfo(
-            name="my_mod", path="/x.py",
-            version="1.2.3", description="desc", author="me",
+            name="my_mod",
+            path="/x.py",
+            version="1.2.3",
+            description="desc",
+            author="me",
             dependencies=["dep1"],
         )
         assert info.version == "1.2.3"
@@ -94,6 +98,7 @@ class TestModuleInfo:
 
 
 # ── ModuleLoader init ─────────────────────────────────────────────────────────
+
 
 class TestModuleLoaderInit:
     def test_empty_loader(self):
@@ -116,6 +121,7 @@ class TestModuleLoaderInit:
 
 
 # ── Discovery ─────────────────────────────────────────────────────────────────
+
 
 class TestDiscovery:
     def test_discover_empty_dir(self, loader):
@@ -153,6 +159,7 @@ class TestDiscovery:
 
 # ── Loading ───────────────────────────────────────────────────────────────────
 
+
 class TestLoading:
     def test_load_addon_class(self, loader, tmp_addon_dir):
         _write_addon(tmp_addon_dir, "my_addon")
@@ -167,7 +174,7 @@ class TestLoading:
         kernel = MagicMock()
         loader.set_kernel(kernel)
         loader.discover()
-        instance = loader.load("legacy_addon")
+        loader.load("legacy_addon")
         assert kernel._test_loaded is True
 
     def test_load_not_found(self, loader):
@@ -200,7 +207,7 @@ class TestLoading:
         assert info.loaded_at > 0
 
     def test_load_extracts_metadata(self, loader, tmp_addon_dir):
-        content = '''
+        content = """
 __version__ = "2.0.0"
 __description__ = "A test addon"
 __author__ = "Tester"
@@ -210,7 +217,7 @@ from domain.shell._internal.addons.base import Addon
 class Addon:
     def setup(self, kernel):
         pass
-'''
+"""
         _write_addon(tmp_addon_dir, "meta_addon", content)
         loader.discover()
         loader.load("meta_addon")
@@ -221,6 +228,7 @@ class Addon:
 
 
 # ── Hot Reload ────────────────────────────────────────────────────────────────
+
 
 class TestHotReload:
     def test_reload(self, loader, tmp_addon_dir):
@@ -239,6 +247,7 @@ class TestHotReload:
 
 
 # ── Unloading ─────────────────────────────────────────────────────────────────
+
 
 class TestUnloading:
     def test_unload(self, loader, tmp_addon_dir):
@@ -275,6 +284,7 @@ class TestUnloading:
 
 
 # ── Hooks ─────────────────────────────────────────────────────────────────────
+
 
 class TestHooks:
     def test_pre_load_hook(self, loader, tmp_addon_dir):
@@ -317,6 +327,7 @@ class TestHooks:
 
 
 # ── Query ─────────────────────────────────────────────────────────────────────
+
 
 class TestQuery:
     def test_loaded(self, loader, tmp_addon_dir):
@@ -364,22 +375,23 @@ class TestQuery:
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 
+
 class TestDependencies:
     def test_load_with_dependencies(self, loader, tmp_addon_dir):
-        dep_content = '''
+        dep_content = """
 from domain.shell._internal.addons.base import Addon
 
 class Addon:
     def setup(self, kernel):
         self.dep_loaded = True
-'''
-        main_content = '''
+"""
+        main_content = """
 from domain.shell._internal.addons.base import Addon
 
 class Addon:
     def setup(self, kernel):
         self.main_loaded = True
-'''
+"""
         _write_addon(tmp_addon_dir, "dep", dep_content)
         _write_addon(tmp_addon_dir, "main", main_content)
 

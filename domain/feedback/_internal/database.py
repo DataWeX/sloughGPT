@@ -14,14 +14,14 @@ from __future__ import annotations
 
 import json
 import logging
-import uuid
 import threading
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Optional, List, Dict, Any
+import uuid
 from dataclasses import dataclass
-import numpy as np
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
+import numpy as np
 from mogdb import MogDB
 
 logger = logging.getLogger("slo.feedback.database")
@@ -33,8 +33,8 @@ class Message:
     conversation_id: str
     role: str  # "user" or "assistant"
     content: str
-    embedding: Optional[np.ndarray] = None
-    created_at: Optional[str] = None
+    embedding: np.ndarray | None = None
+    created_at: str | None = None
 
 
 @dataclass
@@ -42,8 +42,8 @@ class Feedback:
     id: str
     message_id: str
     rating: str  # "thumbs_up" or "thumbs_down"
-    quality_score: Optional[float] = None
-    created_at: Optional[str] = None
+    quality_score: float | None = None
+    created_at: str | None = None
 
 
 @dataclass
@@ -89,10 +89,7 @@ class FeedbackDB:
         conn.row_factory = sqlite3.Row
         try:
             tables = {
-                row[0]
-                for row in conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table'"
-                )
+                row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
             }
             conversations = (
                 [dict(r) for r in conn.execute("SELECT * FROM conversations")]
@@ -187,11 +184,11 @@ class FeedbackDB:
 
         logger.info("Migrated legacy SQLite feedback DB to MogDB (%s)", self.db_path)
 
-    def _embedding_to_list(self, embedding: np.ndarray) -> List[float]:
+    def _embedding_to_list(self, embedding: np.ndarray) -> list[float]:
         """Convert a numpy embedding to a JSON-serialisable float list."""
         return [float(x) for x in embedding.astype(np.float32).ravel()]
 
-    def _list_to_embedding(self, values: List[float]) -> np.ndarray:
+    def _list_to_embedding(self, values: list[float]) -> np.ndarray:
         """Convert a stored float list back to a float32 numpy array."""
         return np.array(values, dtype=np.float32)
 
@@ -204,7 +201,7 @@ class FeedbackDB:
         return float(np.dot(a, b) / (norm_a * norm_b))
 
     @staticmethod
-    def _strip_meta(doc: Dict[str, Any]) -> Dict[str, Any]:
+    def _strip_meta(doc: dict[str, Any]) -> dict[str, Any]:
         """Return *doc* without MogDB-internal fields (``_id``/``_created``/``_updated``)."""
         return {k: v for k, v in doc.items() if k not in ("_id", "_created", "_updated")}
 
@@ -213,7 +210,7 @@ class FeedbackDB:
     def create_conversation(self, user_id: str = "default", title: str = "New Chat") -> str:
         """Create a new conversation."""
         conv_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         with self._lock:
             self._conversations.insert_one(
@@ -229,7 +226,7 @@ class FeedbackDB:
 
         return conv_id
 
-    def get_conversation(self, conv_id: str) -> Optional[Dict]:
+    def get_conversation(self, conv_id: str) -> dict | None:
         """Get conversation by ID."""
         doc = self._conversations.find_one({"_id": conv_id})
         if not doc:
@@ -242,7 +239,7 @@ class FeedbackDB:
             "updated_at": doc["updated_at"],
         }
 
-    def list_conversations(self, user_id: str = "default", limit: int = 50) -> List[Dict]:
+    def list_conversations(self, user_id: str = "default", limit: int = 50) -> list[dict]:
         """List conversations for a user."""
         docs = self._conversations.find(
             {"user_id": user_id},
@@ -263,11 +260,11 @@ class FeedbackDB:
     # ============ Messages ============
 
     def add_message(
-        self, conversation_id: str, role: str, content: str, embedding: Optional[np.ndarray] = None
+        self, conversation_id: str, role: str, content: str, embedding: np.ndarray | None = None
     ) -> str:
         """Add a message to a conversation."""
         msg_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         stored_embedding = self._embedding_to_list(embedding) if embedding is not None else None
 
@@ -287,7 +284,7 @@ class FeedbackDB:
 
         return msg_id
 
-    def get_messages(self, conversation_id: str) -> List[Dict]:
+    def get_messages(self, conversation_id: str) -> list[dict]:
         """Get all messages in a conversation."""
         docs = self._messages.find(
             {"conversation_id": conversation_id},
@@ -304,7 +301,7 @@ class FeedbackDB:
             for d in docs
         ]
 
-    def get_message_embedding(self, message_id: str) -> Optional[np.ndarray]:
+    def get_message_embedding(self, message_id: str) -> np.ndarray | None:
         """Get embedding for a message."""
         doc = self._messages.find_one({"_id": message_id})
         if doc and doc.get("embedding") is not None:
@@ -317,12 +314,12 @@ class FeedbackDB:
         self,
         message_id: str,
         rating: str,
-        quality_score: Optional[float] = None,
-        context_snippet: Optional[str] = None,
+        quality_score: float | None = None,
+        context_snippet: str | None = None,
     ) -> str:
         """Add feedback for a message."""
         fb_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         with self._lock:
             self._feedback.insert_one(
@@ -339,7 +336,7 @@ class FeedbackDB:
 
         return fb_id
 
-    def get_feedback(self, message_id: str) -> List[Dict]:
+    def get_feedback(self, message_id: str) -> list[dict]:
         """Get all feedback for a message."""
         docs = self._feedback.find(
             {"message_id": message_id},
@@ -357,14 +354,14 @@ class FeedbackDB:
             for d in docs
         ]
 
-    def get_all_feedback(self, rating: Optional[str] = None, limit: int = 1000) -> List[Dict]:
+    def get_all_feedback(self, rating: str | None = None, limit: int = 1000) -> list[dict]:
         """Get all feedback, optionally filtered by rating.
 
         Mimics the previous SQL JOIN (feedback ⋈ messages): each feedback
         document is paired with its message's ``content``/``conversation_id``;
         feedback pointing at a missing message is skipped.
         """
-        query: Dict[str, Any] = {}
+        query: dict[str, Any] = {}
         if rating:
             query["rating"] = rating
 
@@ -400,9 +397,9 @@ class FeedbackDB:
         self,
         query_embedding: np.ndarray,
         k: int = 5,
-        rating: Optional[str] = None,
+        rating: str | None = None,
         min_similarity: float = 0.0,
-    ) -> List[SimilarPattern]:
+    ) -> list[SimilarPattern]:
         """Find similar messages using cosine similarity on embeddings.
 
         Reproduces the previous SQL path: messages with an embedding, limited
@@ -412,10 +409,7 @@ class FeedbackDB:
         messages = self._messages.find({"embedding": {"$exists": True}}, limit=1000)
 
         if rating:
-            rated_ids = {
-                fb["message_id"]
-                for fb in self._feedback.find({"rating": rating})
-            }
+            rated_ids = {fb["message_id"] for fb in self._feedback.find({"rating": rating})}
             messages = [m for m in messages if m["_id"] in rated_ids]
 
         results = []
@@ -437,8 +431,8 @@ class FeedbackDB:
         return results[:k]
 
     def find_similar_by_text(
-        self, query: str, k: int = 5, rating: Optional[str] = None
-    ) -> List[SimilarPattern]:
+        self, query: str, k: int = 5, rating: str | None = None
+    ) -> list[SimilarPattern]:
         """Find similar messages by text content (simple keyword matching)."""
         query_lower = query.lower()
         query_words = set(query_lower.split())
@@ -446,10 +440,7 @@ class FeedbackDB:
         messages = self._messages.find(limit=500)
 
         if rating:
-            rated_ids = {
-                fb["message_id"]
-                for fb in self._feedback.find({"rating": rating})
-            }
+            rated_ids = {fb["message_id"] for fb in self._feedback.find({"rating": rating})}
             messages = [m for m in messages if m["_id"] in rated_ids]
 
         # Score by word overlap
@@ -481,7 +472,7 @@ class FeedbackDB:
 
     # ============ Statistics ============
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get database statistics."""
         conv_count = len(self._conversations.find())
         msg_count = len(self._messages.find())
@@ -502,14 +493,17 @@ class FeedbackDB:
 
     # ============ Export ============
 
-    def export_feedback_jsonl(self, filepath: str, rating: Optional[str] = None):
+    def export_feedback_jsonl(self, filepath: str, rating: str | None = None):
         """Export feedback as JSONL for training."""
         with open(filepath, "w") as f:
             feedback_list = self.get_all_feedback(rating=rating)
             for fb in feedback_list:
                 # Get previous message (user) for context
                 prev_docs = self._messages.find(
-                    {"conversation_id": fb["conversation_id"], "created_at": {"$lt": fb.get("created_at", "")}},
+                    {
+                        "conversation_id": fb["conversation_id"],
+                        "created_at": {"$lt": fb.get("created_at", "")},
+                    },
                     sort=[("created_at", -1)],
                     limit=1,
                 )
@@ -544,7 +538,7 @@ class FeedbackDB:
 
     # ============ User Meta Weights ============
 
-    def get_user_meta_weights(self, user_id: str) -> Optional[Dict]:
+    def get_user_meta_weights(self, user_id: str) -> dict | None:
         """Get meta weights for a specific user."""
         doc = self._meta_weights.find_one({"_id": user_id})
         if not doc:
@@ -573,14 +567,14 @@ class FeedbackDB:
         top_k_delta: float = 1.0,
         style_bias_delta: float = 0.01,
         confidence_delta: float = 0.005,
-    ) -> Dict:
+    ) -> dict:
         """Update meta weights for a user based on feedback.
 
         Each delta is applied positively for thumbs_up, negatively for
         thumbs_down (except repetition_delta which is inverted — good
         responses get lower repetition penalty).
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # Compute per-field deltas based on rating
         is_up = rating == "thumbs_up"
@@ -600,8 +594,12 @@ class FeedbackDB:
                 updated = {}
                 for field, delta in d.items():
                     updated[field] = existing.get(field, 0.0) + delta
-                updated["thumbs_up_count"] = existing.get("thumbs_up_count", 0) + (1 if is_up else 0)
-                updated["thumbs_down_count"] = existing.get("thumbs_down_count", 0) + (0 if is_up else 1)
+                updated["thumbs_up_count"] = existing.get("thumbs_up_count", 0) + (
+                    1 if is_up else 0
+                )
+                updated["thumbs_down_count"] = existing.get("thumbs_down_count", 0) + (
+                    0 if is_up else 1
+                )
                 updated["last_updated"] = now
 
                 self._meta_weights.update_one(
@@ -622,14 +620,14 @@ class FeedbackDB:
 
         return self.get_user_meta_weights(user_id)
 
-    def get_all_user_meta_weights(self) -> List[Dict]:
+    def get_all_user_meta_weights(self) -> list[dict]:
         """Get meta weights for all users."""
         docs = self._meta_weights.find(sort=[("last_updated", -1)])
         return [self._strip_meta(d) for d in docs]
 
 
 # Global instance
-_feedback_db: Optional[FeedbackDB] = None
+_feedback_db: FeedbackDB | None = None
 
 
 def get_feedback_db(db_path: str = "data/feedback.db") -> FeedbackDB:

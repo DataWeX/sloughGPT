@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch
 
 import pytest
 
@@ -19,7 +19,6 @@ def dev():
 
 
 class TestInputDeviceBasics:
-
     def test_name(self, dev):
         assert dev.name == "test-input"
 
@@ -48,7 +47,6 @@ class TestInputDeviceBasics:
 
 
 class TestInputDeviceIoctl:
-
     def test_ioctl_unknown_command(self, dev):
         result = dev.ioctl("NONEXISTENT")
         assert isinstance(result, SyscallResult)
@@ -106,7 +104,6 @@ class TestInputDeviceIoctl:
 
 
 class TestInputDeviceCall:
-
     def test_call_success(self, dev):
         with patch.object(dev, "readline", return_value="hello"):
             assert dev.call("READLINE") == "hello"
@@ -120,7 +117,6 @@ class TestInputDeviceCall:
 
 
 class TestInputDeviceFunctions:
-
     def test_readline(self, dev):
         with patch("sys.stdin") as mock_stdin:
             mock_stdin.readline.return_value = "hello\n"
@@ -132,45 +128,47 @@ class TestInputDeviceFunctions:
             assert dev.readchar() == "a"
 
     def test_readkey_simple(self, dev):
-        with patch("sys.stdin") as mock_stdin, \
-             patch("termios.tcgetattr", return_value=[]), \
-             patch("termios.tcsetattr"), \
-             patch("tty.setraw"):
+        with (
+            patch("sys.stdin") as mock_stdin,
+            patch("termios.tcgetattr", return_value=[]),
+            patch("termios.tcsetattr"),
+            patch("tty.setraw"),
+        ):
             mock_stdin.read.side_effect = ["a"]
             assert dev.readkey() == "a"
 
     def test_readkey_escape(self, dev):
-        with patch("sys.stdin") as mock_stdin, \
-             patch("termios.tcgetattr", return_value=[]), \
-             patch("termios.tcsetattr"), \
-             patch("tty.setraw"):
+        with (
+            patch("sys.stdin") as mock_stdin,
+            patch("termios.tcgetattr", return_value=[]),
+            patch("termios.tcsetattr"),
+            patch("tty.setraw"),
+        ):
             mock_stdin.read.side_effect = ["\x1b", "[", "A"]
             assert dev.readkey() == "\x1b[A"
 
     def test_readkey_escape_unknown(self, dev):
-        with patch("sys.stdin") as mock_stdin, \
-             patch("termios.tcgetattr", return_value=[]), \
-             patch("termios.tcsetattr"), \
-             patch("tty.setraw"):
+        with (
+            patch("sys.stdin") as mock_stdin,
+            patch("termios.tcgetattr", return_value=[]),
+            patch("termios.tcsetattr"),
+            patch("tty.setraw"),
+        ):
             mock_stdin.read.side_effect = ["\x1b", "x"]
             assert dev.readkey() == "\x1bx"
 
     def test_readline_echo_normal(self, dev):
-        with patch("sys.stdin") as mock_stdin, \
-             patch("builtins.print"):
+        with patch("sys.stdin") as mock_stdin, patch("builtins.print"):
             mock_stdin.read.side_effect = ["a", "b", "\n"]
             assert dev.readline_echo() == "ab"
 
     def test_readline_echo_backspace(self, dev):
-        with patch("sys.stdin") as mock_stdin, \
-             patch("builtins.print"), \
-             patch("sys.stdout"):
+        with patch("sys.stdin") as mock_stdin, patch("builtins.print"), patch("sys.stdout"):
             mock_stdin.read.side_effect = ["a", "\x7f", "\n"]
             assert dev.readline_echo() == ""
 
     def test_readline_echo_ctrl_c(self, dev):
-        with patch("sys.stdin") as mock_stdin, \
-             patch("builtins.print"):
+        with patch("sys.stdin") as mock_stdin, patch("builtins.print"):
             mock_stdin.read.side_effect = ["\x03"]
             with pytest.raises(KeyboardInterrupt):
                 dev.readline_echo()

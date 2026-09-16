@@ -2,12 +2,13 @@
 Tests for the souls router — list, current, switch, weights, snapshots, stats.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from infrastructure.exception_handlers import register_all_handlers
+
 from apps.api.server.routers.souls import SoulsRouter
 
 
@@ -110,8 +111,9 @@ class TestSwitchSoul:
     @patch("domains.infrastructure.context_core.get_context_core")
     @patch("domains.core.soul.SloEngine")
     @patch("domains.models.provider.update_personality_traits")
-    def test_switch_soul_success(self, mock_update_traits, mock_engine_cls,
-                                  mock_get_ctx, mock_get_mgr, client):
+    def test_switch_soul_success(
+        self, mock_update_traits, mock_engine_cls, mock_get_ctx, mock_get_mgr, client
+    ):
         mgr = MagicMock()
         mgr.switch_soul.return_value = {"success": True}
         mgr.get_soul.return_value = _make_slo_info("sage", "Wise advisor")
@@ -234,26 +236,35 @@ class TestSoulChat:
         assert resp.status_code == 422
 
     def test_chat_with_valid_fields(self, client):
-        resp = client.post("/souls/chat", json={
-            "checkpoint_name": "test",
-            "prompt": "Hello",
-            "max_new_tokens": 10,
-        })
+        resp = client.post(
+            "/souls/chat",
+            json={
+                "checkpoint_name": "test",
+                "prompt": "Hello",
+                "max_new_tokens": 10,
+            },
+        )
         assert resp.status_code == 404
 
     def test_chat_invalid_checkpoint_name(self, client):
-        resp = client.post("/souls/chat", json={
-            "checkpoint_name": "../evil",
-            "prompt": "Hello",
-        })
+        resp = client.post(
+            "/souls/chat",
+            json={
+                "checkpoint_name": "../evil",
+                "prompt": "Hello",
+            },
+        )
         assert resp.status_code == 422
         assert resp.json()["error"] == "Invalid checkpoint name"
 
     def test_chat_missing_checkpoint_name(self, client):
-        resp = client.post("/souls/chat", json={
-            "prompt": "Hello",
-            "max_new_tokens": 5,
-        })
+        resp = client.post(
+            "/souls/chat",
+            json={
+                "prompt": "Hello",
+                "max_new_tokens": 5,
+            },
+        )
         assert resp.status_code == 422
 
 
@@ -264,10 +275,13 @@ class TestSaveTraitWeights:
     def test_save_flattens_groups(self, mock_get_config, client):
         config = MagicMock()
         mock_get_config.return_value = config
-        resp = client.post("/souls/weights", json={
-            "personality": {"warmth": 0.8},
-            "cognition": {"curiosity": 0.3},
-        })
+        resp = client.post(
+            "/souls/weights",
+            json={
+                "personality": {"warmth": 0.8},
+                "cognition": {"curiosity": 0.3},
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
         config.set_many.assert_called_once_with({"warmth": 0.8, "curiosity": 0.3})
@@ -388,9 +402,13 @@ class TestSwitchSoulCheckpoint:
         mock_get_mgr.return_value = mgr
         mock_load.return_value = {"status": "invalid_name"}
 
-        resp = client.post("/souls/switch", json={
-            "name": "sage", "checkpoint_name": "../evil",
-        })
+        resp = client.post(
+            "/souls/switch",
+            json={
+                "name": "sage",
+                "checkpoint_name": "../evil",
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "success"
@@ -437,6 +455,7 @@ class TestGetSoulErrorPath:
     @patch("domains.inference.slo_manager.get_slo_manager")
     def test_manager_error_raises_http(self, mock_get_mgr, client):
         from domains.infrastructure.errors import classify_exception
+
         err = classify_exception(RuntimeError("boom"))
         mock_get_mgr.side_effect = RuntimeError("boom")
         resp = client.get("/souls/broken")

@@ -1,13 +1,23 @@
 """Tests for domain.ops — FusedLayerNorm, FusedRMSNorm, FusedCrossEntropyLoss, FusedAttentionBias, ChunkedOperation, MemoryEfficientSoftmax, FusedScaleBias, OptimizedEmbedding, and standalone functions."""
 
-import math
 import numpy as np
-import pytest
+
 from domain.ops import (
-    FusedLayerNorm, FusedRMSNorm, FusedCrossEntropyLoss, FusedAttentionBias,
-    ChunkedOperation, MemoryEfficientSoftmax, FusedScaleBias, OptimizedEmbedding,
-    fused_swiglu, efficient_cross_entropy, chunked_matmul, ragged_to_padded,
-    estimate_attention_memory, silu, gelu,
+    ChunkedOperation,
+    FusedAttentionBias,
+    FusedCrossEntropyLoss,
+    FusedLayerNorm,
+    FusedRMSNorm,
+    FusedScaleBias,
+    MemoryEfficientSoftmax,
+    OptimizedEmbedding,
+    chunked_matmul,
+    efficient_cross_entropy,
+    estimate_attention_memory,
+    fused_swiglu,
+    gelu,
+    ragged_to_padded,
+    silu,
 )
 
 
@@ -78,7 +88,7 @@ class TestFusedLayerNorm:
         x = np.random.randn(4, 32).astype(np.float32)
         out = ln(x)
         for i in range(4):
-            single = ln(x[i:i+1])
+            single = ln(x[i : i + 1])
             np.testing.assert_allclose(out[i], single[0], atol=1e-5)
 
     def test_different_sequence_lengths(self):
@@ -129,7 +139,7 @@ class TestFusedRMSNorm:
         norm = FusedRMSNorm(64)
         x = np.ones((4, 8, 64), dtype=np.float32) * 3.0
         out = norm(x)
-        rms = np.sqrt(np.mean(out ** 2, axis=-1))
+        rms = np.sqrt(np.mean(out**2, axis=-1))
         np.testing.assert_allclose(rms, 1.0, atol=1e-4)
 
     def test_callable(self):
@@ -146,7 +156,7 @@ class TestFusedRMSNorm:
         norm = FusedRMSNorm(32, eps=1e-3)
         x = np.ones((2, 32), dtype=np.float32) * 5.0
         out = norm(x)
-        rms = np.sqrt(np.mean(out ** 2, axis=-1))
+        rms = np.sqrt(np.mean(out**2, axis=-1))
         np.testing.assert_allclose(rms, 1.0, atol=1e-2)
 
     def test_non_float32_input(self):
@@ -165,7 +175,7 @@ class TestFusedRMSNorm:
         norm = FusedRMSNorm(32)
         x = -np.ones((4, 32), dtype=np.float32) * 2.0
         out = norm(x)
-        rms = np.sqrt(np.mean(out ** 2, axis=-1))
+        rms = np.sqrt(np.mean(out**2, axis=-1))
         np.testing.assert_allclose(rms, 1.0, atol=1e-4)
 
     def test_scale_invariance(self):
@@ -192,7 +202,7 @@ class TestFusedRMSNorm:
         x = np.random.randn(4, 32).astype(np.float32)
         out = norm(x)
         for i in range(4):
-            single = norm(x[i:i+1])
+            single = norm(x[i : i + 1])
             np.testing.assert_allclose(out[i], single[0], atol=1e-5)
 
     def test_custom_weight(self):
@@ -200,7 +210,7 @@ class TestFusedRMSNorm:
         norm.weight = np.ones(8, dtype=np.float32) * 2.0
         x = np.ones((2, 8), dtype=np.float32) * 3.0
         out = norm(x)
-        rms = np.sqrt(np.mean(out ** 2, axis=-1))
+        rms = np.sqrt(np.mean(out**2, axis=-1))
         np.testing.assert_allclose(rms, 2.0, atol=1e-3)
 
 
@@ -981,7 +991,7 @@ class TestEstimateAttentionMemory:
     def test_units_mb(self):
         mem = estimate_attention_memory(1, 128, 12, 64, precision_bytes=2)
         expected_bytes = 1 * 12 * 128 * 128 * 2
-        expected_mb = expected_bytes / (1024 ** 2)
+        expected_mb = expected_bytes / (1024**2)
         np.testing.assert_allclose(mem, expected_mb, rtol=1e-5)
 
     def test_head_dim_scaling(self):

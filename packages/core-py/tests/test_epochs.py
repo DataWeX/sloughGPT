@@ -11,18 +11,17 @@ _make_json_safe, _parse_training_state_metadata, CheckpointManager,
 and _progress_denominator / _format_eta.
 """
 
-import math
-import pytest
 import numpy as np
+import pytest
 
 from domain.inference._internal.slo_format import load_soul
 from domain.training._internal.train_pipeline import (
+    CheckpointManager,
     SloughGPTTrainer,
-    TrainerConfig,
     TextDataset,
+    TrainerConfig,
     _make_json_safe,
     _parse_training_state_metadata,
-    CheckpointManager,
 )
 
 DATA_TEXT = (
@@ -377,7 +376,7 @@ class TestMakeJsonSafe:
 
     def test_np_bool(self):
         result = _make_json_safe(np.bool_(True))
-        assert result == True
+        assert result
 
     def test_complex_number(self):
         result = _make_json_safe(complex(1, 2))
@@ -420,16 +419,12 @@ class TestParseTrainingStateMetadata:
         assert result["accumulation_step"] == 0
 
     def test_step_and_epoch(self):
-        result = _parse_training_state_metadata({
-            "training_state": {"step": 100, "epoch": 5}
-        })
+        result = _parse_training_state_metadata({"training_state": {"step": 100, "epoch": 5}})
         assert result["step"] == 100
         assert result["epoch"] == 5
 
     def test_completed_epochs(self):
-        result = _parse_training_state_metadata({
-            "training_state": {"completed_epochs": 3}
-        })
+        result = _parse_training_state_metadata({"training_state": {"completed_epochs": 3}})
         assert result["completed_epochs"] == 3
 
     def test_completed_epochs_absent(self):
@@ -437,62 +432,53 @@ class TestParseTrainingStateMetadata:
         assert "completed_epochs" not in result
 
     def test_optimizer_state_converts_lists(self):
-        result = _parse_training_state_metadata({
-            "training_state": {
-                "optimizer": {
-                    "hyperparameters": {"lr": 0.001},
-                    "state": {
-                        "param0": {"m": [1.0, 2.0], "v": [3.0, 4.0]}
+        result = _parse_training_state_metadata(
+            {
+                "training_state": {
+                    "optimizer": {
+                        "hyperparameters": {"lr": 0.001},
+                        "state": {"param0": {"m": [1.0, 2.0], "v": [3.0, 4.0]}},
                     }
                 }
             }
-        })
+        )
         opt = result["optimizer"]
         assert opt["hyperparameters"]["lr"] == 0.001
         assert isinstance(opt["state"]["param0"]["m"], np.ndarray)
 
     def test_scheduler_passthrough(self):
         sched = {"type": "cosine", "initial_lr": 0.001}
-        result = _parse_training_state_metadata({
-            "training_state": {"scheduler": sched}
-        })
+        result = _parse_training_state_metadata({"training_state": {"scheduler": sched}})
         assert result["scheduler"] == sched
 
     def test_accumulation_step(self):
-        result = _parse_training_state_metadata({
-            "training_state": {"accumulation_step": 2}
-        })
+        result = _parse_training_state_metadata({"training_state": {"accumulation_step": 2}})
         assert result["accumulation_step"] == 2
 
     def test_optimizer_none(self):
-        result = _parse_training_state_metadata({
-            "training_state": {"optimizer": None}
-        })
+        result = _parse_training_state_metadata({"training_state": {"optimizer": None}})
         assert "optimizer" not in result
 
     def test_full_metadata(self):
-        result = _parse_training_state_metadata({
-            "training_state": {
-                "step": 100,
-                "epoch": 5,
-                "completed_epochs": 3,
-                "accumulation_step": 2,
+        result = _parse_training_state_metadata(
+            {
+                "training_state": {
+                    "step": 100,
+                    "epoch": 5,
+                    "completed_epochs": 3,
+                    "accumulation_step": 2,
+                }
             }
-        })
+        )
         assert result["step"] == 100
         assert result["epoch"] == 5
         assert result["completed_epochs"] == 3
         assert result["accumulation_step"] == 2
 
     def test_optimizer_with_empty_state(self):
-        result = _parse_training_state_metadata({
-            "training_state": {
-                "optimizer": {
-                    "hyperparameters": {"lr": 0.001},
-                    "state": {}
-                }
-            }
-        })
+        result = _parse_training_state_metadata(
+            {"training_state": {"optimizer": {"hyperparameters": {"lr": 0.001}, "state": {}}}}
+        )
         assert result["optimizer"]["state"] == {}
 
     def test_scheduler_all_fields(self):
@@ -502,19 +488,19 @@ class TestParseTrainingStateMetadata:
             "total_steps": 1000,
             "warmup_steps": 100,
         }
-        result = _parse_training_state_metadata({
-            "training_state": {"scheduler": sched}
-        })
+        result = _parse_training_state_metadata({"training_state": {"scheduler": sched}})
         assert result["scheduler"]["type"] == "cosine"
         assert result["scheduler"]["initial_lr"] == 0.001
 
     def test_none_values(self):
-        result = _parse_training_state_metadata({
-            "training_state": {
-                "optimizer": None,
-                "scheduler": None,
+        result = _parse_training_state_metadata(
+            {
+                "training_state": {
+                    "optimizer": None,
+                    "scheduler": None,
+                }
             }
-        })
+        )
         assert "optimizer" not in result
         assert "scheduler" not in result
 
@@ -525,49 +511,41 @@ class TestParseTrainingStateMetadata:
         assert result["accumulation_step"] == 0
 
     def test_large_step(self):
-        result = _parse_training_state_metadata({
-            "training_state": {"step": 999999}
-        })
+        result = _parse_training_state_metadata({"training_state": {"step": 999999}})
         assert result["step"] == 999999
 
     def test_optimizer_not_dict(self):
-        result = _parse_training_state_metadata({
-            "training_state": {"optimizer": "invalid"}
-        })
+        result = _parse_training_state_metadata({"training_state": {"optimizer": "invalid"}})
         assert "optimizer" not in result
 
     def test_scheduler_not_dict(self):
-        result = _parse_training_state_metadata({
-            "training_state": {"scheduler": "invalid"}
-        })
+        result = _parse_training_state_metadata({"training_state": {"scheduler": "invalid"}})
         assert "scheduler" not in result
 
     def test_multiple_optimizer_params(self):
-        result = _parse_training_state_metadata({
-            "training_state": {
-                "optimizer": {
-                    "hyperparameters": {"lr": 0.001, "weight_decay": 0.01},
-                    "state": {
-                        "w1": {"m": [1.0], "v": [2.0]},
-                        "w2": {"m": [3.0], "v": [4.0]},
+        result = _parse_training_state_metadata(
+            {
+                "training_state": {
+                    "optimizer": {
+                        "hyperparameters": {"lr": 0.001, "weight_decay": 0.01},
+                        "state": {
+                            "w1": {"m": [1.0], "v": [2.0]},
+                            "w2": {"m": [3.0], "v": [4.0]},
+                        },
                     }
                 }
             }
-        })
+        )
         assert "w1" in result["optimizer"]["state"]
         assert "w2" in result["optimizer"]["state"]
         assert isinstance(result["optimizer"]["state"]["w1"]["m"], np.ndarray)
 
     def test_zero_step(self):
-        result = _parse_training_state_metadata({
-            "training_state": {"step": 0}
-        })
+        result = _parse_training_state_metadata({"training_state": {"step": 0}})
         assert result["step"] == 0
 
     def test_negative_accumulation_step(self):
-        result = _parse_training_state_metadata({
-            "training_state": {"accumulation_step": -1}
-        })
+        result = _parse_training_state_metadata({"training_state": {"accumulation_step": -1}})
         assert result["accumulation_step"] == -1
 
 
@@ -577,7 +555,7 @@ class TestParseTrainingStateMetadata:
 class TestCheckpointManager:
     def test_init_creates_dir(self, tmp_path):
         cp_dir = tmp_path / "checkpoints"
-        mgr = CheckpointManager(str(cp_dir))
+        CheckpointManager(str(cp_dir))
         assert cp_dir.exists()
 
     def test_latest_path_empty(self, tmp_path):
@@ -659,7 +637,7 @@ class TestCheckpointManager:
 
     def test_checkpoint_dir_created(self, tmp_path):
         cp_dir = tmp_path / "new_dir" / "subdir"
-        mgr = CheckpointManager(str(cp_dir))
+        CheckpointManager(str(cp_dir))
         assert cp_dir.exists()
 
     def test_candidates_excludes_all_tmp(self, tmp_path):
@@ -682,6 +660,7 @@ class TestCheckpointManager:
 
     def test_candidates_sorted_newest_first(self, tmp_path):
         import time
+
         cp_dir = tmp_path / "ckpts"
         cp_dir.mkdir()
         (cp_dir / "old.soul").write_text("old")
@@ -766,6 +745,7 @@ class TestProgressDenominator:
     def _make_trainer_stub(self, epochs=10, max_steps=None):
         class Stub:
             config = TrainerConfig(epochs=epochs, max_steps=max_steps)
+
         return Stub()
 
     def test_no_max_steps(self):
@@ -835,14 +815,31 @@ class TestProgressDenominator:
 class TestTrainerConfigExtra:
     def test_all_fields_settable(self):
         cfg = TrainerConfig(
-            vocab_size=512, n_embed=128, n_layer=4, n_head=8,
-            block_size=256, dropout=0.2, batch_size=64, epochs=20,
-            learning_rate=0.001, weight_decay=0.1, max_grad_norm=2.0,
-            scheduler_type="linear", warmup_steps=200, min_lr=1e-6,
-            checkpoint_dir="/tmp/ckpts", checkpoint_interval=100,
-            save_best_only=True, max_checkpoints=3, use_lora=True,
-            lora_rank=16, lora_alpha=32, log_interval=5, eval_interval=50,
-            early_stopping_patience=10, gradient_accumulation_steps=4,
+            vocab_size=512,
+            n_embed=128,
+            n_layer=4,
+            n_head=8,
+            block_size=256,
+            dropout=0.2,
+            batch_size=64,
+            epochs=20,
+            learning_rate=0.001,
+            weight_decay=0.1,
+            max_grad_norm=2.0,
+            scheduler_type="linear",
+            warmup_steps=200,
+            min_lr=1e-6,
+            checkpoint_dir="/tmp/ckpts",
+            checkpoint_interval=100,
+            save_best_only=True,
+            max_checkpoints=3,
+            use_lora=True,
+            lora_rank=16,
+            lora_alpha=32,
+            log_interval=5,
+            eval_interval=50,
+            early_stopping_patience=10,
+            gradient_accumulation_steps=4,
         )
         assert cfg.vocab_size == 512
         assert cfg.n_embed == 128

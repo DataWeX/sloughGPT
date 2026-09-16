@@ -6,21 +6,23 @@ Import datasets from various sources: GitHub, HuggingFace, URLs, local files.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import subprocess
 import urllib.request
-import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Set
 from dataclasses import dataclass
+from pathlib import Path
 
 logger = logging.getLogger("slo.data_import")
 
 
-def _retry(fn, retries=2, delay=1.0, exceptions=(urllib.error.URLError, ConnectionError, TimeoutError)):
+def _retry(
+    fn, retries=2, delay=1.0, exceptions=(urllib.error.URLError, ConnectionError, TimeoutError)
+):
     """Retry a callable on transient network errors."""
     import time
+
     last_exc = None
     for attempt in range(retries + 1):
         try:
@@ -28,12 +30,19 @@ def _retry(fn, retries=2, delay=1.0, exceptions=(urllib.error.URLError, Connecti
         except exceptions as e:
             last_exc = e
             if attempt < retries:
-                logger.warning("Retry %s/%s after %s: %s", attempt + 1, retries, type(e).__name__, e,
-                    extra={"tag": "TRAIN"},)
+                logger.warning(
+                    "Retry %s/%s after %s: %s",
+                    attempt + 1,
+                    retries,
+                    type(e).__name__,
+                    e,
+                    extra={"tag": "TRAIN"},
+                )
                 time.sleep(delay * (attempt + 1))
     raise last_exc
 
-DEFAULT_IGNORES: Set[str] = {
+
+DEFAULT_IGNORES: set[str] = {
     ".git",
     ".svn",
     ".hg",
@@ -61,7 +70,7 @@ class ImportResult:
     files_imported: int
     total_chars: int
     output_path: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class RepoImporter:
@@ -74,8 +83,8 @@ class RepoImporter:
     def clone_repo(
         self,
         url: str,
-        branch: Optional[str] = None,
-        depth: Optional[int] = 1,
+        branch: str | None = None,
+        depth: int | None = 1,
     ) -> Path:
         """Clone a git repository."""
         # Validate URL protocol — reject file:// and other local protocols
@@ -85,15 +94,18 @@ class RepoImporter:
 
         repo_name = url.split("/")[-1].replace(".git", "")
         # Sanitize repo_name — reject path traversal
-        repo_name = re.sub(r'[^\w\-]', '_', repo_name).strip('_') or "repo"
+        repo_name = re.sub(r"[^\w\-]", "_", repo_name).strip("_") or "repo"
         target = self.cache_dir / repo_name
 
         if target.exists():
-            logger.info("Repo already exists: %s", target,
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "Repo already exists: %s",
+                target,
+                extra={"tag": "TRAIN"},
+            )
             return target
 
-        if branch and not re.match(r'^[a-zA-Z0-9_\-/.]+$', branch):
+        if branch and not re.match(r"^[a-zA-Z0-9_\-/.]+$", branch):
             raise ValueError(f"Invalid branch name: {branch}")
 
         cmd = ["git", "clone", url, str(target)]
@@ -102,8 +114,11 @@ class RepoImporter:
         if depth:
             cmd.extend(["--depth", str(depth)])
 
-        logger.info("Cloning %s...", url,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Cloning %s...",
+            url,
+            extra={"tag": "TRAIN"},
+        )
         subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         return target
@@ -112,10 +127,10 @@ class RepoImporter:
         self,
         repo_path: Path,
         output_path: str,
-        ignores: Optional[Set[str]] = None,
-        max_files: Optional[int] = None,
+        ignores: set[str] | None = None,
+        max_files: int | None = None,
         max_bytes: int = 200_000,
-        extensions: Optional[List[str]] = None,
+        extensions: list[str] | None = None,
     ) -> int:
         """Export repository files to JSONL corpus."""
         ignores = ignores or DEFAULT_IGNORES
@@ -149,7 +164,7 @@ class RepoImporter:
 
         return count
 
-    def _iter_files(self, root: Path, ignores: Set[str], extensions: List[str]):
+    def _iter_files(self, root: Path, ignores: set[str], extensions: list[str]):
         """Iterate over files in repository."""
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = [d for d in dirnames if d not in ignores and not d.startswith(".")]
@@ -455,8 +470,11 @@ class RepoImporter:
                 json.loads(sample)
                 return "json"
             except Exception:
-                logger.warning("Failed to parse JSON for sample", exc_info=True,
-                    extra={"tag": "TRAIN"},)
+                logger.warning(
+                    "Failed to parse JSON for sample",
+                    exc_info=True,
+                    extra={"tag": "TRAIN"},
+                )
 
         # YAML patterns
         yaml_indicators = ["---\n", ": ", "\n  ", "\n    "]
@@ -563,8 +581,8 @@ class RepoImporter:
         url: str,
         dataset_name: str,
         output_dir: str = "datasets",
-        extensions: Optional[List[str]] = None,
-        max_files: Optional[int] = None,
+        extensions: list[str] | None = None,
+        max_files: int | None = None,
     ) -> ImportResult:
         """Import dataset from GitHub repository."""
         try:
@@ -580,7 +598,7 @@ class RepoImporter:
 
             total_chars = 0
             if Path(output_path).exists():
-                with open(output_path, "r") as f:
+                with open(output_path) as f:
                     for line_num, line in enumerate(f, 1):
                         try:
                             data = json.loads(line)
@@ -598,8 +616,11 @@ class RepoImporter:
                 output_path=output_path,
             )
         except Exception as e:
-            logger.error("Failed to import from GitHub: %s", e,
-                extra={"tag": "TRAIN"},)
+            logger.error(
+                "Failed to import from GitHub: %s",
+                e,
+                extra={"tag": "TRAIN"},
+            )
             return ImportResult(
                 success=False,
                 name=dataset_name,
@@ -616,10 +637,12 @@ class BooksSearch:
 
     def _sanitize_query(self, query: str) -> str:
         import urllib.parse
+
         return urllib.parse.quote(query.strip(), safe="")
 
-    def _is_isbn(self, query: str) -> Optional[str]:
+    def _is_isbn(self, query: str) -> str | None:
         import re
+
         digits = re.sub(r"[-_\s]", "", query)
         if len(digits) == 10 and digits.isdigit():
             return f"isbn:{digits}"
@@ -627,7 +650,7 @@ class BooksSearch:
             return f"isbn:{digits}"
         return None
 
-    def search(self, query: str, limit: int = 10) -> List[Dict]:
+    def search(self, query: str, limit: int = 10) -> list[dict]:
         """Search books by title or ISBN."""
         isbn_query = self._is_isbn(query)
         if isbn_query:
@@ -640,7 +663,9 @@ class BooksSearch:
             req = urllib.request.Request(url)
             req.add_header("User-Agent", "SloughGPT/1.0")
 
-            data = _retry(lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode()))
+            data = _retry(
+                lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
+            )
             return [
                 {
                     "key": r.get("key", ""),
@@ -649,13 +674,16 @@ class BooksSearch:
                     "isbn": r.get("isbn", [""])[0],
                     "year": r.get("first_publish_year"),
                     "cover": r.get("cover_i"),
-                    }
-                    for r in data.get("docs", [])[:limit]
-                    if r.get("title")
-                ]
+                }
+                for r in data.get("docs", [])[:limit]
+                if r.get("title")
+            ]
         except Exception as e:
-            logger.error("Books search failed: %s", e,
-                extra={"tag": "TRAIN"},)
+            logger.error(
+                "Books search failed: %s",
+                e,
+                extra={"tag": "TRAIN"},
+            )
             return []
 
 
@@ -678,29 +706,34 @@ class HuggingFaceImporter:
         except ImportError:
             return False
 
-    def search_datasets(self, query: str, limit: int = 10) -> List[Dict]:
+    def search_datasets(self, query: str, limit: int = 10) -> list[dict]:
         """Search HuggingFace datasets via the Hub REST API."""
         try:
             from domain.infrastructure._internal.hf_hub import fetch_dataset_search
         except ImportError:
-            logger.warning("downcraft not available — dataset search disabled",
-                extra={"tag": "TRAIN"},)
+            logger.warning(
+                "downcraft not available — dataset search disabled",
+                extra={"tag": "TRAIN"},
+            )
             return []
 
         try:
             return fetch_dataset_search(query, limit=limit)
         except Exception as e:
-            logger.error("Search failed: %s", e,
-                extra={"tag": "TRAIN"},)
+            logger.error(
+                "Search failed: %s",
+                e,
+                extra={"tag": "TRAIN"},
+            )
             return []
 
     def download_dataset(
         self,
         dataset_id: str,
         output_dir: str = "datasets",
-        name: Optional[str] = None,
-        config: Optional[str] = None,
-        split: Optional[str] = None,
+        name: str | None = None,
+        config: str | None = None,
+        split: str | None = None,
     ) -> ImportResult:
         """Download dataset from HuggingFace."""
         if not self._hf_available:
@@ -721,8 +754,12 @@ class HuggingFaceImporter:
             output_path = Path(output_dir) / name
             output_path.mkdir(parents=True, exist_ok=True)
 
-            logger.info("Downloading %s%s...", dataset_id, f" (config={config})" if config else "",
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "Downloading %s%s...",
+                dataset_id,
+                f" (config={config})" if config else "",
+                extra={"tag": "TRAIN"},
+            )
 
             load_kwargs: dict = {}
             if config:
@@ -734,26 +771,43 @@ class HuggingFaceImporter:
                 dataset = load_dataset(dataset_id, **load_kwargs)
             except Exception as config_err:
                 error_msg = str(config_err)
-                if "scripts are no longer supported" in error_msg or "trust_remote_code" in error_msg:
-                    logger.warning("Script-based dataset detected, retrying with trust_remote_code: %s", dataset_id,
-                        extra={"tag": "TRAIN"},)
+                if (
+                    "scripts are no longer supported" in error_msg
+                    or "trust_remote_code" in error_msg
+                ):
+                    logger.warning(
+                        "Script-based dataset detected, retrying with trust_remote_code: %s",
+                        dataset_id,
+                        extra={"tag": "TRAIN"},
+                    )
                     try:
                         dataset = load_dataset(dataset_id, trust_remote_code=True, **load_kwargs)
                     except Exception:
                         fallback_kwargs = {k: v for k, v in load_kwargs.items() if k != "split"}
-                        dataset = load_dataset(dataset_id, split="train", trust_remote_code=True, **fallback_kwargs)
+                        dataset = load_dataset(
+                            dataset_id, split="train", trust_remote_code=True, **fallback_kwargs
+                        )
                 elif "Config name is missing" in error_msg:
                     import re
+
                     configs_match = re.search(r"available configs: \[(.+?)\]", error_msg)
                     available_configs = []
                     if configs_match:
-                        available_configs = [c.strip().strip("'") for c in configs_match.group(1).split(",")]
+                        available_configs = [
+                            c.strip().strip("'") for c in configs_match.group(1).split(",")
+                        ]
                     if available_configs:
                         auto_config = available_configs[0]
-                        logger.info("Auto-selecting config '%s' for dataset %s", auto_config, dataset_id,
-                            extra={"tag": "TRAIN"},)
+                        logger.info(
+                            "Auto-selecting config '%s' for dataset %s",
+                            auto_config,
+                            dataset_id,
+                            extra={"tag": "TRAIN"},
+                        )
                         fallback_kwargs = {k: v for k, v in load_kwargs.items() if k != "split"}
-                        dataset = load_dataset(dataset_id, name=auto_config, split="train", **fallback_kwargs)
+                        dataset = load_dataset(
+                            dataset_id, name=auto_config, split="train", **fallback_kwargs
+                        )
                     else:
                         return ImportResult(
                             success=False,
@@ -765,8 +819,11 @@ class HuggingFaceImporter:
                             error=f"Dataset '{dataset_id}' requires a config name. Please specify a config.",
                         )
                 else:
-                    logger.warning("Full load failed, trying default config: %s", config_err,
-                        extra={"tag": "TRAIN"},)
+                    logger.warning(
+                        "Full load failed, trying default config: %s",
+                        config_err,
+                        extra={"tag": "TRAIN"},
+                    )
                     fallback_kwargs = {k: v for k, v in load_kwargs.items() if k != "split"}
                     dataset = load_dataset(dataset_id, split="train", **fallback_kwargs)
 
@@ -777,7 +834,7 @@ class HuggingFaceImporter:
 
             with open(corpus_file, "w", encoding="utf-8") as f:
                 # Check if dataset is a dict (DatasetDict) or single dataset
-                if hasattr(dataset, 'keys'):
+                if hasattr(dataset, "keys"):
                     # It's a DatasetDict - iterate over splits
                     for split in dataset.keys():
                         for item in dataset[split]:
@@ -804,8 +861,11 @@ class HuggingFaceImporter:
                 output_path=str(corpus_file),
             )
         except Exception as e:
-            logger.error("Download failed: %s", e,
-                extra={"tag": "TRAIN"},)
+            logger.error(
+                "Download failed: %s",
+                e,
+                extra={"tag": "TRAIN"},
+            )
             return ImportResult(
                 success=False,
                 name=name or dataset_id,
@@ -865,8 +925,11 @@ class URLImporter:
                 output_path=str(corpus_file),
             )
         except Exception as e:
-            logger.error("URL import failed: %s", e,
-                extra={"tag": "TRAIN"},)
+            logger.error(
+                "URL import failed: %s",
+                e,
+                extra={"tag": "TRAIN"},
+            )
             return ImportResult(
                 success=False,
                 name=dataset_name,
@@ -888,10 +951,11 @@ class GitHubSearch:
         URL becomes: q=python+code+in+here
         """
         import urllib.parse
+
         normalized = query.strip().lower()
         return urllib.parse.quote(normalized, safe="")
 
-    def search_repos(self, query: str, limit: int = 10) -> List[Dict]:
+    def search_repos(self, query: str, limit: int = 10) -> list[dict]:
         """Search GitHub repos via API.
 
         Args:
@@ -904,7 +968,9 @@ class GitHubSearch:
             req.add_header("Accept", "application/vnd.github.v3+json")
             req.add_header("User-Agent", "SloughGPT")
 
-            data = _retry(lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode()))
+            data = _retry(
+                lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
+            )
             return [
                 {
                     "full_name": r["full_name"],
@@ -917,8 +983,11 @@ class GitHubSearch:
                 for r in data.get("items", [])
             ]
         except Exception as e:
-            logger.error("GitHub search failed: %s", e,
-                extra={"tag": "TRAIN"},)
+            logger.error(
+                "GitHub search failed: %s",
+                e,
+                extra={"tag": "TRAIN"},
+            )
             return []
 
 
@@ -949,8 +1018,10 @@ class ISBNImporter:
         books = self._books_search.search(isbn, limit=1)
         if not books:
             error_msg = f"Book not found for ISBN: {isbn}"
-            logger.error(error_msg,
-                extra={"tag": "TRAIN"},)
+            logger.error(
+                error_msg,
+                extra={"tag": "TRAIN"},
+            )
             return ImportResult(
                 success=False,
                 name=name,
@@ -1017,7 +1088,7 @@ class ISBNImporter:
                 output_path=str(output_dir),
             )
 
-    def _fetch_gutenberg_text(self, title: str, author: str) -> Optional[str]:
+    def _fetch_gutenberg_text(self, title: str, author: str) -> str | None:
         """
         Search Project Gutenberg via Gutendex API and download full text.
 
@@ -1029,6 +1100,7 @@ class ISBNImporter:
             Full text content if found, None otherwise
         """
         import urllib.parse
+
         search_terms = f"{title} {author}".strip()
         if not search_terms:
             return None
@@ -1037,23 +1109,42 @@ class ISBNImporter:
         try:
             url = f"https://gutendex.com/books?search={q}"
             req = urllib.request.Request(url, headers={"User-Agent": "SloughGPT/1.0"})
-            data = _retry(lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode()))
+            data = _retry(
+                lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
+            )
             items = data.get("results", [])
             if not items:
-                logger.info("No Gutendex results for: %s", title,
-                    extra={"tag": "TRAIN"},)
+                logger.info(
+                    "No Gutendex results for: %s",
+                    title,
+                    extra={"tag": "TRAIN"},
+                )
                 return None
 
             gutenberg_id = items[0]["id"]
             text_url = f"https://www.gutenberg.org/cache/epub/{gutenberg_id}/pg{gutenberg_id}.txt"
             text_req = urllib.request.Request(text_url, headers={"User-Agent": "SloughGPT/1.0"})
-            text = _retry(lambda: urllib.request.urlopen(text_req, timeout=60).read().decode("utf-8", errors="replace"))
-            logger.info("Downloaded %s chars from Gutenberg #%s", len(text), gutenberg_id,
-                extra={"tag": "TRAIN"},)
+            text = _retry(
+                lambda: (
+                    urllib.request.urlopen(text_req, timeout=60)
+                    .read()
+                    .decode("utf-8", errors="replace")
+                )
+            )
+            logger.info(
+                "Downloaded %s chars from Gutenberg #%s",
+                len(text),
+                gutenberg_id,
+                extra={"tag": "TRAIN"},
+            )
             return text
         except Exception as e:
-            logger.warning("Gutenberg fetch failed for '%s': %s", title, e,
-                extra={"tag": "TRAIN"},)
+            logger.warning(
+                "Gutenberg fetch failed for '%s': %s",
+                title,
+                e,
+                extra={"tag": "TRAIN"},
+            )
             return None
 
 
@@ -1070,8 +1161,8 @@ class DataImporter:
         self,
         url: str,
         name: str,
-        extensions: Optional[List[str]] = None,
-        max_files: Optional[int] = None,
+        extensions: list[str] | None = None,
+        max_files: int | None = None,
     ) -> ImportResult:
         """Import from GitHub repository."""
         return self.repo_importer.import_from_github(
@@ -1081,7 +1172,7 @@ class DataImporter:
     def import_from_huggingface(
         self,
         dataset_id: str,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> ImportResult:
         """Import from HuggingFace Hub."""
         return self.hf_importer.download_dataset(dataset_id, self.output_dir, name)
@@ -1102,6 +1193,7 @@ class DataImporter:
         """
         try:
             import fitz
+
             doc = fitz.open(str(file_path))
             pages = [page.get_text() for page in doc]
             doc.close()
@@ -1110,6 +1202,7 @@ class DataImporter:
             pass
         try:
             import PyPDF2
+
             with open(file_path, "rb") as f:
                 reader = PyPDF2.PdfReader(f)
                 return "\n".join(page.extract_text() or "" for page in reader.pages)
@@ -1121,7 +1214,7 @@ class DataImporter:
         self,
         path: str,
         name: str,
-        extensions: Optional[List[str]] = None,
+        extensions: list[str] | None = None,
     ) -> ImportResult:
         """Import from local file or directory.
 
@@ -1192,7 +1285,7 @@ def import_data(
     source: str,
     name: str,
     *,
-    source_type: Optional[str] = None,
+    source_type: str | None = None,
     output_dir: str = "runs/imports",
     **kwargs,
 ) -> ImportResult:
@@ -1203,18 +1296,23 @@ def import_data(
     """
     imp: object
     if source_type == "local" or (
-        not source_type and not source.startswith(("http://", "https://", "git@"))
+        not source_type
+        and not source.startswith(("http://", "https://", "git@"))
         and "/" not in source.split(":")[-1]
     ):
         imp = DataImporter(output_dir=output_dir)
         return imp.import_from_local(source, name, **kwargs)  # type: ignore[union-attr]
     elif source_type == "huggingface" or (
-        not source_type and not source.startswith(("http://", "https://", "git@"))
+        not source_type
+        and not source.startswith(("http://", "https://", "git@"))
         and ":" not in source
     ):
-        return HuggingFaceImporter().download_dataset(source, output_dir=output_dir, name=name, **kwargs)  # type: ignore[union-attr]
+        return HuggingFaceImporter().download_dataset(
+            source, output_dir=output_dir, name=name, **kwargs
+        )  # type: ignore[union-attr]
     elif source_type == "url" or (
-        not source_type and source.startswith(("http://", "https://"))
+        not source_type
+        and source.startswith(("http://", "https://"))
         and "github.com" not in source
     ):
         return URLImporter().import_from_url(source, name, output_dir=output_dir, **kwargs)  # type: ignore[union-attr]

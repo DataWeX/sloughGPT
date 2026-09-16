@@ -1,41 +1,37 @@
 """Tests for provider module — protocols, processors, registries, ProviderRouter."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from domain.models._internal.provider import (
-    ChatMessage,
+    KnowledgeProcessor,
     ModelCapabilities,
-    ModelProvider,
-    MessageProcessor,
-    register_provider,
+    PersonalityProcessor,
+    ProviderRouter,
+    StyleProcessor,
+    ToolUseProcessor,
+    apply_processors,
+    get_processor,
     get_provider,
+    list_processors,
     list_providers,
     register_processor,
-    get_processor,
-    list_processors,
-    apply_processors,
-    VisionProcessor,
-    KnowledgeProcessor,
-    ToolUseProcessor,
-    ToolDef,
-    PersonalityProcessor,
-    StyleProcessor,
-    ProviderRouter,
-    SloTransformerProvider,
+    register_provider,
     setup_providers,
     update_personality_traits,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _clean_registries():
     """Clear provider/processor registries before each test."""
     import domain.models._internal.provider as mod
+
     mod._providers.clear()
     mod._processors.clear()
     yield
@@ -56,6 +52,7 @@ def _make_mock_provider(model_id="test-model"):
 # ---------------------------------------------------------------------------
 # Registry: providers
 # ---------------------------------------------------------------------------
+
 
 class TestProviderRegistry:
     def test_register_and_get(self):
@@ -83,6 +80,7 @@ class TestProviderRegistry:
 # Registry: processors
 # ---------------------------------------------------------------------------
 
+
 class TestProcessorRegistry:
     def test_register_and_get(self):
         proc = KnowledgeProcessor(knowledge=["fact1"])
@@ -102,6 +100,7 @@ class TestProcessorRegistry:
 # apply_processors
 # ---------------------------------------------------------------------------
 
+
 class TestApplyProcessors:
     @pytest.mark.asyncio
     async def test_empty_list(self):
@@ -119,6 +118,7 @@ class TestApplyProcessors:
     @pytest.mark.asyncio
     async def test_exception_in_processor_is_caught(self):
         """Failing processor should not crash the pipeline."""
+
         class BadProcessor:
             async def process(self, messages):
                 raise RuntimeError("boom")
@@ -132,6 +132,7 @@ class TestApplyProcessors:
 # ---------------------------------------------------------------------------
 # KnowledgeProcessor
 # ---------------------------------------------------------------------------
+
 
 class TestKnowledgeProcessor:
     @pytest.mark.asyncio
@@ -160,6 +161,7 @@ class TestKnowledgeProcessor:
 # ---------------------------------------------------------------------------
 # PersonalityProcessor
 # ---------------------------------------------------------------------------
+
 
 class TestPersonalityProcessor:
     @pytest.mark.asyncio
@@ -194,9 +196,15 @@ class TestPersonalityProcessor:
     async def test_all_ten_traits(self):
         """All 10 PersonalityCore traits should produce descriptions."""
         traits = {
-            "warmth": 0.9, "creativity": 0.8, "empathy": 0.7,
-            "formality": 0.6, "humor": 0.9, "patience": 0.5,
-            "confidence": 0.4, "curiosity": 0.9, "directness": 0.2,
+            "warmth": 0.9,
+            "creativity": 0.8,
+            "empathy": 0.7,
+            "formality": 0.6,
+            "humor": 0.9,
+            "patience": 0.5,
+            "confidence": 0.4,
+            "curiosity": 0.9,
+            "directness": 0.2,
             "optimism": 0.8,
         }
         proc = PersonalityProcessor(traits=traits)
@@ -217,6 +225,7 @@ class TestPersonalityProcessor:
 # ---------------------------------------------------------------------------
 # StyleProcessor
 # ---------------------------------------------------------------------------
+
 
 class TestStyleProcessor:
     @pytest.mark.asyncio
@@ -245,12 +254,20 @@ class TestStyleProcessor:
 # ToolUseProcessor
 # ---------------------------------------------------------------------------
 
+
 class TestToolUseProcessor:
     @pytest.mark.asyncio
     async def test_injects_tool_prompt(self):
         proc = ToolUseProcessor()
-        msgs = [{"role": "system", "content": "You are helpful."},
-                {"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]
+        msgs = [
+            {"role": "system", "content": "You are helpful."},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}
+                ],
+            },
+        ]
         result = await proc.process(msgs)
         assert "tools" in result[0]["content"].lower() or "TOOL" in result[0]["content"]
 
@@ -264,7 +281,7 @@ class TestToolUseProcessor:
 
     def test_match_tool_found(self):
         proc = ToolUseProcessor()
-        text = 'I need to see the image. [[TOOL: describe_image]] abc123'
+        text = "I need to see the image. [[TOOL: describe_image]] abc123"
         match = proc.match_tool(text)
         assert match is not None
         assert match[0] == "describe_image"
@@ -278,6 +295,7 @@ class TestToolUseProcessor:
 # ---------------------------------------------------------------------------
 # ProviderRouter
 # ---------------------------------------------------------------------------
+
 
 class TestProviderRouter:
     def test_metadata(self):
@@ -371,6 +389,7 @@ class TestProviderRouter:
 # update_personality_traits
 # ---------------------------------------------------------------------------
 
+
 class TestUpdatePersonalityTraits:
     def test_updates_router_processor(self):
         router = ProviderRouter()
@@ -395,6 +414,7 @@ class TestUpdatePersonalityTraits:
 # ---------------------------------------------------------------------------
 # setup_providers
 # ---------------------------------------------------------------------------
+
 
 class TestSetupProviders:
     def test_registers_default_router(self):
@@ -422,9 +442,13 @@ class TestSetupProviders:
             model_id = "slonet"
             capabilities = ModelCapabilities(chat=True, streaming=True)
             metadata = {}
-            def embed(self, text): return []
+
+            def embed(self, text):
+                return []
+
             async def chat_stream(self, messages, **kwargs):
                 yield ""
+
             async def chat(self, messages, **kwargs):
                 return ""
 
@@ -441,10 +465,13 @@ class TestSetupProviders:
             @property
             def alive(self):
                 return True
+
             def health(self):
                 return {"alive": True}
+
             def on_crash(self, cb):
                 pass
+
             def on_restart(self, cb):
                 pass
 
@@ -454,10 +481,13 @@ class TestSetupProviders:
             def __init__(self):
                 self._server = None
                 self._model_id = "fake-slo"
+
             def set_server(self, server):
                 self._server = server
+
             def get_server(self):
                 return self._server
+
             def to_server(self, process_guard=None, **kwargs):
                 return SloNetServer(
                     model=MagicMock(),
@@ -477,6 +507,7 @@ class TestSetupProviders:
         class PlainProvider:
             def __init__(self):
                 self._server = None
+
             def set_server(self, server):
                 self._server = server
 
@@ -493,8 +524,13 @@ class TestSetupProviders:
         from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
 
         cfg = {
-            "n_layer": 1, "n_embd": 4, "n_head": 1, "n_inner": 8,
-            "vocab_size": 8, "n_positions": 6, "model_type": "gpt2",
+            "n_layer": 1,
+            "n_embd": 4,
+            "n_head": 1,
+            "n_inner": 8,
+            "vocab_size": 8,
+            "n_positions": 6,
+            "model_type": "gpt2",
         }
         weights = {
             "h.0.ln_1.weight": np.ones(4, dtype=np.float32),
@@ -530,8 +566,11 @@ class TestSetupProviders:
         header = {"__metadata__": {}}
         data = b""
         for name, arr in weights.items():
-            header[name] = {"dtype": "F32", "shape": list(arr.shape),
-                            "data_offsets": [len(data), len(data) + arr.nbytes]}
+            header[name] = {
+                "dtype": "F32",
+                "shape": list(arr.shape),
+                "data_offsets": [len(data), len(data) + arr.nbytes],
+            }
             data += arr.tobytes()
         header_json = json.dumps(header).encode()
         st_path.write_bytes(struct.pack("<Q", len(header_json)) + header_json + data)
@@ -573,6 +612,7 @@ class TestSetupProviders:
 # ModelCapabilities
 # ---------------------------------------------------------------------------
 
+
 class TestModelCapabilities:
     def test_defaults(self):
         caps = ModelCapabilities()
@@ -591,6 +631,7 @@ class TestModelCapabilities:
 # ---------------------------------------------------------------------------
 # update_personality_traits
 # ---------------------------------------------------------------------------
+
 
 class TestUpdatePersonalityTraits:
     def test_updates_personality_processor(self):
@@ -619,6 +660,7 @@ class TestUpdatePersonalityTraits:
 
     def test_noop_when_no_default_router(self):
         import domain.models._internal.provider as prov
+
         old = prov._providers.pop("default", None)
         try:
             update_personality_traits({"warmth": 0.5})

@@ -9,24 +9,25 @@ a device table with bit-based fd management.
 from __future__ import annotations
 
 import threading
-from enum import IntEnum
 from dataclasses import dataclass
+from enum import IntEnum
 from typing import Any
 
 from .kernel_syscall import SyscallResult
 
-
 # ── Device types as bit flags ─────────────────────────────────────────────
+
 
 class DeviceType(IntEnum):
     """Device categories as bit positions."""
+
     INFERENCE = 1 << 0  # 0b000001
-    TRAINING  = 1 << 1  # 0b000010
-    STORAGE   = 1 << 2  # 0b000100
-    NETWORK   = 1 << 3  # 0b001000
-    DISPLAY   = 1 << 4  # 0b010000
-    INPUT     = 1 << 5  # 0b100000
-    CUSTOM    = 0       # no type
+    TRAINING = 1 << 1  # 0b000010
+    STORAGE = 1 << 2  # 0b000100
+    NETWORK = 1 << 3  # 0b001000
+    DISPLAY = 1 << 4  # 0b010000
+    INPUT = 1 << 5  # 0b100000
+    CUSTOM = 0  # no type
 
 
 class DeviceState(IntEnum):
@@ -38,6 +39,7 @@ class DeviceState(IntEnum):
 @dataclass
 class DeviceHandle:
     """A file-descriptor-like handle to an open device."""
+
     fd: int
     device_name: str
     mode: str = "r"
@@ -45,6 +47,7 @@ class DeviceHandle:
 
 
 # ── Device driver (gates) ─────────────────────────────────────────────────
+
 
 class DeviceDriver:
     """
@@ -85,6 +88,7 @@ class DeviceDriver:
 
 # ── Device table (request handler) ────────────────────────────────────────
 
+
 class DeviceTable:
     """
     Kernel device table — routes ioctls to devices.
@@ -117,7 +121,7 @@ class DeviceTable:
         """Find first free fd using bit scan."""
         for i in range(self._max_fds):
             if not (self._fd_bitmap >> i) & 1:
-                self._fd_bitmap |= (1 << i)
+                self._fd_bitmap |= 1 << i
                 return i
         return -1
 
@@ -213,12 +217,13 @@ class DeviceTable:
         dev = self.get(name)
         if dev is None:
             return []
-        if hasattr(dev, 'list_commands'):
+        if hasattr(dev, "list_commands"):
             return dev.list_commands()
         return []
 
 
 # ── Device manager (backward compat) ──────────────────────────────────────
+
 
 class DeviceManager:
     """High-level device manager — wraps DeviceTable.
@@ -274,7 +279,7 @@ class DeviceManager:
         dev = self.get(name)
         if dev is None:
             return []
-        if hasattr(dev, 'list_commands'):
+        if hasattr(dev, "list_commands"):
             return dev.list_commands()
         return []
 
@@ -286,6 +291,7 @@ class DeviceManager:
 
 
 # ── Null device ───────────────────────────────────────────────────────────
+
 
 class NullDevice(DeviceDriver):
     """A null /dev/null device that discards writes and returns empty on read."""

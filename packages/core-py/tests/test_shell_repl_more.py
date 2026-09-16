@@ -7,7 +7,6 @@ cal/ln, render, ai fallback, tutorial, completion.
 from __future__ import annotations
 
 import importlib
-import json
 import os
 import sys
 import time
@@ -19,28 +18,36 @@ import pytest
 import domain.shell._internal.repl as repl_mod
 from domain.shell._internal.io import MemoryIO, capture_cmd
 from domain.shell._internal.log_buffer import LogEntry
-from domain.shell._internal.permissions import ShellPermissions
 from domain.shell._internal.repl import ShellREPL, _CaptureOutput
 from domain.shell._internal.runtime import DaitRuntime
-from domain.shell._internal.state import ShellState
 
 
 @pytest.fixture
 def repl():
     import tempfile
+
     from domain.shell._internal.init import reset_init_system
-    from domain.shell._internal.state import set_shell_state_db, reset_shell_state_db
+    from domain.shell._internal.state import reset_shell_state_db, set_shell_state_db
+
     reset_init_system()
     with tempfile.TemporaryDirectory() as tmp:
         st = Path(tmp) / "sloughgpt"
         st.mkdir(parents=True, exist_ok=True)
         state_db = str(st / "shell_state_mogdb")
         set_shell_state_db(state_db)
-        with patch("domain.shell._internal.runtime._probe_api", return_value={"available": False, "error": "mock"}), \
-             patch("domain.shell._internal.repl.ShellREPL._get_current_model", return_value=""), \
-             patch("domain.shell._internal.repl.ShellREPL._get_current_soul", return_value=""), \
-             patch.object(ShellREPL, "_setup_readline"), \
-             patch("domain.shell._internal.runtime.APIServerProcess.start", return_value={"ok": True, "message": "mocked"}):
+        with (
+            patch(
+                "domain.shell._internal.runtime._probe_api",
+                return_value={"available": False, "error": "mock"},
+            ),
+            patch("domain.shell._internal.repl.ShellREPL._get_current_model", return_value=""),
+            patch("domain.shell._internal.repl.ShellREPL._get_current_soul", return_value=""),
+            patch.object(ShellREPL, "_setup_readline"),
+            patch(
+                "domain.shell._internal.runtime.APIServerProcess.start",
+                return_value={"ok": True, "message": "mocked"},
+            ),
+        ):
             os = DaitRuntime()
             r = ShellREPL(os)
             r._perms._granted.update(["tee", "xargs", "cp", "mv", "touch", "chmod"])
@@ -226,56 +233,64 @@ class TestCmdCommEdgeCases:
 
     def test_common_lines(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f1:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f1:
             f1.write("a\nb\nc\n")
             path1 = f1.name
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f2:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f2:
             f2.write("a\nb\nc\n")
             path2 = f2.name
         repl._cmd_comm(f"{path1} {path2}")
         import os
+
         os.unlink(path1)
         os.unlink(path2)
         assert repl._last_exit_code == 0
 
     def test_disjoint_lines(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f1:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f1:
             f1.write("a\nb\n")
             path1 = f1.name
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f2:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f2:
             f2.write("c\nd\n")
             path2 = f2.name
         repl._cmd_comm(f"{path1} {path2}")
         import os
+
         os.unlink(path1)
         os.unlink(path2)
         assert repl._last_exit_code == 0
 
     def test_left_only(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f1:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f1:
             f1.write("a\nb\n")
             path1 = f1.name
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f2:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f2:
             f2.write("c\n")
             path2 = f2.name
         repl._cmd_comm(f"{path1} {path2}")
         import os
+
         os.unlink(path1)
         os.unlink(path2)
         assert repl._last_exit_code == 0
 
     def test_right_only(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f1:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f1:
             f1.write("a\n")
             path1 = f1.name
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f2:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f2:
             f2.write("b\nc\n")
             path2 = f2.name
         repl._cmd_comm(f"{path1} {path2}")
         import os
+
         os.unlink(path1)
         os.unlink(path2)
         assert repl._last_exit_code == 0
@@ -296,11 +311,13 @@ class TestCmdKillSubprocess:
 class TestCmdShufRevFiles:
     def test_shuf_file(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("a\nb\nc\n")
             path = f.name
         repl._cmd_shuf(path)
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
@@ -310,11 +327,13 @@ class TestCmdShufRevFiles:
 
     def test_rev_file(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("abc\ndef\n")
             path = f.name
         repl._cmd_rev(path)
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
@@ -374,31 +393,37 @@ class TestCmdOdEdges:
 
     def test_od_hex_base(self, repl):
         import tempfile
+
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(b"hello")
             path = f.name
         repl._cmd_od(f"-x {path}")
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
     def test_od_decimal_base(self, repl):
         import tempfile
+
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(b"hello")
             path = f.name
         repl._cmd_od(f"-d {path}")
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
     def test_od_octal_default(self, repl):
         import tempfile
+
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(b"hello")
             path = f.name
         repl._cmd_od(path)
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
@@ -417,28 +442,32 @@ class TestCmdPasteEdges:
 
     def test_paste_two_files(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f1:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f1:
             f1.write("a\nb\n")
             path1 = f1.name
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f2:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f2:
             f2.write("c\nd\n")
             path2 = f2.name
         repl._cmd_paste(f"{path1} {path2}")
         import os
+
         os.unlink(path1)
         os.unlink(path2)
         assert repl._last_exit_code == 0
 
     def test_paste_unequal_lengths(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f1:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f1:
             f1.write("a\nb\nc\n")
             path1 = f1.name
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f2:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f2:
             f2.write("x\n")
             path2 = f2.name
         repl._cmd_paste(f"{path1} {path2}")
         import os
+
         os.unlink(path1)
         os.unlink(path2)
         assert repl._last_exit_code == 0
@@ -462,14 +491,16 @@ class TestCmdJoinEdges:
 
     def test_join_common_key(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f1:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f1:
             f1.write("k1 v1\nk2 v2\n")
             path1 = f1.name
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f2:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f2:
             f2.write("k1 w1\nk3 w3\n")
             path2 = f2.name
         repl._cmd_join(f"{path1} {path2}")
         import os
+
         os.unlink(path1)
         os.unlink(path2)
         assert repl._last_exit_code == 0
@@ -495,11 +526,13 @@ class TestCmdTacEdges:
 
     def test_file(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("a\nb\nc\n")
             path = f.name
         repl._cmd_tac(path)
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
@@ -513,7 +546,11 @@ class TestCmdXargsPermission:
         repl._check_permission = MagicMock(return_value=False)
         repl._cmd_xargs("echo")
         repl._piped_input = None
-        repl._check_permission = repl.__class__.check_permission if hasattr(repl.__class__, 'check_permission') else MagicMock(return_value=True)
+        repl._check_permission = (
+            repl.__class__.check_permission
+            if hasattr(repl.__class__, "check_permission")
+            else MagicMock(return_value=True)
+        )
         assert repl._last_exit_code == 0
 
 
@@ -532,6 +569,7 @@ class TestCmdTimeTiming:
 class TestCmdReadEdges:
     def test_read_with_prompt_and_var(self, repl):
         from domain.shell._internal.io import MemoryIO
+
         mem = MemoryIO()
         mem.feed("hello_value")
         old_io = repl.io
@@ -558,6 +596,7 @@ class TestCmdWatchWithCommand:
 class TestCmdBgRunning:
     def test_bg_with_thread(self, repl):
         import threading
+
         mock_thread = MagicMock(spec=threading.Thread)
         mock_thread.name = "bg-2"
         mock_thread.is_alive.return_value = True
@@ -577,6 +616,7 @@ class TestCmdBgRunning:
 class TestCmdFgRunning:
     def test_fg_with_running_thread(self, repl):
         import threading
+
         mock_thread = MagicMock(spec=threading.Thread)
         mock_thread.name = "bg-3"
         mock_thread.is_alive.return_value = True
@@ -755,9 +795,14 @@ class TestCmdAiLLMExecution:
 
 
 def _add_log(repl, level="ERROR", source="kernel", message="boom"):
-    repl._log_buffer.append(LogEntry(
-        timestamp=time.time(), level=level, source=source, message=message,
-    ))
+    repl._log_buffer.append(
+        LogEntry(
+            timestamp=time.time(),
+            level=level,
+            source=source,
+            message=message,
+        )
+    )
 
 
 # ── Module-level helpers ─────────────────────────────────────────────
@@ -865,8 +910,10 @@ class TestCheckPermission:
 
     def test_interactive_eof_denies(self, repl, monkeypatch):
         repl._perms._granted.discard("mount")
+
         def raise_eof(prompt=""):
             raise EOFError
+
         monkeypatch.setattr(repl.io, "read", raise_eof)
         repl._check_permission("mount", "", True)
         assert "mount" not in repl._perms._granted
@@ -973,8 +1020,9 @@ class TestCdPwdEcho:
         assert "not a directory" in out
         assert repl._last_exit_code == 1
 
-    @pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0,
-                        reason="root bypasses permission checks")
+    @pytest.mark.skipif(
+        hasattr(os, "geteuid") and os.geteuid() == 0, reason="root bypasses permission checks"
+    )
     def test_cd_permission_denied(self, repl, tmp_path):
         d = tmp_path / "locked"
         d.mkdir()
@@ -995,7 +1043,11 @@ class TestCdPwdEcho:
         assert os.getcwd() == str(tmp_path)
 
     def test_pwd_prints_cwd(self, repl, tmp_path):
-        with patch.object(repl.os, "_cwd", str(tmp_path)) if False else patch("os.getcwd", return_value=str(tmp_path)):
+        with (
+            patch.object(repl.os, "_cwd", str(tmp_path))
+            if False
+            else patch("os.getcwd", return_value=str(tmp_path))
+        ):
             out = capture_cmd(repl, repl._cmd_pwd, "")
         assert str(tmp_path) in out
 
@@ -1366,7 +1418,7 @@ class TestWhichType:
         assert "shell built-in" in out
 
     def test_which_system(self, repl):
-        out = capture_cmd(repl, repl._cmd_which, "ls")
+        capture_cmd(repl, repl._cmd_which, "ls")
         assert repl._last_exit_code == 0
 
     def test_which_not_found(self, repl):
@@ -1473,6 +1525,7 @@ class TestCalLn:
 
     def test_cal_single_arg_current_year(self, repl):
         import datetime
+
         out = capture_cmd(repl, repl._cmd_cal, str(datetime.datetime.now().year))
         assert "Mo Tu We Th Fr Sa Su" in out
 
@@ -1484,7 +1537,7 @@ class TestCalLn:
         target = tmp_path / "t.txt"
         target.write_text("data")
         link = tmp_path / "link.txt"
-        out = capture_cmd(repl, repl._cmd_ln, f"-s {target} {link}")
+        capture_cmd(repl, repl._cmd_ln, f"-s {target} {link}")
         assert link.is_symlink() or link.exists()
 
 
@@ -1557,7 +1610,7 @@ class TestAi:
     @pytest.mark.skip(reason="_interpret_natural removed")
     def test_interpret_natural_procs(self, repl):
         with patch.object(repl, "_execute_single", return_value="procs output") as m:
-            out = capture_cmd(repl, repl._interpret_natural, "show running jobs")
+            capture_cmd(repl, repl._interpret_natural, "show running jobs")
         assert m.called
 
     @pytest.mark.skip(reason="_interpret_natural removed")
@@ -1588,7 +1641,7 @@ class TestCompletion:
         assert "status" in candidates or "distill" in candidates
 
     def test_complete_train_candidates(self, repl):
-        with patch.object(repl, "_complete_path", return_value=[]) as m:
+        with patch.object(repl, "_complete_path", return_value=[]):
             candidates = repl._complete_args_for_uncached("train")
         assert "status" in candidates
         assert "distill" in candidates
@@ -1805,7 +1858,7 @@ class TestSortUniqHeadTail:
 
 class TestAliasSetExport:
     def test_alias_set_and_expand(self, repl):
-        out = capture_cmd(repl, repl._cmd_alias, "ll=ls -la")
+        capture_cmd(repl, repl._cmd_alias, "ll=ls -la")
         assert repl._aliases.get("ll") == "ls -la"
 
     def test_alias_list(self, repl):
@@ -1815,11 +1868,11 @@ class TestAliasSetExport:
 
     def test_unalias(self, repl):
         repl._aliases["ll"] = "ls -la"
-        out = capture_cmd(repl, repl._cmd_unalias, "ll")
+        capture_cmd(repl, repl._cmd_unalias, "ll")
         assert "ll" not in repl._aliases
 
     def test_set_var(self, repl):
-        out = capture_cmd(repl, repl._cmd_set, "MYVAR=hello")
+        capture_cmd(repl, repl._cmd_set, "MYVAR=hello")
         assert repl._env.get("MYVAR") == "hello"
 
     def test_set_list(self, repl):
@@ -1828,7 +1881,7 @@ class TestAliasSetExport:
         assert "MYVAR" in out
 
     def test_export_var(self, repl):
-        out = capture_cmd(repl, repl._cmd_export, "MYVAR=world")
+        capture_cmd(repl, repl._cmd_export, "MYVAR=world")
         assert repl._env.get("MYVAR") == "world"
 
 
@@ -1887,7 +1940,7 @@ class TestLogsMore:
     def test_logs_export_os_error(self, repl, tmp_path):
         repl._log_buffer.clear()
         _add_log(repl, "INFO", "api", "test")
-        out = capture_cmd(repl, repl._cmd_logs, f"-e /nonexistent/dir/logs.txt")
+        out = capture_cmd(repl, repl._cmd_logs, "-e /nonexistent/dir/logs.txt")
         assert "Error writing" in out or repl._last_exit_code == 1
 
     def test_logs_source_filter(self, repl):
@@ -1971,7 +2024,7 @@ class TestCompletionMore:
         assert isinstance(candidates, list)
 
     def test_complete_unknown_cmd(self, repl):
-        with patch.object(repl, "_complete_path", return_value=[]) as m:
+        with patch.object(repl, "_complete_path", return_value=[]):
             candidates = repl._complete_args_for_uncached("zzz_unknown_cmd")
         assert candidates == []
 
@@ -2200,7 +2253,7 @@ class TestFileCommands:
         monkeypatch.chdir(tmp_path)
         f = tmp_path / "chmod_test.txt"
         f.write_text("x")
-        out = capture_cmd(repl, repl._cmd_chmod, f"644 {f}")
+        capture_cmd(repl, repl._cmd_chmod, f"644 {f}")
         assert repl._last_exit_code == 0
 
 
@@ -2225,7 +2278,7 @@ class TestPipeCommands:
         outfile = tmp_path / "tee_append.txt"
         outfile.write_text("first\n")
         repl._piped_input = "second"
-        out = capture_cmd(repl, repl._cmd_tee, f"-a {outfile}")
+        capture_cmd(repl, repl._cmd_tee, f"-a {outfile}")
         assert "first" in outfile.read_text()
         assert "second" in outfile.read_text()
 
@@ -2266,26 +2319,36 @@ class TestProtectUnprotect:
         assert "Usage" in out
 
     def test_protect_model(self, repl, monkeypatch):
-        import domain.infrastructure.model_protector as mp
+        import domain.infrastructure._internal.model_protector as mp
+
         monkeypatch.setattr(mp, "protect_model", lambda mid: {"protected": ["f1"], "errors": []})
         out = capture_cmd(repl, repl._cmd_protect, "mymodel")
         assert "Protected 1" in out or "mymodel" in out
 
     def test_protect_no_files(self, repl, monkeypatch):
-        import domain.infrastructure.model_protector as mp
+        import domain.infrastructure._internal.model_protector as mp
+
         monkeypatch.setattr(mp, "protect_model", lambda mid: {"protected": [], "errors": []})
         out = capture_cmd(repl, repl._cmd_protect, "mymodel")
         assert "No files found" in out
 
     def test_protect_with_errors(self, repl, monkeypatch):
-        import domain.infrastructure.model_protector as mp
-        monkeypatch.setattr(mp, "protect_model", lambda mid: {"protected": ["f1"], "errors": [{"error": "perm denied"}]})
+        import domain.infrastructure._internal.model_protector as mp
+
+        monkeypatch.setattr(
+            mp,
+            "protect_model",
+            lambda mid: {"protected": ["f1"], "errors": [{"error": "perm denied"}]},
+        )
         out = capture_cmd(repl, repl._cmd_protect, "mymodel")
         assert "Warning" in out
 
     def test_protect_exception(self, repl, monkeypatch):
-        import domain.infrastructure.model_protector as mp
-        monkeypatch.setattr(mp, "protect_model", lambda mid: (_ for _ in ()).throw(RuntimeError("boom")))
+        import domain.infrastructure._internal.model_protector as mp
+
+        monkeypatch.setattr(
+            mp, "protect_model", lambda mid: (_ for _ in ()).throw(RuntimeError("boom"))
+        )
         out = capture_cmd(repl, repl._cmd_protect, "mymodel")
         assert "Error" in out
 
@@ -2294,26 +2357,34 @@ class TestProtectUnprotect:
         assert "Usage" in out
 
     def test_unprotect_model(self, repl, monkeypatch):
-        import domain.infrastructure.model_protector as mp
+        import domain.infrastructure._internal.model_protector as mp
+
         monkeypatch.setattr(mp, "unprotect_model", lambda mid: {"unprotected": 3, "errors": []})
         out = capture_cmd(repl, repl._cmd_unprotect, "mymodel")
         assert "Unprotected 3" in out
 
     def test_unprotect_none(self, repl, monkeypatch):
-        import domain.infrastructure.model_protector as mp
+        import domain.infrastructure._internal.model_protector as mp
+
         monkeypatch.setattr(mp, "unprotect_model", lambda mid: {"unprotected": 0, "errors": []})
         out = capture_cmd(repl, repl._cmd_unprotect, "mymodel")
         assert "No protected" in out
 
     def test_unprotect_with_errors(self, repl, monkeypatch):
-        import domain.infrastructure.model_protector as mp
-        monkeypatch.setattr(mp, "unprotect_model", lambda mid: {"unprotected": 1, "errors": [{"error": "oops"}]})
+        import domain.infrastructure._internal.model_protector as mp
+
+        monkeypatch.setattr(
+            mp, "unprotect_model", lambda mid: {"unprotected": 1, "errors": [{"error": "oops"}]}
+        )
         out = capture_cmd(repl, repl._cmd_unprotect, "mymodel")
         assert "Warning" in out
 
     def test_unprotect_exception(self, repl, monkeypatch):
-        import domain.infrastructure.model_protector as mp
-        monkeypatch.setattr(mp, "unprotect_model", lambda mid: (_ for _ in ()).throw(RuntimeError("fail")))
+        import domain.infrastructure._internal.model_protector as mp
+
+        monkeypatch.setattr(
+            mp, "unprotect_model", lambda mid: (_ for _ in ()).throw(RuntimeError("fail"))
+        )
         out = capture_cmd(repl, repl._cmd_unprotect, "mymodel")
         assert "Error" in out
 
@@ -2325,27 +2396,52 @@ class TestSvcCommands:
     def _make_svc_repl(self, repl):
         class FakeAPI:
             is_running = False
+
             def start(self):
                 self.is_running = True
                 return {"ok": True, "message": "started"}
+
             def stop(self):
                 self.is_running = False
                 return {"message": "stopped"}
+
             def status(self):
-                return {"available": True, "model_id": "gpt2", "engine_type": "cpu", "running": self.is_running, "uptime": 120.0}
+                return {
+                    "available": True,
+                    "model_id": "gpt2",
+                    "engine_type": "cpu",
+                    "running": self.is_running,
+                    "uptime": 120.0,
+                }
+
         class FakeManager:
             def __init__(self, name):
                 self.name = name
-                self.instance = type('Obj', (), {'log': []})()
-            def start(self): return True
-            def stop(self): return True
-            def restart(self): return True
-            def status_line(self, n): return f"  {self.name}: running"
+                self.instance = type("Obj", (), {"log": []})()
+
+            def start(self):
+                return True
+
+            def stop(self):
+                return True
+
+            def restart(self):
+                return True
+
+            def status_line(self, n):
+                return f"  {self.name}: running"
+
         class FakeInitSystem:
-            def service_table(self): return "  svc1: running\n  svc2: stopped"
-            def get_manager(self, name): return FakeManager(name)
+            def service_table(self):
+                return "  svc1: running\n  svc2: stopped"
+
+            def get_manager(self, name):
+                return FakeManager(name)
+
             @property
-            def status_summary(self): return "  Init: OK"
+            def status_summary(self):
+                return "  Init: OK"
+
         api = FakeAPI()
         repl.os._api = api
         repl.os._init = FakeInitSystem()
@@ -2358,12 +2454,12 @@ class TestSvcCommands:
 
     def test_svc_start_already_running(self, repl):
         repl = self._make_svc_repl(repl)
-        out = capture_cmd(repl, repl._cmd_svc, "start svc1")
+        capture_cmd(repl, repl._cmd_svc, "start svc1")
         assert repl._last_exit_code == 0
 
     def test_svc_stop(self, repl):
         repl = self._make_svc_repl(repl)
-        out = capture_cmd(repl, repl._cmd_svc, "stop svc1")
+        capture_cmd(repl, repl._cmd_svc, "stop svc1")
         assert repl._last_exit_code == 0
 
     def test_svc_stop_not_running(self, repl):
@@ -2373,17 +2469,17 @@ class TestSvcCommands:
 
     def test_svc_restart(self, repl):
         repl = self._make_svc_repl(repl)
-        out = capture_cmd(repl, repl._cmd_svc, "restart svc1")
+        capture_cmd(repl, repl._cmd_svc, "restart svc1")
         assert repl._last_exit_code == 0
 
     def test_svc_restart_not_running(self, repl):
         repl = self._make_svc_repl(repl)
-        out = capture_cmd(repl, repl._cmd_svc, "restart svc1")
+        capture_cmd(repl, repl._cmd_svc, "restart svc1")
         assert repl._last_exit_code == 0
 
     def test_svc_status(self, repl):
         repl = self._make_svc_repl(repl)
-        out = capture_cmd(repl, repl._cmd_svc, "status svc1")
+        capture_cmd(repl, repl._cmd_svc, "status svc1")
         assert repl._last_exit_code == 0
 
     def test_svc_list(self, repl):
@@ -2393,30 +2489,50 @@ class TestSvcCommands:
 
     def test_svc_start_fail(self, repl):
         repl = self._make_svc_repl(repl)
+
         class FailManager:
             def __init__(self, name):
                 self.name = name
-                self.instance = type('Obj', (), {'log': []})()
-            def start(self): return False
-            def stop(self): return True
-            def restart(self): return False
-            def status_line(self, n): return f"  {self.name}: failed"
+                self.instance = type("Obj", (), {"log": []})()
+
+            def start(self):
+                return False
+
+            def stop(self):
+                return True
+
+            def restart(self):
+                return False
+
+            def status_line(self, n):
+                return f"  {self.name}: failed"
+
         repl.os._init.get_manager = lambda name: FailManager(name)
-        out = capture_cmd(repl, repl._cmd_svc, "start svc1")
+        capture_cmd(repl, repl._cmd_svc, "start svc1")
         assert repl._last_exit_code == 0
 
     def test_svc_restart_fail(self, repl):
         repl = self._make_svc_repl(repl)
+
         class FailManager:
             def __init__(self, name):
                 self.name = name
-                self.instance = type('Obj', (), {'log': []})()
-            def start(self): return False
-            def stop(self): return True
-            def restart(self): return False
-            def status_line(self, n): return f"  {self.name}: failed"
+                self.instance = type("Obj", (), {"log": []})()
+
+            def start(self):
+                return False
+
+            def stop(self):
+                return True
+
+            def restart(self):
+                return False
+
+            def status_line(self, n):
+                return f"  {self.name}: failed"
+
         repl.os._init.get_manager = lambda name: FailManager(name)
-        out = capture_cmd(repl, repl._cmd_svc, "restart svc1")
+        capture_cmd(repl, repl._cmd_svc, "restart svc1")
         assert repl._last_exit_code == 0
 
 
@@ -2425,7 +2541,10 @@ class TestSvcCommands:
 
 class TestTrainCommands:
     def _mock_api_repl(self, repl, monkeypatch):
-        monkeypatch.setattr("domain.shell._internal.runtime._probe_api", lambda *a, **kw: {"available": True, "model_id": "gpt2"})
+        monkeypatch.setattr(
+            "domain.shell._internal.runtime._probe_api",
+            lambda *a, **kw: {"available": True, "model_id": "gpt2"},
+        )
         return repl
 
     def test_train_usage(self, repl, monkeypatch):
@@ -2533,72 +2652,72 @@ class TestRenderInternals:
 
     def test_render_sphere(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "sphere 1.0 0 0 0")
+        capture_cmd(repl, repl._cmd_render, "sphere 1.0 0 0 0")
         assert repl._last_exit_code == 0
 
     def test_render_cube(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "cube 1.0 0 0 0")
+        capture_cmd(repl, repl._cmd_render, "cube 1.0 0 0 0")
         assert repl._last_exit_code == 0
 
     def test_render_plane(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "plane 10.0 -1")
+        capture_cmd(repl, repl._cmd_render, "plane 10.0 -1")
         assert repl._last_exit_code == 0
 
     def test_render_light(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "light 5 5 5 1.0 1.0 1.0 5.0")
+        capture_cmd(repl, repl._cmd_render, "light 5 5 5 1.0 1.0 1.0 5.0")
         assert repl._last_exit_code == 0
 
     def test_render_mat(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "mat 0 1.0 0.0 0.0 0.5 0.8")
+        capture_cmd(repl, repl._cmd_render, "mat 0 1.0 0.0 0.0 0.5 0.8")
         assert repl._last_exit_code == 0
 
     def test_render_cam(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "cam 0 0 5 0 0 0")
+        capture_cmd(repl, repl._cmd_render, "cam 0 0 5 0 0 0")
         assert repl._last_exit_code == 0
 
     def test_render_go(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "go 32 24 1")
+        capture_cmd(repl, repl._cmd_render, "go 32 24 1")
         assert repl._last_exit_code == 0
 
     def test_render_clear(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "clear")
+        capture_cmd(repl, repl._cmd_render, "clear")
         assert repl._last_exit_code == 0
 
     def test_render_neural(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "neural")
+        capture_cmd(repl, repl._cmd_render, "neural")
         assert repl._last_exit_code == 0
 
     def test_render_info(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "")
+        capture_cmd(repl, repl._cmd_render, "")
         assert repl._last_exit_code == 0
 
     def test_render_preset_demo(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "preset demo")
+        capture_cmd(repl, repl._cmd_render, "preset demo")
         assert repl._last_exit_code == 0
 
     def test_render_preset_cornell(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "preset cornell")
+        capture_cmd(repl, repl._cmd_render, "preset cornell")
         assert repl._last_exit_code == 0
 
     def test_render_preset_spheres(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "preset spheres")
+        capture_cmd(repl, repl._cmd_render, "preset spheres")
         assert repl._last_exit_code == 0
 
     def test_render_unknown_verb(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "bogus")
+        capture_cmd(repl, repl._cmd_render, "bogus")
         assert repl._last_exit_code == 0
 
 
@@ -2676,7 +2795,7 @@ class TestSourceCommand:
     def test_source_existing_file(self, repl, tmp_path):
         rc = tmp_path / "test_rc"
         rc.write_text("echo from_rc\n")
-        out = capture_cmd(repl, repl._cmd_source, str(rc))
+        capture_cmd(repl, repl._cmd_source, str(rc))
         assert repl._last_exit_code == 0
 
     def test_source_missing_file(self, repl):
@@ -2694,7 +2813,7 @@ class TestSourceCommand:
 class TestAliasEdgeCases:
     def test_alias_list_empty(self, repl):
         repl._aliases = {}
-        out = capture_cmd(repl, repl._cmd_alias, "")
+        capture_cmd(repl, repl._cmd_alias, "")
         assert repl._last_exit_code == 0
 
     def test_alias_set_and_list(self, repl):
@@ -2712,19 +2831,19 @@ class TestAliasEdgeCases:
 
 class TestSetExport:
     def test_set_no_args(self, repl):
-        out = capture_cmd(repl, repl._cmd_set, "")
+        capture_cmd(repl, repl._cmd_set, "")
         assert repl._last_exit_code == 0
 
     def test_set_var(self, repl):
-        out = capture_cmd(repl, repl._cmd_set, "MYVAR=hello")
+        capture_cmd(repl, repl._cmd_set, "MYVAR=hello")
         assert repl._env.get("MYVAR") == "hello"
 
     def test_export_no_args(self, repl):
-        out = capture_cmd(repl, repl._cmd_export, "")
+        capture_cmd(repl, repl._cmd_export, "")
         assert repl._last_exit_code == 0
 
     def test_export_var(self, repl):
-        out = capture_cmd(repl, repl._cmd_export, "MYVAR=world")
+        capture_cmd(repl, repl._cmd_export, "MYVAR=world")
         assert repl._env.get("MYVAR") == "world"
 
 
@@ -2769,7 +2888,7 @@ class TestMkdirInternals:
     def test_mkdir_parents(self, repl, tmp_path):
         d = tmp_path / "a" / "b" / "c"
         d.mkdir(parents=True)
-        out = capture_cmd(repl, repl._cmd_mkdir, str(d))
+        capture_cmd(repl, repl._cmd_mkdir, str(d))
         assert repl._last_exit_code == 1 or d.exists()
 
 
@@ -2781,13 +2900,17 @@ class TestRmInternals:
         d = tmp_path / "dir_to_rm"
         d.mkdir()
         out = capture_cmd(repl, repl._cmd_rm, str(d))
-        assert repl._last_exit_code != 0 or "is a directory" in out.lower() or "recursive" in out.lower()
+        assert (
+            repl._last_exit_code != 0
+            or "is a directory" in out.lower()
+            or "recursive" in out.lower()
+        )
 
     def test_rm_recursive(self, repl, tmp_path):
         d = tmp_path / "dir_rm_recursive"
         d.mkdir()
         (d / "file.txt").write_text("data")
-        out = capture_cmd(repl, repl._cmd_rm, f"-r {d}")
+        capture_cmd(repl, repl._cmd_rm, f"-r {d}")
         assert not d.exists()
 
 
@@ -2797,15 +2920,16 @@ class TestRmInternals:
 class TestTouchInternals:
     def test_touch_creates_file(self, repl, tmp_path):
         f = tmp_path / "new_file.txt"
-        out = capture_cmd(repl, repl._cmd_touch, str(f))
+        capture_cmd(repl, repl._cmd_touch, str(f))
         assert f.exists()
 
     def test_touch_existing_file(self, repl, tmp_path):
         f = tmp_path / "existing.txt"
         f.write_text("old")
         import os
-        old_mtime = os.path.getmtime(f)
-        out = capture_cmd(repl, repl._cmd_touch, str(f))
+
+        os.path.getmtime(f)
+        capture_cmd(repl, repl._cmd_touch, str(f))
         assert f.exists()
 
 
@@ -2817,14 +2941,14 @@ class TestCpMvInternals:
         src = tmp_path / "src.txt"
         src.write_text("data")
         dst = tmp_path / "dst.txt"
-        out = capture_cmd(repl, repl._cmd_cp, f"{src} {dst}")
+        capture_cmd(repl, repl._cmd_cp, f"{src} {dst}")
         assert dst.read_text() == "data"
 
     def test_mv_file(self, repl, tmp_path):
         src = tmp_path / "mv_src.txt"
         src.write_text("data")
         dst = tmp_path / "mv_dst.txt"
-        out = capture_cmd(repl, repl._cmd_mv, f"{src} {dst}")
+        capture_cmd(repl, repl._cmd_mv, f"{src} {dst}")
         assert dst.exists()
         assert not src.exists()
 
@@ -2834,7 +2958,7 @@ class TestCpMvInternals:
         (src_dir / "f.txt").write_text("content")
         dst_dir = tmp_path / "cp_dst_dir"
         try:
-            out = capture_cmd(repl, repl._cmd_cp, f"-r {src_dir} {dst_dir}")
+            capture_cmd(repl, repl._cmd_cp, f"-r {src_dir} {dst_dir}")
         except (TypeError, OSError):
             pass  # cp -r may not be fully supported
         assert repl._last_exit_code == 0 or not dst_dir.exists() or dst_dir.exists()
@@ -2847,8 +2971,9 @@ class TestChmodInternals:
     def test_chmod_file(self, repl, tmp_path):
         f = tmp_path / "chmod_test.txt"
         f.write_text("data")
-        out = capture_cmd(repl, repl._cmd_chmod, f"644 {f}")
+        capture_cmd(repl, repl._cmd_chmod, f"644 {f}")
         import os
+
         mode = oct(os.stat(f).st_mode)[-3:]
         assert "644" in mode or repl._last_exit_code == 0
 
@@ -2921,11 +3046,11 @@ class TestDiffInternals:
 
 class TestDuInternals:
     def test_du_no_args(self, repl, tmp_path):
-        out = capture_cmd(repl, repl._cmd_du, str(tmp_path))
+        capture_cmd(repl, repl._cmd_du, str(tmp_path))
         assert repl._last_exit_code == 0
 
     def test_du_human(self, repl, tmp_path):
-        out = capture_cmd(repl, repl._cmd_du, f"-h {tmp_path}")
+        capture_cmd(repl, repl._cmd_du, f"-h {tmp_path}")
         assert repl._last_exit_code == 0
 
 
@@ -2940,7 +3065,7 @@ class TestNlInternals:
 
     def test_nl_no_args(self, repl):
         repl._piped_input = "line1\nline2\n"
-        out = capture_cmd(repl, repl._cmd_nl, "")
+        capture_cmd(repl, repl._cmd_nl, "")
         assert repl._last_exit_code == 0
 
 
@@ -3013,7 +3138,7 @@ class TestOdInternals:
     def test_od_file(self, repl, tmp_path):
         f = tmp_path / "od_test.txt"
         f.write_text("hello")
-        out = capture_cmd(repl, repl._cmd_od, str(f))
+        capture_cmd(repl, repl._cmd_od, str(f))
         assert repl._last_exit_code == 0
 
 
@@ -3023,12 +3148,12 @@ class TestOdInternals:
 class TestFoldInternals:
     def test_fold_piped(self, repl):
         repl._piped_input = "a very long line that should be folded somewhere"
-        out = capture_cmd(repl, repl._cmd_fold, "-w 10")
+        capture_cmd(repl, repl._cmd_fold, "-w 10")
         assert repl._last_exit_code == 0
 
     def test_fold_no_args(self, repl):
         repl._piped_input = "some text"
-        out = capture_cmd(repl, repl._cmd_fold, "")
+        capture_cmd(repl, repl._cmd_fold, "")
         assert repl._last_exit_code == 0
 
 
@@ -3104,7 +3229,7 @@ class TestEnvInternals:
 
     def test_env_empty(self, repl):
         repl._env = {}
-        out = capture_cmd(repl, repl._cmd_env, "")
+        capture_cmd(repl, repl._cmd_env, "")
         assert repl._last_exit_code == 0
 
 
@@ -3117,23 +3242,23 @@ class TestSystemCommands:
         assert "uid" in out.lower() or repl._last_exit_code == 0
 
     def test_logname(self, repl):
-        out = capture_cmd(repl, repl._cmd_logname, "")
+        capture_cmd(repl, repl._cmd_logname, "")
         assert repl._last_exit_code == 0
 
     def test_who(self, repl):
-        out = capture_cmd(repl, repl._cmd_who, "")
+        capture_cmd(repl, repl._cmd_who, "")
         assert repl._last_exit_code == 0
 
     def test_hostname(self, repl):
-        out = capture_cmd(repl, repl._cmd_hostname, "")
+        capture_cmd(repl, repl._cmd_hostname, "")
         assert repl._last_exit_code == 0
 
     def test_uname_all(self, repl):
-        out = capture_cmd(repl, repl._cmd_uname, "-a")
+        capture_cmd(repl, repl._cmd_uname, "-a")
         assert repl._last_exit_code == 0
 
     def test_uname_flags(self, repl):
-        out = capture_cmd(repl, repl._cmd_uname, "-srm")
+        capture_cmd(repl, repl._cmd_uname, "-srm")
         assert repl._last_exit_code == 0
 
     def test_nproc(self, repl):
@@ -3141,7 +3266,7 @@ class TestSystemCommands:
         assert out.strip().isdigit()
 
     def test_mktemp(self, repl):
-        out = capture_cmd(repl, repl._cmd_mktemp, "")
+        capture_cmd(repl, repl._cmd_mktemp, "")
         assert repl._last_exit_code == 0
 
 
@@ -3158,7 +3283,7 @@ class TestHelpInternals:
         assert "echo" in out.lower() or repl._last_exit_code == 0
 
     def test_help_unknown_cmd(self, repl):
-        out = capture_cmd(repl, repl._cmd_help, "nonexistent_cmd_xyz")
+        capture_cmd(repl, repl._cmd_help, "nonexistent_cmd_xyz")
         assert repl._last_exit_code == 0
 
     def test_help_full(self, repl):
@@ -3180,7 +3305,7 @@ class TestExportInternals:
         assert "not set" in out
 
     def test_export_no_args(self, repl):
-        out = capture_cmd(repl, repl._cmd_export, "")
+        capture_cmd(repl, repl._cmd_export, "")
         assert repl._last_exit_code == 0
 
 
@@ -3202,7 +3327,7 @@ class TestFgBgInternals:
 
     def test_bg_no_threads(self, repl):
         repl._bg_threads = {}
-        out = capture_cmd(repl, repl._cmd_bg, "")
+        capture_cmd(repl, repl._cmd_bg, "")
         assert repl._last_exit_code == 0
 
 
@@ -3222,7 +3347,7 @@ class TestFcInternals:
 
     def test_fc_re_run(self, repl):
         repl._history = ["echo hello", "echo world"]
-        out = capture_cmd(repl, repl._cmd_fc, "1")
+        capture_cmd(repl, repl._cmd_fc, "1")
         assert repl._last_exit_code == 0
 
 
@@ -3253,7 +3378,7 @@ class TestDirStackInternals:
 class TestSortInternals:
     def test_sort_empty(self, repl):
         repl._piped_input = "a\nb\n"
-        out = capture_cmd(repl, repl._cmd_sort, "")
+        capture_cmd(repl, repl._cmd_sort, "")
         assert repl._last_exit_code == 0
 
     def test_sort_single_line(self, repl):
@@ -3302,7 +3427,7 @@ class TestHeadTailInternals:
 
     def test_tail_zero(self, repl):
         repl._piped_input = "a\nb\nc\n"
-        out = capture_cmd(repl, repl._cmd_tail, "-0")
+        capture_cmd(repl, repl._cmd_tail, "-0")
         assert repl._last_exit_code == 0
 
     def test_tail_more_than_available(self, repl):
@@ -3353,43 +3478,43 @@ class TestSystemBinaryFallback:
         assert "goodbye" in out
 
     def test_base64_runs(self, repl):
-        out = repl._execute_single("base64", "hello")
+        repl._execute_single("base64", "hello")
         assert repl._last_exit_code == 0
 
     def test_md5sum_runs(self, repl):
-        out = repl._execute_single("md5sum", "hello")
+        repl._execute_single("md5sum", "hello")
         assert repl._last_exit_code == 0
 
     def test_sha256sum_runs(self, repl):
-        out = repl._execute_single("sha256sum", "hello")
+        repl._execute_single("sha256sum", "hello")
         assert repl._last_exit_code == 0
 
     def test_timeout_runs(self, repl):
-        out = repl._execute_single("timeout 1 true")
+        repl._execute_single("timeout 1 true")
         assert repl._last_exit_code == 0
 
     def test_nice_runs(self, repl):
-        out = repl._execute_single("nice true")
+        repl._execute_single("nice true")
         assert repl._last_exit_code == 0
 
     def test_no_hup_runs(self, repl):
-        out = repl._execute_single("nohup true")
+        repl._execute_single("nohup true")
         assert repl._last_exit_code == 0
 
     def test_system_binary_not_found(self, repl):
-        out = repl._execute_single("nonexistent_binary_xyz_123")
+        repl._execute_single("nonexistent_binary_xyz_123")
         assert repl._last_exit_code == 127
 
     def test_system_binary_with_redirect(self, repl, tmp_path):
         outfile = tmp_path / "redirect_out.txt"
-        out = repl._execute_single(f"echo redirect_test > {outfile}")
+        repl._execute_single(f"echo redirect_test > {outfile}")
         assert outfile.exists()
         assert "redirect_test" in outfile.read_text()
 
     def test_system_binary_with_append(self, repl, tmp_path):
         outfile = tmp_path / "append_out.txt"
         outfile.write_text("first\n")
-        out = repl._execute_single(f"echo second >> {outfile}")
+        repl._execute_single(f"echo second >> {outfile}")
         content = outfile.read_text()
         assert "first" in content and "second" in content
 
@@ -3402,7 +3527,7 @@ class TestSystemBinaryFallback:
         assert repl._last_exit_code == 124 or "timed out" in out.lower()
 
     def test_system_binary_error(self, repl):
-        out = repl._execute_single("ls /nonexistent_path_xyz_abc")
+        repl._execute_single("ls /nonexistent_path_xyz_abc")
         assert repl._last_exit_code != 0
 
     def test_system_binary_with_piped_input(self, repl):
@@ -3410,7 +3535,7 @@ class TestSystemBinaryFallback:
         assert "piped data here" in out
 
     def test_system_binary_vfs_redirect(self, repl):
-        out = repl._execute_single("echo vfs_test > /dev/null")
+        repl._execute_single("echo vfs_test > /dev/null")
         assert repl._last_exit_code == 0
 
     def test_system_binary_inline_env_restore(self, repl):
@@ -3439,7 +3564,7 @@ class TestTabCompletion:
 
     def test_complete_first_word_state(self, repl):
         result0 = repl._complete("e", 0)
-        result1 = repl._complete("e", 1)
+        repl._complete("e", 1)
         result_none = repl._complete("e", 999)
         assert result0 is not None
         assert result_none is None
@@ -3497,7 +3622,7 @@ class TestTabCompletion:
 
 class TestAgentsCommand:
     def test_agents_list(self, repl):
-        out = capture_cmd(repl, repl._cmd_agents, "list")
+        capture_cmd(repl, repl._cmd_agents, "list")
         assert repl._last_exit_code == 0
 
     def test_agents_help(self, repl):
@@ -3505,7 +3630,7 @@ class TestAgentsCommand:
         assert "Usage" in out or "agents" in out.lower()
 
     def test_agents_no_args(self, repl):
-        out = capture_cmd(repl, repl._cmd_agents, "")
+        capture_cmd(repl, repl._cmd_agents, "")
         assert repl._last_exit_code == 0
 
     def test_agents_add_no_args(self, repl):
@@ -3531,52 +3656,52 @@ class TestRenderMoreInternals:
 
     def test_render_sphere_default_mat(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "sphere 1.0 0 0 0 1")
+        capture_cmd(repl, repl._cmd_render, "sphere 1.0 0 0 0 1")
         assert repl._last_exit_code == 0
 
     def test_render_cube_default_mat(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "cube 1.0 0 0 0 1")
+        capture_cmd(repl, repl._cmd_render, "cube 1.0 0 0 0 1")
         assert repl._last_exit_code == 0
 
     def test_render_plane_default_mat(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "plane 10.0 -1 1")
+        capture_cmd(repl, repl._cmd_render, "plane 10.0 -1 1")
         assert repl._last_exit_code == 0
 
     def test_render_light_full_args(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "light 5 5 5 1.0 0.5 0.2 10.0")
+        capture_cmd(repl, repl._cmd_render, "light 5 5 5 1.0 0.5 0.2 10.0")
         assert repl._last_exit_code == 0
 
     def test_render_mat_valid(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "mat 0 1.0 0.0 0.0 0.5 0.8")
+        capture_cmd(repl, repl._cmd_render, "mat 0 1.0 0.0 0.0 0.5 0.8")
         assert repl._last_exit_code == 0
 
     def test_render_cam_valid(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "cam 0 0 5 0 0 0")
+        capture_cmd(repl, repl._cmd_render, "cam 0 0 5 0 0 0")
         assert repl._last_exit_code == 0
 
     def test_render_go_default(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "go")
+        capture_cmd(repl, repl._cmd_render, "go")
         assert repl._last_exit_code == 0
 
     def test_render_go_custom_size(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "go 64 48 2")
+        capture_cmd(repl, repl._cmd_render, "go 64 48 2")
         assert repl._last_exit_code == 0
 
     def test_render_clear(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "clear")
+        capture_cmd(repl, repl._cmd_render, "clear")
         assert repl._last_exit_code == 0
 
     def test_render_neural(self, repl):
         repl = self._repl(repl)
-        out = capture_cmd(repl, repl._cmd_render, "neural")
+        capture_cmd(repl, repl._cmd_render, "neural")
         assert repl._last_exit_code == 0
 
     def test_render_sphere_too_few_args(self, repl):
@@ -3617,14 +3742,14 @@ class TestSourceInternals:
     def test_source_executes_commands(self, repl, tmp_path):
         rc = tmp_path / "test_rc_exec"
         rc.write_text("echo from_source\nset SRCVAR=sourced_val\n")
-        out = capture_cmd(repl, repl._cmd_source, str(rc))
+        capture_cmd(repl, repl._cmd_source, str(rc))
         assert repl._last_exit_code == 0
         assert repl._env.get("SRCVAR") == "sourced_val"
 
     def test_source_with_env_vars(self, repl, tmp_path):
         rc = tmp_path / "test_rc_env"
         rc.write_text("export EXPORTED=yes\nset PERSISTED=true\n")
-        out = capture_cmd(repl, repl._cmd_source, str(rc))
+        capture_cmd(repl, repl._cmd_source, str(rc))
         assert repl._env.get("EXPORTED") == "yes"
         assert repl._env.get("PERSISTED") == "true"
 
@@ -3717,7 +3842,7 @@ class TestStripRedirection:
         assert append is True
 
     def test_redirect_with_quotes(self, repl):
-        cmd, path, append = repl._strip_redirection('echo hello > /tmp/out.txt')
+        cmd, path, append = repl._strip_redirection("echo hello > /tmp/out.txt")
         assert cmd == "echo hello"
         assert path == "/tmp/out.txt"
 
@@ -3776,7 +3901,7 @@ class TestCommCommand:
         f2 = tmp_path / "b.txt"
         f1.write_text("apple\nbanana\ncherry\n")
         f2.write_text("banana\ndate\nfig\n")
-        out = capture_cmd(repl, repl._cmd_comm, f"{f1} {f2}")
+        capture_cmd(repl, repl._cmd_comm, f"{f1} {f2}")
         assert repl._last_exit_code == 0
 
     def test_comm_identical_files(self, repl, tmp_path):
@@ -3784,7 +3909,7 @@ class TestCommCommand:
         f2 = tmp_path / "y.txt"
         f1.write_text("a\nb\n")
         f2.write_text("a\nb\n")
-        out = capture_cmd(repl, repl._cmd_comm, f"{f1} {f2}")
+        capture_cmd(repl, repl._cmd_comm, f"{f1} {f2}")
         assert repl._last_exit_code == 0
 
     def test_comm_one_empty(self, repl, tmp_path):
@@ -3792,7 +3917,7 @@ class TestCommCommand:
         f2 = tmp_path / "data.txt"
         f1.write_text("")
         f2.write_text("x\ny\n")
-        out = capture_cmd(repl, repl._cmd_comm, f"{f1} {f2}")
+        capture_cmd(repl, repl._cmd_comm, f"{f1} {f2}")
         assert repl._last_exit_code == 0
 
 
@@ -3832,7 +3957,7 @@ class TestTestCommand:
 
     def test_test_z_empty(self, repl):
         # Parser doesn't interpret shell quotes; "" is literal 2 chars
-        capture_cmd(repl, repl._cmd_test, "-z \"\"")
+        capture_cmd(repl, repl._cmd_test, '-z ""')
         assert repl._last_exit_code == 1
 
     def test_test_z_nonempty(self, repl):
@@ -3845,7 +3970,7 @@ class TestTestCommand:
 
     def test_test_n_empty(self, repl):
         # "" is literal 2 chars, so -n considers it non-empty
-        capture_cmd(repl, repl._cmd_test, "-n \"\"")
+        capture_cmd(repl, repl._cmd_test, '-n ""')
         assert repl._last_exit_code == 0
 
     def test_test_eq_equal(self, repl):
@@ -3908,15 +4033,15 @@ class TestPrintfCommand:
         assert repl._last_exit_code == 1
 
     def test_printf_string(self, repl):
-        out = capture_cmd(repl, repl._cmd_printf, "%s" " hello")
+        out = capture_cmd(repl, repl._cmd_printf, "%s hello")
         assert "hello" in out
 
     def test_printf_int(self, repl):
-        out = capture_cmd(repl, repl._cmd_printf, "%d" " 42")
+        out = capture_cmd(repl, repl._cmd_printf, "%d 42")
         assert "42" in out
 
     def test_printf_float(self, repl):
-        out = capture_cmd(repl, repl._cmd_printf, "%f" " 3.14")
+        out = capture_cmd(repl, repl._cmd_printf, "%f 3.14")
         assert "3.14" in out
 
     def test_printf_newline(self, repl):
@@ -3948,14 +4073,14 @@ class TestLnCommand:
         target = tmp_path / "target.txt"
         target.write_text("data")
         link = tmp_path / "link.txt"
-        out = capture_cmd(repl, repl._cmd_ln, f"-s {target} {link}")
+        capture_cmd(repl, repl._cmd_ln, f"-s {target} {link}")
         assert link.is_symlink() or repl._last_exit_code == 0
 
     def test_ln_hard(self, repl, tmp_path):
         target = tmp_path / "hard_target.txt"
         target.write_text("data")
         link = tmp_path / "hard_link.txt"
-        out = capture_cmd(repl, repl._cmd_ln, f"{target} {link}")
+        capture_cmd(repl, repl._cmd_ln, f"{target} {link}")
         assert link.exists() or repl._last_exit_code == 0
 
 
@@ -3964,7 +4089,7 @@ class TestLnCommand:
 
 class TestCalCommand:
     def test_cal_current(self, repl):
-        out = capture_cmd(repl, repl._cmd_cal, "")
+        capture_cmd(repl, repl._cmd_cal, "")
         assert repl._last_exit_code == 0
 
     def test_cal_specific_month(self, repl):
@@ -4006,7 +4131,7 @@ class TestWhichTypeCommand:
         assert "builtin" in out.lower() or "echo" in out
 
     def test_which_external(self, repl):
-        out = capture_cmd(repl, repl._cmd_which, "ls")
+        capture_cmd(repl, repl._cmd_which, "ls")
         assert repl._last_exit_code == 0
 
     def test_which_not_found(self, repl):
@@ -4018,7 +4143,7 @@ class TestWhichTypeCommand:
         assert "builtin" in out.lower() or "echo" in out
 
     def test_type_external(self, repl):
-        out = capture_cmd(repl, repl._cmd_type, "ls")
+        capture_cmd(repl, repl._cmd_type, "ls")
         assert repl._last_exit_code == 0
 
     def test_type_not_found(self, repl):
@@ -4031,11 +4156,11 @@ class TestWhichTypeCommand:
 
 class TestUptimePsCommand:
     def test_uptime(self, repl):
-        out = capture_cmd(repl, repl._cmd_uptime, "")
+        capture_cmd(repl, repl._cmd_uptime, "")
         assert repl._last_exit_code == 0
 
     def test_ps(self, repl):
-        out = capture_cmd(repl, repl._cmd_ps, "")
+        capture_cmd(repl, repl._cmd_ps, "")
         assert repl._last_exit_code == 0
 
 
@@ -4086,14 +4211,22 @@ class TestRenderPrompt:
 class TestCmdApiCommand:
     def test_api_status_default(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         api = repl.os.api
-        api.status.return_value = {"available": True, "running": True, "model_id": "gpt2", "engine_type": "cpu", "uptime": 120}
+        api.status.return_value = {
+            "available": True,
+            "running": True,
+            "model_id": "gpt2",
+            "engine_type": "cpu",
+            "uptime": 120,
+        }
         repl._cmd_api("")
         assert repl._last_exit_code == 0
 
     def test_api_status_not_available(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         api = repl.os.api
         api.status.return_value = {"available": False, "running": False}
@@ -4102,6 +4235,7 @@ class TestCmdApiCommand:
 
     def test_api_start_success(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         api = repl.os.api
         api.is_running = False
@@ -4111,6 +4245,7 @@ class TestCmdApiCommand:
 
     def test_api_start_already_running(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         api = repl.os.api
         api.is_running = True
@@ -4119,6 +4254,7 @@ class TestCmdApiCommand:
 
     def test_api_start_fail(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         api = repl.os.api
         api.is_running = False
@@ -4128,6 +4264,7 @@ class TestCmdApiCommand:
 
     def test_api_stop_success(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         api = repl.os.api
         api.is_running = True
@@ -4137,6 +4274,7 @@ class TestCmdApiCommand:
 
     def test_api_stop_not_running(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         api = repl.os.api
         api.is_running = False
@@ -4145,6 +4283,7 @@ class TestCmdApiCommand:
 
     def test_api_restart_when_running(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         api = repl.os.api
         api.is_running = True
@@ -4154,6 +4293,7 @@ class TestCmdApiCommand:
 
     def test_api_restart_when_not_running(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         api = repl.os.api
         api.is_running = False
@@ -4163,6 +4303,7 @@ class TestCmdApiCommand:
 
     def test_api_restart_fail(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         api = repl.os.api
         api.is_running = False
@@ -4172,6 +4313,7 @@ class TestCmdApiCommand:
 
     def test_api_status_with_uptime(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         api = repl.os.api
         api.status.return_value = {"available": True, "running": True, "uptime": 300}
@@ -4180,6 +4322,7 @@ class TestCmdApiCommand:
 
     def test_api_status_without_uptime(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         api = repl.os.api
         api.status.return_value = {"available": True, "running": False}
@@ -4193,6 +4336,7 @@ class TestCmdApiCommand:
 class TestRequireApi:
     def test_require_api_when_available(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         repl.os.api_status = {"available": True}
         result = repl._require_api("test")
@@ -4200,6 +4344,7 @@ class TestRequireApi:
 
     def test_require_api_when_unavailable(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         repl.os.api_status = {"available": False}
         result = repl._require_api("test")
@@ -4212,21 +4357,27 @@ class TestRequireApi:
 class TestCmdEvents:
     def test_events_no_bus(self, repl):
         from unittest.mock import patch
-        with patch("domain.infrastructure.event_bus.get_event_bus", side_effect=Exception("no bus")):
+
+        with patch(
+            "domain.infrastructure._internal.event_bus.get_event_bus",
+            side_effect=Exception("no bus"),
+        ):
             repl._cmd_events("")
             assert repl._last_exit_code == 0
 
     def test_events_empty(self, repl):
         from unittest.mock import MagicMock, patch
+
         bus = MagicMock()
         bus.history.return_value = []
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("")
             assert repl._last_exit_code == 0
 
     def test_events_with_data(self, repl):
-        from unittest.mock import MagicMock, patch
         import time as _time
+        from unittest.mock import MagicMock, patch
+
         bus = MagicMock()
         ev = MagicMock()
         ev.name = "model.loaded"
@@ -4234,13 +4385,14 @@ class TestCmdEvents:
         ev.source = "api"
         ev.data = {"model": "gpt2"}
         bus.history.return_value = [ev]
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("")
             assert repl._last_exit_code == 0
 
     def test_events_with_filter(self, repl):
-        from unittest.mock import MagicMock, patch
         import time as _time
+        from unittest.mock import MagicMock, patch
+
         bus = MagicMock()
         ev1 = MagicMock()
         ev1.name = "model.loaded"
@@ -4253,12 +4405,13 @@ class TestCmdEvents:
         ev2.source = "api"
         ev2.data = None
         bus.history.return_value = [ev1, ev2]
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("model")
             assert repl._last_exit_code == 0
 
     def test_events_no_match(self, repl):
         from unittest.mock import MagicMock, patch
+
         bus = MagicMock()
         ev = MagicMock()
         ev.name = "model.loaded"
@@ -4266,13 +4419,14 @@ class TestCmdEvents:
         ev.source = "api"
         ev.data = None
         bus.history.return_value = [ev]
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("nonexistent")
             assert repl._last_exit_code == 0
 
     def test_events_with_limit(self, repl):
-        from unittest.mock import MagicMock, patch
         import time as _time
+        from unittest.mock import MagicMock, patch
+
         bus = MagicMock()
         events = []
         for i in range(10):
@@ -4283,7 +4437,7 @@ class TestCmdEvents:
             ev.data = None
             events.append(ev)
         bus.history.return_value = events
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events(" 3")
             assert repl._last_exit_code == 0
 
@@ -4316,100 +4470,109 @@ class TestCmdConfirm:
 class TestSetupReadlineHistory:
     def _call_real_setup(self, repl):
         """Call the real _setup_readline, bypassing the fixture's patch."""
-        from domain.shell._internal.repl import ShellREPL as _RealShellREPL
         import types
+
         # Get the real method from the original class definition
         real_method = None
         for base in type(repl).__mro__:
-            if '_setup_readline' in base.__dict__:
-                candidate = base.__dict__['_setup_readline']
+            if "_setup_readline" in base.__dict__:
+                candidate = base.__dict__["_setup_readline"]
                 if not isinstance(candidate, types.FunctionType):
                     continue
                 real_method = candidate
                 break
         if real_method is None:
             # Fallback: reload the module and get the method
-            import importlib, domain.shell._internal.repl
+            import importlib
+
+            import domain.shell._internal.repl
+
             importlib.reload(domain.shell._internal.repl)
             real_method = domain.shell._internal.repl.ShellREPL._setup_readline
         real_method(repl)
 
     def test_truncates_large_history(self, repl, tmp_path):
         from unittest.mock import patch
+
         histdir = tmp_path / ".config" / "sloughgpt"
         histdir.mkdir(parents=True, exist_ok=True)
         histfile = histdir / ".shell_history"
         line = b"command_" + b"x" * 40 + b"\n"
         with open(histfile, "wb") as f:
-            for i in range(300000):
+            for _i in range(300000):
                 f.write(line)
         original_size = histfile.stat().st_size
         assert original_size > 10 * 1024 * 1024
         with patch("pathlib.Path.home", return_value=tmp_path):
             import sys
-            mock_rl = type(sys)('readline')
+
+            mock_rl = type(sys)("readline")
             mock_rl.set_history_length = lambda x: None
             mock_rl.read_history_file = lambda x: None
             mock_rl.write_history_file = lambda x: None
             mock_rl.set_completer = lambda x: None
             mock_rl.parse_and_bind = lambda x: None
-            old = sys.modules.get('readline')
-            sys.modules['readline'] = mock_rl
+            old = sys.modules.get("readline")
+            sys.modules["readline"] = mock_rl
             try:
                 self._call_real_setup(repl)
                 new_size = histfile.stat().st_size
                 assert new_size < original_size
             finally:
                 if old is not None:
-                    sys.modules['readline'] = old
+                    sys.modules["readline"] = old
                 else:
-                    del sys.modules['readline']
+                    del sys.modules["readline"]
 
     def test_preserves_small_history(self, repl, tmp_path):
         from unittest.mock import patch
+
         histdir = tmp_path / ".config" / "sloughgpt"
         histdir.mkdir(parents=True, exist_ok=True)
         histfile = histdir / ".shell_history"
         histfile.write_text("cmd1\ncmd2\ncmd3\n")
         with patch("pathlib.Path.home", return_value=tmp_path):
             import sys
-            mock_rl = type(sys)('readline')
+
+            mock_rl = type(sys)("readline")
             mock_rl.set_history_length = lambda x: None
             mock_rl.read_history_file = lambda x: None
             mock_rl.write_history_file = lambda x: None
             mock_rl.set_completer = lambda x: None
             mock_rl.parse_and_bind = lambda x: None
-            old = sys.modules.get('readline')
-            sys.modules['readline'] = mock_rl
+            old = sys.modules.get("readline")
+            sys.modules["readline"] = mock_rl
             try:
                 self._call_real_setup(repl)
                 assert "cmd1" in histfile.read_text()
             finally:
                 if old is not None:
-                    sys.modules['readline'] = old
+                    sys.modules["readline"] = old
                 else:
-                    del sys.modules['readline']
+                    del sys.modules["readline"]
 
     def test_no_history_file(self, repl, tmp_path):
         from unittest.mock import patch
+
         with patch("pathlib.Path.home", return_value=tmp_path):
             import sys
-            mock_rl = type(sys)('readline')
+
+            mock_rl = type(sys)("readline")
             mock_rl.set_history_length = lambda x: None
             mock_rl.read_history_file = lambda x: None
             mock_rl.write_history_file = lambda x: None
             mock_rl.set_completer = lambda x: None
             mock_rl.parse_and_bind = lambda x: None
-            old = sys.modules.get('readline')
-            sys.modules['readline'] = mock_rl
+            old = sys.modules.get("readline")
+            sys.modules["readline"] = mock_rl
             try:
                 self._call_real_setup(repl)
                 assert repl._last_exit_code == 0
             finally:
                 if old is not None:
-                    sys.modules['readline'] = old
+                    sys.modules["readline"] = old
                 else:
-                    del sys.modules['readline']
+                    del sys.modules["readline"]
 
 
 # ── _cmd_load ImportError fallback ────────────────────────────────────
@@ -4422,6 +4585,7 @@ class TestCmdLoadFallback:
 
     def test_load_no_api(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         repl.os.api_status = {"available": False}
         repl._cmd_load("gpt2")
@@ -4429,11 +4593,15 @@ class TestCmdLoadFallback:
 
     def test_load_import_error_fallback(self, repl):
         from unittest.mock import MagicMock, patch
+
         repl.os = MagicMock()
         repl.os.api_status = {"available": True}
         repl.cmds = MagicMock()
         repl.cmds.load_model.return_value = {"status": "loaded", "device": "cpu"}
-        with patch.dict("sys.modules", {"domain.infrastructure.conversion_tracker": None, "apps.cli.src.utils.progress": None}):
+        with patch.dict(
+            "sys.modules",
+            {"domain.infrastructure.conversion_tracker": None, "apps.cli.src.utils.progress": None},
+        ):
             repl._cmd_load("gpt2")
             assert repl._last_exit_code == 0
 
@@ -4444,12 +4612,15 @@ class TestCmdLoadFallback:
 class TestCmdTrainSubcommands:
     def _make_api_repl(self, repl):
         from unittest.mock import PropertyMock, patch
-        self._patcher = patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True})
+
+        self._patcher = patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        )
         self._patcher.start()
         return repl
 
     def teardown_method(self):
-        if hasattr(self, '_patcher') and self._patcher:
+        if hasattr(self, "_patcher") and self._patcher:
             self._patcher.stop()
 
     def test_train_no_args(self, repl):
@@ -4459,6 +4630,7 @@ class TestCmdTrainSubcommands:
 
     def test_train_stop_no_args(self, repl):
         from unittest.mock import MagicMock
+
         self._make_api_repl(repl)
         repl.cmds = MagicMock()
         repl._cmd_train("stop")
@@ -4466,6 +4638,7 @@ class TestCmdTrainSubcommands:
 
     def test_train_distill_no_args(self, repl):
         from unittest.mock import MagicMock
+
         self._make_api_repl(repl)
         repl.cmds = MagicMock()
         repl._cmd_train("distill")
@@ -4473,6 +4646,7 @@ class TestCmdTrainSubcommands:
 
     def test_train_hf_no_args(self, repl):
         from unittest.mock import MagicMock
+
         self._make_api_repl(repl)
         repl.cmds = MagicMock()
         repl._cmd_train("hf")
@@ -4564,7 +4738,8 @@ class TestFormatTable:
 
 class TestCheckPermissionInteractive:
     def test_always_grant(self, repl):
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         repl._perms._granted.discard("rm")
         repl.io.read = MagicMock(return_value="always")
@@ -4574,6 +4749,7 @@ class TestCheckPermissionInteractive:
 
     def test_y_grant(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         repl._perms._granted.discard("rm")
         repl.io.read = MagicMock(return_value="y")
@@ -4583,6 +4759,7 @@ class TestCheckPermissionInteractive:
 
     def test_deny(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         repl._perms._granted.discard("rm")
         repl.io.read = MagicMock(return_value="n")
@@ -4591,6 +4768,7 @@ class TestCheckPermissionInteractive:
 
     def test_eof_denies(self, repl):
         from unittest.mock import MagicMock
+
         repl.os = MagicMock()
         repl._perms._granted.discard("rm")
         repl.io.read = MagicMock(side_effect=EOFError)
@@ -4608,49 +4786,55 @@ class TestCheckPermissionInteractive:
 class TestCmdHeadVFS:
     def test_head_vfs_file(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = "line1\nline2\nline3\nline4\nline5"
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_head("-2 /dev/test")
             assert repl._last_exit_code == 0
 
     def test_head_vfs_none(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = None
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_head("/dev/null")
             assert repl._last_exit_code == 1
 
     def test_tail_vfs_file(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = "line1\nline2\nline3\nline4\nline5"
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_tail("-2 /dev/test")
             assert repl._last_exit_code == 0
 
     def test_tail_vfs_none(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = None
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_tail("/dev/null")
             assert repl._last_exit_code == 1
 
     def test_head_proc_file(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = "proc data"
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_head("/proc/meminfo")
             assert repl._last_exit_code == 0
 
     def test_tail_proc_file(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = "proc data"
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_tail("/proc/meminfo")
             assert repl._last_exit_code == 0
 
@@ -4684,16 +4868,16 @@ class TestCmdHeadVFS:
 
 class TestCmdStatusWithRegistry:
     def test_status_with_registry(self, repl):
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
+
         repl.cmds = MagicMock()
-        repl.cmds.health_detailed.return_value = {
-            "registry": {"models": ["m1", "m2"]}
-        }
+        repl.cmds.health_detailed.return_value = {"registry": {"models": ["m1", "m2"]}}
         repl._cmd_status("")
         assert repl._last_exit_code == 0
 
     def test_status_without_registry(self, repl):
         from unittest.mock import MagicMock
+
         repl.cmds = MagicMock()
         repl.cmds.health_detailed.return_value = {"uptime": 100}
         repl._cmd_status("")
@@ -4701,6 +4885,7 @@ class TestCmdStatusWithRegistry:
 
     def test_status_health_error(self, repl):
         from unittest.mock import MagicMock
+
         repl.cmds = MagicMock()
         repl.cmds.health_detailed.side_effect = Exception("fail")
         repl._cmd_status("")
@@ -4712,7 +4897,8 @@ class TestCmdStatusWithRegistry:
 
 class TestCmdLogsAnalyze:
     def test_logs_analyze(self, repl):
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
+
         repl.cmds = MagicMock()
         repl.cmds.generate.return_value = {"text": "Analysis complete"}
         repl._cmd_logs("analyze")
@@ -4724,6 +4910,7 @@ class TestCmdLogsAnalyze:
 
     def test_logs_analyze_generate_fails(self, repl):
         from unittest.mock import MagicMock
+
         repl.cmds = MagicMock()
         repl.cmds.generate.return_value = {"error": "model down"}
         repl._cmd_logs("analyze")
@@ -4742,47 +4929,83 @@ class TestCmdBoot:
 
     def test_boot_api_autostart_fail(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         repl._running = False
         api = MagicMock()
         api.is_running = False
         api.start.return_value = {"ok": False, "error": "busy"}
-        with patch.object(type(repl.os), 'api', new_callable=PropertyMock, return_value=api), \
-             patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
-            with patch.object(repl.os, 'boot', return_value=("log", {"available": False})):
+        with (
+            patch.object(type(repl.os), "api", new_callable=PropertyMock, return_value=api),
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": False},
+            ),
+        ):
+            with patch.object(repl.os, "boot", return_value=("log", {"available": False})):
                 repl._cmd_boot("")
         assert repl._last_exit_code == 0
 
     def test_boot_api_autostart_success(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         repl._running = False
         api = MagicMock()
         api.is_running = False
         api.start.return_value = {"ok": True, "message": "started"}
-        with patch.object(type(repl.os), 'api', new_callable=PropertyMock, return_value=api), \
-             patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True, "model_id": "gpt2"}):
-            with patch.object(repl.os, 'boot', return_value=("log", {"available": True, "model_id": "gpt2"})):
+        with (
+            patch.object(type(repl.os), "api", new_callable=PropertyMock, return_value=api),
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": True, "model_id": "gpt2"},
+            ),
+        ):
+            with patch.object(
+                repl.os, "boot", return_value=("log", {"available": True, "model_id": "gpt2"})
+            ):
                 repl._cmd_boot("")
         assert repl._last_exit_code == 0
 
     def test_boot_api_already_running(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         repl._running = False
         api = MagicMock()
         api.is_running = True
-        with patch.object(type(repl.os), 'api', new_callable=PropertyMock, return_value=api), \
-             patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True, "model_id": "qwen"}):
-            with patch.object(repl.os, 'boot', return_value=("log", {"available": True, "model_id": "qwen"})):
+        with (
+            patch.object(type(repl.os), "api", new_callable=PropertyMock, return_value=api),
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": True, "model_id": "qwen"},
+            ),
+        ):
+            with patch.object(
+                repl.os, "boot", return_value=("log", {"available": True, "model_id": "qwen"})
+            ):
                 repl._cmd_boot("")
         assert repl._last_exit_code == 0
 
     def test_boot_result_not_tuple(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         repl._running = False
         api = MagicMock()
         api.is_running = True
-        with patch.object(type(repl.os), 'api', new_callable=PropertyMock, return_value=api), \
-             patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
-            with patch.object(repl.os, 'boot', return_value="just a string"):
+        with (
+            patch.object(type(repl.os), "api", new_callable=PropertyMock, return_value=api),
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": False},
+            ),
+        ):
+            with patch.object(repl.os, "boot", return_value="just a string"):
                 repl._cmd_boot("")
         assert repl._last_exit_code == 0
 
@@ -4809,6 +5032,7 @@ class TestExpandGlobs:
         (tmp_path / "a.txt").write_text("a")
         (tmp_path / "b.txt").write_text("b")
         import os
+
         old = os.getcwd()
         try:
             os.chdir(tmp_path)
@@ -4824,17 +5048,19 @@ class TestExpandGlobs:
 class TestExecuteRedirectVFS:
     def test_redirect_to_vfs(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.write.return_value = None
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._execute_single("echo test > /dev/null", "")
             vfs.write.assert_called_once()
 
     def test_redirect_to_vfs_error(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.write.return_value = "permission denied"
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._execute_single("echo test > /dev/null", "")
             assert repl._last_exit_code == 0
 
@@ -4862,12 +5088,14 @@ class TestExecuteBackground:
     def test_background_string(self, repl):
         repl._execute_background("echo hello")
         import time
+
         time.sleep(0.1)
         assert repl._last_exit_code == 0
 
     def test_background_tuples(self, repl):
         repl._execute_background_tuples([("echo", "hello")])
         import time
+
         time.sleep(0.1)
         assert repl._last_exit_code == 0
 
@@ -5002,17 +5230,19 @@ class TestCmdDate:
 class TestCmdWcVFS:
     def test_wc_vfs_file(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = "line1\nline2\nline3"
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_wc("/dev/test")
             assert repl._last_exit_code == 0
 
     def test_wc_vfs_none(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = None
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_wc("/dev/null")
             assert repl._last_exit_code == 1
 
@@ -5022,9 +5252,10 @@ class TestCmdWcVFS:
 
     def test_wc_proc_file(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = "mem info data"
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_wc("/proc/meminfo")
             assert repl._last_exit_code == 0
 
@@ -5039,25 +5270,28 @@ class TestCmdGrepVFS:
 
     def test_grep_vfs_file(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = "hello\nworld\nhello"
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_grep("hello /dev/test")
             assert repl._last_exit_code == 0
 
     def test_grep_vfs_none(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = None
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_grep("hello /dev/null")
             assert repl._last_exit_code == 1
 
     def test_grep_proc_file(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = "cpu info line"
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_grep("cpu /proc/cpuinfo")
             assert repl._last_exit_code == 0
 
@@ -5186,17 +5420,19 @@ class TestCmdCatVFS:
 
     def test_cat_vfs_file(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = "vfs content"
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_cat("/dev/test")
             assert repl._last_exit_code == 0
 
     def test_cat_vfs_none(self, repl):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         vfs = MagicMock()
         vfs.read.return_value = None
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=vfs):
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=vfs):
             repl._cmd_cat("/dev/null")
             assert repl._last_exit_code == 1
 
@@ -5215,8 +5451,14 @@ class TestCmdAi:
         assert "Usage" in out
 
     def test_ai_api_unavailable(self, repl):
-        from unittest.mock import MagicMock, PropertyMock, patch
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": False},
+        ):
             out = capture_cmd(repl, repl._cmd_ai, "what is 2+2")
             assert repl._last_exit_code == 0
             assert "not connected" in out.lower() or "API" in out
@@ -5227,27 +5469,34 @@ class TestCmdAi:
 
 class TestCmdTrain:
     def test_train_no_args_lists_datasets(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.datasets.return_value = [{"name": "d1"}, {"name": "d2"}]
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("")
         assert repl._last_exit_code == 0
 
     def test_train_with_dataset_calls_train(self, repl):
         from unittest.mock import MagicMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.train_quick.return_value = {"id": "j1", "status": "started"}
-        with patch.object(repl, '_spinner_call', side_effect=lambda msg, fn: fn()), \
-             patch.object(repl, '_stream_train_progress'):
+        with (
+            patch.object(repl, "_spinner_call", side_effect=lambda msg, fn: fn()),
+            patch.object(repl, "_stream_train_progress"),
+        ):
             repl._cmd_train("test_dataset")
         assert repl._last_exit_code == 0
 
     def test_train_error_response(self, repl):
         from unittest.mock import MagicMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.train_quick.return_value = {"error": "no GPU"}
-        with patch.object(repl, '_spinner_call', side_effect=lambda msg, fn: fn()):
+        with patch.object(repl, "_spinner_call", side_effect=lambda msg, fn: fn()):
             out = capture_cmd(repl, repl._cmd_train, "test_dataset")
         assert "no GPU" in out
 
@@ -5262,17 +5511,20 @@ class TestCmdAgents:
 
     def test_agents_with_goal(self, repl):
         from unittest.mock import MagicMock, patch
+
         orch = MagicMock()
         orch.execute.return_value = {"response": "task done", "tasks": [{"status": "completed"}]}
-        with patch('domain.agents._internal.multi.get_orchestrator', return_value=orch), \
-             patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl, '_spinner_call', side_effect=lambda msg, fn: fn()):
+        with (
+            patch("domain.agents._internal.multi.get_orchestrator", return_value=orch),
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl, "_spinner_call", side_effect=lambda msg, fn: fn()),
+        ):
             out = capture_cmd(repl, repl._cmd_agents, "research topic X")
         assert repl._last_exit_code == 0
         assert "task done" in out
 
     def test_agents_api_unavailable(self, repl):
-        with patch.object(repl, '_require_api', return_value=False):
+        with patch.object(repl, "_require_api", return_value=False):
             repl._cmd_agents("research X")
         assert repl._last_exit_code == 0
 
@@ -5283,6 +5535,7 @@ class TestCmdAgents:
 class TestCmdLogsExport:
     def test_logs_export(self, repl, tmp_path):
         from unittest.mock import MagicMock
+
         e1 = MagicMock()
         e1.timestamp = 1000.0
         e1.level = "INFO"
@@ -5354,7 +5607,7 @@ class TestCmdFind:
         assert "test.txt" in out
 
     def test_find_missing_dir(self, repl):
-        out = capture_cmd(repl, repl._cmd_find, "-name *.txt /nonexistent_xyz_find")
+        capture_cmd(repl, repl._cmd_find, "-name *.txt /nonexistent_xyz_find")
         assert repl._last_exit_code == 0
 
 
@@ -5456,95 +5709,148 @@ class TestCmdTr:
 
 class TestCmdTrainStatus:
     def test_train_status(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.train_status.return_value = [
             {"id": "abc12345", "status": "running", "model": "gpt2", "progress": 50},
             {"id": "def67890", "status": "done", "model": "qwen", "progress": 100},
         ]
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("status")
         assert repl._last_exit_code == 0
 
     def test_train_status_empty(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.train_status.return_value = []
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("status")
         assert repl._last_exit_code == 0
 
     def test_train_follow(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}), \
-             patch.object(repl, '_stream_train_progress'):
+        with (
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": True},
+            ),
+            patch.object(repl, "_stream_train_progress"),
+        ):
             repl._cmd_train("follow j1")
         assert repl._last_exit_code == 0
 
     def test_train_follow_no_id(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("follow")
         assert repl._last_exit_code == 0
 
     def test_train_stop(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.train_stop.return_value = "ok"
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("stop j1")
         assert repl._last_exit_code == 0
 
     def test_train_stop_no_id(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("stop")
         assert repl._last_exit_code == 0
 
     def test_train_distill(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.train_distill.return_value = {"id": "j1", "status": "started"}
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}), \
-             patch.object(repl, '_spinner_call', side_effect=lambda msg, fn: fn()), \
-             patch.object(repl, '_stream_train_progress'):
+        with (
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": True},
+            ),
+            patch.object(repl, "_spinner_call", side_effect=lambda msg, fn: fn()),
+            patch.object(repl, "_stream_train_progress"),
+        ):
             repl._cmd_train("distill shakespeare")
         assert repl._last_exit_code == 0
 
     def test_train_hf(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.train_hf.return_value = {"id": "j1", "status": "started"}
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}), \
-             patch.object(repl, '_spinner_call', side_effect=lambda msg, fn: fn()), \
-             patch.object(repl, '_stream_train_progress'):
+        with (
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": True},
+            ),
+            patch.object(repl, "_spinner_call", side_effect=lambda msg, fn: fn()),
+            patch.object(repl, "_stream_train_progress"),
+        ):
             repl._cmd_train("hf gpt2 shakespeare")
         assert repl._last_exit_code == 0
 
     def test_train_auto(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.train_auto.return_value = {"id": "j1", "status": "started"}
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}), \
-             patch.object(repl, '_spinner_call', side_effect=lambda msg, fn: fn()), \
-             patch.object(repl, '_stream_train_progress'):
+        with (
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": True},
+            ),
+            patch.object(repl, "_spinner_call", side_effect=lambda msg, fn: fn()),
+            patch.object(repl, "_stream_train_progress"),
+        ):
             repl._cmd_train("auto")
         assert repl._last_exit_code == 0
 
     def test_train_load(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.train_load.return_value = {"status": "loaded"}
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("load checkpoint_v1")
         assert repl._last_exit_code == 0
 
     def test_train_del(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.train_del.return_value = "deleted"
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("del checkpoint_v1")
         assert repl._last_exit_code == 0
 
@@ -5554,7 +5860,8 @@ class TestCmdTrainStatus:
 
 class TestCmdSvcV3:
     def _booted_repl(self, repl):
-        from unittest.mock import MagicMock, PropertyMock, patch
+        from unittest.mock import MagicMock
+
         init = MagicMock()
         init.service_table.return_value = "  svc1  running\n  svc2  stopped"
         init.status_summary = "2 services"
@@ -5650,22 +5957,28 @@ class TestCmdSvcV3:
 
 class TestCmdTrainStatusDisplay:
     def test_train_status_display(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.train_status.return_value = [
             {"id": "abc12345", "status": "running", "model": "gpt2", "progress": 50},
         ]
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("status")
         assert repl._last_exit_code == 0
 
     def test_train_status_no_data_source(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.train_status.return_value = [
             {"id": "abc12345", "status": "running", "progress": 50},
         ]
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("status")
         assert repl._last_exit_code == 0
 
@@ -5696,35 +6009,67 @@ class TestCmdLoad:
         assert repl._last_exit_code == 0
 
     def test_load_fallback(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.load_model.return_value = {"status": "loaded", "device": "cpu"}
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}), \
-             patch('domain.infrastructure.conversion_tracker.get_tracker', side_effect=ImportError("no tracker")):
+        with (
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": True},
+            ),
+            patch(
+                "domain.infrastructure.conversion_tracker.get_tracker",
+                side_effect=ImportError("no tracker"),
+            ),
+        ):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
     def test_load_tracker_ready(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.load_model.return_value = {"status": "loaded", "device": "cpu"}
         tracker = MagicMock()
         tracker.get.return_value = {"stage": "ready", "progress": 1.0, "message": "done"}
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}), \
-             patch('domain.infrastructure.conversion_tracker.get_tracker', return_value=tracker), \
-             patch('apps.cli.src.utils.progress.ProgressBar'):
+        with (
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": True},
+            ),
+            patch("domain.infrastructure.conversion_tracker.get_tracker", return_value=tracker),
+            patch("apps.cli.src.utils.progress.ProgressBar"),
+        ):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
     def test_load_tracker_error(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.load_model.return_value = {"status": "error", "error": "disk full"}
         tracker = MagicMock()
-        tracker.get.return_value = {"stage": "error", "progress": 0.5, "message": "failed", "error": "disk full"}
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}), \
-             patch('domain.infrastructure.conversion_tracker.get_tracker', return_value=tracker), \
-             patch('apps.cli.src.utils.progress.ProgressBar'):
+        tracker.get.return_value = {
+            "stage": "error",
+            "progress": 0.5,
+            "message": "failed",
+            "error": "disk full",
+        }
+        with (
+            patch.object(
+                type(repl.os),
+                "api_status",
+                new_callable=PropertyMock,
+                return_value={"available": True},
+            ),
+            patch("domain.infrastructure.conversion_tracker.get_tracker", return_value=tracker),
+            patch("apps.cli.src.utils.progress.ProgressBar"),
+        ):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
@@ -5738,18 +6083,24 @@ class TestCmdGen:
         assert repl._last_exit_code == 0
 
     def test_gen_with_result(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.generate.return_value = {"text": "Hello world"}
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_gen("hello")
         assert repl._last_exit_code == 0
 
     def test_gen_with_error(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.generate.return_value = {"error": "timeout"}
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_gen("hello")
         assert repl._last_exit_code == 0
 
@@ -5767,10 +6118,13 @@ class TestCmdChat:
         assert repl._chat_history == []
 
     def test_chat_with_response(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.chat.return_value = {"message": "Hi there!", "session_id": "s1"}
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_chat("hello")
         assert repl._last_exit_code == 0
         assert len(repl._chat_history) == 2
@@ -5842,17 +6196,26 @@ class TestErrorPaths:
 class TestCmdApi:
     def _mock_api(self, repl, running=True, available=True):
         from unittest.mock import MagicMock, PropertyMock, patch
+
         api = MagicMock()
         api.is_running = running
         api.start.return_value = {"ok": True, "message": "started"}
         api.stop.return_value = {"message": "stopped"}
-        api.status.return_value = {"available": available, "model_id": "gpt2", "engine_type": "cpu", "running": running, "uptime": 123.0}
-        self._api_ctx = patch.object(type(repl.os), 'api', new_callable=PropertyMock, return_value=api)
+        api.status.return_value = {
+            "available": available,
+            "model_id": "gpt2",
+            "engine_type": "cpu",
+            "running": running,
+            "uptime": 123.0,
+        }
+        self._api_ctx = patch.object(
+            type(repl.os), "api", new_callable=PropertyMock, return_value=api
+        )
         self._api_ctx.start()
         return api
 
     def teardown_method(self):
-        if hasattr(self, '_api_ctx'):
+        if hasattr(self, "_api_ctx"):
             self._api_ctx.stop()
 
     def test_api_status_default(self, repl):
@@ -5967,23 +6330,32 @@ class TestCmdBootShutdown:
 class TestCmdLsdevProcs:
     def test_lsdev_no_devices(self, repl):
         from unittest.mock import PropertyMock, patch
-        with patch.object(type(repl.os), 'devices', new_callable=PropertyMock, return_value=None):
+
+        with patch.object(type(repl.os), "devices", new_callable=PropertyMock, return_value=None):
             repl._cmd_lsdev("")
         assert repl._last_exit_code == 0
 
     def test_procs_no_jobs(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
         repl.cmds.ps.return_value = []
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_procs("")
         assert repl._last_exit_code == 0
 
     def test_procs_with_jobs(self, repl):
-        from unittest.mock import MagicMock, patch, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock, patch
+
         repl.cmds = MagicMock()
-        repl.cmds.ps.return_value = [{"id": "abc", "status": "running", "name": "train", "progress": 50, "loss": 0.5}]
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        repl.cmds.ps.return_value = [
+            {"id": "abc", "status": "running", "name": "train", "progress": 50, "loss": 0.5}
+        ]
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_procs("")
         assert repl._last_exit_code == 0
 
@@ -6016,24 +6388,30 @@ class TestCmdLog:
         assert repl._last_exit_code == 0
 
     def test_log_with_entries(self, repl):
-        from domain.shell._internal.log_buffer import LogEntry
         import time
+
+        from domain.shell._internal.log_buffer import LogEntry
+
         entry = LogEntry(timestamp=time.time(), level="ERROR", source="test", message="boom")
         repl._log_buffer.append(entry)
         repl._cmd_logs("")
         assert repl._last_exit_code == 0
 
     def test_log_level_filter(self, repl):
-        from domain.shell._internal.log_buffer import LogEntry
         import time
+
+        from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer.append(LogEntry(time.time(), "ERROR", "test", "err1"))
         repl._log_buffer.append(LogEntry(time.time(), "INFO", "test", "info1"))
         repl._cmd_logs("-l ERROR")
         assert repl._last_exit_code == 0
 
     def test_log_source_filter(self, repl):
-        from domain.shell._internal.log_buffer import LogEntry
         import time
+
+        from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer.append(LogEntry(time.time(), "ERROR", "api", "err1"))
         repl._cmd_logs("-s api")
         assert repl._last_exit_code == 0
@@ -6477,7 +6855,7 @@ class TestUtilityCommandsV2:
         assert repl._last_exit_code == 1
 
     def test_printf_string(self, repl):
-        repl._cmd_printf("%s %s" "hello world")
+        repl._cmd_printf("%s %shello world")
         assert repl._last_exit_code == 0
 
     def test_printf_newline(self, repl):
@@ -6556,14 +6934,20 @@ class TestCmdSvcRunlevel:
 
 class TestCmdTrainLoadDel:
     def test_train_load_no_name(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("load")
         assert repl._last_exit_code == 0
 
     def test_train_del_no_name(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("del")
         assert repl._last_exit_code == 0
 
@@ -6573,20 +6957,29 @@ class TestCmdTrainLoadDel:
 
 class TestCmdTrainDistillArgs:
     def test_train_distill_missing_ds(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("distill")
         assert repl._last_exit_code == 0
 
     def test_train_hf_missing_args(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("hf")
         assert repl._last_exit_code == 0
 
     def test_train_hf_missing_dataset(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("hf gpt2")
         assert repl._last_exit_code == 0
 
@@ -6749,42 +7142,63 @@ class TestCmdAiV2:
         assert repl._last_exit_code == 0
 
     def test_ai_api_unavailable_fallback(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": False},
+        ):
             repl._cmd_ai("show me running jobs")
         assert repl._last_exit_code == 0
 
     def test_ai_api_available_llm_result(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.generate = MagicMock(return_value={"text": "models"})
             repl._cmd_ai("show models")
         assert repl._last_exit_code == 0
 
     def test_ai_api_available_error_result(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.generate = MagicMock(return_value={"error": "timeout"})
             repl._cmd_ai("show models")
         assert repl._last_exit_code == 0
 
     def test_ai_api_available_non_dict(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.generate = MagicMock(return_value="just a string")
             repl._cmd_ai("show models")
         assert repl._last_exit_code == 0
 
     def test_ai_generates_background_cmd(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.generate = MagicMock(return_value={"text": "sleep 1 &"})
             repl._cmd_ai("background sleep")
         assert repl._last_exit_code == 0
 
     def test_ai_generates_pipeline(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.generate = MagicMock(return_value={"text": "echo hello | wc"})
             repl._cmd_ai("count hello")
         assert repl._last_exit_code == 0
@@ -6796,14 +7210,24 @@ class TestCmdAiV2:
 class TestCmdRenderSubs:
     def _mock_render(self, repl):
         from unittest.mock import MagicMock
+
         import numpy as _np
+
         dev = MagicMock()
+
         def _call(method, *args, **kwargs):
             if method == "info":
-                return {"meshes": 1, "materials": 2, "lights": 3, "resolution": [80, 60], "samples": 4}
+                return {
+                    "meshes": 1,
+                    "materials": 2,
+                    "lights": 3,
+                    "resolution": [80, 60],
+                    "samples": 4,
+                }
             if method == "render":
                 return _np.zeros((60, 80, 3))
             return [0]
+
         dev.call.side_effect = _call
         repl._render_device = dev
         repl._render_neural = MagicMock()
@@ -6920,10 +7344,13 @@ class TestCmdVmrunFlags:
 
     def test_vmrun_admin_flag(self, repl):
         import os
+
         os.environ["MAN_VM_ROLE"] = "admin"
         try:
-            with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=MagicMock()):
-                with patch('domain.shell._internal.vm.X86VirtualSystem', MagicMock()):
+            with patch.object(
+                repl.os, "vm_system", new_callable=PropertyMock, return_value=MagicMock()
+            ):
+                with patch("domain.shell._internal.vm.X86VirtualSystem", MagicMock()):
                     repl._cmd_vmrun("--admin hello")
         except Exception:
             pass
@@ -6932,10 +7359,13 @@ class TestCmdVmrunFlags:
 
     def test_vmrun_kernel_flag(self, repl):
         import os
+
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
-            with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=MagicMock()):
-                with patch('domain.shell._internal.vm.X86VirtualSystem', MagicMock()):
+            with patch.object(
+                repl.os, "vm_system", new_callable=PropertyMock, return_value=MagicMock()
+            ):
+                with patch("domain.shell._internal.vm.X86VirtualSystem", MagicMock()):
                     repl._cmd_vmrun("--kernel hello")
         except Exception:
             pass
@@ -6948,10 +7378,13 @@ class TestCmdVmrunFlags:
 
     def test_vmrun_debug_flag(self, repl):
         import os
+
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
-            with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=MagicMock()):
-                with patch('domain.shell._internal.vm.X86VirtualSystem', MagicMock()):
+            with patch.object(
+                repl.os, "vm_system", new_callable=PropertyMock, return_value=MagicMock()
+            ):
+                with patch("domain.shell._internal.vm.X86VirtualSystem", MagicMock()):
                     repl._cmd_vmrun("--debug hello")
         except Exception:
             pass
@@ -6960,6 +7393,7 @@ class TestCmdVmrunFlags:
 
     def test_vmrun_role_denied(self, repl):
         import os
+
         os.environ["MAN_VM_ROLE"] = "user"
         try:
             repl._cmd_vmrun("--admin hello")
@@ -6969,10 +7403,13 @@ class TestCmdVmrunFlags:
 
     def test_vmrun_builtin_hello(self, repl):
         import os
+
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
-            with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=MagicMock()):
-                with patch('domain.shell._internal.vm.X86VirtualSystem', MagicMock()):
+            with patch.object(
+                repl.os, "vm_system", new_callable=PropertyMock, return_value=MagicMock()
+            ):
+                with patch("domain.shell._internal.vm.X86VirtualSystem", MagicMock()):
                     repl._cmd_vmrun("hello")
         except Exception:
             pass
@@ -7097,31 +7534,41 @@ class TestCmdSvcList:
 
 class TestCmdAiContext:
     def test_ai_with_history(self, repl):
-        from unittest.mock import patch, PropertyMock
+        from unittest.mock import PropertyMock, patch
+
         repl._history = ["models", "health", "ls"]
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.generate = MagicMock(return_value={"text": "help"})
             repl._cmd_ai("help me")
         assert repl._last_exit_code == 0
 
     def test_ai_with_log_buffer(self, repl):
-        from unittest.mock import patch, PropertyMock
+        from unittest.mock import PropertyMock, patch
+
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer = MagicMock()
         repl._log_buffer.get.return_value = [
             LogEntry(1000000.0, "ERROR", "test", "something failed"),
         ]
         repl._log_buffer.__len__ = MagicMock(return_value=1)
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.generate = MagicMock(return_value={"text": "help"})
             repl._cmd_ai("help")
         assert repl._last_exit_code == 0
 
     def test_ai_with_model_and_soul(self, repl):
-        from unittest.mock import patch, PropertyMock
+        from unittest.mock import PropertyMock, patch
+
         repl._get_current_model = MagicMock(return_value="gpt2")
         repl._get_current_soul = MagicMock(return_value="friendly")
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.generate = MagicMock(return_value={"text": "help"})
             repl._cmd_ai("help")
         assert repl._last_exit_code == 0
@@ -7133,24 +7580,40 @@ class TestCmdAiContext:
 class TestCmdRenderGo:
     def _mock_render(self, repl):
         from unittest.mock import MagicMock
+
         import numpy as _np
+
         dev = MagicMock()
+
         def _call(method, *args, **kwargs):
             if method == "info":
-                return {"meshes": 1, "materials": 2, "lights": 3, "resolution": [80, 60], "samples": 4}
+                return {
+                    "meshes": 1,
+                    "materials": 2,
+                    "lights": 3,
+                    "resolution": [80, 60],
+                    "samples": 4,
+                }
             if method == "render":
                 return _np.zeros((60, 80, 3))
             return [0]
+
         dev.call.side_effect = _call
         repl._render_device = dev
 
         neural = MagicMock()
+
         def _ncall(method, *args, **kwargs):
             if method == "process":
                 return {"embedding": _np.zeros((8,)), "probabilities": _np.ones(8) / 8}
             if method == "descriptor":
-                return {"dominant_class": 0, "neural_entropy": 1.0, "image": {"mean": 0.5, "std": 0.1}}
+                return {
+                    "dominant_class": 0,
+                    "neural_entropy": 1.0,
+                    "image": {"mean": 0.5, "std": 0.1},
+                }
             return MagicMock()
+
         neural.call.side_effect = _ncall
         repl._render_neural = neural
         return dev
@@ -7196,10 +7659,13 @@ class TestCmdSvcServiceTable:
 class TestCmdVmrunBuiltins:
     def test_vmrun_count(self, repl):
         import os
+
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
-            with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=MagicMock()):
-                with patch('domain.shell._internal.vm.X86VirtualSystem', MagicMock()):
+            with patch.object(
+                repl.os, "vm_system", new_callable=PropertyMock, return_value=MagicMock()
+            ):
+                with patch("domain.shell._internal.vm.X86VirtualSystem", MagicMock()):
                     repl._cmd_vmrun("count")
         except Exception:
             pass
@@ -7208,10 +7674,13 @@ class TestCmdVmrunBuiltins:
 
     def test_vmrun_counter(self, repl):
         import os
+
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
-            with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=MagicMock()):
-                with patch('domain.shell._internal.vm.X86VirtualSystem', MagicMock()):
+            with patch.object(
+                repl.os, "vm_system", new_callable=PropertyMock, return_value=MagicMock()
+            ):
+                with patch("domain.shell._internal.vm.X86VirtualSystem", MagicMock()):
                     repl._cmd_vmrun("counter")
         except Exception:
             pass
@@ -7224,14 +7693,26 @@ class TestCmdVmrunBuiltins:
 
 class TestCmdAiKeywordFallbackV2:
     def test_ai_fallback_models(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": False},
+        ):
             repl._cmd_ai("show models")
         assert repl._last_exit_code == 0
 
     def test_ai_fallback_health(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": False},
+        ):
             repl._cmd_ai("check health")
         assert repl._last_exit_code in (0, 1)
 
@@ -7242,14 +7723,24 @@ class TestCmdAiKeywordFallbackV2:
 class TestCmdRenderExtra:
     def _mock_render(self, repl):
         from unittest.mock import MagicMock
+
         import numpy as _np
+
         dev = MagicMock()
+
         def _call(method, *args, **kwargs):
             if method == "info":
-                return {"meshes": 1, "materials": 2, "lights": 3, "resolution": [80, 60], "samples": 4}
+                return {
+                    "meshes": 1,
+                    "materials": 2,
+                    "lights": 3,
+                    "resolution": [80, 60],
+                    "samples": 4,
+                }
             if method == "render":
                 return _np.zeros((60, 80, 3))
             return [0]
+
         dev.call.side_effect = _call
         repl._render_device = dev
         repl._render_neural = MagicMock()
@@ -7281,135 +7772,194 @@ class TestCmdRenderExtra:
 
 class TestCmdTrainFollowStop:
     def test_train_follow_no_id(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("follow")
         assert repl._last_exit_code == 0
 
     def test_train_stop_no_id(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("stop")
         assert repl._last_exit_code == 0
 
     def test_train_stop_with_id(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.train_stop = MagicMock(return_value={"status": "stopped"})
             repl._cmd_train("stop job123")
         assert repl._last_exit_code == 0
 
     def test_train_follow_with_id(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._stream_train_progress = MagicMock()
             repl._cmd_train("follow job123")
         assert repl._last_exit_code == 0
 
     def test_train_distill_with_args(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.train_distill = MagicMock(return_value={"id": "j1", "status": "started"})
             repl._stream_train_progress = MagicMock()
             repl._cmd_train("distill shakespeare gpt2 5")
         assert repl._last_exit_code == 0
 
     def test_train_distill_error(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.train_distill = MagicMock(return_value={"error": "no dataset"})
             repl._cmd_train("distill bad gpt2 3")
         assert repl._last_exit_code == 0
 
     def test_train_hf_with_args(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.train_hf = MagicMock(return_value={"id": "j2", "status": "started"})
             repl._stream_train_progress = MagicMock()
             repl._cmd_train("hf gpt2 shakespeare 3")
         assert repl._last_exit_code == 0
 
     def test_train_hf_error(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.train_hf = MagicMock(return_value={"error": "not found"})
             repl._cmd_train("hf bad ds 3")
         assert repl._last_exit_code == 0
 
     def test_train_auto_with_args(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.train_auto = MagicMock(return_value={"status": "started"})
             repl._cmd_train("auto friendly gpt2 10")
         assert repl._last_exit_code == 0
 
     def test_train_auto_error(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.train_auto = MagicMock(return_value={"error": "failed"})
             repl._cmd_train("auto x gpt2 5")
         assert repl._last_exit_code == 0
 
     def test_train_load_with_name(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.load_checkpoint = MagicMock(return_value={"status": "loaded"})
             repl._cmd_train("load ckpt1")
         assert repl._last_exit_code == 0
 
     def test_train_load_error(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.load_checkpoint = MagicMock(return_value={"error": "not found"})
             repl._cmd_train("load bad_ckpt")
         assert repl._last_exit_code == 0
 
     def test_train_del_with_name(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.delete_checkpoint = MagicMock(return_value={"status": "deleted"})
             repl._cmd_train("del ckpt1")
         assert repl._last_exit_code == 0
 
     def test_train_del_error(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.delete_checkpoint = MagicMock(return_value={"error": "not found"})
             repl._cmd_train("del bad_ckpt")
         assert repl._last_exit_code == 0
 
     def test_train_quick_with_dataset(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.train_quick = MagicMock(return_value={"id": "j3", "status": "started"})
             repl._stream_train_progress = MagicMock()
             repl._cmd_train("shakespeare")
         assert repl._last_exit_code == 0
 
     def test_train_quick_no_datasets(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.datasets = MagicMock(return_value=[])
             repl._cmd_train("")
         assert repl._last_exit_code == 0
 
     def test_train_quick_lists_datasets(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.datasets = MagicMock(return_value=[{"name": "ds1"}, {"name": "ds2"}])
             repl._cmd_train("")
         assert repl._last_exit_code == 0
 
     def test_train_status_with_jobs(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
-            repl.cmds.train_status = MagicMock(return_value=[{"id": "j1", "status": "running", "model": "gpt2", "progress": 50}])
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
+            repl.cmds.train_status = MagicMock(
+                return_value=[{"id": "j1", "status": "running", "model": "gpt2", "progress": 50}]
+            )
             repl._cmd_train("status")
         assert repl._last_exit_code == 0
 
     def test_train_status_no_jobs(self, repl):
-        from unittest.mock import patch, PropertyMock
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        from unittest.mock import PropertyMock, patch
+
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.train_status = MagicMock(return_value=[])
             repl._cmd_train("status")
         assert repl._last_exit_code == 0
@@ -7421,39 +7971,65 @@ class TestCmdTrainFollowStop:
 class TestStreamTrainProgress:
     def test_stream_completed(self, repl):
         from unittest.mock import patch
+
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=0)
         repl._log_buffer.get.return_value = []
-        with patch('domain.shell._internal.commands._api_get', return_value={"status": "completed", "progress": 100, "current_epoch": 5, "epochs": 5, "train_loss": 0.5, "checkpoint": "my_ckpt"}):
+        with patch(
+            "domain.shell._internal.commands._api_get",
+            return_value={
+                "status": "completed",
+                "progress": 100,
+                "current_epoch": 5,
+                "epochs": 5,
+                "train_loss": 0.5,
+                "checkpoint": "my_ckpt",
+            },
+        ):
             repl._stream_train_progress("j1")
         assert repl._last_exit_code == 0
 
     def test_stream_failed(self, repl):
         from unittest.mock import patch
+
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=0)
         repl._log_buffer.get.return_value = []
-        with patch('domain.shell._internal.commands._api_get', return_value={"status": "failed", "progress": 30, "error": "OOM"}):
+        with patch(
+            "domain.shell._internal.commands._api_get",
+            return_value={"status": "failed", "progress": 30, "error": "OOM"},
+        ):
             repl._stream_train_progress("j2")
         assert repl._last_exit_code == 0
 
     def test_stream_not_found(self, repl):
         from unittest.mock import patch
+
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=0)
         repl._log_buffer.get.return_value = []
-        with patch('domain.shell._internal.commands._api_get', return_value=None):
+        with patch("domain.shell._internal.commands._api_get", return_value=None):
             repl._stream_train_progress("j3")
         assert repl._last_exit_code == 0
 
     def test_stream_with_stdio(self, repl):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=0)
         repl._log_buffer.get.return_value = []
         stdio = MagicMock()
         repl._stdio = stdio
-        with patch('domain.shell._internal.commands._api_get', return_value={"status": "completed", "progress": 100, "current_epoch": 1, "epochs": 1, "train_loss": 0.1}):
+        with patch(
+            "domain.shell._internal.commands._api_get",
+            return_value={
+                "status": "completed",
+                "progress": 100,
+                "current_epoch": 1,
+                "epochs": 1,
+                "train_loss": 0.1,
+            },
+        ):
             repl._stream_train_progress("j4")
         assert repl._last_exit_code == 0
         repl._stdio = None
@@ -7515,6 +8091,7 @@ class TestCmdEventsV2:
 
     def test_events_with_entries(self, repl):
         from unittest.mock import MagicMock
+
         bus = MagicMock()
         ev = MagicMock()
         ev.name = "test_event"
@@ -7528,6 +8105,7 @@ class TestCmdEventsV2:
 
     def test_events_with_filter(self, repl):
         from unittest.mock import MagicMock
+
         bus = MagicMock()
         ev = MagicMock()
         ev.name = "model_loaded"
@@ -7580,13 +8158,16 @@ class TestCmdMetrics:
 class TestCmdTui:
     def test_tui_runtime_error(self, repl):
         import builtins
+
         real_import = builtins.__import__
+
         def mock_import(name, *args, **kwargs):
             if name == "domain.shell._internal.tui_repl":
                 mod = MagicMock()
                 mod.TuiRepl.side_effect = RuntimeError("tui crashed")
                 return mod
             return real_import(name, *args, **kwargs)
+
         with patch("builtins.__import__", side_effect=mock_import):
             repl._cmd_tui()
         assert repl._last_exit_code == 1
@@ -7598,6 +8179,7 @@ class TestCmdTui:
 class TestCmdLogsExplain:
     def test_logs_explain_with_errors(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=1)
         repl._log_buffer.get.return_value = [
@@ -7618,6 +8200,7 @@ class TestCmdLogsExplain:
 
     def test_logs_explain_error_result(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=1)
         repl._log_buffer.get.return_value = [
@@ -7630,6 +8213,7 @@ class TestCmdLogsExplain:
 
     def test_logs_explain_non_dict_result(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=1)
         repl._log_buffer.get.return_value = [
@@ -7647,6 +8231,7 @@ class TestCmdLogsExplain:
 class TestCmdLogsExportV2:
     def test_logs_export(self, repl, tmp_path):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer = MagicMock()
         repl._log_buffer.get.return_value = [
             LogEntry(1000000.0, "INFO", "test", "all good"),
@@ -7676,6 +8261,7 @@ class TestCmdLogsExportV2:
 class TestCmdLogsLevels:
     def test_logs_with_entries(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=3)
         repl._log_buffer.get.return_value = [
@@ -7688,6 +8274,7 @@ class TestCmdLogsLevels:
 
     def test_logs_follow(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=1)
         repl._log_buffer.get.return_value = [
@@ -7696,8 +8283,10 @@ class TestCmdLogsLevels:
         repl._log_buffer.entries = [LogEntry(1000000.0, "ERROR", "test", "err")]
         # Follow mode has a while True loop - just test it doesn't crash on init
         import signal
+
         def alarm_handler(signum, frame):
             raise KeyboardInterrupt()
+
         old_handler = signal.signal(signal.SIGALRM, alarm_handler)
         signal.alarm(1)
         try:
@@ -7711,6 +8300,7 @@ class TestCmdLogsLevels:
 
     def test_logs_stats(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=2)
         repl._log_buffer.get.return_value = [
@@ -7769,11 +8359,17 @@ class TestCmdUptimeV2:
 
 class TestCmdStatus:
     def test_status(self, repl):
-        from unittest.mock import patch, PropertyMock
+        from unittest.mock import PropertyMock, patch
+
         repl.os.kernel = MagicMock()
         repl.os.kernel.uptime = 100
         repl.os.kernel._event_bus = MagicMock()
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True, "model": "gpt2"}):
+        with patch.object(
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": True, "model": "gpt2"},
+        ):
             repl._cmd_status("")
         assert repl._last_exit_code == 0
 
@@ -8035,35 +8631,35 @@ class TestCmdNote:
         mock_notes = MagicMock()
         mock_store = self._mock_store()
         mock_notes.get_note_store.return_value = mock_store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("badsubcmd")
         assert repl._last_exit_code == 1
 
     def test_note_new_no_args(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("new")
         assert repl._last_exit_code == 1
 
     def test_note_new_with_title(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("new My Note --tags a,b --status wip --sprint S1 --gh o/r#1")
         assert repl._last_exit_code == 0
 
     def test_note_new_empty_title(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("new --tags a")
         assert repl._last_exit_code == 1
 
     def test_note_list(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("list")
         assert repl._last_exit_code == 0
 
@@ -8072,28 +8668,28 @@ class TestCmdNote:
         store.list_notes.return_value = []
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("list")
         assert repl._last_exit_code == 0
 
     def test_note_list_with_filters(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("list --tag tag1 --status open --sprint S1 --limit 5")
         assert repl._last_exit_code == 0
 
     def test_note_show(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("show abc123")
         assert repl._last_exit_code == 0
 
     def test_note_show_no_id(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("show")
         assert repl._last_exit_code == 1
 
@@ -8102,28 +8698,30 @@ class TestCmdNote:
         store.get.return_value = None
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("show nonexistent")
         assert repl._last_exit_code == 1
 
     def test_note_edit(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            repl._cmd_note("edit abc123 --title New Title --tags t1 --status done --sprint S2 --gh o/r#2 --body new body")
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            repl._cmd_note(
+                "edit abc123 --title New Title --tags t1 --status done --sprint S2 --gh o/r#2 --body new body"
+            )
         assert repl._last_exit_code == 0
 
     def test_note_edit_no_args(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("edit")
         assert repl._last_exit_code == 1
 
     def test_note_edit_no_flags(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("edit abc123")
         assert repl._last_exit_code == 1
 
@@ -8132,21 +8730,21 @@ class TestCmdNote:
         store.update.return_value = None
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("edit badid --title x")
         assert repl._last_exit_code == 1
 
     def test_note_delete(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("delete abc123")
         assert repl._last_exit_code == 0
 
     def test_note_delete_no_id(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("delete")
         assert repl._last_exit_code == 1
 
@@ -8155,21 +8753,21 @@ class TestCmdNote:
         store.delete.return_value = False
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("rm nonexistent")
         assert repl._last_exit_code == 1
 
     def test_note_search(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("search query")
         assert repl._last_exit_code == 0
 
     def test_note_search_no_args(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("search")
         assert repl._last_exit_code == 1
 
@@ -8178,14 +8776,14 @@ class TestCmdNote:
         store.search.return_value = []
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("search nothing")
         assert repl._last_exit_code == 0
 
     def test_note_today(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("today")
         assert repl._last_exit_code == 0
 
@@ -8194,14 +8792,14 @@ class TestCmdNote:
         store.today.return_value = []
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("today")
         assert repl._last_exit_code == 0
 
     def test_note_export_no_file(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("export")
         assert repl._last_exit_code == 0
 
@@ -8209,14 +8807,14 @@ class TestCmdNote:
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
         out = tmp_path / "notes.md"
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note(f"export {out}")
         assert repl._last_exit_code == 0
 
     def test_note_tags(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("tags")
         assert repl._last_exit_code == 0
 
@@ -8225,14 +8823,14 @@ class TestCmdNote:
         store.list_notes.return_value = []
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("tags")
         assert repl._last_exit_code == 0
 
     def test_note_status(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("status")
         assert repl._last_exit_code == 0
 
@@ -8241,28 +8839,28 @@ class TestCmdNote:
         store.list_notes.return_value = []
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("status")
         assert repl._last_exit_code == 0
 
     def test_note_sprint_no_name(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("sprint")
         assert repl._last_exit_code == 0
 
     def test_note_sprint_list(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("sprint S1")
         assert repl._last_exit_code == 0
 
     def test_note_sprint_report(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("sprint S1 report")
         assert repl._last_exit_code == 0
 
@@ -8271,14 +8869,14 @@ class TestCmdNote:
         store.list_notes.return_value = []
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("sprint S2")
         assert repl._last_exit_code == 0
 
     def test_note_timeline(self, repl):
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = self._mock_store()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("timeline --days 7 --tag t1 --status open")
         assert repl._last_exit_code == 0
 
@@ -8287,7 +8885,7 @@ class TestCmdNote:
         store.timeline.return_value = []
         mock_notes = MagicMock()
         mock_notes.get_note_store.return_value = store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("timeline")
         assert repl._last_exit_code == 0
 
@@ -8298,6 +8896,7 @@ class TestCmdNote:
 class TestCmdVmrunExecution:
     def test_vmrun_file_not_found(self, repl):
         import os
+
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
             repl._cmd_vmrun("/nonexistent/file.asm")
@@ -8307,6 +8906,7 @@ class TestCmdVmrunExecution:
 
     def test_vmrun_no_source_no_pipe(self, repl):
         import os
+
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
             repl._piped_input = ""
@@ -8317,6 +8917,7 @@ class TestCmdVmrunExecution:
 
     def test_vmrun_success(self, repl):
         import os
+
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
             mock_vs = MagicMock()
@@ -8324,8 +8925,10 @@ class TestCmdVmrunExecution:
             mock_vs._syscall._rbac = MagicMock()
             mock_vs.scheduler.current = MagicMock()
             mock_vs.cpu._regs = [0]
-            with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=mock_vs):
-                with patch('domain.shell._internal.vm.X86VirtualSystem', return_value=mock_vs):
+            with patch.object(
+                repl.os, "vm_system", new_callable=PropertyMock, return_value=mock_vs
+            ):
+                with patch("domain.shell._internal.vm.X86VirtualSystem", return_value=mock_vs):
                     repl._cmd_vmrun("hello")
         except Exception:
             pass
@@ -8334,12 +8937,15 @@ class TestCmdVmrunExecution:
 
     def test_vmrun_spawn_fails(self, repl):
         import os
+
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
             mock_vs = MagicMock()
             mock_vs.spawn.return_value = None
-            with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=mock_vs):
-                with patch('domain.shell._internal.vm.X86VirtualSystem', return_value=mock_vs):
+            with patch.object(
+                repl.os, "vm_system", new_callable=PropertyMock, return_value=mock_vs
+            ):
+                with patch("domain.shell._internal.vm.X86VirtualSystem", return_value=mock_vs):
                     repl._cmd_vmrun("hello")
             assert repl._last_exit_code == 1
         except Exception:
@@ -8349,14 +8955,17 @@ class TestCmdVmrunExecution:
 
     def test_vmrun_no_process(self, repl):
         import os
+
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
             mock_vs = MagicMock()
             mock_vs.spawn.return_value = 1
             mock_vs._syscall._rbac = MagicMock()
             mock_vs.scheduler.current = None
-            with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=mock_vs):
-                with patch('domain.shell._internal.vm.X86VirtualSystem', return_value=mock_vs):
+            with patch.object(
+                repl.os, "vm_system", new_callable=PropertyMock, return_value=mock_vs
+            ):
+                with patch("domain.shell._internal.vm.X86VirtualSystem", return_value=mock_vs):
                     repl._cmd_vmrun("hello")
             assert repl._last_exit_code == 1
         except Exception:
@@ -8387,11 +8996,14 @@ class TestCmdConfirmConfig:
 
     def test_confirm_config_import_error(self, repl):
         import builtins
+
         real_import = builtins.__import__
+
         def mock_import(name, *args, **kwargs):
-            if name == "domain.infrastructure.config":
+            if name == "domain.infrastructure._internal.config":
                 raise ImportError("not available")
             return real_import(name, *args, **kwargs)
+
         with patch("builtins.__import__", side_effect=mock_import):
             repl._cmd_confirm("on")
         assert repl._last_exit_code == 0
@@ -8404,8 +9016,8 @@ class TestCmdConfirmConfig:
         mock_config._config_dir.mkdir(parents=True, exist_ok=True)
         defaults = mock_config._config_dir / "defaults.yaml"
         defaults.write_text("features:\n  auto_download: false\n")
-        with patch('domain.infrastructure.config.get_config', return_value=mock_config):
-            with patch.object(Path, 'cwd', return_value=Path("/tmp/test_config").parent):
+        with patch("domain.infrastructure.config.get_config", return_value=mock_config):
+            with patch.object(Path, "cwd", return_value=Path("/tmp/test_config").parent):
                 repl._cmd_confirm("on")
         assert repl._last_exit_code == 0
         defaults.unlink(missing_ok=True)
@@ -8418,11 +9030,14 @@ class TestCmdConfirmConfig:
 class TestCmdConfirmToggle:
     def _patched_confirm(self, repl, arg):
         import builtins
+
         real_import = builtins.__import__
+
         def mock_import(name, *args, **kwargs):
-            if name == "domain.infrastructure.config":
+            if name == "domain.infrastructure._internal.config":
                 raise ImportError()
             return real_import(name, *args, **kwargs)
+
         with patch("builtins.__import__", side_effect=mock_import):
             repl._cmd_confirm(arg)
 
@@ -8459,39 +9074,54 @@ class TestCmdLoadTracker:
         mock_tracker = MagicMock()
         mock_tracker.get.return_value = tracker_state
         mock_progress = MagicMock()
-        with patch.dict('sys.modules', {
-            'domain.infrastructure.conversion_tracker': MagicMock(get_tracker=MagicMock(return_value=mock_tracker)),
-            'apps.cli.src.utils.progress': MagicMock(ProgressBar=mock_progress),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "domain.infrastructure.conversion_tracker": MagicMock(
+                    get_tracker=MagicMock(return_value=mock_tracker)
+                ),
+                "apps.cli.src.utils.progress": MagicMock(ProgressBar=mock_progress),
+            },
+        ):
             repl.cmds.load_model = MagicMock(return_value=load_result)
-            with patch.object(repl, '_require_api', return_value=True):
+            with patch.object(repl, "_require_api", return_value=True):
                 repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
     def test_tracker_ready(self, repl):
-        self._load_with_tracker(repl,
+        self._load_with_tracker(
+            repl,
             {"progress": 1.0, "stage": "ready", "message": "done"},
-            {"status": "loaded", "device": "cpu"})
+            {"status": "loaded", "device": "cpu"},
+        )
 
     def test_tracker_downloading(self, repl):
-        self._load_with_tracker(repl,
+        self._load_with_tracker(
+            repl,
             {"progress": 0.3, "stage": "downloading", "message": "downloading model"},
-            {"status": "loaded", "device": "cpu"})
+            {"status": "loaded", "device": "cpu"},
+        )
 
     def test_tracker_converting(self, repl):
-        self._load_with_tracker(repl,
+        self._load_with_tracker(
+            repl,
             {"progress": 0.7, "stage": "converting", "message": "converting"},
-            {"status": "loaded", "device": "cpu"})
+            {"status": "loaded", "device": "cpu"},
+        )
 
     def test_tracker_loading(self, repl):
-        self._load_with_tracker(repl,
+        self._load_with_tracker(
+            repl,
             {"progress": 0.9, "stage": "loading", "message": "loading into memory"},
-            {"status": "loaded", "device": "cpu"})
+            {"status": "loaded", "device": "cpu"},
+        )
 
     def test_tracker_error(self, repl):
-        self._load_with_tracker(repl,
+        self._load_with_tracker(
+            repl,
             {"progress": 0.5, "stage": "error", "error": "disk full"},
-            {"status": "loaded", "device": "cpu"})
+            {"status": "loaded", "device": "cpu"},
+        )
 
     def test_tracker_none_then_result(self, repl):
         self._load_with_tracker(repl, None, {"status": "loaded", "device": "cpu"})
@@ -8500,9 +9130,9 @@ class TestCmdLoadTracker:
         self._load_with_tracker(repl, None, None)
 
     def test_tracker_result_error(self, repl):
-        self._load_with_tracker(repl,
-            {"progress": 1.0, "stage": "ready"},
-            {"status": "error", "error": "OOM"})
+        self._load_with_tracker(
+            repl, {"progress": 1.0, "stage": "ready"}, {"status": "error", "error": "OOM"}
+        )
 
 
 # ── _cmd_load ImportError paths ───────────────────────────────────
@@ -8511,16 +9141,19 @@ class TestCmdLoadTracker:
 class TestCmdLoadImportError:
     def _load_import_error(self, repl, load_result):
         import builtins
+
         real_import = builtins.__import__
+
         def mock_import(name, *args, **kwargs):
             if name == "domain.infrastructure.conversion_tracker":
                 raise ImportError("no tracker")
             if name == "apps.cli.src.utils.progress":
                 raise ImportError("no progress")
             return real_import(name, *args, **kwargs)
+
         with patch("builtins.__import__", side_effect=mock_import):
             repl.cmds.load_model = MagicMock(return_value=load_result)
-            with patch.object(repl, '_require_api', return_value=True):
+            with patch.object(repl, "_require_api", return_value=True):
                 repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
@@ -8542,7 +9175,9 @@ class TestStreamTrainProgressException:
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=0)
         repl._log_buffer.get.return_value = []
-        with patch('domain.shell._internal.commands._api_get', side_effect=Exception("network error")):
+        with patch(
+            "domain.shell._internal.commands._api_get", side_effect=Exception("network error")
+        ):
             repl._stream_train_progress("j1")
         assert repl._last_exit_code == 0
 
@@ -8562,7 +9197,7 @@ class TestCmdEventsExtra:
             ev.data = {"key": f"val_{i}"}
             events.append(ev)
         bus.history.return_value = events
-        with patch('domain.infrastructure.event_bus.get_event_bus', return_value=bus):
+        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("5")
         assert repl._last_exit_code == 0
 
@@ -8579,7 +9214,7 @@ class TestCmdEventsExtra:
         ev2.source = "monitor"
         ev2.data = {}
         bus.history.return_value = [ev1, ev2]
-        with patch('domain.infrastructure.event_bus.get_event_bus', return_value=bus):
+        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("model")
         assert repl._last_exit_code == 0
 
@@ -8590,6 +9225,7 @@ class TestCmdEventsExtra:
 class TestCmdLogsExplainExtra:
     def test_logs_explain_non_dict_result(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=1)
         entry = LogEntry(1000000.0, "ERROR", "test", "err")
@@ -8601,23 +9237,29 @@ class TestCmdLogsExplainExtra:
 
     def test_logs_explain_with_api_and_error_entries(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer = MagicMock()
         entry1 = LogEntry(1000000.0, "ERROR", "test", "something broke")
         entry2 = LogEntry(1000001.0, "WARNING", "test", "low memory")
         repl._log_buffer.get.return_value = [entry1, entry2]
         repl._log_buffer.__len__ = MagicMock(return_value=2)
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.generate = MagicMock(return_value={"text": "Fix the config"})
             repl._cmd_logs("--explain")
         assert repl._last_exit_code == 0
 
     def test_logs_explain_with_api_dict_error(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer = MagicMock()
         entry = LogEntry(1000000.0, "ERROR", "test", "crash")
         repl._log_buffer.get.return_value = [entry]
         repl._log_buffer.__len__ = MagicMock(return_value=1)
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl.cmds.generate = MagicMock(return_value={"error": "timeout"})
             repl._cmd_logs("--explain")
         assert repl._last_exit_code == 0
@@ -8631,11 +9273,17 @@ class TestCmdLogsExplainExtra:
 
     def test_logs_explain_api_unavailable(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer = MagicMock()
         entry = LogEntry(1000000.0, "ERROR", "test", "err")
         repl._log_buffer.get.return_value = [entry]
         repl._log_buffer.__len__ = MagicMock(return_value=1)
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
+        with patch.object(
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": False},
+        ):
             repl._cmd_logs("--explain")
         assert repl._last_exit_code == 0
 
@@ -8645,20 +9293,21 @@ class TestCmdLogsExplainExtra:
 
 class TestCmdExecutionPaths:
     def test_permission_denied(self, repl):
-        with patch.object(repl, '_check_permission', return_value=False):
+        with patch.object(repl, "_check_permission", return_value=False):
             repl.execute("help")
         assert repl._last_exit_code == 126
 
     def test_handler_execution(self, repl):
-        with patch.object(repl, '_check_permission', return_value=True):
+        with patch.object(repl, "_check_permission", return_value=True):
             repl.execute("date")
         assert repl._last_exit_code == 0
 
     def test_handler_system_exit(self, repl):
         def bad_handler(r, a):
             raise SystemExit(42)
+
         repl.COMMANDS["badcmd"] = bad_handler
-        with patch.object(repl, '_check_permission', return_value=True):
+        with patch.object(repl, "_check_permission", return_value=True):
             repl.execute("badcmd")
         assert repl._last_exit_code == 42
         del repl.COMMANDS["badcmd"]
@@ -8666,14 +9315,15 @@ class TestCmdExecutionPaths:
     def test_handler_exception(self, repl):
         def bad_handler(r, a):
             raise RuntimeError("oops")
+
         repl.COMMANDS["badcmd"] = bad_handler
-        with patch.object(repl, '_check_permission', return_value=True):
+        with patch.object(repl, "_check_permission", return_value=True):
             repl.execute("badcmd")
         assert repl._last_exit_code == 1
         del repl.COMMANDS["badcmd"]
 
     def test_timing_output(self, repl):
-        with patch.object(repl, '_check_permission', return_value=True):
+        with patch.object(repl, "_check_permission", return_value=True):
             repl.execute("date")
         assert repl._last_exit_code == 0
 
@@ -8682,7 +9332,7 @@ class TestCmdExecutionPaths:
         assert repl._last_exit_code != 0
 
     def test_pipe_perm_denied_first(self, repl):
-        with patch.object(repl, '_check_permission', return_value=False):
+        with patch.object(repl, "_check_permission", return_value=False):
             repl.execute("help | wc")
         assert repl._last_exit_code == 126
 
@@ -8692,48 +9342,46 @@ class TestCmdExecutionPaths:
 
 class TestSystemBinaryFallbackV2:
     def test_system_binary_runs(self, repl):
-        with patch('shutil.which', return_value='/usr/bin/myecho'):
-            with patch('subprocess.run') as mock_run:
-                mock_run.return_value = MagicMock(
-                    stdout=b"hello\n", stderr=b"", returncode=0
-                )
+        with patch("shutil.which", return_value="/usr/bin/myecho"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(stdout=b"hello\n", stderr=b"", returncode=0)
                 repl._execute_single("myecho hello")
         assert repl._last_exit_code == 0
 
     def test_system_binary_stderr(self, repl):
-        with patch('shutil.which', return_value='/usr/bin/myutil'):
-            with patch('subprocess.run') as mock_run:
-                mock_run.return_value = MagicMock(
-                    stdout=b"", stderr=b"err msg", returncode=1
-                )
+        with patch("shutil.which", return_value="/usr/bin/myutil"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(stdout=b"", stderr=b"err msg", returncode=1)
                 repl._execute_single("myutil arg1")
         assert repl._last_exit_code == 1
 
     def test_system_binary_timeout(self, repl):
         import subprocess as _sp
-        with patch('shutil.which', return_value='/usr/bin/myslow'):
-            with patch('subprocess.run', side_effect=_sp.TimeoutExpired('myslow', 120)):
+
+        with patch("shutil.which", return_value="/usr/bin/myslow"):
+            with patch("subprocess.run", side_effect=_sp.TimeoutExpired("myslow", 120)):
                 repl._execute_single("myslow")
         assert repl._last_exit_code == 124
 
     def test_system_binary_exception(self, repl):
-        with patch('shutil.which', return_value='/usr/bin/mybroken'):
-            with patch('subprocess.run', side_effect=OSError("perm denied")):
+        with patch("shutil.which", return_value="/usr/bin/mybroken"):
+            with patch("subprocess.run", side_effect=OSError("perm denied")):
                 repl._execute_single("mybroken")
         assert repl._last_exit_code == 1
 
     def test_system_binary_not_found(self, repl):
-        with patch('shutil.which', return_value=None):
+        with patch("shutil.which", return_value=None):
             repl._execute_single("nope")
         assert repl._last_exit_code == 127
 
     def test_system_binary_redirect(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             tmppath = f.name
         try:
-            with patch('shutil.which', return_value='/usr/bin/mycat'):
-                with patch('subprocess.run') as mock_run:
+            with patch("shutil.which", return_value="/usr/bin/mycat"):
+                with patch("subprocess.run") as mock_run:
                     mock_run.return_value = MagicMock(
                         stdout=b"file content", stderr=b"", returncode=0
                     )
@@ -8746,53 +9394,44 @@ class TestSystemBinaryFallbackV2:
     def test_system_binary_redirect_vfs(self, repl):
         mock_vfs = MagicMock()
         mock_vfs.write.return_value = None
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=mock_vfs):
-            with patch('shutil.which', return_value='/usr/bin/mycat'):
-                with patch('subprocess.run') as mock_run:
-                    mock_run.return_value = MagicMock(
-                        stdout=b"data", stderr=b"", returncode=0
-                    )
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=mock_vfs):
+            with patch("shutil.which", return_value="/usr/bin/mycat"):
+                with patch("subprocess.run") as mock_run:
+                    mock_run.return_value = MagicMock(stdout=b"data", stderr=b"", returncode=0)
                     repl._execute_single("mycat > /dev/null")
         mock_vfs.write.assert_called_once()
 
     def test_system_binary_inline_env(self, repl):
-        with patch('shutil.which', return_value='/usr/bin/myrun'):
-            with patch('subprocess.run') as mock_run:
-                mock_run.return_value = MagicMock(
-                    stdout=b"", stderr=b"", returncode=0
-                )
+        with patch("shutil.which", return_value="/usr/bin/myrun"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(stdout=b"", stderr=b"", returncode=0)
                 repl._execute_single("MYVAR=1 myrun hi")
         assert repl._last_exit_code == 0
 
     def test_system_binary_piped_input(self, repl):
-        with patch('shutil.which', return_value='/usr/bin/mycat'):
-            with patch('subprocess.run') as mock_run:
-                mock_run.return_value = MagicMock(
-                    stdout=b"piped data", stderr=b"", returncode=0
-                )
+        with patch("shutil.which", return_value="/usr/bin/mycat"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(stdout=b"piped data", stderr=b"", returncode=0)
                 repl._execute_single("mycat")
         assert repl._last_exit_code == 0
 
     def test_system_binary_no_stdout(self, repl):
-        with patch('shutil.which', return_value='/usr/bin/mytrue'):
-            with patch('subprocess.run') as mock_run:
-                mock_run.return_value = MagicMock(
-                    stdout=None, stderr=None, returncode=0
-                )
+        with patch("shutil.which", return_value="/usr/bin/mytrue"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(stdout=None, stderr=None, returncode=0)
                 repl._execute_single("mytrue")
         assert repl._last_exit_code == 0
 
     def test_system_binary_redirect_append(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("first\n")
             tmppath = f.name
         try:
-            with patch('shutil.which', return_value='/usr/bin/mywrite'):
-                with patch('subprocess.run') as mock_run:
-                    mock_run.return_value = MagicMock(
-                        stdout=b"second", stderr=b"", returncode=0
-                    )
+            with patch("shutil.which", return_value="/usr/bin/mywrite"):
+                with patch("subprocess.run") as mock_run:
+                    mock_run.return_value = MagicMock(stdout=b"second", stderr=b"", returncode=0)
                     repl._execute_single(f"mywrite >> {tmppath}")
             with open(tmppath) as f:
                 content = f.read()
@@ -8803,31 +9442,25 @@ class TestSystemBinaryFallbackV2:
     def test_system_binary_redirect_vfs_error(self, repl):
         mock_vfs = MagicMock()
         mock_vfs.write.return_value = "write failed"
-        with patch.object(type(repl.os), 'vfs', new_callable=PropertyMock, return_value=mock_vfs):
-            with patch('shutil.which', return_value='/usr/bin/mycmd'):
-                with patch('subprocess.run') as mock_run:
-                    mock_run.return_value = MagicMock(
-                        stdout=b"data", stderr=b"", returncode=0
-                    )
+        with patch.object(type(repl.os), "vfs", new_callable=PropertyMock, return_value=mock_vfs):
+            with patch("shutil.which", return_value="/usr/bin/mycmd"):
+                with patch("subprocess.run") as mock_run:
+                    mock_run.return_value = MagicMock(stdout=b"data", stderr=b"", returncode=0)
                     repl._execute_single("mycmd > /dev/null")
         assert repl._last_exit_code == 0
 
     def test_system_binary_redirect_file_oserror(self, repl):
-        with patch('shutil.which', return_value='/usr/bin/mycmd'):
-            with patch('subprocess.run') as mock_run:
-                mock_run.return_value = MagicMock(
-                    stdout=b"data", stderr=b"", returncode=0
-                )
+        with patch("shutil.which", return_value="/usr/bin/mycmd"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(stdout=b"data", stderr=b"", returncode=0)
                 repl._execute_single("mycmd > /nonexistent/deeply/path/file.txt")
         assert repl._last_exit_code == 1
 
     def test_system_binary_inline_env_existing_var(self, repl):
         repl._env["EXISTING_VAR"] = "original"
-        with patch('shutil.which', return_value='/usr/bin/mycmd'):
-            with patch('subprocess.run') as mock_run:
-                mock_run.return_value = MagicMock(
-                    stdout=b"", stderr=b"", returncode=0
-                )
+        with patch("shutil.which", return_value="/usr/bin/mycmd"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(stdout=b"", stderr=b"", returncode=0)
                 repl._execute_single("EXISTING_VAR=new mycmd")
         assert repl._last_exit_code == 0
         assert repl._env.get("EXISTING_VAR") == "original"
@@ -8844,13 +9477,13 @@ class TestSystemBinaryFallbackV2:
 
     def test_permission_denied_inline_env(self, repl):
         repl._env["EXISTING"] = "old"
-        with patch.object(repl, '_check_permission', return_value=False):
+        with patch.object(repl, "_check_permission", return_value=False):
             repl._execute_single("EXISTING=new help")
         assert repl._last_exit_code == 126
         assert repl._env.get("EXISTING") == "old"
 
     def test_permission_denied_inline_env_new_var(self, repl):
-        with patch.object(repl, '_check_permission', return_value=False):
+        with patch.object(repl, "_check_permission", return_value=False):
             repl._execute_single("FRESHVAR=val help")
         assert repl._last_exit_code == 126
         assert "FRESHVAR" not in repl._env
@@ -9038,10 +9671,11 @@ class TestRevInternalsV2:
 class TestPasteInternalsV2:
     def test_paste_two_files(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a\nb\nc")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("x\ny")
         f2.close()
         try:
@@ -9063,10 +9697,11 @@ class TestPasteInternalsV2:
 class TestCommInternals:
     def test_comm(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a\nb\nc")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("b\nc\nd")
         f2.close()
         try:
@@ -9098,7 +9733,7 @@ class TestCmdTestInternals:
         assert repl._last_exit_code == 1
 
     def test_test_file_exists(self, repl):
-        repl._cmd_test(f"-f /etc/hostname")
+        repl._cmd_test("-f /etc/hostname")
         assert repl._last_exit_code == 0
 
     def test_test_file_not_exists(self, repl):
@@ -9222,7 +9857,7 @@ class TestCmdDuInternals:
         assert repl._last_exit_code == 0
 
     def test_du_multiple_targets(self, repl):
-        repl._cmd_du(f". /etc/hostname")
+        repl._cmd_du(". /etc/hostname")
         assert repl._last_exit_code == 0
 
     def test_format_size(self, repl):
@@ -9234,7 +9869,8 @@ class TestCmdDuInternals:
 class TestCmdDiffInternals:
     def test_diff_same(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a\nb\n")
         f1.close()
         try:
@@ -9245,10 +9881,11 @@ class TestCmdDiffInternals:
 
     def test_diff_different(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a\n")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("b\n")
         f2.close()
         try:
@@ -9347,33 +9984,126 @@ class TestCmdHelpInternals:
             del repl._ext_cmds["myext2"]
 
     def test_help_system_command(self, repl):
-        with patch('shutil.which', return_value='/usr/bin/ls'):
+        with patch("shutil.which", return_value="/usr/bin/ls"):
             repl._cmd_help("ls")
         assert repl._last_exit_code == 0
 
     def test_help_unknown_command(self, repl):
-        with patch('shutil.which', return_value=None):
+        with patch("shutil.which", return_value=None):
             repl._cmd_help("nonexistentxyz")
         assert repl._last_exit_code == 0
 
     def test_help_all_known_commands(self, repl):
-        known = ["help", "exit", "cd", "pwd", "echo", "ls", "cat", "mkdir",
-                 "rm", "touch", "cp", "mv", "head", "tail", "wc", "grep",
-                 "sort", "uniq", "find", "tee", "xargs", "chmod", "du",
-                 "diff", "stat", "cut", "tr", "seq", "nl", "fold", "tac",
-                 "env", "printenv", "yes", "realpath", "dirname", "basename",
-                 "nproc", "hostname", "uname", "shuf", "rev", "paste",
-                 "comm", "test", "printf", "history", "fc", "alias",
-                 "unalias", "export", "set", "source", "which", "type",
-                 "procs", "kill", "train", "bg", "jobs", "fg", "models",
-                 "load", "unload", "souls", "switch", "whoami", "uptime",
-                 "health", "status", "metrics", "datasets", "knowledge",
-                 "remember", "recall", "checkpoints", "finetuned", "gen",
-                 "tokenizer", "py", "ai", "agents", "tutorial", "boot",
-                 "shutdown", "svc", "devices", "lsdev", "asm", "vmrun",
-                 "vmperms", "permit", "deny", "permissions", "api", "chat",
-                 "confirm", "events", "read", "logs", "clear", "sleep",
-                 "date", "cal", "ln", "render", "watch", "note"]
+        known = [
+            "help",
+            "exit",
+            "cd",
+            "pwd",
+            "echo",
+            "ls",
+            "cat",
+            "mkdir",
+            "rm",
+            "touch",
+            "cp",
+            "mv",
+            "head",
+            "tail",
+            "wc",
+            "grep",
+            "sort",
+            "uniq",
+            "find",
+            "tee",
+            "xargs",
+            "chmod",
+            "du",
+            "diff",
+            "stat",
+            "cut",
+            "tr",
+            "seq",
+            "nl",
+            "fold",
+            "tac",
+            "env",
+            "printenv",
+            "yes",
+            "realpath",
+            "dirname",
+            "basename",
+            "nproc",
+            "hostname",
+            "uname",
+            "shuf",
+            "rev",
+            "paste",
+            "comm",
+            "test",
+            "printf",
+            "history",
+            "fc",
+            "alias",
+            "unalias",
+            "export",
+            "set",
+            "source",
+            "which",
+            "type",
+            "procs",
+            "kill",
+            "train",
+            "bg",
+            "jobs",
+            "fg",
+            "models",
+            "load",
+            "unload",
+            "souls",
+            "switch",
+            "whoami",
+            "uptime",
+            "health",
+            "status",
+            "metrics",
+            "datasets",
+            "knowledge",
+            "remember",
+            "recall",
+            "checkpoints",
+            "finetuned",
+            "gen",
+            "tokenizer",
+            "py",
+            "ai",
+            "agents",
+            "tutorial",
+            "boot",
+            "shutdown",
+            "svc",
+            "devices",
+            "lsdev",
+            "asm",
+            "vmrun",
+            "vmperms",
+            "permit",
+            "deny",
+            "permissions",
+            "api",
+            "chat",
+            "confirm",
+            "events",
+            "read",
+            "logs",
+            "clear",
+            "sleep",
+            "date",
+            "cal",
+            "ln",
+            "render",
+            "watch",
+            "note",
+        ]
         for cmd in known:
             repl._cmd_help(cmd)
         assert repl._last_exit_code == 0
@@ -9385,6 +10115,7 @@ class TestCmdHelpInternals:
 class TestCmdLsExtra:
     def test_ls_empty_dir(self, repl):
         import tempfile
+
         d = tempfile.mkdtemp()
         try:
             repl._cmd_ls(d)
@@ -9393,12 +10124,12 @@ class TestCmdLsExtra:
             os.rmdir(d)
 
     def test_ls_permission_denied(self, repl):
-        with patch('os.listdir', side_effect=PermissionError("denied")):
+        with patch("os.listdir", side_effect=PermissionError("denied")):
             repl._cmd_ls("/some/dir")
         assert repl._last_exit_code == 1
 
     def test_ls_not_a_directory(self, repl):
-        with patch('os.listdir', side_effect=NotADirectoryError("not dir")):
+        with patch("os.listdir", side_effect=NotADirectoryError("not dir")):
             repl._cmd_ls("/some/file")
         assert repl._last_exit_code == 1
 
@@ -9420,7 +10151,7 @@ class TestCmdFindExtra:
         assert repl._last_exit_code == 0
 
     def test_find_permission_denied(self, repl):
-        with patch('os.walk', side_effect=PermissionError("denied")):
+        with patch("os.walk", side_effect=PermissionError("denied")):
             repl._cmd_find("/some/dir -name '*.py'")
         assert repl._last_exit_code == 1
 
@@ -9467,7 +10198,7 @@ class TestCmdFindExtra:
     def test_find_no_pattern_with_type(self, repl, tmp_path):
         (tmp_path / "a.txt").write_text("x")
         (tmp_path / "subdir").mkdir()
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_find(f"{tmp_path} -type d")
         assert repl._last_exit_code == 0
 
@@ -9478,10 +10209,11 @@ class TestCmdFindExtra:
 class TestCmdCommExtra:
     def test_comm_with_overlap(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a\nb\nc\nd")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("b\nd\ne")
         f2.close()
         try:
@@ -9493,10 +10225,11 @@ class TestCmdCommExtra:
 
     def test_comm_no_overlap(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a\nb")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("c\nd")
         f2.close()
         try:
@@ -9508,10 +10241,11 @@ class TestCmdCommExtra:
 
     def test_comm_left_longer(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a\nb\nc\nd\ne")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("b")
         f2.close()
         try:
@@ -9523,10 +10257,11 @@ class TestCmdCommExtra:
 
     def test_comm_right_longer(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("a\nb\nc\nd")
         f2.close()
         try:
@@ -9543,7 +10278,8 @@ class TestCmdCommExtra:
 class TestCmdFoldFlags:
     def test_fold_file(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("a" * 100)
         f.close()
         try:
@@ -9578,7 +10314,8 @@ class TestCmdFoldFlags:
 class TestCmdShufExtra:
     def test_shuf_file(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("a\nb\nc\nd\ne")
         f.close()
         try:
@@ -9591,7 +10328,8 @@ class TestCmdShufExtra:
 class TestCmdRevExtra:
     def test_rev_file(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("hello\nworld")
         f.close()
         try:
@@ -9604,7 +10342,8 @@ class TestCmdRevExtra:
 class TestCmdTacExtra:
     def test_tac_file(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("a\nb\nc")
         f.close()
         try:
@@ -9620,7 +10359,8 @@ class TestCmdTacExtra:
 class TestCmdNlFlags:
     def test_nl_file(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("a\nb\nc")
         f.close()
         try:
@@ -9710,7 +10450,8 @@ class TestCmdDuExtra:
 class TestCmdDiffExtra:
     def test_diff_identical_content(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("same\ncontent")
         f1.close()
         try:
@@ -9721,7 +10462,8 @@ class TestCmdDiffExtra:
 
     def test_diff_q_identical(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("same\n")
         f1.close()
         try:
@@ -9734,10 +10476,11 @@ class TestCmdDiffExtra:
 
     def test_diff_q_different(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a\n")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("b\n")
         f2.close()
         try:
@@ -9751,10 +10494,11 @@ class TestCmdDiffExtra:
 
     def test_diff_q_unified(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a\n")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("b\n")
         f2.close()
         try:
@@ -9793,12 +10537,12 @@ class TestCmdWhichTypeEdge:
             del repl._ext_cmds["myext"]
 
     def test_which_not_found(self, repl):
-        with patch('shutil.which', return_value=None):
+        with patch("shutil.which", return_value=None):
             repl._cmd_which("nonexistent")
         assert repl._last_exit_code == 1
 
     def test_which_system_command(self, repl):
-        with patch('shutil.which', return_value='/usr/bin/ls'):
+        with patch("shutil.which", return_value="/usr/bin/ls"):
             repl._cmd_which("ls")
         assert repl._last_exit_code == 0
 
@@ -9826,12 +10570,12 @@ class TestCmdWhichTypeEdge:
         assert repl._last_exit_code == 0
 
     def test_type_system_command(self, repl):
-        with patch('shutil.which', return_value='/usr/bin/ls'):
+        with patch("shutil.which", return_value="/usr/bin/ls"):
             repl._cmd_type("ls")
         assert repl._last_exit_code == 0
 
     def test_type_not_found(self, repl):
-        with patch('shutil.which', return_value=None):
+        with patch("shutil.which", return_value=None):
             repl._cmd_type("nonexistent")
         assert repl._last_exit_code == 1
 
@@ -9878,7 +10622,7 @@ class TestCmdPermitDenyExtra:
 
 class TestCmdConfirmExtra:
     def test_confirm_no_args(self, repl):
-        with patch.dict('os.environ', {}, clear=False):
+        with patch.dict("os.environ", {}, clear=False):
             repl._cmd_confirm("")
             assert repl._last_exit_code == 0
 
@@ -9948,8 +10692,10 @@ class TestPipelineInternals:
         mock_result.returncode = 0
         mock_result.stdout = b"output"
         mock_result.stderr = b""
-        with patch('shutil.which', return_value='/usr/bin/myutil'), \
-             patch('subprocess.run', return_value=mock_result):
+        with (
+            patch("shutil.which", return_value="/usr/bin/myutil"),
+            patch("subprocess.run", return_value=mock_result),
+        ):
             repl._execute_single("myutil arg1 arg2", "")
         assert repl._last_exit_code == 0
 
@@ -9958,29 +10704,36 @@ class TestPipelineInternals:
         mock_result.returncode = 0
         mock_result.stdout = b""
         mock_result.stderr = b"some warning"
-        with patch('shutil.which', return_value='/usr/bin/myerr'), \
-             patch('subprocess.run', return_value=mock_result):
+        with (
+            patch("shutil.which", return_value="/usr/bin/myerr"),
+            patch("subprocess.run", return_value=mock_result),
+        ):
             repl._execute_single("myerr", "")
         assert repl._last_exit_code == 0
 
     def test_execute_line_system_binary_exception(self, repl):
-        with patch('shutil.which', return_value='/usr/bin/myutil'), \
-             patch('subprocess.run', side_effect=Exception("spawn error")):
+        with (
+            patch("shutil.which", return_value="/usr/bin/myutil"),
+            patch("subprocess.run", side_effect=Exception("spawn error")),
+        ):
             repl._execute_single("myutil", "")
         assert repl._last_exit_code == 1
 
     def test_execute_line_redirect(self, repl):
         import tempfile
+
         d = tempfile.mkdtemp()
         try:
             repl._execute_single(f"echo test > {d}/out.txt")
             assert os.path.exists(f"{d}/out.txt")
         finally:
             import shutil
+
             shutil.rmtree(d)
 
     def test_execute_line_append(self, repl):
         import tempfile
+
         d = tempfile.mkdtemp()
         try:
             repl._execute_single(f"echo first > {d}/out.txt")
@@ -9990,10 +10743,12 @@ class TestPipelineInternals:
             assert "first" in content and "second" in content
         finally:
             import shutil
+
             shutil.rmtree(d)
 
     def test_execute_line_permission_denied(self, repl):
         from domain.shell._internal.permissions import Risk
+
         repl._perms.set_policy(Risk.ELEVATED, "deny")
         repl._perms._granted.discard("rm")
         repl.execute("rm /tmp/test")
@@ -10022,7 +10777,7 @@ class TestPipelineInternals:
             del repl._ext_cmds["testext"]
 
     def test_execute_line_system_binary_not_found(self, repl):
-        with patch('shutil.which', return_value=None):
+        with patch("shutil.which", return_value=None):
             repl._execute_single("nonexistent", "")
         assert repl._last_exit_code == 127
 
@@ -10075,7 +10830,8 @@ class TestCmdOdFlags:
 
     def test_od_hex(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='wb', suffix='.bin', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="wb", suffix=".bin", delete=False)
         f.write(b"\x00\x01\x02\x03")
         f.close()
         try:
@@ -10086,7 +10842,8 @@ class TestCmdOdFlags:
 
     def test_od_octal(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='wb', suffix='.bin', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="wb", suffix=".bin", delete=False)
         f.write(b"\x00\x01\x02\x03")
         f.close()
         try:
@@ -10097,7 +10854,8 @@ class TestCmdOdFlags:
 
     def test_od_decimal(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='wb', suffix='.bin', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="wb", suffix=".bin", delete=False)
         f.write(b"\x00\x01\x02\x03")
         f.close()
         try:
@@ -10184,7 +10942,7 @@ class TestCmdColumn:
 
     def test_column_no_input(self, repl):
         repl._piped_input = None
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_column("")
         assert repl._last_exit_code == 1
 
@@ -10292,7 +11050,8 @@ class TestCmdExpandUnexpand:
 
     def test_expand_file(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("col1\tcol2\tcol3")
         f.close()
         try:
@@ -10311,7 +11070,8 @@ class TestCmdExpandUnexpand:
 
     def test_unexpand_file(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("col1    col2    col3")
         f.close()
         try:
@@ -10335,6 +11095,7 @@ class TestCmdReadExtra:
 
     def test_read_with_prompt(self, repl):
         from domain.shell._internal.io import MemoryIO
+
         mem = MemoryIO()
         mem.feed("test_value")
         old_io = repl.io
@@ -10348,6 +11109,7 @@ class TestCmdReadExtra:
 
     def test_read_prompt_only(self, repl):
         from domain.shell._internal.io import MemoryIO
+
         mem = MemoryIO()
         mem.feed("val")
         old_io = repl.io
@@ -10361,6 +11123,7 @@ class TestCmdReadExtra:
 
     def test_read_eof(self, repl):
         from domain.shell._internal.io import MemoryIO
+
         mem = MemoryIO()
         old_io = repl.io
         repl.io = mem
@@ -10381,7 +11144,8 @@ class TestCmdSourceExtraV2:
 
     def test_source_valid(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False)
         f.write("echo from_source\n")
         f.close()
         try:
@@ -10498,6 +11262,7 @@ class TestCmdLnExtra:
 
     def test_ln_hard(self, repl):
         import tempfile
+
         d = tempfile.mkdtemp()
         try:
             src = os.path.join(d, "src.txt")
@@ -10508,10 +11273,12 @@ class TestCmdLnExtra:
             assert os.path.islink(dst) or os.path.exists(dst)
         finally:
             import shutil
+
             shutil.rmtree(d)
 
     def test_ln_symbolic(self, repl):
         import tempfile
+
         d = tempfile.mkdtemp()
         try:
             src = os.path.join(d, "src.txt")
@@ -10522,6 +11289,7 @@ class TestCmdLnExtra:
             assert os.path.islink(dst)
         finally:
             import shutil
+
             shutil.rmtree(d)
 
 
@@ -10563,25 +11331,31 @@ class TestCmdGenExtra:
         assert repl._last_exit_code == 0
 
     def test_gen_no_api(self, repl):
-        with patch.object(repl, '_require_api', return_value=False):
+        with patch.object(repl, "_require_api", return_value=False):
             repl._cmd_gen("hello")
         assert repl._last_exit_code == 0
 
     def test_gen_success(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'generate', return_value={"text": "generated text"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "generate", return_value={"text": "generated text"}),
+        ):
             repl._cmd_gen("hello")
         assert repl._last_exit_code == 0
 
     def test_gen_error(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'generate', return_value={"error": "API down"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "generate", return_value={"error": "API down"}),
+        ):
             repl._cmd_gen("hello")
         assert repl._last_exit_code == 0
 
     def test_gen_fallback(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'generate', return_value={"foo": "bar"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "generate", return_value={"foo": "bar"}),
+        ):
             repl._cmd_gen("hello")
         assert repl._last_exit_code == 0
 
@@ -10602,32 +11376,42 @@ class TestCmdChatExtra:
         assert repl._chat_history == []
 
     def test_chat_no_api(self, repl):
-        with patch.object(repl, '_require_api', return_value=False):
+        with patch.object(repl, "_require_api", return_value=False):
             repl._cmd_chat("hello")
         assert repl._last_exit_code == 0
 
     def test_chat_success(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl, '_spinner_call', return_value={"message": "response text"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl, "_spinner_call", return_value={"message": "response text"}),
+        ):
             repl._cmd_chat("hello")
         assert repl._last_exit_code == 0
         assert len(repl._chat_history) == 2
 
     def test_chat_error(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl, '_spinner_call', return_value={"error": "fail"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl, "_spinner_call", return_value={"error": "fail"}),
+        ):
             repl._cmd_chat("hello")
         assert repl._last_exit_code == 0
 
     def test_chat_fallback(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl, '_spinner_call', return_value="raw string"):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl, "_spinner_call", return_value="raw string"),
+        ):
             repl._cmd_chat("hello")
         assert repl._last_exit_code == 0
 
     def test_chat_strips_think(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl, '_spinner_call', return_value={"message": "<think>reasoning</think>final"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(
+                repl, "_spinner_call", return_value={"message": "<think>reasoning</think>final"}
+            ),
+        ):
             repl._cmd_chat("hello")
         assert repl._last_exit_code == 0
 
@@ -10655,7 +11439,7 @@ class TestCmdAsmExtra:
 
     def test_asm_vm_fault(self, repl):
         repl._piped_input = "INVALID_OP"
-        with patch('domain.shell._internal.vm.VMRunner') as MockRunner:
+        with patch("domain.shell._internal.vm.VMRunner") as MockRunner:
             MockRunner.return_value.assemble_and_run.side_effect = Exception("VM error")
             repl._cmd_asm("")
         assert repl._last_exit_code == 1
@@ -10716,7 +11500,9 @@ class TestCmdSvcExtra:
         return mock_init
 
     def test_svc_not_booted(self, repl):
-        with patch.object(type(repl.os), 'init_system', new_callable=PropertyMock, return_value=None):
+        with patch.object(
+            type(repl.os), "init_system", new_callable=PropertyMock, return_value=None
+        ):
             repl._cmd_svc("list")
         assert repl._last_exit_code == 1
 
@@ -10940,6 +11726,7 @@ class TestCmdRenderExtraV2:
 class TestCmdTutorialExtra:
     def test_tutorial(self, repl):
         from domain.shell._internal.io import MemoryIO
+
         mem = MemoryIO()
         mem.feed("q")
         old_io = repl.io
@@ -10960,25 +11747,31 @@ class TestCmdAiExtra:
         assert repl._last_exit_code == 0
 
     def test_ai_no_api(self, repl):
-        with patch.object(repl, '_require_api', return_value=False):
+        with patch.object(repl, "_require_api", return_value=False):
             repl._cmd_ai("help me")
         assert repl._last_exit_code == 0
 
     def test_ai_success(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'generate', return_value={"text": "run ls"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "generate", return_value={"text": "run ls"}),
+        ):
             repl._cmd_ai("show files")
         assert repl._last_exit_code == 0
 
     def test_ai_non_dict_result(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'generate', return_value="just text"):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "generate", return_value="just text"),
+        ):
             repl._cmd_ai("do something")
         assert repl._last_exit_code == 0
 
     def test_ai_api_error(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'generate', return_value={"error": "timeout"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "generate", return_value={"error": "timeout"}),
+        ):
             repl._cmd_ai("do something")
         assert repl._last_exit_code == 0
 
@@ -11077,6 +11870,7 @@ class TestCmdAsmExecution:
 
     def test_asm_vm_fault(self, repl):
         from domain.shell._internal.vm import VMFault
+
         with patch("domain.shell._internal.vm.VMRunner") as MockRunner:
             MockRunner.return_value.assemble_and_run.side_effect = VMFault("bad instruction")
             repl._cmd_asm("")
@@ -11116,25 +11910,31 @@ class TestCmdGenExecution:
         assert repl._last_exit_code == 0
 
     def test_gen_no_api(self, repl):
-        with patch.object(repl, '_require_api', return_value=False):
+        with patch.object(repl, "_require_api", return_value=False):
             repl._cmd_gen("hello")
         assert repl._last_exit_code == 0
 
     def test_gen_success(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'generate', return_value={"text": "generated text"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "generate", return_value={"text": "generated text"}),
+        ):
             repl._cmd_gen("hello")
         assert repl._last_exit_code == 0
 
     def test_gen_error(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'generate', return_value={"error": "timeout"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "generate", return_value={"error": "timeout"}),
+        ):
             repl._cmd_gen("hello")
         assert repl._last_exit_code == 0
 
     def test_gen_non_dict_result(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'generate', return_value="just text"):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "generate", return_value="just text"),
+        ):
             repl._cmd_gen("hello")
         assert repl._last_exit_code == 0
 
@@ -11153,13 +11953,15 @@ class TestCmdChatExecution:
         assert repl._last_exit_code == 0
 
     def test_chat_no_api(self, repl):
-        with patch.object(repl, '_require_api', return_value=False):
+        with patch.object(repl, "_require_api", return_value=False):
             repl._cmd_chat("hello")
         assert repl._last_exit_code == 0
 
     def test_chat_new_session(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'chat', return_value={"message": "hi there"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "chat", return_value={"message": "hi there"}),
+        ):
             repl._cmd_chat("hello")
         assert repl._chat_session_id is not None
         assert len(repl._chat_history) == 2
@@ -11168,27 +11970,37 @@ class TestCmdChatExecution:
     def test_chat_continues_session(self, repl):
         repl._chat_session_id = "existing"
         repl._chat_history = [{"role": "user", "content": "prev"}]
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'chat', return_value={"message": "response"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "chat", return_value={"message": "response"}),
+        ):
             repl._cmd_chat("hello")
         assert len(repl._chat_history) == 3
         assert repl._last_exit_code == 0
 
     def test_chat_error(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'chat', return_value={"error": "fail"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "chat", return_value={"error": "fail"}),
+        ):
             repl._cmd_chat("hello")
         assert repl._last_exit_code == 0
 
     def test_chat_non_dict_result(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'chat', return_value="just text"):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "chat", return_value="just text"),
+        ):
             repl._cmd_chat("hello")
         assert repl._last_exit_code == 0
 
     def test_chat_think_tag_stripped(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'chat', return_value={"message": "<think>reasoning</think>answer"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(
+                repl.cmds, "chat", return_value={"message": "<think>reasoning</think>answer"}
+            ),
+        ):
             repl._cmd_chat("hello")
         assert "<think>" not in str(repl._chat_history)
         assert repl._last_exit_code == 0
@@ -11206,16 +12018,26 @@ class TestStreamTrainProgressV2:
     def test_job_completed(self, repl):
         results = [
             {"status": "running", "progress": 50, "epoch": 1, "epochs": 3, "loss": 0.5},
-            {"status": "completed", "progress": 100, "epoch": 3, "epochs": 3, "loss": 0.1, "checkpoint": "my-checkpoint"},
+            {
+                "status": "completed",
+                "progress": 100,
+                "epoch": 3,
+                "epochs": 3,
+                "loss": 0.1,
+                "checkpoint": "my-checkpoint",
+            },
         ]
         call_count = [0]
+
         def mock_get(url):
             idx = call_count[0]
             call_count[0] += 1
-            return results[min(idx, len(results)-1)]
+            return results[min(idx, len(results) - 1)]
 
-        with patch("domain.shell._internal.commands._api_get", side_effect=mock_get), \
-             patch("domain.shell._internal.repl.time.sleep"):
+        with (
+            patch("domain.shell._internal.commands._api_get", side_effect=mock_get),
+            patch("domain.shell._internal.repl.time.sleep"),
+        ):
             repl._stream_train_progress("job-123")
         assert repl._last_exit_code == 0
 
@@ -11225,13 +12047,16 @@ class TestStreamTrainProgressV2:
             {"status": "failed", "progress": 30, "error": "OOM"},
         ]
         call_count = [0]
+
         def mock_get(url):
             idx = call_count[0]
             call_count[0] += 1
-            return results[min(idx, len(results)-1)]
+            return results[min(idx, len(results) - 1)]
 
-        with patch("domain.shell._internal.commands._api_get", side_effect=mock_get), \
-             patch("domain.shell._internal.repl.time.sleep"):
+        with (
+            patch("domain.shell._internal.commands._api_get", side_effect=mock_get),
+            patch("domain.shell._internal.repl.time.sleep"),
+        ):
             repl._stream_train_progress("job-456")
         assert repl._last_exit_code == 0
 
@@ -11239,27 +12064,34 @@ class TestStreamTrainProgressV2:
         results = [
             {"status": "error", "progress": 0, "error": "crash"},
         ]
-        with patch("domain.shell._internal.commands._api_get", return_value=results[0]), \
-             patch("domain.shell._internal.repl.time.sleep"):
+        with (
+            patch("domain.shell._internal.commands._api_get", return_value=results[0]),
+            patch("domain.shell._internal.repl.time.sleep"),
+        ):
             repl._stream_train_progress("job-789")
         assert repl._last_exit_code == 0
 
     def test_job_keyboard_interrupt(self, repl):
         call_count = [0]
+
         def mock_get(url):
             call_count[0] += 1
             if call_count[0] > 1:
                 raise KeyboardInterrupt()
             return {"status": "running", "progress": 10}
 
-        with patch("domain.shell._internal.commands._api_get", side_effect=mock_get), \
-             patch("domain.shell._internal.repl.time.sleep"):
+        with (
+            patch("domain.shell._internal.commands._api_get", side_effect=mock_get),
+            patch("domain.shell._internal.repl.time.sleep"),
+        ):
             repl._stream_train_progress("job-kbd")
         assert repl._last_exit_code == 0
 
     def test_job_exception(self, repl):
-        with patch("domain.shell._internal.commands._api_get", side_effect=RuntimeError("network")), \
-             patch("domain.shell._internal.repl.time.sleep"):
+        with (
+            patch("domain.shell._internal.commands._api_get", side_effect=RuntimeError("network")),
+            patch("domain.shell._internal.repl.time.sleep"),
+        ):
             repl._stream_train_progress("job-err")
         assert repl._last_exit_code == 0
 
@@ -11271,13 +12103,16 @@ class TestStreamTrainProgressV2:
             {"status": "completed", "progress": 100, "epoch": 3, "epochs": 3, "loss": 0.1},
         ]
         call_count = [0]
+
         def mock_get(url):
             idx = call_count[0]
             call_count[0] += 1
-            return results[min(idx, len(results)-1)]
+            return results[min(idx, len(results) - 1)]
 
-        with patch("domain.shell._internal.commands._api_get", side_effect=mock_get), \
-             patch("domain.shell._internal.repl.time.sleep"):
+        with (
+            patch("domain.shell._internal.commands._api_get", side_effect=mock_get),
+            patch("domain.shell._internal.repl.time.sleep"),
+        ):
             repl._stream_train_progress("job-stdio")
         repl._stdio = None
         assert repl._last_exit_code == 0
@@ -11288,13 +12123,16 @@ class TestStreamTrainProgressV2:
             {"status": "completed", "progress": 100},
         ]
         call_count = [0]
+
         def mock_get(url):
             idx = call_count[0]
             call_count[0] += 1
-            return results[min(idx, len(results)-1)]
+            return results[min(idx, len(results) - 1)]
 
-        with patch("domain.shell._internal.commands._api_get", side_effect=mock_get), \
-             patch("domain.shell._internal.repl.time.sleep"):
+        with (
+            patch("domain.shell._internal.commands._api_get", side_effect=mock_get),
+            patch("domain.shell._internal.repl.time.sleep"),
+        ):
             repl._stream_train_progress("job-half")
         assert repl._last_exit_code == 0
 
@@ -11304,13 +12142,14 @@ class TestStreamTrainProgressV2:
 
 class TestPipelineInternalsV2:
     def test_execute_single_permission_denied(self, repl):
-        with patch.object(repl, '_check_permission', return_value=False):
+        with patch.object(repl, "_check_permission", return_value=False):
             repl.execute("rm /important/file")
         assert repl._last_exit_code == 126
 
     def test_execute_single_system_exit(self, repl):
         def raise_exit(self_repl, args):
             raise SystemExit(42)
+
         repl.COMMANDS["testexit"] = raise_exit
         repl.execute("testexit")
         assert repl._last_exit_code == 42
@@ -11318,6 +12157,7 @@ class TestPipelineInternalsV2:
     def test_execute_single_exception(self, repl):
         def raise_error(self_repl, args):
             raise RuntimeError("boom")
+
         repl.COMMANDS["testerr"] = raise_error
         repl.execute("testerr")
         assert repl._last_exit_code == 1
@@ -11357,6 +12197,7 @@ class TestPipelineInternalsV2:
     def test_execute_single_keyboard_interrupt(self, repl):
         def raise_kbd(self_repl, args):
             raise KeyboardInterrupt()
+
         repl.COMMANDS["kbdtest"] = raise_kbd
         repl.execute("kbdtest")
         assert repl._last_exit_code == 0
@@ -11378,34 +12219,82 @@ class TestPipelineInternalsV2:
 class TestCmdLoadTrackerV2:
     def test_load_tracker_downloading(self, repl):
         mock_tracker = MagicMock()
-        mock_tracker.get.return_value = {"stage": "downloading", "progress": 0.5, "message": "Downloading model..."}
+        mock_tracker.get.return_value = {
+            "stage": "downloading",
+            "progress": 0.5,
+            "message": "Downloading model...",
+        }
         mock_bar = MagicMock()
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch("domain.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
-             patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domain.shell._internal.repl.time.sleep"):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch(
+                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                return_value=mock_tracker,
+            ),
+            patch.dict(
+                "sys.modules",
+                {
+                    "apps.cli.src.utils.progress": MagicMock(
+                        ProgressBar=MagicMock(return_value=mock_bar)
+                    )
+                },
+            ),
+            patch("domain.shell._internal.repl.time.sleep"),
+        ):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
     def test_load_tracker_converting(self, repl):
         mock_tracker = MagicMock()
-        mock_tracker.get.return_value = {"stage": "converting", "progress": 0.7, "message": "Converting format..."}
+        mock_tracker.get.return_value = {
+            "stage": "converting",
+            "progress": 0.7,
+            "message": "Converting format...",
+        }
         mock_bar = MagicMock()
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch("domain.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
-             patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domain.shell._internal.repl.time.sleep"):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch(
+                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                return_value=mock_tracker,
+            ),
+            patch.dict(
+                "sys.modules",
+                {
+                    "apps.cli.src.utils.progress": MagicMock(
+                        ProgressBar=MagicMock(return_value=mock_bar)
+                    )
+                },
+            ),
+            patch("domain.shell._internal.repl.time.sleep"),
+        ):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
     def test_load_tracker_loading(self, repl):
         mock_tracker = MagicMock()
-        mock_tracker.get.return_value = {"stage": "loading", "progress": 0.9, "message": "Loading into memory..."}
+        mock_tracker.get.return_value = {
+            "stage": "loading",
+            "progress": 0.9,
+            "message": "Loading into memory...",
+        }
         mock_bar = MagicMock()
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch("domain.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
-             patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domain.shell._internal.repl.time.sleep"):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch(
+                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                return_value=mock_tracker,
+            ),
+            patch.dict(
+                "sys.modules",
+                {
+                    "apps.cli.src.utils.progress": MagicMock(
+                        ProgressBar=MagicMock(return_value=mock_bar)
+                    )
+                },
+            ),
+            patch("domain.shell._internal.repl.time.sleep"),
+        ):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
@@ -11413,21 +12302,49 @@ class TestCmdLoadTrackerV2:
         mock_tracker = MagicMock()
         mock_tracker.get.return_value = {"stage": "ready", "progress": 1.0}
         mock_bar = MagicMock()
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch("domain.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
-             patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domain.shell._internal.repl.time.sleep"):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch(
+                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                return_value=mock_tracker,
+            ),
+            patch.dict(
+                "sys.modules",
+                {
+                    "apps.cli.src.utils.progress": MagicMock(
+                        ProgressBar=MagicMock(return_value=mock_bar)
+                    )
+                },
+            ),
+            patch("domain.shell._internal.repl.time.sleep"),
+        ):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
     def test_load_tracker_error(self, repl):
         mock_tracker = MagicMock()
-        mock_tracker.get.return_value = {"stage": "error", "progress": 0, "error": "Download failed"}
+        mock_tracker.get.return_value = {
+            "stage": "error",
+            "progress": 0,
+            "error": "Download failed",
+        }
         mock_bar = MagicMock()
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch("domain.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
-             patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domain.shell._internal.repl.time.sleep"):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch(
+                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                return_value=mock_tracker,
+            ),
+            patch.dict(
+                "sys.modules",
+                {
+                    "apps.cli.src.utils.progress": MagicMock(
+                        ProgressBar=MagicMock(return_value=mock_bar)
+                    )
+                },
+            ),
+            patch("domain.shell._internal.repl.time.sleep"),
+        ):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
@@ -11435,10 +12352,22 @@ class TestCmdLoadTrackerV2:
         mock_bar = MagicMock()
         mock_tracker = MagicMock()
         mock_tracker.get.return_value = None
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch("domain.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
-             patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domain.shell._internal.repl.time.sleep"):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch(
+                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                return_value=mock_tracker,
+            ),
+            patch.dict(
+                "sys.modules",
+                {
+                    "apps.cli.src.utils.progress": MagicMock(
+                        ProgressBar=MagicMock(return_value=mock_bar)
+                    )
+                },
+            ),
+            patch("domain.shell._internal.repl.time.sleep"),
+        ):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
@@ -11446,11 +12375,23 @@ class TestCmdLoadTrackerV2:
         mock_bar = MagicMock()
         mock_tracker = MagicMock()
         mock_tracker.get.return_value = None
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch("domain.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
-             patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domain.shell._internal.repl.time.sleep"), \
-             patch.object(repl.cmds, 'load_model', return_value=None):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch(
+                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                return_value=mock_tracker,
+            ),
+            patch.dict(
+                "sys.modules",
+                {
+                    "apps.cli.src.utils.progress": MagicMock(
+                        ProgressBar=MagicMock(return_value=mock_bar)
+                    )
+                },
+            ),
+            patch("domain.shell._internal.repl.time.sleep"),
+            patch.object(repl.cmds, "load_model", return_value=None),
+        ):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
@@ -11458,11 +12399,25 @@ class TestCmdLoadTrackerV2:
         mock_bar = MagicMock()
         mock_tracker = MagicMock()
         mock_tracker.get.return_value = None
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch("domain.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
-             patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domain.shell._internal.repl.time.sleep"), \
-             patch.object(repl.cmds, 'load_model', return_value={"status": "error", "error": "not found"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch(
+                "domain.infrastructure._internal.conversion_tracker.get_tracker",
+                return_value=mock_tracker,
+            ),
+            patch.dict(
+                "sys.modules",
+                {
+                    "apps.cli.src.utils.progress": MagicMock(
+                        ProgressBar=MagicMock(return_value=mock_bar)
+                    )
+                },
+            ),
+            patch("domain.shell._internal.repl.time.sleep"),
+            patch.object(
+                repl.cmds, "load_model", return_value={"status": "error", "error": "not found"}
+            ),
+        ):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
@@ -11472,173 +12427,227 @@ class TestCmdLoadTrackerV2:
 
 class TestCmdTrainPaths:
     def test_train_no_args(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'datasets', return_value=[{"name": "shakespeare"}]):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "datasets", return_value=[{"name": "shakespeare"}]),
+        ):
             repl._cmd_train("")
         assert repl._last_exit_code == 0
 
     def test_train_no_api(self, repl):
-        with patch.object(repl, '_require_api', return_value=False):
+        with patch.object(repl, "_require_api", return_value=False):
             repl._cmd_train("shakespeare")
         assert repl._last_exit_code == 0
 
     def test_train_success(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'train_quick', return_value={"id": "train-123", "status": "started"}), \
-             patch.object(repl, '_stream_train_progress'):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(
+                repl.cmds, "train_quick", return_value={"id": "train-123", "status": "started"}
+            ),
+            patch.object(repl, "_stream_train_progress"),
+        ):
             repl._cmd_train("shakespeare")
         assert repl._last_exit_code == 0
 
     def test_train_error(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'train_quick', return_value={"error": "no dataset"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "train_quick", return_value={"error": "no dataset"}),
+        ):
             repl._cmd_train("shakespeare")
         assert repl._last_exit_code == 0
 
     def test_train_no_job_id(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'train_quick', return_value={"status": "started"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "train_quick", return_value={"status": "started"}),
+        ):
             repl._cmd_train("shakespeare")
         assert repl._last_exit_code == 0
 
     def test_train_with_name(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'train_quick', return_value={"id": "train-456"}), \
-             patch.object(repl, '_stream_train_progress'):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "train_quick", return_value={"id": "train-456"}),
+            patch.object(repl, "_stream_train_progress"),
+        ):
             repl._cmd_train("shakespeare my-run")
         assert repl._last_exit_code == 0
 
     def test_train_status(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'train_status', return_value=[{"id": "abc12345", "status": "running", "model": "gpt2", "progress": 50}]):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(
+                repl.cmds,
+                "train_status",
+                return_value=[
+                    {"id": "abc12345", "status": "running", "model": "gpt2", "progress": 50}
+                ],
+            ),
+        ):
             repl._cmd_train("status")
         assert repl._last_exit_code == 0
 
     def test_train_status_empty(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'train_status', return_value=[]):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "train_status", return_value=[]),
+        ):
             repl._cmd_train("status")
         assert repl._last_exit_code == 0
 
     def test_train_stop(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'train_stop', return_value={"stopped": True}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "train_stop", return_value={"stopped": True}),
+        ):
             repl._cmd_train("stop abc123")
         assert repl._last_exit_code == 0
 
     def test_train_stop_no_id(self, repl):
-        with patch.object(repl, '_require_api', return_value=True):
+        with patch.object(repl, "_require_api", return_value=True):
             repl._cmd_train("stop")
         assert repl._last_exit_code == 0
 
     def test_train_follow(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl, '_stream_train_progress') as mock_stream:
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl, "_stream_train_progress") as mock_stream,
+        ):
             repl._cmd_train("follow abc123")
         mock_stream.assert_called_once_with("abc123")
         assert repl._last_exit_code == 0
 
     def test_train_follow_no_id(self, repl):
-        with patch.object(repl, '_require_api', return_value=True):
+        with patch.object(repl, "_require_api", return_value=True):
             repl._cmd_train("follow")
         assert repl._last_exit_code == 0
 
     def test_train_distill(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'train_distill', return_value={"id": "dist-123", "status": "started"}), \
-             patch.object(repl, '_stream_train_progress'):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(
+                repl.cmds, "train_distill", return_value={"id": "dist-123", "status": "started"}
+            ),
+            patch.object(repl, "_stream_train_progress"),
+        ):
             repl._cmd_train("distill shakespeare")
         assert repl._last_exit_code == 0
 
     def test_train_distill_no_dataset(self, repl):
-        with patch.object(repl, '_require_api', return_value=True):
+        with patch.object(repl, "_require_api", return_value=True):
             repl._cmd_train("distill")
         assert repl._last_exit_code == 0
 
     def test_train_distill_error(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'train_distill', return_value={"error": "fail"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "train_distill", return_value={"error": "fail"}),
+        ):
             repl._cmd_train("distill shakespeare")
         assert repl._last_exit_code == 0
 
     def test_train_hf(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'train_hf', return_value={"id": "hf-123", "status": "started"}), \
-             patch.object(repl, '_stream_train_progress'):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "train_hf", return_value={"id": "hf-123", "status": "started"}),
+            patch.object(repl, "_stream_train_progress"),
+        ):
             repl._cmd_train("hf gpt2 shakespeare")
         assert repl._last_exit_code == 0
 
     def test_train_hf_no_args(self, repl):
-        with patch.object(repl, '_require_api', return_value=True):
+        with patch.object(repl, "_require_api", return_value=True):
             repl._cmd_train("hf")
         assert repl._last_exit_code == 0
 
     def test_train_hf_one_arg(self, repl):
-        with patch.object(repl, '_require_api', return_value=True):
+        with patch.object(repl, "_require_api", return_value=True):
             repl._cmd_train("hf gpt2")
         assert repl._last_exit_code == 0
 
     def test_train_hf_error(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'train_hf', return_value={"error": "fail"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "train_hf", return_value={"error": "fail"}),
+        ):
             repl._cmd_train("hf gpt2 shakespeare")
         assert repl._last_exit_code == 0
 
     def test_train_auto(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'train_auto', return_value={"status": "started"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "train_auto", return_value={"status": "started"}),
+        ):
             repl._cmd_train("auto friendly")
         assert repl._last_exit_code == 0
 
     def test_train_auto_error(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'train_auto', return_value={"error": "fail"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "train_auto", return_value={"error": "fail"}),
+        ):
             repl._cmd_train("auto friendly")
         assert repl._last_exit_code == 0
 
     def test_train_load(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'load_checkpoint', return_value={"loaded": True}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "load_checkpoint", return_value={"loaded": True}),
+        ):
             repl._cmd_train("load my-checkpoint")
         assert repl._last_exit_code == 0
 
     def test_train_load_no_name(self, repl):
-        with patch.object(repl, '_require_api', return_value=True):
+        with patch.object(repl, "_require_api", return_value=True):
             repl._cmd_train("load")
         assert repl._last_exit_code == 0
 
     def test_train_load_error(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'load_checkpoint', return_value={"error": "not found"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "load_checkpoint", return_value={"error": "not found"}),
+        ):
             repl._cmd_train("load bad-checkpoint")
         assert repl._last_exit_code == 0
 
     def test_train_del(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'delete_checkpoint', return_value={"deleted": True}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "delete_checkpoint", return_value={"deleted": True}),
+        ):
             repl._cmd_train("del my-checkpoint")
         assert repl._last_exit_code == 0
 
     def test_train_del_no_name(self, repl):
-        with patch.object(repl, '_require_api', return_value=True):
+        with patch.object(repl, "_require_api", return_value=True):
             repl._cmd_train("del")
         assert repl._last_exit_code == 0
 
     def test_train_del_error(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'delete_checkpoint', return_value={"error": "not found"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "delete_checkpoint", return_value={"error": "not found"}),
+        ):
             repl._cmd_train("del bad-checkpoint")
         assert repl._last_exit_code == 0
 
     def test_train_list_datasets(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'datasets', return_value=[{"name": "shakespeare"}, {"name": "wiki"}]):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(
+                repl.cmds, "datasets", return_value=[{"name": "shakespeare"}, {"name": "wiki"}]
+            ),
+        ):
             repl._cmd_train("")
         assert repl._last_exit_code == 0
 
     def test_train_no_datasets(self, repl):
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'datasets', return_value=[]):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "datasets", return_value=[]),
+        ):
             repl._cmd_train("")
         assert repl._last_exit_code == 0
 
@@ -11653,6 +12662,7 @@ class TestCmdReadExtraV2:
 
     def test_read_prompt_only(self, repl):
         from domain.shell._internal.io import MemoryIO
+
         mem = MemoryIO()
         mem.feed("value")
         old_io = repl.io
@@ -11666,6 +12676,7 @@ class TestCmdReadExtraV2:
 
     def test_read_with_prompt_and_var(self, repl):
         from domain.shell._internal.io import MemoryIO
+
         mem = MemoryIO()
         mem.feed("hello")
         old_io = repl.io
@@ -11679,6 +12690,7 @@ class TestCmdReadExtraV2:
 
     def test_read_eof(self, repl):
         from domain.shell._internal.io import MemoryIO
+
         mem = MemoryIO()
         old_io = repl.io
         repl.io = mem
@@ -11801,13 +12813,25 @@ class TestCmdRenderExecution:
 
     def test_render_no_args(self, repl):
         mock_dev, _ = self._setup_render(repl)
-        mock_dev.call.return_value = {"meshes": 0, "materials": 0, "lights": 0, "resolution": [80, 60], "samples": 4}
+        mock_dev.call.return_value = {
+            "meshes": 0,
+            "materials": 0,
+            "lights": 0,
+            "resolution": [80, 60],
+            "samples": 4,
+        }
         repl._cmd_render("")
         assert repl._last_exit_code == 0
 
     def test_render_info(self, repl):
         mock_dev, _ = self._setup_render(repl)
-        mock_dev.call.return_value = {"meshes": 1, "materials": 2, "lights": 1, "resolution": [80, 60], "samples": 4}
+        mock_dev.call.return_value = {
+            "meshes": 1,
+            "materials": 2,
+            "lights": 1,
+            "resolution": [80, 60],
+            "samples": 4,
+        }
         repl._cmd_render("info")
         assert repl._last_exit_code == 0
 
@@ -11899,6 +12923,7 @@ class TestCmdRenderExecution:
     def test_render_go(self, repl):
         mock_dev, _ = self._setup_render(repl)
         import numpy as np
+
         mock_dev.call.return_value = np.random.rand(60, 80, 3).astype(np.float32) * 0.5
         repl._cmd_render("go")
         assert repl._last_exit_code == 0
@@ -11906,6 +12931,7 @@ class TestCmdRenderExecution:
     def test_render_go_custom_size(self, repl):
         mock_dev, _ = self._setup_render(repl)
         import numpy as np
+
         mock_dev.call.return_value = np.random.rand(40, 50, 3).astype(np.float32) * 0.5
         repl._cmd_render("go 50 40 2")
         assert repl._last_exit_code == 0
@@ -11943,8 +12969,13 @@ class TestCmdRenderExecution:
     def test_render_neural(self, repl):
         mock_dev, mock_neural = self._setup_render(repl)
         mock_neural.call.side_effect = [
-            {"embedding": MagicMock(shape=(1, 64)), "probabilities": [0.1]*8},
-            {"dominant_class": 2, "neural_entropy": 1.5, "image": {"mean": 0.5, "std": 0.2}, "depth": {"mean": 0.3, "std": 0.1}},
+            {"embedding": MagicMock(shape=(1, 64)), "probabilities": [0.1] * 8},
+            {
+                "dominant_class": 2,
+                "neural_entropy": 1.5,
+                "image": {"mean": 0.5, "std": 0.2},
+                "depth": {"mean": 0.3, "std": 0.1},
+            },
         ]
         repl._cmd_render("neural")
         assert repl._last_exit_code == 0
@@ -11960,32 +12991,44 @@ class TestCmdLogsExplainExtraV2:
 
     def test_logs_explain_with_errors(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         entry = LogEntry(time.time(), "ERROR", "test", "Something failed")
         repl._log_buffer._entries.append(entry)
-        with patch.object(repl, '_require_api', return_value=False):
+        with patch.object(repl, "_require_api", return_value=False):
             repl._cmd_logs("--explain")
         assert repl._last_exit_code == 0
 
     def test_logs_explain_api_success(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         entry = LogEntry(time.time(), "ERROR", "test", "Something failed")
         repl._log_buffer._entries.append(entry)
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'generate', return_value={"text": "Root cause: memory overflow\nFix: increase RAM"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(
+                repl.cmds,
+                "generate",
+                return_value={"text": "Root cause: memory overflow\nFix: increase RAM"},
+            ),
+        ):
             repl._cmd_logs("--explain")
         assert repl._last_exit_code == 0
 
     def test_logs_explain_api_error(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         entry = LogEntry(time.time(), "WARNING", "test", "Low disk space")
         repl._log_buffer._entries.append(entry)
-        with patch.object(repl, '_require_api', return_value=True), \
-             patch.object(repl.cmds, 'generate', return_value={"error": "timeout"}):
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            patch.object(repl.cmds, "generate", return_value={"error": "timeout"}),
+        ):
             repl._cmd_logs("--explain")
         assert repl._last_exit_code == 0
 
     def test_logs_stats(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         for i in range(5):
             repl._log_buffer._entries.append(LogEntry(time.time() + i, "INFO", "test", f"msg {i}"))
         repl._log_buffer._entries.append(LogEntry(time.time(), "ERROR", "other", "err"))
@@ -11998,27 +13041,33 @@ class TestCmdLogsExplainExtraV2:
 
     def test_logs_export(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer._entries.append(LogEntry(time.time(), "INFO", "test", "export me"))
         import tempfile
+
         with tempfile.NamedTemporaryFile(suffix=".log", delete=False) as f:
             path = f.name
         repl._cmd_logs(f"--export {path}")
         import os
+
         assert os.path.exists(path)
         os.unlink(path)
         assert repl._last_exit_code == 0
 
     def test_logs_export_empty(self, repl):
         import tempfile
+
         with tempfile.NamedTemporaryFile(suffix=".log", delete=False) as f:
             path = f.name
         repl._cmd_logs(f"--export {path}")
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
     def test_logs_filter_level(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer._entries.append(LogEntry(time.time(), "ERROR", "test", "err"))
         repl._log_buffer._entries.append(LogEntry(time.time(), "INFO", "test", "info"))
         repl._cmd_logs("-l ERROR")
@@ -12026,6 +13075,7 @@ class TestCmdLogsExplainExtraV2:
 
     def test_logs_filter_source(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         repl._log_buffer._entries.append(LogEntry(time.time(), "INFO", "kernel", "boot"))
         repl._log_buffer._entries.append(LogEntry(time.time(), "INFO", "api", "ready"))
         repl._cmd_logs("-s kernel")
@@ -12033,6 +13083,7 @@ class TestCmdLogsExplainExtraV2:
 
     def test_logs_count(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
+
         for i in range(10):
             repl._log_buffer._entries.append(LogEntry(time.time() + i, "INFO", "test", f"msg {i}"))
         repl._cmd_logs("-n 3")
@@ -12048,7 +13099,7 @@ class TestCmdConfirmConfigV2:
         assert repl._last_exit_code == 0
 
     def test_confirm_on(self, repl):
-        with patch("domain.infrastructure.config.get_config") as mock_get_cfg:
+        with patch("domain.infrastructure._internal.config.get_config") as mock_get_cfg:
             mock_cfg = MagicMock()
             mock_cfg.features.auto_download = False
             mock_cfg.save = MagicMock()
@@ -12057,7 +13108,7 @@ class TestCmdConfirmConfigV2:
         assert repl._last_exit_code == 0
 
     def test_confirm_off(self, repl):
-        with patch("domain.infrastructure.config.get_config") as mock_get_cfg:
+        with patch("domain.infrastructure._internal.config.get_config") as mock_get_cfg:
             mock_cfg = MagicMock()
             mock_cfg.features.auto_download = True
             mock_cfg.save = MagicMock()
@@ -12145,7 +13196,13 @@ class TestCmdApiExtraV2:
 
     def test_api_status_connected(self, repl):
         mock_api = MagicMock()
-        mock_api.status.return_value = {"available": True, "model_id": "gpt2", "engine_type": "cpu", "running": True, "uptime": 120.5}
+        mock_api.status.return_value = {
+            "available": True,
+            "model_id": "gpt2",
+            "engine_type": "cpu",
+            "running": True,
+            "uptime": 120.5,
+        }
         repl.os._api = mock_api
         repl._cmd_api("status")
         assert repl._last_exit_code == 0
@@ -12241,22 +13298,34 @@ class TestCmdProtectUnprotectV2:
         assert repl._last_exit_code == 0
 
     def test_protect_success(self, repl):
-        with patch("domain.infrastructure.model_protector.protect_model", return_value={"protected": ["file.bin"], "errors": []}):
+        with patch(
+            "domain.infrastructure._internal.model_protector.protect_model",
+            return_value={"protected": ["file.bin"], "errors": []},
+        ):
             repl._cmd_protect("gpt2")
         assert repl._last_exit_code == 0
 
     def test_protect_no_files(self, repl):
-        with patch("domain.infrastructure.model_protector.protect_model", return_value={"protected": [], "errors": []}):
+        with patch(
+            "domain.infrastructure._internal.model_protector.protect_model",
+            return_value={"protected": [], "errors": []},
+        ):
             repl._cmd_protect("nonexistent")
         assert repl._last_exit_code == 0
 
     def test_protect_with_errors(self, repl):
-        with patch("domain.infrastructure.model_protector.protect_model", return_value={"protected": ["f"], "errors": [{"error": "perm denied"}]}):
+        with patch(
+            "domain.infrastructure._internal.model_protector.protect_model",
+            return_value={"protected": ["f"], "errors": [{"error": "perm denied"}]},
+        ):
             repl._cmd_protect("gpt2")
         assert repl._last_exit_code == 0
 
     def test_protect_exception(self, repl):
-        with patch("domain.infrastructure.model_protector.protect_model", side_effect=RuntimeError("fail")):
+        with patch(
+            "domain.infrastructure._internal.model_protector.protect_model",
+            side_effect=RuntimeError("fail"),
+        ):
             repl._cmd_protect("gpt2")
         assert repl._last_exit_code == 0
 
@@ -12265,17 +13334,26 @@ class TestCmdProtectUnprotectV2:
         assert repl._last_exit_code == 0
 
     def test_unprotect_success(self, repl):
-        with patch("domain.infrastructure.model_protector.unprotect_model", return_value={"unprotected": 2, "errors": []}):
+        with patch(
+            "domain.infrastructure._internal.model_protector.unprotect_model",
+            return_value={"unprotected": 2, "errors": []},
+        ):
             repl._cmd_unprotect("gpt2")
         assert repl._last_exit_code == 0
 
     def test_unprotect_with_errors(self, repl):
-        with patch("domain.infrastructure.model_protector.unprotect_model", return_value={"unprotected": 0, "errors": [{"error": "not found"}]}):
+        with patch(
+            "domain.infrastructure._internal.model_protector.unprotect_model",
+            return_value={"unprotected": 0, "errors": [{"error": "not found"}]},
+        ):
             repl._cmd_unprotect("nonexistent")
         assert repl._last_exit_code == 0
 
     def test_unprotect_exception(self, repl):
-        with patch("domain.infrastructure.model_protector.unprotect_model", side_effect=RuntimeError("fail")):
+        with patch(
+            "domain.infrastructure._internal.model_protector.unprotect_model",
+            side_effect=RuntimeError("fail"),
+        ):
             repl._cmd_unprotect("gpt2")
         assert repl._last_exit_code == 0
 
@@ -12310,13 +13388,13 @@ class TestCmdEventsExtraV2:
         assert repl._last_exit_code == 0
 
     def test_events_filter_match(self, repl):
-        with patch("domain.infrastructure.event_bus.get_event_bus") as mock_bus:
+        with patch("domain.infrastructure._internal.event_bus.get_event_bus") as mock_bus:
             mock_bus.return_value.get_recent.return_value = [{"type": "model.loaded", "data": {}}]
             repl._cmd_events("model")
         assert repl._last_exit_code == 0
 
     def test_events_empty(self, repl):
-        with patch("domain.infrastructure.event_bus.get_event_bus") as mock_bus:
+        with patch("domain.infrastructure._internal.event_bus.get_event_bus") as mock_bus:
             mock_bus.return_value.get_recent.return_value = []
             repl._cmd_events("")
         assert repl._last_exit_code == 0
@@ -12409,7 +13487,9 @@ class TestCmdLnExtraV2:
         assert repl._last_exit_code == 1
 
     def test_ln_hard(self, repl):
-        import tempfile, os
+        import os
+        import tempfile
+
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(b"test")
             src = f.name
@@ -12423,7 +13503,9 @@ class TestCmdLnExtraV2:
                 os.unlink(dst)
 
     def test_ln_symbolic(self, repl):
-        import tempfile, os
+        import os
+        import tempfile
+
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(b"test")
             src = f.name
@@ -12626,11 +13708,13 @@ class TestCmdSourceExtraV3:
 
     def test_source_valid(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
             f.write("echo hello\n")
             path = f.name
         repl._cmd_source(path)
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
@@ -12693,7 +13777,7 @@ class TestCmdClearExtra:
 class TestCmdNoteExtra:
     def test_note_no_args(self, repl):
         mock_notes = MagicMock()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
+        with patch.dict("sys.modules", {"notes": mock_notes}):
             repl._cmd_note("")
         assert repl._last_exit_code == 0
 
@@ -12787,11 +13871,13 @@ class TestCmdCutInternals:
 
     def test_cut_file(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("a\tb\tc\n")
             path = f.name
         repl._cmd_cut(f"-f1 {path}")
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
@@ -12891,10 +13977,12 @@ class TestCmdChmodExecution:
 
     def test_chmod_valid(self, repl):
         import tempfile
+
         with tempfile.NamedTemporaryFile(delete=False) as f:
             path = f.name
         repl._cmd_chmod(f"755 {path}")
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
@@ -12954,6 +14042,7 @@ class TestCmdBgFgJobs:
 
     def test_fg_with_job(self, repl):
         import threading
+
         mock_thread = MagicMock(spec=threading.Thread)
         mock_thread.name = "bg-1"
         mock_thread.is_alive.return_value = False
@@ -13006,6 +14095,7 @@ class TestCmdTuiExtra:
 class TestCmdTutorialExecution:
     def test_tutorial_quit_immediately(self, repl):
         from domain.shell._internal.io import MemoryIO
+
         mem = MemoryIO()
         mem.feed("q")
         old_io = repl.io
@@ -13018,6 +14108,7 @@ class TestCmdTutorialExecution:
 
     def test_tutorial_step_through(self, repl):
         from domain.shell._internal.io import MemoryIO
+
         mem = MemoryIO()
         # Feed empty strings for each step, then 'q' to quit
         for _ in range(15):
@@ -13043,7 +14134,7 @@ class TestCmdTrainCustomParams:
         mock_cmds = MagicMock()
         mock_cmds.train_distill.return_value = {"id": "j1", "status": "started"}
         repl.cmds = mock_cmds
-        with patch.object(repl, '_stream_train_progress'):
+        with patch.object(repl, "_stream_train_progress"):
             repl._cmd_train("distill shakespeare gpt2 10")
         assert repl._last_exit_code == 0
 
@@ -13054,7 +14145,7 @@ class TestCmdTrainCustomParams:
         mock_cmds = MagicMock()
         mock_cmds.train_hf.return_value = {"id": "j2", "status": "started"}
         repl.cmds = mock_cmds
-        with patch.object(repl, '_stream_train_progress'):
+        with patch.object(repl, "_stream_train_progress"):
             repl._cmd_train("hf gpt2 shakespeare 5")
         assert repl._last_exit_code == 0
 
@@ -13095,7 +14186,7 @@ class TestCmdTrainCustomParams:
         mock_cmds = MagicMock()
         mock_cmds.train_quick.return_value = {"id": "j3", "status": "started"}
         repl.cmds = mock_cmds
-        with patch.object(repl, '_stream_train_progress'):
+        with patch.object(repl, "_stream_train_progress"):
             repl._cmd_train("test_dataset my_run")
         assert repl._last_exit_code == 0
 
@@ -13120,7 +14211,7 @@ class TestCmdAgentsException:
         repl.os._api = mock_api
         mock_orch = MagicMock()
         mock_orch.execute.side_effect = RuntimeError("API down")
-        with patch('domain.agents._internal.multi.get_orchestrator', return_value=mock_orch):
+        with patch("domain.agents._internal.multi.get_orchestrator", return_value=mock_orch):
             repl._cmd_agents("do something")
         assert repl._last_exit_code == 0
 
@@ -13130,7 +14221,7 @@ class TestCmdAgentsException:
         repl.os._api = mock_api
         mock_orch = MagicMock()
         mock_orch.execute.return_value = {"response": None, "tasks": []}
-        with patch('domain.agents._internal.multi.get_orchestrator', return_value=mock_orch):
+        with patch("domain.agents._internal.multi.get_orchestrator", return_value=mock_orch):
             repl._cmd_agents("do something")
         assert repl._last_exit_code == 0
 
@@ -13140,7 +14231,7 @@ class TestCmdAgentsException:
         repl.os._api = mock_api
         mock_orch = MagicMock()
         mock_orch.execute.return_value = {"response": "done"}
-        with patch('domain.agents._internal.multi.get_orchestrator', return_value=mock_orch):
+        with patch("domain.agents._internal.multi.get_orchestrator", return_value=mock_orch):
             repl._cmd_agents("do something")
         assert repl._last_exit_code == 0
 
@@ -13152,7 +14243,9 @@ class TestCmdNoteEdgeCases:
     def test_note_list_invalid_limit(self, repl):
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("list --limit abc")
         assert repl._last_exit_code == 0
 
@@ -13169,7 +14262,9 @@ class TestCmdNoteEdgeCases:
         mock_note.gh_url = ""
         mock_note.date_str = "2026-01-01"
         mock_store.get_note.return_value = mock_note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("show abc123")
         assert repl._last_exit_code == 0
 
@@ -13177,14 +14272,18 @@ class TestCmdNoteEdgeCases:
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
         mock_store.sprints.return_value = ["S99"]
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("sprint S99")
         assert repl._last_exit_code == 0
 
     def test_note_timeline_empty(self, repl):
         mock_store = MagicMock()
         mock_store.timeline.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("timeline --days 0")
         assert repl._last_exit_code == 0
 
@@ -13235,11 +14334,13 @@ class TestCmdSeqThreeArgFloat:
 class TestCmdNlFile:
     def test_nl_file(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("line1\nline2\nline3\n")
             path = f.name
         repl._cmd_nl(path)
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
@@ -13254,14 +14355,16 @@ class TestCmdNlFile:
 class TestCmdDuMultipleTargets:
     def test_du_multiple_targets(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f1:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f1:
             f1.write("a" * 100)
             path1 = f1.name
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f2:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f2:
             f2.write("b" * 200)
             path2 = f2.name
         repl._cmd_du(f"-h {path1} {path2}")
         import os
+
         os.unlink(path1)
         os.unlink(path2)
         assert repl._last_exit_code == 0
@@ -13277,11 +14380,13 @@ class TestCmdDuMultipleTargets:
 class TestCmdDiffEdgeCases:
     def test_diff_one_arg(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("content")
             path = f.name
         repl._cmd_diff(path)
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 1
 
@@ -13292,6 +14397,7 @@ class TestCmdDiffEdgeCases:
 class TestCmdFindEdgeCases:
     def test_find_no_name(self, repl):
         import tempfile
+
         with tempfile.TemporaryDirectory() as d:
             repl._cmd_find(d)
             assert repl._last_exit_code == 1
@@ -13333,6 +14439,7 @@ class TestExecutePaths:
     def test_execute_exception_in_command(self, repl):
         def bad_handler(self, args):
             raise RuntimeError("boom")
+
         repl.COMMANDS["badcmd"] = bad_handler
         repl.execute("badcmd")
         assert repl._last_exit_code == 1
@@ -13341,6 +14448,7 @@ class TestExecutePaths:
     def test_execute_system_exit(self, repl):
         def sys_exit_handler(self, args):
             raise SystemExit(42)
+
         repl.COMMANDS["exitcmd"] = sys_exit_handler
         repl.execute("exitcmd")
         assert repl._last_exit_code == 42
@@ -13357,6 +14465,7 @@ class TestExecutePaths:
     def test_execute_background(self, repl):
         repl.execute("echo hello &")
         import time
+
         time.sleep(0.1)
         assert repl._last_exit_code == 0
 
@@ -13378,7 +14487,7 @@ class TestCmdTrainBranches:
         mock_cmds = MagicMock()
         mock_cmds.train_distill.return_value = {"id": "j1", "status": "started"}
         repl.cmds = mock_cmds
-        with patch.object(repl, '_stream_train_progress'):
+        with patch.object(repl, "_stream_train_progress"):
             repl._cmd_train("distill shakespeare gpt2")
         assert repl._last_exit_code == 0
 
@@ -13389,7 +14498,7 @@ class TestCmdTrainBranches:
         mock_cmds = MagicMock()
         mock_cmds.train_hf.return_value = {"id": "j2", "status": "started"}
         repl.cmds = mock_cmds
-        with patch.object(repl, '_stream_train_progress'):
+        with patch.object(repl, "_stream_train_progress"):
             repl._cmd_train("hf gpt2 shakespeare 10")
         assert repl._last_exit_code == 0
 
@@ -13458,7 +14567,7 @@ class TestCmdAgentsBranches:
         repl.os._api = mock_api
         mock_orch = MagicMock()
         mock_orch.execute.return_value = "simple string response"
-        with patch('domain.agents._internal.multi.get_orchestrator', return_value=mock_orch):
+        with patch("domain.agents._internal.multi.get_orchestrator", return_value=mock_orch):
             repl._cmd_agents("do something")
         assert repl._last_exit_code == 0
 
@@ -13470,75 +14579,97 @@ class TestCmdNoteSubcommands:
     def test_note_list_empty(self, repl):
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("list")
         assert repl._last_exit_code == 0
 
     def test_note_show_nonexistent(self, repl):
         mock_store = MagicMock()
         mock_store.get_note.return_value = None
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("show nonexistent")
         assert repl._last_exit_code == 0
 
     def test_note_new(self, repl):
         mock_store = MagicMock()
         mock_store.add_note.return_value = {"short_id": "abc123"}
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("new my title --tags tag1 --status wip")
         assert repl._last_exit_code == 0
 
     def test_note_new_no_title(self, repl):
         mock_store = MagicMock()
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("new")
         assert repl._last_exit_code == 1
 
     def test_note_sprint(self, repl):
         mock_store = MagicMock()
         mock_store.sprints.return_value = ["S1", "S2"]
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("sprint")
         assert repl._last_exit_code == 0
 
     def test_note_today(self, repl):
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("today")
         assert repl._last_exit_code == 0
 
     def test_note_tags(self, repl):
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("tags")
         assert repl._last_exit_code == 0
 
     def test_note_status(self, repl):
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("status")
         assert repl._last_exit_code == 0
 
     def test_note_search(self, repl):
         mock_store = MagicMock()
         mock_store.search_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("search test")
         assert repl._last_exit_code == 0
 
     def test_note_unknown_subcmd(self, repl):
         mock_store = MagicMock()
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("bogus")
         assert repl._last_exit_code == 1
 
     def test_note_delete(self, repl):
         mock_store = MagicMock()
         mock_store.delete_note.return_value = True
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("delete abc123")
         assert repl._last_exit_code == 0
 
@@ -13546,14 +14677,18 @@ class TestCmdNoteSubcommands:
         mock_store = MagicMock()
         mock_store.export_all.return_value = "exported content"
         mock_store.count.return_value = 5
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("export")
         assert repl._last_exit_code == 0
 
     def test_note_timeline(self, repl):
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("timeline")
         assert repl._last_exit_code == 0
 
@@ -13612,7 +14747,7 @@ class TestCmdTeeEdgeCases:
 
     def test_tee_permission_denied(self, repl):
         repl._piped_input = "hello\n"
-        with patch('builtins.open', side_effect=PermissionError("denied")):
+        with patch("builtins.open", side_effect=PermissionError("denied")):
             repl._cmd_tee("/proc/fake.txt")
         assert repl._last_exit_code == 1
 
@@ -13709,21 +14844,25 @@ class TestCmdFoldEdgeCases:
 class TestCmdOdEdgeCases:
     def test_od_default(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("hello\n")
             path = f.name
         repl._cmd_od(path)
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
     def test_od_file(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("hello\n")
             path = f.name
         repl._cmd_od(path)
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
@@ -13742,14 +14881,16 @@ class TestCmdPasteEdgeCases:
 
     def test_paste_two_files(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f1:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f1:
             f1.write("a\nb\nc\n")
             path1 = f1.name
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f2:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f2:
             f2.write("1\n2\n3\n")
             path2 = f2.name
         repl._cmd_paste(f"{path1} {path2}")
         import os
+
         os.unlink(path1)
         os.unlink(path2)
         assert repl._last_exit_code == 0
@@ -13790,11 +14931,13 @@ class TestCmdTacEdgeCases:
 
     def test_tac_file(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("line1\nline2\n")
             path = f.name
         repl._cmd_tac(path)
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
@@ -13819,11 +14962,13 @@ class TestCmdRevEdgeCases:
 
     def test_rev_file(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("hello\n")
             path = f.name
         repl._cmd_rev(path)
         import os
+
         os.unlink(path)
         assert repl._last_exit_code == 0
 
@@ -13889,6 +15034,7 @@ class TestCmdReadEdgeCases:
 
     def test_read_var(self, repl):
         from domain.shell._internal.io import MemoryIO
+
         mem = MemoryIO()
         mem.feed("test_value")
         old_io = repl.io
@@ -13902,6 +15048,7 @@ class TestCmdReadEdgeCases:
 
     def test_read_with_prompt(self, repl):
         from domain.shell._internal.io import MemoryIO
+
         mem = MemoryIO()
         mem.feed("hello")
         old_io = repl.io
@@ -13941,6 +15088,7 @@ class TestCmdBgEdgeCases:
 
     def test_bg_with_thread(self, repl):
         import threading
+
         t = threading.Thread(target=lambda: None)
         t.daemon = True
         repl._bg_threads = {0: t}
@@ -13968,6 +15116,7 @@ class TestCmdFgEdgeCases:
 
     def test_fg_done_thread(self, repl):
         import threading
+
         t = threading.Thread(target=lambda: None)
         t.daemon = True
         t.start()
@@ -13982,13 +15131,15 @@ class TestCmdFgEdgeCases:
 
 class TestModuleLevelFunctions:
     def test_color_enabled(self):
-        from domain.shell._internal.repl import _color, _C_CYAN, _C_RESET
+        from domain.shell._internal.repl import _C_CYAN, _C_RESET, _color
+
         result = _color("test", _C_CYAN)
         assert "test" in result
         assert _C_RESET in result
 
     def test_color_disabled(self):
         import domain.shell._internal.repl as mod
+
         old = mod._COLOR_ENABLED
         try:
             mod._COLOR_ENABLED = False
@@ -13999,70 +15150,79 @@ class TestModuleLevelFunctions:
 
     def test_fetch_model_names_exception(self):
         from domain.shell._internal.repl import _fetch_model_names
-        with patch('requests.get', side_effect=Exception("network")):
+
+        with patch("requests.get", side_effect=Exception("network")):
             result = _fetch_model_names()
         assert result == []
 
     def test_fetch_model_names_non_200(self):
         from domain.shell._internal.repl import _fetch_model_names
+
         mock_resp = MagicMock()
         mock_resp.status_code = 500
-        with patch('requests.get', return_value=mock_resp):
+        with patch("requests.get", return_value=mock_resp):
             result = _fetch_model_names()
         assert result == []
 
     def test_fetch_soul_names_exception(self):
         from domain.shell._internal.repl import _fetch_soul_names
-        with patch('requests.get', side_effect=Exception("network")):
+
+        with patch("requests.get", side_effect=Exception("network")):
             result = _fetch_soul_names()
         assert result == []
 
     def test_fetch_dataset_names_exception(self):
         from domain.shell._internal.repl import _fetch_dataset_names
-        with patch('requests.get', side_effect=Exception("network")):
+
+        with patch("requests.get", side_effect=Exception("network")):
             result = _fetch_dataset_names()
         assert result == []
 
     def test_fetch_checkpoint_names_exception(self):
         from domain.shell._internal.repl import _fetch_checkpoint_names
-        with patch('requests.get', side_effect=Exception("network")):
+
+        with patch("requests.get", side_effect=Exception("network")):
             result = _fetch_checkpoint_names()
         assert result == []
 
     def test_fetch_model_names_dict_response(self):
         from domain.shell._internal.repl import _fetch_model_names
+
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"models": [{"name": "gpt2"}, {"id": "bert"}]}
-        with patch('requests.get', return_value=mock_resp):
+        with patch("requests.get", return_value=mock_resp):
             result = _fetch_model_names()
         assert "gpt2" in result
         assert "bert" in result
 
     def test_fetch_soul_names_dict_response(self):
         from domain.shell._internal.repl import _fetch_soul_names
+
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"souls": [{"name": "friendly"}]}
-        with patch('requests.get', return_value=mock_resp):
+        with patch("requests.get", return_value=mock_resp):
             result = _fetch_soul_names()
         assert "friendly" in result
 
     def test_fetch_dataset_names_dict_response(self):
         from domain.shell._internal.repl import _fetch_dataset_names
+
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"datasets": [{"name": "shakespeare"}]}
-        with patch('requests.get', return_value=mock_resp):
+        with patch("requests.get", return_value=mock_resp):
             result = _fetch_dataset_names()
         assert "shakespeare" in result
 
     def test_fetch_checkpoint_names_dict_response(self):
         from domain.shell._internal.repl import _fetch_checkpoint_names
+
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"checkpoints": [{"name": "ckpt1"}]}
-        with patch('requests.get', return_value=mock_resp):
+        with patch("requests.get", return_value=mock_resp):
             result = _fetch_checkpoint_names()
         assert "ckpt1" in result
 
@@ -14073,6 +15233,7 @@ class TestModuleLevelFunctions:
 class TestCaptureOutput:
     def test_with_repl(self, repl):
         from domain.shell._internal.io import MemoryIO
+
         mem = MemoryIO()
         old_io = repl.io
         old_console_io = repl.console._io
@@ -14087,6 +15248,7 @@ class TestCaptureOutput:
 
     def test_without_repl(self):
         from domain.shell._internal.repl import _CaptureOutput
+
         with _CaptureOutput() as cap:
             print("test output")
         assert "test output" in cap.getvalue()
@@ -14291,16 +15453,19 @@ class TestExpandGlobsV2:
 class TestSplitPipe:
     def test_no_pipe(self, repl):
         from domain.shell._internal.repl import ShellREPL
+
         result = ShellREPL._split_pipe("echo hello")
         assert result == ["echo hello"]
 
     def test_simple_pipe(self, repl):
         from domain.shell._internal.repl import ShellREPL
+
         result = ShellREPL._split_pipe("echo hello | cat")
         assert result == ["echo hello", "cat"]
 
     def test_quoted_pipe(self, repl):
         from domain.shell._internal.repl import ShellREPL
+
         result = ShellREPL._split_pipe('echo "a|b" | cat')
         assert len(result) == 2
 
@@ -14370,9 +15535,12 @@ class TestCmdCatExtra:
         assert repl._last_exit_code == 1
 
     def test_cat_single_file(self, repl):
-        import tempfile, os
+        import os
+        import tempfile
+
         p = os.path.join(tempfile.gettempdir(), "test_cat_single")
-        with open(p, 'w') as f: f.write("hello\n")
+        with open(p, "w") as f:
+            f.write("hello\n")
         repl._cmd_cat(p)
         os.unlink(p)
         assert repl._last_exit_code == 0
@@ -14389,6 +15557,7 @@ class TestCmdCatExtra:
 class TestCmdMkdirExtra:
     def test_mkdir_existing(self, repl):
         import tempfile
+
         with tempfile.TemporaryDirectory() as d:
             repl._cmd_mkdir(d)
             assert repl._last_exit_code == 1
@@ -14404,6 +15573,7 @@ class TestCmdRmExtra:
 
     def test_rm_directory(self, repl):
         import tempfile
+
         with tempfile.TemporaryDirectory() as d:
             repl._cmd_rm(f"-r {d}")
             assert repl._last_exit_code == 0
@@ -14414,7 +15584,9 @@ class TestCmdRmExtra:
 
 class TestCmdTouchExtra:
     def test_touch_creates(self, repl):
-        import tempfile, os
+        import os
+        import tempfile
+
         path = os.path.join(tempfile.gettempdir(), "test_touch_extra")
         repl._cmd_touch(path)
         assert os.path.exists(path)
@@ -14448,17 +15620,23 @@ class TestCmdHeadTailExtra:
         assert repl._last_exit_code == 1
 
     def test_head_file(self, repl):
-        import tempfile, os
+        import os
+        import tempfile
+
         p = os.path.join(tempfile.gettempdir(), "test_head")
-        with open(p, 'w') as f: f.write("line1\nline2\nline3\n")
+        with open(p, "w") as f:
+            f.write("line1\nline2\nline3\n")
         repl._cmd_head(f"-2 {p}")
         os.unlink(p)
         assert repl._last_exit_code == 0
 
     def test_tail_file(self, repl):
-        import tempfile, os
+        import os
+        import tempfile
+
         p = os.path.join(tempfile.gettempdir(), "test_tail")
-        with open(p, 'w') as f: f.write("line1\nline2\nline3\n")
+        with open(p, "w") as f:
+            f.write("line1\nline2\nline3\n")
         repl._cmd_tail(f"-2 {p}")
         os.unlink(p)
         assert repl._last_exit_code == 0
@@ -14473,9 +15651,12 @@ class TestCmdWcExtra:
         assert repl._last_exit_code == 1
 
     def test_wc_file(self, repl):
-        import tempfile, os
+        import os
+        import tempfile
+
         p = os.path.join(tempfile.gettempdir(), "test_wc")
-        with open(p, 'w') as f: f.write("hello\nworld\n")
+        with open(p, "w") as f:
+            f.write("hello\nworld\n")
         repl._cmd_wc(p)
         os.unlink(p)
         assert repl._last_exit_code == 0
@@ -14669,6 +15850,7 @@ class TestCmdExportExtra2:
 class TestCmdPwdExtra:
     def test_pwd_returns_cwd(self, repl):
         import os
+
         out = _run_with_io(repl, [], lambda: repl._cmd_pwd(""))
         assert repl._last_exit_code == 0
         assert os.getcwd() in out
@@ -14684,7 +15866,7 @@ class TestCmdPwdExtra:
 
 class TestCmdEchoExtra:
     def test_echo_empty(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_echo(""))
+        _run_with_io(repl, [], lambda: repl._cmd_echo(""))
         assert repl._last_exit_code == 0
 
     def test_echo_single_word(self, repl):
@@ -14712,6 +15894,7 @@ class TestCmdCdExtra:
         assert repl._last_exit_code == 0
         import os
         import pathlib
+
         assert os.getcwd() == str(pathlib.Path.home())
 
     def test_cd_tilde_goes_home(self, repl):
@@ -14719,10 +15902,12 @@ class TestCmdCdExtra:
         assert repl._last_exit_code == 0
         import os
         import pathlib
+
         assert os.getcwd() == str(pathlib.Path.home())
 
     def test_cd_dash_returns_previous(self, repl, tmp_path):
         import os
+
         old = os.getcwd()
         repl._cmd_cd(str(tmp_path))
         repl._cmd_cd("-")
@@ -14734,7 +15919,7 @@ class TestCmdCdExtra:
         assert repl._last_exit_code == 1
 
     def test_cd_file_not_directory(self, repl, tmp_path):
-        import os
+
         f = tmp_path / "a_file.txt"
         f.write_text("hi")
         repl._cmd_cd(str(f))
@@ -14762,7 +15947,7 @@ class TestCmdExitExtra:
 class TestCmdHistoryExtra:
     def test_history_empty(self, repl):
         repl._history.clear()
-        out = _run_with_io(repl, [], lambda: repl._cmd_history(""))
+        _run_with_io(repl, [], lambda: repl._cmd_history(""))
         assert repl._last_exit_code == 0
 
     def test_history_with_entries(self, repl):
@@ -14804,11 +15989,12 @@ class TestCmdPermissionsExtra:
 
 class TestCmdPsExtra:
     def test_ps_empty(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_ps(""))
+        _run_with_io(repl, [], lambda: repl._cmd_ps(""))
         assert repl._last_exit_code == 0
 
     def test_ps_with_process(self, repl):
         from unittest.mock import MagicMock
+
         proc = MagicMock()
         proc.pid = 1
         proc.name = "test_proc"
@@ -14881,7 +16067,7 @@ class TestCmdShutdownExtra:
 
 class TestCmdAliasExtraV2:
     def test_alias_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_alias(""))
+        _run_with_io(repl, [], lambda: repl._cmd_alias(""))
         assert repl._last_exit_code == 0
 
     def test_alias_set(self, repl):
@@ -14970,6 +16156,7 @@ class TestCmdBasenameExtra:
 class TestCmdMktempExtra:
     def test_mktemp_creates_file(self, repl):
         import os
+
         out = _run_with_io(repl, [], lambda: repl._cmd_mktemp(""))
         path = out.strip()
         assert os.path.isfile(path)
@@ -14978,6 +16165,7 @@ class TestCmdMktempExtra:
 
     def test_mktemp_dir(self, repl):
         import os
+
         out = _run_with_io(repl, [], lambda: repl._cmd_mktemp("-d"))
         path = out.strip()
         assert os.path.isdir(path)
@@ -14995,7 +16183,7 @@ class TestCmdLnExtraV3:
         assert repl._last_exit_code == 1
 
     def test_ln_missing_target(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_ln("only_one"))
+        _run_with_io(repl, [], lambda: repl._cmd_ln("only_one"))
         assert repl._last_exit_code == 1
 
     def test_ln_hard_link(self, repl, tmp_path):
@@ -15083,7 +16271,7 @@ class TestCmdCommExtraV2:
         assert repl._last_exit_code == 1
 
     def test_comm_one_file(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_comm("only_one"))
+        _run_with_io(repl, [], lambda: repl._cmd_comm("only_one"))
         assert repl._last_exit_code == 1
 
     def test_comm_files(self, repl, tmp_path):
@@ -15099,7 +16287,7 @@ class TestCmdCommExtraV2:
     def test_comm_nonexistent_file(self, repl, tmp_path):
         f1 = tmp_path / "c_exist.txt"
         f1.write_text("a\n")
-        out = _run_with_io(repl, [], lambda: repl._cmd_comm(f"{f1} /nonexistent_comm_xyz"))
+        _run_with_io(repl, [], lambda: repl._cmd_comm(f"{f1} /nonexistent_comm_xyz"))
         assert repl._last_exit_code == 1
 
 
@@ -15150,7 +16338,7 @@ class TestCmdExpandExtra:
         assert "\t" not in out
 
     def test_expand_nonexistent(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_expand("/nonexistent_expand_xyz"))
+        _run_with_io(repl, [], lambda: repl._cmd_expand("/nonexistent_expand_xyz"))
         assert repl._last_exit_code == 1
 
 
@@ -15162,7 +16350,7 @@ class TestCmdUnexpandExtra:
 
     def test_unexpand_piped(self, repl):
         repl._piped_input = "        eight"
-        out = _run_with_io(repl, [], lambda: repl._cmd_unexpand(""))
+        _run_with_io(repl, [], lambda: repl._cmd_unexpand(""))
         assert repl._last_exit_code == 0
 
 
@@ -15195,12 +16383,12 @@ class TestCmdGrepFlags:
 
     def test_grep_no_match(self, repl):
         repl._piped_input = "apple\nbanana"
-        out = _run_with_io(repl, [], lambda: repl._cmd_grep("cherry"))
+        _run_with_io(repl, [], lambda: repl._cmd_grep("cherry"))
         assert repl._last_exit_code == 1
 
     def test_grep_invalid_regex(self, repl):
         repl._piped_input = "hello"
-        out = _run_with_io(repl, [], lambda: repl._cmd_grep("[invalid"))
+        _run_with_io(repl, [], lambda: repl._cmd_grep("[invalid"))
         assert repl._last_exit_code == 2
 
     def test_grep_file(self, repl, tmp_path):
@@ -15261,7 +16449,7 @@ class TestCmdShufExtraV2:
         assert set(lines) == {"alpha", "beta", "gamma"}
 
     def test_shuf_nonexistent(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_shuf("/nonexistent_shuf_xyz"))
+        _run_with_io(repl, [], lambda: repl._cmd_shuf("/nonexistent_shuf_xyz"))
         assert repl._last_exit_code == 1
 
     def test_shuf_piped(self, repl):
@@ -15318,7 +16506,7 @@ class TestCmdTeeExtra:
         f = tmp_path / "tee_append.txt"
         f.write_text("first\n")
         repl._piped_input = "second\n"
-        out = _run_with_io(repl, [], lambda: repl._cmd_tee(f"-a {f}"))
+        _run_with_io(repl, [], lambda: repl._cmd_tee(f"-a {f}"))
         content = f.read_text()
         assert "first" in content and "second" in content
 
@@ -15326,7 +16514,7 @@ class TestCmdTeeExtra:
         repl._piped_input = "multi\n"
         f1 = tmp_path / "tee_m1.txt"
         f2 = tmp_path / "tee_m2.txt"
-        out = _run_with_io(repl, [], lambda: repl._cmd_tee(f"{f1} {f2}"))
+        _run_with_io(repl, [], lambda: repl._cmd_tee(f"{f1} {f2}"))
         assert f1.read_text() == "multi\n"
         assert f2.read_text() == "multi\n"
 
@@ -15341,22 +16529,34 @@ class TestCmdProtectExtra:
 
     def test_protect_success(self, repl, tmp_path):
         from unittest.mock import patch as mp
+
         mock_result = {"protected": ["model.bin"], "errors": []}
-        with mp("domain.infrastructure.model_protector.protect_model", return_value=mock_result):
+        with mp(
+            "domain.infrastructure._internal.model_protector.protect_model",
+            return_value=mock_result,
+        ):
             out = _run_with_io(repl, [], lambda: repl._cmd_protect("mymodel"))
             assert "Protected 1" in out
 
     def test_protect_no_files(self, repl):
         from unittest.mock import patch as mp
+
         mock_result = {"protected": [], "errors": []}
-        with mp("domain.infrastructure.model_protector.protect_model", return_value=mock_result):
+        with mp(
+            "domain.infrastructure._internal.model_protector.protect_model",
+            return_value=mock_result,
+        ):
             out = _run_with_io(repl, [], lambda: repl._cmd_protect("mymodel"))
             assert "No files found" in out
 
     def test_protect_with_errors(self, repl):
         from unittest.mock import patch as mp
+
         mock_result = {"protected": ["a.bin"], "errors": [{"error": "perm denied"}]}
-        with mp("domain.infrastructure.model_protector.protect_model", return_value=mock_result):
+        with mp(
+            "domain.infrastructure._internal.model_protector.protect_model",
+            return_value=mock_result,
+        ):
             out = _run_with_io(repl, [], lambda: repl._cmd_protect("mymodel"))
             assert "Warning: perm denied" in out
 
@@ -15368,15 +16568,23 @@ class TestCmdUnprotectExtra:
 
     def test_unprotect_success(self, repl):
         from unittest.mock import patch as mp
+
         mock_result = {"unprotected": 3, "errors": []}
-        with mp("domain.infrastructure.model_protector.unprotect_model", return_value=mock_result):
+        with mp(
+            "domain.infrastructure._internal.model_protector.unprotect_model",
+            return_value=mock_result,
+        ):
             out = _run_with_io(repl, [], lambda: repl._cmd_unprotect("mymodel"))
             assert "Unprotected 3" in out
 
     def test_unprotect_none_found(self, repl):
         from unittest.mock import patch as mp
+
         mock_result = {"unprotected": 0, "errors": []}
-        with mp("domain.infrastructure.model_protector.unprotect_model", return_value=mock_result):
+        with mp(
+            "domain.infrastructure._internal.model_protector.unprotect_model",
+            return_value=mock_result,
+        ):
             out = _run_with_io(repl, [], lambda: repl._cmd_unprotect("mymodel"))
             assert "No protected files found" in out
 
@@ -15386,16 +16594,20 @@ class TestCmdUnprotectExtra:
 
 class TestCmdLsdevExtraV2:
     def test_lsdev_no_devices(self, repl):
-        from unittest.mock import patch as mp, PropertyMock
-        with mp.object(type(repl.os), 'devices', new_callable=PropertyMock, return_value=None):
+        from unittest.mock import PropertyMock
+        from unittest.mock import patch as mp
+
+        with mp.object(type(repl.os), "devices", new_callable=PropertyMock, return_value=None):
             out = _run_with_io(repl, [], lambda: repl._cmd_lsdev(""))
             assert "not available" in out.lower()
 
     def test_lsdev_with_devices(self, repl):
-        from unittest.mock import MagicMock, patch as mp, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock
+        from unittest.mock import patch as mp
+
         mock_dev = MagicMock()
         mock_dev.list_devices.return_value = "  /dev/null\n  /dev/zero"
-        with mp.object(type(repl.os), 'devices', new_callable=PropertyMock, return_value=mock_dev):
+        with mp.object(type(repl.os), "devices", new_callable=PropertyMock, return_value=mock_dev):
             out = _run_with_io(repl, [], lambda: repl._cmd_lsdev(""))
             assert "Device nodes" in out
             assert "/dev/null" in out
@@ -15407,15 +16619,21 @@ class TestCmdLsdevExtraV2:
 class TestCmdEventsExtraV3:
     def test_events_no_bus(self, repl):
         from unittest.mock import patch as mp
-        with mp("domain.infrastructure.event_bus.get_event_bus", side_effect=Exception("no bus")):
+
+        with mp(
+            "domain.infrastructure._internal.event_bus.get_event_bus",
+            side_effect=Exception("no bus"),
+        ):
             out = _run_with_io(repl, [], lambda: repl._cmd_events(""))
             assert "not available" in out
 
     def test_events_empty_history(self, repl):
-        from unittest.mock import MagicMock, patch as mp
+        from unittest.mock import MagicMock
+        from unittest.mock import patch as mp
+
         mock_bus = MagicMock()
         mock_bus.history.return_value = []
-        with mp("domain.infrastructure.event_bus.get_event_bus", return_value=mock_bus):
+        with mp("domain.infrastructure._internal.event_bus.get_event_bus", return_value=mock_bus):
             out = _run_with_io(repl, [], lambda: repl._cmd_events(""))
             assert "No events" in out
 
@@ -15426,12 +16644,14 @@ class TestCmdEventsExtraV3:
 class TestCmdMetricsExtra:
     def test_metrics_error(self, repl):
         from unittest.mock import MagicMock
+
         repl.cmds.system_metrics = MagicMock(return_value={"error": "connection refused"})
         out = _run_with_io(repl, [], lambda: repl._cmd_metrics(""))
         assert "connection refused" in out
 
     def test_metrics_ok(self, repl):
         from unittest.mock import MagicMock
+
         repl.cmds.system_metrics = MagicMock(return_value={"cpu": 50.0, "mem": 1024})
         out = _run_with_io(repl, [], lambda: repl._cmd_metrics(""))
         assert "cpu" in out
@@ -15456,7 +16676,7 @@ class TestCmdMvOverwrite:
         assert "Usage" in out
 
     def test_mv_one_arg(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_mv("only_one"))
+        _run_with_io(repl, [], lambda: repl._cmd_mv("only_one"))
         assert repl._last_exit_code == 1
 
 
@@ -15478,45 +16698,63 @@ class TestCmdCpEdgeCases:
 
 class TestCmdSvcExtraV2:
     def test_svc_no_init(self, repl):
-        from unittest.mock import patch as mp, PropertyMock
-        with mp.object(type(repl.os), 'init_system', new_callable=PropertyMock, return_value=None):
+        from unittest.mock import PropertyMock
+        from unittest.mock import patch as mp
+
+        with mp.object(type(repl.os), "init_system", new_callable=PropertyMock, return_value=None):
             out = _run_with_io(repl, [], lambda: repl._cmd_svc(""))
             assert "not booted" in out
             assert repl._last_exit_code == 1
 
     def test_svc_list(self, repl):
-        from unittest.mock import MagicMock, patch as mp, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock
+        from unittest.mock import patch as mp
+
         mock_init = MagicMock()
         mock_init.service_table.return_value = "  svc1  running\n  svc2  stopped"
-        with mp.object(type(repl.os), 'init_system', new_callable=PropertyMock, return_value=mock_init):
+        with mp.object(
+            type(repl.os), "init_system", new_callable=PropertyMock, return_value=mock_init
+        ):
             out = _run_with_io(repl, [], lambda: repl._cmd_svc("list"))
             assert "svc1" in out
             assert "svc2" in out
 
     def test_svc_status(self, repl):
-        from unittest.mock import MagicMock, patch as mp, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock
+        from unittest.mock import patch as mp
+
         mock_init = MagicMock()
         mock_mgr = MagicMock()
         mock_mgr.status_line.return_value = "  svc1  running"
         mock_mgr.instance.log = ["started", "ready"]
         mock_init.get_manager.return_value = mock_mgr
-        with mp.object(type(repl.os), 'init_system', new_callable=PropertyMock, return_value=mock_init):
+        with mp.object(
+            type(repl.os), "init_system", new_callable=PropertyMock, return_value=mock_init
+        ):
             out = _run_with_io(repl, [], lambda: repl._cmd_svc("status svc1"))
             assert "running" in out
 
     def test_svc_start(self, repl):
-        from unittest.mock import MagicMock, patch as mp, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock
+        from unittest.mock import patch as mp
+
         mock_init = MagicMock()
         mock_init.start.return_value = True
-        with mp.object(type(repl.os), 'init_system', new_callable=PropertyMock, return_value=mock_init):
-            out = _run_with_io(repl, [], lambda: repl._cmd_svc("start svc1"))
+        with mp.object(
+            type(repl.os), "init_system", new_callable=PropertyMock, return_value=mock_init
+        ):
+            _run_with_io(repl, [], lambda: repl._cmd_svc("start svc1"))
             assert repl._last_exit_code == 0
 
     def test_svc_stop(self, repl):
-        from unittest.mock import MagicMock, patch as mp, PropertyMock
+        from unittest.mock import MagicMock, PropertyMock
+        from unittest.mock import patch as mp
+
         mock_init = MagicMock()
-        with mp.object(type(repl.os), 'init_system', new_callable=PropertyMock, return_value=mock_init):
-            out = _run_with_io(repl, [], lambda: repl._cmd_svc("stop svc1"))
+        with mp.object(
+            type(repl.os), "init_system", new_callable=PropertyMock, return_value=mock_init
+        ):
+            _run_with_io(repl, [], lambda: repl._cmd_svc("stop svc1"))
             assert repl._last_exit_code == 0
 
 
@@ -15610,7 +16848,7 @@ class TestCmdNlDeeper:
         assert "2\tbb" in out
 
     def test_nl_nonexistent(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_nl("/nonexistent_nl_xyz"))
+        _run_with_io(repl, [], lambda: repl._cmd_nl("/nonexistent_nl_xyz"))
         assert repl._last_exit_code == 1
 
 
@@ -15623,7 +16861,7 @@ class TestCmdFoldDeeper:
 
     def test_fold_short_flag(self, repl):
         repl._piped_input = "abcdefghij\n"
-        out = _run_with_io(repl, [], lambda: repl._cmd_fold("-w5"))
+        _run_with_io(repl, [], lambda: repl._cmd_fold("-w5"))
         assert repl._last_exit_code == 0
 
     def test_fold_file(self, repl, tmp_path):
@@ -15753,7 +16991,7 @@ class TestCmdReadDeeper:
 
 class TestCmdTimeExtra:
     def test_time_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_time(""))
+        _run_with_io(repl, [], lambda: repl._cmd_time(""))
         assert repl._last_exit_code == 1
 
     def test_time_with_echo(self, repl):
@@ -15800,15 +17038,17 @@ class TestCmdSleepDeeper:
 class TestCmdKillDeeper:
     def test_kill_with_process(self, repl):
         from unittest.mock import MagicMock
+
         repl.cmds.kill = MagicMock(return_value={"ok": True})
-        out = _run_with_io(repl, [], lambda: repl._cmd_kill("123"))
+        _run_with_io(repl, [], lambda: repl._cmd_kill("123"))
         assert repl._last_exit_code == 0
 
     def test_kill_invalid(self, repl):
         from unittest.mock import MagicMock
+
         repl.cmds.kill = MagicMock(side_effect=Exception("not found"))
         try:
-            out = _run_with_io(repl, [], lambda: repl._cmd_kill("999"))
+            _run_with_io(repl, [], lambda: repl._cmd_kill("999"))
         except Exception:
             pass
 
@@ -15822,7 +17062,7 @@ class TestCmdLognameDeeper:
 
 class TestCmdWhoDeeper:
     def test_who_returns_value(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_who(""))
+        _run_with_io(repl, [], lambda: repl._cmd_who(""))
         assert repl._last_exit_code == 0
 
 
@@ -15888,7 +17128,7 @@ class TestCmdXargsDeeper:
 
     def test_xargs_with_n_flag(self, repl):
         repl._piped_input = "1 2 3 4 5"
-        out = _run_with_io(repl, [], lambda: repl._cmd_xargs("-n 2 echo"))
+        _run_with_io(repl, [], lambda: repl._cmd_xargs("-n 2 echo"))
         assert repl._last_exit_code == 0
 
 
@@ -15921,7 +17161,8 @@ class TestCmdCommDeeper:
 class TestCmdTuiExtraV2:
     def test_tui_import_error(self, repl):
         from unittest.mock import patch as mp
-        with mp.dict('sys.modules', {'domain.shell._internal.tui_repl': None}):
+
+        with mp.dict("sys.modules", {"domain.shell._internal.tui_repl": None}):
             out = _run_with_io(repl, [], lambda: repl._cmd_tui(""))
             assert "not available" in out.lower() or "error" in out.lower()
 
@@ -15983,6 +17224,7 @@ class TestDispatch:
     def test_dispatch_keyboard_interrupt(self, repl):
         def raise_kb(self_repl, args):
             raise KeyboardInterrupt()
+
         repl.COMMANDS["kbcmd"] = raise_kb
         try:
             repl._dispatch("kbcmd")
@@ -16017,6 +17259,7 @@ class TestDispatch:
     def test_dispatch_command_exception(self, repl):
         def bad_handler(self_repl, args):
             raise RuntimeError("test boom")
+
         repl.COMMANDS["boomcmd"] = bad_handler
         try:
             repl._dispatch("boomcmd")
@@ -16158,32 +17401,35 @@ class TestNoteStatusSummary:
 
 class TestInterpretNatural:
     def test_processes_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("show me running processes"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("show me running processes"))
         assert repl._last_exit_code == 0
 
     def test_models_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("what models are available"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("what models are available"))
         assert repl._last_exit_code == 0
 
     def test_health_keyword(self, repl):
-        with patch("domain.shell._internal.commands.ShellCommands.health", return_value={"status": "healthy"}):
-            out = _run_with_io(repl, [], lambda: repl._interpret_natural("check health status"))
+        with patch(
+            "domain.shell._internal.commands.ShellCommands.health",
+            return_value={"status": "healthy"},
+        ):
+            _run_with_io(repl, [], lambda: repl._interpret_natural("check health status"))
         assert repl._last_exit_code == 0
 
     def test_dataset_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("show datasets"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("show datasets"))
         assert repl._last_exit_code == 0
 
     def test_knowledge_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("show knowledge facts"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("show knowledge facts"))
         assert repl._last_exit_code == 0
 
     def test_checkpoint_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("list checkpoints"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("list checkpoints"))
         assert repl._last_exit_code == 0
 
     def test_metric_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("show cpu metrics"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("show cpu metrics"))
         assert repl._last_exit_code == 0
 
 
@@ -16248,23 +17494,23 @@ class TestCmdVmPermsDeeper:
         assert "Permission" in out
 
     def test_vmperms_list(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_vmperms("list"))
+        _run_with_io(repl, [], lambda: repl._cmd_vmperms("list"))
         assert repl._last_exit_code == 0
 
     def test_vmperms_allow(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_vmperms("allow user ls"))
+        _run_with_io(repl, [], lambda: repl._cmd_vmperms("allow user ls"))
         assert repl._last_exit_code == 0
 
     def test_vmperms_deny(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_vmperms("deny user ls"))
+        _run_with_io(repl, [], lambda: repl._cmd_vmperms("deny user ls"))
         assert repl._last_exit_code == 0
 
     def test_vmperms_revoke(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_vmperms("revoke user ls"))
+        _run_with_io(repl, [], lambda: repl._cmd_vmperms("revoke user ls"))
         assert repl._last_exit_code == 0
 
     def test_vmperms_audit(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_vmperms("audit"))
+        _run_with_io(repl, [], lambda: repl._cmd_vmperms("audit"))
         assert repl._last_exit_code == 0
 
     def test_vmperms_help(self, repl):
@@ -16323,23 +17569,23 @@ class TestCmdTutorialDeeper:
 
 class TestCmdConfirmDeeper:
     def test_confirm_on(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_confirm("on"))
+        _run_with_io(repl, [], lambda: repl._cmd_confirm("on"))
         assert repl._last_exit_code == 0
 
     def test_confirm_off(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_confirm("off"))
+        _run_with_io(repl, [], lambda: repl._cmd_confirm("off"))
         assert repl._last_exit_code == 0
 
     def test_confirm_yes(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_confirm("yes"))
+        _run_with_io(repl, [], lambda: repl._cmd_confirm("yes"))
         assert repl._last_exit_code == 0
 
     def test_confirm_no(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_confirm("no"))
+        _run_with_io(repl, [], lambda: repl._cmd_confirm("no"))
         assert repl._last_exit_code == 0
 
     def test_confirm_status(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_confirm(""))
+        _run_with_io(repl, [], lambda: repl._cmd_confirm(""))
         assert repl._last_exit_code == 0
 
 
@@ -16348,7 +17594,7 @@ class TestCmdConfirmDeeper:
 
 class TestCmdAgentsDeeper:
     def test_agents_list(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_agents("list"))
+        _run_with_io(repl, [], lambda: repl._cmd_agents("list"))
         assert repl._last_exit_code == 0
 
     def test_agents_empty(self, repl):
@@ -16400,13 +17646,13 @@ class TestCmdSourceDeeper:
     def test_source_with_pipeline(self, repl, tmp_path):
         src = tmp_path / "src_pipe.sh"
         src.write_text("echo pipe_test | wc\n")
-        out = _run_with_io(repl, [], lambda: repl._cmd_source(str(src)))
+        _run_with_io(repl, [], lambda: repl._cmd_source(str(src)))
         assert repl._last_exit_code == 0
 
     def test_source_with_bg(self, repl, tmp_path):
         src = tmp_path / "src_bg.sh"
         src.write_text("echo bg_test &\n")
-        out = _run_with_io(repl, [], lambda: repl._cmd_source(str(src)))
+        _run_with_io(repl, [], lambda: repl._cmd_source(str(src)))
         assert repl._last_exit_code == 0
 
     def test_source_with_error_line(self, repl, tmp_path):
@@ -16532,7 +17778,7 @@ class TestCmdTrDeeper:
 
     def test_tr_no_input(self, repl):
         repl._piped_input = None
-        out = _run_with_io(repl, [], lambda: repl._cmd_tr("a b"))
+        _run_with_io(repl, [], lambda: repl._cmd_tr("a b"))
         assert repl._last_exit_code == 1
 
 
@@ -16566,7 +17812,7 @@ class TestCmdNlDeeperV2:
 
     def test_nl_no_input(self, repl):
         repl._piped_input = None
-        out = _run_with_io(repl, [], lambda: repl._cmd_nl(""))
+        _run_with_io(repl, [], lambda: repl._cmd_nl(""))
         assert repl._last_exit_code == 1
 
 
@@ -16591,15 +17837,15 @@ class TestCmdFoldDeeperV2:
 
 class TestCmdBgFgDeeper:
     def test_bg_no_jobs(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_bg(""))
+        _run_with_io(repl, [], lambda: repl._cmd_bg(""))
         assert repl._last_exit_code == 0
 
     def test_fg_no_jobs(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_fg(""))
+        _run_with_io(repl, [], lambda: repl._cmd_fg(""))
         assert repl._last_exit_code == 0
 
     def test_jobs_empty(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_bg(""))
+        _run_with_io(repl, [], lambda: repl._cmd_bg(""))
         assert repl._last_exit_code == 0
 
 
@@ -16608,7 +17854,7 @@ class TestCmdBgFgDeeper:
 
 class TestCmdExportDeeper:
     def test_export_with_value(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_export("MYVAR=hello"))
+        _run_with_io(repl, [], lambda: repl._cmd_export("MYVAR=hello"))
         assert repl._last_exit_code == 0
 
     def test_export_empty(self, repl):
@@ -16621,11 +17867,11 @@ class TestCmdExportDeeper:
 
 class TestCmdSetDeeper:
     def test_set_with_value(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_set("MYVAR=world"))
+        _run_with_io(repl, [], lambda: repl._cmd_set("MYVAR=world"))
         assert repl._last_exit_code == 0
 
     def test_set_empty(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_set(""))
+        _run_with_io(repl, [], lambda: repl._cmd_set(""))
         assert repl._last_exit_code == 0
 
 
@@ -16634,7 +17880,7 @@ class TestCmdSetDeeper:
 
 class TestCmdAliasDeeper:
     def test_alias_with_equals(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_alias("ll=ls -la"))
+        _run_with_io(repl, [], lambda: repl._cmd_alias("ll=ls -la"))
         assert repl._last_exit_code == 0
 
     def test_alias_list(self, repl):
@@ -16647,7 +17893,7 @@ class TestCmdAliasDeeper:
 
 class TestCmdUnaliasDeeper:
     def test_unalias_nonexistent(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_unalias("nonexistent"))
+        _run_with_io(repl, [], lambda: repl._cmd_unalias("nonexistent"))
         assert repl._last_exit_code == 0
 
 
@@ -16673,7 +17919,7 @@ class TestCmdFcDeeper:
 
     def test_fc_re_exec(self, repl):
         repl._history.append("echo fc_reexec")
-        out = _run_with_io(repl, [], lambda: repl._cmd_fc("1"))
+        _run_with_io(repl, [], lambda: repl._cmd_fc("1"))
         assert repl._last_exit_code == 0
 
 
@@ -16682,7 +17928,7 @@ class TestCmdFcDeeper:
 
 class TestCmdChmodDeeper:
     def test_chmod_nonexistent(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_chmod("755 /nonexistent"))
+        _run_with_io(repl, [], lambda: repl._cmd_chmod("755 /nonexistent"))
         assert repl._last_exit_code == 1
 
 
@@ -16704,11 +17950,11 @@ class TestCmdDiffDeeper:
         f2 = tmp_path / "b.txt"
         f1.write_text("same\n")
         f2.write_text("same\n")
-        out = _run_with_io(repl, [], lambda: repl._cmd_diff(str(f1) + " " + str(f2)))
+        _run_with_io(repl, [], lambda: repl._cmd_diff(str(f1) + " " + str(f2)))
         assert repl._last_exit_code == 0
 
     def test_diff_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_diff(""))
+        _run_with_io(repl, [], lambda: repl._cmd_diff(""))
         assert repl._last_exit_code == 1
 
 
@@ -16717,11 +17963,11 @@ class TestCmdDiffDeeper:
 
 class TestCmdStatDeeper:
     def test_stat_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_stat(""))
+        _run_with_io(repl, [], lambda: repl._cmd_stat(""))
         assert repl._last_exit_code == 1
 
     def test_stat_nonexistent(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_stat("/nonexistent"))
+        _run_with_io(repl, [], lambda: repl._cmd_stat("/nonexistent"))
         assert repl._last_exit_code == 1
 
 
@@ -16730,7 +17976,7 @@ class TestCmdStatDeeper:
 
 class TestCmdLnDeeper:
     def test_ln_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_ln(""))
+        _run_with_io(repl, [], lambda: repl._cmd_ln(""))
         assert repl._last_exit_code == 1
 
 
@@ -16739,7 +17985,7 @@ class TestCmdLnDeeper:
 
 class TestCmdMktempDeeper:
     def test_mktemp_creates_file(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_mktemp(""))
+        _run_with_io(repl, [], lambda: repl._cmd_mktemp(""))
         assert repl._last_exit_code == 0
 
 
@@ -16748,7 +17994,7 @@ class TestCmdMktempDeeper:
 
 class TestCmdRealpathDeeperV2:
     def test_realpath_dot(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_realpath("."))
+        _run_with_io(repl, [], lambda: repl._cmd_realpath("."))
         assert repl._last_exit_code == 0
 
 
@@ -16824,7 +18070,7 @@ class TestCmdLognameDeeperV2:
 
 class TestCmdWhoDeeperV2:
     def test_who_returns_output(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_who(""))
+        _run_with_io(repl, [], lambda: repl._cmd_who(""))
         assert repl._last_exit_code == 0
 
 
@@ -16833,7 +18079,7 @@ class TestCmdWhoDeeperV2:
 
 class TestCmdUptimeDeeper:
     def test_uptime_returns_output(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_uptime(""))
+        _run_with_io(repl, [], lambda: repl._cmd_uptime(""))
         assert repl._last_exit_code == 0
 
 
@@ -16851,7 +18097,7 @@ class TestCmdDateDeeper:
 
 class TestCmdCalDeeper:
     def test_cal_current_month(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_cal(""))
+        _run_with_io(repl, [], lambda: repl._cmd_cal(""))
         assert repl._last_exit_code == 0
 
 
@@ -16869,7 +18115,7 @@ class TestCmdSleepDeeperV2:
 
 class TestCmdClearDeeper:
     def test_clear(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_clear(""))
+        _run_with_io(repl, [], lambda: repl._cmd_clear(""))
         assert repl._last_exit_code == 0
 
 
@@ -16878,7 +18124,7 @@ class TestCmdClearDeeper:
 
 class TestCmdProtectDeeper:
     def test_protect_show(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_protect(""))
+        _run_with_io(repl, [], lambda: repl._cmd_protect(""))
         assert repl._last_exit_code == 0
 
 
@@ -16887,7 +18133,7 @@ class TestCmdProtectDeeper:
 
 class TestCmdUnprotectDeeper:
     def test_unprotect_show(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_unprotect(""))
+        _run_with_io(repl, [], lambda: repl._cmd_unprotect(""))
         assert repl._last_exit_code == 0
 
 
@@ -16896,7 +18142,7 @@ class TestCmdUnprotectDeeper:
 
 class TestCmdLsdevDeeper:
     def test_lsdev_empty(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_lsdev(""))
+        _run_with_io(repl, [], lambda: repl._cmd_lsdev(""))
         assert repl._last_exit_code == 0
 
 
@@ -16905,7 +18151,7 @@ class TestCmdLsdevDeeper:
 
 class TestCmdEventsDeeper:
     def test_events_empty(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_events(""))
+        _run_with_io(repl, [], lambda: repl._cmd_events(""))
         assert repl._last_exit_code == 0
 
 
@@ -16914,7 +18160,7 @@ class TestCmdEventsDeeper:
 
 class TestCmdMetricsDeeper:
     def test_metrics_returns_output(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_metrics(""))
+        _run_with_io(repl, [], lambda: repl._cmd_metrics(""))
         assert repl._last_exit_code == 0
 
 
@@ -16923,11 +18169,11 @@ class TestCmdMetricsDeeper:
 
 class TestCmdHelpDeeper:
     def test_help_with_command(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_help("echo"))
+        _run_with_io(repl, [], lambda: repl._cmd_help("echo"))
         assert repl._last_exit_code == 0
 
     def test_help_unknown_command(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_help("nonexistent"))
+        _run_with_io(repl, [], lambda: repl._cmd_help("nonexistent"))
         assert repl._last_exit_code == 0
 
 
@@ -16936,7 +18182,7 @@ class TestCmdHelpDeeper:
 
 class TestCmdTuiDeeper:
     def test_tui_import_error(self, repl):
-        with patch.dict('sys.modules', {'domain.shell._internal.tui_repl': None}):
+        with patch.dict("sys.modules", {"domain.shell._internal.tui_repl": None}):
             out = _run_with_io(repl, [], lambda: repl._cmd_tui(""))
             assert "TUI" in out or "not available" in out.lower() or repl._last_exit_code == 1
 
@@ -16953,7 +18199,7 @@ class TestCmdRenderDeeper:
     def test_render_scene(self, repl):
         mock_dev = MagicMock()
         repl._render_device = mock_dev
-        out = _run_with_io(repl, [], lambda: repl._cmd_render("scene demo"))
+        _run_with_io(repl, [], lambda: repl._cmd_render("scene demo"))
         assert repl._last_exit_code == 0
 
 
@@ -17007,7 +18253,7 @@ class TestCmdTrainDeeper:
 
 class TestCmdStatusDeeper:
     def test_status_returns_output(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_status(""))
+        _run_with_io(repl, [], lambda: repl._cmd_status(""))
         assert repl._last_exit_code == 0
 
 
@@ -17016,7 +18262,7 @@ class TestCmdStatusDeeper:
 
 class TestCmdUptimeDeeper2:
     def test_uptime_returns_output(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_uptime(""))
+        _run_with_io(repl, [], lambda: repl._cmd_uptime(""))
         assert repl._last_exit_code == 0
 
 
@@ -17025,7 +18271,7 @@ class TestCmdUptimeDeeper2:
 
 class TestCmdPsDeeper:
     def test_ps_returns_output(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_ps(""))
+        _run_with_io(repl, [], lambda: repl._cmd_ps(""))
         assert repl._last_exit_code == 0
 
 
@@ -17043,7 +18289,7 @@ class TestCmdKillDeeper2:
 
 class TestCmdBootDeeper:
     def test_boot_returns_output(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_boot(""))
+        _run_with_io(repl, [], lambda: repl._cmd_boot(""))
         assert repl._last_exit_code == 0
 
 
@@ -17052,7 +18298,7 @@ class TestCmdBootDeeper:
 
 class TestCmdShutdownDeeper:
     def test_shutdown_returns_output(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_shutdown(""))
+        _run_with_io(repl, [], lambda: repl._cmd_shutdown(""))
         assert repl._last_exit_code == 0
 
 
@@ -17088,7 +18334,7 @@ class TestCmdDenyDeeper:
 
 class TestCmdPermissionsDeeper:
     def test_permissions_returns_output(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_permissions(""))
+        _run_with_io(repl, [], lambda: repl._cmd_permissions(""))
         assert repl._last_exit_code == 0
 
 
@@ -17109,7 +18355,7 @@ class TestCmdNoteDeeper:
 
 class TestCmdLogsDeeper:
     def test_logs_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_logs(""))
+        _run_with_io(repl, [], lambda: repl._cmd_logs(""))
         assert repl._last_exit_code == 0
 
 
@@ -17118,7 +18364,7 @@ class TestCmdLogsDeeper:
 
 class TestCmdWhichDeeper:
     def test_which_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_which(""))
+        _run_with_io(repl, [], lambda: repl._cmd_which(""))
         assert repl._last_exit_code == 1
 
 
@@ -17127,7 +18373,7 @@ class TestCmdWhichDeeper:
 
 class TestCmdTypeDeeper:
     def test_type_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_type(""))
+        _run_with_io(repl, [], lambda: repl._cmd_type(""))
         assert repl._last_exit_code == 1
 
 
@@ -17166,7 +18412,7 @@ class TestCmdWatchDeeper2:
 class TestCmdXargsDeeper2:
     def test_xargs_piped(self, repl):
         repl._piped_input = "file1.txt\nfile2.txt"
-        out = _run_with_io(repl, [], lambda: repl._cmd_xargs("echo"))
+        _run_with_io(repl, [], lambda: repl._cmd_xargs("echo"))
         assert repl._last_exit_code == 0
 
 
@@ -17175,7 +18421,7 @@ class TestCmdXargsDeeper2:
 
 class TestCmdCommDeeper2:
     def test_comm_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_comm(""))
+        _run_with_io(repl, [], lambda: repl._cmd_comm(""))
         assert repl._last_exit_code == 1
 
 
@@ -17196,7 +18442,7 @@ class TestCmdYesDeeper2:
 
 class TestCmdEnvDeeper2:
     def test_env_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_env(""))
+        _run_with_io(repl, [], lambda: repl._cmd_env(""))
         assert repl._last_exit_code == 0
 
 
@@ -17205,7 +18451,7 @@ class TestCmdEnvDeeper2:
 
 class TestCmdShufDeeper2:
     def test_shuf_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_shuf(""))
+        _run_with_io(repl, [], lambda: repl._cmd_shuf(""))
         assert repl._last_exit_code == 1
 
 
@@ -17224,7 +18470,7 @@ class TestCmdRevDeeper2:
 
 class TestCmdPasteDeeper2:
     def test_paste_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_paste(""))
+        _run_with_io(repl, [], lambda: repl._cmd_paste(""))
         assert repl._last_exit_code == 1
 
 
@@ -17243,7 +18489,7 @@ class TestCmdTeeDeeper2:
 
 class TestCmdOdDeeper:
     def test_od_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_od(""))
+        _run_with_io(repl, [], lambda: repl._cmd_od(""))
         assert repl._last_exit_code == 1
 
 
@@ -17445,14 +18691,14 @@ class TestCmdCdDeeper:
         assert "not a directory" in out.lower()
 
     def test_cd_no_such_dir(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_cd("/nonexistent/path"))
+        _run_with_io(repl, [], lambda: repl._cmd_cd("/nonexistent/path"))
         assert repl._last_exit_code == 1
 
     def test_cd_permission_denied(self, repl, tmp_path):
         d = tmp_path / "noperm"
         d.mkdir()
         d.chmod(0o000)
-        out = _run_with_io(repl, [], lambda: repl._cmd_cd(str(d)))
+        _run_with_io(repl, [], lambda: repl._cmd_cd(str(d)))
         assert repl._last_exit_code == 1
         d.chmod(0o755)
 
@@ -17462,7 +18708,7 @@ class TestCmdCdDeeper:
 
 class TestCmdLsDeeper:
     def test_ls_no_such_dir(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_ls("/nonexistent"))
+        _run_with_io(repl, [], lambda: repl._cmd_ls("/nonexistent"))
         assert repl._last_exit_code == 1
 
     def test_ls_with_files(self, repl, tmp_path):
@@ -17477,7 +18723,7 @@ class TestCmdLsDeeper:
             os.chdir(old)
 
     def test_ls_current_dir(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_ls("."))
+        _run_with_io(repl, [], lambda: repl._cmd_ls("."))
         assert repl._last_exit_code == 0
 
 
@@ -17491,12 +18737,12 @@ class TestCmdCatDeeper:
         assert "piped content" in out
 
     def test_cat_nonexistent(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_cat("/nonexistent"))
+        _run_with_io(repl, [], lambda: repl._cmd_cat("/nonexistent"))
         assert repl._last_exit_code == 1
 
     def test_cat_no_args_no_pipe(self, repl):
         repl._piped_input = None
-        out = _run_with_io(repl, [], lambda: repl._cmd_cat(""))
+        _run_with_io(repl, [], lambda: repl._cmd_cat(""))
         assert repl._last_exit_code == 1
 
 
@@ -17505,7 +18751,7 @@ class TestCmdCatDeeper:
 
 class TestCmdRmDeeper:
     def test_rm_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_rm(""))
+        _run_with_io(repl, [], lambda: repl._cmd_rm(""))
         assert repl._last_exit_code == 1
 
     def test_rm_nonexistent_no_force(self, repl):
@@ -17515,7 +18761,7 @@ class TestCmdRmDeeper:
 
     def test_rm_nonexistent_with_force(self, repl):
         repl._perms._granted.add("rm")
-        out = _run_with_io(repl, [], lambda: repl._cmd_rm("-f /nonexistent"))
+        _run_with_io(repl, [], lambda: repl._cmd_rm("-f /nonexistent"))
         assert repl._last_exit_code == 0
 
     def test_rm_directory_without_recursive(self, repl, tmp_path):
@@ -17529,7 +18775,7 @@ class TestCmdRmDeeper:
         d.mkdir()
         (d / "file.txt").write_text("hello")
         repl._perms._granted.add("rm")
-        out = _run_with_io(repl, [], lambda: repl._cmd_rm("-r " + str(d)))
+        _run_with_io(repl, [], lambda: repl._cmd_rm("-r " + str(d)))
         assert not d.exists()
 
 
@@ -17538,11 +18784,15 @@ class TestCmdRmDeeper:
 
 class TestCmdCpDeeper:
     def test_cp_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_cp(""))
+        _run_with_io(repl, [], lambda: repl._cmd_cp(""))
         assert repl._last_exit_code == 1
 
     def test_cp_nonexistent_source(self, repl, tmp_path):
-        out = _run_with_io(repl, [], lambda: repl._cmd_cp(str(tmp_path / "nonexistent") + " " + str(tmp_path / "dst")))
+        _run_with_io(
+            repl,
+            [],
+            lambda: repl._cmd_cp(str(tmp_path / "nonexistent") + " " + str(tmp_path / "dst")),
+        )
         assert repl._last_exit_code == 1
 
 
@@ -17551,11 +18801,15 @@ class TestCmdCpDeeper:
 
 class TestCmdMvDeeper:
     def test_mv_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_mv(""))
+        _run_with_io(repl, [], lambda: repl._cmd_mv(""))
         assert repl._last_exit_code == 1
 
     def test_mv_nonexistent_source(self, repl, tmp_path):
-        out = _run_with_io(repl, [], lambda: repl._cmd_mv(str(tmp_path / "nonexistent") + " " + str(tmp_path / "dst")))
+        _run_with_io(
+            repl,
+            [],
+            lambda: repl._cmd_mv(str(tmp_path / "nonexistent") + " " + str(tmp_path / "dst")),
+        )
         assert repl._last_exit_code == 1
 
 
@@ -17564,13 +18818,13 @@ class TestCmdMvDeeper:
 
 class TestCmdTouchDeeper:
     def test_touch_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_touch(""))
+        _run_with_io(repl, [], lambda: repl._cmd_touch(""))
         assert repl._last_exit_code == 1
 
     def test_touch_existing_file(self, repl, tmp_path):
         f = tmp_path / "exists.txt"
         f.write_text("old")
-        out = _run_with_io(repl, [], lambda: repl._cmd_touch(str(f)))
+        _run_with_io(repl, [], lambda: repl._cmd_touch(str(f)))
         assert repl._last_exit_code == 0
         assert f.read_text() == "old"
 
@@ -17578,7 +18832,7 @@ class TestCmdTouchDeeper:
         old = os.getcwd()
         try:
             os.chdir(tmp_path)
-            out = _run_with_io(repl, [], lambda: repl._cmd_touch("a.txt b.txt"))
+            _run_with_io(repl, [], lambda: repl._cmd_touch("a.txt b.txt"))
             assert (tmp_path / "a.txt").exists()
             assert (tmp_path / "b.txt").exists()
         finally:
@@ -17590,18 +18844,18 @@ class TestCmdTouchDeeper:
 
 class TestCmdMkdirDeeper:
     def test_mkdir_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_mkdir(""))
+        _run_with_io(repl, [], lambda: repl._cmd_mkdir(""))
         assert repl._last_exit_code == 1
 
     def test_mkdir_existing(self, repl, tmp_path):
         d = tmp_path / "exists"
         d.mkdir()
-        out = _run_with_io(repl, [], lambda: repl._cmd_mkdir(str(d)))
+        _run_with_io(repl, [], lambda: repl._cmd_mkdir(str(d)))
         assert repl._last_exit_code == 1
 
     def test_mkdir_recursive(self, repl, tmp_path):
         target = tmp_path / "a" / "b" / "c"
-        out = _run_with_io(repl, [], lambda: repl._cmd_mkdir("-p " + str(target)))
+        _run_with_io(repl, [], lambda: repl._cmd_mkdir("-p " + str(target)))
         assert target.exists() or repl._last_exit_code == 0
 
 
@@ -17611,7 +18865,7 @@ class TestCmdMkdirDeeper:
 class TestCmdHeadDeeper:
     def test_head_no_args_no_pipe(self, repl):
         repl._piped_input = None
-        out = _run_with_io(repl, [], lambda: repl._cmd_head(""))
+        _run_with_io(repl, [], lambda: repl._cmd_head(""))
         assert repl._last_exit_code == 1
 
     def test_head_piped(self, repl):
@@ -17627,7 +18881,7 @@ class TestCmdHeadDeeper:
 class TestCmdTailDeeper:
     def test_tail_no_args_no_pipe(self, repl):
         repl._piped_input = None
-        out = _run_with_io(repl, [], lambda: repl._cmd_tail(""))
+        _run_with_io(repl, [], lambda: repl._cmd_tail(""))
         assert repl._last_exit_code == 1
 
     def test_tail_piped(self, repl):
@@ -17643,7 +18897,7 @@ class TestCmdTailDeeper:
 class TestCmdWcDeeper:
     def test_wc_no_args_no_pipe(self, repl):
         repl._piped_input = None
-        out = _run_with_io(repl, [], lambda: repl._cmd_wc(""))
+        _run_with_io(repl, [], lambda: repl._cmd_wc(""))
         assert repl._last_exit_code == 1
 
     def test_wc_piped(self, repl):
@@ -17658,7 +18912,7 @@ class TestCmdWcDeeper:
 class TestCmdGrepDeeper:
     def test_grep_no_args(self, repl):
         repl._piped_input = None
-        out = _run_with_io(repl, [], lambda: repl._cmd_grep(""))
+        _run_with_io(repl, [], lambda: repl._cmd_grep(""))
         assert repl._last_exit_code == 1
 
     def test_grep_piped_match(self, repl):
@@ -17668,7 +18922,7 @@ class TestCmdGrepDeeper:
 
     def test_grep_piped_no_match(self, repl):
         repl._piped_input = "hello world"
-        out = _run_with_io(repl, [], lambda: repl._cmd_grep("nonexistent"))
+        _run_with_io(repl, [], lambda: repl._cmd_grep("nonexistent"))
         assert repl._last_exit_code == 1
 
     def test_grep_v_invert(self, repl):
@@ -17721,7 +18975,7 @@ class TestCmdUniqDeeper:
 
 class TestCmdFindDeeper:
     def test_find_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_find(""))
+        _run_with_io(repl, [], lambda: repl._cmd_find(""))
         assert repl._last_exit_code == 1
 
     def test_find_name(self, repl, tmp_path):
@@ -17737,7 +18991,7 @@ class TestCmdFindDeeper:
 class TestCmdTeeDeeper:
     def test_tee_no_args_no_pipe(self, repl):
         repl._piped_input = None
-        out = _run_with_io(repl, [], lambda: repl._cmd_tee(""))
+        _run_with_io(repl, [], lambda: repl._cmd_tee(""))
         assert repl._last_exit_code == 1
 
     def test_tee_to_file(self, repl, tmp_path):
@@ -17752,7 +19006,7 @@ class TestCmdTeeDeeper:
 
 class TestCmdPrintfDeeper:
     def test_printf_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_printf(""))
+        _run_with_io(repl, [], lambda: repl._cmd_printf(""))
         assert repl._last_exit_code == 1
 
     def test_printf_format(self, repl):
@@ -17797,7 +19051,7 @@ class TestCmdCommDeeper3:
 class TestCmdXargsDeeper3:
     def test_xargs_no_args(self, repl):
         repl._piped_input = "hello"
-        out = _run_with_io(repl, [], lambda: repl._cmd_xargs(""))
+        _run_with_io(repl, [], lambda: repl._cmd_xargs(""))
         assert repl._last_exit_code == 0
 
     def test_xargs_echo(self, repl):
@@ -17832,7 +19086,7 @@ class TestCmdEnvDeeper3:
 class TestCmdShufDeeper3:
     def test_shuf_piped(self, repl):
         repl._piped_input = "1\n2\n3\n4\n5"
-        out = _run_with_io(repl, [], lambda: repl._cmd_shuf(""))
+        _run_with_io(repl, [], lambda: repl._cmd_shuf(""))
         assert repl._last_exit_code == 0
 
 
@@ -17857,7 +19111,7 @@ class TestCmdRevDeeper3:
 class TestCmdPasteDeeper3:
     def test_paste_no_args(self, repl):
         repl._piped_input = None
-        out = _run_with_io(repl, [], lambda: repl._cmd_paste(""))
+        _run_with_io(repl, [], lambda: repl._cmd_paste(""))
         assert repl._last_exit_code == 1
 
 
@@ -17867,11 +19121,11 @@ class TestCmdPasteDeeper3:
 class TestCmdOdDeeper2:
     def test_od_no_args(self, repl):
         repl._piped_input = None
-        out = _run_with_io(repl, [], lambda: repl._cmd_od(""))
+        _run_with_io(repl, [], lambda: repl._cmd_od(""))
         assert repl._last_exit_code == 1
 
     def test_od_nonexistent_file(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_od("/nonexistent"))
+        _run_with_io(repl, [], lambda: repl._cmd_od("/nonexistent"))
         assert repl._last_exit_code == 1
 
 
@@ -17881,7 +19135,7 @@ class TestCmdOdDeeper2:
 class TestCmdExpandDeeper2:
     def test_expand_no_args(self, repl):
         repl._piped_input = None
-        out = _run_with_io(repl, [], lambda: repl._cmd_expand(""))
+        _run_with_io(repl, [], lambda: repl._cmd_expand(""))
         assert repl._last_exit_code == 1
 
 
@@ -17891,7 +19145,7 @@ class TestCmdExpandDeeper2:
 class TestCmdUnexpandDeeper2:
     def test_unexpand_no_args(self, repl):
         repl._piped_input = None
-        out = _run_with_io(repl, [], lambda: repl._cmd_unexpand(""))
+        _run_with_io(repl, [], lambda: repl._cmd_unexpand(""))
         assert repl._last_exit_code == 1
 
 
@@ -17904,7 +19158,7 @@ class TestCmdDiffDeeper2:
         f2 = tmp_path / "same2.txt"
         f1.write_text("identical\n")
         f2.write_text("identical\n")
-        out = _run_with_io(repl, [], lambda: repl._cmd_diff(str(f1) + " " + str(f2)))
+        _run_with_io(repl, [], lambda: repl._cmd_diff(str(f1) + " " + str(f2)))
         assert repl._last_exit_code == 0
 
     def test_diff_different(self, repl, tmp_path):
@@ -17912,7 +19166,7 @@ class TestCmdDiffDeeper2:
         f2 = tmp_path / "b.txt"
         f1.write_text("line1\n")
         f2.write_text("line2\n")
-        out = _run_with_io(repl, [], lambda: repl._cmd_diff(str(f1) + " " + str(f2)))
+        _run_with_io(repl, [], lambda: repl._cmd_diff(str(f1) + " " + str(f2)))
         assert repl._last_exit_code == 1
 
 
@@ -17923,7 +19177,7 @@ class TestCmdStatDeeper2:
     def test_stat_existing_file(self, repl, tmp_path):
         f = tmp_path / "stat_test.txt"
         f.write_text("content")
-        out = _run_with_io(repl, [], lambda: repl._cmd_stat(str(f)))
+        _run_with_io(repl, [], lambda: repl._cmd_stat(str(f)))
         assert repl._last_exit_code == 0
 
 
@@ -17934,7 +19188,7 @@ class TestCmdChmodDeeper2:
     def test_chmod_existing_file(self, repl, tmp_path):
         f = tmp_path / "chmod_test.txt"
         f.write_text("content")
-        out = _run_with_io(repl, [], lambda: repl._cmd_chmod("644 " + str(f)))
+        _run_with_io(repl, [], lambda: repl._cmd_chmod("644 " + str(f)))
         assert repl._last_exit_code == 0
 
 
@@ -17944,7 +19198,7 @@ class TestCmdChmodDeeper2:
 class TestCmdDuDeeper2:
     def test_du_existing_dir(self, repl, tmp_path):
         (tmp_path / "file.txt").write_text("hello")
-        out = _run_with_io(repl, [], lambda: repl._cmd_du(str(tmp_path)))
+        _run_with_io(repl, [], lambda: repl._cmd_du(str(tmp_path)))
         assert repl._last_exit_code == 0
 
 
@@ -17956,7 +19210,7 @@ class TestCmdLnDeeper2:
         target = tmp_path / "original.txt"
         target.write_text("content")
         link = tmp_path / "link.txt"
-        out = _run_with_io(repl, [], lambda: repl._cmd_ln("-s " + str(target) + " " + str(link)))
+        _run_with_io(repl, [], lambda: repl._cmd_ln("-s " + str(target) + " " + str(link)))
         assert repl._last_exit_code == 0
         assert link.is_symlink()
 
@@ -18037,11 +19291,11 @@ class TestCmdWatchDeeper3:
 
 class TestCmdExportDeeper2:
     def test_export_with_equals(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_export("FOO=bar"))
+        _run_with_io(repl, [], lambda: repl._cmd_export("FOO=bar"))
         assert repl._env.get("FOO") == "bar"
 
     def test_export_no_value(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_export("FOO"))
+        _run_with_io(repl, [], lambda: repl._cmd_export("FOO"))
         assert repl._last_exit_code == 0
 
 
@@ -18050,11 +19304,11 @@ class TestCmdExportDeeper2:
 
 class TestCmdSetDeeper2:
     def test_set_with_equals(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_set("BAZ=qux"))
+        _run_with_io(repl, [], lambda: repl._cmd_set("BAZ=qux"))
         assert repl._env.get("BAZ") == "qux"
 
     def test_set_no_value(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_set("VAR"))
+        _run_with_io(repl, [], lambda: repl._cmd_set("VAR"))
         assert repl._last_exit_code == 0
 
 
@@ -18063,7 +19317,7 @@ class TestCmdSetDeeper2:
 
 class TestCmdAliasDeeper2:
     def test_alias_set(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_alias("gg=git status"))
+        _run_with_io(repl, [], lambda: repl._cmd_alias("gg=git status"))
         assert repl._aliases.get("gg") == "git status"
 
     def test_alias_list(self, repl):
@@ -18078,7 +19332,7 @@ class TestCmdAliasDeeper2:
 class TestCmdUnaliasDeeper2:
     def test_unalias_existing(self, repl):
         repl._aliases["myalias"] = "echo hi"
-        out = _run_with_io(repl, [], lambda: repl._cmd_unalias("myalias"))
+        _run_with_io(repl, [], lambda: repl._cmd_unalias("myalias"))
         assert "myalias" not in repl._aliases
 
     def test_unalias_nonexistent(self, repl):
@@ -18092,7 +19346,7 @@ class TestCmdUnaliasDeeper2:
 class TestCmdHistoryDeeper2:
     def test_history_empty(self, repl):
         repl._history = []
-        out = _run_with_io(repl, [], lambda: repl._cmd_history(""))
+        _run_with_io(repl, [], lambda: repl._cmd_history(""))
         assert repl._last_exit_code == 0
 
     def test_history_with_entries(self, repl):
@@ -18107,7 +19361,7 @@ class TestCmdHistoryDeeper2:
 class TestCmdFcDeeper2:
     def test_fc_no_history(self, repl):
         repl._history = []
-        out = _run_with_io(repl, [], lambda: repl._cmd_fc(""))
+        _run_with_io(repl, [], lambda: repl._cmd_fc(""))
         assert repl._last_exit_code == 0
 
     def test_fc_list_last(self, repl):
@@ -18157,7 +19411,7 @@ class TestCmdNprocDeeper2:
 
 class TestCmdUptimeDeeper3:
     def test_uptime_returns_output(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_uptime(""))
+        _run_with_io(repl, [], lambda: repl._cmd_uptime(""))
         assert repl._last_exit_code == 0
 
 
@@ -18188,7 +19442,7 @@ class TestCmdCalDeeper2:
 
 class TestCmdDateDeeper2:
     def test_date_default(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_date(""))
+        _run_with_io(repl, [], lambda: repl._cmd_date(""))
         assert repl._last_exit_code == 0
 
     def test_date_format_string(self, repl):
@@ -18264,7 +19518,7 @@ class TestCmdDenyDeeper2:
 
 class TestCmdLogsDeeper2:
     def test_logs_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_logs(""))
+        _run_with_io(repl, [], lambda: repl._cmd_logs(""))
         assert repl._last_exit_code == 0
 
     def test_logs_clear(self, repl):
@@ -18272,24 +19526,24 @@ class TestCmdLogsDeeper2:
         assert "cleared" in out.lower()
 
     def test_logs_level_filter(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_logs("-l ERROR"))
+        _run_with_io(repl, [], lambda: repl._cmd_logs("-l ERROR"))
         assert repl._last_exit_code == 0
 
     def test_logs_source_filter(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_logs("-s test"))
+        _run_with_io(repl, [], lambda: repl._cmd_logs("-s test"))
         assert repl._last_exit_code == 0
 
     def test_logs_lines(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_logs("-n 5"))
+        _run_with_io(repl, [], lambda: repl._cmd_logs("-n 5"))
         assert repl._last_exit_code == 0
 
     def test_logs_stats(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_logs("--stats"))
+        _run_with_io(repl, [], lambda: repl._cmd_logs("--stats"))
         assert repl._last_exit_code == 0
 
     def test_logs_export(self, repl, tmp_path):
         export_file = str(tmp_path / "logs.txt")
-        out = _run_with_io(repl, [], lambda: repl._cmd_logs("-e " + export_file))
+        _run_with_io(repl, [], lambda: repl._cmd_logs("-e " + export_file))
         assert repl._last_exit_code == 0
 
 
@@ -18299,6 +19553,7 @@ class TestCmdLogsDeeper2:
 class TestCmdSvcDeeper2:
     def test_svc_not_booted(self, repl):
         from domain.shell._internal.init import reset_init_system
+
         reset_init_system()
         repl.os._init = None
         out = _run_with_io(repl, [], lambda: repl._cmd_svc("list"))
@@ -18323,7 +19578,7 @@ class TestCmdSvcDeeper2:
 class TestCmdBootDeeper2:
     def test_boot_sets_running(self, repl):
         repl._running = False
-        out = _run_with_io(repl, [], lambda: repl._cmd_boot(""))
+        _run_with_io(repl, [], lambda: repl._cmd_boot(""))
         assert repl._running is True
 
     def test_boot_already_running(self, repl):
@@ -18339,7 +19594,7 @@ class TestCmdBootDeeper2:
 class TestCmdShutdownDeeper2:
     def test_shutdown_clears_running(self, repl):
         repl._running = True
-        out = _run_with_io(repl, [], lambda: repl._cmd_shutdown(""))
+        _run_with_io(repl, [], lambda: repl._cmd_shutdown(""))
         assert repl._running is False
 
 
@@ -18356,7 +19611,7 @@ class TestCmdHelpDeeper2:
         assert "cd" in out.lower()
 
     def test_help_unknown(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_help("nonexistent_xyz"))
+        _run_with_io(repl, [], lambda: repl._cmd_help("nonexistent_xyz"))
         assert repl._last_exit_code == 0
 
     def test_help_all_commands(self, repl):
@@ -18378,15 +19633,15 @@ class TestCmdPermissionsDeeper2:
 
 class TestCmdConfirmDeeper2:
     def test_confirm_show(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_confirm(""))
+        _run_with_io(repl, [], lambda: repl._cmd_confirm(""))
         assert repl._last_exit_code == 0
 
     def test_confirm_on(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_confirm("on"))
+        _run_with_io(repl, [], lambda: repl._cmd_confirm("on"))
         assert repl._last_exit_code == 0
 
     def test_confirm_off(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_confirm("off"))
+        _run_with_io(repl, [], lambda: repl._cmd_confirm("off"))
         assert repl._last_exit_code == 0
 
 
@@ -18407,7 +19662,7 @@ class TestExecuteSingleComplex:
         assert repl._last_exit_code == 0
 
     def test_execute_single管道(self, repl):
-        result = repl._execute_single("echo pipe_test | wc")
+        repl._execute_single("echo pipe_test | wc")
         assert repl._last_exit_code == 0
 
     def test_execute_single_empty(self, repl):
@@ -18526,7 +19781,7 @@ class TestCmdDateDeeper3:
         assert "-" in out
 
     def test_date_default(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_date(""))
+        _run_with_io(repl, [], lambda: repl._cmd_date(""))
         assert repl._last_exit_code == 0
 
 
@@ -18535,7 +19790,7 @@ class TestCmdDateDeeper3:
 
 class TestCmdCalDeeper3:
     def test_cal_current(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_cal(""))
+        _run_with_io(repl, [], lambda: repl._cmd_cal(""))
         assert repl._last_exit_code == 0
 
     def test_cal_specific(self, repl):
@@ -18551,12 +19806,12 @@ class TestCmdLnDeeper3:
         original = tmp_path / "original.txt"
         original.write_text("content")
         link = tmp_path / "hardlink.txt"
-        out = _run_with_io(repl, [], lambda: repl._cmd_ln(str(original) + " " + str(link)))
+        _run_with_io(repl, [], lambda: repl._cmd_ln(str(original) + " " + str(link)))
         assert repl._last_exit_code == 0
         assert link.exists()
 
     def test_ln_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_ln(""))
+        _run_with_io(repl, [], lambda: repl._cmd_ln(""))
         assert repl._last_exit_code == 1
 
 
@@ -18570,7 +19825,7 @@ class TestCmdMktempDeeper2:
         assert len(out.strip()) > 0
 
     def test_mktemp_dir(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_mktemp("-d"))
+        _run_with_io(repl, [], lambda: repl._cmd_mktemp("-d"))
         assert repl._last_exit_code == 0
 
 
@@ -18592,7 +19847,7 @@ class TestCmdIdDeeper3:
 
 class TestCmdWhoDeeper2:
     def test_who_returns_output(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_who(""))
+        _run_with_io(repl, [], lambda: repl._cmd_who(""))
         assert repl._last_exit_code == 0
 
 
@@ -18649,7 +19904,7 @@ class TestCmdSeqEdgeCases2:
         assert "1" in out and "5" in out
 
     def test_seq_reverse(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_seq("5 1"))
+        _run_with_io(repl, [], lambda: repl._cmd_seq("5 1"))
         assert repl._last_exit_code == 0 or repl._last_exit_code == 1
 
 
@@ -18658,7 +19913,7 @@ class TestCmdSeqEdgeCases2:
 
 class TestCmdCommDeeper4:
     def test_comm_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_comm(""))
+        _run_with_io(repl, [], lambda: repl._cmd_comm(""))
         assert repl._last_exit_code == 1
 
 
@@ -18667,7 +19922,7 @@ class TestCmdCommDeeper4:
 
 class TestCmdJoinDeeper:
     def test_join_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_join(""))
+        _run_with_io(repl, [], lambda: repl._cmd_join(""))
         assert repl._last_exit_code == 1
 
 
@@ -18676,7 +19931,7 @@ class TestCmdJoinDeeper:
 
 class TestCmdPasteDeeper4:
     def test_join_no_args2(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_join(""))
+        _run_with_io(repl, [], lambda: repl._cmd_join(""))
         assert repl._last_exit_code == 1
 
 
@@ -18687,6 +19942,7 @@ class TestCmdSvcMocked:
     def _setup_init(self, repl):
         """Set up a mock init_system."""
         from domain.shell._internal.init import reset_init_system
+
         reset_init_system()
         mock_init = MagicMock()
         mock_init.service_table.return_value = "  api  running\n  vfs  stopped"
@@ -18698,6 +19954,7 @@ class TestCmdSvcMocked:
 
     def test_svc_not_booted(self, repl):
         from domain.shell._internal.init import reset_init_system
+
         reset_init_system()
         repl.os._init = None
         out = _run_with_io(repl, [], lambda: repl._cmd_svc("list"))
@@ -18710,7 +19967,7 @@ class TestCmdSvcMocked:
 
     def test_svc_ls_shortcut(self, repl):
         init = self._setup_init(repl)
-        out = _run_with_io(repl, [], lambda: repl._cmd_svc("ls"))
+        _run_with_io(repl, [], lambda: repl._cmd_svc("ls"))
         assert init.service_table.called
 
     def test_svc_status_no_name(self, repl):
@@ -18725,7 +19982,7 @@ class TestCmdSvcMocked:
         assert "Unknown" in out
 
     def test_svc_start_no_name(self, repl):
-        init = self._setup_init(repl)
+        self._setup_init(repl)
         out = _run_with_io(repl, [], lambda: repl._cmd_svc("start"))
         assert repl._last_exit_code == 1 or "Usage" in out
 
@@ -18736,8 +19993,8 @@ class TestCmdSvcMocked:
         assert "Unknown" in out
 
     def test_svc_stop_no_name(self, repl):
-        init = self._setup_init(repl)
-        out = _run_with_io(repl, [], lambda: repl._cmd_svc("stop"))
+        self._setup_init(repl)
+        _run_with_io(repl, [], lambda: repl._cmd_svc("stop"))
         assert repl._last_exit_code == 1
 
     def test_svc_stop_unknown(self, repl):
@@ -18747,8 +20004,8 @@ class TestCmdSvcMocked:
         assert "Unknown" in out
 
     def test_svc_restart_no_name(self, repl):
-        init = self._setup_init(repl)
-        out = _run_with_io(repl, [], lambda: repl._cmd_svc("restart"))
+        self._setup_init(repl)
+        _run_with_io(repl, [], lambda: repl._cmd_svc("restart"))
         assert repl._last_exit_code == 1
 
     def test_svc_restart_unknown(self, repl):
@@ -18758,12 +20015,12 @@ class TestCmdSvcMocked:
         assert "Unknown" in out
 
     def test_svc_runlevel(self, repl):
-        init = self._setup_init(repl)
+        self._setup_init(repl)
         out = _run_with_io(repl, [], lambda: repl._cmd_svc("runlevel"))
         assert "3" in out or "runlevel" in out.lower()
 
     def test_svc_unknown_subcmd(self, repl):
-        init = self._setup_init(repl)
+        self._setup_init(repl)
         out = _run_with_io(repl, [], lambda: repl._cmd_svc("bogus"))
         assert repl._last_exit_code == 1 or "Usage" in out
 
@@ -18801,7 +20058,8 @@ class TestCmdDenyDeeper3:
 
 class TestCmdEventsDeeper2:
     def test_events_no_bus(self, repl):
-        import domain.infrastructure.event_bus as eb
+        import domain.infrastructure._internal.event_bus as eb
+
         with patch.object(eb, "get_event_bus", side_effect=Exception("no bus")):
             out = _run_with_io(repl, [], lambda: repl._cmd_events(""))
             assert "not available" in out.lower() or repl._last_exit_code == 0
@@ -18809,7 +20067,8 @@ class TestCmdEventsDeeper2:
     def test_events_empty_history(self, repl):
         mock_bus = MagicMock()
         mock_bus.history.return_value = []
-        import domain.infrastructure.event_bus as eb
+        import domain.infrastructure._internal.event_bus as eb
+
         with patch.object(eb, "get_event_bus", return_value=mock_bus):
             out = _run_with_io(repl, [], lambda: repl._cmd_events(""))
             assert "No events" in out
@@ -18822,7 +20081,8 @@ class TestCmdEventsDeeper2:
         mock_event.data = {"model": "gpt2"}
         mock_bus = MagicMock()
         mock_bus.history.return_value = [mock_event]
-        import domain.infrastructure.event_bus as eb
+        import domain.infrastructure._internal.event_bus as eb
+
         with patch.object(eb, "get_event_bus", return_value=mock_bus):
             out = _run_with_io(repl, [], lambda: repl._cmd_events("model"))
             assert "model.loaded" in out
@@ -18835,7 +20095,8 @@ class TestCmdEventsDeeper2:
         mock_event.data = {}
         mock_bus = MagicMock()
         mock_bus.history.return_value = [mock_event]
-        import domain.infrastructure.event_bus as eb
+        import domain.infrastructure._internal.event_bus as eb
+
         with patch.object(eb, "get_event_bus", return_value=mock_bus):
             out = _run_with_io(repl, [], lambda: repl._cmd_events("nonexistent"))
             assert "No events matching" in out
@@ -18851,7 +20112,8 @@ class TestCmdEventsDeeper2:
             events.append(ev)
         mock_bus = MagicMock()
         mock_bus.history.return_value = events
-        import domain.infrastructure.event_bus as eb
+        import domain.infrastructure._internal.event_bus as eb
+
         with patch.object(eb, "get_event_bus", return_value=mock_bus):
             out = _run_with_io(repl, [], lambda: repl._cmd_events("event 5"))
             assert "5" in out or "last" in out.lower()
@@ -18943,12 +20205,12 @@ class TestCmdStatusDeeper2:
 
 class TestCmdLogsExplainV2:
     def test_logs_explain(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_logs("--explain"))
+        _run_with_io(repl, [], lambda: repl._cmd_logs("--explain"))
         assert repl._last_exit_code == 0
 
     def test_logs_follow(self, repl):
         repl._log_buffer.clear()
-        out = _run_with_io(repl, [], lambda: repl._cmd_logs("-f"))
+        _run_with_io(repl, [], lambda: repl._cmd_logs("-f"))
         assert repl._last_exit_code == 0
 
 
@@ -18972,12 +20234,16 @@ class TestCmdTrainDeeper2:
 
 class TestCmdApiDeeper2:
     def test_api_status(self, repl):
-        with patch.object(type(repl.os.api), 'is_running', new_callable=PropertyMock, return_value=True):
-            out = _run_with_io(repl, [], lambda: repl._cmd_api("status"))
+        with patch.object(
+            type(repl.os.api), "is_running", new_callable=PropertyMock, return_value=True
+        ):
+            _run_with_io(repl, [], lambda: repl._cmd_api("status"))
             assert repl._last_exit_code == 0
 
     def test_api_not_running(self, repl):
-        with patch.object(type(repl.os.api), 'is_running', new_callable=PropertyMock, return_value=False):
+        with patch.object(
+            type(repl.os.api), "is_running", new_callable=PropertyMock, return_value=False
+        ):
             out = _run_with_io(repl, [], lambda: repl._cmd_api("stop"))
             assert "not running" in out.lower() or repl._last_exit_code == 0
 
@@ -18996,7 +20262,7 @@ class TestCmdSetDeeper2V2:
         assert "not set" in out
 
     def test_set_no_color(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_set("NO_COLOR=1"))
+        _run_with_io(repl, [], lambda: repl._cmd_set("NO_COLOR=1"))
         assert repl._last_exit_code == 0
 
 
@@ -19005,7 +20271,7 @@ class TestCmdSetDeeper2V2:
 
 class TestCmdExportDeeper2V2:
     def test_export_set(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_export("MYVAR=test123"))
+        _run_with_io(repl, [], lambda: repl._cmd_export("MYVAR=test123"))
         assert "test123" in repl._env.get("MYVAR", "")
 
     def test_export_show(self, repl):
@@ -19023,7 +20289,7 @@ class TestCmdExportDeeper2V2:
 
 class TestCmdReadDeeper3V2:
     def test_read_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_read(""))
+        _run_with_io(repl, [], lambda: repl._cmd_read(""))
         assert repl._last_exit_code == 1
 
     def test_read_with_prompt(self, repl):
@@ -19102,15 +20368,19 @@ class TestCmdBootAutoAPI:
     def test_boot_auto_start_api(self, repl):
         repl._running = False
         repl.os.api.start.return_value = {"ok": True, "message": "started"}
-        with patch.object(type(repl.os.api), 'is_running', new_callable=PropertyMock, return_value=False):
-            out = _run_with_io(repl, [], lambda: repl._cmd_boot(""))
+        with patch.object(
+            type(repl.os.api), "is_running", new_callable=PropertyMock, return_value=False
+        ):
+            _run_with_io(repl, [], lambda: repl._cmd_boot(""))
         assert repl._running is True
 
     def test_boot_api_auto_start_fails(self, repl):
         repl._running = False
         repl.os.api.start.return_value = {"ok": False, "error": "port busy"}
-        with patch.object(type(repl.os.api), 'is_running', new_callable=PropertyMock, return_value=False):
-            out = _run_with_io(repl, [], lambda: repl._cmd_boot(""))
+        with patch.object(
+            type(repl.os.api), "is_running", new_callable=PropertyMock, return_value=False
+        ):
+            _run_with_io(repl, [], lambda: repl._cmd_boot(""))
         assert repl._running is True
 
 
@@ -19120,8 +20390,8 @@ class TestCmdBootAutoAPI:
 class TestCmdShutdownDeeper3:
     def test_shutdown_sets_false(self, repl):
         repl._running = True
-        with patch.object(repl.os, 'shutdown', return_value="Shut down"):
-            out = _run_with_io(repl, [], lambda: repl._cmd_shutdown(""))
+        with patch.object(repl.os, "shutdown", return_value="Shut down"):
+            _run_with_io(repl, [], lambda: repl._cmd_shutdown(""))
         assert repl._running is False
 
 
@@ -19168,7 +20438,7 @@ class TestCmdKillDeeper3V2:
     def test_kill_with_exception(self, repl):
         repl.cmds.kill = MagicMock(side_effect=RuntimeError("kill failed"))
         try:
-            out = _run_with_io(repl, [], lambda: repl._cmd_kill("123"))
+            _run_with_io(repl, [], lambda: repl._cmd_kill("123"))
         except RuntimeError:
             pass
 
@@ -19183,7 +20453,7 @@ class TestCmdPsDeeper3:
         mock_proc.name = "test-proc"
         mock_proc.state = 2
         mock_proc.created_at = time.time() - 10.0
-        with patch.object(repl.os.kernel, 'list_processes', return_value=[mock_proc]):
+        with patch.object(repl.os.kernel, "list_processes", return_value=[mock_proc]):
             out = _run_with_io(repl, [], lambda: repl._cmd_ps(""))
         assert "test-proc" in out or "RUNNING" in out
 
@@ -19208,15 +20478,15 @@ class TestCmdMetricsDeeper2:
 
 class TestCmdConfirmDeeper3:
     def test_confirm_show(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_confirm(""))
+        _run_with_io(repl, [], lambda: repl._cmd_confirm(""))
         assert repl._last_exit_code == 0
 
     def test_confirm_on(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_confirm("on"))
+        _run_with_io(repl, [], lambda: repl._cmd_confirm("on"))
         assert repl._last_exit_code == 0
 
     def test_confirm_off(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_confirm("off"))
+        _run_with_io(repl, [], lambda: repl._cmd_confirm("off"))
         assert repl._last_exit_code == 0
 
 
@@ -19235,7 +20505,7 @@ class TestCmdPermissionsDeeper3:
 class TestCmdTutorialDeeper2:
     def test_tutorial_resets_flag(self, repl):
         repl.state.first_run = False
-        out = _run_with_io(repl, [], lambda: repl._cmd_tutorial(""))
+        _run_with_io(repl, [], lambda: repl._cmd_tutorial(""))
         assert repl._last_exit_code == 0
 
 
@@ -19245,7 +20515,7 @@ class TestCmdTutorialDeeper2:
 class TestCmdNotesDeeper2:
     def test_notes_no_module(self, repl):
         try:
-            out = _run_with_io(repl, [], lambda: repl._cmd_note("list"))
+            _run_with_io(repl, [], lambda: repl._cmd_note("list"))
             assert repl._last_exit_code == 0
         except (ImportError, ModuleNotFoundError):
             pass
@@ -19381,12 +20651,20 @@ class TestParseInlineEnvDeeper:
 class TestExecutePipelineDeeper:
     def test_pipeline_and_skip(self, repl):
         repl._last_exit_code = 1
-        out = _run_with_io(repl, [], lambda: repl._execute_pipeline([("echo should_skip", "&&"), ("echo fallback", None)]))
+        out = _run_with_io(
+            repl,
+            [],
+            lambda: repl._execute_pipeline([("echo should_skip", "&&"), ("echo fallback", None)]),
+        )
         assert "fallback" in out
 
     def test_pipeline_or_skip(self, repl):
         repl._last_exit_code = 0
-        out = _run_with_io(repl, [], lambda: repl._execute_pipeline([("echo no_run", "||"), ("echo fallback", None)]))
+        out = _run_with_io(
+            repl,
+            [],
+            lambda: repl._execute_pipeline([("echo no_run", "||"), ("echo fallback", None)]),
+        )
         assert "fallback" in out
 
     def test_pipeline_empty(self, repl):
@@ -19415,26 +20693,28 @@ class TestExecuteSingleDeeper2:
         mock_mod.run.return_value = 0
         mock_mod.help = "test module"
         repl._ext_cmds["testextcmd"] = mock_mod
-        out = repl._execute_single("testextcmd arg1")
+        repl._execute_single("testextcmd arg1")
         assert repl._last_exit_code == 0
 
     def test_system_exit_caught(self, repl):
         def _exit_cmd(r, a):
             raise SystemExit(42)
+
         repl.COMMANDS["exitcmd42"] = _exit_cmd
-        out = repl._execute_single("exitcmd42")
+        repl._execute_single("exitcmd42")
         assert repl._last_exit_code == 42
 
     def test_exception_caught(self, repl):
         def _explode(r, a):
             raise RuntimeError("boom")
+
         repl.COMMANDS["explodecmd"] = _explode
-        out = repl._execute_single("explodecmd")
+        repl._execute_single("explodecmd")
         assert repl._last_exit_code == 1
 
     def test_inline_env_restores(self, repl):
         old_val = repl._env.get("MYTEMP")
-        out = repl._execute_single("MYTEMP=999 echo hi_inline_env")
+        repl._execute_single("MYTEMP=999 echo hi_inline_env")
         assert repl._env.get("MYTEMP") == old_val
 
 
@@ -19445,21 +20725,25 @@ class TestExecuteBackgroundDeeper:
     def test_background_error(self, repl):
         def _explode(r, a):
             raise RuntimeError("bg boom")
+
         repl.COMMANDS["bgexplode"] = _explode
         repl._execute_background("bgexplode")
         import time
+
         time.sleep(0.2)
         assert repl._next_bg_id >= 2
 
     def test_background_success(self, repl):
         repl._execute_background("echo bg_ok")
         import time
+
         time.sleep(0.2)
         assert repl._next_bg_id >= 2
 
     def test_background_tuples(self, repl):
         repl._execute_background_tuples([("echo bg_tuple", None)])
         import time
+
         time.sleep(0.2)
         assert repl._next_bg_id >= 2
 
@@ -19470,6 +20754,7 @@ class TestExecuteBackgroundDeeper:
 class TestCmdSvcWithManager:
     def _setup_manager(self, repl):
         from domain.shell._internal.init import reset_init_system
+
         reset_init_system()
         mock_init = MagicMock()
         mock_init.service_table.return_value = "  api  running"
@@ -19833,7 +21118,7 @@ class TestCmdAiDeeper:
 
 class TestCmdAgentsDeeperV2:
     def test_agents_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_agents(""))
+        _run_with_io(repl, [], lambda: repl._cmd_agents(""))
         assert repl._last_exit_code == 0
 
 
@@ -19842,7 +21127,7 @@ class TestCmdAgentsDeeperV2:
 
 class TestCmdProcsDeeper:
     def test_procs(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_procs(""))
+        _run_with_io(repl, [], lambda: repl._cmd_procs(""))
         assert repl._last_exit_code == 0
 
 
@@ -19851,7 +21136,7 @@ class TestCmdProcsDeeper:
 
 class TestCmdBgFgDeeperV2:
     def test_bg_empty(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_bg(""))
+        _run_with_io(repl, [], lambda: repl._cmd_bg(""))
         assert repl._last_exit_code == 0
 
     def test_fg_empty(self, repl):
@@ -19865,6 +21150,7 @@ class TestCmdBgFgDeeperV2:
 class TestCaptureOutput2:
     def test_with_repl(self, repl):
         from domain.shell._internal.repl import _CaptureOutput
+
         with _CaptureOutput(repl) as cap:
             repl.io.write("captured text\n")
         out = cap.getvalue()
@@ -19872,18 +21158,21 @@ class TestCaptureOutput2:
 
     def test_without_repl(self):
         from domain.shell._internal.repl import _CaptureOutput
+
         with _CaptureOutput() as cap:
             print("stdout text")
         assert "stdout text" in cap.getvalue()
 
     def test_getvalue_returns_string(self):
         from domain.shell._internal.repl import _CaptureOutput
+
         with _CaptureOutput() as cap:
             pass
         assert isinstance(cap.getvalue(), str)
 
     def test_no_repl_returns_empty(self):
         from domain.shell._internal.repl import _CaptureOutput
+
         with _CaptureOutput() as cap:
             pass
         result = cap.getvalue()
@@ -19900,7 +21189,9 @@ class TestNoteNewDeeper:
         note.short_id = "abc123"
         note.title = "Tagged Note"
         mock_store.create.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("new Tagged Note --tags tag1,tag2")
         assert repl._last_exit_code == 0
 
@@ -19910,7 +21201,9 @@ class TestNoteNewDeeper:
         note.short_id = "abc123"
         note.title = "Status Note"
         mock_store.create.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("new Status Note --status wip")
         assert repl._last_exit_code == 0
 
@@ -19920,7 +21213,9 @@ class TestNoteNewDeeper:
         note.short_id = "abc123"
         note.title = "Sprint Note"
         mock_store.create.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("new Sprint Note --sprint S1")
         assert repl._last_exit_code == 0
 
@@ -19930,7 +21225,9 @@ class TestNoteNewDeeper:
         note.short_id = "abc123"
         note.title = "GH Note"
         mock_store.create.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("new GH Note --gh owner/repo#42")
         assert repl._last_exit_code == 0
 
@@ -19940,7 +21237,9 @@ class TestNoteNewDeeper:
         note.short_id = "abc123"
         note.title = "Full Note"
         mock_store.create.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("new Full Note --tags a,b --status done --sprint S1 --gh o/r#1")
         assert repl._last_exit_code == 0
 
@@ -19952,30 +21251,38 @@ class TestNoteListDeeper:
     def test_note_list_with_tag_filter(self, repl):
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("list --tag tag1")
         assert repl._last_exit_code == 0
         call_kwargs = mock_store.list_notes.call_args
-        assert call_kwargs[1].get('tag') == 'tag1' or call_kwargs[0][0] == 'tag1'
+        assert call_kwargs[1].get("tag") == "tag1" or call_kwargs[0][0] == "tag1"
 
     def test_note_list_with_status_filter(self, repl):
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("list --status wip")
         assert repl._last_exit_code == 0
 
     def test_note_list_with_sprint_filter(self, repl):
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("list --sprint S1")
         assert repl._last_exit_code == 0
 
     def test_note_list_with_limit(self, repl):
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("list --limit 5")
         assert repl._last_exit_code == 0
 
@@ -19988,7 +21295,9 @@ class TestNoteListDeeper:
         note.status = "open"
         note.date_str = "2024-01-01"
         mock_store.list_notes.return_value = [note]
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("list")
         assert repl._last_exit_code == 0
 
@@ -20011,7 +21320,9 @@ class TestNoteShowDeeper:
         note.created_at = "2024-01-01"
         note.updated_at = "2024-01-02"
         mock_store.get.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("show abc123")
         assert repl._last_exit_code == 0
 
@@ -20029,7 +21340,9 @@ class TestNoteShowDeeper:
         note.created_at = "2024-01-01"
         note.updated_at = "2024-01-02"
         mock_store.get.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("show abc123")
         assert repl._last_exit_code == 0
 
@@ -20047,7 +21360,9 @@ class TestNoteShowDeeper:
         note.created_at = "2024-01-01"
         note.updated_at = "2024-01-02"
         mock_store.get.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("show abc123")
         assert repl._last_exit_code == 0
 
@@ -20062,7 +21377,9 @@ class TestNoteEditDeeper:
         note.short_id = "abc123"
         note.title = "Updated Title"
         mock_store.update.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("edit abc123 --title Updated Title")
         assert repl._last_exit_code == 0
 
@@ -20072,7 +21389,9 @@ class TestNoteEditDeeper:
         note.short_id = "abc123"
         note.title = "Note"
         mock_store.update.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("edit abc123 --tags newtag")
         assert repl._last_exit_code == 0
 
@@ -20082,7 +21401,9 @@ class TestNoteEditDeeper:
         note.short_id = "abc123"
         note.title = "Note"
         mock_store.update.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("edit abc123 --status done")
         assert repl._last_exit_code == 0
 
@@ -20092,7 +21413,9 @@ class TestNoteEditDeeper:
         note.short_id = "abc123"
         note.title = "Note"
         mock_store.update.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("edit abc123 --sprint S2")
         assert repl._last_exit_code == 0
 
@@ -20102,7 +21425,9 @@ class TestNoteEditDeeper:
         note.short_id = "abc123"
         note.title = "Note"
         mock_store.update.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("edit abc123 --gh o/r#2")
         assert repl._last_exit_code == 0
 
@@ -20112,7 +21437,9 @@ class TestNoteEditDeeper:
         note.short_id = "abc123"
         note.title = "Note"
         mock_store.update.return_value = note
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("edit abc123 --body New body content")
         assert repl._last_exit_code == 0
 
@@ -20123,14 +21450,18 @@ class TestNoteEditDeeper:
 class TestNoteDeleteDeeper:
     def test_note_delete_no_args(self, repl):
         mock_store = MagicMock()
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("delete")
         assert repl._last_exit_code == 1
 
     def test_note_delete_not_found(self, repl):
         mock_store = MagicMock()
         mock_store.delete.return_value = False
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("delete nonexistent")
         assert repl._last_exit_code == 1
 
@@ -20148,14 +21479,18 @@ class TestNoteSearchDeeper:
         note.status = "open"
         note.date_str = "2024-01-01"
         mock_store.search.return_value = [note]
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("search test")
         assert repl._last_exit_code == 0
 
     def test_note_search_empty_results(self, repl):
         mock_store = MagicMock()
         mock_store.search.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("search nonexistent")
         assert repl._last_exit_code == 0
 
@@ -20172,14 +21507,18 @@ class TestNoteTodayDeeper:
         note.tags = ["tag1"]
         note.status = "wip"
         mock_store.today.return_value = [note]
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("today")
         assert repl._last_exit_code == 0
 
     def test_note_today_empty(self, repl):
         mock_store = MagicMock()
         mock_store.today.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("today")
         assert repl._last_exit_code == 0
 
@@ -20192,7 +21531,9 @@ class TestNoteExportDeeper:
         mock_store = MagicMock()
         mock_store.export_all.return_value = "exported"
         mock_store.count.return_value = 3
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("export /tmp/notes.md")
         assert repl._last_exit_code == 0
 
@@ -20200,7 +21541,9 @@ class TestNoteExportDeeper:
         mock_store = MagicMock()
         mock_store.export_all.return_value = "# All notes"
         mock_store.count.return_value = 1
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("export")
         assert repl._last_exit_code == 0
 
@@ -20216,14 +21559,18 @@ class TestNoteTagsDeeper:
         note2 = MagicMock()
         note2.tags = ["bug", "feature"]
         mock_store.list_notes.return_value = [note1, note2]
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("tags")
         assert repl._last_exit_code == 0
 
     def test_note_tags_empty(self, repl):
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("tags")
         assert repl._last_exit_code == 0
 
@@ -20235,14 +21582,18 @@ class TestNoteSprintDeeper:
     def test_note_sprint_list_all(self, repl):
         mock_store = MagicMock()
         mock_store.sprints.return_value = ["S1", "S2"]
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("sprint")
         assert repl._last_exit_code == 0
 
     def test_note_sprint_no_sprints(self, repl):
         mock_store = MagicMock()
         mock_store.sprints.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("sprint")
         assert repl._last_exit_code == 0
 
@@ -20255,7 +21606,9 @@ class TestNoteSprintDeeper:
         note.status = "open"
         note.gh = ""
         mock_store.list_notes.return_value = [note]
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("sprint S1")
         assert repl._last_exit_code == 0
 
@@ -20269,14 +21622,18 @@ class TestNoteSprintDeeper:
         note.gh = ""
         mock_store.list_notes.return_value = [note]
         mock_store.sprint_report.return_value = "Sprint Report Line 1\nSprint Report Line 2"
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("sprint S1 report")
         assert repl._last_exit_code == 0
 
     def test_note_sprint_no_notes(self, repl):
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("sprint S99")
         assert repl._last_exit_code == 0
 
@@ -20296,14 +21653,18 @@ class TestNoteStatusDeeper:
         note_blocked = MagicMock()
         note_blocked.status = "blocked"
         mock_store.list_notes.return_value = [note_open, note_wip, note_done, note_blocked]
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("status")
         assert repl._last_exit_code == 0
 
     def test_note_status_empty(self, repl):
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("status")
         assert repl._last_exit_code == 0
 
@@ -20321,21 +21682,27 @@ class TestNoteTimelineDeeper:
         note.status = "open"
         note.sprint = "S1"
         mock_store.timeline.return_value = [("2024-01-01", [note])]
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("timeline --days 30")
         assert repl._last_exit_code == 0
 
     def test_note_timeline_with_tag(self, repl):
         mock_store = MagicMock()
         mock_store.timeline.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("timeline --tag tag1 --days 7")
         assert repl._last_exit_code == 0
 
     def test_note_timeline_with_status(self, repl):
         mock_store = MagicMock()
         mock_store.timeline.return_value = []
-        with patch.dict('sys.modules', {'notes': MagicMock(get_note_store=MagicMock(return_value=mock_store))}):
+        with patch.dict(
+            "sys.modules", {"notes": MagicMock(get_note_store=MagicMock(return_value=mock_store))}
+        ):
             repl._cmd_note("timeline --status done --days 14")
         assert repl._last_exit_code == 0
 
@@ -20345,23 +21712,25 @@ class TestNoteTimelineDeeper:
 
 class TestConsoleDeeper:
     def test_table(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._table([["a", "b"], ["c", "d"]], header=["X", "Y"]))
+        _run_with_io(
+            repl, [], lambda: repl._table([["a", "b"], ["c", "d"]], header=["X", "Y"])
+        )
         assert repl._last_exit_code == 0
 
     def test_box(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._box("Hello Box"))
+        _run_with_io(repl, [], lambda: repl._box("Hello Box"))
         assert repl._last_exit_code == 0
 
     def test_status(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._status("ok", "Done", "detail"))
+        _run_with_io(repl, [], lambda: repl._status("ok", "Done", "detail"))
         assert repl._last_exit_code == 0
 
     def test_kvlist(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._kvlist([("key1", "val1"), ("key2", "val2")]))
+        _run_with_io(repl, [], lambda: repl._kvlist([("key1", "val1"), ("key2", "val2")]))
         assert repl._last_exit_code == 0
 
     def test_kvlist_empty(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._kvlist([]))
+        _run_with_io(repl, [], lambda: repl._kvlist([]))
         assert repl._last_exit_code == 0
 
 
@@ -20450,7 +21819,7 @@ class TestCmdSleepDeeper4:
             pass
 
     def test_sleep_zero(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_sleep("0"))
+        _run_with_io(repl, [], lambda: repl._cmd_sleep("0"))
         assert repl._last_exit_code == 0
 
 
@@ -20463,7 +21832,7 @@ class TestCmdEchoDeeper3:
         assert "hello world" in out
 
     def test_echo_empty(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_echo(""))
+        _run_with_io(repl, [], lambda: repl._cmd_echo(""))
         assert repl._last_exit_code == 0
 
 
@@ -20489,11 +21858,11 @@ class TestCmdChmodDeeper3:
 
 class TestCmdDuDeeper3:
     def test_du_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_du(""))
+        _run_with_io(repl, [], lambda: repl._cmd_du(""))
         assert repl._last_exit_code == 0
 
     def test_du_bad_path(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_du("/nonexistent_xyz"))
+        _run_with_io(repl, [], lambda: repl._cmd_du("/nonexistent_xyz"))
         assert repl._last_exit_code == 0
 
 
@@ -20524,7 +21893,7 @@ class TestCmdStatDeeper3:
 
 class TestCmdLnDeeper4:
     def test_ln_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_ln(""))
+        _run_with_io(repl, [], lambda: repl._cmd_ln(""))
         assert repl._last_exit_code == 1
 
 
@@ -20533,7 +21902,7 @@ class TestCmdLnDeeper4:
 
 class TestCmdFoldDeeper3:
     def test_fold_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_fold(""))
+        _run_with_io(repl, [], lambda: repl._cmd_fold(""))
         assert repl._last_exit_code == 1
 
 
@@ -20542,7 +21911,7 @@ class TestCmdFoldDeeper3:
 
 class TestCmdNlDeeper3:
     def test_nl_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_nl(""))
+        _run_with_io(repl, [], lambda: repl._cmd_nl(""))
         assert repl._last_exit_code == 1
 
 
@@ -20551,7 +21920,7 @@ class TestCmdNlDeeper3:
 
 class TestCmdTeeDeeper3:
     def test_tee_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_tee(""))
+        _run_with_io(repl, [], lambda: repl._cmd_tee(""))
         assert repl._last_exit_code == 1
 
 
@@ -20560,7 +21929,7 @@ class TestCmdTeeDeeper3:
 
 class TestCmdCutDeeper3:
     def test_cut_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_cut(""))
+        _run_with_io(repl, [], lambda: repl._cmd_cut(""))
         assert repl._last_exit_code == 1
 
 
@@ -20569,7 +21938,7 @@ class TestCmdCutDeeper3:
 
 class TestCmdTrDeeper3:
     def test_tr_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_tr(""))
+        _run_with_io(repl, [], lambda: repl._cmd_tr(""))
         assert repl._last_exit_code == 1
 
 
@@ -20578,7 +21947,7 @@ class TestCmdTrDeeper3:
 
 class TestCmdPrintfDeeper3:
     def test_printf_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_printf(""))
+        _run_with_io(repl, [], lambda: repl._cmd_printf(""))
         assert repl._last_exit_code == 1
 
 
@@ -20587,7 +21956,7 @@ class TestCmdPrintfDeeper3:
 
 class TestCmdShufDeeper3V2:
     def test_shuf_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_shuf(""))
+        _run_with_io(repl, [], lambda: repl._cmd_shuf(""))
         assert repl._last_exit_code == 1
 
 
@@ -20596,7 +21965,7 @@ class TestCmdShufDeeper3V2:
 
 class TestCmdRevDeeper3V2:
     def test_rev_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_rev(""))
+        _run_with_io(repl, [], lambda: repl._cmd_rev(""))
         assert repl._last_exit_code == 1
 
 
@@ -20605,7 +21974,7 @@ class TestCmdRevDeeper3V2:
 
 class TestCmdPasteDeeper5:
     def test_paste_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_paste(""))
+        _run_with_io(repl, [], lambda: repl._cmd_paste(""))
         assert repl._last_exit_code == 1
 
 
@@ -20614,7 +21983,7 @@ class TestCmdPasteDeeper5:
 
 class TestCmdCommDeeper5:
     def test_comm_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_comm(""))
+        _run_with_io(repl, [], lambda: repl._cmd_comm(""))
         assert repl._last_exit_code == 1
 
 
@@ -20623,7 +21992,7 @@ class TestCmdCommDeeper5:
 
 class TestCmdJoinDeeper2:
     def test_join_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_join(""))
+        _run_with_io(repl, [], lambda: repl._cmd_join(""))
         assert repl._last_exit_code == 1
 
 
@@ -20632,7 +22001,7 @@ class TestCmdJoinDeeper2:
 
 class TestCmdOdDeeper3:
     def test_od_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_od(""))
+        _run_with_io(repl, [], lambda: repl._cmd_od(""))
         assert repl._last_exit_code == 1
 
 
@@ -20641,7 +22010,7 @@ class TestCmdOdDeeper3:
 
 class TestCmdXargsDeeper3V2:
     def test_xargs_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_xargs(""))
+        _run_with_io(repl, [], lambda: repl._cmd_xargs(""))
         assert repl._last_exit_code == 1
 
 
@@ -20650,7 +22019,7 @@ class TestCmdXargsDeeper3V2:
 
 class TestCmdExpandDeeper3:
     def test_expand_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_expand(""))
+        _run_with_io(repl, [], lambda: repl._cmd_expand(""))
         assert repl._last_exit_code == 1
 
 
@@ -20659,7 +22028,7 @@ class TestCmdExpandDeeper3:
 
 class TestCmdUnexpandDeeper3:
     def test_unexpand_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_unexpand(""))
+        _run_with_io(repl, [], lambda: repl._cmd_unexpand(""))
         assert repl._last_exit_code == 1
 
 
@@ -20668,7 +22037,7 @@ class TestCmdUnexpandDeeper3:
 
 class TestCmdClearDeeper2:
     def test_clear(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_clear(""))
+        _run_with_io(repl, [], lambda: repl._cmd_clear(""))
         assert repl._last_exit_code == 0
 
 
@@ -20774,7 +22143,7 @@ class TestRunMethod:
 
     def test_run_keyboard_interrupt(self, repl):
         call_count = [0]
-        original_read = repl.io.read
+
         def mock_read(prompt=""):
             call_count[0] += 1
             if call_count[0] == 1:
@@ -20782,6 +22151,7 @@ class TestRunMethod:
             if call_count[0] == 2:
                 return "exit"
             return None
+
         mem = MemoryIO()
         mem.read = mock_read
         old_io = repl.io
@@ -20822,7 +22192,7 @@ class TestSetupReadlineDeeper:
             pass
 
     def test_setup_readline_with_existing_histfile(self, repl, tmp_path):
-        histfile = Path.home() / ".config" / "sloughgpt" / ".shell_history"
+        Path.home() / ".config" / "sloughgpt" / ".shell_history"
         try:
             repl._setup_readline()
         except Exception:
@@ -20889,7 +22259,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds = MagicMock()
         mock_cmds.datasets.return_value = []
         repl.cmds = mock_cmds
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("")
         assert repl._last_exit_code == 0
 
@@ -20897,7 +22269,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds = MagicMock()
         mock_cmds.datasets.return_value = [{"name": "ds1"}, {"name": "ds2"}]
         repl.cmds = mock_cmds
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("")
         assert repl._last_exit_code == 0
 
@@ -20905,27 +22279,37 @@ class TestCmdTrainDeeperV2:
         mock_cmds = MagicMock()
         mock_cmds.train_status.return_value = []
         repl.cmds = mock_cmds
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("status")
         assert repl._last_exit_code == 0
 
     def test_train_stop_no_id(self, repl):
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("stop")
         assert repl._last_exit_code == 0
 
     def test_train_follow_no_id(self, repl):
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("follow")
         assert repl._last_exit_code == 0
 
     def test_train_load_no_name(self, repl):
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("load")
         assert repl._last_exit_code == 0
 
     def test_train_del_no_name(self, repl):
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("del")
         assert repl._last_exit_code == 0
 
@@ -20933,7 +22317,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds = MagicMock()
         mock_cmds.train_auto.return_value = {"error": "missing soul"}
         repl.cmds = mock_cmds
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("auto")
         assert repl._last_exit_code == 0
 
@@ -20942,7 +22328,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds.train_auto.return_value = {"status": "started", "id": "abc123"}
         repl.cmds = mock_cmds
         repl._stream_train_progress = MagicMock()
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("auto friendly")
         assert repl._last_exit_code == 0
 
@@ -20950,7 +22338,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds = MagicMock()
         mock_cmds.train_distill.return_value = {"error": "dataset not found"}
         repl.cmds = mock_cmds
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("distill nonexistent")
         assert repl._last_exit_code == 0
 
@@ -20958,7 +22348,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds = MagicMock()
         mock_cmds.train_hf.return_value = {"error": "model not found"}
         repl.cmds = mock_cmds
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("hf badmodel dataset1")
         assert repl._last_exit_code == 0
 
@@ -20966,7 +22358,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds = MagicMock()
         mock_cmds.train_quick.return_value = {"error": "training failed"}
         repl.cmds = mock_cmds
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("shakespeare")
         assert repl._last_exit_code == 0
 
@@ -20974,7 +22368,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds = MagicMock()
         mock_cmds.load_checkpoint.return_value = {"error": "not found"}
         repl.cmds = mock_cmds
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("load nonexistent")
         assert repl._last_exit_code == 0
 
@@ -20982,7 +22378,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds = MagicMock()
         mock_cmds.delete_checkpoint.return_value = {"error": "not found"}
         repl.cmds = mock_cmds
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("del nonexistent")
         assert repl._last_exit_code == 0
 
@@ -20990,7 +22388,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds = MagicMock()
         mock_cmds.load_checkpoint.return_value = {"status": "loaded"}
         repl.cmds = mock_cmds
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("load my-checkpoint")
         assert repl._last_exit_code == 0
 
@@ -20998,7 +22398,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds = MagicMock()
         mock_cmds.delete_checkpoint.return_value = {"status": "deleted"}
         repl.cmds = mock_cmds
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("del old-checkpoint")
         assert repl._last_exit_code == 0
 
@@ -21007,7 +22409,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds.train_distill.return_value = {"status": "started", "id": "abc123"}
         repl.cmds = mock_cmds
         repl._stream_train_progress = MagicMock()
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("distill shakespeare gpt2 10")
         assert repl._last_exit_code == 0
 
@@ -21016,7 +22420,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds.train_hf.return_value = {"status": "started", "id": "abc123"}
         repl.cmds = mock_cmds
         repl._stream_train_progress = MagicMock()
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("hf gpt2 shakespeare 5")
         assert repl._last_exit_code == 0
 
@@ -21025,7 +22431,9 @@ class TestCmdTrainDeeperV2:
         mock_cmds.train_auto.return_value = {"status": "started", "id": "abc123"}
         repl.cmds = mock_cmds
         repl._stream_train_progress = MagicMock()
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_train("auto friendly gpt2 20")
         assert repl._last_exit_code == 0
 
@@ -21106,7 +22514,9 @@ class TestCmdSvcDeeperV2:
 
 class TestCmdBootDeeperV2:
     def test_boot_already_running(self, repl):
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_boot("")
         assert repl._last_exit_code == 0
 
@@ -21115,7 +22525,9 @@ class TestCmdBootDeeperV2:
         api.is_running = False
         api.start.return_value = {"ok": True}
         repl.os._api = api
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             repl._cmd_boot("")
         assert repl._last_exit_code == 0
 
@@ -21213,13 +22625,15 @@ class TestDispatchEdgeCases:
 
     def test_dispatch_with_redirect(self, repl):
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             tmp = f.name
         try:
             repl._dispatch(f"echo redirect_test > {tmp}")
             assert repl._last_exit_code == 0
         finally:
             import os
+
             try:
                 os.unlink(tmp)
             except OSError:
@@ -21234,7 +22648,7 @@ class TestExecuteSingleDeeper:
         mock_mod = MagicMock()
         mock_mod.run.return_value = 0
         repl._ext_cmds["testext"] = mock_mod
-        out = repl._execute_single("testext arg1 arg2")
+        repl._execute_single("testext arg1 arg2")
         assert mock_mod.run.called
         assert repl._last_exit_code == 0
 
@@ -21242,28 +22656,32 @@ class TestExecuteSingleDeeper:
         mock_mod = MagicMock()
         mock_mod.run.return_value = 0
         repl._ext_cmds["testext"] = mock_mod
-        out = repl._execute_single("testext", piped_input="hello world")
+        repl._execute_single("testext", piped_input="hello world")
         assert repl._env.get("_piped_input") is None
         assert repl._last_exit_code == 0
 
     def test_execute_single_system_exit_int(self, repl):
         def _boom(r, args):
             raise SystemExit(42)
+
         repl.COMMANDS["boomcmd"] = _boom
-        out = repl._execute_single("boomcmd")
+        repl._execute_single("boomcmd")
         assert repl._last_exit_code == 42
 
     def test_execute_single_system_exit_str(self, repl):
         def _boom(r, args):
             raise SystemExit("fatal error")
+
         repl.COMMANDS["boomcmd"] = _boom
-        out = repl._execute_single("boomcmd")
+        repl._execute_single("boomcmd")
         assert repl._last_exit_code == 1
 
     def test_execute_single_inline_env_restore(self, repl):
         repl._env["MYVAR"] = "original"
+
         def _show(r, args):
             r._print(f"MYVAR={r._env.get('MYVAR', '')}")
+
         repl.COMMANDS["showenv"] = _show
         out = repl._execute_single("MYVAR=overridden showenv")
         assert "MYVAR=overridden" in out
@@ -21272,14 +22690,17 @@ class TestExecuteSingleDeeper:
     def test_execute_single_inline_env_new_var(self, repl):
         def _show(r, args):
             r._print(f"NEWVAR={r._env.get('NEWVAR', '')}")
+
         repl.COMMANDS["showenv"] = _show
         out = repl._execute_single("NEWVAR=hello showenv")
         assert "NEWVAR=hello" in out
         assert "NEWVAR" not in repl._env
 
     def test_execute_single_redirect_os_write(self, repl):
-        import tempfile, os
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        import os
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             tmp = f.name
         try:
             repl._execute_single(f"echo test_content > {tmp}")
@@ -21290,8 +22711,10 @@ class TestExecuteSingleDeeper:
             os.unlink(tmp)
 
     def test_execute_single_redirect_append(self, repl):
-        import tempfile, os
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        import os
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("line1\n")
             tmp = f.name
         try:
@@ -21304,7 +22727,7 @@ class TestExecuteSingleDeeper:
             os.unlink(tmp)
 
     def test_execute_single_redirect_os_error(self, repl):
-        out = repl._execute_single("echo test > /nonexistent_dir/file.txt")
+        repl._execute_single("echo test > /nonexistent_dir/file.txt")
         assert repl._last_exit_code == 1
 
 
@@ -21406,7 +22829,11 @@ class TestCmdTrainDeeperV3:
 class TestGetCurrentModelSoulReal:
     def test_get_current_model_cache_hit(self, repl):
         repl._completion_cache["__model__"] = (time.monotonic(), "qwen")
-        result = ShellREPL._get_current_model.__wrapped__(repl) if hasattr(ShellREPL._get_current_model, '__wrapped__') else repl._get_current_model()
+        result = (
+            ShellREPL._get_current_model.__wrapped__(repl)
+            if hasattr(ShellREPL._get_current_model, "__wrapped__")
+            else repl._get_current_model()
+        )
         assert result == "" or result == "qwen"
 
     def test_get_current_soul_cache_hit(self, repl):
@@ -21418,6 +22845,7 @@ class TestGetCurrentModelSoulReal:
 class TestSetupReadlineDeeperV2:
     def test_setup_readline_real_with_readline(self, repl):
         import sys
+
         if "readline" not in sys.modules:
             pytest.skip("readline not available")
         repl._setup_readline()
@@ -21442,15 +22870,19 @@ class TestCmdRunMethod:
         repl.io = mem
         repl.console._io = mem
         repl._running = True
-        with patch.object(repl.os, 'shutdown'), \
-             patch.object(repl.os, 'boot', return_value=([], {"available": False})), \
-             patch.object(type(repl.os.api), 'is_running', new_callable=PropertyMock, return_value=True), \
-             patch.object(repl.os.api, 'start', return_value={"ok": True}), \
-             patch.object(repl, '_render_prompt', return_value="λ"), \
-             patch.object(repl, '_print_header'), \
-             patch.object(repl, '_show_welcome'), \
-             patch.object(repl._audit, 'startup'), \
-             patch.object(repl._audit, 'shutdown'):
+        with (
+            patch.object(repl.os, "shutdown"),
+            patch.object(repl.os, "boot", return_value=([], {"available": False})),
+            patch.object(
+                type(repl.os.api), "is_running", new_callable=PropertyMock, return_value=True
+            ),
+            patch.object(repl.os.api, "start", return_value={"ok": True}),
+            patch.object(repl, "_render_prompt", return_value="λ"),
+            patch.object(repl, "_print_header"),
+            patch.object(repl, "_show_welcome"),
+            patch.object(repl._audit, "startup"),
+            patch.object(repl._audit, "shutdown"),
+        ):
             repl.run()
 
     def test_run_state_first_run(self, repl):
@@ -21460,15 +22892,19 @@ class TestCmdRunMethod:
         repl.state.first_run = True
         repl._running = True
         mock_welcome = MagicMock()
-        with patch.object(repl.os, 'shutdown'), \
-             patch.object(repl.os, 'boot', return_value=([], {"available": False})), \
-             patch.object(type(repl.os.api), 'is_running', new_callable=PropertyMock, return_value=True), \
-             patch.object(repl.os.api, 'start', return_value={"ok": True}), \
-             patch.object(repl, '_render_prompt', return_value="λ"), \
-             patch.object(repl, '_print_header'), \
-             patch.object(repl, '_show_welcome', mock_welcome), \
-             patch.object(repl._audit, 'startup'), \
-             patch.object(repl._audit, 'shutdown'):
+        with (
+            patch.object(repl.os, "shutdown"),
+            patch.object(repl.os, "boot", return_value=([], {"available": False})),
+            patch.object(
+                type(repl.os.api), "is_running", new_callable=PropertyMock, return_value=True
+            ),
+            patch.object(repl.os.api, "start", return_value={"ok": True}),
+            patch.object(repl, "_render_prompt", return_value="λ"),
+            patch.object(repl, "_print_header"),
+            patch.object(repl, "_show_welcome", mock_welcome),
+            patch.object(repl._audit, "startup"),
+            patch.object(repl._audit, "shutdown"),
+        ):
             repl.run()
             mock_welcome.assert_called_once()
 
@@ -21478,15 +22914,19 @@ class TestCmdRunMethod:
         repl.console._io = mem
         repl._running = True
         repl.state.save = MagicMock()
-        with patch.object(repl.os, 'shutdown'), \
-             patch.object(repl.os, 'boot', return_value=([], {"available": False})), \
-             patch.object(type(repl.os.api), 'is_running', new_callable=PropertyMock, return_value=True), \
-             patch.object(repl.os.api, 'start', return_value={"ok": True}), \
-             patch.object(repl, '_render_prompt', return_value="λ"), \
-             patch.object(repl, '_print_header'), \
-             patch.object(repl, '_show_welcome'), \
-             patch.object(repl._audit, 'startup'), \
-             patch.object(repl._audit, 'shutdown'):
+        with (
+            patch.object(repl.os, "shutdown"),
+            patch.object(repl.os, "boot", return_value=([], {"available": False})),
+            patch.object(
+                type(repl.os.api), "is_running", new_callable=PropertyMock, return_value=True
+            ),
+            patch.object(repl.os.api, "start", return_value={"ok": True}),
+            patch.object(repl, "_render_prompt", return_value="λ"),
+            patch.object(repl, "_print_header"),
+            patch.object(repl, "_show_welcome"),
+            patch.object(repl._audit, "startup"),
+            patch.object(repl._audit, "shutdown"),
+        ):
             repl.run()
         repl.state.save.assert_called()
 
@@ -21496,27 +22936,31 @@ class TestCmdRunMethod:
         repl.io = mem
         repl.console._io = mem
         repl._running = True
-        with patch.object(repl.os, 'shutdown'), \
-             patch.object(repl.os, 'boot', return_value=([], {"available": False})), \
-             patch.object(type(repl.os.api), 'is_running', new_callable=PropertyMock, return_value=True), \
-             patch.object(repl.os.api, 'start', return_value={"ok": True}), \
-             patch.object(repl, '_render_prompt', return_value="λ"), \
-             patch.object(repl, '_print_header'), \
-             patch.object(repl, '_show_welcome'), \
-             patch.object(repl._audit, 'startup'), \
-             patch.object(repl._audit, 'shutdown'):
+        with (
+            patch.object(repl.os, "shutdown"),
+            patch.object(repl.os, "boot", return_value=([], {"available": False})),
+            patch.object(
+                type(repl.os.api), "is_running", new_callable=PropertyMock, return_value=True
+            ),
+            patch.object(repl.os.api, "start", return_value={"ok": True}),
+            patch.object(repl, "_render_prompt", return_value="λ"),
+            patch.object(repl, "_print_header"),
+            patch.object(repl, "_show_welcome"),
+            patch.object(repl._audit, "startup"),
+            patch.object(repl._audit, "shutdown"),
+        ):
             repl.run()
         assert repl._cmd_count == 1
 
 
 class TestCmdRenderDeeperV2:
     def test_render_render_full_flag(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_render("--full")
         assert repl._last_exit_code == 0
 
     def test_render_render_preset_flag(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_render("--preset dark")
         assert repl._last_exit_code == 0
 
@@ -21526,48 +22970,48 @@ class TestCmdRenderDeeperV2:
         assert "Unknown" in cap.getvalue() or "Try" in cap.getvalue()
 
     def test_render_with_scene(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_render("test_scene")
         assert repl._last_exit_code == 0
 
     def test_render_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_render("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdLogsDeeperV2:
     def test_logs_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_logs("")
         assert repl._last_exit_code == 0
 
     def test_logs_explain(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_logs("explain")
         assert repl._last_exit_code == 0
 
     def test_logs_follow(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_logs("follow 1")
         assert repl._last_exit_code == 0
 
 
 class TestCmdApiDeeperV2:
     def test_api_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_api("")
         assert repl._last_exit_code == 0
 
     def test_api_status(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_api("status")
         assert repl._last_exit_code == 0
 
 
 class TestCmdBootShutdownV4:
     def test_boot_already_running(self, repl):
-        with patch.object(type(repl.os), 'api', new_callable=PropertyMock) as mock_api:
+        with patch.object(type(repl.os), "api", new_callable=PropertyMock) as mock_api:
             mock_api.return_value.is_running = True
             mock_api.return_value.start = MagicMock(return_value={"ok": True})
             repl._cmd_boot("")
@@ -21575,13 +23019,13 @@ class TestCmdBootShutdownV4:
 
     def test_shutdown_sets_running_false(self, repl):
         repl._running = True
-        with patch.object(repl.os, 'shutdown'):
+        with patch.object(repl.os, "shutdown"):
             repl._cmd_shutdown("")
         assert not repl._running
 
     def test_shutdown_calls_os_shutdown(self, repl):
         repl._running = True
-        with patch.object(repl.os, 'shutdown') as mock_shutdown:
+        with patch.object(repl.os, "shutdown") as mock_shutdown:
             repl._cmd_shutdown("")
             mock_shutdown.assert_called_once()
 
@@ -21597,50 +23041,50 @@ class TestCmdSvcDeeperV3:
 
     def test_svc_no_args(self, repl):
         self._svc_repl(repl)
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_svc("")
         assert repl._last_exit_code == 0
 
     def test_svc_restart_no_name(self, repl):
         self._svc_repl(repl)
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_svc("restart")
         assert repl._last_exit_code == 1
 
     def test_svc_list(self, repl):
         self._svc_repl(repl)
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_svc("list")
         assert repl._last_exit_code == 0
 
     def test_svc_ls(self, repl):
         self._svc_repl(repl)
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_svc("ls")
         assert repl._last_exit_code == 0
 
     def test_svc_status_no_name(self, repl):
         self._svc_repl(repl)
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_svc("status")
         assert repl._last_exit_code == 0
 
     def test_svc_runlevel(self, repl):
         self._svc_repl(repl)
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_svc("runlevel")
         assert repl._last_exit_code == 0
 
     def test_svc_unknown_subcmd(self, repl):
         self._svc_repl(repl)
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_svc("zzz_unknown")
         assert repl._last_exit_code == 1
 
 
 class TestCmdEventsDeeperV2:
     def test_events_no_args(self, repl):
-        with patch("domain.infrastructure.event_bus.get_event_bus") as mock_eb:
+        with patch("domain.infrastructure._internal.event_bus.get_event_bus") as mock_eb:
             mock_bus = MagicMock()
             mock_bus.replay.return_value = []
             mock_eb.return_value = mock_bus
@@ -21669,7 +23113,7 @@ class TestCmdKillDeeperV2:
     def test_kill_exception(self, repl):
         repl.cmds = MagicMock()
         repl.cmds.kill.side_effect = Exception("kill failed")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             try:
                 repl._cmd_kill("1234")
             except Exception:
@@ -21678,29 +23122,29 @@ class TestCmdKillDeeperV2:
 
 class TestCmdWhichTypeDeeper:
     def test_which_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_which("")
         assert repl._last_exit_code == 1
 
     def test_type_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_type("")
         assert repl._last_exit_code == 1
 
     def test_which_known_cmd(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_which("echo")
         assert repl._last_exit_code == 0
 
     def test_type_known_cmd(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_type("echo")
         assert repl._last_exit_code == 0
 
 
 class TestCmdReadDeeperV2:
     def test_read_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_read("")
         assert repl._last_exit_code == 1
 
@@ -21729,7 +23173,7 @@ class TestCmdWatchDeeperV2:
 
     def test_watch_negative_interval(self, repl):
         repl._execute_single = lambda cmd, piped="": "output"
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             try:
                 repl._cmd_watch("-1 echo hi")
             except ValueError:
@@ -21738,11 +23182,13 @@ class TestCmdWatchDeeperV2:
     @pytest.mark.skip(reason="watch uses subprocess.run not _execute_single")
     def test_watch_keyboard_interrupt(self, repl):
         call_count = [0]
+
         def fake_execute(cmd, piped=""):
             call_count[0] += 1
             if call_count[0] >= 2:
                 raise KeyboardInterrupt()
             return "output"
+
         repl._execute_single = fake_execute
         with _CaptureOutput(repl) as cap:
             repl._cmd_watch("1 echo hi")
@@ -21759,49 +23205,49 @@ class TestCmdSleepDeeperV3:
 
 class TestCmdChmodDeeperV2:
     def test_chmod_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_chmod("")
         assert repl._last_exit_code == 1
 
 
 class TestCmdDuDeeperV2:
     def test_du_nonexistent(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_du("/nonexistent_path_xyz")
         assert repl._last_exit_code == 0
 
 
 class TestCmdDiffDeeperV2:
     def test_diff_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_diff("")
         assert repl._last_exit_code == 1
 
 
 class TestCmdStatDeeperV2:
     def test_stat_nonexistent(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_stat("/nonexistent_file_xyz")
         assert repl._last_exit_code == 1
 
 
 class TestCmdLnDeeperV2:
     def test_ln_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_ln("")
         assert repl._last_exit_code == 1
 
 
 class TestCmdTestDeeperV2:
     def test_test_z_no_second_arg(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_test("-z ")
         assert repl._last_exit_code == 1
 
 
 class TestCmdDirnameDeeperV3:
     def test_dirname_single_file(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_dirname("file.txt")
         assert repl._last_exit_code == 0
 
@@ -21982,7 +23428,11 @@ class TestCmdPyDeeperV2:
     def test_py_syntax_error(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_py("def (")
-        assert "Error" in cap.getvalue() or "error" in cap.getvalue() or "SyntaxError" in cap.getvalue()
+        assert (
+            "Error" in cap.getvalue()
+            or "error" in cap.getvalue()
+            or "SyntaxError" in cap.getvalue()
+        )
 
     def test_py_runtime_error(self, repl):
         with _CaptureOutput(repl) as cap:
@@ -22012,6 +23462,7 @@ class TestFormatSize:
 class TestDumpJsonDeeperV2:
     def test_dump_json_datetime(self, repl):
         import datetime
+
         obj = {"ts": datetime.datetime.now()}
         result = repl._dump_json(obj)
         assert isinstance(result, str)
@@ -22093,11 +23544,18 @@ class TestSuggestCommandDeeperV2:
 
 class TestRequireApiDeeper:
     def test_require_api_available(self, repl):
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": True}):
+        with patch.object(
+            type(repl.os), "api_status", new_callable=PropertyMock, return_value={"available": True}
+        ):
             assert repl._require_api("test") is True
 
     def test_require_api_unavailable(self, repl):
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
+        with patch.object(
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": False},
+        ):
             with _CaptureOutput(repl) as cap:
                 result = repl._require_api("test")
             assert result is False
@@ -22150,7 +23608,7 @@ class TestCmdProtectDeeperV2:
         assert "Usage" in cap.getvalue()
 
     def test_protect_var(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_protect("MYVAR")
         assert repl._last_exit_code == 0
 
@@ -22162,7 +23620,7 @@ class TestCmdUnprotectDeeperV2:
         assert "Usage" in cap.getvalue()
 
     def test_unprotect_var(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_unprotect("MYVAR")
         assert repl._last_exit_code == 0
 
@@ -22174,7 +23632,7 @@ class TestCmdPermitDeeperV2:
         assert "Usage" in cap.getvalue()
 
     def test_permit_cmd(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_permit("echo")
         assert repl._last_exit_code == 0
 
@@ -22186,7 +23644,7 @@ class TestCmdDenyDeeperV2:
         assert "Usage" in cap.getvalue()
 
     def test_deny_cmd(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_deny("echo")
         assert repl._last_exit_code == 0
 
@@ -22203,7 +23661,7 @@ class TestCmdCommDeeperV2:
         f2 = tmp_path / "b.txt"
         f1.write_text("a\nb\nc\n")
         f2.write_text("b\nc\nd\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_comm(f"{f1} {f2}")
         assert repl._last_exit_code == 0
 
@@ -22249,7 +23707,7 @@ class TestCmdJoinDeeperV2:
         f2 = tmp_path / "b.txt"
         f1.write_text("1\tone\n2\ttwo\n")
         f2.write_text("1\tuno\n2\tdos\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_join(f"{f1} {f2}")
         assert repl._last_exit_code == 0
 
@@ -22286,14 +23744,14 @@ class TestCmdOdDeeperV2:
     def test_od_file(self, repl, tmp_path):
         f = tmp_path / "test.bin"
         f.write_bytes(b"\x00\x01\x02")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_od(str(f))
         assert repl._last_exit_code == 0
 
 
 class TestCmdNlDeeperV3:
     def test_nl_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_nl("")
         assert repl._last_exit_code == 1
 
@@ -22347,20 +23805,20 @@ class TestCmdRevDeeper:
 
 class TestCmdShufDeeper:
     def test_shuf_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_shuf("")
         assert repl._last_exit_code == 1
 
 
 class TestCmdFoldDeeperV3:
     def test_fold_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_fold("")
         assert repl._last_exit_code == 1
 
     def test_fold_piped(self, repl):
         repl._piped_input = "hello world foo bar\n"
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_fold("-w10")
         assert repl._last_exit_code == 0
 
@@ -22372,7 +23830,7 @@ class TestCmdPrintfDeeperV2:
 
     def test_printf_format(self, repl):
         with _CaptureOutput(repl) as cap:
-            repl._cmd_printf("%s hello" "there")
+            repl._cmd_printf("%s hellothere")
         out = cap.getvalue()
         assert "hellothere" in out
 
@@ -22386,7 +23844,7 @@ class TestCmdPrintfDeeperV2:
 
 class TestCmdYesDeeperV2:
     def test_yes_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_yes("")
         assert repl._last_exit_code == 0
 
@@ -22460,12 +23918,15 @@ class TestSafeImportDeeper:
 class TestGroupExtCmdsDeeper:
     def test_group_ext_cmds_empty(self, repl):
         from domain.shell._internal.repl import ShellREPL
+
         result = ShellREPL._group_ext_cmds({})
         assert result == {}
 
     def test_group_ext_cmds_multiple(self, repl):
-        from domain.shell._internal.repl import ShellREPL
         from types import ModuleType
+
+        from domain.shell._internal.repl import ShellREPL
+
         m1 = ModuleType("m1")
         m1.help = "File ops"
         m2 = ModuleType("m2")
@@ -22480,13 +23941,13 @@ class TestGroupExtCmdsDeeper:
 
 class TestLoadRcDeeper:
     def test_load_rc_no_file(self, repl):
-        with patch.object(repl, '_rc_path', return_value=Path("/nonexistent/rc")):
+        with patch.object(repl, "_rc_path", return_value=Path("/nonexistent/rc")):
             repl._load_rc()
 
     def test_load_rc_with_file(self, repl, tmp_path):
         rc = tmp_path / "rc"
         rc.write_text("# comment\necho from_rc\n")
-        with patch.object(repl, '_rc_path', return_value=rc):
+        with patch.object(repl, "_rc_path", return_value=rc):
             repl._load_rc()
 
 
@@ -22506,13 +23967,13 @@ class TestRenderPromptDeeperV2:
 
     def test_render_prompt_with_model(self, repl):
         repl._env["PS1"] = "\\m> "
-        with patch.object(repl.__class__, '_get_current_model', return_value="gpt2"):
+        with patch.object(repl.__class__, "_get_current_model", return_value="gpt2"):
             result = repl._render_prompt()
         assert "gpt2" in result
 
     def test_render_prompt_with_soul(self, repl):
         repl._env["PS1"] = "\\S> "
-        with patch.object(repl.__class__, '_get_current_soul', return_value="friendly"):
+        with patch.object(repl.__class__, "_get_current_soul", return_value="friendly"):
             result = repl._render_prompt()
         assert "friendly" in result
 
@@ -22524,30 +23985,30 @@ class TestRenderPromptDeeperV2:
 
 class TestDispatchDeeperV2:
     def test_dispatch_unknown(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._dispatch("zzz_nonexistent_cmd")
         assert repl._last_exit_code == 127
 
     def test_dispatch_empty(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._dispatch("")
         assert repl._last_exit_code == 0
 
     def test_dispatch_alias(self, repl):
         repl._aliases["ll"] = "ls -la"
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._dispatch("ll")
         assert repl._last_exit_code == 0
 
     def test_dispatch_system_exit(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._dispatch("exit 42")
         assert repl._running is False
 
     def test_dispatch_exception(self, repl):
-        repl.COMMANDS["__test_crash"] = lambda self, args: 1/0
+        repl.COMMANDS["__test_crash"] = lambda self, args: 1 / 0
         try:
-            with _CaptureOutput(repl) as cap:
+            with _CaptureOutput(repl):
                 repl._dispatch("__test_crash")
             assert repl._last_exit_code == 1
         finally:
@@ -22566,22 +24027,22 @@ class TestNoteSprintDeeperV2:
 
     def test_note_sprint_no_sprints(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("sprint")
         assert repl._last_exit_code == 0
 
     def test_note_sprint_with_name_no_notes(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("sprint nonexistent list")
         assert repl._last_exit_code == 0
 
     def test_note_sprint_report(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("sprint nonexistent report")
         assert repl._last_exit_code == 0
 
@@ -22592,8 +24053,8 @@ class TestNoteTodayDeeperV2:
         mock_store = MagicMock()
         mock_store.today.return_value = []
         mock_notes.get_note_store.return_value = mock_store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("today")
         assert repl._last_exit_code == 0
 
@@ -22605,8 +24066,8 @@ class TestNoteExportDeeperV2:
         mock_store.count.return_value = 0
         mock_store.export_all.return_value = ""
         mock_notes.get_note_store.return_value = mock_store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("export")
         assert repl._last_exit_code == 0
 
@@ -22617,8 +24078,8 @@ class TestNoteExportDeeperV2:
         mock_store.export_all.return_value = ""
         mock_notes.get_note_store.return_value = mock_store
         out = str(tmp_path / "notes.md")
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note(f"export {out}")
         assert repl._last_exit_code == 0
 
@@ -22629,8 +24090,8 @@ class TestNoteTagsDeeperV2:
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
         mock_notes.get_note_store.return_value = mock_store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("tags")
         assert repl._last_exit_code == 0
 
@@ -22641,8 +24102,8 @@ class TestNoteStatusSummaryDeeper:
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
         mock_notes.get_note_store.return_value = mock_store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("status")
         assert repl._last_exit_code == 0
 
@@ -22652,8 +24113,8 @@ class TestNoteSearchDeeperV2:
         mock_notes = MagicMock()
         mock_store = MagicMock()
         mock_notes.get_note_store.return_value = mock_store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("search")
         assert repl._last_exit_code == 1
 
@@ -22662,8 +24123,8 @@ class TestNoteSearchDeeperV2:
         mock_store = MagicMock()
         mock_store.search.return_value = []
         mock_notes.get_note_store.return_value = mock_store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("search nonexistent_xyz_query")
         assert repl._last_exit_code == 0
 
@@ -22674,8 +24135,8 @@ class TestNoteTimelineDeeperV2:
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
         mock_notes.get_note_store.return_value = mock_store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("timeline")
         assert repl._last_exit_code == 0
 
@@ -22684,8 +24145,8 @@ class TestNoteTimelineDeeperV2:
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
         mock_notes.get_note_store.return_value = mock_store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("timeline --days 30")
         assert repl._last_exit_code == 0
 
@@ -22694,8 +24155,8 @@ class TestNoteTimelineDeeperV2:
         mock_store = MagicMock()
         mock_store.list_notes.return_value = []
         mock_notes.get_note_store.return_value = mock_store
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("timeline --tag wip")
         assert repl._last_exit_code == 0
 
@@ -22709,29 +24170,29 @@ class TestNoteNewDeeperV2:
 
     def test_note_new_with_tags(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("new Test note --tags tag1,tag2")
         assert repl._last_exit_code == 0
 
     def test_note_new_with_status(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("new Test note --status done")
         assert repl._last_exit_code == 0
 
     def test_note_new_with_sprint(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("new Test note --sprint sprint1")
         assert repl._last_exit_code == 0
 
     def test_note_new_with_gh(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("new Test note --gh 123")
         assert repl._last_exit_code == 0
 
@@ -22746,29 +24207,29 @@ class TestNoteListDeeperV2:
 
     def test_note_list_with_tag_filter(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("list --tag wip")
         assert repl._last_exit_code == 0
 
     def test_note_list_with_status_filter(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("list --status done")
         assert repl._last_exit_code == 0
 
     def test_note_list_with_sprint_filter(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("list --sprint sprint1")
         assert repl._last_exit_code == 0
 
     def test_note_list_with_limit(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("list --limit 5")
         assert repl._last_exit_code == 0
 
@@ -22782,22 +24243,22 @@ class TestNoteEditDeeperV2:
 
     def test_note_edit_title(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("edit someid --title New Title")
         assert repl._last_exit_code == 0
 
     def test_note_edit_tags(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("edit someid --tags newtag1,newtag2")
         assert repl._last_exit_code == 0
 
     def test_note_edit_gh(self, repl):
         mock_notes, _ = self._mock_notes()
-        with patch.dict('sys.modules', {'notes': mock_notes}):
-            with _CaptureOutput(repl) as cap:
+        with patch.dict("sys.modules", {"notes": mock_notes}):
+            with _CaptureOutput(repl):
                 repl._cmd_note("edit someid --gh 456")
         assert repl._last_exit_code == 0
 
@@ -22808,14 +24269,14 @@ class TestCmdCommExtraV3:
         f2 = tmp_path / "b.txt"
         f1.write_text("a\nb\n")
         f2.write_text("b\nc\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_comm(f"{f1} {f2}")
         assert repl._last_exit_code == 0
 
 
 class TestCmdCutExtra:
     def test_cut_no_piped(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cut("-f1")
         assert repl._last_exit_code == 1
 
@@ -22833,42 +24294,42 @@ class TestCmdTrExtraV2:
 class TestCmdXargsExtra:
     def test_xargs_no_piped(self, repl):
         repl._piped_input = "hello world\n"
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_xargs("echo")
         assert repl._last_exit_code == 0
 
 
 class TestCmdFoldExtra:
     def test_fold_no_piped(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_fold("-w5")
         assert repl._last_exit_code == 1
 
 
 class TestCmdNlExtra:
     def test_nl_no_piped(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_nl("")
         assert repl._last_exit_code == 1
 
 
 class TestCmdRevExtraV2:
     def test_rev_no_piped(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_rev("")
         assert repl._last_exit_code == 1
 
 
 class TestCmdShufExtraV3:
     def test_shuf_no_piped(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_shuf("")
         assert repl._last_exit_code == 1
 
 
 class TestCmdTacExtraV2:
     def test_tac_no_piped(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_tac("")
         assert repl._last_exit_code == 1
 
@@ -22901,13 +24362,13 @@ class TestConsoleOutputHelpers:
         assert "val1" in out
 
     def test_status(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._status("ok", "all good", "detail")
 
 
 class TestCmdTuiDeeperV2:
     def test_tui_import_error(self, repl):
-        with patch.dict('sys.modules', {'domain.shell._internal.tui_repl': None}):
+        with patch.dict("sys.modules", {"domain.shell._internal.tui_repl": None}):
             with _CaptureOutput(repl) as cap:
                 repl._cmd_tui("")
         out = cap.getvalue()
@@ -22916,7 +24377,7 @@ class TestCmdTuiDeeperV2:
 
 class TestCmdLsdevDeeperV2:
     def test_lsdev_no_devices(self, repl):
-        with patch.object(type(repl.os), 'devices', new_callable=PropertyMock, return_value=None):
+        with patch.object(type(repl.os), "devices", new_callable=PropertyMock, return_value=None):
             with _CaptureOutput(repl) as cap:
                 repl._cmd_lsdev("")
         assert "not available" in cap.getvalue() or "Devices" in cap.getvalue()
@@ -22924,7 +24385,9 @@ class TestCmdLsdevDeeperV2:
     def test_lsdev_with_devices(self, repl):
         mock_devs = MagicMock()
         mock_devs.list_devices.return_value = "/dev/llm\n/dev/embedding"
-        with patch.object(type(repl.os), 'devices', new_callable=PropertyMock, return_value=mock_devs):
+        with patch.object(
+            type(repl.os), "devices", new_callable=PropertyMock, return_value=mock_devs
+        ):
             with _CaptureOutput(repl) as cap:
                 repl._cmd_lsdev("")
         assert "Device" in cap.getvalue()
@@ -22934,7 +24397,7 @@ class TestCmdStatusDeeperV2:
     def test_status(self, repl):
         repl.cmds = MagicMock()
         repl.cmds.health_detailed.return_value = {}
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_status("")
         assert repl._last_exit_code == 0
 
@@ -22977,14 +24440,14 @@ class TestCmdPwdDeeper:
 
 class TestCmdClearDeeperV2:
     def test_clear(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_clear("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdExitDeeper:
     def test_exit(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_exit("")
         assert repl._running is False
 
@@ -23018,28 +24481,28 @@ class TestCmdHostnameDeeperV3:
 
 class TestCmdUptimeDeeperV3:
     def test_uptime(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_uptime("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdDateDeeperV3:
     def test_date(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_date("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdCalDeeperV3:
     def test_cal(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cal("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdIdDeeperV3:
     def test_id(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_id("")
         assert repl._last_exit_code == 0
 
@@ -23047,12 +24510,12 @@ class TestCmdIdDeeperV3:
 class TestCmdMkdirDeeperV2:
     def test_mkdir(self, repl, tmp_path):
         target = str(tmp_path / "newdir")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_mkdir(target)
         assert os.path.isdir(target)
 
     def test_mkdir_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_mkdir("")
         assert repl._last_exit_code == 1
 
@@ -23060,12 +24523,12 @@ class TestCmdMkdirDeeperV2:
 class TestCmdTouchDeeperV2:
     def test_touch(self, repl, tmp_path):
         target = str(tmp_path / "newfile.txt")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_touch(target)
         assert os.path.exists(target)
 
     def test_touch_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_touch("")
         assert repl._last_exit_code == 1
 
@@ -23075,12 +24538,12 @@ class TestCmdCpDeeperV2:
         src = tmp_path / "src.txt"
         dst = tmp_path / "dst.txt"
         src.write_text("hello")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cp(f"{src} {dst}")
         assert dst.read_text() == "hello"
 
     def test_cp_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cp("")
         assert repl._last_exit_code == 1
 
@@ -23090,20 +24553,20 @@ class TestCmdMvDeeperV2:
         src = tmp_path / "src.txt"
         dst = tmp_path / "dst.txt"
         src.write_text("hello")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_mv(f"{src} {dst}")
         assert dst.read_text() == "hello"
         assert not src.exists()
 
     def test_mv_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_mv("")
         assert repl._last_exit_code == 1
 
 
 class TestCmdLsDeeperV2:
     def test_ls_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_ls("")
         assert repl._last_exit_code == 0
 
@@ -23118,7 +24581,7 @@ class TestCmdCatDeeperV2:
 
     def test_cat_no_args_no_piped(self, repl):
         repl._piped_input = ""
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cat("")
         assert repl._last_exit_code == 1
 
@@ -23127,12 +24590,12 @@ class TestCmdRmDeeperV2:
     def test_rm_file(self, repl, tmp_path):
         f = tmp_path / "to_delete.txt"
         f.write_text("bye")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_rm(str(f))
         assert not f.exists()
 
     def test_rm_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_rm("")
         assert repl._last_exit_code == 1
 
@@ -23148,7 +24611,7 @@ class TestCmdHeadDeeperV2:
 
     def test_head_no_args_no_piped(self, repl):
         repl._piped_input = ""
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_head("")
         assert repl._last_exit_code == 1
 
@@ -23164,7 +24627,7 @@ class TestCmdTailDeeperV2:
 
     def test_tail_no_args_no_piped(self, repl):
         repl._piped_input = ""
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_tail("")
         assert repl._last_exit_code == 1
 
@@ -23173,13 +24636,13 @@ class TestCmdWcDeeperV2:
     def test_wc_file(self, repl, tmp_path):
         f = tmp_path / "lines.txt"
         f.write_text("a\nb\nc\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_wc(str(f))
         assert repl._last_exit_code == 0
 
     def test_wc_no_args_no_piped(self, repl):
         repl._piped_input = ""
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_wc("")
         assert repl._last_exit_code == 1
 
@@ -23222,7 +24685,7 @@ class TestCmdUniqDeeperV2:
 
     def test_uniq_no_args_no_piped(self, repl):
         repl._piped_input = ""
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_uniq("")
         assert repl._last_exit_code == 1
 
@@ -23239,7 +24702,7 @@ class TestCmdGrepDeeperV2:
 
     def test_grep_no_args_no_piped(self, repl):
         repl._piped_input = ""
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_grep("")
         assert repl._last_exit_code == 1
 
@@ -23252,7 +24715,7 @@ class TestCmdFindDeeperV2:
         assert "target.txt" in cap.getvalue()
 
     def test_find_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_find("")
         assert repl._last_exit_code == 1
 
@@ -23268,7 +24731,7 @@ class TestCmdTeeDeeperV2:
 
     def test_tee_no_args_no_piped(self, repl):
         repl._piped_input = ""
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_tee("")
         assert repl._last_exit_code == 1
 
@@ -23276,41 +24739,56 @@ class TestCmdTeeDeeperV2:
 class TestCmdPushdPopdDirsDeeper:
     def test_pushd_popd_via_cd(self, repl, tmp_path):
         original = os.getcwd()
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cd(str(tmp_path))
         assert os.getcwd() == str(tmp_path)
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cd("-")
         assert os.getcwd() == original
 
 
 class TestCmdGenDeeperV3:
     def test_gen_no_api(self, repl):
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
-            with _CaptureOutput(repl) as cap:
+        with patch.object(
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": False},
+        ):
+            with _CaptureOutput(repl):
                 repl._cmd_gen("hello")
         assert repl._last_exit_code == 1
 
 
 class TestCmdChatDeeperV3:
     def test_chat_no_api(self, repl):
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
-            with _CaptureOutput(repl) as cap:
+        with patch.object(
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": False},
+        ):
+            with _CaptureOutput(repl):
                 repl._cmd_chat("hello")
         assert repl._last_exit_code == 1
 
 
 class TestCmdLoadDeeperV3:
     def test_load_no_api(self, repl):
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
-            with _CaptureOutput(repl) as cap:
+        with patch.object(
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": False},
+        ):
+            with _CaptureOutput(repl):
                 repl._cmd_load("gpt2")
         assert repl._last_exit_code == 1
 
 
 class TestCmdWhoamiShellDeeper:
     def test_whoami_via_execute(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._execute_single("whoami")
         assert repl._last_exit_code == 0
 
@@ -23367,7 +24845,7 @@ class TestParseInlineEnvV3:
     def test_quoted_value(self, repl):
         env, rest = repl._parse_inline_env('FOO="hello world" cmd')
         assert env == {"FOO": "hello"}
-        assert rest == "world\" cmd"
+        assert rest == 'world" cmd'
 
     def test_empty(self, repl):
         env, rest = repl._parse_inline_env("")
@@ -23525,7 +25003,7 @@ class TestCmdDuDeeperV3:
     def test_file_du(self, repl, tmp_path):
         f = tmp_path / "test.txt"
         f.write_text("hello world")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_du(str(f))
         assert repl._last_exit_code == 0
 
@@ -23558,7 +25036,7 @@ class TestCmdOdDeeperV3:
     def test_octal_dump(self, repl, tmp_path):
         f = tmp_path / "test.bin"
         f.write_bytes(b"\x00\x01\x02\x03")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_od(str(f))
         assert repl._last_exit_code == 0
 
@@ -23569,7 +25047,7 @@ class TestCmdOdDeeperV3:
     def test_with_piped_input(self, repl, tmp_path):
         f = tmp_path / "data.bin"
         f.write_bytes(b"\x00\x01\x02\x03")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_od(str(f))
         assert repl._last_exit_code == 0
 
@@ -23589,7 +25067,7 @@ class TestCmdNlDeeperV4:
 
     def test_with_piped_input(self, repl):
         repl._piped_input = "line1\nline2\n"
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_nl("")
         assert repl._last_exit_code == 0
 
@@ -23597,7 +25075,7 @@ class TestCmdNlDeeperV4:
 class TestCmdFoldDeeperV4:
     def test_fold_with_width(self, repl):
         repl._piped_input = "hello world this is a long line"
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_fold("-w 10")
         assert repl._last_exit_code == 0
 
@@ -23612,7 +25090,7 @@ class TestCmdCommDeeperV3:
         f2 = tmp_path / "b.txt"
         f1.write_text("apple\nbanana\ncherry\n")
         f2.write_text("banana\ndate\ncherry\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_comm(f"{f1} {f2}")
         assert repl._last_exit_code == 0
 
@@ -23664,7 +25142,7 @@ class TestCmdJoinDeeperV3:
         f2 = tmp_path / "b.txt"
         f1.write_text("a 1\nb 2\n")
         f2.write_text("a x\nb y\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_join(f"{f1} {f2}")
         assert repl._last_exit_code == 0
 
@@ -23682,7 +25160,7 @@ class TestCmdJoinDeeperV3:
 class TestCmdXargsDeeperV3:
     def test_xargs_echo(self, repl):
         repl._piped_input = "hello world\n"
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_xargs("echo")
         assert repl._last_exit_code == 0
 
@@ -23697,7 +25175,7 @@ class TestCmdPasteDeeperV2:
         f2 = tmp_path / "b.txt"
         f1.write_text("a\nb\n")
         f2.write_text("1\n2\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_paste(f"{f1} {f2}")
         assert repl._last_exit_code == 0
 
@@ -23737,7 +25215,7 @@ class TestCmdShufDeeperV2:
     def test_shuf_file(self, repl, tmp_path):
         f = tmp_path / "nums.txt"
         f.write_text("1\n2\n3\n4\n5\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_shuf(str(f))
         assert repl._last_exit_code == 0
 
@@ -23749,7 +25227,7 @@ class TestCmdShufDeeperV2:
 class TestCmdUnexpandDeeperV3:
     def test_unexpand_tabs(self, repl):
         repl._piped_input = "hello world\tfoo\n"
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_unexpand("")
         assert repl._last_exit_code == 0
 
@@ -23761,7 +25239,7 @@ class TestCmdUnexpandDeeperV3:
 class TestCmdExpandDeeperV2:
     def test_expand_tabs(self, repl):
         repl._piped_input = "hello\tworld\n"
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_expand("")
         assert repl._last_exit_code == 0
 
@@ -23821,21 +25299,21 @@ class TestCmdYesDeeperV3:
 
 class TestCmdLognameDeeperV4:
     def test_logname(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_logname("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdWhoDeeperV4:
     def test_who(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_who("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdTypeDeeperV2:
     def test_type_builtin(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_type("echo")
         assert repl._last_exit_code == 0
 
@@ -23850,7 +25328,7 @@ class TestCmdTypeDeeperV2:
 
 class TestCmdWhichDeeperV2:
     def test_which_found(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_which("python3")
         assert repl._last_exit_code == 0
 
@@ -23969,7 +25447,7 @@ class TestCmdSetDeeperV3:
         assert repl._env.get("MYVAR") == "hello"
 
     def test_set_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_set("")
         assert repl._last_exit_code == 0
 
@@ -23997,7 +25475,7 @@ class TestCmdAliasDeeperV3:
         assert repl._aliases.get("myalias") == "echo hello"
 
     def test_alias_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_alias("")
         assert repl._last_exit_code == 0
 
@@ -24017,7 +25495,7 @@ class TestCmdFcDeeperV3:
     def test_fc_list(self, repl):
         repl._history.append("echo hello")
         repl._history.append("echo world")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_fc("-l")
         assert repl._last_exit_code == 0
 
@@ -24030,7 +25508,7 @@ class TestCmdFcDeeperV3:
 class TestCmdHistoryDeeperV3:
     def test_history(self, repl):
         repl._history.append("echo hello")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_history("")
         assert repl._last_exit_code == 0
 
@@ -24068,12 +25546,12 @@ class TestCmdWatchDeeperV3:
     def test_watch_keyboard_interrupt(self, repl):
         repl._execute_single = MagicMock(side_effect=KeyboardInterrupt)
         repl._cmd_watch("1 echo hi")
-        assert "Stopped" in repl._last_output if hasattr(repl, '_last_output') else True
+        assert "Stopped" in repl._last_output if hasattr(repl, "_last_output") else True
 
 
 class TestCmdBgFgDeeperV4:
     def test_bg_no_jobs(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_bg("")
         assert repl._last_exit_code == 0
 
@@ -24085,7 +25563,7 @@ class TestCmdBgFgDeeperV4:
 
 class TestCmdTimeDeeperV2:
     def test_time_echo(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_time("echo hello")
         assert repl._last_exit_code == 0
 
@@ -24118,89 +25596,89 @@ class TestCmdPyDeeperV3:
 
 class TestCmdLogsDeeperV3:
     def test_logs(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_logs("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdConsoleDeeper:
     def test_console(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_logs("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdApiDeeperV3:
     def test_api_start(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_api("start")
         assert repl._last_exit_code == 0
 
     def test_api_status(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_api("status")
         assert repl._last_exit_code == 0
 
 
 class TestCmdEventsDeeperV3:
     def test_events(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_events("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdMetricsDeeperV3:
     def test_metrics(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_metrics("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdUptimeDeeperV4:
     def test_uptime(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_uptime("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdDateDeeperV4:
     def test_date(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_date("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdCalDeeperV4:
     def test_cal(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cal("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdIdDeeperV4:
     def test_id(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_id("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdHostnameDeeperV4:
     def test_hostname(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_hostname("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdNprocDeeperV3:
     def test_nproc(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_nproc("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdRealpathDeeperV3:
     def test_realpath(self, repl, tmp_path):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_realpath(str(tmp_path))
         assert repl._last_exit_code == 0
 
@@ -24243,26 +25721,26 @@ class TestCmdBasenameDeeperV4:
 
 class TestCmdUnameDeeperV3:
     def test_uname(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_uname("")
         assert repl._last_exit_code == 0
 
     def test_uname_a(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_uname("-a")
         assert repl._last_exit_code == 0
 
 
 class TestCmdProcsDeeperV2:
     def test_procs(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_procs("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdPsDeeperV4:
     def test_ps(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_ps("")
         assert repl._last_exit_code == 0
 
@@ -24281,7 +25759,7 @@ class TestCmdKillDeeperV3:
 
 class TestCmdClearDeeperV3:
     def test_clear(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_clear("")
         assert repl._last_exit_code == 0
 
@@ -24314,7 +25792,7 @@ class TestCmdEchoDeeperV3:
 
 class TestCmdEnvDeeperV2:
     def test_env(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_env("")
         assert repl._last_exit_code == 0
 
@@ -24327,7 +25805,7 @@ class TestCmdLsDeeperV3:
         assert "file.txt" in cap.getvalue()
 
     def test_ls_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_ls("")
         assert repl._last_exit_code == 0
 
@@ -24442,7 +25920,7 @@ class TestCmdWcDeeperV3:
     def test_wc_file(self, repl, tmp_path):
         f = tmp_path / "test.txt"
         f.write_text("hello\nworld\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_wc(str(f))
         assert repl._last_exit_code == 0
 
@@ -24532,31 +26010,46 @@ class TestCmdTeeDeeperV3:
 
 class TestCmdGenDeeperV4:
     def test_gen_no_api(self, repl):
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
-            with _CaptureOutput(repl) as cap:
+        with patch.object(
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": False},
+        ):
+            with _CaptureOutput(repl):
                 repl._cmd_gen("hello")
         assert repl._last_exit_code == 1
 
 
 class TestCmdChatDeeperV4:
     def test_chat_no_api(self, repl):
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
-            with _CaptureOutput(repl) as cap:
+        with patch.object(
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": False},
+        ):
+            with _CaptureOutput(repl):
                 repl._cmd_chat("hello")
         assert repl._last_exit_code == 1
 
 
 class TestCmdLoadDeeperV4:
     def test_load_no_api(self, repl):
-        with patch.object(type(repl.os), 'api_status', new_callable=PropertyMock, return_value={"available": False}):
-            with _CaptureOutput(repl) as cap:
+        with patch.object(
+            type(repl.os),
+            "api_status",
+            new_callable=PropertyMock,
+            return_value={"available": False},
+        ):
+            with _CaptureOutput(repl):
                 repl._cmd_load("gpt2")
         assert repl._last_exit_code == 1
 
 
 class TestCmdWhoamiShellDeeperV2:
     def test_whoami_via_execute(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._execute_single("whoami")
         assert repl._last_exit_code == 0
 
@@ -24572,65 +26065,68 @@ class TestCmdLsdevDeeperV3:
         mock_devices = MagicMock()
         mock_devices.list_devices.return_value = [{"name": "gpu0", "type": "gpu"}]
         repl.os._devices = mock_devices
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_lsdev("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdStatusDeeperV3:
     def test_status(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_status("")
         assert repl._last_exit_code == 0
 
 
 class TestCmdVmpermsDeeperV2:
     def test_vmperms(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_vmperms("")
         assert repl._last_exit_code == 0
 
 
 class TestInterpretNaturalDeeperV2:
     def test_health_keyword(self, repl):
-        with patch("domain.shell._internal.commands.ShellCommands.health", return_value={"status": "healthy"}):
-            out = _run_with_io(repl, [], lambda: repl._interpret_natural("check health status"))
+        with patch(
+            "domain.shell._internal.commands.ShellCommands.health",
+            return_value={"status": "healthy"},
+        ):
+            _run_with_io(repl, [], lambda: repl._interpret_natural("check health status"))
         assert repl._last_exit_code == 0
 
     def test_processes_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("show me running processes"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("show me running processes"))
         assert repl._last_exit_code == 0
 
     def test_models_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("what models are available"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("what models are available"))
         assert repl._last_exit_code == 0
 
     def test_dataset_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("show datasets"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("show datasets"))
         assert repl._last_exit_code == 0
 
     def test_knowledge_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("show knowledge facts"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("show knowledge facts"))
         assert repl._last_exit_code == 0
 
     def test_checkpoint_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("list checkpoints"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("list checkpoints"))
         assert repl._last_exit_code == 0
 
     def test_finetuned_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("show finetuned models"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("show finetuned models"))
         assert repl._last_exit_code == 0
 
     def test_metrics_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("show cpu metrics"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("show cpu metrics"))
         assert repl._last_exit_code == 0
 
     def test_tokenizer_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("tokenizer vocab"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("tokenizer vocab"))
         assert repl._last_exit_code == 0
 
     def test_soul_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("show soul personality"))
+        _run_with_io(repl, [], lambda: repl._interpret_natural("show soul personality"))
         assert repl._last_exit_code == 0
 
 
@@ -25225,7 +26721,7 @@ class TestCmdDiffDeeperV4:
         f2 = tmp_path / "b.txt"
         f1.write_text("same\n")
         f2.write_text("same\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_diff(f"-u {f1} {f2}")
         assert repl._last_exit_code == 0
 
@@ -25234,7 +26730,7 @@ class TestCmdDiffDeeperV4:
         f2 = tmp_path / "b.txt"
         f1.write_text("hello world\n")
         f2.write_text("hello  world\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_diff(f"-w {f1} {f2}")
         assert repl._last_exit_code == 0
 
@@ -25321,7 +26817,9 @@ class TestCmdSvcDeeperV4:
         mock_mgr.start.return_value = True
         mock_mgr.restart.return_value = True
         mock_init.get_manager.return_value = mock_mgr
-        patcher = patch.object(type(repl.os), 'init_system', new_callable=PropertyMock, return_value=mock_init)
+        patcher = patch.object(
+            type(repl.os), "init_system", new_callable=PropertyMock, return_value=mock_init
+        )
         patcher.start()
         self._all_patchers.append(patcher)
         repl._svc_patcher = patcher
@@ -25336,7 +26834,9 @@ class TestCmdSvcDeeperV4:
         self._all_patchers.clear()
 
     def test_svc_no_init(self, repl):
-        patcher = patch.object(type(repl.os), 'init_system', new_callable=PropertyMock, return_value=None)
+        patcher = patch.object(
+            type(repl.os), "init_system", new_callable=PropertyMock, return_value=None
+        )
         patcher.start()
         self._all_patchers.append(patcher)
         with _CaptureOutput(repl) as cap:
@@ -25433,7 +26933,7 @@ class TestCmdNoteDeeperV2:
             mock_store = MagicMock()
             mock_store.list_notes.return_value = []
             mock_get.return_value = mock_store
-            with _CaptureOutput(repl) as cap:
+            with _CaptureOutput(repl):
                 repl._cmd_note("")
         mock_store.list_notes.assert_called_once()
 
@@ -25467,7 +26967,7 @@ class TestDispatchDeeperV3:
         assert repl._cmd_count == initial_count + 1
 
     def test_permission_denied(self, repl):
-        with patch.object(repl, '_check_permission', return_value=False):
+        with patch.object(repl, "_check_permission", return_value=False):
             repl._dispatch("rm -rf /")
         assert repl._last_exit_code == 126
 
@@ -25519,7 +27019,7 @@ class TestCmdVmrunDeeper:
         assert repl._last_exit_code == 1
 
     def test_file_not_found(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_vmrun("/nonexistent/file.asm")
         assert repl._last_exit_code == 1
 
@@ -25592,7 +27092,7 @@ class TestCmdGenDeeperV5:
 
     def test_no_api(self, repl):
         repl.cmds._api_get = MagicMock(side_effect=Exception("no api"))
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_gen("hello")
         assert repl._last_exit_code == 1
 
@@ -25614,7 +27114,7 @@ class TestCmdChatDeeperV5:
 
     def test_no_api(self, repl):
         repl.cmds._api_get = MagicMock(side_effect=Exception("no api"))
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_chat("hello")
         assert repl._last_exit_code == 1
 
@@ -25779,7 +27279,7 @@ class TestCmdTouchErrorPaths:
     def test_update_existing_file(self, repl, tmp_path):
         f = tmp_path / "existing.txt"
         f.write_text("data")
-        old_mtime = f.stat().st_mtime_ns
+        f.stat().st_mtime_ns
         repl._cmd_touch(f"{f}")
         assert f.exists()
         assert repl._last_exit_code == 0
@@ -25796,7 +27296,9 @@ class TestCmdGrepErrorPaths:
     def test_invalid_regex(self, repl):
         repl._piped_input = "hello"
         with _CaptureOutput(repl) as cap:
-            repl._cmd_grep("[invalid", )
+            repl._cmd_grep(
+                "[invalid",
+            )
         assert "invalid pattern" in cap.getvalue()
         assert repl._last_exit_code == 2
 
@@ -25856,7 +27358,7 @@ class TestCmdTeeErrorPaths:
 
     def test_permission_denied(self, repl):
         repl._piped_input = "data"
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_tee("/proc/impossible_file_xyz")
         assert repl._last_exit_code == 1
 
@@ -25927,11 +27429,13 @@ class TestCmdWatchV3:
     @pytest.mark.skip(reason="watch uses subprocess.run not _execute_single")
     def test_watch_keyboard_interrupt(self, repl):
         call_count = [0]
+
         def mock_execute(cmd, piped=""):
             call_count[0] += 1
             if call_count[0] >= 2:
                 raise KeyboardInterrupt()
             return "ok"
+
         repl._execute_single = mock_execute
         repl._cmd_watch("1 ls")
 
@@ -26116,7 +27620,7 @@ class TestCmdComm:
         f2 = tmp_path / "b.txt"
         f1.write_text("a\nb\nc\n")
         f2.write_text("b\nc\nd\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_comm(f"{f1} {f2}")
         assert repl._last_exit_code == 0
 
@@ -26130,7 +27634,7 @@ class TestCmdFold:
 
     def test_fold_no_args_no_pipe(self, repl):
         repl._piped_input = ""
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_fold("")
         # returns empty or usage
 
@@ -26217,6 +27721,7 @@ class TestCmdLognameV2:
 class TestCmdSleepV2:
     def test_sleep_zero(self, repl):
         import time
+
         t0 = time.time()
         repl._cmd_sleep("0")
         assert time.time() - t0 < 2
@@ -26238,7 +27743,7 @@ class TestCmdKillV2:
         assert "Usage" in cap.getvalue()
 
     def test_kill_invalid_pid(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_kill("99999")
         # may succeed or fail depending on OS
         assert repl._last_exit_code in (0, 1)
@@ -26259,11 +27764,11 @@ class TestCmdReadV2:
         assert repl._last_exit_code == 1
 
     def test_read_with_var(self, repl):
-        out = _run_with_io(repl, ["myvalue"], lambda: repl._cmd_read("myvar"))
+        _run_with_io(repl, ["myvalue"], lambda: repl._cmd_read("myvar"))
         assert repl._env.get("myvar") == "myvalue"
 
     def test_read_prompt(self, repl):
-        out = _run_with_io(repl, ["val"], lambda: repl._cmd_read("-p Enter: myvar"))
+        _run_with_io(repl, ["val"], lambda: repl._cmd_read("-p Enter: myvar"))
         assert repl._env.get("myvar") == "val"
 
 
@@ -26276,7 +27781,11 @@ class TestCmdSource:
     def test_source_nonexistent(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_source("/nonexistent/script.sh")
-        assert "not found" in cap.getvalue() or "No such" in cap.getvalue() or "Error reading" in cap.getvalue()
+        assert (
+            "not found" in cap.getvalue()
+            or "No such" in cap.getvalue()
+            or "Error reading" in cap.getvalue()
+        )
 
 
 class TestCmdPyV4:
@@ -26339,7 +27848,7 @@ class TestCmdSourceDeeperV4:
     def test_source_script(self, repl, tmp_path):
         script = tmp_path / "test.sh"
         script.write_text("echo sourced_ok\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_source(str(script))
         assert repl._last_exit_code == 0
 
@@ -26361,7 +27870,7 @@ class TestCmdCatDeeperV4:
     def test_cat_empty_file(self, repl, tmp_path):
         f = tmp_path / "empty.txt"
         f.write_text("")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cat(str(f))
         assert repl._last_exit_code == 0
 
@@ -26604,7 +28113,7 @@ class TestCmdCutDeeperV5:
         assert "2" not in out
 
     def test_cut_file_not_found(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cut("-d: -f1 /nonexistent/file.txt")
         assert repl._last_exit_code == 1
 
@@ -26638,7 +28147,7 @@ class TestCmdCutDeeperV5:
 
     def test_cut_no_args(self, repl):
         repl._piped_input = ""
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cut("")
         assert repl._last_exit_code == 1
 
@@ -26658,7 +28167,7 @@ class TestCmdCutDeeperV5:
 
     def test_cut_no_input(self, repl):
         repl._piped_input = ""
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cut("-f1")
         assert repl._last_exit_code == 1
 
@@ -26699,7 +28208,7 @@ class TestCmdCutDeeperV5:
 
     def test_cut_rejects_combined_bc(self, repl):
         repl._piped_input = "abc\n"
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cut("-b1 -c2")
         assert repl._last_exit_code == 1
 
@@ -26948,7 +28457,7 @@ class TestCmdTestBranchesV2:
 class TestCmdPrintfBranchesV2:
     def test_printf_percent_s(self, repl):
         with _CaptureOutput(repl) as cap:
-            repl._cmd_printf("hello %s world %s" % ("cruel", "today"))
+            repl._cmd_printf("hello {} world {}".format("cruel", "today"))
         assert "hello" in cap.getvalue()
 
     def test_printf_percent_d(self, repl):
@@ -26958,7 +28467,7 @@ class TestCmdPrintfBranchesV2:
 
     def test_printf_percent_f(self, repl):
         with _CaptureOutput(repl) as cap:
-            repl._cmd_printf("%f" % 3.14)
+            repl._cmd_printf(f"{3.14:f}")
         assert "3.14" in cap.getvalue()
 
     def test_printf_no_args(self, repl):
@@ -27049,7 +28558,7 @@ class TestCmdPasteEdgesV2:
         assert "a:c" in out and "b:d" in out
 
     def test_paste_no_files(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_paste("-d,")
         assert repl._last_exit_code == 1
 
@@ -27092,7 +28601,7 @@ class TestCmdReadEdgesV2:
         assert repl._last_exit_code == 1
 
     def test_read_with_var(self, repl):
-        out = _run_with_io(repl, ["hello"], lambda: repl._cmd_read("myvar"))
+        _run_with_io(repl, ["hello"], lambda: repl._cmd_read("myvar"))
         assert repl._env.get("myvar") == "hello"
 
 
@@ -27199,7 +28708,11 @@ class TestPermitDenyV2:
     def test_permit_rm(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_permit("rm")
-        assert "permitted" in cap.getvalue().lower() or "granted" in cap.getvalue().lower() or repl._last_exit_code == 0
+        assert (
+            "permitted" in cap.getvalue().lower()
+            or "granted" in cap.getvalue().lower()
+            or repl._last_exit_code == 0
+        )
 
     def test_deny_empty(self, repl):
         with _CaptureOutput(repl):
@@ -27260,7 +28773,7 @@ class TestSourceMore:
     def test_source_dot(self, repl, tmp_path):
         script = tmp_path / "test.sh"
         script.write_text("echo dot_sourced\n")
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_source(str(script))
         assert repl._last_exit_code == 0
 
@@ -27272,17 +28785,17 @@ class TestSourceMore:
 
 class TestLogsV2:
     def test_logs_empty(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_logs("")
         assert repl._last_exit_code == 0
 
     def test_logs_stats(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_logs("--stats")
         assert repl._last_exit_code == 0
 
     def test_logs_clear(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_logs("--clear")
         assert repl._last_exit_code == 0
 
@@ -27296,6 +28809,7 @@ class TestCmdSvcRepl:
 
     def test_svc_list_booted(self, repl):
         from unittest.mock import MagicMock
+
         init = MagicMock()
         init.service_table.return_value = "  svc1: running"
         init.status_summary = "OK"
@@ -27345,12 +28859,12 @@ class TestAsmV2:
 
 class TestCalLnV2:
     def test_cal_current(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cal("")
         assert repl._last_exit_code == 0
 
     def test_cal_specific(self, repl):
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cal("1 2025")
         assert repl._last_exit_code == 0
 
@@ -28030,13 +29544,14 @@ class TestCmdTsort:
 
     def test_tsort_no_input(self, repl):
         repl._piped_input = None
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_tsort("")
         assert repl._last_exit_code == 1
 
     def test_tsort_file(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("A B\nB C\n")
         f.close()
         try:
@@ -28054,8 +29569,9 @@ class TestCmdTsort:
 class TestCmdStrings:
     def test_strings_binary(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(delete=False, suffix='.bin')
-        f.write(b'\x00\x01hello\x02\x03world\x04')
+
+        f = tempfile.NamedTemporaryFile(delete=False, suffix=".bin")
+        f.write(b"\x00\x01hello\x02\x03world\x04")
         f.close()
         try:
             with _CaptureOutput(repl) as cap:
@@ -28068,8 +29584,9 @@ class TestCmdStrings:
 
     def test_strings_min_len(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(delete=False, suffix='.bin')
-        f.write(b'\x00ab\x01')
+
+        f = tempfile.NamedTemporaryFile(delete=False, suffix=".bin")
+        f.write(b"\x00ab\x01")
         f.close()
         try:
             with _CaptureOutput(repl) as cap:
@@ -28081,7 +29598,7 @@ class TestCmdStrings:
 
     def test_strings_no_input(self, repl):
         repl._piped_input = None
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_strings("")
         assert repl._last_exit_code == 1
 
@@ -28110,7 +29627,8 @@ class TestCmdBase64:
 
     def test_base64_file(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("test data")
         f.close()
         try:
@@ -28122,7 +29640,7 @@ class TestCmdBase64:
 
     def test_base64_no_input(self, repl):
         repl._piped_input = None
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_base64("")
         assert repl._last_exit_code == 1
 
@@ -28141,7 +29659,8 @@ class TestCmdCksum:
 
     def test_cksum_file(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("hello")
         f.close()
         try:
@@ -28158,7 +29677,7 @@ class TestCmdCksum:
 
     def test_cksum_no_input(self, repl):
         repl._piped_input = None
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_cksum("")
         assert repl._last_exit_code == 1
 
@@ -28215,10 +29734,11 @@ class TestCmdUniqFlags:
 class TestCmdJoinFlags:
     def test_join_basic(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("1 one\n2 two\n")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("1 ONE\n3 THREE\n")
         f2.close()
         try:
@@ -28234,10 +29754,11 @@ class TestCmdJoinFlags:
 
     def test_join_a_orphans(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("1 one\n2 two\n")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("1 ONE\n3 THREE\n")
         f2.close()
         try:
@@ -28264,8 +29785,9 @@ class TestCmdJoinFlags:
 class TestCmdOdFlagsV2:
     def test_od_hex(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(delete=False, suffix='.bin')
-        f.write(b'\x00\x01\x02\x03')
+
+        f = tempfile.NamedTemporaryFile(delete=False, suffix=".bin")
+        f.write(b"\x00\x01\x02\x03")
         f.close()
         try:
             with _CaptureOutput(repl) as cap:
@@ -28278,8 +29800,9 @@ class TestCmdOdFlagsV2:
 
     def test_od_decimal(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(delete=False, suffix='.bin')
-        f.write(b'\x00\x01\x02\x03')
+
+        f = tempfile.NamedTemporaryFile(delete=False, suffix=".bin")
+        f.write(b"\x00\x01\x02\x03")
         f.close()
         try:
             with _CaptureOutput(repl) as cap:
@@ -28292,8 +29815,9 @@ class TestCmdOdFlagsV2:
 
     def test_od_skip(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(delete=False, suffix='.bin')
-        f.write(b'\x00\x01\x02\x03\x04\x05')
+
+        f = tempfile.NamedTemporaryFile(delete=False, suffix=".bin")
+        f.write(b"\x00\x01\x02\x03\x04\x05")
         f.close()
         try:
             with _CaptureOutput(repl) as cap:
@@ -28305,7 +29829,7 @@ class TestCmdOdFlagsV2:
 
     def test_od_no_file(self, repl):
         repl._piped_input = None
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_od("")
         assert repl._last_exit_code == 1
 
@@ -28316,7 +29840,8 @@ class TestCmdOdFlagsV2:
 class TestCmdStatFlags:
     def test_stat_c_name(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(delete=False, suffix='.txt')
+
+        f = tempfile.NamedTemporaryFile(delete=False, suffix=".txt")
         f.close()
         try:
             with _CaptureOutput(repl) as cap:
@@ -28328,7 +29853,8 @@ class TestCmdStatFlags:
 
     def test_stat_c_size(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt')
+
+        f = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt")
         f.write("hello")
         f.close()
         try:
@@ -28359,6 +29885,7 @@ class TestCmdSplit:
         out = cap.getvalue()
         assert "x" in out
         import glob as _glob
+
         files = _glob.glob("x*")
         assert len(files) >= 2
         for f in files:
@@ -28366,9 +29893,10 @@ class TestCmdSplit:
 
     def test_split_bytes(self, repl):
         repl._piped_input = "abcdefghij"
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_split("-b 3")
         import glob as _glob
+
         files = _glob.glob("x*")
         assert len(files) >= 3
         for f in files:
@@ -28376,9 +29904,10 @@ class TestCmdSplit:
 
     def test_split_numeric(self, repl):
         repl._piped_input = "a\nb\nc\n"
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_split("-d -l 1")
         import glob as _glob
+
         files = _glob.glob("x*")
         assert len(files) == 3
         for f in files:
@@ -28386,7 +29915,7 @@ class TestCmdSplit:
 
     def test_split_no_input(self, repl):
         repl._piped_input = None
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_split("-l 2")
         assert repl._last_exit_code == 1
 
@@ -28404,10 +29933,11 @@ class TestCmdTailFlags:
 
     def test_tail_q(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("aa\n")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("bb\n")
         f2.close()
         try:
@@ -28428,7 +29958,7 @@ class TestCmdTailFlags:
 
     def test_tail_no_input(self, repl):
         repl._piped_input = None
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_tail("")
         assert repl._last_exit_code == 1
 
@@ -28453,7 +29983,8 @@ class TestCmdWcFlags:
 
     def test_wc_file(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("hello\nworld\n")
         f.close()
         try:
@@ -28466,7 +29997,7 @@ class TestCmdWcFlags:
 
     def test_wc_no_input(self, repl):
         repl._piped_input = None
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_wc("")
         assert repl._last_exit_code == 1
 
@@ -28505,7 +30036,7 @@ class TestCmdTrFlags:
 
     def test_tr_no_input(self, repl):
         repl._piped_input = None
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_tr("a b")
         assert repl._last_exit_code == 1
 
@@ -28516,10 +30047,11 @@ class TestCmdTrFlags:
 class TestCmdCommFlags:
     def test_comm_1(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a\nb\nc\n")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("b\nc\nd\n")
         f2.close()
         try:
@@ -28533,10 +30065,11 @@ class TestCmdCommFlags:
 
     def test_comm_3(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a\nb\n")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("b\nc\n")
         f2.close()
         try:
@@ -28577,10 +30110,11 @@ class TestCmdHeadFlags:
 
     def test_head_q(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("aa\n")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("bb\n")
         f2.close()
         try:
@@ -28594,7 +30128,7 @@ class TestCmdHeadFlags:
 
     def test_head_no_input(self, repl):
         repl._piped_input = None
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_head("")
         assert repl._last_exit_code == 1
 
@@ -28605,10 +30139,11 @@ class TestCmdHeadFlags:
 class TestCmdPasteFlags:
     def testPasteMultiDelim(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a\nb\n")
         f1.close()
-        f2 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        f2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f2.write("c\nd\n")
         f2.close()
         try:
@@ -28623,7 +30158,8 @@ class TestCmdPasteFlags:
 
     def testPasteSerialize(self, repl):
         import tempfile
-        f1 = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f1 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f1.write("a\nb\nc\n")
         f1.close()
         try:
@@ -28636,7 +30172,7 @@ class TestCmdPasteFlags:
 
     def testPasteNoInput(self, repl):
         repl._piped_input = None
-        with _CaptureOutput(repl) as cap:
+        with _CaptureOutput(repl):
             repl._cmd_paste("")
         assert repl._last_exit_code == 1
 
@@ -28680,6 +30216,7 @@ class TestCmdDf:
 class TestCmdReadlink:
     def testReadlinkReal(self, repl):
         import tempfile
+
         d = tempfile.mkdtemp()
         f = os.path.join(d, "testfile.txt")
         with open(f, "w") as fh:
@@ -28699,11 +30236,12 @@ class TestCmdReadlink:
 
     def testReadlinkNotLink(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("content")
         f.close()
         try:
-            with _CaptureOutput(repl) as cap:
+            with _CaptureOutput(repl):
                 repl._cmd_readlink(f.name)
             # Not a symlink → exit code 1
             assert repl._last_exit_code == 1
@@ -28717,7 +30255,8 @@ class TestCmdReadlink:
 class TestCmdFile:
     def testFileASCII(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("hello world\n")
         f.close()
         try:
@@ -28730,7 +30269,8 @@ class TestCmdFile:
 
     def testFileJSON(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
         f.write('{"key": "value"}\n')
         f.close()
         try:
@@ -28743,7 +30283,8 @@ class TestCmdFile:
 
     def testFileBrief(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("test data\n")
         f.close()
         try:
@@ -28757,7 +30298,8 @@ class TestCmdFile:
 
     def testFileMIME(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
         f.write('{"key": "value"}\n')
         f.close()
         try:
@@ -28896,12 +30438,14 @@ class TestCmdWatchV4:
 class TestCmdSleepSuffixes:
     def test_sleep_seconds(self, repl):
         import time as _t
+
         s = _t.time()
         repl._cmd_sleep("0.01")
         assert _t.time() - s < 1
 
     def test_sleep_minutes(self, repl):
         import time as _t
+
         s = _t.time()
         repl._cmd_sleep("0.001m")
         assert _t.time() - s < 1
@@ -28944,6 +30488,7 @@ class TestCmdType:
 class TestCmdLsFlagsV2:
     def test_ls_1(self, repl):
         import tempfile
+
         d = tempfile.mkdtemp()
         f1 = os.path.join(d, "a.txt")
         f2 = os.path.join(d, "b.txt")
@@ -28962,6 +30507,7 @@ class TestCmdLsFlagsV2:
 
     def test_ls_a(self, repl):
         import tempfile
+
         d = tempfile.mkdtemp()
         f1 = os.path.join(d, "visible.txt")
         f2 = os.path.join(d, ".hidden.txt")
@@ -28984,11 +30530,12 @@ class TestCmdLsFlagsV2:
 
     def test_ls_empty_dir(self, repl):
         import tempfile
+
         d = tempfile.mkdtemp()
         try:
             with _CaptureOutput(repl) as cap:
                 repl._cmd_ls(d)
-            out = cap.getvalue()
+            cap.getvalue()
             assert repl._last_exit_code == 0
         finally:
             os.rmdir(d)
@@ -29005,11 +30552,12 @@ class TestCmdDirStack:
     def test_dirs_default(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_dirs("")
-        out = cap.getvalue()
+        cap.getvalue()
         assert repl._last_exit_code == 0
 
     def test_pushd_popd(self, repl):
         import tempfile
+
         d = tempfile.mkdtemp()
         try:
             repl._cmd_pushd(d)
@@ -29030,7 +30578,7 @@ class TestCmdDirStack:
     def test_dirs_v(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_dirs("-v")
-        out = cap.getvalue()
+        cap.getvalue()
         assert repl._last_exit_code == 0
 
 
@@ -29040,6 +30588,7 @@ class TestCmdDirStack:
 class TestCmdCpFlags:
     def test_cp_r_verbose(self, repl):
         import tempfile
+
         src = tempfile.mkdtemp()
         sub = os.path.join(src, "sub")
         os.makedirs(sub)
@@ -29047,12 +30596,13 @@ class TestCmdCpFlags:
         Path(f1).write_text("hello")
         dst = tempfile.mktemp()
         try:
-            with _CaptureOutput(repl) as cap:
+            with _CaptureOutput(repl):
                 repl._cmd_cp(f"-rv {src} {dst}")
             assert repl._last_exit_code == 0
             assert os.path.exists(os.path.join(dst, "sub", "a.txt"))
         finally:
             import shutil
+
             if os.path.exists(src):
                 shutil.rmtree(src)
             if os.path.exists(dst):
@@ -29073,12 +30623,13 @@ class TestCmdCpFlags:
 class TestCmdMvFlags:
     def test_mv_verbose(self, repl):
         import tempfile
-        src = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        src = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         src.write("test")
         src.close()
-        dst = tempfile.mktemp(suffix='.txt')
+        dst = tempfile.mktemp(suffix=".txt")
         try:
-            with _CaptureOutput(repl) as cap:
+            with _CaptureOutput(repl):
                 repl._cmd_mv(f"-v {src.name} {dst}")
             assert repl._last_exit_code == 0
             assert os.path.exists(dst)
@@ -29102,6 +30653,7 @@ class TestCmdMvFlags:
 class TestCmdMkdirFlags:
     def test_mkdir_p(self, repl):
         import tempfile
+
         base = tempfile.mkdtemp()
         nested = os.path.join(base, "a", "b", "c")
         try:
@@ -29110,6 +30662,7 @@ class TestCmdMkdirFlags:
             assert repl._last_exit_code == 0
         finally:
             import shutil
+
             shutil.rmtree(base)
 
     def test_mkdir_no_args(self, repl):
@@ -29123,7 +30676,8 @@ class TestCmdMkdirFlags:
 class TestCmdTouchFlags:
     def test_touch_c_existing(self, repl):
         import tempfile
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         f.write("test")
         f.close()
         try:
@@ -29134,7 +30688,8 @@ class TestCmdTouchFlags:
 
     def test_touch_c_nonexistent(self, repl):
         import tempfile
-        f = tempfile.mktemp(suffix='.txt')
+
+        f = tempfile.mktemp(suffix=".txt")
         try:
             repl._cmd_touch(f"-c {f}")
             assert not os.path.exists(f)

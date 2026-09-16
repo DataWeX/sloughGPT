@@ -1,10 +1,9 @@
 """Tests for domain.collections._internal.validators — pure logic, no network."""
+
 from __future__ import annotations
 
-import time
 import threading
-
-import pytest
+import time
 
 from domain.collections._internal.sources import Record
 from domain.collections._internal.validators import (
@@ -18,10 +17,10 @@ from domain.collections._internal.validators import (
     Schema,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _r(content: str, **meta) -> Record:
     return Record(content=content, metadata=meta)
@@ -30,6 +29,7 @@ def _r(content: str, **meta) -> Record:
 # ---------------------------------------------------------------------------
 # Schema
 # ---------------------------------------------------------------------------
+
 
 class TestSchema:
     def test_valid_record(self):
@@ -101,6 +101,7 @@ class TestSchema:
 # DataValidator
 # ---------------------------------------------------------------------------
 
+
 class TestDataValidator:
     def test_valid_increments_stats(self):
         dv = DataValidator(Schema())
@@ -137,6 +138,7 @@ class TestDataValidator:
 # EnrichmentRule
 # ---------------------------------------------------------------------------
 
+
 class TestEnrichmentRule:
     def test_static_value(self):
         rule = EnrichmentRule(key="tag", value="v1")
@@ -172,6 +174,7 @@ class TestEnrichmentRule:
 # ---------------------------------------------------------------------------
 # DataEnricher
 # ---------------------------------------------------------------------------
+
 
 class TestDataEnricher:
     def test_enrich_adds_field(self):
@@ -219,6 +222,7 @@ class TestDataEnricher:
 # ---------------------------------------------------------------------------
 # RateLimiter
 # ---------------------------------------------------------------------------
+
 
 class TestRateLimiter:
     def test_acquire_within_burst(self):
@@ -268,6 +272,7 @@ class TestRateLimiter:
         rl = RateLimiter(max_per_second=1000, burst_size=500)
         results = []
         lock = threading.Lock()
+
         def acquire_many():
             count = 0
             for _ in range(100):
@@ -275,6 +280,7 @@ class TestRateLimiter:
                     count += 1
             with lock:
                 results.append(count)
+
         threads = [threading.Thread(target=acquire_many) for _ in range(4)]
         for t in threads:
             t.start()
@@ -288,11 +294,13 @@ class TestRateLimiter:
 # CallableSource
 # ---------------------------------------------------------------------------
 
+
 class TestCallableSource:
     def test_read(self):
         def gen():
             yield Record(content="a")
             yield Record(content="b")
+
         cs = CallableSource(gen)
         records = list(cs.read())
         assert len(records) == 2
@@ -300,6 +308,7 @@ class TestCallableSource:
     def test_default_name(self):
         def my_func():
             yield Record(content="x")
+
         cs = CallableSource(my_func)
         assert cs.name == "my_func"
 
@@ -311,6 +320,7 @@ class TestCallableSource:
 # ---------------------------------------------------------------------------
 # CallableStore
 # ---------------------------------------------------------------------------
+
 
 class TestCallableStore:
     def test_write(self):
@@ -332,6 +342,7 @@ class TestCallableStore:
     def test_default_name(self):
         def my_fn(r):
             pass
+
         cs = CallableStore(my_fn)
         assert cs.name == "my_fn"
 
@@ -344,13 +355,16 @@ class TestCallableStore:
 # CollectorRunner
 # ---------------------------------------------------------------------------
 
+
 class TestCollectorRunner:
     def _make_collector(self, count: int):
         class FakeCollector:
             def __init__(self, n):
                 self.n = n
+
             def collect(self):
                 return self.n
+
         return FakeCollector(count)
 
     def test_add_and_list(self):
@@ -381,6 +395,7 @@ class TestCollectorRunner:
         class FailCollector:
             def collect(self):
                 raise RuntimeError("boom")
+
         cr = CollectorRunner()
         cr.add("f", FailCollector())
         assert cr.run("f") == 0

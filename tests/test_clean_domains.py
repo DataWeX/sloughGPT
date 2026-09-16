@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
-
 from domains.chat.domain import ChatDomain, ChatRequest, ChatResponse, get_chat_domain
 
 # companion.py (top-level, single file)
@@ -20,7 +18,6 @@ from domains.companion import (
     create_companion,
     get_companion,
 )
-
 
 # =============================================================================
 # ChatDomain Tests
@@ -56,7 +53,7 @@ class TestChatDomain:
     def test_constructor_creates_log_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             log_dir = Path(tmp) / "chat_logs"
-            chat = ChatDomain(log_dir=str(log_dir))
+            ChatDomain(log_dir=str(log_dir))
             assert log_dir.is_dir()
 
     @pytest.mark.asyncio
@@ -116,11 +113,13 @@ class TestChatDomain:
     async def test_respond_picks_last_user_message(self):
         chat = ChatDomain(log_dir=tempfile.mkdtemp())
         with patch.object(chat, "_generate", return_value="ok") as mock:
-            await chat.respond(messages=[
-                {"role": "user", "content": "first"},
-                {"role": "assistant", "content": "middle"},
-                {"role": "user", "content": "last"},
-            ])
+            await chat.respond(
+                messages=[
+                    {"role": "user", "content": "first"},
+                    {"role": "assistant", "content": "middle"},
+                    {"role": "user", "content": "last"},
+                ]
+            )
             assert mock.call_args[1]["user_msg"] == "last"
 
     def test_get_recent_responses_returns_limited(self):
@@ -128,9 +127,15 @@ class TestChatDomain:
             chat = ChatDomain(log_dir=tmp)
             for i in range(5):
                 chat._log(
-                    user_message=f"msg{i}", assistant_response=f"resp{i}",
-                    model="t", temperature=0.5, max_tokens=10,
-                    session_id="s", user_id="u", tokens_generated=1, duration_ms=1,
+                    user_message=f"msg{i}",
+                    assistant_response=f"resp{i}",
+                    model="t",
+                    temperature=0.5,
+                    max_tokens=10,
+                    session_id="s",
+                    user_id="u",
+                    tokens_generated=1,
+                    duration_ms=1,
                 )
             result = chat.get_recent_responses(limit=2)
             assert len(result) == 2
@@ -141,9 +146,15 @@ class TestChatDomain:
             chat = ChatDomain(log_dir=tmp)
             for i in range(3):
                 chat._log(
-                    user_message=f"msg{i}", assistant_response=f"resp{i}",
-                    model="gpt2", temperature=0.5, max_tokens=10,
-                    session_id="s", user_id="u", tokens_generated=5 + i, duration_ms=10 + i,
+                    user_message=f"msg{i}",
+                    assistant_response=f"resp{i}",
+                    model="gpt2",
+                    temperature=0.5,
+                    max_tokens=10,
+                    session_id="s",
+                    user_id="u",
+                    tokens_generated=5 + i,
+                    duration_ms=10 + i,
                 )
             stats = chat.get_stats()
             assert stats["total"] == 3

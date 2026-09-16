@@ -627,10 +627,17 @@ class HealthController:
         # Staged loader info
         try:
             from infrastructure.staged_loader import get_staged_loader
+
             staged_loader = get_staged_loader()
             startup_progress = staged_loader.get_status()
         except Exception:
-            startup_progress = {"stage": "unknown", "stage_value": 0, "elapsed_seconds": 0, "errors": {}, "stages": {}}
+            startup_progress = {
+                "stage": "unknown",
+                "stage_value": 0,
+                "elapsed_seconds": 0,
+                "errors": {},
+                "stages": {},
+            }
 
         # Version info
         try:

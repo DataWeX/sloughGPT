@@ -1,9 +1,5 @@
 """Tests for MobileTrainingStore (MogDB-backed)."""
 
-import os
-import tempfile
-import time
-
 import pytest
 
 from domain.training._internal.mobile_training_store import MobileTrainingStore
@@ -45,11 +41,13 @@ class TestMobileTrainingStore:
 
     def test_add_batch(self, store):
         """add_batch inserts multiple pairs."""
-        ids = store.add_batch([
-            {"user_msg": "u1", "assistant_msg": "a1", "session_id": "s1"},
-            {"user_msg": "u2", "assistant_msg": "a2", "session_id": "s1"},
-            {"user_msg": "u3", "assistant_msg": "a3", "session_id": "s2"},
-        ])
+        ids = store.add_batch(
+            [
+                {"user_msg": "u1", "assistant_msg": "a1", "session_id": "s1"},
+                {"user_msg": "u2", "assistant_msg": "a2", "session_id": "s1"},
+                {"user_msg": "u3", "assistant_msg": "a3", "session_id": "s2"},
+            ]
+        )
         assert len(ids) == 3
         assert store.count() == 3
 

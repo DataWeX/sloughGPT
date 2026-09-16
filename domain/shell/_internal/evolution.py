@@ -42,6 +42,7 @@ from dataclasses import replace
 
 import numpy as np
 
+from .memory import WorldMemory
 from .simulation import (
     MATERIAL_ORGANIC,
     SimBaby,
@@ -49,7 +50,6 @@ from .simulation import (
     Simulation,
     WorldParams,
 )
-from .memory import WorldMemory
 
 # Dedicated RNG stream for the cultural (teach) brain. The teach brain is
 # genetic material too, but drawing it from the SHARED stream would change the
@@ -165,9 +165,9 @@ class Genome:
     winning parent's tribe, so tribes persist and drift across generations.
     """
 
-    def __init__(self, tensors: dict[str, np.ndarray],
-                 memories: list[dict] | None = None,
-                 group_id: int = 0):
+    def __init__(
+        self, tensors: dict[str, np.ndarray], memories: list[dict] | None = None, group_id: int = 0
+    ):
         self.tensors: dict[str, np.ndarray] = {
             k: np.array(v, dtype=np.float32) for k, v in tensors.items()
         }
@@ -183,7 +183,7 @@ class Genome:
         return len(self.memories)
 
     @classmethod
-    def from_baby(cls, baby: SimBaby, group_id: int = 0) -> "Genome":
+    def from_baby(cls, baby: SimBaby, group_id: int = 0) -> Genome:
         """
         Extract a genome from a baby: perceptron weights plus a consolidated
         memotype.
@@ -206,17 +206,13 @@ class Genome:
             names = names + ("message",)
         if hasattr(baby, "perceptron_teach") and baby.perceptron_teach is not None:
             names = names + ("teach",)
-        if (hasattr(baby, "perceptron_predation")
-                and baby.perceptron_predation is not None):
+        if hasattr(baby, "perceptron_predation") and baby.perceptron_predation is not None:
             names = names + ("predation",)
-        if (hasattr(baby, "perceptron_territory")
-                and baby.perceptron_territory is not None):
+        if hasattr(baby, "perceptron_territory") and baby.perceptron_territory is not None:
             names = names + ("territory",)
-        if (hasattr(baby, "perceptron_reproduce")
-                and baby.perceptron_reproduce is not None):
+        if hasattr(baby, "perceptron_reproduce") and baby.perceptron_reproduce is not None:
             names = names + ("reproduce",)
-        if (hasattr(baby, "perceptron_role")
-                and baby.perceptron_role is not None):
+        if hasattr(baby, "perceptron_role") and baby.perceptron_role is not None:
             names = names + ("role",)
         for name in names:
             p = getattr(baby, f"perceptron_{name}")
@@ -228,17 +224,18 @@ class Genome:
         cap = max(1, int(getattr(baby.params, "memory_inherit", 8)))
         memories: list[dict] = []
         for e in baby.memory.recall(cap, by_reward=True):
-            memories.append({
-                "features": [float(x) for x in e.features],
-                "action": [float(a) for a in e.action],
-                "reward": float(e.reward),
-                "tick": int(e.tick),
-            })
+            memories.append(
+                {
+                    "features": [float(x) for x in e.features],
+                    "action": [float(a) for a in e.action],
+                    "reward": float(e.reward),
+                    "tick": int(e.tick),
+                }
+            )
         return cls(tensors, memories=memories, group_id=group_id)
 
     @classmethod
-    def random(cls, params: WorldParams, rng: np.random.Generator,
-               group_id: int = 0) -> "Genome":
+    def random(cls, params: WorldParams, rng: np.random.Generator, group_id: int = 0) -> Genome:
         """
         Create a random genome matching the perceptron shapes for params.
 
@@ -265,10 +262,14 @@ class Genome:
         tensors: dict[str, np.ndarray] = {}
         for name, (n_in, n_out) in shapes.items():
             readout_in = n_in + hidden if (hidden > 0 and name in ("cells", "move")) else n_in
-            tensors[f"{name}.W"] = (rng.standard_normal((readout_in, n_out)) * 0.1).astype(np.float32)
+            tensors[f"{name}.W"] = (rng.standard_normal((readout_in, n_out)) * 0.1).astype(
+                np.float32
+            )
             tensors[f"{name}.b"] = np.zeros(n_out, dtype=np.float32)
             if hidden > 0 and name in ("cells", "move"):
-                tensors[f"{name}.H"] = (rng.standard_normal((n_in, hidden)) * 0.5).astype(np.float32)
+                tensors[f"{name}.H"] = (rng.standard_normal((n_in, hidden)) * 0.5).astype(
+                    np.float32
+                )
                 tensors[f"{name}.bh"] = (rng.standard_normal(hidden) * 0.1).astype(np.float32)
         if params.teaching_enabled:
             # Cultural brain: one gate over the target's entity features,
@@ -277,7 +278,9 @@ class Genome:
             # whether or not teaching is enabled (locked proofs and a
             # perfectly controlled culture benchmark).
             teach = _teach_rng(group_id)
-            tensors["teach.W"] = (teach.standard_normal((params.entity_input_dim, 1)) * 0.1).astype(np.float32)
+            tensors["teach.W"] = (teach.standard_normal((params.entity_input_dim, 1)) * 0.1).astype(
+                np.float32
+            )
             tensors["teach.b"] = np.zeros(1, dtype=np.float32)
         if params.predation_enabled:
             # Predator brain: one gate over the target's entity features,
@@ -286,7 +289,9 @@ class Genome:
             # whether or not predation is enabled (locked proofs and a
             # perfectly controlled predator-prey benchmark).
             pred = _predation_rng(group_id)
-            tensors["predation.W"] = (pred.standard_normal((params.entity_input_dim, 1)) * 0.1).astype(np.float32)
+            tensors["predation.W"] = (
+                pred.standard_normal((params.entity_input_dim, 1)) * 0.1
+            ).astype(np.float32)
             tensors["predation.b"] = np.zeros(1, dtype=np.float32)
         if params.territoriality_enabled:
             # Territory brain: one gate over a trespasser's entity features,
@@ -295,7 +300,9 @@ class Genome:
             # whether or not territoriality is enabled (locked proofs and a
             # perfectly controlled territoriality benchmark).
             terr = _territory_rng(group_id)
-            tensors["territory.W"] = (terr.standard_normal((params.entity_input_dim, 1)) * 0.1).astype(np.float32)
+            tensors["territory.W"] = (
+                terr.standard_normal((params.entity_input_dim, 1)) * 0.1
+            ).astype(np.float32)
             tensors["territory.b"] = np.zeros(1, dtype=np.float32)
         if params.lifecycle_enabled:
             # Reproduction brain: one gate over the parent's own body state,
@@ -304,7 +311,9 @@ class Genome:
             # whether or not lifecycle is enabled (locked proofs and a
             # perfectly controlled lifecycle benchmark).
             repro = _reproduce_rng(group_id)
-            tensors["reproduce.W"] = (repro.standard_normal((params.body_input_dim, 1)) * 0.1).astype(np.float32)
+            tensors["reproduce.W"] = (
+                repro.standard_normal((params.body_input_dim, 1)) * 0.1
+            ).astype(np.float32)
             tensors["reproduce.b"] = np.zeros(1, dtype=np.float32)
         if params.specialization_enabled:
             # Role brain: one gate over the baby's own body state — its
@@ -314,7 +323,9 @@ class Genome:
             # proofs and a perfectly controlled division-of-labor
             # benchmark).
             role = _role_rng(group_id)
-            tensors["role.W"] = (role.standard_normal((params.body_input_dim, 1)) * 0.1).astype(np.float32)
+            tensors["role.W"] = (role.standard_normal((params.body_input_dim, 1)) * 0.1).astype(
+                np.float32
+            )
             tensors["role.b"] = np.zeros(1, dtype=np.float32)
         return cls(tensors, group_id=group_id)
 
@@ -337,42 +348,54 @@ class Genome:
             if f"{name}.H" in self.tensors:
                 p.H = np.array(self.tensors[f"{name}.H"], dtype=np.float32).copy()
                 p.bh = np.array(self.tensors[f"{name}.bh"], dtype=np.float32).copy()
-        if (hasattr(baby, "perceptron_message")
-                and baby.perceptron_message is not None
-                and "message.W" in self.tensors):
+        if (
+            hasattr(baby, "perceptron_message")
+            and baby.perceptron_message is not None
+            and "message.W" in self.tensors
+        ):
             p = baby.perceptron_message
             p.W[:] = self.tensors["message.W"]
             p.b[:] = self.tensors["message.b"]
             if "message.H" in self.tensors:
                 p.H = np.array(self.tensors["message.H"], dtype=np.float32).copy()
                 p.bh = np.array(self.tensors["message.bh"], dtype=np.float32).copy()
-        if (hasattr(baby, "perceptron_teach")
-                and baby.perceptron_teach is not None
-                and "teach.W" in self.tensors):
+        if (
+            hasattr(baby, "perceptron_teach")
+            and baby.perceptron_teach is not None
+            and "teach.W" in self.tensors
+        ):
             p = baby.perceptron_teach
             p.W[:] = self.tensors["teach.W"]
             p.b[:] = self.tensors["teach.b"]
-        if (hasattr(baby, "perceptron_predation")
-                and baby.perceptron_predation is not None
-                and "predation.W" in self.tensors):
+        if (
+            hasattr(baby, "perceptron_predation")
+            and baby.perceptron_predation is not None
+            and "predation.W" in self.tensors
+        ):
             p = baby.perceptron_predation
             p.W[:] = self.tensors["predation.W"]
             p.b[:] = self.tensors["predation.b"]
-        if (hasattr(baby, "perceptron_territory")
-                and baby.perceptron_territory is not None
-                and "territory.W" in self.tensors):
+        if (
+            hasattr(baby, "perceptron_territory")
+            and baby.perceptron_territory is not None
+            and "territory.W" in self.tensors
+        ):
             p = baby.perceptron_territory
             p.W[:] = self.tensors["territory.W"]
             p.b[:] = self.tensors["territory.b"]
-        if (hasattr(baby, "perceptron_reproduce")
-                and baby.perceptron_reproduce is not None
-                and "reproduce.W" in self.tensors):
+        if (
+            hasattr(baby, "perceptron_reproduce")
+            and baby.perceptron_reproduce is not None
+            and "reproduce.W" in self.tensors
+        ):
             p = baby.perceptron_reproduce
             p.W[:] = self.tensors["reproduce.W"]
             p.b[:] = self.tensors["reproduce.b"]
-        if (hasattr(baby, "perceptron_role")
-                and baby.perceptron_role is not None
-                and "role.W" in self.tensors):
+        if (
+            hasattr(baby, "perceptron_role")
+            and baby.perceptron_role is not None
+            and "role.W" in self.tensors
+        ):
             p = baby.perceptron_role
             p.W[:] = self.tensors["role.W"]
             p.b[:] = self.tensors["role.b"]
@@ -384,7 +407,7 @@ class Genome:
                 tick=int(m["tick"]),
             )
 
-    def crossover(self, other: "Genome", rng: np.random.Generator) -> "Genome":
+    def crossover(self, other: Genome, rng: np.random.Generator) -> Genome:
         """
         Uniform crossover — each element is inherited from either parent.
 
@@ -419,8 +442,7 @@ class Genome:
             mixed[k] = np.where(mask, v, other.tensors[k]).astype(np.float32)
         return Genome(mixed, memories=self.memories, group_id=self.group_id)
 
-    def mutate(self, rng: np.random.Generator, rate: float = 0.05,
-               scale: float = 0.1) -> "Genome":
+    def mutate(self, rng: np.random.Generator, rate: float = 0.05, scale: float = 0.1) -> Genome:
         """
         Gaussian mutation — add noise to a random subset of elements.
 
@@ -493,19 +515,22 @@ class EvolutionEngine:
         the capped parent->child memotype.
     """
 
-    def __init__(self, params: WorldParams | None = None,
-                 population_size: int = 8,
-                 generations: int = 10,
-                 ticks_per_generation: int = 20,
-                 elite_count: int = 2,
-                 mutation_rate: float = 0.05,
-                 mutation_scale: float = 0.1,
-                 organic_pools: int = 3,
-                 learning_enabled: bool = False,
-                 spawn_positions: list[np.ndarray] | None = None,
-                 group_count: int = 1,
-                 group_weight: float = 0.0,
-                 seed: int | None = None):
+    def __init__(
+        self,
+        params: WorldParams | None = None,
+        population_size: int = 8,
+        generations: int = 10,
+        ticks_per_generation: int = 20,
+        elite_count: int = 2,
+        mutation_rate: float = 0.05,
+        mutation_scale: float = 0.1,
+        organic_pools: int = 3,
+        learning_enabled: bool = False,
+        spawn_positions: list[np.ndarray] | None = None,
+        group_count: int = 1,
+        group_weight: float = 0.0,
+        seed: int | None = None,
+    ):
         self.params = params or WorldParams(grid_size=(16, 8, 16))
         self.population_size = max(2, int(population_size))
         self.generations = max(1, int(generations))
@@ -522,8 +547,7 @@ class EvolutionEngine:
         self.history: list[dict] = []
         # World-level long-term memory: one reservoir per engine run, shared
         # by every generation's scene so deposits survive across generations.
-        self.world_memory = (WorldMemory()
-                             if self.params.memory_enabled else None)
+        self.world_memory = WorldMemory() if self.params.memory_enabled else None
         self._run_seeds_given = 0
         self._run_seeds_total = 0
         if self.spawn_positions is None and self.group_count > 1:
@@ -540,8 +564,7 @@ class EvolutionEngine:
             List of ``group_count + 1`` boundaries; group ``g`` owns the x
             range ``[edges[g], edges[g+1])``.
         """
-        return [int(round(i * nx / self.group_count))
-                for i in range(self.group_count + 1)]
+        return [int(round(i * nx / self.group_count)) for i in range(self.group_count + 1)]
 
     def _grouped_spawn_positions(self) -> list[np.ndarray]:
         """
@@ -599,7 +622,10 @@ class EvolutionEngine:
                     z = min(max(cz + dz, 0), nz - 1)
                     y = int(scene._surface_y(x, z))
                     scene.place_material(
-                        x, y, z, MATERIAL_ORGANIC,
+                        x,
+                        y,
+                        z,
+                        MATERIAL_ORGANIC,
                         energy=float(rng.uniform(200, 800)),
                     )
 
@@ -608,19 +634,17 @@ class EvolutionEngine:
         """Fitness = energy at end of generation (0 if dead)."""
         return baby.energy
 
-    def _group_means(self, babies: list[SimBaby],
-                     genomes: list[Genome]) -> dict[int, float]:
+    def _group_means(self, babies: list[SimBaby], genomes: list[Genome]) -> dict[int, float]:
         """Mean end-of-generation energy per tribe (for observability)."""
         sums: dict[int, float] = {}
         counts: dict[int, int] = {}
-        for b, g in zip(babies, genomes):
+        for b, g in zip(babies, genomes, strict=False):
             key = g.group_id
             sums[key] = sums.get(key, 0.0) + b.energy
             counts[key] = counts.get(key, 0) + 1
         return {k: round(sums[k] / counts[k], 4) for k in sums}
 
-    def _home_displacement(self, babies: list[SimBaby],
-                           genomes: list[Genome]) -> float:
+    def _home_displacement(self, babies: list[SimBaby], genomes: list[Genome]) -> float:
         """
         Territoriality measure: mean distance of alive babies from their
         tribe's spawn centroid. Lower means the tribe stays in its home
@@ -633,17 +657,17 @@ class EvolutionEngine:
         for i, pos in enumerate(self.spawn_positions):
             if i < len(groups):
                 centroids.setdefault(groups[i], []).append(np.asarray(pos))
-        means = {g: np.mean(arr, axis=0)
-                 for g, arr in centroids.items() if arr}
+        means = {g: np.mean(arr, axis=0) for g, arr in centroids.items() if arr}
         dists = [
             float(np.linalg.norm(b.position - means[g.group_id]))
-            for b, g in zip(babies, genomes)
+            for b, g in zip(babies, genomes, strict=False)
             if b.alive and g.group_id in means
         ]
         return float(np.mean(dists)) if dists else 0.0
 
-    def _run_generation(self, genomes: list[Genome],
-                        rng: np.random.Generator) -> tuple[list[SimBaby], list[float], dict]:
+    def _run_generation(
+        self, genomes: list[Genome], rng: np.random.Generator
+    ) -> tuple[list[SimBaby], list[float], dict]:
         """
         Build a scene, place food, simulate one generation.
 
@@ -663,10 +687,17 @@ class EvolutionEngine:
         self._place_food(scene, food_rng)
         babies: list[SimBaby] = []
         for i, g in enumerate(genomes):
-            position = (self.spawn_positions[i] if self.spawn_positions
-                        and i < len(self.spawn_positions) else None)
-            b = SimBaby(position=position, initial_energy=self.params.start_energy,
-                        params=self.params, group_id=g.group_id)
+            position = (
+                self.spawn_positions[i]
+                if self.spawn_positions and i < len(self.spawn_positions)
+                else None
+            )
+            b = SimBaby(
+                position=position,
+                initial_energy=self.params.start_energy,
+                params=self.params,
+                group_id=g.group_id,
+            )
             g.apply_to(b)
             scene.add_baby(b)
             babies.append(b)
@@ -692,9 +723,13 @@ class EvolutionEngine:
         social["mean_home_displacement"] = self._home_displacement(babies, genomes)
         return babies, [self._fitness(b) for b in babies], social
 
-    def _select(self, babies: list[SimBaby], fitnesses: list[float],
-                rng: np.random.Generator,
-                groups: list[int] | None = None) -> list[Genome]:
+    def _select(
+        self,
+        babies: list[SimBaby],
+        fitnesses: list[float],
+        rng: np.random.Generator,
+        groups: list[int] | None = None,
+    ) -> list[Genome]:
         """
         Elitism + tournament selection, then crossover + mutation to refill.
 
@@ -726,10 +761,10 @@ class EvolutionEngine:
         if self.group_count > 1 and self.group_weight > 0.0:
             return self._select_groups(babies, fitnesses, rng, groups)
 
-        ranked = sorted(zip(babies, fitnesses, groups),
-                        key=lambda x: x[1], reverse=True)
-        next_gen = [Genome.from_baby(b, group_id=grp)
-                    for b, _, grp in ranked[:self.elite_count]]
+        ranked = sorted(
+            zip(babies, fitnesses, groups, strict=False), key=lambda x: x[1], reverse=True
+        )
+        next_gen = [Genome.from_baby(b, group_id=grp) for b, _, grp in ranked[: self.elite_count]]
         pool_size = len(ranked)
         while len(next_gen) < self.population_size:
             i = int(rng.integers(0, pool_size))
@@ -739,15 +774,20 @@ class EvolutionEngine:
             l = int(rng.integers(0, pool_size))
             parent_b = ranked[k] if ranked[k][1] >= ranked[l][1] else ranked[l]
             child = Genome.from_baby(parent_a[0], group_id=parent_a[2]).crossover(
-                Genome.from_baby(parent_b[0], group_id=parent_b[2]), rng,
+                Genome.from_baby(parent_b[0], group_id=parent_b[2]),
+                rng,
             )
             child.mutate(rng, self.mutation_rate, self.mutation_scale)
             next_gen.append(child)
         return next_gen
 
-    def _select_groups(self, babies: list[SimBaby], fitnesses: list[float],
-                       rng: np.random.Generator,
-                       groups: list[int]) -> list[Genome]:
+    def _select_groups(
+        self,
+        babies: list[SimBaby],
+        fitnesses: list[float],
+        rng: np.random.Generator,
+        groups: list[int],
+    ) -> list[Genome]:
         """
         Two-level (multilevel / trait-group) selection.
 
@@ -775,7 +815,7 @@ class EvolutionEngine:
             Next generation's genomes.
         """
         tribes: dict[int, list[tuple[SimBaby, float]]] = {}
-        for b, f, g in zip(babies, fitnesses, groups):
+        for b, f, g in zip(babies, fitnesses, groups, strict=False):
             tribes.setdefault(g, []).append((b, f))
         tribe_ids = list(tribes)
 
@@ -785,8 +825,7 @@ class EvolutionEngine:
                 return 0.0
             return float(np.exp(np.mean(np.log(energies))))
 
-        tribe_score = {g: geometric_mean(members)
-                       for g, members in tribes.items()}
+        tribe_score = {g: geometric_mean(members) for g, members in tribes.items()}
 
         def pick_tribe() -> int:
             i, j = int(rng.integers(0, len(tribe_ids))), int(rng.integers(0, len(tribe_ids)))
@@ -796,7 +835,7 @@ class EvolutionEngine:
         ranked_tribes = sorted(tribe_ids, key=lambda g: tribe_score[g], reverse=True)
         next_gen = [
             Genome.from_baby(max(tribes[g], key=lambda x: x[1])[0], group_id=g)
-            for g in ranked_tribes[:min(self.elite_count, len(ranked_tribes))]
+            for g in ranked_tribes[: min(self.elite_count, len(ranked_tribes))]
         ]
         while len(next_gen) < self.population_size:
             ga = pick_tribe()
@@ -806,7 +845,8 @@ class EvolutionEngine:
             parent_a = members_a[int(rng.integers(0, len(members_a)))][0]
             parent_b = members_b[int(rng.integers(0, len(members_b)))][0]
             child = Genome.from_baby(parent_a, group_id=ga).crossover(
-                Genome.from_baby(parent_b, group_id=gb), rng,
+                Genome.from_baby(parent_b, group_id=gb),
+                rng,
             )
             child.mutate(rng, self.mutation_rate, self.mutation_scale)
             next_gen.append(child)
@@ -833,8 +873,10 @@ class EvolutionEngine:
 
         self._run_seeds_total = 0
 
-        genomes = [Genome.random(self.params, rng, group_id=i % self.group_count)
-                   for i in range(self.population_size)]
+        genomes = [
+            Genome.random(self.params, rng, group_id=i % self.group_count)
+            for i in range(self.population_size)
+        ]
         best_genome: Genome | None = None
         best_fitness = -1.0
 
@@ -848,7 +890,8 @@ class EvolutionEngine:
                 best_fitness = gen_best
                 best_idx = int(np.argmax(raw))
                 best_genome = Genome.from_baby(
-                    babies[best_idx], group_id=genomes[best_idx].group_id,
+                    babies[best_idx],
+                    group_id=genomes[best_idx].group_id,
                 )
 
             seeds = self._run_seeds_given
@@ -884,11 +927,9 @@ class EvolutionEngine:
                 "role_raid_energy": social["role_raid_energy"],
                 "deaths": social["deaths"],
                 "alive_count": social["alive_count"],
-                "memory_size": len(self.world_memory)
-                if self.world_memory is not None else 0,
+                "memory_size": len(self.world_memory) if self.world_memory is not None else 0,
                 "memory_seeds": seeds,
-                "solar_energy_deposited": float(
-                    social.get("solar_energy_deposited", 0.0)),
+                "solar_energy_deposited": float(social.get("solar_energy_deposited", 0.0)),
                 "sunshine": float(social.get("sunshine", 0.0)),
                 "light_final": float(social.get("light_final", 0.0)),
             }
@@ -898,7 +939,9 @@ class EvolutionEngine:
 
             if gen < self.generations:
                 genomes = self._select(
-                    babies, raw, rng,
+                    babies,
+                    raw,
+                    rng,
                     groups=[g.group_id for g in genomes],
                 )
 
@@ -909,8 +952,7 @@ class EvolutionEngine:
             "best_genome": best_genome,
             "inherited_episodes": best_genome.memory_count if best_genome else 0,
             "history": list(self.history),
-            "memory_size": len(self.world_memory)
-            if self.world_memory is not None else 0,
+            "memory_size": len(self.world_memory) if self.world_memory is not None else 0,
             "memory_seeds_total": self._run_seeds_total,
         }
 
@@ -932,45 +974,49 @@ class EvolutionEngine:
         best_fitness = -1.0
         history: list[dict] = []
         for gen in range(1, self.generations + 1):
-            genomes = [Genome.random(self.params, rng, group_id=i % self.group_count)
-                       for i in range(self.population_size)]
+            genomes = [
+                Genome.random(self.params, rng, group_id=i % self.group_count)
+                for i in range(self.population_size)
+            ]
             babies, raw, social = self._run_generation(genomes, rng)
             gen_best = float(max(raw))
             gen_avg = float(np.mean(raw))
             alive = sum(1 for b in babies if b.alive)
             if gen_best > best_fitness:
                 best_fitness = gen_best
-            history.append({
-                "generation": gen,
-                "best_fitness": gen_best,
-                "avg_fitness": gen_avg,
-                "alive": alive,
-                "cooperations": social["cooperations"],
-                "contests": social["contests"],
-                "cooperate_rate": social["cooperate_rate"],
-                "contest_rate": social["contest_rate"],
-                "social_energy_moved": social["social_energy_moved"],
-                "mean_home_displacement": social["mean_home_displacement"],
-                "lessons": social["lessons"],
-                "teach_rate": social["teach_rate"],
-                "predations": social["predations"],
-                "predation_rate": social["predation_rate"],
-                "predation_energy_moved": social["predation_energy_moved"],
-                "defenses": social["defenses"],
-                "defend_rate": social["defend_rate"],
-                "defend_energy_moved": social["defend_energy_moved"],
-                "raids": social["raids"],
-                "raid_energy_moved": social["raid_energy_moved"],
-                "nests_built": social["nests_built"],
-                "role_deposits": social["role_deposits"],
-                "role_deposit_rate": social["role_deposit_rate"],
-                "role_deposit_energy": social["role_deposit_energy"],
-                "role_raids": social["role_raids"],
-                "role_raid_rate": social["role_raid_rate"],
-                "role_raid_energy": social["role_raid_energy"],
-                "memory_size": 0,
-                "memory_seeds": 0,
-            })
+            history.append(
+                {
+                    "generation": gen,
+                    "best_fitness": gen_best,
+                    "avg_fitness": gen_avg,
+                    "alive": alive,
+                    "cooperations": social["cooperations"],
+                    "contests": social["contests"],
+                    "cooperate_rate": social["cooperate_rate"],
+                    "contest_rate": social["contest_rate"],
+                    "social_energy_moved": social["social_energy_moved"],
+                    "mean_home_displacement": social["mean_home_displacement"],
+                    "lessons": social["lessons"],
+                    "teach_rate": social["teach_rate"],
+                    "predations": social["predations"],
+                    "predation_rate": social["predation_rate"],
+                    "predation_energy_moved": social["predation_energy_moved"],
+                    "defenses": social["defenses"],
+                    "defend_rate": social["defend_rate"],
+                    "defend_energy_moved": social["defend_energy_moved"],
+                    "raids": social["raids"],
+                    "raid_energy_moved": social["raid_energy_moved"],
+                    "nests_built": social["nests_built"],
+                    "role_deposits": social["role_deposits"],
+                    "role_deposit_rate": social["role_deposit_rate"],
+                    "role_deposit_energy": social["role_deposit_energy"],
+                    "role_raids": social["role_raids"],
+                    "role_raid_rate": social["role_raid_rate"],
+                    "role_raid_energy": social["role_raid_energy"],
+                    "memory_size": 0,
+                    "memory_seeds": 0,
+                }
+            )
         return {
             "generations": self.generations,
             "population_size": self.population_size,
@@ -983,14 +1029,17 @@ class EvolutionEngine:
         }
 
 
-def benchmark_emergence(params: WorldParams | None = None, *,
-                        population_size: int = 8,
-                        generations: int = 14,
-                        ticks_per_generation: int = 30,
-                        organic_pools: int = 3,
-                        hidden_units: int = 0,
-                        shared_spawn: bool = True,
-                        seed: int = 1) -> dict:
+def benchmark_emergence(
+    params: WorldParams | None = None,
+    *,
+    population_size: int = 8,
+    generations: int = 14,
+    ticks_per_generation: int = 30,
+    organic_pools: int = 3,
+    hidden_units: int = 0,
+    shared_spawn: bool = True,
+    seed: int = 1,
+) -> dict:
     """
     Deterministic emergence proof: evolved vs frozen-random babies.
 
@@ -1018,9 +1067,14 @@ def benchmark_emergence(params: WorldParams | None = None, *,
         and ``run_frozen()``) plus ``spawn_positions`` for reproducibility.
     """
     base = params or WorldParams(grid_size=(16, 8, 16))
-    base = replace(base, generate_world=True, world_seed=seed,
-                   learning_enabled=False, brain_hidden_units=int(hidden_units),
-                   social_enabled=False)
+    base = replace(
+        base,
+        generate_world=True,
+        world_seed=seed,
+        learning_enabled=False,
+        brain_hidden_units=int(hidden_units),
+        social_enabled=False,
+    )
 
     ref = SimScene(params=base)
     nx, ny, nz = base.grid_size
@@ -1028,17 +1082,27 @@ def benchmark_emergence(params: WorldParams | None = None, *,
     xs = rng.permutation(nx)
     zs = rng.permutation(nz)
     positions = [
-        np.array([int(xs[i % nx]), int(ref._surface_y(int(xs[i % nx]), int(zs[i % nz]))),
-                  int(zs[i % nz])], dtype=np.float64)
+        np.array(
+            [
+                int(xs[i % nx]),
+                int(ref._surface_y(int(xs[i % nx]), int(zs[i % nz]))),
+                int(zs[i % nz]),
+            ],
+            dtype=np.float64,
+        )
         for i in range(population_size)
     ]
     if shared_spawn:
         positions = [positions[0]] * population_size
 
-    shared = dict(population_size=population_size, generations=generations,
-                  ticks_per_generation=ticks_per_generation,
-                  organic_pools=organic_pools, spawn_positions=positions,
-                  seed=seed)
+    shared = {
+        "population_size": population_size,
+        "generations": generations,
+        "ticks_per_generation": ticks_per_generation,
+        "organic_pools": organic_pools,
+        "spawn_positions": positions,
+        "seed": seed,
+    }
     evolved = EvolutionEngine(params=base, **shared).run()
     frozen = EvolutionEngine(params=base, **shared).run_frozen()
 
@@ -1054,15 +1118,18 @@ def benchmark_emergence(params: WorldParams | None = None, *,
     }
 
 
-def benchmark_social(params: WorldParams | None = None, *,
-                     population_size: int = 8,
-                     generations: int = 12,
-                     ticks_per_generation: int = 24,
-                     organic_pools: int = 3,
-                     group_count: int = 2,
-                     group_weight: float = 0.5,
-                     hidden_units: int = 0,
-                     seed: int = 1) -> dict:
+def benchmark_social(
+    params: WorldParams | None = None,
+    *,
+    population_size: int = 8,
+    generations: int = 12,
+    ticks_per_generation: int = 24,
+    organic_pools: int = 3,
+    group_count: int = 2,
+    group_weight: float = 0.5,
+    hidden_units: int = 0,
+    seed: int = 1,
+) -> dict:
     """
     Deterministic social emergence proof (Stage 6): two selection objectives.
 
@@ -1105,13 +1172,22 @@ def benchmark_social(params: WorldParams | None = None, *,
         verdict (group-arm cooperation rate beats the individual arm's).
     """
     base = params or WorldParams(grid_size=(16, 8, 16))
-    base = replace(base, generate_world=True, world_seed=seed,
-                   learning_enabled=False, brain_hidden_units=int(hidden_units))
+    base = replace(
+        base,
+        generate_world=True,
+        world_seed=seed,
+        learning_enabled=False,
+        brain_hidden_units=int(hidden_units),
+    )
 
-    shared = dict(population_size=population_size, generations=generations,
-                  ticks_per_generation=ticks_per_generation,
-                  organic_pools=organic_pools, group_count=group_count,
-                  seed=seed)
+    shared = {
+        "population_size": population_size,
+        "generations": generations,
+        "ticks_per_generation": ticks_per_generation,
+        "organic_pools": organic_pools,
+        "group_count": group_count,
+        "seed": seed,
+    }
     individual = EvolutionEngine(params=base, group_weight=0.0, **shared).run()
     group = EvolutionEngine(params=base, group_weight=group_weight, **shared).run()
 
@@ -1132,15 +1208,18 @@ def benchmark_social(params: WorldParams | None = None, *,
     }
 
 
-def benchmark_specialization(params: WorldParams | None = None, *,
-                             population_size: int = 8,
-                             generations: int = 12,
-                             ticks_per_generation: int = 24,
-                             organic_pools: int = 3,
-                             group_count: int = 2,
-                             group_weight: float = 0.5,
-                             hidden_units: int = 0,
-                             seed: int = 1) -> dict:
+def benchmark_specialization(
+    params: WorldParams | None = None,
+    *,
+    population_size: int = 8,
+    generations: int = 12,
+    ticks_per_generation: int = 24,
+    organic_pools: int = 3,
+    group_count: int = 2,
+    group_weight: float = 0.5,
+    hidden_units: int = 0,
+    seed: int = 1,
+) -> dict:
     """
     Deterministic division-of-labor proof (Stage 11): two role channels.
 
@@ -1186,18 +1265,30 @@ def benchmark_specialization(params: WorldParams | None = None, *,
         AND raid rates) while matching the control arm's final mean fitness.
     """
     base = params or WorldParams(grid_size=(16, 8, 16))
-    base = replace(base, generate_world=True, world_seed=seed,
-                   learning_enabled=False, brain_hidden_units=int(hidden_units),
-                   structure_enabled=True, territoriality_enabled=True,
-                   write_energy_scale=10.0)
+    base = replace(
+        base,
+        generate_world=True,
+        world_seed=seed,
+        learning_enabled=False,
+        brain_hidden_units=int(hidden_units),
+        structure_enabled=True,
+        territoriality_enabled=True,
+        write_energy_scale=10.0,
+    )
 
-    shared = dict(population_size=population_size, generations=generations,
-                  ticks_per_generation=ticks_per_generation,
-                  organic_pools=organic_pools, group_count=group_count,
-                  group_weight=group_weight, seed=seed)
+    shared = {
+        "population_size": population_size,
+        "generations": generations,
+        "ticks_per_generation": ticks_per_generation,
+        "organic_pools": organic_pools,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "seed": seed,
+    }
     control = EvolutionEngine(params=base, **shared).run()
     spec = EvolutionEngine(
-        params=replace(base, specialization_enabled=True), **shared,
+        params=replace(base, specialization_enabled=True),
+        **shared,
     ).run()
 
     def last(arm: dict, key: str) -> float:
@@ -1220,21 +1311,22 @@ def benchmark_specialization(params: WorldParams | None = None, *,
         "specialization_role_raid_rate": s_raid,
         "control_final_avg_fitness": c_avg,
         "specialization_final_avg_fitness": s_avg,
-        "specialization_emerged": bool(
-            s_dep > 0.0 and s_raid > 0.0 and s_avg >= c_avg
-        ),
+        "specialization_emerged": bool(s_dep > 0.0 and s_raid > 0.0 and s_avg >= c_avg),
     }
 
 
-def benchmark_culture(params: WorldParams | None = None, *,
-                      population_size: int = 8,
-                      generations: int = 12,
-                      ticks_per_generation: int = 24,
-                      organic_pools: int = 3,
-                      group_count: int = 2,
-                      group_weight: float = 0.5,
-                      hidden_units: int = 0,
-                      seed: int = 1) -> dict:
+def benchmark_culture(
+    params: WorldParams | None = None,
+    *,
+    population_size: int = 8,
+    generations: int = 12,
+    ticks_per_generation: int = 24,
+    organic_pools: int = 3,
+    group_count: int = 2,
+    group_weight: float = 0.5,
+    hidden_units: int = 0,
+    seed: int = 1,
+) -> dict:
     """
     Deterministic cultural transmission proof (Stage 7): two transmission
     channels.
@@ -1276,17 +1368,26 @@ def benchmark_culture(params: WorldParams | None = None, *,
         (culture-arm final average fitness beats the control arm's).
     """
     base = params or WorldParams(grid_size=(16, 8, 16))
-    base = replace(base, generate_world=True, world_seed=seed,
-                   learning_enabled=True, brain_hidden_units=int(hidden_units),
-                   teaching_enabled=False)
+    base = replace(
+        base,
+        generate_world=True,
+        world_seed=seed,
+        learning_enabled=True,
+        brain_hidden_units=int(hidden_units),
+        teaching_enabled=False,
+    )
 
-    shared = dict(population_size=population_size, generations=generations,
-                  ticks_per_generation=ticks_per_generation,
-                  organic_pools=organic_pools, group_count=group_count,
-                  group_weight=group_weight, seed=seed)
+    shared = {
+        "population_size": population_size,
+        "generations": generations,
+        "ticks_per_generation": ticks_per_generation,
+        "organic_pools": organic_pools,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "seed": seed,
+    }
     control = EvolutionEngine(params=base, **shared).run()
-    culture = EvolutionEngine(params=replace(base, teaching_enabled=True),
-                              **shared).run()
+    culture = EvolutionEngine(params=replace(base, teaching_enabled=True), **shared).run()
 
     ctrl_avg = control["history"][-1]["avg_fitness"]
     cult_avg = culture["history"][-1]["avg_fitness"]
@@ -1303,15 +1404,18 @@ def benchmark_culture(params: WorldParams | None = None, *,
     }
 
 
-def benchmark_memory(params: WorldParams | None = None, *,
-                     population_size: int = 8,
-                     generations: int = 12,
-                     ticks_per_generation: int = 24,
-                     organic_pools: int = 3,
-                     group_count: int = 2,
-                     group_weight: float = 0.5,
-                     hidden_units: int = 0,
-                     seed: int = 1) -> dict:
+def benchmark_memory(
+    params: WorldParams | None = None,
+    *,
+    population_size: int = 8,
+    generations: int = 12,
+    ticks_per_generation: int = 24,
+    organic_pools: int = 3,
+    group_count: int = 2,
+    group_weight: float = 0.5,
+    hidden_units: int = 0,
+    seed: int = 1,
+) -> dict:
     """
     Deterministic long-term memory proof (Stage 7): two memory channels.
 
@@ -1352,17 +1456,27 @@ def benchmark_memory(params: WorldParams | None = None, *,
         (memory-arm final average fitness beats the control arm's).
     """
     base = params or WorldParams(grid_size=(16, 8, 16))
-    base = replace(base, generate_world=True, world_seed=seed,
-                   learning_enabled=True, brain_hidden_units=int(hidden_units),
-                   teaching_enabled=False, memory_enabled=False)
+    base = replace(
+        base,
+        generate_world=True,
+        world_seed=seed,
+        learning_enabled=True,
+        brain_hidden_units=int(hidden_units),
+        teaching_enabled=False,
+        memory_enabled=False,
+    )
 
-    shared = dict(population_size=population_size, generations=generations,
-                  ticks_per_generation=ticks_per_generation,
-                  organic_pools=organic_pools, group_count=group_count,
-                  group_weight=group_weight, seed=seed)
+    shared = {
+        "population_size": population_size,
+        "generations": generations,
+        "ticks_per_generation": ticks_per_generation,
+        "organic_pools": organic_pools,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "seed": seed,
+    }
     control = EvolutionEngine(params=base, **shared).run()
-    memory = EvolutionEngine(params=replace(base, memory_enabled=True),
-                             **shared).run()
+    memory = EvolutionEngine(params=replace(base, memory_enabled=True), **shared).run()
 
     ctrl_avg = control["history"][-1]["avg_fitness"]
     mem_avg = memory["history"][-1]["avg_fitness"]
@@ -1379,15 +1493,18 @@ def benchmark_memory(params: WorldParams | None = None, *,
     }
 
 
-def benchmark_predation(params: WorldParams | None = None, *,
-                        population_size: int = 8,
-                        generations: int = 12,
-                        ticks_per_generation: int = 24,
-                        organic_pools: int = 3,
-                        group_count: int = 2,
-                        group_weight: float = 0.5,
-                        hidden_units: int = 0,
-                        seed: int = 1) -> dict:
+def benchmark_predation(
+    params: WorldParams | None = None,
+    *,
+    population_size: int = 8,
+    generations: int = 12,
+    ticks_per_generation: int = 24,
+    organic_pools: int = 3,
+    group_count: int = 2,
+    group_weight: float = 0.5,
+    hidden_units: int = 0,
+    seed: int = 1,
+) -> dict:
     """
     Deterministic predator-prey proof (Stage 8): two interaction channels.
 
@@ -1431,18 +1548,28 @@ def benchmark_predation(params: WorldParams | None = None, *,
         beats the control arm's).
     """
     base = params or WorldParams(grid_size=(16, 8, 16))
-    base = replace(base, generate_world=True, world_seed=seed,
-                   learning_enabled=True, brain_hidden_units=int(hidden_units),
-                   teaching_enabled=False, memory_enabled=False,
-                   predation_enabled=False)
+    base = replace(
+        base,
+        generate_world=True,
+        world_seed=seed,
+        learning_enabled=True,
+        brain_hidden_units=int(hidden_units),
+        teaching_enabled=False,
+        memory_enabled=False,
+        predation_enabled=False,
+    )
 
-    shared = dict(population_size=population_size, generations=generations,
-                  ticks_per_generation=ticks_per_generation,
-                  organic_pools=organic_pools, group_count=group_count,
-                  group_weight=group_weight, seed=seed)
+    shared = {
+        "population_size": population_size,
+        "generations": generations,
+        "ticks_per_generation": ticks_per_generation,
+        "organic_pools": organic_pools,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "seed": seed,
+    }
     control = EvolutionEngine(params=base, **shared).run()
-    predation = EvolutionEngine(params=replace(base, predation_enabled=True),
-                                **shared).run()
+    predation = EvolutionEngine(params=replace(base, predation_enabled=True), **shared).run()
 
     ctrl_avg = control["history"][-1]["avg_fitness"]
     pred_avg = predation["history"][-1]["avg_fitness"]
@@ -1455,21 +1582,23 @@ def benchmark_predation(params: WorldParams | None = None, *,
         "predation_last_avg": float(pred_avg),
         "predation_rate": float(predation["history"][-1]["predation_rate"]),
         "predations": int(predation["history"][-1]["predations"]),
-        "predation_energy_moved": float(
-            predation["history"][-1]["predation_energy_moved"]),
+        "predation_energy_moved": float(predation["history"][-1]["predation_energy_moved"]),
         "predation_emerged": bool(pred_avg > ctrl_avg),
     }
 
 
-def benchmark_territoriality(params: WorldParams | None = None, *,
-                             population_size: int = 8,
-                             generations: int = 12,
-                             ticks_per_generation: int = 24,
-                             organic_pools: int = 3,
-                             group_count: int = 2,
-                             group_weight: float = 0.5,
-                             hidden_units: int = 0,
-                             seed: int = 1) -> dict:
+def benchmark_territoriality(
+    params: WorldParams | None = None,
+    *,
+    population_size: int = 8,
+    generations: int = 12,
+    ticks_per_generation: int = 24,
+    organic_pools: int = 3,
+    group_count: int = 2,
+    group_weight: float = 0.5,
+    hidden_units: int = 0,
+    seed: int = 1,
+) -> dict:
     """
     Deterministic territoriality proof (Stage 9): the defense channel.
 
@@ -1526,19 +1655,30 @@ def benchmark_territoriality(params: WorldParams | None = None, *,
         (territoriality-arm final average fitness beats the control arm's).
     """
     base = params or WorldParams(grid_size=(16, 8, 16))
-    base = replace(base, generate_world=True, world_seed=seed,
-                   learning_enabled=True, brain_hidden_units=int(hidden_units),
-                   teaching_enabled=False, memory_enabled=False,
-                   structure_enabled=True, write_energy_scale=10.0,
-                   territoriality_enabled=False)
+    base = replace(
+        base,
+        generate_world=True,
+        world_seed=seed,
+        learning_enabled=True,
+        brain_hidden_units=int(hidden_units),
+        teaching_enabled=False,
+        memory_enabled=False,
+        structure_enabled=True,
+        write_energy_scale=10.0,
+        territoriality_enabled=False,
+    )
 
-    shared = dict(population_size=population_size, generations=generations,
-                  ticks_per_generation=ticks_per_generation,
-                  organic_pools=organic_pools, group_count=group_count,
-                  group_weight=group_weight, seed=seed)
+    shared = {
+        "population_size": population_size,
+        "generations": generations,
+        "ticks_per_generation": ticks_per_generation,
+        "organic_pools": organic_pools,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "seed": seed,
+    }
     control = EvolutionEngine(params=base, **shared).run()
-    territory = EvolutionEngine(
-        params=replace(base, territoriality_enabled=True), **shared).run()
+    territory = EvolutionEngine(params=replace(base, territoriality_enabled=True), **shared).run()
 
     ctrl_avg = control["history"][-1]["avg_fitness"]
     terr_avg = territory["history"][-1]["avg_fitness"]
@@ -1551,24 +1691,25 @@ def benchmark_territoriality(params: WorldParams | None = None, *,
         "territoriality_last_avg": float(terr_avg),
         "defend_rate": float(territory["history"][-1]["defend_rate"]),
         "defenses": int(territory["history"][-1]["defenses"]),
-        "defend_energy_moved": float(
-            territory["history"][-1]["defend_energy_moved"]),
+        "defend_energy_moved": float(territory["history"][-1]["defend_energy_moved"]),
         "raids": int(territory["history"][-1]["raids"]),
-        "raid_energy_moved": float(
-            territory["history"][-1]["raid_energy_moved"]),
+        "raid_energy_moved": float(territory["history"][-1]["raid_energy_moved"]),
         "territoriality_emerged": bool(terr_avg > ctrl_avg),
     }
 
 
-def benchmark_lifecycle(params: WorldParams | None = None, *,
-                        population_size: int = 8,
-                        generations: int = 12,
-                        ticks_per_generation: int = 24,
-                        organic_pools: int = 3,
-                        group_count: int = 2,
-                        group_weight: float = 0.5,
-                        hidden_units: int = 0,
-                        seed: int = 1) -> dict:
+def benchmark_lifecycle(
+    params: WorldParams | None = None,
+    *,
+    population_size: int = 8,
+    generations: int = 12,
+    ticks_per_generation: int = 24,
+    organic_pools: int = 3,
+    group_count: int = 2,
+    group_weight: float = 0.5,
+    hidden_units: int = 0,
+    seed: int = 1,
+) -> dict:
     """
     Deterministic life-cycle proof (Stage 10): births and deaths in-tick.
 
@@ -1619,20 +1760,31 @@ def benchmark_lifecycle(params: WorldParams | None = None, *,
         i.e. the channel demonstrably fired).
     """
     base = params or WorldParams(grid_size=(16, 8, 16))
-    base = replace(base, generate_world=True, world_seed=seed,
-                   learning_enabled=True, brain_hidden_units=int(hidden_units),
-                   teaching_enabled=False, memory_enabled=False,
-                   structure_enabled=True, write_energy_scale=10.0,
-                   lifecycle_enabled=False,
-                   max_entities=max(int(population_size) * 4, 16))
+    base = replace(
+        base,
+        generate_world=True,
+        world_seed=seed,
+        learning_enabled=True,
+        brain_hidden_units=int(hidden_units),
+        teaching_enabled=False,
+        memory_enabled=False,
+        structure_enabled=True,
+        write_energy_scale=10.0,
+        lifecycle_enabled=False,
+        max_entities=max(int(population_size) * 4, 16),
+    )
 
-    shared = dict(population_size=population_size, generations=generations,
-                  ticks_per_generation=ticks_per_generation,
-                  organic_pools=organic_pools, group_count=group_count,
-                  group_weight=group_weight, seed=seed)
+    shared = {
+        "population_size": population_size,
+        "generations": generations,
+        "ticks_per_generation": ticks_per_generation,
+        "organic_pools": organic_pools,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "seed": seed,
+    }
     control = EvolutionEngine(params=base, **shared).run()
-    lifecycle = EvolutionEngine(
-        params=replace(base, lifecycle_enabled=True), **shared).run()
+    lifecycle = EvolutionEngine(params=replace(base, lifecycle_enabled=True), **shared).run()
 
     ctrl_avg = control["history"][-1]["avg_fitness"]
     life_avg = lifecycle["history"][-1]["avg_fitness"]
@@ -1654,8 +1806,7 @@ def benchmark_lifecycle(params: WorldParams | None = None, *,
     }
 
 
-def _conservation_sweep(params: WorldParams, genomes: list[Genome],
-                        ticks: int) -> dict:
+def _conservation_sweep(params: WorldParams, genomes: list[Genome], ticks: int) -> dict:
     """
     Live physics tripwire: grid + entity + nest energy must never increase.
 
@@ -1688,21 +1839,28 @@ def _conservation_sweep(params: WorldParams, genomes: list[Genome],
         np.random.seed(int(params.world_seed))
     scene = SimScene(params=params)
     food_rng = np.random.default_rng(int(params.world_seed))
-    engine = EvolutionEngine(params=params, population_size=len(genomes),
-                             generations=1, ticks_per_generation=ticks,
-                             seed=int(params.world_seed))
+    engine = EvolutionEngine(
+        params=params,
+        population_size=len(genomes),
+        generations=1,
+        ticks_per_generation=ticks,
+        seed=int(params.world_seed),
+    )
     engine._place_food(scene, food_rng)
     for g in genomes:
-        b = SimBaby(position=None, initial_energy=params.start_energy,
-                    params=params, group_id=g.group_id)
+        b = SimBaby(
+            position=None, initial_energy=params.start_energy, params=params, group_id=g.group_id
+        )
         g.apply_to(b)
         scene.add_baby(b)
     sim = Simulation(scene, max_ticks=ticks)
 
     def total() -> float:
-        return (float(np.sum(scene.world.energy))
-                + float(sum(x.energy for x in scene.babies))
-                + float(sum(n.stored_energy for n in scene.nests)))
+        return (
+            float(np.sum(scene.world.energy))
+            + float(sum(x.energy for x in scene.babies))
+            + float(sum(n.stored_energy for n in scene.nests))
+        )
 
     start_total = total()
     prev = start_total
@@ -1725,15 +1883,18 @@ def _conservation_sweep(params: WorldParams, genomes: list[Genome],
     }
 
 
-def benchmark_civilization(params: WorldParams | None = None, *,
-                           population_size: int = 8,
-                           generations: int = 12,
-                           ticks_per_generation: int = 24,
-                           organic_pools: int = 3,
-                           group_count: int = 2,
-                           group_weight: float = 0.5,
-                           hidden_units: int = 0,
-                           seed: int = 1) -> dict:
+def benchmark_civilization(
+    params: WorldParams | None = None,
+    *,
+    population_size: int = 8,
+    generations: int = 12,
+    ticks_per_generation: int = 24,
+    organic_pools: int = 3,
+    group_count: int = 2,
+    group_weight: float = 0.5,
+    hidden_units: int = 0,
+    seed: int = 1,
+) -> dict:
     """
     Integrated world proof (Stage 12): every channel in one living world.
 
@@ -1796,25 +1957,48 @@ def benchmark_civilization(params: WorldParams | None = None, *,
         ``civilization_emerged`` verdict.
     """
     base = params or WorldParams(grid_size=(16, 8, 16))
-    bare = replace(base, generate_world=True, world_seed=seed,
-                   learning_enabled=False, brain_hidden_units=int(hidden_units),
-                   message_enabled=False, structure_enabled=False,
-                   teaching_enabled=False, memory_enabled=False,
-                   predation_enabled=False, territoriality_enabled=False,
-                   lifecycle_enabled=False, specialization_enabled=False)
-    civil = replace(base, generate_world=True, world_seed=seed,
-                    learning_enabled=True, brain_hidden_units=int(hidden_units),
-                    message_enabled=True, structure_enabled=True,
-                    teaching_enabled=True, memory_enabled=True,
-                    predation_enabled=True, territoriality_enabled=True,
-                    lifecycle_enabled=True, specialization_enabled=True,
-                    write_energy_scale=10.0,
-                    max_entities=max(int(population_size) * 4, 16))
+    bare = replace(
+        base,
+        generate_world=True,
+        world_seed=seed,
+        learning_enabled=False,
+        brain_hidden_units=int(hidden_units),
+        message_enabled=False,
+        structure_enabled=False,
+        teaching_enabled=False,
+        memory_enabled=False,
+        predation_enabled=False,
+        territoriality_enabled=False,
+        lifecycle_enabled=False,
+        specialization_enabled=False,
+    )
+    civil = replace(
+        base,
+        generate_world=True,
+        world_seed=seed,
+        learning_enabled=True,
+        brain_hidden_units=int(hidden_units),
+        message_enabled=True,
+        structure_enabled=True,
+        teaching_enabled=True,
+        memory_enabled=True,
+        predation_enabled=True,
+        territoriality_enabled=True,
+        lifecycle_enabled=True,
+        specialization_enabled=True,
+        write_energy_scale=10.0,
+        max_entities=max(int(population_size) * 4, 16),
+    )
 
-    shared = dict(population_size=population_size, generations=generations,
-                  ticks_per_generation=ticks_per_generation,
-                  organic_pools=organic_pools, group_count=group_count,
-                  group_weight=group_weight, seed=seed)
+    shared = {
+        "population_size": population_size,
+        "generations": generations,
+        "ticks_per_generation": ticks_per_generation,
+        "organic_pools": organic_pools,
+        "group_count": group_count,
+        "group_weight": group_weight,
+        "seed": seed,
+    }
     control = EvolutionEngine(params=bare, **shared).run()
     civilization = EvolutionEngine(params=civil, **shared).run()
 
@@ -1824,32 +2008,38 @@ def benchmark_civilization(params: WorldParams | None = None, *,
     g_off = Genome.random(bare, np.random.default_rng(seed), group_id=0)
     g_on = Genome.random(civil, np.random.default_rng(seed), group_id=0)
     brains_identical = all(
-        np.allclose(g_off.tensors[f"{name}.{suf}"],
-                    g_on.tensors[f"{name}.{suf}"])
+        np.allclose(g_off.tensors[f"{name}.{suf}"], g_on.tensors[f"{name}.{suf}"])
         for name in ("cells", "body", "entity", "move")
         for suf in ("W", "b")
     )
 
     # Conservation sweep: one fully-loaded generation, live tick loop.
-    genomes = [Genome.random(civil, np.random.default_rng(seed),
-                             group_id=i % group_count)
-               for i in range(population_size)]
+    genomes = [
+        Genome.random(civil, np.random.default_rng(seed), group_id=i % group_count)
+        for i in range(population_size)
+    ]
     sweep = _conservation_sweep(civil, genomes, ticks_per_generation)
 
     # Channel liveness across the whole civilization run.
     fired = {
         k: any(h.get(k, 0) > 0 for h in civilization["history"])
-        for k in ("lessons", "predations", "defenses", "raids",
-                  "nests_built", "births", "role_deposits", "role_raids")
+        for k in (
+            "lessons",
+            "predations",
+            "defenses",
+            "raids",
+            "nests_built",
+            "births",
+            "role_deposits",
+            "role_raids",
+        )
     }
-    fired["memory"] = any(h.get("memory_size", 0) > 0
-                          for h in civilization["history"])
+    fired["memory"] = any(h.get("memory_size", 0) > 0 for h in civilization["history"])
 
     last = civilization["history"][-1]
     births = int(last["births"])
     all_live = all(fired.values())
-    emerged = bool(sweep["monotonic"] and brains_identical and all_live
-                   and births > 0)
+    emerged = bool(sweep["monotonic"] and brains_identical and all_live and births > 0)
     return {
         "control": control,
         "civilization": civilization,
@@ -1871,14 +2061,17 @@ def benchmark_civilization(params: WorldParams | None = None, *,
     }
 
 
-def benchmark_solar(params: WorldParams | None = None, *,
-                    population_size: int = 8,
-                    generations: int = 12,
-                    ticks_per_generation: int = 48,
-                    organic_pools: int = 3,
-                    solar_deposit_rate: float = 0.1,
-                    hidden_units: int = 0,
-                    seed: int = 7) -> dict:
+def benchmark_solar(
+    params: WorldParams | None = None,
+    *,
+    population_size: int = 8,
+    generations: int = 12,
+    ticks_per_generation: int = 48,
+    organic_pools: int = 3,
+    solar_deposit_rate: float = 0.1,
+    hidden_units: int = 0,
+    seed: int = 7,
+) -> dict:
     """
     Diurnal energy cycle proof (Stage 13): the world's first external source.
 
@@ -1938,27 +2131,51 @@ def benchmark_solar(params: WorldParams | None = None, *,
         ``sunshine``, ``light_final``), and the ``solar_emerged`` verdict.
     """
     base = params or WorldParams(grid_size=(16, 8, 16))
-    closed = replace(base, generate_world=True, world_seed=seed,
-                     learning_enabled=True, brain_hidden_units=int(hidden_units),
-                     message_enabled=False, structure_enabled=False,
-                     teaching_enabled=False, memory_enabled=False,
-                     predation_enabled=False, territoriality_enabled=False,
-                     lifecycle_enabled=False, specialization_enabled=False,
-                     solar_enabled=False)
-    solar = replace(base, generate_world=True, world_seed=seed,
-                    learning_enabled=True, brain_hidden_units=int(hidden_units),
-                    message_enabled=False, structure_enabled=False,
-                    teaching_enabled=False, memory_enabled=False,
-                    predation_enabled=False, territoriality_enabled=False,
-                    lifecycle_enabled=False, specialization_enabled=False,
-                    solar_enabled=True,
-                    solar_day_ticks=int(ticks_per_generation),
-                    solar_phase=0, solar_min_intensity=0.0,
-                    solar_max_intensity=1.0, solar_deposit_rate=float(solar_deposit_rate))
+    closed = replace(
+        base,
+        generate_world=True,
+        world_seed=seed,
+        learning_enabled=True,
+        brain_hidden_units=int(hidden_units),
+        message_enabled=False,
+        structure_enabled=False,
+        teaching_enabled=False,
+        memory_enabled=False,
+        predation_enabled=False,
+        territoriality_enabled=False,
+        lifecycle_enabled=False,
+        specialization_enabled=False,
+        solar_enabled=False,
+    )
+    solar = replace(
+        base,
+        generate_world=True,
+        world_seed=seed,
+        learning_enabled=True,
+        brain_hidden_units=int(hidden_units),
+        message_enabled=False,
+        structure_enabled=False,
+        teaching_enabled=False,
+        memory_enabled=False,
+        predation_enabled=False,
+        territoriality_enabled=False,
+        lifecycle_enabled=False,
+        specialization_enabled=False,
+        solar_enabled=True,
+        solar_day_ticks=int(ticks_per_generation),
+        solar_phase=0,
+        solar_min_intensity=0.0,
+        solar_max_intensity=1.0,
+        solar_deposit_rate=float(solar_deposit_rate),
+    )
 
-    shared = dict(population_size=population_size, generations=generations,
-                  ticks_per_generation=ticks_per_generation,
-                  organic_pools=organic_pools, seed=seed)
+    shared = {
+        "population_size": population_size,
+        "generations": generations,
+        "ticks_per_generation": ticks_per_generation,
+        "organic_pools": organic_pools,
+        "seed": seed,
+    }
     control = EvolutionEngine(params=closed, **shared).run()
     day = EvolutionEngine(params=solar, **shared).run()
 
@@ -1969,30 +2186,37 @@ def benchmark_solar(params: WorldParams | None = None, *,
     g_off = Genome.random(closed, np.random.default_rng(seed), group_id=0)
     g_on = Genome.random(solar, np.random.default_rng(seed), group_id=0)
     brains_identical = all(
-        np.allclose(g_off.tensors[f"{name}.{suf}"],
-                    g_on.tensors[f"{name}.{suf}"])
+        np.allclose(g_off.tensors[f"{name}.{suf}"], g_on.tensors[f"{name}.{suf}"])
         for name in ("cells", "body", "entity", "move")
         for suf in ("W", "b")
     )
 
     # Conservation under the boundary source: solar-aware sweep.
-    genomes = [Genome.random(solar, np.random.default_rng(seed), group_id=0)
-               for _ in range(population_size)]
+    genomes = [
+        Genome.random(solar, np.random.default_rng(seed), group_id=0)
+        for _ in range(population_size)
+    ]
     solar_sweep = _conservation_sweep(solar, genomes, ticks_per_generation)
     # Closed-world tripwire: strict monotonic with the sky off.
-    closed_genomes = [Genome.random(closed, np.random.default_rng(seed), group_id=0)
-                      for _ in range(population_size)]
-    closed_sweep = _conservation_sweep(closed, closed_genomes,
-                                       ticks_per_generation)
+    closed_genomes = [
+        Genome.random(closed, np.random.default_rng(seed), group_id=0)
+        for _ in range(population_size)
+    ]
+    closed_sweep = _conservation_sweep(closed, closed_genomes, ticks_per_generation)
 
     last = day["history"][-1]
     deposited = float(last["solar_energy_deposited"])
     sunshine = float(last["sunshine"])
     light_final = float(last["light_final"])
 
-    emerged = bool(solar_sweep["monotonic"] and closed_sweep["monotonic"]
-                   and brains_identical and deposited > 0.0
-                   and sunshine > 0.0 and solar_avg > ctrl_avg)
+    emerged = bool(
+        solar_sweep["monotonic"]
+        and closed_sweep["monotonic"]
+        and brains_identical
+        and deposited > 0.0
+        and sunshine > 0.0
+        and solar_avg > ctrl_avg
+    )
     return {
         "control": control,
         "solar": day,
@@ -2016,16 +2240,19 @@ def benchmark_solar(params: WorldParams | None = None, *,
     }
 
 
-def benchmark_seasons(params: WorldParams | None = None, *,
-                      population_size: int = 6,
-                      generations: int = 3,
-                      ticks_per_generation: int = 24,
-                      organic_pools: int = 2,
-                      solar_deposit_rate: float = 0.1,
-                      seasonality: float = 1.0,
-                      seasons_per_year: int = 4,
-                      hidden_units: int = 0,
-                      seed: int = 7) -> dict:
+def benchmark_seasons(
+    params: WorldParams | None = None,
+    *,
+    population_size: int = 6,
+    generations: int = 3,
+    ticks_per_generation: int = 24,
+    organic_pools: int = 2,
+    solar_deposit_rate: float = 0.1,
+    seasonality: float = 1.0,
+    seasons_per_year: int = 4,
+    hidden_units: int = 0,
+    seed: int = 7,
+) -> dict:
     """
     Seasonal year envelope proof (Stage 14): the diurnal cycle rides a year.
 
@@ -2080,27 +2307,46 @@ def benchmark_seasons(params: WorldParams | None = None, *,
         (``deposited``, ``sunshine``) and the ``seasons_emerged`` verdict.
     """
     base = params or WorldParams(grid_size=(16, 8, 16))
-    closed = replace(base, generate_world=True, world_seed=seed,
-                     learning_enabled=True, brain_hidden_units=int(hidden_units),
-                     message_enabled=False, structure_enabled=False,
-                     teaching_enabled=False, memory_enabled=False,
-                     predation_enabled=False, territoriality_enabled=False,
-                     lifecycle_enabled=False, specialization_enabled=False,
-                     solar_enabled=False)
+    closed = replace(
+        base,
+        generate_world=True,
+        world_seed=seed,
+        learning_enabled=True,
+        brain_hidden_units=int(hidden_units),
+        message_enabled=False,
+        structure_enabled=False,
+        teaching_enabled=False,
+        memory_enabled=False,
+        predation_enabled=False,
+        territoriality_enabled=False,
+        lifecycle_enabled=False,
+        specialization_enabled=False,
+        solar_enabled=False,
+    )
     day_ticks = max(int(ticks_per_generation), 1)
-    control = replace(closed, solar_enabled=True,
-                      solar_day_ticks=day_ticks,
-                      solar_phase=0, solar_min_intensity=0.0,
-                      solar_max_intensity=1.0,
-                      solar_deposit_rate=float(solar_deposit_rate),
-                      solar_season_ticks=0, solar_seasonality=1.0)
+    control = replace(
+        closed,
+        solar_enabled=True,
+        solar_day_ticks=day_ticks,
+        solar_phase=0,
+        solar_min_intensity=0.0,
+        solar_max_intensity=1.0,
+        solar_deposit_rate=float(solar_deposit_rate),
+        solar_season_ticks=0,
+        solar_seasonality=1.0,
+    )
     season_ticks = max(int(seasons_per_year), 1) * day_ticks
-    seasonal = replace(control, solar_season_ticks=season_ticks,
-                       solar_seasonality=float(seasonality))
+    seasonal = replace(
+        control, solar_season_ticks=season_ticks, solar_seasonality=float(seasonality)
+    )
 
-    shared = dict(population_size=population_size, generations=generations,
-                  ticks_per_generation=ticks_per_generation,
-                  organic_pools=organic_pools, seed=seed)
+    shared = {
+        "population_size": population_size,
+        "generations": generations,
+        "ticks_per_generation": ticks_per_generation,
+        "organic_pools": organic_pools,
+        "seed": seed,
+    }
     ctrl_run = EvolutionEngine(params=control, **shared).run()
     seasonal_run = EvolutionEngine(params=seasonal, **shared).run()
 
@@ -2111,19 +2357,22 @@ def benchmark_seasons(params: WorldParams | None = None, *,
     g_off = Genome.random(control, np.random.default_rng(seed), group_id=0)
     g_on = Genome.random(seasonal, np.random.default_rng(seed), group_id=0)
     brains_identical = all(
-        np.allclose(g_off.tensors[f"{name}.{suf}"],
-                    g_on.tensors[f"{name}.{suf}"])
+        np.allclose(g_off.tensors[f"{name}.{suf}"], g_on.tensors[f"{name}.{suf}"])
         for name in ("cells", "body", "entity", "move")
         for suf in ("W", "b")
     )
 
     # Conservation under the seasonal boundary: solar-aware sweep.
-    genomes = [Genome.random(seasonal, np.random.default_rng(seed), group_id=0)
-               for _ in range(population_size)]
+    genomes = [
+        Genome.random(seasonal, np.random.default_rng(seed), group_id=0)
+        for _ in range(population_size)
+    ]
     seasonal_sweep = _conservation_sweep(seasonal, genomes, day_ticks)
     # Closed-world tripwire: strict monotonic with the sky off.
-    closed_genomes = [Genome.random(closed, np.random.default_rng(seed), group_id=0)
-                      for _ in range(population_size)]
+    closed_genomes = [
+        Genome.random(closed, np.random.default_rng(seed), group_id=0)
+        for _ in range(population_size)
+    ]
     closed_sweep = _conservation_sweep(closed, closed_genomes, day_ticks)
 
     def _noon(params: WorldParams, tick: int) -> float:
@@ -2140,9 +2389,14 @@ def benchmark_seasons(params: WorldParams | None = None, *,
     deposited = float(last["solar_energy_deposited"])
     sunshine = float(last["sunshine"])
 
-    emerged = bool(seasonal_sweep["monotonic"] and closed_sweep["monotonic"]
-                   and brains_identical and deposited > 0.0
-                   and sunshine > 0.0 and summer_noon > winter_noon)
+    emerged = bool(
+        seasonal_sweep["monotonic"]
+        and closed_sweep["monotonic"]
+        and brains_identical
+        and deposited > 0.0
+        and sunshine > 0.0
+        and summer_noon > winter_noon
+    )
     return {
         "control": ctrl_run,
         "seasonal": seasonal_run,

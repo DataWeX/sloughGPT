@@ -1,10 +1,8 @@
 """Tests for domain.feedback._internal.training — TrainingExample, DPOPair; domain.multimodal._internal.engine — MultimodalOutput; domain.multimodal._internal.speech — TranscriptionResult."""
 
-import pytest
-from domain.feedback._internal.training import TrainingExample, DPOPair
+from domain.feedback._internal.training import DPOPair, TrainingExample
 from domain.multimodal._internal.engine import MultimodalOutput
 from domain.multimodal._internal.speech import TranscriptionResult
-
 
 # ── TrainingExample ──────────────────────────────────────────────────────
 
@@ -74,8 +72,7 @@ class TestTrainingExample:
 
     def test_many_examples(self):
         examples = [
-            TrainingExample(prompt=f"q{i}", response=f"r{i}", rating="good")
-            for i in range(100)
+            TrainingExample(prompt=f"q{i}", response=f"r{i}", rating="good") for i in range(100)
         ]
         assert len(examples) == 100
         assert examples[0].prompt == "q0"
@@ -133,10 +130,7 @@ class TestDPOPair:
         assert "DPOPair" in repr(dp)
 
     def test_many_pairs(self):
-        pairs = [
-            DPOPair(chosen=f"c{i}", rejected=f"r{i}", prompt=f"p{i}")
-            for i in range(50)
-        ]
+        pairs = [DPOPair(chosen=f"c{i}", rejected=f"r{i}", prompt=f"p{i}") for i in range(50)]
         assert len(pairs) == 50
 
 

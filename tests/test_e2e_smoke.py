@@ -46,6 +46,7 @@ def model_loaded(client):
     in a background task and may not be complete when the lifespan yields).
     """
     import time
+
     deadline = time.time() + 20
     while time.time() < deadline:
         resp = client.get("/health")
@@ -125,10 +126,13 @@ class TestChatGenerate:
     def test_chat_non_streaming(self, client, model_loaded):
         if not model_loaded:
             pytest.skip("No model loaded")
-        resp = client.post("/chat", json={
-            "messages": [{"role": "user", "content": "Hello"}],
-            "max_tokens": 20,
-        })
+        resp = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 20,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert "message" in data
@@ -136,19 +140,26 @@ class TestChatGenerate:
     def test_chat_stream(self, client, model_loaded):
         if not model_loaded:
             pytest.skip("No model loaded")
-        resp = client.post("/chat/stream", json={
-            "messages": [{"role": "user", "content": "Hi"}],
-            "max_tokens": 20,
-        })
+        resp = client.post(
+            "/chat/stream",
+            json={
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 20,
+            },
+        )
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
 
     def test_generate(self, client, model_loaded):
         if not model_loaded:
             pytest.skip("No model loaded")
-        resp = client.post("/inference/generate", json={
-            "prompt": "Hello", "max_new_tokens": 20,
-        })
+        resp = client.post(
+            "/inference/generate",
+            json={
+                "prompt": "Hello",
+                "max_new_tokens": 20,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert "text" in data
@@ -156,9 +167,13 @@ class TestChatGenerate:
     def test_generate_stream(self, client, model_loaded):
         if not model_loaded:
             pytest.skip("No model loaded")
-        resp = client.post("/inference/generate/stream", json={
-            "prompt": "Hi", "max_new_tokens": 20,
-        })
+        resp = client.post(
+            "/inference/generate/stream",
+            json={
+                "prompt": "Hi",
+                "max_new_tokens": 20,
+            },
+        )
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
 

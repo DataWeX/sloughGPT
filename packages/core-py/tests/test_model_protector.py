@@ -126,6 +126,7 @@ class TestErrorHandling:
     def test_protect_chmod_error_recorded(self, model_dir, monkeypatch):
         def boom(*args, **kwargs):
             raise OSError("chmod denied")
+
         monkeypatch.setattr(mp.os, "chmod", boom)
         result = mp.protect_model("gpt2", [model_dir / "model.slnc"])
         assert result["protected"] == []
@@ -133,8 +134,10 @@ class TestErrorHandling:
 
     def test_unprotect_chmod_error_recorded(self, model_dir, monkeypatch):
         mp.protect_model("gpt2", [model_dir / "model.slnc"])
+
         def boom(*args, **kwargs):
             raise OSError("chmod denied")
+
         monkeypatch.setattr(mp.os, "chmod", boom)
         result = mp.unprotect_model("gpt2")
         assert result["unprotected"] == 0
@@ -162,7 +165,7 @@ class TestCheckModel:
 
     def test_different_model_isolated(self, model_dir):
         mp.protect_model("gpt2", [model_dir / "model.slnc"])
-        other = model_dir.parent / "models--other"
+        model_dir.parent / "models--other"
         assert mp.check_model("other") == []
 
 

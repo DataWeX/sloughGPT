@@ -1,33 +1,22 @@
 """Tests for adaptive training infrastructure."""
 
-import json
-import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
-from domain.training._internal.adaptive_config import AdaptiveConfigEngine, AdaptiveRecommendation
 from domain.settings._internal.persistent import (
     AppSettings,
-    GenerationSettings,
-    TrainingSettings,
-    AdaptiveSettings,
-    VoiceSettings,
     PersistentSettings,
 )
-
+from domain.training._internal.adaptive_config import AdaptiveConfigEngine, AdaptiveRecommendation
+from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 
 # ── Outcome Tracker ──────────────────────────────────────────────────────────
 
 
 class TestTrainingOutcome:
-
     def test_to_dict(self):
-        o = TrainingOutcome(
-            run_id="run_1", dataset="data", model="gpt2", final_loss=2.5
-        )
+        o = TrainingOutcome(run_id="run_1", dataset="data", model="gpt2", final_loss=2.5)
         d = o.to_dict()
         assert d["run_id"] == "run_1"
         assert d["final_loss"] == 2.5
@@ -46,12 +35,15 @@ class TestTrainingOutcome:
 
 
 class TestTrainingOutcomeTracker:
-
     def test_record_and_load(self, tmp_path):
         tracker = TrainingOutcomeTracker(tmp_path / "history.jsonl")
         o = TrainingOutcome(
-            run_id="run_1", dataset="data", model="gpt2",
-            method="finetune", final_loss=2.5, converged=True,
+            run_id="run_1",
+            dataset="data",
+            model="gpt2",
+            method="finetune",
+            final_loss=2.5,
+            converged=True,
         )
         tracker.record(o)
 
@@ -63,17 +55,25 @@ class TestTrainingOutcomeTracker:
     def test_multiple_records(self, tmp_path):
         tracker = TrainingOutcomeTracker(tmp_path / "h.jsonl")
         for i in range(5):
-            tracker.record(TrainingOutcome(
-                run_id=f"run_{i}", dataset="data", final_loss=5.0 - i,
-            ))
+            tracker.record(
+                TrainingOutcome(
+                    run_id=f"run_{i}",
+                    dataset="data",
+                    final_loss=5.0 - i,
+                )
+            )
         assert len(tracker.load_outcomes()) == 5
 
     def test_get_best_outcomes(self, tmp_path):
         tracker = TrainingOutcomeTracker(tmp_path / "h.jsonl")
         for i in range(5):
-            tracker.record(TrainingOutcome(
-                run_id=f"run_{i}", final_loss=5.0 - i, converged=i < 3,
-            ))
+            tracker.record(
+                TrainingOutcome(
+                    run_id=f"run_{i}",
+                    final_loss=5.0 - i,
+                    converged=i < 3,
+                )
+            )
         best = tracker.get_best_outcomes(2)
         assert len(best) == 2
         # Best should have lowest loss and convergence
@@ -89,12 +89,21 @@ class TestTrainingOutcomeTracker:
 
     def test_get_stats(self, tmp_path):
         tracker = TrainingOutcomeTracker(tmp_path / "h.jsonl")
-        tracker.record(TrainingOutcome(
-            run_id="r1", final_loss=2.0, converged=True,
-        ))
-        tracker.record(TrainingOutcome(
-            run_id="r2", final_loss=3.0, converged=False, early_stopped=True,
-        ))
+        tracker.record(
+            TrainingOutcome(
+                run_id="r1",
+                final_loss=2.0,
+                converged=True,
+            )
+        )
+        tracker.record(
+            TrainingOutcome(
+                run_id="r2",
+                final_loss=3.0,
+                converged=False,
+                early_stopped=True,
+            )
+        )
         stats = tracker.get_stats()
         assert stats["total_runs"] == 2
         assert stats["converged_count"] == 1
@@ -115,12 +124,20 @@ class TestTrainingOutcomeTracker:
 
     def test_quality_score_converged_beats_not(self, tmp_path):
         tracker = TrainingOutcomeTracker(tmp_path / "h.jsonl")
-        tracker.record(TrainingOutcome(
-            run_id="good", final_loss=2.0, converged=True,
-        ))
-        tracker.record(TrainingOutcome(
-            run_id="bad", final_loss=4.0, converged=False,
-        ))
+        tracker.record(
+            TrainingOutcome(
+                run_id="good",
+                final_loss=2.0,
+                converged=True,
+            )
+        )
+        tracker.record(
+            TrainingOutcome(
+                run_id="bad",
+                final_loss=4.0,
+                converged=False,
+            )
+        )
         outcomes = tracker.load_outcomes()
         good = next(o for o in outcomes if o.run_id == "good")
         bad = next(o for o in outcomes if o.run_id == "bad")
@@ -131,24 +148,25 @@ class TestTrainingOutcomeTracker:
 
 
 class TestAdaptiveConfigEngine:
-
     def _make_tracker(self, tmp_path, n=5):
         tracker = TrainingOutcomeTracker(tmp_path / "h.jsonl")
         for i in range(n):
-            tracker.record(TrainingOutcome(
-                run_id=f"run_{i}",
-                dataset="test",
-                dataset_size=5000,
-                model="gpt2",
-                method="finetune",
-                epochs=5,
-                batch_size=8,
-                learning_rate=2e-4,
-                lora_rank=8,
-                lora_alpha=16,
-                final_loss=3.0 - i * 0.3,
-                converged=True,
-            ))
+            tracker.record(
+                TrainingOutcome(
+                    run_id=f"run_{i}",
+                    dataset="test",
+                    dataset_size=5000,
+                    model="gpt2",
+                    method="finetune",
+                    epochs=5,
+                    batch_size=8,
+                    learning_rate=2e-4,
+                    lora_rank=8,
+                    lora_alpha=16,
+                    final_loss=3.0 - i * 0.3,
+                    converged=True,
+                )
+            )
         return tracker
 
     def test_recommend_with_history(self, tmp_path):
@@ -194,8 +212,12 @@ class TestAdaptiveConfigEngine:
         tracker = TrainingOutcomeTracker(tmp_path / "h.jsonl")
         engine = AdaptiveConfigEngine(tracker)
         outcome = TrainingOutcome(
-            run_id="r1", dataset="data", model="gpt2",
-            method="finetune", final_loss=2.5, converged=True,
+            run_id="r1",
+            dataset="data",
+            model="gpt2",
+            method="finetune",
+            final_loss=2.5,
+            converged=True,
         )
         engine.update_after_run(outcome)
         assert len(tracker.load_outcomes()) == 1
@@ -219,7 +241,6 @@ class TestAdaptiveConfigEngine:
 
 
 class TestAppSettings:
-
     def test_defaults(self):
         s = AppSettings()
         assert s.generation.temperature == 0.8
@@ -247,7 +268,6 @@ class TestAppSettings:
 
 
 class TestPersistentSettings:
-
     def test_update_and_load(self, tmp_path):
         ps = PersistentSettings(tmp_path / "settings.json")
         ps.update("generation", temperature=0.5)
@@ -305,7 +325,6 @@ class TestPersistentSettings:
 
 
 class TestAutoConfigureAdaptive:
-
     def test_auto_configure_uses_adaptive_when_history_exists(self, tmp_path):
         from domain.training._internal.auto_config import auto_configure
 
@@ -316,19 +335,21 @@ class TestAutoConfigureAdaptive:
         # Seed history with good outcomes
         tracker = TrainingOutcomeTracker(tmp_path / "history.jsonl")
         for i in range(5):
-            tracker.record(TrainingOutcome(
-                run_id=f"seed_{i}",
-                dataset="test",
-                dataset_size=100,
-                model="gpt2",
-                method="finetune",
-                epochs=10,
-                batch_size=4,
-                learning_rate=1e-4,
-                lora_rank=4,
-                final_loss=2.0,
-                converged=True,
-            ))
+            tracker.record(
+                TrainingOutcome(
+                    run_id=f"seed_{i}",
+                    dataset="test",
+                    dataset_size=100,
+                    model="gpt2",
+                    method="finetune",
+                    epochs=10,
+                    batch_size=4,
+                    learning_rate=1e-4,
+                    lora_rank=4,
+                    final_loss=2.0,
+                    converged=True,
+                )
+            )
 
         with patch("domain.training._internal.adaptive_config.AdaptiveConfigEngine") as MockEngine:
             mock_engine = MagicMock()

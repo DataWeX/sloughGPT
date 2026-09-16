@@ -5,9 +5,9 @@ Public API:
 """
 
 from domain.mobile._internal.notifications import (
-    PushNotificationService,
-    NotificationPayload,
     DeviceToken,
+    NotificationPayload,
+    PushNotificationService,
     get_notification_service,
 )
 

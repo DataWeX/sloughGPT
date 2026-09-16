@@ -1,12 +1,13 @@
 import numpy as np
-import pytest
 
 from domain.collections._internal.perception import (
-    PerceptionConfig, PerceptionEvent, RecordToMaterial,
-    WorldPerception, PerceptionFeed, PerceptionScheduler,
+    PerceptionConfig,
+    PerceptionFeed,
+    PerceptionScheduler,
+    RecordToMaterial,
+    WorldPerception,
 )
-from domain.collections._internal.sources import Record, GeneratorSource
-from domain.collections._internal.stores import MemoryStore
+from domain.collections._internal.sources import GeneratorSource, Record
 from domain.shell._internal.simulation import WorldGrid
 
 

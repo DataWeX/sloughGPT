@@ -3,9 +3,8 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-from domain.infrastructure._internal.pugqeep.store import MemoryStore, JSONStore, DirectoryStore
 from domain.infrastructure._internal.pugqeep.point import Point
+from domain.infrastructure._internal.pugqeep.store import DirectoryStore, JSONStore, MemoryStore
 
 
 def _make_point(identity="p1", function_type="periodic", params=None):

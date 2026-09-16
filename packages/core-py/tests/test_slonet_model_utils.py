@@ -4,26 +4,25 @@ from __future__ import annotations
 
 import os
 import tempfile
-import pytest
+
 import numpy as np
+
 from domain.training._internal.slonet import (
-    Tensor,
+    SloLinear,
     SloNet,
     SloTransformer,
-    SloLinear,
-    no_grad,
-    compute_sensitivity,
-    souls_from_directory,
-    _rotate_half,
+    Tensor,
     _apply_rope,
+    _rotate_half,
+    compute_sensitivity,
+    no_grad,
+    souls_from_directory,
 )
-
 
 # ── _rotate_half ────────────────────────────────────────────────────────────
 
 
 class TestRotateHalf:
-
     def test_basic(self):
         x = np.array([1.0, 2.0, 3.0, 4.0])
         result = _rotate_half(x)
@@ -44,7 +43,6 @@ class TestRotateHalf:
 
 
 class TestApplyRope:
-
     def test_basic(self):
         q = np.ones((2, 4, 8))
         k = np.ones((2, 4, 8))
@@ -59,7 +57,6 @@ class TestApplyRope:
 
 
 class TestComputeSensitivity:
-
     def test_no_grad_params(self):
         model = SloTransformer(vocab_size=100, n_embed=32, n_layer=1, n_head=2)
         x = Tensor(np.array([[1, 2, 3]]))
@@ -80,7 +77,6 @@ class TestComputeSensitivity:
 
 
 class TestSoulsFromDirectory:
-
     def test_empty_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             result = souls_from_directory(tmpdir)
@@ -92,9 +88,13 @@ class TestSoulsFromDirectory:
 
     def test_with_sou_files(self):
         from domain.training._internal.slonet import export_to_sou
+
         with tempfile.TemporaryDirectory() as tmpdir:
             model = SloTransformer(
-                vocab_size=100, n_embed=32, n_layer=1, n_head=2,
+                vocab_size=100,
+                n_embed=32,
+                n_layer=1,
+                n_head=2,
                 soul_name="TestSou",
             )
             export_to_sou(model, os.path.join(tmpdir, "test.soul"))
@@ -107,7 +107,6 @@ class TestSoulsFromDirectory:
 
 
 class TestSloNetLoadStateDict:
-
     def test_state_dict_roundtrip(self):
         net = SloNet(layers=[SloLinear(10, 5)])
         sd = net.state_dict()
@@ -120,10 +119,11 @@ class TestSloNetLoadStateDict:
 
 
 class TestSloTransformerLoadStateDict:
-
     def test_load_state_dict(self):
         model = SloTransformer(vocab_size=100, n_embed=32, n_layer=1, n_head=2)
         sd = model.state_dict()
         model2 = SloTransformer(vocab_size=100, n_embed=32, n_layer=1, n_head=2)
         model2.load_state_dict(sd, strict=False)
-        assert np.allclose(model.state_dict()["tok_emb.weight"], model2.state_dict()["tok_emb.weight"])
+        assert np.allclose(
+            model.state_dict()["tok_emb.weight"], model2.state_dict()["tok_emb.weight"]
+        )

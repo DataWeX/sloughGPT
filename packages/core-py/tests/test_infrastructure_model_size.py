@@ -1,4 +1,5 @@
 """Tests for model_size formatting functions."""
+
 from __future__ import annotations
 
 from domain.infrastructure._internal.model_size import format_size_gb, format_size_mb

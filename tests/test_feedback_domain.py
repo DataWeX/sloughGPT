@@ -2,24 +2,23 @@
 
 from __future__ import annotations
 
-import json
-import os
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pytest
 
-from domains.feedback.database import FeedbackDB, Message, Feedback, SimilarPattern
-from domains.feedback.lora_eval import (
-    LoRAEvaluator, EvalResult, BLEUScorer, PersonalityScore,
+from domain.feedback._internal.database import Feedback, FeedbackDB, Message, SimilarPattern
+from domain.feedback._internal.lora_eval import (
+    BLEUScorer,
+    EvalResult,
+    LoRAEvaluator,
+    PersonalityScore,
 )
-from domains.feedback.online_train import OnlineLoRAUpdater, LoRAConfig
-from domains.feedback.per_user_lora import PerUserLoRAStore, UserAdapter
-from domains.feedback.workflow import FeedbackWorkflowManager, WorkflowConfig
-
+from domain.feedback._internal.online_train import LoRAConfig, OnlineLoRAUpdater
+from domain.feedback._internal.per_user_lora import PerUserLoRAStore, UserAdapter
+from domain.feedback._internal.workflow import FeedbackWorkflowManager, WorkflowConfig
 
 # =============================================================================
 # FeedbackDB Tests
@@ -43,8 +42,8 @@ class TestFeedbackDB:
     def test_list_conversations(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = FeedbackDB(db_path=str(Path(tmp) / "test.db"))
-            c1 = db.create_conversation(user_id="u1")
-            c2 = db.create_conversation(user_id="u1")
+            db.create_conversation(user_id="u1")
+            db.create_conversation(user_id="u1")
             convs = db.list_conversations(user_id="u1")
             assert len(convs) == 2
 
@@ -52,7 +51,7 @@ class TestFeedbackDB:
         with tempfile.TemporaryDirectory() as tmp:
             db = FeedbackDB(db_path=str(Path(tmp) / "test.db"))
             conv_id = db.create_conversation(user_id="u1")
-            msg_id = db.add_message(conv_id, "user", "hello")
+            db.add_message(conv_id, "user", "hello")
             msgs = db.get_messages(conv_id)
             assert len(msgs) == 1
             assert msgs[0]["content"] == "hello"
@@ -73,7 +72,7 @@ class TestFeedbackDB:
             db = FeedbackDB(db_path=str(Path(tmp) / "test.db"))
             conv_id = db.create_conversation()
             msg_id = db.add_message(conv_id, "user", "hello")
-            fb_id = db.add_feedback(msg_id, "thumbs_up", quality_score=0.9)
+            db.add_feedback(msg_id, "thumbs_up", quality_score=0.9)
             feedback_list = db.get_feedback(msg_id)
             assert len(feedback_list) == 1
             assert feedback_list[0]["rating"] == "thumbs_up"
@@ -105,8 +104,10 @@ class TestFeedbackDB:
         with tempfile.TemporaryDirectory() as tmp:
             db = FeedbackDB(db_path=str(Path(tmp) / "test.db"))
             conv_id = db.create_conversation()
-            m1 = db.add_message(conv_id, "user", "hello world", embedding=np.array([1.0, 0.0, 0.0]))
-            m2 = db.add_message(conv_id, "user", "goodbye world", embedding=np.array([0.9, 0.1, 0.0]))
+            db.add_message(conv_id, "user", "hello world", embedding=np.array([1.0, 0.0, 0.0]))
+            db.add_message(
+                conv_id, "user", "goodbye world", embedding=np.array([0.9, 0.1, 0.0])
+            )
             results = db.find_similar_messages(
                 query_embedding=np.array([1.0, 0.0, 0.0]), k=5, min_similarity=0.5
             )
@@ -155,7 +156,7 @@ class TestFeedbackDB:
         with tempfile.TemporaryDirectory() as tmp:
             db = FeedbackDB(db_path=str(Path(tmp) / "test.db"))
             conv_id = db.create_conversation()
-            m1 = db.add_message(conv_id, "user", "hello")
+            db.add_message(conv_id, "user", "hello")
             m2 = db.add_message(conv_id, "assistant", "hi there")
             db.add_feedback(m2, "thumbs_up")
             export_path = str(Path(tmp) / "export.jsonl")
@@ -239,10 +240,17 @@ class TestBLEUScorer:
 class TestEvalResult:
     def test_to_dict_excludes_quality_delta(self):
         r = EvalResult(
-            timestamp="now", adapter_path=None, prompts=2, references=1,
-            perplexity=10.0, bleu=50.0, avg_response_len=5.0,
-            inference_time_sec=1.0, tokens_per_sec=10.0,
-            personality_score=0.5, quality_delta=0.1,
+            timestamp="now",
+            adapter_path=None,
+            prompts=2,
+            references=1,
+            perplexity=10.0,
+            bleu=50.0,
+            avg_response_len=5.0,
+            inference_time_sec=1.0,
+            tokens_per_sec=10.0,
+            personality_score=0.5,
+            quality_delta=0.1,
         )
         d = r.to_dict()
         assert "quality_delta" not in d
@@ -251,9 +259,15 @@ class TestEvalResult:
 
     def test_to_dict_no_personality(self):
         r = EvalResult(
-            timestamp="now", adapter_path="test.npz", prompts=1, references=0,
-            perplexity=None, bleu=None, avg_response_len=0.0,
-            inference_time_sec=0.0, tokens_per_sec=None,
+            timestamp="now",
+            adapter_path="test.npz",
+            prompts=1,
+            references=0,
+            perplexity=None,
+            bleu=None,
+            avg_response_len=0.0,
+            inference_time_sec=0.0,
+            tokens_per_sec=None,
             personality_score=None,
         )
         d = r.to_dict()
@@ -264,8 +278,12 @@ class TestEvalResult:
 class TestPersonalityScore:
     def test_to_dict(self):
         ps = PersonalityScore(
-            soul_name="assistant", warmth_score=0.8, creativity_score=0.6,
-            formality_score=0.5, coherence_score=0.7, overall=0.65,
+            soul_name="assistant",
+            warmth_score=0.8,
+            creativity_score=0.6,
+            formality_score=0.5,
+            coherence_score=0.7,
+            overall=0.65,
         )
         d = ps.to_dict()
         assert d["soul"] == "assistant"
@@ -276,14 +294,28 @@ class TestPersonalityScore:
 class TestLoRAEvaluatorCompare:
     def test_baseline_vs_adapter_better(self):
         baseline = EvalResult(
-            timestamp="t1", adapter_path=None, prompts=2, references=1,
-            perplexity=15.0, bleu=40.0, avg_response_len=5.0,
-            inference_time_sec=2.0, tokens_per_sec=5.0, personality_score=0.5,
+            timestamp="t1",
+            adapter_path=None,
+            prompts=2,
+            references=1,
+            perplexity=15.0,
+            bleu=40.0,
+            avg_response_len=5.0,
+            inference_time_sec=2.0,
+            tokens_per_sec=5.0,
+            personality_score=0.5,
         )
         with_adapter = EvalResult(
-            timestamp="t2", adapter_path="test.npz", prompts=2, references=1,
-            perplexity=10.0, bleu=55.0, avg_response_len=6.0,
-            inference_time_sec=1.5, tokens_per_sec=8.0, personality_score=0.6,
+            timestamp="t2",
+            adapter_path="test.npz",
+            prompts=2,
+            references=1,
+            perplexity=10.0,
+            bleu=55.0,
+            avg_response_len=6.0,
+            inference_time_sec=1.5,
+            tokens_per_sec=8.0,
+            personality_score=0.6,
         )
         evaluator = LoRAEvaluator()
         delta = evaluator.compare(baseline, with_adapter)
@@ -295,14 +327,28 @@ class TestLoRAEvaluatorCompare:
 
     def test_baseline_vs_adapter_worse(self):
         baseline = EvalResult(
-            timestamp="t1", adapter_path=None, prompts=2, references=1,
-            perplexity=10.0, bleu=55.0, avg_response_len=5.0,
-            inference_time_sec=1.0, tokens_per_sec=10.0, personality_score=0.6,
+            timestamp="t1",
+            adapter_path=None,
+            prompts=2,
+            references=1,
+            perplexity=10.0,
+            bleu=55.0,
+            avg_response_len=5.0,
+            inference_time_sec=1.0,
+            tokens_per_sec=10.0,
+            personality_score=0.6,
         )
         with_adapter = EvalResult(
-            timestamp="t2", adapter_path="test.npz", prompts=2, references=1,
-            perplexity=20.0, bleu=30.0, avg_response_len=4.0,
-            inference_time_sec=2.0, tokens_per_sec=4.0, personality_score=0.4,
+            timestamp="t2",
+            adapter_path="test.npz",
+            prompts=2,
+            references=1,
+            perplexity=20.0,
+            bleu=30.0,
+            avg_response_len=4.0,
+            inference_time_sec=2.0,
+            tokens_per_sec=4.0,
+            personality_score=0.4,
         )
         evaluator = LoRAEvaluator()
         delta = evaluator.compare(baseline, with_adapter)
@@ -311,14 +357,28 @@ class TestLoRAEvaluatorCompare:
 
     def test_baseline_vs_adapter_mixed(self):
         baseline = EvalResult(
-            timestamp="t1", adapter_path=None, prompts=2, references=1,
-            perplexity=10.0, bleu=50.0, avg_response_len=5.0,
-            inference_time_sec=1.0, tokens_per_sec=10.0, personality_score=0.5,
+            timestamp="t1",
+            adapter_path=None,
+            prompts=2,
+            references=1,
+            perplexity=10.0,
+            bleu=50.0,
+            avg_response_len=5.0,
+            inference_time_sec=1.0,
+            tokens_per_sec=10.0,
+            personality_score=0.5,
         )
         with_adapter = EvalResult(
-            timestamp="t2", adapter_path="test.npz", prompts=2, references=1,
-            perplexity=15.0, bleu=60.0, avg_response_len=6.0,
-            inference_time_sec=0.8, tokens_per_sec=12.0, personality_score=0.55,
+            timestamp="t2",
+            adapter_path="test.npz",
+            prompts=2,
+            references=1,
+            perplexity=15.0,
+            bleu=60.0,
+            avg_response_len=6.0,
+            inference_time_sec=0.8,
+            tokens_per_sec=12.0,
+            personality_score=0.55,
         )
         evaluator = LoRAEvaluator()
         delta = evaluator.compare(baseline, with_adapter)
@@ -327,14 +387,28 @@ class TestLoRAEvaluatorCompare:
 
     def test_compare_with_missing_metrics(self):
         baseline = EvalResult(
-            timestamp="t1", adapter_path=None, prompts=2, references=1,
-            perplexity=10.0, bleu=None, avg_response_len=5.0,
-            inference_time_sec=1.0, tokens_per_sec=None, personality_score=None,
+            timestamp="t1",
+            adapter_path=None,
+            prompts=2,
+            references=1,
+            perplexity=10.0,
+            bleu=None,
+            avg_response_len=5.0,
+            inference_time_sec=1.0,
+            tokens_per_sec=None,
+            personality_score=None,
         )
         with_adapter = EvalResult(
-            timestamp="t2", adapter_path="test.npz", prompts=2, references=1,
-            perplexity=12.0, bleu=None, avg_response_len=5.5,
-            inference_time_sec=0.9, tokens_per_sec=None, personality_score=None,
+            timestamp="t2",
+            adapter_path="test.npz",
+            prompts=2,
+            references=1,
+            perplexity=12.0,
+            bleu=None,
+            avg_response_len=5.5,
+            inference_time_sec=0.9,
+            tokens_per_sec=None,
+            personality_score=None,
         )
         evaluator = LoRAEvaluator()
         delta = evaluator.compare(baseline, with_adapter)
@@ -344,14 +418,28 @@ class TestLoRAEvaluatorCompare:
 
     def test_compare_with_report_contains_metrics(self):
         baseline = EvalResult(
-            timestamp="t1", adapter_path=None, prompts=2, references=1,
-            perplexity=15.0, bleu=40.0, avg_response_len=5.0,
-            inference_time_sec=2.0, tokens_per_sec=5.0, personality_score=0.5,
+            timestamp="t1",
+            adapter_path=None,
+            prompts=2,
+            references=1,
+            perplexity=15.0,
+            bleu=40.0,
+            avg_response_len=5.0,
+            inference_time_sec=2.0,
+            tokens_per_sec=5.0,
+            personality_score=0.5,
         )
         with_adapter = EvalResult(
-            timestamp="t2", adapter_path="test.npz", prompts=2, references=1,
-            perplexity=10.0, bleu=55.0, avg_response_len=6.0,
-            inference_time_sec=1.5, tokens_per_sec=8.0, personality_score=0.6,
+            timestamp="t2",
+            adapter_path="test.npz",
+            prompts=2,
+            references=1,
+            perplexity=10.0,
+            bleu=55.0,
+            avg_response_len=6.0,
+            inference_time_sec=1.5,
+            tokens_per_sec=8.0,
+            personality_score=0.6,
         )
         evaluator = LoRAEvaluator()
         report = evaluator.compare_with_report(baseline, with_adapter)
@@ -365,14 +453,28 @@ class TestLoRAEvaluatorCompare:
     def test_compare_with_report_degraded(self):
         evaluator = LoRAEvaluator()
         baseline = EvalResult(
-            timestamp="t1", adapter_path=None, prompts=1, references=1,
-            perplexity=5.0, bleu=80.0, avg_response_len=10.0,
-            inference_time_sec=0.5, tokens_per_sec=20.0, personality_score=0.8,
+            timestamp="t1",
+            adapter_path=None,
+            prompts=1,
+            references=1,
+            perplexity=5.0,
+            bleu=80.0,
+            avg_response_len=10.0,
+            inference_time_sec=0.5,
+            tokens_per_sec=20.0,
+            personality_score=0.8,
         )
         with_adapter = EvalResult(
-            timestamp="t2", adapter_path="bad.npz", prompts=1, references=1,
-            perplexity=25.0, bleu=10.0, avg_response_len=2.0,
-            inference_time_sec=2.0, tokens_per_sec=1.0, personality_score=0.2,
+            timestamp="t2",
+            adapter_path="bad.npz",
+            prompts=1,
+            references=1,
+            perplexity=25.0,
+            bleu=10.0,
+            avg_response_len=2.0,
+            inference_time_sec=2.0,
+            tokens_per_sec=1.0,
+            personality_score=0.2,
         )
         report = evaluator.compare_with_report(baseline, with_adapter)
         assert "VERDICT" in report
@@ -385,12 +487,20 @@ class TestLoRAEvaluatorCompare:
 
     def test_compare_none_perplexity_no_keyerror(self):
         evaluator = LoRAEvaluator()
-        common = dict(timestamp="t", adapter_path=None, prompts=1, references=0,
-                      avg_response_len=1, inference_time_sec=1.0)
-        baseline = EvalResult(perplexity=None, bleu=0.5, tokens_per_sec=1.0,
-                              personality_score=0.5, **common)
-        with_adapter = EvalResult(perplexity=None, bleu=0.6, tokens_per_sec=1.2,
-                                  personality_score=0.6, **common)
+        common = {
+            "timestamp": "t",
+            "adapter_path": None,
+            "prompts": 1,
+            "references": 0,
+            "avg_response_len": 1,
+            "inference_time_sec": 1.0,
+        }
+        baseline = EvalResult(
+            perplexity=None, bleu=0.5, tokens_per_sec=1.0, personality_score=0.5, **common
+        )
+        with_adapter = EvalResult(
+            perplexity=None, bleu=0.6, tokens_per_sec=1.2, personality_score=0.6, **common
+        )
         delta = evaluator.compare(baseline, with_adapter)
         assert "perplexity_delta" not in delta
         assert delta["bleu_delta"] > 0
@@ -398,12 +508,20 @@ class TestLoRAEvaluatorCompare:
 
     def test_compare_with_report_none_metrics_renders_n_a(self):
         evaluator = LoRAEvaluator()
-        common = dict(timestamp="t", adapter_path=None, prompts=1, references=0,
-                      avg_response_len=1, inference_time_sec=1.0)
-        baseline = EvalResult(perplexity=None, bleu=0.5, tokens_per_sec=1.0,
-                              personality_score=0.5, **common)
-        with_adapter = EvalResult(perplexity=None, bleu=0.6, tokens_per_sec=1.2,
-                                  personality_score=0.6, **common)
+        common = {
+            "timestamp": "t",
+            "adapter_path": None,
+            "prompts": 1,
+            "references": 0,
+            "avg_response_len": 1,
+            "inference_time_sec": 1.0,
+        }
+        baseline = EvalResult(
+            perplexity=None, bleu=0.5, tokens_per_sec=1.0, personality_score=0.5, **common
+        )
+        with_adapter = EvalResult(
+            perplexity=None, bleu=0.6, tokens_per_sec=1.2, personality_score=0.6, **common
+        )
         report = evaluator.compare_with_report(baseline, with_adapter)
         assert "n/a" in report
         assert "VERDICT" in report
@@ -423,13 +541,14 @@ class TestLoRAEvaluatorCompare:
             assert evaluator.available() is True
 
 
-
 class TestLoRAEvaluatorLiveGenerator:
     def test_generate_uses_injected_generator(self):
         calls = []
+
         def fake_gen(prompt):
             calls.append(prompt)
             return "Hello! I am a real generated response."
+
         evaluator = LoRAEvaluator(generator=fake_gen)
         text, latency, tps = evaluator._generate("Hello", None)
         assert calls == ["Hello"]
@@ -445,10 +564,19 @@ class TestLoRAEvaluatorLiveGenerator:
 
     def test_resolve_live_generator_wires_provider(self):
         class FakeProvider:
-            def _generate_sync(self, messages, max_tokens=512, temperature=0.8,
-                               top_k=None, top_p=None, repetition_penalty=1.0, session_id=None):
+            def _generate_sync(
+                self,
+                messages,
+                max_tokens=512,
+                temperature=0.8,
+                top_k=None,
+                top_p=None,
+                repetition_penalty=1.0,
+                session_id=None,
+            ):
                 assert messages == [{"role": "user", "content": "hi"}]
                 return "real provider text"
+
         evaluator = LoRAEvaluator()
         with patch("domains.models.provider.get_provider", return_value=FakeProvider()):
             gen = evaluator._resolve_live_generator()
@@ -459,6 +587,7 @@ class TestLoRAEvaluatorLiveGenerator:
         evaluator = LoRAEvaluator()
         with patch("domains.models.provider.get_provider", return_value=None):
             assert evaluator._resolve_live_generator() is None
+
     def test_default_soul(self):
         evaluator = LoRAEvaluator()
         ps = evaluator._score_personality("thank you for your help", "assistant")
@@ -477,12 +606,17 @@ class TestLoRAEvaluatorLiveGenerator:
 
     def test_warmth_scoring(self):
         evaluator = LoRAEvaluator()
-        ps = evaluator._score_personality("thank you great help appreciate it wonderful", "assistant")
+        ps = evaluator._score_personality(
+            "thank you great help appreciate it wonderful", "assistant"
+        )
         assert ps.warmth_score > 0
 
     def test_coherence_bounds(self):
         evaluator = LoRAEvaluator()
-        texts = ["a. b. c.", "very long text with many sentences. here is another one. and a third."]
+        texts = [
+            "a. b. c.",
+            "very long text with many sentences. here is another one. and a third.",
+        ]
         for text in texts:
             ps = evaluator._score_personality(text, "assistant")
             assert 0 <= ps.coherence_score <= 1
@@ -603,7 +737,9 @@ class TestOnlineLoRAUpdater:
         assert "W_a" in grads
         assert "W_b" in grads
         # Positive reinforcement → positive scale → grad mean should tend positive
-        assert np.mean(grads["W_a"]) >= -0.02 or np.mean(grads["W_a"]) <= 0.02  # random, just check shape
+        assert (
+            np.mean(grads["W_a"]) >= -0.02 or np.mean(grads["W_a"]) <= 0.02
+        )  # random, just check shape
 
     def test_compute_gradients_all_negative(self):
         updater = OnlineLoRAUpdater(learning_rate=0.01)
@@ -619,8 +755,10 @@ class TestOnlineLoRAUpdater:
         updater = OnlineLoRAUpdater(learning_rate=0.01)
         updater.initialize(model_dim=768)
         original_wb = updater._lora_weights["W_b"].copy()
-        grads = {"W_a": np.ones_like(updater._lora_weights["W_a"]) * 0.1,
-                 "W_b": np.ones_like(updater._lora_weights["W_b"]) * 0.1}
+        grads = {
+            "W_a": np.ones_like(updater._lora_weights["W_a"]) * 0.1,
+            "W_b": np.ones_like(updater._lora_weights["W_b"]) * 0.1,
+        }
         updater._apply_gradients(grads)
         assert not np.allclose(updater._lora_weights["W_b"], original_wb)
 
@@ -677,8 +815,10 @@ class TestUserAdapter:
             user_id="u1",
             W_a=np.random.randn(8, 768).astype(np.float32),
             W_b=np.zeros((768, 8), dtype=np.float32),
-            rank=8, alpha=16,
-            created_at="now", updated_at="now",
+            rank=8,
+            alpha=16,
+            created_at="now",
+            updated_at="now",
             feedback_count=5,
         )
         assert adapter.user_id == "u1"
@@ -689,7 +829,7 @@ class TestUserAdapter:
 class TestPerUserLoRAStore:
     def test_init_creates_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store = PerUserLoRAStore(store_path=str(Path(tmp) / "adapters"))
+            PerUserLoRAStore(store_path=str(Path(tmp) / "adapters"))
             assert (Path(tmp) / "adapters").is_dir()
 
     def test_create_adapter(self):
@@ -723,19 +863,25 @@ class TestPerUserLoRAStore:
 
     def test_update_adapter_positive(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store = PerUserLoRAStore(store_path=tmp, model_dim=64, adapter_rank=4, auto_aggregate_threshold=999)
+            store = PerUserLoRAStore(
+                store_path=tmp, model_dim=64, adapter_rank=4, auto_aggregate_threshold=999
+            )
             adapter = store.update_adapter("user1", feedback_signal=1.0, learning_rate=0.01)
             assert adapter.feedback_count == 1
 
     def test_update_adapter_negative(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store = PerUserLoRAStore(store_path=tmp, model_dim=64, adapter_rank=4, auto_aggregate_threshold=999)
+            store = PerUserLoRAStore(
+                store_path=tmp, model_dim=64, adapter_rank=4, auto_aggregate_threshold=999
+            )
             adapter = store.update_adapter("user1", feedback_signal=-1.0, learning_rate=0.01)
             assert adapter.feedback_count == 1
 
     def test_update_adapter_clips_weights(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store = PerUserLoRAStore(store_path=tmp, model_dim=64, adapter_rank=4, auto_aggregate_threshold=999)
+            store = PerUserLoRAStore(
+                store_path=tmp, model_dim=64, adapter_rank=4, auto_aggregate_threshold=999
+            )
             adapter = store.update_adapter("user1", feedback_signal=100.0, learning_rate=1.0)
             assert np.all(np.abs(adapter.W_b) <= 1.0)
             assert np.all(np.abs(adapter.W_a) <= 1.0)
@@ -795,14 +941,18 @@ class TestPerUserLoRAStore:
 
     def test_get_quality_adapters_filters_by_feedback(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store = PerUserLoRAStore(store_path=tmp, model_dim=64, adapter_rank=4, min_feedback_for_aggregation=3)
+            store = PerUserLoRAStore(
+                store_path=tmp, model_dim=64, adapter_rank=4, min_feedback_for_aggregation=3
+            )
             store.create_adapter("u1")
             quality = store.get_quality_adapters(min_feedback_count=3)
             assert len(quality) == 0  # u1 has 0 feedback
 
     def test_get_quality_adapters_after_feedback(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store = PerUserLoRAStore(store_path=tmp, model_dim=64, adapter_rank=4, auto_aggregate_threshold=999)
+            store = PerUserLoRAStore(
+                store_path=tmp, model_dim=64, adapter_rank=4, auto_aggregate_threshold=999
+            )
             for _ in range(5):
                 store.update_adapter("u1", feedback_signal=1.0)
             quality = store.get_quality_adapters(min_feedback_count=3)
@@ -819,7 +969,9 @@ class TestPerUserLoRAStore:
 
     def test_reset_user_adapter(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store = PerUserLoRAStore(store_path=tmp, model_dim=64, adapter_rank=4, auto_aggregate_threshold=999)
+            store = PerUserLoRAStore(
+                store_path=tmp, model_dim=64, adapter_rank=4, auto_aggregate_threshold=999
+            )
             store.update_adapter("u1", feedback_signal=1.0)
             store.reset_user_adapter("u1")
             adapter = store.get_adapter("u1")
@@ -827,7 +979,9 @@ class TestPerUserLoRAStore:
 
     def test_aggregate_best_adapters_no_quality(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store = PerUserLoRAStore(store_path=tmp, model_dim=64, adapter_rank=4, min_feedback_for_aggregation=3)
+            store = PerUserLoRAStore(
+                store_path=tmp, model_dim=64, adapter_rank=4, min_feedback_for_aggregation=3
+            )
             result = store.aggregate_best_adapters(top_k=5, min_feedback_count=3)
             assert "error" in result
             assert result["count"] == 0
@@ -896,11 +1050,15 @@ class TestWorkflowConfig:
 class TestFeedbackWorkflowManager:
     def test_init(self):
         with tempfile.TemporaryDirectory() as tmp:
-            lora_store = PerUserLoRAStore(store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4)
+            lora_store = PerUserLoRAStore(
+                store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4
+            )
             db_path = str(Path(tmp) / "feedback.db")
             from domains.feedback.database import FeedbackDB
+
             feedback_db = FeedbackDB(db_path=db_path)
             from domains.feedback.meta_weights import MetaWeightManager
+
             meta = MetaWeightManager()
             updater = OnlineLoRAUpdater()
             wfm = FeedbackWorkflowManager(
@@ -915,11 +1073,18 @@ class TestFeedbackWorkflowManager:
 
     def test_record_feedback(self):
         with tempfile.TemporaryDirectory() as tmp:
-            lora_store = PerUserLoRAStore(store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4, auto_aggregate_threshold=999)
+            lora_store = PerUserLoRAStore(
+                store_path=str(Path(tmp) / "adapters"),
+                model_dim=64,
+                adapter_rank=4,
+                auto_aggregate_threshold=999,
+            )
             db_path = str(Path(tmp) / "feedback.db")
             from domains.feedback.database import FeedbackDB
+
             feedback_db = FeedbackDB(db_path=db_path)
             from domains.feedback.meta_weights import MetaWeightManager
+
             meta = MetaWeightManager()
             updater = OnlineLoRAUpdater()
             wfm = FeedbackWorkflowManager(
@@ -940,11 +1105,18 @@ class TestFeedbackWorkflowManager:
 
     def test_record_feedback_negative(self):
         with tempfile.TemporaryDirectory() as tmp:
-            lora_store = PerUserLoRAStore(store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4, auto_aggregate_threshold=999)
+            lora_store = PerUserLoRAStore(
+                store_path=str(Path(tmp) / "adapters"),
+                model_dim=64,
+                adapter_rank=4,
+                auto_aggregate_threshold=999,
+            )
             db_path = str(Path(tmp) / "feedback.db")
             from domains.feedback.database import FeedbackDB
+
             feedback_db = FeedbackDB(db_path=db_path)
             from domains.feedback.meta_weights import MetaWeightManager
+
             meta = MetaWeightManager()
             updater = OnlineLoRAUpdater()
             wfm = FeedbackWorkflowManager(
@@ -959,11 +1131,15 @@ class TestFeedbackWorkflowManager:
 
     def test_get_status(self):
         with tempfile.TemporaryDirectory() as tmp:
-            lora_store = PerUserLoRAStore(store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4)
+            lora_store = PerUserLoRAStore(
+                store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4
+            )
             db_path = str(Path(tmp) / "feedback.db")
             from domains.feedback.database import FeedbackDB
+
             feedback_db = FeedbackDB(db_path=db_path)
             from domains.feedback.meta_weights import MetaWeightManager
+
             meta = MetaWeightManager()
             updater = OnlineLoRAUpdater()
             wfm = FeedbackWorkflowManager(
@@ -1035,14 +1211,18 @@ class TestFeedbackWorkflowManager:
 
     def test_trigger_aggregate(self):
         with tempfile.TemporaryDirectory() as tmp:
-            lora_store = PerUserLoRAStore(store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4)
+            lora_store = PerUserLoRAStore(
+                store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4
+            )
             wfm = FeedbackWorkflowManager(config=WorkflowConfig(), lora_store=lora_store)
             result = wfm.trigger_aggregate()
             assert result["status"] == "aggregated"
 
     def test_trigger_prune(self):
         with tempfile.TemporaryDirectory() as tmp:
-            lora_store = PerUserLoRAStore(store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4)
+            lora_store = PerUserLoRAStore(
+                store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4
+            )
             wfm = FeedbackWorkflowManager(config=WorkflowConfig(), lora_store=lora_store)
             result = wfm.trigger_prune()
             assert result["status"] == "pruned"
@@ -1051,6 +1231,7 @@ class TestFeedbackWorkflowManager:
         with tempfile.TemporaryDirectory() as tmp:
             db_path = str(Path(tmp) / "feedback.db")
             from domains.feedback.database import FeedbackDB
+
             feedback_db = FeedbackDB(db_path=db_path)
             wfm = FeedbackWorkflowManager(
                 config=WorkflowConfig(export_path=str(Path(tmp) / "exports")),
@@ -1062,8 +1243,11 @@ class TestFeedbackWorkflowManager:
     def test_scheduled_tasks_aggregate(self):
         with tempfile.TemporaryDirectory() as tmp:
             lora_store = PerUserLoRAStore(
-                store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4,
-                auto_aggregate_threshold=1, min_feedback_for_aggregation=1,
+                store_path=str(Path(tmp) / "adapters"),
+                model_dim=64,
+                adapter_rank=4,
+                auto_aggregate_threshold=1,
+                min_feedback_for_aggregation=1,
                 run_eval=False,
             )
             wfm = FeedbackWorkflowManager(config=WorkflowConfig(), lora_store=lora_store)
@@ -1076,7 +1260,9 @@ class TestFeedbackWorkflowManager:
     def test_scheduled_tasks_prune(self):
         with tempfile.TemporaryDirectory() as tmp:
             lora_store = PerUserLoRAStore(
-                store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4,
+                store_path=str(Path(tmp) / "adapters"),
+                model_dim=64,
+                adapter_rank=4,
             )
             wfm = FeedbackWorkflowManager(config=WorkflowConfig(), lora_store=lora_store)
             wfm._last_prune_time = 0

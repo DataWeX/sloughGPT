@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import pytest
 from domain.training._internal.auto_config import (
     DatasetAnalysis,
     TrainingConfig,
 )
 
-
 # ── DatasetAnalysis ────────────────────────────────────────────────────────
 
 
 class TestDatasetAnalysis:
-
     def test_init(self):
         analysis = DatasetAnalysis(path="test.txt", format="text")
         assert analysis.path == "test.txt"
@@ -54,7 +51,6 @@ class TestDatasetAnalysis:
 
 
 class TestTrainingConfig:
-
     def test_default(self):
         config = TrainingConfig()
         assert config.model == "gpt2"

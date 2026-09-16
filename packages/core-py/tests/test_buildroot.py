@@ -1,10 +1,9 @@
 """
 Tests for Buildroot infrastructure - validates configuration files and structure.
 """
-import pytest
-from pathlib import Path
-import os
 
+import os
+from pathlib import Path
 
 # Paths — test is at packages/core-py/tests/, repo root is 3 levels up
 REPO_ROOT = Path(__file__).resolve().parents[3]

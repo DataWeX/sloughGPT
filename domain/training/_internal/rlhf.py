@@ -13,12 +13,12 @@ Runs entirely on numpy/SloNet.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
-import logging
 
 import numpy as np
+
 from domain.training._internal.slonet import SloLinear, Tensor
 
 logger = logging.getLogger("slo.rlhf")
@@ -26,6 +26,7 @@ logger = logging.getLogger("slo.rlhf")
 
 class RLHFMetric(Enum):
     """Metrics tracked during RLHF training."""
+
     REWARD = "reward"
     KL_DIVERGENCE = "kl_divergence"
     VALUE_LOSS = "value_loss"
@@ -52,8 +53,8 @@ class RLHFConfig:
     kl_coef: float = 0.1  # KL penalty coefficient
 
     # Model parameters
-    reward_model_path: Optional[str] = None
-    ref_model_path: Optional[str] = None
+    reward_model_path: str | None = None
+    ref_model_path: str | None = None
     use_ref_model: bool = True
 
     # Generation
@@ -182,8 +183,8 @@ class ValueHead:
 
     def __init__(self, base_model):
         self.base_model = base_model
-        self.head: Optional[SloLinear] = None
-        self._feature_dim: Optional[int] = None
+        self.head: SloLinear | None = None
+        self._feature_dim: int | None = None
 
     def _ensure_head(self, feature_dim: int):
         if self._feature_dim == feature_dim and self.head is not None:
@@ -228,9 +229,9 @@ class PPOTrainer:
         self,
         policy_model,
         reward_model: RewardModel,
-        value_model: Optional[object] = None,
-        ref_model: Optional[object] = None,
-        config: Optional[RLHFConfig] = None,
+        value_model: object | None = None,
+        ref_model: object | None = None,
+        config: RLHFConfig | None = None,
     ):
         self.policy = policy_model
         self.reward_model = reward_model
@@ -245,8 +246,8 @@ class PPOTrainer:
         self,
         prompts: np.ndarray,
         response_ids: np.ndarray,
-        advantages: Optional[np.ndarray] = None,
-        returns: Optional[np.ndarray] = None,
+        advantages: np.ndarray | None = None,
+        returns: np.ndarray | None = None,
     ) -> dict:
         """Package transition data into a rollout dict for :meth:`update`.
 
@@ -308,12 +309,12 @@ class PPOTrainer:
         Returns a dict of training metrics (mean across mini-batches).
         """
         cfg = self.config
-        obs = rollout["obs"]           # [B, T]
+        obs = rollout["obs"]  # [B, T]
         old_logprobs = rollout["logprobs"]  # [B, T, V]
-        rollout["values"]      # [B]
-        advantages = rollout["advantages"]   # [T]
-        returns = rollout["returns"]         # [T]
-        rewards = rollout["rewards"]         # [B]
+        rollout["values"]  # [B]
+        advantages = rollout["advantages"]  # [T]
+        returns = rollout["returns"]  # [T]
+        rewards = rollout["rewards"]  # [B]
 
         B, T = obs.shape
         vocab_size = old_logprobs.shape[-1]
@@ -342,8 +343,8 @@ class PPOTrainer:
                 start = i * mini_size
                 end = start + mini_size if i < n_mini - 1 else B
                 mb_idx = indices[start:end]
-                mb_obs = obs[mb_idx]               # [mb, T]
-                mb_old_lp = old_logprobs[mb_idx]   # [mb, T, V]
+                mb_obs = obs[mb_idx]  # [mb, T]
+                mb_old_lp = old_logprobs[mb_idx]  # [mb, T, V]
                 # Advantages are per-timestep [T], broadcast across batch
                 mb_adv = np.broadcast_to(advantages_norm, (mb_obs.shape[0], T))
 
@@ -383,7 +384,11 @@ class PPOTrainer:
                 if new_values.ndim == 1:
                     new_values_per_t = np.broadcast_to(new_values[:, None], (B_mb, T_mb))
                 else:
-                    new_values_per_t = new_values[:, :T_mb] if new_values.shape[1] >= T_mb else np.broadcast_to(new_values.mean(axis=1)[:, None], (B_mb, T_mb))
+                    new_values_per_t = (
+                        new_values[:, :T_mb]
+                        if new_values.shape[1] >= T_mb
+                        else np.broadcast_to(new_values.mean(axis=1)[:, None], (B_mb, T_mb))
+                    )
                 mb_returns = returns[None, :T_mb] if returns.ndim == 1 else returns[mb_idx, :T_mb]
                 value_loss = ((new_values_per_t - mb_returns) ** 2).mean()
 
@@ -470,7 +475,11 @@ class PPOTrainer:
                                 params.append(sub)
                             if hasattr(sub, "weight") and hasattr(sub.weight, "data"):
                                 params.append(sub.weight)
-                            if hasattr(sub, "bias") and sub.bias is not None and hasattr(sub.bias, "data"):
+                            if (
+                                hasattr(sub, "bias")
+                                and sub.bias is not None
+                                and hasattr(sub.bias, "data")
+                            ):
                                 params.append(sub.bias)
                     except TypeError:
                         pass
@@ -489,6 +498,7 @@ class PPOTrainer:
 
     def _init_optimizer(self):
         from domain.training._internal.slonet import SloAdam
+
         self._optimizer = SloAdam(lr=self.config.learning_rate)
 
     def _zero_grads(self):
@@ -500,7 +510,7 @@ class PPOTrainer:
         total_norm = 0.0
         for p in params:
             if p.grad is not None:
-                total_norm += float(np.sum(p.grad.data ** 2))
+                total_norm += float(np.sum(p.grad.data**2))
         total_norm = np.sqrt(total_norm)
         if total_norm > max_norm:
             scale = max_norm / (total_norm + 1e-8)
@@ -511,9 +521,9 @@ class PPOTrainer:
 
 def create_rlhf_trainer(
     policy_model=None,
-    value_model: Optional[object] = None,
-    ref_model: Optional[object] = None,
-    config: Optional[RLHFConfig] = None,
+    value_model: object | None = None,
+    ref_model: object | None = None,
+    config: RLHFConfig | None = None,
     device: str = "cpu",
 ):
     """

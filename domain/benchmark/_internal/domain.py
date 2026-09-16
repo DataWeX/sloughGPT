@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
-from typing import Optional
 from dataclasses import dataclass
+from pathlib import Path
+
 from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.benchmark")
@@ -19,10 +19,10 @@ logger = logging.getLogger("slo.benchmark")
 _RESPONSES_DIR = find_repo_root(Path(__file__).resolve()) / "data" / "logged_responses"
 
 # Global singleton
-_benchmark_domain: Optional["BenchmarkDomain"] = None
+_benchmark_domain: BenchmarkDomain | None = None
 
 
-def get_benchmark_domain() -> "BenchmarkDomain":
+def get_benchmark_domain() -> BenchmarkDomain:
     global _benchmark_domain
     if _benchmark_domain is None:
         _benchmark_domain = BenchmarkDomain()
@@ -97,8 +97,8 @@ class BenchmarkDomain:
         lengths = [len(t) for t in texts]
         avg_len = sum(lengths) / len(lengths) if lengths else 0
         std_len = (
-            sum((ln - avg_len) ** 2 for ln in lengths) / len(lengths)
-        ) ** 0.5 if lengths else 0
+            (sum((ln - avg_len) ** 2 for ln in lengths) / len(lengths)) ** 0.5 if lengths else 0
+        )
 
         # Repetition detection
         total_bigrams = 0
@@ -132,6 +132,7 @@ class BenchmarkDomain:
         """Delete all logged response files."""
         if self._responses_dir.exists():
             import shutil
+
             shutil.rmtree(self._responses_dir)
             self._responses_dir.mkdir(parents=True, exist_ok=True)
             logger.info("Cleared benchmark response history", extra={"tag": "BENCH"})

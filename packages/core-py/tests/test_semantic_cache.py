@@ -2,11 +2,9 @@
 
 import time
 
-import pytest
-
 from domain.inference._internal.semantic_cache import (
-    CacheEntry,
     CachedSoulEngine,
+    CacheEntry,
     SemanticCache,
 )
 
@@ -209,9 +207,15 @@ class TestCachedSoulEngine:
     def test_miss_generates_and_caches(self):
         engine = self.FakeEngine()
         cached = CachedSoulEngine(engine, cache=make_cache())
-        assert cached.generate("the capital of France is Paris") == "response:the capital of France is Paris"
+        assert (
+            cached.generate("the capital of France is Paris")
+            == "response:the capital of France is Paris"
+        )
         assert len(engine.calls) == 1
-        assert cached.generate("the capital of France is Paris") == "response:the capital of France is Paris"
+        assert (
+            cached.generate("the capital of France is Paris")
+            == "response:the capital of France is Paris"
+        )
         assert len(engine.calls) == 1
 
     def test_hit_skips_engine(self):

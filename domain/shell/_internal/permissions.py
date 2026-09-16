@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -37,42 +36,143 @@ class Risk:
 # ── Command → risk mapping ──────────────────────────────────────────
 
 # Read-only / no side effects
-_SAFE = frozenset({
-    "help", "exit", "which",
-    "type", "history", "fc", "whoami",
-    "tutorial", "status", "metrics", "health", "tokenizer",
-    "devices", "lsdev", "asm", "uptime",
-    "logs", "console",
-    "pwd", "echo", "cat", "head", "tail", "wc", "less",
-    "sort", "uniq", "find", "grep", "ls", "tee", "xargs", "diff", "stat", "du",
-    "cut", "tr", "seq", "nl", "fold", "tac", "env", "printenv", "yes", "realpath",
-    "dirname", "basename", "nproc", "hostname", "uname", "shuf", "rev", "paste", "comm",
-    "test", "[", "printf", "expand", "unexpand", "id", "logname", "mktemp", "who",
-    "od", "join",
-})
+_SAFE = frozenset(
+    {
+        "help",
+        "exit",
+        "which",
+        "type",
+        "history",
+        "fc",
+        "whoami",
+        "tutorial",
+        "status",
+        "metrics",
+        "health",
+        "tokenizer",
+        "devices",
+        "lsdev",
+        "asm",
+        "uptime",
+        "logs",
+        "console",
+        "pwd",
+        "echo",
+        "cat",
+        "head",
+        "tail",
+        "wc",
+        "less",
+        "sort",
+        "uniq",
+        "find",
+        "grep",
+        "ls",
+        "tee",
+        "xargs",
+        "diff",
+        "stat",
+        "du",
+        "cut",
+        "tr",
+        "seq",
+        "nl",
+        "fold",
+        "tac",
+        "env",
+        "printenv",
+        "yes",
+        "realpath",
+        "dirname",
+        "basename",
+        "nproc",
+        "hostname",
+        "uname",
+        "shuf",
+        "rev",
+        "paste",
+        "comm",
+        "test",
+        "[",
+        "printf",
+        "expand",
+        "unexpand",
+        "id",
+        "logname",
+        "mktemp",
+        "who",
+        "od",
+        "join",
+    }
+)
 
 # Modifies shell state only (aliases, env, history, variables, jobs)
-_ELEVATED = frozenset({
-    "alias", "unalias", "set", "export", "read", "source", ".",
-    "py", "ai", "cd",
-    "bg", "fg", "watch",
-})
+_ELEVATED = frozenset(
+    {
+        "alias",
+        "unalias",
+        "set",
+        "export",
+        "read",
+        "source",
+        ".",
+        "py",
+        "ai",
+        "cd",
+        "bg",
+        "fg",
+        "watch",
+    }
+)
 
 # Modifies filesystem or external resources
-_DANGEROUS = frozenset({
-    "protect", "unprotect",
-    "rm", "chmod", "chown", "mv", "cp", "dd", "touch",
-    "mkfs", "fsck", "fdisk", "mount", "umount",
-    "mkdir", "rmdir",
-})
+_DANGEROUS = frozenset(
+    {
+        "protect",
+        "unprotect",
+        "rm",
+        "chmod",
+        "chown",
+        "mv",
+        "cp",
+        "dd",
+        "touch",
+        "mkfs",
+        "fsck",
+        "fdisk",
+        "mount",
+        "umount",
+        "mkdir",
+        "rmdir",
+    }
+)
 
 # Affects system, models, training, processes, services
-_CRITICAL = frozenset({
-    "boot", "shutdown", "svc", "load", "unload", "switch",
-    "train", "kill", "gen", "chat", "agents", "remember",
-    "recall", "note", "api", "vmrun", "vmperms",
-    "permit", "deny", "permissions", "confirm",
-})
+_CRITICAL = frozenset(
+    {
+        "boot",
+        "shutdown",
+        "svc",
+        "load",
+        "unload",
+        "switch",
+        "train",
+        "kill",
+        "gen",
+        "chat",
+        "agents",
+        "remember",
+        "recall",
+        "note",
+        "api",
+        "vmrun",
+        "vmperms",
+        "permit",
+        "deny",
+        "permissions",
+        "confirm",
+    }
+)
 
 # Command → risk classification
 _RISK_MAP: dict[str, str] = {}
@@ -98,14 +198,16 @@ _db = None
 _collection = None
 
 
-def _get_collection(db_path: Optional[str] = None):
+def _get_collection(db_path: str | None = None):
     """Return the ``shell_permissions`` collection, creating it on first call."""
     global _db, _collection
     if _collection is not None:
         return _collection
     from mogdb import MogDB
+
     if db_path is None:
         from domain.shared import find_repo_root
+
         repo = find_repo_root(Path(__file__).resolve())
         db_path = str(repo / "data" / "shell_permissions_mogdb")
     _db = MogDB(db_path)
@@ -117,6 +219,7 @@ def set_permissions_db(db_path: str) -> None:
     """Replace the module-level collection (for tests)."""
     global _db, _collection
     from mogdb import MogDB
+
     _db = MogDB(db_path)
     _collection = _db.collection("shell_permissions")
 
@@ -141,7 +244,7 @@ class ShellPermissions:
     ``persist=True``.
     """
 
-    def __init__(self, db_path: Optional[str] = None) -> None:
+    def __init__(self, db_path: str | None = None) -> None:
         self._granted: set[str] = set()
         self._denied: set[str] = set()
         self._policy: dict[str, str] = {
@@ -168,8 +271,7 @@ class ShellPermissions:
 
         if cmd in self._denied:
             raise PermissionError(
-                f"Permission denied: {cmd} (risk={risk}). "
-                f"Use `permit {cmd}` to grant."
+                f"Permission denied: {cmd} (risk={risk}). Use `permit {cmd}` to grant."
             )
 
         raise PermissionError(

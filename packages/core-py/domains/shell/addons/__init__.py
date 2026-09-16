@@ -13,9 +13,11 @@ Usage:
     kernel.install_addon(shell_ui)
 """
 
+from . import (
+    filesystem,  # noqa: F401
+    neural,  # noqa: F401
+    shell_ui,  # noqa: F401
+)
 from .base import Addon  # noqa: F401
-from . import neural  # noqa: F401
-from . import filesystem  # noqa: F401
-from . import shell_ui  # noqa: F401
 
 __all__ = ["Addon", "neural", "filesystem", "shell_ui"]

@@ -2,26 +2,25 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+import pytest
+
 from domain.training._internal.ewc import (
+    DiagonalFisherEstimator,
     EWCParameters,
     TaskSnapshot,
-    DiagonalFisherEstimator,
     _as_array,
-    _scalar,
-    _zero_grad,
     _batch_size,
+    _scalar,
     _unpack_batch,
+    _zero_grad,
 )
-from domain.training._internal.slonet import Tensor, SloLinear, SloNet
-
+from domain.training._internal.slonet import SloLinear, SloNet, Tensor
 
 # ── _as_array / _scalar / _batch_size / _unpack_batch helpers ──────────────
 
 
 class TestHelperFunctions:
-
     def test_as_array_numpy(self):
         arr = np.array([1.0, 2.0])
         result = _as_array(arr)
@@ -64,7 +63,6 @@ class TestHelperFunctions:
 
 
 class TestZeroGrad:
-
     def test_zero_grad(self):
         net = SloNet(layers=[SloLinear(10, 5)])
         _zero_grad(net)
@@ -76,7 +74,6 @@ class TestZeroGrad:
 
 
 class TestEWCParameters:
-
     def test_default(self):
         params = EWCParameters()
         assert params.lambda_ewc == 1000.0
@@ -93,7 +90,6 @@ class TestEWCParameters:
 
 
 class TestTaskSnapshot:
-
     def test_init(self):
         snap = TaskSnapshot(
             task_id="t1",
@@ -111,12 +107,13 @@ class TestTaskSnapshot:
 
 
 class TestDiagonalFisherEstimator:
-
     def test_init(self):
         class MockModel:
             def parameters(self):
                 return [Tensor(np.array([1.0, 2.0]))]
+
             def named_parameters(self):
                 return [("w", Tensor(np.array([1.0, 2.0])))]
+
         estimator = DiagonalFisherEstimator(MockModel())
         assert estimator is not None

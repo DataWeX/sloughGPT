@@ -25,11 +25,12 @@ No agent knows the rules. They discover them through experiment.
 
 from __future__ import annotations
 
-import time
 import logging
+import time
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 from enum import IntEnum
-from dataclasses import dataclass, field, asdict
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
@@ -62,9 +63,11 @@ class EntityType(IntEnum):
 
 # ── Parameters ───────────────────────────────────────────────────────────────
 
+
 @dataclass
 class WorldParams:
     """World rules. Agents do NOT know these — they discover them."""
+
     grid_size: tuple[int, int, int] = (64, 32, 64)
     tick_rate: float = 0.1
 
@@ -85,8 +88,8 @@ class WorldParams:
     # Social interaction (multi-agent)
     social_enabled: bool = True
     social_radius: float = 3.0
-    share_fraction: float = 0.1     # fraction of surplus energy shared per act
-    contest_take: float = 2.0       # energy taken per contest against a weaker agent
+    share_fraction: float = 0.1  # fraction of surplus energy shared per act
+    contest_take: float = 2.0  # energy taken per contest against a weaker agent
     contest_threshold: float = 0.5  # perceptron competition gate
     cooperate_threshold: float = 0.5  # perceptron cooperation gate
 
@@ -97,8 +100,8 @@ class WorldParams:
     # the message one tick later as an extra entity feature at index 5, so it
     # is only visible to brains built with ``entity_input_dim >= 6``.
     message_enabled: bool = False
-    message_cost: float = 0.5       # energy spent per unit of message amplitude
-    message_range: float = 5.0      # max distance for direct delivery
+    message_cost: float = 0.5  # energy spent per unit of message amplitude
+    message_range: float = 5.0  # max distance for direct delivery
     message_gate_threshold: float = 0.5  # perceptron gate must clear to emit
 
     # Durable structures (Stage 7). Opt-in: off by default so the locked
@@ -109,12 +112,12 @@ class WorldParams:
     # own tribe's nearest nest — a starvation buffer that makes territoriality
     # and resource pooling worth evolving.
     structure_enabled: bool = False
-    nest_radius: float = 2.0        # a write within this distance of a nest feeds it
-    nest_seed_energy: float = 3.0   # deposited energy needed to seed a new nest
-    nest_draw_rate: float = 1.0     # max energy drawn per tick from one nest
-    nest_use_radius: float = 2.0    # a baby must stand this close to draw
-    nest_decay: float = 0.002       # fraction of stored energy lost per tick
-    max_nests: int = 8              # world-wide nest cap (limited territory)
+    nest_radius: float = 2.0  # a write within this distance of a nest feeds it
+    nest_seed_energy: float = 3.0  # deposited energy needed to seed a new nest
+    nest_draw_rate: float = 1.0  # max energy drawn per tick from one nest
+    nest_use_radius: float = 2.0  # a baby must stand this close to draw
+    nest_decay: float = 0.002  # fraction of stored energy lost per tick
+    max_nests: int = 8  # world-wide nest cap (limited territory)
 
     # Cultural transmission (Stage 7). Opt-in: off by default so the locked
     # single/group selection proofs keep their exact genome layout and RNG
@@ -129,11 +132,11 @@ class WorldParams:
     # subsequent learning, making culture net-negative in the honest-reward
     # world (benchmark_culture). ``0`` disables episode transfer entirely.
     teaching_enabled: bool = False
-    teach_cost: float = 0.5          # energy spent per unit of lesson amplitude
-    teach_range: float = 5.0         # max distance for a lesson
+    teach_cost: float = 0.5  # energy spent per unit of lesson amplitude
+    teach_range: float = 5.0  # max distance for a lesson
     teach_gate_threshold: float = 0.5  # perceptron gate must clear to teach
     teach_weight_blend: float = 0.1  # fraction of the weight gap closed per lesson
-    teach_memotype_cap: int = 1      # best episodes copied per lesson (0 = none)
+    teach_memotype_cap: int = 1  # best episodes copied per lesson (0 = none)
 
     # World-level long-term memory (Stage 7). Opt-in: off by default so the
     # locked selection proofs keep their exact energy flow and genome layout.
@@ -144,8 +147,8 @@ class WorldParams:
     # — so lived experience survives death and crosses lineages, beyond the
     # capped parent->child memotype.
     memory_enabled: bool = False
-    memory_deposit: int = 8    # episodes a baby deposits into the world reservoir
-    memory_seed: int = 4       # episodes a newborn is seeded with from the reservoir
+    memory_deposit: int = 8  # episodes a baby deposits into the world reservoir
+    memory_seed: int = 4  # episodes a newborn is seeded with from the reservoir
 
     # Predator-prey dynamics (Stage 8). Opt-in: off by default so the locked
     # selection proofs keep their exact genome layout and RNG draw order.
@@ -158,8 +161,8 @@ class WorldParams:
     # energy exceeds the strike cost, and self-limits as prey grows scarce
     # (a lone predator that eats its own population starves with it).
     predation_enabled: bool = False
-    predation_cost: float = 0.5       # energy spent to execute a strike
-    predation_range: float = 3.0      # max distance a predator can strike
+    predation_cost: float = 0.5  # energy spent to execute a strike
+    predation_range: float = 3.0  # max distance a predator can strike
     predation_gate_threshold: float = 0.5  # perceptron gate must clear to hunt
 
     # Territoriality (Stage 9). Opt-in: off by default so the locked
@@ -185,11 +188,11 @@ class WorldParams:
     # energy than the eviction costs and self-limits as trespassers grow
     # scarce.
     territoriality_enabled: bool = False
-    territory_radius: float = 3.0       # a tribe's region = within this of its nearest nest
-    defend_range: float = 3.0           # max distance a defender can evict a trespasser
-    defend_cost: float = 0.5            # energy spent to execute an eviction
-    defend_take_fraction: float = 0.5   # share of the trespasser's energy taken as toll
-    defend_push: float = 1.0            # cells the evicted trespasser is shoved away
+    territory_radius: float = 3.0  # a tribe's region = within this of its nearest nest
+    defend_range: float = 3.0  # max distance a defender can evict a trespasser
+    defend_cost: float = 0.5  # energy spent to execute an eviction
+    defend_take_fraction: float = 0.5  # share of the trespasser's energy taken as toll
+    defend_push: float = 1.0  # cells the evicted trespasser is shoved away
     defend_gate_threshold: float = 0.5  # perceptron gate must clear to defend
 
     # In-world life cycle (Stage 10). Opt-in: off by default so the locked
@@ -211,11 +214,11 @@ class WorldParams:
     # world's conserved energy budget — a birth is a transfer, never
     # creation, so energy is the carrying capacity.
     lifecycle_enabled: bool = False
-    reproduce_gate_threshold: float = 0.5   # perceptron gate must clear to breed
+    reproduce_gate_threshold: float = 0.5  # perceptron gate must clear to breed
     reproduce_energy_threshold: float = 150.0  # parent must exceed this energy to breed
-    birth_cost: float = 50.0      # total energy transferred to the offspring at birth
+    birth_cost: float = 50.0  # total energy transferred to the offspring at birth
     birth_nest_fraction: float = 0.5  # share of birth_cost drawn from the tribe's nest bank
-    birth_range: float = 2.0      # max distance the offspring is placed from the parent
+    birth_range: float = 2.0  # max distance the offspring is placed from the parent
 
     # Division of labor (Stage 11). Opt-in: off by default so the locked
     # selection proofs keep their exact genome layout and RNG draw order.
@@ -236,70 +239,74 @@ class WorldParams:
     specialization_enabled: bool = False
     role_gate_threshold: float = 0.5  # gate < threshold = Builder, >= = Warrior
     role_deposit_fraction: float = 0.1  # share of surplus a Builder banks per tick
-    role_raid_fraction: float = 0.5     # share of nest_draw_rate a Warrior may raid
+    role_raid_fraction: float = 0.5  # share of nest_draw_rate a Warrior may raid
 
     # World generation (opt-in terrain, deterministic on (grid_size, world_seed))
     generate_world: bool = False
     world_seed: int = 0
 
     # Temperature & combustion
-    ambient_temp: float = 20.0      # temperature the world relaxes toward
-    ambient_cooling: float = 0.01   # fraction of the temp gap closed per tick
-    ignition_temp: float = 100.0    # organic material ignites above this
-    burn_temp: float = 150.0        # temperature a live ember sustains itself at
+    ambient_temp: float = 20.0  # temperature the world relaxes toward
+    ambient_cooling: float = 0.01  # fraction of the temp gap closed per tick
+    ignition_temp: float = 100.0  # organic material ignites above this
+    burn_temp: float = 150.0  # temperature a live ember sustains itself at
 
     # Material behaviors (world-computer physics)
-    ember_heat_rate: float = 0.05     # fraction of ember fuel emitted per tick
+    ember_heat_rate: float = 0.05  # fraction of ember fuel emitted per tick
     ember_energy_fraction: float = 0.5  # of the emitted fuel, share given as energy
-    heat_to_temp: float = 1.0         # converts emitted heat into temperature units
+    heat_to_temp: float = 1.0  # converts emitted heat into temperature units
     organic_metabolism: float = 0.001  # fraction of organic energy lost to rot/tick
-    living_growth_rate: float = 0.05   # fraction of living energy spent growing/tick
-    living_growth_cost: float = 2.0    # energy a living cell must spend per new cell
+    living_growth_rate: float = 0.05  # fraction of living energy spent growing/tick
+    living_growth_cost: float = 2.0  # energy a living cell must spend per new cell
     growth_transfer_fraction: float = 0.8  # of that cost, share moved into the new cell
-    metal_conduction_boost: float = 3.0   # extra diffusion carried by metal cells
-    water_signal_dampen: float = 0.5      # fraction of signal removed at water cells
-    water_cool_rate: float = 0.05         # water cells relax toward ambient per tick
+    metal_conduction_boost: float = 3.0  # extra diffusion carried by metal cells
+    water_signal_dampen: float = 0.5  # fraction of signal removed at water cells
+    water_cool_rate: float = 0.05  # water cells relax toward ambient per tick
 
     # Perception input dimensions (for perceptrons)
-    cells_input_dim: int = 5  # material, energy, temperature, occupancy, signal (+ daylight at index 5 when >= 6)
-    body_input_dim: int = 3   # energy, position x, position y
+    cells_input_dim: int = (
+        5  # material, energy, temperature, occupancy, signal (+ daylight at index 5 when >= 6)
+    )
+    body_input_dim: int = 3  # energy, position x, position y
     entity_input_dim: int = 5  # type, energy, distance, angle, kin signal (+ directed-message amplitude at index 5 when >= 6)
 
     # Solar energy cycle (Stage 13) — energy enters the world ONLY from the
     # boundary (the sky), along a diurnal curve. When off the world stays a
     # closed system, so the locked selection proofs remain bit-identical.
     solar_enabled: bool = False
-    solar_day_ticks: int = 24          # full day/night cycle length in ticks
-    solar_phase: int = 0               # tick offset (0 = sunrise)
-    solar_min_intensity: float = 0.0   # night light level (0 = dark)
-    solar_max_intensity: float = 1.0   # noon light level
-    solar_deposit_rate: float = 0.4    # energy per lit surface cell per tick at full sun
+    solar_day_ticks: int = 24  # full day/night cycle length in ticks
+    solar_phase: int = 0  # tick offset (0 = sunrise)
+    solar_min_intensity: float = 0.0  # night light level (0 = dark)
+    solar_max_intensity: float = 1.0  # noon light level
+    solar_deposit_rate: float = 0.4  # energy per lit surface cell per tick at full sun
 
     # Seasonal year envelope (Stage 14) — the diurnal curve rides inside a
     # slower cosine year. When off (``solar_season_ticks == 0``) the world is
     # exactly the Stage 13 diurnal world, so the locked selection proofs stay
     # bit-identical. The envelope is a pure deterministic function of tick —
     # it consumes no RNG.
-    solar_season_ticks: int = 0        # full year length in ticks (0 = no seasons)
-    solar_seasonality: float = 1.0     # 0 = flat (always the diurnal mean), 1 = full swing
+    solar_season_ticks: int = 0  # full year length in ticks (0 = no seasons)
+    solar_seasonality: float = 1.0  # 0 = flat (always the diurnal mean), 1 = full swing
 
     # Episodic memory (ring buffer)
-    memory_capacity: int = 64   # episodes remembered before the oldest is evicted
-    memory_lookback: int = 5    # recent episodes averaged as the learning baseline
-    memory_inherit: int = 8     # episodes a baby consolidates into its offspring's memory
+    memory_capacity: int = 64  # episodes remembered before the oldest is evicted
+    memory_lookback: int = 5  # recent episodes averaged as the learning baseline
+    memory_inherit: int = 8  # episodes a baby consolidates into its offspring's memory
 
     # Brain & movement (Stage 5 cognition)
-    brain_hidden_units: int = 0     # hidden layer per decision perceptron (0 = single layer)
-    move_cost: float = 0.2          # energy spent per grid step a baby takes
-    move_threshold: float = 10.0    # babies below this energy stay still (like react)
-    learning_enabled: bool = True   # in-life delta-rule weight updates (off = pure evolution)
+    brain_hidden_units: int = 0  # hidden layer per decision perceptron (0 = single layer)
+    move_cost: float = 0.2  # energy spent per grid step a baby takes
+    move_threshold: float = 10.0  # babies below this energy stay still (like react)
+    learning_enabled: bool = True  # in-life delta-rule weight updates (off = pure evolution)
 
 
 # ── Data Structures ──────────────────────────────────────────────────────────
 
+
 @dataclass
 class WorldCell:
     """Per-cell state — the memory of the world-computer."""
+
     material: int = MATERIAL_AIR
     energy: float = 0.0
     temperature: float = 20.0
@@ -329,11 +336,7 @@ class WorldGrid:
 
     def idx(self, x: int, y: int, z: int) -> int:
         """Convert 3D coordinates to flat index. Wraps at boundaries."""
-        return (
-            (x % self.nx) * self.ny * self.nz
-            + (y % self.ny) * self.nz
-            + (z % self.nz)
-        )
+        return (x % self.nx) * self.ny * self.nz + (y % self.ny) * self.nz + (z % self.nz)
 
     def coords(self, flat_idx: int) -> tuple[int, int, int]:
         """Convert flat index to 3D coordinates."""
@@ -358,8 +361,9 @@ class WorldGrid:
         self.energy[i] = cell.energy
         self.temperature[i] = cell.temperature
 
-    def place_material(self, x: int, y: int, z: int, material: int,
-                       energy: float = 0.0, temperature: float = 20.0):
+    def place_material(
+        self, x: int, y: int, z: int, material: int, energy: float = 0.0, temperature: float = 20.0
+    ):
         """Place material at a cell."""
         i = self.idx(x, y, z)
         self.material[i] = material
@@ -370,8 +374,7 @@ class WorldGrid:
             # broadcast amplitude — the wave engine propagates it outward.
             self.signal[i] += energy
 
-    def write_cell(self, x: int, y: int, z: int, material: int,
-                   energy: float = 0.0) -> bool:
+    def write_cell(self, x: int, y: int, z: int, material: int, energy: float = 0.0) -> bool:
         """
         Write a cell — the fundamental baby action.
         Returns True if the write succeeded.
@@ -386,8 +389,7 @@ class WorldGrid:
             self.signal[i] += energy
         return True
 
-    def get_nearby_cells(self, cx: int, cy: int, cz: int,
-                         radius: float) -> dict[str, np.ndarray]:
+    def get_nearby_cells(self, cx: int, cy: int, cz: int, radius: float) -> dict[str, np.ndarray]:
         """
         Read cells within radius of a point.
         Returns flattened arrays of cell properties.
@@ -441,7 +443,7 @@ class WorldGrid:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "WorldGrid":
+    def from_dict(cls, data: dict[str, Any]) -> WorldGrid:
         """
         Rebuild a grid from :meth:`to_dict` output.
 
@@ -472,6 +474,7 @@ class WorldGrid:
 
 
 # ── Cell Update Functions (world-computer) ───────────────────────────────────
+
 
 def cell_update_diffusion(grid: WorldGrid, params: WorldParams):
     """
@@ -525,9 +528,12 @@ def cell_update_waves(grid: WorldGrid, params: WorldParams):
 
 # Offsets of the six orthogonal neighbors (axis-aligned 3D grid).
 _NEIGHBOR_OFFSETS = (
-    (-1, 0, 0), (1, 0, 0),
-    (0, -1, 0), (0, 1, 0),
-    (0, 0, -1), (0, 0, 1),
+    (-1, 0, 0),
+    (1, 0, 0),
+    (0, -1, 0),
+    (0, 1, 0),
+    (0, 0, -1),
+    (0, 0, 1),
 )
 
 # The neighborhood a baby perceives is a pure function of radius, so the
@@ -567,9 +573,7 @@ def _sphere_offsets(radius: float):
     ar = np.arange(-r, r + 1)
     dx, dy, dz = np.meshgrid(ar, ar, ar, indexing="ij")
     d = np.sqrt(
-        dx.astype(np.float64) ** 2
-        + dy.astype(np.float64) ** 2
-        + dz.astype(np.float64) ** 2
+        dx.astype(np.float64) ** 2 + dy.astype(np.float64) ** 2 + dz.astype(np.float64) ** 2
     )
     inside = d <= radius
     offsets = (dx[inside], dy[inside], dz[inside], d[inside])
@@ -591,7 +595,7 @@ def cell_update_metabolism(grid: WorldGrid, params: WorldParams):
         return
     mask = grid.material == MATERIAL_ORGANIC
     if mask.any():
-        grid.energy[mask] *= (1.0 - params.organic_metabolism)
+        grid.energy[mask] *= 1.0 - params.organic_metabolism
 
 
 def cell_update_ember(grid: WorldGrid, params: WorldParams):
@@ -628,9 +632,7 @@ def cell_update_ember(grid: WorldGrid, params: WorldParams):
 
     energy[ember_ids] -= d
     e_per = d * params.ember_energy_fraction / n
-    t_per = (
-        d * (1.0 - params.ember_energy_fraction) * params.heat_to_temp / n
-    )
+    t_per = d * (1.0 - params.ember_energy_fraction) * params.heat_to_temp / n
     nx, ny, nz = grid.size
     ex = ember_ids // (ny * nz)
     rem = ember_ids % (ny * nz)
@@ -640,11 +642,7 @@ def cell_update_ember(grid: WorldGrid, params: WorldParams):
     # offset the neighbor map is a bijection over the ember set, so targets
     # within one pass are distinct — a direct fancy-indexed add is exact.
     for dx, dy, dz in _NEIGHBOR_OFFSETS:
-        ni = (
-            ((ex + dx) % nx) * ny * nz
-            + ((ey + dy) % ny) * nz
-            + ((ez + dz) % nz)
-        )
+        ni = ((ex + dx) % nx) * ny * nz + ((ey + dy) % ny) * nz + ((ez + dz) % nz)
         energy[ni] += e_per
         temperature[ni] += t_per
 
@@ -721,11 +719,11 @@ def cell_update_water(grid: WorldGrid, params: WorldParams):
     if not water.any():
         return
     if params.water_signal_dampen > 0:
-        grid.signal[water] *= (1.0 - params.water_signal_dampen)
+        grid.signal[water] *= 1.0 - params.water_signal_dampen
     if params.water_cool_rate > 0:
         grid.temperature[water] += (
-            (params.ambient_temp - grid.temperature[water]) * params.water_cool_rate
-        )
+            params.ambient_temp - grid.temperature[water]
+        ) * params.water_cool_rate
 
 
 def cell_update_conduction(grid: WorldGrid, params: WorldParams):
@@ -755,9 +753,7 @@ def cell_update_conduction(grid: WorldGrid, params: WorldParams):
 def cell_update_temperature(grid: WorldGrid, params: WorldParams):
     """The whole world relaxes toward ambient temperature."""
     if params.ambient_cooling > 0:
-        grid.temperature += (
-            (params.ambient_temp - grid.temperature) * params.ambient_cooling
-        )
+        grid.temperature += (params.ambient_temp - grid.temperature) * params.ambient_cooling
 
 
 def cell_update_materials(grid: WorldGrid, params: WorldParams):
@@ -773,7 +769,7 @@ def cell_update_materials(grid: WorldGrid, params: WorldParams):
 def cell_update_energy_conservation(grid: WorldGrid, params: WorldParams):
     """Enforce energy conservation — total energy can only decrease."""
     if params.energy_loss > 0:
-        grid.energy *= (1.0 - params.energy_loss)
+        grid.energy *= 1.0 - params.energy_loss
     grid.energy = np.maximum(grid.energy, 0.0)
     grid.temperature = np.clip(grid.temperature, -273.15, 1000.0)
 
@@ -789,8 +785,8 @@ def cell_update_default(grid: WorldGrid, params: WorldParams):
 
 # ── World Generation (terrain) ───────────────────────────────────────────────
 
-def generate_world(grid: WorldGrid, params: WorldParams,
-                   seed: int | None = None) -> None:
+
+def generate_world(grid: WorldGrid, params: WorldParams, seed: int | None = None) -> None:
     """
     Build terrain into an empty grid using a local seeded RNG.
 
@@ -858,9 +854,11 @@ def generate_world(grid: WorldGrid, params: WorldParams,
 
 # ── Entity ───────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Entity:
     """A physical thing in the world. Minimal: position + energy."""
+
     id: int = 0
     position: np.ndarray = field(default_factory=lambda: np.zeros(3))
     energy: float = 100.0
@@ -889,7 +887,7 @@ class Entity:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Entity":
+    def from_dict(cls, data: dict[str, Any]) -> Entity:
         """
         Rebuild an entity from :meth:`to_dict` output.
 
@@ -910,6 +908,7 @@ class Entity:
 
 # ── Structures ───────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Nest:
     """
@@ -922,6 +921,7 @@ class Nest:
     pooling worth evolving. Stored energy decays a little every tick, so an
     abandoned structure erodes to nothing.
     """
+
     id: int
     position: np.ndarray
     stored_energy: float
@@ -948,7 +948,7 @@ class Nest:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Nest":
+    def from_dict(cls, data: dict[str, Any]) -> Nest:
         """
         Rebuild a nest from :meth:`to_dict` output.
 
@@ -969,9 +969,11 @@ class Nest:
 
 # ── Perception ───────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Perception:
     """What a baby perceives — nearby cells, entities, own body."""
+
     nearby_cells: dict[str, np.ndarray] = field(default_factory=dict)
     nearby_entities: list[dict[str, Any]] = field(default_factory=list)
     agent_body: dict[str, Any] = field(default_factory=dict)
@@ -980,9 +982,11 @@ class Perception:
 
 # ── Action (arbitrary write) ────────────────────────────────────────────────
 
+
 @dataclass
 class CellWrite:
     """A single cell write — the fundamental baby action."""
+
     x: int = 0
     y: int = 0
     z: int = 0
@@ -993,10 +997,12 @@ class CellWrite:
 @dataclass
 class BabyAction:
     """What a baby does — writes any number of cells anywhere."""
+
     writes: list[CellWrite] = field(default_factory=list)
 
 
 # ── Perceptron ───────────────────────────────────────────────────────────────
+
 
 class Perceptron:
     """
@@ -1086,7 +1092,7 @@ class Perceptron:
         return data
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Perceptron":
+    def from_dict(cls, data: dict[str, Any]) -> Perceptron:
         """
         Rebuild a perceptron from :meth:`to_dict` output without touching RNG.
 
@@ -1113,6 +1119,7 @@ class Perceptron:
 
 # ── SimBaby ──────────────────────────────────────────────────────────────────
 
+
 class SimBaby:
     """
     A baby agent in the world.
@@ -1123,21 +1130,29 @@ class SimBaby:
 
     _next_id = 0
 
-    def __init__(self, position: np.ndarray | None = None,
-                 initial_energy: float = 100.0,
-                 params: WorldParams | None = None,
-                 group_id: int = 0):
+    def __init__(
+        self,
+        position: np.ndarray | None = None,
+        initial_energy: float = 100.0,
+        params: WorldParams | None = None,
+        group_id: int = 0,
+    ):
         SimBaby._next_id += 1
         self.params = params or WorldParams()
         self.group_id: int = int(group_id)
 
         self.entity = Entity(
             id=SimBaby._next_id,
-            position=position if position is not None else np.array([
-                np.random.randint(0, max(self.params.grid_size[0], 1)),
-                np.random.randint(0, max(self.params.grid_size[1], 1)),
-                np.random.randint(0, max(self.params.grid_size[2], 1)),
-            ], dtype=np.float64),
+            position=position
+            if position is not None
+            else np.array(
+                [
+                    np.random.randint(0, max(self.params.grid_size[0], 1)),
+                    np.random.randint(0, max(self.params.grid_size[1], 1)),
+                    np.random.randint(0, max(self.params.grid_size[2], 1)),
+                ],
+                dtype=np.float64,
+            ),
             energy=initial_energy,
             entity_type=EntityType.AGENT,
         )
@@ -1282,8 +1297,9 @@ class SimBaby:
         """Euclidean distance to a point in world coordinates."""
         return float(np.linalg.norm(self.position - point))
 
-    def perceive(self, world: WorldGrid, babies: list[SimBaby] | None = None,
-                 nests: list[Nest] | None = None) -> Perception:
+    def perceive(
+        self, world: WorldGrid, babies: list[SimBaby] | None = None, nests: list[Nest] | None = None
+    ) -> Perception:
         """
         Read nearby cells, detect entities and structures, read own body.
         Energy cost is deducted.
@@ -1323,15 +1339,17 @@ class SimBaby:
                 if d <= self.params.see_radius:
                     dx, dy, dz = other.position - self.position
                     angle = float(np.arctan2(dz, dx))
-                    entities.append({
-                        "id": other.entity.id,
-                        "type": int(other.entity.entity_type),
-                        "energy": other.energy,
-                        "distance": d,
-                        "angle": angle,
-                        "group_id": other.group_id,
-                        "message": self._inbox.get(other.entity.id, 0.0),
-                    })
+                    entities.append(
+                        {
+                            "id": other.entity.id,
+                            "type": int(other.entity.entity_type),
+                            "energy": other.energy,
+                            "distance": d,
+                            "angle": angle,
+                            "group_id": other.group_id,
+                            "message": self._inbox.get(other.entity.id, 0.0),
+                        }
+                    )
 
         # Detect durable structures (Stage 7). Nests appear as objects keyed
         # by their stored energy, so the entity brain can learn to approach a
@@ -1342,18 +1360,23 @@ class SimBaby:
                     continue
                 d = nest.distance_to_point(self.position)
                 if d <= self.params.see_radius:
-                    entities.append({
-                        "id": nest.id,
-                        "type": int(EntityType.OBJECT),
-                        "energy": nest.stored_energy,
-                        "distance": d,
-                        "angle": float(np.arctan2(
-                            nest.position[2] - self.position[2],
-                            nest.position[0] - self.position[0])),
-                        "group_id": nest.owner_group_id,
-                        "message": 0.0,
-                        "is_nest": True,
-                    })
+                    entities.append(
+                        {
+                            "id": nest.id,
+                            "type": int(EntityType.OBJECT),
+                            "energy": nest.stored_energy,
+                            "distance": d,
+                            "angle": float(
+                                np.arctan2(
+                                    nest.position[2] - self.position[2],
+                                    nest.position[0] - self.position[0],
+                                )
+                            ),
+                            "group_id": nest.owner_group_id,
+                            "message": 0.0,
+                            "is_nest": True,
+                        }
+                    )
 
         # Simple body readout
         body = {
@@ -1400,14 +1423,21 @@ class SimBaby:
         n = int(cells.get("count", 0))
         if n == 0:
             return np.zeros(self.params.cells_input_dim, dtype=np.float32)
-        return np.clip(np.array([
-            float(np.mean(cells["material"])) / max(float(NUM_MATERIALS), 1.0),
-            float(np.mean(cells["energy"])) / max(self.params.start_energy, 1.0),
-            float(np.mean(cells["temperature"])) / 100.0,
-            min(float(n) / 16.0, 1.0),
-            min(float(np.mean(cells["signal"])), 1.0),  # broadcast strength in radius
-            min(float(np.mean(cells.get("light", [0.0]))), 1.0),  # daylight
-        ], dtype=np.float32), 0.0, 1.0)[:self.params.cells_input_dim]
+        return np.clip(
+            np.array(
+                [
+                    float(np.mean(cells["material"])) / max(float(NUM_MATERIALS), 1.0),
+                    float(np.mean(cells["energy"])) / max(self.params.start_energy, 1.0),
+                    float(np.mean(cells["temperature"])) / 100.0,
+                    min(float(n) / 16.0, 1.0),
+                    min(float(np.mean(cells["signal"])), 1.0),  # broadcast strength in radius
+                    min(float(np.mean(cells.get("light", [0.0]))), 1.0),  # daylight
+                ],
+                dtype=np.float32,
+            ),
+            0.0,
+            1.0,
+        )[: self.params.cells_input_dim]
 
     def react(self, perception: Perception, energy_delta: float) -> BabyAction:
         """
@@ -1528,7 +1558,7 @@ class SimBaby:
         """
         baseline = self.memory.mean_reward()  # 0.0 when the buffer is empty
         surprise = abs(energy_delta - baseline)
-        scale = 0.5 + min(surprise, 1.0)      # learning rate multiplier, 0.5x..1.5x
+        scale = 0.5 + min(surprise, 1.0)  # learning rate multiplier, 0.5x..1.5x
         self._last_learning = {
             "baseline": baseline,
             "surprise": surprise,
@@ -1546,11 +1576,14 @@ class SimBaby:
 
         if self.params.learning_enabled:
             # Simple body input
-            body_input = np.array([
-                self.energy / self.params.start_energy,
-                self.position[0] / self.params.grid_size[0],
-                self.position[1] / self.params.grid_size[1],
-            ], dtype=np.float32)
+            body_input = np.array(
+                [
+                    self.energy / self.params.start_energy,
+                    self.position[0] / self.params.grid_size[0],
+                    self.position[1] / self.params.grid_size[1],
+                ],
+                dtype=np.float32,
+            )
 
             self.perceptron_body.update(body_input, np.array([error, error]), lr=lr)
 
@@ -1604,8 +1637,7 @@ class SimBaby:
                 self._last_teach_out = None
 
             # Learn predation from the last hunt decision (if any)
-            if (self._last_predation_input is not None
-                    and self.perceptron_predation is not None):
+            if self._last_predation_input is not None and self.perceptron_predation is not None:
                 self.perceptron_predation.update(
                     self._last_predation_input,
                     np.array([error]),
@@ -1615,8 +1647,7 @@ class SimBaby:
                 self._last_predation_out = None
 
             # Learn territoriality from the last defense decision (if any)
-            if (self._last_defend_input is not None
-                    and self.perceptron_territory is not None):
+            if self._last_defend_input is not None and self.perceptron_territory is not None:
                 self.perceptron_territory.update(
                     self._last_defend_input,
                     np.array([error]),
@@ -1710,14 +1741,17 @@ class SimBaby:
         Returns:
             np.ndarray of shape (entity_input_dim,), values in [0, 1].
         """
-        return np.array([
-            float(entity["type"]) / max(int(EntityType.EFFECTOR) + 1, 1),
-            entity["energy"] / max(self.params.start_energy, 1.0),
-            entity["distance"] / max(self.params.see_radius, 1.0),
-            (entity["angle"] + np.pi) / (2 * np.pi),
-            1.0 if entity.get("group_id") == self.group_id else 0.0,  # kin signal
-            min(float(entity.get("message", 0.0)), 1.0),  # directed message amplitude
-        ], dtype=np.float32)[:self.params.entity_input_dim]
+        return np.array(
+            [
+                float(entity["type"]) / max(int(EntityType.EFFECTOR) + 1, 1),
+                entity["energy"] / max(self.params.start_energy, 1.0),
+                entity["distance"] / max(self.params.see_radius, 1.0),
+                (entity["angle"] + np.pi) / (2 * np.pi),
+                1.0 if entity.get("group_id") == self.group_id else 0.0,  # kin signal
+                min(float(entity.get("message", 0.0)), 1.0),  # directed message amplitude
+            ],
+            dtype=np.float32,
+        )[: self.params.entity_input_dim]
 
     def decide_message(self, other: SimBaby) -> float:
         """
@@ -1746,8 +1780,11 @@ class SimBaby:
             "type": int(other.entity.entity_type),
             "energy": other.energy,
             "distance": d,
-            "angle": float(np.arctan2(other.position[2] - self.position[2],
-                                      other.position[0] - self.position[0])),
+            "angle": float(
+                np.arctan2(
+                    other.position[2] - self.position[2], other.position[0] - self.position[0]
+                )
+            ),
             "group_id": other.group_id,
             "id": other.entity.id,
             "message": self._inbox.get(other.entity.id, 0.0),
@@ -1782,8 +1819,11 @@ class SimBaby:
         Returns:
             Lesson amplitude in [0, 1]; 0.0 means no lesson is given.
         """
-        if (self.perceptron_teach is None or not other.alive
-                or self.energy <= self.params.start_energy):
+        if (
+            self.perceptron_teach is None
+            or not other.alive
+            or self.energy <= self.params.start_energy
+        ):
             # Teaching is only worth it when the teacher has surplus energy
             # (mirrors cooperation's surplus condition) — a starving teacher
             # that spends energy on a lesson is pure waste.
@@ -1795,8 +1835,11 @@ class SimBaby:
             "type": int(other.entity.entity_type),
             "energy": other.energy,
             "distance": d,
-            "angle": float(np.arctan2(other.position[2] - self.position[2],
-                                      other.position[0] - self.position[0])),
+            "angle": float(
+                np.arctan2(
+                    other.position[2] - self.position[2], other.position[0] - self.position[0]
+                )
+            ),
             "group_id": other.group_id,
             "id": other.entity.id,
             "message": self._inbox.get(other.entity.id, 0.0),
@@ -1884,8 +1927,11 @@ class SimBaby:
             "type": int(other.entity.entity_type),
             "energy": other.energy,
             "distance": d,
-            "angle": float(np.arctan2(other.position[2] - self.position[2],
-                                      other.position[0] - self.position[0])),
+            "angle": float(
+                np.arctan2(
+                    other.position[2] - self.position[2], other.position[0] - self.position[0]
+                )
+            ),
             "group_id": other.group_id,
             "id": other.entity.id,
             "message": self._inbox.get(other.entity.id, 0.0),
@@ -1962,8 +2008,11 @@ class SimBaby:
             "type": int(other.entity.entity_type),
             "energy": other.energy,
             "distance": d,
-            "angle": float(np.arctan2(other.position[2] - self.position[2],
-                                      other.position[0] - self.position[0])),
+            "angle": float(
+                np.arctan2(
+                    other.position[2] - self.position[2], other.position[0] - self.position[0]
+                )
+            ),
             "group_id": other.group_id,
             "id": other.entity.id,
             "message": self._inbox.get(other.entity.id, 0.0),
@@ -2003,11 +2052,14 @@ class SimBaby:
             self._last_reproduce_input = None
             self._last_reproduce_out = None
             return 0.0
-        body = np.array([
-            self.energy / max(self.params.start_energy, 1.0),
-            self.position[0] / max(self.params.grid_size[0], 1.0),
-            self.position[1] / max(self.params.grid_size[1], 1.0),
-        ], dtype=np.float32)[:self.params.body_input_dim]
+        body = np.array(
+            [
+                self.energy / max(self.params.start_energy, 1.0),
+                self.position[0] / max(self.params.grid_size[0], 1.0),
+                self.position[1] / max(self.params.grid_size[1], 1.0),
+            ],
+            dtype=np.float32,
+        )[: self.params.body_input_dim]
         out = self.perceptron_reproduce.forward(body)
         gate = float(out[0])
         self._last_reproduce_input = body
@@ -2046,18 +2098,21 @@ class SimBaby:
             self._last_role_input = None
             self._last_role_out = None
             return 0.0
-        body = np.array([
-            self.energy / max(self.params.start_energy, 1.0),
-            self.position[0] / max(self.params.grid_size[0], 1.0),
-            self.position[1] / max(self.params.grid_size[1], 1.0),
-        ], dtype=np.float32)[:self.params.body_input_dim]
+        body = np.array(
+            [
+                self.energy / max(self.params.start_energy, 1.0),
+                self.position[0] / max(self.params.grid_size[0], 1.0),
+                self.position[1] / max(self.params.grid_size[1], 1.0),
+            ],
+            dtype=np.float32,
+        )[: self.params.body_input_dim]
         out = self.perceptron_role.forward(body)
         gate = float(out[0])
         self._last_role_input = body
         self._last_role_out = gate
         return gate
 
-    def spawn_child(self, position: np.ndarray) -> "SimBaby":
+    def spawn_child(self, position: np.ndarray) -> SimBaby:
         """
         Create an asexual offspring of this living lineage.
 
@@ -2082,8 +2137,18 @@ class SimBaby:
             params=self.params,
             group_id=self.group_id,
         )
-        names = ("cells", "body", "entity", "move", "message", "teach",
-                 "predation", "territory", "reproduce", "role")
+        names = (
+            "cells",
+            "body",
+            "entity",
+            "move",
+            "message",
+            "teach",
+            "predation",
+            "territory",
+            "reproduce",
+            "role",
+        )
         for name in names:
             src = getattr(self, f"perceptron_{name}", None)
             dst = getattr(child, f"perceptron_{name}", None)
@@ -2127,9 +2192,10 @@ class SimBaby:
         """
         if not other.alive or self.perceptron_territory is None:
             return 0.0
-        take = min(self.params.defend_take_fraction
-                   * float(other.entity.energy),
-                   max(float(other.entity.energy) - 1e-6, 0.0))
+        take = min(
+            self.params.defend_take_fraction * float(other.entity.energy),
+            max(float(other.entity.energy) - 1e-6, 0.0),
+        )
         if take > 0.0:
             other.entity.energy -= take
             self.entity.energy += take
@@ -2185,8 +2251,11 @@ class SimBaby:
             "type": int(other.entity.entity_type),
             "energy": other.energy,
             "distance": d,
-            "angle": float(np.arctan2(other.position[2] - self.position[2],
-                                      other.position[0] - self.position[0])),
+            "angle": float(
+                np.arctan2(
+                    other.position[2] - self.position[2], other.position[0] - self.position[0]
+                )
+            ),
             "group_id": other.group_id,
             "id": other.entity.id,
             "message": self._inbox.get(other.entity.id, 0.0),
@@ -2243,29 +2312,33 @@ class SimBaby:
             "perceptron_entity": self.perceptron_entity.to_dict(),
             "perceptron_move": self.perceptron_move.to_dict(),
             "perceptron_message": self.perceptron_message.to_dict()
-            if self.perceptron_message is not None else None,
+            if self.perceptron_message is not None
+            else None,
             "perceptron_teach": self.perceptron_teach.to_dict()
-            if self.perceptron_teach is not None else None,
+            if self.perceptron_teach is not None
+            else None,
             "perceptron_predation": self.perceptron_predation.to_dict()
-            if self.perceptron_predation is not None else None,
+            if self.perceptron_predation is not None
+            else None,
             "perceptron_territory": self.perceptron_territory.to_dict()
-            if self.perceptron_territory is not None else None,
+            if self.perceptron_territory is not None
+            else None,
             "perceptron_reproduce": self.perceptron_reproduce.to_dict()
-            if self.perceptron_reproduce is not None else None,
+            if self.perceptron_reproduce is not None
+            else None,
             "perceptron_role": self.perceptron_role.to_dict()
-            if self.perceptron_role is not None else None,
+            if self.perceptron_role is not None
+            else None,
             "memory": self.memory.to_dict(),
             "total_ticks": int(self._total_ticks),
             "group_id": int(self.group_id),
-            "learning": {
-                k: float(v) for k, v in (self._last_learning or {}).items()
-            } or None,
+            "learning": {k: float(v) for k, v in (self._last_learning or {}).items()} or None,
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any],
-                  params: WorldParams | None = None,
-                  entity: Entity | None = None) -> "SimBaby":
+    def from_dict(
+        cls, data: dict[str, Any], params: WorldParams | None = None, entity: Entity | None = None
+    ) -> SimBaby:
         """
         Rebuild a baby from :meth:`to_dict` output without touching RNG.
 
@@ -2292,7 +2365,8 @@ class SimBaby:
             # Legacy payloads predate movement — mint a fresh move brain
             # (touches RNG only on the legacy path).
             baby.perceptron_move = Perceptron(
-                baby.params.cells_input_dim, 3,
+                baby.params.cells_input_dim,
+                3,
                 hidden_units=baby.params.brain_hidden_units,
             )
         baby.memory = EpisodicMemory.from_dict(data["memory"])
@@ -2353,11 +2427,11 @@ class SimBaby:
 
 # ── SimScene ─────────────────────────────────────────────────────────────────
 
+
 class SimScene:
     """The virtual world — grid, entities, babies."""
 
-    def __init__(self, params: WorldParams | None = None,
-                 world_memory: WorldMemory | None = None):
+    def __init__(self, params: WorldParams | None = None, world_memory: WorldMemory | None = None):
         self.params = params or WorldParams()
         self.world = WorldGrid(self.params.grid_size)
         if self.params.generate_world:
@@ -2378,7 +2452,8 @@ class SimScene:
         # When the channel is off the scene simply carries no reservoir; an
         # injected one (from the evolution engine) persists across generations.
         self.world_memory: WorldMemory | None = (
-            world_memory if world_memory is not None
+            world_memory
+            if world_memory is not None
             else (WorldMemory() if self.params.memory_enabled else None)
         )
         self.memory_seeds_given = 0
@@ -2391,9 +2466,9 @@ class SimScene:
         self.solar_energy_deposited = 0.0
         self.solar_lit_ticks = 0
         # Stage 14: the current year-envelope state (pure function of tick).
-        self.solar_season_index = 0   # which quadrant of the year this tick is in
+        self.solar_season_index = 0  # which quadrant of the year this tick is in
         self.solar_season_factor = 1.0  # multiplicative daylight envelope (0..1)
-        self.solar_year = 0           # how many full years have elapsed
+        self.solar_year = 0  # how many full years have elapsed
 
     def add_baby(self, baby: SimBaby):
         """
@@ -2410,8 +2485,7 @@ class SimScene:
             - raises ``memory_seeds_given`` by the number of episodes seeded
         """
         if self.world_memory is not None and self.params.memory_seed > 0:
-            for e in self.world_memory.recall(self.params.memory_seed,
-                                              by_reward=True):
+            for e in self.world_memory.recall(self.params.memory_seed, by_reward=True):
                 baby.memory.record(e.features, e.action, e.reward, e.tick)
                 self.memory_seeds_given += 1
         self._devices.append(baby)
@@ -2438,8 +2512,10 @@ class SimScene:
         if self.world_memory is None:
             return 0
         return self.world_memory.consolidate(
-            baby.memory, self.params.memory_deposit,
-            group_id=baby.group_id, donor_id=baby.entity.id,
+            baby.memory,
+            self.params.memory_deposit,
+            group_id=baby.group_id,
+            donor_id=baby.entity.id,
         )
 
     def _surface_y(self, x: int, z: int) -> int:
@@ -2465,11 +2541,14 @@ class SimScene:
                 y = self._surface_y(x, z)
                 position = np.array([x + 0.5, y, z + 0.5], dtype=np.float64)
             else:
-                position = np.array([
-                    int(np.random.randint(0, max(nx, 1))),
-                    int(np.random.randint(0, max(ny, 1))),
-                    int(np.random.randint(0, max(nz, 1))),
-                ], dtype=np.float64)
+                position = np.array(
+                    [
+                        int(np.random.randint(0, max(nx, 1))),
+                        int(np.random.randint(0, max(ny, 1))),
+                        int(np.random.randint(0, max(nz, 1))),
+                    ],
+                    dtype=np.float64,
+                )
             baby = SimBaby(
                 position=position,
                 initial_energy=self.params.start_energy,
@@ -2477,8 +2556,9 @@ class SimScene:
             )
             self.add_baby(baby)
 
-    def place_material(self, x: int, y: int, z: int, material: int,
-                       energy: float = 0.0, temperature: float = 20.0):
+    def place_material(
+        self, x: int, y: int, z: int, material: int, energy: float = 0.0, temperature: float = 20.0
+    ):
         """Place material in the world grid."""
         self.world.place_material(x, y, z, material, energy, temperature)
 
@@ -2521,9 +2601,9 @@ class SimScene:
         day = max(int(p.solar_day_ticks), 1)
         phase = (self._tick + int(p.solar_phase)) % day
         angle = 2.0 * np.pi * phase / day
-        intensity = (p.solar_min_intensity
-                     + (p.solar_max_intensity - p.solar_min_intensity)
-                     * max(0.0, float(np.sin(angle))))
+        intensity = p.solar_min_intensity + (p.solar_max_intensity - p.solar_min_intensity) * max(
+            0.0, float(np.sin(angle))
+        )
 
         season_ticks = int(p.solar_season_ticks)
         if season_ticks <= 0:
@@ -2533,10 +2613,8 @@ class SimScene:
         else:
             season_ticks = max(season_ticks, 1)
             season_index = (self._tick % season_ticks) // max(day, 1)
-            season_factor = (
-                (1.0 - float(p.solar_seasonality))
-                + float(p.solar_seasonality)
-                * (0.5 + 0.5 * np.cos(2.0 * np.pi * self._tick / season_ticks))
+            season_factor = (1.0 - float(p.solar_seasonality)) + float(p.solar_seasonality) * (
+                0.5 + 0.5 * np.cos(2.0 * np.pi * self._tick / season_ticks)
             )
             year = self._tick // season_ticks
         self.solar_season_index = season_index
@@ -2580,8 +2658,9 @@ class SimScene:
     def alive_babies(self) -> list[SimBaby]:
         return [d for d in self._devices if d.alive]
 
-    def nearby_babies(self, position: np.ndarray, radius: float,
-                      exclude_id: int | None = None) -> list[SimBaby]:
+    def nearby_babies(
+        self, position: np.ndarray, radius: float, exclude_id: int | None = None
+    ) -> list[SimBaby]:
         """
         Find alive babies within radius of a point.
 
@@ -2629,8 +2708,9 @@ class SimScene:
                 continue
             tgt._inbox[sender_id] = max(tgt._inbox.get(sender_id, 0.0), amplitude)
 
-    def nearest_nest(self, point: np.ndarray, radius: float,
-                     group_id: int | None = None) -> Nest | None:
+    def nearest_nest(
+        self, point: np.ndarray, radius: float, group_id: int | None = None
+    ) -> Nest | None:
         """
         Find the closest alive nest within radius of a point.
 
@@ -2684,9 +2764,9 @@ class SimScene:
         for w in action.writes:
             if w.energy <= 0:
                 continue
-            if not (0 <= w.x < self.world.nx
-                    and 0 <= w.y < self.world.ny
-                    and 0 <= w.z < self.world.nz):
+            if not (
+                0 <= w.x < self.world.nx and 0 <= w.y < self.world.ny and 0 <= w.z < self.world.nz
+            ):
                 continue
             anchor = np.array([w.x + 0.5, w.y, w.z + 0.5], dtype=np.float64)
             nest = self.nearest_nest(anchor, self.params.nest_radius)
@@ -2694,14 +2774,17 @@ class SimScene:
                 nest.stored_energy += w.energy
                 nested += w.energy
                 self.world.energy[self.world.idx(w.x, w.y, w.z)] = 0.0
-            elif (len(self.nests) < self.params.max_nests
-                    and w.energy >= self.params.nest_seed_energy):
-                self.nests.append(Nest(
-                    id=self._next_nest_id,
-                    position=anchor,
-                    stored_energy=w.energy,
-                    owner_group_id=baby.group_id,
-                ))
+            elif (
+                len(self.nests) < self.params.max_nests and w.energy >= self.params.nest_seed_energy
+            ):
+                self.nests.append(
+                    Nest(
+                        id=self._next_nest_id,
+                        position=anchor,
+                        stored_energy=w.energy,
+                        owner_group_id=baby.group_id,
+                    )
+                )
                 self._next_nest_id += 1
                 seeded += 1
                 self.world.energy[self.world.idx(w.x, w.y, w.z)] = 0.0
@@ -2752,8 +2835,7 @@ class SimScene:
             return 0.0
         if baby.energy >= self.params.start_energy:
             return 0.0
-        nest = self.nearest_nest(baby.position, self.params.nest_use_radius,
-                                 group_id=baby.group_id)
+        nest = self.nearest_nest(baby.position, self.params.nest_use_radius, group_id=baby.group_id)
         if nest is None:
             return 0.0
         gap = self.params.start_energy - baby.energy
@@ -2840,8 +2922,7 @@ class SimScene:
         surplus = baby.energy - self.params.start_energy
         if surplus <= 0.0:
             return 0.0
-        nest = self.nearest_nest(baby.position, self.params.nest_use_radius,
-                                 group_id=baby.group_id)
+        nest = self.nearest_nest(baby.position, self.params.nest_use_radius, group_id=baby.group_id)
         if nest is None:
             return 0.0
         amount = min(surplus, surplus * self.params.role_deposit_fraction)
@@ -2930,9 +3011,9 @@ class SimScene:
         nest_share = 0.0
         nest = None
         if self.params.structure_enabled:
-            nest = self.nearest_nest(parent.position,
-                                     self.params.nest_use_radius,
-                                     group_id=parent.group_id)
+            nest = self.nearest_nest(
+                parent.position, self.params.nest_use_radius, group_id=parent.group_id
+            )
             if nest is not None:
                 nest_share = min(
                     self.params.birth_cost * self.params.birth_nest_fraction,
@@ -2946,15 +3027,16 @@ class SimScene:
             return None, 0.0
         parent.entity.energy -= parent_share
         gx, gy, gz = self.params.grid_size
-        dx = float(np.random.uniform(-self.params.birth_range,
-                                     self.params.birth_range))
-        dz = float(np.random.uniform(-self.params.birth_range,
-                                     self.params.birth_range))
-        child_pos = np.array([
-            (parent.position[0] + dx) % gx,
-            float(parent.position[1]),
-            (parent.position[2] + dz) % gz,
-        ], dtype=np.float64)
+        dx = float(np.random.uniform(-self.params.birth_range, self.params.birth_range))
+        dz = float(np.random.uniform(-self.params.birth_range, self.params.birth_range))
+        child_pos = np.array(
+            [
+                (parent.position[0] + dx) % gx,
+                float(parent.position[1]),
+                (parent.position[2] + dz) % gz,
+            ],
+            dtype=np.float64,
+        )
         child = parent.spawn_child(child_pos)
         self.add_baby(child)
         self.births += 1
@@ -2996,12 +3078,11 @@ class SimScene:
             "pending_messages": [list(m) for m in self._pending_messages],
             "nests": [n.to_dict() for n in self.nests],
             "next_nest_id": self._next_nest_id,
-            "world_memory": self.world_memory.to_dict()
-            if self.world_memory is not None else None,
+            "world_memory": self.world_memory.to_dict() if self.world_memory is not None else None,
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SimScene":
+    def from_dict(cls, data: dict[str, Any]) -> SimScene:
         """
         Rebuild a scene from :meth:`to_dict` output.
 
@@ -3030,9 +3111,7 @@ class SimScene:
         scene._devices = babies
         scene._tick = int(data["tick"])
         scene._next_entity_id = int(data["next_entity_id"])
-        scene._pending_messages = [
-            tuple(m) for m in data.get("pending_messages", [])
-        ]
+        scene._pending_messages = [tuple(m) for m in data.get("pending_messages", [])]
         scene.nests = [Nest.from_dict(n) for n in data.get("nests", [])]
         scene._next_nest_id = int(data.get("next_nest_id", 1))
         wm = data.get("world_memory")
@@ -3047,6 +3126,7 @@ class SimScene:
 
 
 # ── Simulation ───────────────────────────────────────────────────────────────
+
 
 class Simulation:
     """
@@ -3075,8 +3155,9 @@ class Simulation:
            world memory reservoir first, when the channel is on)
     """
 
-    def __init__(self, scene: SimScene, max_ticks: int = 100,
-                 verbose: bool = False, render_bridge=None):
+    def __init__(
+        self, scene: SimScene, max_ticks: int = 100, verbose: bool = False, render_bridge=None
+    ):
         self.scene = scene
         self.max_ticks = max_ticks
         self.verbose = verbose
@@ -3126,8 +3207,7 @@ class Simulation:
             prev_energy = baby.energy
 
             # 1. Perceive (cells + nearby agents + structures)
-            perception = baby.perceive(self.scene.world, babies=alive,
-                                       nests=self.scene.nests)
+            perception = baby.perceive(self.scene.world, babies=alive, nests=self.scene.nests)
             baby.entity.energy -= self.scene.params.see_cost
 
             # 2. Feel — the immediate sensation (only see_cost has been paid
@@ -3153,9 +3233,7 @@ class Simulation:
                 nested, seeded = self.scene.route_build(action, baby)
 
             deposited = float(sum(w.energy for w in action.writes))
-            baby.entity.energy -= (
-                self.scene.params.write_cost * cells_written + deposited
-            )
+            baby.entity.energy -= self.scene.params.write_cost * cells_written + deposited
 
             # 4b. Move — a born ability to relocate one grid step per tick.
             #     Charged move_cost; the cost lands in the same tick's net
@@ -3183,7 +3261,8 @@ class Simulation:
             message_amplitude = 0.0
             if self.scene.params.message_enabled:
                 msg_neighbors = self.scene.nearby_babies(
-                    baby.position, self.scene.params.message_range,
+                    baby.position,
+                    self.scene.params.message_range,
                     exclude_id=baby.entity.id,
                 )
                 baby._last_message_input = None
@@ -3195,9 +3274,7 @@ class Simulation:
                         self.scene._pending_messages.append(
                             (baby.entity.id, msg_target.entity.id, float(message_amplitude))
                         )
-                        message_energy = (
-                            self.scene.params.message_cost * message_amplitude
-                        )
+                        message_energy = self.scene.params.message_cost * message_amplitude
                         baby.entity.energy -= message_energy
 
             # 4d. Cultural act — teach the neediest nearby baby. The teach
@@ -3213,7 +3290,8 @@ class Simulation:
             taught_episodes = 0
             if self.scene.params.teaching_enabled:
                 teach_neighbors = self.scene.nearby_babies(
-                    baby.position, self.scene.params.teach_range,
+                    baby.position,
+                    self.scene.params.teach_range,
                     exclude_id=baby.entity.id,
                 )
                 # Cultural transmission is IN-GROUP (mirrors the tribe-scoped
@@ -3222,8 +3300,7 @@ class Simulation:
                 # teaching before it can ever be selected for. The teach
                 # perceptron still decides whether and how loud to teach a
                 # tribe-mate, and pays the cost.
-                teach_neighbors = [n for n in teach_neighbors
-                                   if n.group_id == baby.group_id]
+                teach_neighbors = [n for n in teach_neighbors if n.group_id == baby.group_id]
                 baby._last_teach_input = None
                 baby._last_teach_out = None
                 if teach_neighbors:
@@ -3231,9 +3308,7 @@ class Simulation:
                     teaching_amplitude = baby.decide_teach(teach_target)
                     if teaching_amplitude > 0.0:
                         taught_episodes = baby.teach(teach_target, teaching_amplitude)
-                        teaching_energy = (
-                            self.scene.params.teach_cost * teaching_amplitude
-                        )
+                        teaching_energy = self.scene.params.teach_cost * teaching_amplitude
                         baby.entity.energy -= teaching_energy
 
             # 5. Social step — cooperate or contest the neediest nearby baby.
@@ -3250,7 +3325,8 @@ class Simulation:
             social_energy = 0.0
             if self.scene.params.social_enabled:
                 neighbors = self.scene.nearby_babies(
-                    baby.position, self.scene.params.social_radius,
+                    baby.position,
+                    self.scene.params.social_radius,
                     exclude_id=baby.entity.id,
                 )
                 if neighbors:
@@ -3275,7 +3351,8 @@ class Simulation:
             prey_id = None
             if self.scene.params.predation_enabled:
                 prey_neighbors = self.scene.nearby_babies(
-                    baby.position, self.scene.params.predation_range,
+                    baby.position,
+                    self.scene.params.predation_range,
                     exclude_id=baby.entity.id,
                 )
                 baby._last_predation_input = None
@@ -3315,26 +3392,27 @@ class Simulation:
             defended_id = None
             if self.scene.params.territoriality_enabled:
                 home_nest = self.scene.nearest_nest(
-                    baby.position, self.scene.params.territory_radius,
+                    baby.position,
+                    self.scene.params.territory_radius,
                     group_id=baby.group_id,
                 )
                 baby._last_defend_input = None
                 baby._last_defend_out = None
                 if home_nest is not None:
                     strangers = [
-                        n for n in self.scene.nearby_babies(
-                            baby.position, self.scene.params.defend_range,
+                        n
+                        for n in self.scene.nearby_babies(
+                            baby.position,
+                            self.scene.params.defend_range,
                             exclude_id=baby.entity.id,
-                        ) if n.group_id != baby.group_id
+                        )
+                        if n.group_id != baby.group_id
                     ]
                     if strangers:
-                        target = min(strangers,
-                                     key=lambda n: n.distance_to_point(
-                                         baby.position))
+                        target = min(strangers, key=lambda n: n.distance_to_point(baby.position))
                         defend_amplitude = baby.decide_defend(target)
                         if defend_amplitude > 0.0:
-                            defend_energy = baby.defend(
-                                target, home_nest.position)
+                            defend_energy = baby.defend(target, home_nest.position)
                             defended_id = target.entity.id
                             defended = True
                             baby.entity.energy -= self.scene.params.defend_cost
@@ -3360,9 +3438,10 @@ class Simulation:
             if self.scene.params.lifecycle_enabled:
                 baby._last_reproduce_input = None
                 baby._last_reproduce_out = None
-                if (baby.energy > self.scene.params.reproduce_energy_threshold
-                        and len(self.scene.alive_babies)
-                        < self.scene.params.max_entities):
+                if (
+                    baby.energy > self.scene.params.reproduce_energy_threshold
+                    and len(self.scene.alive_babies) < self.scene.params.max_entities
+                ):
                     if baby.decide_reproduce() > 0.0:
                         child_id, birth_energy = self.scene.birth(baby)
                         reproduced = child_id is not None
@@ -3492,7 +3571,7 @@ class Simulation:
         """Run the full simulation loop."""
         self._running = True
         all_results = []
-        for i in range(self.max_ticks):
+        for _i in range(self.max_ticks):
             if not self._running:
                 break
             results = self.step()
@@ -3518,7 +3597,9 @@ class Simulation:
             "total_ticks": self.scene.tick,
             "total_baby_ticks": len(self._tick_log),
             "alive_at_end": len(alive) > 0,
-            "avg_energy": float(np.mean([r["energy"] for r in self._tick_log])) if self._tick_log else 0,
+            "avg_energy": float(np.mean([r["energy"] for r in self._tick_log]))
+            if self._tick_log
+            else 0,
             "total_cells_written": sum(r["cells_written"] for r in self._tick_log),
             "total_energy_absorbed": sum(r["absorbed"] for r in self._tick_log),
             "cooperations": sum(1 for r in self._tick_log if r["social_act"] == "cooperate"),
@@ -3529,31 +3610,21 @@ class Simulation:
             "nests_built": sum(r.get("seeded", 0) for r in self._tick_log),
             "lessons": sum(1 for r in self._tick_log if r.get("taught_episodes", 0) > 0),
             "episodes_taught": sum(r.get("taught_episodes", 0) for r in self._tick_log),
-            "predations": sum(1 for r in self._tick_log
-                              if r.get("predation_energy", 0.0) > 0.0),
-            "predation_energy_moved": sum(r.get("predation_energy", 0.0)
-                                          for r in self._tick_log),
+            "predations": sum(1 for r in self._tick_log if r.get("predation_energy", 0.0) > 0.0),
+            "predation_energy_moved": sum(r.get("predation_energy", 0.0) for r in self._tick_log),
             "defenses": sum(1 for r in self._tick_log if r.get("defended", False)),
-            "defend_energy_moved": sum(r.get("defend_energy", 0.0)
-                                       for r in self._tick_log),
+            "defend_energy_moved": sum(r.get("defend_energy", 0.0) for r in self._tick_log),
             "raids": sum(1 for r in self._tick_log if r.get("raided", 0.0) > 0.0),
-            "raid_energy_moved": sum(r.get("raided", 0.0)
-                                     for r in self._tick_log),
+            "raid_energy_moved": sum(r.get("raided", 0.0) for r in self._tick_log),
             "births": sum(1 for r in self._tick_log if r.get("reproduced", False)),
-            "birth_energy_moved": sum(r.get("birth_energy", 0.0)
-                                      for r in self._tick_log),
-            "role_deposits": sum(1 for r in self._tick_log
-                                 if r.get("role_deposited", 0.0) > 0.0),
-            "role_deposit_energy": sum(r.get("role_deposited", 0.0)
-                                       for r in self._tick_log),
-            "role_raids": sum(1 for r in self._tick_log
-                              if r.get("role_raided", 0.0) > 0.0),
-            "role_raid_energy": sum(r.get("role_raided", 0.0)
-                                    for r in self._tick_log),
+            "birth_energy_moved": sum(r.get("birth_energy", 0.0) for r in self._tick_log),
+            "role_deposits": sum(1 for r in self._tick_log if r.get("role_deposited", 0.0) > 0.0),
+            "role_deposit_energy": sum(r.get("role_deposited", 0.0) for r in self._tick_log),
+            "role_raids": sum(1 for r in self._tick_log if r.get("role_raided", 0.0) > 0.0),
+            "role_raid_energy": sum(r.get("role_raided", 0.0) for r in self._tick_log),
             "deaths": len(dead),
             "alive_count": len([b for b in self.scene.babies if b.alive]),
             "solar_energy_deposited": float(self.scene.solar_energy_deposited),
-            "sunshine": float(self.scene.solar_lit_ticks)
-            / max(float(self.scene.tick), 1.0),
+            "sunshine": float(self.scene.solar_lit_ticks) / max(float(self.scene.tick), 1.0),
             "light_final": float(self.scene.world.light),
         }

@@ -9,6 +9,7 @@ Provides:
   - Event callbacks
   - Worker pool via ProducerConsumerQueue (optional threaded execution)
 """
+
 from __future__ import annotations
 
 import json
@@ -16,16 +17,18 @@ import logging
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("slo.pugqeep")
 
 
 class TaskStatus(Enum):
     """Task lifecycle states."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -35,6 +38,7 @@ class TaskStatus(Enum):
 
 class TaskPriority(Enum):
     """Task priority levels."""
+
     LOW = 0
     NORMAL = 1
     HIGH = 2
@@ -44,20 +48,21 @@ class TaskPriority(Enum):
 @dataclass
 class Task:
     """A unit of work in the queue."""
+
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     name: str = ""
     data: Any = None
     status: TaskStatus = TaskStatus.PENDING
     priority: TaskPriority = TaskPriority.NORMAL
-    tree_id: Optional[str] = None  # assigned tree/instance
+    tree_id: str | None = None  # assigned tree/instance
     result: Any = None
-    error: Optional[str] = None
+    error: str | None = None
     created_at: float = field(default_factory=time.time)
-    started_at: Optional[float] = None
-    completed_at: Optional[float] = None
+    started_at: float | None = None
+    completed_at: float | None = None
     retries: int = 0
     max_retries: int = 3
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     _done_event: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def to_dict(self) -> dict:
@@ -79,7 +84,7 @@ class Task:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Task":
+    def from_dict(cls, d: dict) -> Task:
         return cls(
             id=d["id"],
             name=d.get("name", ""),
@@ -101,10 +106,9 @@ class Task:
 class TaskQueue:
     """Priority task queue with persistence, routing, and optional worker pool."""
 
-    def __init__(self,
-                 name: str = "default",
-                 storage_dir: Optional[Path] = None,
-                 max_size: int = 10000):
+    def __init__(
+        self, name: str = "default", storage_dir: Path | None = None, max_size: int = 10000
+    ):
         """Initialize task queue.
 
         Args:
@@ -115,16 +119,16 @@ class TaskQueue:
         self.name = name
         self._storage_dir = storage_dir
         self._max_size = max_size
-        self._tasks: Dict[str, Task] = {}
-        self._pending: List[str] = []  # task ids, sorted by priority
-        self._running: Dict[str, Task] = {}
-        self._completed: List[str] = []
-        self._handlers: Dict[str, Callable] = {}
+        self._tasks: dict[str, Task] = {}
+        self._pending: list[str] = []  # task ids, sorted by priority
+        self._running: dict[str, Task] = {}
+        self._completed: list[str] = []
+        self._handlers: dict[str, Callable] = {}
         self._paused = False
-        self._callbacks: List[Callable] = []
+        self._callbacks: list[Callable] = []
 
         # Worker pool (optional — via ProducerConsumerQueue)
-        self._worker_queue: Optional[Any] = None  # ProducerConsumerQueue[Task]
+        self._worker_queue: Any | None = None  # ProducerConsumerQueue[Task]
         self._num_workers: int = 0
 
     def submit(self, task: Task) -> Task:
@@ -143,8 +147,9 @@ class TaskQueue:
             priority = self._task_priority_to_int(task.priority)
             dispatched = self._worker_queue.put(task, priority=priority)
             if not dispatched:
-                logger.warning("TaskQueue[%s]: worker queue full, task %s queued locally",
-                               self.name, task.id)
+                logger.warning(
+                    "TaskQueue[%s]: worker queue full, task %s queued locally", self.name, task.id
+                )
                 self._pending.append(task.id)
             else:
                 self._pending.append(task.id)
@@ -168,13 +173,13 @@ class TaskQueue:
             TaskPriority.LOW: 3,
         }.get(p, 2)
 
-    def submit_many(self, tasks: List[Task]) -> List[Task]:
+    def submit_many(self, tasks: list[Task]) -> list[Task]:
         """Submit multiple tasks."""
         for task in tasks:
             self.submit(task)
         return tasks
 
-    def next(self) -> Optional[Task]:
+    def next(self) -> Task | None:
         """Get the next task to process (highest priority, oldest first)."""
         if self._paused:
             return None
@@ -190,7 +195,7 @@ class TaskQueue:
 
         return None
 
-    def complete(self, task_id: str, result: Any = None) -> Optional[Task]:
+    def complete(self, task_id: str, result: Any = None) -> Task | None:
         """Mark a task as completed."""
         task = self._running.pop(task_id, None)
         if task is None:
@@ -208,7 +213,7 @@ class TaskQueue:
         self._notify_callbacks(task)
         return task
 
-    def fail(self, task_id: str, error: str) -> Optional[Task]:
+    def fail(self, task_id: str, error: str) -> Task | None:
         """Mark a task as failed."""
         task = self._running.pop(task_id, None)
         if task is None:
@@ -226,9 +231,13 @@ class TaskQueue:
             task.completed_at = None
             self._pending.append(task.id)
             self._sort_pending()
-            logger.info("TaskQueue[%s]: retrying %s (attempt %d)",
-                       self.name, task_id, task.retries,
-                       extra={"tag": "INFRA"})
+            logger.info(
+                "TaskQueue[%s]: retrying %s (attempt %d)",
+                self.name,
+                task_id,
+                task.retries,
+                extra={"tag": "INFRA"},
+            )
         else:
             task._done_event.set()
             self._completed.append(task_id)
@@ -239,7 +248,7 @@ class TaskQueue:
         self._notify_callbacks(task)
         return task
 
-    def cancel(self, task_id: str) -> Optional[Task]:
+    def cancel(self, task_id: str) -> Task | None:
         """Cancel a task."""
         # Remove from pending
         if task_id in self._pending:
@@ -259,7 +268,7 @@ class TaskQueue:
 
         return task
 
-    def cancel_many(self, task_ids: List[str]) -> List[Optional[Task]]:
+    def cancel_many(self, task_ids: list[str]) -> list[Task | None]:
         """Cancel multiple tasks by ID."""
         return [self.cancel(tid) for tid in task_ids]
 
@@ -271,7 +280,7 @@ class TaskQueue:
             cancelled += 1
         return cancelled
 
-    def retry(self, task_id: str, reset_retries: bool = False) -> Optional[Task]:
+    def retry(self, task_id: str, reset_retries: bool = False) -> Task | None:
         """Retry a failed or completed task.
 
         Moves the task back to PENDING status and re-queues it.
@@ -319,8 +328,9 @@ class TaskQueue:
                 retried += 1
         return retried
 
-    def submit_batch(self, items: List[Dict[str, Any]],
-                     priority: TaskPriority = TaskPriority.NORMAL) -> List[Task]:
+    def submit_batch(
+        self, items: list[dict[str, Any]], priority: TaskPriority = TaskPriority.NORMAL
+    ) -> list[Task]:
         """Create and submit multiple tasks from dicts.
 
         Each dict must have at least a "name" key. Optional: "data", "tree_id", "metadata".
@@ -361,16 +371,16 @@ class TaskQueue:
         """Register a completion callback."""
         self._callbacks.append(callback)
 
-    def get_task(self, task_id: str) -> Optional[Task]:
+    def get_task(self, task_id: str) -> Task | None:
         return self._tasks.get(task_id)
 
-    def list_tasks(self, status: Optional[TaskStatus] = None) -> List[Task]:
+    def list_tasks(self, status: TaskStatus | None = None) -> list[Task]:
         """List tasks, optionally filtered by status."""
         if status is None:
             return list(self._tasks.values())
         return [t for t in self._tasks.values() if t.status == status]
 
-    def wait_for(self, task_id: str, timeout: Optional[float] = None) -> Optional[Task]:
+    def wait_for(self, task_id: str, timeout: float | None = None) -> Task | None:
         """Wait for a specific task to complete.
 
         Args:
@@ -388,7 +398,7 @@ class TaskQueue:
         task._done_event.wait(timeout=timeout)
         return self._tasks.get(task_id)
 
-    def wait_all(self, timeout: Optional[float] = None) -> List[Task]:
+    def wait_all(self, timeout: float | None = None) -> list[Task]:
         """Wait for all running/pending tasks to complete.
 
         Args:
@@ -398,10 +408,14 @@ class TaskQueue:
             List of completed/failed/cancelled Tasks.
         """
         if not self._pending and not self._running:
-            return [t for t in self._tasks.values()
-                    if t.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED)]
+            return [
+                t
+                for t in self._tasks.values()
+                if t.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED)
+            ]
 
         import threading as _threading
+
         deadline = time.time() + timeout if timeout else None
         while True:
             has_pending = len(self._pending) > 0
@@ -412,8 +426,11 @@ class TaskQueue:
                 break
             _threading.Event().wait(0.05)
 
-        return [t for t in self._tasks.values()
-                if t.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED)]
+        return [
+            t
+            for t in self._tasks.values()
+            if t.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED)
+        ]
 
     def stats(self) -> dict:
         """Queue statistics."""
@@ -422,12 +439,9 @@ class TaskQueue:
             "total": len(self._tasks),
             "pending": len(self._pending),
             "running": len(self._running),
-            "completed": sum(1 for t in self._tasks.values()
-                           if t.status == TaskStatus.COMPLETED),
-            "failed": sum(1 for t in self._tasks.values()
-                         if t.status == TaskStatus.FAILED),
-            "cancelled": sum(1 for t in self._tasks.values()
-                           if t.status == TaskStatus.CANCELLED),
+            "completed": sum(1 for t in self._tasks.values() if t.status == TaskStatus.COMPLETED),
+            "failed": sum(1 for t in self._tasks.values() if t.status == TaskStatus.FAILED),
+            "cancelled": sum(1 for t in self._tasks.values() if t.status == TaskStatus.CANCELLED),
             "paused": self._paused,
             "handlers": list(self._handlers.keys()),
         }
@@ -454,7 +468,7 @@ class TaskQueue:
 
         return count
 
-    def save(self, path: Optional[Path] = None) -> Path:
+    def save(self, path: Path | None = None) -> Path:
         """Save queue to disk."""
         if path is None:
             if self._storage_dir is None:
@@ -471,7 +485,7 @@ class TaskQueue:
         return path
 
     @classmethod
-    def load(cls, path: Path) -> "TaskQueue":
+    def load(cls, path: Path) -> TaskQueue:
         """Load queue from disk."""
         data = json.loads(path.read_text())
         q = cls(name=data["name"])
@@ -496,8 +510,9 @@ class TaskQueue:
         try:
             self.save()
         except Exception as e:
-            logger.warning("TaskQueue[%s]: persist failed: %s", self.name, e,
-                extra={"tag": "INFRA"})
+            logger.warning(
+                "TaskQueue[%s]: persist failed: %s", self.name, e, extra={"tag": "INFRA"}
+            )
 
     def _notify_callbacks(self, task: Task) -> None:
         """Notify completion callbacks."""
@@ -505,8 +520,9 @@ class TaskQueue:
             try:
                 cb(task)
             except Exception as e:
-                logger.warning("TaskQueue[%s]: callback error: %s", self.name, e,
-                    extra={"tag": "INFRA"})
+                logger.warning(
+                    "TaskQueue[%s]: callback error: %s", self.name, e, extra={"tag": "INFRA"}
+                )
 
     # ── Worker pool (ProducerConsumerQueue-backed) ────────────────────
 
@@ -534,9 +550,13 @@ class TaskQueue:
             name=f"pgq-task-{self.name}",
         )
         self._worker_queue.start()
-        logger.info("TaskQueue[%s]: started %d workers (max_queue=%d)",
-                     self.name, num_workers, max_queue,
-                     extra={"tag": "INFRA"})
+        logger.info(
+            "TaskQueue[%s]: started %d workers (max_queue=%d)",
+            self.name,
+            num_workers,
+            max_queue,
+            extra={"tag": "INFRA"},
+        )
 
     def stop_workers(self, timeout: float = 5.0) -> None:
         """Stop worker threads gracefully (drains pending tasks)."""
@@ -544,8 +564,7 @@ class TaskQueue:
             self._worker_queue.stop(timeout=timeout)
             self._worker_queue = None
             self._num_workers = 0
-            logger.info("TaskQueue[%s]: workers stopped", self.name,
-                         extra={"tag": "INFRA"})
+            logger.info("TaskQueue[%s]: workers stopped", self.name, extra={"tag": "INFRA"})
 
     def _execute_task(self, task: Task) -> None:
         """Worker callback: look up handler and execute the task."""
@@ -561,8 +580,7 @@ class TaskQueue:
 
         handler = self._handlers.get(task.name)
         if handler is None:
-            logger.warning("TaskQueue[%s]: no handler for task '%s'",
-                           self.name, task.name)
+            logger.warning("TaskQueue[%s]: no handler for task '%s'", self.name, task.name)
             self.fail(task.id, error=f"No handler registered for '{task.name}'")
             return
 

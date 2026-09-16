@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+from datetime import UTC
 from pathlib import Path
 
 # ── ANSI helpers (imported from the parent module at class level) ──────
@@ -536,7 +537,7 @@ class LinuxCommandsMixin:
                     self._print(f"  {label}\t{target}")
                 elif os.path.isdir(target):
                     sz = 0
-                    for root, dirs, files in os.walk(target):
+                    for root, _dirs, files in os.walk(target):
                         for f in files:
                             try:
                                 sz += os.path.getsize(os.path.join(root, f))
@@ -582,7 +583,8 @@ class LinuxCommandsMixin:
         target = os.path.expanduser(target)
         try:
             st = os.stat(target)
-            import stat as _stat, time as _time
+            import stat as _stat
+            import time as _time
             if fmt:
                 type_map = {
                     "directory": "directory",
@@ -1289,7 +1291,7 @@ class LinuxCommandsMixin:
                     cur_key = k
                     cur_group = [l]
             groups.append((cur_key, cur_group))
-        for key, group in groups:
+        for _key, group in groups:
             show = True
             if dup_only and len(group) == 1:
                 show = False
@@ -1329,9 +1331,11 @@ class LinuxCommandsMixin:
                 import fnmatch as _fnmatch
                 pat_val = parts[i + 1]
                 if p == "-iname":
-                    _match_fn = lambda name, _p=pat_val.lower(): _fnmatch.fnmatch(name.lower(), _p)
+                    def _match_fn(name, _p=pat_val.lower()):
+                        return _fnmatch.fnmatch(name.lower(), _p)
                 else:
-                    _match_fn = lambda name, _p=pat_val: _fnmatch.fnmatch(name, _p)
+                    def _match_fn(name, _p=pat_val):
+                        return _fnmatch.fnmatch(name, _p)
                 pattern = pat_val
                 i += 2
             elif p == "-type" and i + 1 < len(parts):
@@ -2219,7 +2223,8 @@ class LinuxCommandsMixin:
             return
         import difflib as _difflib
         if ignore_ws:
-            norm = lambda s: " ".join(s.split())
+            def norm(s):
+                return " ".join(s.split())
             lines1 = [norm(l) for l in lines1]
             lines2 = [norm(l) for l in lines2]
         if unified:
@@ -2227,7 +2232,7 @@ class LinuxCommandsMixin:
                 lines1, lines2,
                 fromfile=targets[0], tofile=targets[1],
             )
-            from ..repl import _C_GREEN, _C_RED, _C_DIM, _C_RESET
+            from ..repl import _C_DIM, _C_GREEN, _C_RED, _C_RESET
             has_output = False
             for l in diff_gen:
                 has_output = True
@@ -2259,7 +2264,7 @@ class LinuxCommandsMixin:
                 self._print(f"  Files {targets[0]} and {targets[1]} differ")
                 self._last_exit_code = 1
                 return
-            from ..repl import _C_GREEN, _C_RED, _C_DIM, _C_RESET
+            from ..repl import _C_DIM, _C_GREEN, _C_RED, _C_RESET
             for l in diffs:
                 if l.startswith("+ "):
                     self._print(f"  {_C_GREEN}{l}{_C_RESET}")
@@ -2395,6 +2400,7 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
             return
         import time as _time
+
         from ..repl import _C_DIM, _C_RESET
         start = _time.perf_counter()
         self._execute_single(args)
@@ -2504,7 +2510,8 @@ class LinuxCommandsMixin:
 
     def _cmd_id(self, args: str = "") -> None:
         """Print user identity."""
-        import getpass as _gp, os as _os
+        import getpass as _gp
+        import os as _os
         user = _gp.getuser()
         uid = _os.getuid() if hasattr(_os, "getuid") else "?"
         gid = _os.getgid() if hasattr(_os, "getgid") else "?"
@@ -2535,8 +2542,8 @@ class LinuxCommandsMixin:
 
     def _cmd_who(self, args: str = "") -> None:
         """Show who is logged on."""
-        import time as _time
         import getpass as _gp
+        import time as _time
         user = _gp.getuser()
         self._print(f"  {user}    console  {_time.strftime('%Y-%m-%d %H:%M')}")
         self._last_exit_code = 0
@@ -2811,7 +2818,7 @@ class LinuxCommandsMixin:
 
     def _cmd_date(self, args: str = "") -> None:
         """Show current date and time: date [-u] [+format]"""
-        from datetime import datetime as _dt, timezone as _tz
+        from datetime import datetime as _dt
         argv = args.split()
         utc = False
         fmt = "%a %b %d %H:%M:%S %Z %Y"
@@ -2825,13 +2832,14 @@ class LinuxCommandsMixin:
                 i += 1
             else:
                 i += 1
-        now = _dt.now(_tz.utc if utc else None)
+        now = _dt.now(UTC if utc else None)
         self._print(now.strftime(fmt))
 
     def _cmd_cal(self, args: str = "") -> None:
         """Show a calendar: cal [[month] year]"""
-        from datetime import datetime as _dt
         import calendar as _cal
+        from datetime import datetime as _dt
+
         from ..repl import _C_BOLD, _C_RESET
         argv = args.split()
         now = _dt.now()
@@ -3700,8 +3708,8 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
             return
         cmd_str = " ".join(cmd_parts)
-        import subprocess as _sp
         import signal as _signal
+        import subprocess as _sp
         try:
             proc = _sp.Popen(cmd_str, shell=True, stdout=_sp.PIPE, stderr=_sp.PIPE)
             try:
@@ -4158,7 +4166,7 @@ class LinuxCommandsMixin:
         if not self._bg_threads:
             self._last_exit_code = 0
             return
-        for name, t in list(self._bg_threads.items()):
+        for _name, t in list(self._bg_threads.items()):
             if t.is_alive():
                 t.join(timeout=5)
         self._last_exit_code = 0

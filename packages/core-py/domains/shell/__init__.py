@@ -2,21 +2,22 @@
 
 import domain.shell as _domain_shell
 from domain.shell import (
+    ConsoleIO,
+    DaitRuntime,
     Kernel,
+    MemoryIO,
     NeuralKernel,
     Process,
     ProcessState,
-    ShellState,
-    ShellIO,
-    ConsoleIO,
-    MemoryIO,
-    capture_output,
-    ShellCommands,
-    DaitRuntime,
     Resource,
+    ShellCommands,
+    ShellIO,
+    ShellState,
+    capture_output,
 )
 
 _dait_instance = None
+
 
 def get_dait_runtime():
     global _dait_instance
@@ -24,7 +25,14 @@ def get_dait_runtime():
         _dait_instance = DaitRuntime()
     return _dait_instance
 
-from domain.shell._internal import commands, init, kernel, kernel_scheduler, vm_training_bridge  # noqa: F401
+
+from domain.shell._internal import (  # noqa: F401
+    commands,
+    init,
+    kernel,
+    kernel_scheduler,
+    vm_training_bridge,
+)
 
 __all__ = [
     "Kernel",

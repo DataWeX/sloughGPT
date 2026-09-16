@@ -1,4 +1,5 @@
 """Tests for scripts/benchmark_results.py persistent results + regression tracking."""
+
 import json
 import sys
 from pathlib import Path
@@ -21,14 +22,20 @@ def write_result(tmp_results, kind, model, **fields):
     """Write a result file and return its path."""
     path = br.results_path(kind, model, br.timestamp().replace(":", "").replace(".", ""))
     path.parent.mkdir(parents=True, exist_ok=True)
-    record = {"kind": kind, "model": model, "timestamp": br.timestamp(),
-              "commit": "test-sha", **fields}
+    record = {
+        "kind": kind,
+        "model": model,
+        "timestamp": br.timestamp(),
+        "commit": "test-sha",
+        **fields,
+    }
     with open(path, "w") as f:
         json.dump(record, f)
     return path
 
 
 # ── helpers ────────────────────────────────────────────────────────────────
+
 
 def test_git_commit_runs():
     """git_commit returns a short sha or None, never raises."""
@@ -64,12 +71,13 @@ def test_dig_nested_containers(tmp_results):
 
 def test_extract_from_stability_grabs_trailing_json():
     """Extracts the JSON report from mixed stdout."""
-    raw = "🔍 Server alive\n{\"model\": \"m\", \"score\": {\"overall\": 88}}"
+    raw = '🔍 Server alive\n{"model": "m", "score": {"overall": 88}}'
     data = br._extract_from_stability(raw)
     assert data["score"]["overall"] == 88
 
 
 # ── threshold semantics ────────────────────────────────────────────────────
+
 
 def test_threshold_rel_normalized():
     """rel thresholds (percentages) normalize to fractions."""
@@ -86,6 +94,7 @@ def test_threshold_abs():
 
 # ── regression detection ───────────────────────────────────────────────────
 
+
 def test_no_regression_when_equal(tmp_results):
     old = {"score": {"overall": 95}}
     new = {"score": {"overall": 95}}
@@ -93,10 +102,26 @@ def test_no_regression_when_equal(tmp_results):
 
 
 def test_regression_stability_score_drop(tmp_results):
-    old = {"score": {"overall": 100, "response_rate": 1.0, "crash_rate": 0.0,
-                     "empty_rate": 0.0, "latency_degradation": 1.1, "length_cv": 0.2}}
-    new = {"score": {"overall": 70, "response_rate": 0.9, "crash_rate": 0.1,
-                     "empty_rate": 0.0, "latency_degradation": 1.5, "length_cv": 0.4}}
+    old = {
+        "score": {
+            "overall": 100,
+            "response_rate": 1.0,
+            "crash_rate": 0.0,
+            "empty_rate": 0.0,
+            "latency_degradation": 1.1,
+            "length_cv": 0.2,
+        }
+    }
+    new = {
+        "score": {
+            "overall": 70,
+            "response_rate": 0.9,
+            "crash_rate": 0.1,
+            "empty_rate": 0.0,
+            "latency_degradation": 1.5,
+            "length_cv": 0.4,
+        }
+    }
     assert br.is_regression("stability", new, old) is True
 
 
@@ -122,8 +147,10 @@ def test_latency_rel_improvement_not_regression(tmp_results):
 
 # ── record / history / compare integration ─────────────────────────────────
 
+
 def test_record_and_history_roundtrip(tmp_results, monkeypatch):
     """record persists a run; history lists it."""
+
     class Args:
         kind = "stability"
         json_file = None
@@ -133,8 +160,13 @@ def test_record_and_history_roundtrip(tmp_results, monkeypatch):
         vs = "previous"
 
     def fake_run(url, runs):
-        return {"model": "m", "runs": runs, "passed": True,
-                "score": {"overall": 100}, "elapsed_s": 10}
+        return {
+            "model": "m",
+            "runs": runs,
+            "passed": True,
+            "score": {"overall": 100},
+            "elapsed_s": 10,
+        }
 
     monkeypatch.setattr(br, "_run_stability", fake_run)
     assert br.do_record(Args()) == 0
@@ -159,12 +191,32 @@ def test_compare_single_run_is_ok(tmp_results):
 
 
 def test_compare_detects_regression_and_exit_code(tmp_results, capsys):
-    write_result(tmp_results, "stability", "m",
-                 score={"overall": 100, "response_rate": 1.0, "crash_rate": 0.0,
-                        "empty_rate": 0.0, "latency_degradation": 1.1, "length_cv": 0.2})
-    write_result(tmp_results, "stability", "m",
-                 score={"overall": 70, "response_rate": 0.9, "crash_rate": 0.1,
-                        "empty_rate": 0.0, "latency_degradation": 1.5, "length_cv": 0.4})
+    write_result(
+        tmp_results,
+        "stability",
+        "m",
+        score={
+            "overall": 100,
+            "response_rate": 1.0,
+            "crash_rate": 0.0,
+            "empty_rate": 0.0,
+            "latency_degradation": 1.1,
+            "length_cv": 0.2,
+        },
+    )
+    write_result(
+        tmp_results,
+        "stability",
+        "m",
+        score={
+            "overall": 70,
+            "response_rate": 0.9,
+            "crash_rate": 0.1,
+            "empty_rate": 0.0,
+            "latency_degradation": 1.5,
+            "length_cv": 0.4,
+        },
+    )
 
     class Args:
         kind = "stability"

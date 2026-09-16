@@ -4,9 +4,10 @@ Tests for TokenizerManager (domains/training/tokenizer_manager.py).
 
 import os
 import tempfile
+
 import pytest
 
-from domains.training.tokenizer_manager import TokenizerManager, get_tokenizer_manager
+from domain.training._internal.tokenizer_manager import TokenizerManager, get_tokenizer_manager
 
 
 @pytest.fixture(autouse=True)
@@ -157,8 +158,9 @@ class TestTokenizerManager:
         # Reset auto-train state if the module has been imported (avoids cross-test pollution
         # from tests that call POST /auto-train/start and leave state.student_tokenizer set)
         import sys as _sys
-        if 'routers.auto_train' in _sys.modules:
-            _sys.modules['routers.auto_train'].state.student_tokenizer = None
+
+        if "routers.auto_train" in _sys.modules:
+            _sys.modules["routers.auto_train"].state.student_tokenizer = None
         result = mgr.borrow_from_autotrain()
         assert result is False
 

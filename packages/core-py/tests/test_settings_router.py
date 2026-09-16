@@ -2,9 +2,6 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -12,7 +9,6 @@ if _server_dir not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from routers.settings import SettingsRouter
 
 
@@ -20,6 +16,7 @@ def _app(sr: SettingsRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(sr.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 
@@ -177,7 +174,9 @@ class TestGenerateModelCard:
     def test_generate_card(self):
         sr = SettingsRouter()
         client = TestClient(_app(sr))
-        resp = client.post("/settings/model-card?name=test-model&base_model=gpt2&description=A+test+model")
+        resp = client.post(
+            "/settings/model-card?name=test-model&base_model=gpt2&description=A+test+model"
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert "card" in data
@@ -418,7 +417,9 @@ class TestBulkOperations:
     def test_bulk_bookmark(self):
         sr = SettingsRouter()
         client = TestClient(_app(sr))
-        resp = client.post("/settings/training/runs/bulk/bookmark?run_ids=run-1,run-2&bookmarked=true")
+        resp = client.post(
+            "/settings/training/runs/bulk/bookmark?run_ids=run-1,run-2&bookmarked=true"
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert "updated_count" in data

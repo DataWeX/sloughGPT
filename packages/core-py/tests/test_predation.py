@@ -28,12 +28,14 @@ from domain.shell._internal.simulation import (
 )
 
 
-def _quiet_baby(params: WorldParams, energy: float, position,
-                group_id: int = 0) -> SimBaby:
+def _quiet_baby(params: WorldParams, energy: float, position, group_id: int = 0) -> SimBaby:
     """A baby whose every decision gate is pinned off except predation."""
-    b = SimBaby(initial_energy=energy,
-                position=np.array(position, dtype=np.float64),
-                params=params, group_id=group_id)
+    b = SimBaby(
+        initial_energy=energy,
+        position=np.array(position, dtype=np.float64),
+        params=params,
+        group_id=group_id,
+    )
     b.perceptron_cells.W[:] = 0.0
     b.perceptron_cells.b[:] = -10.0
     b.perceptron_body.W[:] = 0.0
@@ -54,12 +56,9 @@ def _quiet_baby(params: WorldParams, energy: float, position,
     return b
 
 
-def _zero_predator(params: WorldParams, energy: float = 200.0,
-                   position=(4.0, 1.0, 4.0)) -> SimBaby:
+def _zero_predator(params: WorldParams, energy: float = 200.0, position=(4.0, 1.0, 4.0)) -> SimBaby:
     """A predator whose predation gate stays at its zero init (sigmoid(0))."""
-    b = SimBaby(initial_energy=energy,
-                position=np.array(position, dtype=np.float64),
-                params=params)
+    b = SimBaby(initial_energy=energy, position=np.array(position, dtype=np.float64), params=params)
     b.perceptron_cells.W[:] = 0.0
     b.perceptron_cells.b[:] = -10.0
     b.perceptron_body.W[:] = 0.0
@@ -78,15 +77,18 @@ def _zero_predator(params: WorldParams, energy: float = 200.0,
 
 
 def _params(**kw) -> WorldParams:
-    base = dict(grid_size=(8, 4, 8), predation_enabled=True,
-                social_enabled=False, message_enabled=False,
-                teaching_enabled=False)
+    base = {
+        "grid_size": (8, 4, 8),
+        "predation_enabled": True,
+        "social_enabled": False,
+        "message_enabled": False,
+        "teaching_enabled": False,
+    }
     base.update(kw)
     return WorldParams(**base)
 
 
-def _open_predator(params: WorldParams, energy: float = 200.0,
-                   position=(4.0, 1.0, 4.0)) -> SimBaby:
+def _open_predator(params: WorldParams, energy: float = 200.0, position=(4.0, 1.0, 4.0)) -> SimBaby:
     """A predator with its predation gate forced open (sigmoid(10) ~ 1)."""
     b = _quiet_baby(params, energy, position)
     assert b.perceptron_predation is not None
@@ -105,7 +107,8 @@ class TestPredationBrain:
         on = SimBaby(params=_params())
         assert on.perceptron_predation is not None
         assert on.perceptron_predation.W.shape == (
-            _params().entity_input_dim, 1,
+            _params().entity_input_dim,
+            1,
         )
 
     def test_gate_below_threshold_does_not_hunt(self):
@@ -202,8 +205,7 @@ class TestPredationScene:
         assert weak.alive
         assert predator.alive
         assert predator.energy == pytest.approx(
-            200.0 + 10.0 - params.predation_cost - params.see_cost
-            - params.passive_drain,
+            200.0 + 10.0 - params.predation_cost - params.see_cost - params.passive_drain,
             abs=1e-6,
         )
 
@@ -253,8 +255,7 @@ class TestPredationScene:
             scene.add_baby(b)
         sim = Simulation(scene, max_ticks=2)
         sim.run()
-        strikes = [r for r in sim._tick_log
-                   if r.get("predation_energy", 0.0) > 0.0]
+        strikes = [r for r in sim._tick_log if r.get("predation_energy", 0.0) > 0.0]
         assert sim.summary()["predations"] == len(strikes) == 1
         assert sim.summary()["predation_energy_moved"] == pytest.approx(
             sum(r["predation_energy"] for r in strikes),
@@ -302,16 +303,19 @@ class TestPredationScene:
                 scene.add_baby(b)
             sim = Simulation(scene, max_ticks=2)
             sim.run()
-            outs.append((sim.summary()["predations"],
-                         sim.summary()["predation_energy_moved"]))
+            outs.append((sim.summary()["predations"], sim.summary()["predation_energy_moved"]))
         assert outs[0] == outs[1]
 
 
 class TestPredationEvolution:
     @staticmethod
     def _params(**kw) -> WorldParams:
-        base = dict(grid_size=(16, 8, 16), predation_enabled=True,
-                    teaching_enabled=False, memory_enabled=False)
+        base = {
+            "grid_size": (16, 8, 16),
+            "predation_enabled": True,
+            "teaching_enabled": False,
+            "memory_enabled": False,
+        }
         base.update(kw)
         return WorldParams(**base)
 
@@ -334,18 +338,19 @@ class TestPredationEvolution:
         g_off = Genome.random(off, np.random.default_rng(9), group_id=0)
         g_on = Genome.random(on, np.random.default_rng(9), group_id=0)
         for name in ("cells", "body", "entity", "move"):
-            assert np.allclose(g_off.tensors[f"{name}.W"],
-                               g_on.tensors[f"{name}.W"])
-            assert np.allclose(g_off.tensors[f"{name}.b"],
-                               g_on.tensors[f"{name}.b"])
+            assert np.allclose(g_off.tensors[f"{name}.W"], g_on.tensors[f"{name}.W"])
+            assert np.allclose(g_off.tensors[f"{name}.b"], g_on.tensors[f"{name}.b"])
         assert "predation.W" in g_on.tensors
         assert "predation.W" not in g_off.tensors
 
     def test_run_history_carries_predation_fields(self):
         eng = EvolutionEngine(
             params=self._params(),
-            population_size=4, generations=2, ticks_per_generation=3,
-            organic_pools=1, seed=3,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=3,
+            organic_pools=1,
+            seed=3,
         )
         result = eng.run()
         assert "predations" in result["history"][0]
@@ -355,21 +360,34 @@ class TestPredationEvolution:
 
     def test_run_off_default_has_no_predation_brains(self):
         eng = EvolutionEngine(
-            population_size=4, generations=2, ticks_per_generation=3,
-            organic_pools=1, seed=3,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=3,
+            organic_pools=1,
+            seed=3,
         )
         result = eng.run()
         assert result["history"][0]["predations"] == 0
 
     def test_benchmark_structure_and_verdict_keys(self):
         result = benchmark_predation(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         assert set(result) >= {
-            "control", "predation", "group_count", "group_weight",
-            "control_last_avg", "predation_last_avg", "predation_rate",
-            "predations", "predation_energy_moved", "predation_emerged",
+            "control",
+            "predation",
+            "group_count",
+            "group_weight",
+            "control_last_avg",
+            "predation_last_avg",
+            "predation_rate",
+            "predations",
+            "predation_energy_moved",
+            "predation_emerged",
         }
         assert len(result["control"]["history"]) == 3
         assert len(result["predation"]["history"]) == 3
@@ -377,12 +395,18 @@ class TestPredationEvolution:
 
     def test_benchmark_deterministic(self):
         a = benchmark_predation(
-            population_size=4, generations=2, ticks_per_generation=8,
-            organic_pools=1, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=5,
         )
         b = benchmark_predation(
-            population_size=4, generations=2, ticks_per_generation=8,
-            organic_pools=1, seed=5,
+            population_size=4,
+            generations=2,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=5,
         )
         assert a["predation_last_avg"] == b["predation_last_avg"]
         assert a["predations"] == b["predations"]

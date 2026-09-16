@@ -1,4 +1,5 @@
 """Tests for singleton pattern — thread-safe singletons."""
+
 from __future__ import annotations
 
 import threading
@@ -39,7 +40,7 @@ class TestMakeSingleton:
             t.join()
 
         # All should be the same instance
-        assert len(set(id(i) for i in instances)) == 1
+        assert len({id(i) for i in instances}) == 1
 
 
 class TestSingletonMeta:
@@ -96,4 +97,4 @@ class TestSingletonMeta:
         for t in threads:
             t.join()
 
-        assert len(set(id(i) for i in instances)) == 1
+        assert len({id(i) for i in instances}) == 1

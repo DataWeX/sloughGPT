@@ -1,24 +1,24 @@
 """Tests for domain.cognitive.reasoning.deep — LogicalOperator; domain.cognitive.reasoning.advanced — ReasoningMode, ThoughtStep."""
 
 import pytest
-from domain.cognitive._internal.reasoning.deep import (
-    LogicalOperator,
-    Term,
-    Predicate,
-    WellFormedFormula,
-    Substitution,
-    RetrievalSource,
-    RetrievedKnowledge,
-    DeepReasoningContext,
-    WorkingMemory,
-    FormalLogicEngine,
-)
+
 from domain.cognitive._internal.reasoning.advanced import (
     ReasoningMode,
-    ThoughtStep,
     ReasoningResult,
+    ThoughtStep,
 )
-
+from domain.cognitive._internal.reasoning.deep import (
+    DeepReasoningContext,
+    FormalLogicEngine,
+    LogicalOperator,
+    Predicate,
+    RetrievalSource,
+    RetrievedKnowledge,
+    Substitution,
+    Term,
+    WellFormedFormula,
+    WorkingMemory,
+)
 
 # ── LogicalOperator ──────────────────────────────────────────────────────
 
@@ -56,11 +56,13 @@ class TestLogicalOperator:
 
     def test_membership(self):
         assert LogicalOperator.AND in LogicalOperator
-        assert LogicalOperator.XOR not in LogicalOperator if hasattr(LogicalOperator, 'XOR') else True
+        assert (
+            LogicalOperator.XOR not in LogicalOperator if hasattr(LogicalOperator, "XOR") else True
+        )
 
     def test_iteration(self):
         count = 0
-        for m in LogicalOperator:
+        for _m in LogicalOperator:
             count += 1
         assert count == 7
 
@@ -114,8 +116,14 @@ class TestReasoningMode:
     def test_member_names(self):
         names = {m.name for m in ReasoningMode}
         assert names == {
-            "CHAIN_OF_THOUGHT", "TREE_OF_THOUGHTS", "SELF_CONSISTENCY",
-            "CONSTITUTIONAL", "REACT", "CAUSAL", "COUNTERFACTUAL", "SYLLOGISM",
+            "CHAIN_OF_THOUGHT",
+            "TREE_OF_THOUGHTS",
+            "SELF_CONSISTENCY",
+            "CONSTITUTIONAL",
+            "REACT",
+            "CAUSAL",
+            "COUNTERFACTUAL",
+            "SYLLOGISM",
         }
 
     def test_member_values_unique(self):
@@ -168,11 +176,15 @@ class TestThoughtStep:
         assert ts.is_final is False
 
     def test_children_ids_list(self):
-        ts = ThoughtStep(step_id=0, thought="a", reasoning_type="r", confidence=1.0, children_ids=[1, 2])
+        ts = ThoughtStep(
+            step_id=0, thought="a", reasoning_type="r", confidence=1.0, children_ids=[1, 2]
+        )
         assert ts.children_ids == [1, 2]
 
     def test_parent_id(self):
-        ts = ThoughtStep(step_id=1, thought="child", reasoning_type="r", confidence=0.8, parent_id=0)
+        ts = ThoughtStep(
+            step_id=1, thought="child", reasoning_type="r", confidence=0.8, parent_id=0
+        )
         assert ts.parent_id == 0
 
     def test_value_assignment(self):
@@ -206,7 +218,9 @@ class TestThoughtStep:
 
     def test_many_children(self):
         children = list(range(20))
-        ts = ThoughtStep(step_id=0, thought="", reasoning_type="", confidence=0.0, children_ids=children)
+        ts = ThoughtStep(
+            step_id=0, thought="", reasoning_type="", confidence=0.0, children_ids=children
+        )
         assert len(ts.children_ids) == 20
         assert ts.children_ids == children
 
@@ -230,8 +244,12 @@ class TestReasoningResult:
     def test_creation(self):
         ts = ThoughtStep(step_id=0, thought="a", reasoning_type="r", confidence=0.9)
         rr = ReasoningResult(
-            conclusion="yes", confidence=0.8, mode=ReasoningMode.CHAIN_OF_THOUGHT,
-            steps=[ts], metadata={"k": "v"}, execution_time_ms=100.0,
+            conclusion="yes",
+            confidence=0.8,
+            mode=ReasoningMode.CHAIN_OF_THOUGHT,
+            steps=[ts],
+            metadata={"k": "v"},
+            execution_time_ms=100.0,
         )
         assert rr.conclusion == "yes"
         assert rr.confidence == 0.8
@@ -240,15 +258,23 @@ class TestReasoningResult:
 
     def test_metadata_dict(self):
         rr = ReasoningResult(
-            conclusion="", confidence=0.0, mode=ReasoningMode.REACT,
-            steps=[], metadata={"a": 1, "b": [2, 3]}, execution_time_ms=0.0,
+            conclusion="",
+            confidence=0.0,
+            mode=ReasoningMode.REACT,
+            steps=[],
+            metadata={"a": 1, "b": [2, 3]},
+            execution_time_ms=0.0,
         )
         assert rr.metadata == {"a": 1, "b": [2, 3]}
 
     def test_empty_steps(self):
         rr = ReasoningResult(
-            conclusion="", confidence=0.0, mode=ReasoningMode.REACT,
-            steps=[], metadata={}, execution_time_ms=0.0,
+            conclusion="",
+            confidence=0.0,
+            mode=ReasoningMode.REACT,
+            steps=[],
+            metadata={},
+            execution_time_ms=0.0,
         )
         assert rr.steps == []
 
@@ -258,8 +284,12 @@ class TestReasoningResult:
             for i in range(5)
         ]
         rr = ReasoningResult(
-            conclusion="c", confidence=0.7, mode=ReasoningMode.TREE_OF_THOUGHTS,
-            steps=steps, metadata={}, execution_time_ms=50.0,
+            conclusion="c",
+            confidence=0.7,
+            mode=ReasoningMode.TREE_OF_THOUGHTS,
+            steps=steps,
+            metadata={},
+            execution_time_ms=50.0,
         )
         assert len(rr.steps) == 5
 
@@ -389,7 +419,9 @@ class TestRetrievalSource:
 class TestRetrievedKnowledge:
     def test_basic(self):
         rk = RetrievedKnowledge(
-            content="fact", source=RetrievalSource.VECTOR_STORE, relevance=0.95,
+            content="fact",
+            source=RetrievalSource.VECTOR_STORE,
+            relevance=0.95,
         )
         assert rk.content == "fact"
         assert rk.relevance == 0.95
@@ -397,7 +429,10 @@ class TestRetrievedKnowledge:
 
     def test_with_source_id(self):
         rk = RetrievedKnowledge(
-            content="x", source=RetrievalSource.MEMORY, relevance=0.5, source_id="doc1",
+            content="x",
+            source=RetrievalSource.MEMORY,
+            relevance=0.5,
+            source_id="doc1",
         )
         assert rk.source_id == "doc1"
 
@@ -531,10 +566,14 @@ class TestFormalLogicEngine:
     def test_modus_ponens(self):
         e = FormalLogicEngine()
         human = WellFormedFormula(predicate=Predicate(name="human", terms=[Term(name="socrates")]))
-        mortal = WellFormedFormula(predicate=Predicate(name="mortal", terms=[Term(name="socrates")]))
+        mortal = WellFormedFormula(
+            predicate=Predicate(name="mortal", terms=[Term(name="socrates")])
+        )
         implies = WellFormedFormula(
             operator=LogicalOperator.IMPLIES,
-            left=WellFormedFormula(predicate=Predicate(name="human", terms=[Term(name="socrates")])),
+            left=WellFormedFormula(
+                predicate=Predicate(name="human", terms=[Term(name="socrates")])
+            ),
             right=mortal,
         )
         e.assert_fact(human)
@@ -566,11 +605,17 @@ class TestFormalLogicEngine:
     def test_resolution_entailed(self):
         e = FormalLogicEngine()
         e.assert_predicate("human", "socrates")
-        e.assert_fact(WellFormedFormula(
-            operator=LogicalOperator.IMPLIES,
-            left=WellFormedFormula(predicate=Predicate(name="human", terms=[Term(name="socrates")])),
-            right=WellFormedFormula(predicate=Predicate(name="mortal", terms=[Term(name="socrates")])),
-        ))
+        e.assert_fact(
+            WellFormedFormula(
+                operator=LogicalOperator.IMPLIES,
+                left=WellFormedFormula(
+                    predicate=Predicate(name="human", terms=[Term(name="socrates")])
+                ),
+                right=WellFormedFormula(
+                    predicate=Predicate(name="mortal", terms=[Term(name="socrates")])
+                ),
+            )
+        )
         goal = Predicate(name="mortal", terms=[Term(name="socrates")])
         assert e.resolution(goal) is True
 
@@ -593,7 +638,9 @@ class TestFormalLogicEngine:
 
     def test_inference_history_appended(self):
         e = FormalLogicEngine()
-        e.prove_syllogism(("All", "are", "mortal"), ("All", "are", "human"), ("All", "are", "mortal"))
+        e.prove_syllogism(
+            ("All", "are", "mortal"), ("All", "are", "human"), ("All", "are", "mortal")
+        )
         assert len(e.inference_history) == 1
 
     def test_to_categorical(self):
@@ -605,12 +652,16 @@ class TestFormalLogicEngine:
 
     def test_check_valid_mood(self):
         e = FormalLogicEngine()
-        valid, reason = e._check_syllogism_validity("AAA", 1, ("All", "S", "are", "P"), ("All", "S", "are", "M"), ("All", "S", "are", "P"))
+        valid, reason = e._check_syllogism_validity(
+            "AAA", 1, ("All", "S", "are", "P"), ("All", "S", "are", "M"), ("All", "S", "are", "P")
+        )
         assert valid is True
 
     def test_check_invalid_mood(self):
         e = FormalLogicEngine()
-        valid, reason = e._check_syllogism_validity("OOO", 1, ("All", "S", "are", "P"), ("All", "S", "are", "M"), ("All", "S", "are", "P"))
+        valid, reason = e._check_syllogism_validity(
+            "OOO", 1, ("All", "S", "are", "P"), ("All", "S", "are", "M"), ("All", "S", "are", "P")
+        )
         assert valid is False
 
     def test_format_categorical(self):

@@ -19,6 +19,7 @@ Covers:
 import asyncio
 import sys
 from pathlib import Path
+
 import pytest
 
 _CORE_PY = Path(__file__).resolve().parents[1]
@@ -26,17 +27,14 @@ if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
 from domain.infrastructure._internal.event_bus import (
-    EventBus,
     Event,
+    EventBus,
     EventPriority,
-    Subscription,
-    get_event_bus,
-    set_event_bus,
     _is_noisy,
+    get_event_bus,
     install_log_subscriber,
-    _LOG_SUBSCRIBER_INSTALLED,
+    set_event_bus,
 )
-
 
 # ── Subscribe + Emit ──────────────────────────────────────────────────
 
@@ -123,7 +121,10 @@ class TestOff:
     def test_off_removes_handler(self):
         bus = EventBus()
         received = []
-        handler = lambda n, d: received.append(1)
+
+        def handler(n, d):
+            return received.append(1)
+
         bus.on("x", handler)
         assert bus.off("x", handler) is True
         bus.emit_sync("x")
@@ -135,7 +136,10 @@ class TestOff:
 
     def test_off_wildcard(self):
         bus = EventBus()
-        handler = lambda n, d: None
+
+        def handler(n, d):
+            return None
+
         bus.on("*", handler)
         assert bus.off("*", handler) is True
         assert bus.subscriber_count == 0
@@ -229,8 +233,10 @@ class TestPriority:
 class TestErrorIsolation:
     def test_bad_handler_doesnt_crash_bus(self):
         bus = EventBus()
+
         def bad_handler(n, d):
             raise ValueError("boom")
+
         good = []
         bus.on("x", bad_handler)
         bus.on("x", lambda n, d: good.append(1))
@@ -240,8 +246,10 @@ class TestErrorIsolation:
 
     def test_async_handler_error_isolated(self):
         bus = EventBus()
+
         async def bad(n, d):
             raise RuntimeError("async boom")
+
         good = []
         bus.on("x", bad)
         bus.on("x", lambda n, d: good.append(1))
@@ -260,10 +268,13 @@ class TestErrorIsolation:
 class TestEmitSync:
     def test_sync_skips_async_handlers(self):
         import warnings
+
         bus = EventBus()
         called = []
+
         async def handler(n, d):
             called.append(1)
+
         bus.on("x", handler)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
@@ -274,8 +285,10 @@ class TestEmitSync:
     def test_async_emit_awaits_async_handlers(self):
         bus = EventBus()
         called = []
+
         async def handler(n, d):
             called.append(1)
+
         bus.on("x", handler)
 
         async def run():
@@ -317,6 +330,7 @@ class TestSingleton:
 
     def test_reset_creates_new_instance(self):
         from domain.infrastructure._internal.event_bus import reset_event_bus
+
         original = get_event_bus()
         reset_event_bus()
         new = get_event_bus()
@@ -384,6 +398,7 @@ class TestInstallLogSubscriber:
     def test_idempotent(self):
         """Calling install_log_subscriber twice doesn't add duplicate handlers."""
         import domain.infrastructure._internal.event_bus as mod
+
         original = mod._LOG_SUBSCRIBER_INSTALLED
         mod._LOG_SUBSCRIBER_INSTALLED = False
         try:
@@ -397,8 +412,8 @@ class TestInstallLogSubscriber:
 
     def test_noisy_events_filtered(self):
         """Noisy events (heartbeat, metric, cache) should not reach the log handler."""
-        import logging
         import domain.infrastructure._internal.event_bus as mod
+
         original = mod._LOG_SUBSCRIBER_INSTALLED
         mod._LOG_SUBSCRIBER_INSTALLED = False
         try:
@@ -419,6 +434,7 @@ class TestInstallLogSubscriber:
             pass
 
         import warnings
+
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             bus.replay(handler=async_handler)

@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
+
 torch = pytest.importorskip("torch")
 
 try:
@@ -21,9 +22,9 @@ from domains.training.lm_eval_char import evaluate_sloughgpt_char_lm, main
 
 
 def test_eval_sloughgpt_char_lm_smoke(tmp_path: Path) -> None:
-    chars = sorted(list("abc\n"))
+    chars = sorted("abc\n")
     stoi = {c: i for i, c in enumerate(chars)}
-    itos = {i: c for i, c in enumerate(chars)}
+    itos = dict(enumerate(chars))
     m = SloughGPTModel(
         vocab_size=len(chars),
         n_embed=16,
@@ -62,9 +63,9 @@ def test_lm_eval_char_main_json(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    chars = sorted(list("abc\n"))
+    chars = sorted("abc\n")
     stoi = {c: i for i, c in enumerate(chars)}
-    itos = {i: c for i, c in enumerate(chars)}
+    itos = dict(enumerate(chars))
     m = SloughGPTModel(
         vocab_size=len(chars),
         n_embed=16,

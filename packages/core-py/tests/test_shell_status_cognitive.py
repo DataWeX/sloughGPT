@@ -1,8 +1,12 @@
-from domain.shell._internal.cmds.status import _fmt_uptime
 from domain.cognitive._internal.core import (
-    CognitiveCore, ThinkingMode, ReasoningType,
-    ThoughtProcess, CreativeIdea, ReasoningChain,
+    CognitiveCore,
+    CreativeIdea,
+    ReasoningChain,
+    ReasoningType,
+    ThinkingMode,
+    ThoughtProcess,
 )
+from domain.shell._internal.cmds.status import _fmt_uptime
 
 
 class TestFmtUptime:
@@ -58,11 +62,16 @@ class TestReasoningType:
 class TestThoughtProcess:
     def test_create(self):
         tp = ThoughtProcess(
-            id="t1", mode=ThinkingMode.ANALYTICAL,
+            id="t1",
+            mode=ThinkingMode.ANALYTICAL,
             reasoning_type=ReasoningType.DEDUCTIVE,
-            input_prompt="test", thought_content="thinking",
-            confidence=0.9, creativity_score=0.5, logical_score=0.8,
-            timestamp=1.0, processing_time=0.1,
+            input_prompt="test",
+            thought_content="thinking",
+            confidence=0.9,
+            creativity_score=0.5,
+            logical_score=0.8,
+            timestamp=1.0,
+            processing_time=0.1,
         )
         assert tp.id == "t1"
         assert tp.mode == ThinkingMode.ANALYTICAL
@@ -72,9 +81,15 @@ class TestThoughtProcess:
 class TestCreativeIdea:
     def test_create(self):
         ci = CreativeIdea(
-            id="i1", concept="test", description="desc",
-            novelty_score=0.8, feasibility_score=0.7, creativity_score=0.9,
-            category="science", tags=["tag1"], timestamp=1.0,
+            id="i1",
+            concept="test",
+            description="desc",
+            novelty_score=0.8,
+            feasibility_score=0.7,
+            creativity_score=0.9,
+            category="science",
+            tags=["tag1"],
+            timestamp=1.0,
         )
         assert ci.concept == "test"
         assert ci.novelty_score == 0.8
@@ -84,11 +99,14 @@ class TestCreativeIdea:
 class TestReasoningChain:
     def test_create(self):
         rc = ReasoningChain(
-            id="r1", question="why?",
+            id="r1",
+            question="why?",
             reasoning_steps=["step1", "step2"],
-            conclusion="because", confidence=0.85,
+            conclusion="because",
+            confidence=0.85,
             reasoning_type=ReasoningType.CAUSAL,
-            evidence=["ev1"], timestamp=1.0,
+            evidence=["ev1"],
+            timestamp=1.0,
         )
         assert rc.question == "why?"
         assert len(rc.reasoning_steps) == 2

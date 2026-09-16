@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import numpy as np
 from dataclasses import dataclass
-from typing import Any
 from enum import IntEnum
+from typing import Any
+
+import numpy as np
 
 
 class CommunityRole(IntEnum):
@@ -100,7 +101,8 @@ class BabyCommunity:
         key = (min(baby_a, baby_b), max(baby_a, baby_b))
         if key not in self._relations:
             self._relations[key] = Relation(
-                baby_a=key[0], baby_b=key[1],
+                baby_a=key[0],
+                baby_b=key[1],
                 relation_type=relation_type,
             )
 
@@ -108,8 +110,9 @@ class BabyCommunity:
         key = (min(baby_a, baby_b), max(baby_a, baby_b))
         return self._relations.get(key)
 
-    def update_relation(self, baby_a: int, baby_b: int, relation_type: RelationType,
-                        strength_delta: float = 0.1):
+    def update_relation(
+        self, baby_a: int, baby_b: int, relation_type: RelationType, strength_delta: float = 0.1
+    ):
         relation = self.get_relation(baby_a, baby_b)
         if relation:
             relation.relation_type = relation_type
@@ -216,8 +219,9 @@ class BabyCommunitySystem:
         del self._communities[community_id]
         return True
 
-    def add_baby_to_community(self, baby_id: int, community_id: int,
-                              role: CommunityRole = CommunityRole.MEMBER) -> bool:
+    def add_baby_to_community(
+        self, baby_id: int, community_id: int, role: CommunityRole = CommunityRole.MEMBER
+    ) -> bool:
         if community_id not in self._communities:
             return False
         if baby_id in self._baby_community:
@@ -244,8 +248,9 @@ class BabyCommunitySystem:
             return self._communities.get(community_id)
         return None
 
-    def find_nearest_community(self, position: np.ndarray,
-                               max_distance: float = 10.0) -> BabyCommunity | None:
+    def find_nearest_community(
+        self, position: np.ndarray, max_distance: float = 10.0
+    ) -> BabyCommunity | None:
         best_community = None
         best_distance = max_distance
         for community in self._communities.values():

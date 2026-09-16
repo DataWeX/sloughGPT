@@ -57,8 +57,8 @@ def ansi_on(monkeypatch):
 
 # ── Construction ───────────────────────────────────────────────────────────
 
-class TestConstruction:
 
+class TestConstruction:
     def test_default_stream_is_stderr_capture(self):
         log = ConsoleLogger("slo.api")
         assert log.name == "slo.api"
@@ -77,8 +77,8 @@ class TestConstruction:
 
 # ── Human format ───────────────────────────────────────────────────────────
 
-class TestHumanFormat:
 
+class TestHumanFormat:
     def test_info_line(self):
         log = ConsoleLogger("slo.api", colors=False)
         line = log._formatter.format_oop(_record(message="server started", context={"port": 8000}))
@@ -137,8 +137,8 @@ class TestHumanFormat:
 
 # ── JSON format ────────────────────────────────────────────────────────────
 
-class TestJsonFormat:
 
+class TestJsonFormat:
     def test_json_line_is_valid(self):
         log = ConsoleLogger("slo.api", format="json")
         line = log._format_record(_record(message="hello", context={"a": 1}, tag="REQ"))
@@ -178,8 +178,8 @@ class TestJsonFormat:
 
 # ── Exception parsing ──────────────────────────────────────────────────────
 
-class TestExceptionParsing:
 
+class TestExceptionParsing:
     def test_parse_simple_type_and_message(self):
         log = ConsoleLogger("slo.api")
         exc_type, exc_msg, file_info = log._parse_exception("ValueError: bad input")
@@ -235,14 +235,16 @@ class TestExceptionParsing:
 
 # ── Cursor methods ────────────────────────────────────────────────────────
 
-class TestCursorMethods:
 
+class TestCursorMethods:
     def test_cursor_up_writes_ansi_on_tty(self):
         class FakeTTY:
             def isatty(self):
                 return True
+
             def write(self, s):
                 self.data = getattr(self, "data", "") + s
+
             def flush(self):
                 pass
 
@@ -261,8 +263,10 @@ class TestCursorMethods:
         class FakeTTY:
             def isatty(self):
                 return True
+
             def write(self, s):
                 self.data = getattr(self, "data", "") + s
+
             def flush(self):
                 pass
 
@@ -275,8 +279,10 @@ class TestCursorMethods:
         class FakeTTY:
             def isatty(self):
                 return True
+
             def write(self, s):
                 self.data = getattr(self, "data", "") + s
+
             def flush(self):
                 pass
 
@@ -295,8 +301,10 @@ class TestCursorMethods:
         class FakeTTY:
             def isatty(self):
                 return True
+
             def write(self, s):
                 self.data = getattr(self, "data", "") + s
+
             def flush(self):
                 pass
 
@@ -315,8 +323,10 @@ class TestCursorMethods:
         class FakeTTY:
             def isatty(self):
                 return True
+
             def write(self, s):
                 self.data = getattr(self, "data", "") + s
+
             def flush(self):
                 pass
 
@@ -330,8 +340,10 @@ class TestCursorMethods:
         class FakeTTY:
             def isatty(self):
                 return True
+
             def write(self, s):
                 self.data = getattr(self, "data", "") + s
+
             def flush(self):
                 pass
 
@@ -350,8 +362,10 @@ class TestCursorMethods:
         class FakeTTY:
             def isatty(self):
                 return True
+
             def write(self, s):
                 self.data = getattr(self, "data", "") + s
+
             def flush(self):
                 pass
 
@@ -370,8 +384,10 @@ class TestCursorMethods:
         class BrokenTTY:
             def isatty(self):
                 return True
+
             def write(self, _):
                 raise OSError("closed")
+
             def flush(self):
                 raise OSError("closed")
 
@@ -386,8 +402,8 @@ class TestCursorMethods:
 
 # ── emit ───────────────────────────────────────────────────────────────────
 
-class TestEmit:
 
+class TestEmit:
     def test_emit_writes_line(self):
         buf = io.StringIO()
         log = ConsoleLogger("slo.api", stream=buf, colors=False)

@@ -1,15 +1,18 @@
 import numpy as np
-import pytest
 
 from domain.collections._internal.baby_building import (
-    StructureType, ToolType, BuildingConfig, Structure, Tool,
-    BabyBuilding, BuildingRegistry,
+    BabyBuilding,
+    BuildingRegistry,
+    Structure,
+    StructureType,
+    Tool,
+    ToolType,
 )
 
 
 class FakeBaby:
     def __init__(self, id=1, energy=100.0):
-        self.entity = type('Entity', (), {'id': id, 'entity_type': 1})()
+        self.entity = type("Entity", (), {"id": id, "entity_type": 1})()
         self.position = np.array([32, 0, 32], dtype=np.float64)
         self.energy = energy
         self.alive = True

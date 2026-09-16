@@ -1,20 +1,27 @@
 """Tests for HFLoraTrainer, load_lora_adapter, merge_lora_adapter."""
 
 import tempfile
-import numpy as np
-import pytest
 from pathlib import Path
 
-from domain.training._internal.slonet import SloTransformer, Tensor, cross_entropy, SloAdam
-from domain.training._internal.lora import (
-    LoRALinear, LoRAConfig, apply_lora_to_model, get_lora_parameters,
-    _walk_slo_tree, count_lora_parameters,
-)
-from domain.training._internal.hf_lora_finetune import (
-    HFLoraConfig, HFLoraTrainer, load_lora_adapter, merge_lora_adapter,
-    _LoRADataset,
-)
+import numpy as np
+import pytest
 
+from domain.training._internal.hf_lora_finetune import (
+    HFLoraConfig,
+    HFLoraTrainer,
+    _LoRADataset,
+    load_lora_adapter,
+    merge_lora_adapter,
+)
+from domain.training._internal.lora import (
+    LoRAConfig,
+    LoRALinear,
+    _walk_slo_tree,
+    apply_lora_to_model,
+    count_lora_parameters,
+    get_lora_parameters,
+)
+from domain.training._internal.slonet import SloAdam, SloTransformer, Tensor, cross_entropy
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -22,8 +29,11 @@ from domain.training._internal.hf_lora_finetune import (
 def _make_model(vocab_size=64, n_embed=32, n_layer=2, n_head=2, block_size=128):
     """Create a tiny SloTransformer for testing."""
     return SloTransformer(
-        vocab_size=vocab_size, n_embed=n_embed,
-        n_layer=n_layer, n_head=n_head, block_size=block_size,
+        vocab_size=vocab_size,
+        n_embed=n_embed,
+        n_layer=n_layer,
+        n_head=n_head,
+        block_size=block_size,
     )
 
 
@@ -38,7 +48,6 @@ def _save_text_data(path: Path, n_chars=2000):
 
 
 class TestHFLoraConfig:
-
     def test_defaults(self):
         cfg = HFLoraConfig()
         assert cfg.rank == 8
@@ -124,12 +133,22 @@ class TestHFLoraConfig:
 
     def test_all_fields_stored(self):
         cfg = HFLoraConfig(
-            model_path="m", data_path="d", rank=2, alpha=4.0,
-            dropout=0.1, target_modules=["W_q"],
-            epochs=1, batch_size=2, block_size=64,
-            learning_rate=0.01, weight_decay=0.1, warmup_steps=10,
-            grad_clip=0.5, grad_accumulation_steps=4,
-            output_dir="/tmp", adapter_name="custom",
+            model_path="m",
+            data_path="d",
+            rank=2,
+            alpha=4.0,
+            dropout=0.1,
+            target_modules=["W_q"],
+            epochs=1,
+            batch_size=2,
+            block_size=64,
+            learning_rate=0.01,
+            weight_decay=0.1,
+            warmup_steps=10,
+            grad_clip=0.5,
+            grad_accumulation_steps=4,
+            output_dir="/tmp",
+            adapter_name="custom",
             log_interval=5,
         )
         assert cfg.model_path == "m"
@@ -155,7 +174,6 @@ class TestHFLoraConfig:
 
 
 class TestHFLoraTrainer:
-
     def test_apply_lora(self):
         """apply_lora should inject LoRA layers into the model."""
         model = _make_model()
@@ -165,8 +183,7 @@ class TestHFLoraTrainer:
 
         params = trainer.apply_lora()
         assert len(params) > 0
-        n_lora = sum(1 for p in params.values()
-                     if isinstance(p, (Tensor,)) and hasattr(p, 'data'))
+        n_lora = sum(1 for p in params.values() if isinstance(p, (Tensor,)) and hasattr(p, "data"))
         assert n_lora > 0
 
     def test_apply_lora_no_model_raises(self):
@@ -181,7 +198,8 @@ class TestHFLoraTrainer:
         model = _make_model(vocab_size=32, n_embed=16, n_layer=1, n_head=2, block_size=32)
 
         cfg = HFLoraConfig(
-            rank=4, alpha=8.0,
+            rank=4,
+            alpha=8.0,
             target_modules=["W_q", "W_v"],
             epochs=1,
             batch_size=4,
@@ -193,13 +211,16 @@ class TestHFLoraTrainer:
         trainer.model = model
         trainer.apply_lora()
 
-        lora_tensors = [p for p in trainer.lora_params.values()
-                        if hasattr(p, 'data') and hasattr(p, 'requires_grad')]
+        lora_tensors = [
+            p
+            for p in trainer.lora_params.values()
+            if hasattr(p, "data") and hasattr(p, "requires_grad")
+        ]
         optimizer = SloAdam(lr=cfg.learning_rate)
 
         vocab_size = model.vocab_size
         losses = []
-        for step in range(10):
+        for _step in range(10):
             x = np.random.randint(0, vocab_size, (2, cfg.block_size))
             y = np.random.randint(0, vocab_size, (2, cfg.block_size))
 
@@ -212,18 +233,18 @@ class TestHFLoraTrainer:
 
             total_norm = 0.0
             for p in lora_tensors:
-                if hasattr(p, 'grad') and p.grad is not None:
-                    total_norm += float(np.sum(p.grad.data ** 2))
+                if hasattr(p, "grad") and p.grad is not None:
+                    total_norm += float(np.sum(p.grad.data**2))
             total_norm = np.sqrt(total_norm)
             if total_norm > 1.0:
                 scale = 1.0 / total_norm
                 for p in lora_tensors:
-                    if hasattr(p, 'grad') and p.grad is not None:
+                    if hasattr(p, "grad") and p.grad is not None:
                         p.grad.data *= scale
 
             optimizer.step(lora_tensors)
             for p in lora_tensors:
-                if hasattr(p, 'grad') and p.grad is not None:
+                if hasattr(p, "grad") and p.grad is not None:
                     p.grad.data[:] = 0.0
 
             losses.append(float(loss.data))
@@ -244,6 +265,7 @@ class TestHFLoraTrainer:
 
     def test_stop_sets_flag(self):
         import threading
+
         cfg = HFLoraConfig()
         cfg._cancel_event = threading.Event()
         trainer = HFLoraTrainer(cfg)
@@ -302,7 +324,6 @@ class TestHFLoraTrainer:
 
 
 class TestSaveLoadAdapter:
-
     def test_save_and_load_roundtrip(self):
         """Save adapter, load it back, weights should match."""
         model = _make_model(vocab_size=32, n_embed=16, n_layer=1, n_head=2)
@@ -423,7 +444,6 @@ class TestSaveLoadAdapter:
 
 
 class TestMergeLoRAAdapter:
-
     def test_merge_sets_weights(self):
         """After merge, LoRA weight should be folded into base weight."""
         model = _make_model(vocab_size=32, n_embed=16, n_layer=1, n_head=2)
@@ -433,16 +453,18 @@ class TestMergeLoRAAdapter:
         trainer.apply_lora()
 
         lora_params_before = get_lora_parameters(model)
-        first_lora_key = [k for k in lora_params_before if 'lora_A' in k][0]
-        w_before = lora_params_before[first_lora_key].data.copy()
+        first_lora_key = [k for k in lora_params_before if "lora_A" in k][0]
+        lora_params_before[first_lora_key].data.copy()
 
         model = merge_lora_adapter(model)
 
         lora_params_after = get_lora_parameters(model)
         for key in lora_params_after:
-            if 'lora_A' in key or 'lora_B' in key:
+            if "lora_A" in key or "lora_B" in key:
                 np.testing.assert_allclose(
-                    lora_params_after[key].data, 0.0, atol=1e-7,
+                    lora_params_after[key].data,
+                    0.0,
+                    atol=1e-7,
                     err_msg=f"{key} not zeroed after merge",
                 )
 
@@ -471,11 +493,13 @@ class TestMergeLoRAAdapter:
         model = merge_lora_adapter(model)
 
         for path, module in _walk_slo_tree(model, []):
-            assert not isinstance(module, LoRALinear), \
+            assert not isinstance(module, LoRALinear), (
                 f"LoRALinear still present at {path} after merge"
-            if 'W_q' in path or 'W_v' in path:
-                assert isinstance(module, SloLinear), \
+            )
+            if "W_q" in path or "W_v" in path:
+                assert isinstance(module, SloLinear), (
                     f"Expected SloLinear at {path}, got {type(module).__name__}"
+                )
 
     def test_merge_returns_model(self):
         model = _make_model()
@@ -487,14 +511,13 @@ class TestMergeLoRAAdapter:
         assert result is model
 
     def test_merge_multiple_modules(self):
-        from domain.training._internal.slonet import SloLinear
         model = _make_model(vocab_size=32, n_embed=16, n_layer=1, n_head=2)
         cfg = HFLoraConfig(rank=4, target_modules=["W_q", "W_v", "W_k"])
         trainer = HFLoraTrainer(cfg)
         trainer.model = model
         trainer.apply_lora()
         model = merge_lora_adapter(model)
-        for path, module in _walk_slo_tree(model, []):
+        for _path, module in _walk_slo_tree(model, []):
             assert not isinstance(module, LoRALinear)
 
     def test_merge_then_inference(self):
@@ -512,9 +535,10 @@ class TestMergeLoRAAdapter:
         model = _make_model(vocab_size=32, n_embed=16, n_layer=1, n_head=2)
         # Record base weight before LoRA
         from domain.training._internal.slonet import SloLinear
+
         w_before = None
         for path, module in _walk_slo_tree(model, []):
-            if 'W_q' in path and isinstance(module, SloLinear):
+            if "W_q" in path and isinstance(module, SloLinear):
                 w_before = module.weight.data.copy()
                 break
 
@@ -525,11 +549,13 @@ class TestMergeLoRAAdapter:
         model = merge_lora_adapter(model)
 
         for path, module in _walk_slo_tree(model, []):
-            if 'W_q' in path and isinstance(module, SloLinear):
+            if "W_q" in path and isinstance(module, SloLinear):
                 # With small alpha, merged weight should be close to original
                 np.testing.assert_allclose(
-                    module.weight.data, w_before, atol=0.1,
-                    err_msg=f"W_q weight changed significantly after merge"
+                    module.weight.data,
+                    w_before,
+                    atol=0.1,
+                    err_msg="W_q weight changed significantly after merge",
                 )
                 break
 
@@ -538,10 +564,10 @@ class TestMergeLoRAAdapter:
 
 
 class TestCancellation:
-
     def test_stop_sets_flag(self):
         """stop() should set the cancel event."""
         import threading
+
         cfg = HFLoraConfig()
         cfg._cancel_event = threading.Event()
         trainer = HFLoraTrainer(cfg)
@@ -560,6 +586,7 @@ class TestCancellation:
 
     def test_stop_idempotent(self):
         import threading
+
         cfg = HFLoraConfig()
         cfg._cancel_event = threading.Event()
         trainer = HFLoraTrainer(cfg)
@@ -571,6 +598,7 @@ class TestCancellation:
 
     def test_stop_sets_config_event(self):
         import threading
+
         cfg = HFLoraConfig()
         cfg._cancel_event = threading.Event()
         trainer = HFLoraTrainer(cfg)

@@ -13,11 +13,11 @@ Fixed version of RAGGrounder with:
 from __future__ import annotations
 
 import hashlib
-import re
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
-from collections import Counter
 import logging
+import re
+from collections import Counter
+from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -27,11 +27,12 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TextChunk:
     """A chunked piece of text with metadata."""
+
     id: str
     content: str
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
     token_count: int = 0
-    embedding: Optional[np.ndarray] = None
+    embedding: np.ndarray | None = None
     bm25_score: float = 0.0
 
     def __post_init__(self):
@@ -42,6 +43,7 @@ class TextChunk:
 @dataclass
 class RetrievalResult:
     """Result from retrieval with scores."""
+
     chunk: TextChunk
     dense_score: float
     sparse_score: float
@@ -58,13 +60,13 @@ class BM25Indexer:
     def __init__(self, k1: float = 1.5, b: float = 0.75):
         self.k1 = k1
         self.b = b
-        self.doc_lengths: List[int] = []
+        self.doc_lengths: list[int] = []
         self.avg_doc_length: float = 0.0
-        self.doc_freq: Dict[str, int] = Counter()
+        self.doc_freq: dict[str, int] = Counter()
         self.num_docs: int = 0
-        self.inverted_index: Dict[str, List[Tuple[int, int]]] = {}
+        self.inverted_index: dict[str, list[tuple[int, int]]] = {}
 
-    def index(self, chunks: List[TextChunk]):
+    def index(self, chunks: list[TextChunk]):
         """Build BM25 index."""
         self.num_docs = len(chunks)
         logger.debug("BM25 indexing started: %d documents", self.num_docs)
@@ -90,13 +92,13 @@ class BM25Indexer:
             len(self.doc_freq),
         )
 
-    def _tokenize(self, text: str) -> List[str]:
+    def _tokenize(self, text: str) -> list[str]:
         """Tokenize text."""
         text = text.lower()
-        tokens = re.findall(r'\b\w+\b', text)
+        tokens = re.findall(r"\b\w+\b", text)
         return tokens
 
-    def score(self, query: str) -> List[Tuple[int, float]]:
+    def score(self, query: str) -> list[tuple[int, float]]:
         """
         Score all documents against query.
         Returns list of (doc_id, score) tuples.
@@ -114,8 +116,7 @@ class BM25Indexer:
 
             for doc_id, _ in self.inverted_index[token]:
                 doc_len = self.doc_lengths[doc_id]
-                tf = sum(1 for d, _ in self.inverted_index.get(token, [])
-                         if d == doc_id)
+                tf = sum(1 for d, _ in self.inverted_index.get(token, []) if d == doc_id)
 
                 # BM25 formula
                 numerator = tf * (self.k1 + 1)
@@ -143,15 +144,15 @@ class HybridRetriever:
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3,
         use_rerank: bool = True,
-        embedding_fn: Optional[Any] = None,
+        embedding_fn: Any | None = None,
     ):
         self.dense_weight = dense_weight
         self.sparse_weight = sparse_weight
         self.use_rerank = use_rerank
 
-        self.chunks: List[TextChunk] = []
+        self.chunks: list[TextChunk] = []
         self.bm25 = BM25Indexer()
-        self.embedding_cache: Dict[str, np.ndarray] = {}
+        self.embedding_cache: dict[str, np.ndarray] = {}
         self._embedding_fn = embedding_fn or self._default_embedding
 
     def add_chunk(self, chunk: TextChunk):
@@ -186,7 +187,7 @@ class HybridRetriever:
         self,
         query: str,
         top_k: int = 20,
-    ) -> List[Tuple[int, float]]:
+    ) -> list[tuple[int, float]]:
         """Dense vector search."""
         query_emb = self._get_embedding(query)
 
@@ -206,7 +207,7 @@ class HybridRetriever:
         self,
         query: str,
         top_k: int = 20,
-    ) -> List[Tuple[int, float]]:
+    ) -> list[tuple[int, float]]:
         """Sparse BM25 search."""
         return self.bm25.score(query)[:top_k]
 
@@ -215,7 +216,7 @@ class HybridRetriever:
         query: str,
         top_k: int = 5,
         min_score: float = 0.0,
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         """
         Hybrid retrieval with optional reranking.
         """
@@ -236,7 +237,7 @@ class HybridRetriever:
         max_sparse = max(s for _, s in sparse_results) if sparse_results else 1
 
         # Combine scores
-        combined_scores: Dict[int, Dict[str, float]] = {}
+        combined_scores: dict[int, dict[str, float]] = {}
 
         for doc_id, score in dense_results:
             if doc_id not in combined_scores:
@@ -251,17 +252,16 @@ class HybridRetriever:
         # Calculate combined scores
         results = []
         for doc_id, scores in combined_scores.items():
-            combined = (
-                self.dense_weight * scores["dense"] +
-                self.sparse_weight * scores["sparse"]
+            combined = self.dense_weight * scores["dense"] + self.sparse_weight * scores["sparse"]
+            results.append(
+                RetrievalResult(
+                    chunk=self.chunks[doc_id],
+                    dense_score=scores["dense"],
+                    sparse_score=scores["sparse"],
+                    combined_score=combined,
+                    rank=0,
+                )
             )
-            results.append(RetrievalResult(
-                chunk=self.chunks[doc_id],
-                dense_score=scores["dense"],
-                sparse_score=scores["sparse"],
-                combined_score=combined,
-                rank=0,
-            ))
 
         # Sort by combined score
         results.sort(key=lambda x: -x.combined_score)
@@ -289,8 +289,8 @@ class HybridRetriever:
     def _rerank(
         self,
         query: str,
-        results: List[RetrievalResult],
-    ) -> List[RetrievalResult]:
+        results: list[RetrievalResult],
+    ) -> list[RetrievalResult]:
         """
         Rerank results using cross-encoder style scoring.
         In production, use: sentence-transformers cross-encoder.
@@ -301,14 +301,16 @@ class HybridRetriever:
 
         for r in results:
             # Check novelty
-            novelty = len(set(r.chunk.content.split()) & seen_contexts) / len(r.chunk.content.split())
+            novelty = len(set(r.chunk.content.split()) & seen_contexts) / len(
+                r.chunk.content.split()
+            )
             diversity_score = r.combined_score * (1 - novelty * 0.3)
 
             if diversity_score > 0.1:
                 reranked.append(r)
                 seen_contexts.update(r.chunk.content.split())
 
-        return reranked[:len(results)]
+        return reranked[: len(results)]
 
 
 class CitationTracker:
@@ -318,9 +320,9 @@ class CitationTracker:
     """
 
     def __init__(self):
-        self.claims: List[Dict[str, Any]] = []
+        self.claims: list[dict[str, Any]] = []
 
-    def extract_claims(self, text: str) -> List[Dict[str, Any]]:
+    def extract_claims(self, text: str) -> list[dict[str, Any]]:
         """Extract factual claims from text.
 
         Splits on sentence boundaries first, then applies claim patterns
@@ -329,14 +331,14 @@ class CitationTracker:
         claims = []
 
         # Split into sentences first (avoids cross-sentence captures)
-        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = re.split(r"(?<=[.!?])\s+", text)
 
         # Pattern-based claim extraction
         claim_patterns = [
-            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+is\s+(.+)',
-            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+was\s+(.+)',
-            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+can\s+(.+)',
-            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+has\s+(.+)',
+            r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+is\s+(.+)",
+            r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+was\s+(.+)",
+            r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+can\s+(.+)",
+            r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+has\s+(.+)",
         ]
 
         offset = 0
@@ -344,13 +346,15 @@ class CitationTracker:
             for pattern in claim_patterns:
                 matches = re.finditer(pattern, sentence)
                 for match in matches:
-                    claims.append({
-                        "subject": match.group(1),
-                        "predicate": match.group(2).rstrip('.'),
-                        "text": match.group(0),
-                        "start": offset + match.start(),
-                        "end": offset + match.end(),
-                    })
+                    claims.append(
+                        {
+                            "subject": match.group(1),
+                            "predicate": match.group(2).rstrip("."),
+                            "text": match.group(0),
+                            "start": offset + match.start(),
+                            "end": offset + match.end(),
+                        }
+                    )
             offset += len(sentence) + 1  # +1 for the space
 
         self.claims = claims
@@ -358,9 +362,9 @@ class CitationTracker:
 
     def cite(
         self,
-        claim: Dict[str, Any],
-        source_chunks: List[TextChunk],
-    ) -> Dict[str, Any]:
+        claim: dict[str, Any],
+        source_chunks: list[TextChunk],
+    ) -> dict[str, Any]:
         """Add citation to claim."""
         return {
             **claim,
@@ -399,7 +403,7 @@ class HallucinationDetector:
         self,
         text: str,
         min_confidence: float = 0.5,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Detect hallucinations in text.
 
@@ -420,15 +424,17 @@ class HallucinationDetector:
             sources = self.retriever.retrieve(query, top_k=3, min_score=min_confidence)
 
             if not sources:
-                hallucinations.append({
-                    **claim,
-                    "reason": "No supporting evidence found",
-                    "confidence": 0.0,
-                })
+                hallucinations.append(
+                    {
+                        **claim,
+                        "reason": "No supporting evidence found",
+                        "confidence": 0.0,
+                    }
+                )
             else:
                 # Check predicate overlap — high score alone isn't enough;
                 # the source must actually share predicate words with the claim.
-                claim_words = set(claim['predicate'].lower().split())
+                claim_words = set(claim["predicate"].lower().split())
                 best_overlap = 0.0
                 best_source = None
                 for s in sources:
@@ -440,18 +446,22 @@ class HallucinationDetector:
 
                 if best_overlap < 0.3:
                     # Source matches subject but not predicate → likely hallucination
-                    hallucinations.append({
-                        **claim,
-                        "reason": f"Source mentions {claim['subject']} but not '{claim['predicate'][:50]}'",
-                        "confidence": best_source.combined_score if best_source else 0.0,
-                    })
+                    hallucinations.append(
+                        {
+                            **claim,
+                            "reason": f"Source mentions {claim['subject']} but not '{claim['predicate'][:50]}'",
+                            "confidence": best_source.combined_score if best_source else 0.0,
+                        }
+                    )
                 else:
                     avg_score = sum(s.combined_score for s in sources) / len(sources)
-                    grounded.append({
-                        **claim,
-                        "confidence": avg_score,
-                        "sources": [s.chunk.id for s in sources],
-                    })
+                    grounded.append(
+                        {
+                            **claim,
+                            "confidence": avg_score,
+                            "sources": [s.chunk.id for s in sources],
+                        }
+                    )
 
         # Calculate overall confidence
         total_claims = len(claims)
@@ -486,7 +496,7 @@ class ProductionRAG:
     Production-grade RAG system.
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         config = config or {}
         self.retriever = HybridRetriever(
             dense_weight=config.get("dense_weight", 0.7),
@@ -497,10 +507,10 @@ class ProductionRAG:
     def add_document(
         self,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
         chunk_size: int = 512,
         overlap: int = 50,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Add a document with intelligent chunking.
         """
@@ -517,8 +527,8 @@ class ProductionRAG:
         tokens = content.split()
         stride = max(1, chunk_size - overlap)
         for i in range(0, len(tokens), stride):
-            chunk_tokens = tokens[i:i + chunk_size]
-            chunk_content = ' '.join(chunk_tokens)
+            chunk_tokens = tokens[i : i + chunk_size]
+            chunk_content = " ".join(chunk_tokens)
 
             chunk_id = hashlib.md5(chunk_content.encode()).hexdigest()[:12]
             chunk = TextChunk(
@@ -545,7 +555,7 @@ class ProductionRAG:
         question: str,
         top_k: int = 5,
         return_context: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Query the RAG system.
         """
@@ -580,7 +590,7 @@ class ProductionRAG:
         self,
         generated_text: str,
         question: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Verify generated text and add citations.
         """

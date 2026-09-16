@@ -17,10 +17,9 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Optional, TextIO
+from typing import TextIO
 
 from .base import Logger, LogLevel, LogRecord
-
 
 _NO_COLOR = os.environ.get("NO_COLOR", "").strip() == "1"
 _COLOR_ENABLED = not _NO_COLOR and sys.stdout.isatty()
@@ -44,14 +43,15 @@ class ShellLogger(Logger):
         self,
         name: str = "slo.shell",
         level: LogLevel = LogLevel.INFO,
-        stream: Optional[TextIO] = None,
-        colors: Optional[bool] = None,
+        stream: TextIO | None = None,
+        colors: bool | None = None,
         context=None,
     ) -> None:
         super().__init__(name=name, level=level, context=context)
         self._stream = stream or sys.stdout
         self._colors = _COLOR_ENABLED if colors is None else colors
         from .config import LogFormatter
+
         self._formatter = LogFormatter(fmt="shell", colors=self._colors)
 
     def emit(self, record: LogRecord) -> None:

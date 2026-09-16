@@ -11,8 +11,9 @@ from domain.infrastructure._internal.truth_labeler import (
 
 class TestLabelResult:
     def test_to_dict(self):
-        r = LabelResult(label="factual", confidence=0.8, reason="declarative",
-                        scores={"factual": 0.8})
+        r = LabelResult(
+            label="factual", confidence=0.8, reason="declarative", scores={"factual": 0.8}
+        )
         d = r.to_dict()
         assert d["label"] == "factual"
         assert d["confidence"] == pytest.approx(0.8)
@@ -149,7 +150,7 @@ class TestTruthLabelerBatch:
         texts = ["The sky is blue", "why?", "run the command"]
         batch = l.label_batch(texts)
         assert len(batch) == 3
-        for text, r in zip(texts, batch):
+        for text, r in zip(texts, batch, strict=False):
             single = l.label(text)
             assert r.label == single.label
             assert r.confidence == pytest.approx(single.confidence)
@@ -159,8 +160,13 @@ class TestTruthLabelerScores:
     def test_all_labels_present(self):
         r = TruthLabeler().label("something to classify here")
         assert set(r.scores.keys()) == {
-            "factual", "conceptual", "procedural", "interrogative",
-            "descriptive", "directive", "analytical",
+            "factual",
+            "conceptual",
+            "procedural",
+            "interrogative",
+            "descriptive",
+            "directive",
+            "analytical",
         }
 
     def test_scores_sum_positive(self):

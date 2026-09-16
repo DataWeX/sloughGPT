@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import json
-import math
 import struct
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
@@ -13,24 +11,21 @@ from unittest.mock import patch
 import pytest
 
 from domain.training._internal.service import (
-    _finite_payload,
-    parse_subtitle_text,
-    resolve_dataset_path,
-    build_soul_prompt,
-    get_soul_name,
-    get_soul_traits,
-    read_slo_json_header,
-    describe_checkpoint,
-    find_checkpoint,
-    log_experiment_metric,
-    log_experiment_param,
-    CHECKPOINTS_DIR,
-    TURBO_DIR,
+    _VALID_DATASET_ID,
     SOU_MAGIC,
     VALID_CKPT_NAME,
-    _VALID_DATASET_ID,
+    _finite_payload,
+    build_soul_prompt,
+    describe_checkpoint,
+    find_checkpoint,
+    get_soul_name,
+    get_soul_traits,
+    log_experiment_metric,
+    log_experiment_param,
+    parse_subtitle_text,
+    read_slo_json_header,
+    resolve_dataset_path,
 )
-
 
 # ── _finite_payload ───────────────────────────────────────────────────────────
 
@@ -71,7 +66,9 @@ class TestFinitePayload:
 
     def test_non_float_passthrough(self):
         assert _finite_payload({"a": "hello", "b": 42, "c": None}) == {
-            "a": "hello", "b": 42, "c": None
+            "a": "hello",
+            "b": 42,
+            "c": None,
         }
 
 
@@ -101,21 +98,12 @@ class TestParseSubtitleText:
         assert result == ["Hello world", "Second subtitle"]
 
     def test_srt_skips_numbers_and_timestamps(self):
-        text = (
-            "42\n"
-            "00:01:00,000 --> 00:01:05,000\n"
-            "Actual text\n"
-        )
+        text = "42\n00:01:00,000 --> 00:01:05,000\nActual text\n"
         result = parse_subtitle_text(text)
         assert result == ["Actual text"]
 
     def test_vtt_format(self):
-        text = (
-            "WEBVTT\n"
-            "\n"
-            "00:00.000 --> 00:03.000\n"
-            "VTT subtitle\n"
-        )
+        text = "WEBVTT\n\n00:00.000 --> 00:03.000\nVTT subtitle\n"
         result = parse_subtitle_text(text)
         assert result == ["VTT subtitle"]
 
@@ -128,12 +116,7 @@ class TestParseSubtitleText:
         assert parse_subtitle_text(text) == ["CCC"]
 
     def test_srt_skips_bracket_lines(self):
-        text = (
-            "1\n"
-            "00:00:01,000 --> 00:00:04,000\n"
-            "[music]\n"
-            "Actual dialogue\n"
-        )
+        text = "1\n00:00:01,000 --> 00:00:04,000\n[music]\nActual dialogue\n"
         result = parse_subtitle_text(text)
         assert result == ["Actual dialogue"]
 
@@ -213,17 +196,20 @@ class TestGetSoulName:
     def test_from_name_attr(self):
         class Soul:
             name = "test-soul"
+
         assert get_soul_name(Soul()) == "test-soul"
 
     def test_from_soul_name_attr(self):
         class Soul:
             soul_name = "fallback-soul"
+
         assert get_soul_name(Soul()) == "fallback-soul"
 
     def test_empty_name_falls_back(self):
         class Soul:
             name = ""
             soul_name = "fallback"
+
         assert get_soul_name(Soul()) == "fallback"
 
     def test_no_attrs_returns_unknown(self):
@@ -237,26 +223,32 @@ class TestGetSoulTraits:
     def test_from_soul_traits(self):
         class Soul:
             soul_traits = {"friendly": 0.8}
+
         assert get_soul_traits(Soul()) == {"friendly": 0.8}
 
     def test_from_personality_dict(self):
         class Soul:
             personality = {"creative": 0.9}
+
         assert get_soul_traits(Soul()) == {"creative": 0.9}
 
     def test_from_personality_object_with_to_dict(self):
         class Personality:
             def to_dict(self):
                 return {"bold": 0.7}
+
         class Soul:
             personality = Personality()
+
         assert get_soul_traits(Soul()) == {"bold": 0.7}
 
     def test_from_personality_object_with_dict(self):
         class Personality:
             __dict__ = {"shy": 0.3}
+
         class Soul:
             personality = Personality()
+
         result = get_soul_traits(Soul())
         assert "shy" in result
 

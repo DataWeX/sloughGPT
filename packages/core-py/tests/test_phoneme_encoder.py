@@ -1,10 +1,12 @@
 """Tests for multimodal/phoneme_encoder.py — PhonemeEncoder encode/decode roundtrip."""
 
 import numpy as np
-import pytest
+
 from domain.multimodal._internal.phoneme_encoder import (
-    PhonemeEncoder, text_to_phonemes, ID_TO_PHONEME,
-    BOS, EOS, PAD, SPACE, SILENCE, NUM_PHONEMES,
+    BOS,
+    EOS,
+    NUM_PHONEMES,
+    PhonemeEncoder,
 )
 
 
@@ -113,10 +115,20 @@ class TestPhonemeEncoderDecodePhonemes:
         ids = enc.encode("the quick brown fox")
         phonemes = enc.decode_phonemes(ids)
         assert phonemes == [
-            "DH", "AH",  # the
-            "K", "W", "IH", "K",  # quick
-            "B", "R", "AW", "N",  # brown
-            "F", "AO", "K", "S",  # fox
+            "DH",
+            "AH",  # the
+            "K",
+            "W",
+            "IH",
+            "K",  # quick
+            "B",
+            "R",
+            "AW",
+            "N",  # brown
+            "F",
+            "AO",
+            "K",
+            "S",  # fox
         ]
 
     def test_decode_phonemes_matches_encode(self):
@@ -126,7 +138,7 @@ class TestPhonemeEncoderDecodePhonemes:
             ids = enc.encode(word)
             phonemes = enc.decode_phonemes(ids)
             # Re-encode phonemes and compare
-            re_encoded = enc.encode(" ".join(phonemes))
+            enc.encode(" ".join(phonemes))
             # They should be equivalent (ignoring exact ID mapping)
             assert len(phonemes) > 0
 
@@ -191,14 +203,16 @@ class TestPhonemeEncoderBatch:
         result = enc.encode_batch(texts)
         # First row should match single encode of "hello"
         single = enc.encode("hello")
-        assert np.array_equal(result[0, :single.shape[1]], single.flatten())
+        assert np.array_equal(result[0, : single.shape[1]], single.flatten())
 
     def test_encode_batch_variable_length(self):
         enc = PhonemeEncoder()
         result = enc.encode_batch(["a", "hello"], pad_to_max=False)
         # Should be padded to max length
         assert result.shape[0] == 2
-        assert result.shape[1] == max(len(enc.encode("a").flatten()), len(enc.encode("hello").flatten()))
+        assert result.shape[1] == max(
+            len(enc.encode("a").flatten()), len(enc.encode("hello").flatten())
+        )
 
 
 class TestPhonemeEncoderScorePronunciation:

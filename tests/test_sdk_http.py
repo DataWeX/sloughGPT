@@ -1,4 +1,5 @@
 """Coverage for sloughgpt_sdk.http_client."""
+
 import logging
 import sys
 from pathlib import Path
@@ -25,8 +26,8 @@ from sloughgpt_sdk.http_client import (  # noqa: E402
     RetryInterceptor,
     Sanitizer,
     sanitize_request,
-    with_timeout,
     with_retry,
+    with_timeout,
 )
 
 
@@ -62,7 +63,14 @@ class TestRequestContextDataclasses:
 
 class TestSanitizer:
     def test_sensitive_header_set(self):
-        for name in ("authorization", "cookie", "x-api-key", "x-auth-token", "x-access-token", "proxy-authorization"):
+        for name in (
+            "authorization",
+            "cookie",
+            "x-api-key",
+            "x-auth-token",
+            "x-access-token",
+            "proxy-authorization",
+        ):
             assert name in Sanitizer.SENSITIVE_HEADERS
 
     def test_sanitize_headers_masks_sensitive_case_insensitive(self):
@@ -116,13 +124,15 @@ class TestSanitizer:
 class TestRequestInterceptor:
     def test_add_returns_self_and_appends(self):
         interceptor = RequestInterceptor()
-        fn = lambda ctx: ctx
+        def fn(ctx):
+            return ctx
         assert interceptor.add(fn) is interceptor
         assert len(interceptor._interceptors) == 1
 
     def test_remove_existing_returns_true(self):
         interceptor = RequestInterceptor()
-        fn = lambda ctx: ctx
+        def fn(ctx):
+            return ctx
         interceptor.add(fn)
         assert interceptor.remove(fn) is True
         assert interceptor._interceptors == []
@@ -133,7 +143,9 @@ class TestRequestInterceptor:
 
     def test_intercept_chains(self):
         interceptor = RequestInterceptor()
-        interceptor.add(lambda ctx: RequestContext("PATCH", "http://2", ctx.headers, ctx.body, ctx.timestamp))
+        interceptor.add(
+            lambda ctx: RequestContext("PATCH", "http://2", ctx.headers, ctx.body, ctx.timestamp)
+        )
         out = interceptor.intercept(RequestContext("GET", "http://1", {}, None, 0.0))
         assert out.method == "PATCH"
 
@@ -364,7 +376,7 @@ class TestWithTimeout:
             return "done"
 
         with (
-            patch("signal.signal") as signal,
+            patch("signal.signal"),
             patch("signal.alarm") as alarm,
         ):
             assert work() == "done"
@@ -373,6 +385,7 @@ class TestWithTimeout:
 
     def test_timeout_handler_raises(self):
         with patch("signal.signal") as signal, patch("signal.alarm"):
+
             @with_timeout(timeout=1)
             def work():
                 return 1
@@ -404,7 +417,11 @@ def jsonstr(data):
 
 
 def _fake_ok(**overrides):
-    default = {"status_code": 200, "headers": {"content-type": "application/json"}, "text": jsonstr({"x": 1})}
+    default = {
+        "status_code": 200,
+        "headers": {"content-type": "application/json"},
+        "text": jsonstr({"x": 1}),
+    }
     default.update(overrides)
     return SimpleNamespace(**default)
 

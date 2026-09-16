@@ -1,8 +1,7 @@
 """Tests for ct_provider — thin wrapper making NativeEngine look like SlonetChatProvider."""
 
-import numpy as np
-import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock
+
 from domain.inference._internal.ct_provider import CTransformProvider
 
 

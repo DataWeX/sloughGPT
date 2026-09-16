@@ -10,20 +10,26 @@ Tests the chain:
   → ContinualLearner.deploy()
 """
 
-import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-from domain.inference._internal.vector_store import InMemoryVectorStorefrom domain.learner._internal.entity_extractor import (    extract_entities,
-    extract_relationships,
-    extract_facts_from_conversation,
-)
-from domain.learner._internal.knowledge import (    KnowledgeMemory,
-    KnowledgeFact,
-    KnowledgeIngestor,
-)
+from unittest.mock import patch
+
+import pytest
+
+from domain.inference._internal.vector_store import InMemoryVectorStore
 from domain.knowledge._internal.knowledge import _extract_topics
-from domain.learner._internal.knowledge_augmenter import enrich_with_knowledgefrom domain.learner._internal.continual import ContinualLearner, _tokenizefrom domain.learner._internal.data_filter import DataFilter
+from domain.learner._internal.continual import ContinualLearner
+from domain.learner._internal.data_filter import DataFilter
+from domain.learner._internal.entity_extractor import (
+    extract_entities,
+    extract_facts_from_conversation,
+    extract_relationships,
+)
+from domain.learner._internal.knowledge import (
+    KnowledgeFact,
+    KnowledgeMemory,
+)
+from domain.learner._internal.knowledge_augmenter import enrich_with_knowledge
 
 # ===== Entity Extraction → Storage =====
 

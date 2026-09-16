@@ -3,33 +3,32 @@
 Covers: PointConfig, CompressorConfig, LibraryConfig, TreeConfig, QueueConfig,
 SubprocessConfig, RestartPolicy, MonitorConfig, EngineConfig defaults and edges.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-
-import pytest
 
 _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
 from domain.infrastructure._internal.pugqeep.config import (
-    PointConfig,
     CompressorConfig,
-    LibraryConfig,
-    TreeConfig,
-    QueueConfig,
-    SubprocessConfig,
-    RestartPolicy,
-    MonitorConfig,
     EngineConfig,
+    LibraryConfig,
+    MonitorConfig,
+    PointConfig,
+    QueueConfig,
+    RestartPolicy,
+    SubprocessConfig,
+    TreeConfig,
 )
-
 
 # ---------------------------------------------------------------------------
 # PointConfig
 # ---------------------------------------------------------------------------
+
 
 class TestPointConfig:
     def test_defaults(self):
@@ -88,6 +87,7 @@ class TestPointConfig:
 # CompressorConfig
 # ---------------------------------------------------------------------------
 
+
 class TestCompressorConfig:
     def test_defaults(self):
         c = CompressorConfig()
@@ -144,6 +144,7 @@ class TestCompressorConfig:
 # LibraryConfig
 # ---------------------------------------------------------------------------
 
+
 class TestLibraryConfig:
     def test_defaults(self):
         c = LibraryConfig()
@@ -187,6 +188,7 @@ class TestLibraryConfig:
 # ---------------------------------------------------------------------------
 # TreeConfig
 # ---------------------------------------------------------------------------
+
 
 class TestTreeConfig:
     def test_defaults(self):
@@ -249,6 +251,7 @@ class TestTreeConfig:
 # QueueConfig
 # ---------------------------------------------------------------------------
 
+
 class TestQueueConfig:
     def test_defaults(self):
         c = QueueConfig()
@@ -301,6 +304,7 @@ class TestQueueConfig:
 # ---------------------------------------------------------------------------
 # SubprocessConfig
 # ---------------------------------------------------------------------------
+
 
 class TestSubprocessConfig:
     def test_defaults(self):
@@ -364,6 +368,7 @@ class TestSubprocessConfig:
 # RestartPolicy
 # ---------------------------------------------------------------------------
 
+
 class TestRestartPolicy:
     def test_defaults(self):
         c = RestartPolicy()
@@ -419,6 +424,7 @@ class TestRestartPolicy:
 # ---------------------------------------------------------------------------
 # MonitorConfig
 # ---------------------------------------------------------------------------
+
 
 class TestMonitorConfig:
     def test_defaults(self):
@@ -487,6 +493,7 @@ class TestMonitorConfig:
 # ---------------------------------------------------------------------------
 # EngineConfig
 # ---------------------------------------------------------------------------
+
 
 class TestEngineConfig:
     def test_defaults(self):

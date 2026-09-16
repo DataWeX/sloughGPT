@@ -5,9 +5,13 @@ import time
 
 import pytest
 
-from domain.infrastructure._internal.pugqeep.task_queue import TaskQueue, Task, TaskStatus, TaskPriority
 from domain.infrastructure._internal.pugqeep.engine import Engine, Process, ProcessStatus
-
+from domain.infrastructure._internal.pugqeep.task_queue import (
+    Task,
+    TaskPriority,
+    TaskQueue,
+    TaskStatus,
+)
 
 # ── TaskQueue worker pool tests ─────────────────────────────────────
 
@@ -232,8 +236,10 @@ class TestTaskQueueWorkers:
 
     def test_workers_queue_depth(self):
         gate = threading.Event()
+
         def blocking_handler(task):
             gate.wait(timeout=2.0)
+
         q = TaskQueue(name="test-depth")
         q.register_handler("work", blocking_handler)
         q.start_workers(num_workers=1)
@@ -277,6 +283,7 @@ class TestTaskQueueWorkers:
     def test_many_tasks_sequential(self):
         results = []
         lock = threading.Lock()
+
         def handler(task):
             with lock:
                 results.append(task.data)
@@ -296,6 +303,7 @@ class TestTaskQueueWorkers:
     def test_stop_workers_drains(self):
         results = []
         lock = threading.Lock()
+
         def handler(task):
             with lock:
                 results.append(task.data)
@@ -401,10 +409,20 @@ class TestTask:
 
     def test_task_from_dict_with_optional_fields(self):
         d = {
-            "id": "abc123", "name": "t", "data": None, "status": "pending",
-            "priority": 1, "tree_id": None, "result": None, "error": None,
-            "created_at": 100.0, "started_at": None, "completed_at": None,
-            "retries": 0, "max_retries": 3, "metadata": {},
+            "id": "abc123",
+            "name": "t",
+            "data": None,
+            "status": "pending",
+            "priority": 1,
+            "tree_id": None,
+            "result": None,
+            "error": None,
+            "created_at": 100.0,
+            "started_at": None,
+            "completed_at": None,
+            "retries": 0,
+            "max_retries": 3,
+            "metadata": {},
         }
         t = Task.from_dict(d)
         assert t.id == "abc123"
@@ -851,6 +869,7 @@ class TestEngineWorkers:
     def test_process_args_kwargs(self):
         def add(a, b, c=0):
             return a + b + c
+
         p = Process(fn=add, args=(1, 2), kwargs={"c": 3})
         result = p.fn(*p.args, **p.kwargs)
         assert result == 6

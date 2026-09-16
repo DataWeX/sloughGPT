@@ -3,6 +3,7 @@
 Covers: list, get, create, delete, validate_id, stats.
 Controller is mocked; only HTTP-level behavior is tested.
 """
+
 from __future__ import annotations
 
 import sys
@@ -25,12 +26,42 @@ from routers.datasets import DatasetsRouter  # noqa: E402
 def _mock_ctrl(**overrides) -> MagicMock:
     ctrl = MagicMock()
     ctrl.list_datasets.return_value = [
-        {"id": "ds1", "name": "Test Dataset", "path": "/datasets/ds1", "type": "text", "size_bytes": 100, "size_formatted": "100 B", "num_samples": 10},
+        {
+            "id": "ds1",
+            "name": "Test Dataset",
+            "path": "/datasets/ds1",
+            "type": "text",
+            "size_bytes": 100,
+            "size_formatted": "100 B",
+            "num_samples": 10,
+        },
     ]
-    ctrl.get_dataset.return_value = {"id": "ds1", "name": "Test Dataset", "path": "/datasets/ds1", "type": "text", "size_bytes": 100, "size_formatted": "100 B", "num_samples": 10}
-    ctrl.create_dataset.return_value = {"id": "new-ds", "name": "New", "path": "/datasets/new-ds", "type": "text", "size_bytes": 0, "size_formatted": "Empty", "num_samples": 0}
+    ctrl.get_dataset.return_value = {
+        "id": "ds1",
+        "name": "Test Dataset",
+        "path": "/datasets/ds1",
+        "type": "text",
+        "size_bytes": 100,
+        "size_formatted": "100 B",
+        "num_samples": 10,
+    }
+    ctrl.create_dataset.return_value = {
+        "id": "new-ds",
+        "name": "New",
+        "path": "/datasets/new-ds",
+        "type": "text",
+        "size_bytes": 0,
+        "size_formatted": "Empty",
+        "num_samples": 0,
+    }
     ctrl.delete_dataset.return_value = True
-    ctrl.get_dataset_stats.return_value = {"samples": 10, "chars": 500, "avg_length": 50.0, "lines": 10, "format": "text"}
+    ctrl.get_dataset_stats.return_value = {
+        "samples": 10,
+        "chars": 500,
+        "avg_length": 50.0,
+        "lines": 10,
+        "format": "text",
+    }
     return ctrl
 
 
@@ -38,6 +69,7 @@ def _app(dr: DatasetsRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(dr.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 

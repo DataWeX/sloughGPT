@@ -1,27 +1,36 @@
 """Tests for LoRA numpy inference bridge and HF LoRA fine-tuning."""
 
-import os
 import tempfile
-import numpy as np
-import pytest
 from pathlib import Path
 
-from domain.training._internal.slonet import (
-    SloTransformer, SloTransformerBlock, SloMultiHeadAttention,
-    SloFeedForward, SloLinear, SloEmbedding, SloRMSNorm,
-    Tensor, cross_entropy,
+import numpy as np
+import pytest
+
+from domain.training._internal.hf_lora_finetune import (
+    HFLoraConfig,
+    HFLoraTrainer,
+    _LoRADataset,
+    load_lora_adapter,
+    merge_lora_adapter,
 )
 from domain.training._internal.lora import (
-    LoRALinear, LoRAEmbedding, LoRAConfig, LoRAType,
-    apply_lora_to_model, get_lora_parameters, count_lora_parameters,
-    _walk_slo_tree, _set_nested,
+    LoRAConfig,
+    LoRAEmbedding,
+    LoRALinear,
+    LoRAType,
+    _set_nested,
+    _walk_slo_tree,
+    apply_lora_to_model,
+    count_lora_parameters,
+    get_lora_parameters,
 )
-from domain.training._internal.hf_lora_finetune import (
-    HFLoraConfig, HFLoraTrainer, _LoRADataset,
-    load_lora_adapter, merge_lora_adapter,
+from domain.training._internal.slonet import (
+    SloEmbedding,
+    SloLinear,
+    SloTransformer,
+    Tensor,
 )
 from domain.training._internal.trainer_protocol import TrainResult
-
 
 # ============================================================================
 # Helpers
@@ -268,8 +277,12 @@ class TestLoRALinearForwardNumpy:
         linear.bias.data[:] = np.zeros(16, dtype=np.float32)
 
         lora = LoRALinear(
-            in_features=32, out_features=16, bias=True,
-            rank=4, alpha=8.0, original_weight=linear.weight.data,
+            in_features=32,
+            out_features=16,
+            bias=True,
+            rank=4,
+            alpha=8.0,
+            original_weight=linear.weight.data,
             original_bias=linear.bias.data,
         )
         lora.eval()
@@ -288,8 +301,13 @@ class TestLoRALinearForwardNumpy:
         b = np.zeros(16, dtype=np.float32)
 
         lora = LoRALinear(
-            in_features=32, out_features=16, bias=True,
-            rank=4, alpha=8.0, original_weight=w, original_bias=b,
+            in_features=32,
+            out_features=16,
+            bias=True,
+            rank=4,
+            alpha=8.0,
+            original_weight=w,
+            original_bias=b,
         )
 
         x = np.random.randn(1, 32).astype(np.float32)
@@ -304,8 +322,13 @@ class TestLoRALinearForwardNumpy:
         b = np.zeros(16, dtype=np.float32)
 
         lora = LoRALinear(
-            in_features=32, out_features=16, bias=True,
-            rank=4, alpha=8.0, original_weight=w, original_bias=b,
+            in_features=32,
+            out_features=16,
+            bias=True,
+            rank=4,
+            alpha=8.0,
+            original_weight=w,
+            original_bias=b,
         )
 
         # Modify LoRA params
@@ -324,8 +347,12 @@ class TestLoRALinearForwardNumpy:
         w = np.random.randn(16, 32).astype(np.float32) * 0.1
 
         lora = LoRALinear(
-            in_features=32, out_features=16, bias=False,
-            rank=4, alpha=8.0, lora_type=LoRAType.IA3,
+            in_features=32,
+            out_features=16,
+            bias=False,
+            rank=4,
+            alpha=8.0,
+            lora_type=LoRAType.IA3,
             original_weight=w,
         )
         lora.lora_s.data[:] = 2.0  # double the output
@@ -340,8 +367,12 @@ class TestLoRALinearForwardNumpy:
         """Forward without bias should not add bias term."""
         w = np.random.randn(16, 32).astype(np.float32) * 0.1
         lora = LoRALinear(
-            in_features=32, out_features=16, bias=False,
-            rank=4, alpha=8.0, original_weight=w,
+            in_features=32,
+            out_features=16,
+            bias=False,
+            rank=4,
+            alpha=8.0,
+            original_weight=w,
         )
         x = np.random.randn(1, 32).astype(np.float32)
         out = lora.forward_numpy(x)
@@ -352,8 +383,12 @@ class TestLoRALinearForwardNumpy:
         """Forward should handle batch size > 1."""
         w = np.random.randn(16, 32).astype(np.float32) * 0.1
         lora = LoRALinear(
-            in_features=32, out_features=16, bias=True,
-            rank=4, alpha=8.0, original_weight=w,
+            in_features=32,
+            out_features=16,
+            bias=True,
+            rank=4,
+            alpha=8.0,
+            original_weight=w,
         )
         x = np.random.randn(8, 32).astype(np.float32)
         out = lora.forward_numpy(x)
@@ -363,8 +398,12 @@ class TestLoRALinearForwardNumpy:
         """Output shape should match (batch, out_features)."""
         w = np.random.randn(32, 64).astype(np.float32) * 0.1
         lora = LoRALinear(
-            in_features=64, out_features=32, bias=True,
-            rank=2, alpha=4.0, original_weight=w,
+            in_features=64,
+            out_features=32,
+            bias=True,
+            rank=2,
+            alpha=4.0,
+            original_weight=w,
         )
         x = np.random.randn(4, 64).astype(np.float32)
         out = lora.forward_numpy(x)
@@ -375,9 +414,14 @@ class TestLoRALinearForwardNumpy:
         w = np.random.randn(16, 32).astype(np.float32) * 0.1
         b = np.ones(16, dtype=np.float32) * 0.5
         lora = LoRALinear(
-            in_features=32, out_features=16, bias=True,
-            rank=4, alpha=8.0, lora_type=LoRAType.IA3,
-            original_weight=w, original_bias=b,
+            in_features=32,
+            out_features=16,
+            bias=True,
+            rank=4,
+            alpha=8.0,
+            lora_type=LoRAType.IA3,
+            original_weight=w,
+            original_bias=b,
         )
         lora.lora_s.data[:] = 3.0
         x = np.random.randn(1, 32).astype(np.float32)
@@ -492,20 +536,20 @@ class TestHasLoraFlag:
 
     def test_apply_lora_sets_flag(self):
         model = _make_tiny_model()
-        assert not getattr(model, '_has_lora', False)
+        assert not getattr(model, "_has_lora", False)
         config = LoRAConfig(rank=4, alpha=8.0, target_modules=["W_q", "W_v"])
         model = apply_lora_to_model(model, config)
-        assert getattr(model, '_has_lora', False) is True
+        assert getattr(model, "_has_lora", False) is True
 
     def test_model_without_lora_no_flag(self):
         model = _make_tiny_model()
-        assert not getattr(model, '_has_lora', False)
+        assert not getattr(model, "_has_lora", False)
 
     def test_apply_lora_with_no_targets(self):
         model = _make_tiny_model()
         config = LoRAConfig(rank=4, alpha=8.0, target_modules=["nonexistent"])
         model = apply_lora_to_model(model, config)
-        assert getattr(model, '_has_lora', False) is False
+        assert getattr(model, "_has_lora", False) is False
 
 
 # ============================================================================
@@ -571,7 +615,10 @@ class TestGenerateNumpyLora:
         model = apply_lora_to_model(model, config)
         input_ids = np.array([[1, 2, 3]], dtype=np.int64)
         output = model.generate_numpy(
-            input_ids, max_new_tokens=5, temperature=0.5, repetition_penalty=1.2,
+            input_ids,
+            max_new_tokens=5,
+            temperature=0.5,
+            repetition_penalty=1.2,
         )
         assert output.shape == (1, 8)
         assert np.all(output[:, :3] == input_ids)
@@ -620,7 +667,9 @@ class TestLoRAParameters:
 
     def test_get_lora_parameters_ia3(self):
         model = _make_tiny_model()
-        config = LoRAConfig(rank=4, alpha=8.0, target_modules=["W_q", "W_v"], lora_type=LoRAType.IA3)
+        config = LoRAConfig(
+            rank=4, alpha=8.0, target_modules=["W_q", "W_v"], lora_type=LoRAType.IA3
+        )
         model = apply_lora_to_model(model, config)
         params = get_lora_parameters(model)
         for name in params:
@@ -657,8 +706,12 @@ class TestMergeWeights:
     def test_merge_lora_into_base(self):
         w = np.random.randn(16, 32).astype(np.float32) * 0.1
         lora = LoRALinear(
-            in_features=32, out_features=16, bias=False,
-            rank=4, alpha=8.0, original_weight=w,
+            in_features=32,
+            out_features=16,
+            bias=False,
+            rank=4,
+            alpha=8.0,
+            original_weight=w,
         )
         lora.lora_A.data[:] = np.random.randn(4, 32).astype(np.float32) * 0.1
         lora.lora_B.data[:] = np.random.randn(16, 4).astype(np.float32) * 0.1
@@ -672,8 +725,12 @@ class TestMergeWeights:
     def test_merge_ia3_into_base(self):
         w = np.random.randn(16, 32).astype(np.float32) * 0.1
         lora = LoRALinear(
-            in_features=32, out_features=16, bias=False,
-            rank=4, alpha=8.0, lora_type=LoRAType.IA3,
+            in_features=32,
+            out_features=16,
+            bias=False,
+            rank=4,
+            alpha=8.0,
+            lora_type=LoRAType.IA3,
             original_weight=w,
         )
         lora.lora_s.data[:] = 3.0
@@ -685,8 +742,12 @@ class TestMergeWeights:
     def test_merge_preserves_output(self):
         w = np.random.randn(16, 32).astype(np.float32) * 0.1
         lora = LoRALinear(
-            in_features=32, out_features=16, bias=False,
-            rank=4, alpha=8.0, original_weight=w,
+            in_features=32,
+            out_features=16,
+            bias=False,
+            rank=4,
+            alpha=8.0,
+            original_weight=w,
         )
         lora.lora_A.data[:] = np.random.randn(4, 32).astype(np.float32) * 0.1
         lora.lora_B.data[:] = np.random.randn(16, 4).astype(np.float32) * 0.1
@@ -699,8 +760,12 @@ class TestMergeWeights:
     def test_merge_zero_lora_no_change(self):
         w = np.random.randn(16, 32).astype(np.float32) * 0.1
         lora = LoRALinear(
-            in_features=32, out_features=16, bias=False,
-            rank=4, alpha=8.0, original_weight=w,
+            in_features=32,
+            out_features=16,
+            bias=False,
+            rank=4,
+            alpha=8.0,
+            original_weight=w,
         )
         w_before = lora.weight.data.copy()
         lora.merge_weights()
@@ -720,14 +785,14 @@ class TestSaveLoadAdapter:
         config = LoRAConfig(rank=4, alpha=8.0, target_modules=["W_q", "W_v"])
         model = apply_lora_to_model(model, config)
         for name, param in get_lora_parameters(model).items():
-            if hasattr(param, 'data'):
+            if hasattr(param, "data"):
                 param.data[:] = np.random.randn(*param.data.shape).astype(np.float32) * 0.1
 
         with tempfile.TemporaryDirectory() as tmpdir:
             adapter_path = Path(tmpdir) / "test_adapter.npz"
             adapter_dict = {}
             for name, param in get_lora_parameters(model).items():
-                if hasattr(param, 'data'):
+                if hasattr(param, "data"):
                     adapter_dict[name] = param.data
             np.savez_compressed(str(adapter_path), **adapter_dict)
 
@@ -735,7 +800,7 @@ class TestSaveLoadAdapter:
             model2 = apply_lora_to_model(model2, config)
             adapter = np.load(str(adapter_path))
             for name, param in get_lora_parameters(model2).items():
-                if name in adapter and hasattr(param, 'data'):
+                if name in adapter and hasattr(param, "data"):
                     param.data[:] = adapter[name]
 
             for name in get_lora_parameters(model):
@@ -748,14 +813,14 @@ class TestSaveLoadAdapter:
         config = LoRAConfig(rank=4, alpha=8.0, target_modules=["W_q", "W_v"])
         model = apply_lora_to_model(model, config)
         for name, param in get_lora_parameters(model).items():
-            if hasattr(param, 'data'):
+            if hasattr(param, "data"):
                 param.data[:] = np.ones_like(param.data) * 0.5
 
         with tempfile.TemporaryDirectory() as tmpdir:
             adapter_path = Path(tmpdir) / "adapter.npz"
             adapter_dict = {}
             for name, param in get_lora_parameters(model).items():
-                if hasattr(param, 'data'):
+                if hasattr(param, "data"):
                     adapter_dict[name] = param.data
             np.savez_compressed(str(adapter_path), **adapter_dict)
 
@@ -872,7 +937,7 @@ class TestWalkSloTree:
 
     def test_walk_paths_are_dotted(self):
         model = _make_tiny_model(vocab_size=64, n_embed=32, n_layer=2, n_head=2)
-        for path, module in _walk_slo_tree(model, []):
+        for path, _module in _walk_slo_tree(model, []):
             assert "." in path or "layers" in path
 
     def test_walk_finds_lora_layers(self):
@@ -897,6 +962,7 @@ class TestSetNested:
     def test_set_simple_attr(self):
         class Obj:
             pass
+
         obj = Obj()
         _set_nested(obj, ["x"], 42)
         assert obj.x == 42
@@ -904,8 +970,10 @@ class TestSetNested:
     def test_set_nested_attr(self):
         class Inner:
             pass
+
         class Outer:
             pass
+
         outer = Outer()
         outer.inner = Inner()
         _set_nested(outer, ["inner", "x"], 42)
@@ -914,6 +982,7 @@ class TestSetNested:
     def test_set_list_index(self):
         class Obj:
             pass
+
         obj = Obj()
         obj.items = [10, 20, 30]
         _set_nested(obj, ["items[1]"], 99)
@@ -922,10 +991,13 @@ class TestSetNested:
     def test_set_deeply_nested(self):
         class A:
             pass
+
         class B:
             pass
+
         class C:
             pass
+
         a = A()
         a.b = B()
         a.b.c = C()
@@ -1042,7 +1114,7 @@ class TestEdgeCases:
             adapter_path = Path(tmpdir) / "adapter.npz"
             adapter_dict = {}
             for name, param in get_lora_parameters(model).items():
-                if hasattr(param, 'data'):
+                if hasattr(param, "data"):
                     adapter_dict[name] = param.data
             adapter_dict["_config/rank"] = np.array([config.rank])
             adapter_dict["_config/alpha"] = np.array([config.alpha])

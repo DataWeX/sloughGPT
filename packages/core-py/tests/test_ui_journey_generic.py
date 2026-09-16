@@ -4,7 +4,7 @@ Tests for the Generic UI Journey Testing Library.
 Usage:
     .venv/bin/python -m pytest tests/test_ui_journey_generic.py -x -v
 """
-import pytest
+
 
 
 class TestGenericCore:
@@ -59,10 +59,12 @@ class TestGenericCore:
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
-        result = journey.run([
-            journey.goto("/"),
-            journey.check_body("test"),
-        ])
+        result = journey.run(
+            [
+                journey.goto("/"),
+                journey.check_body("test"),
+            ]
+        )
         assert result.passed
         assert result.passed_count == 2
 

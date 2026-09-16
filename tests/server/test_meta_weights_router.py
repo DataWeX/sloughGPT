@@ -2,8 +2,9 @@
 Tests for the meta-weights router — POST /meta-weights/get and GET /meta-weights/stats.
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -13,6 +14,7 @@ from apps.api.server.routers.meta_weights import router
 @pytest.fixture
 def app():
     from apps.api.server.infrastructure.exception_handlers import register_all_handlers
+
     _app = FastAPI()
     register_all_handlers(_app)
     _app.include_router(router)
@@ -24,15 +26,26 @@ def client(app):
     return TestClient(app, raise_server_exceptions=False)
 
 
-def _make_weight(temperature=0.8, repetition_penalty=1.0, top_p=0.9, top_k=50, style_bias=0.0, confidence_boost=0.0):
-    return type("W", (), {
-        "temperature": temperature,
-        "repetition_penalty": repetition_penalty,
-        "top_p": top_p,
-        "top_k": top_k,
-        "style_bias": style_bias,
-        "confidence_boost": confidence_boost,
-    })()
+def _make_weight(
+    temperature=0.8,
+    repetition_penalty=1.0,
+    top_p=0.9,
+    top_k=50,
+    style_bias=0.0,
+    confidence_boost=0.0,
+):
+    return type(
+        "W",
+        (),
+        {
+            "temperature": temperature,
+            "repetition_penalty": repetition_penalty,
+            "top_p": top_p,
+            "top_k": top_k,
+            "style_bias": style_bias,
+            "confidence_boost": confidence_boost,
+        },
+    )()
 
 
 class TestGetMetaWeights:
@@ -40,7 +53,10 @@ class TestGetMetaWeights:
     def test_returns_adjustment(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight(
-            temperature=0.9, repetition_penalty=1.1, top_p=0.95, top_k=40,
+            temperature=0.9,
+            repetition_penalty=1.1,
+            top_p=0.95,
+            top_k=40,
         )
         mgr._weight_history = [1, 2, 3]
         resp = client.post("/meta-weights/get", json={"user_message": "hello"})
@@ -102,7 +118,10 @@ class TestGetMetaWeights:
     def test_response_contains_all_weight_fields(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight(
-            temperature=0.7, repetition_penalty=1.3, top_p=0.85, top_k=30,
+            temperature=0.7,
+            repetition_penalty=1.3,
+            top_p=0.85,
+            top_k=30,
         )
         mgr._weight_history = [1]
         resp = client.post("/meta-weights/get", json={"user_message": "test"})
@@ -168,7 +187,10 @@ class TestGetMetaWeights:
     def test_all_zero_weight_values_pass_through(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight(
-            temperature=0.0, repetition_penalty=0.0, top_p=0.0, top_k=0,
+            temperature=0.0,
+            repetition_penalty=0.0,
+            top_p=0.0,
+            top_k=0,
         )
         mgr._weight_history = []
         resp = client.post("/meta-weights/get", json={"user_message": "hello"})

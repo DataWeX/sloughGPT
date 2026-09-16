@@ -127,7 +127,7 @@ async def control_stop_training():
     result = controller.stop()
 
     if result["success"]:
-        for jid, job in training_jobs.items():
+        for _jid, job in training_jobs.items():
             if job.get("status") == "running":
                 job["status"] = "stopping"
         signaled = _signal_current_job(cancel=True)

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
-from domain.infrastructure._internal.quant_core.wrapper import matmul_int8_c, matmul_int8_f32_c, matmul_int4_c
+from domain.infrastructure._internal.quant_core.wrapper import (
+    matmul_int4_c,
+    matmul_int8_c,
+    matmul_int8_f32_c,
+)
 
 __all__ = ["matmul_int8_c", "matmul_int8_f32_c", "matmul_int4_c"]

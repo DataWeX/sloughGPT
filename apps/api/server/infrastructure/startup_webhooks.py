@@ -12,13 +12,13 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable, Coroutine
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class WebhookEvent(str, Enum):
+class WebhookEvent(StrEnum):
     """Startup webhook events."""
 
     STARTUP_START = "startup.start"
@@ -172,7 +172,7 @@ class WebhookManager:
         """Record a webhook delivery."""
         self._deliveries.append(delivery)
         if len(self._deliveries) > self._max_deliveries:
-            self._deliveries = self._deliveries[-self._max_deliveries:]
+            self._deliveries = self._deliveries[-self._max_deliveries :]
 
     def get_status(self) -> dict:
         """Get webhook manager status."""

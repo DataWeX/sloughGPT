@@ -5,33 +5,32 @@ import pytest
 
 from domain.training._internal.gguf_export import (
     ARCHITECTURE_MAPPINGS,
-    QUANTIZATION_TYPES,
     MOBILE_RECOMMENDED,
+    QUANTIZATION_TYPES,
+    BloomMapping,
+    DeepseekMapping,
+    FalconMapping,
+    GemmaMapping,
     GGUFExportConfig,
-    TensorMapping,
-    SloughGPTMapping,
+    GPT2Mapping,
+    GPTNeoXMapping,
     LLaMAMapping,
     MistralMapping,
-    GPT2Mapping,
     OPTMapping,
-    FalconMapping,
-    GPTNeoXMapping,
-    BloomMapping,
     PhiMapping,
-    GemmaMapping,
     QwenMapping,
-    DeepseekMapping,
+    SloughGPTMapping,
+    TensorMapping,
     YiMapping,
     _as_float16,
-    detect_architecture,
-    register_architecture,
     count_layers,
-    get_block_mapping,
+    detect_architecture,
     estimate_memory_requirements,
+    get_block_mapping,
     list_available_quantizations,
     list_supported_architectures,
+    register_architecture,
 )
-
 
 # ── GGUFExportConfig ──────────────────────────────────────────────
 
@@ -104,6 +103,7 @@ class TestAsFloat16:
     def test_non_convertible_returns_none(self):
         class CantConvert:
             pass
+
         result = _as_float16(CantConvert())
         assert result is None
 
@@ -247,20 +247,34 @@ class TestMappingBase:
 
     def test_base_special_tensors_default(self):
         class _DummyMapping(TensorMapping):
-            def get_tensor_map(self): return {}
-            def get_block_prefix(self): return ""
-            def has_rope(self): return False
-            def has_position_embeddings(self): return False
+            def get_tensor_map(self):
+                return {}
+
+            def get_block_prefix(self):
+                return ""
+
+            def has_rope(self):
+                return False
+
+            def has_position_embeddings(self):
+                return False
 
         m = _DummyMapping("base", "llama")
         assert m.get_special_tensors() == {}
 
     def test_base_fused_qkv_default(self):
         class _DummyMapping(TensorMapping):
-            def get_tensor_map(self): return {}
-            def get_block_prefix(self): return ""
-            def has_rope(self): return False
-            def has_position_embeddings(self): return False
+            def get_tensor_map(self):
+                return {}
+
+            def get_block_prefix(self):
+                return ""
+
+            def has_rope(self):
+                return False
+
+            def has_position_embeddings(self):
+                return False
 
         m = _DummyMapping("base", "llama")
         assert m.get_fused_qkv_keys() == []
@@ -491,7 +505,7 @@ class TestListQuantizations:
             assert isinstance(mobile, bool)
 
     def test_mobile_recommended_flag(self):
-        for name, desc, mobile in list_available_quantizations():
+        for name, _desc, mobile in list_available_quantizations():
             if name in MOBILE_RECOMMENDED:
                 assert mobile is True
 

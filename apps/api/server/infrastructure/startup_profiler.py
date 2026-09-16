@@ -12,9 +12,10 @@ Usage:
 
 import logging
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Generator
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +148,9 @@ class StartupProfiler:
             if hook.success:
                 logger.debug("Hook %s completed in %.1fms", hook_name, hook.duration_ms)
             else:
-                logger.warning("Hook %s failed after %.1fms: %s", hook_name, hook.duration_ms, hook.error)
+                logger.warning(
+                    "Hook %s failed after %.1fms: %s", hook_name, hook.duration_ms, hook.error
+                )
 
     def finish(self) -> StartupProfile:
         """Finish profiling and return the complete profile."""

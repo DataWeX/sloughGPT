@@ -1,10 +1,14 @@
 """Meaningful tests for knowledge_augmenter — small talk detection, web search need, content tokens, topical relatedness."""
 
-import pytest
 from domain.learner._internal.knowledge_augmenter import (
-    _is_casual_small_talk, _needs_web_search, _content_tokens,
-    _topically_related, MIN_RELEVANCE_SCORE, _QUERY_SIGNALS,
-    _CASUAL_GREETINGS, _CASUAL_PATTERNS,
+    _CASUAL_GREETINGS,
+    _CASUAL_PATTERNS,
+    _QUERY_SIGNALS,
+    MIN_RELEVANCE_SCORE,
+    _content_tokens,
+    _is_casual_small_talk,
+    _needs_web_search,
+    _topically_related,
 )
 
 
@@ -89,22 +93,15 @@ class TestContentTokens:
 
 class TestTopicallyRelated:
     def test_related(self):
-        assert _topically_related(
-            "What is Python?",
-            "Python is a programming language"
-        ) is True
+        assert _topically_related("What is Python?", "Python is a programming language") is True
 
     def test_not_related(self):
-        assert _topically_related(
-            "What color is the sky?",
-            "Paris is the capital of France"
-        ) is False
+        assert (
+            _topically_related("What color is the sky?", "Paris is the capital of France") is False
+        )
 
     def test_shared_short_words_not_enough(self):
-        assert _topically_related(
-            "is the",
-            "is the"
-        ) is False
+        assert _topically_related("is the", "is the") is False
 
     def test_empty(self):
         assert _topically_related("", "") is False

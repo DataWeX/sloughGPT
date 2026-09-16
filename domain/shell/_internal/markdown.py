@@ -13,8 +13,8 @@ Renders basic Markdown to ANSI-colored terminal text:
 
 from __future__ import annotations
 
-import re
 import os
+import re
 
 # ANSI codes
 _COLOR_ENABLED = not os.environ.get("NO_COLOR")
@@ -107,7 +107,7 @@ def render_markdown(text: str, width: int = 0) -> str:
         m = re.match(r"^(\d+)\.\s", line)
         if m:
             num = m.group(1)
-            content = line[len(num) + 2:]
+            content = line[len(num) + 2 :]
             result.append(f"  {_YELLOW}{num}.{_RESET} {_render_inline(content)}")
             continue
 

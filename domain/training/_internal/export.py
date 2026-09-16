@@ -54,11 +54,10 @@ See Also
 
 from __future__ import annotations
 
-import logging
 import datetime
-from typing import Optional, Dict, Any, List
-
-from dataclasses import dataclass, field, asdict
+import logging
+from dataclasses import asdict, dataclass, field
+from typing import Any
 
 logger = logging.getLogger("slo.export")
 
@@ -163,7 +162,7 @@ class ModelMetadata:
     n_embed: int = 256
     n_layer: int = 6
     n_head: int = 8
-    n_kv_head: Optional[int] = None
+    n_kv_head: int | None = None
     block_size: int = 128
     max_seq_len: int = 2048
 
@@ -199,10 +198,10 @@ class ModelMetadata:
     # Slo (SloughGPT)
     soul_name: str = ""
     soul_hash: str = ""
-    personality: Dict[str, Any] = field(default_factory=dict)
-    behavior: Dict[str, Any] = field(default_factory=dict)
-    cognition: Dict[str, Any] = field(default_factory=dict)
-    emotion: Dict[str, Any] = field(default_factory=dict)
+    personality: dict[str, Any] = field(default_factory=dict)
+    behavior: dict[str, Any] = field(default_factory=dict)
+    cognition: dict[str, Any] = field(default_factory=dict)
+    emotion: dict[str, Any] = field(default_factory=dict)
 
     # Technical
     precision: str = "fp32"
@@ -214,21 +213,21 @@ class ModelMetadata:
     architecture: str = ""
 
     # Custom
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     notes: str = ""
-    config: Dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ModelMetadata":
+    def from_dict(cls, data: dict[str, Any]) -> ModelMetadata:
         """Create from dictionary."""
         return cls(**{k: v for k, v in data.items() if k in cls.__annotations__})
 
     @classmethod
-    def from_model(cls, model: "Any", name: str = "sloughgpt") -> "ModelMetadata":
+    def from_model(cls, model: Any, name: str = "sloughgpt") -> ModelMetadata:
         """Extract metadata from a model instance.
 
         Args:
@@ -255,7 +254,7 @@ class ModelMetadata:
                     setattr(metadata, field, val)
 
         # Set timestamps
-        metadata.created_at = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+        metadata.created_at = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
 
         metadata.torch_version = ""
 
@@ -268,7 +267,7 @@ class ModelMetadata:
         train_loss: float = 0.0,
         val_loss: float = 0.0,
         steps: int = 0,
-    ) -> "ModelMetadata":
+    ) -> ModelMetadata:
         """Add training information to metadata.
 
         Args:
@@ -287,7 +286,7 @@ class ModelMetadata:
         self.final_val_loss = val_loss
         self.steps_trained = steps
         self.last_step = steps
-        self.trained_at = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+        self.trained_at = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
 
         if val_loss > 0 and (self.best_val_loss == 0 or val_loss < self.best_val_loss):
             self.best_val_loss = val_loss
@@ -297,9 +296,9 @@ class ModelMetadata:
     def add_soul_info(
         self,
         soul_name: str = "",
-        personality: Optional[Dict] = None,
+        personality: dict | None = None,
         soul_hash: str = "",
-    ) -> "ModelMetadata":
+    ) -> ModelMetadata:
         """Add soul/personality information.
 
         Args:
@@ -316,7 +315,7 @@ class ModelMetadata:
             self.personality = personality
         return self
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         """Validate metadata completeness.
 
         Returns:
@@ -346,10 +345,10 @@ class ModelMetadata:
 
 
 def create_model_metadata(
-    model: "Any",
+    model: Any,
     name: str = "sloughgpt",
-    training_info: Optional[Dict[str, Any]] = None,
-    soul_info: Optional[Dict[str, Any]] = None,
+    training_info: dict[str, Any] | None = None,
+    soul_info: dict[str, Any] | None = None,
 ) -> ModelMetadata:
     """Create comprehensive model metadata.
 
@@ -387,7 +386,7 @@ def create_model_metadata(
     if soul_info:
         metadata.add_soul_info(**soul_info)
 
-    metadata.exported_at = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+    metadata.exported_at = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
 
     return metadata
 
@@ -442,9 +441,9 @@ class ExportConfig:
     input_path: str = ""
     output_path: str = ""
     format: str = "safetensors"
-    quantization: Optional[str] = None
+    quantization: str | None = None
     include_tokenizer: bool = True
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
     seq_len: int = 128
     opset_version: int = 17
     n_ctx: int = 2048
@@ -503,7 +502,7 @@ class GGUFExportOptions:
 
 
 def export_to_gguf(
-    model: "Any",
+    model: Any,
     output_path: str,
     quantization: str = "Q4_K_M",
     tokenizer: Any = None,
@@ -559,7 +558,12 @@ def export_to_gguf(
         https://github.com/mybigday/llama.rn
         https://github.com/ggerganov/llama.cpp
     """
-    from domain.training._internal.gguf_export import export_to_gguf as gguf_export, GGUFExportConfig
+    from domain.training._internal.gguf_export import (
+        GGUFExportConfig,
+    )
+    from domain.training._internal.gguf_export import (
+        export_to_gguf as gguf_export,
+    )
 
     config = GGUFExportConfig(quantization=quantization)
 
@@ -569,13 +573,17 @@ def export_to_gguf(
         tokenizer=tokenizer,
         config=config,
     )
-    logger.info("Exported GGUF: %s (%s)", output_path, quantization,
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Exported GGUF: %s (%s)",
+        output_path,
+        quantization,
+        extra={"tag": "TRAIN"},
+    )
     return result
 
 
 def export_to_gguf_fp16(
-    model: "Any",
+    model: Any,
     output_path: str,
     tokenizer: Any = None,
 ) -> str:
@@ -599,14 +607,18 @@ def export_to_gguf_fp16(
         llama.cpp quantize tool: https://github.com/ggerganov/llama.cpp
     """
     from domain.training._internal.gguf_export import export_to_gguf_fp16 as gguf_fp16_export
+
     result = gguf_fp16_export(model, output_path, tokenizer)
-    logger.info("Exported GGUF FP16: %s", output_path,
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Exported GGUF FP16: %s",
+        output_path,
+        extra={"tag": "TRAIN"},
+    )
     return result
 
 
 def export_to_gguf_q4_k_m(
-    model: "Any",
+    model: Any,
     output_path: str,
     tokenizer: Any = None,
 ) -> str:
@@ -628,14 +640,18 @@ def export_to_gguf_q4_k_m(
         memory requirements.
     """
     from domain.training._internal.gguf_export import export_to_gguf_q4_k_m as gguf_q4_k_m_export
+
     result = gguf_q4_k_m_export(model, output_path, tokenizer)
-    logger.info("Exported GGUF Q4_K_M: %s", output_path,
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Exported GGUF Q4_K_M: %s",
+        output_path,
+        extra={"tag": "TRAIN"},
+    )
     return result
 
 
 def export_to_sou(
-    model: "Any",
+    model: Any,
     output_path: str,
     soul_profile: Any = None,
     weights_only: bool = False,
@@ -664,8 +680,11 @@ def export_to_sou(
         soul_profile=soul_profile,
         weights_only=weights_only,
     )
-    logger.info("Exported Slo Unit: %s", output_path,
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Exported Slo Unit: %s",
+        output_path,
+        extra={"tag": "TRAIN"},
+    )
     return output_path
 
 
@@ -706,7 +725,7 @@ def export_model(config: ExportConfig, model: Any, tokenizer: Any) -> list:
     return results
 
 
-def list_export_formats() -> Dict[str, str]:
+def list_export_formats() -> dict[str, str]:
     """List supported export formats with descriptions.
 
     Returns:

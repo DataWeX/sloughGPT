@@ -1,7 +1,6 @@
 """Tests for pugqeep config dataclasses."""
-from __future__ import annotations
 
-from pathlib import Path
+from __future__ import annotations
 
 from domain.infrastructure._internal.pugqeep.config import (
     CompressorConfig,

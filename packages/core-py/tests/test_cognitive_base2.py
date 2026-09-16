@@ -1,16 +1,17 @@
 """Tests for domain.cognitive._internal.base — CognitiveDomain and CognitiveException."""
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from domains import DomainException, Thought, ThoughtType, Memory
-from domain.cognitive._internal.base import CognitiveDomain, CognitiveException
+import pytest
+from domains import DomainException
 
+from domain.cognitive._internal.base import CognitiveDomain, CognitiveException
 
 # ---------------------------------------------------------------------------
 # Exception hierarchy
 # ---------------------------------------------------------------------------
+
 
 class TestCognitiveException:
     def test_is_subclass_of_domain_exception(self):
@@ -27,6 +28,7 @@ class TestCognitiveException:
 # ---------------------------------------------------------------------------
 # CognitiveDomain — construction defaults
 # ---------------------------------------------------------------------------
+
 
 class TestCognitiveDomainDefaults:
     def setup_method(self):
@@ -75,6 +77,7 @@ class TestCognitiveDomainDefaults:
 # get_cognitive_state
 # ---------------------------------------------------------------------------
 
+
 class TestGetCognitiveState:
     def setup_method(self):
         self.domain = CognitiveDomain()
@@ -87,7 +90,12 @@ class TestGetCognitiveState:
     @pytest.mark.asyncio
     async def test_keys(self):
         state = await self.domain.get_cognitive_state()
-        assert set(state.keys()) == {"state", "active_thoughts_count", "memory_count", "components_status"}
+        assert set(state.keys()) == {
+            "state",
+            "active_thoughts_count",
+            "memory_count",
+            "components_status",
+        }
 
     @pytest.mark.asyncio
     async def test_idle_state(self):
@@ -135,6 +143,7 @@ class TestGetCognitiveState:
 # process_thought — processor not initialized
 # ---------------------------------------------------------------------------
 
+
 class TestProcessThoughtNoProcessor:
     @pytest.mark.asyncio
     async def test_raises_cognitive_exception(self):
@@ -146,6 +155,7 @@ class TestProcessThoughtNoProcessor:
 # ---------------------------------------------------------------------------
 # store_memory — memory manager not initialized
 # ---------------------------------------------------------------------------
+
 
 class TestStoreMemoryNoManager:
     @pytest.mark.asyncio
@@ -159,6 +169,7 @@ class TestStoreMemoryNoManager:
 # retrieve_memory — memory manager not initialized
 # ---------------------------------------------------------------------------
 
+
 class TestRetrieveMemoryNoManager:
     @pytest.mark.asyncio
     async def test_raises_cognitive_exception(self):
@@ -171,6 +182,7 @@ class TestRetrieveMemoryNoManager:
 # reason — reasoning engine not initialized
 # ---------------------------------------------------------------------------
 
+
 class TestReasonNoEngine:
     @pytest.mark.asyncio
     async def test_raises_cognitive_exception(self):
@@ -182,6 +194,7 @@ class TestReasonNoEngine:
 # ---------------------------------------------------------------------------
 # _shutdown_component
 # ---------------------------------------------------------------------------
+
 
 class TestShutdownComponent:
     @pytest.mark.asyncio
@@ -218,6 +231,7 @@ class TestShutdownComponent:
 # ---------------------------------------------------------------------------
 # _stop_cognitive_processes
 # ---------------------------------------------------------------------------
+
 
 class TestStopCognitiveProcesses:
     @pytest.mark.asyncio
@@ -261,18 +275,29 @@ class TestStopCognitiveProcesses:
 # _on_shutdown — component order
 # ---------------------------------------------------------------------------
 
+
 class TestOnShutdown:
     @pytest.mark.asyncio
     async def test_shutdown_calls_components_in_order(self):
         domain = CognitiveDomain()
         order = []
-        for name in ("cognitive_processor", "metacognitive_monitor", "reasoning_engine", "memory_manager"):
+        for name in (
+            "cognitive_processor",
+            "metacognitive_monitor",
+            "reasoning_engine",
+            "memory_manager",
+        ):
             comp = AsyncMock()
             comp.shutdown.side_effect = lambda n=name: order.append(n)
             setattr(domain, name, comp)
 
         await domain._on_shutdown()
-        assert order == ["cognitive_processor", "metacognitive_monitor", "reasoning_engine", "memory_manager"]
+        assert order == [
+            "cognitive_processor",
+            "metacognitive_monitor",
+            "reasoning_engine",
+            "memory_manager",
+        ]
         assert domain.is_initialized is False
 
     @pytest.mark.asyncio

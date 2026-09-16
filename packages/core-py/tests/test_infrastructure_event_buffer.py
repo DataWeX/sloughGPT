@@ -1,7 +1,12 @@
 """Tests for EventBuffer — thread-safe ring buffer for dashboard events."""
+
 from __future__ import annotations
 
-from domain.infrastructure._internal.event_buffer import DashboardEvent, EventBuffer, get_event_buffer
+from domain.infrastructure._internal.event_buffer import (
+    DashboardEvent,
+    EventBuffer,
+    get_event_buffer,
+)
 
 
 class TestDashboardEvent:
@@ -16,7 +21,7 @@ class TestDashboardEvent:
         e = DashboardEvent(ts=1.0, category="X", message="Y")
         try:
             e.category = "Z"
-            assert False, "should be frozen"
+            raise AssertionError("should be frozen")
         except AttributeError:
             pass
 
@@ -57,10 +62,13 @@ class TestEventBuffer:
 
     def test_thread_safety(self):
         import threading
+
         buf = EventBuffer(maxlen=100)
+
         def worker(n):
             for i in range(10):
                 buf.record("SYS", f"t{n}-e{i}")
+
         threads = [threading.Thread(target=worker, args=(i,)) for i in range(10)]
         for t in threads:
             t.start()

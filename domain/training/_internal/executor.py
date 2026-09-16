@@ -19,15 +19,16 @@ import logging
 import sys
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable, Dict, Optional
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger("slo.training.executor")
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     """Lifecycle states for a training job."""
 
     QUEUED = "queued"
@@ -42,17 +43,17 @@ class JobInfo:
     """Metadata for a single training job."""
 
     job_id: str
-    tree_id: Optional[str] = None
+    tree_id: str | None = None
     status: JobStatus = JobStatus.QUEUED
-    future: Optional[Future] = field(default=None, repr=False)
+    future: Future | None = field(default=None, repr=False)
     submitted_at: float = field(default_factory=time.time)
-    started_at: Optional[float] = None
-    completed_at: Optional[float] = None
-    error: Optional[str] = None
+    started_at: float | None = None
+    completed_at: float | None = None
+    error: str | None = None
     cancel_requested: bool = False
     result: Any = None
 
-    def elapsed(self) -> Optional[float]:
+    def elapsed(self) -> float | None:
         """Wall-clock seconds since submission (or total if completed)."""
         end = self.completed_at or time.time()
         return end - self.submitted_at
@@ -109,8 +110,8 @@ class TrainingExecutor:
         fn: Callable[..., Any],
         job_id: str,
         *args: Any,
-        tree_id: Optional[str] = None,
-        _call_args: Optional[dict[str, Any]] = None,
+        tree_id: str | None = None,
+        _call_args: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> str:
         """Submit a training function to the pool.
@@ -137,6 +138,7 @@ class TrainingExecutor:
         def _wrapper() -> Any:
             # Switch RM to training mode for optimal pool sizing
             from domain.infrastructure._internal.resource_manager import get_resource_manager
+
             rm = get_resource_manager()
             prev_mode = rm.mode
             if prev_mode != "training":
@@ -161,7 +163,10 @@ class TrainingExecutor:
         info.future = future
         logger.info(
             "Submitted training job %s tree=%s (pool=%d/%d)",
-            job_id, tree_id or "-", self._running(), self._max_workers,
+            job_id,
+            tree_id or "-",
+            self._running(),
+            self._max_workers,
             extra={"tag": "TRAIN"},
         )
         return job_id
@@ -203,16 +208,20 @@ class TrainingExecutor:
             if point_library is not None and isinstance(result, dict):
                 try:
                     from domain.infrastructure._internal.pugqeep import PointCompressor
+
                     compressor = PointCompressor()
                     for name, weights in result.items():
                         if hasattr(weights, "nbytes"):
                             point = compressor.compress_cluster(
-                                weights, name, n_clusters=16,
+                                weights,
+                                name,
+                                n_clusters=16,
                             )
                             point_library.add(point)
                     logger.info(
                         "Stored %d trained Points in library for tree %s",
-                        len(result), tree_id,
+                        len(result),
+                        tree_id,
                         extra={"tag": "TRAIN"},
                     )
                 except Exception as e:
@@ -220,19 +229,23 @@ class TrainingExecutor:
             return result
 
         return self.submit(
-            _wrapped_fn, job_id, *args, tree_id=tree_id, **kwargs,
+            _wrapped_fn,
+            job_id,
+            *args,
+            tree_id=tree_id,
+            **kwargs,
         )
 
     # ── Query ─────────────────────────────────────────────────────────
 
-    def status(self, job_id: str) -> Optional[dict[str, Any]]:
+    def status(self, job_id: str) -> dict[str, Any] | None:
         """Return job metadata dict, or None if unknown."""
         info = self._jobs.get(job_id)
         if info is None:
             return None
         return info.to_dict()
 
-    def result_summary(self, job_id: str) -> Optional[dict[str, Any]]:
+    def result_summary(self, job_id: str) -> dict[str, Any] | None:
         """Return shape/dtype summary for a completed job's trained weights.
 
         Returns None if the job is unknown or not completed.
@@ -255,8 +268,7 @@ class TrainingExecutor:
                 for name, w in info.result.items()
             },
             "total_bytes": sum(
-                w.nbytes if hasattr(w, "nbytes") else 0
-                for w in info.result.values()
+                w.nbytes if hasattr(w, "nbytes") else 0 for w in info.result.values()
             ),
         }
 
@@ -305,7 +317,11 @@ class TrainingExecutor:
                 logger.info("Cancelled queued job %s", job_id, extra={"tag": "TRAIN"})
                 return True
             # Job is already running — flag is set, function must check is_cancelled()
-            logger.info("Cancellation requested for running job %s (must check is_cancelled())", job_id, extra={"tag": "TRAIN"})
+            logger.info(
+                "Cancellation requested for running job %s (must check is_cancelled())",
+                job_id,
+                extra={"tag": "TRAIN"},
+            )
             return True
         return False
 
@@ -345,7 +361,9 @@ class TrainingExecutor:
         self._executor.shutdown(wait=wait, cancel_futures=not wait)
         if _instance is self:
             _instance = None
-        logger.info("TrainingExecutor shut down (workers=%d)", self._max_workers, extra={"tag": "TRAIN"})
+        logger.info(
+            "TrainingExecutor shut down (workers=%d)", self._max_workers, extra={"tag": "TRAIN"}
+        )
 
     # ── Internals ─────────────────────────────────────────────────────
 
@@ -357,7 +375,7 @@ class TrainingExecutor:
 
 # ── Singleton ─────────────────────────────────────────────────────────
 
-_instance: Optional[TrainingExecutor] = None
+_instance: TrainingExecutor | None = None
 _instance_lock = threading.Lock()
 
 
@@ -374,8 +392,10 @@ def get_training_executor() -> TrainingExecutor:
         if _instance is not None:
             return _instance
         from domain.infrastructure._internal.resource_manager import get_resource_manager
+
         rm = get_resource_manager()
         import os
+
         max_workers = int(os.environ.get("SLO_TRAIN_POOL_SIZE", rm.train_pool_size))
         _instance = TrainingExecutor(max_workers=max_workers)
         logger.info("TrainingExecutor created (workers=%d)", max_workers, extra={"tag": "TRAIN"})
@@ -388,8 +408,8 @@ def get_training_executor() -> TrainingExecutor:
 def compress_checkpoint(
     soul_path: str,
     n_clusters: int = 16,
-    output_dir: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
+    output_dir: str | None = None,
+) -> dict[str, Any] | None:
     """Compress a ``.soul`` checkpoint into PointLibrary vectors.
 
     Args:
@@ -412,8 +432,9 @@ def compress_checkpoint(
         return None
 
     try:
-        from domain.infrastructure._internal.pugqeep import PointCompressor
         from domains.infrastructure.pugqeep.library import PointLibrary
+
+        from domain.infrastructure._internal.pugqeep import PointCompressor
         from domain.training._internal.slonet import import_from_sou
     except ImportError as exc:
         logger.warning("Pugqeep/SloNet not available: %s", exc, extra={"tag": "TRAIN"})
@@ -437,6 +458,7 @@ def compress_checkpoint(
     library = PointLibrary(name=lib_name, storage_dir=out_dir)
 
     import numpy as np
+
     total_raw = 0
     total_compressed = 0
     for name, weights in state_dict.items():
@@ -445,7 +467,9 @@ def compress_checkpoint(
         total_raw += weights.nbytes
         point_id = f"{lib_name}.{name}"
         point = compressor.compress_cluster(
-            weights, point_id, n_clusters=n_clusters,
+            weights,
+            point_id,
+            n_clusters=n_clusters,
         )
         total_compressed += point.nbytes()
         library.add(point)
@@ -468,8 +492,7 @@ def compress_checkpoint(
             "block_size": getattr(model, "block_size", 32),
             "use_rope": getattr(model, "use_rope", True),
             "weight_shapes": {
-                name: list(np.asarray(w, dtype=np.float32).shape)
-                for name, w in state_dict.items()
+                name: list(np.asarray(w, dtype=np.float32).shape) for name, w in state_dict.items()
             },
         },
     }
@@ -483,7 +506,9 @@ def compress_checkpoint(
     }
     logger.info(
         "Compressed %s → %d points (%.1fx ratio)",
-        soul_file.name, stats["point_count"], stats["compression_ratio"],
+        soul_file.name,
+        stats["point_count"],
+        stats["compression_ratio"],
         extra={"tag": "TRAIN"},
     )
     return stats

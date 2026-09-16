@@ -3,18 +3,18 @@
 import numpy as np
 import pytest
 
-from domain.training._internal.trainer_protocol import TrainResult, TrainerProtocol
 from domain.inference._internal.embeddings import (
+    BatchEmbedder,
+    Embedder,
     EmbeddingProvider,
     EmbeddingResult,
     InMemoryEmbedder,
-    Embedder,
-    BatchEmbedder,
     create_embedder,
 )
-
+from domain.training._internal.trainer_protocol import TrainerProtocol, TrainResult
 
 # ── TrainResult ──────────────────────────────────────────────────────────────
+
 
 class TestTrainResultDefaults:
     def test_success_default_true(self):
@@ -89,11 +89,20 @@ class TestTrainResultDefaults:
 class TestTrainResultConstruction:
     def test_all_fields_positional(self):
         r = TrainResult(
-            success=False, status="failed", final_loss=1.5,
-            best_eval_loss=0.8, global_step=100, total_steps=200,
-            epochs_completed=5, model_path="/tmp/m", checkpoint_name="cp9",
-            method="slonet", metrics={"ppl": 2.3}, avg_quality=4.2,
-            data_quality={"repetition": 0.1}, error="OOM",
+            success=False,
+            status="failed",
+            final_loss=1.5,
+            best_eval_loss=0.8,
+            global_step=100,
+            total_steps=200,
+            epochs_completed=5,
+            model_path="/tmp/m",
+            checkpoint_name="cp9",
+            method="slonet",
+            metrics={"ppl": 2.3},
+            avg_quality=4.2,
+            data_quality={"repetition": 0.1},
+            error="OOM",
         )
         assert r.success is False
         assert r.final_loss == 1.5
@@ -192,11 +201,23 @@ class TestTrainResultToDict:
         r = TrainResult()
         d = r.to_dict()
         expected_keys = {
-            "success", "status", "final_loss", "best_eval_loss",
-            "global_step", "total_steps", "epochs_completed",
-            "model_path", "checkpoint_name", "method", "error",
-            "message", "elapsed", "phases", "checkpoint",
-            "avg_quality", "data_quality",
+            "success",
+            "status",
+            "final_loss",
+            "best_eval_loss",
+            "global_step",
+            "total_steps",
+            "epochs_completed",
+            "model_path",
+            "checkpoint_name",
+            "method",
+            "error",
+            "message",
+            "elapsed",
+            "phases",
+            "checkpoint",
+            "avg_quality",
+            "data_quality",
         }
         assert expected_keys.issubset(set(d.keys()))
 
@@ -214,11 +235,14 @@ class TestTrainerProtocol:
         class FakeTrainer:
             def train(self, **kwargs):
                 return TrainResult()
+
             @property
             def is_training(self):
                 return False
+
             def stop(self):
                 pass
+
         assert isinstance(FakeTrainer(), TrainerProtocol)
 
     def test_missing_train_not_satisfies(self):
@@ -226,21 +250,26 @@ class TestTrainerProtocol:
             @property
             def is_training(self):
                 return False
+
             def stop(self):
                 pass
+
         assert not isinstance(NoTrain(), TrainerProtocol)
 
     def test_missing_stop_not_satisfies(self):
         class NoStop:
             def train(self, **kwargs):
                 return TrainResult()
+
             @property
             def is_training(self):
                 return False
+
         assert not isinstance(NoStop(), TrainerProtocol)
 
 
 # ── EmbeddingProvider ────────────────────────────────────────────────────────
+
 
 class TestEmbeddingProvider:
     def test_all_members(self):
@@ -260,6 +289,7 @@ class TestEmbeddingProvider:
 
 
 # ── EmbeddingResult ──────────────────────────────────────────────────────────
+
 
 class TestEmbeddingResult:
     def test_fields(self):
@@ -284,6 +314,7 @@ class TestEmbeddingResult:
 
 
 # ── InMemoryEmbedder ────────────────────────────────────────────────────────
+
 
 class TestInMemoryEmbedder:
     def test_default_dimension(self):
@@ -365,6 +396,7 @@ class TestInMemoryEmbedder:
 
 # ── Embedder (unified interface) ────────────────────────────────────────────
 
+
 class TestEmbedder:
     def test_default_provider(self):
         emb = Embedder()
@@ -406,6 +438,7 @@ class TestEmbedder:
 
 
 # ── BatchEmbedder ────────────────────────────────────────────────────────────
+
 
 class TestBatchEmbedder:
     def test_basic_embed(self):
@@ -449,7 +482,7 @@ class TestBatchEmbedder:
         be = BatchEmbedder(batch_size=10)
         texts = ["alpha", "beta", "gamma"]
         result = be.embed(texts)
-        for i, (r, t) in enumerate(zip(result, be.embed(texts))):
+        for i, (r, _t) in enumerate(zip(result, be.embed(texts), strict=False)):
             assert r == result[i]
 
     def test_empty_list(self):
@@ -466,6 +499,7 @@ class TestBatchEmbedder:
 
 
 # ── create_embedder factory ─────────────────────────────────────────────────
+
 
 class TestCreateEmbedder:
     def test_returns_in_memory(self):

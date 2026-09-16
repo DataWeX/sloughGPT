@@ -2,8 +2,9 @@
 Tests for the VM router — run assembly, list builtins, VM info.
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -38,14 +39,16 @@ class TestVmRun:
         assert body["status"] == "empty"
 
     def test_503_when_vm_module_unavailable(self, client):
-        import apps.api.server.routers.vm as vm_mod
-        original = vm_mod.__builtins__
+
         import builtins
+
         real_import = builtins.__import__
+
         def block_vm(name, *a, **kw):
             if name.startswith("domains.shell.vm"):
                 raise ImportError("no vm")
             return real_import(name, *a, **kw)
+
         builtins.__import__ = block_vm
         try:
             resp = client.post("/vm/run", json={"source": "mov eax, 1"})
@@ -83,34 +86,50 @@ class TestVmRun:
         assert body["success"] is True or body["status"] == "spawn_failed"
 
     def test_keyboard_input(self, client):
-        resp = client.post("/vm/run", json={
-            "source": "mov eax, 1",
-            "keyboard_input": "abc",
-        })
+        resp = client.post(
+            "/vm/run",
+            json={
+                "source": "mov eax, 1",
+                "keyboard_input": "abc",
+            },
+        )
         assert resp.status_code == 200
 
     def test_debug_returns_trace(self, client):
-        resp = client.post("/vm/run", json={
-            "source": "mov eax, 1",
-            "debug": True,
-        })
+        resp = client.post(
+            "/vm/run",
+            json={
+                "source": "mov eax, 1",
+                "debug": True,
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body.get("trace") is not None
 
     def test_invalid_memory_size_returns_422(self, client):
-        resp = client.post("/vm/run", json={
-            "source": "hlt",
-            "memory_size": 42,
-        })
+        resp = client.post(
+            "/vm/run",
+            json={
+                "source": "hlt",
+                "memory_size": 42,
+            },
+        )
         assert resp.status_code == 422
 
     def test_response_schema(self, client):
         resp = client.post("/vm/run", json={"source": "hlt"})
         body = resp.json()
         required = [
-            "success", "exit_code", "steps_executed", "elapsed_ms",
-            "output", "registers", "eip", "eip_hex", "status",
+            "success",
+            "exit_code",
+            "steps_executed",
+            "elapsed_ms",
+            "output",
+            "registers",
+            "eip",
+            "eip_hex",
+            "status",
         ]
         for field in required:
             assert field in body, f"missing field: {field}"

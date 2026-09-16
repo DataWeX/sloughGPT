@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import gc
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
+
 from domain.training._internal.pair_extractor import extract_pairs_from_sessions
 from domain.training._internal.quality_scorer import score_batch
 from domain.training._internal.slonet import (
@@ -32,6 +34,7 @@ logger = logging.getLogger("slo.training.chat_trainer")
 @dataclass
 class ChatTrainConfig:
     """Configuration for on-device chat training."""
+
     n_embed: int = 128
     n_layer: int = 4
     n_head: int = 4
@@ -53,8 +56,8 @@ class ChatTrainConfig:
     checkpoint_dir: str = "models/auto-training"
     soul_name: str = "chat-trained"
 
-    session_ids: Optional[List[str]] = None
-    resume_checkpoint: Optional[str] = None
+    session_ids: list[str] | None = None
+    resume_checkpoint: str | None = None
     resume_epoch: int = 0
     resume_step: int = 0
 
@@ -62,7 +65,7 @@ class ChatTrainConfig:
 class ChatTextDataset:
     """Character-level text dataset from formatted chat pairs."""
 
-    def __init__(self, text: str, block_size: int, stoi: Dict[str, int]):
+    def __init__(self, text: str, block_size: int, stoi: dict[str, int]):
         self.text = text
         self.block_size = block_size
         self.stoi = stoi
@@ -72,7 +75,7 @@ class ChatTextDataset:
     def __len__(self) -> int:
         return self.n_samples
 
-    def get_batch(self, batch_size: int, rng: np.random.Generator) -> Tuple[np.ndarray, np.ndarray]:
+    def get_batch(self, batch_size: int, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
         """Get random batch of (x, y) pairs for next-token prediction.
 
         Uses vectorized advanced indexing instead of Python-level loops.
@@ -86,7 +89,7 @@ class ChatTextDataset:
         return x.astype(np.int32), y.astype(np.int32)
 
 
-def _build_vocab(pairs: List[Dict[str, str]]) -> Tuple[Dict[str, int], Dict[int, str]]:
+def _build_vocab(pairs: list[dict[str, str]]) -> tuple[dict[str, int], dict[int, str]]:
     """Build character-level vocabulary from chat pairs."""
     chars = set()
     for pair in pairs:
@@ -100,7 +103,7 @@ def _build_vocab(pairs: List[Dict[str, str]]) -> Tuple[Dict[str, int], Dict[int,
     return stoi, itos
 
 
-def _format_pairs_text(pairs: List[Dict[str, str]]) -> str:
+def _format_pairs_text(pairs: list[dict[str, str]]) -> str:
     """Format pairs as training text."""
     parts = []
     for pair in pairs:
@@ -111,14 +114,15 @@ def _format_pairs_text(pairs: List[Dict[str, str]]) -> str:
 @dataclass
 class _ResumeState:
     """Validated state restored from a training checkpoint."""
+
     model: SloTransformer = None
     epoch: int = 0
     step: int = 0
     best_loss: float = float("inf")
-    stoi: Optional[Dict[str, int]] = None
-    itos: Optional[Dict[int, str]] = None
+    stoi: dict[str, int] | None = None
+    itos: dict[int, str] | None = None
     vocab_size: int = 0
-    optimizer_state: Optional[dict] = None
+    optimizer_state: dict | None = None
     found: bool = False
 
 
@@ -126,8 +130,15 @@ def _validate_int(value, lo: int, hi: int, name: str, default: int) -> int:
     """Validate an integer metadata field is within bounds."""
     if isinstance(value, (int, float)) and lo <= value < hi:
         return int(value)
-    logger.warning("Checkpoint %s=%s invalid (expected [%s,%s)), using %s",
-        name, value, lo, hi, default, extra={"tag": "TRAIN"})
+    logger.warning(
+        "Checkpoint %s=%s invalid (expected [%s,%s)), using %s",
+        name,
+        value,
+        lo,
+        hi,
+        default,
+        extra={"tag": "TRAIN"},
+    )
     return default
 
 
@@ -138,7 +149,7 @@ def _validate_float(value, name: str, default: float) -> float:
     return default
 
 
-def _repair_itos(raw: dict) -> Dict[int, str]:
+def _repair_itos(raw: dict) -> dict[int, str]:
     """Convert JSON-deserialized itos (string keys) back to int keys.
 
     Skips corrupt entries that cannot be cast to int.
@@ -148,15 +159,14 @@ def _repair_itos(raw: dict) -> Dict[int, str]:
         try:
             repaired[int(k)] = v
         except (ValueError, TypeError):
-            logger.warning("Skipping corrupt itos entry: %s=%s", k, v,
-                extra={"tag": "TRAIN"})
+            logger.warning("Skipping corrupt itos entry: %s=%s", k, v, extra={"tag": "TRAIN"})
     return repaired
 
 
 def _load_resume_state(
     config: ChatTrainConfig,
-    data_stoi: Dict[str, int],
-    data_itos: Dict[int, str],
+    data_stoi: dict[str, int],
+    data_itos: dict[int, str],
     data_vocab_size: int,
 ) -> _ResumeState:
     """Load and validate a training checkpoint for resume.
@@ -172,47 +182,49 @@ def _load_resume_state(
 
     logger.info("Resuming from: %s", path, extra={"tag": "TRAIN"})
     from domain.training._internal.slonet import import_from_sou
+
     model = import_from_sou(path)
-    raw = model.metadata if hasattr(model, 'metadata') and model.metadata else {}
+    raw = model.metadata if hasattr(model, "metadata") and model.metadata else {}
 
     result.model = model
     result.found = True
     result.epoch = _validate_int(
-        raw.get("epoch", config.resume_epoch), 0, config.epochs, "epoch", 0)
-    result.step = _validate_int(
-        raw.get("step", config.resume_step), 0, 1_000_000, "step", 0)
+        raw.get("epoch", config.resume_epoch), 0, config.epochs, "epoch", 0
+    )
+    result.step = _validate_int(raw.get("step", config.resume_step), 0, 1_000_000, "step", 0)
     result.best_loss = _validate_float(
-        raw.get("best_loss", float("inf")), "best_loss", float("inf"))
+        raw.get("best_loss", float("inf")), "best_loss", float("inf")
+    )
 
     # Vocab: prefer checkpoint (prevents mismatch when data changes)
     raw_stoi = raw.get("stoi")
     raw_itos = raw.get("itos")
-    if (raw_stoi and isinstance(raw_stoi, dict)
-            and raw_itos and isinstance(raw_itos, dict)):
+    if raw_stoi and isinstance(raw_stoi, dict) and raw_itos and isinstance(raw_itos, dict):
         result.stoi = raw_stoi
         result.itos = _repair_itos(raw_itos)
         if result.itos:
             result.vocab_size = len(result.stoi)
-            logger.info("Using checkpoint vocab: %d chars", result.vocab_size,
-                extra={"tag": "TRAIN"})
+            logger.info(
+                "Using checkpoint vocab: %d chars", result.vocab_size, extra={"tag": "TRAIN"}
+            )
         else:
-            logger.warning("itos empty after repair, using vocab from data",
-                extra={"tag": "TRAIN"})
+            logger.warning("itos empty after repair, using vocab from data", extra={"tag": "TRAIN"})
             result.stoi, result.itos = None, None
     else:
-        logger.warning("Checkpoint missing stoi/itos, using vocab from data",
-            extra={"tag": "TRAIN"})
+        logger.warning(
+            "Checkpoint missing stoi/itos, using vocab from data", extra={"tag": "TRAIN"}
+        )
 
     result.optimizer_state = raw.get("optimizer_state")
     return result
 
 
 def train_chat_model(
-    pairs: List[Dict[str, str]],
-    config: Optional[ChatTrainConfig] = None,
-    on_step: Optional[Callable] = None,
+    pairs: list[dict[str, str]],
+    config: ChatTrainConfig | None = None,
+    on_step: Callable | None = None,
     cancel_event=None,
-) -> Tuple[SloTransformer, Dict[str, Any]]:
+) -> tuple[SloTransformer, dict[str, Any]]:
     """Train a SloTransformer on chat pairs.
 
     Args:
@@ -229,33 +241,33 @@ def train_chat_model(
     if not pairs:
         raise ValueError("No training pairs provided")
 
-    logger.info("SloChatTrainer: %d pairs, config=%s", len(pairs), config,
-        extra={"tag": "TRAIN"})
+    logger.info("SloChatTrainer: %d pairs, config=%s", len(pairs), config, extra={"tag": "TRAIN"})
 
     # Filter low-quality pairs
     scored = score_batch(pairs)
-    good_pairs = [
-        p for p, s in zip(pairs, scored)
-        if s >= config.min_pair_quality
-    ]
-    logger.info("Quality filter: %d/%d pairs passed (threshold=%.1f)",
-                len(good_pairs), len(pairs), config.min_pair_quality,
-                extra={"tag": "TRAIN"})
+    good_pairs = [p for p, s in zip(pairs, scored, strict=False) if s >= config.min_pair_quality]
+    logger.info(
+        "Quality filter: %d/%d pairs passed (threshold=%.1f)",
+        len(good_pairs),
+        len(pairs),
+        config.min_pair_quality,
+        extra={"tag": "TRAIN"},
+    )
 
     if len(good_pairs) < 5:
-        logger.warning("Too few quality pairs (%d), using all", len(good_pairs),
-            extra={"tag": "TRAIN"})
-        good_pairs = pairs[:max(5, len(pairs))]
+        logger.warning(
+            "Too few quality pairs (%d), using all", len(good_pairs), extra={"tag": "TRAIN"}
+        )
+        good_pairs = pairs[: max(5, len(pairs))]
 
     if len(good_pairs) > config.max_pairs:
-        good_pairs = good_pairs[:config.max_pairs]
+        good_pairs = good_pairs[: config.max_pairs]
 
     # Build vocab and text
     stoi, itos = _build_vocab(good_pairs)
     vocab_size = len(stoi)
     text = _format_pairs_text(good_pairs)
-    logger.info("Vocab: %d chars, text: %d chars", vocab_size, len(text),
-        extra={"tag": "TRAIN"})
+    logger.info("Vocab: %d chars, text: %d chars", vocab_size, len(text), extra={"tag": "TRAIN"})
 
     # Split train/val — pairs are newest-first from extractor, so validate
     # on the oldest (tail) and train on the newer (head).
@@ -278,9 +290,14 @@ def train_chat_model(
         start_epoch, start_step = resume.epoch, resume.step
         best_loss = resume.best_loss
     else:
-        logger.info("Creating model: embed=%d, layers=%d, heads=%d, block=%d",
-                    config.n_embed, config.n_layer, config.n_head, config.block_size,
-                    extra={"tag": "TRAIN"})
+        logger.info(
+            "Creating model: embed=%d, layers=%d, heads=%d, block=%d",
+            config.n_embed,
+            config.n_layer,
+            config.n_head,
+            config.block_size,
+            extra={"tag": "TRAIN"},
+        )
         model = SloTransformer(
             vocab_size=vocab_size,
             n_embed=config.n_embed,
@@ -298,9 +315,12 @@ def train_chat_model(
     # Datasets
     train_ds = ChatTextDataset(train_text, config.block_size, stoi)
     val_ds = ChatTextDataset(val_text, config.block_size, stoi) if val_text else None
-    logger.info("Dataset: train=%d samples, val=%d samples",
-                len(train_ds), len(val_ds) if val_ds else 0,
-                extra={"tag": "TRAIN"})
+    logger.info(
+        "Dataset: train=%d samples, val=%d samples",
+        len(train_ds),
+        len(val_ds) if val_ds else 0,
+        extra={"tag": "TRAIN"},
+    )
 
     optimizer = SloAdam(lr=config.lr)
     rng = np.random.default_rng(42)
@@ -309,11 +329,17 @@ def train_chat_model(
     if resume.optimizer_state:
         try:
             optimizer.load_state_dict(resume.optimizer_state, params=list(model.parameters()))
-            logger.info("Restored optimizer state: t=%s",
-                resume.optimizer_state.get("t", "?"), extra={"tag": "TRAIN"})
+            logger.info(
+                "Restored optimizer state: t=%s",
+                resume.optimizer_state.get("t", "?"),
+                extra={"tag": "TRAIN"},
+            )
         except Exception as e:
-            logger.warning("Could not restore optimizer state (%s), starting fresh",
-                type(e).__name__, extra={"tag": "TRAIN"})
+            logger.warning(
+                "Could not restore optimizer state (%s), starting fresh",
+                type(e).__name__,
+                extra={"tag": "TRAIN"},
+            )
 
     # Training loop
     steps_per_epoch = max(1, len(train_ds) // config.batch_size)
@@ -321,19 +347,22 @@ def train_chat_model(
     remaining_steps = remaining_epochs * steps_per_epoch
     total_steps = start_step + remaining_steps
     step = start_step
-    train_losses: List[float] = []
-    val_losses: List[float] = []
+    train_losses: list[float] = []
+    val_losses: list[float] = []
     avg_epoch_loss = 0.0
     last_epoch = start_epoch
 
-    logger.info("Starting training: %d epochs, %d steps/epoch, %d total",
-                config.epochs, steps_per_epoch, total_steps,
-                extra={"tag": "TRAIN"})
+    logger.info(
+        "Starting training: %d epochs, %d steps/epoch, %d total",
+        config.epochs,
+        steps_per_epoch,
+        total_steps,
+        extra={"tag": "TRAIN"},
+    )
 
     for epoch in range(start_epoch, config.epochs):
         if cancel_event and cancel_event.is_set():
-            logger.info("Training cancelled at epoch %d", epoch,
-                extra={"tag": "TRAIN"})
+            logger.info("Training cancelled at epoch %d", epoch, extra={"tag": "TRAIN"})
             break
 
         epoch_loss = 0.0
@@ -358,9 +387,9 @@ def train_chat_model(
             total_norm = 0.0
             for p in params:
                 if p.grad is not None:
-                    g = p.grad.data if hasattr(p.grad, 'data') else p.grad
-                    total_norm += float(np.sum(g ** 2))
-            total_norm = total_norm ** 0.5
+                    g = p.grad.data if hasattr(p.grad, "data") else p.grad
+                    total_norm += float(np.sum(g**2))
+            total_norm = total_norm**0.5
             if total_norm > config.grad_clip:
                 scale = config.grad_clip / total_norm
                 for p in params:
@@ -381,9 +410,14 @@ def train_chat_model(
 
             if step % config.log_interval == 0:
                 avg = epoch_loss / max(1, epoch_tokens)
-                logger.info("Step %d/%d epoch=%d loss=%.4f",
-                           step, total_steps, epoch, avg,
-                           extra={"tag": "TRAIN"})
+                logger.info(
+                    "Step %d/%d epoch=%d loss=%.4f",
+                    step,
+                    total_steps,
+                    epoch,
+                    avg,
+                    extra={"tag": "TRAIN"},
+                )
                 if on_step:
                     on_step(step, avg, epoch, total_steps=total_steps)
 
@@ -391,8 +425,7 @@ def train_chat_model(
             if val_ds and step % config.eval_interval == 0:
                 val_loss = _eval_loss(model, val_ds, config.batch_size, rng)
                 val_losses.append(val_loss)
-                logger.info("  val_loss=%.4f", val_loss,
-                    extra={"tag": "TRAIN"})
+                logger.info("  val_loss=%.4f", val_loss, extra={"tag": "TRAIN"})
 
             # Periodic GC — every 100 steps, not every step
             if step % 100 == 0:
@@ -401,8 +434,9 @@ def train_chat_model(
         # End of epoch
         avg_epoch_loss = epoch_loss / max(1, epoch_tokens)
         last_epoch = epoch + 1
-        logger.info("Epoch %d complete: avg_loss=%.4f", epoch, avg_epoch_loss,
-            extra={"tag": "TRAIN"})
+        logger.info(
+            "Epoch %d complete: avg_loss=%.4f", epoch, avg_epoch_loss, extra={"tag": "TRAIN"}
+        )
 
         # Checkpoint on best loss
         if avg_epoch_loss < best_loss:
@@ -419,7 +453,8 @@ def train_chat_model(
     ckpt_path = ckpt_dir / f"{config.soul_name}.soul"
 
     export_to_sou(
-        model, str(ckpt_path),
+        model,
+        str(ckpt_path),
         metadata={
             "soul_name": config.soul_name,
             "vocab_size": vocab_size,
@@ -439,8 +474,7 @@ def train_chat_model(
             "optimizer_state": optimizer.state_dict(params=list(model.parameters())),
         },
     )
-    logger.info("Checkpoint saved: %s", ckpt_path,
-        extra={"tag": "TRAIN"})
+    logger.info("Checkpoint saved: %s", ckpt_path, extra={"tag": "TRAIN"})
 
     metadata = {
         "checkpoint": str(ckpt_path),
@@ -461,7 +495,12 @@ def train_chat_model(
     # Record training outcome for adaptive learning
     try:
         import time as _outcome_time
-        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+
+        from domain.training._internal.outcome_tracker import (
+            TrainingOutcome,
+            TrainingOutcomeTracker,
+        )
+
         outcome = TrainingOutcome(
             run_id=f"chat_{int(_outcome_time.time() * 1000)}",
             timestamp=_outcome_time.time(),
@@ -510,8 +549,8 @@ def _eval_loss(
 
 def generate_from_chat_model(
     model: SloTransformer,
-    stoi: Dict[str, int],
-    itos: Dict[int, str],
+    stoi: dict[str, int],
+    itos: dict[int, str],
     prompt: str,
     max_tokens: int = 100,
     temperature: float = 0.8,
@@ -534,7 +573,7 @@ def generate_from_chat_model(
         tokens = [0]
 
     eos = 0  # index 0 is "\x00" (null char) — our padding/EOS token
-    inp = np.array([tokens[-model.block_size:]], dtype=np.int64)
+    inp = np.array([tokens[-model.block_size :]], dtype=np.int64)
     out = model.generate(
         inp,
         max_new_tokens=max_tokens,
@@ -546,18 +585,18 @@ def generate_from_chat_model(
     )
     out_ids = out.data.flatten().tolist()
     if eos in out_ids:
-        out_ids = out_ids[:out_ids.index(eos)]
+        out_ids = out_ids[: out_ids.index(eos)]
 
-    return "".join(itos.get(t, "") for t in out_ids[len(tokens):])
+    return "".join(itos.get(t, "") for t in out_ids[len(tokens) :])
 
 
 def evaluate_chat_model(
     model: SloTransformer,
-    stoi: Dict[str, int],
-    itos: Dict[int, str],
-    pairs: List[Dict[str, str]],
+    stoi: dict[str, int],
+    itos: dict[int, str],
+    pairs: list[dict[str, str]],
     max_samples: int = 5,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Evaluate a trained chat model.
 
     Computes perplexity on pair text and generates sample responses.
@@ -590,7 +629,9 @@ def evaluate_chat_model(
         "User: Tell me",
     ]
     for prompt in eval_prompts[:max_samples]:
-        response = generate_from_chat_model(model, stoi, itos, prompt, max_tokens=50, temperature=0.7)
+        response = generate_from_chat_model(
+            model, stoi, itos, prompt, max_tokens=50, temperature=0.7
+        )
         samples.append({"prompt": prompt, "response": response})
 
     # Average response length
@@ -606,10 +647,10 @@ def evaluate_chat_model(
 
 
 def train_from_sessions(
-    config: Optional[ChatTrainConfig] = None,
-    on_step: Optional[Callable[[int, float, int], None]] = None,
+    config: ChatTrainConfig | None = None,
+    on_step: Callable[[int, float, int], None] | None = None,
     cancel_event=None,
-) -> Tuple[SloTransformer, Dict[str, Any]]:
+) -> tuple[SloTransformer, dict[str, Any]]:
     """High-level: extract pairs from sessions and train.
 
     Args:
@@ -624,12 +665,12 @@ def train_from_sessions(
     pairs = extract_pairs_from_sessions(limit=config.max_pairs, session_ids=config.session_ids)
     if not pairs:
         from domain.training._internal.pair_extractor import extract_pairs_from_corpus
+
         pairs = extract_pairs_from_corpus(limit=config.max_pairs)
     if not pairs:
         raise ValueError("No chat sessions found to train on")
 
-    logger.info("Extracted %d pairs from sessions", len(pairs),
-        extra={"tag": "TRAIN"})
+    logger.info("Extracted %d pairs from sessions", len(pairs), extra={"tag": "TRAIN"})
 
     model, metadata = train_chat_model(pairs, config, on_step, cancel_event)
 

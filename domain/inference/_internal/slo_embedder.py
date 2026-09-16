@@ -33,7 +33,6 @@ import os
 import struct
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -55,11 +54,11 @@ CONTRASTIVE_TEMPERATURE = 0.07
 LSE_THRESHOLD = 15.0
 
 # Quality gate thresholds (recorded at train time, enforced at load time)
-QUALITY_MAX_PROBES = 24          # probe texts sampled from the training corpus
-QUALITY_COS_EPS = 0.9999         # off-diagonal cosine above this = "degenerate" pair
-QUALITY_DEGENERATE_MAX = 0.25    # max fraction of probe pairs allowed to be degenerate
-QUALITY_MEAN_COSINE_MAX = 0.90   # max mean off-diagonal probe cosine (collapse detector)
-QUALITY_NN_K = 3                 # nearest-neighbour count for n-gram agreement diagnostic
+QUALITY_MAX_PROBES = 24  # probe texts sampled from the training corpus
+QUALITY_COS_EPS = 0.9999  # off-diagonal cosine above this = "degenerate" pair
+QUALITY_DEGENERATE_MAX = 0.25  # max fraction of probe pairs allowed to be degenerate
+QUALITY_MEAN_COSINE_MAX = 0.90  # max mean off-diagonal probe cosine (collapse detector)
+QUALITY_NN_K = 3  # nearest-neighbour count for n-gram agreement diagnostic
 
 
 # ---------------------------------------------------------------------------
@@ -67,18 +66,22 @@ QUALITY_NN_K = 3                 # nearest-neighbour count for n-gram agreement 
 # ---------------------------------------------------------------------------
 
 from contextlib import contextmanager
+
 from domain.shared import find_repo_root
+
 
 @contextmanager
 def _no_accel():
     """Context manager to temporarily disable Metal/GPU accelerator."""
     import domains.training.slonet as _slonet
+
     prev = getattr(_slonet, "_ACCELERATOR", None)
     try:
         _slonet._ACCELERATOR = "none"
         yield
     finally:
         _slonet._ACCELERATOR = prev
+
 
 # Where the trained embedder lives
 _EMBEDDER_DIR = find_repo_root(Path(__file__).resolve()) / "data" / "models"
@@ -89,6 +92,7 @@ _TOKENIZER_PATH = _EMBEDDER_DIR / "text-embedder-tokenizer.json"
 # ---------------------------------------------------------------------------
 # Binary log-sum-exp tree — no flat sum of exponentials
 # ---------------------------------------------------------------------------
+
 
 def _lse_pair(a, b, coeff=1.0, threshold=LSE_THRESHOLD):
     """Binary log-sum-exp pair: log(coeff*exp(a) + exp(b)).
@@ -137,49 +141,153 @@ def _lse_tree(x, axis=-1, threshold=LSE_THRESHOLD):
 # Tokenizer — BPE with whitespace fallback
 # ---------------------------------------------------------------------------
 
-_STOPWORDS: frozenset = frozenset({
-    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "could",
-    "should", "may", "might", "can", "shall", "to", "of", "in", "for",
-    "on", "with", "at", "by", "from", "as", "into", "through", "during",
-    "before", "after", "above", "below", "between", "out", "off", "over",
-    "under", "again", "further", "then", "once", "here", "there", "when",
-    "where", "why", "how", "all", "each", "every", "both", "few", "more",
-    "most", "other", "some", "such", "no", "nor", "not", "only", "own",
-    "same", "so", "than", "too", "very", "just", "because", "and", "but",
-    "or", "if", "while", "about", "up", "it", "its", "this", "that",
-    "these", "those", "i", "me", "my", "we", "our", "you", "your", "he",
-    "she", "they", "them", "their", "what", "which", "who", "whom",
-})
+_STOPWORDS: frozenset = frozenset(
+    {
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "can",
+        "shall",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "as",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "between",
+        "out",
+        "off",
+        "over",
+        "under",
+        "again",
+        "further",
+        "then",
+        "once",
+        "here",
+        "there",
+        "when",
+        "where",
+        "why",
+        "how",
+        "all",
+        "each",
+        "every",
+        "both",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "no",
+        "nor",
+        "not",
+        "only",
+        "own",
+        "same",
+        "so",
+        "than",
+        "too",
+        "very",
+        "just",
+        "because",
+        "and",
+        "but",
+        "or",
+        "if",
+        "while",
+        "about",
+        "up",
+        "it",
+        "its",
+        "this",
+        "that",
+        "these",
+        "those",
+        "i",
+        "me",
+        "my",
+        "we",
+        "our",
+        "you",
+        "your",
+        "he",
+        "she",
+        "they",
+        "them",
+        "their",
+        "what",
+        "which",
+        "who",
+        "whom",
+    }
+)
 
 
-def _tokenize_simple(text: str) -> List[str]:
+def _tokenize_simple(text: str) -> list[str]:
     """Lowercase, strip punctuation, split on whitespace."""
     import re
+
     return [t for t in re.findall(r"[a-z0-9']+", text.lower()) if t not in _STOPWORDS]
 
 
-def _build_bpe_tokenizer(texts: List[str], vocab_size: int = 2048):
+def _build_bpe_tokenizer(texts: list[str], vocab_size: int = 2048):
     """Train a BPE tokenizer on the corpus and return (bpe, encode_fn)."""
     try:
         from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
+
         bpe = BPETokenizer(vocab_size=vocab_size)
         bpe.train(texts)
+
         def encode_fn(text: str, max_len: int) -> np.ndarray:
             ids = bpe.encode(text)
             ids = ids[:max_len]
             padded = np.zeros(max_len, dtype=np.int64)
-            padded[:len(ids)] = ids
+            padded[: len(ids)] = ids
             return padded
+
         return bpe, encode_fn
     except Exception as e:
-        logger.warning("BPE tokenizer failed (%s), falling back to whitespace", e, extra={"tag": "INFRA"})
+        logger.warning(
+            "BPE tokenizer failed (%s), falling back to whitespace", e, extra={"tag": "INFRA"}
+        )
         return None, None
 
 
-def _build_vocab(texts: List[str], vocab_size: int = DEFAULT_VOCAB_SIZE) -> Tuple[dict, dict]:
+def _build_vocab(texts: list[str], vocab_size: int = DEFAULT_VOCAB_SIZE) -> tuple[dict, dict]:
     """Build vocabulary from texts (used by whitespace fallback)."""
     from collections import Counter
+
     counts = Counter()
     for t in texts:
         counts.update(_tokenize_simple(t))
@@ -209,6 +317,7 @@ def _encode_tokens(text: str, vocab: dict, max_len: int) -> np.ndarray:
 # SloNet text encoder (lightweight — no external deps)
 # ---------------------------------------------------------------------------
 
+
 def _build_encoder(
     vocab_size: int,
     embed_dim: int,
@@ -219,9 +328,9 @@ def _build_encoder(
     """Build a SloNet text encoder from existing primitives."""
     from domain.training._internal.slonet import (
         SloEmbedding,
-        SloTransformerBlock,
         SloLayerNorm,
         SloLinear,
+        SloTransformerBlock,
         Tensor,
     )
 
@@ -236,7 +345,10 @@ def _build_encoder(
             )
             self.blocks = [
                 SloTransformerBlock(
-                    embed_dim, n_heads, use_rope=True, dropout=0.1,
+                    embed_dim,
+                    n_heads,
+                    use_rope=True,
+                    dropout=0.1,
                     name=f"emb_block_{i}",
                 )
                 for i in range(n_layers)
@@ -246,7 +358,8 @@ def _build_encoder(
 
         def forward(self, token_ids: np.ndarray):
             """token_ids: (B, seq_len) → (B, embed_dim)"""
-            from domain.training._internal.slonet import Tensor as _T, tensor as _tensor
+            from domain.training._internal.slonet import Tensor as _T
+            from domain.training._internal.slonet import tensor as _tensor
 
             B, S = token_ids.shape
             tok = self.tok_emb.forward(_tensor(token_ids, requires_grad=False))
@@ -283,6 +396,7 @@ def _build_encoder(
 # Contrastive training
 # ---------------------------------------------------------------------------
 
+
 def _augment_text(text: str, rng: np.random.RandomState) -> str:
     """Simple text augmentation for contrastive pairs."""
     tokens = _tokenize_simple(text)
@@ -316,10 +430,10 @@ def _contrastive_loss(
     z_i: np.ndarray,
     z_j: np.ndarray,
     temperature: float = CONTRASTIVE_TEMPERATURE,
-    point_labels: Optional[List[str]] = None,
+    point_labels: list[str] | None = None,
     meaning_tags=None,
     constraint_weight: float = 0.5,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """InfoNCE loss with meaning tag constraints.
 
     z_i, z_j: (B, D) — L2-normalized embeddings
@@ -362,7 +476,7 @@ def _contrastive_loss(
     return float(total), constraint_loss
 
 
-def _label_by_meaning(text: str, points_store=None) -> Optional[str]:
+def _label_by_meaning(text: str, points_store=None) -> str | None:
     """Label text by nearest meaning point in embedding space.
 
     Uses n-gram TF-IDF embed (always available, no download) to position
@@ -374,6 +488,7 @@ def _label_by_meaning(text: str, points_store=None) -> Optional[str]:
     near each other land near the same meaning point.
     """
     from domain.inference._internal.vector_store import simple_embed
+
     if points_store is None:
         return None
     vec = simple_embed(text, dimension=points_store.dimension)
@@ -383,7 +498,7 @@ def _label_by_meaning(text: str, points_store=None) -> Optional[str]:
 
 
 def train_embedder(
-    texts: List[str],
+    texts: list[str],
     vocab_size: int = DEFAULT_VOCAB_SIZE,
     embed_dim: int = DEFAULT_EMBED_DIM,
     max_seq_len: int = DEFAULT_MAX_SEQ_LEN,
@@ -392,7 +507,7 @@ def train_embedder(
     epochs: int = DEFAULT_EPOCHS,
     lr: float = DEFAULT_LR,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    save_path: Optional[str] = None,
+    save_path: str | None = None,
     progress_callback=None,
 ) -> dict:
     """Train a text embedder on a corpus using contrastive learning.
@@ -442,11 +557,23 @@ def train_embedder(
 
     # 2b. Load meaning tags (the stars — fixed semantic reference points)
     from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
+
     meaning_tags = get_default_meaning_tags(dimension=embed_dim)
-    logger.info("Loaded %d meaning tags: %s", len(meaning_tags.names()), meaning_tags.names(), extra={"tag": "INFRA"})
+    logger.info(
+        "Loaded %d meaning tags: %s",
+        len(meaning_tags.names()),
+        meaning_tags.names(),
+        extra={"tag": "INFRA"},
+    )
 
     # 3. Training loop
-    logger.info("Training embedder: %d texts, %d epochs, batch_size=%d", len(texts), epochs, batch_size, extra={"tag": "INFRA"})
+    logger.info(
+        "Training embedder: %d texts, %d epochs, batch_size=%d",
+        len(texts),
+        epochs,
+        batch_size,
+        extra={"tag": "INFRA"},
+    )
     rng_train = np.random.RandomState(123)
     losses = []
     refine_stats = []
@@ -461,7 +588,7 @@ def train_embedder(
         indices = rng_train.permutation(len(texts))
 
         for start in range(0, len(texts), batch_size):
-            batch_idx = indices[start: start + batch_size]
+            batch_idx = indices[start : start + batch_size]
             if len(batch_idx) < 2:
                 continue
 
@@ -485,7 +612,9 @@ def train_embedder(
             aug_emb = encoder.forward(aug_ids)
 
             # L2-normalize
-            orig_norm = orig_emb.data / (np.linalg.norm(orig_emb.data, axis=1, keepdims=True) + 1e-10)
+            orig_norm = orig_emb.data / (
+                np.linalg.norm(orig_emb.data, axis=1, keepdims=True) + 1e-10
+            )
             aug_norm = aug_emb.data / (np.linalg.norm(aug_emb.data, axis=1, keepdims=True) + 1e-10)
 
             # Label by meaning (nearest meaning tag in embedding space)
@@ -493,7 +622,8 @@ def train_embedder(
 
             # Compute contrastive loss with meaning tag constraints
             loss_val, constraint_loss = _contrastive_loss(
-                orig_norm, aug_norm,
+                orig_norm,
+                aug_norm,
                 point_labels=batch_labels,
                 meaning_tags=meaning_tags,
                 constraint_weight=0.5,
@@ -513,7 +643,11 @@ def train_embedder(
 
             # Backprop through L2 norm: d(L2)/d(orig_emb)
             norms = np.linalg.norm(orig_emb.data, axis=1, keepdims=True) + 1e-10
-            grad_orig_emb = (grad_orig_norm / norms) - (orig_emb.data * (grad_orig_norm * orig_emb.data).sum(axis=1, keepdims=True) / (norms ** 3))
+            grad_orig_emb = (grad_orig_norm / norms) - (
+                orig_emb.data
+                * (grad_orig_norm * orig_emb.data).sum(axis=1, keepdims=True)
+                / (norms**3)
+            )
 
             # Set gradient on encoder output and backward through SloNet autograd
             orig_emb.grad = Tensor(grad_orig_emb)
@@ -549,10 +683,13 @@ def train_embedder(
         refined = meaning_tags.refine(texts, all_norm, lr=0.1, min_samples=max(3, len(texts) // 10))
         if refined:
             refine_stats.append({"epoch": epoch + 1, "refined": refined})
-            logger.info("Epoch %d refine: %s", epoch + 1, {k: v for k, v in refined.items()}, extra={"tag": "INFRA"})
+            logger.info(
+                "Epoch %d refine: %s", epoch + 1, dict(refined.items()), extra={"tag": "INFRA"}
+            )
 
         # Step B: Correct misclassified texts via TruthMaintainer
         from domain.infrastructure._internal.truth_maintainer import get_truth_maintainer
+
         maintainer = get_truth_maintainer()
         misclassified = maintainer.find_misclassified(texts, all_norm, meaning_tags)
         if misclassified and len(misclassified) >= 3:
@@ -561,23 +698,61 @@ def train_embedder(
             )
             if queries:
                 corr_loss = maintainer.apply_correction(
-                    encoder, queries, positives, negatives,
-                    meaning_tags, vocab, encode_fn=encode_fn,
-                    max_seq_len=max_seq_len, lr=lr * 0.5,
+                    encoder,
+                    queries,
+                    positives,
+                    negatives,
+                    meaning_tags,
+                    vocab,
+                    encode_fn=encode_fn,
+                    max_seq_len=max_seq_len,
+                    lr=lr * 0.5,
                 )
-                maintain_stats.append({"epoch": epoch + 1, "misclassified": len(misclassified), "corrected": len(queries), "loss": corr_loss})
-                logger.info("Epoch %d maintain: %d misclassified → %d corrected (loss=%.4f)",
-                           epoch + 1, len(misclassified), len(queries), corr_loss, extra={"tag": "INFRA"})
+                maintain_stats.append(
+                    {
+                        "epoch": epoch + 1,
+                        "misclassified": len(misclassified),
+                        "corrected": len(queries),
+                        "loss": corr_loss,
+                    }
+                )
+                logger.info(
+                    "Epoch %d maintain: %d misclassified → %d corrected (loss=%.4f)",
+                    epoch + 1,
+                    len(misclassified),
+                    len(queries),
+                    corr_loss,
+                    extra={"tag": "INFRA"},
+                )
 
         if progress_callback:
             progress_callback(epoch + 1, avg_loss, epochs)
 
         if (epoch + 1) % 5 == 0 or epoch == 0:
-            logger.info("Epoch %d/%d — loss: %.4f (constraint: %.4f)", epoch + 1, epochs, avg_loss, avg_constraint, extra={"tag": "INFRA"})
+            logger.info(
+                "Epoch %d/%d — loss: %.4f (constraint: %.4f)",
+                epoch + 1,
+                epochs,
+                avg_loss,
+                avg_constraint,
+                extra={"tag": "INFRA"},
+            )
 
     # 4. Save checkpoint
     out_path = save_path or str(_EMBEDDER_PATH)
-    _save_checkpoint(out_path, encoder, vocab, itos, embed_dim, max_seq_len, n_heads, n_layers, bpe=bpe, texts=texts, encode_fn=encode_fn)
+    _save_checkpoint(
+        out_path,
+        encoder,
+        vocab,
+        itos,
+        embed_dim,
+        max_seq_len,
+        n_heads,
+        n_layers,
+        bpe=bpe,
+        texts=texts,
+        encode_fn=encode_fn,
+    )
     logger.info("Saved embedder to %s", out_path, extra={"tag": "INFRA"})
 
     return {
@@ -597,7 +772,8 @@ def train_embedder(
 # Save / Load
 # ---------------------------------------------------------------------------
 
-def _sample_probes(texts: List[str], max_probes: int = QUALITY_MAX_PROBES) -> List[str]:
+
+def _sample_probes(texts: list[str], max_probes: int = QUALITY_MAX_PROBES) -> list[str]:
     """Sample a deterministic subset of texts to act as quality probe vectors.
 
     Args:
@@ -614,7 +790,7 @@ def _sample_probes(texts: List[str], max_probes: int = QUALITY_MAX_PROBES) -> Li
     return probes[:max_probes]
 
 
-def _encode_probe(texts: List[str], encode_fn, vocab: dict, max_seq_len: int) -> np.ndarray:
+def _encode_probe(texts: list[str], encode_fn, vocab: dict, max_seq_len: int) -> np.ndarray:
     """Tokenize probe texts into a stacked (P, max_seq_len) id matrix."""
     if encode_fn is not None:
         return np.stack([encode_fn(t, max_seq_len) for t in texts])
@@ -645,14 +821,14 @@ def _nn_agreement(trained: np.ndarray, reference: np.ndarray, k: int = QUALITY_N
     r_sim = reference @ reference.T
     overlaps = []
     for i in range(P):
-        t_idx = set(np.argsort(-t_sim[i])[:k + 1][1:])
-        r_idx = set(np.argsort(-r_sim[i])[:k + 1][1:])
+        t_idx = set(np.argsort(-t_sim[i])[: k + 1][1:])
+        r_idx = set(np.argsort(-r_sim[i])[: k + 1][1:])
         overlaps.append(len(t_idx & r_idx) / k)
     return float(np.mean(overlaps))
 
 
 def _compute_embed_mean(
-    texts: List[str],
+    texts: list[str],
     encoder,
     vocab: dict,
     max_seq_len: int,
@@ -687,12 +863,12 @@ def _compute_embed_mean(
 
 
 def _compute_quality(
-    texts: List[str],
+    texts: list[str],
     encoder,
     vocab: dict,
     max_seq_len: int,
     encode_fn=None,
-    embed_mean: Optional[np.ndarray] = None,
+    embed_mean: np.ndarray | None = None,
 ) -> dict:
     """Compute honest, computed quality metrics for a trained embedder.
 
@@ -744,6 +920,7 @@ def _compute_quality(
     # Reference: word n-gram TF-IDF (zero downloads, always available).
     try:
         from domain.inference._internal.vector_store import _word_ngram_embed
+
         ref = np.stack([_word_ngram_embed(t, 128) for t in probes])
         rn = np.linalg.norm(ref, axis=1, keepdims=True) + 1e-10
         reference = ref / rn
@@ -776,7 +953,7 @@ def _perturb_text(text: str, drop_frac: float = 0.25, min_keep: int = 3) -> str:
     tokens = text.split()
     if len(tokens) <= min_keep:
         return text
-    rng = np.random.RandomState(sum(ord(c) for c in text) % (2 ** 31))
+    rng = np.random.RandomState(sum(ord(c) for c in text) % (2**31))
     n_drop = max(1, int(round(len(tokens) * drop_frac)))
     drop = set(rng.choice(len(tokens), size=n_drop, replace=False).tolist())
     kept = [t for i, t in enumerate(tokens) if i not in drop]
@@ -786,7 +963,7 @@ def _perturb_text(text: str, drop_frac: float = 0.25, min_keep: int = 3) -> str:
 
 
 def _retrieval_benchmark(
-    texts: List[str],
+    texts: list[str],
     trained_fn,
     ngram_fn,
     top_k: int = QUALITY_NN_K,
@@ -812,9 +989,12 @@ def _retrieval_benchmark(
     """
     if len(texts) < 2:
         return {
-            "queries": 0, "top_k": top_k,
-            "trained_mrr": 0.0, "ngram_mrr": 0.0,
-            "trained_hit": 0.0, "ngram_hit": 0.0,
+            "queries": 0,
+            "top_k": top_k,
+            "trained_mrr": 0.0,
+            "ngram_mrr": 0.0,
+            "trained_hit": 0.0,
+            "ngram_hit": 0.0,
             "better": "n_gram",
         }
     step = max(1, len(texts) // max_queries)
@@ -847,12 +1027,15 @@ def _retrieval_benchmark(
         g_mrr, g_hit = _score(q_g, corpus_g, probe_idx)
     except Exception as exc:
         import logging
-        logging.getLogger("slo.embedder").warning(
-            "Retrieval benchmark failed: %s", exc)
+
+        logging.getLogger("slo.embedder").warning("Retrieval benchmark failed: %s", exc)
         return {
-            "queries": len(probe_idx), "top_k": top_k,
-            "trained_mrr": 0.0, "ngram_mrr": 0.0,
-            "trained_hit": 0.0, "ngram_hit": 0.0,
+            "queries": len(probe_idx),
+            "top_k": top_k,
+            "trained_mrr": 0.0,
+            "ngram_mrr": 0.0,
+            "trained_hit": 0.0,
+            "ngram_hit": 0.0,
             "better": "n_gram",
             "error": str(exc),
         }
@@ -869,12 +1052,12 @@ def _retrieval_benchmark(
 
 
 def _retrieval_benchmark_for(
-    texts: List[str],
+    texts: list[str],
     encoder,
     vocab: dict,
     max_seq_len: int,
     encode_fn=None,
-    embed_mean: Optional[np.ndarray] = None,
+    embed_mean: np.ndarray | None = None,
 ) -> dict:
     """Run the retrieval benchmark for a trained encoder against the n-gram reference.
 
@@ -894,6 +1077,7 @@ def _retrieval_benchmark_for(
     Returns:
         retrieval benchmark dict (see ``_retrieval_benchmark``)
     """
+
     def trained_fn(t):
         ids = (encode_fn or _encode_tokens)(t, max_seq_len)
         ids = np.asarray(ids, dtype=np.int64)[np.newaxis, :]
@@ -905,9 +1089,13 @@ def _retrieval_benchmark_for(
         return v / n if n > 0 else v
 
     from domain.inference._internal.vector_store import _word_ngram_embed
+
     return _retrieval_benchmark(
-        texts, trained_fn, lambda t: _word_ngram_embed(t, 128),
-        top_k=QUALITY_NN_K, max_queries=QUALITY_MAX_PROBES,
+        texts,
+        trained_fn,
+        lambda t: _word_ngram_embed(t, 128),
+        top_k=QUALITY_NN_K,
+        max_queries=QUALITY_MAX_PROBES,
     )
 
 
@@ -921,7 +1109,7 @@ def _save_checkpoint(
     n_heads: int,
     n_layers: int,
     bpe=None,
-    texts: Optional[List[str]] = None,
+    texts: list[str] | None = None,
     encode_fn=None,
 ):
     """Save embedder as .soul checkpoint with vocab sidecar.
@@ -955,6 +1143,7 @@ def _save_checkpoint(
 
     # Manual save: just dump all parameter arrays
     import tempfile
+
     quality = None
     embed_mean = None
     if texts:
@@ -962,12 +1151,17 @@ def _save_checkpoint(
             embed_mean = _compute_embed_mean(texts, encoder, vocab, max_seq_len, encode_fn)
             quality = _compute_quality(texts, encoder, vocab, max_seq_len, encode_fn, embed_mean)
             quality["retrieval"] = _retrieval_benchmark_for(
-                texts, encoder, vocab, max_seq_len, encode_fn, embed_mean,
+                texts,
+                encoder,
+                vocab,
+                max_seq_len,
+                encode_fn,
+                embed_mean,
             )
         except Exception as exc:
             import logging
-            logging.getLogger("slo.embedder").warning(
-                "Quality computation failed: %s", exc)
+
+            logging.getLogger("slo.embedder").warning("Quality computation failed: %s", exc)
             quality = None
             embed_mean = None
     meta = {
@@ -985,8 +1179,10 @@ def _save_checkpoint(
     json_bytes = json.dumps(meta, allow_nan=False).encode()
 
     from domain.training._internal.slonet import SOU_MAGIC
+
     tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=os.path.dirname(path) or ".", suffix=".tmp",
+        dir=os.path.dirname(path) or ".",
+        suffix=".tmp",
     )
     try:
         with os.fdopen(tmp_fd, "wb") as f:
@@ -995,8 +1191,10 @@ def _save_checkpoint(
             f.write(struct.pack("<I", len(json_bytes)))
             f.write(json_bytes)
 
-            params = [(f"p{i}", np.asarray(p.data, dtype=np.float32))
-                      for i, p in enumerate(encoder.parameters())]
+            params = [
+                (f"p{i}", np.asarray(p.data, dtype=np.float32))
+                for i, p in enumerate(encoder.parameters())
+            ]
             f.write(struct.pack("<I", len(params)))
             for key, arr in params:
                 name_bytes = key.encode()
@@ -1042,8 +1240,8 @@ class SloTextEmbedder:
         embed_dim: int = DEFAULT_EMBED_DIM,
         max_seq_len: int = DEFAULT_MAX_SEQ_LEN,
         encode_fn=None,
-        quality: Optional[dict] = None,
-        embed_mean: Optional[np.ndarray] = None,
+        quality: dict | None = None,
+        embed_mean: np.ndarray | None = None,
     ):
         self.encoder = encoder
         self.vocab = vocab
@@ -1062,7 +1260,7 @@ class SloTextEmbedder:
                 block.train(False)
 
     @classmethod
-    def load(cls, path: Optional[str] = None) -> Optional["SloTextEmbedder"]:
+    def load(cls, path: str | None = None) -> SloTextEmbedder | None:
         """Load a trained embedder from disk. Returns None if not found."""
         path = path or str(_EMBEDDER_PATH)
         if not os.path.exists(path):
@@ -1074,12 +1272,13 @@ class SloTextEmbedder:
                 raw = f.read()
 
             from domain.training._internal.slonet import SOU_MAGIC
+
             if raw[:4] != SOU_MAGIC:
                 return None
 
             struct.unpack("<I", raw[4:8])[0]
             json_len = struct.unpack("<I", raw[8:12])[0]
-            meta_bytes = raw[12:12 + json_len].rstrip(b"\x00")
+            meta_bytes = raw[12 : 12 + json_len].rstrip(b"\x00")
             meta = json.loads(meta_bytes.decode())
 
             system_prompt = meta.get("system_prompt", "")
@@ -1109,11 +1308,14 @@ class SloTextEmbedder:
             bpe_tokenizer = None
             try:
                 from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
+
                 bpe_path = os.path.splitext(path)[0] + "-bpe.json"
                 if os.path.exists(bpe_path):
                     bpe_tokenizer = BPETokenizer()
                     if bpe_tokenizer.load(bpe_path):
-                        logger.info("Loaded BPE tokenizer from %s", bpe_path, extra={"tag": "INFRA"})
+                        logger.info(
+                            "Loaded BPE tokenizer from %s", bpe_path, extra={"tag": "INFRA"}
+                        )
                     else:
                         bpe_tokenizer = None
             except Exception:
@@ -1130,18 +1332,22 @@ class SloTextEmbedder:
                 pos = 4
                 param_idx = 0
                 for _ in range(num_params):
-                    name_len = struct.unpack("<I", rem[pos:pos + 4])[0]
+                    name_len = struct.unpack("<I", rem[pos : pos + 4])[0]
                     pos += 4
                     pos += name_len  # skip name
-                    ndim = struct.unpack("<I", rem[pos:pos + 4])[0]
+                    ndim = struct.unpack("<I", rem[pos : pos + 4])[0]
                     pos += 4
                     shape = tuple(
-                        struct.unpack("<I", rem[pos + 4 * i:pos + 4 * i + 4])[0]
+                        struct.unpack("<I", rem[pos + 4 * i : pos + 4 * i + 4])[0]
                         for i in range(ndim)
                     )
                     pos += 4 * ndim
                     count = int(np.prod(shape))
-                    arr = np.frombuffer(rem[pos:pos + count * 4], dtype=np.float32).copy().reshape(shape)
+                    arr = (
+                        np.frombuffer(rem[pos : pos + count * 4], dtype=np.float32)
+                        .copy()
+                        .reshape(shape)
+                    )
                     pos += count * 4
 
                     # Load into encoder parameters
@@ -1151,17 +1357,27 @@ class SloTextEmbedder:
                             enc_params[param_idx].data = arr
                     param_idx += 1
 
-            logger.info("Loaded SloTextEmbedder from %s (embed_dim=%d)", path, embed_dim, extra={"tag": "INFRA"})
+            logger.info(
+                "Loaded SloTextEmbedder from %s (embed_dim=%d)",
+                path,
+                embed_dim,
+                extra={"tag": "INFRA"},
+            )
             encode_fn = None
             if bpe_tokenizer is not None:
+
                 def encode_fn(text: str, max_len: int) -> np.ndarray:
                     ids = bpe_tokenizer.encode(text)
                     ids = ids[:max_len]
                     padded = np.zeros(max_len, dtype=np.int64)
-                    padded[:len(ids)] = ids
+                    padded[: len(ids)] = ids
                     return padded
+
             embedder = cls(
-                encoder, vocab, embed_dim, max_seq_len,
+                encoder,
+                vocab,
+                embed_dim,
+                max_seq_len,
                 encode_fn=encode_fn,
                 quality=meta.get("quality"),
                 embed_mean=meta.get("embed_mean"),
@@ -1195,7 +1411,7 @@ class SloTextEmbedder:
             return False
         return True
 
-    def embed(self, text: str) -> List[float]:
+    def embed(self, text: str) -> list[float]:
         """Encode text to an L2-normalized vector.
 
         Args:
@@ -1205,6 +1421,7 @@ class SloTextEmbedder:
             list of floats (L2-normalized)
         """
         import domains.training.slonet as _slonet
+
         _prev_accel = getattr(_slonet, "_ACCELERATOR", None)
         try:
             _slonet._ACCELERATOR = "none"
@@ -1234,13 +1451,13 @@ class SloTextEmbedder:
         if len(vec) < self.embed_dim:
             vec = np.pad(vec, (0, self.embed_dim - len(vec)))
         elif len(vec) > self.embed_dim:
-            vec = vec[:self.embed_dim]
+            vec = vec[: self.embed_dim]
             n = np.linalg.norm(vec)
             if n > 0:
                 vec = vec / n
 
         return vec.tolist()
 
-    def embed_batch(self, texts: List[str]) -> List[List[float]]:
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Encode a batch of texts."""
         return [self.embed(t) for t in texts]

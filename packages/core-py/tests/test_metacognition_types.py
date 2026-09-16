@@ -1,21 +1,26 @@
 """Tests for domain.cognitive.metacognition — enums and dataclasses."""
 
 import time
+
 import pytest
+
 from domain.cognitive._internal.metacognition import (
-    MetacognitiveLevel, CognitiveProcess,
-    MetacognitiveAssessment, ReflectionInsight, CognitiveStateSnapshot,
+    CognitiveProcess,
+    CognitiveStateSnapshot,
+    MetacognitiveAssessment,
+    MetacognitiveLevel,
+    ReflectionInsight,
 )
 
 
 class TestMetacognitiveLevel:
     def test_all_members(self):
         assert len(MetacognitiveLevel) == 4
-    
+
     def test_values(self):
         assert MetacognitiveLevel.BASIC.value == "basic"
         assert MetacognitiveLevel.ADAPTIVE.value == "adaptive"
-    
+
     def test_all_value_names(self):
         values = [level.value for level in MetacognitiveLevel]
         assert "basic" in values
@@ -50,11 +55,11 @@ class TestMetacognitiveLevel:
 class TestCognitiveProcess:
     def test_all_members(self):
         assert len(CognitiveProcess) == 7
-    
+
     def test_values(self):
         assert CognitiveProcess.REASONING.value == "reasoning"
         assert CognitiveProcess.CREATIVITY.value == "creativity"
-    
+
     def test_all_value_names(self):
         values = [process.value for process in CognitiveProcess]
         assert "perception" in values

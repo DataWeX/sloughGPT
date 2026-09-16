@@ -1,7 +1,6 @@
 """Tests for domain.shell._internal.console — Console output, TUI-aware methods."""
 
-import pytest
-from domain.shell._internal.console import Console, _TuiSpinner, _Spinner, _Live
+from domain.shell._internal.console import Console, _Live, _Spinner, _TuiSpinner
 from domain.shell._internal.io import MemoryIO
 
 
@@ -137,7 +136,7 @@ class TestSpinner:
 
     def test_tui_spinner_writes_static_line(self):
         c, io = _make_console(tui=True)
-        with c.spinner("working") as s:
+        with c.spinner("working"):
             pass
         output = io.get_output()
         assert "working" in output

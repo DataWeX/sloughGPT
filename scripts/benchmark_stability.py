@@ -20,30 +20,29 @@ Gold Standard (pass/fail thresholds):
   - Response length variance (CV): <= 0.30
 """
 
-import sys
-import json
-import time
-import math
-import uuid
 import argparse
-from dataclasses import dataclass, asdict, field
-from typing import List, Optional
+import json
+import math
+import sys
+import time
+import uuid
+from dataclasses import asdict, dataclass
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-from urllib.error import URLError, HTTPError
-
 
 # ── Gold Standard Thresholds ────────────────────────────────────────────────
 
 GOLD = {
-    "max_crash_rate": 0.0,            # 0% — no crashes allowed
+    "max_crash_rate": 0.0,  # 0% — no crashes allowed
     "max_latency_degradation": 1.20,  # p95 last 5 / p95 first 5 <= 1.20
-    "max_empty_rate": 0.0,            # 0% — no empty responses
-    "max_length_cv": 0.30,            # coefficient of variation of response length
-    "min_response_rate": 1.0,         # 100% — all requests must return 200
+    "max_empty_rate": 0.0,  # 0% — no empty responses
+    "max_length_cv": 0.30,  # coefficient of variation of response length
+    "min_response_rate": 1.0,  # 100% — all requests must return 200
 }
 
 
 # ── Data Structures ─────────────────────────────────────────────────────────
+
 
 @dataclass
 class RequestRecord:
@@ -51,8 +50,8 @@ class RequestRecord:
     status: int
     latency_s: float
     response_length: int
-    error: Optional[str] = None
-    token_count: Optional[int] = None
+    error: str | None = None
+    token_count: int | None = None
 
 
 @dataclass
@@ -78,7 +77,7 @@ class StabilityScore:
 class StabilityResult:
     model: str
     runs: int
-    records: List[RequestRecord]
+    records: list[RequestRecord]
     score: StabilityScore
     elapsed_s: float
     passed: bool
@@ -86,14 +85,17 @@ class StabilityResult:
 
 # ── HTTP Helpers ────────────────────────────────────────────────────────────
 
+
 def _chat_request(url: str, prompt: str, timeout: int = 120) -> tuple:
     """Send one chat request, return (status, latency_s, response_text)."""
-    body = json.dumps({
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 50,
-        "temperature": 0.01,  # near-deterministic for stable length CV
-        "session_id": f"bench-{uuid.uuid4().hex[:8]}",  # unique — avoid SessionKVCache replay
-    }).encode()
+    body = json.dumps(
+        {
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 50,
+            "temperature": 0.01,  # near-deterministic for stable length CV
+            "session_id": f"bench-{uuid.uuid4().hex[:8]}",  # unique — avoid SessionKVCache replay
+        }
+    ).encode()
     req = Request(f"{url}/chat", data=body, headers={"Content-Type": "application/json"})
     start = time.time()
     try:
@@ -110,7 +112,7 @@ def _chat_request(url: str, prompt: str, timeout: int = 120) -> tuple:
         return 0, latency, str(e)
 
 
-def _health_check(url: str) -> Optional[dict]:
+def _health_check(url: str) -> dict | None:
     """Check if server is alive, return health JSON or None."""
     try:
         with urlopen(f"{url}/health", timeout=5) as resp:
@@ -137,7 +139,8 @@ BENCHMARK_PROMPT = "Say hi in 3 words."
 
 # ── Scoring ─────────────────────────────────────────────────────────────────
 
-def compute_score(records: List[RequestRecord]) -> StabilityScore:
+
+def compute_score(records: list[RequestRecord]) -> StabilityScore:
     """Compute all stability metrics from request records."""
     total = len(records)
     if total == 0:
@@ -171,11 +174,22 @@ def compute_score(records: List[RequestRecord]) -> StabilityScore:
 
     # Overall score: 0-100, weighted composite
     crash_ok = 1.0 if crash_rate == 0 else max(0, 1.0 - crash_rate * 5)
-    latency_ok = 1.0 if latency_degradation <= 1.20 else max(0, 1.0 - (latency_degradation - 1.20) * 2)
+    latency_ok = (
+        1.0 if latency_degradation <= 1.20 else max(0, 1.0 - (latency_degradation - 1.20) * 2)
+    )
     empty_ok = 1.0 if empty_rate == 0 else max(0, 1.0 - empty_rate * 5)
     cv_ok = 1.0 if length_cv <= 0.30 else max(0, 1.0 - (length_cv - 0.30) * 2)
     response_ok = 1.0 if response_rate == 1.0 else max(0, response_rate)
-    overall = round(100 * (crash_ok * 0.35 + latency_ok * 0.25 + empty_ok * 0.15 + cv_ok * 0.10 + response_ok * 0.15))
+    overall = round(
+        100
+        * (
+            crash_ok * 0.35
+            + latency_ok * 0.25
+            + empty_ok * 0.15
+            + cv_ok * 0.10
+            + response_ok * 0.15
+        )
+    )
 
     return StabilityScore(
         crash_rate=crash_rate,
@@ -189,6 +203,7 @@ def compute_score(records: List[RequestRecord]) -> StabilityScore:
 
 # ── Main ────────────────────────────────────────────────────────────────────
 
+
 def run_benchmark(url: str, runs: int = 20, verbose: bool = False) -> StabilityResult:
     """Run stability benchmark against a live server."""
     model = _resolve_model(url)
@@ -199,7 +214,7 @@ def run_benchmark(url: str, runs: int = 20, verbose: bool = False) -> StabilityR
         print(f"  Runs:   {runs}")
         print()
 
-    records: List[RequestRecord] = []
+    records: list[RequestRecord] = []
     start_time = time.time()
 
     for i in range(runs):
@@ -208,15 +223,17 @@ def run_benchmark(url: str, runs: int = 20, verbose: bool = False) -> StabilityR
 
         if verbose:
             icon = "✓" if status == 200 else "✗"
-            print(f"  [{i+1:2d}/{runs}] {icon} {status} {latency*1000:6.1f}ms  len={len(text)}")
+            print(f"  [{i + 1:2d}/{runs}] {icon} {status} {latency * 1000:6.1f}ms  len={len(text)}")
 
-        records.append(RequestRecord(
-            index=i,
-            status=status,
-            latency_s=latency,
-            response_length=len(text),
-            error=None if status == 200 else text,
-        ))
+        records.append(
+            RequestRecord(
+                index=i,
+                status=status,
+                latency_s=latency,
+                response_length=len(text),
+                error=None if status == 200 else text,
+            )
+        )
 
     elapsed = time.time() - start_time
     score = compute_score(records)
@@ -242,20 +259,30 @@ def print_report(result: StabilityResult, verbose: bool = False):
     print(f"  Model:      {result.model}")
     print(f"  Runs:       {result.runs}")
     print(f"  Duration:   {result.elapsed_s:.1f}s")
-    print(f"  Avg/req:    {result.elapsed_s/result.runs*1000:.0f}ms")
+    print(f"  Avg/req:    {result.elapsed_s / result.runs * 1000:.0f}ms")
     print()
 
     failures = [r for r in result.records if r.status != 200]
-    print(f"  Crashes:            {len(failures)}/{result.runs}  "
-          f"({s.crash_rate*100:.0f}%)  {'✅' if s.crash_rate == 0 else '❌'}  ≤{GOLD['max_crash_rate']*100:.0f}%")
-    print(f"  Latency degr.:      {s.latency_degradation:.2f}x  "
-          f"{'✅' if s.latency_degradation <= GOLD['max_latency_degradation'] else '❌'}  ≤{GOLD['max_latency_degradation']}x")
-    print(f"  Empty responses:    {sum(1 for r in result.records if r.status == 200 and r.response_length == 0)}/{result.runs}  "
-          f"({s.empty_rate*100:.0f}%)  {'✅' if s.empty_rate == 0 else '❌'}  ≤{GOLD['max_empty_rate']*100:.0f}%")
-    print(f"  Length CV:          {s.length_cv:.2f}  "
-          f"{'✅' if s.length_cv <= GOLD['max_length_cv'] else '❌'}  ≤{GOLD['max_length_cv']}")
-    print(f"  Response rate:      {s.response_rate*100:.0f}%  "
-          f"{'✅' if s.response_rate >= GOLD['min_response_rate'] else '❌'}  ≥{GOLD['min_response_rate']*100:.0f}%")
+    print(
+        f"  Crashes:            {len(failures)}/{result.runs}  "
+        f"({s.crash_rate * 100:.0f}%)  {'✅' if s.crash_rate == 0 else '❌'}  ≤{GOLD['max_crash_rate'] * 100:.0f}%"
+    )
+    print(
+        f"  Latency degr.:      {s.latency_degradation:.2f}x  "
+        f"{'✅' if s.latency_degradation <= GOLD['max_latency_degradation'] else '❌'}  ≤{GOLD['max_latency_degradation']}x"
+    )
+    print(
+        f"  Empty responses:    {sum(1 for r in result.records if r.status == 200 and r.response_length == 0)}/{result.runs}  "
+        f"({s.empty_rate * 100:.0f}%)  {'✅' if s.empty_rate == 0 else '❌'}  ≤{GOLD['max_empty_rate'] * 100:.0f}%"
+    )
+    print(
+        f"  Length CV:          {s.length_cv:.2f}  "
+        f"{'✅' if s.length_cv <= GOLD['max_length_cv'] else '❌'}  ≤{GOLD['max_length_cv']}"
+    )
+    print(
+        f"  Response rate:      {s.response_rate * 100:.0f}%  "
+        f"{'✅' if s.response_rate >= GOLD['min_response_rate'] else '❌'}  ≥{GOLD['min_response_rate'] * 100:.0f}%"
+    )
     print()
 
     # Per-request detail
@@ -264,7 +291,9 @@ def print_report(result: StabilityResult, verbose: bool = False):
         for r in result.records:
             icon = "✓" if r.status == 200 else "✗"
             marker = " ← CRASH" if r.status == 0 else ""
-            print(f"  [{r.index+1:2d}] {icon} {r.status} {r.latency_s*1000:7.1f}ms  len={r.response_length}{marker}")
+            print(
+                f"  [{r.index + 1:2d}] {icon} {r.status} {r.latency_s * 1000:7.1f}ms  len={r.response_length}{marker}"
+            )
 
     # Trend analysis
     ok = [r for r in result.records if r.status == 200]
@@ -273,12 +302,14 @@ def print_report(result: StabilityResult, verbose: bool = False):
         first_half_avg = sum(r.latency_s for r in ok[:half]) / half
         last_half_avg = sum(r.latency_s for r in ok[-half:]) / half
         trend = (last_half_avg / first_half_avg - 1) * 100
-        print(f"  ── Trend ──")
-        print(f"  First {half} avg: {first_half_avg*1000:.0f}ms   Last {half} avg: {last_half_avg*1000:.0f}ms   Δ {trend:+.0f}%")
+        print("  ── Trend ──")
+        print(
+            f"  First {half} avg: {first_half_avg * 1000:.0f}ms   Last {half} avg: {last_half_avg * 1000:.0f}ms   Δ {trend:+.0f}%"
+        )
         if trend > 20:
-            print(f"  ⚠ Latency increasing — possible memory leak")
+            print("  ⚠ Latency increasing — possible memory leak")
         elif trend < -10:
-            print(f"  ✴ Latency improving (warmup effect)")
+            print("  ✴ Latency improving (warmup effect)")
 
     # Summary verdict
     print()
@@ -287,18 +318,26 @@ def print_report(result: StabilityResult, verbose: bool = False):
     print()
 
     if failures:
-        print(f"  Failed requests:")
+        print("  Failed requests:")
         for r in failures:
-            print(f"    [{r.index+1}] status={r.status} error={r.error[:80] if r.error else 'unknown'}")
+            print(
+                f"    [{r.index + 1}] status={r.status} error={r.error[:80] if r.error else 'unknown'}"
+            )
 
     print("=" * 56)
     print()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Stability Benchmark — Sequential Chat Request Test")
-    parser.add_argument("--url", default="http://localhost:8000", help="Server URL (default: http://localhost:8000)")
-    parser.add_argument("--runs", type=int, default=20, help="Number of sequential requests (default: 20)")
+    parser = argparse.ArgumentParser(
+        description="Stability Benchmark — Sequential Chat Request Test"
+    )
+    parser.add_argument(
+        "--url", default="http://localhost:8000", help="Server URL (default: http://localhost:8000)"
+    )
+    parser.add_argument(
+        "--runs", type=int, default=20, help="Number of sequential requests (default: 20)"
+    )
     parser.add_argument("--verbose", "-v", action="store_true", help="Print per-request latencies")
     parser.add_argument("--json", action="store_true", help="Output JSON report")
     args = parser.parse_args()
@@ -313,7 +352,7 @@ def main():
     payload = health.get("data", health)
     model_loaded = payload.get("model_loaded", health.get("status") == "healthy")
     if not model_loaded:
-        print(f"⚠  Server reachable but no model loaded")
+        print("⚠  Server reachable but no model loaded")
         print(f"   Health: {json.dumps(health, indent=2)[:200]}")
         proceed = input("   Continue anyway? [y/N] ")
         if proceed.lower() != "y":

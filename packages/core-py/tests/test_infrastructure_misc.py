@@ -1,4 +1,5 @@
 """Tests for correlation ID, SessionCore, and ConsoleLogger."""
+
 from __future__ import annotations
 
 import asyncio
@@ -38,10 +39,13 @@ class TestCorrelationId:
 
 class TestSessionCore:
     def test_store_and_get(self):
-        result = SessionCore.store_context("s1", [
-            {"role": "user", "content": "hello"},
-            {"role": "assistant", "content": "hi"},
-        ])
+        result = SessionCore.store_context(
+            "s1",
+            [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi"},
+            ],
+        )
         assert result["status"] == "stored"
         assert result["message_count"] == 2
         msgs = SessionCore.get_messages("s1")
@@ -92,7 +96,9 @@ class TestConsoleLogger:
 
     def test_json_format(self):
         stream = io.StringIO()
-        log = ConsoleLogger("test", level=LogLevel.DEBUG, stream=stream, colors=False, format="json")
+        log = ConsoleLogger(
+            "test", level=LogLevel.DEBUG, stream=stream, colors=False, format="json"
+        )
         log.info("test message")
         output = stream.getvalue()
         assert "test message" in output

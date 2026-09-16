@@ -1,4 +1,5 @@
 """Tests for CpuTopology — CPU detection dataclass and properties."""
+
 from __future__ import annotations
 
 from domain.infrastructure._internal.cpu_topology import CpuTopology
@@ -66,6 +67,6 @@ class TestImmutability:
         topo = CpuTopology()
         try:
             topo.logical_cores = 99
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass

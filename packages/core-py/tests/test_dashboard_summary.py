@@ -3,15 +3,12 @@
 import sys
 from pathlib import Path
 
-import pytest
-
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from routers.dashboard import DashboardRouter
 
 

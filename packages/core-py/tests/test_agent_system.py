@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from domain.agents._internal.system import (
-    AgentSystem,
     DEFAULT_AGENTS,
-    get_agent_system,
+    AgentSystem,
     _default_inference_fn,
+    get_agent_system,
 )
 
 
@@ -19,13 +19,14 @@ def sys(tmp_path, monkeypatch):
     """Create an AgentSystem with a temp directory."""
     monkeypatch.setattr("domain.agents._internal.system.AGENTS_DIR", str(tmp_path))
     monkeypatch.setattr("domain.agents._internal.system._agent_repo", None)
-    from domain.agents._internal.system import _agent_repo as _
     # Reset singleton
     import domain.agents._internal.system as mod
+
     mod._default_system = None
 
     # Patch the repo
     from domain.infrastructure._internal.repository import FileRepository, JsonSerializer
+
     repo = FileRepository(
         directory=str(tmp_path),
         serializer=JsonSerializer(dict),
@@ -43,7 +44,6 @@ def sys(tmp_path, monkeypatch):
 
 
 class TestDefaultAgents:
-
     def test_default_agents_structure(self):
         assert "general" in DEFAULT_AGENTS
         assert "coder" in DEFAULT_AGENTS
@@ -67,7 +67,6 @@ class TestDefaultAgents:
 
 
 class TestAgentSystemCRUD:
-
     def test_create_agent(self, sys):
         result = sys.create("test1", "Test Agent", "A test agent", "Be helpful")
         assert result["id"] == "test1"
@@ -132,7 +131,6 @@ class TestAgentSystemCRUD:
 
 
 class TestDefaultsLoading:
-
     def test_defaults_loaded_on_init(self, sys):
         agents = sys.list()
         ids = [a["id"] for a in agents]
@@ -149,7 +147,6 @@ class TestDefaultsLoading:
 
 
 class TestInferenceFunction:
-
     def test_default_inference_fn_returns_dict(self):
         result = _default_inference_fn("test prompt")
         assert isinstance(result, dict)
@@ -159,10 +156,10 @@ class TestInferenceFunction:
 
 
 class TestSingleton:
-
     def test_get_returns_same(self):
         with patch("domain.agents._internal.system.get_agent", return_value=MagicMock()):
             import domain.agents._internal.system as mod
+
             mod._default_system = None
             s1 = get_agent_system()
             s2 = get_agent_system()

@@ -12,9 +12,10 @@ Usage:
 import logging
 import sys
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
-from dataclasses import dataclass, field
-from typing import Generator, TextIO
+from dataclasses import dataclass
+from typing import TextIO
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ class StartupTerminalViz:
                 break
 
         symbol = STATUS_SYMBOLS.get(status, "  ?")
-        elapsed = time.monotonic() - self._start_time if self._start_time else 0
+        time.monotonic() - self._start_time if self._start_time else 0
 
         if status == "ok":
             color = COLORS["green"]

@@ -1,14 +1,22 @@
 """Tests for domain.training — DatasetType, DataFormat, DatasetConfig, PreprocessingStepType, PipelineStageType, ModelType, ModelArchitecture, ModelConfig, PipelineConfig (training.__init__)."""
 
 from domain.training import (
-    DatasetType, DataFormat, DatasetConfig, PreprocessingStepType,
-    PipelineStageType, ModelType, ModelArchitecture, ModelConfig, PipelineConfig,
+    DataFormat,
+    DatasetConfig,
+    DatasetType,
+    ModelArchitecture,
+    ModelConfig,
+    ModelType,
+    PipelineConfig,
+    PipelineStageType,
+    PreprocessingStepType,
 )
 
 
 class TestDatasetType:
     def test_all_members(self):
         assert len(DatasetType) == 8
+
     def test_values(self):
         assert DatasetType.TEXT.value == "text"
         assert DatasetType.CODE.value == "code"
@@ -19,6 +27,7 @@ class TestDatasetType:
 class TestDataFormat:
     def test_all_members(self):
         assert len(DataFormat) == 3
+
     def test_values(self):
         assert DataFormat.JSON.value == "json"
         assert DataFormat.JSONL.value == "jsonl"
@@ -27,7 +36,12 @@ class TestDataFormat:
 
 class TestDatasetConfig:
     def test_fields(self):
-        dc = DatasetConfig(name="test", dataset_type=DatasetType.TEXT, data_format=DataFormat.JSONL, path="/tmp/test.jsonl")
+        dc = DatasetConfig(
+            name="test",
+            dataset_type=DatasetType.TEXT,
+            data_format=DataFormat.JSONL,
+            path="/tmp/test.jsonl",
+        )
         assert dc.name == "test"
         assert dc.dataset_type == DatasetType.TEXT
         assert dc.max_samples is None
@@ -36,6 +50,7 @@ class TestDatasetConfig:
 class TestPreprocessingStepType:
     def test_all_members(self):
         assert len(PreprocessingStepType) == 3
+
     def test_values(self):
         assert PreprocessingStepType.CLEAN.value == "clean"
         assert PreprocessingStepType.TOKENIZE.value == "tokenize"
@@ -45,6 +60,7 @@ class TestPreprocessingStepType:
 class TestPipelineStageType:
     def test_all_members(self):
         assert len(PipelineStageType) == 4
+
     def test_values(self):
         assert PipelineStageType.PREPROCESS.value == "preprocess"
         assert PipelineStageType.TRAIN.value == "train"
@@ -54,6 +70,7 @@ class TestPipelineStageType:
 class TestModelType:
     def test_all_members(self):
         assert len(ModelType) == 2
+
     def test_values(self):
         assert ModelType.LANGUAGE_MODEL.value == "language_model"
         assert ModelType.CHAT_MODEL.value == "chat_model"
@@ -62,6 +79,7 @@ class TestModelType:
 class TestModelArchitecture:
     def test_all_members(self):
         assert len(ModelArchitecture) == 3
+
     def test_values(self):
         assert ModelArchitecture.GPT.value == "gpt"
         assert ModelArchitecture.BERT.value == "bert"
@@ -70,7 +88,9 @@ class TestModelArchitecture:
 
 class TestModelConfig:
     def test_fields(self):
-        mc = ModelConfig(name="m1", model_type=ModelType.LANGUAGE_MODEL, architecture=ModelArchitecture.GPT)
+        mc = ModelConfig(
+            name="m1", model_type=ModelType.LANGUAGE_MODEL, architecture=ModelArchitecture.GPT
+        )
         assert mc.name == "m1"
         assert mc.hidden_size == 768
         assert mc.num_layers == 12

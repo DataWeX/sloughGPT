@@ -3,33 +3,31 @@
 import asyncio
 import os
 import time
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from domain.infrastructure._internal.lifecycle import (
-    LifecyclePhase,
-    StartupProfile,
-    StartupHook,
-    ShutdownHook,
-    _HookResult,
-    _topological_sort,
-    _dependency_levels,
-    LifecycleManager,
     ALL_PROFILES,
-    EVT_PHASE_CHANGED,
-    EVT_HOOK_STARTED,
     EVT_HOOK_COMPLETED,
     EVT_HOOK_FAILED,
+    EVT_HOOK_STARTED,
+    EVT_PHASE_CHANGED,
+    LifecycleManager,
+    LifecyclePhase,
+    ShutdownHook,
+    StartupHook,
+    StartupProfile,
+    _dependency_levels,
+    _HookResult,
+    _topological_sort,
     get_lifecycle_manager,
     reset_lifecycle_manager,
-    _lifecycle_manager,
 )
-
 
 # ---------------------------------------------------------------------------
 # LifecyclePhase
 # ---------------------------------------------------------------------------
+
 
 class TestLifecyclePhase:
     def test_all_members(self):
@@ -100,6 +98,7 @@ class TestLifecyclePhase:
 # ---------------------------------------------------------------------------
 # StartupProfile
 # ---------------------------------------------------------------------------
+
 
 class TestStartupProfile:
     def test_all_members(self):
@@ -203,6 +202,7 @@ class TestAllProfilesConstant:
 # StartupHook
 # ---------------------------------------------------------------------------
 
+
 class TestStartupHook:
     def test_defaults(self):
         sh = StartupHook(name="test", handler=lambda: None)
@@ -232,6 +232,7 @@ class TestStartupHook:
     def test_handler_is_callable(self):
         async def my_handler():
             pass
+
         sh = StartupHook(name="x", handler=my_handler)
         assert callable(sh.handler)
 
@@ -266,6 +267,7 @@ class TestStartupHook:
 
     def test_is_dataclass(self):
         from dataclasses import fields
+
         field_names = {f.name for f in fields(StartupHook)}
         assert field_names == {"name", "handler", "depends_on", "timeout", "critical", "profiles"}
 
@@ -273,6 +275,7 @@ class TestStartupHook:
 # ---------------------------------------------------------------------------
 # ShutdownHook
 # ---------------------------------------------------------------------------
+
 
 class TestShutdownHook:
     def test_defaults(self):
@@ -313,6 +316,7 @@ class TestShutdownHook:
 
     def test_is_dataclass(self):
         from dataclasses import fields
+
         field_names = {f.name for f in fields(ShutdownHook)}
         assert field_names == {"name", "handler", "depends_on", "timeout", "critical"}
 
@@ -320,6 +324,7 @@ class TestShutdownHook:
 # ---------------------------------------------------------------------------
 # _HookResult
 # ---------------------------------------------------------------------------
+
 
 class TestHookResult:
     def test_defaults(self):
@@ -361,6 +366,7 @@ class TestHookResult:
 
     def test_is_dataclass(self):
         from dataclasses import fields
+
         field_names = {f.name for f in fields(_HookResult)}
         assert field_names == {"name", "success", "elapsed", "error"}
 
@@ -368,6 +374,7 @@ class TestHookResult:
 # ---------------------------------------------------------------------------
 # _topological_sort
 # ---------------------------------------------------------------------------
+
 
 class TestTopologicalSort:
     def test_simple_order(self):
@@ -454,7 +461,10 @@ class TestTopologicalSort:
         assert names.index("e") < names.index("f")
 
     def test_all_hooks_in_result(self):
-        hooks = [StartupHook(name=f"h{i}", handler=lambda: None, depends_on=["h0"] if i > 0 else []) for i in range(10)]
+        hooks = [
+            StartupHook(name=f"h{i}", handler=lambda: None, depends_on=["h0"] if i > 0 else [])
+            for i in range(10)
+        ]
         result = _topological_sort(hooks)
         result_names = {h.name for h in result}
         assert result_names == {f"h{i}" for i in range(10)}
@@ -468,6 +478,7 @@ class TestTopologicalSort:
 # ---------------------------------------------------------------------------
 # _dependency_levels
 # ---------------------------------------------------------------------------
+
 
 class TestDependencyLevels:
     def test_empty(self):
@@ -556,7 +567,7 @@ class TestDependencyLevels:
     def test_deep_chain(self):
         hooks = []
         for i in range(10):
-            deps = [f"h{i-1}"] if i > 0 else []
+            deps = [f"h{i - 1}"] if i > 0 else []
             hooks.append(StartupHook(name=f"h{i}", handler=lambda: None, depends_on=deps))
         levels = _dependency_levels(hooks)
         assert len(levels) == 10
@@ -565,6 +576,7 @@ class TestDependencyLevels:
 # ---------------------------------------------------------------------------
 # Event constants
 # ---------------------------------------------------------------------------
+
 
 class TestEventConstants:
     def test_phase_changed(self):
@@ -593,6 +605,7 @@ class TestEventConstants:
 # ---------------------------------------------------------------------------
 # LifecycleManager — unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestLifecycleManagerInit:
     def test_initial_phase(self):
@@ -697,23 +710,35 @@ class TestLifecycleManagerHooks:
 
     def test_preview_with_profile_filter(self):
         mgr = LifecycleManager()
-        mgr.register_startup_hook(StartupHook(
-            name="a", handler=lambda: None,
-            profiles=frozenset({StartupProfile.FULL}),
-        ))
-        mgr.register_startup_hook(StartupHook(
-            name="b", handler=lambda: None,
-            profiles=frozenset({StartupProfile.MINIMAL}),
-        ))
+        mgr.register_startup_hook(
+            StartupHook(
+                name="a",
+                handler=lambda: None,
+                profiles=frozenset({StartupProfile.FULL}),
+            )
+        )
+        mgr.register_startup_hook(
+            StartupHook(
+                name="b",
+                handler=lambda: None,
+                profiles=frozenset({StartupProfile.MINIMAL}),
+            )
+        )
         preview = mgr.preview(profile=StartupProfile.FULL)
         assert len(preview) == 1
         assert preview[0]["name"] == "a"
 
     def test_preview_shows_critical_timeout_depends(self):
         mgr = LifecycleManager()
-        mgr.register_startup_hook(StartupHook(
-            name="x", handler=lambda: None, critical=False, timeout=5.0, depends_on=["y"],
-        ))
+        mgr.register_startup_hook(
+            StartupHook(
+                name="x",
+                handler=lambda: None,
+                critical=False,
+                timeout=5.0,
+                depends_on=["y"],
+            )
+        )
         preview = mgr.preview()
         assert preview[0]["critical"] is False
         assert preview[0]["timeout"] == 5.0
@@ -963,7 +988,9 @@ class TestLifecycleManagerStart:
             await asyncio.sleep(100)
 
         mgr = LifecycleManager()
-        mgr.register_startup_hook(StartupHook(name="slow", handler=slow, timeout=0.05, critical=True))
+        mgr.register_startup_hook(
+            StartupHook(name="slow", handler=slow, timeout=0.05, critical=True)
+        )
         result = await mgr.start()
         assert result is False
         assert mgr.phase == LifecyclePhase.CRASHED
@@ -992,10 +1019,13 @@ class TestLifecycleManagerStart:
             called.append("full")
 
         mgr = LifecycleManager()
-        mgr.register_startup_hook(StartupHook(
-            name="full_only", handler=full_only,
-            profiles=frozenset({StartupProfile.FULL}),
-        ))
+        mgr.register_startup_hook(
+            StartupHook(
+                name="full_only",
+                handler=full_only,
+                profiles=frozenset({StartupProfile.FULL}),
+            )
+        )
         await mgr.start(profile=StartupProfile.FULL)
         assert "full" in called
 
@@ -1007,10 +1037,13 @@ class TestLifecycleManagerStart:
             called.append("full")
 
         mgr = LifecycleManager()
-        mgr.register_startup_hook(StartupHook(
-            name="full_only", handler=full_only,
-            profiles=frozenset({StartupProfile.FULL}),
-        ))
+        mgr.register_startup_hook(
+            StartupHook(
+                name="full_only",
+                handler=full_only,
+                profiles=frozenset({StartupProfile.FULL}),
+            )
+        )
         await mgr.start(profile=StartupProfile.MINIMAL)
         assert "full" not in called
 
@@ -1021,6 +1054,7 @@ class TestLifecycleManagerStart:
         class FakeBus:
             async def emit(self, event, data, source=""):
                 events.append(event)
+
             def emit_sync(self, event, data, source=""):
                 events.append(event)
 
@@ -1220,6 +1254,7 @@ class TestLifecycleManagerGetResults:
 # Singleton functions
 # ---------------------------------------------------------------------------
 
+
 class TestSingleton:
     def test_get_lifecycle_manager_returns_same(self):
         reset_lifecycle_manager()
@@ -1268,6 +1303,7 @@ class TestSingleton:
 # Extended LifecycleManager — more edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestLifecycleManagerExtended:
     def test_is_draining_in_init(self):
         mgr = LifecycleManager()
@@ -1295,9 +1331,8 @@ class TestLifecycleManagerExtended:
     def test_profile_set_during_start(self):
         mgr = LifecycleManager()
         import asyncio
-        asyncio.get_event_loop().run_until_complete(
-            mgr.start(profile=StartupProfile.MINIMAL)
-        )
+
+        asyncio.get_event_loop().run_until_complete(mgr.start(profile=StartupProfile.MINIMAL))
         assert mgr.get_profile() == StartupProfile.MINIMAL
         asyncio.get_event_loop().run_until_complete(mgr.shutdown())
 
@@ -1327,6 +1362,7 @@ class TestLifecycleManagerExtended:
 
     def test_lock_is_asyncio_lock(self):
         import asyncio
+
         mgr = LifecycleManager()
         assert isinstance(mgr._lock, asyncio.Lock)
 
@@ -1341,6 +1377,7 @@ class TestLifecycleManagerExtended:
         class FakeBus:
             async def emit(self, event, data, source=""):
                 events.append(event)
+
             def emit_sync(self, event, data, source=""):
                 events.append(event)
 
@@ -1355,6 +1392,7 @@ class TestLifecycleManagerExtended:
         class FakeBus:
             async def emit(self, event, data, source=""):
                 events.append(event)
+
             def emit_sync(self, event, data, source=""):
                 events.append(event)
 
@@ -1370,6 +1408,7 @@ class TestLifecycleManagerExtended:
         class FakeBus:
             async def emit(self, event, data, source=""):
                 events.append(event)
+
             def emit_sync(self, event, data, source=""):
                 events.append(event)
 
@@ -1384,6 +1423,7 @@ class TestLifecycleManagerExtended:
         class FakeBus:
             async def emit(self, event, data, source=""):
                 events.append(event)
+
             def emit_sync(self, event, data, source=""):
                 events.append(event)
 
@@ -1402,6 +1442,7 @@ class TestLifecycleManagerExtended:
         class FakeBus:
             async def emit(self, event, data, source=""):
                 events.append(event)
+
             def emit_sync(self, event, data, source=""):
                 events.append(event)
 
@@ -1471,7 +1512,9 @@ class TestLifecycleManagerExtended:
 
     def test_filter_hooks_for_profile(self):
         mgr = LifecycleManager()
-        h1 = StartupHook(name="full_only", handler=lambda: None, profiles=frozenset({StartupProfile.FULL}))
+        h1 = StartupHook(
+            name="full_only", handler=lambda: None, profiles=frozenset({StartupProfile.FULL})
+        )
         h2 = StartupHook(name="all", handler=lambda: None)
         filtered = mgr._filter_hooks_for_profile([h1, h2], StartupProfile.FULL)
         assert len(filtered) == 2

@@ -14,14 +14,13 @@ and the generic DEV_OPEN/DEV_CALL/DEV_CLOSE protocol.
 
 from __future__ import annotations
 
+import logging
 import re
 import struct
 import zlib
-import logging
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
-
 
 import numpy as np
 
@@ -40,6 +39,7 @@ F_NEG = 1 << 2
 
 
 # ── Exceptions ───────────────────────────────────────────────────────────────
+
 
 class VMFault(Exception):
     """Base VM fault."""
@@ -67,9 +67,11 @@ class DeviceFault(VMFault):
 
 # ── Data Structures ──────────────────────────────────────────────────────────
 
+
 @dataclass
 class Instruction:
     """Decoded instruction ready for execution."""
+
     opcode: str
     operands: list
     line_num: int = 0
@@ -79,6 +81,7 @@ class Instruction:
 @dataclass
 class TraceEntry:
     """Snapshot of machine state at one execution cycle."""
+
     cycle: int
     pc: int
     instruction: str
@@ -91,90 +94,91 @@ class TraceEntry:
 OPCODES = {
     "LOAD_CONST": "Rd, value          Rd = constant",
     "LOAD_SHAPE": "Rd, rows, cols     Rd = zeros(rows,cols)",
-    "MOV":        "Rd, Rs             Rd = Rs",
-    "STORE":      "Rs, key            heap[key] = Rs",
-    "LOAD":       "Rd, key            Rd = heap[key]",
-    "FREE":       "key                delete heap[key]",
-    "PRINT":      "Rs                 output Rs",
-    "NOP":        "                   no operation",
-    "IADD":       "Rd, Ra, Rb         Rd = int(Ra) + int(Rb)",
-    "ISUB":       "Rd, Ra, Rb         Rd = int(Ra) - int(Rb)",
-    "IMUL":       "Rd, Ra, Rb         Rd = int(Ra) * int(Rb)",
-    "IDIV":       "Rd, Ra, Rb         Rd = int(Ra) // int(Rb)",
-    "IAND":       "Rd, Ra, Rb         Rd = int(Ra) & int(Rb)",
-    "IOR":        "Rd, Ra, Rb         Rd = int(Ra) | int(Rb)",
-    "IXOR":       "Rd, Ra, Rb         Rd = int(Ra) ^ int(Rb)",
-    "ISHL":       "Rd, Ra, Rb         Rd = int(Ra) << int(Rb)",
-    "ISHR":       "Rd, Ra, Rb         Rd = int(Ra) >> int(Rb)",
-    "INEG":       "Rd, Ra             Rd = -int(Ra)",
-    "INC":        "Rd                 Rd += 1",
-    "DEC":        "Rd                 Rd -= 1",
-    "ICMP":       "Ra, Rb             set CMP_FLAG",
-    "ADD":        "Rd, Ra, Rb         Rd = Ra + Rb",
-    "SUB":        "Rd, Ra, Rb         Rd = Ra - Rb",
-    "MUL":        "Rd, Ra, Rb         Rd = Ra * Rb",
-    "DIV":        "Rd, Ra, Rb         Rd = Ra / Rb",
-    "NEG":        "Rd, Ra             Rd = -Ra",
-    "ABS":        "Rd, Ra             Rd = |Ra|",
-    "MATMUL":     "Rd, Ra, Rb         Rd = Ra @ Rb",
-    "TRANSPOSE":  "Rd, Ra             Rd = Ra.T",
-    "DOT":        "Rd, Ra, Rb         Rd = Ra . Rb",
-    "NORM":       "Rd, Ra             Rd = ||Ra||",
-    "SUM":        "Rd, Ra             Rd = sum(Ra)",
-    "MEAN":       "Rd, Ra             Rd = mean(Ra)",
-    "MAX":        "Rd, Ra             Rd = max(Ra)",
-    "ARGMAX":     "Rd, Ra             Rd = argmax(Ra)",
-    "RESHAPE":    "Rd, Ra, R, C       Rd = reshape(Ra, (R,C))",
-    "SHAPE":      "Rd, Ra             Rd = list(Ra.shape)",
-    "SIZE":       "Rd, Ra             Rd = element count",
-    "RELU":       "Rd, Ra             Rd = max(0, Ra)",
-    "GELU":       "Rd, Ra             Rd = gelu(Ra)",
-    "SIGMOID":    "Rd, Ra             Rd = sigmoid(Ra)",
-    "TANH":       "Rd, Ra             Rd = tanh(Ra)",
-    "SOFTMAX":    "Rd, Ra             Rd = softmax(Ra)",
-    "LAYERNORM":  "Rd, Ra             Rd = layer_norm(Ra)",
-    "RMSNORM":    "Rd, Ra             Rd = rms_norm(Ra)",
-    "RANDN":      "Rd, rows, cols     Rd = randn(rows,cols)",
-    "RANDUNIF":   "Rd, rows, cols, lo, hi  Rd = uniform(lo,hi)",
-    "CMP":        "Ra, Rb             set CMP_FLAG (-1/0/+1)",
-    "TEST":       "Ra                 set CMP_FLAG (0 or 1)",
-    "JMP":        "label              PC = label",
-    "JZ":         "label              if CMP_FLAG == 0: PC = label",
-    "JNZ":        "label              if CMP_FLAG != 0: PC = label",
-    "JGT":        "label              if CMP_FLAG > 0: PC = label",
-    "JGE":        "label              if CMP_FLAG >= 0: PC = label",
-    "JLT":        "label              if CMP_FLAG < 0: PC = label",
-    "JLE":        "label              if CMP_FLAG <= 0: PC = label",
-    "CALL":       "label              push PC+1, PC = label",
-    "RET":        "                   pop call stack",
-    "LOOP":       "Rd, label          Rd -= 1; if Rd != 0: PC = label",
-    "HALT":       "                   stop execution",
-    "SYSCALL":    "                   R0=handler(R7, [R0..R5])",
-    "DEV_OPEN":   "Rd, name           Rd = device handle",
-    "DEV_CALL":   "Rd, H, method, args...  Rd = device.method(*args)",
-    "DEV_CLOSE":  "H                  release device handle",
-    "DEV_INFO":   "Rd, H              Rd = device.info()",
-    "DEV_TABLE_OPEN":  "Rd, name       Rd = fd (bit-based fd management)",
-    "DEV_TABLE_CALL":  "Rd, fd, cmd, args...  Rd = device_table.ioctl(fd, cmd, args)",
+    "MOV": "Rd, Rs             Rd = Rs",
+    "STORE": "Rs, key            heap[key] = Rs",
+    "LOAD": "Rd, key            Rd = heap[key]",
+    "FREE": "key                delete heap[key]",
+    "PRINT": "Rs                 output Rs",
+    "NOP": "                   no operation",
+    "IADD": "Rd, Ra, Rb         Rd = int(Ra) + int(Rb)",
+    "ISUB": "Rd, Ra, Rb         Rd = int(Ra) - int(Rb)",
+    "IMUL": "Rd, Ra, Rb         Rd = int(Ra) * int(Rb)",
+    "IDIV": "Rd, Ra, Rb         Rd = int(Ra) // int(Rb)",
+    "IAND": "Rd, Ra, Rb         Rd = int(Ra) & int(Rb)",
+    "IOR": "Rd, Ra, Rb         Rd = int(Ra) | int(Rb)",
+    "IXOR": "Rd, Ra, Rb         Rd = int(Ra) ^ int(Rb)",
+    "ISHL": "Rd, Ra, Rb         Rd = int(Ra) << int(Rb)",
+    "ISHR": "Rd, Ra, Rb         Rd = int(Ra) >> int(Rb)",
+    "INEG": "Rd, Ra             Rd = -int(Ra)",
+    "INC": "Rd                 Rd += 1",
+    "DEC": "Rd                 Rd -= 1",
+    "ICMP": "Ra, Rb             set CMP_FLAG",
+    "ADD": "Rd, Ra, Rb         Rd = Ra + Rb",
+    "SUB": "Rd, Ra, Rb         Rd = Ra - Rb",
+    "MUL": "Rd, Ra, Rb         Rd = Ra * Rb",
+    "DIV": "Rd, Ra, Rb         Rd = Ra / Rb",
+    "NEG": "Rd, Ra             Rd = -Ra",
+    "ABS": "Rd, Ra             Rd = |Ra|",
+    "MATMUL": "Rd, Ra, Rb         Rd = Ra @ Rb",
+    "TRANSPOSE": "Rd, Ra             Rd = Ra.T",
+    "DOT": "Rd, Ra, Rb         Rd = Ra . Rb",
+    "NORM": "Rd, Ra             Rd = ||Ra||",
+    "SUM": "Rd, Ra             Rd = sum(Ra)",
+    "MEAN": "Rd, Ra             Rd = mean(Ra)",
+    "MAX": "Rd, Ra             Rd = max(Ra)",
+    "ARGMAX": "Rd, Ra             Rd = argmax(Ra)",
+    "RESHAPE": "Rd, Ra, R, C       Rd = reshape(Ra, (R,C))",
+    "SHAPE": "Rd, Ra             Rd = list(Ra.shape)",
+    "SIZE": "Rd, Ra             Rd = element count",
+    "RELU": "Rd, Ra             Rd = max(0, Ra)",
+    "GELU": "Rd, Ra             Rd = gelu(Ra)",
+    "SIGMOID": "Rd, Ra             Rd = sigmoid(Ra)",
+    "TANH": "Rd, Ra             Rd = tanh(Ra)",
+    "SOFTMAX": "Rd, Ra             Rd = softmax(Ra)",
+    "LAYERNORM": "Rd, Ra             Rd = layer_norm(Ra)",
+    "RMSNORM": "Rd, Ra             Rd = rms_norm(Ra)",
+    "RANDN": "Rd, rows, cols     Rd = randn(rows,cols)",
+    "RANDUNIF": "Rd, rows, cols, lo, hi  Rd = uniform(lo,hi)",
+    "CMP": "Ra, Rb             set CMP_FLAG (-1/0/+1)",
+    "TEST": "Ra                 set CMP_FLAG (0 or 1)",
+    "JMP": "label              PC = label",
+    "JZ": "label              if CMP_FLAG == 0: PC = label",
+    "JNZ": "label              if CMP_FLAG != 0: PC = label",
+    "JGT": "label              if CMP_FLAG > 0: PC = label",
+    "JGE": "label              if CMP_FLAG >= 0: PC = label",
+    "JLT": "label              if CMP_FLAG < 0: PC = label",
+    "JLE": "label              if CMP_FLAG <= 0: PC = label",
+    "CALL": "label              push PC+1, PC = label",
+    "RET": "                   pop call stack",
+    "LOOP": "Rd, label          Rd -= 1; if Rd != 0: PC = label",
+    "HALT": "                   stop execution",
+    "SYSCALL": "                   R0=handler(R7, [R0..R5])",
+    "DEV_OPEN": "Rd, name           Rd = device handle",
+    "DEV_CALL": "Rd, H, method, args...  Rd = device.method(*args)",
+    "DEV_CLOSE": "H                  release device handle",
+    "DEV_INFO": "Rd, H              Rd = device.info()",
+    "DEV_TABLE_OPEN": "Rd, name       Rd = fd (bit-based fd management)",
+    "DEV_TABLE_CALL": "Rd, fd, cmd, args...  Rd = device_table.ioctl(fd, cmd, args)",
     "DEV_TABLE_CLOSE": "fd             close device fd via DeviceTable",
-    "DEV_TABLE_INFO":  "Rd, fd         Rd = device_table.ioctl(fd, INFO)",
-    "DEV_REG_READ":    "Rd, addr      Rd = device_register_map.read(addr)",
-    "DEV_REG_WRITE":   "addr, val     device_register_map.write(addr, val)",
-    "PUSH":       "Rs                 stack.push(Rs); sp -= 1",
-    "POP":        "Rd                 sp += 1; Rd = stack[sp]",
-    "FADD":       "Rd, Ra, Rb         Rd = float(Ra) + float(Rb)",
-    "FSUB":       "Rd, Ra, Rb         Rd = float(Ra) - float(Rb)",
-    "FMUL":       "Rd, Ra, Rb         Rd = float(Ra) * float(Rb)",
-    "FDIV":       "Rd, Ra, Rb         Rd = float(Ra) / float(Rb)",
-    "FCMP":       "Ra, Rb             set CMP_FLAG for floats",
-    "ALLOC":      "Rd, size           Rd = heap.alloc(size)",
-    "MEMINFO":    "Rd                 Rd = heap.usage()",
-    "IN":         "Rd, port           Rd = bus.read_io(port)",
-    "OUT":        "port, Rs           bus.write_io(port, Rs)",
+    "DEV_TABLE_INFO": "Rd, fd         Rd = device_table.ioctl(fd, INFO)",
+    "DEV_REG_READ": "Rd, addr      Rd = device_register_map.read(addr)",
+    "DEV_REG_WRITE": "addr, val     device_register_map.write(addr, val)",
+    "PUSH": "Rs                 stack.push(Rs); sp -= 1",
+    "POP": "Rd                 sp += 1; Rd = stack[sp]",
+    "FADD": "Rd, Ra, Rb         Rd = float(Ra) + float(Rb)",
+    "FSUB": "Rd, Ra, Rb         Rd = float(Ra) - float(Rb)",
+    "FMUL": "Rd, Ra, Rb         Rd = float(Ra) * float(Rb)",
+    "FDIV": "Rd, Ra, Rb         Rd = float(Ra) / float(Rb)",
+    "FCMP": "Ra, Rb             set CMP_FLAG for floats",
+    "ALLOC": "Rd, size           Rd = heap.alloc(size)",
+    "MEMINFO": "Rd                 Rd = heap.usage()",
+    "IN": "Rd, port           Rd = bus.read_io(port)",
+    "OUT": "port, Rs           bus.write_io(port, Rs)",
 }
 
 
 # ── Memory Subsystem ─────────────────────────────────────────────────────────
+
 
 class Memory:
     """Named tensor heap with LRU access tracking."""
@@ -227,6 +231,7 @@ class Memory:
 
 
 # ── Device Bus ───────────────────────────────────────────────────────────────
+
 
 class Device:
     """Generic device interface. Subclass to wrap any library."""
@@ -285,8 +290,9 @@ class ClockDevice(Device):
         """Total seconds since epoch (wall-clock time)."""
         return self._epoch + self._ticks / self._freq
 
-    def set_time(self, year: int, month: int, day: int,
-                 hour: int = 0, minute: int = 0, second: int = 0):
+    def set_time(
+        self, year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0
+    ):
         """Set the wall clock to a specific date/time (useful for tests)."""
         self._epoch = self._date_to_unix(year, month, day, hour, minute, second)
         self._ticks = 0
@@ -353,8 +359,9 @@ class ClockDevice(Device):
         }
 
     @classmethod
-    def _date_to_unix(cls, year: int, month: int, day: int,
-                      hour: int = 0, minute: int = 0, second: int = 0) -> int:
+    def _date_to_unix(
+        cls, year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0
+    ) -> int:
         """Encode a calendar date to a Unix timestamp.  Pure math."""
         # Days from 1970-01-01 to year-01-01
         days = 0
@@ -469,9 +476,11 @@ class FileDevice(Device):
             return True
         if method == "listdir":
             import os
+
             return os.listdir(args[0])
         if method == "exists":
             import os
+
             return os.path.exists(args[0])
         return super().call(method, *args)
 
@@ -543,8 +552,9 @@ class VGADevice(Device):
     VGA_BUFFER_ADDR = 0xB8000
 
     def __init__(self):
-        self._screen = [[{'char': ' ', 'fg': 7, 'bg': 0} for _ in range(self.COLS)]
-                        for _ in range(self.ROWS)]
+        self._screen = [
+            [{"char": " ", "fg": 7, "bg": 0} for _ in range(self.COLS)] for _ in range(self.ROWS)
+        ]
         self._cursor_row = 0
         self._cursor_col = 0
         self._default_fg = 7  # light gray
@@ -566,7 +576,7 @@ class VGADevice(Device):
             fg = args[3] if len(args) > 3 else self._default_fg
             bg = args[4] if len(args) > 4 else self._default_bg
             if 0 <= row < self.ROWS and 0 <= col < self.COLS:
-                self._screen[row][col] = {'char': char, 'fg': fg, 'bg': bg}
+                self._screen[row][col] = {"char": char, "fg": fg, "bg": bg}
                 self._writes += 1
             return True
         if method == "write_string":
@@ -576,14 +586,16 @@ class VGADevice(Device):
             for i, ch in enumerate(text):
                 c = col + i
                 if c < self.COLS and 0 <= row < self.ROWS:
-                    self._screen[row][c] = {'char': ch, 'fg': fg, 'bg': bg}
+                    self._screen[row][c] = {"char": ch, "fg": fg, "bg": bg}
                     self._writes += 1
             return True
         if method == "clear":
             fg = args[0] if args else self._default_fg
             bg = args[1] if len(args) > 1 else self._default_bg
-            self._screen = [[{'char': ' ', 'fg': fg, 'bg': bg}
-                             for _ in range(self.COLS)] for _ in range(self.ROWS)]
+            self._screen = [
+                [{"char": " ", "fg": fg, "bg": bg} for _ in range(self.COLS)]
+                for _ in range(self.ROWS)
+            ]
             self._cursor_row = 0
             self._cursor_col = 0
             self._writes += self.ROWS * self.COLS
@@ -592,8 +604,7 @@ class VGADevice(Device):
             n = args[0] if args else 1
             for _ in range(n):
                 self._screen.pop(0)
-                self._screen.append([{'char': ' ', 'fg': 7, 'bg': 0}
-                                     for _ in range(self.COLS)])
+                self._screen.append([{"char": " ", "fg": 7, "bg": 0} for _ in range(self.COLS)])
             self._writes += n * self.COLS
             return True
         if method == "set_cursor":
@@ -605,7 +616,7 @@ class VGADevice(Device):
         if method == "get_screen":
             lines = []
             for row in self._screen:
-                lines.append(''.join(c['char'] for c in row))
+                lines.append("".join(c["char"] for c in row))
             return lines
         return super().call(method, *args)
 
@@ -626,19 +637,52 @@ class PS2KeyboardDevice(Device):
 
     # PS/2 Set 1 scancodes → ASCII
     SCANCODE_TO_ASCII = {
-        0x00: 0, 0x1E: ord('1'), 0x1F: ord('2'), 0x20: ord('3'),
-        0x21: ord('4'), 0x22: ord('5'), 0x23: ord('6'), 0x24: ord('7'),
-        0x25: ord('8'), 0x26: ord('9'), 0x27: ord('0'),
-        0x10: ord('q'), 0x11: ord('w'), 0x12: ord('e'), 0x13: ord('r'),
-        0x14: ord('t'), 0x15: ord('y'), 0x16: ord('u'), 0x17: ord('i'),
-        0x18: ord('o'), 0x19: ord('p'),
-        0x1E: ord('a'), 0x1F: ord('s'), 0x20: ord('d'), 0x21: ord('f'),
-        0x22: ord('g'), 0x23: ord('h'), 0x24: ord('j'), 0x25: ord('k'),
-        0x26: ord('l'),
-        0x2C: ord('z'), 0x2D: ord('x'), 0x2E: ord('c'), 0x2F: ord('v'),
-        0x30: ord('b'), 0x31: ord('n'), 0x32: ord('m'),
-        0x39: ord(' '), 0x1C: 10, 0x0E: 8, 0x01: 27, 0x0F: 9,
-        0x4B: 0x100, 0x4D: 0x101, 0x48: 0x102, 0x50: 0x103,  # arrows
+        0x00: 0,
+        0x1E: ord("1"),
+        0x1F: ord("2"),
+        0x20: ord("3"),
+        0x21: ord("4"),
+        0x22: ord("5"),
+        0x23: ord("6"),
+        0x24: ord("7"),
+        0x25: ord("8"),
+        0x26: ord("9"),
+        0x27: ord("0"),
+        0x10: ord("q"),
+        0x11: ord("w"),
+        0x12: ord("e"),
+        0x13: ord("r"),
+        0x14: ord("t"),
+        0x15: ord("y"),
+        0x16: ord("u"),
+        0x17: ord("i"),
+        0x18: ord("o"),
+        0x19: ord("p"),
+        0x1E: ord("a"),
+        0x1F: ord("s"),
+        0x20: ord("d"),
+        0x21: ord("f"),
+        0x22: ord("g"),
+        0x23: ord("h"),
+        0x24: ord("j"),
+        0x25: ord("k"),
+        0x26: ord("l"),
+        0x2C: ord("z"),
+        0x2D: ord("x"),
+        0x2E: ord("c"),
+        0x2F: ord("v"),
+        0x30: ord("b"),
+        0x31: ord("n"),
+        0x32: ord("m"),
+        0x39: ord(" "),
+        0x1C: 10,
+        0x0E: 8,
+        0x01: 27,
+        0x0F: 9,
+        0x4B: 0x100,
+        0x4D: 0x101,
+        0x48: 0x102,
+        0x50: 0x103,  # arrows
     }
 
     def __init__(self):
@@ -716,6 +760,7 @@ def crc8(data: bytes) -> int:
 
 class BlockFlags(IntEnum):
     """Block status flags."""
+
     COMPRESSED = 0x01
     DIRTY = 0x02
     CORRUPTED = 0x04
@@ -723,6 +768,7 @@ class BlockFlags(IntEnum):
 
 class CompressionAlgo(IntEnum):
     """Supported compression algorithms."""
+
     NONE = 0
     LZ4 = 1
     ZSTD = 2
@@ -733,6 +779,7 @@ class CompressionAlgo(IntEnum):
 @dataclass
 class BlockMapEntry:
     """Per-block metadata in the block map."""
+
     offset: int = 0
     compressed_size: int = 0
     flags: int = 0
@@ -742,7 +789,7 @@ class BlockMapEntry:
         return struct.pack("<IHBB", self.offset, self.compressed_size, self.flags, self.crc)
 
     @classmethod
-    def unpack(cls, data: bytes) -> "BlockMapEntry":
+    def unpack(cls, data: bytes) -> BlockMapEntry:
         offset, cs, flags, crc = struct.unpack("<IHBB", data)
         return cls(offset=offset, compressed_size=cs, flags=flags, crc=crc)
 
@@ -765,12 +812,14 @@ class BlockCompressor:
         elif algo == CompressionAlgo.LZ4:
             try:
                 import lz4.frame  # noqa: F401
+
                 return True
             except ImportError:
                 return False
         elif algo == CompressionAlgo.ZSTD:
             try:
                 import zstandard  # noqa: F401
+
                 return True
             except ImportError:
                 return False
@@ -779,6 +828,7 @@ class BlockCompressor:
         elif algo == CompressionAlgo.SNAPPY:
             try:
                 import snappy  # noqa: F401
+
                 return True
             except ImportError:
                 return False
@@ -803,15 +853,18 @@ class BlockCompressor:
 
         if self._algo == CompressionAlgo.LZ4:
             import lz4.frame
+
             return lz4.frame.compress(data)
         elif self._algo == CompressionAlgo.ZSTD:
             import zstandard
+
             cctx = zstandard.ZstdCompressor()
             return cctx.compress(data)
         elif self._algo == CompressionAlgo.GZIP:
             return zlib.compress(data, level=6)
         elif self._algo == CompressionAlgo.SNAPPY:
             import snappy
+
             return snappy.compress(data)
 
         return data
@@ -826,15 +879,18 @@ class BlockCompressor:
 
         if self._algo == CompressionAlgo.LZ4:
             import lz4.frame
+
             return lz4.frame.decompress(data)
         elif self._algo == CompressionAlgo.ZSTD:
             import zstandard
+
             dctx = zstandard.ZstdDecompressor()
             return dctx.decompress(data)
         elif self._algo == CompressionAlgo.GZIP:
             return zlib.decompress(data)
         elif self._algo == CompressionAlgo.SNAPPY:
             import snappy
+
             return snappy.decompress(data)
 
         return data
@@ -883,11 +939,15 @@ class BlockDevice(Device):
 
     SECTOR_SIZE = _SECTOR_SIZE
 
-    def __init__(self, path: str | Path | None = None, *,
-                 num_sectors: int = 256,
-                 block_size: int = _DEFAULT_BLOCK_SIZE,
-                 algo: CompressionAlgo = CompressionAlgo.LZ4,
-                 create: bool = False):
+    def __init__(
+        self,
+        path: str | Path | None = None,
+        *,
+        num_sectors: int = 256,
+        block_size: int = _DEFAULT_BLOCK_SIZE,
+        algo: CompressionAlgo = CompressionAlgo.LZ4,
+        create: bool = False,
+    ):
         """Create a block device.
 
         Args:
@@ -956,9 +1016,13 @@ class BlockDevice(Device):
         self._file = open(self._path, "r+b")
         self._read_header()
 
-        logger.info("Opened block device: %s (%d blocks, %d bytes each, %s)",
-                     self._path, self._total_blocks, self._block_size,
-                     self._compressor.algo.name)
+        logger.info(
+            "Opened block device: %s (%d blocks, %d bytes each, %s)",
+            self._path,
+            self._total_blocks,
+            self._block_size,
+            self._compressor.algo.name,
+        )
 
     def close(self):
         """Flush and close the device."""
@@ -1007,7 +1071,9 @@ class BlockDevice(Device):
         expected_crc = header_data[511]
         actual_crc = crc8(header_data[:511])
         if expected_crc != actual_crc:
-            raise DeviceFault(f"Header CRC mismatch: expected 0x{expected_crc:02x}, got 0x{actual_crc:02x}")
+            raise DeviceFault(
+                f"Header CRC mismatch: expected 0x{expected_crc:02x}, got 0x{actual_crc:02x}"
+            )
 
         version = header_data[4]
         if version != _VERSION:
@@ -1026,7 +1092,7 @@ class BlockDevice(Device):
             self._file.seek(_HEADER_SIZE)
             map_data = self._file.read(map_size)
             for i in range(0, len(map_data), _BLOCK_MAP_ENTRY_SIZE):
-                entry = BlockMapEntry.unpack(map_data[i:i + _BLOCK_MAP_ENTRY_SIZE])
+                entry = BlockMapEntry.unpack(map_data[i : i + _BLOCK_MAP_ENTRY_SIZE])
                 self._block_map.append(entry)
 
     def _sync_header(self) -> None:
@@ -1065,7 +1131,7 @@ class BlockDevice(Device):
             block_data = self.read_block(block_num)
             self._reads += 1
             self._bytes_read += self.SECTOR_SIZE
-            return block_data[block_offset:block_offset + self.SECTOR_SIZE]
+            return block_data[block_offset : block_offset + self.SECTOR_SIZE]
 
         if not (0 <= sector_idx < len(self._sectors)):
             raise DeviceFault(f"sector out of range: {sector_idx}")
@@ -1084,7 +1150,7 @@ class BlockDevice(Device):
             DeviceFault: If sector_idx is out of range or data too large.
         """
         if isinstance(data, str):
-            data = data.encode('utf-8')
+            data = data.encode("utf-8")
 
         if self._is_persistent:
             if len(data) > self.SECTOR_SIZE:
@@ -1101,7 +1167,7 @@ class BlockDevice(Device):
             except DeviceFault:
                 block_data = bytearray(self._block_size)
 
-            block_data[block_offset:block_offset + self.SECTOR_SIZE] = data
+            block_data[block_offset : block_offset + self.SECTOR_SIZE] = data
             self.write_block(block_num, bytes(block_data))
             self._writes += 1
             self._bytes_written += self.SECTOR_SIZE
@@ -1111,7 +1177,7 @@ class BlockDevice(Device):
             raise DeviceFault(f"sector out of range: {sector_idx}")
         self._writes += 1
         self._bytes_written += self.SECTOR_SIZE
-        self._sectors[sector_idx][:len(data)] = data[:self.SECTOR_SIZE]
+        self._sectors[sector_idx][: len(data)] = data[: self.SECTOR_SIZE]
 
     def read_sectors(self, sector: int, count: int) -> bytes:
         """Read multiple contiguous sectors.
@@ -1143,7 +1209,7 @@ class BlockDevice(Device):
         count = len(data) // self.SECTOR_SIZE
         for i in range(count):
             start = i * self.SECTOR_SIZE
-            self.write_sector(sector + i, data[start:start + self.SECTOR_SIZE])
+            self.write_sector(sector + i, data[start : start + self.SECTOR_SIZE])
 
     # ── Block Interface ──────────────────────────────────────────────────────
 
@@ -1196,11 +1262,15 @@ class BlockDevice(Device):
         compressed_data = self._file.read(entry.compressed_size)
 
         if len(compressed_data) != entry.compressed_size:
-            raise DeviceFault(f"Block {block_num}: read {len(compressed_data)} bytes, expected {entry.compressed_size}")
+            raise DeviceFault(
+                f"Block {block_num}: read {len(compressed_data)} bytes, expected {entry.compressed_size}"
+            )
 
         actual_crc = crc8(compressed_data)
         if actual_crc != entry.crc:
-            raise DeviceFault(f"Block {block_num}: CRC mismatch (expected 0x{entry.crc:02x}, got 0x{actual_crc:02x})")
+            raise DeviceFault(
+                f"Block {block_num}: CRC mismatch (expected 0x{entry.crc:02x}, got 0x{actual_crc:02x})"
+            )
 
         self._compressed_bytes_read += len(compressed_data)
 
@@ -1212,7 +1282,7 @@ class BlockDevice(Device):
         if len(data) < self._block_size:
             data = data + b"\x00" * (self._block_size - len(data))
 
-        return data[:self._block_size]
+        return data[: self._block_size]
 
     def _write_persistent_block(self, block_num: int, data: bytes) -> None:
         """Compress and write a block to disk."""
@@ -1223,7 +1293,7 @@ class BlockDevice(Device):
             self._block_map.append(BlockMapEntry())
             self._total_blocks = len(self._block_map)
 
-        data = data[:self._block_size]
+        data = data[: self._block_size]
         if len(data) < self._block_size:
             data = data + b"\x00" * (self._block_size - len(data))
 
@@ -1247,17 +1317,18 @@ class BlockDevice(Device):
 
         flags = BlockFlags.COMPRESSED if is_compressed else 0
         self._block_map[block_num] = BlockMapEntry(
-            offset=physical_offset,
-            compressed_size=len(compressed),
-            flags=flags,
-            crc=block_crc
+            offset=physical_offset, compressed_size=len(compressed), flags=flags, crc=block_crc
         )
 
         self._sync_header()
 
-        logger.debug("Wrote block %d: %d bytes -> %d bytes (ratio=%.2f)",
-                     block_num, len(data), len(compressed),
-                     len(compressed) / len(data) if data else 1.0)
+        logger.debug(
+            "Wrote block %d: %d bytes -> %d bytes (ratio=%.2f)",
+            block_num,
+            len(data),
+            len(compressed),
+            len(compressed) / len(data) if data else 1.0,
+        )
 
     # ── ioctl (Linux-compatible) ─────────────────────────────────────────────
 
@@ -1326,21 +1397,25 @@ class BlockDevice(Device):
             "sector_size": self.SECTOR_SIZE,
         }
         if self._is_persistent:
-            stats.update({
-                "path": str(self._path),
-                "block_size": self._block_size,
-                "total_blocks": self._total_blocks,
-                "total_sectors": self.get_sectors(),
-                "algo": self._compressor.algo.name,
-                "compressed_bytes_read": self._compressed_bytes_read,
-                "compressed_bytes_written": self._compressed_bytes_written,
-                "compression_ratio": self.get_compression_ratio(),
-                "disk_usage_bytes": self._get_disk_usage(),
-            })
+            stats.update(
+                {
+                    "path": str(self._path),
+                    "block_size": self._block_size,
+                    "total_blocks": self._total_blocks,
+                    "total_sectors": self.get_sectors(),
+                    "algo": self._compressor.algo.name,
+                    "compressed_bytes_read": self._compressed_bytes_read,
+                    "compressed_bytes_written": self._compressed_bytes_written,
+                    "compression_ratio": self.get_compression_ratio(),
+                    "disk_usage_bytes": self._get_disk_usage(),
+                }
+            )
         else:
-            stats.update({
-                "sectors": len(self._sectors),
-            })
+            stats.update(
+                {
+                    "sectors": len(self._sectors),
+                }
+            )
         return stats
 
     def get_compression_ratio(self) -> float:
@@ -1427,10 +1502,12 @@ class BlockDevice(Device):
 
     def __repr__(self) -> str:
         if self._is_persistent:
-            return (f"BlockDevice(path={self._path}, "
-                    f"blocks={self._total_blocks}, "
-                    f"block_size={self._block_size}, "
-                    f"algo={self._compressor.algo.name})")
+            return (
+                f"BlockDevice(path={self._path}, "
+                f"blocks={self._total_blocks}, "
+                f"block_size={self._block_size}, "
+                f"algo={self._compressor.algo.name})"
+            )
         return f"BlockDevice(sectors={len(self._sectors)}, sector_size={self.SECTOR_SIZE})"
 
 
@@ -1484,7 +1561,7 @@ class SerialDevice(Device):
         lsr = 0
         if self._rx_buffer:
             lsr |= 0x01  # bit 0: RX ready
-        lsr |= 0x20      # bit 5: TX empty (always ready in simulation)
+        lsr |= 0x20  # bit 5: TX empty (always ready in simulation)
         return lsr
 
     def info(self):
@@ -1582,7 +1659,7 @@ class MouseDevice(Device):
     def read_packet(self) -> bytes:
         if self._packets:
             return self._packets.pop(0)
-        return b''
+        return b""
 
     def get_state(self) -> dict:
         return {
@@ -1707,19 +1784,18 @@ class CMOSDevice(Device):
     REG_STATUS_D = 0x0D
 
     # BIOS standard: equipment list, base memory, extended memory etc.
-    REG_EQUIPMENT = 0x14     # CMOS equipment word
-    REG_BASE_MEM_LO = 0x15   # base memory (KB) low byte
-    REG_BASE_MEM_HI = 0x16   # base memory (KB) high byte
-    REG_EXT_MEM_LO = 0x17    # extended memory (KB) low byte
-    REG_EXT_MEM_HI = 0x18    # extended memory (KB) high byte
-    REG_BOOT_ORDER = 0x3D    # boot device order (4 bits each)
+    REG_EQUIPMENT = 0x14  # CMOS equipment word
+    REG_BASE_MEM_LO = 0x15  # base memory (KB) low byte
+    REG_BASE_MEM_HI = 0x16  # base memory (KB) high byte
+    REG_EXT_MEM_LO = 0x17  # extended memory (KB) low byte
+    REG_EXT_MEM_HI = 0x18  # extended memory (KB) high byte
+    REG_BOOT_ORDER = 0x3D  # boot device order (4 bits each)
 
-    def __init__(self, cpu: X86CPU | None = None,
-                 clock: ClockDevice | None = None):
+    def __init__(self, cpu: X86CPU | None = None, clock: ClockDevice | None = None):
         self._cmos = bytearray(self.CMOS_SIZE)
-        self._selected = 0       # current register offset (written to port 0x70)
+        self._selected = 0  # current register offset (written to port 0x70)
         self._nmi_disabled = False
-        self._clock = clock      # self-contained wall clock (no time.time)
+        self._clock = clock  # self-contained wall clock (no time.time)
 
         # Initialize Status Register D (VRT = battery OK)
         self._cmos[self.REG_STATUS_D] = 0x80
@@ -1740,7 +1816,9 @@ class CMOSDevice(Device):
         # Register I/O ports for CMOS address port too
         # (reads from 0x70 return last written value per some implementations)
         if cpu:
-            cpu.register_io_in(self.PORT_ADDR, lambda: self._selected | (0x80 if self._nmi_disabled else 0))
+            cpu.register_io_in(
+                self.PORT_ADDR, lambda: self._selected | (0x80 if self._nmi_disabled else 0)
+            )
 
     def _write_addr(self, val: int):
         """Port 0x70 write: select CMOS register.  Bit 7 = NMI disable."""
@@ -1776,8 +1854,8 @@ class CMOSDevice(Device):
             return
         parts = self._clock.decode()
         reg_b = self._cmos[self.REG_STATUS_B]
-        binary = bool(reg_b & 0x04)    # DM bit: 0=BCD, 1=binary
-        h24 = bool(reg_b & 0x02)       # 24/12 bit: 0=12h, 1=24h
+        binary = bool(reg_b & 0x04)  # DM bit: 0=BCD, 1=binary
+        h24 = bool(reg_b & 0x02)  # 24/12 bit: 0=12h, 1=24h
 
         if binary:
             self._cmos[self.REG_SECONDS] = parts["second"] & 0xFF
@@ -1806,7 +1884,9 @@ class CMOSDevice(Device):
                 h12 = parts["hour"] % 12
                 if h12 == 0:
                     h12 = 12
-                self._cmos[self.REG_HOURS] = self._to_bcd(h12) | (0x80 if parts["hour"] >= 12 else 0)
+                self._cmos[self.REG_HOURS] = self._to_bcd(h12) | (
+                    0x80 if parts["hour"] >= 12 else 0
+                )
 
     def _to_bcd(self, val: int) -> int:
         """Convert an integer (0–99) to BCD."""
@@ -1841,10 +1921,14 @@ class CMOSDevice(Device):
             elif not is_pm and hour == 12:
                 hour = 0
 
-        year_raw = self._cmos[self.REG_YEAR] if binary else self._from_bcd(self._cmos[self.REG_YEAR])
+        year_raw = (
+            self._cmos[self.REG_YEAR] if binary else self._from_bcd(self._cmos[self.REG_YEAR])
+        )
         return {
             "year": 2000 + year_raw if year_raw < 100 else year_raw,
-            "month": self._cmos[self.REG_MONTH] if binary else self._from_bcd(self._cmos[self.REG_MONTH]),
+            "month": self._cmos[self.REG_MONTH]
+            if binary
+            else self._from_bcd(self._cmos[self.REG_MONTH]),
             "day": self._cmos[self.REG_DAY] if binary else self._from_bcd(self._cmos[self.REG_DAY]),
             "hour": hour,
             "minute": minute,
@@ -1951,7 +2035,7 @@ class DiskDevice(Device):
     def write_sectors(self, lba: int, data: bytes):
         num_sectors = (len(data) + self.SECTOR_SIZE - 1) // self.SECTOR_SIZE
         for i in range(num_sectors):
-            chunk = data[i * self.SECTOR_SIZE:(i + 1) * self.SECTOR_SIZE]
+            chunk = data[i * self.SECTOR_SIZE : (i + 1) * self.SECTOR_SIZE]
             self._block.write_sector(lba + i, chunk)
             self._writes += 1
 
@@ -2025,7 +2109,7 @@ class NICDevice(Device):
         if self._rx_buffer:
             pkt = self._rx_buffer.pop(0)
             return pkt
-        return b''
+        return b""
 
     def inject_packet(self, data: bytes):
         self._rx_buffer.append(data)
@@ -2086,31 +2170,31 @@ class FlatFS:
 
     def _load_table(self):
         raw = bytes(self._block.read_sector(self.TABLE_SECTOR))
-        if raw[:2] == b'\x00\x00':
+        if raw[:2] == b"\x00\x00":
             return
-        n = int.from_bytes(raw[:2], 'big')
+        n = int.from_bytes(raw[:2], "big")
         pos = 2
         for _ in range(n):
-            name_len = int.from_bytes(raw[pos:pos+2], 'big')
+            name_len = int.from_bytes(raw[pos : pos + 2], "big")
             pos += 2
-            name = raw[pos:pos+name_len].decode('utf-8', errors='replace')
+            name = raw[pos : pos + name_len].decode("utf-8", errors="replace")
             pos += name_len
-            start = int.from_bytes(raw[pos:pos+2], 'big')
+            start = int.from_bytes(raw[pos : pos + 2], "big")
             pos += 2
-            count = int.from_bytes(raw[pos:pos+2], 'big')
+            count = int.from_bytes(raw[pos : pos + 2], "big")
             pos += 2
             self._files[name] = (start, count)
 
     def _save_table(self):
-        data = len(self._files).to_bytes(2, 'big')
+        data = len(self._files).to_bytes(2, "big")
         for name, (start, count) in self._files.items():
-            name_bytes = name.encode('utf-8')[:self.MAX_NAME]
-            data += len(name_bytes).to_bytes(2, 'big')
+            name_bytes = name.encode("utf-8")[: self.MAX_NAME]
+            data += len(name_bytes).to_bytes(2, "big")
             data += name_bytes
-            data += start.to_bytes(2, 'big')
-            data += count.to_bytes(2, 'big')
+            data += start.to_bytes(2, "big")
+            data += count.to_bytes(2, "big")
         # Pad to sector size
-        data = data.ljust(self._block.SECTOR_SIZE, b'\x00')
+        data = data.ljust(self._block.SECTOR_SIZE, b"\x00")
         self._block.write_sector(self.TABLE_SECTOR, data)
 
     def list_files(self) -> list[str]:
@@ -2121,7 +2205,9 @@ class FlatFS:
 
     def write(self, name: str, data: bytes) -> None:
         """Write data to a file, allocating sectors as needed."""
-        sectors_needed = max(1, (len(data) + self._block.SECTOR_SIZE - 1) // self._block.SECTOR_SIZE)
+        sectors_needed = max(
+            1, (len(data) + self._block.SECTOR_SIZE - 1) // self._block.SECTOR_SIZE
+        )
 
         # Find free sectors (simple: use sectors after all existing files)
         used = set()
@@ -2140,7 +2226,7 @@ class FlatFS:
 
         # Write data sectors
         for i, sector_idx in enumerate(free_sectors):
-            chunk = data[i * self._block.SECTOR_SIZE:(i + 1) * self._block.SECTOR_SIZE]
+            chunk = data[i * self._block.SECTOR_SIZE : (i + 1) * self._block.SECTOR_SIZE]
             self._block.write_sector(sector_idx, chunk)
 
         self._files[name] = (free_sectors[0], sectors_needed)
@@ -2151,7 +2237,7 @@ class FlatFS:
         if name not in self._files:
             raise DeviceFault(f"file not found: {name}")
         start, count = self._files[name]
-        data = b''
+        data = b""
         for i in range(count):
             data += bytes(self._block.read_sector(start + i))
         return data
@@ -2202,6 +2288,7 @@ class DeviceBus:
 
 # ── Device Bus Adapter (bridges DeviceBus → DeviceTable) ────────────────────
 
+
 class DeviceBusAdapter:
     """Adapter bridging DeviceBus to DeviceTable for fd-based device access.
 
@@ -2219,7 +2306,8 @@ class DeviceBusAdapter:
     """
 
     def __init__(self, max_fds: int = 64):
-        from .kernel_devices import DeviceTable, DeviceDriver
+        from .kernel_devices import DeviceDriver, DeviceTable
+
         self._table = DeviceTable(max_fds=max_fds)
         self._name_to_driver: dict[str, DeviceDriver] = {}
         self._fd_names: dict[int, str] = {}
@@ -2267,6 +2355,7 @@ class DeviceBusAdapter:
 
 # ── Device Register Map (memory-mapped device access for assembly) ──────────
 
+
 class DeviceRegisterMap:
     """Memory-mapped device registers for assembly access.
 
@@ -2294,27 +2383,27 @@ class DeviceRegisterMap:
 
     # Device base addresses
     BASE_ADDRESSES = {
-        "tensor":  0xF000,
-        "npu":     0xF100,
+        "tensor": 0xF000,
+        "npu": 0xF100,
         "storage": 0xF200,
         "network": 0xF300,
         "display": 0xF400,
-        "input":   0xF500,
+        "input": 0xF500,
     }
 
     # Register offsets within each device block
-    REG_STATUS  = 0x00
+    REG_STATUS = 0x00
     REG_COMMAND = 0x04
-    REG_ARG0    = 0x08
-    REG_ARG1    = 0x0C
-    REG_ARG2    = 0x10
-    REG_RESULT  = 0x14
-    REG_ERROR   = 0x18
+    REG_ARG0 = 0x08
+    REG_ARG1 = 0x0C
+    REG_ARG2 = 0x10
+    REG_RESULT = 0x14
+    REG_ERROR = 0x18
 
     # Status bits
-    STATUS_READY    = 0x01
-    STATUS_BUSY     = 0x02
-    STATUS_ERROR    = 0x04
+    STATUS_READY = 0x01
+    STATUS_BUSY = 0x02
+    STATUS_ERROR = 0x04
     STATUS_DATA_RDY = 0x08
 
     def __init__(self):
@@ -2401,14 +2490,14 @@ class DeviceRegisterMap:
     def _dispatch_command(self, device, command: int, arg0: int, arg1: int, arg2: int):
         """Dispatch a command to a device."""
         # Generic dispatch — try ioctl if available
-        if hasattr(device, 'ioctl'):
+        if hasattr(device, "ioctl"):
             result = device.ioctl(command, arg0, arg1, arg2)
-            if hasattr(result, 'success'):
+            if hasattr(result, "success"):
                 if result.success:
                     return result.value
                 raise Exception(result.error)
             return result
-        elif hasattr(device, 'call'):
+        elif hasattr(device, "call"):
             return device.call(command, arg0, arg1, arg2)
         else:
             raise DeviceFault(f"device does not support command: {command}")
@@ -2419,6 +2508,7 @@ class DeviceRegisterMap:
 
 
 # ── CPU ──────────────────────────────────────────────────────────────────────
+
 
 class CPU:
     """Central processing unit with integer ALU, tensor ALU, and control flow."""
@@ -2550,13 +2640,15 @@ class CPU:
                     regs_snapshot[f"R{i}"] = np.array2string(v, precision=3, suppress_small=True)
                 else:
                     regs_snapshot[f"R{i}"] = v
-        self._trace.append(TraceEntry(
-            cycle=self._step_count,
-            pc=self.pc,
-            instruction=f"{inst.opcode} {', '.join(str(o) for o in inst.operands)}",
-            registers=regs_snapshot,
-            heap_keys=list(self._memory._heap.keys()),
-        ))
+        self._trace.append(
+            TraceEntry(
+                cycle=self._step_count,
+                pc=self.pc,
+                instruction=f"{inst.opcode} {', '.join(str(o) for o in inst.operands)}",
+                registers=regs_snapshot,
+                heap_keys=list(self._memory._heap.keys()),
+            )
+        )
 
     def get_trace(self):
         return list(self._trace)
@@ -2570,6 +2662,7 @@ class CPU:
 
 
 # ── Assembler ────────────────────────────────────────────────────────────────
+
 
 class Assembler:
     """Assembly text to Instruction list."""
@@ -2619,10 +2712,14 @@ class Assembler:
             operand_str = parts[1].strip() if len(parts) > 1 else ""
 
             operands = self._parse_operands(operand_str, labels)
-            instructions.append(Instruction(
-                opcode=opcode, operands=operands,
-                line_num=line_num, raw=line,
-            ))
+            instructions.append(
+                Instruction(
+                    opcode=opcode,
+                    operands=operands,
+                    line_num=line_num,
+                    raw=line,
+                )
+            )
 
         return instructions
 
@@ -2659,13 +2756,13 @@ class Assembler:
             if ch == '"':
                 in_string = not in_string
                 current.append(ch)
-            elif ch == '[' and not in_string:
+            elif ch == "[" and not in_string:
                 in_tensor += 1
                 current.append(ch)
-            elif ch == ']' and not in_string:
+            elif ch == "]" and not in_string:
                 in_tensor -= 1
                 current.append(ch)
-            elif ch == ',' and not in_string and in_tensor == 0:
+            elif ch == "," and not in_string and in_tensor == 0:
                 result.append("".join(current))
                 current = []
             else:
@@ -2679,6 +2776,7 @@ ProgramLoader = Assembler  # backward-compatible alias
 
 
 # ── VM Runner ────────────────────────────────────────────────────────────────
+
 
 class VMRunner:
     """Convenience: assemble + run + trace.
@@ -2732,12 +2830,14 @@ Assembler.load = Assembler.assemble
 
 # ── Integer ALU ──────────────────────────────────────────────────────────────
 
+
 def _op_iadd(cpu, ops):
     cpu._check_arity(ops, 3)
     a, b = int(cpu._val(ops[1])), int(cpu._val(ops[2]))
     result = a + b
     cpu._carry_flag = result > 0xFFFFFFFF
     cpu.regs[cpu._reg(ops[0])] = result & 0xFFFFFFFF
+
 
 def _op_isub(cpu, ops):
     cpu._check_arity(ops, 3)
@@ -2746,48 +2846,59 @@ def _op_isub(cpu, ops):
     cpu._carry_flag = result < 0
     cpu.regs[cpu._reg(ops[0])] = result
 
+
 def _op_imul(cpu, ops):
     cpu._check_arity(ops, 3)
     cpu.regs[cpu._reg(ops[0])] = int(cpu._val(ops[1])) * int(cpu._val(ops[2]))
+
 
 def _op_idiv(cpu, ops):
     cpu._check_arity(ops, 3)
     a, b = int(cpu._val(ops[1])), int(cpu._val(ops[2]))
     cpu.regs[cpu._reg(ops[0])] = a // b if b != 0 else 0
 
+
 def _op_iand(cpu, ops):
     cpu._check_arity(ops, 3)
     cpu.regs[cpu._reg(ops[0])] = int(cpu._val(ops[1])) & int(cpu._val(ops[2]))
+
 
 def _op_ior(cpu, ops):
     cpu._check_arity(ops, 3)
     cpu.regs[cpu._reg(ops[0])] = int(cpu._val(ops[1])) | int(cpu._val(ops[2]))
 
+
 def _op_ixor(cpu, ops):
     cpu._check_arity(ops, 3)
     cpu.regs[cpu._reg(ops[0])] = int(cpu._val(ops[1])) ^ int(cpu._val(ops[2]))
+
 
 def _op_ishl(cpu, ops):
     cpu._check_arity(ops, 3)
     cpu.regs[cpu._reg(ops[0])] = int(cpu._val(ops[1])) << int(cpu._val(ops[2]))
 
+
 def _op_ishr(cpu, ops):
     cpu._check_arity(ops, 3)
     cpu.regs[cpu._reg(ops[0])] = int(cpu._val(ops[1])) >> int(cpu._val(ops[2]))
 
+
 def _op_ineg(cpu, ops):
     cpu._check_arity(ops, 2)
     cpu.regs[cpu._reg(ops[0])] = -int(cpu._val(ops[1]))
+
 
 def _op_inc(cpu, ops):
     cpu._check_arity(ops, 1)
     idx = cpu._reg(ops[0])
     cpu.regs[idx] = int(cpu.regs[idx]) + 1
 
+
 def _op_dec(cpu, ops):
     cpu._check_arity(ops, 1)
     idx = cpu._reg(ops[0])
     cpu.regs[idx] = int(cpu.regs[idx]) - 1
+
 
 def _op_icmp(cpu, ops):
     cpu._check_arity(ops, 2)
@@ -2797,17 +2908,21 @@ def _op_icmp(cpu, ops):
 
 # ── Float ALU ──────────────────────────────────────────────────────────────
 
+
 def _op_fadd(cpu, ops):
     cpu._check_arity(ops, 3)
     cpu.regs[cpu._reg(ops[0])] = float(cpu._val(ops[1])) + float(cpu._val(ops[2]))
+
 
 def _op_fsub(cpu, ops):
     cpu._check_arity(ops, 3)
     cpu.regs[cpu._reg(ops[0])] = float(cpu._val(ops[1])) - float(cpu._val(ops[2]))
 
+
 def _op_fmul(cpu, ops):
     cpu._check_arity(ops, 3)
     cpu.regs[cpu._reg(ops[0])] = float(cpu._val(ops[1])) * float(cpu._val(ops[2]))
+
 
 def _op_fdiv(cpu, ops):
     cpu._check_arity(ops, 3)
@@ -2815,6 +2930,7 @@ def _op_fdiv(cpu, ops):
     if b == 0:
         raise InsFault("division by zero")
     cpu.regs[cpu._reg(ops[0])] = float(cpu._val(ops[1])) / b
+
 
 def _op_fcmp(cpu, ops):
     cpu._check_arity(ops, 2)
@@ -2824,12 +2940,14 @@ def _op_fcmp(cpu, ops):
 
 # ── Stack Operations ───────────────────────────────────────────────────────
 
+
 def _op_push(cpu, ops):
     cpu._check_arity(ops, 1)
     if cpu.sp <= 0:
         raise InsFault("stack overflow")
     cpu.sp -= 1
     cpu._stack[cpu.sp] = cpu._val(ops[0])
+
 
 def _op_pop(cpu, ops):
     cpu._check_arity(ops, 1)
@@ -2841,12 +2959,14 @@ def _op_pop(cpu, ops):
 
 # ── Memory Operations ──────────────────────────────────────────────────────
 
+
 def _op_alloc(cpu, ops):
     cpu._check_arity(ops, 2)
     size = int(cpu._val(ops[1]))
     name = f"_alloc_{cpu._step_count}"
     cpu._memory.store(name, np.zeros(size, dtype=np.float64))
     cpu.regs[cpu._reg(ops[0])] = size
+
 
 def _op_meminfo(cpu, ops):
     cpu._check_arity(ops, 1)
@@ -2856,13 +2976,14 @@ def _op_meminfo(cpu, ops):
 
 # ── I/O Operations ─────────────────────────────────────────────────────────
 
+
 def _op_in(cpu, ops):
     cpu._check_arity(ops, 2)
     port = int(cpu._val(ops[1]))
     try:
         device = cpu._devices._devices.get(str(port))
         if device:
-            if hasattr(device, 'read'):
+            if hasattr(device, "read"):
                 val = device.read()
                 try:
                     val = int(val)
@@ -2879,19 +3000,21 @@ def _op_in(cpu, ops):
     except Exception:
         cpu.regs[cpu._reg(ops[0])] = 0
 
+
 def _op_out(cpu, ops):
     cpu._check_arity(ops, 2)
     port = int(cpu._val(ops[0]))
     val = cpu._val(ops[1])
     try:
         device = cpu._devices._devices.get(str(port))
-        if device and hasattr(device, 'write'):
+        if device and hasattr(device, "write"):
             device.write(val)
     except Exception as e:
         logger.debug("device write to port %s failed: %s", port, e)
 
 
 # ── Tensor ALU ───────────────────────────────────────────────────────────────
+
 
 def _op_add(cpu, ops):
     cpu._check_arity(ops, 3)
@@ -2902,6 +3025,7 @@ def _op_add(cpu, ops):
     else:
         cpu.regs[rd] = (a or 0) + (b or 0)
 
+
 def _op_sub(cpu, ops):
     cpu._check_arity(ops, 3)
     rd = cpu._reg(ops[0])
@@ -2911,6 +3035,7 @@ def _op_sub(cpu, ops):
     else:
         cpu.regs[rd] = (a or 0) - (b or 0)
 
+
 def _op_mul(cpu, ops):
     cpu._check_arity(ops, 3)
     rd = cpu._reg(ops[0])
@@ -2919,6 +3044,7 @@ def _op_mul(cpu, ops):
         cpu.regs[rd] = cpu._parse_tensor(a) * cpu._parse_tensor(b)
     else:
         cpu.regs[rd] = (a or 0) * (b or 0)
+
 
 def _op_div(cpu, ops):
     cpu._check_arity(ops, 3)
@@ -2931,17 +3057,20 @@ def _op_div(cpu, ops):
         result = np.where(np.isnan(result), 0.0, result)
     cpu.regs[rd] = result
 
+
 def _op_neg(cpu, ops):
     cpu._check_arity(ops, 2)
     rd = cpu._reg(ops[0])
     a = cpu._val(ops[1])
     cpu.regs[rd] = -cpu._parse_tensor(a) if isinstance(a, np.ndarray) else -(a or 0)
 
+
 def _op_abs(cpu, ops):
     cpu._check_arity(ops, 2)
     rd = cpu._reg(ops[0])
     a = cpu._val(ops[1])
     cpu.regs[rd] = np.abs(a) if isinstance(a, np.ndarray) else abs(a or 0)
+
 
 def _op_matmul(cpu, ops):
     cpu._check_arity(ops, 3)
@@ -2958,9 +3087,11 @@ def _op_matmul(cpu, ops):
         b = b.reshape(-1, 1)
     cpu.regs[rd] = a @ b
 
+
 def _op_transpose(cpu, ops):
     cpu._check_arity(ops, 2)
     cpu.regs[cpu._reg(ops[0])] = cpu._parse_tensor(cpu._val(ops[1])).T
+
 
 def _op_dot(cpu, ops):
     cpu._check_arity(ops, 3)
@@ -2968,25 +3099,31 @@ def _op_dot(cpu, ops):
     b = cpu._parse_tensor(cpu._val(ops[2])).ravel()
     cpu.regs[cpu._reg(ops[0])] = float(np.dot(a, b))
 
+
 def _op_norm(cpu, ops):
     cpu._check_arity(ops, 2)
     cpu.regs[cpu._reg(ops[0])] = float(np.linalg.norm(cpu._parse_tensor(cpu._val(ops[1]))))
+
 
 def _op_sum(cpu, ops):
     cpu._check_arity(ops, 2)
     cpu.regs[cpu._reg(ops[0])] = float(np.sum(cpu._parse_tensor(cpu._val(ops[1]))))
 
+
 def _op_mean(cpu, ops):
     cpu._check_arity(ops, 2)
     cpu.regs[cpu._reg(ops[0])] = float(np.mean(cpu._parse_tensor(cpu._val(ops[1]))))
+
 
 def _op_max(cpu, ops):
     cpu._check_arity(ops, 2)
     cpu.regs[cpu._reg(ops[0])] = float(np.max(cpu._parse_tensor(cpu._val(ops[1]))))
 
+
 def _op_argmax(cpu, ops):
     cpu._check_arity(ops, 2)
     cpu.regs[cpu._reg(ops[0])] = int(np.argmax(cpu._parse_tensor(cpu._val(ops[1]))))
+
 
 def _op_reshape(cpu, ops):
     cpu._check_arity(ops, 4)
@@ -2995,31 +3132,40 @@ def _op_reshape(cpu, ops):
     cols = int(ops[3]) if isinstance(ops[3], (int, float)) else -1
     cpu.regs[cpu._reg(ops[0])] = a.reshape(rows, cols)
 
+
 def _op_shape(cpu, ops):
     cpu._check_arity(ops, 2)
     cpu.regs[cpu._reg(ops[0])] = list(cpu._parse_tensor(cpu._val(ops[1])).shape)
+
 
 def _op_size(cpu, ops):
     cpu._check_arity(ops, 2)
     cpu.regs[cpu._reg(ops[0])] = int(cpu._parse_tensor(cpu._val(ops[1])).size)
 
+
 def _op_relu(cpu, ops):
     cpu._check_arity(ops, 2)
     cpu.regs[cpu._reg(ops[0])] = np.maximum(0, cpu._parse_tensor(cpu._val(ops[1])))
 
+
 def _op_gelu(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
-    cpu.regs[cpu._reg(ops[0])] = 0.5 * a * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (a + 0.044715 * a ** 3)))
+    cpu.regs[cpu._reg(ops[0])] = (
+        0.5 * a * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (a + 0.044715 * a**3)))
+    )
+
 
 def _op_sigmoid(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
     cpu.regs[cpu._reg(ops[0])] = 1.0 / (1.0 + np.exp(-np.clip(a, -500, 500)))
 
+
 def _op_tanh(cpu, ops):
     cpu._check_arity(ops, 2)
     cpu.regs[cpu._reg(ops[0])] = np.tanh(cpu._parse_tensor(cpu._val(ops[1])))
+
 
 def _op_softmax(cpu, ops):
     cpu._check_arity(ops, 2)
@@ -3028,21 +3174,25 @@ def _op_softmax(cpu, ops):
     exp_a = np.exp(shifted)
     cpu.regs[cpu._reg(ops[0])] = exp_a / np.sum(exp_a)
 
+
 def _op_layernorm(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
     cpu.regs[cpu._reg(ops[0])] = (a - np.mean(a)) / np.sqrt(np.var(a) + 1e-5)
 
+
 def _op_rmsnorm(cpu, ops):
     cpu._check_arity(ops, 2)
     a = cpu._parse_tensor(cpu._val(ops[1]))
-    cpu.regs[cpu._reg(ops[0])] = a / np.sqrt(np.mean(a ** 2) + 1e-5)
+    cpu.regs[cpu._reg(ops[0])] = a / np.sqrt(np.mean(a**2) + 1e-5)
+
 
 def _op_randn(cpu, ops):
     cpu._check_arity(ops, 3)
     r = int(ops[1]) if isinstance(ops[1], (int, float)) else 1
     c = int(ops[2]) if isinstance(ops[2], (int, float)) else 1
     cpu.regs[cpu._reg(ops[0])] = np.random.randn(r, c)
+
 
 def _op_randunif(cpu, ops):
     cpu._check_arity(ops, 5)
@@ -3055,13 +3205,14 @@ def _op_randunif(cpu, ops):
 
 # ── Comparison ───────────────────────────────────────────────────────────────
 
+
 def _op_cmp(cpu, ops):
     cpu._check_arity(ops, 2)
     a, b = cpu._val(ops[0]), cpu._val(ops[1])
     if isinstance(a, (int, float)) and isinstance(b, (int, float)):
         diff = a - b
         cpu._cmp_flag = -1 if diff < 0 else (1 if diff > 0 else 0)
-        if hasattr(cpu, '_update_flags_sub'):
+        if hasattr(cpu, "_update_flags_sub"):
             cpu._update_flags_sub(a, b, diff, 32)
     elif isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
         if np.array_equal(a, b):
@@ -3075,12 +3226,14 @@ def _op_cmp(cpu, ops):
     else:
         cpu._cmp_flag = -1 if str(a) < str(b) else (1 if str(a) > str(b) else 0)
 
+
 def _op_test(cpu, ops):
     cpu._check_arity(ops, 1)
     cpu._cmp_flag = 1 if cpu._truthy(cpu._val(ops[0])) else 0
 
 
 # ── Control Flow ─────────────────────────────────────────────────────────────
+
 
 def _resolve_label(cpu, operand):
     if isinstance(operand, int):
@@ -3089,10 +3242,12 @@ def _resolve_label(cpu, operand):
         return int(operand)
     raise InsFault(f"invalid jump target: {operand}")
 
+
 def _op_jmp(cpu, ops):
     cpu._check_arity(ops, 1)
     cpu.pc = _resolve_label(cpu, ops[0])
     cpu._pc_changed = True
+
 
 def _op_jz(cpu, ops):
     cpu._check_arity(ops, 1)
@@ -3100,11 +3255,13 @@ def _op_jz(cpu, ops):
         cpu.pc = _resolve_label(cpu, ops[0])
         cpu._pc_changed = True
 
+
 def _op_jnz(cpu, ops):
     cpu._check_arity(ops, 1)
     if cpu._cmp_flag != 0:
         cpu.pc = _resolve_label(cpu, ops[0])
         cpu._pc_changed = True
+
 
 def _op_jgt(cpu, ops):
     cpu._check_arity(ops, 1)
@@ -3112,11 +3269,13 @@ def _op_jgt(cpu, ops):
         cpu.pc = _resolve_label(cpu, ops[0])
         cpu._pc_changed = True
 
+
 def _op_jge(cpu, ops):
     cpu._check_arity(ops, 1)
     if cpu._cmp_flag >= 0:
         cpu.pc = _resolve_label(cpu, ops[0])
         cpu._pc_changed = True
+
 
 def _op_jlt(cpu, ops):
     cpu._check_arity(ops, 1)
@@ -3124,11 +3283,13 @@ def _op_jlt(cpu, ops):
         cpu.pc = _resolve_label(cpu, ops[0])
         cpu._pc_changed = True
 
+
 def _op_jle(cpu, ops):
     cpu._check_arity(ops, 1)
     if cpu._cmp_flag <= 0:
         cpu.pc = _resolve_label(cpu, ops[0])
         cpu._pc_changed = True
+
 
 def _op_call(cpu, ops):
     cpu._check_arity(ops, 1)
@@ -3140,11 +3301,13 @@ def _op_call(cpu, ops):
     cpu.pc = _resolve_label(cpu, ops[0])
     cpu._pc_changed = True
 
+
 def _op_ret(cpu, ops):
     if not cpu._call_stack:
         raise InsFault("ret with empty call stack")
     cpu.pc = cpu._call_stack.pop()
     cpu._pc_changed = True
+
 
 def _op_loop(cpu, ops):
     cpu._check_arity(ops, 2)
@@ -3153,6 +3316,7 @@ def _op_loop(cpu, ops):
     if cpu.regs[idx] != 0:
         cpu.pc = _resolve_label(cpu, ops[1])
         cpu._pc_changed = True
+
 
 def _op_halt(cpu, ops):
     raise Halt()
@@ -3205,12 +3369,14 @@ def _op_syscall(cpu, ops):
 
 # ── Data Movement ────────────────────────────────────────────────────────────
 
+
 def _op_load_const(cpu, ops):
     cpu._check_arity(ops, 2)
     rd = cpu._reg(ops[0])
     val = ops[1]
     if isinstance(val, str) and val.startswith("[") and val.endswith("]"):
         import json as _json
+
         try:
             parsed = _json.loads(val)
             if isinstance(parsed, list):
@@ -3236,29 +3402,35 @@ def _op_load_const(cpu, ops):
     else:
         cpu.regs[rd] = val
 
+
 def _op_load_shape(cpu, ops):
     cpu._check_arity(ops, 3)
     r = int(ops[1]) if isinstance(ops[1], (int, float)) else 1
     c = int(ops[2]) if isinstance(ops[2], (int, float)) else 1
     cpu.regs[cpu._reg(ops[0])] = np.zeros((r, c))
 
+
 def _op_mov(cpu, ops):
     cpu._check_arity(ops, 2)
     cpu.regs[cpu._reg(ops[0])] = cpu._val(ops[1])
+
 
 def _op_store(cpu, ops):
     cpu._check_arity(ops, 2)
     key = str(ops[1])
     cpu._memory.store(key, cpu._val(ops[0]))
 
+
 def _op_load(cpu, ops):
     cpu._check_arity(ops, 2)
     key = str(ops[1])
     cpu.regs[cpu._reg(ops[0])] = cpu._memory.load(key)
 
+
 def _op_free(cpu, ops):
     cpu._check_arity(ops, 1)
     cpu._memory.free(str(ops[0]))
+
 
 def _op_print(cpu, ops):
     cpu._check_arity(ops, 1)
@@ -3268,11 +3440,13 @@ def _op_print(cpu, ops):
     else:
         cpu._output.append(str(val))
 
+
 def _op_nop(cpu, ops):
     pass
 
 
 # ── Device Bus Ops ───────────────────────────────────────────────────────────
+
 
 def _op_dev_open(cpu, ops):
     """DEV_OPEN Rd, name — open device by name, return handle string.
@@ -3296,6 +3470,7 @@ def _op_dev_open(cpu, ops):
             cpu._output.append(f"[VM] DEV_OPEN: no such device: {name}")
             cpu.regs[rd] = ""
 
+
 def _op_dev_call(cpu, ops):
     """DEV_CALL Rd, handle, method, args... — call device method.
 
@@ -3317,11 +3492,13 @@ def _op_dev_call(cpu, ops):
         cpu._output.append(f"[VM] DEV_CALL exception: {e}")
         cpu.regs[rd] = None
 
+
 def _op_dev_close(cpu, ops):
     """DEV_CLOSE handle — release device handle (no-op for DeviceBus)."""
     cpu._check_arity(ops, 1)
     # DeviceBus doesn't track open handles, so this is a no-op
     pass
+
 
 def _op_dev_info(cpu, ops):
     """DEV_INFO Rd, handle — get device info dict."""
@@ -3337,6 +3514,7 @@ def _op_dev_info(cpu, ops):
 
 
 # ── Device Table Ops (fd-based with SyscallResult) ──────────────────────────
+
 
 def _op_dev_table_open(cpu, ops):
     """DEV_TABLE_OPEN Rd, name — open device via DeviceTable, return fd.
@@ -3360,6 +3538,7 @@ def _op_dev_table_open(cpu, ops):
     if fd < 0:
         cpu._output.append(f"[VM] DEV_TABLE_OPEN: failed to open: {name}")
 
+
 def _op_dev_table_call(cpu, ops):
     """DEV_TABLE_CALL Rd, fd, command, args... — ioctl via DeviceTable.
 
@@ -3379,12 +3558,13 @@ def _op_dev_table_call(cpu, ops):
         return
 
     result = adapter.ioctl(fd, command, *extra_args)
-    if hasattr(result, 'success'):
+    if hasattr(result, "success"):
         cpu.regs[rd] = result.value if result.success else None
         if not result.success:
             cpu._output.append(f"[VM] DEV_TABLE_CALL error: {result.error}")
     else:
         cpu.regs[rd] = result
+
 
 def _op_dev_table_close(cpu, ops):
     """DEV_TABLE_CLOSE fd — close device fd via DeviceTable."""
@@ -3396,6 +3576,7 @@ def _op_dev_table_close(cpu, ops):
         return
 
     adapter.close(fd)
+
 
 def _op_dev_table_info(cpu, ops):
     """DEV_TABLE_INFO Rd, fd — get device info via DeviceTable ioctl."""
@@ -3409,10 +3590,11 @@ def _op_dev_table_info(cpu, ops):
         return
 
     result = adapter.ioctl(fd, "INFO")
-    cpu.regs[rd] = result.value if hasattr(result, 'value') else {}
+    cpu.regs[rd] = result.value if hasattr(result, "value") else {}
 
 
 # ── Device Register Ops (memory-mapped access) ──────────────────────────────
+
 
 def _op_dev_reg_read(cpu, ops):
     """DEV_REG_READ Rd, address — read device register at memory address."""
@@ -3426,6 +3608,7 @@ def _op_dev_reg_read(cpu, ops):
         return
 
     cpu.regs[rd] = reg_map.read(address)
+
 
 def _op_dev_reg_write(cpu, ops):
     """DEV_REG_WRITE address, value — write device register at memory address."""
@@ -3481,7 +3664,7 @@ def _get_device_table_adapter(cpu) -> DeviceBusAdapter | None:
     """Get DeviceTable adapter, checking CPU context first."""
     global _device_table_adapter
     # Check if CPU has a DeviceBusAdapter attached
-    if hasattr(cpu, '_device_table_adapter'):
+    if hasattr(cpu, "_device_table_adapter"):
         return cpu._device_table_adapter
     return _device_table_adapter
 
@@ -3489,7 +3672,7 @@ def _get_device_table_adapter(cpu) -> DeviceBusAdapter | None:
 def _get_device_register_map(cpu) -> DeviceRegisterMap | None:
     """Get device register map, checking CPU context first."""
     global _device_register_map
-    if hasattr(cpu, '_device_register_map'):
+    if hasattr(cpu, "_device_register_map"):
         return cpu._device_register_map
     return _device_register_map
 
@@ -3497,42 +3680,93 @@ def _get_device_register_map(cpu) -> DeviceRegisterMap | None:
 # ── Opcode Table ─────────────────────────────────────────────────────────────
 
 _OPCODE_TABLE = {
-    "LOAD_CONST": _op_load_const, "LOAD_SHAPE": _op_load_shape,
-    "MOV": _op_mov, "STORE": _op_store, "LOAD": _op_load,
-    "FREE": _op_free, "PRINT": _op_print, "NOP": _op_nop,
-    "IADD": _op_iadd, "ISUB": _op_isub, "IMUL": _op_imul, "IDIV": _op_idiv,
-    "IAND": _op_iand, "IOR": _op_ior, "IXOR": _op_ixor,
-    "ISHL": _op_ishl, "ISHR": _op_ishr, "INEG": _op_ineg,
-    "INC": _op_inc, "DEC": _op_dec, "ICMP": _op_icmp,
-    "ADD": _op_add, "SUB": _op_sub, "MUL": _op_mul, "DIV": _op_div,
-    "NEG": _op_neg, "ABS": _op_abs,
-    "MATMUL": _op_matmul, "TRANSPOSE": _op_transpose,
-    "DOT": _op_dot, "NORM": _op_norm,
-    "SUM": _op_sum, "MEAN": _op_mean, "MAX": _op_max, "ARGMAX": _op_argmax,
-    "RESHAPE": _op_reshape, "SHAPE": _op_shape, "SIZE": _op_size,
-    "RELU": _op_relu, "GELU": _op_gelu, "SIGMOID": _op_sigmoid,
-    "TANH": _op_tanh, "SOFTMAX": _op_softmax,
-    "LAYERNORM": _op_layernorm, "RMSNORM": _op_rmsnorm,
-    "RANDN": _op_randn, "RANDUNIF": _op_randunif,
-    "CMP": _op_cmp, "TEST": _op_test,
-    "JMP": _op_jmp, "JZ": _op_jz, "JNZ": _op_jnz,
-    "JGT": _op_jgt, "JGE": _op_jge, "JLT": _op_jlt, "JLE": _op_jle,
-    "CALL": _op_call, "RET": _op_ret, "LOOP": _op_loop, "HALT": _op_halt,
-    "DEV_OPEN": _op_dev_open, "DEV_CALL": _op_dev_call,
-    "DEV_CLOSE": _op_dev_close, "DEV_INFO": _op_dev_info,
-    "DEV_TABLE_OPEN": _op_dev_table_open, "DEV_TABLE_CALL": _op_dev_table_call,
-    "DEV_TABLE_CLOSE": _op_dev_table_close, "DEV_TABLE_INFO": _op_dev_table_info,
-    "DEV_REG_READ": _op_dev_reg_read, "DEV_REG_WRITE": _op_dev_reg_write,
-    "PUSH": _op_push, "POP": _op_pop,
-    "FADD": _op_fadd, "FSUB": _op_fsub, "FMUL": _op_fmul, "FDIV": _op_fdiv,
+    "LOAD_CONST": _op_load_const,
+    "LOAD_SHAPE": _op_load_shape,
+    "MOV": _op_mov,
+    "STORE": _op_store,
+    "LOAD": _op_load,
+    "FREE": _op_free,
+    "PRINT": _op_print,
+    "NOP": _op_nop,
+    "IADD": _op_iadd,
+    "ISUB": _op_isub,
+    "IMUL": _op_imul,
+    "IDIV": _op_idiv,
+    "IAND": _op_iand,
+    "IOR": _op_ior,
+    "IXOR": _op_ixor,
+    "ISHL": _op_ishl,
+    "ISHR": _op_ishr,
+    "INEG": _op_ineg,
+    "INC": _op_inc,
+    "DEC": _op_dec,
+    "ICMP": _op_icmp,
+    "ADD": _op_add,
+    "SUB": _op_sub,
+    "MUL": _op_mul,
+    "DIV": _op_div,
+    "NEG": _op_neg,
+    "ABS": _op_abs,
+    "MATMUL": _op_matmul,
+    "TRANSPOSE": _op_transpose,
+    "DOT": _op_dot,
+    "NORM": _op_norm,
+    "SUM": _op_sum,
+    "MEAN": _op_mean,
+    "MAX": _op_max,
+    "ARGMAX": _op_argmax,
+    "RESHAPE": _op_reshape,
+    "SHAPE": _op_shape,
+    "SIZE": _op_size,
+    "RELU": _op_relu,
+    "GELU": _op_gelu,
+    "SIGMOID": _op_sigmoid,
+    "TANH": _op_tanh,
+    "SOFTMAX": _op_softmax,
+    "LAYERNORM": _op_layernorm,
+    "RMSNORM": _op_rmsnorm,
+    "RANDN": _op_randn,
+    "RANDUNIF": _op_randunif,
+    "CMP": _op_cmp,
+    "TEST": _op_test,
+    "JMP": _op_jmp,
+    "JZ": _op_jz,
+    "JNZ": _op_jnz,
+    "JGT": _op_jgt,
+    "JGE": _op_jge,
+    "JLT": _op_jlt,
+    "JLE": _op_jle,
+    "CALL": _op_call,
+    "RET": _op_ret,
+    "LOOP": _op_loop,
+    "HALT": _op_halt,
+    "DEV_OPEN": _op_dev_open,
+    "DEV_CALL": _op_dev_call,
+    "DEV_CLOSE": _op_dev_close,
+    "DEV_INFO": _op_dev_info,
+    "DEV_TABLE_OPEN": _op_dev_table_open,
+    "DEV_TABLE_CALL": _op_dev_table_call,
+    "DEV_TABLE_CLOSE": _op_dev_table_close,
+    "DEV_TABLE_INFO": _op_dev_table_info,
+    "DEV_REG_READ": _op_dev_reg_read,
+    "DEV_REG_WRITE": _op_dev_reg_write,
+    "PUSH": _op_push,
+    "POP": _op_pop,
+    "FADD": _op_fadd,
+    "FSUB": _op_fsub,
+    "FMUL": _op_fmul,
+    "FDIV": _op_fdiv,
     "FCMP": _op_fcmp,
-    "ALLOC": _op_alloc, "MEMINFO": _op_meminfo,
-    "IN": _op_in, "OUT": _op_out,
+    "ALLOC": _op_alloc,
+    "MEMINFO": _op_meminfo,
+    "IN": _op_in,
+    "OUT": _op_out,
     "SYSCALL": _op_syscall,
 }
 
 
 # ── x86 Assembler ────────────────────────────────────────────────────────────
+
 
 class X86Assembler:
     """x86-32 real mode assembler — compiles assembly to machine code bytes.
@@ -3570,15 +3804,41 @@ class X86Assembler:
     # ── Condition codes ──────────────────────────────────────────────────
 
     _CC = {
-        "jz": 0x4, "je": 0x4, "jnz": 0x5, "jne": 0x5,
-        "jg": 0xf, "jnle": 0xf, "jge": 0xd, "jnl": 0xd,
-        "jl": 0xc, "jnge": 0xc, "jle": 0xe, "jng": 0xe,
-        "ja": 0x7, "jnbe": 0x7, "jae": 0x3, "jnb": 0x3,
-        "jb": 0x2, "jnae": 0x2, "jbe": 0x6, "jna": 0x6,
-        "js": 0x8, "jns": 0x9, "jo": 0x0, "jno": 0x1,
-        "jp": 0xa, "jpe": 0xa, "jnp": 0xb, "jpo": 0xb,
-        "loop": 0xe2, "loope": 0xe1, "loopz": 0xe1,
-        "loopne": 0xe0, "loopnz": 0xe0, "jcxz": 0xe3, "jecxz": 0xe3,
+        "jz": 0x4,
+        "je": 0x4,
+        "jnz": 0x5,
+        "jne": 0x5,
+        "jg": 0xF,
+        "jnle": 0xF,
+        "jge": 0xD,
+        "jnl": 0xD,
+        "jl": 0xC,
+        "jnge": 0xC,
+        "jle": 0xE,
+        "jng": 0xE,
+        "ja": 0x7,
+        "jnbe": 0x7,
+        "jae": 0x3,
+        "jnb": 0x3,
+        "jb": 0x2,
+        "jnae": 0x2,
+        "jbe": 0x6,
+        "jna": 0x6,
+        "js": 0x8,
+        "jns": 0x9,
+        "jo": 0x0,
+        "jno": 0x1,
+        "jp": 0xA,
+        "jpe": 0xA,
+        "jnp": 0xB,
+        "jpo": 0xB,
+        "loop": 0xE2,
+        "loope": 0xE1,
+        "loopz": 0xE1,
+        "loopne": 0xE0,
+        "loopnz": 0xE0,
+        "jcxz": 0xE3,
+        "jecxz": 0xE3,
     }
 
     def __init__(self):
@@ -3646,9 +3906,14 @@ class X86Assembler:
                 if clean.startswith("["):
                     self._handle_directive(clean)
                     continue
-                if ":" in clean and not clean.startswith("db ") and not clean.startswith("dw ") and not clean.startswith("dd "):
+                if (
+                    ":" in clean
+                    and not clean.startswith("db ")
+                    and not clean.startswith("dw ")
+                    and not clean.startswith("dd ")
+                ):
                     colon_idx = clean.index(":")
-                    after_colon = clean[colon_idx + 1:colon_idx + 2]
+                    after_colon = clean[colon_idx + 1 : colon_idx + 2]
                     if after_colon and after_colon not in (" ", "\t", ""):
                         pass
                     else:
@@ -3698,7 +3963,9 @@ class X86Assembler:
             total = 0
             for item in inner.split(","):
                 item = item.strip()
-                if (item.startswith('"') and item.endswith('"')) or (item.startswith("'") and item.endswith("'")):
+                if (item.startswith('"') and item.endswith('"')) or (
+                    item.startswith("'") and item.endswith("'")
+                ):
                     total += len(item) - 2  # strip quotes
                 elif item.startswith('"') or item.startswith("'"):
                     total += len(item) - 1  # strip leading quote
@@ -3714,8 +3981,26 @@ class X86Assembler:
     def _estimate_insn_size(self, line):
         parts = line.split(None, 1)
         op = parts[0].lower()
-        if op in ("nop", "hlt", "cli", "sti", "ret", "iret", "pusha", "popa", "cld", "std",
-                   "lodsb", "lodsw", "stosb", "stosw", "movsb", "movsw", "cmpsb", "scasb"):
+        if op in (
+            "nop",
+            "hlt",
+            "cli",
+            "sti",
+            "ret",
+            "iret",
+            "pusha",
+            "popa",
+            "cld",
+            "std",
+            "lodsb",
+            "lodsw",
+            "stosb",
+            "stosw",
+            "movsb",
+            "movsw",
+            "cmpsb",
+            "scasb",
+        ):
             return 1
         if op == "rep":
             return 2  # rep prefix + string instruction
@@ -3750,7 +4035,20 @@ class X86Assembler:
             return self._estimate_mov_size(parts[1] if len(parts) > 1 else "")
         if op in ("add", "sub", "and", "or", "xor", "cmp", "test"):
             return self._estimate_alu_size(parts[1] if len(parts) > 1 else "")
-        if op in ("inc", "dec", "neg", "not", "shl", "shr", "sal", "sar", "rol", "ror", "rcl", "rcr"):
+        if op in (
+            "inc",
+            "dec",
+            "neg",
+            "not",
+            "shl",
+            "shr",
+            "sal",
+            "sar",
+            "rol",
+            "ror",
+            "rcl",
+            "rcr",
+        ):
             return 2
         return 3  # default
 
@@ -3774,9 +4072,11 @@ class X86Assembler:
             return 2
         dst, src = parts[0].strip(), parts[1].strip()
         # reg, reg → 2 bytes (31/r for xor, 08/r for or, etc.)
-        if (dst in self._REG32 and src in self._REG32) or \
-           (dst in self._REG16 and src in self._REG16) or \
-           (dst in self._REG8 and src in self._REG8):
+        if (
+            (dst in self._REG32 and src in self._REG32)
+            or (dst in self._REG16 and src in self._REG16)
+            or (dst in self._REG8 and src in self._REG8)
+        ):
             return 2
         # reg, imm (small) → 3 bytes (83 /x ib)
         # reg, imm (large) → 6 bytes (81 /x id)
@@ -3807,7 +4107,9 @@ class X86Assembler:
             inner = line[2:].strip()
             items = self._parse_db_items(inner)
             for item in items:
-                if (item.startswith('"') and item.endswith('"')) or (item.startswith("'") and item.endswith("'")):
+                if (item.startswith('"') and item.endswith('"')) or (
+                    item.startswith("'") and item.endswith("'")
+                ):
                     s = item[1:-1]
                     for ch in s:
                         self._output.append(ord(ch))
@@ -3835,15 +4137,15 @@ class X86Assembler:
         while i < len(inner):
             if inner[i] in ('"', "'"):
                 quote = inner[i]
-                j = inner.index(quote, i + 1) if quote in inner[i+1:] else len(inner)
-                items.append(inner[i:j+1])
+                j = inner.index(quote, i + 1) if quote in inner[i + 1 :] else len(inner)
+                items.append(inner[i : j + 1])
                 i = j + 1
-                if i < len(inner) and inner[i] == ',':
+                if i < len(inner) and inner[i] == ",":
                     i += 1
-            elif inner[i] == ',':
+            elif inner[i] == ",":
                 i += 1
             else:
-                j = inner.index(',', i) if ',' in inner[i:] else len(inner)
+                j = inner.index(",", i) if "," in inner[i:] else len(inner)
                 items.append(inner[i:j].strip())
                 i = j + 1
         return items
@@ -4161,7 +4463,9 @@ class X86Assembler:
         dst = ops[0].lower().strip()
         # Don't lowercase character literals like 'A'
         src_raw = ops[1].strip()
-        if (src_raw.startswith("'") and src_raw.endswith("'")) or (src_raw.startswith('"') and src_raw.endswith('"')):
+        if (src_raw.startswith("'") and src_raw.endswith("'")) or (
+            src_raw.startswith('"') and src_raw.endswith('"')
+        ):
             src = src_raw
         else:
             src = src_raw.lower()
@@ -4171,53 +4475,53 @@ class X86Assembler:
             # MOV Sreg, r/m16 — opcode 8E, ModRM with /r = segment reg
             reg_field = self._SEG_REGS[dst]
             rm_field = self._REG16[src]
-            modrm = (0xC0 | (reg_field << 3) | rm_field)
+            modrm = 0xC0 | (reg_field << 3) | rm_field
             self._output.append(0x8E)
             self._output.append(modrm)
         elif dst in self._REG16 and src in self._SEG_REGS:
             # MOV r/m16, Sreg — opcode 8C, ModRM with /r = segment reg
             reg_field = self._SEG_REGS[src]
             rm_field = self._REG16[dst]
-            modrm = (0xC0 | (reg_field << 3) | rm_field)
+            modrm = 0xC0 | (reg_field << 3) | rm_field
             self._output.append(0x8C)
             self._output.append(modrm)
         elif dst in self._REG32 and src in self._REG32:
             if self._pfx(dst):
                 self._output.append(0x66)
             self._output.append(0x89)
-            modrm = (0xC0 | (self._REG32[src] << 3) | self._REG32[dst])
+            modrm = 0xC0 | (self._REG32[src] << 3) | self._REG32[dst]
             self._output.append(modrm)
         elif dst in self._REG16 and src in self._REG16:
             if self._pfx(dst):
                 self._output.append(0x66)
             self._output.append(0x89)
-            modrm = (0xC0 | (self._REG16[src] << 3) | self._REG16[dst])
+            modrm = 0xC0 | (self._REG16[src] << 3) | self._REG16[dst]
             self._output.append(modrm)
         # MOV reg, CRn / MOV CRn, reg (control register moves)
         elif dst in self._REG32 and src in self._CTRL_REGS:
             # MOV r32, CRn — opcode 0F 20, ModRM with reg=CRn, rm=r32
             self._output.append(0x0F)
             self._output.append(0x20)
-            modrm = (0xC0 | (self._CTRL_REGS[src] << 3) | self._REG32[dst])
+            modrm = 0xC0 | (self._CTRL_REGS[src] << 3) | self._REG32[dst]
             self._output.append(modrm)
         elif dst in self._CTRL_REGS and src in self._REG32:
             # MOV CRn, r32 — opcode 0F 22, ModRM with reg=CRn, rm=r32
             self._output.append(0x0F)
             self._output.append(0x22)
-            modrm = (0xC0 | (self._CTRL_REGS[dst] << 3) | self._REG32[src])
+            modrm = 0xC0 | (self._CTRL_REGS[dst] << 3) | self._REG32[src]
             self._output.append(modrm)
         # MOV reg, DRn / MOV DRn, reg (debug register moves)
         elif dst in self._REG32 and src in self._DBG_REGS:
             # MOV r32, DRn — opcode 0F 21, ModRM with reg=DRn, rm=r32
             self._output.append(0x0F)
             self._output.append(0x21)
-            modrm = (0xC0 | (self._DBG_REGS[src] << 3) | self._REG32[dst])
+            modrm = 0xC0 | (self._DBG_REGS[src] << 3) | self._REG32[dst]
             self._output.append(modrm)
         elif dst in self._DBG_REGS and src in self._REG32:
             # MOV DRn, r32 — opcode 0F 23, ModRM with reg=DRn, rm=r32
             self._output.append(0x0F)
             self._output.append(0x23)
-            modrm = (0xC0 | (self._DBG_REGS[dst] << 3) | self._REG32[src])
+            modrm = 0xC0 | (self._DBG_REGS[dst] << 3) | self._REG32[src]
             self._output.append(modrm)
         # MOV [mem], reg — size-prefixed memory stores with register source
         elif dst.startswith("byte") and "[" in dst and src in self._REG8:
@@ -4269,7 +4573,7 @@ class X86Assembler:
         elif dst in self._REG8 and src in self._REG8:
             # MOV r8, r8 — opcode 88, ModRM
             self._output.append(0x88)
-            modrm = (0xC0 | (self._REG8[src] << 3) | self._REG8[dst])
+            modrm = 0xC0 | (self._REG8[src] << 3) | self._REG8[dst]
             self._output.append(modrm)
         elif dst in self._REG8 and src.startswith("["):
             self._output.append(0x8A)
@@ -4323,13 +4627,17 @@ class X86Assembler:
             self._emit_modrm_mem(src, dst)
         # MOV reg, [imm] — direct address load (moffs A1/A3 handled above for
         # eax/ax with a numeric absolute; other regs/forms use modrm disp32)
-        elif dst in self._REG32 and (src.startswith("0x") or (src.startswith("[") and src[1:-1].strip().startswith("0x"))):
+        elif dst in self._REG32 and (
+            src.startswith("0x") or (src.startswith("[") and src[1:-1].strip().startswith("0x"))
+        ):
             inner = src.strip("[]") if src.startswith("[") else src
             mem = f"[{inner}]"
             self._output.append(0x8B)
             self._emit_modrm_mem(dst, mem)
         # MOV [mem], imm — size prefix may follow the bracket (mov [mem], dword 8)
-        elif dst.startswith("[") and (src.startswith("dword") or src.startswith("word") or src.startswith("byte")):
+        elif dst.startswith("[") and (
+            src.startswith("dword") or src.startswith("word") or src.startswith("byte")
+        ):
             size, _, imm_src = src.partition(" ")
             imm_src = imm_src.strip()
             val = self._parse_imm(imm_src)
@@ -4346,7 +4654,9 @@ class X86Assembler:
                 self._output.append(0xC7)  # MOV r/m32, imm32
                 self._emit_modrm_mem("eax", dst)
                 self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
-        elif dst in self._REG16 and (src.startswith("0x") or (src.startswith("[") and src[1:-1].strip().startswith("0x"))):
+        elif dst in self._REG16 and (
+            src.startswith("0x") or (src.startswith("[") and src[1:-1].strip().startswith("0x"))
+        ):
             # 16-bit register, absolute address — emit 66 + 8B modrm disp32.
             inner = src.strip("[]") if src.startswith("[") else src
             mem = f"[{inner}]"
@@ -4423,16 +4733,38 @@ class X86Assembler:
                         # base=100 means "no base" without disp; force mod=01.
                         sib = (scale_enc << 6) | (index_enc << 3) | 0x04
                         mod_bits = 0x40
-                        disp = bytes([addr & 0xFF]) if -128 <= addr <= 127 else (addr & 0xFFFFFFFF).to_bytes(4, "little")
+                        disp = (
+                            bytes([addr & 0xFF])
+                            if -128 <= addr <= 127
+                            else (addr & 0xFFFFFFFF).to_bytes(4, "little")
+                        )
                         return mod_bits, 0x04, sib.to_bytes(1, "little") + disp
                     if addr == 0:
-                        return 0x00, 0x04, (scale_enc << 6 | index_enc << 3 | base_enc).to_bytes(1, "little")
+                        return (
+                            0x00,
+                            0x04,
+                            (scale_enc << 6 | index_enc << 3 | base_enc).to_bytes(1, "little"),
+                        )
                     if -128 <= addr <= 127:
-                        return 0x40, 0x04, (scale_enc << 6 | index_enc << 3 | base_enc).to_bytes(1, "little") + bytes([addr & 0xFF])
-                    return 0x80, 0x04, (scale_enc << 6 | index_enc << 3 | base_enc).to_bytes(1, "little") + (addr & 0xFFFFFFFF).to_bytes(4, "little")
+                        return (
+                            0x40,
+                            0x04,
+                            (scale_enc << 6 | index_enc << 3 | base_enc).to_bytes(1, "little")
+                            + bytes([addr & 0xFF]),
+                        )
+                    return (
+                        0x80,
+                        0x04,
+                        (scale_enc << 6 | index_enc << 3 | base_enc).to_bytes(1, "little")
+                        + (addr & 0xFFFFFFFF).to_bytes(4, "little"),
+                    )
                 # [idx*scale + disp32] — no base register
                 sib = (scale_enc << 6) | (index_enc << 3) | 0x05
-                return 0x00, 0x04, sib.to_bytes(1, "little") + (addr & 0xFFFFFFFF).to_bytes(4, "little")
+                return (
+                    0x00,
+                    0x04,
+                    sib.to_bytes(1, "little") + (addr & 0xFFFFFFFF).to_bytes(4, "little"),
+                )
             # Check which part is a register
             if base in self._REG32:
                 # [reg + imm/label]
@@ -4475,9 +4807,11 @@ class X86Assembler:
     def _emit_modrm_mem(self, reg, mem):
         """Emit ModR/M byte for [memory] operand."""
         inner = mem.strip("[]").strip().lower()
-        reg_enc = self._REG32.get(reg.lower(), self._REG16.get(reg.lower(), self._REG8.get(reg.lower(), 0)))
+        reg_enc = self._REG32.get(
+            reg.lower(), self._REG16.get(reg.lower(), self._REG8.get(reg.lower(), 0))
+        )
         mod_bits, rm_field, disp_bytes = self._mem_operand(inner)
-        modrm = (mod_bits | (reg_enc << 3) | rm_field)
+        modrm = mod_bits | (reg_enc << 3) | rm_field
         self._output.append(modrm)
         self._output.extend(disp_bytes)
 
@@ -4485,8 +4819,17 @@ class X86Assembler:
         if len(ops) < 2:
             return
         dst, src = ops[0].lower().strip(), ops[1].lower().strip()
-        alu_op = {"add": 0, "or": 1, "adc": 2, "sbb": 3,
-                  "and": 4, "sub": 5, "xor": 6, "cmp": 7, "test": 0}
+        alu_op = {
+            "add": 0,
+            "or": 1,
+            "adc": 2,
+            "sbb": 3,
+            "and": 4,
+            "sub": 5,
+            "xor": 6,
+            "cmp": 7,
+            "test": 0,
+        }
 
         # reg, reg
         if dst in self._REG32 and src in self._REG32:
@@ -4494,35 +4837,35 @@ class X86Assembler:
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x85)
-                modrm = (0xC0 | (self._REG32[src] << 3) | self._REG32[dst])
+                modrm = 0xC0 | (self._REG32[src] << 3) | self._REG32[dst]
                 self._output.append(modrm)
             else:
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x01 + alu_op[op] * 8)
-                modrm = (0xC0 | (self._REG32[src] << 3) | self._REG32[dst])
+                modrm = 0xC0 | (self._REG32[src] << 3) | self._REG32[dst]
                 self._output.append(modrm)
         elif dst in self._REG16 and src in self._REG16:
             if op == "test":
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x85)
-                modrm = (0xC0 | (self._REG16[src] << 3) | self._REG16[dst])
+                modrm = 0xC0 | (self._REG16[src] << 3) | self._REG16[dst]
                 self._output.append(modrm)
             else:
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x01 + alu_op[op] * 8)
-                modrm = (0xC0 | (self._REG16[src] << 3) | self._REG16[dst])
+                modrm = 0xC0 | (self._REG16[src] << 3) | self._REG16[dst]
                 self._output.append(modrm)
         elif dst in self._REG8 and src in self._REG8:
             if op == "test":
                 self._output.append(0x84)
-                modrm = (0xC0 | (self._REG8[src] << 3) | self._REG8[dst])
+                modrm = 0xC0 | (self._REG8[src] << 3) | self._REG8[dst]
                 self._output.append(modrm)
             else:
                 self._output.append(0x00 + alu_op[op] * 8)
-                modrm = (0xC0 | (self._REG8[src] << 3) | self._REG8[dst])
+                modrm = 0xC0 | (self._REG8[src] << 3) | self._REG8[dst]
                 self._output.append(modrm)
         # reg, [mem] — ALU r32, r/m32 (0x03 + op*8)
         elif dst in self._REG32 and src.startswith("["):
@@ -4532,14 +4875,14 @@ class X86Assembler:
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x85)
-                modrm = (mod_bits | (self._REG32[dst] << 3) | rm_field)
+                modrm = mod_bits | (self._REG32[dst] << 3) | rm_field
                 self._output.append(modrm)
                 self._output.extend(disp_bytes)
             else:
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x03 + alu_op[op] * 8)
-                modrm = (mod_bits | (self._REG32[dst] << 3) | rm_field)
+                modrm = mod_bits | (self._REG32[dst] << 3) | rm_field
                 self._output.append(modrm)
                 self._output.extend(disp_bytes)
         elif dst in self._REG16 and src.startswith("["):
@@ -4547,25 +4890,25 @@ class X86Assembler:
             if op == "test":
                 self._output.append(0x66)
                 self._output.append(0x85)
-                modrm = (mod_bits | (self._REG16[dst] << 3) | rm_field)
+                modrm = mod_bits | (self._REG16[dst] << 3) | rm_field
                 self._output.append(modrm)
                 self._output.extend(disp_bytes)
             else:
                 self._output.append(0x66)
                 self._output.append(0x03 + alu_op[op] * 8)
-                modrm = (mod_bits | (self._REG16[dst] << 3) | rm_field)
+                modrm = mod_bits | (self._REG16[dst] << 3) | rm_field
                 self._output.append(modrm)
                 self._output.extend(disp_bytes)
         elif dst in self._REG8 and src.startswith("["):
             mod_bits, rm_field, disp_bytes = self._mem_operand(src.strip("[]").strip())
             if op == "test":
                 self._output.append(0x84)
-                modrm = (mod_bits | (self._REG8[dst] << 3) | rm_field)
+                modrm = mod_bits | (self._REG8[dst] << 3) | rm_field
                 self._output.append(modrm)
                 self._output.extend(disp_bytes)
             else:
                 self._output.append(0x02 + alu_op[op] * 8)
-                modrm = (mod_bits | (self._REG8[dst] << 3) | rm_field)
+                modrm = mod_bits | (self._REG8[dst] << 3) | rm_field
                 self._output.append(modrm)
                 self._output.extend(disp_bytes)
         # reg, imm
@@ -4586,7 +4929,7 @@ class X86Assembler:
                     if self._pfx(dst):
                         self._output.append(0x66)
                     self._output.append(0xF7)
-                    modrm = (0xC0 | (0 << 3) | self._REG32[dst])
+                    modrm = 0xC0 | (0 << 3) | self._REG32[dst]
                     self._output.append(modrm)
                     self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
             elif self._REG32[dst] == 0 and not (-128 <= val <= 127):
@@ -4605,21 +4948,21 @@ class X86Assembler:
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x83)
-                modrm = (0xE8 | self._REG32[dst])
+                modrm = 0xE8 | self._REG32[dst]
                 self._output.append(modrm)
                 self._output.append(val & 0xFF)
             elif -128 <= val <= 127:
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x83)
-                modrm = (0xC0 | (alu_op[op] << 3) | self._REG32[dst])
+                modrm = 0xC0 | (alu_op[op] << 3) | self._REG32[dst]
                 self._output.append(modrm)
                 self._output.append(val & 0xFF)
             else:
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x81)
-                modrm = (0xC0 | (alu_op[op] << 3) | self._REG32[dst])
+                modrm = 0xC0 | (alu_op[op] << 3) | self._REG32[dst]
                 self._output.append(modrm)
                 self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
         elif dst in self._REG16:
@@ -4636,7 +4979,7 @@ class X86Assembler:
                     if self._pfx(dst):
                         self._output.append(0x66)
                     self._output.append(0xF7)
-                    modrm = (0xC0 | (0 << 3) | self._REG16[dst])
+                    modrm = 0xC0 | (0 << 3) | self._REG16[dst]
                     self._output.append(modrm)
                     self._output.extend(struct.pack("<H", val & 0xFFFF))
             elif self._REG16[dst] == 0 and not (-128 <= val <= 127):
@@ -4651,14 +4994,14 @@ class X86Assembler:
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x83)
-                modrm = (0xC0 | (alu_op[op] << 3) | self._REG16[dst])
+                modrm = 0xC0 | (alu_op[op] << 3) | self._REG16[dst]
                 self._output.append(modrm)
                 self._output.append(val & 0xFF)
             else:
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x81)
-                modrm = (0xC0 | (alu_op[op] << 3) | self._REG16[dst])
+                modrm = 0xC0 | (alu_op[op] << 3) | self._REG16[dst]
                 self._output.append(modrm)
                 self._output.extend(val.to_bytes(2, "little", signed=True))
         elif dst in self._REG8:
@@ -4671,7 +5014,7 @@ class X86Assembler:
                 else:
                     # TEST r/m8, imm8 — F6 /0 ib
                     self._output.append(0xF6)
-                    modrm = (0xC0 | (0 << 3) | self._REG8[dst])
+                    modrm = 0xC0 | (0 << 3) | self._REG8[dst]
                     self._output.append(modrm)
                     self._output.append(val & 0xFF)
             elif self._REG8[dst] == 0:
@@ -4683,7 +5026,7 @@ class X86Assembler:
                 # ALU r/m8, imm8 — 80 /digit ib. r/m8 has no imm16 form, so
                 # the immediate is truncated to 8 bits (same as TEST above).
                 self._output.append(0x80)
-                modrm = (0xC0 | (alu_op[op] << 3) | self._REG8[dst])
+                modrm = 0xC0 | (alu_op[op] << 3) | self._REG8[dst]
                 self._output.append(modrm)
                 self._output.append(val & 0xFF)
         # [mem], reg or [mem], imm — ALU r/m32, r/imm
@@ -4693,7 +5036,7 @@ class X86Assembler:
             for pfx in ("dword", "word", "byte"):
                 if mem.startswith(pfx):
                     size = pfx
-                    mem = mem[len(pfx):].strip()
+                    mem = mem[len(pfx) :].strip()
             mod_bits, rm_field, disp_bytes = self._mem_operand(mem.strip("[]").strip())
             # [mem], reg — ALU r/m32, r32
             if op == "test" and src in self._REG32:
@@ -4806,7 +5149,7 @@ class X86Assembler:
             for pfx in ("dword", "word", "byte"):
                 if mem.startswith(pfx):
                     size = pfx
-                    mem = mem[len(pfx):].strip()
+                    mem = mem[len(pfx) :].strip()
             mod_bits, rm_field, disp_bytes = self._mem_operand(mem.strip("[]").strip())
             if size == "byte":
                 self._output.append(0xFE)
@@ -4826,17 +5169,17 @@ class X86Assembler:
             if self._pfx(reg):
                 self._output.append(0x66)
             self._output.append(0xF7)
-            modrm = (0xC0 | (func << 3) | self._REG32[reg])
+            modrm = 0xC0 | (func << 3) | self._REG32[reg]
             self._output.append(modrm)
         elif reg in self._REG16:
             if self._pfx(reg):
                 self._output.append(0x66)
             self._output.append(0xF7)
-            modrm = (0xC0 | (func << 3) | self._REG16[reg])
+            modrm = 0xC0 | (func << 3) | self._REG16[reg]
             self._output.append(modrm)
         elif reg in self._REG8:
             self._output.append(0xF6)
-            modrm = (0xC0 | (func << 3) | self._REG8[reg])
+            modrm = 0xC0 | (func << 3) | self._REG8[reg]
             self._output.append(modrm)
         elif "[" in reg:
             # [mem] — F6 /func (byte) or F7 /func (word/dword)
@@ -4845,19 +5188,19 @@ class X86Assembler:
             for pfx in ("dword", "word", "byte"):
                 if mem.startswith(pfx):
                     size = pfx
-                    mem = mem[len(pfx):].strip()
+                    mem = mem[len(pfx) :].strip()
             inner = mem.strip("[]").strip().lower()
             mod_bits, rm_field, disp_bytes = self._mem_operand(inner)
             if size == "byte":
                 self._output.append(0xF6)
-                modrm = (mod_bits | (func << 3) | rm_field)
+                modrm = mod_bits | (func << 3) | rm_field
                 self._output.append(modrm)
                 self._output.extend(disp_bytes)
             else:
                 if size == "word":
                     self._output.append(0x66)
                 self._output.append(0xF7)
-                modrm = (mod_bits | (func << 3) | rm_field)
+                modrm = mod_bits | (func << 3) | rm_field
                 self._output.append(modrm)
                 self._output.extend(disp_bytes)
 
@@ -4887,7 +5230,7 @@ class X86Assembler:
             self._output.append(0x0F)
             self._output.append(0xAF)
             if src in self._REG32:
-                modrm = (0xC0 | (self._REG32[dst] << 3) | self._REG32[src])
+                modrm = 0xC0 | (self._REG32[dst] << 3) | self._REG32[src]
                 self._output.append(modrm)
             elif src.startswith("["):
                 self._emit_modrm_mem(dst, src)
@@ -4902,7 +5245,7 @@ class X86Assembler:
                     self._output.append(0x66)
                 self._output.append(0x6B)
                 if src in self._REG32:
-                    modrm = (0xC0 | (self._REG32[dst] << 3) | self._REG32[src])
+                    modrm = 0xC0 | (self._REG32[dst] << 3) | self._REG32[src]
                     self._output.append(modrm)
                 elif src.startswith("["):
                     self._emit_modrm_mem(dst, src)
@@ -4915,7 +5258,7 @@ class X86Assembler:
                     self._output.append(0x66)
                 self._output.append(0x69)
                 if src in self._REG32:
-                    modrm = (0xC0 | (self._REG32[dst] << 3) | self._REG32[src])
+                    modrm = 0xC0 | (self._REG32[dst] << 3) | self._REG32[src]
                     self._output.append(modrm)
                 elif src.startswith("["):
                     self._emit_modrm_mem(dst, src)
@@ -4929,8 +5272,7 @@ class X86Assembler:
         reg = ops[0].lower()
         count = ops[1].strip()
         # /0=ROL, /1=ROR, /2=RCL, /3=RCR, /4=SHL, /5=SHR, /7=SAR
-        ext_map = {"rol": 0, "ror": 1, "rcl": 2, "rcr": 3,
-                   "shl": 4, "sal": 4, "shr": 5, "sar": 7}
+        ext_map = {"rol": 0, "ror": 1, "rcl": 2, "rcr": 3, "shl": 4, "sal": 4, "shr": 5, "sar": 7}
         ext = ext_map.get(op, 4)
         if reg in self._REG32:
             if self._pfx(reg):
@@ -4976,7 +5318,7 @@ class X86Assembler:
             for pfx in ("dword", "word", "byte"):
                 if mem.startswith(pfx):
                     size = pfx
-                    mem = mem[len(pfx):].strip()
+                    mem = mem[len(pfx) :].strip()
             mod_bits, rm_field, disp_bytes = self._mem_operand(mem.strip("[]").strip())
             if size == "byte":
                 if count == "cl":
@@ -5016,17 +5358,17 @@ class X86Assembler:
         r1, r2 = ops[0].lower(), ops[1].lower()
         if r1 in self._REG32 and r2 in self._REG32:
             self._output.append(0x87)
-            modrm = (0xC0 | (self._REG32[r1] << 3) | self._REG32[r2])
+            modrm = 0xC0 | (self._REG32[r1] << 3) | self._REG32[r2]
             self._output.append(modrm)
         elif r1 in self._REG16 and r2 in self._REG16:
             if self._pfx(r1):
                 self._output.append(0x66)
             self._output.append(0x87)
-            modrm = (0xC0 | (self._REG16[r1] << 3) | self._REG16[r2])
+            modrm = 0xC0 | (self._REG16[r1] << 3) | self._REG16[r2]
             self._output.append(modrm)
         elif r1 in self._REG8 and r2 in self._REG8:
             self._output.append(0x86)
-            modrm = (0xC0 | (self._REG8[r1] << 3) | self._REG8[r2])
+            modrm = 0xC0 | (self._REG8[r1] << 3) | self._REG8[r2]
             self._output.append(modrm)
         elif r1 in self._REG32:
             # XCHG r32, [mem]
@@ -5110,13 +5452,14 @@ class X86Assembler:
                 self._output.append(0x67)
             self._output.append(0x0F)
             self._output.append(0x00)
-            modrm = (mod_bits | (3 << 3) | rm_field)
+            modrm = mod_bits | (3 << 3) | rm_field
             self._output.append(modrm)
             self._output.extend(disp_bytes)
 
     def _parse_label(self, text):
         text = text.strip()
         import re
+
         if text == "$":
             return self._org + len(self._output)
         if text in self._labels:
@@ -5132,16 +5475,16 @@ class X86Assembler:
         if text.startswith("0b") or text.startswith("0B"):
             return int(text, 2)
         # Only treat as hex literal if the prefix is purely hex digits (e.g. "10h", "FFh")
-        if re.match(r'^[0-9a-fA-F]+[hH]$', text):
+        if re.match(r"^[0-9a-fA-F]+[hH]$", text):
             return int(text[:-1], 16)
-        if re.match(r'^[01]+[bB]$', text):
+        if re.match(r"^[01]+[bB]$", text):
             return int(text[:-1], 2)
         try:
             return int(text, 0)
         except ValueError:
             pass
         # In pass 1, forward references to labels use placeholder (0)
-        if getattr(self, '_pass', 2) == 1:
+        if getattr(self, "_pass", 2) == 1:
             return 0
         return self._parse_imm(text)
 
@@ -5150,11 +5493,12 @@ class X86Assembler:
         text = text.strip()
         # Replace hex literals
         import re
-        text = re.sub(r'0[xX]([0-9a-fA-F]+)', lambda m: str(int(m.group(1), 16)), text)
-        text = re.sub(r'0[bB]([01]+)', lambda m: str(int(m.group(1), 2)), text)
-        text = re.sub(r'([0-9]+)[hH]', lambda m: str(int(m.group(1), 16)), text)
+
+        text = re.sub(r"0[xX]([0-9a-fA-F]+)", lambda m: str(int(m.group(1), 16)), text)
+        text = re.sub(r"0[bB]([01]+)", lambda m: str(int(m.group(1), 2)), text)
+        text = re.sub(r"([0-9]+)[hH]", lambda m: str(int(m.group(1), 16)), text)
         # Only allow digits, operators, parentheses, spaces
-        if re.match(r'^[\d\s\+\-\*\/\(\)]+$', text):
+        if re.match(r"^[\d\s\+\-\*\/\(\)]+$", text):
             try:
                 return int(eval(text))
             except (ValueError, SyntaxError, TypeError):
@@ -5164,22 +5508,25 @@ class X86Assembler:
     def _parse_imm(self, text):
         text = text.strip()
         import re
+
         # Character literals: 'A', '0', '\n', etc.
-        if (text.startswith("'") and text.endswith("'")) or (text.startswith('"') and text.endswith('"')):
+        if (text.startswith("'") and text.endswith("'")) or (
+            text.startswith('"') and text.endswith('"')
+        ):
             inner = text[1:-1]
             if len(inner) == 1:
                 return ord(inner)
-            elif inner == '\\n':
+            elif inner == "\\n":
                 return 10
-            elif inner == '\\r':
+            elif inner == "\\r":
                 return 13
-            elif inner == '\\t':
+            elif inner == "\\t":
                 return 9
-            elif inner == '\\0':
+            elif inner == "\\0":
                 return 0
-            elif inner == '\\\\':
+            elif inner == "\\\\":
                 return 92
-            elif inner.startswith('\\x'):
+            elif inner.startswith("\\x"):
                 return int(inner[2:], 16)
             return ord(inner[0]) if inner else 0
         if text.startswith("0x") or text.startswith("0X"):
@@ -5188,7 +5535,7 @@ class X86Assembler:
             return int(text, 2)
         if text.endswith("h") or text.endswith("H"):
             return int(text[:-1], 16)
-        if re.match(r'^[01]+[bB]$', text):
+        if re.match(r"^[01]+[bB]$", text):
             return int(text[:-1], 2)
         try:
             return int(text, 0)
@@ -5207,8 +5554,8 @@ class X86Assembler:
         # Try arithmetic expression with label references
         expr = text
         for name, addr in self._labels.items():
-            expr = re.sub(r'(?<!\w)' + re.escape(name) + r'(?!\w)', str(addr), expr)
-        if re.match(r'^[\d\s\+\-\*\/\(\)]+$', expr):
+            expr = re.sub(r"(?<!\w)" + re.escape(name) + r"(?!\w)", str(addr), expr)
+        if re.match(r"^[\d\s\+\-\*\/\(\)]+$", expr):
             try:
                 return int(eval(expr))
             except Exception as e:
@@ -5237,8 +5584,14 @@ class X86Assembler:
             result.append(current.strip())
         return result
 
-    def run(self, source: str, org: int = 0, max_steps: int = 100000,
-            memory_size: int = 1024 * 1024, **kwargs) -> "X86CPU":
+    def run(
+        self,
+        source: str,
+        org: int = 0,
+        max_steps: int = 100000,
+        memory_size: int = 1024 * 1024,
+        **kwargs,
+    ) -> X86CPU:
         """Assemble, load, and run source on an X86CPU. Returns the CPU."""
         code = self.assemble(source)
         cpu = X86CPU(memory_size=memory_size)
@@ -5259,10 +5612,8 @@ FLAG_DF = 0x0400
 FLAG_IF = 0x0200
 
 # Register indices
-_REG_I32 = {"eax": 0, "ecx": 1, "edx": 2, "ebx": 3,
-            "esp": 4, "ebp": 5, "esi": 6, "edi": 7}
-_REG_I16 = {"ax": 0, "cx": 1, "dx": 2, "bx": 3,
-            "sp": 4, "bp": 5, "si": 6, "di": 7}
+_REG_I32 = {"eax": 0, "ecx": 1, "edx": 2, "ebx": 3, "esp": 4, "ebp": 5, "esi": 6, "edi": 7}
+_REG_I16 = {"ax": 0, "cx": 1, "dx": 2, "bx": 3, "sp": 4, "bp": 5, "si": 6, "di": 7}
 _REG_I8L = {"al": 0, "cl": 1, "dl": 2, "bl": 3}
 _REG_I8H = {"ah": 4, "ch": 5, "dh": 6, "bh": 7}
 
@@ -5274,26 +5625,142 @@ def _parity(v: int) -> bool:
 
 # PS/2 scancode set 1 lookup (make codes only, no break codes)
 _CHAR_TO_SCANCODE = {
-    'a': 0x1E, 'b': 0x30, 'c': 0x2E, 'd': 0x20, 'e': 0x12, 'f': 0x21,
-    'g': 0x22, 'h': 0x23, 'i': 0x17, 'j': 0x24, 'k': 0x25, 'l': 0x26,
-    'm': 0x32, 'n': 0x31, 'o': 0x18, 'p': 0x19, 'q': 0x10, 'r': 0x13,
-    's': 0x1F, 't': 0x14, 'u': 0x16, 'v': 0x2F, 'w': 0x11, 'x': 0x2D,
-    'y': 0x15, 'z': 0x2C,
-    '0': 0x0B, '1': 0x02, '2': 0x03, '3': 0x04, '4': 0x05,
-    '5': 0x06, '6': 0x07, '7': 0x08, '8': 0x09, '9': 0x0A,
-    ' ': 0x39, '\n': 0x1C, '\r': 0x1C, '\t': 0x0F,
-    '-': 0x0C, '=': 0x0D, '[': 0x1A, ']': 0x1B, '\\': 0x2B,
-    ';': 0x27, "'": 0x28, ',': 0x33, '.': 0x34, '/': 0x35,
-    '`': 0x29,
+    "a": 0x1E,
+    "b": 0x30,
+    "c": 0x2E,
+    "d": 0x20,
+    "e": 0x12,
+    "f": 0x21,
+    "g": 0x22,
+    "h": 0x23,
+    "i": 0x17,
+    "j": 0x24,
+    "k": 0x25,
+    "l": 0x26,
+    "m": 0x32,
+    "n": 0x31,
+    "o": 0x18,
+    "p": 0x19,
+    "q": 0x10,
+    "r": 0x13,
+    "s": 0x1F,
+    "t": 0x14,
+    "u": 0x16,
+    "v": 0x2F,
+    "w": 0x11,
+    "x": 0x2D,
+    "y": 0x15,
+    "z": 0x2C,
+    "0": 0x0B,
+    "1": 0x02,
+    "2": 0x03,
+    "3": 0x04,
+    "4": 0x05,
+    "5": 0x06,
+    "6": 0x07,
+    "7": 0x08,
+    "8": 0x09,
+    "9": 0x0A,
+    " ": 0x39,
+    "\n": 0x1C,
+    "\r": 0x1C,
+    "\t": 0x0F,
+    "-": 0x0C,
+    "=": 0x0D,
+    "[": 0x1A,
+    "]": 0x1B,
+    "\\": 0x2B,
+    ";": 0x27,
+    "'": 0x28,
+    ",": 0x33,
+    ".": 0x34,
+    "/": 0x35,
+    "`": 0x29,
 }
 
 _SCANDATA = [
-    0x00, 0x1B, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 0x08, 0x09,
-    'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', 0x0D, 0x00,
-    'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', "'", '`', 0x00, '\\',
-    'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0x00, '*', 0x00, ' ',
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '0', '.',
+    0x00,
+    0x1B,
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "0",
+    "-",
+    "=",
+    0x08,
+    0x09,
+    "q",
+    "w",
+    "e",
+    "r",
+    "t",
+    "y",
+    "u",
+    "i",
+    "o",
+    "p",
+    "[",
+    "]",
+    0x0D,
+    0x00,
+    "a",
+    "s",
+    "d",
+    "f",
+    "g",
+    "h",
+    "j",
+    "k",
+    "l",
+    ";",
+    "'",
+    "`",
+    0x00,
+    "\\",
+    "z",
+    "x",
+    "c",
+    "v",
+    "b",
+    "n",
+    "m",
+    ",",
+    ".",
+    "/",
+    0x00,
+    "*",
+    0x00,
+    " ",
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    "7",
+    "8",
+    "9",
+    "-",
+    "4",
+    "5",
+    "6",
+    "+",
+    "1",
+    "2",
+    "3",
+    "0",
+    ".",
 ]
 
 
@@ -5310,7 +5777,7 @@ def _scancode_to_char(sc: int) -> str:
             return ch
         if isinstance(ch, int) and ch != 0:
             return chr(ch)
-    return '\0'
+    return "\0"
 
 
 def _default_kbd_handler(cpu):
@@ -5318,9 +5785,9 @@ def _default_kbd_handler(cpu):
     if cpu._kbd_buffer:
         sc = cpu._kbd_buffer.pop(0)
         ch = _scancode_to_char(sc)
-        if ch and ch != '\0':
+        if ch and ch != "\0":
             cpu._mem[0x400] = ord(ch)  # keyboard buffer at 0x400
-            cpu._mem[0x401] = sc       # scancode at 0x401
+            cpu._mem[0x401] = sc  # scancode at 0x401
 
 
 class X86CPU:
@@ -5352,13 +5819,13 @@ class X86CPU:
 
     def reset(self):
         """Zero all registers, flags, and memory."""
-        self._regs = [0] * 8          # EAX..EDI
+        self._regs = [0] * 8  # EAX..EDI
         self._regs[4] = self._mem_size - 4  # ESP starts at top of memory
         self._eip = 0
-        self._eflags = 0x0002         # Bit 1 always set per x86 spec
-        self._segregs = [0] * 6       # ES, CS, SS, DS, FS, GS
-        self._cr = [0] * 8            # CR0..CR7 (control registers)
-        self._dr = [0] * 8            # DR0..DR7 (debug registers)
+        self._eflags = 0x0002  # Bit 1 always set per x86 spec
+        self._segregs = [0] * 6  # ES, CS, SS, DS, FS, GS
+        self._cr = [0] * 8  # CR0..CR7 (control registers)
+        self._dr = [0] * 8  # DR0..DR7 (debug registers)
         self._running = False
         self._step_count = 0
         self._max_steps = 1_000_000
@@ -5406,7 +5873,7 @@ class X86CPU:
         if self._mem[0x400] == 0 and self._kbd_buffer:
             sc = self._kbd_buffer.pop(0)
             ch = _scancode_to_char(sc)
-            if ch and ch != '\0':
+            if ch and ch != "\0":
                 self._mem[0x400] = ord(ch)
                 self._mem[0x401] = sc
 
@@ -5513,43 +5980,80 @@ class X86CPU:
             raise ValueError(f"unknown register: {name}")
 
     @property
-    def eax(self) -> int: return self._get32(0)
+    def eax(self) -> int:
+        return self._get32(0)
+
     @eax.setter
-    def eax(self, v: int): self._set32(0, v)
+    def eax(self, v: int):
+        self._set32(0, v)
+
     @property
-    def ecx(self) -> int: return self._get32(1)
+    def ecx(self) -> int:
+        return self._get32(1)
+
     @ecx.setter
-    def ecx(self, v: int): self._set32(1, v)
+    def ecx(self, v: int):
+        self._set32(1, v)
+
     @property
-    def edx(self) -> int: return self._get32(2)
+    def edx(self) -> int:
+        return self._get32(2)
+
     @edx.setter
-    def edx(self, v: int): self._set32(2, v)
+    def edx(self, v: int):
+        self._set32(2, v)
+
     @property
-    def ebx(self) -> int: return self._get32(3)
+    def ebx(self) -> int:
+        return self._get32(3)
+
     @ebx.setter
-    def ebx(self, v: int): self._set32(3, v)
+    def ebx(self, v: int):
+        self._set32(3, v)
+
     @property
-    def esp(self) -> int: return self._get32(4)
+    def esp(self) -> int:
+        return self._get32(4)
+
     @esp.setter
-    def esp(self, v: int): self._set32(4, v)
+    def esp(self, v: int):
+        self._set32(4, v)
+
     @property
-    def ebp(self) -> int: return self._get32(5)
+    def ebp(self) -> int:
+        return self._get32(5)
+
     @ebp.setter
-    def ebp(self, v: int): self._set32(5, v)
+    def ebp(self, v: int):
+        self._set32(5, v)
+
     @property
-    def esi(self) -> int: return self._get32(6)
+    def esi(self) -> int:
+        return self._get32(6)
+
     @esi.setter
-    def esi(self, v: int): self._set32(6, v)
+    def esi(self, v: int):
+        self._set32(6, v)
+
     @property
-    def edi(self) -> int: return self._get32(7)
+    def edi(self) -> int:
+        return self._get32(7)
+
     @edi.setter
-    def edi(self, v: int): self._set32(7, v)
+    def edi(self, v: int):
+        self._set32(7, v)
+
     @property
-    def eip(self) -> int: return self._eip
+    def eip(self) -> int:
+        return self._eip
+
     @eip.setter
-    def eip(self, v: int): self._eip = v & 0xFFFFFFFF
+    def eip(self, v: int):
+        self._eip = v & 0xFFFFFFFF
+
     @property
-    def esp_val(self) -> int: return self._get32(4)
+    def esp_val(self) -> int:
+        return self._get32(4)
 
     # ── EFLAGS ───────────────────────────────────────────────────────────
 
@@ -5563,17 +6067,28 @@ class X86CPU:
             self._eflags &= ~mask
 
     @property
-    def cf(self) -> bool: return self._flag(FLAG_CF)
+    def cf(self) -> bool:
+        return self._flag(FLAG_CF)
+
     @property
-    def zf(self) -> bool: return self._flag(FLAG_ZF)
+    def zf(self) -> bool:
+        return self._flag(FLAG_ZF)
+
     @property
-    def sf(self) -> bool: return self._flag(FLAG_SF)
+    def sf(self) -> bool:
+        return self._flag(FLAG_SF)
+
     @property
-    def of(self) -> bool: return self._flag(FLAG_OF)
+    def of(self) -> bool:
+        return self._flag(FLAG_OF)
+
     @property
-    def df(self) -> bool: return self._flag(FLAG_DF)
+    def df(self) -> bool:
+        return self._flag(FLAG_DF)
+
     @property
-    def if_(self) -> bool: return self._flag(FLAG_IF)
+    def if_(self) -> bool:
+        return self._flag(FLAG_IF)
 
     def _update_flags_add(self, a: int, b: int, result: int, bits: int = 32):
         mask = (1 << bits) - 1
@@ -5680,7 +6195,7 @@ class X86CPU:
         reg = (modrm >> 3) & 7
         rm = modrm & 7
 
-        rm_is_reg = (mod == 3)
+        rm_is_reg = mod == 3
         if rm_is_reg:
             return reg, True, rm
 
@@ -5721,28 +6236,40 @@ class X86CPU:
         return self._read_rm_mem(rm_val, width)
 
     def _read_rm_reg(self, idx, width):
-        if width == 32: return self._get32(idx)
-        if width == 16: return self._get16(idx)
-        if width == 8 and idx < 4: return self._get8l(idx)
-        if width == 8: return self._get8h(idx - 4)
+        if width == 32:
+            return self._get32(idx)
+        if width == 16:
+            return self._get16(idx)
+        if width == 8 and idx < 4:
+            return self._get8l(idx)
+        if width == 8:
+            return self._get8h(idx - 4)
         return 0
 
     def _write_rm_reg(self, idx, width, val):
-        if width == 32: self._set32(idx, val)
-        elif width == 16: self._set16(idx, val)
-        elif width == 8 and idx < 4: self._set8l(idx, val)
-        elif width == 8: self._set8h(idx - 4, val)
+        if width == 32:
+            self._set32(idx, val)
+        elif width == 16:
+            self._set16(idx, val)
+        elif width == 8 and idx < 4:
+            self._set8l(idx, val)
+        elif width == 8:
+            self._set8h(idx - 4, val)
 
     def _read_rm_mem(self, addr, width):
-        if width == 32: return self._read32(addr)
-        if width == 16: return self._read16(addr)
+        if width == 32:
+            return self._read32(addr)
+        if width == 16:
+            return self._read16(addr)
         return self._read8(addr)
 
     def _write_rm_mem(self, addr, width, val):
-        if width == 32: self._write32(addr, val)
+        if width == 32:
+            self._write32(addr, val)
         elif width == 16:
             struct.pack_into("<H", self._mem, addr & 0xFFFFFFFF, val & 0xFFFF)
-        else: self._write8(addr, val)
+        else:
+            self._write8(addr, val)
 
     def _read16(self, addr: int) -> int:
         return struct.unpack_from("<H", self._mem, addr & 0xFFFFFFFF)[0]
@@ -5789,12 +6316,14 @@ class X86CPU:
         try:
             if self._trace_enabled:
                 opcode_byte = self._mem[start_eip] if start_eip < len(self._mem) else 0
-                self._trace.append({
-                    "step": self._step_count,
-                    "eip": start_eip,
-                    "opcode": f"0x{opcode_byte:02X}",
-                    "operands": "",
-                })
+                self._trace.append(
+                    {
+                        "step": self._step_count,
+                        "eip": start_eip,
+                        "opcode": f"0x{opcode_byte:02X}",
+                        "operands": "",
+                    }
+                )
             self._exec_one()
         except Halt:
             return False
@@ -5835,13 +6364,17 @@ class X86CPU:
 
         # ── CLI / STI / CLD / STD ──
         if opcode == 0xFA:
-            self._set_flag(FLAG_IF, False); return
+            self._set_flag(FLAG_IF, False)
+            return
         if opcode == 0xFB:
-            self._set_flag(FLAG_IF, True); return
+            self._set_flag(FLAG_IF, True)
+            return
         if opcode == 0xFC:
-            self._set_flag(FLAG_DF, False); return
+            self._set_flag(FLAG_DF, False)
+            return
         if opcode == 0xFD:
-            self._set_flag(FLAG_DF, True); return
+            self._set_flag(FLAG_DF, True)
+            return
 
         # ── LOOP / LOOPE / LOOPNE / JECXZ (E0-E3) ──
         if opcode in (0xE0, 0xE1, 0xE2, 0xE3):
@@ -5889,9 +6422,11 @@ class X86CPU:
 
         # ── RET / RETF ──
         if opcode == 0xC3:
-            self._eip = self._pop32(); return
+            self._eip = self._pop32()
+            return
         if opcode == 0xCB:
-            self._eip = self._pop32(); self._pop32()  # pop CS (ignored)
+            self._eip = self._pop32()
+            self._pop32()  # pop CS (ignored)
             return
 
         # ── INT imm8 ──
@@ -6399,22 +6934,38 @@ class X86CPU:
 
         # ── ADD/SUB/AND/OR/XOR/CMP/TEST r/m32, r32 (01-03, 09-0B, 21-23, 29-2B, 31-33, 39-3B, 84-85) ──
         alu_ops = {
-            0x01: (0, 32), 0x03: (0, 32),  # ADD
-            0x09: (1, 32), 0x0B: (1, 32),  # OR
-            0x11: (2, 32), 0x13: (2, 32),  # ADC
-            0x19: (3, 32), 0x1B: (3, 32),  # SBB
-            0x21: (4, 32), 0x23: (4, 32),  # AND
-            0x29: (5, 32), 0x2B: (5, 32),  # SUB
-            0x31: (6, 32), 0x33: (6, 32),  # XOR
-            0x39: (7, 32), 0x3B: (7, 32),  # CMP
-            0x00: (0, 8),  0x02: (0, 8),   # ADD8
-            0x08: (1, 8),  0x0A: (1, 8),   # OR8
-            0x10: (2, 8),  0x12: (2, 8),   # ADC8
-            0x18: (3, 8),  0x1A: (3, 8),   # SBB8
-            0x20: (4, 8),  0x22: (4, 8),   # AND8
-            0x28: (5, 8),  0x2A: (5, 8),   # SUB8
-            0x30: (6, 8),  0x32: (6, 8),   # XOR8
-            0x38: (7, 8),  0x3A: (7, 8),   # CMP8
+            0x01: (0, 32),
+            0x03: (0, 32),  # ADD
+            0x09: (1, 32),
+            0x0B: (1, 32),  # OR
+            0x11: (2, 32),
+            0x13: (2, 32),  # ADC
+            0x19: (3, 32),
+            0x1B: (3, 32),  # SBB
+            0x21: (4, 32),
+            0x23: (4, 32),  # AND
+            0x29: (5, 32),
+            0x2B: (5, 32),  # SUB
+            0x31: (6, 32),
+            0x33: (6, 32),  # XOR
+            0x39: (7, 32),
+            0x3B: (7, 32),  # CMP
+            0x00: (0, 8),
+            0x02: (0, 8),  # ADD8
+            0x08: (1, 8),
+            0x0A: (1, 8),  # OR8
+            0x10: (2, 8),
+            0x12: (2, 8),  # ADC8
+            0x18: (3, 8),
+            0x1A: (3, 8),  # SBB8
+            0x20: (4, 8),
+            0x22: (4, 8),  # AND8
+            0x28: (5, 8),
+            0x2A: (5, 8),  # SUB8
+            0x30: (6, 8),
+            0x32: (6, 8),  # XOR8
+            0x38: (7, 8),
+            0x3A: (7, 8),  # CMP8
         }
         if opcode in alu_ops:
             alu_op, width = alu_ops[opcode]
@@ -6443,14 +6994,22 @@ class X86CPU:
 
         # ── Accumulator-immediate ALU (04/05/0C/0D/14/15/1C/1D/24/25/2C/2D/34/35/3C/3D) ──
         _alu_acc_imm = {
-            0x04: (0, 8),  0x05: (0, 32),   # ADD AL,imm8 / EAX,imm32
-            0x0C: (1, 8),  0x0D: (1, 32),   # OR  AL,imm8 / EAX,imm32
-            0x14: (2, 8),  0x15: (2, 32),   # ADC AL,imm8 / EAX,imm32
-            0x1C: (3, 8),  0x1D: (3, 32),   # SBB AL,imm8 / EAX,imm32
-            0x24: (4, 8),  0x25: (4, 32),   # AND AL,imm8 / EAX,imm32
-            0x2C: (5, 8),  0x2D: (5, 32),   # SUB AL,imm8 / EAX,imm32
-            0x34: (6, 8),  0x35: (6, 32),   # XOR AL,imm8 / EAX,imm32
-            0x3C: (7, 8),  0x3D: (7, 32),   # CMP AL,imm8 / EAX,imm32
+            0x04: (0, 8),
+            0x05: (0, 32),  # ADD AL,imm8 / EAX,imm32
+            0x0C: (1, 8),
+            0x0D: (1, 32),  # OR  AL,imm8 / EAX,imm32
+            0x14: (2, 8),
+            0x15: (2, 32),  # ADC AL,imm8 / EAX,imm32
+            0x1C: (3, 8),
+            0x1D: (3, 32),  # SBB AL,imm8 / EAX,imm32
+            0x24: (4, 8),
+            0x25: (4, 32),  # AND AL,imm8 / EAX,imm32
+            0x2C: (5, 8),
+            0x2D: (5, 32),  # SUB AL,imm8 / EAX,imm32
+            0x34: (6, 8),
+            0x35: (6, 32),  # XOR AL,imm8 / EAX,imm32
+            0x3C: (7, 8),
+            0x3D: (7, 32),  # CMP AL,imm8 / EAX,imm32
         }
         if opcode in _alu_acc_imm:
             alu_op, width = _alu_acc_imm[opcode]
@@ -6611,8 +7170,7 @@ class X86CPU:
 
         # ── STOSW (AB) ──
         if opcode == 0xAB:
-            struct.pack_into("<H", self._mem, self._get32(7) & 0xFFFFFFFF,
-                             self._get16(0))
+            struct.pack_into("<H", self._mem, self._get32(7) & 0xFFFFFFFF, self._get16(0))
             if self._flag(FLAG_DF):
                 self._set32(7, (self._get32(7) - 2) & 0xFFFFFFFF)
             else:
@@ -6671,22 +7229,30 @@ class X86CPU:
             if opcode2 == 0xA4:  # REP MOVSB
                 while count > 0:
                     self._write8(self._get32(7), self._read8(self._get32(6)))
-                    self._set32(6, (self._get32(6) + (1 if not self._flag(FLAG_DF) else -1)) & 0xFFFFFFFF)
-                    self._set32(7, (self._get32(7) + (1 if not self._flag(FLAG_DF) else -1)) & 0xFFFFFFFF)
+                    self._set32(
+                        6, (self._get32(6) + (1 if not self._flag(FLAG_DF) else -1)) & 0xFFFFFFFF
+                    )
+                    self._set32(
+                        7, (self._get32(7) + (1 if not self._flag(FLAG_DF) else -1)) & 0xFFFFFFFF
+                    )
                     count -= 1
                 self._set32(1, 0)
                 return
             if opcode2 == 0xAC:  # REP LODSB
                 while count > 0:
                     self._set8l(0, self._read8(self._get32(6)))
-                    self._set32(6, (self._get32(6) + (1 if not self._flag(FLAG_DF) else -1)) & 0xFFFFFFFF)
+                    self._set32(
+                        6, (self._get32(6) + (1 if not self._flag(FLAG_DF) else -1)) & 0xFFFFFFFF
+                    )
                     count -= 1
                 self._set32(1, 0)
                 return
             if opcode2 == 0xAA:  # REP STOSB
                 while count > 0:
                     self._write8(self._get32(7), self._get8l(0))
-                    self._set32(7, (self._get32(7) + (1 if not self._flag(FLAG_DF) else -1)) & 0xFFFFFFFF)
+                    self._set32(
+                        7, (self._get32(7) + (1 if not self._flag(FLAG_DF) else -1)) & 0xFFFFFFFF
+                    )
                     count -= 1
                 self._set32(1, 0)
                 return
@@ -6865,8 +7431,10 @@ class X86CPU:
                 else:
                     a = self._read8(rm_val)
                 b = self._get8l(0)
-                if a & 0x80: a |= 0xFFFFFF00
-                if b & 0x80: b |= 0xFFFFFF00
+                if a & 0x80:
+                    a |= 0xFFFFFF00
+                if b & 0x80:
+                    b |= 0xFFFFFF00
                 result = (a * b) & 0xFFFFFFFF
                 self._set16(0, result & 0xFFFF)
                 sign = ((result >> 15) & 1) == ((result >> 7) & 1)
@@ -7232,14 +7800,22 @@ class X86CPU:
 
         # ALU r/m16, r16 / r16, r/m16 (16-bit reg forms)
         _alu_r16_rm16 = {
-            0x01: 0, 0x03: 0,  # ADD
-            0x09: 1, 0x0B: 1,  # OR
-            0x11: 2, 0x13: 2,  # ADC
-            0x19: 3, 0x1B: 3,  # SBB
-            0x21: 4, 0x23: 4,  # AND
-            0x29: 5, 0x2B: 5,  # SUB
-            0x31: 6, 0x33: 6,  # XOR
-            0x39: 7, 0x3B: 7,  # CMP
+            0x01: 0,
+            0x03: 0,  # ADD
+            0x09: 1,
+            0x0B: 1,  # OR
+            0x11: 2,
+            0x13: 2,  # ADC
+            0x19: 3,
+            0x1B: 3,  # SBB
+            0x21: 4,
+            0x23: 4,  # AND
+            0x29: 5,
+            0x2B: 5,  # SUB
+            0x31: 6,
+            0x33: 6,  # XOR
+            0x39: 7,
+            0x3B: 7,  # CMP
         }
         if opcode in _alu_r16_rm16:
             alu_op = _alu_r16_rm16[opcode]
@@ -7265,14 +7841,22 @@ class X86CPU:
 
         # ALU r/m8, r8 / r8, r/m8 (8-bit reg forms)
         _alu_r8_rm8 = {
-            0x00: 0, 0x02: 0,  # ADD
-            0x08: 1, 0x0A: 1,  # OR
-            0x10: 2, 0x12: 2,  # ADC
-            0x18: 3, 0x1A: 3,  # SBB
-            0x20: 4, 0x22: 4,  # AND
-            0x28: 5, 0x2A: 5,  # SUB
-            0x30: 6, 0x32: 6,  # XOR
-            0x38: 7, 0x3A: 7,  # CMP
+            0x00: 0,
+            0x02: 0,  # ADD
+            0x08: 1,
+            0x0A: 1,  # OR
+            0x10: 2,
+            0x12: 2,  # ADC
+            0x18: 3,
+            0x1A: 3,  # SBB
+            0x20: 4,
+            0x22: 4,  # AND
+            0x28: 5,
+            0x2A: 5,  # SUB
+            0x30: 6,
+            0x32: 6,  # XOR
+            0x38: 7,
+            0x3A: 7,  # CMP
         }
         if opcode in _alu_r8_rm8:
             alu_op = _alu_r8_rm8[opcode]
@@ -7298,14 +7882,22 @@ class X86CPU:
 
         # Accumulator-immediate ALU, 16-bit mode (0x66 04/05/0C/0D/14/15/1C/1D/24/25/2C/2D/34/35/3C/3D)
         _alu_acc_imm16 = {
-            0x04: (0, 8),  0x05: (0, 16),   # ADD AL,imm8 / AX,imm16
-            0x0C: (1, 8),  0x0D: (1, 16),   # OR  AL,imm8 / AX,imm16
-            0x14: (2, 8),  0x15: (2, 16),   # ADC AL,imm8 / AX,imm16
-            0x1C: (3, 8),  0x1D: (3, 16),   # SBB AL,imm8 / AX,imm16
-            0x24: (4, 8),  0x25: (4, 16),   # AND AL,imm8 / AX,imm16
-            0x2C: (5, 8),  0x2D: (5, 16),   # SUB AL,imm8 / AX,imm16
-            0x34: (6, 8),  0x35: (6, 16),   # XOR AL,imm8 / AX,imm16
-            0x3C: (7, 8),  0x3D: (7, 16),   # CMP AL,imm8 / AX,imm16
+            0x04: (0, 8),
+            0x05: (0, 16),  # ADD AL,imm8 / AX,imm16
+            0x0C: (1, 8),
+            0x0D: (1, 16),  # OR  AL,imm8 / AX,imm16
+            0x14: (2, 8),
+            0x15: (2, 16),  # ADC AL,imm8 / AX,imm16
+            0x1C: (3, 8),
+            0x1D: (3, 16),  # SBB AL,imm8 / AX,imm16
+            0x24: (4, 8),
+            0x25: (4, 16),  # AND AL,imm8 / AX,imm16
+            0x2C: (5, 8),
+            0x2D: (5, 16),  # SUB AL,imm8 / AX,imm16
+            0x34: (6, 8),
+            0x35: (6, 16),  # XOR AL,imm8 / AX,imm16
+            0x3C: (7, 8),
+            0x3D: (7, 16),  # CMP AL,imm8 / AX,imm16
         }
         if opcode in _alu_acc_imm16:
             alu_op, width = _alu_acc_imm16[opcode]
@@ -7565,7 +8157,9 @@ class X86CPU:
                 return
             return
 
-        raise InsFault(f"unknown opcode 0x66 0x{opcode:02X} at EIP=0x{(self._eip - 1) & 0xFFFFFFFF:X}")
+        raise InsFault(
+            f"unknown opcode 0x66 0x{opcode:02X} at EIP=0x{(self._eip - 1) & 0xFFFFFFFF:X}"
+        )
 
     # ── ALU operations ───────────────────────────────────────────────────
 
@@ -7652,24 +8246,44 @@ class X86CPU:
 
     def _cc_condition(self, cc: int) -> bool:
         """Evaluate x86 condition code (0-15) against current flags."""
-        if cc == 0x0: return self._flag(FLAG_OF)             # JO
-        if cc == 0x1: return not self._flag(FLAG_OF)         # JNO
-        if cc == 0x2: return self._flag(FLAG_CF)             # JB/JC
-        if cc == 0x3: return not self._flag(FLAG_CF)         # JAE/JNC
-        if cc == 0x4: return self._flag(FLAG_ZF)             # JE/JZ
-        if cc == 0x5: return not self._flag(FLAG_ZF)         # JNE/JNZ
-        if cc == 0x6: return (self._flag(FLAG_CF) or         # JBE
-                              self._flag(FLAG_ZF))
-        if cc == 0x7: return (not self._flag(FLAG_CF) and    # JA
-                              not self._flag(FLAG_ZF))
-        if cc == 0x8: return self._flag(FLAG_SF)             # JS
-        if cc == 0x9: return not self._flag(FLAG_SF)         # JNS
-        if cc == 0xA: return self._flag(FLAG_PF)             # JP
-        if cc == 0xB: return not self._flag(FLAG_PF)         # JNP
-        if cc == 0xC: return self._flag(FLAG_SF) != self._flag(FLAG_OF)  # JL
-        if cc == 0xD: return self._flag(FLAG_SF) == self._flag(FLAG_OF)  # JGE
-        if cc == 0xE: return self._flag(FLAG_ZF) or self._flag(FLAG_SF) != self._flag(FLAG_OF)  # JLE
-        if cc == 0xF: return not self._flag(FLAG_ZF) and self._flag(FLAG_SF) == self._flag(FLAG_OF)  # JG
+        if cc == 0x0:
+            return self._flag(FLAG_OF)  # JO
+        if cc == 0x1:
+            return not self._flag(FLAG_OF)  # JNO
+        if cc == 0x2:
+            return self._flag(FLAG_CF)  # JB/JC
+        if cc == 0x3:
+            return not self._flag(FLAG_CF)  # JAE/JNC
+        if cc == 0x4:
+            return self._flag(FLAG_ZF)  # JE/JZ
+        if cc == 0x5:
+            return not self._flag(FLAG_ZF)  # JNE/JNZ
+        if cc == 0x6:
+            return (
+                self._flag(FLAG_CF)  # JBE
+                or self._flag(FLAG_ZF)
+            )
+        if cc == 0x7:
+            return (
+                not self._flag(FLAG_CF)  # JA
+                and not self._flag(FLAG_ZF)
+            )
+        if cc == 0x8:
+            return self._flag(FLAG_SF)  # JS
+        if cc == 0x9:
+            return not self._flag(FLAG_SF)  # JNS
+        if cc == 0xA:
+            return self._flag(FLAG_PF)  # JP
+        if cc == 0xB:
+            return not self._flag(FLAG_PF)  # JNP
+        if cc == 0xC:
+            return self._flag(FLAG_SF) != self._flag(FLAG_OF)  # JL
+        if cc == 0xD:
+            return self._flag(FLAG_SF) == self._flag(FLAG_OF)  # JGE
+        if cc == 0xE:
+            return self._flag(FLAG_ZF) or self._flag(FLAG_SF) != self._flag(FLAG_OF)  # JLE
+        if cc == 0xF:
+            return not self._flag(FLAG_ZF) and self._flag(FLAG_SF) == self._flag(FLAG_OF)  # JG
         return False
 
     # ── Debug / inspection ───────────────────────────────────────────────
@@ -7677,8 +8291,12 @@ class X86CPU:
     def reg_dump(self) -> str:
         """Return formatted register dump."""
         lines = []
-        lines.append(f"EAX={self.eax:08X}  ECX={self.ecx:08X}  EDX={self.edx:08X}  EBX={self.ebx:08X}")
-        lines.append(f"ESP={self.esp:08X}  EBP={self.ebp:08X}  ESI={self.esi:08X}  EDI={self.edi:08X}")
+        lines.append(
+            f"EAX={self.eax:08X}  ECX={self.ecx:08X}  EDX={self.edx:08X}  EBX={self.ebx:08X}"
+        )
+        lines.append(
+            f"ESP={self.esp:08X}  EBP={self.ebp:08X}  ESI={self.esi:08X}  EDI={self.edi:08X}"
+        )
         lines.append(f"EIP={self.eip:08X}  EFLAGS={self._eflags:08X} [{self.eflags_str()}]")
         return "\n".join(lines)
 
@@ -7710,8 +8328,8 @@ class X86CPU:
 
 # ── Interactive Shell ─────────────────────────────────────────────────────────
 
-import time
 import threading
+import time
 
 # Minimal x86 kernel shell assembly — reads keyboard, echoes to screen
 _SHELL_ASM = """\
@@ -7857,8 +8475,7 @@ class X86Shell:
         code = self._asm.assemble(self._source)
         self._cpu.load(code, 0x1000)
         self._running = True
-        self._thread = threading.Thread(target=self._run_loop,
-                                         args=(max_steps,), daemon=True)
+        self._thread = threading.Thread(target=self._run_loop, args=(max_steps,), daemon=True)
         self._thread.start()
 
     def _run_loop(self, max_steps: int):
@@ -7892,7 +8509,7 @@ class X86Shell:
             for col in range(width):
                 offset = (row * width + col) * 2
                 ch = self._cpu._mem[0xB8000 + offset]
-                line += chr(ch) if 32 <= ch < 127 else ' '
+                line += chr(ch) if 32 <= ch < 127 else " "
             lines.append(line.rstrip())
         return "\n".join(lines)
 
@@ -7902,6 +8519,7 @@ class X86Shell:
 
 
 # ── Program Loader ───────────────────────────────────────────────────────────
+
 
 class DiskProgramLoader:
     """Load and execute programs from a FlatFS filesystem.
@@ -7917,21 +8535,20 @@ class DiskProgramLoader:
 
     def list_programs(self) -> list[str]:
         """List all .asm files on the filesystem."""
-        return [f for f in self._fs.list_files() if f.endswith('.asm')]
+        return [f for f in self._fs.list_files() if f.endswith(".asm")]
 
     def load_source(self, name: str) -> str:
         """Read assembly source from filesystem."""
-        if not name.endswith('.asm'):
-            name = name + '.asm'
+        if not name.endswith(".asm"):
+            name = name + ".asm"
         data = self._fs.read(name)
-        return data.decode('utf-8', errors='replace').rstrip('\x00')
+        return data.decode("utf-8", errors="replace").rstrip("\x00")
 
     def assemble(self, source: str) -> list:
         """Assemble source into instructions."""
         return self._assembler.assemble(source)
 
-    def run(self, name: str, max_steps: int = 10000,
-            stdin_fn=None, stdout_fn=None) -> dict:
+    def run(self, name: str, max_steps: int = 10000, stdin_fn=None, stdout_fn=None) -> dict:
         """Load, assemble, and run a program. Returns output and stats."""
         source = self.load_source(name)
         instructions = self.assemble(source)
@@ -7952,12 +8569,13 @@ class DiskProgramLoader:
 
     def save_program(self, name: str, source: str) -> None:
         """Save assembly source to filesystem."""
-        if not name.endswith('.asm'):
-            name = name + '.asm'
-        self._fs.write(name, source.encode('utf-8'))
+        if not name.endswith(".asm"):
+            name = name + ".asm"
+        self._fs.write(name, source.encode("utf-8"))
 
 
 # ── Integrated Virtual System ────────────────────────────────────────────────
+
 
 class VirtualSystem:
     """Integrated virtual computer — CPU + Memory + DeviceBus + optional devices.
@@ -7965,8 +8583,14 @@ class VirtualSystem:
     Wires together the components into a single runnable system.
     """
 
-    def __init__(self, enable_block: bool = False, enable_console: bool = True,
-                 stdin_fn=None, stdout_fn=None, syscall_handler=None):
+    def __init__(
+        self,
+        enable_block: bool = False,
+        enable_console: bool = True,
+        stdin_fn=None,
+        stdout_fn=None,
+        syscall_handler=None,
+    ):
         self.memory = Memory()
         self.bus = DeviceBus()
 
@@ -8015,6 +8639,7 @@ class VirtualSystem:
 
 # ── Page Frame Allocator ─────────────────────────────────────────────────────
 
+
 class PageFrameAllocator:
     """Bitmap-based physical page frame allocator.
 
@@ -8034,8 +8659,11 @@ class PageFrameAllocator:
 
     PAGE_SIZE = 0x1000  # 4 KB
 
-    def __init__(self, total_memory: int = 4 * 1024 * 1024,
-                 reserved_ranges: list[tuple[int, int]] | None = None):
+    def __init__(
+        self,
+        total_memory: int = 4 * 1024 * 1024,
+        reserved_ranges: list[tuple[int, int]] | None = None,
+    ):
         """Initialize the page frame allocator.
 
         Args:
@@ -8065,7 +8693,7 @@ class PageFrameAllocator:
         bit_idx = frame & 7
         if byte_idx < len(self._bitmap):
             if not (self._bitmap[byte_idx] & (1 << bit_idx)):
-                self._bitmap[byte_idx] |= (1 << bit_idx)
+                self._bitmap[byte_idx] |= 1 << bit_idx
                 self._allocated_count += 1
 
     def _is_allocated(self, frame: int) -> bool:
@@ -8135,12 +8763,14 @@ class PageFrameAllocator:
 
 # ── Process Control Block ───────────────────────────────────────────────────
 
+
 class ProcessState:
     """Process lifecycle states."""
+
     CREATED = "created"
     READY = "ready"
     RUNNING = "running"
-    WAITING = "waiting"    # blocked on I/O
+    WAITING = "waiting"  # blocked on I/O
     TERMINATED = "terminated"
 
 
@@ -8173,9 +8803,9 @@ class ProcessControlBlock:
         self.eflags = 0x00000002  # bit 1 always set
 
         # Memory
-        self.stack_base = 0       # start of stack region
-        self.stack_size = 0       # size in bytes
-        self.heap_base = 0        # start of heap region
+        self.stack_base = 0  # start of stack region
+        self.stack_size = 0  # size in bytes
+        self.heap_base = 0  # start of heap region
         self.heap_size = 0
 
         # I/O
@@ -8183,9 +8813,9 @@ class ProcessControlBlock:
         self.stdout_fd = -1
 
         # Scheduling
-        self.time_slice = 0       # remaining ticks in current quantum
-        self.total_ticks = 0      # total CPU ticks consumed
-        self.wait_ticks = 0       # ticks spent waiting
+        self.time_slice = 0  # remaining ticks in current quantum
+        self.total_ticks = 0  # total CPU ticks consumed
+        self.wait_ticks = 0  # ticks spent waiting
 
         # Accounting
         self.exit_code = 0
@@ -8219,11 +8849,11 @@ class ProcessControlBlock:
         cpu._eflags = self.eflags & 0xFFFFFFFF
 
     def __repr__(self):
-        return (f"PCB(pid={self.pid}, name={self.name!r}, "
-                f"state={self.state}, eip=0x{self.eip:08X})")
+        return f"PCB(pid={self.pid}, name={self.name!r}, state={self.state}, eip=0x{self.eip:08X})"
 
 
 # ── Process Table ────────────────────────────────────────────────────────────
+
 
 class ProcessTable:
     """Central process table — the kernel's view of all processes."""
@@ -8266,11 +8896,11 @@ class ProcessTable:
         return len(self._processes)
 
     def alive_count(self) -> int:
-        return sum(1 for p in self._processes.values()
-                   if p.state != ProcessState.TERMINATED)
+        return sum(1 for p in self._processes.values() if p.state != ProcessState.TERMINATED)
 
 
 # ── Scheduler ────────────────────────────────────────────────────────────────
+
 
 class Scheduler:
     """Round-robin preemptive scheduler.
@@ -8427,6 +9057,7 @@ class Scheduler:
 
 # ── Syscall Handler (INT 0x80) ──────────────────────────────────────────────
 
+
 class X86SyscallHandler:
     """INT 0x80 syscall dispatcher for x86.
 
@@ -8500,9 +9131,14 @@ class X86SyscallHandler:
     SYS_TRAIN_STATUS = 29
     SYS_TRAIN_GET_RESULT = 30
 
-    def __init__(self, cpu: X86CPU, process_table: ProcessTable,
-                 scheduler: Scheduler, memory: 'PageFrameAllocator',
-                 filesystem: FlatFS | None = None):
+    def __init__(
+        self,
+        cpu: X86CPU,
+        process_table: ProcessTable,
+        scheduler: Scheduler,
+        memory: PageFrameAllocator,
+        filesystem: FlatFS | None = None,
+    ):
         self._cpu = cpu
         self._ptable = process_table
         self._scheduler = scheduler
@@ -8529,6 +9165,7 @@ class X86SyscallHandler:
 
         # RBAC layer
         from .vm_permissions import X86RBAC, Permission
+
         self._rbac = X86RBAC()
         self._Permission = Permission
 
@@ -8582,9 +9219,10 @@ class X86SyscallHandler:
         if not allowed:
             role = self._rbac.role_of(pid)
             import logging
+
             logging.getLogger("x86.rbac").debug(
-                "DENY pid=%d syscall=%d role=%s need=%s",
-                pid, syscall_num, role.name, required.name)
+                "DENY pid=%d syscall=%d role=%s need=%s", pid, syscall_num, role.name, required.name
+            )
         return allowed
 
     def handle(self):
@@ -8653,7 +9291,7 @@ class X86SyscallHandler:
                 break
             chars.append(chr(b))
             addr += 1
-        return ''.join(chars)
+        return "".join(chars)
 
     def _write_string(self, addr: int, s: str):
         """Write a string to CPU memory (null-terminated)."""
@@ -8698,8 +9336,8 @@ class X86SyscallHandler:
         data = bytes(self._cpu._read8(buf_addr + i) for i in range(count))
         if fd == 1 or fd == 2:
             # stdout/stderr — write to console
-            text = data.decode('ascii', errors='replace')
-            logger.debug(text, end='', flush=True)
+            text = data.decode("ascii", errors="replace")
+            logger.debug(text, end="", flush=True)
             return count
         elif self._fs and fd in self._fd_table:
             filename = self._fd_table[fd]
@@ -8722,7 +9360,7 @@ class X86SyscallHandler:
         self._fd_table[fd] = filename
         if mode == 2:
             if not self._fs.exists(filename):
-                self._fs.write(filename, b'')
+                self._fs.write(filename, b"")
         return fd
 
     def _sys_close(self, fd: int) -> int:
@@ -8740,8 +9378,7 @@ class X86SyscallHandler:
         if child_stack is None:
             return -1
 
-        child = self._ptable.create(name=current.name + "_child",
-                                     priority=current.priority)
+        child = self._ptable.create(name=current.name + "_child", priority=current.priority)
         child.parent_pid = current.pid
         current.children.append(child.pid)
         self._rbac.inherit(child.pid, current.pid)
@@ -8793,19 +9430,19 @@ class X86SyscallHandler:
         # Strip trailing NUL bytes: FlatFS pads short files to full blocks,
         # so a genuinely empty file would otherwise assemble to NOPs.
         data = self._fs.read(filename).rstrip(b"\x00")
-        source = data.decode('utf-8', errors='replace')
+        source = data.decode("utf-8", errors="replace")
 
         # Default to 32-bit mode if no BITS directive present
-        if '[BITS' not in source.upper():
-            source = '[BITS 32]\n' + source
+        if "[BITS" not in source.upper():
+            source = "[BITS 32]\n" + source
 
         asm = X86Assembler()
         try:
             code = asm.assemble(source)
         except Exception as e:
             import logging
-            logging.getLogger("slo.vm").warning(
-                "Assembly failed: %s", e, extra={"tag": "VM"})
+
+            logging.getLogger("slo.vm").warning("Assembly failed: %s", e, extra={"tag": "VM"})
             return -1
 
         if not code:
@@ -8829,11 +9466,12 @@ class X86SyscallHandler:
             code = X86Assembler().assemble(source, org=base)
         except Exception as exc:
             import logging
+
             logging.getLogger("slo.vm").warning("Assembly failed: %s", exc)
             return -1
 
         # Load code at base address
-        self._cpu._mem[base:base + len(code)] = code
+        self._cpu._mem[base : base + len(code)] = code
 
         # Reset process state for new program
         current.eip = base
@@ -8905,6 +9543,7 @@ class X86SyscallHandler:
         """
         config_str = self._read_string(config_addr)
         from .vm_training_bridge import get_bridge
+
         return get_bridge().start(config_str)
 
     def _sys_train_status(self, job_id: int) -> int:
@@ -8915,6 +9554,7 @@ class X86SyscallHandler:
         Returns: 0 = running, 1 = completed, 2 = failed, -1 = not found.
         """
         from .vm_training_bridge import get_bridge
+
         s = get_bridge().status(job_id)
         return {"running": 0, "completed": 1, "failed": 2, "not_found": -1}.get(s["status"], -1)
 
@@ -8927,12 +9567,13 @@ class X86SyscallHandler:
         Returns: bytes written (0 if job not completed or not found).
         """
         from .vm_training_bridge import get_bridge
+
         result_json = get_bridge().get_result_json(job_id)
         if result_json is None:
             return 0
         data = (result_json + "\0").encode("utf-8")
         if len(data) > buf_size:
-            data = data[:buf_size - 1] + b"\0"
+            data = data[: buf_size - 1] + b"\0"
         for i, b in enumerate(data):
             self._cpu._write8(buf_addr + i, b)
         return len(data) - 1  # exclude null terminator
@@ -9111,6 +9752,7 @@ class X86SyscallHandler:
 
 # ── PIT (Programmable Interval Timer) ───────────────────────────────────────
 
+
 class PITDevice:
     """Intel 8254 Programmable Interval Timer.
 
@@ -9128,10 +9770,14 @@ class PITDevice:
     CMD_PORT = 0x43
     FREQ = 1193182  # Base PIT frequency in Hz
 
-    def __init__(self, cpu: X86CPU, scheduler: Scheduler,
-                 syscall_handler: X86SyscallHandler | None = None,
-                 target_hz: int = 100,
-                 clock: ClockDevice | None = None):
+    def __init__(
+        self,
+        cpu: X86CPU,
+        scheduler: Scheduler,
+        syscall_handler: X86SyscallHandler | None = None,
+        target_hz: int = 100,
+        clock: ClockDevice | None = None,
+    ):
         self._cpu = cpu
         self._scheduler = scheduler
         self._syscall = syscall_handler
@@ -9183,6 +9829,7 @@ class PITDevice:
 
 # ── X86 Virtual System (OS-integrated) ──────────────────────────────────────
 
+
 class X86VirtualSystem:
     """Integrated x86 virtual computer with OS layer.
 
@@ -9201,10 +9848,13 @@ class X86VirtualSystem:
         vs.start_shell(shell_asm)
     """
 
-    def __init__(self, memory_size: int = 4 * 1024 * 1024,
-                 filesystem: FlatFS | None = None,
-                 timer_hz: int = 100,
-                 quantum: int = 10):
+    def __init__(
+        self,
+        memory_size: int = 4 * 1024 * 1024,
+        filesystem: FlatFS | None = None,
+        timer_hz: int = 100,
+        quantum: int = 10,
+    ):
         # Memory allocator
         # Reserve: 0-0x100000 (low 1 MB: IVT, GDT, kernel, VGA)
         self._allocator = PageFrameAllocator(
@@ -9212,13 +9862,13 @@ class X86VirtualSystem:
             reserved_ranges=[
                 (0, 0x100000),
                 (0xB8000, 0xC0000),
-            ]
+            ],
         )
 
         # Filesystem
         if filesystem is not None:
             self._fs = filesystem
-            self._block = filesystem._block if hasattr(filesystem, '_block') else BlockDevice()
+            self._block = filesystem._block if hasattr(filesystem, "_block") else BlockDevice()
         else:
             self._block = BlockDevice()
             self._fs = FlatFS(self._block)
@@ -9281,6 +9931,7 @@ class X86VirtualSystem:
         self._kernel.esp = memory_size - 4
         self._scheduler._current_pid = self._kernel.pid
         from .vm_permissions import Role
+
         self._syscall._rbac.assign(self._kernel.pid, Role.KERNEL)
 
     @property
@@ -9341,7 +9992,7 @@ class X86VirtualSystem:
         base = org
 
         # Load code at the org address
-        self._cpu._mem[base:base + code_size] = code
+        self._cpu._mem[base : base + code_size] = code
 
         # Create process
         pcb = self._ptable.create(name=name)
@@ -9405,8 +10056,7 @@ class X86VirtualSystem:
                 "total": self._ptable.count(),
                 "alive": self._ptable.alive_count(),
                 "list": [
-                    {"pid": p.pid, "name": p.name, "state": p.state,
-                     "eip": f"0x{p.eip:08X}"}
+                    {"pid": p.pid, "name": p.name, "state": p.state, "eip": f"0x{p.eip:08X}"}
                     for p in self._ptable.all()
                 ],
             },
@@ -9421,13 +10071,16 @@ class X86VirtualSystem:
             reserved_ranges=[(0, 0x100000), (0xB8000, 0xC0000)],
         )
         self._ptable = ProcessTable()
-        self._scheduler = Scheduler(self._ptable,
-                                     quantum=self._pit._divider if hasattr(self, '_pit') else 10)
+        self._scheduler = Scheduler(
+            self._ptable, quantum=self._pit._divider if hasattr(self, "_pit") else 10
+        )
         self._cpu = X86CPU(memory_size=self._cpu._mem_size)
         # Re-register everything...
         self._syscall = X86SyscallHandler(
-            cpu=self._cpu, process_table=self._ptable,
-            scheduler=self._scheduler, memory=self._allocator,
+            cpu=self._cpu,
+            process_table=self._ptable,
+            scheduler=self._scheduler,
+            memory=self._allocator,
             filesystem=self._fs,
         )
         self._kernel = self._ptable.create(name="kernel", priority=10)
@@ -9436,14 +10089,27 @@ class X86VirtualSystem:
 
 # ── Re-exports from submodules ──────────────────────────────────────────────
 
-from .vm_programs import (  # noqa: E402, F401
-    HELLO_ASM, CLASSICAL_ASM, TENSOR_MATH_ASM, MATRIX_MUL_ASM,
-    NEURAL_NET_ASM, LOOP_ASM, FUNCTION_ASM, MIXED_ASM,
-    NPU_PROGRAM_ASM, COUNTER_ASM, FIB_ASM, COLLATZ_ASM,
-    self_test,
-)
-
 from .vm_devices import (  # noqa: E402, F401
-    TensorDevice, PythonExecDevice, SlonetDevice,
-    MultimodalDevice, EngineDevice, SlonetTrainingDevice, NPUVMDevice,
+    EngineDevice,
+    MultimodalDevice,
+    NPUVMDevice,
+    PythonExecDevice,
+    SlonetDevice,
+    SlonetTrainingDevice,
+    TensorDevice,
+)
+from .vm_programs import (  # noqa: E402, F401
+    CLASSICAL_ASM,
+    COLLATZ_ASM,
+    COUNTER_ASM,
+    FIB_ASM,
+    FUNCTION_ASM,
+    HELLO_ASM,
+    LOOP_ASM,
+    MATRIX_MUL_ASM,
+    MIXED_ASM,
+    NEURAL_NET_ASM,
+    NPU_PROGRAM_ASM,
+    TENSOR_MATH_ASM,
+    self_test,
 )

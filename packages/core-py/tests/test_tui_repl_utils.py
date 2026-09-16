@@ -3,27 +3,29 @@
 from __future__ import annotations
 
 import os
-import tempfile
-import shutil
 
 import pytest
 
-from domain.shell._internal.surface import TextSurface
+from domain.shell._internal.surface import (
+    STYLE_CRITICAL,
+    STYLE_DEBUG,
+    STYLE_ERROR,
+    STYLE_INFO,
+    STYLE_WARN,
+    TextSurface,
+)
 from domain.shell._internal.tui_repl import (
-    _complete_path,
     _ESC_FINALS,
     _STYLE_PAIRS,
     TuiIo,
     TuiRepl,
+    _complete_path,
 )
-from domain.shell._internal.surface import (
-    STYLE_INFO, STYLE_WARN, STYLE_ERROR, STYLE_DEBUG, STYLE_CRITICAL,
-)
-
 
 # ---------------------------------------------------------------------------
 # _complete_path
 # ---------------------------------------------------------------------------
+
 
 class TestCompletePath:
     """Tests for the filesystem path completion helper."""
@@ -78,6 +80,7 @@ class TestCompletePath:
 # Constants
 # ---------------------------------------------------------------------------
 
+
 class TestConstants:
     def test_esc_finals_is_frozen(self):
         assert isinstance(_ESC_FINALS, frozenset)
@@ -97,6 +100,7 @@ class TestConstants:
 # ---------------------------------------------------------------------------
 # TuiIo
 # ---------------------------------------------------------------------------
+
 
 class TestTuiIo:
     def test_write_delegates_to_surface(self):
@@ -126,6 +130,7 @@ class TestTuiIo:
 # TuiRepl — _input_view
 # ---------------------------------------------------------------------------
 
+
 class TestInputView:
     """Tests for the visible-input-line computation."""
 
@@ -138,6 +143,7 @@ class TestInputView:
             console = type("C", (), {"_io": surface, "_tui_repl": None})()
             COMMANDS = {}
             _history = []
+
         return TuiRepl(FakeRepl(), None)
 
     def test_short_buffer(self, repl):
@@ -193,6 +199,7 @@ class TestInputView:
 # TuiRepl — history navigation
 # ---------------------------------------------------------------------------
 
+
 class TestHistoryNavigation:
     @pytest.fixture
     def repl(self):
@@ -203,6 +210,7 @@ class TestHistoryNavigation:
             console = type("C", (), {"_io": surface, "_tui_repl": None})()
             COMMANDS = {}
             _history = []
+
         r = TuiRepl(FakeRepl(), None)
         r._input_buf = []
         r._input_cursor = 0
@@ -254,6 +262,7 @@ class TestHistoryNavigation:
 # TuiRepl — caret movement
 # ---------------------------------------------------------------------------
 
+
 class TestCaretMovement:
     @pytest.fixture
     def repl(self):
@@ -264,6 +273,7 @@ class TestCaretMovement:
             console = type("C", (), {"_io": surface, "_tui_repl": None})()
             COMMANDS = {}
             _history = []
+
         r = TuiRepl(FakeRepl(), None)
         r._input_buf = list("hello world")
         r._input_cursor = 5
@@ -344,6 +354,7 @@ class TestCaretMovement:
 # TuiRepl — transpose
 # ---------------------------------------------------------------------------
 
+
 class TestTransposeChars:
     @pytest.fixture
     def repl(self):
@@ -354,6 +365,7 @@ class TestTransposeChars:
             console = type("C", (), {"_io": surface, "_tui_repl": None})()
             COMMANDS = {}
             _history = []
+
         return TuiRepl(FakeRepl(), None)
 
     def test_transpose_mid_line(self, repl):
@@ -387,6 +399,7 @@ class TestTransposeChars:
 # TuiRepl — kill ring and kill operations
 # ---------------------------------------------------------------------------
 
+
 class TestKillRing:
     @pytest.fixture
     def repl(self):
@@ -397,6 +410,7 @@ class TestKillRing:
             console = type("C", (), {"_io": surface, "_tui_repl": None})()
             COMMANDS = {}
             _history = []
+
         r = TuiRepl(FakeRepl(), None)
         r._input_buf = []
         r._input_cursor = 0
@@ -458,6 +472,7 @@ class TestDeleteOperations:
             console = type("C", (), {"_io": surface, "_tui_repl": None})()
             COMMANDS = {}
             _history = []
+
         r = TuiRepl(FakeRepl(), None)
         r._input_buf = []
         r._input_cursor = 0
@@ -532,6 +547,7 @@ class TestDeleteOperations:
 # TuiRepl — yank (Ctrl+Y)
 # ---------------------------------------------------------------------------
 
+
 class TestYank:
     @pytest.fixture
     def repl(self):
@@ -542,6 +558,7 @@ class TestYank:
             console = type("C", (), {"_io": surface, "_tui_repl": None})()
             COMMANDS = {}
             _history = []
+
         r = TuiRepl(FakeRepl(), None)
         r._input_buf = []
         r._input_cursor = 0
@@ -576,6 +593,7 @@ class TestYank:
 # TuiRepl — history search (_search_back)
 # ---------------------------------------------------------------------------
 
+
 class TestSearchBack:
     @pytest.fixture
     def repl(self):
@@ -586,6 +604,7 @@ class TestSearchBack:
             console = type("C", (), {"_io": surface, "_tui_repl": None})()
             COMMANDS = {}
             _history = []
+
         r = TuiRepl(FakeRepl(), None)
         r._cmd_history = ["foo bar", "baz foo", "bar baz", "foo qux"]
         r._search_q = ""
@@ -637,6 +656,7 @@ class TestSearchBack:
 # TuiRepl — output search (_out_find)
 # ---------------------------------------------------------------------------
 
+
 class TestOutFind:
     @pytest.fixture
     def repl(self):
@@ -650,6 +670,7 @@ class TestOutFind:
             console = type("C", (), {"_io": surface, "_tui_repl": None})()
             COMMANDS = {}
             _history = []
+
         r = TuiRepl(FakeRepl(), None)
         r._output_surface = surface
         r._out_search_q = ""
@@ -687,6 +708,7 @@ class TestOutFind:
             console = type("C", (), {"_io": surface, "_tui_repl": None})()
             COMMANDS = {}
             _history = []
+
         r = TuiRepl(FakeRepl(), None)
         r._output_surface = surface
         r._out_search_q = "test"

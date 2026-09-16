@@ -13,7 +13,7 @@ from __future__ import annotations
 import ctypes
 import logging
 import time
-from typing import Optional, List, Dict, Generator
+from collections.abc import Generator
 
 import numpy as np
 
@@ -37,7 +37,7 @@ def _detect_model_type(config: dict) -> str:
     return "qwen2"
 
 
-def _hf_id_from_slnc_path(slnc_path: str) -> Optional[str]:
+def _hf_id_from_slnc_path(slnc_path: str) -> str | None:
     """Derive the HuggingFace model id from a .slnc path when possible.
 
     Handles HuggingFace cache layouts of the form ``models--<org>--<name>``
@@ -51,16 +51,17 @@ def _hf_id_from_slnc_path(slnc_path: str) -> Optional[str]:
         HuggingFace model id string, or None if not derivable
     """
     import os
+
     parts = os.path.normpath(slnc_path).split(os.sep)
     for part in parts:
         if part.startswith("models--"):
-            slug = part[len("models--"):]
+            slug = part[len("models--") :]
             if "--" in slug:
                 return slug.replace("--", "/", 1)
     return None
 
 
-def _format_chat_qwen(messages: List[Dict[str, str]], system: str = "") -> str:
+def _format_chat_qwen(messages: list[dict[str, str]], system: str = "") -> str:
     parts = []
     if system:
         parts.append(f"{IMS}system\n{system}{IME}")
@@ -72,7 +73,7 @@ def _format_chat_qwen(messages: List[Dict[str, str]], system: str = "") -> str:
     return "".join(parts)
 
 
-def _format_chat_llama(messages: List[Dict[str, str]], system: str = "") -> str:
+def _format_chat_llama(messages: list[dict[str, str]], system: str = "") -> str:
     parts = []
     if system:
         parts.append(f"[INST] <<SYS>>\n{system}\n<</SYS>>\n\n")
@@ -89,7 +90,7 @@ def _format_chat_llama(messages: List[Dict[str, str]], system: str = "") -> str:
     return "".join(parts)
 
 
-def _format_chat_gpt2(messages: List[Dict[str, str]], system: str = "") -> str:
+def _format_chat_gpt2(messages: list[dict[str, str]], system: str = "") -> str:
     parts = []
     for msg in messages:
         role = msg.get("role", "user").capitalize()
@@ -99,7 +100,7 @@ def _format_chat_gpt2(messages: List[Dict[str, str]], system: str = "") -> str:
     return "".join(parts)
 
 
-def format_chat(messages: List[Dict[str, str]], model_type: str, system: str = "") -> str:
+def format_chat(messages: list[dict[str, str]], model_type: str, system: str = "") -> str:
     if model_type == "qwen2":
         return _format_chat_qwen(messages, system)
     elif model_type == "llama":
@@ -108,9 +109,13 @@ def format_chat(messages: List[Dict[str, str]], model_type: str, system: str = "
         return _format_chat_gpt2(messages, system)
 
 
-def sample_token(logits: np.ndarray, temperature: float = 1.0,
-                 top_p: float = 0.9, top_k: int = 50,
-                 rng: Optional[np.random.Generator] = None) -> int:
+def sample_token(
+    logits: np.ndarray,
+    temperature: float = 1.0,
+    top_p: float = 0.9,
+    top_k: int = 50,
+    rng: np.random.Generator | None = None,
+) -> int:
     if temperature <= 0.01:
         return int(np.argmax(logits))
     if rng is None:
@@ -132,7 +137,7 @@ def sample_token(logits: np.ndarray, temperature: float = 1.0,
         cutoff = cumsum[-1] * top_p
         for i in range(len(sorted_logits)):
             if cumsum[i] >= cutoff:
-                logits[sorted_idx[i+1:]] = -1e9
+                logits[sorted_idx[i + 1 :]] = -1e9
                 break
 
     probs = np.exp(logits - np.max(logits))
@@ -193,15 +198,22 @@ class NativeEngine:
             return None
         try:
             from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
+
             return MorphTokenizer.from_pretrained(model_id)
         except Exception as exc:
-            logger.warning("could not load tokenizer for %s: %s", model_id, exc,
-                           extra={"tag": "MODEL"})
+            logger.warning(
+                "could not load tokenizer for %s: %s", model_id, exc, extra={"tag": "MODEL"}
+            )
             return None
 
-    def load_from_slnc(self, slnc_tensors: dict, slnc_config: dict,
-                       seq_capacity: int = 2048,
-                       hf_model_id: str = None, tokenizer=None) -> dict:
+    def load_from_slnc(
+        self,
+        slnc_tensors: dict,
+        slnc_config: dict,
+        seq_capacity: int = 2048,
+        hf_model_id: str = None,
+        tokenizer=None,
+    ) -> dict:
         self._config = slnc_config
         self._model_type = _detect_model_type(slnc_config)
         n_layers = slnc_config.get("num_hidden_layers", 12)
@@ -231,9 +243,7 @@ class NativeEngine:
         self._weights = B.load_lib()._Weights()
         flat_arr = np.ascontiguousarray(flat, dtype=np.float32)
         flat_ct = flat_arr.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
-        rc = self._lib.transformer_load_weights(
-            self._weights, flat_ct, len(flat), cfg
-        )
+        rc = self._lib.transformer_load_weights(self._weights, flat_ct, len(flat), cfg)
         if rc != 0:
             raise RuntimeError(f"transformer_load_weights failed: {rc}")
 
@@ -245,19 +255,29 @@ class NativeEngine:
             tv = int(getattr(self._tokenizer, "vocab_size", 0) or 0)
             if tv > vocab:
                 logger.warning(
-                    "tokenizer vocab %d exceeds model vocab %d; tokens above %d "
-                    "will be masked", tv, vocab, vocab, extra={"tag": "MODEL"})
+                    "tokenizer vocab %d exceeds model vocab %d; tokens above %d will be masked",
+                    tv,
+                    vocab,
+                    vocab,
+                    extra={"tag": "MODEL"},
+                )
             elif 0 < tv < vocab:
-                logger.info("tokenizer vocab %d < model vocab %d; masking %d ids",
-                            tv, vocab, vocab - tv, extra={"tag": "MODEL"})
+                logger.info(
+                    "tokenizer vocab %d < model vocab %d; masking %d ids",
+                    tv,
+                    vocab,
+                    vocab - tv,
+                    extra={"tag": "MODEL"},
+                )
         self._stop_ids_cache = None
         self._loaded = True
 
         return {"model_type": self._model_type, "layers": n_layers, "hidden": hidden}
 
     @classmethod
-    def from_slnc_file(cls, slnc_path: str, hf_model_id: str = None,
-                       seq_capacity: int = 2048) -> "NativeEngine":
+    def from_slnc_file(
+        cls, slnc_path: str, hf_model_id: str = None, seq_capacity: int = 2048
+    ) -> NativeEngine:
         """Build an engine directly from a .slnc file on disk.
 
         Loads weights through the mmap-based ``SLNCParser`` and auto-attaches
@@ -282,15 +302,25 @@ class NativeEngine:
             config = parser.config
             tensors = parser.get_weights_dict()
             engine = cls()
-            engine.load_from_slnc(tensors, config, seq_capacity=seq_capacity,
-                                  hf_model_id=hf_model_id or _hf_id_from_slnc_path(slnc_path))
+            engine.load_from_slnc(
+                tensors,
+                config,
+                seq_capacity=seq_capacity,
+                hf_model_id=hf_model_id or _hf_id_from_slnc_path(slnc_path),
+            )
             return engine
         finally:
             parser.close()
 
-    def generate(self, messages: List[Dict[str, str]], max_tokens: int = 128,
-                 temperature: float = 0.7, top_p: float = 0.9, top_k: int = 50,
-                 system: str = "") -> str:
+    def generate(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int = 128,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        top_k: int = 50,
+        system: str = "",
+    ) -> str:
         if not self._loaded:
             raise RuntimeError("No model loaded")
 
@@ -308,8 +338,11 @@ class NativeEngine:
         t0 = time.perf_counter()
         for i, tok in enumerate(tokens):
             self._lib.transformer_forward_step(
-                self._weights, self._cache, tok, i,
-                logits_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+                self._weights,
+                self._cache,
+                tok,
+                i,
+                logits_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
             )
         t_prompt = time.perf_counter() - t0
         logger.info("prompt eval: %.3fs (%d tokens)", t_prompt, len(tokens))
@@ -323,20 +356,33 @@ class NativeEngine:
                 break
             generated.append(tok)
             self._lib.transformer_forward_step(
-                self._weights, self._cache, tok, len(tokens) + step,
-                logits_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+                self._weights,
+                self._cache,
+                tok,
+                len(tokens) + step,
+                logits_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
             )
         t_gen = time.perf_counter() - t0
 
         n_gen = len(generated)
         result = self._detokenize_simple(generated)
-        logger.info("generated %d tokens in %.3fs (%.1f tok/s)", n_gen, t_gen,
-                     n_gen / t_gen if t_gen > 0 else 0)
+        logger.info(
+            "generated %d tokens in %.3fs (%.1f tok/s)",
+            n_gen,
+            t_gen,
+            n_gen / t_gen if t_gen > 0 else 0,
+        )
         return result
 
-    def generate_stream(self, messages: List[Dict[str, str]], max_tokens: int = 128,
-                        temperature: float = 0.7, top_p: float = 0.9, top_k: int = 50,
-                        system: str = "") -> Generator[str, None, None]:
+    def generate_stream(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int = 128,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        top_k: int = 50,
+        system: str = "",
+    ) -> Generator[str, None, None]:
         if not self._loaded:
             raise RuntimeError("No model loaded")
 
@@ -349,8 +395,11 @@ class NativeEngine:
 
         for i, tok in enumerate(tokens):
             self._lib.transformer_forward_step(
-                self._weights, self._cache, tok, i,
-                logits_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+                self._weights,
+                self._cache,
+                tok,
+                i,
+                logits_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
             )
 
         stop_ids = self._stop_ids()
@@ -361,11 +410,14 @@ class NativeEngine:
             piece = self._detokenize_simple([tok])
             yield piece
             self._lib.transformer_forward_step(
-                self._weights, self._cache, tok, len(tokens) + step,
-                logits_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+                self._weights,
+                self._cache,
+                tok,
+                len(tokens) + step,
+                logits_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
             )
 
-    def _build_prompt(self, messages: List[Dict[str, str]], system: str = "") -> str:
+    def _build_prompt(self, messages: list[dict[str, str]], system: str = "") -> str:
         """Render a chat prompt, preferring the model's real chat template.
 
         Args:
@@ -385,8 +437,9 @@ class NativeEngine:
                 if rendered:
                     return rendered
             except Exception as exc:
-                logger.warning("apply_chat_template failed, falling back: %s",
-                               exc, extra={"tag": "MODEL"})
+                logger.warning(
+                    "apply_chat_template failed, falling back: %s", exc, extra={"tag": "MODEL"}
+                )
         return format_chat(messages, self._model_type, system)
 
     def _stop_ids(self) -> set:
@@ -413,8 +466,7 @@ class NativeEngine:
         self._stop_ids_cache = {int(eos)}
         return self._stop_ids_cache
 
-    def _sample(self, logits: np.ndarray, temperature: float, top_p: float,
-                top_k: int, rng) -> int:
+    def _sample(self, logits: np.ndarray, temperature: float, top_p: float, top_k: int, rng) -> int:
         """Sample a token, masking ids beyond the tokenizer vocab.
 
         Args:
@@ -440,10 +492,12 @@ class NativeEngine:
                 ids = tok.encode(text)
                 return ids if isinstance(ids, list) else list(ids)
             except Exception as exc:
-                logger.warning("tokenizer encode failed, falling back: %s",
-                               exc, extra={"tag": "MODEL"})
+                logger.warning(
+                    "tokenizer encode failed, falling back: %s", exc, extra={"tag": "MODEL"}
+                )
         try:
             from ..tokenizer import get_tokenizer
+
             tok = get_tokenizer()
             ids = tok.encode(text)
             return ids if isinstance(ids, list) else list(ids)
@@ -456,10 +510,12 @@ class NativeEngine:
             try:
                 return tok.decode(tokens)
             except Exception as exc:
-                logger.warning("tokenizer decode failed, falling back: %s",
-                               exc, extra={"tag": "MODEL"})
+                logger.warning(
+                    "tokenizer decode failed, falling back: %s", exc, extra={"tag": "MODEL"}
+                )
         try:
             from ..tokenizer import get_tokenizer
+
             tok = get_tokenizer()
             return tok.decode(tokens)
         except Exception:
@@ -475,6 +531,7 @@ class NativeEngine:
 
 
 _engine = None
+
 
 def get_engine() -> NativeEngine:
     global _engine
@@ -501,18 +558,31 @@ class NativeTransformerProvider:
     @property
     def capabilities(self):
         from domain.models._internal.provider import ModelCapabilities
+
         return ModelCapabilities(chat=True, streaming=True, embedding=False, vision=False)
 
-    async def chat_stream(self, messages, max_tokens=512, temperature=0.8,
-                          top_p=0.9, top_k=50, cancel_event=None,
-                          session_id=None, **kwargs):
+    async def chat_stream(
+        self,
+        messages,
+        max_tokens=512,
+        temperature=0.8,
+        top_p=0.9,
+        top_k=50,
+        cancel_event=None,
+        session_id=None,
+        **kwargs,
+    ):
         import asyncio
+
         loop = asyncio.get_event_loop()
 
         def _gen():
             return self._engine.generate_stream(
-                messages, max_tokens=max_tokens,
-                temperature=temperature, top_p=top_p, top_k=top_k,
+                messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
             )
 
         try:
@@ -526,10 +596,12 @@ class NativeTransformerProvider:
 
     async def chat(self, messages, max_tokens=512, temperature=0.8, **kwargs):
         import asyncio
+
         loop = asyncio.get_event_loop()
+
         def _gen():
-            return self._engine.generate(messages, max_tokens=max_tokens,
-                                         temperature=temperature)
+            return self._engine.generate(messages, max_tokens=max_tokens, temperature=temperature)
+
         return await loop.run_in_executor(None, _gen)
 
     def embed(self, text: str) -> list:

@@ -4,29 +4,28 @@ MultiAgentOrchestrator._compute_levels, _simple_plan, _build_dep_context.
 Covers: dataclass creation, to_dict, topological sort into parallel levels,
 dependency context building, singleton access.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-
-import pytest
 
 _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
 from domain.agents._internal.multi import (
-    SpecializedAgent,
-    AgentTask,
-    TaskStatus,
-    MultiAgentOrchestrator,
     DEFAULT_AGENTS,
+    AgentTask,
+    MultiAgentOrchestrator,
+    SpecializedAgent,
+    TaskStatus,
     get_orchestrator,
     reset_orchestrator,
 )
 
-
 # ── SpecializedAgent ─────────────────────────────────────────────────
+
 
 class TestSpecializedAgent:
     def test_creation(self):
@@ -104,6 +103,7 @@ class TestSpecializedAgent:
 
 # ── AgentTask ────────────────────────────────────────────────────────
 
+
 class TestAgentTask:
     def test_creation(self):
         t = AgentTask(id="1", description="do stuff", assigned_agent="writer")
@@ -112,8 +112,13 @@ class TestAgentTask:
         assert t.depends_on == []
 
     def test_to_dict(self):
-        t = AgentTask(id="2", description="research", assigned_agent="researcher",
-                      result="Found data", depends_on=["1"])
+        t = AgentTask(
+            id="2",
+            description="research",
+            assigned_agent="researcher",
+            result="Found data",
+            depends_on=["1"],
+        )
         d = t.to_dict()
         assert d["id"] == "2"
         assert d["agent"] == "researcher"
@@ -175,6 +180,7 @@ class TestAgentTask:
 
 # ── TaskStatus ───────────────────────────────────────────────────────
 
+
 class TestTaskStatus:
     def test_values(self):
         assert TaskStatus.PENDING == "pending"
@@ -189,11 +195,21 @@ class TestTaskStatus:
         assert isinstance(TaskStatus.FAILED, str)
 
     def test_unique_values(self):
-        values = [TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED, TaskStatus.FAILED]
+        values = [
+            TaskStatus.PENDING,
+            TaskStatus.IN_PROGRESS,
+            TaskStatus.COMPLETED,
+            TaskStatus.FAILED,
+        ]
         assert len(values) == len(set(values))
 
     def test_count(self):
-        values = [TaskStatus.PENDING, TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED, TaskStatus.FAILED]
+        values = [
+            TaskStatus.PENDING,
+            TaskStatus.IN_PROGRESS,
+            TaskStatus.COMPLETED,
+            TaskStatus.FAILED,
+        ]
         assert len(values) == 4
 
     def test_can_be_used_in_set(self):
@@ -209,6 +225,7 @@ class TestTaskStatus:
 
 
 # ── MultiAgentOrchestrator (pure logic) ─────────────────────────────
+
 
 class TestOrchestratorLevels:
     def test_independent_tasks(self):
@@ -426,7 +443,9 @@ class TestOrchestratorListAgents:
 
     def test_custom_agents_dict(self):
         custom = {
-            "analyst": SpecializedAgent(name="Analyst", role="analyze", system_prompt="Analyze stuff."),
+            "analyst": SpecializedAgent(
+                name="Analyst", role="analyze", system_prompt="Analyze stuff."
+            ),
         }
         orch = MultiAgentOrchestrator(agents=custom)
         assert orch.get_agent("analyst") is not None
@@ -457,10 +476,20 @@ class TestOrchestratorCompose:
     def test_compose_with_completed_tasks(self):
         orch = MultiAgentOrchestrator()
         tasks = [
-            AgentTask(id="1", description="research", assigned_agent="researcher",
-                      status=TaskStatus.COMPLETED, result="Findings here"),
-            AgentTask(id="2", description="write", assigned_agent="writer",
-                      status=TaskStatus.COMPLETED, result="Written content"),
+            AgentTask(
+                id="1",
+                description="research",
+                assigned_agent="researcher",
+                status=TaskStatus.COMPLETED,
+                result="Findings here",
+            ),
+            AgentTask(
+                id="2",
+                description="write",
+                assigned_agent="writer",
+                status=TaskStatus.COMPLETED,
+                result="Written content",
+            ),
         ]
         result = orch._compose("test goal", tasks)
         assert isinstance(result, str)

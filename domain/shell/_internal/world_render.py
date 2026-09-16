@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import numpy as np
 from dataclasses import dataclass, field
 from typing import Any
 
-from .cycles import Scene, Mesh, Material, Light, Camera, CyclesRenderer
+import numpy as np
 
+from .cycles import Camera, CyclesRenderer, Light, Material, Mesh, Scene
 
 MATERIAL_AIR = 0
 MATERIAL_GROUND = 1
@@ -26,26 +26,32 @@ class RenderConfig:
     camera_distance: float = 30.0
     sun_position: tuple[float, float, float] = (32.0, 50.0, 32.0)
     sun_strength: float = 3.0
-    material_color_map: dict[int, tuple[float, float, float]] = field(default_factory=lambda: {
-        MATERIAL_AIR: (0.05, 0.05, 0.08),
-        MATERIAL_GROUND: (0.3, 0.25, 0.2),
-        MATERIAL_FOOD: (0.1, 0.7, 0.2),
-        MATERIAL_TOXIC: (0.7, 0.1, 0.1),
-        MATERIAL_SIGNAL: (0.2, 0.3, 0.9),
-        MATERIAL_NEST: (0.6, 0.5, 0.3),
-        MATERIAL_WATER: (0.1, 0.3, 0.7),
-    })
-    material_emission_map: dict[int, float] = field(default_factory=lambda: {
-        MATERIAL_SIGNAL: 2.0,
-        MATERIAL_FOOD: 0.3,
-    })
+    material_color_map: dict[int, tuple[float, float, float]] = field(
+        default_factory=lambda: {
+            MATERIAL_AIR: (0.05, 0.05, 0.08),
+            MATERIAL_GROUND: (0.3, 0.25, 0.2),
+            MATERIAL_FOOD: (0.1, 0.7, 0.2),
+            MATERIAL_TOXIC: (0.7, 0.1, 0.1),
+            MATERIAL_SIGNAL: (0.2, 0.3, 0.9),
+            MATERIAL_NEST: (0.6, 0.5, 0.3),
+            MATERIAL_WATER: (0.1, 0.3, 0.7),
+        }
+    )
+    material_emission_map: dict[int, float] = field(
+        default_factory=lambda: {
+            MATERIAL_SIGNAL: 2.0,
+            MATERIAL_FOOD: 0.3,
+        }
+    )
 
 
 class WorldToSceneMapper:
     def __init__(self, config: RenderConfig | None = None):
         self.config = config or RenderConfig()
 
-    def grid_to_scene(self, world_grid, camera_target: tuple[float, float, float] | None = None) -> Scene:
+    def grid_to_scene(
+        self, world_grid, camera_target: tuple[float, float, float] | None = None
+    ) -> Scene:
         scene = Scene()
         nx, ny, nz = world_grid.size
         vs = self.config.voxel_size
@@ -56,7 +62,13 @@ class WorldToSceneMapper:
         if len(indices) == 0:
             scene.background = np.array([0.02, 0.02, 0.04])
             scene.camera = Camera(
-                origin=np.array([nx * vs / 2, self.config.camera_height, nz * vs / 2 + self.config.camera_distance]),
+                origin=np.array(
+                    [
+                        nx * vs / 2,
+                        self.config.camera_height,
+                        nz * vs / 2 + self.config.camera_distance,
+                    ]
+                ),
                 look_at=np.array([nx * vs / 2, 0, nz * vs / 2]),
                 fov=50.0,
             )
@@ -76,12 +88,14 @@ class WorldToSceneMapper:
                 energy_val = float(world_grid.energy[fi])
                 emission_strength = emission * (1.0 + energy_val)
 
-                scene.materials.append(Material(
-                    name=f"mat_{mat_type}",
-                    base_color=base_color,
-                    emission_strength=emission_strength,
-                    roughness=0.8,
-                ))
+                scene.materials.append(
+                    Material(
+                        name=f"mat_{mat_type}",
+                        base_color=base_color,
+                        emission_strength=emission_strength,
+                        roughness=0.8,
+                    )
+                )
 
         mesh = self._build_voxel_mesh(indices, world_grid, vs, material_indices_map)
         scene.add_mesh(mesh)
@@ -96,38 +110,66 @@ class WorldToSceneMapper:
             fov=50.0,
         )
 
-        scene.lights.append(Light(
-            position=np.array(list(self.config.sun_position)),
-            color=np.ones(3),
-            strength=self.config.sun_strength,
-            size=10.0,
-        ))
+        scene.lights.append(
+            Light(
+                position=np.array(list(self.config.sun_position)),
+                color=np.ones(3),
+                strength=self.config.sun_strength,
+                size=10.0,
+            )
+        )
 
-        scene.lights.append(Light(
-            position=np.array([cx, self.config.camera_height * 0.5, cz]),
-            color=np.array([0.4, 0.4, 0.6]),
-            strength=1.0,
-            size=5.0,
-        ))
+        scene.lights.append(
+            Light(
+                position=np.array([cx, self.config.camera_height * 0.5, cz]),
+                color=np.array([0.4, 0.4, 0.6]),
+                strength=1.0,
+                size=5.0,
+            )
+        )
 
         scene.background = np.array([0.02, 0.02, 0.04])
         return scene
 
-    def _build_voxel_mesh(self, indices: np.ndarray, world_grid, voxel_size: float,
-                           material_indices_map: dict[int, int]) -> Mesh:
+    def _build_voxel_mesh(
+        self,
+        indices: np.ndarray,
+        world_grid,
+        voxel_size: float,
+        material_indices_map: dict[int, int],
+    ) -> Mesh:
         vs = voxel_size
         half = vs * 0.5
-        cube_verts = np.array([
-            [-half, -half, -half], [half, -half, -half],
-            [half, half, -half], [-half, half, -half],
-            [-half, -half, half], [half, -half, half],
-            [half, half, half], [-half, half, half],
-        ], dtype=np.float32)
-        cube_faces = np.array([
-            [0, 1, 2], [0, 2, 3], [4, 6, 5], [4, 7, 6],
-            [0, 4, 5], [0, 5, 1], [2, 6, 7], [2, 7, 3],
-            [0, 3, 7], [0, 7, 4], [1, 5, 6], [1, 6, 2],
-        ], dtype=np.int32)
+        cube_verts = np.array(
+            [
+                [-half, -half, -half],
+                [half, -half, -half],
+                [half, half, -half],
+                [-half, half, -half],
+                [-half, -half, half],
+                [half, -half, half],
+                [half, half, half],
+                [-half, half, half],
+            ],
+            dtype=np.float32,
+        )
+        cube_faces = np.array(
+            [
+                [0, 1, 2],
+                [0, 2, 3],
+                [4, 6, 5],
+                [4, 7, 6],
+                [0, 4, 5],
+                [0, 5, 1],
+                [2, 6, 7],
+                [2, 7, 3],
+                [0, 3, 7],
+                [0, 7, 4],
+                [1, 5, 6],
+                [1, 6, 2],
+            ],
+            dtype=np.int32,
+        )
 
         max_voxels = len(indices)
         all_vertices = np.zeros((max_voxels * 8, 3), dtype=np.float32)
@@ -147,9 +189,9 @@ class WorldToSceneMapper:
             offset = vi // 8 * 8
             faces = cube_faces + offset
 
-            all_vertices[vi:vi + 8] = verts
-            all_faces[fi:fi + 12] = faces
-            all_mat_idx[fi:fi + 12] = mat_idx
+            all_vertices[vi : vi + 8] = verts
+            all_faces[fi : fi + 12] = faces
+            all_mat_idx[fi : fi + 12] = mat_idx
             vi += 8
             fi += 12
 
@@ -203,9 +245,13 @@ class RenderBridge:
         self._last_state_tensors: dict[str, np.ndarray] | None = None
         self.stats = {"renders": 0, "total_time_ms": 0.0}
 
-    def build_scene(self, world_grid, babies: list | None = None,
-                    nests: list | None = None,
-                    camera_target: tuple[float, float, float] | None = None) -> Scene:
+    def build_scene(
+        self,
+        world_grid,
+        babies: list | None = None,
+        nests: list | None = None,
+        camera_target: tuple[float, float, float] | None = None,
+    ) -> Scene:
         self._scene = self._mapper.grid_to_scene(world_grid, camera_target)
 
         if babies:
@@ -227,6 +273,7 @@ class RenderBridge:
         if self._scene is None:
             return np.zeros((self.config.height, self.config.width, 3), dtype=np.float32)
         import time
+
         t0 = time.monotonic()
         self._renderer = CyclesRenderer(
             self._scene,
@@ -250,9 +297,13 @@ class RenderBridge:
         self._last_state_tensors = tensors
         return tensors
 
-    def render_tick(self, world_grid, babies: list | None = None,
-                    nests: list | None = None,
-                    camera_target: tuple[float, float, float] | None = None) -> np.ndarray:
+    def render_tick(
+        self,
+        world_grid,
+        babies: list | None = None,
+        nests: list | None = None,
+        camera_target: tuple[float, float, float] | None = None,
+    ) -> np.ndarray:
         self.build_scene(world_grid, babies, nests, camera_target)
         return self.render()
 
@@ -270,11 +321,13 @@ class RenderBridge:
 
 
 class NeuralRenderBridge(RenderBridge):
-    def __init__(self, config: RenderConfig | None = None,
-                 embed_dim: int = 64, num_classes: int = 8):
+    def __init__(
+        self, config: RenderConfig | None = None, embed_dim: int = 64, num_classes: int = 8
+    ):
         super().__init__(config)
         from .cycles_device import CyclesDevice
         from .render_neural import RenderNeuralDevice
+
         self._cycles_device = CyclesDevice(
             width=self.config.width,
             height=self.config.height,
@@ -290,9 +343,13 @@ class NeuralRenderBridge(RenderBridge):
         self._last_descriptor: dict | None = None
         self.stats = {"renders": 0, "total_time_ms": 0.0, "neural_processes": 0}
 
-    def render_tick(self, world_grid, babies: list | None = None,
-                    nests: list | None = None,
-                    camera_target: tuple[float, float, float] | None = None) -> np.ndarray:
+    def render_tick(
+        self,
+        world_grid,
+        babies: list | None = None,
+        nests: list | None = None,
+        camera_target: tuple[float, float, float] | None = None,
+    ) -> np.ndarray:
         image = super().render_tick(world_grid, babies, nests, camera_target)
         if self._scene is not None:
             self._sync_scene_to_cycles_device()
@@ -305,23 +362,43 @@ class NeuralRenderBridge(RenderBridge):
         cycles = self._cycles_device
         cycles.call("clear")
         for mesh in self._scene.meshes:
-            for face_idx in range(len(mesh.faces)):
+            for _face_idx in range(len(mesh.faces)):
                 pass
         for i, mat in enumerate(self._scene.materials):
-            cycles.call("set_material", i,
-                        mat.base_color[0], mat.base_color[1], mat.base_color[2],
-                        mat.metallic, mat.roughness, mat.emission_strength,
-                        mat.transmission, mat.ior)
+            cycles.call(
+                "set_material",
+                i,
+                mat.base_color[0],
+                mat.base_color[1],
+                mat.base_color[2],
+                mat.metallic,
+                mat.roughness,
+                mat.emission_strength,
+                mat.transmission,
+                mat.ior,
+            )
         for light in self._scene.lights:
-            cycles.call("add_light",
-                        light.position[0], light.position[1], light.position[2],
-                        light.color[0], light.color[1], light.color[2],
-                        light.strength)
+            cycles.call(
+                "add_light",
+                light.position[0],
+                light.position[1],
+                light.position[2],
+                light.color[0],
+                light.color[1],
+                light.color[2],
+                light.strength,
+            )
         cam = self._scene.camera
-        cycles.call("set_camera",
-                    cam.origin[0], cam.origin[1], cam.origin[2],
-                    cam.look_at[0], cam.look_at[1], cam.look_at[2],
-                    cam.fov)
+        cycles.call(
+            "set_camera",
+            cam.origin[0],
+            cam.origin[1],
+            cam.origin[2],
+            cam.look_at[0],
+            cam.look_at[1],
+            cam.look_at[2],
+            cam.fov,
+        )
         bg = self._scene.background
         cycles.call("set_background", bg[0], bg[1], bg[2])
 
@@ -367,11 +444,11 @@ class RenderDiff:
             b = b[:min_h, :min_w]
 
         self.diff = np.abs(a - b)
-        self.mse = float(np.mean(self.diff ** 2))
+        self.mse = float(np.mean(self.diff**2))
         self.mae = float(np.mean(self.diff))
         self.max_diff = float(np.max(self.diff))
 
-        self.diff_magnitude = np.sqrt(np.sum(self.diff ** 2, axis=-1))
+        self.diff_magnitude = np.sqrt(np.sum(self.diff**2, axis=-1))
         self.changed_pixels = int(np.sum(self.diff_magnitude > 0.01))
         self.total_pixels = a.shape[0] * a.shape[1]
         self.change_ratio = self.changed_pixels / max(self.total_pixels, 1)
@@ -418,7 +495,7 @@ class RenderHistory:
         }
         self._entries.append(entry)
         if len(self._entries) > self.max_entries:
-            self._entries = self._entries[-self.max_entries:]
+            self._entries = self._entries[-self.max_entries :]
         return len(self._entries) - 1
 
     def get(self, index: int) -> np.ndarray | None:
@@ -450,8 +527,7 @@ class RenderHistory:
     def recent(self, n: int = 5) -> list[dict]:
         entries = self._entries[-n:]
         return [
-            {"index": len(self._entries) - len(entries) + i,
-             "tick": e["tick"], "mean": e["mean"]}
+            {"index": len(self._entries) - len(entries) + i, "tick": e["tick"], "mean": e["mean"]}
             for i, e in enumerate(entries)
         ]
 
@@ -498,14 +574,16 @@ class RenderAnalyzer:
         for i in range(1, len(entries)):
             diff = RenderDiff(entries[i - 1]["image"], entries[i]["image"])
             if diff.change_ratio > threshold:
-                changes.append({
-                    "from": i - 1,
-                    "to": i,
-                    "tick_from": entries[i - 1]["tick"],
-                    "tick_to": entries[i]["tick"],
-                    "change_ratio": diff.change_ratio,
-                    "mse": diff.mse,
-                })
+                changes.append(
+                    {
+                        "from": i - 1,
+                        "to": i,
+                        "tick_from": entries[i - 1]["tick"],
+                        "tick_to": entries[i]["tick"],
+                        "change_ratio": diff.change_ratio,
+                        "mse": diff.mse,
+                    }
+                )
         return changes
 
     def compare_ticks(self, tick_a: int, tick_b: int) -> RenderDiff | None:

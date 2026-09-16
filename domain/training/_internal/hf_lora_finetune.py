@@ -23,19 +23,26 @@ Usage::
 from __future__ import annotations
 
 import logging
-import time
 import threading
-import numpy as np
-from pathlib import Path
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from pathlib import Path
+from typing import Any
+
+import numpy as np
 
 from domain.training._internal.lora import (
-    LoRAConfig, LoRALinear, apply_lora_to_model, get_lora_parameters,
+    LoRAConfig,
+    LoRALinear,
+    apply_lora_to_model,
     count_lora_parameters,
+    get_lora_parameters,
 )
 from domain.training._internal.slonet import (
-    SloTransformer, Tensor, cross_entropy,
+    SloTransformer,
+    Tensor,
+    cross_entropy,
 )
 from domain.training._internal.trainer_protocol import TrainResult
 
@@ -56,9 +63,14 @@ class HFLoraConfig:
     rank: int = 8
     alpha: float = 16.0
     dropout: float = 0.0
-    target_modules: Optional[List[str]] = field(default_factory=lambda: [
-        "W_q", "W_k", "W_v", "W_o",
-    ])
+    target_modules: list[str] | None = field(
+        default_factory=lambda: [
+            "W_q",
+            "W_k",
+            "W_v",
+            "W_o",
+        ]
+    )
 
     # Training hyperparameters
     epochs: int = 3
@@ -72,14 +84,14 @@ class HFLoraConfig:
 
     # Output
     output_dir: str = "models"
-    adapter_name: Optional[str] = None  # auto-generated if None
+    adapter_name: str | None = None  # auto-generated if None
 
     # Progress
     log_interval: int = 10
-    progress_callback: Optional[Callable] = None
+    progress_callback: Callable | None = None
 
     # Cancellation
-    _cancel_event: Optional[threading.Event] = field(default=None, repr=False)
+    _cancel_event: threading.Event | None = field(default=None, repr=False)
 
     def __post_init__(self):
         if self.adapter_name is None:
@@ -122,10 +134,10 @@ class HFLoraTrainer:
 
     def __init__(self, config: HFLoraConfig):
         self.config = config
-        self.model: Optional[SloTransformer] = None
-        self.lora_params: Dict[str, Any] = {}
+        self.model: SloTransformer | None = None
+        self.lora_params: dict[str, Any] = {}
         self._is_training = False
-        self._training_thread: Optional[threading.Thread] = None
+        self._training_thread: threading.Thread | None = None
 
     def load_model(self) -> SloTransformer:
         """Load model from .slnc file."""
@@ -138,11 +150,15 @@ class HFLoraTrainer:
         logger.info("Loading model from %s", model_path)
         provider = SloNetChatProvider.from_slnc(str(model_path))
         self.model = provider._model
-        logger.info("Model loaded: %s vocab, %s embed, %s layers",
-                    self.model.vocab_size, self.model.n_embed, self.model.n_layer)
+        logger.info(
+            "Model loaded: %s vocab, %s embed, %s layers",
+            self.model.vocab_size,
+            self.model.n_embed,
+            self.model.n_layer,
+        )
         return self.model
 
-    def apply_lora(self) -> Dict[str, Any]:
+    def apply_lora(self) -> dict[str, Any]:
         """Apply LoRA adapters to the model."""
         if self.model is None:
             raise RuntimeError("Model not loaded — call load_model() first")
@@ -156,8 +172,11 @@ class HFLoraTrainer:
         self.model = apply_lora_to_model(self.model, config)
         self.lora_params = get_lora_parameters(self.model)
         n_params = count_lora_parameters(self.model)
-        logger.info("Applied LoRA: %d tensors, %s trainable parameters",
-                    len(self.lora_params), f"{n_params:,}")
+        logger.info(
+            "Applied LoRA: %d tensors, %s trainable parameters",
+            len(self.lora_params),
+            f"{n_params:,}",
+        )
         return self.lora_params
 
     def _prepare_data(self):
@@ -169,9 +188,11 @@ class HFLoraTrainer:
             raise FileNotFoundError(f"Data not found: {data_path}")
 
         # Use the model's tokenizer if available
-        tokenizer = getattr(self.model, '_tokenizer', None)
+        tokenizer = getattr(self.model, "_tokenizer", None)
         data, self._vocab_size, self._stoi, self._itos = prepare_data(
-            data_path, self.config.block_size, tokenizer,
+            data_path,
+            self.config.block_size,
+            tokenizer,
         )
         return data
 
@@ -200,17 +221,21 @@ class HFLoraTrainer:
                     success=False,
                     status="failed",
                     error=f"Data too short for block_size={self.config.block_size} "
-                          f"(data={len(data)} chars, need >={self.config.block_size})",
+                    f"(data={len(data)} chars, need >={self.config.block_size})",
                 )
 
             # Create optimizer (only LoRA params)
             from domain.training._internal.slonet import SloAdam
-            lora_tensors = [p for p in self.lora_params.values()
-                           if hasattr(p, 'data') and hasattr(p, 'requires_grad')]
+
+            lora_tensors = [
+                p
+                for p in self.lora_params.values()
+                if hasattr(p, "data") and hasattr(p, "requires_grad")
+            ]
             optimizer = SloAdam(lr=self.config.learning_rate)
 
             # Training loop
-            best_loss = float('inf')
+            best_loss = float("inf")
             total_steps = 0
             loss_history = []
 
@@ -253,20 +278,20 @@ class HFLoraTrainer:
                     if self.config.grad_clip > 0:
                         total_norm = 0.0
                         for p in lora_tensors:
-                            if hasattr(p, 'grad') and p.grad is not None:
-                                total_norm += float(np.sum(p.grad.data ** 2))
+                            if hasattr(p, "grad") and p.grad is not None:
+                                total_norm += float(np.sum(p.grad.data**2))
                         total_norm = np.sqrt(total_norm)
                         if total_norm > self.config.grad_clip:
                             scale = self.config.grad_clip / total_norm
                             for p in lora_tensors:
-                                if hasattr(p, 'grad') and p.grad is not None:
+                                if hasattr(p, "grad") and p.grad is not None:
                                     p.grad.data *= scale
 
                     # Optimizer step
                     if (total_steps + 1) % self.config.grad_accumulation_steps == 0:
                         optimizer.step(lora_tensors)
                         for p in lora_tensors:
-                            if hasattr(p, 'grad') and p.grad is not None:
+                            if hasattr(p, "grad") and p.grad is not None:
                                 p.grad.data[:] = 0.0
 
                     epoch_loss += float(loss.data)
@@ -278,15 +303,20 @@ class HFLoraTrainer:
                         avg_loss = epoch_loss / max(n_batches, 1)
                         loss_history.append(avg_loss)
                         if self.config.progress_callback:
-                            self.config.progress_callback({
-                                "step": total_steps,
-                                "epoch": epoch + 1,
-                                "loss": avg_loss,
-                                "lr": self.config.learning_rate,
-                            })
+                            self.config.progress_callback(
+                                {
+                                    "step": total_steps,
+                                    "epoch": epoch + 1,
+                                    "loss": avg_loss,
+                                    "lr": self.config.learning_rate,
+                                }
+                            )
                         logger.info(
                             "step=%d epoch=%d loss=%.4f lr=%.2e",
-                            total_steps, epoch+1, avg_loss, self.config.learning_rate,
+                            total_steps,
+                            epoch + 1,
+                            avg_loss,
+                            self.config.learning_rate,
                         )
 
                 # Epoch complete
@@ -294,8 +324,7 @@ class HFLoraTrainer:
                 if avg_epoch_loss < best_loss:
                     best_loss = avg_epoch_loss
 
-                logger.info("Epoch %d/%d loss=%.4f",
-                            epoch+1, self.config.epochs, avg_epoch_loss)
+                logger.info("Epoch %d/%d loss=%.4f", epoch + 1, self.config.epochs, avg_epoch_loss)
 
             # Save adapter
             adapter_path = self._save_adapter()
@@ -305,13 +334,17 @@ class HFLoraTrainer:
 
             # Record training outcome for adaptive learning
             try:
-                from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+                from domain.training._internal.outcome_tracker import (
+                    TrainingOutcome,
+                    TrainingOutcomeTracker,
+                )
+
                 outcome = TrainingOutcome(
                     run_id=f"hf_lora_{int(time.time() * 1000)}",
                     timestamp=time.time(),
-                    dataset=getattr(self.config, 'data_path', ''),
+                    dataset=getattr(self.config, "data_path", ""),
                     dataset_size=len(data),
-                    model=getattr(self.config, 'model_name', 'hf_model'),
+                    model=getattr(self.config, "model_name", "hf_model"),
                     method="finetune",
                     epochs=self.config.epochs,
                     batch_size=self.config.batch_size,
@@ -368,7 +401,7 @@ class HFLoraTrainer:
         # Collect all LoRA weights
         adapter_dict = {}
         for name, param in self.lora_params.items():
-            if hasattr(param, 'data'):
+            if hasattr(param, "data"):
                 adapter_dict[name] = param.data
 
         # Save metadata
@@ -378,11 +411,14 @@ class HFLoraTrainer:
             [len(self.config.target_modules)], dtype=np.int64
         )
         for i, m in enumerate(self.config.target_modules):
-            adapter_dict[f"_config/target_module_{i}"] = np.array([ord(c) for c in m], dtype=np.int64)
+            adapter_dict[f"_config/target_module_{i}"] = np.array(
+                [ord(c) for c in m], dtype=np.int64
+            )
 
         np.savez_compressed(str(adapter_path), **adapter_dict)
-        logger.info("Saved LoRA adapter to %s (%.1f KB)",
-                    adapter_path, adapter_path.stat().st_size / 1024)
+        logger.info(
+            "Saved LoRA adapter to %s (%.1f KB)", adapter_path, adapter_path.stat().st_size / 1024
+        )
         return adapter_path
 
     @property
@@ -409,8 +445,8 @@ class _LoRADataset:
         return max(0, len(self.data) - self.block_size)
 
     def __getitem__(self, idx):
-        x = self.data[idx:idx + self.block_size]
-        y = self.data[idx + 1:idx + self.block_size + 1]
+        x = self.data[idx : idx + self.block_size]
+        y = self.data[idx + 1 : idx + self.block_size + 1]
         return x, y
 
 
@@ -427,7 +463,7 @@ def load_lora_adapter(model: SloTransformer, adapter_path: str) -> SloTransforme
     adapter = np.load(adapter_path)
 
     for name, param in get_lora_parameters(model).items():
-        if name in adapter and hasattr(param, 'data'):
+        if name in adapter and hasattr(param, "data"):
             param.data[:] = adapter[name]
 
     logger.info("Loaded LoRA adapter from %s", adapter_path)
@@ -441,7 +477,7 @@ def merge_lora_adapter(model: SloTransformer) -> SloTransformer:
     The inlined fast path in generate_numpy requires SloLinear (with
     _get_weight_T_contig), so merged layers must be replaced.
     """
-    from domain.training._internal.lora import _walk_slo_tree, _set_nested, LoRAEmbedding
+    from domain.training._internal.lora import LoRAEmbedding, _set_nested, _walk_slo_tree
     from domain.training._internal.slonet import SloLinear
 
     for path, module in _walk_slo_tree(model, []):
@@ -451,8 +487,10 @@ def merge_lora_adapter(model: SloTransformer) -> SloTransformer:
 
             # Build a plain SloLinear with the merged weight
             new_linear = SloLinear(
-                module.in_features, module.out_features,
-                bias=module.use_bias, name=f"merged_{path.replace('.', '_')}",
+                module.in_features,
+                module.out_features,
+                bias=module.use_bias,
+                name=f"merged_{path.replace('.', '_')}",
                 _lazy=True,
             )
             new_linear.weight.data[:] = module.weight.data

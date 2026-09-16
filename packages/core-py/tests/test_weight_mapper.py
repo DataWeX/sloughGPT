@@ -1,7 +1,7 @@
 """Tests for weight_mapper — SLNC tensor dict to flat C weight array."""
 
 import numpy as np
-import pytest
+
 from domain.inference._internal.native.weight_mapper import map_slnc_to_native
 
 
@@ -102,9 +102,24 @@ class TestMapSlncToNative:
 class TestLayerLayout:
     def test_layer_size_formula(self):
         D, NH, NKV, HD, FF = 16, 2, 1, 8, 32
-        expected = (D + D*(NH*HD) + NH*HD + D*(NKV*HD) + NKV*HD
-                    + D*(NKV*HD) + NKV*HD + NH*HD*D + D
-                    + D + D*FF + FF + D*FF + FF + FF*D + D)
+        expected = (
+            D
+            + D * (NH * HD)
+            + NH * HD
+            + D * (NKV * HD)
+            + NKV * HD
+            + D * (NKV * HD)
+            + NKV * HD
+            + NH * HD * D
+            + D
+            + D
+            + D * FF
+            + FF
+            + D * FF
+            + FF
+            + FF * D
+            + D
+        )
         D2, NH2, NKV2, HD2, FF2, V = D, NH, NKV, HD, FF, 10
         tensors = _make_tensors(D2, NH2, NKV2, HD2, FF2, V, 1)
         _, info = map_slnc_to_native(tensors, 1, D2, NH2, NKV2, HD2, FF2, V)
@@ -145,7 +160,7 @@ class TestTensorContent:
         D, NH, NKV, HD, FF, V = 8, 2, 1, 4, 16, 10
         tensors = _make_tensors(D, NH, NKV, HD, FF, V, 1)
         flat, info = map_slnc_to_native(tensors, 1, D, NH, NKV, HD, FF, V)
-        embed = flat[:V*D]
+        embed = flat[: V * D]
         assert np.all(embed == 1.0)
 
     def test_layer_norm_section(self):
@@ -153,7 +168,7 @@ class TestTensorContent:
         tensors = _make_tensors(D, NH, NKV, HD, FF, V, 1)
         flat, info = map_slnc_to_native(tensors, 1, D, NH, NKV, HD, FF, V)
         start = info["layers"][0]["offset"]
-        ln = flat[start:start+D]
+        ln = flat[start : start + D]
         assert np.all(ln == 1.0)
 
     def test_all_ones_tensor(self):
@@ -171,7 +186,7 @@ class TestTensorContent:
         D, NH, NKV, HD, FF, V = 8, 2, 1, 4, 16, 10
         tensors = {"model.embed_tokens.weight": np.ones((V, D), dtype=np.float32)}
         flat, info = map_slnc_to_native(tensors, 1, D, NH, NKV, HD, FF, V)
-        embed = flat[:V*D]
+        embed = flat[: V * D]
         assert np.all(embed == 1.0)
         assert info["total_floats"] > V * D
 
@@ -379,10 +394,12 @@ class TestRavelBehavior:
     def test_2d_weight_raveled(self):
         D, NH, NKV, HD, FF, V = 8, 2, 1, 4, 16, 10
         tensors = _make_tensors(D, NH, NKV, HD, FF, V, 1)
-        tensors["model.layers.0.self_attn.q_proj.weight"] = np.arange(D * NH * HD, dtype=np.float32).reshape(D, NH * HD)
+        tensors["model.layers.0.self_attn.q_proj.weight"] = np.arange(
+            D * NH * HD, dtype=np.float32
+        ).reshape(D, NH * HD)
         flat, info = map_slnc_to_native(tensors, 1, D, NH, NKV, HD, FF, V)
         start = info["layers"][0]["offset"] + D
-        q_section = flat[start:start + D * NH * HD]
+        q_section = flat[start : start + D * NH * HD]
         expected = np.arange(D * NH * HD, dtype=np.float32)
         np.testing.assert_array_equal(q_section, expected)
 
@@ -392,14 +409,16 @@ class TestRavelBehavior:
         tensors["model.layers.0.self_attn.q_proj.bias"] = np.arange(NH * HD, dtype=np.float32)
         flat, info = map_slnc_to_native(tensors, 1, D, NH, NKV, HD, FF, V)
         start = info["layers"][0]["offset"] + D + D * NH * HD
-        bias_section = flat[start:start + NH * HD]
+        bias_section = flat[start : start + NH * HD]
         expected = np.arange(NH * HD, dtype=np.float32)
         np.testing.assert_array_equal(bias_section, expected)
 
     def test_truncation_if_oversized(self):
         D, NH, NKV, HD, FF, V = 8, 2, 1, 4, 16, 10
         tensors = _make_tensors(D, NH, NKV, HD, FF, V, 1)
-        tensors["model.layers.0.self_attn.q_proj.weight"] = np.ones((D + 5, NH * HD), dtype=np.float32)
+        tensors["model.layers.0.self_attn.q_proj.weight"] = np.ones(
+            (D + 5, NH * HD), dtype=np.float32
+        )
         flat, info = map_slnc_to_native(tensors, 1, D, NH, NKV, HD, FF, V)
         assert np.all(np.isfinite(flat))
 
@@ -440,4 +459,3 @@ class TestEdgeCases:
         tensors = _make_tensors(D, NH, NKV, HD, FF, V, 1)
         flat, info = map_slnc_to_native(tensors, 1, D, NH, NKV, HD, FF, V)
         assert np.all(np.isfinite(flat))
-

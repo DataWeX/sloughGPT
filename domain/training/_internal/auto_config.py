@@ -13,7 +13,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("slo.training.auto_config")
 
@@ -30,7 +30,7 @@ class DatasetAnalysis:
     avg_line_length: float = 0.0
     has_dialogue_markers: bool = False
     has_role_fields: bool = False
-    preview_lines: List[str] = field(default_factory=list)
+    preview_lines: list[str] = field(default_factory=list)
 
     @property
     def is_dialogue(self) -> bool:
@@ -83,12 +83,12 @@ class TrainingConfig:
     rl_reward_mode: str = "length"
 
     # What we discovered
-    analysis: Optional[DatasetAnalysis] = None
+    analysis: DatasetAnalysis | None = None
 
     # Plain-language explanation of what we chose and why
     explanation: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialisable dict for the training router."""
         return {
             "model": self.model,
@@ -153,7 +153,15 @@ def analyse_dataset(dataset_path: str) -> DatasetAnalysis:
         sample_count = len(non_empty)
 
     # Detect dialogue markers
-    dialogue_markers = ["user:", "assistant:", "human:", "ai:", "system:", "<|user|>", "<|assistant|>"]
+    dialogue_markers = [
+        "user:",
+        "assistant:",
+        "human:",
+        "ai:",
+        "system:",
+        "<|user|>",
+        "<|assistant|>",
+    ]
     marker_hits = 0
     for line in non_empty[:200]:
         lower = line.lower().strip()
@@ -181,8 +189,8 @@ def analyse_dataset(dataset_path: str) -> DatasetAnalysis:
 def auto_configure(
     dataset: str,
     dataset_path: str,
-    available_models: Optional[List[str]] = None,
-    preferred_model: Optional[str] = None,
+    available_models: list[str] | None = None,
+    preferred_model: str | None = None,
 ) -> TrainingConfig:
     """Analyse a dataset and produce a complete training config.
 
@@ -219,8 +227,7 @@ def auto_configure(
 
     # RL: auto-enable for chat models (instruction-tuned models benefit from GRPO)
     is_chat_model = any(
-        kw in model.lower()
-        for kw in ["instruct", "chat", "qwen", "smollm", "tinyllama", "phi"]
+        kw in model.lower() for kw in ["instruct", "chat", "qwen", "smollm", "tinyllama", "phi"]
     )
     rl_post_train = method == "finetune" and is_chat_model
 
@@ -252,6 +259,7 @@ def auto_configure(
     # Try adaptive engine — if history exists, use learned recommendations
     try:
         from domain.training._internal.adaptive_config import AdaptiveConfigEngine
+
         engine = AdaptiveConfigEngine()
         adaptive = engine.recommend(
             dataset_size=analysis.word_count,
@@ -268,8 +276,10 @@ def auto_configure(
             config.explanation += f"\n\nAdaptive: {adaptive.reason}"
             logger.info(
                 "Adaptive override: lr=%.2e bs=%d epochs=%d (from %d runs)",
-                adaptive.learning_rate, adaptive.batch_size,
-                adaptive.epochs, adaptive.based_on_runs,
+                adaptive.learning_rate,
+                adaptive.batch_size,
+                adaptive.epochs,
+                adaptive.based_on_runs,
                 extra={"tag": "TRAIN"},
             )
     except Exception:
@@ -277,7 +287,11 @@ def auto_configure(
 
     logger.info(
         "Auto-config: dataset=%s, method=%s, model=%s, epochs=%d, rl=%s",
-        dataset, method, model, epochs, rl_post_train,
+        dataset,
+        method,
+        model,
+        epochs,
+        rl_post_train,
         extra={"tag": "TRAIN"},
     )
 
@@ -288,6 +302,7 @@ def auto_configure(
 # Internal helpers — the "brain" of auto-config
 # ---------------------------------------------------------------------------
 
+
 def _is_json(s: str) -> bool:
     try:
         json.loads(s)
@@ -296,7 +311,7 @@ def _is_json(s: str) -> bool:
         return False
 
 
-def _pick_model(analysis: DatasetAnalysis, models: List[str]) -> str:
+def _pick_model(analysis: DatasetAnalysis, models: list[str]) -> str:
     """Pick the best model for this dataset.
 
     Rules:
@@ -304,12 +319,12 @@ def _pick_model(analysis: DatasetAnalysis, models: List[str]) -> str:
     - Tiny datasets → use small models (avoid overfitting)
     - Large datasets → any model works, prefer the first available
     """
-    chat_models = [m for m in models if any(
-        kw in m.lower() for kw in ["instruct", "chat", "qwen", "smollm"]
-    )]
-    small_models = [m for m in models if any(
-        kw in m.lower() for kw in ["0.5b", "135m", "124m", "gpt2"]
-    )]
+    chat_models = [
+        m for m in models if any(kw in m.lower() for kw in ["instruct", "chat", "qwen", "smollm"])
+    ]
+    small_models = [
+        m for m in models if any(kw in m.lower() for kw in ["0.5b", "135m", "124m", "gpt2"])
+    ]
 
     if analysis.is_dialogue and chat_models:
         return chat_models[0]
@@ -448,12 +463,14 @@ def _build_explanation(
 
     # RL explanation
     if rl_enabled:
-        parts.append("Auto-enabling personality reinforcement (your AI will learn to give better answers)")
+        parts.append(
+            "Auto-enabling personality reinforcement (your AI will learn to give better answers)"
+        )
 
     return ". ".join(parts) + "."
 
 
-def plain_language_verdict(eval_delta: Dict[str, Any]) -> str:
+def plain_language_verdict(eval_delta: dict[str, Any]) -> str:
     """Translate eval delta metrics into a plain-language verdict.
 
     Takes the dict from ``LoRAEvaluator.compare()`` and returns

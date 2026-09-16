@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
 import tempfile
-import os
-from domain.training._internal.mobile_training_store import MobileTrainingStore
 
+from domain.training._internal.mobile_training_store import MobileTrainingStore
 
 # ── MobileTrainingStore ─────────────────────────────────────────────────────
 
 
 class TestMobileTrainingStore:
-
     def test_init(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             store = MobileTrainingStore(tmpdir)

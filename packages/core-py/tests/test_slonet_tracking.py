@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-import pytest
 from domain.training._internal.tracking import (
+    ExperimentTracker,
     TrackerBackend,
     TrackingConfig,
-    ExperimentTracker,
 )
-
 
 # ── TrackerBackend ──────────────────────────────────────────────────────────
 
 
 class TestTrackerBackend:
-
     def test_values(self):
         assert TrackerBackend.MLFLOW.value == "mlflow"
         assert TrackerBackend.WANDB.value == "wandb"
@@ -26,7 +23,6 @@ class TestTrackerBackend:
 
 
 class TestTrackingConfig:
-
     def test_default(self):
         config = TrackingConfig()
         assert config.backend == TrackerBackend.NONE
@@ -42,7 +38,6 @@ class TestTrackingConfig:
 
 
 class TestExperimentTracker:
-
     def test_init_none(self):
         config = TrackingConfig(backend=TrackerBackend.NONE)
         tracker = ExperimentTracker(config)

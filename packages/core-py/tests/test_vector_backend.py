@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.vector_backend import VectorBE
 from domain.infrastructure._internal.arch_config import ArchConfig
+from domain.infrastructure._internal.vector_backend import VectorBE
 
 
 def _make_arch():
@@ -38,13 +38,27 @@ def _make_weights(arch):
     weights = {}
     weights["embed_tokens.weight"] = np.random.randn(V, E).astype(np.float32) * 0.02
     i = 0
-    weights[f"model.layers.{i}.self_attn.q_proj.weight"] = np.random.randn(H * D, E).astype(np.float32) * 0.02
-    weights[f"model.layers.{i}.self_attn.k_proj.weight"] = np.random.randn(KV * D, E).astype(np.float32) * 0.02
-    weights[f"model.layers.{i}.self_attn.v_proj.weight"] = np.random.randn(KV * D, E).astype(np.float32) * 0.02
-    weights[f"model.layers.{i}.self_attn.o_proj.weight"] = np.random.randn(E, H * D).astype(np.float32) * 0.02
-    weights[f"model.layers.{i}.mlp.gate_proj.weight"] = np.random.randn(FF, E).astype(np.float32) * 0.02
-    weights[f"model.layers.{i}.mlp.up_proj.weight"] = np.random.randn(FF, E).astype(np.float32) * 0.02
-    weights[f"model.layers.{i}.mlp.down_proj.weight"] = np.random.randn(E, FF).astype(np.float32) * 0.02
+    weights[f"model.layers.{i}.self_attn.q_proj.weight"] = (
+        np.random.randn(H * D, E).astype(np.float32) * 0.02
+    )
+    weights[f"model.layers.{i}.self_attn.k_proj.weight"] = (
+        np.random.randn(KV * D, E).astype(np.float32) * 0.02
+    )
+    weights[f"model.layers.{i}.self_attn.v_proj.weight"] = (
+        np.random.randn(KV * D, E).astype(np.float32) * 0.02
+    )
+    weights[f"model.layers.{i}.self_attn.o_proj.weight"] = (
+        np.random.randn(E, H * D).astype(np.float32) * 0.02
+    )
+    weights[f"model.layers.{i}.mlp.gate_proj.weight"] = (
+        np.random.randn(FF, E).astype(np.float32) * 0.02
+    )
+    weights[f"model.layers.{i}.mlp.up_proj.weight"] = (
+        np.random.randn(FF, E).astype(np.float32) * 0.02
+    )
+    weights[f"model.layers.{i}.mlp.down_proj.weight"] = (
+        np.random.randn(E, FF).astype(np.float32) * 0.02
+    )
     weights[f"model.layers.{i}.input_layernorm.weight"] = np.ones(E, dtype=np.float32)
     weights[f"model.layers.{i}.post_attention_layernorm.weight"] = np.ones(E, dtype=np.float32)
     weights["model.norm.weight"] = np.ones(E, dtype=np.float32)

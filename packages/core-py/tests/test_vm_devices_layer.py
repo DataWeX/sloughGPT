@@ -16,16 +16,15 @@ import pytest
 
 from domain.shell._internal.vm import DeviceFault
 from domain.shell._internal.vm_devices import (
-    TensorDevice,
+    EngineDevice,
+    MultimodalDevice,
+    NPUVMDevice,
     PythonExecDevice,
     SlonetDevice,
-    MultimodalDevice,
-    EngineDevice,
     SlonetTrainingDevice,
-    NPUVMDevice,
+    TensorDevice,
 )
 from domain.training._internal.slonet import SloTransformer
-
 
 # ── Shared fakes ──────────────────────────────────────────────────────────
 
@@ -58,12 +57,14 @@ class _FakeSlonetModel:
     block_size = 64
     layers = [object(), object(), object()]
 
-    def generate_numpy(self, input_ids, max_new_tokens, temperature,
-                       top_k, top_p, repetition_penalty, eos_token):
+    def generate_numpy(
+        self, input_ids, max_new_tokens, temperature, top_k, top_p, repetition_penalty, eos_token
+    ):
         return np.array([[5, 6, 7]])
 
-    def generate_numpy_stream(self, input_ids, max_new_tokens, eos_token,
-                              temperature, top_k, top_p, repetition_penalty):
+    def generate_numpy_stream(
+        self, input_ids, max_new_tokens, eos_token, temperature, top_k, top_p, repetition_penalty
+    ):
         yield 8
         yield 9
 
@@ -126,17 +127,18 @@ class _FakeGenerateEngine:
 
 
 def _tiny_model():
-    return SloTransformer(vocab_size=32, n_embed=16, n_layer=1, n_head=2,
-                          block_size=32, dropout=0.0)
+    return SloTransformer(
+        vocab_size=32, n_embed=16, n_layer=1, n_head=2, block_size=32, dropout=0.0
+    )
 
 
 def _slonet_shim_without_scheduler():
     """Module shim that shadows WarmupCosineScheduler to force the
     has_scheduler=False branch in SlonetTrainingDevice._train."""
     import domain.training._internal.slonet as real
+
     shim = types.ModuleType("domain.training._internal.slonet")
-    for name in ("cross_entropy", "SloAdam", "clip_grad_norm_",
-                 "Tensor", "export_to_sou"):
+    for name in ("cross_entropy", "SloAdam", "clip_grad_norm_", "Tensor", "export_to_sou"):
         setattr(shim, name, getattr(real, name))
     return shim
 
@@ -223,21 +225,25 @@ class TestTensorDevice:
             TensorDevice().call("forward", [1, 2])
 
     def test_forward_full(self):
-        dev = TensorDevice({
-            "w1": np.array([[1.0, 0.0], [0.0, 1.0]]),
-            "b1": np.array([0.1, 0.2]),
-            "w2": np.array([[1.0, 1.0]]),
-            "b2": np.array([0.0]),
-        })
+        dev = TensorDevice(
+            {
+                "w1": np.array([[1.0, 0.0], [0.0, 1.0]]),
+                "b1": np.array([0.1, 0.2]),
+                "w2": np.array([[1.0, 1.0]]),
+                "b2": np.array([0.0]),
+            }
+        )
         probs = dev.call("forward", [1.0, 2.0])
         assert np.allclose(probs.sum(), 1.0)
         assert probs.ndim == 1
 
     def test_forward_no_biases(self):
-        dev = TensorDevice({
-            "w1": np.array([[1.0, 0.0], [0.0, 1.0]]),
-            "w2": np.array([[1.0, 1.0]]),
-        })
+        dev = TensorDevice(
+            {
+                "w1": np.array([[1.0, 0.0], [0.0, 1.0]]),
+                "w2": np.array([[1.0, 1.0]]),
+            }
+        )
         probs = dev.call("forward", [1.0, 2.0])
         assert np.allclose(probs.sum(), 1.0)
 
@@ -324,8 +330,7 @@ class TestSlonetDevice:
     def test_generate_stream(self):
         dev = SlonetDevice(_FakeSlonetProvider())
         assert list(dev.call("generate_stream", [1, 2, 3], 5)) == [8, 9]
-        assert list(dev.call("generate_stream",
-                             np.array([[1, 2]]), 5, 0)) == [8, 9]
+        assert list(dev.call("generate_stream", np.array([[1, 2]]), 5, 0)) == [8, 9]
 
     def test_forward(self):
         dev = SlonetDevice(_FakeSlonetProvider())
@@ -371,8 +376,7 @@ class TestMultimodalDevice:
         dev = MultimodalDevice(_FakeMultimodalEngine(trained=True))
         assert dev.call("info")["trained"] is True
         assert dev.call("info")["embed_dim"] == 64
-        bare = MultimodalDevice(_FakeMultimodalEngine(trained=False,
-                                                      bare_vision=True))
+        bare = MultimodalDevice(_FakeMultimodalEngine(trained=False, bare_vision=True))
         assert bare.call("info")["trained"] is False
         assert bare.call("info")["embed_dim"] == 0
 
@@ -414,8 +418,7 @@ class TestSlonetTrainingDevice:
         assert dev._created_model is False
 
     def test_init_from_config(self):
-        dev = SlonetTrainingDevice(vocab_size=32, n_embed=16, n_layer=1,
-                                   n_head=2, block_size=32)
+        dev = SlonetTrainingDevice(vocab_size=32, n_embed=16, n_layer=1, n_head=2, block_size=32)
         assert dev._created_model is True
         assert dev._model is None
         assert dev._model_config["vocab_size"] == 32
@@ -455,21 +458,18 @@ class TestSlonetTrainingDevice:
         assert dev.call("detokenize", [97, 98]) == "ab"
 
     def test_generate_empty_prompt(self):
-        dev = SlonetTrainingDevice(vocab_size=32, n_embed=16, n_layer=1,
-                                   n_head=2, block_size=32)
+        dev = SlonetTrainingDevice(vocab_size=32, n_embed=16, n_layer=1, n_head=2, block_size=32)
         assert dev.call("generate", "", 5, 1.0) == ""
 
     def test_generate_temp_paths(self):
-        dev = SlonetTrainingDevice(vocab_size=32, n_embed=16, n_layer=1,
-                                   n_head=2, block_size=32)
+        dev = SlonetTrainingDevice(vocab_size=32, n_embed=16, n_layer=1, n_head=2, block_size=32)
         out0 = dev.call("generate", "hi", 5, 0.0)
         out1 = dev.call("generate", "hi", 5, 1.2)
         assert isinstance(out0, str) and out0
         assert isinstance(out1, str) and out1
 
     def test_forward_input_shapes(self):
-        dev = SlonetTrainingDevice(vocab_size=32, n_embed=16, n_layer=1,
-                                   n_head=2, block_size=32)
+        dev = SlonetTrainingDevice(vocab_size=32, n_embed=16, n_layer=1, n_head=2, block_size=32)
         a = dev.call("forward", [1, 2, 3])
         b = dev.call("forward", np.array([1, 2, 3]))
         c = dev.call("forward", np.array([[1, 2, 3]]))
@@ -488,8 +488,10 @@ class TestSlonetTrainingDevice:
         assert "error" in res
 
     def _write_dataset(self, tmp_path):
-        text = ("hello world this is a tiny dataset for training. "
-                "the quick brown fox jumps over the lazy dog. ") * 6
+        text = (
+            "hello world this is a tiny dataset for training. "
+            "the quick brown fox jumps over the lazy dog. "
+        ) * 6
         p = tmp_path / "data.txt"
         p.write_text(text)
         return p
@@ -509,8 +511,9 @@ class TestSlonetTrainingDevice:
         assert ev["batches_evaluated"] == 2
 
     def test_train_without_scheduler(self, tmp_path, monkeypatch):
-        monkeypatch.setitem(sys.modules, "domain.training._internal.slonet",
-                            _slonet_shim_without_scheduler())
+        monkeypatch.setitem(
+            sys.modules, "domain.training._internal.slonet", _slonet_shim_without_scheduler()
+        )
         dev = SlonetTrainingDevice(model=_tiny_model())
         dev.call("config", "checkpoint_dir", str(tmp_path / "ckpt"))
         p = self._write_dataset(tmp_path)
@@ -658,8 +661,7 @@ class TestNPUVMDevice:
         assert dev.call("forward", "q", np.array([1, 2])) == [0.5]
         assert dev.call("forward", "q", (1, 2)) == [0.5]
         assert dev.call("embed", "q", "hi", 2) == [0.1]
-        assert dev.call("train_step", "q", np.array([1]), np.array([2]),
-                        0.001) == {"loss": 1.0}
+        assert dev.call("train_step", "q", np.array([1]), np.array([2]), 0.001) == {"loss": 1.0}
         assert dev.call("train_step", "q", [1], [2], 0.001) == {"loss": 1.0}
         assert dev.call("info") == {"npu": True}
         assert dev.info() == {"npu": True}

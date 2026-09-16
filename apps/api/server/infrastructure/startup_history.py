@@ -29,10 +29,11 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Default persistence path
-DEFAULT_HISTORY_PATH = Path(os.environ.get(
-    "SLO_STARTUP_HISTORY_PATH",
-    str(Path.home() / ".slogpt" / "startup_history.json")
-))
+DEFAULT_HISTORY_PATH = Path(
+    os.environ.get(
+        "SLO_STARTUP_HISTORY_PATH", str(Path.home() / ".slogpt" / "startup_history.json")
+    )
+)
 
 
 @dataclass
@@ -115,6 +116,7 @@ class StartupHistory:
         # Record to Prometheus metrics
         try:
             from domain.infrastructure.metrics import get_metrics
+
             metrics = get_metrics()
             for stage, dur in record.stage_durations.items():
                 metrics.record_startup_stage_duration(stage, dur)
@@ -201,7 +203,9 @@ class StartupHistory:
                 "min_duration": round(min(durations), 2),
                 "max_duration": round(max(durations), 2),
                 "p50_duration": round(sorted_durations[n // 2], 2),
-                "p95_duration": round(sorted_durations[int(n * 0.95)] if n > 1 else sorted_durations[0], 2),
+                "p95_duration": round(
+                    sorted_durations[int(n * 0.95)] if n > 1 else sorted_durations[0], 2
+                ),
                 "success_rate": round(successes / n, 2),
             }
 
@@ -235,11 +239,7 @@ class StartupHistory:
     def get_slow_startups(self, threshold_seconds: float = 60.0) -> list[dict]:
         """Get startups that exceeded the threshold."""
         with self._lock:
-            return [
-                r.to_dict()
-                for r in self._records
-                if r.total_duration > threshold_seconds
-            ]
+            return [r.to_dict() for r in self._records if r.total_duration > threshold_seconds]
 
     def compare_runs(self, run_a_index: int, run_b_index: int) -> dict[str, Any] | None:
         """Compare two startup runs.
@@ -325,37 +325,43 @@ class StartupHistory:
             slow_threshold = p95 * 1.5
             for r in self._records[-5:]:  # Check last 5
                 if r.total_duration > slow_threshold:
-                    alerts.append({
-                        "type": "slow_startup",
-                        "severity": "warning",
-                        "message": f"Startup took {r.total_duration:.1f}s (threshold: {slow_threshold:.1f}s)",
-                        "timestamp": r.timestamp,
-                        "duration": r.total_duration,
-                    })
+                    alerts.append(
+                        {
+                            "type": "slow_startup",
+                            "severity": "warning",
+                            "message": f"Startup took {r.total_duration:.1f}s (threshold: {slow_threshold:.1f}s)",
+                            "timestamp": r.timestamp,
+                            "duration": r.total_duration,
+                        }
+                    )
 
             # Check for failed startups
             for r in self._records[-5:]:
                 if not r.success:
-                    alerts.append({
-                        "type": "failed_startup",
-                        "severity": "error",
-                        "message": f"Startup failed: {r.error or 'unknown error'}",
-                        "timestamp": r.timestamp,
-                        "error": r.error,
-                    })
+                    alerts.append(
+                        {
+                            "type": "failed_startup",
+                            "severity": "error",
+                            "message": f"Startup failed: {r.error or 'unknown error'}",
+                            "timestamp": r.timestamp,
+                            "error": r.error,
+                        }
+                    )
 
             # Check for regression (current > 2x average)
             if self._records:
                 last = self._records[-1]
                 if last.total_duration > avg * 2:
-                    alerts.append({
-                        "type": "startup_regression",
-                        "severity": "warning",
-                        "message": f"Startup {last.total_duration:.1f}s is {last.total_duration/avg:.1f}x slower than average ({avg:.1f}s)",
-                        "timestamp": last.timestamp,
-                        "duration": last.total_duration,
-                        "avg_duration": avg,
-                    })
+                    alerts.append(
+                        {
+                            "type": "startup_regression",
+                            "severity": "warning",
+                            "message": f"Startup {last.total_duration:.1f}s is {last.total_duration / avg:.1f}x slower than average ({avg:.1f}s)",
+                            "timestamp": last.timestamp,
+                            "duration": last.total_duration,
+                            "avg_duration": avg,
+                        }
+                    )
 
         return alerts
 
@@ -373,25 +379,29 @@ class StartupHistory:
             stage_stats = self.get_stage_stats()
             for stage, stats in stage_stats.items():
                 if stats["avg"] > 30:
-                    suggestions.append({
-                        "type": "slow_stage",
-                        "severity": "warning",
-                        "stage": stage,
-                        "message": f"Stage '{stage}' averages {stats['avg']}s. Consider optimizing hooks in this stage.",
-                        "current_avg": stats["avg"],
-                        "threshold": 30,
-                    })
+                    suggestions.append(
+                        {
+                            "type": "slow_stage",
+                            "severity": "warning",
+                            "stage": stage,
+                            "message": f"Stage '{stage}' averages {stats['avg']}s. Consider optimizing hooks in this stage.",
+                            "current_avg": stats["avg"],
+                            "threshold": 30,
+                        }
+                    )
 
                 # Check for high variance
                 if stats["max"] > stats["avg"] * 2 and stats["count"] > 3:
-                    suggestions.append({
-                        "type": "high_variance",
-                        "severity": "info",
-                        "stage": stage,
-                        "message": f"Stage '{stage}' has high variance (avg: {stats['avg']}s, max: {stats['max']}s). Check for non-deterministic behavior.",
-                        "avg": stats["avg"],
-                        "max": stats["max"],
-                    })
+                    suggestions.append(
+                        {
+                            "type": "high_variance",
+                            "severity": "info",
+                            "stage": stage,
+                            "message": f"Stage '{stage}' has high variance (avg: {stats['avg']}s, max: {stats['max']}s). Check for non-deterministic behavior.",
+                            "avg": stats["avg"],
+                            "max": stats["max"],
+                        }
+                    )
 
             # Analyze hook performance
             hook_stats: dict[str, list[float]] = {}
@@ -404,14 +414,16 @@ class StartupHistory:
             for hook, durations in hook_stats.items():
                 avg_duration = sum(durations) / len(durations)
                 if avg_duration > 10:
-                    suggestions.append({
-                        "type": "slow_hook",
-                        "severity": "warning",
-                        "hook": hook,
-                        "message": f"Hook '{hook}' averages {avg_duration:.1f}s. Consider parallelizing or optimizing.",
-                        "current_avg": round(avg_duration, 1),
-                        "threshold": 10,
-                    })
+                    suggestions.append(
+                        {
+                            "type": "slow_hook",
+                            "severity": "warning",
+                            "hook": hook,
+                            "message": f"Hook '{hook}' averages {avg_duration:.1f}s. Consider parallelizing or optimizing.",
+                            "current_avg": round(avg_duration, 1),
+                            "threshold": 10,
+                        }
+                    )
 
             # Check for model load specifically
             model_durations = [
@@ -422,37 +434,43 @@ class StartupHistory:
             if model_durations:
                 avg_model = sum(model_durations) / len(model_durations)
                 if avg_model > 60:
-                    suggestions.append({
-                        "type": "slow_model_load",
-                        "severity": "warning",
-                        "hook": "model_load",
-                        "message": f"Model load averages {avg_model:.0f}s. Consider using a smaller model, quantization, or model caching.",
-                        "current_avg": round(avg_model, 1),
-                        "threshold": 60,
-                    })
+                    suggestions.append(
+                        {
+                            "type": "slow_model_load",
+                            "severity": "warning",
+                            "hook": "model_load",
+                            "message": f"Model load averages {avg_model:.0f}s. Consider using a smaller model, quantization, or model caching.",
+                            "current_avg": round(avg_model, 1),
+                            "threshold": 60,
+                        }
+                    )
 
             # Check for overall startup time
             durations = [r.total_duration for r in self._records]
             avg_total = sum(durations) / len(durations)
             if avg_total > 120:
-                suggestions.append({
-                    "type": "slow_overall",
-                    "severity": "warning",
-                    "message": f"Overall startup averages {avg_total:.0f}s. Consider disabling non-essential hooks.",
-                    "current_avg": round(avg_total, 1),
-                    "threshold": 120,
-                })
+                suggestions.append(
+                    {
+                        "type": "slow_overall",
+                        "severity": "warning",
+                        "message": f"Overall startup averages {avg_total:.0f}s. Consider disabling non-essential hooks.",
+                        "current_avg": round(avg_total, 1),
+                        "threshold": 120,
+                    }
+                )
 
             # Check for frequent failures
             failures = sum(1 for r in self._records if not r.success)
             if failures > len(self._records) * 0.2:  # More than 20% failures
-                suggestions.append({
-                    "type": "frequent_failures",
-                    "severity": "error",
-                    "message": f"{failures}/{len(self._records)} startups failed ({failures/len(self._records)*100:.0f}%). Check system resources and configuration.",
-                    "failure_count": failures,
-                    "total_count": len(self._records),
-                })
+                suggestions.append(
+                    {
+                        "type": "frequent_failures",
+                        "severity": "error",
+                        "message": f"{failures}/{len(self._records)} startups failed ({failures / len(self._records) * 100:.0f}%). Check system resources and configuration.",
+                        "failure_count": failures,
+                        "total_count": len(self._records),
+                    }
+                )
 
         return suggestions
 

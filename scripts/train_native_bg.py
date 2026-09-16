@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Train native SloNet — detached from terminal."""
-import os, sys, time, signal
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "packages", "core-py"))
+import os
+import sys
+import time
+
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "packages", "core-py")
+)
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 # Write PID for status checking
@@ -20,21 +25,21 @@ config = TrainerConfig(
     batch_size=8,
     epochs=10,
     learning_rate=1e-3,
-    checkpoint_dir='models/slonet-native',
+    checkpoint_dir="models/slonet-native",
     checkpoint_interval=100,
     log_interval=25,
     warmup_steps=20,
 )
 
 trainer = SloughGPTTrainer(
-    data_path='datasets/api_conversations/input.txt',
+    data_path="datasets/api_conversations/input.txt",
     config=config,
-    soul_name='sloughgpt-v1',
+    soul_name="sloughgpt-v1",
 )
 
 params = sum(p.data.size for p in trainer.model.parameters())
-print(f'Model: {params:,} params, vocab={trainer.vocab_size}', flush=True)
-print(f'Train: {len(trainer.train_data):,} chars', flush=True)
+print(f"Model: {params:,} params, vocab={trainer.vocab_size}", flush=True)
+print(f"Train: {len(trainer.train_data):,} chars", flush=True)
 
 start = time.time()
 trainer.train()
@@ -44,5 +49,5 @@ elapsed = time.time() - start
 with open("/tmp/native-train.status", "w") as f:
     f.write(f"done|{elapsed:.0f}|{trainer._best_val_loss:.4f}|{trainer._last_checkpoint_path}")
 
-print(f'Done in {elapsed:.0f}s, best_loss={trainer._best_val_loss:.4f}', flush=True)
-print(f'Checkpoint: {trainer._last_checkpoint_path}', flush=True)
+print(f"Done in {elapsed:.0f}s, best_loss={trainer._best_val_loss:.4f}", flush=True)
+print(f"Checkpoint: {trainer._last_checkpoint_path}", flush=True)

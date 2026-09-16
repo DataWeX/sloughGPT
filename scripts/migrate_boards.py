@@ -24,8 +24,18 @@ from pathlib import Path
 
 # New card schema field ordering (mirrors planner.store.Card).
 NEW_FIELDS = [
-    "id", "title", "description", "column", "priority", "tags",
-    "assignee", "dueDate", "createdAt", "updatedAt", "root_hash", "notes",
+    "id",
+    "title",
+    "description",
+    "column",
+    "priority",
+    "tags",
+    "assignee",
+    "dueDate",
+    "createdAt",
+    "updatedAt",
+    "root_hash",
+    "notes",
 ]
 
 # Maps a source status/column value to a board column.
@@ -120,7 +130,8 @@ def migrate(board_dir: Path, dry_run: bool = False) -> dict:
         if raw_columns:
             columns = [
                 {
-                    "name": c.get("name"), "wip_limit": c.get("wip_limit", 0),
+                    "name": c.get("name"),
+                    "wip_limit": c.get("wip_limit", 0),
                     "order": c.get("order", i),
                 }
                 for i, c in enumerate(raw_columns)
@@ -150,7 +161,9 @@ def migrate(board_dir: Path, dry_run: bool = False) -> dict:
 
     if dry_run:
         return {
-            "name": name, "columns": columns, "cards": merged,
+            "name": name,
+            "columns": columns,
+            "cards": merged,
             "from_json": len(json_cards),
             "from_jsonl": len(jsonl_cards),
             "jsonl_new": from_jsonl_added,
@@ -165,7 +178,9 @@ def migrate(board_dir: Path, dry_run: bool = False) -> dict:
     board_json.write_text(json.dumps(board_doc, ensure_ascii=False, indent=2) + "\n")
 
     return {
-        "name": name, "columns": columns, "cards": merged,
+        "name": name,
+        "columns": columns,
+        "cards": merged,
         "from_json": len(json_cards),
         "from_jsonl": len(jsonl_cards),
         "jsonl_new": from_jsonl_added,
@@ -178,9 +193,13 @@ def main() -> None:
         prog="migrate_boards",
         description="Migrate legacy board.json + board.jsonl to the new card schema.",
     )
-    parser.add_argument("--board-dir", default=".kanban", help="Board directory with board.json/board.jsonl")
+    parser.add_argument(
+        "--board-dir", default=".kanban", help="Board directory with board.json/board.jsonl"
+    )
     parser.add_argument("--dry-run", action="store_true", help="Preview the merge without writing")
-    parser.add_argument("--json", dest="json_out", action="store_true", help="Emit machine-readable stats")
+    parser.add_argument(
+        "--json", dest="json_out", action="store_true", help="Emit machine-readable stats"
+    )
     args = parser.parse_args()
 
     stats = migrate(Path(args.board_dir), dry_run=args.dry_run)

@@ -9,13 +9,20 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Union
+from typing import Union
 
 import numpy as np
 
 from domain.training._internal.slonet import (
-    softmax, log_softmax, cross_entropy, mse_loss, kl_div_loss,
-    Tensor, SloLinear, no_grad, SloAdam,
+    SloAdam,
+    SloLinear,
+    Tensor,
+    cross_entropy,
+    kl_div_loss,
+    log_softmax,
+    mse_loss,
+    no_grad,
+    softmax,
 )
 
 logger = logging.getLogger("slo.distillation")
@@ -27,7 +34,7 @@ ArrayLike = Union[Tensor, np.ndarray]
 def _to_np(x):
     if isinstance(x, Tensor):
         return x.data
-    if hasattr(x, 'cpu'):
+    if hasattr(x, "cpu"):
         return x.detach().cpu().numpy()
     if isinstance(x, np.ndarray):
         return x
@@ -55,7 +62,7 @@ def _size(x, dim):
 @dataclass
 class DistillationConfig:
     temperature: float = 4.0
-    temperature_schedule: Optional[List[float]] = None
+    temperature_schedule: list[float] | None = None
     alpha: float = 0.5
     beta: float = 0.5
     gamma: float = 0.0
@@ -63,8 +70,8 @@ class DistillationConfig:
     use_label_smoothing: bool = False
     label_smoothing: float = 0.1
     progressive: bool = False
-    stage_weights: Optional[List[float]] = None
-    hidden_layer_mapping: Optional[Dict[int, int]] = None
+    stage_weights: list[float] | None = None
+    hidden_layer_mapping: dict[int, int] | None = None
 
 
 # =============================================================================
@@ -84,13 +91,14 @@ class DistillationLoss:
         self.config = config
         self.projection = None
 
-    def __call__(self, student_logits, teacher_logits, labels=None,
-                 student_hidden=None, teacher_hidden=None):
-        return self.forward(student_logits, teacher_logits, labels,
-                            student_hidden, teacher_hidden)
+    def __call__(
+        self, student_logits, teacher_logits, labels=None, student_hidden=None, teacher_hidden=None
+    ):
+        return self.forward(student_logits, teacher_logits, labels, student_hidden, teacher_hidden)
 
-    def forward(self, student_logits, teacher_logits, labels=None,
-                student_hidden=None, teacher_hidden=None):
+    def forward(
+        self, student_logits, teacher_logits, labels=None, student_hidden=None, teacher_hidden=None
+    ):
         losses = {}
 
         s = _to_np(student_logits)
@@ -101,14 +109,13 @@ class DistillationLoss:
             student_soft = log_softmax(_to_tensor(s / temp), dim=-1)
             teacher_soft = softmax(_to_tensor(t / temp), dim=-1)
             soft_loss = kl_div_loss(student_soft, teacher_soft, reduction="batchmean")
-            soft_loss = soft_loss * (temp ** 2)
+            soft_loss = soft_loss * (temp**2)
             losses["soft_loss"] = float(_to_np(soft_loss).reshape(-1)[0])
 
         if self.config.alpha > 0 and labels is not None:
             lbl = _to_np(labels).reshape(-1).astype(np.int64)
             s_flat = s.reshape(-1, s.shape[-1])
-            hard_loss = cross_entropy(_to_tensor(s_flat, requires_grad=True),
-                                      _to_tensor(lbl))
+            hard_loss = cross_entropy(_to_tensor(s_flat, requires_grad=True), _to_tensor(lbl))
             losses["hard_loss"] = float(_to_np(hard_loss).reshape(-1)[0])
 
         if self.config.gamma > 0 and student_hidden is not None and teacher_hidden is not None:
@@ -149,17 +156,18 @@ class DistillationTrainer:
     torch tensors — they are converted at the boundary.
     """
 
-    def __init__(self, teacher_model, student_model, config: DistillationConfig,
-                 device: Optional[str] = None):
+    def __init__(
+        self, teacher_model, student_model, config: DistillationConfig, device: str | None = None
+    ):
         self.teacher = teacher_model
         self.student = student_model
         self.config = config
         self.device = device or "cpu"
 
         for param in self.teacher.parameters():
-            if hasattr(param, 'requires_grad'):
+            if hasattr(param, "requires_grad"):
                 param.requires_grad = False
-        if hasattr(self.teacher, 'eval'):
+        if hasattr(self.teacher, "eval"):
             self.teacher.eval()
 
         self.optimizer = SloAdam(lr=1e-4)
@@ -167,13 +175,29 @@ class DistillationTrainer:
         self.current_stage = 0
         self.stage_weights = config.stage_weights or [1.0]
 
-    def step(self, inputs, labels) -> Dict[str, float]:
+    def step(self, inputs, labels) -> dict[str, float]:
         with no_grad():
             teacher_outputs = self.teacher(inputs)
-            t_logits = teacher_outputs if isinstance(teacher_outputs, (Tensor, np.ndarray)) else _to_np(teacher_outputs[0] if isinstance(teacher_outputs, (list, tuple)) else teacher_outputs)
+            t_logits = (
+                teacher_outputs
+                if isinstance(teacher_outputs, (Tensor, np.ndarray))
+                else _to_np(
+                    teacher_outputs[0]
+                    if isinstance(teacher_outputs, (list, tuple))
+                    else teacher_outputs
+                )
+            )
 
         student_outputs = self.student(inputs)
-        s_logits = student_outputs if isinstance(student_outputs, (Tensor, np.ndarray)) else _to_np(student_outputs[0] if isinstance(student_outputs, (list, tuple)) else student_outputs)
+        s_logits = (
+            student_outputs
+            if isinstance(student_outputs, (Tensor, np.ndarray))
+            else _to_np(
+                student_outputs[0]
+                if isinstance(student_outputs, (list, tuple))
+                else student_outputs
+            )
+        )
 
         if _size(t_logits, 1) != _size(s_logits, 1):
             min_len = min(_size(t_logits, 1), _size(s_logits, 1))
@@ -191,13 +215,11 @@ class DistillationTrainer:
             max_vocab = max(t_vocab, s_vocab)
             if s_vocab < max_vocab:
                 s_np = _to_np(s_logits)
-                pad = np.full(s_np.shape[:-1] + (max_vocab - s_vocab,), -1e9,
-                              dtype=s_np.dtype)
+                pad = np.full(s_np.shape[:-1] + (max_vocab - s_vocab,), -1e9, dtype=s_np.dtype)
                 s_logits = np.concatenate([s_np, pad], axis=-1)
             if t_vocab < max_vocab:
                 t_np = _to_np(t_logits)
-                pad = np.full(t_np.shape[:-1] + (max_vocab - t_vocab,), -1e9,
-                              dtype=t_np.dtype)
+                pad = np.full(t_np.shape[:-1] + (max_vocab - t_vocab,), -1e9, dtype=t_np.dtype)
                 t_logits = np.concatenate([t_np, pad], axis=-1)
 
         loss, losses_dict = self.loss_fn(s_logits, t_logits, labels)
@@ -205,7 +227,7 @@ class DistillationTrainer:
         loss.backward()
         self.optimizer.step(self.student.parameters())
         for p in self.student.parameters():
-            if hasattr(p, 'grad'):
+            if hasattr(p, "grad"):
                 p.grad = None
 
         return losses_dict
@@ -216,7 +238,7 @@ class DistillationTrainer:
         student_soft = log_softmax(_to_tensor(s / temperature), dim=-1)
         teacher_soft = softmax(_to_tensor(t / temperature), dim=-1)
         loss = kl_div_loss(student_soft, teacher_soft, reduction="batchmean")
-        loss = loss * (temperature ** 2)
+        loss = loss * (temperature**2)
         return loss
 
     def distill_hidden_states(self, student_hidden, teacher_hidden, projection=None):
@@ -241,16 +263,27 @@ class ProgressiveDistiller:
 
     def _get_layers(self, model):
         layers = []
-        for name, module in (model.named_modules() if hasattr(model, 'named_modules') else model.named_children()):
+        for name, module in (
+            model.named_modules() if hasattr(model, "named_modules") else model.named_children()
+        ):
             if "block" in name.lower() or "layer" in name.lower():
                 try:
-                    if len(list(module.children() if hasattr(module, 'children') else module.named_children())) > 0:
+                    if (
+                        len(
+                            list(
+                                module.children()
+                                if hasattr(module, "children")
+                                else module.named_children()
+                            )
+                        )
+                        > 0
+                    ):
                         layers.append(module)
                 except Exception:
                     layers.append(module)
         return layers
 
-    def _create_layer_mapping(self) -> Dict[int, int]:
+    def _create_layer_mapping(self) -> dict[int, int]:
         n_t = len(self.teacher_layers)
         n_s = len(self.student_layers)
         if n_s >= n_t:
@@ -267,8 +300,9 @@ class ProgressiveDistiller:
         return 0.0
 
 
-def create_distillation_trainer(teacher_model, student_model, temperature=4.0,
-                                alpha=0.5, beta=0.5) -> DistillationTrainer:
+def create_distillation_trainer(
+    teacher_model, student_model, temperature=4.0, alpha=0.5, beta=0.5
+) -> DistillationTrainer:
     config = DistillationConfig(temperature=temperature, alpha=alpha, beta=beta)
     return DistillationTrainer(teacher_model, student_model, config)
 

@@ -1,13 +1,12 @@
 """Tests for TrainingExecutor, InferencePool dynamic sizing, and pugqeep integration."""
 
 import asyncio
-import time
 import threading
+import time
 from unittest.mock import patch
 
 import numpy as np
 import pytest
-
 
 # ── TrainingExecutor tests ──────────────────────────────────────────
 
@@ -54,7 +53,7 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
     def test_cancel_queued_job(self):
-        from domain.training._internal.executor import TrainingExecutor, JobStatus
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=1)
         evt = threading.Event()
@@ -169,7 +168,7 @@ class TestTrainingExecutorEdgeBranches:
             seen.update(kw)
             return {}
 
-        job_id = exec_.submit(fn, "call_args_job", _call_args={"a": 1, "b": 2}, c=3)
+        exec_.submit(fn, "call_args_job", _call_args={"a": 1, "b": 2}, c=3)
         time.sleep(0.1)
         assert seen == {"a": 1, "b": 2, "c": 3}
         exec_.shutdown(wait=True)
@@ -202,7 +201,10 @@ class TestTrainingExecutorEdgeBranches:
             return {"w": np.random.randn(32).astype(np.float32)}
 
         job_id = exec_.submit_training(
-            train_fn, "bad_lib", tree_id="t", point_library=BadLibrary(),
+            train_fn,
+            "bad_lib",
+            tree_id="t",
+            point_library=BadLibrary(),
         )
         status = None
         for _ in range(50):
@@ -353,6 +355,7 @@ class TestCompressCheckpointBranches:
         import sys
         import tempfile
         from pathlib import Path
+
         from domains.training import executor as exmod
 
         monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.pugqeep", None)
@@ -364,10 +367,13 @@ class TestCompressCheckpointBranches:
     def test_model_none_returns_none(self):
         import tempfile
         from pathlib import Path
+
         from domains.training import executor as exmod
 
-        with patch("domain.training._internal.slonet.import_from_sou", return_value=None), \
-                tempfile.TemporaryDirectory() as tmpdir:
+        with (
+            patch("domain.training._internal.slonet.import_from_sou", return_value=None),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
             soul_path = str(Path(tmpdir) / "x.soul")
             Path(soul_path).write_text("x")
             assert exmod.compress_checkpoint(soul_path) is None
@@ -375,10 +381,16 @@ class TestCompressCheckpointBranches:
     def test_load_failure_returns_none(self):
         import tempfile
         from pathlib import Path
+
         from domains.training import executor as exmod
 
-        with patch("domain.training._internal.slonet.import_from_sou", side_effect=RuntimeError("corrupt")), \
-                tempfile.TemporaryDirectory() as tmpdir:
+        with (
+            patch(
+                "domain.training._internal.slonet.import_from_sou",
+                side_effect=RuntimeError("corrupt"),
+            ),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
             soul_path = str(Path(tmpdir) / "x.soul")
             Path(soul_path).write_text("x")
             assert exmod.compress_checkpoint(soul_path) is None
@@ -386,14 +398,17 @@ class TestCompressCheckpointBranches:
     def test_weights_converted_to_ndarray(self):
         import tempfile
         from pathlib import Path
+
         from domains.training import executor as exmod
 
         class FakeModel:
             def state_dict(self):
                 return {"w": [1.0, 2.0, 3.0]}
 
-        with patch("domain.training._internal.slonet.import_from_sou", return_value=FakeModel()), \
-                tempfile.TemporaryDirectory() as tmpdir:
+        with (
+            patch("domain.training._internal.slonet.import_from_sou", return_value=FakeModel()),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
             soul_path = str(Path(tmpdir) / "x.soul")
             Path(soul_path).write_text("x")
             stats = exmod.compress_checkpoint(soul_path, n_clusters=2)
@@ -525,6 +540,7 @@ class TestModelServerReadSemaphore:
         class FakeTokenizer:
             eos_token_id = 0
             pad_token_id = 0
+
             def __call__(self, text, **kwargs):
                 return {"input_ids": [[1, 2, 3]]}
 

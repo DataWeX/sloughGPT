@@ -5,15 +5,15 @@ Common utility functions for the SloughGPT AI Framework
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
+import logging
 import random
 import string
 import sys as _sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-import logging
+from typing import Any
 
 logger = logging.getLogger("slo.shared")
 
@@ -57,9 +57,9 @@ def format_time(seconds: float) -> str:
         return f"{seconds / 86400:.1f}d"
 
 
-def load_json(path: str) -> Dict:
+def load_json(path: str) -> dict:
     """Load JSON from file."""
-    with open(path, "r") as f:
+    with open(path) as f:
         return json.load(f)
 
 
@@ -69,7 +69,7 @@ def save_json(data: Any, path: str, indent: int = 2) -> None:
         json.dump(data, f, indent=indent)
 
 
-def merge_dicts(*dicts: Dict) -> Dict:
+def merge_dicts(*dicts: dict) -> dict:
     """Merge multiple dictionaries."""
     result = {}
     for d in dicts:
@@ -131,7 +131,7 @@ class Cache:
         self._cache = {}
         self._max_size = max_size
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         return self._cache.get(key)
 
     def set(self, key: str, value: Any) -> None:
@@ -174,14 +174,14 @@ class RateLimiter:
         return wrapper
 
 
-def validate_config(config: Dict, required_keys: List[str]) -> bool:
+def validate_config(config: dict, required_keys: list[str]) -> bool:
     """Validate config has required keys."""
     return all(key in config for key in required_keys)
 
 
 def get_timestamp() -> str:
     """Get ISO timestamp."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 __all__ = [
@@ -218,6 +218,7 @@ def find_available_port(host: str = "", start_port: int = 8000, max_attempts: in
         RuntimeError: If no port is available in range
     """
     import socket
+
     for port in range(start_port, start_port + max_attempts):
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -227,10 +228,12 @@ def find_available_port(host: str = "", start_port: int = 8000, max_attempts: in
             return port
         except OSError:
             continue
-    raise RuntimeError(f"Could not find available port in range {start_port}-{start_port + max_attempts}")
+    raise RuntimeError(
+        f"Could not find available port in range {start_port}-{start_port + max_attempts}"
+    )
 
 
-def find_repo_root(start: "Path | str" = "") -> "Path":
+def find_repo_root(start: Path | str = "") -> Path:
     """Walk up from *start* (or this file) to find the repository root.
 
     The root is identified by having both ``apps/`` and ``packages/``
@@ -245,7 +248,7 @@ def find_repo_root(start: "Path | str" = "") -> "Path":
     return here.parents[min(4, len(here.parents) - 1)]
 
 
-def find_server_python(repo_root: "Path | str" = "") -> str:
+def find_server_python(repo_root: Path | str = "") -> str:
     """Find the Python executable with the project's dependencies.
 
     Checks ``<repo_root>/.venv/bin/python3`` first, then ``.venv/bin/python``,

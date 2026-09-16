@@ -20,15 +20,15 @@ Usage:
     python scripts/benchmark_model_comparison.py --sou models/checkpoint.soul --hf gpt2
 """
 
-import sys
-import json
-import time
-import math
 import argparse
-import numpy as np
+import json
+import math
+import sys
+import time
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
-from typing import List, Optional
+
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packages" / "core-py"))
 
@@ -65,8 +65,8 @@ QUICK_PROMPTS = {
 @dataclass
 class ModelMetrics:
     model_name: str
-    perplexity: Optional[float] = None
-    bleu: Optional[float] = None
+    perplexity: float | None = None
+    bleu: float | None = None
     mean_latency_ms: float = 0.0
     p50_latency_ms: float = 0.0
     p95_latency_ms: float = 0.0
@@ -74,13 +74,13 @@ class ModelMetrics:
     mean_response_len: float = 0.0
     repetition_rate: float = 0.0
     diversity: float = 0.0
-    responses: List[str] = field(default_factory=list)
-    prompts: List[str] = field(default_factory=list)
+    responses: list[str] = field(default_factory=list)
+    prompts: list[str] = field(default_factory=list)
 
 
 @dataclass
 class ComparisonReport:
-    models: List[ModelMetrics]
+    models: list[ModelMetrics]
     eval_prompts: int
     timestamp: str = ""
 
@@ -95,11 +95,11 @@ def compute_bleu(candidate: str, reference: str, max_n: int = 4) -> float:
     for n in range(1, min(max_n + 1, len(cand_tokens) + 1, len(ref_tokens) + 1)):
         cand_ngrams = {}
         for i in range(len(cand_tokens) - n + 1):
-            ng = tuple(cand_tokens[i:i+n])
+            ng = tuple(cand_tokens[i : i + n])
             cand_ngrams[ng] = cand_ngrams.get(ng, 0) + 1
         ref_ngrams = {}
         for i in range(len(ref_tokens) - n + 1):
-            ng = tuple(ref_tokens[i:i+n])
+            ng = tuple(ref_tokens[i : i + n])
             ref_ngrams[ng] = ref_ngrams.get(ng, 0) + 1
         matches = sum(min(cand_ngrams[ng], ref_ngrams.get(ng, 0)) for ng in cand_ngrams)
         total = sum(cand_ngrams.values())
@@ -119,7 +119,7 @@ def compute_repetition_rate(text: str) -> float:
     words = text.split()
     if len(words) < 2:
         return 0.0
-    bigrams = [(words[i], words[i+1]) for i in range(len(words)-1)]
+    bigrams = [(words[i], words[i + 1]) for i in range(len(words) - 1)]
     unique = len(set(bigrams))
     total = len(bigrams)
     return 1.0 - (unique / total) if total > 0 else 0.0
@@ -154,8 +154,12 @@ TRAIN_TEXT = (
 def train_native_model(epochs: int = 30):
     """Train a small SloNet model on-the-fly for benchmarking."""
     from domain.training._internal.slonet import (
-        SloNet, SloEmbedding, SloLSTM, SloAdam,
-        cross_entropy, tensor, _sample_from_logits,
+        SloAdam,
+        SloEmbedding,
+        SloLSTM,
+        SloNet,
+        cross_entropy,
+        tensor,
     )
 
     chars = sorted(set(TRAIN_TEXT))
@@ -171,7 +175,10 @@ def train_native_model(epochs: int = 30):
         return "".join(itos.get(int(i), "?") for i in ids if i > 0)
 
     net = SloNet(
-        layers=[SloEmbedding(vocab_size, 32), SloLSTM(vocab_size, 32, 64, num_layers=1, dropout=0.0)],
+        layers=[
+            SloEmbedding(vocab_size, 32),
+            SloLSTM(vocab_size, 32, 64, num_layers=1, dropout=0.0),
+        ],
         soul_name="bench_native",
     )
     lstm = net.layers[1]
@@ -185,8 +192,8 @@ def train_native_model(epochs: int = 30):
         ep_loss = 0.0
         steps = 0
         for pos in order[:30]:
-            x = tensor(data[pos:pos + chunk].reshape(1, -1), requires_grad=True)
-            y = tensor(data[pos + 1:pos + chunk + 1].reshape(1, -1))
+            x = tensor(data[pos : pos + chunk].reshape(1, -1), requires_grad=True)
+            y = tensor(data[pos + 1 : pos + chunk + 1].reshape(1, -1))
             h = lstm.init_hidden()
             logits, _ = lstm.forward(x, h)
             loss = cross_entropy(logits, y.reshape(-1))
@@ -205,7 +212,9 @@ def _find_best_trained_model():
     """Find the best available trained model in auto-training dir."""
     if not TRAINED_MODELS_DIR.exists():
         return None
-    candidates = sorted(TRAINED_MODELS_DIR.glob("*.soul"), key=lambda p: p.stat().st_size, reverse=True)
+    candidates = sorted(
+        TRAINED_MODELS_DIR.glob("*.soul"), key=lambda p: p.stat().st_size, reverse=True
+    )
     for path in candidates:
         if path.stat().st_size > 1_000_000:  # >1MB = real model
             return path
@@ -221,8 +230,9 @@ def load_native_model():
     if trained_path:
         print(f"Loading trained model from {trained_path}")
         from domain.training._internal.slonet import import_from_sou
+
         net = import_from_sou(str(trained_path))
-        if hasattr(net, 'generate'):
+        if hasattr(net, "generate"):
             meta_raw = _read_soul_metadata(trained_path)
             md = meta_raw.get("metadata", {}) if meta_raw else {}
             stoi = md.get("stoi", {})
@@ -232,39 +242,57 @@ def load_native_model():
                 charset = "".join(charset)
             if itos:
                 if isinstance(itos, list):
-                    itos_map = {i: c for i, c in enumerate(itos)}
+                    itos_map = dict(enumerate(itos))
                 else:
                     itos_map = {int(k): v for k, v in itos.items()}
                 stoi_map = {v: k for k, v in itos_map.items()}
-                encode = lambda text: np.array([stoi_map.get(c, 0) for c in text], dtype=np.int64).reshape(1, -1)
-                decode_tokens = lambda ids: "".join(itos_map.get(int(i), "?") for i in ids.flatten() if int(i) in itos_map)
+                def encode(text):
+                    return np.array(
+                                    [stoi_map.get(c, 0) for c in text], dtype=np.int64
+                                ).reshape(1, -1)
+                def decode_tokens(ids):
+                    return "".join(
+                                    itos_map.get(int(i), "?") for i in ids.flatten() if int(i) in itos_map
+                                )
                 return net, None, encode, decode_tokens, charset
             else:
                 vocab_size = md.get("vocab_size", 256)
-                encode = lambda text: np.array([ord(c) % vocab_size for c in text], dtype=np.int64).reshape(1, -1)
-                decode_tokens = lambda ids: "".join(chr(int(i)) if 32 <= int(i) < 127 else "?" for i in ids.flatten())
+                def encode(text):
+                    return np.array(
+                                    [ord(c) % vocab_size for c in text], dtype=np.int64
+                                ).reshape(1, -1)
+                def decode_tokens(ids):
+                    return "".join(
+                                    chr(int(i)) if 32 <= int(i) < 127 else "?" for i in ids.flatten()
+                                )
                 return net, None, encode, decode_tokens, ""
 
     # 2. Try the bench LSTM .soul
     soul_path = BENCH_MODEL_PATH
     if soul_path.exists():
         print(f"Loading benchmark LSTM from {soul_path}")
-        from domain.training._internal.slonet import SloNet, SloLSTM, import_from_sou
+        from domain.training._internal.slonet import import_from_sou
+
         net = import_from_sou(str(soul_path))
         lstm = net.layers[1] if len(net.layers) > 1 else net.layers[0]
-        meta = getattr(net, 'metadata', {})
-        inner_meta = meta.get('metadata', {})
-        charset = inner_meta.get('charset', '') if isinstance(inner_meta, dict) else ''
+        meta = getattr(net, "metadata", {})
+        inner_meta = meta.get("metadata", {})
+        charset = inner_meta.get("charset", "") if isinstance(inner_meta, dict) else ""
         if charset:
             chars = sorted(set(charset))
         else:
-            chars = sorted(set(" " + "".join(c for c in TRAIN_TEXT if c.isalnum() or c in ".,!?;:'-")))
+            chars = sorted(
+                set(" " + "".join(c for c in TRAIN_TEXT if c.isalnum() or c in ".,!?;:'-"))
+            )
         stoi = {c: i + 1 for i, c in enumerate(chars)}
         itos = {i + 1: c for i, c in enumerate(chars)}
+
         def encode(text):
             return np.array([stoi.get(c, 0) for c in text], dtype=np.int64)
+
         def decode(ids):
             return "".join(itos.get(int(i), "?") for i in ids if i > 0)
+
         return net, lstm, encode, decode, charset
 
     print("No pre-trained model found.")
@@ -275,13 +303,15 @@ def load_native_model():
 
 def _read_soul_metadata(path):
     """Read the JSON metadata from a .soul file."""
-    import struct, json
+    import json
+    import struct
+
     with open(path, "rb") as f:
         raw = f.read()
     if raw[:4] not in (b"SOU\x00", b"SOUL"):
         return None
     json_len = struct.unpack("<I", raw[8:12])[0]
-    meta_bytes = raw[12:12 + json_len].rstrip(b"\x00")
+    meta_bytes = raw[12 : 12 + json_len].rstrip(b"\x00")
     return json.loads(meta_bytes.decode())
 
 
@@ -306,7 +336,8 @@ def run_native_inference(net, lstm, encode, decode, prompt: str, max_new_tokens:
     if lstm is not None:
         # LSTM path
         gen_ids = list(input_ids.flatten())
-        from domain.training._internal.slonet import tensor, no_grad
+        from domain.training._internal.slonet import no_grad, tensor
+
         h = lstm.init_hidden()
         prompt_len = len(gen_ids)
         with no_grad():
@@ -337,9 +368,10 @@ def run_native_inference(net, lstm, encode, decode, prompt: str, max_new_tokens:
 
 
 def run_sou_inference(model, prompt: str, max_new_tokens: int = 50):
-    tokenizer = getattr(model, '_tokenizer', None)
+    tokenizer = getattr(model, "_tokenizer", None)
     if tokenizer is None:
         from domain.multimodal.char_tokenizer import CharTokenizer
+
         tokenizer = CharTokenizer()
         tokenizer.build_vocab(prompt)
 
@@ -348,26 +380,31 @@ def run_sou_inference(model, prompt: str, max_new_tokens: int = 50):
 
     t0 = time.perf_counter()
     output = model.generate_numpy(
-        input_arr, max_new_tokens=max_new_tokens,
-        temperature=0.0, repetition_penalty=1.0,
+        input_arr,
+        max_new_tokens=max_new_tokens,
+        temperature=0.0,
+        repetition_penalty=1.0,
     )
     elapsed = time.perf_counter() - t0
 
-    gen_ids = output[0, len(input_ids):]
+    gen_ids = output[0, len(input_ids) :]
     text = tokenizer.decode(gen_ids.tolist())
     return text.strip(), elapsed, len(gen_ids)
 
 
 def run_hf_inference(model, tokenizer, prompt: str, max_new_tokens: int = 50):
     import torch
+
     inputs = tokenizer(prompt, return_tensors="pt")
     prompt_len = inputs["input_ids"].shape[1]
 
     t0 = time.perf_counter()
     with torch.no_grad():
         output = model.generate(
-            **inputs, max_new_tokens=max_new_tokens,
-            temperature=0.0, do_sample=False,
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            temperature=0.0,
+            do_sample=False,
             pad_token_id=tokenizer.eos_token_id,
         )
     elapsed = time.perf_counter() - t0
@@ -377,13 +414,18 @@ def run_hf_inference(model, tokenizer, prompt: str, max_new_tokens: int = 50):
     return text.strip(), elapsed, len(gen_ids)
 
 
-def evaluate_model(name: str, responses: List[str], latencies: List[float],
-                   token_counts: List[int], prompts: List[str]) -> ModelMetrics:
+def evaluate_model(
+    name: str,
+    responses: list[str],
+    latencies: list[float],
+    token_counts: list[int],
+    prompts: list[str],
+) -> ModelMetrics:
     bleu_scores = []
     rep_rates = []
     diversities = []
 
-    for resp, prompt_text in zip(responses, prompts):
+    for resp, prompt_text in zip(responses, prompts, strict=False):
         ref = EVAL_PROMPTS.get(prompt_text, "")
         if ref:
             bleu_scores.append(compute_bleu(resp, ref))
@@ -410,7 +452,7 @@ def evaluate_model(name: str, responses: List[str], latencies: List[float],
     )
 
 
-def print_comparison(results: List[ModelMetrics]):
+def print_comparison(results: list[ModelMetrics]):
     print()
     print("=" * 90)
     print("MODEL COMPARISON BENCHMARK")
@@ -449,7 +491,7 @@ def print_comparison(results: List[ModelMetrics]):
     print()
 
 
-def print_summary(results: List[ModelMetrics]):
+def print_summary(results: list[ModelMetrics]):
     """Print compact summary table."""
     header = f"{'Model':<25} {'Params':>10} {'BLEU':>6} {'Lat(ms)':>8} {'tok/s':>7} {'RepRate':>8} {'Diversity':>9}"
     log()
@@ -477,19 +519,29 @@ def main():
     parser = argparse.ArgumentParser(description="Model Comparison Benchmark")
     parser.add_argument("--sou", nargs="*", default=[], help="SOU checkpoint paths")
     parser.add_argument("--hf", nargs="*", default=[], help="HuggingFace model names")
-    parser.add_argument("--mode", choices=["native", "hf", "both"], default="both",
-                        help="native=numpy only, hf=torch only, both=auto-detect")
+    parser.add_argument(
+        "--mode",
+        choices=["native", "hf", "both"],
+        default="both",
+        help="native=numpy only, hf=torch only, both=auto-detect",
+    )
     parser.add_argument("--max-new-tokens", type=int, default=50)
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--quick", action="store_true", help="Use fewer prompts")
-    parser.add_argument("--compare", action="store_true",
-                        help="Compare trained transformer vs small LSTM side-by-side")
-    parser.add_argument("--summary", action="store_true",
-                        help="Show compact table only (no response details)")
-    parser.add_argument("--save", type=str, default=None,
-                        help="Save results to JSON file for tracking over time")
-    parser.add_argument("--history", action="store_true",
-                        help="Show saved benchmark history and exit")
+    parser.add_argument(
+        "--compare",
+        action="store_true",
+        help="Compare trained transformer vs small LSTM side-by-side",
+    )
+    parser.add_argument(
+        "--summary", action="store_true", help="Show compact table only (no response details)"
+    )
+    parser.add_argument(
+        "--save", type=str, default=None, help="Save results to JSON file for tracking over time"
+    )
+    parser.add_argument(
+        "--history", action="store_true", help="Show saved benchmark history and exit"
+    )
     parser.add_argument("--epochs", type=int, default=30, help="Training epochs for native mode")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
@@ -507,7 +559,9 @@ def main():
             for entry in history[-20:]:
                 for m in entry.get("models", []):
                     bleu = f"{m['bleu']:.1f}" if m.get("bleu") else "n/a"
-                    log(f"{entry['timestamp']:<20} {m['model_name']:<25} {bleu:>6} {m['tokens_per_sec']:>7.1f} {m['diversity']:>9.3f}")
+                    log(
+                        f"{entry['timestamp']:<20} {m['model_name']:<25} {bleu:>6} {m['tokens_per_sec']:>7.1f} {m['diversity']:>9.3f}"
+                    )
         else:
             log("No benchmark history found.")
         return
@@ -524,30 +578,41 @@ def main():
         # 1. Trained transformer
         trained_path = _find_best_trained_model()
         if trained_path:
-            print(f"\n=== Comparing: trained transformer vs small LSTM ===\n")
+            print("\n=== Comparing: trained transformer vs small LSTM ===\n")
             try:
                 from domain.training._internal.slonet import import_from_sou
+
                 net = import_from_sou(str(trained_path))
                 meta_raw = _read_soul_metadata(str(trained_path))
                 md = meta_raw.get("metadata", {}) if meta_raw else {}
-                stoi = md.get("stoi", {})
+                md.get("stoi", {})
                 itos = md.get("itos", {})
                 charset = md.get("chars", "")
                 if isinstance(charset, list):
                     charset = "".join(charset)
                 itos_map = {int(k): v for k, v in itos.items()}
                 stoi_map = {v: k for k, v in itos_map.items()}
-                encode = lambda text: np.array([stoi_map.get(c, 0) for c in text], dtype=np.int64).reshape(1, -1)
-                decode_tokens = lambda ids: "".join(itos_map.get(int(i), "?") for i in ids.flatten() if int(i) in itos_map)
+                def encode(text):
+                    return np.array(
+                                    [stoi_map.get(c, 0) for c in text], dtype=np.int64
+                                ).reshape(1, -1)
+                def decode_tokens(ids):
+                    return "".join(
+                                    itos_map.get(int(i), "?") for i in ids.flatten() if int(i) in itos_map
+                                )
                 responses, latencies, token_counts = [], [], []
                 print(f"Model: Transformer ({sum(p.numel() for p in net.parameters()):,} params)")
                 for prompt in prompts:
                     for _ in range(args.runs):
-                        resp, lat, tokens = run_native_inference(net, None, encode, decode_tokens, prompt, args.max_new_tokens)
+                        resp, lat, tokens = run_native_inference(
+                            net, None, encode, decode_tokens, prompt, args.max_new_tokens
+                        )
                         responses.append(resp)
                         latencies.append(lat)
                         token_counts.append(tokens)
-                results.append(evaluate_model("Transformer", responses, latencies, token_counts, prompts))
+                results.append(
+                    evaluate_model("Transformer", responses, latencies, token_counts, prompts)
+                )
             except Exception as e:
                 print(f"  Transformer benchmark failed: {e}")
 
@@ -558,7 +623,9 @@ def main():
             print(f"\nModel: LSTM ({sum(p.numel() for p in net2.parameters()):,} params)")
             for prompt in prompts:
                 for _ in range(args.runs):
-                    resp, lat, tokens = run_native_inference(net2, lstm2, encode2, decode2, prompt, args.max_new_tokens)
+                    resp, lat, tokens = run_native_inference(
+                        net2, lstm2, encode2, decode2, prompt, args.max_new_tokens
+                    )
                     responses.append(resp)
                     latencies.append(lat)
                     token_counts.append(tokens)
@@ -568,7 +635,11 @@ def main():
 
         if results:
             if args.json:
-                report = ComparisonReport(models=results, eval_prompts=len(prompts), timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"))
+                report = ComparisonReport(
+                    models=results,
+                    eval_prompts=len(prompts),
+                    timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                )
                 print(json.dumps(asdict(report), indent=2))
             else:
                 print_comparison(results)
@@ -600,23 +671,30 @@ def main():
                 prompts = list(prompts_dict.keys())
                 print(f"  Using Shakespeare prompts (charset has {len(charset)} chars)")
             responses, latencies, token_counts = [], [], []
-            print(f"\nBenchmarking native SloNet...")
+            print("\nBenchmarking native SloNet...")
             for prompt in prompts:
                 for _ in range(args.runs):
-                    resp, lat, tokens = run_native_inference(net, lstm, encode, decode, prompt, args.max_new_tokens)
+                    resp, lat, tokens = run_native_inference(
+                        net, lstm, encode, decode, prompt, args.max_new_tokens
+                    )
                     responses.append(resp)
                     latencies.append(lat)
                     token_counts.append(tokens)
-            results.append(evaluate_model("SloNet:native", responses, latencies, token_counts, prompts))
+            results.append(
+                evaluate_model("SloNet:native", responses, latencies, token_counts, prompts)
+            )
         except Exception as e:
             print(f"  Native benchmark failed: {e}")
-            import traceback; traceback.print_exc()
+            import traceback
+
+            traceback.print_exc()
 
     # SOU checkpoint mode
     for ckpt in args.sou:
         print(f"Benchmarking SOU: {ckpt}")
         try:
             from domain.training._internal.slonet import import_from_sou
+
             model = import_from_sou(ckpt)
             model.eval()
             responses, latencies, token_counts = [], [], []
@@ -638,28 +716,39 @@ def main():
             try:
                 import torch
                 from transformers import AutoModelForCausalLM, AutoTokenizer
+
                 tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
                 model = AutoModelForCausalLM.from_pretrained(
-                    model_name, torch_dtype=torch.float32, trust_remote_code=True,
+                    model_name,
+                    torch_dtype=torch.float32,
+                    trust_remote_code=True,
                 )
                 model.eval()
                 responses, latencies, token_counts = [], [], []
                 for prompt in prompts:
                     for _ in range(args.runs):
-                        resp, lat, tokens = run_hf_inference(model, tokenizer, prompt, args.max_new_tokens)
+                        resp, lat, tokens = run_hf_inference(
+                            model, tokenizer, prompt, args.max_new_tokens
+                        )
                         responses.append(resp)
                         latencies.append(lat)
                         token_counts.append(tokens)
                 del model
-                import gc; gc.collect()
-                results.append(evaluate_model(f"HF:{model_name}", responses, latencies, token_counts, prompts))
+                import gc
+
+                gc.collect()
+                results.append(
+                    evaluate_model(f"HF:{model_name}", responses, latencies, token_counts, prompts)
+                )
             except ImportError:
                 print(f"  torch/transformers not installed, skipping {model_name}")
             except Exception as e:
                 print(f"  Failed: {e}")
 
     if args.json:
-        report = ComparisonReport(models=results, eval_prompts=len(prompts), timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"))
+        report = ComparisonReport(
+            models=results, eval_prompts=len(prompts), timestamp=time.strftime("%Y-%m-%dT%H:%M:%S")
+        )
         print(json.dumps(asdict(report), indent=2))
     elif args.summary:
         print_summary(results)

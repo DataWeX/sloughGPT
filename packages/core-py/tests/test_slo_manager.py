@@ -1,14 +1,11 @@
 """Tests for domain.inference._internal.slo_manager — SloInfo and SloManager."""
 
 import json
-import os
 import struct
-import tempfile
-import time
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
+
 from domain.inference._internal.slo_manager import SloInfo, SloManager
 
 
@@ -642,16 +639,22 @@ class TestSloManagerGetSoul:
 # ---------------------------------------------------------------------------
 class TestSloManagerSwitchSoul:
     def _make_manager(self, tmp_path):
-        _write_soul_binary(tmp_path / "x.soul", {
-            "name": "x",
-            "personality": {"warmth": 0.5},
-            "traits": ["alpha"],
-        })
-        _write_soul_binary(tmp_path / "y.soul", {
-            "name": "y",
-            "personality": {"warmth": 0.8},
-            "traits": ["beta"],
-        })
+        _write_soul_binary(
+            tmp_path / "x.soul",
+            {
+                "name": "x",
+                "personality": {"warmth": 0.5},
+                "traits": ["alpha"],
+            },
+        )
+        _write_soul_binary(
+            tmp_path / "y.soul",
+            {
+                "name": "y",
+                "personality": {"warmth": 0.8},
+                "traits": ["beta"],
+            },
+        )
         return SloManager(souls_dir=str(tmp_path))
 
     def test_switch_success(self, tmp_path):
@@ -745,6 +748,7 @@ class TestSloManagerRegisterSoul:
             assert m.get_soul("a") is not None
         finally:
             import shutil
+
             shutil.rmtree(external, ignore_errors=True)
 
 
@@ -873,6 +877,7 @@ class TestSloManagerPreference:
 class TestSloManagerModuleFunctions:
     def test_get_slo_manager_singleton(self, tmp_path):
         from domains.inference import slo_manager as mod
+
         old = mod._slo_manager
         try:
             mod._slo_manager = None
@@ -884,6 +889,7 @@ class TestSloManagerModuleFunctions:
 
     def test_list_souls_function(self, tmp_path):
         from domains.inference import slo_manager as mod
+
         old = mod._slo_manager
         try:
             mod._slo_manager = SloManager(souls_dir=str(tmp_path))
@@ -894,6 +900,7 @@ class TestSloManagerModuleFunctions:
 
     def test_switch_soul_function(self, tmp_path):
         from domains.inference import slo_manager as mod
+
         old = mod._slo_manager
         try:
             _write_soul_binary(tmp_path / "x.soul", {"name": "x"})

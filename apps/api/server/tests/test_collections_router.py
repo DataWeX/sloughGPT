@@ -25,16 +25,15 @@ def _d(resp):
 @pytest.fixture(autouse=True)
 def _fresh_registry():
     """Reset the global registry singleton before each test."""
-    from domain.collections._internal.registry import get_registry, CollectionRegistry
-
     import domain.collections._internal.registry as reg_mod
+    from domain.collections._internal.registry import CollectionRegistry, get_registry
 
     reg_mod._default_registry = CollectionRegistry()
 
     registry = get_registry()
-    from domain.collections._internal.stores import MemoryStore
-    from domain.collections._internal.sources import GeneratorSource
     from domain.collections._internal.filters import LengthFilter
+    from domain.collections._internal.sources import GeneratorSource
+    from domain.collections._internal.stores import MemoryStore
 
     registry.register_store("memory", MemoryStore())
     registry.register_source("generator", GeneratorSource(lambda: iter(["item1", "item2"])))
@@ -120,9 +119,7 @@ class TestCreatePipeline:
         assert resp.status_code == 422
 
     def test_create_missing_source_type(self):
-        resp = self.client.post(
-            "/collections/create", json={"name": "x", "store_type": "memory"}
-        )
+        resp = self.client.post("/collections/create", json={"name": "x", "store_type": "memory"})
         assert resp.status_code == 422
 
 

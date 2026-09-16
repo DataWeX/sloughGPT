@@ -2,8 +2,9 @@
 Tests for the vector store router — init, stats, upsert, search, ingest status.
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -83,10 +84,9 @@ class TestUpsert:
 
     def test_upsert_with_store(self, client):
         client.post("/vector/init", json={"provider": "in_memory", "dimension": 64})
-        resp = client.post("/vector/upsert", json={
-            "texts": ["hello world", "foo bar"],
-            "ids": ["id1", "id2"]
-        })
+        resp = client.post(
+            "/vector/upsert", json={"texts": ["hello world", "foo bar"], "ids": ["id1", "id2"]}
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "upserted"
@@ -94,18 +94,16 @@ class TestUpsert:
 
     def test_upsert_with_embeddings(self, client):
         client.post("/vector/init", json={"provider": "in_memory", "dimension": 4})
-        resp = client.post("/vector/upsert", json={
-            "texts": ["test"],
-            "embeddings": [[0.1, 0.2, 0.3, 0.4]]
-        })
+        resp = client.post(
+            "/vector/upsert", json={"texts": ["test"], "embeddings": [[0.1, 0.2, 0.3, 0.4]]}
+        )
         assert resp.status_code == 200
 
     def test_upsert_with_metadata(self, client):
         client.post("/vector/init", json={"provider": "in_memory", "dimension": 4})
-        resp = client.post("/vector/upsert", json={
-            "texts": ["test"],
-            "metadata": [{"source": "test"}]
-        })
+        resp = client.post(
+            "/vector/upsert", json={"texts": ["test"], "metadata": [{"source": "test"}]}
+        )
         assert resp.status_code == 200
 
 
@@ -142,21 +140,21 @@ class TestVectorErrorPaths:
         assert data["provider"] == "in_memory"
         assert "note" in data
 
-    @patch("domains.inference.vector_store.create_vector_store",
-           new=AsyncMock(side_effect=RuntimeError("boom")))
+    @patch(
+        "domains.inference.vector_store.create_vector_store",
+        new=AsyncMock(side_effect=RuntimeError("boom")),
+    )
     def test_init_raises_http_error_on_unexpected_exception(self, client):
         resp = client.post("/vector/init", json={"provider": "weird"})
         assert resp.status_code == 500
 
-    @patch("domains.inference.vector_store.create_vector_store",
-           new=AsyncMock(return_value=None))
+    @patch("domains.inference.vector_store.create_vector_store", new=AsyncMock(return_value=None))
     def test_stats_empty_when_store_unavailable(self, client):
         resp = client.get("/vector/stats")
         assert resp.status_code == 200
         assert resp.json()["data"]["count"] == 0
 
-    @patch("domains.inference.vector_store.create_vector_store",
-           new=AsyncMock(return_value=None))
+    @patch("domains.inference.vector_store.create_vector_store", new=AsyncMock(return_value=None))
     def test_upsert_500_when_store_unavailable(self, client):
         resp = client.post("/vector/upsert", json={"texts": ["hello"]})
         assert resp.status_code == 500
@@ -171,20 +169,24 @@ class TestUpsertBranches:
 
     def test_upsert_embeddings_partial(self, client):
         client.post("/vector/init", json={"provider": "in_memory", "dimension": 4})
-        resp = client.post("/vector/upsert", json={
-            "texts": ["one", "two"],
-            "embeddings": [[0.1, 0.2, 0.3, 0.4]]
-        })
+        resp = client.post(
+            "/vector/upsert", json={"texts": ["one", "two"], "embeddings": [[0.1, 0.2, 0.3, 0.4]]}
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["count"] == 2
 
     def test_search_returns_score_and_id(self, client):
         client.post("/vector/init", json={"provider": "in_memory", "dimension": 64})
-        client.post("/vector/upsert", json={
-            "texts": ["alpha beta gamma"],
-            "ids": ["doc-1"],
-        })
-        results = client.post("/vector/search", json={"query": "alpha beta"}).json()["data"]["results"]
+        client.post(
+            "/vector/upsert",
+            json={
+                "texts": ["alpha beta gamma"],
+                "ids": ["doc-1"],
+            },
+        )
+        results = client.post("/vector/search", json={"query": "alpha beta"}).json()["data"][
+            "results"
+        ]
         assert len(results) > 0
         assert "text" in results[0]
         assert "score" in results[0]
@@ -250,19 +252,25 @@ class TestUpsertIdMapping:
 
     def test_upsert_partial_ids(self, client):
         client.post("/vector/init", json={"provider": "in_memory", "dimension": 64})
-        resp = client.post("/vector/upsert", json={
-            "texts": ["a", "b"],
-            "ids": ["only-one"],
-        })
+        resp = client.post(
+            "/vector/upsert",
+            json={
+                "texts": ["a", "b"],
+                "ids": ["only-one"],
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["count"] == 2
 
     def test_upsert_partial_metadata(self, client):
         client.post("/vector/init", json={"provider": "in_memory", "dimension": 64})
-        resp = client.post("/vector/upsert", json={
-            "texts": ["a", "b"],
-            "metadata": [{"source": "first"}],
-        })
+        resp = client.post(
+            "/vector/upsert",
+            json={
+                "texts": ["a", "b"],
+                "metadata": [{"source": "first"}],
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["count"] == 2
 
@@ -276,14 +284,12 @@ class TestUpsertIdMapping:
 class TestLazyStoreInit:
     """get_vector_store lazy-initialization branch."""
 
-    @patch("domains.inference.vector_store.create_vector_store",
-           new=AsyncMock(return_value=None))
+    @patch("domains.inference.vector_store.create_vector_store", new=AsyncMock(return_value=None))
     def test_upsert_error_path_500(self, client):
         resp = client.post("/vector/upsert", json={"texts": ["x"]})
         assert resp.status_code == 500
 
-    @patch("domains.inference.vector_store.create_vector_store",
-           new=AsyncMock(return_value=None))
+    @patch("domains.inference.vector_store.create_vector_store", new=AsyncMock(return_value=None))
     def test_search_no_store_returns_empty_results(self, client):
         resp = client.post("/vector/search", json={"query": "anything"})
         assert resp.status_code == 200

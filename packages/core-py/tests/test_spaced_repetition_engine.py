@@ -1,6 +1,7 @@
 """Tests for domain.infrastructure.spaced_repetition_engine."""
 
 import time
+
 from domain.infrastructure._internal.spaced_repetition_engine import SpacedRepetitionScheduler
 
 
@@ -140,7 +141,7 @@ class TestScheduleReview:
     def test_low_then_high_averages_to_medium(self):
         sched = SpacedRepetitionScheduler()
         sched.schedule_review("doc1", 0.2)
-        ts = sched.schedule_review("doc1", 0.95)
+        sched.schedule_review("doc1", 0.95)
         avg = (0.2 + 0.95) / 2
         assert 0.5 <= avg < 0.6
 
@@ -224,12 +225,12 @@ class TestScheduleReview:
 
     def test_schedule_review_with_empty_doc_id(self):
         sched = SpacedRepetitionScheduler()
-        ts = sched.schedule_review("", 0.8)
+        sched.schedule_review("", 0.8)
         assert "" in sched.review_schedule
 
     def test_schedule_review_with_special_chars(self):
         sched = SpacedRepetitionScheduler()
-        ts = sched.schedule_review("doc/with/slashes", 0.8)
+        sched.schedule_review("doc/with/slashes", 0.8)
         assert "doc/with/slashes" in sched.review_schedule
 
 
@@ -484,7 +485,7 @@ class TestPerformanceHistory:
 
     def test_history_grows(self):
         sched = SpacedRepetitionScheduler()
-        for i in range(5):
+        for _i in range(5):
             sched.schedule_review("doc1", 0.5)
         assert len(sched.performance_history["doc1"]) == 5
 

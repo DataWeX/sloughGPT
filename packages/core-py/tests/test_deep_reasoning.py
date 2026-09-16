@@ -3,6 +3,7 @@
 Covers: retrieval-augmented reasoning, self-correction, formal logic (unification,
 modus ponens, resolution, syllogisms), working memory LRU eviction.
 """
+
 from __future__ import annotations
 
 import sys
@@ -14,23 +15,23 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
+from domain.cognitive._internal.reasoning.advanced import ThoughtStep
 from domain.cognitive._internal.reasoning.deep import (
-    RetrievalSource,
-    RetrievedKnowledge,
-    DeepReasoningContext,
     DeepReasoning,
+    DeepReasoningContext,
     FormalLogicEngine,
     LogicalOperator,
-    Term,
     Predicate,
-    WellFormedFormula,
+    RetrievalSource,
+    RetrievedKnowledge,
     Substitution,
+    Term,
+    WellFormedFormula,
     WorkingMemory,
 )
-from domain.cognitive._internal.reasoning.advanced import ThoughtStep
-
 
 # ── Data classes ──────────────────────────────────────────────────────
+
 
 class TestRetrievedKnowledge:
     def test_creation(self):
@@ -50,6 +51,7 @@ class TestDeepReasoningContext:
 
 
 # ── Deep Reasoning ───────────────────────────────────────────────────
+
 
 class TestDeepReasoning:
     @pytest.mark.asyncio
@@ -95,6 +97,7 @@ class TestDeepReasoning:
     @pytest.mark.asyncio
     async def test_custom_llm(self):
         calls = []
+
         async def mock_llm(prompt):
             calls.append(prompt)
             if "critique" in prompt.lower():
@@ -102,6 +105,7 @@ class TestDeepReasoning:
             elif "final" in prompt.lower():
                 return "Conclusion reached."
             return "Analysis step."
+
         dr = DeepReasoning(llm_call=mock_llm)
         result = await dr.reason("Test", max_depth=2)
         assert len(calls) > 0
@@ -113,6 +117,7 @@ class TestDeepReasoning:
             if "critique" in prompt.lower():
                 return "There is an error in this reasoning."
             return "Step analysis."
+
         dr = DeepReasoning(llm_call=mock_llm)
         ctx = DeepReasoningContext(query="test")
         reasoning = [ThoughtStep(0, "step 1", "analysis", 0.8)]
@@ -124,6 +129,7 @@ class TestDeepReasoning:
     async def test_self_correction_clean(self):
         async def mock_llm(prompt):
             return "Looks good."
+
         dr = DeepReasoning(llm_call=mock_llm)
         ctx = DeepReasoningContext(query="test")
         reasoning = [ThoughtStep(0, "step 1", "analysis", 0.8)]
@@ -132,6 +138,7 @@ class TestDeepReasoning:
 
 
 # ── Formal Logic Engine ──────────────────────────────────────────────
+
 
 class TestFormalLogicEngine:
     def test_assert_and_query(self):
@@ -151,12 +158,12 @@ class TestFormalLogicEngine:
         # Assert: human(socrates)
         engine.assert_predicate("human", "socrates")
         # Assert: human(X) → mortal(X)
-        antecedent = WellFormedFormula(predicate=Predicate(
-            name="human", terms=[Term(name="X", is_variable=True)]
-        ))
-        consequent = WellFormedFormula(predicate=Predicate(
-            name="mortal", terms=[Term(name="X", is_variable=True)]
-        ))
+        antecedent = WellFormedFormula(
+            predicate=Predicate(name="human", terms=[Term(name="X", is_variable=True)])
+        )
+        consequent = WellFormedFormula(
+            predicate=Predicate(name="mortal", terms=[Term(name="X", is_variable=True)])
+        )
         implication = WellFormedFormula(
             operator=LogicalOperator.IMPLIES,
             left=antecedent,
@@ -222,22 +229,25 @@ class TestFormalLogicEngine:
         # Assert: p(a)
         engine.assert_predicate("p", "a")
         # Assert: p(X) → q(X)
-        antecedent = WellFormedFormula(predicate=Predicate(
-            name="p", terms=[Term(name="X", is_variable=True)]
-        ))
-        consequent = WellFormedFormula(predicate=Predicate(
-            name="q", terms=[Term(name="X", is_variable=True)]
-        ))
-        engine.assert_fact(WellFormedFormula(
-            operator=LogicalOperator.IMPLIES,
-            left=antecedent,
-            right=consequent,
-        ))
+        antecedent = WellFormedFormula(
+            predicate=Predicate(name="p", terms=[Term(name="X", is_variable=True)])
+        )
+        consequent = WellFormedFormula(
+            predicate=Predicate(name="q", terms=[Term(name="X", is_variable=True)])
+        )
+        engine.assert_fact(
+            WellFormedFormula(
+                operator=LogicalOperator.IMPLIES,
+                left=antecedent,
+                right=consequent,
+            )
+        )
         goal = Predicate(name="q", terms=[Term(name="a")])
         assert engine.resolution(goal) is True
 
 
 # ── Working Memory ───────────────────────────────────────────────────
+
 
 class TestWorkingMemory:
     def test_add_and_get(self):

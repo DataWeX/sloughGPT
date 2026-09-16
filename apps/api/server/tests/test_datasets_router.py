@@ -14,11 +14,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from controllers.datasets import DatasetsController
-from domain.infrastructure._internal.errors import NotFoundError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from routers.datasets import DatasetsRouter
 from routers.datasets import router as datasets_router
+
+from domain.infrastructure._internal.errors import NotFoundError
 
 app = FastAPI()
 register_app_error_handler(app)
@@ -429,7 +430,7 @@ class TestConvertToMessages:
         router, ctrl = _make_convert_router(tmp_path, "corpus")
         _write_jsonl(router, "corpus", [{"text": "hi"}])
         with patch("routers.datasets.get_datasets_controller", return_value=ctrl):
-            res = asyncio.run(router.convert_to_messages("corpus", "You are a poet."))
+            asyncio.run(router.convert_to_messages("corpus", "You are a poet."))
         rows = _read_rows(router, "corpus-messages")
         assert rows[0]["messages"][0] == {"role": "system", "content": "You are a poet."}
 

@@ -1,9 +1,10 @@
 """Tests for workflow router — status, start, stop, trigger delegation."""
 
 import sys
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 pytest.importorskip("fastapi")
 
@@ -15,7 +16,7 @@ if _server_dir not in sys.path:
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from apps.api.server.routers.workflow import WorkflowRouter, WorkflowStartRequest
+from apps.api.server.routers.workflow import WorkflowRouter
 
 
 @pytest.fixture
@@ -40,6 +41,7 @@ def app(mock_workflow):
     app = FastAPI()
     app.include_router(router_instance.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     with patch.object(router_instance, "_get_workflow", return_value=mock_workflow):
         yield app
@@ -61,22 +63,28 @@ class TestGetWorkflowStatus:
 
 class TestStartWorkflow:
     def test_start(self, client, mock_workflow):
-        resp = client.post("/workflow/start", json={
-            "aggregate_interval_minutes": 30,
-            "prune_interval_minutes": 60,
-        })
+        resp = client.post(
+            "/workflow/start",
+            json={
+                "aggregate_interval_minutes": 30,
+                "prune_interval_minutes": 60,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "started"
         mock_workflow.start.assert_called_once()
 
     def test_start_sets_config(self, client, mock_workflow):
-        client.post("/workflow/start", json={
-            "aggregate_interval_minutes": 15,
-            "prune_interval_minutes": 30,
-            "export_interval_hours": 12,
-            "health_check_interval_seconds": 60,
-        })
+        client.post(
+            "/workflow/start",
+            json={
+                "aggregate_interval_minutes": 15,
+                "prune_interval_minutes": 30,
+                "export_interval_hours": 12,
+                "health_check_interval_seconds": 60,
+            },
+        )
         assert mock_workflow.config is not None
 
 
@@ -114,6 +122,7 @@ class TestWorkflowModuleLevel:
     def test_get_workflow_function(self):
         """Module-level _get_workflow delegates to the router instance."""
         from apps.api.server.routers.workflow import _get_workflow, _workflow_router
+
         mock_wf = MagicMock()
         with patch.object(_workflow_router, "_get_workflow", return_value=mock_wf):
             result = _get_workflow()

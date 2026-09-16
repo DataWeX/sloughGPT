@@ -4,11 +4,18 @@ import asyncio
 import os
 import tempfile
 import time
+
 from domain.agents import (
-    SecurityConfig, SecurityBoundary, ToolCapability,
-    ToolDefinition, ToolExecutionContext, AgentConfig,
-    Agent, get_agent, get_runner,
+    Agent,
+    AgentConfig,
+    SecurityBoundary,
+    SecurityConfig,
+    ToolCapability,
+    ToolDefinition,
+    ToolExecutionContext,
     ToolRunner,
+    get_agent,
+    get_runner,
 )
 
 
@@ -406,7 +413,10 @@ class TestAgent:
 
     def test_set_inference_fn(self):
         agent = Agent()
-        fn = lambda x: {"text": "response"}
+
+        def fn(x):
+            return {"text": "response"}
+
         agent.set_inference_fn(fn)
         assert agent._inference_fn is fn
 
@@ -482,19 +492,19 @@ class TestAgent:
         agent = Agent()
         agent.set_inference_fn(lambda x: {"text": "not json"})
         import asyncio
-        plan = asyncio.get_event_loop().run_until_complete(
-            agent._plan_with_llm("do something")
-        )
+
+        plan = asyncio.get_event_loop().run_until_complete(agent._plan_with_llm("do something"))
         # Should fall back to keywords
         assert isinstance(plan, list)
 
     def test_plan_with_llm_valid_json(self):
         agent = Agent()
-        agent.set_inference_fn(lambda x: {"text": '[{"tool": "code_execution", "args": {"code": "print(1)"}}]'})
-        import asyncio
-        plan = asyncio.get_event_loop().run_until_complete(
-            agent._plan_with_llm("run code")
+        agent.set_inference_fn(
+            lambda x: {"text": '[{"tool": "code_execution", "args": {"code": "print(1)"}}]'}
         )
+        import asyncio
+
+        plan = asyncio.get_event_loop().run_until_complete(agent._plan_with_llm("run code"))
         assert len(plan) == 1
         assert plan[0][0] == "code_execution"
 
@@ -502,9 +512,8 @@ class TestAgent:
         agent = Agent()
         agent.set_inference_fn(lambda x: {"text": "[]"})
         import asyncio
-        plan = asyncio.get_event_loop().run_until_complete(
-            agent._plan_with_llm("hello")
-        )
+
+        plan = asyncio.get_event_loop().run_until_complete(agent._plan_with_llm("hello"))
         assert plan == []
 
 
@@ -531,19 +540,23 @@ class TestToolRunner:
 
     def test_generate_citations_no_overlap(self):
         runner = ToolRunner()
-        citations = runner._generate_citations("hello world", [{"text": "completely different", "url": ""}])
+        citations = runner._generate_citations(
+            "hello world", [{"text": "completely different", "url": ""}]
+        )
         assert citations == []
 
 
 class TestSingletons:
     def test_get_agent_returns_agent(self):
         import domain.agents as mod
+
         mod._agent = None
         agent = get_agent()
         assert isinstance(agent, Agent)
 
     def test_get_agent_returns_same_instance(self):
         import domain.agents as mod
+
         mod._agent = None
         a1 = get_agent()
         a2 = get_agent()
@@ -551,12 +564,14 @@ class TestSingletons:
 
     def test_get_runner_returns_runner(self):
         import domain.agents as mod
+
         mod._runner = None
         runner = get_runner()
         assert isinstance(runner, ToolRunner)
 
     def test_get_runner_returns_same_instance(self):
         import domain.agents as mod
+
         mod._runner = None
         r1 = get_runner()
         r2 = get_runner()
@@ -564,6 +579,7 @@ class TestSingletons:
 
 
 # ── ToolRunner Execution (pure logic, no external APIs) ──────────────────────
+
 
 class TestToolRunnerRateLimit:
     def test_rate_limit_allows_first_call(self):
@@ -646,7 +662,9 @@ class TestToolRunnerExecute:
         runner = ToolRunner()
         ctx = ToolExecutionContext(session_id="s1", user_id="u1", timestamp=time.time())
         result = asyncio.get_event_loop().run_until_complete(
-            runner.execute("code_execution", {"code": "console.log('hi')", "language": "javascript"}, ctx)
+            runner.execute(
+                "code_execution", {"code": "console.log('hi')", "language": "javascript"}, ctx
+            )
         )
         assert result["success"] is True
 
@@ -671,9 +689,7 @@ class TestToolRunnerFileRead:
     def test_file_read_no_path(self):
         runner = ToolRunner()
         ctx = ToolExecutionContext(session_id="s1", user_id="u1", timestamp=time.time())
-        result = asyncio.get_event_loop().run_until_complete(
-            runner.execute("file_read", {}, ctx)
-        )
+        result = asyncio.get_event_loop().run_until_complete(runner.execute("file_read", {}, ctx))
         assert result["success"] is False
         assert "path required" in result["error"]
 
@@ -721,9 +737,7 @@ class TestToolRunnerFileSearch:
     def test_file_search_no_query(self):
         runner = ToolRunner()
         ctx = ToolExecutionContext(session_id="s1", user_id="u1", timestamp=time.time())
-        result = asyncio.get_event_loop().run_until_complete(
-            runner.execute("file_search", {}, ctx)
-        )
+        result = asyncio.get_event_loop().run_until_complete(runner.execute("file_search", {}, ctx))
         assert result["success"] is False
         assert "query required" in result["error"]
 
@@ -745,9 +759,7 @@ class TestToolRunnerCitation:
     def test_citation_no_text(self):
         runner = ToolRunner()
         ctx = ToolExecutionContext(session_id="s1", user_id="u1", timestamp=time.time())
-        result = asyncio.get_event_loop().run_until_complete(
-            runner.execute("citation", {}, ctx)
-        )
+        result = asyncio.get_event_loop().run_until_complete(runner.execute("citation", {}, ctx))
         assert result["success"] is False
         assert "text required" in result["error"]
 
@@ -755,10 +767,14 @@ class TestToolRunnerCitation:
         runner = ToolRunner()
         ctx = ToolExecutionContext(session_id="s1", user_id="u1", timestamp=time.time())
         result = asyncio.get_event_loop().run_until_complete(
-            runner.execute("citation", {
-                "text": "The quick brown fox",
-                "sources": [{"text": "The quick brown fox jumps", "url": "http://example.com"}]
-            }, ctx)
+            runner.execute(
+                "citation",
+                {
+                    "text": "The quick brown fox",
+                    "sources": [{"text": "The quick brown fox jumps", "url": "http://example.com"}],
+                },
+                ctx,
+            )
         )
         assert result["success"] is True
         assert result["count"] >= 1
@@ -793,9 +809,7 @@ class TestToolRunnerWebSearch:
     def test_web_search_no_query(self):
         runner = ToolRunner()
         ctx = ToolExecutionContext(session_id="s1", user_id="u1", timestamp=time.time())
-        result = asyncio.get_event_loop().run_until_complete(
-            runner.execute("web_search", {}, ctx)
-        )
+        result = asyncio.get_event_loop().run_until_complete(runner.execute("web_search", {}, ctx))
         assert result["success"] is False
         assert "query required" in result["error"]
 
@@ -965,9 +979,7 @@ class TestAgentExecute:
 
     def test_execute_creates_session_context(self):
         agent = Agent()
-        result = asyncio.get_event_loop().run_until_complete(
-            agent.execute("hello", "s1", "u1")
-        )
+        result = asyncio.get_event_loop().run_until_complete(agent.execute("hello", "s1", "u1"))
         assert result["session_id"] == "s1"
 
     def test_execute_inference_fn_fallback(self):
@@ -1053,7 +1065,10 @@ class TestAgentComposeResponseExtended:
     def test_compose_with_web_results(self):
         agent = Agent()
         results = [
-            {"tool": "web_search", "result": {"success": True, "results": ["r1", "r2"], "count": 2}},
+            {
+                "tool": "web_search",
+                "result": {"success": True, "results": ["r1", "r2"], "count": 2},
+            },
         ]
         response = agent._compose_response("query", results)
         assert "Found 2 results" in response
@@ -1172,43 +1187,37 @@ class TestAgentPlanLLMExtended:
     def test_plan_llm_malformed_json(self):
         agent = Agent()
         agent.set_inference_fn(lambda x: {"text": "not json at all"})
-        plan = asyncio.get_event_loop().run_until_complete(
-            agent._plan_with_llm("do something")
-        )
+        plan = asyncio.get_event_loop().run_until_complete(agent._plan_with_llm("do something"))
         assert isinstance(plan, list)
 
     def test_plan_llm_json_with_extra_text(self):
         agent = Agent()
-        agent.set_inference_fn(lambda x: {"text": 'Here is the plan:\n[{"tool": "code_execution", "args": {"code": "print(1)"}}]\nDone.'})
-        plan = asyncio.get_event_loop().run_until_complete(
-            agent._plan_with_llm("run code")
+        agent.set_inference_fn(
+            lambda x: {
+                "text": 'Here is the plan:\n[{"tool": "code_execution", "args": {"code": "print(1)"}}]\nDone.'
+            }
         )
+        plan = asyncio.get_event_loop().run_until_complete(agent._plan_with_llm("run code"))
         assert len(plan) == 1
         assert plan[0][0] == "code_execution"
 
     def test_plan_llm_items_without_tool_key(self):
         agent = Agent()
         agent.set_inference_fn(lambda x: {"text": '[{"name": "code_execution"}]'})
-        plan = asyncio.get_event_loop().run_until_complete(
-            agent._plan_with_llm("run code")
-        )
+        plan = asyncio.get_event_loop().run_until_complete(agent._plan_with_llm("run code"))
         # Items without "tool" key should be filtered out
         assert len(plan) == 0
 
     def test_plan_llm_non_dict_items(self):
         agent = Agent()
         agent.set_inference_fn(lambda x: {"text": '["code_execution", "file_read"]'})
-        plan = asyncio.get_event_loop().run_until_complete(
-            agent._plan_with_llm("do things")
-        )
+        plan = asyncio.get_event_loop().run_until_complete(agent._plan_with_llm("do things"))
         assert len(plan) == 0
 
     def test_plan_llm_inference_returns_string(self):
         agent = Agent()
         agent.set_inference_fn(lambda x: '{"text": "[]"}')
-        plan = asyncio.get_event_loop().run_until_complete(
-            agent._plan_with_llm("hello")
-        )
+        plan = asyncio.get_event_loop().run_until_complete(agent._plan_with_llm("hello"))
         assert plan == []
 
 

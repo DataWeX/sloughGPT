@@ -2,16 +2,19 @@
 
 import subprocess
 import sys
+
 import pytest
 
 
 @pytest.fixture
 def run_cli():
     """Helper to run the CLI tool."""
+
     def _run(*args):
         cmd = [sys.executable, "-m", "domain.multimodal._internal.phoneme_encoder_cli"] + list(args)
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         return result
+
     return _run
 
 

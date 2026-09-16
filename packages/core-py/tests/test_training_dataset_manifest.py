@@ -1,4 +1,5 @@
 """Tests for dataset manifest — load and resolve training data paths."""
+
 from __future__ import annotations
 
 import json
@@ -39,7 +40,14 @@ class TestLoadManifest:
             load_manifest(p)
 
     def test_wrong_version(self, tmp_path):
-        m = {"schema_version": "2.0", "dataset_id": "d1", "version": "1", "domain": "text", "pii_policy": "none", "sources": []}
+        m = {
+            "schema_version": "2.0",
+            "dataset_id": "d1",
+            "version": "1",
+            "domain": "text",
+            "pii_policy": "none",
+            "sources": [],
+        }
         p = tmp_path / "m.json"
         p.write_text(json.dumps(m))
         with pytest.raises(ManifestError, match="Unsupported schema_version"):
@@ -53,7 +61,14 @@ class TestLoadManifest:
             load_manifest(p)
 
     def test_empty_sources(self, tmp_path):
-        m = {"schema_version": "1.0", "dataset_id": "d1", "version": "1", "domain": "text", "pii_policy": "none", "sources": []}
+        m = {
+            "schema_version": "1.0",
+            "dataset_id": "d1",
+            "version": "1",
+            "domain": "text",
+            "pii_policy": "none",
+            "sources": [],
+        }
         p = tmp_path / "m.json"
         p.write_text(json.dumps(m))
         with pytest.raises(ManifestError, match="non-empty list"):
@@ -74,21 +89,43 @@ class TestGlobTrainFiles:
 
 class TestResolveTrainingDataPath:
     def test_splits_train(self, tmp_path):
-        m = {"schema_version": "1.0", "dataset_id": "d1", "version": "1", "domain": "text", "pii_policy": "none", "sources": [{"type": "file", "path": "data.txt"}], "splits": {"train": "train.txt"}}
+        m = {
+            "schema_version": "1.0",
+            "dataset_id": "d1",
+            "version": "1",
+            "domain": "text",
+            "pii_policy": "none",
+            "sources": [{"type": "file", "path": "data.txt"}],
+            "splits": {"train": "train.txt"},
+        }
         (tmp_path / "manifest.json").write_text(json.dumps(m))
         (tmp_path / "train.txt").write_text("hello")
         path, data = resolve_training_data_path(tmp_path / "manifest.json")
         assert path.name == "train.txt"
 
     def test_fallback_to_input_txt(self, tmp_path):
-        m = {"schema_version": "1.0", "dataset_id": "d1", "version": "1", "domain": "text", "pii_policy": "none", "sources": [{"type": "file", "path": "data.txt"}]}
+        m = {
+            "schema_version": "1.0",
+            "dataset_id": "d1",
+            "version": "1",
+            "domain": "text",
+            "pii_policy": "none",
+            "sources": [{"type": "file", "path": "data.txt"}],
+        }
         (tmp_path / "manifest.json").write_text(json.dumps(m))
         (tmp_path / "input.txt").write_text("hello")
         path, data = resolve_training_data_path(tmp_path / "manifest.json")
         assert path.name == "input.txt"
 
     def test_no_training_file(self, tmp_path):
-        m = {"schema_version": "1.0", "dataset_id": "d1", "version": "1", "domain": "text", "pii_policy": "none", "sources": [{"type": "file", "path": "data.txt"}]}
+        m = {
+            "schema_version": "1.0",
+            "dataset_id": "d1",
+            "version": "1",
+            "domain": "text",
+            "pii_policy": "none",
+            "sources": [{"type": "file", "path": "data.txt"}],
+        }
         (tmp_path / "manifest.json").write_text(json.dumps(m))
         with pytest.raises(ManifestError, match="No training text file"):
             resolve_training_data_path(tmp_path / "manifest.json")

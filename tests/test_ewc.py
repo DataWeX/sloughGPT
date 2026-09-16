@@ -4,12 +4,13 @@ Tests for Elastic Weight Consolidation (EWC) — numpy/SloNet
 
 import numpy as np
 import pytest
-from domains.training.slonet import SloLinear, Tensor
-from domains.training.ewc import (
-    EWCParameters,
+
+from domain.training._internal.ewc import (
     DiagonalFisherEstimator,
     EwcContinualLearner,
+    EWCParameters,
 )
+from domain.training._internal.slonet import SloLinear, Tensor
 
 
 class LinearModel:
@@ -55,8 +56,10 @@ def mse_loss(pred, target):
 
 def random_batches(n=3, batch=4):
     return [
-        (np.random.randn(batch, 10).astype(np.float32),
-         np.random.randn(batch, 10).astype(np.float32))
+        (
+            np.random.randn(batch, 10).astype(np.float32),
+            np.random.randn(batch, 10).astype(np.float32),
+        )
         for _ in range(n)
     ]
 
@@ -163,7 +166,7 @@ class TestEwcContinualLearner:
         before, _ = learner.ewc_loss("task1")
 
         # Perturb the weights away from the snapshot
-        for name, param in model.named_parameters():
+        for _name, param in model.named_parameters():
             param.data = param.data + np.random.randn(*param.data.shape) * 0.5
 
         after, stats = learner.ewc_loss("task1")
@@ -179,8 +182,10 @@ class TestEwcContinualLearner:
         data = random_batches(3)
         learner.save_task_snapshot("task1", "Task1", data, mse_loss)
 
-        batch = (np.random.randn(4, 10).astype(np.float32),
-                 np.random.randn(4, 10).astype(np.float32))
+        batch = (
+            np.random.randn(4, 10).astype(np.float32),
+            np.random.randn(4, 10).astype(np.float32),
+        )
         total_loss, stats = learner.forward_and_ewc(batch, mse_loss, "task1")
 
         assert "total_loss" in stats
@@ -223,7 +228,7 @@ class TestEwcContinualLearner:
         learner.save_task_snapshot("task1", "Task1", data, mse_loss)
 
         # Perturb weights -> forgetting estimate should be positive
-        for name, param in model.named_parameters():
+        for _name, param in model.named_parameters():
             param.data = param.data + np.random.randn(*param.data.shape) * 0.5
 
         forgetting = learner.estimate_forgetting()

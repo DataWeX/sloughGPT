@@ -2,14 +2,12 @@
 
 Covers: _RateLimiter (is_allowed, get_wait_time), RatelimitRouter endpoints.
 """
+
 from __future__ import annotations
 
 import sys
 import time
 from pathlib import Path
-from unittest.mock import patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -26,6 +24,7 @@ def _app(rr: RatelimitRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(rr.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 

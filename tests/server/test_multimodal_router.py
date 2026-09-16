@@ -2,16 +2,14 @@
 Tests for the multimodal router — status, train, batch, transcribe, generate.
 """
 
-import io
-import json
 import os
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import MagicMock, patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from apps.api.server.routers.multimodal import router, _background_job, multimodal_router
 from infrastructure.exception_handlers import register_all_handlers
+
+from apps.api.server.routers.multimodal import _background_job, multimodal_router, router
 
 app = FastAPI()
 register_all_handlers(app)
@@ -68,7 +66,9 @@ def _get_data(resp):
 def _real_png_bytes():
     """Return valid 1x1 PNG bytes via PIL (mock file content must decode)."""
     from io import BytesIO
+
     from PIL import Image
+
     buf = BytesIO()
     Image.new("RGB", (4, 4), (128, 64, 32)).save(buf, format="PNG")
     return buf.getvalue()
@@ -217,8 +217,15 @@ class TestTrainBatch:
 
     def _reset_job(self):
         _background_job.update(
-            job_id=None, running=False, total=0, completed=0, errors=0,
-            current_caption="", current_image="", started_at=None, finished_at=None,
+            job_id=None,
+            running=False,
+            total=0,
+            completed=0,
+            errors=0,
+            current_caption="",
+            current_image="",
+            started_at=None,
+            finished_at=None,
         )
 
     @patch(MGR_TARGET)
@@ -283,24 +290,31 @@ class TestDPO:
         multimodal_router._dpo_state["status"] = "idle"
 
     def test_dpo_run(self):
-        import types
         import sys
-        import time
+        import types
 
         class _FakeTrainer:
             def __init__(self, model, tokenizer, learning_rate):
                 self._lr = learning_rate
 
             def train(self, max_pairs):
-                return {"status": "accepted", "steps": 5, "avg_loss": 0.4,
-                        "ppl_before": 10.0, "ppl_after": 8.0, "ppl_delta_pct": -20.0,
-                        "pairs_trained": max_pairs}
+                return {
+                    "status": "accepted",
+                    "steps": 5,
+                    "avg_loss": 0.4,
+                    "ppl_before": 10.0,
+                    "ppl_after": 8.0,
+                    "ppl_delta_pct": -20.0,
+                    "pairs_trained": max_pairs,
+                }
 
         fake_mod = types.ModuleType("domains.feedback.hf_dpo")
         fake_mod.HFDPOTrainer = _FakeTrainer
         with patch.dict(sys.modules, {"domains.feedback.hf_dpo": fake_mod}):
-            with patch("apps.api.server.routers.multimodal.MultimodalRouter._get_active_model_and_tokenizer",
-                       return_value=(object(), object())):
+            with patch(
+                "apps.api.server.routers.multimodal.MultimodalRouter._get_active_model_and_tokenizer",
+                return_value=(object(), object()),
+            ):
                 multimodal_router._dpo_state["status"] = "idle"
                 resp = client.post("/multimodal/dpo", json={"max_pairs": 4})
                 assert resp.status_code == 200
@@ -319,16 +333,27 @@ class TestTrainVideo:
 
     def _reset_video_job(self):
         multimodal_router._video_training_state.update(
-            status="idle", job_id=None, current_epoch=0, current_step=0,
-            total_steps=0, current_loss=None, result=None, error=None,
+            status="idle",
+            job_id=None,
+            current_epoch=0,
+            current_step=0,
+            total_steps=0,
+            current_loss=None,
+            result=None,
+            error=None,
         )
 
     def test_returns_409_when_running(self):
         multimodal_router._video_training_state["status"] = "running"
         try:
-            resp = client.post("/multimodal/train-video", json={
-                "data_path": "/tmp/videos", "epochs": 3, "batch_size": 2,
-            })
+            resp = client.post(
+                "/multimodal/train-video",
+                json={
+                    "data_path": "/tmp/videos",
+                    "epochs": 3,
+                    "batch_size": 2,
+                },
+            )
             assert resp.status_code == 409
             assert "already in progress" in resp.json()["error"].lower()
         finally:
@@ -339,10 +364,16 @@ class TestTrainVideo:
         mock_get_exec.return_value = MagicMock()
         self._reset_video_job()
         try:
-            resp = client.post("/multimodal/train-video", json={
-                "data_path": "/tmp/videos", "epochs": 3, "batch_size": 2,
-                "learning_rate": 0.0003, "output_dir": "models/video-training",
-            })
+            resp = client.post(
+                "/multimodal/train-video",
+                json={
+                    "data_path": "/tmp/videos",
+                    "epochs": 3,
+                    "batch_size": 2,
+                    "learning_rate": 0.0003,
+                    "output_dir": "models/video-training",
+                },
+            )
             assert resp.status_code == 200
             data = resp.json()["data"]
             assert data["status"] == "started"
@@ -384,7 +415,9 @@ class TestVideoInfer:
         assert data["checkpoint"] == "ck1"
         assert "elapsed_ms" in data
         trainer.load_checkpoint.assert_called_once_with("/tmp/ck1.slnc")
-        trainer.generate.assert_called_once_with(video_path="/tmp/a.mp4", max_len=50, temperature=0.8)
+        trainer.generate.assert_called_once_with(
+            video_path="/tmp/a.mp4", max_len=50, temperature=0.8
+        )
 
 
 class TestAnalyze:
@@ -418,6 +451,7 @@ class TestSynthesizeSpeech:
     @patch("domains.multimodal.tts.TTSEngine")
     def test_synthesizes_waveform(self, mock_tts_cls):
         import numpy as np
+
         tts = mock_tts_cls.return_value
         tts.text_to_waveform.return_value = np.zeros(1600)
         tts.sample_rate = 16000
@@ -499,6 +533,7 @@ class TestProcessVideo:
     @patch("domains.multimodal.video.VideoProcessor")
     def test_processes_video(self, mock_processor_cls, mock_get):
         import numpy as np
+
         mock_get.return_value = _mock_manager()
         mock_get.return_value._multimodal_engine = self._make_engine()
         processor = mock_processor_cls.return_value
@@ -521,6 +556,7 @@ class TestProcessVideo:
     @patch("domains.multimodal.video.VideoProcessor")
     def test_returns_500_when_engine_missing(self, mock_processor_cls, mock_get):
         import numpy as np
+
         mgr = _mock_manager()
         mgr._multimodal_engine = None
         mock_get.return_value = mgr
@@ -539,24 +575,36 @@ class TestVisualDataset:
     def test_403_outside_allowed_path(self, tmp_path):
         out = tmp_path / "outside"
         out.mkdir()
-        resp = client.post("/multimodal/visual-dataset", json={
-            "name": "ds", "image_dir": str(out), "auto_caption": False,
-        })
+        resp = client.post(
+            "/multimodal/visual-dataset",
+            json={
+                "name": "ds",
+                "image_dir": str(out),
+                "auto_caption": False,
+            },
+        )
         assert resp.status_code == 403
 
     def test_400_when_dir_missing(self, tmp_path):
         from pathlib import Path
+
         repo_root = Path(__file__).resolve().parents[2]
         missing = repo_root / "data" / "mm-vision-missing-xyz"
-        resp = client.post("/multimodal/visual-dataset", json={
-            "name": "ds", "image_dir": str(missing), "auto_caption": False,
-        })
+        resp = client.post(
+            "/multimodal/visual-dataset",
+            json={
+                "name": "ds",
+                "image_dir": str(missing),
+                "auto_caption": False,
+            },
+        )
         assert resp.status_code == 400
 
     @patch(MGR_TARGET)
     def test_creates_dataset(self, mock_get, tmp_path):
-        from pathlib import Path
         import shutil
+        from pathlib import Path
+
         mock_get.return_value = _mock_manager()
         repo_root = Path(__file__).resolve().parents[2]
         data_dir = repo_root / "data"
@@ -566,10 +614,14 @@ class TestVisualDataset:
         img_path.write_bytes(_real_png_bytes())
         ds_path = repo_root / "datasets" / "mm-vision-test-xyz.jsonl"
         try:
-            resp = client.post("/multimodal/visual-dataset", json={
-                "name": "mm-vision-test-xyz", "image_dir": str(img_dir),
-                "auto_caption": False,
-            })
+            resp = client.post(
+                "/multimodal/visual-dataset",
+                json={
+                    "name": "mm-vision-test-xyz",
+                    "image_dir": str(img_dir),
+                    "auto_caption": False,
+                },
+            )
             assert resp.status_code == 200
             data = resp.json()["data"]
             assert data["entries"] == 1

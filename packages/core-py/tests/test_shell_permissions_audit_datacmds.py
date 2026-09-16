@@ -1,17 +1,16 @@
 """Tests for domain.shell.permissions.py, audit.py, cmds/data_cmds.py."""
 
-import json
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from domain.shell._internal.permissions import (
-    Risk, ShellPermissions, _RISK_MAP, _FORCE_PATTERNS,
-    _SAFE, _ELEVATED, _DANGEROUS, _CRITICAL,
-    set_permissions_db, reset_permissions_db,
+    _FORCE_PATTERNS,
+    _RISK_MAP,
+    Risk,
+    ShellPermissions,
+    reset_permissions_db,
+    set_permissions_db,
 )
 
 
@@ -225,7 +224,7 @@ from domain.shell._internal.audit import ShellAuditLogger, get_shell_audit_logge
 class TestShellAuditLogger:
     def test_init_creates_log_dir(self, tmp_path):
         log_dir = tmp_path / "audit_test"
-        logger = ShellAuditLogger(log_dir=log_dir)
+        ShellAuditLogger(log_dir=log_dir)
         assert log_dir.exists()
 
     def test_log_path(self, tmp_path):
@@ -334,6 +333,7 @@ class TestShellAuditLogger:
 class TestAuditSingleton:
     def test_singleton(self, tmp_path):
         import domain.shell._internal.audit as audit_mod
+
         audit_mod._audit = None
         logger1 = get_shell_audit_logger(log_dir=tmp_path)
         logger2 = get_shell_audit_logger(log_dir=tmp_path)

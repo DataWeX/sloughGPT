@@ -1,23 +1,57 @@
 import json
-import os
-import tempfile
 
 from domain.collections import (
-    Record, FileSource, MemoryStore, CallbackStore, Collector,
-    LengthFilter, DedupFilter, KeywordFilter, RegexFilter,
-    LanguageFilter, FilterChain, CollectionPipeline, CollectionRegistry,
-    ChainedStore, StatsStore, GeneratorSource, WatchSource,
-    ParallelCollector, BatchCollector, SamplerFilter, TransformFilter,
-    TruncateFilter, PrefixFilter, MetadataFilter,
-    Schema, DataValidator, DataEnricher, EnrichmentRule, RateLimiter,
-    CallableSource, CallableStore, CollectorRunner,
-    JobConfig, JobScheduler, CollectorMonitor, CollectorExporter,
-    CollectorBuilder, DataSource, DataSink, DataTransformer,
-    WorldFeedConfig, RecordToWorldMapper, WorldGridBridge,
-    WorldGridSource, WorldStoreAdapter, CollectionWorldPipeline,
-    TrainingDataConfig, TrainingDataAdapter, TrainingDatasetBuilder,
+    BatchCollector,
+    CallableSource,
+    CallableStore,
+    CallbackStore,
+    ChainedStore,
+    CollectionPipeline,
+    CollectionRegistry,
+    CollectionWorldPipeline,
+    Collector,
+    CollectorBuilder,
+    CollectorExporter,
+    CollectorMonitor,
+    CollectorRunner,
     CollectorTrainingBridge,
-    collect_file, collect_records,
+    DataEnricher,
+    DataSink,
+    DataSource,
+    DataTransformer,
+    DataValidator,
+    DedupFilter,
+    EnrichmentRule,
+    FileSource,
+    FilterChain,
+    GeneratorSource,
+    JobConfig,
+    JobScheduler,
+    KeywordFilter,
+    LanguageFilter,
+    LengthFilter,
+    MemoryStore,
+    MetadataFilter,
+    ParallelCollector,
+    PrefixFilter,
+    RateLimiter,
+    Record,
+    RecordToWorldMapper,
+    RegexFilter,
+    SamplerFilter,
+    Schema,
+    StatsStore,
+    TrainingDataAdapter,
+    TrainingDataConfig,
+    TrainingDatasetBuilder,
+    TransformFilter,
+    TruncateFilter,
+    WatchSource,
+    WorldFeedConfig,
+    WorldGridBridge,
+    WorldStoreAdapter,
+    collect_file,
+    collect_records,
 )
 
 
@@ -316,6 +350,7 @@ class TestGeneratorSource:
         def gen():
             yield "hello"
             yield "world"
+
         src = GeneratorSource(gen)
         records = list(src.read())
         assert len(records) == 2
@@ -324,6 +359,7 @@ class TestGeneratorSource:
     def test_generator_with_records(self):
         def gen():
             yield Record(content="a", metadata={"x": 1})
+
         src = GeneratorSource(gen)
         records = list(src.read())
         assert len(records) == 1
@@ -409,9 +445,9 @@ class TestSamplerFilter:
 
 class TestTransformFilter:
     def test_transform(self):
-        tf = TransformFilter(transform_fn=lambda r: Record(
-            content=r.content.upper(), metadata=r.metadata
-        ))
+        tf = TransformFilter(
+            transform_fn=lambda r: Record(content=r.content.upper(), metadata=r.metadata)
+        )
         r = Record(content="hello")
         assert tf.accept(r) is True
         result = tf.transform(r)
@@ -489,10 +525,12 @@ class TestDataValidator:
 
 class TestDataEnricher:
     def test_enriches(self):
-        enricher = DataEnricher([
-            EnrichmentRule(key="tag", value="important"),
-            EnrichmentRule(key="length", value_fn=lambda r: len(r.content)),
-        ])
+        enricher = DataEnricher(
+            [
+                EnrichmentRule(key="tag", value="important"),
+                EnrichmentRule(key="length", value_fn=lambda r: len(r.content)),
+            ]
+        )
         r = Record(content="hello")
         result = enricher.enrich(r)
         assert result.metadata["tag"] == "important"
@@ -525,6 +563,7 @@ class TestCallableSource:
     def test_callable_source(self):
         def gen():
             yield Record(content="hello")
+
         src = CallableSource(gen)
         records = list(src.read())
         assert len(records) == 1
@@ -534,8 +573,10 @@ class TestCallableSource:
 class TestCallableStore:
     def test_callable_store(self):
         stored = []
+
         def store_fn(r):
             stored.append(r)
+
         store = CallableStore(store_fn)
         store.write(Record(content="hello"))
         assert len(stored) == 1
@@ -596,6 +637,7 @@ class TestJobScheduler:
         scheduler.add_job(config, c1)
         assert scheduler.start_job("job1")
         import time
+
         time.sleep(0.5)
         scheduler.stop_job("job1")
         stats = scheduler.job_stats("job1")
@@ -725,12 +767,14 @@ class TestCollectorBuilder:
     def test_fluent_chaining(self, tmp_path):
         f = tmp_path / "data.txt"
         f.write_text("hello\n")
-        collector = (CollectorBuilder()
+        collector = (
+            CollectorBuilder()
             .file_source(str(f))
             .memory_store()
             .dedup_filter()
             .length_filter(min_length=1)
-            .build())
+            .build()
+        )
         count = collector.collect()
         assert count == 1
 
@@ -923,9 +967,7 @@ class TestWorldGridBridge:
 class TestCollectionWorldPipeline:
     def test_run_no_grid(self):
         pipeline = CollectionWorldPipeline(
-            source=GeneratorSource(lambda: iter([
-                Record(content="a"), Record(content="b")
-            ])),
+            source=GeneratorSource(lambda: iter([Record(content="a"), Record(content="b")])),
         )
         count = pipeline.run()
         assert count == 0
@@ -934,10 +976,14 @@ class TestCollectionWorldPipeline:
 
     def test_run_with_filter(self):
         pipeline = CollectionWorldPipeline(
-            source=GeneratorSource(lambda: iter([
-                Record(content="short"),
-                Record(content="this is a much longer record"),
-            ])),
+            source=GeneratorSource(
+                lambda: iter(
+                    [
+                        Record(content="short"),
+                        Record(content="this is a much longer record"),
+                    ]
+                )
+            ),
             filters=[LengthFilter(min_length=10)],
         )
         count = pipeline.run()

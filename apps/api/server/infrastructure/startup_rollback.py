@@ -75,12 +75,14 @@ class StartupRollback:
     ) -> None:
         """Register a rollback action."""
         with self._lock:
-            self._actions.append(RollbackAction(
-                name=name,
-                description=description,
-                action=action,
-                priority=priority,
-            ))
+            self._actions.append(
+                RollbackAction(
+                    name=name,
+                    description=description,
+                    action=action,
+                    priority=priority,
+                )
+            )
             # Sort by priority (highest first)
             self._actions.sort(key=lambda a: a.priority, reverse=True)
 

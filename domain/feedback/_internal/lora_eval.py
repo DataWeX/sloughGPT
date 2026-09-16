@@ -28,9 +28,11 @@ from __future__ import annotations
 import json
 import logging
 import time
-import numpy as np
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Any
+from typing import Any
+
+import numpy as np
 
 logger = logging.getLogger("slo.lora_eval")
 from dataclasses import dataclass
@@ -39,21 +41,22 @@ from dataclasses import dataclass
 @dataclass
 class EvalResult:
     """Single eval run result."""
+
     timestamp: str
-    adapter_path: Optional[str]
+    adapter_path: str | None
     prompts: int
     references: int
-    perplexity: Optional[float]
-    bleu: Optional[float]
+    perplexity: float | None
+    bleu: float | None
     avg_response_len: float
     inference_time_sec: float
-    tokens_per_sec: Optional[float]
-    personality_score: Optional[float]
-    quality_delta: Optional[float] = None
+    tokens_per_sec: float | None
+    personality_score: float | None
+    quality_delta: float | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         d = vars(self).copy()
-        d.pop('quality_delta', None)
+        d.pop("quality_delta", None)
         return d
 
 
@@ -61,8 +64,11 @@ class BLEUScorer:
     """Simple n-gram BLEU for text generation evaluation."""
 
     @staticmethod
-    def _get_ngrams(tokens: List[str], n: int) -> Dict[Tuple[str, ...], int]:
-        return {tuple(tokens[i:i+n]): tokens[i+n] if i+n < len(tokens) else '' for i in range(len(tokens)-n+1)}
+    def _get_ngrams(tokens: list[str], n: int) -> dict[tuple[str, ...], int]:
+        return {
+            tuple(tokens[i : i + n]): tokens[i + n] if i + n < len(tokens) else ""
+            for i in range(len(tokens) - n + 1)
+        }
 
     @staticmethod
     def score(candidate: str, reference: str, max_n: int = 4) -> float:
@@ -98,6 +104,7 @@ class BLEUScorer:
 @dataclass
 class PersonalityScore:
     """Score how well generated text matches soul personality traits."""
+
     soul_name: str
     warmth_score: float
     creativity_score: float
@@ -105,7 +112,7 @@ class PersonalityScore:
     coherence_score: float
     overall: float
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> dict[str, float]:
         return {
             "soul": self.soul_name,
             "warmth": self.warmth_score,
@@ -158,11 +165,11 @@ class LoRAEvaluator:
 
     def __init__(
         self,
-        base_model: Optional[str] = None,
-        tokenizer_path: Optional[str] = None,
+        base_model: str | None = None,
+        tokenizer_path: str | None = None,
         eval_dir: str = "data/eval_results",
-        eval_prompts: Optional[List[str]] = None,
-        generator: Optional[Callable[[str], str]] = None,
+        eval_prompts: list[str] | None = None,
+        generator: Callable[[str], str] | None = None,
     ):
         self.eval_dir = Path(eval_dir)
         self.eval_dir.mkdir(parents=True, exist_ok=True)
@@ -211,16 +218,19 @@ class LoRAEvaluator:
                 self._stoi = meta.get("stoi") or meta.get("char_to_idx")
                 self._itos = meta.get("itos") or meta.get("idx_to_char") or meta.get("chars")
                 if self._itos is not None and not isinstance(self._itos, dict):
-                    self._itos = {i: c for i, c in enumerate(self._itos)}
+                    self._itos = dict(enumerate(self._itos))
             self._device = "cpu"
             model.eval()
             logger.info("Loaded native eval model: %s", self.base_model, extra={"tag": "INFRA"})
         except Exception as e:
-            logger.warning("Could not load eval model (%s); using simulated generation.", e,
-                extra={"tag": "INFRA"})
+            logger.warning(
+                "Could not load eval model (%s); using simulated generation.",
+                e,
+                extra={"tag": "INFRA"},
+            )
             self._model = None
 
-    def _resolve_live_generator(self) -> Optional[Callable[[str], str]]:
+    def _resolve_live_generator(self) -> Callable[[str], str] | None:
         """Resolve a real generator from the live registered provider (if any).
 
         Returns a callable ``(prompt) -> text`` backed by the running SloNet model
@@ -251,13 +261,15 @@ class LoRAEvaluator:
                     )
                     return text if isinstance(text, str) else ""
                 except Exception as e:
-                    logger.debug("Live eval generator failed for %r: %s", prompt, e,
-                                 extra={"tag": "INFRA"})
+                    logger.debug(
+                        "Live eval generator failed for %r: %s", prompt, e, extra={"tag": "INFRA"}
+                    )
                     return ""
 
             self._default_gen = _gen
-            logger.info("Wired live model into LoRA evaluator via provider %r", name,
-                        extra={"tag": "INFRA"})
+            logger.info(
+                "Wired live model into LoRA evaluator via provider %r", name, extra={"tag": "INFRA"}
+            )
             return _gen
         return None
 
@@ -279,7 +291,9 @@ class LoRAEvaluator:
             return True
         return False
 
-    def _generate(self, prompt: str, adapter_path: Optional[str] = None, max_tokens: int = 50) -> Tuple[str, float, float]:
+    def _generate(
+        self, prompt: str, adapter_path: str | None = None, max_tokens: int = 50
+    ) -> tuple[str, float, float]:
         """Generate response and return (text, latency_sec, tokens_per_sec)."""
         generator = self._resolve_live_generator()
         if generator is not None:
@@ -322,7 +336,9 @@ class LoRAEvaluator:
 
         return full_text, latency, tps
 
-    def _simulate_generation(self, prompt: str, adapter_path: Optional[str] = None) -> Tuple[str, float, float]:
+    def _simulate_generation(
+        self, prompt: str, adapter_path: str | None = None
+    ) -> tuple[str, float, float]:
         """Fallback when model isn't available."""
         # Deterministic simulation based on prompt hash + adapter presence
         np.random.seed(hash(prompt) % (2**31))
@@ -343,7 +359,11 @@ class LoRAEvaluator:
         text_lower = text.lower()
         keywords = self.SOUL_KEYWORDS.get(soul_name, self.SOUL_KEYWORDS["assistant"])
 
-        warmth = sum(1 for k in ["thank", "great", "help", "appreciate", "wonderful"] if k in text_lower) / max(len(text_lower.split()), 1) * 10
+        warmth = (
+            sum(1 for k in ["thank", "great", "help", "appreciate", "wonderful"] if k in text_lower)
+            / max(len(text_lower.split()), 1)
+            * 10
+        )
         creativity = sum(1 for k in keywords[:3] if k in text_lower) / 3
         formality = 0.5 + (text.count(".")) / max(len(text.split()), 1) * 5
 
@@ -351,7 +371,7 @@ class LoRAEvaluator:
         sentences = max(1, text.count(".") + text.count("?") + text.count("!"))
         coherence = min(1.0, sentences / 5)
 
-        overall = (warmth * 0.3 + creativity * 0.3 + formality * 0.2 + coherence * 0.2)
+        overall = warmth * 0.3 + creativity * 0.3 + formality * 0.2 + coherence * 0.2
 
         return PersonalityScore(
             soul_name=soul_name,
@@ -362,7 +382,7 @@ class LoRAEvaluator:
             overall=overall,
         )
 
-    def _compute_perplexity(self, text: str, prompt: str) -> Optional[float]:
+    def _compute_perplexity(self, text: str, prompt: str) -> float | None:
         """Compute perplexity as exp(negative log likelihood) on the native model.
 
         Only meaningful for a real char-level model; returns None when only a
@@ -385,7 +405,7 @@ class LoRAEvaluator:
 
     def run(
         self,
-        adapter_path: Optional[str] = None,
+        adapter_path: str | None = None,
         soul_name: str = "assistant",
         max_tokens: int = 50,
         save: bool = True,
@@ -429,7 +449,15 @@ class LoRAEvaluator:
             if pp is not None:
                 perplexities.append(pp)
 
-            results.append({"prompt": prompt, "generated": generated, "bleu": bleu, "perplexity": pp, "tps": tps})
+            results.append(
+                {
+                    "prompt": prompt,
+                    "generated": generated,
+                    "bleu": bleu,
+                    "perplexity": pp,
+                    "tps": tps,
+                }
+            )
 
         avg_ppl = float(np.mean(perplexities)) if perplexities else None
         avg_bleu = float(np.mean(blues)) if blues else None
@@ -457,7 +485,7 @@ class LoRAEvaluator:
 
         return result
 
-    def compare(self, baseline: EvalResult, with_adapter: EvalResult) -> Dict[str, Any]:
+    def compare(self, baseline: EvalResult, with_adapter: EvalResult) -> dict[str, Any]:
         """
         Compare baseline vs adapter results.
 
@@ -471,13 +499,17 @@ class LoRAEvaluator:
 
         if baseline.perplexity and with_adapter.perplexity:
             delta["perplexity_delta"] = with_adapter.perplexity - baseline.perplexity
-            delta["perplexity_improvement_pct"] = ((baseline.perplexity - with_adapter.perplexity) / baseline.perplexity) * 100
+            delta["perplexity_improvement_pct"] = (
+                (baseline.perplexity - with_adapter.perplexity) / baseline.perplexity
+            ) * 100
 
         if baseline.bleu and with_adapter.bleu:
             delta["bleu_delta"] = with_adapter.bleu - baseline.bleu
 
         if baseline.tokens_per_sec and with_adapter.tokens_per_sec:
-            delta["throughput_delta"] = ((with_adapter.tokens_per_sec - baseline.tokens_per_sec) / baseline.tokens_per_sec) * 100
+            delta["throughput_delta"] = (
+                (with_adapter.tokens_per_sec - baseline.tokens_per_sec) / baseline.tokens_per_sec
+            ) * 100
 
         if baseline.personality_score is not None and with_adapter.personality_score is not None:
             delta["personality_delta"] = with_adapter.personality_score - baseline.personality_score
@@ -485,7 +517,9 @@ class LoRAEvaluator:
         # Overall verdict
         positive = sum(1 for v in delta.values() if isinstance(v, (int, float)) and v > 0)
         total = sum(1 for v in delta.values() if isinstance(v, (int, float)))
-        delta["verdict"] = "improved" if positive > total / 2 else "degraded" if positive == 0 else "mixed"
+        delta["verdict"] = (
+            "improved" if positive > total / 2 else "degraded" if positive == 0 else "mixed"
+        )
         # Lower perplexity is better; override when a real perplexity delta exists.
         if "perplexity_delta" in delta and delta["perplexity_delta"] < 0:
             delta["verdict"] = "improved"
@@ -493,7 +527,7 @@ class LoRAEvaluator:
         return delta
 
     @staticmethod
-    def _fmt(value: Optional[float], precision: int = 2) -> str:
+    def _fmt(value: float | None, precision: int = 2) -> str:
         """Format a possibly-None metric; None renders as ``n/a``."""
         if value is None:
             return "n/a"
@@ -522,21 +556,23 @@ class LoRAEvaluator:
             "",
         ]
 
-        if delta.get('verdict') == 'improved':
+        if delta.get("verdict") == "improved":
             lines.append("✓ Adapter improves model quality")
-        elif delta.get('verdict') == 'degraded':
+        elif delta.get("verdict") == "degraded":
             lines.append("✗ Adapter reduces model quality — review before deploying")
         else:
             lines.append("~ Mixed results — some metrics improved, some degraded")
 
-        if 'perplexity_improvement_pct' in delta:
-            lines.append(f"  Perplexity {'improved' if delta['perplexity_delta'] < 0 else 'worsened'} by {abs(delta['perplexity_improvement_pct']):.1f}%")
+        if "perplexity_improvement_pct" in delta:
+            lines.append(
+                f"  Perplexity {'improved' if delta['perplexity_delta'] < 0 else 'worsened'} by {abs(delta['perplexity_improvement_pct']):.1f}%"
+            )
 
         lines.append("=" * 50)
 
         return "\n".join(lines)
 
-    def _save_result(self, result: EvalResult, detailed: List[Dict]):
+    def _save_result(self, result: EvalResult, detailed: list[dict]):
         """Save eval result to disk."""
         ts = result.timestamp.replace(":", "-")
         prefix = "baseline" if result.adapter_path is None else Path(result.adapter_path).stem
@@ -549,17 +585,21 @@ class LoRAEvaluator:
         # Detailed
         detail_path = self.eval_dir / f"{prefix}_{ts}_detail.json"
         with open(detail_path, "w") as f:
-            json.dump({
-                "summary": result.to_dict(),
-                "generations": detailed,
-            }, f, indent=2)
+            json.dump(
+                {
+                    "summary": result.to_dict(),
+                    "generations": detailed,
+                },
+                f,
+                indent=2,
+            )
 
     def export_adapter_as_sou(
         self,
         adapter_npz: str,
         soul_name: str,
-        eval_delta: Dict[str, Any],
-        output_sou: Optional[str] = None,
+        eval_delta: dict[str, Any],
+        output_sou: str | None = None,
     ) -> str:
         """
         Convert an aggregated LoRA .npz adapter into a .soul checkpoint.
@@ -574,17 +614,21 @@ class LoRAEvaluator:
             Path to the exported .soul file
         """
         from domain.inference import (
-            SloProfile, PersonalityCore, GenerationParams,
-            BehavioralTraits, CognitiveSignature, EmotionalRange,
+            BehavioralTraits,
+            CognitiveSignature,
+            EmotionalRange,
+            GenerationParams,
+            PersonalityCore,
+            SloProfile,
             save_soul,
         )
 
         data = np.load(adapter_npz)
 
         eval_delta_dict = eval_delta if isinstance(eval_delta, dict) else {}
-        verdict = eval_delta_dict.get('verdict', 'unknown')
-        perplexity_delta = eval_delta_dict.get('perplexity_delta', 0)
-        bleu_delta = eval_delta_dict.get('bleu_delta', 0)
+        verdict = eval_delta_dict.get("verdict", "unknown")
+        perplexity_delta = eval_delta_dict.get("perplexity_delta", 0)
+        bleu_delta = eval_delta_dict.get("bleu_delta", 0)
 
         soul_profile = SloProfile(
             name=soul_name,
@@ -602,7 +646,7 @@ class LoRAEvaluator:
             final_train_loss=abs(perplexity_delta) if perplexity_delta else 0.5,
             final_val_loss=abs(perplexity_delta) if perplexity_delta else 0.5,
             personality=PersonalityCore(
-                warmth=0.5 + abs(eval_delta_dict.get('personality_delta', 0)) * 0.5,
+                warmth=0.5 + abs(eval_delta_dict.get("personality_delta", 0)) * 0.5,
                 creativity=0.5,
                 curiosity=0.5,
                 confidence=0.5,
@@ -673,10 +717,12 @@ class LoRAEvaluator:
         logger.info("Exported .soul checkpoint: %s", output_sou, extra={"tag": "INFRA"})
         return output_sou
 
-    def get_history(self, limit: int = 20) -> List[EvalResult]:
+    def get_history(self, limit: int = 20) -> list[EvalResult]:
         """Load recent eval results."""
         results = []
-        summary_files = [f for f in self.eval_dir.glob("baseline_*.json") if not f.name.endswith("_detail.json")]
+        summary_files = [
+            f for f in self.eval_dir.glob("baseline_*.json") if not f.name.endswith("_detail.json")
+        ]
         for f in sorted(summary_files)[-limit:]:
             try:
                 with open(f) as fp:
@@ -684,14 +730,17 @@ class LoRAEvaluator:
                     results.append(EvalResult(**data))
             except Exception as e:
                 import logging
-                logging.getLogger("slo.lora_eval").debug("Failed to load eval result %s: %s", f.name, e)
+
+                logging.getLogger("slo.lora_eval").debug(
+                    "Failed to load eval result %s: %s", f.name, e
+                )
         return sorted(results, key=lambda r: r.timestamp, reverse=True)
 
 
-_global_eval: Optional[LoRAEvaluator] = None
+_global_eval: LoRAEvaluator | None = None
 
 
-def get_lora_evaluator(base_model: Optional[str] = None) -> LoRAEvaluator:
+def get_lora_evaluator(base_model: str | None = None) -> LoRAEvaluator:
     global _global_eval
     if _global_eval is None:
         _global_eval = LoRAEvaluator(base_model=base_model)

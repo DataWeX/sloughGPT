@@ -19,8 +19,9 @@ BLOCK = 8
 
 
 def _make_model():
-    return SloughGPTModel(vocab_size=VOCAB, n_embed=EMBED, n_layer=2, n_head=4,
-                          block_size=BLOCK, dropout=0.1)
+    return SloughGPTModel(
+        vocab_size=VOCAB, n_embed=EMBED, n_layer=2, n_head=4, block_size=BLOCK, dropout=0.1
+    )
 
 
 def _bundle(model):
@@ -31,8 +32,13 @@ def _bundle(model):
         "model_state_dict": sd,
         "stoi": stoi,
         "itos": itos,
-        "training_info": {"vocab_size": VOCAB, "n_embed": EMBED, "n_layer": 2,
-                          "n_head": 4, "block_size": BLOCK},
+        "training_info": {
+            "vocab_size": VOCAB,
+            "n_embed": EMBED,
+            "n_layer": 2,
+            "n_head": 4,
+            "block_size": BLOCK,
+        },
     }
 
 
@@ -41,8 +47,13 @@ class TestEvaluateSoulCharLm:
         from domain.inference._internal.slo_format import SloProfile, save_soul
 
         soul = SloProfile(name="eval-soul")
-        cfg = {"vocab_size": VOCAB, "n_embed": EMBED, "n_layer": 2,
-               "n_head": 4, "block_size": BLOCK}
+        cfg = {
+            "vocab_size": VOCAB,
+            "n_embed": EMBED,
+            "n_layer": 2,
+            "n_head": 4,
+            "block_size": BLOCK,
+        }
         soul.metadata["config"] = cfg
         soul.metadata["vocab_size"] = VOCAB
         if stoi is not None:
@@ -207,8 +218,15 @@ class TestEvaluateSoulCharLm:
         p = tmp_path / "eval.txt"
         p.write_text("abcdefghij" * 5, encoding="utf-8")
         out = ev.evaluate_soul_char_lm(str(soul_path), str(p))
-        expected_keys = {"mean_loss", "perplexity", "num_token_positions",
-                         "num_chars_skipped", "block_size", "vocab_size", "warnings"}
+        expected_keys = {
+            "mean_loss",
+            "perplexity",
+            "num_token_positions",
+            "num_chars_skipped",
+            "block_size",
+            "vocab_size",
+            "warnings",
+        }
         assert expected_keys.issubset(out.keys())
 
     def testitos_based_vocab(self, tmp_path):
@@ -224,28 +242,46 @@ class TestEvaluateSoulCharLm:
 class TestMain:
     def test_json_output(self, tmp_path, monkeypatch, capsys):
         import json as json_lib
+
         monkeypatch.setattr(
             ev,
             "evaluate_soul_char_lm",
-            lambda *a, **k: {"mean_loss": 2.0, "perplexity": math.exp(2), "num_token_positions": 8,
-                             "num_chars_skipped": 0, "block_size": 8, "vocab_size": 64, "warnings": []},
+            lambda *a, **k: {
+                "mean_loss": 2.0,
+                "perplexity": math.exp(2),
+                "num_token_positions": 8,
+                "num_chars_skipped": 0,
+                "block_size": 8,
+                "vocab_size": 64,
+                "warnings": [],
+            },
         )
-        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.soul",
-                                         "--data", "d.txt", "--json"])
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "d.txt", "--json"]
+        )
         ev.main()
         payload = json_lib.loads(capsys.readouterr().out)
         assert payload["perplexity"] == pytest.approx(math.exp(2))
 
     def test_json_output_inf_perplexity(self, monkeypatch, capsys):
         import json as json_lib
+
         monkeypatch.setattr(
             ev,
             "evaluate_soul_char_lm",
-            lambda *a, **k: {"mean_loss": 200.0, "perplexity": float("inf"), "num_token_positions": 8,
-                             "num_chars_skipped": 0, "block_size": 8, "vocab_size": 64, "warnings": []},
+            lambda *a, **k: {
+                "mean_loss": 200.0,
+                "perplexity": float("inf"),
+                "num_token_positions": 8,
+                "num_chars_skipped": 0,
+                "block_size": 8,
+                "vocab_size": 64,
+                "warnings": [],
+            },
         )
-        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.soul",
-                                         "--data", "d.txt", "--json"])
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "d.txt", "--json"]
+        )
         ev.main()
         payload = json_lib.loads(capsys.readouterr().out)
         assert payload["perplexity"] is None
@@ -255,22 +291,32 @@ class TestMain:
             raise ValueError("bad checkpoint")
 
         monkeypatch.setattr(ev, "evaluate_soul_char_lm", _boom)
-        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "d.txt"])
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "d.txt"]
+        )
         with pytest.raises(SystemExit) as exc:
             ev.main()
         assert exc.value.code == 1
 
     def test_json_output_all_keys(self, monkeypatch, capsys):
         import json as json_lib
+
         monkeypatch.setattr(
             ev,
             "evaluate_soul_char_lm",
-            lambda *a, **k: {"mean_loss": 1.0, "perplexity": math.e, "num_token_positions": 16,
-                             "num_chars_skipped": 2, "block_size": 8, "vocab_size": 32,
-                             "warnings": ["warn1"]},
+            lambda *a, **k: {
+                "mean_loss": 1.0,
+                "perplexity": math.e,
+                "num_token_positions": 16,
+                "num_chars_skipped": 2,
+                "block_size": 8,
+                "vocab_size": 32,
+                "warnings": ["warn1"],
+            },
         )
-        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.soul",
-                                         "--data", "d.txt", "--json"])
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "d.txt", "--json"]
+        )
         ev.main()
         payload = json_lib.loads(capsys.readouterr().out)
         assert payload["num_chars_skipped"] == 2
@@ -280,11 +326,19 @@ class TestMain:
         monkeypatch.setattr(
             ev,
             "evaluate_soul_char_lm",
-            lambda *a, **k: {"mean_loss": 1.0, "perplexity": math.e, "num_token_positions": 8,
-                             "num_chars_skipped": 0, "block_size": 8, "vocab_size": 64, "warnings": []},
+            lambda *a, **k: {
+                "mean_loss": 1.0,
+                "perplexity": math.e,
+                "num_token_positions": 8,
+                "num_chars_skipped": 0,
+                "block_size": 8,
+                "vocab_size": 64,
+                "warnings": [],
+            },
         )
-        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.soul",
-                                         "--data", "d.txt"])
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "d.txt"]
+        )
         ev.main()
         out = capsys.readouterr()
         assert out.out == ""
@@ -294,8 +348,9 @@ class TestMain:
             raise FileNotFoundError("missing.soul")
 
         monkeypatch.setattr(ev, "evaluate_soul_char_lm", _boom)
-        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "missing.soul",
-                                         "--data", "d.txt"])
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "missing.soul", "--data", "d.txt"]
+        )
         with pytest.raises(SystemExit) as exc:
             ev.main()
         assert exc.value.code == 1
@@ -305,8 +360,9 @@ class TestMain:
             raise ValueError("too short")
 
         monkeypatch.setattr(ev, "evaluate_soul_char_lm", _boom)
-        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.soul",
-                                         "--data", "short.txt"])
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "short.txt"]
+        )
         with pytest.raises(SystemExit) as exc:
             ev.main()
         assert exc.value.code == 1

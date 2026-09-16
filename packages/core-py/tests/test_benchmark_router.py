@@ -3,14 +3,13 @@
 Covers: run_benchmark, get_model_metrics, get_quality_metrics, get_logged_responses,
 get_tracker_stats, clear_history. Domain deps are mocked.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -19,10 +18,11 @@ if _server_dir not in sys.path:
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
-from routers.benchmark import BenchmarkRouter  # noqa: E402
-
 # Import build_test_app from the core-py tests conftest directly
 import importlib.util as _iu
+
+from routers.benchmark import BenchmarkRouter  # noqa: E402
+
 _core_conftest = Path(__file__).resolve().parent / "conftest.py"
 _spec = _iu.spec_from_file_location("_core_conftest", _core_conftest)
 _mod = _iu.module_from_spec(_spec)
@@ -55,8 +55,13 @@ class TestRunBenchmark:
         mock_ctrl._inference_count = 10
         mock_state = MagicMock()
         mock_state.model.get.return_value = MagicMock()
-        with patch("controllers.models.get_models_controller", return_value=mock_ctrl), \
-             patch("domain.infrastructure.server_state.get_server_state", return_value=mock_state):
+        with (
+            patch("controllers.models.get_models_controller", return_value=mock_ctrl),
+            patch(
+                "domain.infrastructure._internal.server_state.get_server_state",
+                return_value=mock_state,
+            ),
+        ):
             client = TestClient(_app(br))
             resp = client.post("/benchmark/run?model=gpt2")
         assert resp.status_code == 200
@@ -81,9 +86,19 @@ class TestGetLoggedResponses:
     def test_logged_responses(self):
         br = BenchmarkRouter()
         mock_tracker = MagicMock()
-        r1 = SimpleNamespace(timestamp=1.0, user_message="hi", assistant_response="hello", model="gpt2", tokens_generated=5, duration_ms=100)
+        r1 = SimpleNamespace(
+            timestamp=1.0,
+            user_message="hi",
+            assistant_response="hello",
+            model="gpt2",
+            tokens_generated=5,
+            duration_ms=100,
+        )
         mock_tracker.get_responses.return_value = [r1]
-        with patch("domain.feedback._internal.response_tracker.get_response_tracker", return_value=mock_tracker):
+        with patch(
+            "domain.feedback._internal.response_tracker.get_response_tracker",
+            return_value=mock_tracker,
+        ):
             client = TestClient(_app(br))
             resp = client.get("/benchmark/responses")
         assert resp.status_code == 200

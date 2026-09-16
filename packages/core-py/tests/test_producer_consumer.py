@@ -4,8 +4,6 @@ import asyncio
 import threading
 import time
 
-import pytest
-
 from domain.infrastructure._internal.producer_consumer import (
     ProducerConsumerQueue,
     ShutdownMode,
@@ -13,7 +11,6 @@ from domain.infrastructure._internal.producer_consumer import (
     get_producer_consumer_queue,
     set_producer_consumer_queue,
 )
-
 
 # ── ShutdownMode ──────────────────────────────────────────────────────
 
@@ -335,9 +332,7 @@ class TestConsumerHandler:
                 with lock:
                     fast_results.append(item)
 
-        q = ProducerConsumerQueue[int](
-            num_consumers=2, handler=lambda i: None, name="test-noblock"
-        )
+        ProducerConsumerQueue[int](num_consumers=2, handler=lambda i: None, name="test-noblock")
         results2 = []
         lock2 = threading.Lock()
 
@@ -374,8 +369,7 @@ class TestShutdown:
                 results.append(item)
 
         q = ProducerConsumerQueue[int](
-            num_consumers=2, handler=handler,
-            shutdown_mode=ShutdownMode.DRAIN, name="test-drain"
+            num_consumers=2, handler=handler, shutdown_mode=ShutdownMode.DRAIN, name="test-drain"
         )
         q.start()
         for i in range(10):
@@ -392,9 +386,11 @@ class TestShutdown:
             time.sleep(0.5)
 
         q = ProducerConsumerQueue[int](
-            maxsize=100, num_consumers=1,
+            maxsize=100,
+            num_consumers=1,
             handler=slow_handler,
-            shutdown_mode=ShutdownMode.DROP, name="test-drop"
+            shutdown_mode=ShutdownMode.DROP,
+            name="test-drop",
         )
         q.start()
         for i in range(20):
@@ -439,8 +435,10 @@ class TestShutdown:
             time.sleep(2.0)
 
         q = ProducerConsumerQueue[int](
-            num_consumers=1, handler=slow,
-            shutdown_mode=ShutdownMode.DRAIN, name="test-drain-timeout"
+            num_consumers=1,
+            handler=slow,
+            shutdown_mode=ShutdownMode.DRAIN,
+            name="test-drain-timeout",
         )
         q.start()
         q.put(1)
@@ -611,6 +609,7 @@ class TestThreadSafety:
         q = ProducerConsumerQueue[int](num_consumers=4, handler=handler, name="test-stress")
         q.start()
         try:
+
             def producer(start):
                 for i in range(50):
                     q.put(start + i)

@@ -3,13 +3,12 @@
 Covers: list, create, get, update, delete, execute, list_runs, get_run.
 Agent system is mocked.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -25,11 +24,39 @@ from routers.agents import AgentsRouter  # noqa: E402
 def _mock_system(**overrides) -> MagicMock:
     sys = MagicMock()
     sys.list.return_value = [
-        {"id": "a1", "name": "Agent One", "description": "desc", "instructions": "", "tools": [], "avatar": ""},
+        {
+            "id": "a1",
+            "name": "Agent One",
+            "description": "desc",
+            "instructions": "",
+            "tools": [],
+            "avatar": "",
+        },
     ]
-    sys.get.return_value = {"id": "a1", "name": "Agent One", "description": "desc", "instructions": "", "tools": [], "avatar": ""}
-    sys.create.return_value = {"id": "new-agent", "name": "New", "description": "", "instructions": "", "tools": [], "avatar": ""}
-    sys.update.return_value = {"id": "a1", "name": "Updated", "description": "", "instructions": "", "tools": [], "avatar": ""}
+    sys.get.return_value = {
+        "id": "a1",
+        "name": "Agent One",
+        "description": "desc",
+        "instructions": "",
+        "tools": [],
+        "avatar": "",
+    }
+    sys.create.return_value = {
+        "id": "new-agent",
+        "name": "New",
+        "description": "",
+        "instructions": "",
+        "tools": [],
+        "avatar": "",
+    }
+    sys.update.return_value = {
+        "id": "a1",
+        "name": "Updated",
+        "description": "",
+        "instructions": "",
+        "tools": [],
+        "avatar": "",
+    }
     sys.delete.return_value = True
     sys.execute = AsyncMock(return_value={"result": "done"})
     return sys
@@ -39,6 +66,7 @@ def _app(ar: AgentsRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(ar.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 

@@ -18,6 +18,7 @@ Run:
 Each prints one JSON line per shape:
 {"mode","M","N","K","median_ms","gflop"}
 """
+
 import argparse
 import json
 import os
@@ -62,8 +63,11 @@ def _bench_mode(mode):
             sys.exit(f"mode 512 requested but AVX-512 kernel not active (HAS_AVX512={HAS_AVX512})")
         if mode == "2" and not HAS_AVX2:
             sys.exit("mode 2 requested but AVX2 kernel not available")
-    print(f"mode={mode} HAS_AVX2={locals().get('HAS_AVX2', None)} "
-          f"HAS_AVX512={locals().get('HAS_AVX512', None)}", file=sys.stderr)
+    print(
+        f"mode={mode} HAS_AVX2={locals().get('HAS_AVX2', None)} "
+        f"HAS_AVX512={locals().get('HAS_AVX512', None)}",
+        file=sys.stderr,
+    )
 
     grid = [
         (m, n, k)
@@ -87,12 +91,18 @@ def _bench_mode(mode):
 
             def run(a=a, b=b):
                 return a @ b.T
+
         med = _timeit(run)
-        results.append({
-            "mode": mode, "M": m, "N": n, "K": k,
-            "median_ms": round(med * 1e3, 4),
-            "gflop": round((flops / 1e9) / med if med > 0 else 0.0, 3),
-        })
+        results.append(
+            {
+                "mode": mode,
+                "M": m,
+                "N": n,
+                "K": k,
+                "median_ms": round(med * 1e3, 4),
+                "gflop": round((flops / 1e9) / med if med > 0 else 0.0, 3),
+            }
+        )
     return results
 
 

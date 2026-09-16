@@ -12,8 +12,7 @@ from __future__ import annotations
 
 import random
 import string
-import time
-from typing import Any, Optional
+from typing import Any
 from unittest.mock import MagicMock
 
 
@@ -58,6 +57,7 @@ def _random_email() -> str:
 
 # ── User / Auth ────────────────────────────────────────────────────────
 
+
 class UserFactory(_Factory):
     _defaults = {
         "username": f"testuser_{_random_string(4)}",
@@ -79,6 +79,7 @@ class UserFactory(_Factory):
 
 # ── Model ──────────────────────────────────────────────────────────────
 
+
 class ModelFactory(_Factory):
     _defaults = {
         "name": "gpt2",
@@ -96,6 +97,7 @@ class ModelFactory(_Factory):
 
 # ── Dataset ────────────────────────────────────────────────────────────
 
+
 class DatasetFactory(_Factory):
     _defaults = {
         "name": "wikitext-103",
@@ -108,6 +110,7 @@ class DatasetFactory(_Factory):
 
 
 # ── Training Config ────────────────────────────────────────────────────
+
 
 class TrainingConfigFactory(_Factory):
     _defaults = {
@@ -130,6 +133,7 @@ class TrainingConfigFactory(_Factory):
 
 # ── API Response ───────────────────────────────────────────────────────
 
+
 class APIResponseFactory(_Factory):
     _defaults = {
         "status_code": 200,
@@ -151,6 +155,7 @@ class APIResponseFactory(_Factory):
 
 # ── Chat Message ───────────────────────────────────────────────────────
 
+
 class ChatMessageFactory(_Factory):
     _defaults = {
         "role": "user",
@@ -166,6 +171,7 @@ class ChatMessageFactory(_Factory):
 
 
 # ── CLI Args (SimpleNamespace) ─────────────────────────────────────────
+
 
 class CLIArgsFactory(_Factory):
     """Build CLI argument namespaces for command tests."""
@@ -183,4 +189,5 @@ class CLIArgsFactory(_Factory):
     def as_namespace(self):
         """Return a SimpleNamespace instead of a dict."""
         from types import SimpleNamespace
+
         return SimpleNamespace(**self._data)

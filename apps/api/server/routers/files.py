@@ -7,7 +7,6 @@ File metadata is stored in MogDB and synced to JSON for human readability.
 import asyncio
 import json
 import logging
-import os
 import re
 import time
 from pathlib import Path

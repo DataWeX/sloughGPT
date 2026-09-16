@@ -14,7 +14,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from routers.models import router as models_router, ModelsRouter, _instance as _models_instance
+from routers.models import ModelsRouter
+from routers.models import _instance as _models_instance
+from routers.models import router as models_router
 
 app = FastAPI()
 register_app_error_handler(app)
@@ -403,6 +405,7 @@ class TestProcessGuard:
 
 # ── serve_model_file ────────────────────────────────────────────────────────
 
+
 class TestServeModelFile:
     def test_returns_404_when_file_not_found(self):
         """Returns 404 when the file doesn't exist in cache."""
@@ -453,6 +456,7 @@ class TestServeModelFile:
 
 # ── External server management ──────────────────────────────────────────────
 
+
 class TestExternalServers:
     def test_list_empty(self):
         """List servers returns empty when none registered."""
@@ -465,11 +469,14 @@ class TestExternalServers:
     def test_register_and_list(self):
         """Register a server and verify it appears in list."""
         ModelsRouter._external_servers.clear()
-        resp = client.post("/models/external/servers", json={
-            "name": "lab-server",
-            "url": "http://192.168.1.100:8000",
-            "compressed": True,
-        })
+        resp = client.post(
+            "/models/external/servers",
+            json={
+                "name": "lab-server",
+                "url": "http://192.168.1.100:8000",
+                "compressed": True,
+            },
+        )
         assert resp.status_code == 200
         data = _data(resp)
         assert data["name"] == "lab-server"
@@ -483,10 +490,13 @@ class TestExternalServers:
     def test_remove_server(self):
         """Remove a registered server."""
         ModelsRouter._external_servers.clear()
-        client.post("/models/external/servers", json={
-            "name": "temp",
-            "url": "http://localhost:9000",
-        })
+        client.post(
+            "/models/external/servers",
+            json={
+                "name": "temp",
+                "url": "http://localhost:9000",
+            },
+        )
         resp = client.delete("/models/external/servers/temp")
         assert resp.status_code == 200
 
@@ -502,10 +512,13 @@ class TestExternalServers:
     def test_list_external_models(self):
         """List models from external server."""
         ModelsRouter._external_servers.clear()
-        client.post("/models/external/servers", json={
-            "name": "peer",
-            "url": "http://localhost:8000",
-        })
+        client.post(
+            "/models/external/servers",
+            json={
+                "name": "peer",
+                "url": "http://localhost:8000",
+            },
+        )
 
         mock_models = [{"model_id": "llama-7b"}, {"model_id": "mistral-7b"}]
         with patch("urllib.request.urlopen") as mock_open:
@@ -530,14 +543,18 @@ class TestExternalServers:
     def test_download_external_unknown_server(self):
         """Download from unknown server returns 404."""
         ModelsRouter._external_servers.clear()
-        resp = client.post("/models/external/download", json={
-            "server": "unknown",
-            "model_id": "model",
-        })
+        resp = client.post(
+            "/models/external/download",
+            json={
+                "server": "unknown",
+                "model_id": "model",
+            },
+        )
         assert resp.status_code == 404
 
 
 # ── Backend management ──────────────────────────────────────────────────────
+
 
 class TestBackendManagement:
     def test_list_backends(self):
@@ -577,6 +594,7 @@ class TestBackendManagement:
 
 # ── Backend discovery ────────────────────────────────────────────────────────
 
+
 class TestBackendDiscovery:
     def test_list_backends_includes_all_types(self):
         """List backends returns all backend types with capabilities."""
@@ -593,7 +611,7 @@ class TestBackendDiscovery:
         resp = client.get("/models/backends")
         assert resp.status_code == 200
         data = _data(resp)
-        for name, info in data.items():
+        for _name, info in data.items():
             assert "capabilities" in info
             caps = info["capabilities"]
             assert "compression" in caps
@@ -609,6 +627,7 @@ class TestBackendDiscovery:
 
 
 # ── Download history ─────────────────────────────────────────────────────────
+
 
 class TestDownloadHistory:
     def test_download_history_empty(self):

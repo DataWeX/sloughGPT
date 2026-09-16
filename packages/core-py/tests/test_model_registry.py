@@ -3,11 +3,12 @@
 Covers: register, register_engine, unregister, get, list_models, default_id,
 generate, health_summary, reset_metrics, singleton pattern.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -15,7 +16,10 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domain.infrastructure._internal.model_registry import ModelRegistry, get_model_registry, DEFAULT_MODEL_ID
+from domain.infrastructure._internal.model_registry import (
+    ModelRegistry,
+    get_model_registry,
+)
 from domain.infrastructure._internal.model_server import ModelStatus
 
 
@@ -62,9 +66,15 @@ class TestRegister:
 
     def test_register_passes_params(self):
         reg = ModelRegistry()
-        server = reg.register("m1", MagicMock(), MagicMock(),
-                              max_concurrent=4, generate_timeout=60.0,
-                              enable_circuit_breaker=False, idle_timeout_s=300)
+        server = reg.register(
+            "m1",
+            MagicMock(),
+            MagicMock(),
+            max_concurrent=4,
+            generate_timeout=60.0,
+            enable_circuit_breaker=False,
+            idle_timeout_s=300,
+        )
         assert server is not None
 
 

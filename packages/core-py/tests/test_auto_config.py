@@ -5,9 +5,6 @@ import json
 from domain.training._internal.auto_config import (
     DatasetAnalysis,
     TrainingConfig,
-    analyse_dataset,
-    auto_configure,
-    plain_language_verdict,
     _build_explanation,
     _pick_batch_size,
     _pick_epochs,
@@ -16,6 +13,9 @@ from domain.training._internal.auto_config import (
     _pick_model,
     _pick_seq_length,
     _pick_warmup,
+    analyse_dataset,
+    auto_configure,
+    plain_language_verdict,
 )
 
 
@@ -48,9 +48,15 @@ class TestDatasetAnalysis:
         assert DatasetAnalysis(path="/x", format="text", word_count=999).size_category == "tiny"
         assert DatasetAnalysis(path="/x", format="text", word_count=1000).size_category == "small"
         assert DatasetAnalysis(path="/x", format="text", word_count=9_999).size_category == "small"
-        assert DatasetAnalysis(path="/x", format="text", word_count=10_000).size_category == "medium"
-        assert DatasetAnalysis(path="/x", format="text", word_count=99_999).size_category == "medium"
-        assert DatasetAnalysis(path="/x", format="text", word_count=100_000).size_category == "large"
+        assert (
+            DatasetAnalysis(path="/x", format="text", word_count=10_000).size_category == "medium"
+        )
+        assert (
+            DatasetAnalysis(path="/x", format="text", word_count=99_999).size_category == "medium"
+        )
+        assert (
+            DatasetAnalysis(path="/x", format="text", word_count=100_000).size_category == "large"
+        )
 
 
 class TestTrainingConfig:
@@ -81,10 +87,23 @@ class TestTrainingConfig:
         assert d["use_lora"] is True
         assert d["rl_post_train"] is False
         assert set(d) == {
-            "model", "dataset", "data_path", "epochs", "batch_size", "learning_rate",
-            "max_seq_length", "warmup_steps", "weight_decay", "use_lora", "lora_rank",
-            "lora_alpha", "rl_post_train", "rl_num_generations", "rl_learning_rate",
-            "rl_kl_coef", "rl_reward_mode",
+            "model",
+            "dataset",
+            "data_path",
+            "epochs",
+            "batch_size",
+            "learning_rate",
+            "max_seq_length",
+            "warmup_steps",
+            "weight_decay",
+            "use_lora",
+            "lora_rank",
+            "lora_alpha",
+            "rl_post_train",
+            "rl_num_generations",
+            "rl_learning_rate",
+            "rl_kl_coef",
+            "rl_reward_mode",
         }
 
 
@@ -150,7 +169,9 @@ class TestAnalyseDataset:
 class TestAutoConfigure:
     def test_preferred_model_override(self, tmp_path):
         p = _write(tmp_path / "input.txt", "some words here\n" * 10)
-        cfg = auto_configure("mydata", p, available_models=["gpt2"], preferred_model="qwen2.5-0.5b-instruct")
+        cfg = auto_configure(
+            "mydata", p, available_models=["gpt2"], preferred_model="qwen2.5-0.5b-instruct"
+        )
         assert cfg.model == "qwen2.5-0.5b-instruct"
         assert cfg.dataset == "mydata"
         assert cfg.data_path == p
@@ -234,7 +255,10 @@ class TestPickHelpers:
         assert _pick_method(DatasetAnalysis(path="/x", format="text", word_count=100)) == "distill"
 
     def test_pick_method_large_finetune(self):
-        assert _pick_method(DatasetAnalysis(path="/x", format="text", word_count=200_000)) == "finetune"
+        assert (
+            _pick_method(DatasetAnalysis(path="/x", format="text", word_count=200_000))
+            == "finetune"
+        )
 
     def test_pick_epochs_mapping(self):
         assert _pick_epochs(DatasetAnalysis(path="/x", format="text", word_count=10)) == 10
@@ -248,10 +272,21 @@ class TestPickHelpers:
         assert _pick_batch_size(DatasetAnalysis(path="/x", format="text", word_count=500_000)) == 8
 
     def test_pick_lr(self):
-        assert _pick_lr("distill", DatasetAnalysis(path="/x", format="text", word_count=500_000)) == 1e-3
-        assert _pick_lr("finetune", DatasetAnalysis(path="/x", format="text", word_count=10)) == 1e-5
-        assert _pick_lr("finetune", DatasetAnalysis(path="/x", format="text", word_count=5_000)) == 5e-5
-        assert _pick_lr("finetune", DatasetAnalysis(path="/x", format="text", word_count=50_000)) == 2e-4
+        assert (
+            _pick_lr("distill", DatasetAnalysis(path="/x", format="text", word_count=500_000))
+            == 1e-3
+        )
+        assert (
+            _pick_lr("finetune", DatasetAnalysis(path="/x", format="text", word_count=10)) == 1e-5
+        )
+        assert (
+            _pick_lr("finetune", DatasetAnalysis(path="/x", format="text", word_count=5_000))
+            == 5e-5
+        )
+        assert (
+            _pick_lr("finetune", DatasetAnalysis(path="/x", format="text", word_count=50_000))
+            == 2e-4
+        )
 
     def test_pick_seq_length(self):
         a = DatasetAnalysis(path="/x", format="text", avg_line_length=10)
@@ -312,23 +347,27 @@ class TestPlainLanguageVerdict:
         assert text == "Your AI learned to give better answers."
 
     def test_improved_with_metrics(self):
-        text = plain_language_verdict({
-            "verdict": "improved",
-            "perplexity_improvement_pct": 12.4,
-            "bleu_delta": 0.1,
-            "personality_delta": 0.2,
-        })
+        text = plain_language_verdict(
+            {
+                "verdict": "improved",
+                "perplexity_improvement_pct": 12.4,
+                "bleu_delta": 0.1,
+                "personality_delta": 0.2,
+            }
+        )
         assert "12% more coherent" in text
         assert "more relevant" in text
         assert "more consistent" in text
 
     def test_improved_personality_threshold(self):
-        text = plain_language_verdict({
-            "verdict": "improved",
-            "perplexity_improvement_pct": 5.0,
-            "bleu_delta": -1.0,
-            "personality_delta": 0.03,
-        })
+        text = plain_language_verdict(
+            {
+                "verdict": "improved",
+                "perplexity_improvement_pct": 5.0,
+                "bleu_delta": -1.0,
+                "personality_delta": 0.03,
+            }
+        )
         assert "more consistent" not in text
         assert "5% more coherent" in text
 
@@ -337,10 +376,12 @@ class TestPlainLanguageVerdict:
         assert text == "Your AI learned to give better answers."
 
     def test_degraded(self):
-        text = plain_language_verdict({
-            "verdict": "degraded",
-            "perplexity_improvement_pct": -8.0,
-        })
+        text = plain_language_verdict(
+            {
+                "verdict": "degraded",
+                "perplexity_improvement_pct": -8.0,
+            }
+        )
         assert "made some things worse" in text
         assert "Coherence dropped by 8%" in text
         assert "fewer epochs" in text
@@ -350,19 +391,23 @@ class TestPlainLanguageVerdict:
         assert "Try training for fewer epochs" in text
 
     def test_mixed(self):
-        text = plain_language_verdict({
-            "verdict": "mixed",
-            "perplexity_improvement_pct": 3.0,
-        })
+        text = plain_language_verdict(
+            {
+                "verdict": "mixed",
+                "perplexity_improvement_pct": 3.0,
+            }
+        )
         assert "Mixed results" in text
         assert "Coherence improved by 3%" in text
         assert "adjusting the training settings" in text
 
     def test_mixed_worsened(self):
-        text = plain_language_verdict({
-            "verdict": "mixed",
-            "perplexity_improvement_pct": -4.0,
-        })
+        text = plain_language_verdict(
+            {
+                "verdict": "mixed",
+                "perplexity_improvement_pct": -4.0,
+            }
+        )
         assert "worsened by 4%" in text
 
     def test_unknown_falls_to_mixed(self):

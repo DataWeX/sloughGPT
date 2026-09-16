@@ -3,22 +3,23 @@
 import numpy as np
 import pytest
 
-from domain.training._internal.slonet import SloLinear, Tensor
 from domain.training._internal.rlhf import (
+    PPOTrainer,
+    RewardModel,
     RLHFConfig,
     RLHFMetric,
-    RewardModel,
     ValueHead,
-    PPOTrainer,
     _as_array,
     _compute_gae,
     _get_logprobs,
     create_rlhf_trainer,
 )
+from domain.training._internal.slonet import SloLinear, Tensor
 
 
 class FakeBaseModel:
     """A fake model that returns fixed-shape tensors for testing."""
+
     def __init__(self, output):
         self.output = output
 
@@ -28,6 +29,7 @@ class FakeBaseModel:
 
 class FakeTransformerModel:
     """A fake transformer that behaves like SloTransformer for testing."""
+
     def __init__(self, vocab_size: int = 32, hidden: int = 16, seq_len: int = 8):
         self.vocab_size = vocab_size
         self.hidden = hidden
@@ -52,6 +54,7 @@ def make_tensor(shape, dtype=np.float32):
 # RLHFMetric
 # ---------------------------------------------------------------------------
 
+
 class TestRLHFMetric:
     def test_members(self):
         assert RLHFMetric.REWARD.value == "reward"
@@ -65,6 +68,7 @@ class TestRLHFMetric:
 # ---------------------------------------------------------------------------
 # RLHFConfig
 # ---------------------------------------------------------------------------
+
 
 class TestRLHFConfig:
     def test_defaults(self):
@@ -87,8 +91,14 @@ class TestRLHFConfig:
         assert c.kl_coef == 0.1
 
     def test_custom(self):
-        c = RLHFConfig(ppo_epochs=2, clip_epsilon=0.3, use_ref_model=False,
-                       gen_max_length=128, gen_temperature=0.7, gen_top_p=0.5)
+        c = RLHFConfig(
+            ppo_epochs=2,
+            clip_epsilon=0.3,
+            use_ref_model=False,
+            gen_max_length=128,
+            gen_temperature=0.7,
+            gen_top_p=0.5,
+        )
         assert c.ppo_epochs == 2
         assert c.clip_epsilon == 0.3
         assert c.use_ref_model is False
@@ -100,6 +110,7 @@ class TestRLHFConfig:
 # ---------------------------------------------------------------------------
 # _as_array
 # ---------------------------------------------------------------------------
+
 
 class TestAsArray:
     def test_tensor_returns_data(self):
@@ -126,6 +137,7 @@ class TestAsArray:
 # ---------------------------------------------------------------------------
 # _compute_gae
 # ---------------------------------------------------------------------------
+
 
 class TestComputeGAE:
     def test_basic(self):
@@ -159,6 +171,7 @@ class TestComputeGAE:
 # _get_logprobs
 # ---------------------------------------------------------------------------
 
+
 class TestGetLogprobs:
     def test_tuple_output(self):
         model = FakeBaseModel((Tensor(np.random.randn(1, 4, 8).astype(np.float32)), None))
@@ -181,6 +194,7 @@ class TestGetLogprobs:
 # ---------------------------------------------------------------------------
 # RewardModel
 # ---------------------------------------------------------------------------
+
 
 class TestRewardModelInit:
     def test_stores_attributes(self):
@@ -262,6 +276,7 @@ class TestRewardForward:
 # ValueHead
 # ---------------------------------------------------------------------------
 
+
 class TestValueHead:
     def test_output_shape(self):
         base = FakeBaseModel(make_tensor((2, 4, 8)))
@@ -286,6 +301,7 @@ class TestValueHead:
 # ---------------------------------------------------------------------------
 # PPOTrainer
 # ---------------------------------------------------------------------------
+
 
 class TestPPOTrainerInit:
     def test_default_config(self):
@@ -364,7 +380,9 @@ class TestPPOUpdate:
     def test_multi_epoch(self):
         base = FakeBaseModel(Tensor(np.random.randn(4, 4, 8).astype(np.float32)))
         rm = RewardModel(base)
-        trainer = PPOTrainer(base, rm, config=RLHFConfig(ppo_epochs=3, num_mini_batches=2, target_kl=0.0))
+        trainer = PPOTrainer(
+            base, rm, config=RLHFConfig(ppo_epochs=3, num_mini_batches=2, target_kl=0.0)
+        )
         obs = np.array([[1, 2, 3, 4]] * 4, dtype=np.int64)
         rollout = trainer.collect_rollout(obs, obs)
         metrics = trainer.update(rollout)
@@ -374,7 +392,9 @@ class TestPPOUpdate:
         base = FakeBaseModel(Tensor(np.random.randn(4, 4, 8).astype(np.float32)))
         rm = RewardModel(base)
         # Set target_kl very low to trigger early stopping
-        trainer = PPOTrainer(base, rm, config=RLHFConfig(ppo_epochs=10, num_mini_batches=1, target_kl=0.001))
+        trainer = PPOTrainer(
+            base, rm, config=RLHFConfig(ppo_epochs=10, num_mini_batches=1, target_kl=0.001)
+        )
         obs = np.array([[1, 2, 3, 4]] * 4, dtype=np.int64)
         rollout = trainer.collect_rollout(obs, obs)
         metrics = trainer.update(rollout)
@@ -385,6 +405,7 @@ class TestPPOUpdate:
 # ---------------------------------------------------------------------------
 # create_rlhf_trainer
 # ---------------------------------------------------------------------------
+
 
 class TestCreateRlhfTrainer:
     def test_returns_trainer(self):

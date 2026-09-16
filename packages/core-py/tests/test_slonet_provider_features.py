@@ -4,9 +4,11 @@ Tests for SloNetChatProvider new features.
 FEATURE: slonet-provider-tests — Tests for stop sequences, logprobs, batch,
 embed, metadata, seed control, tokenize/detokenize. DO NOT DELETE.
 """
-import pytest
+
+from unittest.mock import MagicMock
+
 import numpy as np
-from unittest.mock import MagicMock, patch
+import pytest
 
 
 class MockTokenizer:
@@ -67,13 +69,22 @@ class MockModel:
 
     def parameters(self):
         for layer in self._layers:
-            if hasattr(layer, 'weight'):
+            if hasattr(layer, "weight"):
                 yield layer.weight
 
-    def generate_numpy_stream(self, input_ids, max_new_tokens=50, eos_token=0,
-                              temperature=1.0, top_k=None, top_p=None,
-                              repetition_penalty=1.0, extra_stop_ids=None,
-                              kv_state=None, return_logprobs=False):
+    def generate_numpy_stream(
+        self,
+        input_ids,
+        max_new_tokens=50,
+        eos_token=0,
+        temperature=1.0,
+        top_k=None,
+        top_p=None,
+        repetition_penalty=1.0,
+        extra_stop_ids=None,
+        kv_state=None,
+        return_logprobs=False,
+    ):
         """Yields sequential token IDs, stops at eos, extra stop ids, or max."""
         stop_ids = {eos_token} | set(extra_stop_ids or ())
         for i in range(max_new_tokens):
@@ -86,14 +97,30 @@ class MockModel:
             else:
                 yield tok
 
-    def generate_numpy(self, input_ids, max_new_tokens=50, temperature=1.0,
-                       top_k=None, top_p=None, repetition_penalty=1.0,
-                       eos_token=0, extra_stop_ids=None):
+    def generate_numpy(
+        self,
+        input_ids,
+        max_new_tokens=50,
+        temperature=1.0,
+        top_k=None,
+        top_p=None,
+        repetition_penalty=1.0,
+        eos_token=0,
+        extra_stop_ids=None,
+    ):
         """Returns all generated token IDs as array."""
-        tokens = list(self.generate_numpy_stream(
-            input_ids, max_new_tokens, eos_token, temperature, top_k, top_p,
-            repetition_penalty, extra_stop_ids,
-        ))
+        tokens = list(
+            self.generate_numpy_stream(
+                input_ids,
+                max_new_tokens,
+                eos_token,
+                temperature,
+                top_k,
+                top_p,
+                repetition_penalty,
+                extra_stop_ids,
+            )
+        )
         if not tokens:
             return input_ids
         return np.array([tokens], dtype=np.int64)
@@ -186,8 +213,15 @@ class TestMetadata:
 
     def test_metadata_has_required_keys(self, mock_provider):
         meta = mock_provider.metadata()
-        required = ["model_id", "architecture", "total_params", "vocab_size",
-                     "max_seq_len", "device", "quantized"]
+        required = [
+            "model_id",
+            "architecture",
+            "total_params",
+            "vocab_size",
+            "max_seq_len",
+            "device",
+            "quantized",
+        ]
         for key in required:
             assert key in meta, f"Missing key: {key}"
 

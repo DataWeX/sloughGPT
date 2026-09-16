@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from domain.inference._internal.vector_store import VectorEntry, VectorStore, QueryResult
+from domain.inference._internal.vector_store import QueryResult, VectorEntry, VectorStore
 
 logger = logging.getLogger("slo.inference.vector_stores.chromadb")
 
@@ -40,7 +40,7 @@ class ChromaDBVectorStore(VectorStore):
         self.collection = None
         self.client = None
 
-    async def upsert(self, entries: List[VectorEntry]) -> int:
+    async def upsert(self, entries: list[VectorEntry]) -> int:
         if not self.collection:
             raise RuntimeError("Not connected to ChromaDB")
         ids = [e.id or f"entry_{i}" for i, e in enumerate(entries)]
@@ -54,10 +54,10 @@ class ChromaDBVectorStore(VectorStore):
 
     async def query(
         self,
-        vector: List[float],
+        vector: list[float],
         top_k: int = 5,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[QueryResult]:
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[QueryResult]:
         if not self.collection:
             raise RuntimeError("Not connected to ChromaDB")
         results = self.collection.query(
@@ -65,20 +65,22 @@ class ChromaDBVectorStore(VectorStore):
             n_results=top_k,
             where=filter_metadata,
         )
-        out: List[QueryResult] = []
+        out: list[QueryResult] = []
         if results and results["ids"] and results["ids"][0]:
             for i, doc_id in enumerate(results["ids"][0]):
                 out.append(
                     QueryResult(
                         id=doc_id,
-                        score=float(results["distances"][0][i]) if results.get("distances") else 0.0,
+                        score=float(results["distances"][0][i])
+                        if results.get("distances")
+                        else 0.0,
                         text=results["documents"][0][i] if results.get("documents") else "",
                         metadata=results["metadatas"][0][i] if results.get("metadatas") else {},
                     )
                 )
         return out
 
-    async def delete(self, ids: List[str]) -> bool:
+    async def delete(self, ids: list[str]) -> bool:
         if not self.collection:
             return False
         self.collection.delete(ids=ids)

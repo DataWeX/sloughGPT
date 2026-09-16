@@ -6,29 +6,32 @@ Focuses on natural conversation, personality, and emotional connection.
 """
 
 from __future__ import annotations
-from typing import Optional, List, Dict, Any
+
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 
 class ResponseStyle(Enum):
     """How the AI should respond."""
-    CASUAL = "casual"       # Relaxed, friendly
-    FORMAL = "formal"      # Professional but warm
-    PLAYFUL = "playful"   # Joking, fun
+
+    CASUAL = "casual"  # Relaxed, friendly
+    FORMAL = "formal"  # Professional but warm
+    PLAYFUL = "playful"  # Joking, fun
     EMPATHETIC = "empathetic"  # Understanding, supportive
-    CURIOUS = "curious"    # Asking questions
+    CURIOUS = "curious"  # Asking questions
 
 
 @dataclass
 class CompanionTraits:
     """Personality traits for the AI companion."""
+
     name: str = "Friend"
-    warmth: float = 0.7      # 0-1: how caring
-    curiosity: float = 0.6    # 0-1: how curious
-    creativity: float = 0.5    # 0-1: how creative
-    confidence: float = 0.5   # 0-1: how confident
-    humor: float = 0.4       # 0-1: how funny
+    warmth: float = 0.7  # 0-1: how caring
+    curiosity: float = 0.6  # 0-1: how curious
+    creativity: float = 0.5  # 0-1: how creative
+    confidence: float = 0.5  # 0-1: how confident
+    humor: float = 0.4  # 0-1: how funny
 
     # Speaking style
     response_length: str = "medium"  # short/medium/long
@@ -36,17 +39,18 @@ class CompanionTraits:
     share_personal: bool = False
 
     # What to avoid
-    avoid_topics: List[str] = field(default_factory=list)
+    avoid_topics: list[str] = field(default_factory=list)
     no_robot_phrases: bool = True
 
 
 @dataclass
 class ConversationContext:
     """Current conversation state."""
-    user_name: Optional[str] = None
-    topics: List[str] = field(default_factory=list)
-    user_mood: Optional[str] = None
-    shared_memories: List[str] = field(default_factory=list)
+
+    user_name: str | None = None
+    topics: list[str] = field(default_factory=list)
+    user_mood: str | None = None
+    shared_memories: list[str] = field(default_factory=list)
     turn_count: int = 0
 
 
@@ -73,9 +77,13 @@ class CompanionSystem:
     """
 
     ROBOT_PHRASES = [
-        "As an AI", "I am an AI", "I was trained",
-        "My training data", "As a language model",
-        "I don't have feelings", "I'm just a program",
+        "As an AI",
+        "I am an AI",
+        "I was trained",
+        "My training data",
+        "As a language model",
+        "I don't have feelings",
+        "I'm just a program",
     ]
 
     def __init__(self):
@@ -102,8 +110,12 @@ class CompanionSystem:
         self.traits.humor = humor
         # Store base traits so mood adjustments don't accumulate
         self._base_traits = CompanionTraits(
-            name=name, warmth=warmth, curiosity=curiosity,
-            creativity=creativity, confidence=confidence, humor=humor,
+            name=name,
+            warmth=warmth,
+            curiosity=curiosity,
+            creativity=creativity,
+            confidence=confidence,
+            humor=humor,
         )
         self._system_prompt = self._build_system_prompt()
 
@@ -141,7 +153,7 @@ class CompanionSystem:
 - Respond in a natural, human way.
 - Keep responses {t.response_length} length.
 - Use questions to keep conversation going: {t.use_questions}
-- Don't use phrases like: {', '.join(self.ROBOT_PHRASES)}
+- Don't use phrases like: {", ".join(self.ROBOT_PHRASES)}
 """
 
     def get_system_prompt(self) -> str:
@@ -168,7 +180,7 @@ class CompanionSystem:
     def respond(
         self,
         user_message: str,
-        context: Optional[ConversationContext] = None,
+        context: ConversationContext | None = None,
     ) -> str:
         """Generate a natural response."""
         self.context.turn_count += 1
@@ -203,7 +215,7 @@ class CompanionSystem:
             self.traits.warmth = base.warmth
             self.traits.humor = base.humor
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dict."""
         return {
             "traits": {
@@ -219,7 +231,7 @@ class CompanionSystem:
 
 
 # Global companion
-_companion: Optional[CompanionSystem] = None
+_companion: CompanionSystem | None = None
 
 
 def get_companion() -> CompanionSystem:

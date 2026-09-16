@@ -4,8 +4,8 @@ import pytest
 
 from domain.soul._internal.quantum import HyperdimensionalProcessor, TemporalReasoningEngine
 
-
 # ── HyperdimensionalProcessor construction ──────────────────────────────────
+
 
 class TestHyperdimensionalProcessorConstruction:
     def test_default_dim(self):
@@ -26,6 +26,7 @@ class TestHyperdimensionalProcessorConstruction:
 
 
 # ── Encode ───────────────────────────────────────────────────────────────────
+
 
 class TestEncode:
     def test_encode_returns_list(self):
@@ -81,6 +82,7 @@ class TestEncode:
 
 # ── Encode Text ──────────────────────────────────────────────────────────────
 
+
 class TestEncodeText:
     def test_encode_text_single_word(self):
         hp = HyperdimensionalProcessor(dim=100)
@@ -95,7 +97,7 @@ class TestEncodeText:
     def test_encode_text_bundled(self):
         hp = HyperdimensionalProcessor(dim=100)
         v1 = hp.encode("hello")
-        v2 = hp.encode("world")
+        hp.encode("world")
         v_text = hp.encode_text("hello world")
         assert len(v_text) == 100
         assert v_text != v1
@@ -114,6 +116,7 @@ class TestEncodeText:
 
 
 # ── Bundle ───────────────────────────────────────────────────────────────────
+
 
 class TestBundle:
     def test_bundle_returns_correct_dim(self):
@@ -160,6 +163,7 @@ class TestBundle:
 
 # ── Bind ─────────────────────────────────────────────────────────────────────
 
+
 class TestBind:
     def test_bind_returns_correct_dim(self):
         hp = HyperdimensionalProcessor(dim=100)
@@ -204,6 +208,7 @@ class TestBind:
 
 # ── Similarity ───────────────────────────────────────────────────────────────
 
+
 class TestSimilarity:
     def test_self_similarity_near_one(self):
         hp = HyperdimensionalProcessor(dim=1000)
@@ -234,6 +239,7 @@ class TestSimilarity:
 
 # ── Unbind ───────────────────────────────────────────────────────────────────
 
+
 class TestUnbind:
     def test_unbind_inverse_of_bind(self):
         hp = HyperdimensionalProcessor(dim=200)
@@ -253,6 +259,7 @@ class TestUnbind:
 
 
 # ── Cleanup ──────────────────────────────────────────────────────────────────
+
 
 class TestCleanup:
     def test_cleanup_removes_zero_vectors(self):
@@ -279,6 +286,7 @@ class TestCleanup:
 
 # ── TemporalReasoningEngine construction ────────────────────────────────────
 
+
 class TestTemporalReasoningEngineConstruction:
     def test_default_timeline_depth(self):
         tre = TemporalReasoningEngine()
@@ -304,6 +312,7 @@ class TestTemporalReasoningEngineConstruction:
 
 
 # ── Add Event ────────────────────────────────────────────────────────────────
+
 
 class TestAddEvent:
     def test_add_single_event(self):
@@ -352,6 +361,7 @@ class TestAddEvent:
 
 
 # ── Branch ───────────────────────────────────────────────────────────────────
+
 
 class TestBranch:
     def test_branch_returns_next_timeline(self):
@@ -402,6 +412,7 @@ class TestBranch:
 
 # ── Switch Timeline ──────────────────────────────────────────────────────────
 
+
 class TestSwitchTimeline:
     def test_switch_returns_true(self):
         tre = TemporalReasoningEngine()
@@ -437,6 +448,7 @@ class TestSwitchTimeline:
 
 # ── Get Current Events ──────────────────────────────────────────────────────
 
+
 class TestGetCurrentEvents:
     def test_returns_list(self):
         tre = TemporalReasoningEngine()
@@ -471,6 +483,7 @@ class TestGetCurrentEvents:
 
 
 # ── Merge Timelines ─────────────────────────────────────────────────────────
+
 
 class TestMergeTimelines:
     def test_merge_empty_timelines(self):

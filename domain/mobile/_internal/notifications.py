@@ -10,42 +10,48 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Optional, List, Dict, Any
-from pathlib import Path
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("slo.mobile.notifications")
 
-NOTIFICATIONS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "mogdb" / "mobile_notifications"
+NOTIFICATIONS_DIR = (
+    Path(__file__).parent.parent.parent.parent / "data" / "mogdb" / "mobile_notifications"
+)
 
 _db = None
 _devices_col = None
 _history_col = None
 
 
-def _get_devices_col(db_path: Optional[str] = None):
+def _get_devices_col(db_path: str | None = None):
     global _db, _devices_col
     if _devices_col is not None:
         return _devices_col
     if db_path is None:
         from domain.shared import find_repo_root
+
         repo = find_repo_root(Path(__file__).resolve())
         db_path = str(repo / "data" / "mogdb" / "mobile_notifications")
     from mogdb import MogDB
+
     _db = MogDB(db_path)
     _devices_col = _db.collection("devices")
     return _devices_col
 
 
-def _get_history_col(db_path: Optional[str] = None):
+def _get_history_col(db_path: str | None = None):
     global _history_col
     if _history_col is not None:
         return _history_col
     if db_path is None:
         from domain.shared import find_repo_root
+
         repo = find_repo_root(Path(__file__).resolve())
         db_path = str(repo / "data" / "mogdb" / "mobile_notifications")
     from mogdb import MogDB
+
     if _db is None:
         _db_inst = MogDB(db_path)
     else:
@@ -58,6 +64,7 @@ def set_mogdb_path(db_path: str) -> None:
     """Override the default MogDB path (used by tests)."""
     global _db, _devices_col, _history_col
     from mogdb import MogDB
+
     _db = MogDB(db_path)
     _devices_col = _db.collection("devices")
     _history_col = _db.collection("history")
@@ -74,10 +81,11 @@ def reset_mogdb() -> None:
 @dataclass
 class DeviceToken:
     """Registered mobile device."""
+
     token: str
     platform: str  # "ios" | "android" | "web"
     user_id: str = "default"
-    topics: List[str] = field(default_factory=lambda: ["chat", "training"])
+    topics: list[str] = field(default_factory=lambda: ["chat", "training"])
     created_at: float = field(default_factory=time.time)
     last_active: float = field(default_factory=time.time)
     enabled: bool = True
@@ -86,15 +94,16 @@ class DeviceToken:
 @dataclass
 class NotificationPayload:
     """Push notification payload."""
+
     title: str
     body: str
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
     sound: str = "default"
-    badge: Optional[int] = None
-    topic: Optional[str] = None
+    badge: int | None = None
+    topic: str | None = None
 
 
-def _strip_meta(doc: Dict[str, Any]) -> Dict[str, Any]:
+def _strip_meta(doc: dict[str, Any]) -> dict[str, Any]:
     """Remove MogDB internal fields from a document."""
     return {k: v for k, v in doc.items() if not k.startswith("_")}
 
@@ -107,9 +116,9 @@ class PushNotificationService:
     or logged for development.
     """
 
-    def __init__(self, db_path: Optional[str] = None):
-        self._devices: Dict[str, DeviceToken] = {}
-        self._history: List[Dict[str, Any]] = []
+    def __init__(self, db_path: str | None = None):
+        self._devices: dict[str, DeviceToken] = {}
+        self._history: list[dict[str, Any]] = []
         self._dev_col = _get_devices_col(db_path)
         self._hist_col = _get_history_col(db_path)
         self._load()
@@ -158,7 +167,7 @@ class PushNotificationService:
         except Exception as e:
             logger.warning("Failed to delete device: %s", e, extra={"tag": "MODEL"})
 
-    def _save_history_record(self, record: Dict[str, Any]):
+    def _save_history_record(self, record: dict[str, Any]):
         """Persist a single history record to MogDB."""
         try:
             data = {"_id": str(record["timestamp"]), **record}
@@ -176,8 +185,8 @@ class PushNotificationService:
         token: str,
         platform: str,
         user_id: str = "default",
-        topics: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        topics: list[str] | None = None,
+    ) -> dict[str, Any]:
         existing = self._devices.get(token)
         if existing:
             existing.last_active = time.time()
@@ -206,35 +215,34 @@ class PushNotificationService:
             return True
         return False
 
-    def get_devices(self, topic: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_devices(self, topic: str | None = None) -> list[dict[str, Any]]:
         devices = []
         for device in self._devices.values():
             if not device.enabled:
                 continue
             if topic and topic not in device.topics:
                 continue
-            devices.append({
-                "token": device.token[:20] + "...",
-                "platform": device.platform,
-                "topics": device.topics,
-                "last_active": device.last_active,
-            })
+            devices.append(
+                {
+                    "token": device.token[:20] + "...",
+                    "platform": device.platform,
+                    "topics": device.topics,
+                    "last_active": device.last_active,
+                }
+            )
         return devices
 
     def send_notification(
         self,
         payload: NotificationPayload,
-        tokens: Optional[List[str]] = None,
-        topic: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        tokens: list[str] | None = None,
+        topic: str | None = None,
+    ) -> dict[str, Any]:
         if tokens:
-            target_devices = [
-                self._devices[t] for t in tokens if t in self._devices
-            ]
+            target_devices = [self._devices[t] for t in tokens if t in self._devices]
         else:
             target_devices = [
-                d for d in self._devices.values()
-                if d.enabled and (not topic or topic in d.topics)
+                d for d in self._devices.values() if d.enabled and (not topic or topic in d.topics)
             ]
 
         if not target_devices:
@@ -262,7 +270,7 @@ class PushNotificationService:
             import httpx
 
             for i in range(0, len(messages), 100):
-                batch = messages[i:i + 100]
+                batch = messages[i : i + 100]
                 with httpx.Client(timeout=30.0) as client:
                     resp = client.post(
                         "https://exp.host/--/api/v2/push/send",
@@ -281,7 +289,12 @@ class PushNotificationService:
                         errors.append(f"HTTP {resp.status_code}")
         except ImportError:
             sent_count = len(messages)
-            logger.info("Notification (httpx unavailable, logged): %s → %s devices", payload.title, len(messages), extra={"tag": "MODEL"})
+            logger.info(
+                "Notification (httpx unavailable, logged): %s → %s devices",
+                payload.title,
+                len(messages),
+                extra={"tag": "MODEL"},
+            )
         except Exception as e:
             errors.append(str(e))
             logger.error("Failed to send notifications: %s", e, extra={"tag": "MODEL"})
@@ -307,17 +320,14 @@ class PushNotificationService:
     async def send_notification_async(
         self,
         payload: NotificationPayload,
-        tokens: Optional[List[str]] = None,
-        topic: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        tokens: list[str] | None = None,
+        topic: str | None = None,
+    ) -> dict[str, Any]:
         if tokens:
-            target_devices = [
-                self._devices[t] for t in tokens if t in self._devices
-            ]
+            target_devices = [self._devices[t] for t in tokens if t in self._devices]
         else:
             target_devices = [
-                d for d in self._devices.values()
-                if d.enabled and (not topic or topic in d.topics)
+                d for d in self._devices.values() if d.enabled and (not topic or topic in d.topics)
             ]
 
         if not target_devices:
@@ -346,7 +356,7 @@ class PushNotificationService:
 
             async with httpx.AsyncClient(timeout=30.0) as client:
                 for i in range(0, len(messages), 100):
-                    batch = messages[i:i + 100]
+                    batch = messages[i : i + 100]
                     resp = await client.post(
                         "https://exp.host/--/api/v2/push/send",
                         json=batch,
@@ -364,7 +374,12 @@ class PushNotificationService:
                         errors.append(f"HTTP {resp.status_code}")
         except ImportError:
             sent_count = len(messages)
-            logger.info("Notification (httpx unavailable, logged): %s → %s devices", payload.title, len(messages), extra={"tag": "MODEL"})
+            logger.info(
+                "Notification (httpx unavailable, logged): %s → %s devices",
+                payload.title,
+                len(messages),
+                extra={"tag": "MODEL"},
+            )
         except Exception as e:
             errors.append(str(e))
             logger.error("Failed to send notifications: %s", e, extra={"tag": "MODEL"})
@@ -391,10 +406,10 @@ class PushNotificationService:
         self,
         title: str,
         body: str,
-        data: Optional[Dict[str, Any]] = None,
-        topics: Optional[List[str]] = None,
+        data: dict[str, Any] | None = None,
+        topics: list[str] | None = None,
         sound: str = "default",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         payload = NotificationPayload(
             title=title,
             body=body,
@@ -404,13 +419,14 @@ class PushNotificationService:
         )
         if topics:
             target_tokens = [
-                t for t, d in self._devices.items()
+                t
+                for t, d in self._devices.items()
                 if d.enabled and any(topic in d.topics for topic in topics)
             ]
             return self.send_notification(payload, tokens=target_tokens)
         return self.send_notification(payload)
 
-    def get_history(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_history(self, limit: int = 50) -> list[dict[str, Any]]:
         return self._history[-limit:]
 
     def cleanup_stale(self, max_age_seconds: float = 30 * 24 * 3600) -> int:
@@ -423,7 +439,7 @@ class PushNotificationService:
 
 
 # Singleton
-_service: Optional[PushNotificationService] = None
+_service: PushNotificationService | None = None
 
 
 def get_notification_service() -> PushNotificationService:

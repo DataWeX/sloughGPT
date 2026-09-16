@@ -9,8 +9,8 @@ import domain.agents as agents_pkg
 from domain.agents import (
     Agent,
     AgentConfig,
-    SecurityConfig,
     SecurityBoundary,
+    SecurityConfig,
     ToolCapability,
     ToolExecutionContext,
     ToolRunner,
@@ -90,7 +90,7 @@ class TestToolRunnerRouting:
         runner = ToolRunner()
 
         async def boom(code, language):
-            raise asyncio.TimeoutError()
+            raise TimeoutError()
 
         monkeypatch.setattr(runner, "_execute_subprocess", boom)
         res = await runner.execute(
@@ -121,9 +121,13 @@ class TestToolRunnerRateLimit:
     async def test_exceeded_returns_error(self):
         runner = ToolRunner(SecurityBoundary(SecurityConfig(rate_limit_per_minute=1)))
         ctx = make_context()
-        first = await runner.execute(ToolCapability.CITATION.value, {"text": "t", "sources": []}, ctx)
+        first = await runner.execute(
+            ToolCapability.CITATION.value, {"text": "t", "sources": []}, ctx
+        )
         assert first["success"] is True
-        second = await runner.execute(ToolCapability.CITATION.value, {"text": "t", "sources": []}, ctx)
+        second = await runner.execute(
+            ToolCapability.CITATION.value, {"text": "t", "sources": []}, ctx
+        )
         assert second["success"] is False
         assert "Rate limit exceeded" in second["error"]
 
@@ -131,7 +135,9 @@ class TestToolRunnerRateLimit:
         runner = ToolRunner(SecurityBoundary(SecurityConfig(rate_limit_per_minute=1)))
         runner._executed_count = 5
         runner._last_reset = asyncio.get_event_loop().time() - 61
-        res = await runner.execute(ToolCapability.CITATION.value, {"text": "t", "sources": []}, make_context())
+        res = await runner.execute(
+            ToolCapability.CITATION.value, {"text": "t", "sources": []}, make_context()
+        )
         assert res["success"] is True
 
 
@@ -149,7 +155,11 @@ class TestToolRunnerFileSearch:
             return ["a.py"]
 
         monkeypatch.setattr(runner, "_search_files", fake)
-        res = await runner.execute(ToolCapability.FILE_SEARCH.value, {"query": "x", "path": ".", "limit": 5}, make_context())
+        res = await runner.execute(
+            ToolCapability.FILE_SEARCH.value,
+            {"query": "x", "path": ".", "limit": 5},
+            make_context(),
+        )
         assert res["success"] is True
         assert res["files"] == ["a.py"]
         assert res["count"] == 1
@@ -292,7 +302,9 @@ class TestToolRunnerCitation:
         runner = ToolRunner()
         sources = [{"text": "python is a language", "url": "http://py"}]
         res = await runner.execute(
-            ToolCapability.CITATION.value, {"text": "I love python", "sources": sources}, make_context()
+            ToolCapability.CITATION.value,
+            {"text": "I love python", "sources": sources},
+            make_context(),
         )
         assert res["success"] is True
         assert res["count"] == 1
@@ -347,7 +359,8 @@ class TestAgentPlanning:
     async def test_plan_with_llm_success(self, monkeypatch):
         agent = Agent()
         monkeypatch.setattr(
-            agent, "_inference_fn",
+            agent,
+            "_inference_fn",
             lambda prompt: '[{"tool": "code_execution", "args": {"code": "print(1)"}}]',
         )
         plan = await agent._plan_with_llm("run code")
@@ -408,27 +421,37 @@ class TestAgentGenerateResponse:
 class TestAgentComposeResponse:
     async def test_stdout(self):
         agent = Agent()
-        out = agent._compose_response("q", [{"tool": "code", "result": {"success": True, "stdout": "hello"}}])
+        out = agent._compose_response(
+            "q", [{"tool": "code", "result": {"success": True, "stdout": "hello"}}]
+        )
         assert out == "hello"
 
     async def test_files(self):
         agent = Agent()
-        out = agent._compose_response("q", [{"tool": "f", "result": {"success": True, "files": ["a"], "count": 1}}])
+        out = agent._compose_response(
+            "q", [{"tool": "f", "result": {"success": True, "files": ["a"], "count": 1}}]
+        )
         assert out == "Found 1 files"
 
     async def test_results(self):
         agent = Agent()
-        out = agent._compose_response("q", [{"tool": "w", "result": {"success": True, "results": [{}], "count": 2}}])
+        out = agent._compose_response(
+            "q", [{"tool": "w", "result": {"success": True, "results": [{}], "count": 2}}]
+        )
         assert out == "Found 2 results"
 
     async def test_citations(self):
         agent = Agent()
-        out = agent._compose_response("q", [{"tool": "c", "result": {"success": True, "citations": [{}], "count": 3}}])
+        out = agent._compose_response(
+            "q", [{"tool": "c", "result": {"success": True, "citations": [{}], "count": 3}}]
+        )
         assert out == "Generated 3 citations"
 
     async def test_error(self):
         agent = Agent()
-        out = agent._compose_response("q", [{"tool": "t", "result": {"success": False, "error": "boom"}}])
+        out = agent._compose_response(
+            "q", [{"tool": "t", "result": {"success": False, "error": "boom"}}]
+        )
         assert out == "Error: boom"
 
     async def test_empty(self):
@@ -446,7 +469,10 @@ class TestAgentExecute:
 
     async def test_set_inference_fn_replaces(self, monkeypatch):
         agent = Agent()
-        fake = lambda prompt: "replaced"
+
+        def fake(prompt):
+            return "replaced"
+
         agent.set_inference_fn(fake)
         assert agent._inference_fn is fake
 
@@ -457,6 +483,7 @@ class TestAgentExecute:
 class TestSingletons:
     async def test_get_agent_singleton(self, monkeypatch):
         import domain.agents._internal.agents as _mod
+
         monkeypatch.setattr(_mod, "_agent", None)
         a = get_agent()
         b = get_agent()
@@ -464,6 +491,7 @@ class TestSingletons:
 
     async def test_get_runner_singleton(self, monkeypatch):
         import domain.agents._internal.agents as _mod
+
         monkeypatch.setattr(_mod, "_runner", None)
         a = get_runner()
         b = get_runner()
@@ -478,4 +506,4 @@ class TestLazyImports:
 
     def test_lazy_import_bad_name(self):
         with pytest.raises(AttributeError):
-            getattr(agents_pkg, "does_not_exist")
+            agents_pkg.does_not_exist

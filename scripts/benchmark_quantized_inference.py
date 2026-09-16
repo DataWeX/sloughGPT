@@ -13,14 +13,15 @@ Usage:
 """
 
 import argparse
-import time
 import sys
+import time
+
 import numpy as np
 
 sys.path.insert(0, "packages/core-py")
 
-from domain.training._internal.slonet import SloTransformer
 from domain.infrastructure.quantization import Quantine, walk_slo_linears
+from domain.training._internal.slonet import SloTransformer
 
 
 def create_model(vocab=32000, embed=256, layers=4, heads=8, seq_len=128):
@@ -87,8 +88,10 @@ def benchmark_generate(model, input_ids, num_steps=10, label=""):
         latencies.append(time.perf_counter() - t0)
 
     latencies = np.array(latencies) * 1000
-    print(f"  {label}: {latencies.mean():.1f}ms avg, {latencies.std():.1f}ms std, "
-          f"min={latencies.min():.1f}ms, max={latencies.max():.1f}ms")
+    print(
+        f"  {label}: {latencies.mean():.1f}ms avg, {latencies.std():.1f}ms std, "
+        f"min={latencies.min():.1f}ms, max={latencies.max():.1f}ms"
+    )
     return latencies
 
 
@@ -97,7 +100,7 @@ def _run(model, x):
     out = model(x)
     if isinstance(out, tuple):
         return out[0].data
-    return out.data if hasattr(out, 'data') else out
+    return out.data if hasattr(out, "data") else out
 
 
 def benchmark_forward(model, input_ids, num_steps=30, label=""):
@@ -110,8 +113,10 @@ def benchmark_forward(model, input_ids, num_steps=30, label=""):
         _ = _run(model, input_ids)
         latencies.append(time.perf_counter() - t0)
     latencies = np.array(latencies) * 1000
-    print(f"  {label}: {latencies.mean():.1f}ms avg, {latencies.std():.1f}ms std, "
-          f"min={latencies.min():.1f}ms, max={latencies.max():.1f}ms")
+    print(
+        f"  {label}: {latencies.mean():.1f}ms avg, {latencies.std():.1f}ms std, "
+        f"min={latencies.min():.1f}ms, max={latencies.max():.1f}ms"
+    )
     return latencies
 
 
@@ -142,7 +147,9 @@ def main():
         _, cnt8 = quantize_model(qmodel, bits=8)
         q8_bytes = count_quantized_bytes(qmodel)
         ratio8 = fp32_bytes / max(q8_bytes, 1)
-        print(f"  INT8 weight memory:  {q8_bytes / 1024:.1f} KB ({ratio8:.1f}x compression, {cnt8} layers)")
+        print(
+            f"  INT8 weight memory:  {q8_bytes / 1024:.1f} KB ({ratio8:.1f}x compression, {cnt8} layers)"
+        )
 
         # int4
         qmodel4 = create_model(embed=embed, layers=layers, heads=heads)
@@ -150,7 +157,9 @@ def main():
         _, cnt4 = quantize_model(qmodel4, bits=4)
         q4_bytes = count_quantized_bytes(qmodel4)
         ratio4 = fp32_bytes / max(q4_bytes, 1)
-        print(f"  INT4 weight memory:  {q4_bytes / 1024:.1f} KB ({ratio4:.1f}x compression, {cnt4} layers)")
+        print(
+            f"  INT4 weight memory:  {q4_bytes / 1024:.1f} KB ({ratio4:.1f}x compression, {cnt4} layers)"
+        )
 
         # Quality
         logits_fp32 = _run(model, inp)
@@ -160,7 +169,9 @@ def main():
         def cosine(a, b):
             return float(np.dot(a.flatten(), b.flatten()) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
-        print(f"  Cosine sim vs FP32: INT8={cosine(logits_fp32, logits_i8):.5f}, INT4={cosine(logits_fp32, logits_i4):.5f}")
+        print(
+            f"  Cosine sim vs FP32: INT8={cosine(logits_fp32, logits_i8):.5f}, INT4={cosine(logits_fp32, logits_i4):.5f}"
+        )
 
     # ── Latency ──────────────────────────────────────────────────────
     print(f"\n--- Latency (Small model, {args.steps} steps) ---")
@@ -181,14 +192,14 @@ def main():
     l_i4 = benchmark_forward(qmodel4, inp, args.steps, "INT4 forward")
 
     # Speed ratio vs fp32
-    print(f"\n  Speed ratio (lower=faster):")
+    print("\n  Speed ratio (lower=faster):")
     print(f"    INT8/FP32: {l_i8.mean() / l_fp32.mean():.2f}x")
     print(f"    INT4/FP32: {l_i4.mean() / l_fp32.mean():.2f}x")
 
     # ── Pre-quantized load time ──────────────────────────────────────
-    print(f"\n--- Pre-quantized weight load time ---")
-    import tempfile, os
-    from pathlib import Path
+    print("\n--- Pre-quantized weight load time ---")
+    import os
+    import tempfile
 
     model = create_model(embed=128, layers=4, heads=4)
     engine = Quantine(bits=8, mode="symmetric")
@@ -215,9 +226,10 @@ def main():
         os.unlink(npz_path)
 
     # ── AVX2 check ──────────────────────────────────────────────────
-    print(f"\n--- Hardware acceleration ---")
+    print("\n--- Hardware acceleration ---")
     try:
         from domain.infrastructure._internal.quant_core.wrapper import HAS_AVX2
+
         if HAS_AVX2:
             print("  AVX2 kernels: AVAILABLE (int8/int4 GEMM accelerated)")
         else:

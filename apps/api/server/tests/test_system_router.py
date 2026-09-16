@@ -30,7 +30,14 @@ class TestInfo:
         resp = client.get("/system/info")
         assert resp.status_code == 200
         data = _data(resp)
-        expected = {"platform", "platform_release", "platform_version", "architecture", "processor", "cpu_count"}
+        expected = {
+            "platform",
+            "platform_release",
+            "platform_version",
+            "architecture",
+            "processor",
+            "cpu_count",
+        }
         assert expected.issubset(data.keys())
         assert isinstance(data["platform"], str)
         assert isinstance(data["cpu_count"], int)

@@ -20,36 +20,35 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .base import Logger, LogLevel, LogRecord
-
 
 # ── Browser console mapping ────────────────────────────────────────────
 
 _CONSOLE_METHOD = {
-    LogLevel.DEBUG:    "debug",
-    LogLevel.INFO:     "log",
-    LogLevel.WARNING:  "warn",
-    LogLevel.ERROR:    "error",
+    LogLevel.DEBUG: "debug",
+    LogLevel.INFO: "log",
+    LogLevel.WARNING: "warn",
+    LogLevel.ERROR: "error",
     LogLevel.CRITICAL: "error",
 }
 
 
 # ── Event → tag mapping (shared by WebLogger.track_event) ──────────────
 
-_EVENT_TAG_MAP: Dict[str, str] = {
-    "model_":      "MODEL",
-    "training_":   "TRAIN",
-    "session_":    "CHAT",
-    "stream_":     "CHAT",
-    "chat_":       "CHAT",
-    "webhook_":    "WORKFLOW",
-    "download_":   "DOWNLOAD",
-    "auth_":       "AUTH",
-    "vm_":         "INFRA",
-    "shell_":      "INFRA",
-    "soul_":       "SOUL",
+_EVENT_TAG_MAP: dict[str, str] = {
+    "model_": "MODEL",
+    "training_": "TRAIN",
+    "session_": "CHAT",
+    "stream_": "CHAT",
+    "chat_": "CHAT",
+    "webhook_": "WORKFLOW",
+    "download_": "DOWNLOAD",
+    "auth_": "AUTH",
+    "vm_": "INFRA",
+    "shell_": "INFRA",
+    "soul_": "SOUL",
 }
 
 _DEFAULT_EVENT_TAG = "UI"
@@ -74,13 +73,13 @@ class WebLogger(Logger):
         context:   Default context attached to every record.
     """
 
-    __slots__ = ('_browser_console', '_writable')
+    __slots__ = ("_browser_console", "_writable")
 
     def __init__(
         self,
         name: str = "slo.web",
         level: LogLevel = LogLevel.INFO,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
         console: Any = None,
         writable: Any = None,
     ) -> None:
@@ -90,9 +89,9 @@ class WebLogger(Logger):
 
     # ── Serialization ───────────────────────────────────────────────────
 
-    def _record_to_dict(self, record: LogRecord) -> Dict[str, Any]:
+    def _record_to_dict(self, record: LogRecord) -> dict[str, Any]:
         """Convert a LogRecord to a plain dict for JSON serialization."""
-        d: Dict[str, Any] = {
+        d: dict[str, Any] = {
             "level": record.level.value,
             "logger": record.logger,
             "message": record.message,
@@ -185,8 +184,9 @@ class WebLogger(Logger):
                 return tag
         return _DEFAULT_EVENT_TAG
 
-    def track_event(self, event: str, data: Optional[Dict[str, Any]] = None,
-                    tag: Optional[str] = None) -> None:
+    def track_event(
+        self, event: str, data: dict[str, Any] | None = None, tag: str | None = None
+    ) -> None:
         """Log a UI event with auto-inferred tag.
 
         The tag is resolved in order:
@@ -204,8 +204,10 @@ class WebLogger(Logger):
         ctx = dict(data) if data else {}
         ctx["tag"] = resolved_tag
         tagged = self.tag(resolved_tag)
-        tagged.emit(tagged._make_record(
-            level=LogLevel.INFO,
-            message=" ".join(summary_parts),
-            context=ctx,
-        ))
+        tagged.emit(
+            tagged._make_record(
+                level=LogLevel.INFO,
+                message=" ".join(summary_parts),
+                context=ctx,
+            )
+        )

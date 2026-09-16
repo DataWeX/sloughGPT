@@ -2,11 +2,24 @@
 
 import numpy as np
 import pytest
+
 from domain.shell._internal.cycles import (
-    _normalize, _dot, _cross, _reflect, _refract,
-    Material, Mesh, Light, Camera, Scene, BVH,
-    create_sphere, create_plane, create_cube,
-    _ggx_distribution, _ggx_geometry, _fresnel_schlick,
+    BVH,
+    Camera,
+    Light,
+    Material,
+    Scene,
+    _cross,
+    _dot,
+    _fresnel_schlick,
+    _ggx_distribution,
+    _ggx_geometry,
+    _normalize,
+    _reflect,
+    _refract,
+    create_cube,
+    create_plane,
+    create_sphere,
 )
 
 

@@ -1,21 +1,20 @@
-import hashlib
 import json
+
 import numpy as np
 import pytest
 
-from domain.collections._internal.sources import Record
-from domain.collections._internal.stores import MemoryStore
 from domain.collections._internal.filters import LengthFilter
+from domain.collections._internal.sources import Record
 from domain.collections._internal.world_bridge import (
-    MATERIAL_SIGNAL,
     MATERIAL_FOOD,
+    MATERIAL_SIGNAL,
     MATERIAL_TOXIC,
-    WorldFeedConfig,
+    CollectionWorldPipeline,
     RecordToWorldMapper,
+    WorldFeedConfig,
     WorldGridBridge,
     WorldGridSource,
     WorldStoreAdapter,
-    CollectionWorldPipeline,
 )
 
 
@@ -69,6 +68,7 @@ class _FixedSource:
 # Constants
 # ---------------------------------------------------------------------------
 
+
 class TestMaterialConstants:
     def test_values(self):
         assert MATERIAL_SIGNAL == 4
@@ -79,6 +79,7 @@ class TestMaterialConstants:
 # ---------------------------------------------------------------------------
 # WorldFeedConfig
 # ---------------------------------------------------------------------------
+
 
 class TestWorldFeedConfig:
     def test_defaults(self):
@@ -100,6 +101,7 @@ class TestWorldFeedConfig:
 # ---------------------------------------------------------------------------
 # RecordToWorldMapper
 # ---------------------------------------------------------------------------
+
 
 class TestRecordToWorldMapper:
     def setup_method(self):
@@ -205,6 +207,7 @@ class TestRecordToWorldMapper:
 # WorldGridBridge
 # ---------------------------------------------------------------------------
 
+
 class TestWorldGridBridge:
     def test_inject_no_grid(self):
         bridge = WorldGridBridge()
@@ -247,7 +250,9 @@ class TestWorldGridBridge:
     def test_inject_with_temperature_metadata(self):
         grid = _FakeGrid()
         bridge = WorldGridBridge(grid)
-        records = [Record(content="temp test", metadata={"temperature": 37.0, "position": [1, 1, 1]})]
+        records = [
+            Record(content="temp test", metadata={"temperature": 37.0, "position": [1, 1, 1]})
+        ]
         bridge.inject_records(records)
         placed = grid._placed[0]
         assert placed[5] == pytest.approx(37.0)
@@ -319,6 +324,7 @@ class TestWorldGridBridge:
 # WorldGridSource
 # ---------------------------------------------------------------------------
 
+
 class TestWorldGridSource:
     def test_read_delegates_to_bridge(self):
         grid = _FakeGrid(shape=(8, 4, 8))
@@ -336,6 +342,7 @@ class TestWorldGridSource:
 # ---------------------------------------------------------------------------
 # WorldStoreAdapter
 # ---------------------------------------------------------------------------
+
 
 class TestWorldStoreAdapter:
     def test_write(self):
@@ -375,6 +382,7 @@ class TestWorldStoreAdapter:
 # ---------------------------------------------------------------------------
 # CollectionWorldPipeline
 # ---------------------------------------------------------------------------
+
 
 class TestCollectionWorldPipeline:
     def test_run_no_grid(self):

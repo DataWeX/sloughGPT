@@ -14,13 +14,13 @@ Usage:
 from __future__ import annotations
 
 import json
-import os
-import time
 import logging
+import os
 import threading
-from pathlib import Path
-from typing import Optional, Dict, Any, List
+import time
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("slo.model_health")
 
@@ -62,7 +62,7 @@ class ModelHealthMonitor:
     def __init__(self, db_path: str = "data/model_health.json"):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._history: List[Dict[str, Any]] = []
+        self._history: list[dict[str, Any]] = []
         self._model = None
         self._tokenizer = None
         self._db = self._init_mogdb()
@@ -71,6 +71,7 @@ class ModelHealthMonitor:
     def _init_mogdb(self):
         """Initialize MogDB with JSON sync for model health."""
         from mogdb import MogDB
+
         repo_root = self.db_path.parent.parent.parent
         db_path = os.path.join(repo_root, "data", "model_health_mogdb")
         sync_path = os.path.join(repo_root, "data", "model_health_json")
@@ -121,13 +122,14 @@ class ModelHealthMonitor:
         except Exception as e:
             logger.warning("Failed to save health history to MogDB: %s", e)
 
-    def run_benchmark(self) -> Optional[HealthSnapshot]:
+    def run_benchmark(self) -> HealthSnapshot | None:
         """Run model on the benchmark corpus and compute average perplexity.
 
         Returns a HealthSnapshot with PPL, loss, and sentence count.
         """
         import numpy as np
-        from domain.training._internal.slonet import tensor, SloLSTM
+
+        from domain.training._internal.slonet import SloLSTM, tensor
 
         net = self._model
         tok = self._tokenizer
@@ -175,12 +177,14 @@ class ModelHealthMonitor:
                 num_sentences=len(BENCHMARK_CORPUS),
             )
 
-            self._history.append({
-                "timestamp": snapshot.timestamp,
-                "perplexity": round(snapshot.perplexity, 4),
-                "loss": round(snapshot.loss, 4),
-                "num_sentences": snapshot.num_sentences,
-            })
+            self._history.append(
+                {
+                    "timestamp": snapshot.timestamp,
+                    "perplexity": round(snapshot.perplexity, 4),
+                    "loss": round(snapshot.loss, 4),
+                    "num_sentences": snapshot.num_sentences,
+                }
+            )
             self._save_history()
 
             return snapshot
@@ -188,7 +192,7 @@ class ModelHealthMonitor:
             logger.warning("Health benchmark failed: %s", e, extra={"tag": "INFRA"})
             return None
 
-    def get_trend(self, window: int = 20) -> Dict[str, Any]:
+    def get_trend(self, window: int = 20) -> dict[str, Any]:
         """Get health trend data for the last N measurements.
 
         Returns current PPL, best PPL, worst PPL, and a list of
@@ -208,13 +212,10 @@ class ModelHealthMonitor:
             "average": sum(ppl_values) / len(ppl_values),
             "count": len(self._history),
             "recent_count": len(recent),
-            "points": [
-                {"t": h["timestamp"], "ppl": h["perplexity"]}
-                for h in recent
-            ],
+            "points": [{"t": h["timestamp"], "ppl": h["perplexity"]} for h in recent],
         }
 
-    def detect_drift(self, threshold_pct: float = 10.0) -> Dict[str, Any]:
+    def detect_drift(self, threshold_pct: float = 10.0) -> dict[str, Any]:
         """Detect significant perplexity drift compared to recent baseline.
 
         Compares the latest measurement against the median of the previous
@@ -259,6 +260,7 @@ class ModelHealthMonitor:
         Returns:
             The background thread (daemon).
         """
+
         def _loop():
             while True:
                 self.run_benchmark()
@@ -271,12 +273,14 @@ class ModelHealthMonitor:
         thread.start()
         return thread
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get full health statistics including trend and drift."""
         trend = self.get_trend()
-        drift = self.detect_drift() if len(self._history) >= 3 else {
-            "drifted": False, "message": "Not enough data"
-        }
+        drift = (
+            self.detect_drift()
+            if len(self._history) >= 3
+            else {"drifted": False, "message": "Not enough data"}
+        )
         return {
             "trend": trend,
             "drift": drift,
@@ -284,7 +288,7 @@ class ModelHealthMonitor:
         }
 
 
-_health_monitor: Optional[ModelHealthMonitor] = None
+_health_monitor: ModelHealthMonitor | None = None
 
 
 def get_health_monitor() -> ModelHealthMonitor:

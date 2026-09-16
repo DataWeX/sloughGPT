@@ -8,6 +8,7 @@ np.matmul() directly. C is tried first, numpy is the fallback.
 from __future__ import annotations
 
 import numpy as np
+
 from . import blas
 
 

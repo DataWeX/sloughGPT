@@ -1,8 +1,8 @@
 """Tests for domain.infrastructure.model_server — IdleManager."""
 
-import time
 import threading
-from unittest.mock import MagicMock
+import time
+
 from domain.infrastructure._internal.model_server import IdleManager
 
 
@@ -206,7 +206,6 @@ class TestIdleManager:
     def test_concurrent_touch(self):
         im = IdleManager()
         im.register("model1")
-        results = []
 
         def toucher():
             for _ in range(20):
@@ -462,7 +461,7 @@ class TestIdleManager:
         # Trigger the idle check by simulating what _check_loop does
         with im._lock:
             now = time.time()
-            for model_id, entry in im._models.items():
+            for _model_id, entry in im._models.items():
                 if entry["unloaded_at"] is not None:
                     continue
                 age = now - entry["last_touch"]

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import numpy as np
 from dataclasses import dataclass, field
 from enum import IntEnum
+
+import numpy as np
 
 
 class ResourceType(IntEnum):
@@ -42,15 +43,17 @@ class Resource:
     quality: float = 1.0
     metadata: dict = field(default_factory=dict)
 
-    def split(self, amount: float) -> 'Resource':
+    def split(self, amount: float) -> Resource:
         actual = min(amount, self.amount)
         self.amount -= actual
         return Resource(self.resource_type, actual, self.quality, dict(self.metadata))
 
-    def merge(self, other: 'Resource'):
+    def merge(self, other: Resource):
         if self.resource_type == other.resource_type:
             total = self.amount + other.amount
-            self.quality = (self.quality * self.amount + other.quality * other.amount) / max(total, 1e-8)
+            self.quality = (self.quality * self.amount + other.quality * other.amount) / max(
+                total, 1e-8
+            )
             self.amount = total
 
     @property
@@ -140,8 +143,9 @@ class BabyEconomy:
             for rt, r in self._inventory.items()
         }
 
-    def create_offer(self, buyer_id: int | None, offer_resource: Resource,
-                     want_resource: Resource) -> TradeOffer | None:
+    def create_offer(
+        self, buyer_id: int | None, offer_resource: Resource, want_resource: Resource
+    ) -> TradeOffer | None:
         if len(self._active_offers) >= self.config.max_offers:
             return None
         if self.get_resource(offer_resource.resource_type) is None:
@@ -166,7 +170,7 @@ class BabyEconomy:
             return False
         return True
 
-    def execute_trade_with(self, offer: TradeOffer, other_economy: 'BabyEconomy') -> bool:
+    def execute_trade_with(self, offer: TradeOffer, other_economy: BabyEconomy) -> bool:
         if offer.status == TradeStatus.PENDING:
             offer.accept()
         if offer.status != TradeStatus.ACCEPTED:
@@ -211,7 +215,9 @@ class BabyEconomy:
             self._price_history[resource_type] = []
         self._price_history[resource_type].append(price)
         if len(self._price_history[resource_type]) > self.config.price_history_size:
-            self._price_history[resource_type] = self._price_history[resource_type][-self.config.price_history_size:]
+            self._price_history[resource_type] = self._price_history[resource_type][
+                -self.config.price_history_size :
+            ]
 
     def get_average_price(self, resource_type: ResourceType) -> float:
         prices = self._price_history.get(resource_type, [])
@@ -269,8 +275,9 @@ class MarketSystem:
                 offers.append(offer)
         return offers
 
-    def find_trade(self, buyer_id: int, want_type: ResourceType,
-                   offer_type: ResourceType) -> TradeOffer | None:
+    def find_trade(
+        self, buyer_id: int, want_type: ResourceType, offer_type: ResourceType
+    ) -> TradeOffer | None:
         for economy in self._economies.values():
             if economy.baby_id == buyer_id:
                 continue

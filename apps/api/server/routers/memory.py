@@ -7,11 +7,17 @@ manage the memory store the chat loop writes to automatically.
 
 import logging
 
-from domain.memory._internal.service import get_memory_service
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
+
+from domain.memory._internal.service import get_memory_service
 
 logger = logging.getLogger("slo.api.memory")
 
@@ -268,8 +274,8 @@ class MemoryRouter:
         self, threshold: float | None = None, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Merge near-duplicate facts, keeping the longest in each cluster."""
-        from domain.memory._internal.consolidation import plan_consolidation
         from domain.memory._internal.config import MemoryConfig
+        from domain.memory._internal.consolidation import plan_consolidation
 
         svc = self._service()
         if threshold is None:

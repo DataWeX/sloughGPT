@@ -1,9 +1,12 @@
 """Tests for DatasetsController."""
-import pytest
+
 import json
-from pathlib import Path
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'apps', 'api', 'server'))
+import os
+import sys
+
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "apps", "api", "server"))
 
 from controllers.datasets import DatasetsController
 
@@ -105,8 +108,18 @@ class TestGetDatasetStats:
         ds_dir = tmp_path / "data" / "convo"
         ds_dir.mkdir()
         msgs = [
-            {"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]},
-            {"messages": [{"role": "user", "content": "bye"}, {"role": "assistant", "content": "goodbye"}]},
+            {
+                "messages": [
+                    {"role": "user", "content": "hi"},
+                    {"role": "assistant", "content": "hello"},
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "bye"},
+                    {"role": "assistant", "content": "goodbye"},
+                ]
+            },
         ]
         (ds_dir / "corpus.jsonl").write_text("\n".join(json.dumps(m) for m in msgs) + "\n")
         ctrl = DatasetsController(tmp_path)
@@ -177,7 +190,7 @@ class TestAddData:
     def test_add_data(self, repo_with_datasets):
         count = repo_with_datasets.add_data("shakespeare", ["line1", "line2", "line3"])
         assert count == 3
-        corpus = (repo_with_datasets.datasets_dir / "shakespeare" / "corpus.jsonl")
+        corpus = repo_with_datasets.datasets_dir / "shakespeare" / "corpus.jsonl"
         lines = [l for l in corpus.read_text().splitlines() if l.strip()]
         assert len(lines) >= 5
 
@@ -225,7 +238,7 @@ class TestPreviewDataset:
             "conversations": [
                 {"from": "human", "value": "What is this?"},
                 {"from": "gpt", "value": "A cat sitting on a mat."},
-            ]
+            ],
         }
         (ds_dir / "corpus.jsonl").write_text(json.dumps(entry) + "\n")
         (ds_dir / ".visual_metadata.json").write_text("{}")
@@ -308,6 +321,7 @@ class TestDescribeDataset:
 class TestSingleton:
     def test_singleton_same_instance(self):
         from controllers.datasets import get_datasets_controller
+
         a = get_datasets_controller()
         b = get_datasets_controller()
         assert a is b

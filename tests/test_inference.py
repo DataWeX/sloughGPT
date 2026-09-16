@@ -2,13 +2,15 @@
 SloughGPT Inference Engine Tests
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
+
 torch = pytest.importorskip("torch")
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 
 
 class TestKVCache:
@@ -57,11 +59,7 @@ class TestGenerationRequest:
         """Test request creation."""
         from domains.inference.engine import GenerationRequest
 
-        request = GenerationRequest(
-            id="test-1",
-            prompt="Hello world",
-            max_new_tokens=100
-        )
+        request = GenerationRequest(id="test-1", prompt="Hello world", max_new_tokens=100)
 
         assert request.id == "test-1"
         assert request.prompt == "Hello world"
@@ -98,11 +96,7 @@ class TestInferenceEngine:
         """Test engine initialization."""
         from domains.inference.engine import InferenceEngine
 
-        engine = InferenceEngine(
-            model=mock_model,
-            tokenizer=mock_tokenizer,
-            device="cpu"
-        )
+        engine = InferenceEngine(model=mock_model, tokenizer=mock_tokenizer, device="cpu")
 
         assert engine.device == torch.device("cpu")
         assert engine.max_batch_size == 32
@@ -112,7 +106,7 @@ class TestInferenceEngine:
         from domains.inference.engine import InferenceEngine
 
         engine = InferenceEngine(mock_model, mock_tokenizer, device="cpu")
-        tokens = engine.encode("test")
+        engine.encode("test")
 
         mock_tokenizer.encode.assert_called_once_with("test", return_tensors="pt")
 
@@ -121,7 +115,7 @@ class TestInferenceEngine:
         from domains.inference.engine import InferenceEngine
 
         engine = InferenceEngine(mock_model, mock_tokenizer, device="cpu")
-        text = engine.decode([1, 2, 3])
+        engine.decode([1, 2, 3])
 
         mock_tokenizer.decode.assert_called_once()
 
@@ -243,17 +237,19 @@ class TestInferenceEngineGeneration:
         """Create simple tokenizer for testing."""
         tokenizer = Mock()
         vocab = {chr(i + 97): i for i in range(26)}
-        vocab['<eos>'] = 0
+        vocab["<eos>"] = 0
         rev_vocab = {v: k for k, v in vocab.items()}
 
         def encode(text, return_tensors=None):
             return torch.tensor([[vocab.get(c, 1) for c in text]])
+
         tokenizer.encode = encode
 
         def decode(ids, skip_special_tokens=True):
             if isinstance(ids, torch.Tensor):
                 ids = ids.tolist()
-            return ''.join([rev_vocab.get(i, '') for i in ids])
+            return "".join([rev_vocab.get(i, "") for i in ids])
+
         tokenizer.decode = decode
 
         tokenizer.eos_token_id = 0

@@ -7,9 +7,17 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 pytest.importorskip("torch")
 
-from config_loader import Config, DataConfig, DeviceConfig, ModelConfig, TrainingConfig, merge_args_with_config
+from config_loader import (
+    Config,
+    DataConfig,
+    DeviceConfig,
+    ModelConfig,
+    TrainingConfig,
+    merge_args_with_config,
+)
 
 
 @pytest.fixture

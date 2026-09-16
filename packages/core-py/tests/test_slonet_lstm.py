@@ -12,7 +12,7 @@ Covers:
 import numpy as np
 import pytest
 
-from domains.training import slonet as sn
+from domain.training._internal import slonet as sn
 
 
 @pytest.fixture(autouse=True)
@@ -34,6 +34,7 @@ def _ids(seq_len=8):
 
 
 # ── Forward / NumPy equivalence ──────────────────────────────────────────────
+
 
 def test_forward_matches_numpy_single_layer():
     lstm = _make_lstm(num_layers=1)
@@ -108,6 +109,7 @@ def test_forward_numpy_hidden_state():
 
 
 # ── Gradient flow ────────────────────────────────────────────────────────────
+
 
 def test_backward_grads_finite_one_layer():
     lstm = _make_lstm(num_layers=1)
@@ -197,6 +199,7 @@ def test_batched_forward_grads_match_sequential_reference():
 
 # ── Training step ────────────────────────────────────────────────────────────
 
+
 def test_training_step_reduces_loss():
     lstm = _make_lstm(num_layers=2)
     ids = _ids(seq_len=8)
@@ -206,7 +209,7 @@ def test_training_step_reduces_loss():
     loss = sn.cross_entropy(logits, y.reshape(-1))
     loss.backward()
     lr = 0.05
-    for step in range(10):
+    for _step in range(10):
         for p in lstm.parameters():
             if p.grad is not None:
                 p.data = p.data - lr * p.grad.data
@@ -270,6 +273,7 @@ def test_loss_is_finite_throughout_training():
 
 # ── Slice helpers ────────────────────────────────────────────────────────────
 
+
 def test_slice_basic_index_helper():
     assert sn._basic_index((slice(None), 0, slice(None)))
     assert sn._basic_index((slice(1, 3),))
@@ -295,6 +299,7 @@ def test_slice_backward_basic_vs_fancy_equal():
 
 
 # ── Generation ───────────────────────────────────────────────────────────────
+
 
 def test_generate_returns_expected_length():
     lstm = _make_lstm(num_layers=1)
@@ -343,19 +348,18 @@ def test_generate_long_sequence():
 def test_generate_sampling_does_not_collapse_to_single_token():
     """Greedy argmax on a fresh LSTM collapses to one repeated token; sampled
     decoding with temperature/top-k must stay diverse."""
-    rng = np.random.default_rng(0)
+    np.random.default_rng(0)
     text = "the quick brown fox jumps over the lazy dog and then runs away home"
     vocab = sorted(set(text))
     stoi = {c: i for i, c in enumerate(vocab)}
     ids = np.array([stoi[c] for c in text], dtype=np.int64)
 
-    lstm = sn.SloLSTM(vocab_size=len(vocab), embed_dim=24, hidden_dim=40,
-                      num_layers=1, dropout=0.0)
+    lstm = sn.SloLSTM(vocab_size=len(vocab), embed_dim=24, hidden_dim=40, num_layers=1, dropout=0.0)
     opt = sn.SloAdam(lr=0.05)
     for step in range(20):
         i = (step * 8) % (len(ids) - 8)
-        x = sn.tensor(ids[i:i + 8].reshape(1, -1), requires_grad=True)
-        y = sn.tensor(ids[i + 1:i + 9].reshape(1, -1))
+        x = sn.tensor(ids[i : i + 8].reshape(1, -1), requires_grad=True)
+        y = sn.tensor(ids[i + 1 : i + 9].reshape(1, -1))
         logits, _ = lstm.forward(x)
         loss = sn.cross_entropy(logits, y)
         loss.backward()
@@ -397,6 +401,7 @@ def test_generate_vocab_bounded():
 
 
 # ── SloLSTM structure ────────────────────────────────────────────────────────
+
 
 def test_lstm_parameters_count():
     lstm = _make_lstm(num_layers=1)
@@ -451,9 +456,8 @@ def test_lstm_forward_numpy_deterministic():
 def test_different_seeds_different_weights():
     lstm1 = _make_lstm(num_layers=1)
     lstm2 = _make_lstm(num_layers=1)
-    same = all(
-        np.array_equal(p1.data, p2.data)
-        for p1, p2 in zip(lstm1.parameters(), lstm2.parameters())
+    all(
+        np.array_equal(p1.data, p2.data) for p1, p2 in zip(lstm1.parameters(), lstm2.parameters(), strict=False)
     )
     # With random init, weights should almost certainly differ
     # (could theoretically match but probability is ~0)
@@ -475,6 +479,7 @@ def test_lstm_gradient_zero_on_frozen_input():
 
 
 # ── GenerationMetrics ─────────────────────────────────────────────────────────
+
 
 def test_generation_metrics_defaults():
     m = sn.GenerationMetrics()
@@ -526,6 +531,7 @@ def test_generation_metrics_finalize_no_time():
 
 # ── GenerateResult ────────────────────────────────────────────────────────────
 
+
 def test_generate_result_shape_and_dtype():
     r = sn.GenerateResult(token_ids=np.array([[1, 2, 3]]))
     assert r.shape == (1, 3)
@@ -573,6 +579,7 @@ def test_generate_result_ne():
 
 # ── no_grad ──────────────────────────────────────────────────────────────────
 
+
 def test_no_grad_context_manager():
     prev = sn._NO_GRAD
     with sn.no_grad():
@@ -584,6 +591,7 @@ def test_no_grad_decorator():
     @sn.no_grad()
     def my_fn():
         return sn._NO_GRAD
+
     assert my_fn() is True
     assert sn._NO_GRAD is False
 
@@ -616,6 +624,7 @@ def test_no_grad_tensor_requires_grad():
 
 # ── cross_entropy ─────────────────────────────────────────────────────────────
 
+
 def test_cross_entropy_basic():
     logits = sn.tensor(np.array([[1.0, 2.0, 3.0]]))
     target = sn.tensor(np.array([2]))
@@ -641,6 +650,7 @@ def test_cross_entropy_batch():
 
 
 # ── softmax / log_softmax ────────────────────────────────────────────────────
+
 
 def test_softmax_sums_to_one():
     logits = sn.tensor(np.array([1.0, 2.0, 3.0]))
@@ -668,6 +678,7 @@ def test_log_softmax_matches_log_softmax():
 
 
 # ── topk ─────────────────────────────────────────────────────────────────────
+
 
 def test_topk_basic():
     t = sn.tensor(np.array([3.0, 1.0, 4.0, 2.0]))

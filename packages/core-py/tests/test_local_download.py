@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-import pytest
-
-from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
-from domain.infrastructure._internal.local_download import LocalFileBackend, _get_cache_root
+from domain.infrastructure._internal.download_backend import DownloadBackend
+from domain.infrastructure._internal.local_download import LocalFileBackend
 
 
 class TestLocalFileBackend:

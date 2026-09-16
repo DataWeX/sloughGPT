@@ -1,9 +1,15 @@
 """Tests for domain.shared._internal.utils — utility functions and Timer."""
 
 import time
+
 from domain.shared._internal.utils import (
-    generate_id, hash_string, format_size, format_time,
-    merge_dicts, clamp, Timer,
+    Timer,
+    clamp,
+    format_size,
+    format_time,
+    generate_id,
+    hash_string,
+    merge_dicts,
 )
 
 
@@ -42,7 +48,7 @@ class TestFormatSize:
         assert "MB" in format_size(1024 * 1024)
 
     def test_gb(self):
-        assert "GB" in format_size(1024 ** 3)
+        assert "GB" in format_size(1024**3)
 
 
 class TestFormatTime:

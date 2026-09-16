@@ -1,7 +1,11 @@
 """Tests for domain.training._internal.export — ExportConfig, GGUFExportOptions, ModelMetadata."""
 
-import pytest
-from domain.training._internal.export import ExportConfig, GGUFExportOptions, ModelMetadata, list_export_formats
+from domain.training._internal.export import (
+    ExportConfig,
+    GGUFExportOptions,
+    ModelMetadata,
+    list_export_formats,
+)
 
 
 class TestExportConfig:
@@ -306,6 +310,7 @@ class TestModelMetadata:
             n_layer = 2
             n_head = 4
             block_size = 64
+
         mm = ModelMetadata.from_model(FakeModel(), name="fake")
         assert mm.name == "fake"
         assert mm.vocab_size == 128
@@ -316,12 +321,19 @@ class TestModelMetadata:
 
     def test_from_model_with_config(self):
         class FakeModel:
-            _config = {"vocab_size": 256, "n_embed": 64, "n_layer": 3, "n_head": 8, "block_size": 32}
+            _config = {
+                "vocab_size": 256,
+                "n_embed": 64,
+                "n_layer": 3,
+                "n_head": 8,
+                "block_size": 32,
+            }
             vocab_size = 256
             n_embed = 64
             n_layer = 3
             n_head = 8
             block_size = 32
+
         mm = ModelMetadata.from_model(FakeModel(), name="with_config")
         assert mm.vocab_size == 256
         assert mm.n_embed == 64
@@ -336,6 +348,7 @@ class TestModelMetadata:
             n_layer = 1
             n_head = 2
             block_size = 10
+
         mm = ModelMetadata.from_model(FakeModel())
         assert mm.created_at != ""
         assert "T" in mm.created_at
@@ -431,7 +444,10 @@ class TestModelMetadata:
 
     def test_validate_zero_epochs(self):
         mm = ModelMetadata(
-            vocab_size=1, n_embed=1, n_layer=1, n_head=1,
+            vocab_size=1,
+            n_embed=1,
+            n_layer=1,
+            n_head=1,
             training_dataset="data.jsonl",
         )
         issues = mm.validate()
@@ -439,7 +455,10 @@ class TestModelMetadata:
 
     def test_validate_missing_lineage(self):
         mm = ModelMetadata(
-            vocab_size=1, n_embed=1, n_layer=1, n_head=1,
+            vocab_size=1,
+            n_embed=1,
+            n_layer=1,
+            n_head=1,
             training_dataset="data.jsonl",
             epochs_trained=1,
         )
@@ -511,13 +530,19 @@ class TestModelMetadata:
             n_layer = 1
             n_head = 2
             block_size = 10
+
         mm = ModelMetadata.from_model(FakeModel())
         assert mm.name == "sloughgpt"
 
     def test_validate_all_good(self):
         mm = ModelMetadata(
-            vocab_size=100, n_embed=32, n_layer=2, n_head=4,
-            training_dataset="d.jsonl", epochs_trained=1, lineage="base",
+            vocab_size=100,
+            n_embed=32,
+            n_layer=2,
+            n_head=4,
+            training_dataset="d.jsonl",
+            epochs_trained=1,
+            lineage="base",
         )
         assert mm.validate() == []
 

@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+
 from domain.training._internal.slonet import (
-    Tensor,
-    SloSGD,
     SloAdam,
     SloAdamW,
+    SloSGD,
+    Tensor,
     clip_grad_norm_,
 )
-
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -32,7 +31,6 @@ def _make_params(shapes=None):
 
 
 class TestSloSGD:
-
     def test_init(self):
         opt = SloSGD(lr=0.01, momentum=0.9)
         assert opt.lr == 0.01
@@ -43,7 +41,7 @@ class TestSloSGD:
         params = _make_params()
         old_data = [p.data.copy() for p in params]
         opt.step(params)
-        for p, old in zip(params, old_data):
+        for p, old in zip(params, old_data, strict=False):
             assert not np.allclose(p.data, old)
 
     def test_step_no_grad(self):
@@ -80,7 +78,6 @@ class TestSloSGD:
 
 
 class TestSloAdam:
-
     def test_init(self):
         opt = SloAdam(lr=0.001, b1=0.9, b2=0.999)
         assert opt.lr == 0.001
@@ -92,7 +89,7 @@ class TestSloAdam:
         params = _make_params()
         old_data = [p.data.copy() for p in params]
         opt.step(params)
-        for p, old in zip(params, old_data):
+        for p, old in zip(params, old_data, strict=False):
             assert not np.allclose(p.data, old)
 
     def test_weight_decay(self):
@@ -100,7 +97,7 @@ class TestSloAdam:
         params = _make_params()
         old_data = [p.data.copy() for p in params]
         opt.step(params)
-        for p, old in zip(params, old_data):
+        for p, old in zip(params, old_data, strict=False):
             # With weight decay, values should decrease
             assert p.data.mean() < old.mean()
 
@@ -151,7 +148,6 @@ class TestSloAdam:
 
 
 class TestSloAdamW:
-
     def test_init(self):
         opt = SloAdamW(lr=0.001, weight_decay=0.01)
         assert opt.lr == 0.001
@@ -164,7 +160,7 @@ class TestSloAdamW:
         params = _make_params()
         old_data = [p.data.copy() for p in params]
         opt.step(params)
-        for p, old in zip(params, old_data):
+        for p, old in zip(params, old_data, strict=False):
             assert not np.allclose(p.data, old)
 
     def test_weight_decay_decoupled(self):
@@ -173,7 +169,7 @@ class TestSloAdamW:
         old = params[0].data.copy()
         opt.step(params)
         # Decoupled weight decay: p -= lr * wd * p
-        expected = old - 0.01 * 0.5 * old
+        old - 0.01 * 0.5 * old
         assert params[0].data.mean() < old.mean()
 
     def test_amsgrad(self):
@@ -188,7 +184,7 @@ class TestSloAdamW:
         old_data = [p.data.copy() for p in params]
         opt.step(params)
         # With maximize, gradient is inverted, so values should increase
-        for p, old in zip(params, old_data):
+        for p, old in zip(params, old_data, strict=False):
             assert p.data.mean() > old.mean()
 
     def test_state_dict_amsgrad(self):
@@ -215,7 +211,6 @@ class TestSloAdamW:
 
 
 class TestClipGradNorm:
-
     def test_no_clipping(self):
         params = _make_params()
         clip_grad_norm_(params, max_norm=100.0)

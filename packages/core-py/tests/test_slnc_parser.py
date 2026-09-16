@@ -7,10 +7,11 @@ import zlib
 import numpy as np
 import pytest
 
+from domain.infrastructure._internal.slnc.parser import SLNCParser
 from domain.infrastructure._internal.slnc.spec import (
     ALIGNMENT,
-    DTYPE_FLOAT32,
     DTYPE_FLOAT16,
+    DTYPE_FLOAT32,
     DTYPE_INT32,
     DTYPE_INT64,
     DTYPE_UINT8,
@@ -22,12 +23,11 @@ from domain.infrastructure._internal.slnc.spec import (
     compute_tensor_entry_size,
     dtype_to_code,
 )
-from domain.infrastructure._internal.slnc.parser import SLNCParser
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _build_slnc_file(tensors, n_layer=2, n_embd=64, n_head=4, config=None):
     """Build a valid .slnc binary file from a list of tensor dicts.
@@ -60,7 +60,7 @@ def _build_slnc_file(tensors, n_layer=2, n_embd=64, n_head=4, config=None):
 
     # Build tensor table
     tensor_table = bytearray()
-    for t, data_off in zip(tensors, data_offsets):
+    for t, data_off in zip(tensors, data_offsets, strict=False):
         name = t["name"]
         data = t["data"]
         name_bytes = name.encode()
@@ -129,6 +129,7 @@ def _make_tensor(name, shape, dtype=np.float32, fill=1.0):
 # ---------------------------------------------------------------------------
 # spec.py tests
 # ---------------------------------------------------------------------------
+
 
 class TestSpecFunctions:
     def test_align_already_aligned(self):
@@ -203,6 +204,7 @@ class TestSpecFunctions:
 # ---------------------------------------------------------------------------
 # SLNCParser — valid file tests
 # ---------------------------------------------------------------------------
+
 
 class TestSLNCParserValid:
     def test_open_valid_file(self, tmp_path):
@@ -421,21 +423,30 @@ class TestSLNCParserValid:
 # SLNCParser — get_block tests
 # ---------------------------------------------------------------------------
 
+
 class TestSLNCParserGetBlock:
     def _build_block_file(self, tmp_path, n_layer=1):
         """Build a .slnc file with all 12 block tensors for each layer."""
         tensors = []
         block_tensor_names = [
-            "ln_1.weight", "ln_1.bias",
-            "attn.c_attn.weight", "attn.c_attn.bias",
-            "attn.c_proj.weight", "attn.c_proj.bias",
-            "ln_2.weight", "ln_2.bias",
-            "mlp.c_fc.weight", "mlp.c_fc.bias",
-            "mlp.c_proj.weight", "mlp.c_proj.bias",
+            "ln_1.weight",
+            "ln_1.bias",
+            "attn.c_attn.weight",
+            "attn.c_attn.bias",
+            "attn.c_proj.weight",
+            "attn.c_proj.bias",
+            "ln_2.weight",
+            "ln_2.bias",
+            "mlp.c_fc.weight",
+            "mlp.c_fc.bias",
+            "mlp.c_proj.weight",
+            "mlp.c_proj.bias",
         ]
         for layer in range(n_layer):
             for i, name in enumerate(block_tensor_names):
-                tensors.append({"name": f"h.{layer}.{name}", "data": np.full((4,), float(i), dtype=np.float32)})
+                tensors.append(
+                    {"name": f"h.{layer}.{name}", "data": np.full((4,), float(i), dtype=np.float32)}
+                )
         path = tmp_path / "test.slnc"
         path.write_bytes(_build_slnc_file(tensors, n_layer=n_layer))
         return str(path)
@@ -445,12 +456,18 @@ class TestSLNCParserGetBlock:
         parser = SLNCParser(path)
         block = parser.get_block(0)
         expected_keys = [
-            "ln_1.weight", "ln_1.bias",
-            "attn.c_attn.weight", "attn.c_attn.bias",
-            "attn.c_proj.weight", "attn.c_proj.bias",
-            "ln_2.weight", "ln_2.bias",
-            "mlp.c_fc.weight", "mlp.c_fc.bias",
-            "mlp.c_proj.weight", "mlp.c_proj.bias",
+            "ln_1.weight",
+            "ln_1.bias",
+            "attn.c_attn.weight",
+            "attn.c_attn.bias",
+            "attn.c_proj.weight",
+            "attn.c_proj.bias",
+            "ln_2.weight",
+            "ln_2.bias",
+            "mlp.c_fc.weight",
+            "mlp.c_fc.bias",
+            "mlp.c_proj.weight",
+            "mlp.c_proj.bias",
         ]
         assert set(block.keys()) == set(expected_keys)
         parser.close()
@@ -478,6 +495,7 @@ class TestSLNCParserGetBlock:
 # ---------------------------------------------------------------------------
 # SLNCParser — error paths
 # ---------------------------------------------------------------------------
+
 
 class TestSLNCParserErrors:
     def test_invalid_magic(self, tmp_path):
@@ -509,6 +527,7 @@ class TestSLNCParserErrors:
 # ---------------------------------------------------------------------------
 # SLNCParser — dtype variations
 # ---------------------------------------------------------------------------
+
 
 class TestSLNCDtypes:
     def test_float16_tensor(self, tmp_path):
@@ -559,6 +578,7 @@ class TestSLNCDtypes:
 # ---------------------------------------------------------------------------
 # SLNCParser — multiple tensors and larger data
 # ---------------------------------------------------------------------------
+
 
 class TestSLNCParserMultipleTensors:
     def test_many_tensors(self, tmp_path):

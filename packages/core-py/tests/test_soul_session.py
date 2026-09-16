@@ -1,18 +1,18 @@
 """Tests for domain.soul._internal.cognitive — SessionMemory, EpisodicMemoryStore, SentimentAnalyzer, EmotionalResponseGenerator, RelationshipMemory, NeuralPlasticityEngine, MetaLearningEngine."""
 
 from domain.soul._internal.cognitive import (
-    SessionMemory,
-    EpisodicMemoryStore,
-    SentimentAnalyzer,
-    EmotionalResponseGenerator,
-    RelationshipMemory,
     CognitiveArchitecture,
-    NeuralPlasticityEngine,
+    EmotionalResponseGenerator,
+    EpisodicMemoryStore,
     MetaLearningEngine,
+    NeuralPlasticityEngine,
+    RelationshipMemory,
+    SentimentAnalyzer,
+    SessionMemory,
 )
 
-
 # ── SessionMemory ─────────────────────────────────────────────────────
+
 
 class TestSessionMemory:
     def test_init(self):
@@ -136,6 +136,7 @@ class TestSessionMemory:
 
 # ── EpisodicMemoryStore ───────────────────────────────────────────────
 
+
 class TestEpisodicMemoryStore:
     def test_init(self):
         ems = EpisodicMemoryStore(max_episodes=10)
@@ -253,6 +254,7 @@ class TestEpisodicMemoryStore:
 
 # ── SentimentAnalyzer ─────────────────────────────────────────────────
 
+
 class TestSentimentAnalyzer:
     def test_init(self):
         sa = SentimentAnalyzer()
@@ -346,6 +348,7 @@ class TestSentimentAnalyzer:
 
 # ── EmotionalResponseGenerator ────────────────────────────────────────
 
+
 class TestEmotionalResponseGenerator:
     def test_init(self):
         erg = EmotionalResponseGenerator()
@@ -400,6 +403,7 @@ class TestEmotionalResponseGenerator:
 
 # ── RelationshipMemory ────────────────────────────────────────────────
 
+
 class TestRelationshipMemory:
     def test_init(self):
         rm = RelationshipMemory()
@@ -437,14 +441,14 @@ class TestRelationshipMemory:
 
     def test_mood_history_capped(self):
         rm = RelationshipMemory()
-        for i in range(60):
+        for _i in range(60):
             rm.update_from_interaction("u1", "msg", "resp", 0.0, "neutral")
         profile = rm.get_user_profile("u1")
         assert len(profile["mood_history"]) <= 50
 
     def test_interaction_history_capped(self):
         rm = RelationshipMemory()
-        for i in range(110):
+        for _i in range(110):
             rm.update_from_interaction("u1", "msg", "resp", 0.0, "neutral")
         assert len(rm.interaction_history["u1"]) <= 100
 
@@ -478,6 +482,7 @@ class TestRelationshipMemory:
 
 
 # ── CognitiveArchitecture ─────────────────────────────────────────────
+
 
 class TestCognitiveArchitecture:
     def test_init(self):
@@ -556,6 +561,7 @@ class TestCognitiveArchitecture:
 
 # ── NeuralPlasticityEngine ────────────────────────────────────────────
 
+
 class TestNeuralPlasticityEngine:
     def test_init(self):
         npe = NeuralPlasticityEngine()
@@ -573,7 +579,7 @@ class TestNeuralPlasticityEngine:
 
     def test_activation_history_capped(self):
         npe = NeuralPlasticityEngine()
-        for i in range(120):
+        for _i in range(120):
             npe.activate("n1")
         assert len(npe.activation_history["n1"]) <= 70
 
@@ -616,6 +622,7 @@ class TestNeuralPlasticityEngine:
 
 
 # ── MetaLearningEngine ────────────────────────────────────────────────
+
 
 class TestMetaLearningEngine:
     def test_init(self):

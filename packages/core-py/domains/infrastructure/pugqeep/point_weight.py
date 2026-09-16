@@ -11,14 +11,15 @@ This gives SloNet:
   - Smooth interpolation (Points can be interpolated)
   - Meaning (each weight has an identity/function type)
 """
+
 from __future__ import annotations
 
 import base64
 
 import numpy as np
 
-from domain.infrastructure._internal.pugqeep.point import Point
 from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
+from domain.infrastructure._internal.pugqeep.point import Point
 
 
 class PointWeight:
@@ -53,8 +54,13 @@ class PointWeight:
         return self.generate()
 
     @classmethod
-    def from_array(cls, weights: np.ndarray, identity: str = "weight",
-                   method: str = "auto", n_clusters: int = 16) -> "PointWeight":
+    def from_array(
+        cls,
+        weights: np.ndarray,
+        identity: str = "weight",
+        method: str = "auto",
+        n_clusters: int = 16,
+    ) -> PointWeight:
         """Compress a numpy weight array into a PointWeight.
 
         Args:
@@ -76,7 +82,7 @@ class PointWeight:
         return cls(point, shape=weights.shape, dtype=str(weights.dtype))
 
     @classmethod
-    def from_point(cls, point: Point, shape: tuple) -> "PointWeight":
+    def from_point(cls, point: Point, shape: tuple) -> PointWeight:
         """Create PointWeight from an existing Point."""
         return cls(point, shape=shape, dtype=point.dtype)
 
@@ -89,12 +95,13 @@ class PointWeight:
         return self.point.accuracy
 
     def __repr__(self) -> str:
-        return (f"PointWeight(type={self.point.function_type}, "
-                f"shape={self.shape}, acc={self.point.accuracy:.3f})")
+        return (
+            f"PointWeight(type={self.point.function_type}, "
+            f"shape={self.shape}, acc={self.point.accuracy:.3f})"
+        )
 
 
-def compress_slonet_to_points(model, method: str = "auto",
-                              n_clusters: int = 16) -> dict:
+def compress_slonet_to_points(model, method: str = "auto", n_clusters: int = 16) -> dict:
     """Compress all SloNet/SloTransformer weights to PointWeights.
 
     Returns dict mapping weight name → PointWeight.
@@ -107,11 +114,14 @@ def compress_slonet_to_points(model, method: str = "auto",
         if arr.size < 16:
             # Too small to compress — store raw
             from domain.infrastructure._internal.pugqeep.point import Point as RawPoint
+
             raw_point = RawPoint(
                 identity=name,
                 function_type="raw",
-                params={"data_b64": base64.b64encode(arr.tobytes()).decode(),
-                        "dtype": str(arr.dtype)},
+                params={
+                    "data_b64": base64.b64encode(arr.tobytes()).decode(),
+                    "dtype": str(arr.dtype),
+                },
                 accuracy=1.0,
                 dtype=str(arr.dtype),
                 shape=arr.shape,
@@ -119,8 +129,7 @@ def compress_slonet_to_points(model, method: str = "auto",
             points[name] = PointWeight(raw_point, shape=arr.shape, dtype=str(arr.dtype))
             return
 
-        pw = PointWeight.from_array(arr, identity=name, method=method,
-                                    n_clusters=n_clusters)
+        pw = PointWeight.from_array(arr, identity=name, method=method, n_clusters=n_clusters)
         points[name] = pw
 
     if hasattr(model, "parameters"):

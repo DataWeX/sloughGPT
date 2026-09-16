@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import os
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from domain.shell._internal.repl import ShellREPL, _color, _COLOR_ENABLED
-
+from domain.shell._internal.repl import ShellREPL
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -42,24 +39,31 @@ def _make_repl():
     repl._ext_cmds = {}
 
     from domain.shell._internal.io import MemoryIO
+
     repl.io = MemoryIO()
 
     from domain.shell._internal.console import Console
+
     repl.console = Console(repl.io, has_readline=False)
 
-    from domain.logging import ShellLogger, LogLevel
+    from domain.logging import LogLevel, ShellLogger
+
     repl.log = ShellLogger("slo.shell.test", level=LogLevel.DEBUG)
 
     from domain.shell._internal.log_buffer import get_log_buffer
+
     repl._log_buffer = get_log_buffer()
 
     from domain.shell._internal.log_display import LineModeLogDisplay
+
     repl._log_display = LineModeLogDisplay(repl._log_buffer)
 
     from domain.shell._internal.audit import get_shell_audit_logger
+
     repl._audit = get_shell_audit_logger()
 
     from domain.shell._internal.permissions import ShellPermissions
+
     repl._perms = ShellPermissions()
 
     repl.COMMANDS = {}
@@ -71,7 +75,6 @@ def _make_repl():
 
 
 class TestExecute:
-
     def test_empty_line(self):
         repl = _make_repl()
         output, code = repl.execute("")
@@ -112,7 +115,6 @@ class TestExecute:
 
 
 class TestExpandAlias:
-
     def test_expand_alias(self):
         repl = _make_repl()
         repl._aliases = {"ll": "ls -la"}
@@ -130,7 +132,6 @@ class TestExpandAlias:
 
 
 class TestSuggestCommand:
-
     def test_suggest_similar(self):
         repl = _make_repl()
         repl.COMMANDS = {"help": None, "exit": None, "load": None}
@@ -148,7 +149,6 @@ class TestSuggestCommand:
 
 
 class TestRenderPrompt:
-
     def test_default_prompt(self):
         repl = _make_repl()
         prompt = repl._render_prompt()
@@ -165,7 +165,6 @@ class TestRenderPrompt:
 
 
 class TestFormatError:
-
     def test_format_error(self):
         repl = _make_repl()
         err = ValueError("test error")
@@ -177,12 +176,12 @@ class TestFormatError:
 
 
 class TestUpdateColorState:
-
     def test_no_color_true(self):
         repl = _make_repl()
         repl._env["NO_COLOR"] = "1"
         repl._update_color_state()
         import domain.shell._internal.repl as mod
+
         # After update, colors should be empty
         assert mod._C_CYAN == "" or mod._COLOR_ENABLED is False
 
@@ -196,7 +195,6 @@ class TestUpdateColorState:
 
 
 class TestComplete:
-
     def test_complete_first_word(self):
         repl = _make_repl()
         repl.COMMANDS = {"help": None, "exit": None}
@@ -214,7 +212,6 @@ class TestComplete:
 
 
 class TestCompleteArgsFor:
-
     def test_train_subcommands(self):
         repl = _make_repl()
         result = repl._complete_args_for_uncached("train")

@@ -1,7 +1,19 @@
 """Tests for bidirectional DAG: forward-mode AD alongside backward-mode AD."""
 
 import numpy as np
-from domain.training._internal.slonet import Tensor, cross_entropy, _layernorm, _rmsnorm, sigmoid, relu, tanh, gelu, silu, _softmax, _maxpool2d, flatten, no_grad, _transpose
+
+from domain.training._internal.slonet import (
+    Tensor,
+    _layernorm,
+    _rmsnorm,
+    _softmax,
+    _transpose,
+    cross_entropy,
+    no_grad,
+    relu,
+    sigmoid,
+    tanh,
+)
 
 
 class TestForwardGradBasic:
@@ -39,7 +51,7 @@ class TestForwardGradBasic:
 
     def test_pow(self):
         a = Tensor([2.0, 3.0], requires_grad=True)
-        y = a ** 2
+        y = a**2
         t = y.forward_grad({a.id: np.array([1.0, 1.0])})
         # dy/da = 2*a, JVP = 2*a*t_a
         assert np.allclose(t[y.id], [4.0, 6.0])
@@ -176,10 +188,8 @@ class TestDotProductConsistency:
         # Backward-mode (all inputs share same seed w=1)
         y.grad = None
         y.backward()
-        vjp = sum((inp.grad.data * tangents[inp.id]).sum()
-                  for inp in inputs if inp.id in tangents)
-        assert np.allclose(jvp.sum(), vjp, atol=1e-5), \
-            f"JVP={jvp.sum():.6f} VJP={vjp:.6f}"
+        vjp = sum((inp.grad.data * tangents[inp.id]).sum() for inp in inputs if inp.id in tangents)
+        assert np.allclose(jvp.sum(), vjp, atol=1e-5), f"JVP={jvp.sum():.6f} VJP={vjp:.6f}"
 
     def test_add_dot(self):
         a = Tensor([1.0, 2.0], requires_grad=True)
@@ -217,8 +227,9 @@ class TestDotProductConsistency:
         targets = Tensor(np.array([2]))
         probs = _softmax(logits)
         loss = cross_entropy(probs, targets)
-        self._check(y=loss, inputs=[logits],
-                    tangents={logits.id: np.random.randn(1, 3).astype(np.float32)})
+        self._check(
+            y=loss, inputs=[logits], tangents={logits.id: np.random.randn(1, 3).astype(np.float32)}
+        )
 
     def test_chain_dot(self):
         A = Tensor(np.random.randn(4, 4).astype(np.float32), requires_grad=True)
@@ -278,9 +289,6 @@ class TestConsumersGraph:
         t = y.forward_grad({a.id: np.array([1.0, 1.0])})
         assert np.allclose(t[s.id], np.array([3.0, 4.0]))
         assert np.allclose(t[y.id], np.array(7.0))
-
-
-
 
 
 class TestBackwardRegression:

@@ -17,12 +17,11 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from typing import Dict, List
 
 
-def _tokenize(text: str) -> List[str]:
+def _tokenize(text: str) -> list[str]:
     """Simple whitespace + lowercasing tokenizer."""
-    return [w for w in re.split(r'\s+', text.lower()) if w]
+    return [w for w in re.split(r"\s+", text.lower()) if w]
 
 
 def _length_score(user_msg: str, assistant_msg: str) -> float:
@@ -52,12 +51,12 @@ def _repetition_score(assistant_msg: str) -> float:
     if len(words) < 4:
         return 0.5
 
-    bigrams = list(zip(words, words[1:]))
+    bigrams = list(zip(words, words[1:], strict=False))
     bigram_counts = Counter(bigrams)
     most_common_bigram_count = bigram_counts.most_common(1)[0][1] if bigram_counts else 1
     bigram_repetition = most_common_bigram_count / max(1, len(bigrams))
 
-    trigrams = list(zip(words, words[1:], words[2:]))
+    trigrams = list(zip(words, words[1:], words[2:], strict=False))
     if trigrams:
         trigram_counts = Counter(trigrams)
         most_common_trigram_count = trigram_counts.most_common(1)[0][1]
@@ -92,20 +91,120 @@ def _coherence_score(user_msg: str, assistant_msg: str) -> float:
     a_words = set(_tokenize(assistant_msg))
 
     stop_words = {
-        'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-        'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-        'should', 'may', 'might', 'shall', 'can', 'to', 'of', 'in', 'for',
-        'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through', 'during',
-        'before', 'after', 'above', 'below', 'between', 'under', 'again',
-        'and', 'but', 'or', 'nor', 'not', 'so', 'yet', 'both', 'either',
-        'neither', 'each', 'every', 'all', 'any', 'few', 'more', 'most',
-        'other', 'some', 'such', 'no', 'only', 'own', 'same', 'than',
-        'too', 'very', 'just', 'because', 'if', 'when', 'where', 'how',
-        'what', 'which', 'who', 'whom', 'this', 'that', 'these', 'those',
-        'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves',
-        'you', 'your', 'yours', 'yourself', 'yourselves', 'he', 'him',
-        'his', 'himself', 'she', 'her', 'hers', 'herself', 'it', 'its',
-        'itself', 'they', 'them', 'their', 'theirs', 'themselves',
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "shall",
+        "can",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "as",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "between",
+        "under",
+        "again",
+        "and",
+        "but",
+        "or",
+        "nor",
+        "not",
+        "so",
+        "yet",
+        "both",
+        "either",
+        "neither",
+        "each",
+        "every",
+        "all",
+        "any",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "no",
+        "only",
+        "own",
+        "same",
+        "than",
+        "too",
+        "very",
+        "just",
+        "because",
+        "if",
+        "when",
+        "where",
+        "how",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "this",
+        "that",
+        "these",
+        "those",
+        "i",
+        "me",
+        "my",
+        "myself",
+        "we",
+        "our",
+        "ours",
+        "ourselves",
+        "you",
+        "your",
+        "yours",
+        "yourself",
+        "yourselves",
+        "he",
+        "him",
+        "his",
+        "himself",
+        "she",
+        "her",
+        "hers",
+        "herself",
+        "it",
+        "its",
+        "itself",
+        "they",
+        "them",
+        "their",
+        "theirs",
+        "themselves",
     }
     u_content = u_words - stop_words
     a_content = a_words - stop_words
@@ -125,7 +224,7 @@ def _coherence_score(user_msg: str, assistant_msg: str) -> float:
     else:
         ratio_score = 0.2
 
-    question_words = {'what', 'how', 'why', 'when', 'where', 'who', 'which'}
+    question_words = {"what", "how", "why", "when", "where", "who", "which"}
     has_question = bool(u_words & question_words)
 
     return min(1.0, overlap * 2 + ratio_score * 0.3 + (0.1 if has_question else 0))
@@ -138,7 +237,7 @@ def _language_quality_score(assistant_msg: str) -> float:
 
     scores = []
 
-    sents = re.findall(r'[.!?]+', assistant_msg)
+    sents = re.findall(r"[.!?]+", assistant_msg)
     if len(sents) >= 3:
         scores.append(1.0)
     elif len(sents) >= 1:
@@ -146,7 +245,7 @@ def _language_quality_score(assistant_msg: str) -> float:
     else:
         scores.append(0.3)
 
-    punct_chars = set(c for c in assistant_msg if c in '.,!?;:-')
+    punct_chars = {c for c in assistant_msg if c in ".,!?;:-"}
     if len(punct_chars) >= 3:
         scores.append(1.0)
     elif len(punct_chars) >= 1:
@@ -192,19 +291,19 @@ def _language_quality_score(assistant_msg: str) -> float:
 # Toxicity detection patterns (regex-based, no external deps)
 _TOXICITY_PATTERNS = [
     # PII patterns
-    r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b',  # Phone numbers
-    r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # Email addresses
-    r'\b\d{3}[-]?\d{2}[-]?\d{4}\b',  # SSN-like patterns
-    r'\b\d{16}\b',  # Credit card-like numbers
+    r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b",  # Phone numbers
+    r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",  # Email addresses
+    r"\b\d{3}[-]?\d{2}[-]?\d{4}\b",  # SSN-like patterns
+    r"\b\d{16}\b",  # Credit card-like numbers
     # Jailbreak patterns
-    r'ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?)',
-    r'you\s+are\s+now\s+(DAN|a\s+hacker|unrestricted)',
-    r'pretend\s+(you\s+are|to\s+be)\s+(evil|unrestricted|without\s+restrictions)',
-    r'bypass\s+(all\s+)?(safety|content|security)\s+(filters?|rules?|guidelines?)',
-    r'do\s+not\s+(follow|obey)\s+(any\s+)?(rules?|guidelines?|safety)',
+    r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?)",
+    r"you\s+are\s+now\s+(DAN|a\s+hacker|unrestricted)",
+    r"pretend\s+(you\s+are|to\s+be)\s+(evil|unrestricted|without\s+restrictions)",
+    r"bypass\s+(all\s+)?(safety|content|security)\s+(filters?|rules?|guidelines?)",
+    r"do\s+not\s+(follow|obey)\s+(any\s+)?(rules?|guidelines?|safety)",
     # Harmful content indicators
-    r'\b(how\s+to\s+(make|build|create)\s+(a\s+)?(bomb|weapon|drug))\b',
-    r'\b(kill|murder|assassinate)\s+(yourself|someone|people)\b',
+    r"\b(how\s+to\s+(make|build|create)\s+(a\s+)?(bomb|weapon|drug))\b",
+    r"\b(kill|murder|assassinate)\s+(yourself|someone|people)\b",
 ]
 
 
@@ -255,13 +354,13 @@ def score_pair(user_msg: str, assistant_msg: str) -> float:
     language = _language_quality_score(assistant_msg)
     safety = _toxicity_score(user_msg + " " + assistant_msg)
 
-    combined = (length * 0.2 + repetition * 0.2 + coherence * 0.2 + language * 0.2 + safety * 0.2)
+    combined = length * 0.2 + repetition * 0.2 + coherence * 0.2 + language * 0.2 + safety * 0.2
 
     score = round(combined * 5, 1)
     return max(0.0, min(5.0, score))
 
 
-def score_batch(pairs: List[Dict[str, str]]) -> List[float]:
+def score_batch(pairs: list[dict[str, str]]) -> list[float]:
     """
     Score a batch of training pairs.
 
@@ -271,10 +370,7 @@ def score_batch(pairs: List[Dict[str, str]]) -> List[float]:
     Returns:
         List of quality scores (0-5 scale), one per pair.
     """
-    return [
-        score_pair(p.get("user_msg", ""), p.get("assistant_msg", ""))
-        for p in pairs
-    ]
+    return [score_pair(p.get("user_msg", ""), p.get("assistant_msg", "")) for p in pairs]
 
 
 def score_text_chunk(text: str) -> float:
@@ -303,12 +399,12 @@ def score_text_chunk(text: str) -> float:
     else:
         diversity = 0.5
 
-    combined = (repetition * 0.4 + language * 0.3 + diversity * 0.3)
+    combined = repetition * 0.4 + language * 0.3 + diversity * 0.3
     score = round(combined * 5, 1)
     return max(0.0, min(5.0, score))
 
 
-def compute_data_quality(text: str, sample_size: int = 20) -> Dict[str, float]:
+def compute_data_quality(text: str, sample_size: int = 20) -> dict[str, float]:
     """Compute aggregate quality metrics for a training text corpus.
 
     Samples chunks from the text and computes average quality scores,
@@ -323,7 +419,13 @@ def compute_data_quality(text: str, sample_size: int = 20) -> Dict[str, float]:
         on a 0-5 scale.
     """
     if not text or len(text) < 100:
-        return {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0, "toxicity_rate": 0.0}
+        return {
+            "avg_quality": 0.0,
+            "repetition_rate": 0.0,
+            "diversity": 0.0,
+            "language_quality": 0.0,
+            "toxicity_rate": 0.0,
+        }
 
     chunk_size = min(500, len(text) // max(1, sample_size))
     if chunk_size < 50:
@@ -339,7 +441,13 @@ def compute_data_quality(text: str, sample_size: int = 20) -> Dict[str, float]:
             break
 
     if not chunks:
-        return {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0, "toxicity_rate": 0.0}
+        return {
+            "avg_quality": 0.0,
+            "repetition_rate": 0.0,
+            "diversity": 0.0,
+            "language_quality": 0.0,
+            "toxicity_rate": 0.0,
+        }
 
     qualities = []
     repetitions = []
@@ -354,7 +462,7 @@ def compute_data_quality(text: str, sample_size: int = 20) -> Dict[str, float]:
         div = min(1.0, (len(set(words)) / max(1, len(words))) * 1.5) if len(words) > 10 else 0.5
         tox = _toxicity_score(chunk)
 
-        combined = (rep * 0.35 + lang * 0.25 + div * 0.25 + tox * 0.15)
+        combined = rep * 0.35 + lang * 0.25 + div * 0.25 + tox * 0.15
         qualities.append(round(combined * 5, 1))
         repetitions.append(rep)
         diversities.append(div)

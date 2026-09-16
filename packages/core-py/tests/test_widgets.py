@@ -8,13 +8,27 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from domain.shell._internal.widgets import (
-    App, Widget, Container, Panel, Text, Button, Input,
-    List, Menu, Tabs, Dialog, Separator, ProgressBar,
-    Spinner, Box, EventBus, KeyEvent, ResizeEvent, FocusEvent,
+    App,
+    Box,
+    Button,
+    Container,
+    Dialog,
+    EventBus,
+    Input,
+    KeyEvent,
+    List,
+    Menu,
+    Panel,
+    ProgressBar,
+    Separator,
+    Spinner,
+    Tabs,
+    Text,
+    Widget,
 )
 
-
 # ── Helpers ───────────────────────────────────────────────────────────
+
 
 def render_widget(w: Widget, rows: int = 10, cols: int = 40) -> list[str]:
     """Compute layout and render a widget, returning lines."""
@@ -39,6 +53,7 @@ def assert_all_same_width(lines: list[str]) -> None:
 
 # ── Box characters ────────────────────────────────────────────────────
 
+
 def test_box_characters_are_single_width():
     assert len(Box.TL) == 1
     assert len(Box.TR) == 1
@@ -49,6 +64,7 @@ def test_box_characters_are_single_width():
 
 
 # ── Widget base ───────────────────────────────────────────────────────
+
 
 def test_widget_base_compute_and_render():
     w = Widget(name="test")
@@ -98,6 +114,7 @@ def test_widget_truncate():
 
 
 # ── Text ──────────────────────────────────────────────────────────────
+
 
 def test_text_simple():
     t = Text(content="Hello")
@@ -152,6 +169,7 @@ def test_text_longer_than_width():
 
 # ── Button ────────────────────────────────────────────────────────────
 
+
 def test_button_default():
     b = Button(label="OK")
     lines = render_widget(b, 1, 20)
@@ -176,6 +194,7 @@ def test_button_enter():
 
 
 # ── Input ─────────────────────────────────────────────────────────────
+
 
 def test_input_default():
     inp = Input(prompt="Name:")
@@ -270,6 +289,7 @@ def test_input_long_value_scroll():
 
 # ── Container ─────────────────────────────────────────────────────────
 
+
 def test_container_vertical():
     c = Container(direction="vertical")
     t1 = Text(content="A")
@@ -320,6 +340,7 @@ def test_container_hidden_child():
 
 
 # ── Panel ─────────────────────────────────────────────────────────────
+
 
 def test_panel_border():
     p = Panel(title="Hi", child=Text(content="X"), border=True)
@@ -381,6 +402,7 @@ def test_panel_with_padding():
 
 # ── List ──────────────────────────────────────────────────────────────
 
+
 def test_list_basic():
     li = List(items=["a", "b", "c"])
     lines = render_widget(li, 5, 20)
@@ -423,6 +445,7 @@ def test_list_page_up_down():
 
 # ── Menu ──────────────────────────────────────────────────────────────
 
+
 def test_menu_closed():
     m = Menu(title="File", options=["New", "Open", "Save"])
     lines = render_widget(m, 1, 20)
@@ -442,7 +465,7 @@ def test_menu_select():
     m = Menu(title="File", options=["New", "Open"], on_select=lambda v: selected.append(v))
     m.compute(5, 20)
     m.handle(KeyEvent(key="enter"))  # open
-    m.handle(KeyEvent(key="down"))   # move to Open
+    m.handle(KeyEvent(key="down"))  # move to Open
     m.handle(KeyEvent(key="enter"))  # select
     assert selected == ["Open"]
 
@@ -457,6 +480,7 @@ def test_menu_escape():
 
 
 # ── Tabs ──────────────────────────────────────────────────────────────
+
 
 def test_tabs_basic():
     t = Tabs(tabs=[("A", Text(content="Content A")), ("B", Text(content="Content B"))])
@@ -476,6 +500,7 @@ def test_tabs_switch():
 
 
 # ── Dialog ────────────────────────────────────────────────────────────
+
 
 def test_dialog_closed():
     d = Dialog(title="Confirm", child=Text(content="Sure?"))
@@ -505,6 +530,7 @@ def test_dialog_close():
 
 # ── Separator ─────────────────────────────────────────────────────────
 
+
 def test_separator_horizontal():
     s = Separator(direction="horizontal")
     lines = render_widget(s, 1, 10)
@@ -520,6 +546,7 @@ def test_separator_vertical():
 
 
 # ── ProgressBar ───────────────────────────────────────────────────────
+
 
 def test_progress_bar_zero():
     pb = ProgressBar(value=0.0, label="Test")
@@ -543,6 +570,7 @@ def test_progress_bar_reactive():
 
 # ── Spinner ───────────────────────────────────────────────────────────
 
+
 def test_spinner_tick():
     sp = Spinner(text="Loading")
     lines = render_widget(sp, 1, 30)
@@ -553,6 +581,7 @@ def test_spinner_tick():
 
 
 # ── EventBus ──────────────────────────────────────────────────────────
+
 
 def test_event_bus_subscribe_publish():
     bus = EventBus()
@@ -566,7 +595,8 @@ def test_event_bus_subscribe_publish():
 def test_event_bus_unsubscribe():
     bus = EventBus()
     received = []
-    cb = lambda e: received.append(e)
+    def cb(e):
+        return received.append(e)
     bus.subscribe(KeyEvent, cb)
     bus.unsubscribe(KeyEvent, cb)
     bus.publish(KeyEvent(key="x"))
@@ -574,6 +604,7 @@ def test_event_bus_unsubscribe():
 
 
 # ── Focus management ──────────────────────────────────────────────────
+
 
 def test_focus_blur():
     w = Widget()
@@ -632,6 +663,7 @@ def test_app_focus_prev():
 
 # ── Edge cases: zero size ─────────────────────────────────────────────
 
+
 def test_text_zero_size():
     t = Text(content="Hi")
     lines = render_widget(t, 0, 0)
@@ -658,6 +690,7 @@ def test_panel_zero_size():
 
 # ── Edge cases: very small sizes ──────────────────────────────────────
 
+
 def test_panel_minimum_size():
     p = Panel(title="T", child=Text(content="X"), border=True)
     lines = render_widget(p, 3, 5)
@@ -679,6 +712,7 @@ def test_list_one_item():
 
 # ── Edge cases: very long content ─────────────────────────────────────
 
+
 def test_text_very_long():
     t = Text(content="x" * 200)
     lines = render_widget(t, 1, 10)
@@ -692,6 +726,7 @@ def test_button_very_long_label():
 
 
 # ── Nested layout ─────────────────────────────────────────────────────
+
 
 def test_nested_containers():
     outer = Container(direction="vertical")
@@ -732,6 +767,7 @@ def test_deeply_nested():
 
 
 # ── All lines same width ──────────────────────────────────────────────
+
 
 def test_all_widgets_same_width():
     """Every widget should produce lines of consistent width."""

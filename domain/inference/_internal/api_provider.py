@@ -30,7 +30,8 @@ Usage:
 
 import json
 import logging
-from typing import Any, AsyncIterator, Dict, List
+from collections.abc import AsyncIterator
+from typing import Any
 
 import httpx
 
@@ -80,7 +81,7 @@ class ApiProvider:
         )
 
     @property
-    def metadata(self) -> Dict[str, Any]:
+    def metadata(self) -> dict[str, Any]:
         return {
             "model_id": self.model_name,
             "provider": "api",
@@ -90,7 +91,7 @@ class ApiProvider:
 
     async def chat(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         max_tokens: int = 512,
         temperature: float = 0.7,
         top_p: float = 0.9,
@@ -129,7 +130,9 @@ class ApiProvider:
 
                 return data["choices"][0]["message"]["content"]
         except httpx.HTTPStatusError as e:
-            logger.error("API chat failed with status %d: %s", e.response.status_code, e.response.text)
+            logger.error(
+                "API chat failed with status %d: %s", e.response.status_code, e.response.text
+            )
             raise
         except Exception as e:
             logger.error("API chat failed: %s", e)
@@ -137,7 +140,7 @@ class ApiProvider:
 
     async def chat_stream(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         max_tokens: int = 512,
         temperature: float = 0.7,
         top_p: float = 0.9,
@@ -197,17 +200,19 @@ class ApiProvider:
                                 continue
 
         except httpx.HTTPStatusError as e:
-            logger.error("API stream failed with status %d: %s", e.response.status_code, e.response.text)
+            logger.error(
+                "API stream failed with status %d: %s", e.response.status_code, e.response.text
+            )
             raise
         except Exception as e:
             logger.error("API stream failed: %s", e)
             raise
 
-    def embed(self, text: str) -> List[float]:
+    def embed(self, text: str) -> list[float]:
         """Embedding not supported by this provider."""
         return []
 
-    def test_connection(self) -> Dict[str, Any]:
+    def test_connection(self) -> dict[str, Any]:
         """Test connection to the API endpoint."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",

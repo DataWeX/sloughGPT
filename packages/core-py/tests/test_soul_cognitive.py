@@ -2,24 +2,22 @@
 RelationshipMemory, CognitiveArchitecture, NeuralPlasticityEngine,
 MetaLearningEngine, DreamProcessingEngine."""
 
-import pytest
 from dataclasses import dataclass
-from domain.soul._internal.cognitive import (
-    SentimentAnalyzer,
-    EmotionalResponseGenerator,
-    RelationshipMemory,
-    SessionMemory,
-    EpisodicMemoryStore,
-    CognitiveArchitecture,
-    NeuralPlasticityEngine,
-    MetaLearningEngine,
-    DreamProcessingEngine,
-)
 
+from domain.soul._internal.cognitive import (
+    CognitiveArchitecture,
+    DreamProcessingEngine,
+    EmotionalResponseGenerator,
+    MetaLearningEngine,
+    NeuralPlasticityEngine,
+    RelationshipMemory,
+    SentimentAnalyzer,
+)
 
 # ---------------------------------------------------------------------------
 # Lightweight stand-in for Experience (foundation module may not exist)
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class _Experience:
@@ -31,6 +29,7 @@ class _Experience:
 # ===================================================================
 # SentimentAnalyzer
 # ===================================================================
+
 
 class TestSentimentAnalyzer:
     def setup_method(self):
@@ -107,6 +106,7 @@ class TestSentimentAnalyzer:
 # EmotionalResponseGenerator
 # ===================================================================
 
+
 class TestEmotionalResponseGenerator:
     def setup_method(self):
         self.gen = EmotionalResponseGenerator()
@@ -156,6 +156,7 @@ class TestEmotionalResponseGenerator:
 # ===================================================================
 # RelationshipMemory
 # ===================================================================
+
 
 class TestRelationshipMemory:
     def setup_method(self):
@@ -252,6 +253,7 @@ class TestRelationshipMemory:
 # CognitiveArchitecture
 # ===================================================================
 
+
 class TestCognitiveArchitecture:
     def setup_method(self):
         self.arch = CognitiveArchitecture(working_capacity=5)
@@ -311,6 +313,7 @@ class TestCognitiveArchitecture:
 # NeuralPlasticityEngine
 # ===================================================================
 
+
 class TestNeuralPlasticityEngine:
     def setup_method(self):
         self.npe = NeuralPlasticityEngine(learning_rate=0.1)
@@ -364,6 +367,7 @@ class TestNeuralPlasticityEngine:
 # MetaLearningEngine
 # ===================================================================
 
+
 class TestMetaLearningEngine:
     def setup_method(self):
         self.mle = MetaLearningEngine()
@@ -405,6 +409,7 @@ class TestMetaLearningEngine:
 # ===================================================================
 # DreamProcessingEngine
 # ===================================================================
+
 
 class TestDreamProcessingEngine:
     def setup_method(self):

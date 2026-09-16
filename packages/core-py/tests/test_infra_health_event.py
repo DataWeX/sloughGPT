@@ -1,29 +1,27 @@
 """Tests for domain.infrastructure.health_flow — Severity, Diagnosis, HealthFlowResult; domain.infrastructure._internal.event_bus — EventPriority, Event, Subscription."""
 
-import asyncio
-import threading
 import time
 
+from domain.infrastructure._internal.event_bus import (
+    Event,
+    EventBus,
+    EventPriority,
+    Subscription,
+    get_event_bus,
+    reset_event_bus,
+    set_event_bus,
+)
 from domain.infrastructure._internal.health_flow import (
-    Severity,
     Diagnosis,
     HealthFlowResult,
+    Severity,
     _check_errors,
     _check_latency,
-    _check_throughput,
     _check_model,
-    _check_uptime,
     _check_resources,
+    _check_throughput,
+    _check_uptime,
     run_health_flow,
-)
-from domain.infrastructure._internal.event_bus import (
-    EventPriority,
-    Event,
-    Subscription,
-    EventBus,
-    get_event_bus,
-    set_event_bus,
-    reset_event_bus,
 )
 
 
@@ -61,6 +59,7 @@ class TestSeverity:
 
     def test_severity_invalid_value(self):
         import pytest
+
         with pytest.raises(ValueError):
             Severity("nonexistent")
 
@@ -92,7 +91,9 @@ class TestDiagnosis:
         assert d.detail == ""
 
     def test_detail_override(self):
-        d = Diagnosis(check="c", severity=Severity.WARN, score=70.0, message="msg", detail="extra info")
+        d = Diagnosis(
+            check="c", severity=Severity.WARN, score=70.0, message="msg", detail="extra info"
+        )
         assert d.detail == "extra info"
 
     def test_zero_score(self):
@@ -155,7 +156,9 @@ class TestHealthFlowResult:
         assert r.diagnoses[0].check == "errors"
 
     def test_model_loaded(self):
-        r = HealthFlowResult(score=100, status="healthy", summary="ok", model_loaded=True, model_type="soul")
+        r = HealthFlowResult(
+            score=100, status="healthy", summary="ok", model_loaded=True, model_type="soul"
+        )
         assert r.model_loaded is True
         assert r.model_type == "soul"
 
@@ -178,7 +181,10 @@ class TestHealthFlowResult:
         assert r.summary == ""
 
     def test_many_diagnoses(self):
-        diags = [Diagnosis(check=str(i), severity=Severity.OK, score=100.0, message=str(i)) for i in range(20)]
+        diags = [
+            Diagnosis(check=str(i), severity=Severity.OK, score=100.0, message=str(i))
+            for i in range(20)
+        ]
         r = HealthFlowResult(score=80, status="healthy", summary="ok", diagnoses=diags)
         assert len(r.diagnoses) == 20
 
@@ -518,11 +524,15 @@ class TestCheckResources:
 class TestRunHealthFlow:
     def test_healthy_system(self):
         r = run_health_flow(
-            req_count=1000, err_count=5,
-            avg_latency_ms=200, tokens_per_sec=40,
+            req_count=1000,
+            err_count=5,
+            avg_latency_ms=200,
+            tokens_per_sec=40,
             uptime_seconds=7200,
-            model_loaded=True, model_type="soul",
-            cpu_percent=30, memory_percent=50,
+            model_loaded=True,
+            model_type="soul",
+            cpu_percent=30,
+            memory_percent=50,
         )
         assert r.status == "healthy"
         assert r.score >= 80
@@ -532,119 +542,158 @@ class TestRunHealthFlow:
 
     def test_degraded_system(self):
         r = run_health_flow(
-            req_count=1000, err_count=200,
-            avg_latency_ms=1500, tokens_per_sec=5,
+            req_count=1000,
+            err_count=200,
+            avg_latency_ms=1500,
+            tokens_per_sec=5,
             uptime_seconds=30,
             model_loaded=False,
-            cpu_percent=90, memory_percent=95,
+            cpu_percent=90,
+            memory_percent=95,
         )
         assert r.status in ("degraded", "unhealthy")
         assert len(r.diagnoses) == 6
 
     def test_unhealthy_system(self):
         r = run_health_flow(
-            req_count=100, err_count=50,
-            avg_latency_ms=3000, tokens_per_sec=1,
+            req_count=100,
+            err_count=50,
+            avg_latency_ms=3000,
+            tokens_per_sec=1,
             uptime_seconds=5,
             model_loaded=False,
-            cpu_percent=99, memory_percent=99,
+            cpu_percent=99,
+            memory_percent=99,
         )
         assert r.status == "unhealthy"
         assert r.score < 50
 
     def test_model_type_in_summary(self):
         r = run_health_flow(
-            req_count=1000, err_count=0,
-            avg_latency_ms=100, tokens_per_sec=50,
+            req_count=1000,
+            err_count=0,
+            avg_latency_ms=100,
+            tokens_per_sec=50,
             uptime_seconds=3600,
-            model_loaded=True, model_type="llama",
+            model_loaded=True,
+            model_type="llama",
         )
         assert "llama" in r.summary
 
     def test_summary_picks_worst(self):
         r = run_health_flow(
-            req_count=1000, err_count=500,
-            avg_latency_ms=200, tokens_per_sec=50,
+            req_count=1000,
+            err_count=500,
+            avg_latency_ms=200,
+            tokens_per_sec=50,
             uptime_seconds=7200,
-            model_loaded=True, model_type="x",
-            cpu_percent=20, memory_percent=30,
+            model_loaded=True,
+            model_type="x",
+            cpu_percent=20,
+            memory_percent=30,
         )
         assert "errors" in r.summary.lower() or "failing" in r.summary.lower()
 
     def test_score_is_integer(self):
         r = run_health_flow(
-            req_count=100, err_count=5,
-            avg_latency_ms=300, tokens_per_sec=20,
+            req_count=100,
+            err_count=5,
+            avg_latency_ms=300,
+            tokens_per_sec=20,
             uptime_seconds=600,
-            model_loaded=True, model_type="",
+            model_loaded=True,
+            model_type="",
         )
         assert isinstance(r.score, int)
 
     def test_all_diagnoses_present(self):
         r = run_health_flow(
-            req_count=100, err_count=10,
-            avg_latency_ms=500, tokens_per_sec=15,
+            req_count=100,
+            err_count=10,
+            avg_latency_ms=500,
+            tokens_per_sec=15,
             uptime_seconds=100,
-            model_loaded=True, model_type="m",
-            cpu_percent=60, memory_percent=70,
+            model_loaded=True,
+            model_type="m",
+            cpu_percent=60,
+            memory_percent=70,
         )
         checks = {d.check for d in r.diagnoses}
         assert checks == {"errors", "latency", "throughput", "model", "uptime", "resources"}
 
     def test_score_range(self):
         r = run_health_flow(
-            req_count=100, err_count=10,
-            avg_latency_ms=500, tokens_per_sec=20,
+            req_count=100,
+            err_count=10,
+            avg_latency_ms=500,
+            tokens_per_sec=20,
             uptime_seconds=600,
-            model_loaded=True, model_type="",
-            cpu_percent=50, memory_percent=60,
+            model_loaded=True,
+            model_type="",
+            cpu_percent=50,
+            memory_percent=60,
         )
         assert 0 <= r.score <= 100
 
     def test_defaults_no_resources(self):
         r = run_health_flow(
-            req_count=100, err_count=0,
-            avg_latency_ms=100, tokens_per_sec=30,
+            req_count=100,
+            err_count=0,
+            avg_latency_ms=100,
+            tokens_per_sec=30,
             uptime_seconds=3600,
-            model_loaded=True, model_type="x",
+            model_loaded=True,
+            model_type="x",
         )
         assert r.status == "healthy"
 
     def test_worst_severity_summary(self):
         r = run_health_flow(
-            req_count=100, err_count=0,
-            avg_latency_ms=3000, tokens_per_sec=1,
+            req_count=100,
+            err_count=0,
+            avg_latency_ms=3000,
+            tokens_per_sec=1,
             uptime_seconds=5,
             model_loaded=False,
-            cpu_percent=99, memory_percent=99,
+            cpu_percent=99,
+            memory_percent=99,
         )
         assert r.status == "unhealthy"
 
     def test_diagnoses_are_diagnosis_type(self):
         r = run_health_flow(
-            req_count=50, err_count=1,
-            avg_latency_ms=200, tokens_per_sec=25,
+            req_count=50,
+            err_count=1,
+            avg_latency_ms=200,
+            tokens_per_sec=25,
             uptime_seconds=120,
-            model_loaded=True, model_type="",
+            model_loaded=True,
+            model_type="",
         )
         for d in r.diagnoses:
             assert isinstance(d, Diagnosis)
 
     def test_perfect_system(self):
         r = run_health_flow(
-            req_count=10000, err_count=0,
-            avg_latency_ms=50, tokens_per_sec=100,
+            req_count=10000,
+            err_count=0,
+            avg_latency_ms=50,
+            tokens_per_sec=100,
             uptime_seconds=86400,
-            model_loaded=True, model_type="soul-xl",
-            cpu_percent=10, memory_percent=20,
+            model_loaded=True,
+            model_type="soul-xl",
+            cpu_percent=10,
+            memory_percent=20,
         )
         assert r.status == "healthy"
         assert r.score >= 90
 
     def test_all_zeros(self):
         r = run_health_flow(
-            req_count=0, err_count=0,
-            avg_latency_ms=0, tokens_per_sec=0,
+            req_count=0,
+            err_count=0,
+            avg_latency_ms=0,
+            tokens_per_sec=0,
             uptime_seconds=0,
             model_loaded=False,
         )
@@ -662,7 +711,12 @@ class TestEventPriority:
         assert EventPriority.CRITICAL.value == 3
 
     def test_ordering(self):
-        assert EventPriority.MONITOR < EventPriority.NORMAL < EventPriority.HIGH < EventPriority.CRITICAL
+        assert (
+            EventPriority.MONITOR
+            < EventPriority.NORMAL
+            < EventPriority.HIGH
+            < EventPriority.CRITICAL
+        )
 
     def test_is_int_enum(self):
         assert isinstance(EventPriority.NORMAL, int)
@@ -743,6 +797,7 @@ class TestSubscription:
     def test_handler_stored(self):
         def my_handler():
             pass
+
         s = Subscription(handler=my_handler)
         assert s.handler is my_handler
 
@@ -782,7 +837,10 @@ class TestEventBus:
 
     def test_off(self):
         bus = EventBus()
-        handler = lambda n, d: None
+
+        def handler(n, d):
+            return None
+
         bus.on("x", handler)
         assert bus.off("x", handler) is True
         assert bus.off("x", handler) is False
@@ -856,7 +914,7 @@ class TestEventBus:
 
     def test_history_max_limit(self):
         bus = EventBus(max_history=3)
-        for i in range(5):
+        for _i in range(5):
             bus.emit_sync("x")
         assert len(bus.history("x")) == 3
 
@@ -864,7 +922,7 @@ class TestEventBus:
         bus = EventBus()
         try:
             bus.on("x", "not_callable")
-            assert False, "Should have raised TypeError"
+            raise AssertionError("Should have raised TypeError")
         except TypeError:
             pass
 
@@ -929,7 +987,10 @@ class TestEventBus:
 
     def test_off_wildcard(self):
         bus = EventBus()
-        handler = lambda n, d: None
+
+        def handler(n, d):
+            return None
+
         bus.on("*", handler)
         assert bus.off("*", handler) is True
 

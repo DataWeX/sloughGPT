@@ -7,19 +7,17 @@ import os
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from domain.feedback._internal.training import (
-    TrainingExample,
     DPOPair,
     FeedbackTrainer,
+    TrainingExample,
     create_training_pipeline,
 )
-
 
 # ---------------------------------------------------------------------------
 # TrainingExample
 # ---------------------------------------------------------------------------
+
 
 class TestTrainingExample:
     def test_basic_fields(self):
@@ -107,6 +105,7 @@ class TestTrainingExample:
 # DPOPair
 # ---------------------------------------------------------------------------
 
+
 class TestDPOPair:
     def test_basic_fields(self):
         dp = DPOPair(chosen="good answer", rejected="bad answer", prompt="question")
@@ -173,6 +172,7 @@ class TestDPOPair:
 # create_training_pipeline factory
 # ---------------------------------------------------------------------------
 
+
 class TestCreateTrainingPipeline:
     def test_returns_feedback_trainer(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -188,6 +188,7 @@ class TestCreateTrainingPipeline:
 # ---------------------------------------------------------------------------
 # FeedbackTrainer — initialization
 # ---------------------------------------------------------------------------
+
 
 class TestFeedbackTrainerInit:
     def test_creates_db(self):
@@ -219,12 +220,14 @@ class TestFeedbackTrainerInit:
         with tempfile.TemporaryDirectory() as tmpdir:
             trainer = FeedbackTrainer(db_path=os.path.join(tmpdir, "fb.db"))
             from mogdb import MogDB
+
             assert isinstance(trainer._db, MogDB)
 
 
 # ---------------------------------------------------------------------------
 # FeedbackTrainer — empty database operations
 # ---------------------------------------------------------------------------
+
 
 class TestFeedbackTrainerEmpty:
     def test_get_training_examples_empty(self):
@@ -302,74 +305,90 @@ def _seed_data(trainer: FeedbackTrainer, conv_id: str = "conv1"):
     prefix = f"s{_seed_counter}"
     msg_id = f"{prefix}_msg_user"
     assistant_msg_id = f"{prefix}_msg_asst"
-    trainer._messages.insert_one({
-        "_id": msg_id,
-        "id": msg_id,
-        "role": "user",
-        "content": "What is 2+2?",
-        "conversation_id": conv_id,
-        "created_at": "2024-01-01T00:00:00Z",
-    })
-    trainer._messages.insert_one({
-        "_id": assistant_msg_id,
-        "id": assistant_msg_id,
-        "role": "assistant",
-        "content": "4",
-        "conversation_id": conv_id,
-        "created_at": "2024-01-01T00:00:01Z",
-    })
-    trainer._feedback.insert_one({
-        "_id": f"{prefix}_fb",
-        "message_id": assistant_msg_id,
-        "rating": "thumbs_up",
-        "quality_score": 0.95,
-        "created_at": "2024-01-01T00:00:02Z",
-    })
+    trainer._messages.insert_one(
+        {
+            "_id": msg_id,
+            "id": msg_id,
+            "role": "user",
+            "content": "What is 2+2?",
+            "conversation_id": conv_id,
+            "created_at": "2024-01-01T00:00:00Z",
+        }
+    )
+    trainer._messages.insert_one(
+        {
+            "_id": assistant_msg_id,
+            "id": assistant_msg_id,
+            "role": "assistant",
+            "content": "4",
+            "conversation_id": conv_id,
+            "created_at": "2024-01-01T00:00:01Z",
+        }
+    )
+    trainer._feedback.insert_one(
+        {
+            "_id": f"{prefix}_fb",
+            "message_id": assistant_msg_id,
+            "rating": "thumbs_up",
+            "quality_score": 0.95,
+            "created_at": "2024-01-01T00:00:02Z",
+        }
+    )
 
 
 def _seed_dpo_pair(trainer: FeedbackTrainer, conv_id: str = "conv_dpo"):
     """Insert a conversation with both thumbs_up and thumbs_down for DPO."""
     user_id = "msg_u1"
-    trainer._messages.insert_one({
-        "_id": user_id,
-        "id": user_id,
-        "role": "user",
-        "content": "Explain X",
-        "conversation_id": conv_id,
-        "created_at": "2024-01-01T00:00:00Z",
-    })
+    trainer._messages.insert_one(
+        {
+            "_id": user_id,
+            "id": user_id,
+            "role": "user",
+            "content": "Explain X",
+            "conversation_id": conv_id,
+            "created_at": "2024-01-01T00:00:00Z",
+        }
+    )
     chosen_id = "msg_c1"
-    trainer._messages.insert_one({
-        "_id": chosen_id,
-        "id": chosen_id,
-        "role": "assistant",
-        "content": "Good explanation",
-        "conversation_id": conv_id,
-        "created_at": "2024-01-01T00:00:01Z",
-    })
-    trainer._feedback.insert_one({
-        "_id": "fb_c1",
-        "message_id": chosen_id,
-        "rating": "thumbs_up",
-        "quality_score": 0.9,
-        "created_at": "2024-01-01T00:00:02Z",
-    })
+    trainer._messages.insert_one(
+        {
+            "_id": chosen_id,
+            "id": chosen_id,
+            "role": "assistant",
+            "content": "Good explanation",
+            "conversation_id": conv_id,
+            "created_at": "2024-01-01T00:00:01Z",
+        }
+    )
+    trainer._feedback.insert_one(
+        {
+            "_id": "fb_c1",
+            "message_id": chosen_id,
+            "rating": "thumbs_up",
+            "quality_score": 0.9,
+            "created_at": "2024-01-01T00:00:02Z",
+        }
+    )
     rejected_id = "msg_r1"
-    trainer._messages.insert_one({
-        "_id": rejected_id,
-        "id": rejected_id,
-        "role": "assistant",
-        "content": "Bad explanation",
-        "conversation_id": conv_id,
-        "created_at": "2024-01-01T00:00:03Z",
-    })
-    trainer._feedback.insert_one({
-        "_id": "fb_r1",
-        "message_id": rejected_id,
-        "rating": "thumbs_down",
-        "quality_score": 0.2,
-        "created_at": "2024-01-01T00:00:04Z",
-    })
+    trainer._messages.insert_one(
+        {
+            "_id": rejected_id,
+            "id": rejected_id,
+            "role": "assistant",
+            "content": "Bad explanation",
+            "conversation_id": conv_id,
+            "created_at": "2024-01-01T00:00:03Z",
+        }
+    )
+    trainer._feedback.insert_one(
+        {
+            "_id": "fb_r1",
+            "message_id": rejected_id,
+            "rating": "thumbs_down",
+            "quality_score": 0.2,
+            "created_at": "2024-01-01T00:00:04Z",
+        }
+    )
 
 
 class TestFeedbackTrainerWithData:
@@ -502,18 +521,34 @@ class TestFeedbackTrainerWithData:
     def test_sft_quality_score_default_one(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             trainer = FeedbackTrainer(db_path=os.path.join(tmpdir, "fb.db"))
-            trainer._messages.insert_one({
-                "_id": "m0", "id": "m0", "role": "user", "content": "q",
-                "conversation_id": "c", "created_at": "2024-01-01T00:00:00Z",
-            })
-            trainer._messages.insert_one({
-                "_id": "m1", "id": "m1", "role": "assistant", "content": "a",
-                "conversation_id": "c", "created_at": "2024-01-01T00:00:01Z",
-            })
-            trainer._feedback.insert_one({
-                "_id": "f1", "message_id": "m1", "rating": "thumbs_up",
-                "created_at": "2024-01-01T00:00:02Z",
-            })
+            trainer._messages.insert_one(
+                {
+                    "_id": "m0",
+                    "id": "m0",
+                    "role": "user",
+                    "content": "q",
+                    "conversation_id": "c",
+                    "created_at": "2024-01-01T00:00:00Z",
+                }
+            )
+            trainer._messages.insert_one(
+                {
+                    "_id": "m1",
+                    "id": "m1",
+                    "role": "assistant",
+                    "content": "a",
+                    "conversation_id": "c",
+                    "created_at": "2024-01-01T00:00:01Z",
+                }
+            )
+            trainer._feedback.insert_one(
+                {
+                    "_id": "f1",
+                    "message_id": "m1",
+                    "rating": "thumbs_up",
+                    "created_at": "2024-01-01T00:00:02Z",
+                }
+            )
             data = trainer.prepare_sft_data()
             assert len(data) == 1
             assert data[0]["quality_score"] == 1.0
@@ -523,103 +558,174 @@ class TestFeedbackTrainerWithData:
 # FeedbackTrainer — edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestFeedbackTrainerEdgeCases:
     def test_missing_rating_skipped(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             trainer = FeedbackTrainer(db_path=os.path.join(tmpdir, "fb.db"))
-            trainer._messages.insert_one({
-                "_id": "m1", "id": "m1", "role": "assistant", "content": "hi",
-                "conversation_id": "c", "created_at": "2024-01-01T00:00:00Z",
-            })
-            trainer._feedback.insert_one({
-                "_id": "f1", "message_id": "m1", "rating": None,
-                "created_at": "2024-01-01T00:00:01Z",
-            })
+            trainer._messages.insert_one(
+                {
+                    "_id": "m1",
+                    "id": "m1",
+                    "role": "assistant",
+                    "content": "hi",
+                    "conversation_id": "c",
+                    "created_at": "2024-01-01T00:00:00Z",
+                }
+            )
+            trainer._feedback.insert_one(
+                {
+                    "_id": "f1",
+                    "message_id": "m1",
+                    "rating": None,
+                    "created_at": "2024-01-01T00:00:01Z",
+                }
+            )
             examples = trainer.get_training_examples()
             assert examples == []
 
     def test_non_assistant_role_skipped(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             trainer = FeedbackTrainer(db_path=os.path.join(tmpdir, "fb.db"))
-            trainer._messages.insert_one({
-                "_id": "m1", "id": "m1", "role": "user", "content": "hi",
-                "conversation_id": "c", "created_at": "2024-01-01T00:00:00Z",
-            })
-            trainer._feedback.insert_one({
-                "_id": "f1", "message_id": "m1", "rating": "thumbs_up",
-                "created_at": "2024-01-01T00:00:01Z",
-            })
+            trainer._messages.insert_one(
+                {
+                    "_id": "m1",
+                    "id": "m1",
+                    "role": "user",
+                    "content": "hi",
+                    "conversation_id": "c",
+                    "created_at": "2024-01-01T00:00:00Z",
+                }
+            )
+            trainer._feedback.insert_one(
+                {
+                    "_id": "f1",
+                    "message_id": "m1",
+                    "rating": "thumbs_up",
+                    "created_at": "2024-01-01T00:00:01Z",
+                }
+            )
             examples = trainer.get_training_examples()
             assert examples == []
 
     def test_dpo_single_rating_skipped(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             trainer = FeedbackTrainer(db_path=os.path.join(tmpdir, "fb.db"))
-            trainer._messages.insert_one({
-                "_id": "m1", "id": "m1", "role": "user", "content": "q",
-                "conversation_id": "c", "created_at": "2024-01-01T00:00:00Z",
-            })
-            trainer._messages.insert_one({
-                "_id": "m2", "id": "m2", "role": "assistant", "content": "a",
-                "conversation_id": "c", "created_at": "2024-01-01T00:00:01Z",
-            })
-            trainer._feedback.insert_one({
-                "_id": "f1", "message_id": "m2", "rating": "thumbs_up",
-                "created_at": "2024-01-01T00:00:02Z",
-            })
+            trainer._messages.insert_one(
+                {
+                    "_id": "m1",
+                    "id": "m1",
+                    "role": "user",
+                    "content": "q",
+                    "conversation_id": "c",
+                    "created_at": "2024-01-01T00:00:00Z",
+                }
+            )
+            trainer._messages.insert_one(
+                {
+                    "_id": "m2",
+                    "id": "m2",
+                    "role": "assistant",
+                    "content": "a",
+                    "conversation_id": "c",
+                    "created_at": "2024-01-01T00:00:01Z",
+                }
+            )
+            trainer._feedback.insert_one(
+                {
+                    "_id": "f1",
+                    "message_id": "m2",
+                    "rating": "thumbs_up",
+                    "created_at": "2024-01-01T00:00:02Z",
+                }
+            )
             pairs = trainer.prepare_dpo_pairs()
             assert pairs == []
 
     def test_sft_filters_non_thumbs_up(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             trainer = FeedbackTrainer(db_path=os.path.join(tmpdir, "fb.db"))
-            trainer._messages.insert_one({
-                "_id": "m1", "id": "m1", "role": "assistant", "content": "a",
-                "conversation_id": "c", "created_at": "2024-01-01T00:00:00Z",
-            })
-            trainer._messages.insert_one({
-                "_id": "m0", "id": "m0", "role": "user", "content": "q",
-                "conversation_id": "c", "created_at": "2024-01-01T00:00:01Z",
-            })
-            trainer._feedback.insert_one({
-                "_id": "f1", "message_id": "m1", "rating": "thumbs_down",
-                "quality_score": 0.9,
-                "created_at": "2024-01-01T00:00:02Z",
-            })
+            trainer._messages.insert_one(
+                {
+                    "_id": "m1",
+                    "id": "m1",
+                    "role": "assistant",
+                    "content": "a",
+                    "conversation_id": "c",
+                    "created_at": "2024-01-01T00:00:00Z",
+                }
+            )
+            trainer._messages.insert_one(
+                {
+                    "_id": "m0",
+                    "id": "m0",
+                    "role": "user",
+                    "content": "q",
+                    "conversation_id": "c",
+                    "created_at": "2024-01-01T00:00:01Z",
+                }
+            )
+            trainer._feedback.insert_one(
+                {
+                    "_id": "f1",
+                    "message_id": "m1",
+                    "rating": "thumbs_down",
+                    "quality_score": 0.9,
+                    "created_at": "2024-01-01T00:00:02Z",
+                }
+            )
             data = trainer.prepare_sft_data()
             assert data == []
 
     def test_empty_prompt_in_sft_excluded(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             trainer = FeedbackTrainer(db_path=os.path.join(tmpdir, "fb.db"))
-            trainer._messages.insert_one({
-                "_id": "m1", "id": "m1", "role": "assistant", "content": "a",
-                "conversation_id": "c", "created_at": "2024-01-01T00:00:00Z",
-            })
-            trainer._feedback.insert_one({
-                "_id": "f1", "message_id": "m1", "rating": "thumbs_up",
-                "created_at": "2024-01-01T00:00:01Z",
-            })
+            trainer._messages.insert_one(
+                {
+                    "_id": "m1",
+                    "id": "m1",
+                    "role": "assistant",
+                    "content": "a",
+                    "conversation_id": "c",
+                    "created_at": "2024-01-01T00:00:00Z",
+                }
+            )
+            trainer._feedback.insert_one(
+                {
+                    "_id": "f1",
+                    "message_id": "m1",
+                    "rating": "thumbs_up",
+                    "created_at": "2024-01-01T00:00:01Z",
+                }
+            )
             data = trainer.prepare_sft_data()
             assert data == []
 
     def test_feedback_for_nonexistent_message_skipped(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             trainer = FeedbackTrainer(db_path=os.path.join(tmpdir, "fb.db"))
-            trainer._feedback.insert_one({
-                "_id": "f1", "message_id": "missing_msg", "rating": "thumbs_up",
-                "created_at": "2024-01-01T00:00:00Z",
-            })
+            trainer._feedback.insert_one(
+                {
+                    "_id": "f1",
+                    "message_id": "missing_msg",
+                    "rating": "thumbs_up",
+                    "created_at": "2024-01-01T00:00:00Z",
+                }
+            )
             examples = trainer.get_training_examples()
             assert examples == []
 
     def test_training_stats_excludes_orphan_feedback(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             trainer = FeedbackTrainer(db_path=os.path.join(tmpdir, "fb.db"))
-            trainer._feedback.insert_one({
-                "_id": "f1", "message_id": "orphan", "rating": "thumbs_up",
-                "created_at": "2024-01-01T00:00:00Z",
-            })
+            trainer._feedback.insert_one(
+                {
+                    "_id": "f1",
+                    "message_id": "orphan",
+                    "rating": "thumbs_up",
+                    "created_at": "2024-01-01T00:00:00Z",
+                }
+            )
             stats = trainer.get_training_stats()
             assert stats["thumbs_up"] == 0
 
@@ -637,46 +743,88 @@ class TestFeedbackTrainerEdgeCases:
         with tempfile.TemporaryDirectory() as tmpdir:
             trainer = FeedbackTrainer(db_path=os.path.join(tmpdir, "fb.db"))
             conv_id = "partial"
-            trainer._messages.insert_one({
-                "_id": "u", "id": "u", "role": "user", "content": "q",
-                "conversation_id": conv_id, "created_at": "2024-01-01T00:00:00Z",
-            })
-            trainer._messages.insert_one({
-                "_id": "a1", "id": "a1", "role": "assistant", "content": "a1",
-                "conversation_id": conv_id, "created_at": "2024-01-01T00:00:01Z",
-            })
-            trainer._messages.insert_one({
-                "_id": "a2", "id": "a2", "role": "assistant", "content": "a2",
-                "conversation_id": conv_id, "created_at": "2024-01-01T00:00:02Z",
-            })
-            trainer._feedback.insert_one({
-                "_id": "f1", "message_id": "a1", "rating": "thumbs_up",
-                "created_at": "2024-01-01T00:00:03Z",
-            })
-            trainer._feedback.insert_one({
-                "_id": "f2", "message_id": "a2", "rating": "thumbs_up",
-                "created_at": "2024-01-01T00:00:04Z",
-            })
+            trainer._messages.insert_one(
+                {
+                    "_id": "u",
+                    "id": "u",
+                    "role": "user",
+                    "content": "q",
+                    "conversation_id": conv_id,
+                    "created_at": "2024-01-01T00:00:00Z",
+                }
+            )
+            trainer._messages.insert_one(
+                {
+                    "_id": "a1",
+                    "id": "a1",
+                    "role": "assistant",
+                    "content": "a1",
+                    "conversation_id": conv_id,
+                    "created_at": "2024-01-01T00:00:01Z",
+                }
+            )
+            trainer._messages.insert_one(
+                {
+                    "_id": "a2",
+                    "id": "a2",
+                    "role": "assistant",
+                    "content": "a2",
+                    "conversation_id": conv_id,
+                    "created_at": "2024-01-01T00:00:02Z",
+                }
+            )
+            trainer._feedback.insert_one(
+                {
+                    "_id": "f1",
+                    "message_id": "a1",
+                    "rating": "thumbs_up",
+                    "created_at": "2024-01-01T00:00:03Z",
+                }
+            )
+            trainer._feedback.insert_one(
+                {
+                    "_id": "f2",
+                    "message_id": "a2",
+                    "rating": "thumbs_up",
+                    "created_at": "2024-01-01T00:00:04Z",
+                }
+            )
             pairs = trainer.prepare_dpo_pairs()
             assert pairs == []
 
     def test_get_training_examples_ascending_quality(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             trainer = FeedbackTrainer(db_path=os.path.join(tmpdir, "fb.db"))
-            trainer._messages.insert_one({
-                "_id": "u0", "id": "u0", "role": "user", "content": "q",
-                "conversation_id": "c", "created_at": "2023-12-31T23:59:59Z",
-            })
+            trainer._messages.insert_one(
+                {
+                    "_id": "u0",
+                    "id": "u0",
+                    "role": "user",
+                    "content": "q",
+                    "conversation_id": "c",
+                    "created_at": "2023-12-31T23:59:59Z",
+                }
+            )
             for i in range(5):
                 mid = f"m{i}"
-                trainer._messages.insert_one({
-                    "_id": mid, "id": mid, "role": "assistant", "content": f"resp{i}",
-                    "conversation_id": "c", "created_at": f"2024-01-01T00:00:{i:02d}Z",
-                })
-                trainer._feedback.insert_one({
-                    "_id": f"f{i}", "message_id": mid, "rating": "thumbs_up",
-                    "quality_score": i * 0.2,
-                    "created_at": f"2024-01-01T00:00:{i:02d}Z",
-                })
+                trainer._messages.insert_one(
+                    {
+                        "_id": mid,
+                        "id": mid,
+                        "role": "assistant",
+                        "content": f"resp{i}",
+                        "conversation_id": "c",
+                        "created_at": f"2024-01-01T00:00:{i:02d}Z",
+                    }
+                )
+                trainer._feedback.insert_one(
+                    {
+                        "_id": f"f{i}",
+                        "message_id": mid,
+                        "rating": "thumbs_up",
+                        "quality_score": i * 0.2,
+                        "created_at": f"2024-01-01T00:00:{i:02d}Z",
+                    }
+                )
             examples = trainer.get_training_examples(min_quality=0.5)
             assert len(examples) >= 1

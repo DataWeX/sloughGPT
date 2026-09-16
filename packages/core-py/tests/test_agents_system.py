@@ -1,9 +1,11 @@
 """Tests for domain.agents._internal.system — AgentSystem CRUD."""
 
 import asyncio
+
 import pytest
+
 import domain.agents._internal.system as _mod
-from domain.agents._internal.system import AgentSystem, get_agent_system
+from domain.agents._internal.system import AgentSystem
 
 
 @pytest.fixture(autouse=True)

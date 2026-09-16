@@ -3,26 +3,22 @@
 from __future__ import annotations
 
 import json
-import csv
-import time
-import tempfile
-import os
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from domain.collections._internal.sources import (
-    Record, FileSource, UrlSource, RssSource, ApiSource, SseSource,
-    WatchSource, GeneratorSource, Source,
+    ApiSource,
+    FileSource,
+    GeneratorSource,
+    Record,
+    RssSource,
+    UrlSource,
+    WatchSource,
 )
-
 
 # ── Record ──────────────────────────────────────────────────────────────────
 
 
 class TestRecord:
-
     def test_defaults(self):
         r = Record(content="hello")
         assert r.content == "hello"
@@ -48,7 +44,6 @@ class TestRecord:
 
 
 class TestFileSource:
-
     def test_name_from_path(self):
         fs = FileSource("/tmp/test.txt")
         assert fs.name == "file:test.txt"
@@ -131,7 +126,6 @@ class TestFileSource:
 
 
 class TestUrlSource:
-
     def test_name(self):
         us = UrlSource("http://example.com/data")
         assert us.name == "url:http://example.com/data"
@@ -180,6 +174,7 @@ class TestUrlSource:
 
     def test_read_error(self):
         import urllib.error
+
         us = UrlSource("http://example.com/fail")
         with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("fail")):
             records = list(us.read())
@@ -191,7 +186,6 @@ class TestUrlSource:
 
 
 class TestRssSource:
-
     def test_init(self):
         rs = RssSource("http://example.com/feed")
         assert rs.name.startswith("rss:")
@@ -206,6 +200,7 @@ class TestRssSource:
     @patch.dict("sys.modules", {"feedparser": MagicMock()})
     def test_read_error(self):
         import urllib.error
+
         rs = RssSource("http://example.com/feed")
         with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("fail")):
             records = list(rs.read())
@@ -216,7 +211,6 @@ class TestRssSource:
 
 
 class TestApiSource:
-
     def test_init(self):
         asrc = ApiSource("http://example.com/api")
         assert asrc.name.startswith("api:")
@@ -225,10 +219,12 @@ class TestApiSource:
     def test_read_json(self):
         asrc = ApiSource("http://example.com/api")
         mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps([
-            {"id": "1", "content": "a"},
-            {"id": "2", "content": "b"},
-        ]).encode()
+        mock_resp.read.return_value = json.dumps(
+            [
+                {"id": "1", "content": "a"},
+                {"id": "2", "content": "b"},
+            ]
+        ).encode()
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
@@ -241,10 +237,12 @@ class TestApiSource:
         asrc = ApiSource("http://example.com/api")
         asrc._last_id = "1"
         mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps([
-            {"id": "1", "content": "a"},
-            {"id": "2", "content": "b"},
-        ]).encode()
+        mock_resp.read.return_value = json.dumps(
+            [
+                {"id": "1", "content": "a"},
+                {"id": "2", "content": "b"},
+            ]
+        ).encode()
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
@@ -254,6 +252,7 @@ class TestApiSource:
 
     def test_read_error(self):
         import urllib.error
+
         asrc = ApiSource("http://example.com/api")
         with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("fail")):
             records = list(asrc.read())
@@ -264,7 +263,6 @@ class TestApiSource:
 
 
 class TestWatchSource:
-
     def test_init(self):
         ws = WatchSource("/tmp/watch_dir")
         assert ws.name.startswith("watch:")
@@ -305,7 +303,6 @@ class TestWatchSource:
 
 
 class TestGeneratorSource:
-
     def test_read_strings(self):
         gs = GeneratorSource(lambda: ["a", "b", "c"])
         records = list(gs.read())

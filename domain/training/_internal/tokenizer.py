@@ -26,12 +26,12 @@ Usage:
 from __future__ import annotations
 
 import json
-import re
+import logging
 import math
+import re
 from collections import Counter
 from pathlib import Path
-from typing import Any, Counter, Dict, List, Optional, Tuple, Set
-import logging
+from typing import Any
 
 logger = logging.getLogger("slo.tokenizer")
 
@@ -45,12 +45,10 @@ logger = logging.getLogger("slo.tokenizer")
 #   - Digit runs with optional leading space
 #   - Punctuation runs with optional leading space
 #   - Trailing whitespace
-_GPT2_SPLIT = re.compile(
-    r"""'(?:[sdmt]|ll|ve|re)| ?[^\W\d_]+| ?\d+| ?[^\s\w]+|\s+(?!\S)|\s+"""
-)
+_GPT2_SPLIT = re.compile(r"""'(?:[sdmt]|ll|ve|re)| ?[^\W\d_]+| ?\d+| ?[^\s\w]+|\s+(?!\S)|\s+""")
 
 
-def gpt2_pretokenize(text: str) -> List[str]:
+def gpt2_pretokenize(text: str) -> list[str]:
     """Split text into pretokens using the GPT-2 regex pattern.
 
     Each pretoken is a word-like unit with punctuation separated,
@@ -59,7 +57,7 @@ def gpt2_pretokenize(text: str) -> List[str]:
     return _GPT2_SPLIT.findall(text)
 
 
-def default_pretokenize(text: str) -> List[str]:
+def default_pretokenize(text: str) -> list[str]:
     """Simple whitespace-based pre-tokenization (fallback)."""
     return text.split()
 
@@ -80,13 +78,13 @@ class SloBPE:
     WORD_SUFFIX = "</w>"
 
     def __init__(self, pretokenizer: str = "gpt2") -> None:
-        self.vocab: List[str] = []
-        self.stoi: Dict[str, int] = {}
-        self.itos: Dict[int, str] = {}
-        self.merges: List[Tuple[str, str]] = []
+        self.vocab: list[str] = []
+        self.stoi: dict[str, int] = {}
+        self.itos: dict[int, str] = {}
+        self.merges: list[tuple[str, str]] = []
         self._word_suffix: str = self.WORD_SUFFIX
         self._pretokenizer: str = pretokenizer
-        self._special_set: Set[str] = set(self.SPECIAL_TOKENS)
+        self._special_set: set[str] = set(self.SPECIAL_TOKENS)
         # Analysis caches — populated by analyze_corpus()
         self._token_freqs: Counter = Counter()
         self._training_corpus_len: int = 0
@@ -117,12 +115,12 @@ class SloBPE:
 
     def train(
         self,
-        texts: List[str],
+        texts: list[str],
         vocab_size: int = 1024,
         min_frequency: int = 2,
         lowercase: bool = True,
         verbose: bool = False,
-    ) -> "SloBPE":
+    ) -> SloBPE:
         """
         Learn BPE merge rules from a corpus of texts.
 
@@ -153,7 +151,7 @@ class SloBPE:
         base_chars = sorted(chars.keys())
         self.vocab = list(self.SPECIAL_TOKENS) + [self._word_suffix] + base_chars.copy()
         self.stoi = {t: i for i, t in enumerate(self.vocab)}
-        self.itos = {i: t for i, t in enumerate(self.vocab)}
+        self.itos = dict(enumerate(self.vocab))
         self.merges = []
         self._special_set = set(self.SPECIAL_TOKENS)
 
@@ -165,13 +163,19 @@ class SloBPE:
                 word_freqs[word + self._word_suffix] += 1
 
         # Each "word" is represented as a list of current tokens (chars + </w>)
-        word_splits: Dict[str, List[str]] = {}
+        word_splits: dict[str, list[str]] = {}
         for word in word_freqs:
             raw = word.replace(self._word_suffix, "")
             word_splits[word] = list(raw) + [self._word_suffix]
 
         # Merge loop
-        target_size = min(vocab_size, len(self.SPECIAL_TOKENS) + 1 + len(base_chars) + (vocab_size - len(self.SPECIAL_TOKENS) - 1))
+        target_size = min(
+            vocab_size,
+            len(self.SPECIAL_TOKENS)
+            + 1
+            + len(base_chars)
+            + (vocab_size - len(self.SPECIAL_TOKENS) - 1),
+        )
         while len(self.vocab) < vocab_size:
             # Count all adjacent pairs across all words
             pair_counts: Counter = Counter()
@@ -196,9 +200,14 @@ class SloBPE:
             new_token = best_pair[0] + best_pair[1]
 
             if verbose:
-                logger.debug("Merge #%d: '%s' + '%s' -> '%s' (count=%d)",
-                             len(self.vocab) - len(base_chars) - len(self.SPECIAL_TOKENS) + 1,
-                             best_pair[0], best_pair[1], new_token, best_count)
+                logger.debug(
+                    "Merge #%d: '%s' + '%s' -> '%s' (count=%d)",
+                    len(self.vocab) - len(base_chars) - len(self.SPECIAL_TOKENS) + 1,
+                    best_pair[0],
+                    best_pair[1],
+                    new_token,
+                    best_count,
+                )
 
             self.merges.append(best_pair)
             self.vocab.append(new_token)
@@ -213,7 +222,11 @@ class SloBPE:
                 new_split = []
                 i = 0
                 while i < len(split):
-                    if i < len(split) - 1 and split[i] == best_pair[0] and split[i + 1] == best_pair[1]:
+                    if (
+                        i < len(split) - 1
+                        and split[i] == best_pair[0]
+                        and split[i + 1] == best_pair[1]
+                    ):
                         new_split.append(new_token)
                         i += 2
                     else:
@@ -230,7 +243,7 @@ class SloBPE:
     # Encoding
     # ------------------------------------------------------------------
 
-    def encode(self, text: str, add_bos: bool = False, add_eos: bool = False) -> List[int]:
+    def encode(self, text: str, add_bos: bool = False, add_eos: bool = False) -> list[int]:
         """
         Encode text into a list of token IDs using learned BPE merges.
 
@@ -243,7 +256,7 @@ class SloBPE:
             list of integer token IDs
         """
         text = self._normalize(text, lowercase=True)
-        ids: List[int] = []
+        ids: list[int] = []
 
         if add_bos:
             ids.append(self.bos_id)
@@ -258,9 +271,13 @@ class SloBPE:
         return ids
 
     def encode_batch(
-        self, texts: List[str], add_bos: bool = False, add_eos: bool = False,
-        max_length: Optional[int] = None, pad: bool = False,
-    ) -> List[List[int]]:
+        self,
+        texts: list[str],
+        add_bos: bool = False,
+        add_eos: bool = False,
+        max_length: int | None = None,
+        pad: bool = False,
+    ) -> list[list[int]]:
         """
         Encode multiple texts, optionally padding to uniform length.
 
@@ -290,10 +307,10 @@ class SloBPE:
 
         return encoded
 
-    def _encode_word(self, word: str) -> List[int]:
+    def _encode_word(self, word: str) -> list[int]:
         """Encode a single word (with </w> suffix) by iteratively applying BPE merges."""
         # Split into base tokens: characters, but preserve </w> as a single token
-        tokens: List[str] = []
+        tokens: list[str] = []
         i = 0
         while i < len(word):
             if word[i:].startswith(self._word_suffix):
@@ -322,7 +339,11 @@ class SloBPE:
                 new_tokens = []
                 i = 0
                 while i < len(tokens):
-                    if i < len(tokens) - 1 and tokens[i] == best_pair[0] and tokens[i + 1] == best_pair[1]:
+                    if (
+                        i < len(tokens) - 1
+                        and tokens[i] == best_pair[0]
+                        and tokens[i + 1] == best_pair[1]
+                    ):
                         new_tokens.append(best_pair[0] + best_pair[1])
                         i += 2
                         changed = True
@@ -336,7 +357,7 @@ class SloBPE:
         return [self.stoi.get(t, self.unk_id) for t in tokens]
 
     @property
-    def _merge_index(self) -> Dict[Tuple[str, str], int]:
+    def _merge_index(self) -> dict[tuple[str, str], int]:
         """Cached mapping from (left, right) pair to merge order index."""
         if not hasattr(self, "_merge_index_cache"):
             self._merge_index_cache = {pair: i for i, pair in enumerate(self.merges)}
@@ -346,7 +367,7 @@ class SloBPE:
     # Decoding
     # ------------------------------------------------------------------
 
-    def decode(self, ids: List[int], skip_special: bool = True) -> str:
+    def decode(self, ids: list[int], skip_special: bool = True) -> str:
         """
         Decode a list of token IDs back into text.
 
@@ -362,7 +383,7 @@ class SloBPE:
         Returns:
             reconstructed text string
         """
-        tokens: List[str] = []
+        tokens: list[str] = []
         for i in ids:
             if i >= len(self.vocab) or i < 0:
                 tokens.append("?")
@@ -400,7 +421,7 @@ class SloBPE:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SloBPE":
+    def from_dict(cls, data: dict) -> SloBPE:
         """Deserialize tokenizer state from a dict."""
         tok = cls()
         tok.vocab = data["vocab"]
@@ -426,9 +447,9 @@ class SloBPE:
             json.dump(self.to_dict(), f, ensure_ascii=False, indent=2)
 
     @classmethod
-    def load(cls, path: str) -> "SloBPE":
+    def load(cls, path: str) -> SloBPE:
         """Load tokenizer from a JSON file."""
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         return cls.from_dict(data)
 
@@ -451,7 +472,7 @@ class SloBPE:
         }
 
     @classmethod
-    def from_checkpoint(cls, bundle: dict) -> "SloBPE":
+    def from_checkpoint(cls, bundle: dict) -> SloBPE:
         """Rebuild tokenizer from a model checkpoint bundle."""
         stoi = bundle.get("stoi", {})
         itos_raw = bundle.get("itos", {})
@@ -465,7 +486,7 @@ class SloBPE:
         if not stoi:
             chars = bundle.get("chars", list(" abcdefghijklmnopqrstuvwxyz0123456789.,!?-'"))
             stoi = {c: i for i, c in enumerate(chars)}
-            itos = {i: c for i, c in enumerate(chars)}
+            itos = dict(enumerate(chars))
 
         tok = cls()
         tok.vocab = [itos[i] for i in range(len(itos))] if itos else list(stoi.keys())
@@ -509,39 +530,74 @@ class SloBPE:
 
     def show_merges(self, top_n: int = 20) -> None:
         """Print the first N learned merges in order."""
-        logger.info("Top %d BPE merges (learned order):", top_n,
-            extra={"tag": "TRAIN"},)
-        logger.info("%4s  %-12s  %-12s  %-20s", "#", "Left", "Right", "Token",
-            extra={"tag": "TRAIN"},)
-        logger.info("-" * 52,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Top %d BPE merges (learned order):",
+            top_n,
+            extra={"tag": "TRAIN"},
+        )
+        logger.info(
+            "%4s  %-12s  %-12s  %-20s",
+            "#",
+            "Left",
+            "Right",
+            "Token",
+            extra={"tag": "TRAIN"},
+        )
+        logger.info(
+            "-" * 52,
+            extra={"tag": "TRAIN"},
+        )
         for i, (left, right) in enumerate(self.merges[:top_n]):
             token = left + right
-            logger.info("%4d  %-12s  %-12s  %-20s", i + 1, left, right, token,
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "%4d  %-12s  %-12s  %-20s",
+                i + 1,
+                left,
+                right,
+                token,
+                extra={"tag": "TRAIN"},
+            )
         if len(self.merges) > top_n:
-            logger.info("  ... and %d more merges", len(self.merges) - top_n,
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "  ... and %d more merges",
+                len(self.merges) - top_n,
+                extra={"tag": "TRAIN"},
+            )
 
     def show_vocab(self, top_n: int = 30) -> None:
         """Print the first N vocabulary entries."""
-        logger.info("Vocabulary (showing %d of %d):", min(top_n, self.vocab_size), self.vocab_size,
-            extra={"tag": "TRAIN"},)
-        logger.info("%4s  %-20s", "ID", "Token",
-            extra={"tag": "TRAIN"},)
-        logger.info("-" * 26,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Vocabulary (showing %d of %d):",
+            min(top_n, self.vocab_size),
+            self.vocab_size,
+            extra={"tag": "TRAIN"},
+        )
+        logger.info(
+            "%4s  %-20s",
+            "ID",
+            "Token",
+            extra={"tag": "TRAIN"},
+        )
+        logger.info(
+            "-" * 26,
+            extra={"tag": "TRAIN"},
+        )
         for i, t in enumerate(self.vocab[:top_n]):
             display = t.replace("\n", "\\n").replace("\t", "\\t")
             marker = " [SPECIAL]" if t in self.SPECIAL_TOKENS else ""
-            logger.info("%4d  %-20s%s", i, display, marker,
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "%4d  %-20s%s",
+                i,
+                display,
+                marker,
+                extra={"tag": "TRAIN"},
+            )
 
     # ------------------------------------------------------------------
     # Special token registry
     # ------------------------------------------------------------------
 
-    def add_special_tokens(self, tokens: List[str]) -> int:
+    def add_special_tokens(self, tokens: list[str]) -> int:
         """Register one or more special tokens, adding them to the vocab if new.
 
         Useful for downstream tasks that need custom control tokens
@@ -580,7 +636,7 @@ class SloBPE:
         return token in self._special_set
 
     @property
-    def special_ids(self) -> List[int]:
+    def special_ids(self) -> list[int]:
         """Return the IDs of all registered special tokens."""
         return [self.stoi[t] for t in self._special_set if t in self.stoi]
 
@@ -588,13 +644,13 @@ class SloBPE:
     # Pre-tokenization
     # ------------------------------------------------------------------
 
-    def _pretokenize(self, text: str, lowercase: bool = True) -> List[str]:
+    def _pretokenize(self, text: str, lowercase: bool = True) -> list[str]:
         """Split text into pretokens using the configured pre-tokenizer."""
         if self._pretokenizer == "gpt2":
             return gpt2_pretokenize(text)
         return text.split()
 
-    def show_pretokenization(self, text: str) -> Dict[str, List[str]]:
+    def show_pretokenization(self, text: str) -> dict[str, list[str]]:
         """Visualize how text splits into pretokens before BPE encoding.
 
         Returns:
@@ -605,18 +661,20 @@ class SloBPE:
         total = len(text)
         segments = []
         for pt in pretoks:
-            segments.append({
-                "text": pt,
-                "char_count": len(pt),
-                "pct": round(len(pt) / total * 100, 1) if total else 0,
-            })
+            segments.append(
+                {
+                    "text": pt,
+                    "char_count": len(pt),
+                    "pct": round(len(pt) / total * 100, 1) if total else 0,
+                }
+            )
         return {"pretokens": pretoks, "segments": segments, "count": len(pretoks)}
 
     # ------------------------------------------------------------------
     # Token decomposition
     # ------------------------------------------------------------------
 
-    def decompose_token(self, token: str) -> Dict:
+    def decompose_token(self, token: str) -> dict:
         """Show how a token decomposes through learned BPE merges.
 
         Traces the merge tree from the final token back to base characters.
@@ -663,7 +721,7 @@ class SloBPE:
             reverse_merge[child] = (left, right)
 
         # Walk backwards through merge tree
-        def _trace(t: str) -> List[str]:
+        def _trace(t: str) -> list[str]:
             if t in self._special_set or len(t) <= 1:
                 return [t]
             if t in reverse_merge:
@@ -684,7 +742,7 @@ class SloBPE:
             "base_chars": bases,
         }
 
-    def analyze_corpus(self, texts: List[str]) -> Dict:
+    def analyze_corpus(self, texts: list[str]) -> dict:
         """Compute token frequency and compression statistics on a corpus.
 
         Populates ``_token_freqs`` and ``_training_corpus_len`` for
@@ -700,7 +758,7 @@ class SloBPE:
             ``bottom_tokens`` (rare tokens).
         """
         total_chars = sum(len(t) for t in texts)
-        all_ids: List[int] = []
+        all_ids: list[int] = []
         tok_counts: Counter = Counter()
 
         for doc in texts:
@@ -715,15 +773,20 @@ class SloBPE:
 
         top = tok_counts.most_common(20)
         top_tokens = [
-            {"id": tid, "token": self.itos.get(tid, "?"), "count": c,
-             "pct": round(c / total_tokens * 100, 2) if total_tokens else 0}
+            {
+                "id": tid,
+                "token": self.itos.get(tid, "?"),
+                "count": c,
+                "pct": round(c / total_tokens * 100, 2) if total_tokens else 0,
+            }
             for tid, c in top
         ]
 
         bottom = tok_counts.most_common()[-20:] if len(tok_counts) > 20 else []
         bottom_tokens = [
             {"id": tid, "token": self.itos.get(tid, "?"), "count": c}
-            for tid, c in bottom if c == min(t[1] for t in tok_counts.most_common())
+            for tid, c in bottom
+            if c == min(t[1] for t in tok_counts.most_common())
         ][:10]
 
         return {
@@ -747,7 +810,7 @@ class SloBPE:
         recursive: bool = True,
         verbose: bool = False,
         pretokenizer: str = "gpt2",
-    ) -> "SloBPE":
+    ) -> SloBPE:
         """Train a tokenizer on all text files in a directory.
 
         Args:
@@ -779,8 +842,13 @@ class SloBPE:
             raise ValueError(f"No {pattern} files found in {dir_path}")
 
         tok = cls(pretokenizer=pretokenizer)
-        tok.train(texts, vocab_size=vocab_size, min_frequency=min_frequency,
-                  lowercase=lowercase, verbose=verbose)
+        tok.train(
+            texts,
+            vocab_size=vocab_size,
+            min_frequency=min_frequency,
+            lowercase=lowercase,
+            verbose=verbose,
+        )
         return tok
 
     @staticmethod
@@ -822,12 +890,12 @@ class SloUnigram:
     SPECIAL_TOKENS = ["<PAD>", "<UNK>", "<BOS>", "<EOS>"]
 
     def __init__(self, pretokenizer: str = "gpt2") -> None:
-        self.vocab: List[str] = []
-        self.stoi: Dict[str, int] = {}
-        self.itos: Dict[int, str] = {}
-        self._scores: Dict[int, float] = {}       # token_id → log-probability
+        self.vocab: list[str] = []
+        self.stoi: dict[str, int] = {}
+        self.itos: dict[int, str] = {}
+        self._scores: dict[int, float] = {}  # token_id → log-probability
         self._pretokenizer: str = pretokenizer
-        self._special_set: Set[str] = set(self.SPECIAL_TOKENS)
+        self._special_set: set[str] = set(self.SPECIAL_TOKENS)
 
     @property
     def vocab_size(self) -> int:
@@ -855,14 +923,14 @@ class SloUnigram:
 
     def train(
         self,
-        texts: List[str],
+        texts: list[str],
         vocab_size: int = 1024,
         lowercase: bool = True,
         seed_max_len: int = 8,
         pruning_ratio: float = 0.5,
         em_iters: int = 4,
         verbose: bool = False,
-    ) -> "SloUnigram":
+    ) -> SloUnigram:
         """Learn a unigram subword vocabulary from a corpus.
 
         Args:
@@ -885,7 +953,7 @@ class SloUnigram:
         # ── Step 1: Build seed vocabulary ──────────────────
         # All character n-grams up to seed_max_len that appear in the corpus
         # plus common printable ASCII characters for coverage
-        seen: Set[str] = set()
+        seen: set[str] = set()
         for doc in corpus:
             for pretok in self._pretokenize(doc, lowercase):
                 for i in range(len(pretok)):
@@ -894,6 +962,7 @@ class SloUnigram:
 
         # Ensure coverage of all printable ASCII characters in seed vocab
         import string as _string_mod
+
         for ch in _string_mod.printable:
             seen.add(ch)
 
@@ -903,7 +972,7 @@ class SloUnigram:
         # Build initial vocab: special tokens + all n-grams
         self.vocab = list(self.SPECIAL_TOKENS) + seen_list
         self.stoi = {t: i for i, t in enumerate(self.vocab)}
-        self.itos = {i: t for i, t in enumerate(self.vocab)}
+        self.itos = dict(enumerate(self.vocab))
         self._special_set = set(self.SPECIAL_TOKENS)
 
         if verbose:
@@ -919,7 +988,7 @@ class SloUnigram:
         pretok_list = list(pretok_counts.keys())
         # Precompute all tokenization paths for each pretoken
         # path_cache[pretoken] = list of (token_str,) segmentations
-        path_cache: Dict[str, List[Tuple[str, ...]]] = {}
+        path_cache: dict[str, list[tuple[str, ...]]] = {}
         for pt in pretok_list:
             path_cache[pt] = self._all_segmentations(pt)
 
@@ -957,7 +1026,7 @@ class SloUnigram:
                     continue  # pragma: no cover (unreachable — at least one path has weight > 0)
                 path_weights = [e / total_exp for e in exp_lps]
 
-                for (path, _), weight in zip(path_probs, path_weights):
+                for (path, _), weight in zip(path_probs, path_weights, strict=False):
                     for t in path:
                         if t in self.stoi:
                             token_counts[self.stoi[t]] += weight * freq
@@ -968,7 +1037,7 @@ class SloUnigram:
                 break
 
             # Re-score: log(relative frequency), floor at log_uniform
-            new_scores: Dict[int, float] = {}
+            new_scores: dict[int, float] = {}
             for tok_id in range(len(self.vocab)):
                 raw = token_counts.get(tok_id, 0)
                 if raw > 0:
@@ -979,12 +1048,12 @@ class SloUnigram:
 
             # Compute loss contribution of each token
             # Protect single characters and special tokens from pruning
-            protected: Set[int] = self._special_token_ids.copy()
+            protected: set[int] = self._special_token_ids.copy()
             for tid, t in enumerate(self.vocab):
                 if len(t) == 1:
                     protected.add(tid)
 
-            loss_contrib: List[Tuple[float, int]] = []  # (delta_loss, tok_id)
+            loss_contrib: list[tuple[float, int]] = []  # (delta_loss, tok_id)
             for tok_id in range(len(self.vocab)):
                 if tok_id in protected:
                     continue
@@ -999,7 +1068,7 @@ class SloUnigram:
             loss_contrib.sort(key=lambda x: x[0])
 
             n_prune = max(1, int(len(loss_contrib) * pruning_ratio))
-            pruned_ids = set(tid for _, tid in loss_contrib[:n_prune])
+            pruned_ids = {tid for _, tid in loss_contrib[:n_prune]}
             # Protect special tokens
             pruned_ids -= self._special_token_ids
 
@@ -1012,10 +1081,10 @@ class SloUnigram:
             new_vocab = [t for i, t in enumerate(old_vocab) if i not in pruned_ids]
             self.vocab = new_vocab
             self.stoi = {t: i for i, t in enumerate(self.vocab)}
-            self.itos = {i: t for i, t in enumerate(self.vocab)}
-            self._scores = {self.stoi[t]: old_scores[i]
-                           for i, t in enumerate(old_vocab)
-                           if i not in pruned_ids}
+            self.itos = dict(enumerate(self.vocab))
+            self._scores = {
+                self.stoi[t]: old_scores[i] for i, t in enumerate(old_vocab) if i not in pruned_ids
+            }
 
             if verbose:
                 logger.debug("Pruned %d -> %d tokens (target %d)", n_prune, len(self.vocab), target)
@@ -1029,7 +1098,7 @@ class SloUnigram:
     # Encoding  (Viterbi — most likely segmentation)
     # ------------------------------------------------------------------
 
-    def encode(self, text: str, add_bos: bool = False, add_eos: bool = False) -> List[int]:
+    def encode(self, text: str, add_bos: bool = False, add_eos: bool = False) -> list[int]:
         """Encode text via the most likely (Viterbi) segmentation.
 
         Args:
@@ -1041,7 +1110,7 @@ class SloUnigram:
             list of token IDs
         """
         text = self._normalize(text, lowercase=True)
-        ids: List[int] = []
+        ids: list[int] = []
 
         if add_bos:
             ids.append(self.bos_id)
@@ -1058,8 +1127,11 @@ class SloUnigram:
         return ids
 
     def encode_with_scores(
-        self, text: str, nbest: int = 10, alpha: float = 0.1,
-    ) -> List[Tuple[List[int], float]]:
+        self,
+        text: str,
+        nbest: int = 10,
+        alpha: float = 0.1,
+    ) -> list[tuple[list[int], float]]:
         """Encode text, returning the n-best segmentations with scores.
 
         Implements subword regularization: samples from the posterior
@@ -1075,7 +1147,7 @@ class SloUnigram:
             list of (ids, score) tuples, sorted by score descending
         """
         text = self._normalize(text, lowercase=True)
-        all_candidates: List[Tuple[List[int], float]] = [([], 0.0)]
+        all_candidates: list[tuple[list[int], float]] = [([], 0.0)]
 
         for pretok in self._pretokenize(text, True):
             if not pretok.strip():
@@ -1086,8 +1158,7 @@ class SloUnigram:
 
             scored = []
             for path in paths:
-                lp = sum(self._scores.get(self.stoi.get(t, 0), -10)
-                        for t in path if t in self.stoi)
+                lp = sum(self._scores.get(self.stoi.get(t, 0), -10) for t in path if t in self.stoi)
                 ids = [self.stoi.get(t, self.unk_id) for t in path]
                 scored.append((ids, lp))
 
@@ -1101,6 +1172,7 @@ class SloUnigram:
 
             # Sample or take top-nbest
             import random
+
             sampled = random.choices(range(len(scored)), weights=probs, k=min(nbest, len(scored)))
             chosen = [scored[i] for i in sampled]
 
@@ -1108,18 +1180,22 @@ class SloUnigram:
             new_candidates = []
             for existing_ids, existing_score in all_candidates:
                 for new_ids, new_score in chosen:
-                    new_candidates.append((
-                        existing_ids + new_ids,
-                        existing_score + new_score,
-                    ))
+                    new_candidates.append(
+                        (
+                            existing_ids + new_ids,
+                            existing_score + new_score,
+                        )
+                    )
 
             # Keep top nbest
             new_candidates.sort(key=lambda x: -x[1])
             all_candidates = new_candidates[:nbest]
 
-        return all_candidates or [([self.unk_id], -10.0)]  # pragma: no cover (unreachable — candidates never empty)
+        return all_candidates or [
+            ([self.unk_id], -10.0)
+        ]  # pragma: no cover (unreachable — candidates never empty)
 
-    def _viterbi(self, text: str) -> List[str]:
+    def _viterbi(self, text: str) -> list[str]:
         """Find the most likely segmentation of text using Viterbi decoding.
 
         Dynamic programming over character positions.  ``dp[i]`` = best
@@ -1133,7 +1209,7 @@ class SloUnigram:
             return []
 
         # Collect all valid substrings that are in the vocab
-        tokens_at: Dict[int, List[Tuple[int, str, float]]] = {i: [] for i in range(n + 1)}
+        tokens_at: dict[int, list[tuple[int, str, float]]] = {i: [] for i in range(n + 1)}
         for i in range(n):
             for j in range(i + 1, n + 1):
                 sub = text[i:j]
@@ -1145,7 +1221,7 @@ class SloUnigram:
         # Viterbi DP
         neg_inf = -1e10
         dp = [neg_inf] * (n + 1)
-        back: List[Optional[Tuple[int, str]]] = [None] * (n + 1)
+        back: list[tuple[int, str] | None] = [None] * (n + 1)
         dp[0] = 0.0
 
         for i in range(n):
@@ -1162,7 +1238,7 @@ class SloUnigram:
             return list(text)
 
         # Backtrack
-        tokens: List[str] = []
+        tokens: list[str] = []
         pos = n
         while pos > 0:
             prev, token = back[pos]
@@ -1171,7 +1247,7 @@ class SloUnigram:
         tokens.reverse()
         return tokens
 
-    def _all_segmentations(self, text: str) -> List[Tuple[str, ...]]:
+    def _all_segmentations(self, text: str) -> list[tuple[str, ...]]:
         """Enumerate all possible segmentations of a text string.
 
         Uses dynamic programming (DFS from each position).
@@ -1184,15 +1260,15 @@ class SloUnigram:
             return []
 
         # memo[pos] = list of token-tuples from pos to end
-        memo: Dict[int, List[Tuple[str, ...]]] = {}
+        memo: dict[int, list[tuple[str, ...]]] = {}
 
-        def _dfs(pos: int) -> List[Tuple[str, ...]]:
+        def _dfs(pos: int) -> list[tuple[str, ...]]:
             if pos in memo:
                 return memo[pos]
             if pos >= n:
-                return [tuple()]
+                return [()]
 
-            results: List[Tuple[str, ...]] = []
+            results: list[tuple[str, ...]] = []
             for end in range(pos + 1, n + 1):
                 sub = text[pos:end]
                 if sub in self.stoi:
@@ -1208,7 +1284,7 @@ class SloUnigram:
     # Decoding
     # ------------------------------------------------------------------
 
-    def decode(self, ids: List[int], skip_special: bool = True) -> str:
+    def decode(self, ids: list[int], skip_special: bool = True) -> str:
         """Decode token IDs back to text.
 
         Args:
@@ -1218,7 +1294,7 @@ class SloUnigram:
         Returns:
             reconstructed text
         """
-        tokens: List[str] = []
+        tokens: list[str] = []
         for i in ids:
             if i >= len(self.vocab) or i < 0:
                 tokens.append("?")
@@ -1247,7 +1323,7 @@ class SloUnigram:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SloUnigram":
+    def from_dict(cls, data: dict) -> SloUnigram:
         """Deserialize tokenizer state from a dict."""
         tok = cls()
         tok.vocab = data["vocab"]
@@ -1268,9 +1344,9 @@ class SloUnigram:
             json.dump(self.to_dict(), f, ensure_ascii=False, indent=2)
 
     @classmethod
-    def load(cls, path: str) -> "SloUnigram":
+    def load(cls, path: str) -> SloUnigram:
         """Load tokenizer from a JSON file."""
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         return cls.from_dict(data)
 
@@ -1293,7 +1369,7 @@ class SloUnigram:
     # Pre-tokenization analysis
     # ------------------------------------------------------------------
 
-    def show_pretokenization(self, text: str) -> Dict:
+    def show_pretokenization(self, text: str) -> dict:
         """Visualize how text splits into pretokens before encoding.
 
         Returns:
@@ -1304,18 +1380,20 @@ class SloUnigram:
         total = len(text)
         segments = []
         for pt in pretoks:
-            segments.append({
-                "text": pt,
-                "char_count": len(pt),
-                "pct": round(len(pt) / total * 100, 1) if total else 0,
-            })
+            segments.append(
+                {
+                    "text": pt,
+                    "char_count": len(pt),
+                    "pct": round(len(pt) / total * 100, 1) if total else 0,
+                }
+            )
         return {"pretokens": pretoks, "segments": segments, "count": len(pretoks)}
 
     # ------------------------------------------------------------------
     # Token decomposition
     # ------------------------------------------------------------------
 
-    def decompose_token(self, token: str) -> Dict:
+    def decompose_token(self, token: str) -> dict:
         """Show how a token decomposes through the Unigram vocabulary.
 
         For Unigram there are no merge trees — shows the base characters
@@ -1341,8 +1419,13 @@ class SloUnigram:
         if not token or token not in self.stoi:
             raise ValueError(f"Token {token!r} not found in vocabulary")
 
-        token_type = "special" if token in self._special_set else \
-                     "base_char" if len(token) <= 1 else "subword"
+        token_type = (
+            "special"
+            if token in self._special_set
+            else "base_char"
+            if len(token) <= 1
+            else "subword"
+        )
 
         return {
             "token": token,
@@ -1358,7 +1441,7 @@ class SloUnigram:
     # Corpus analysis
     # ------------------------------------------------------------------
 
-    def analyze_corpus(self, texts: List[str]) -> Dict:
+    def analyze_corpus(self, texts: list[str]) -> dict:
         """Compute token frequency and compression statistics on a corpus.
 
         Args:
@@ -1370,8 +1453,9 @@ class SloUnigram:
             ``vocab_utilization``, ``top_tokens``, ``rare_tokens``.
         """
         from collections import Counter
+
         total_chars = sum(len(t) for t in texts)
-        all_ids: List[int] = []
+        all_ids: list[int] = []
         tok_counts: Counter = Counter()
 
         for doc in texts:
@@ -1385,15 +1469,20 @@ class SloUnigram:
 
         top = tok_counts.most_common(20)
         top_tokens = [
-            {"id": tid, "token": self.itos.get(tid, "?"), "count": c,
-             "pct": round(c / max(total_tokens, 1) * 100, 2)}
+            {
+                "id": tid,
+                "token": self.itos.get(tid, "?"),
+                "count": c,
+                "pct": round(c / max(total_tokens, 1) * 100, 2),
+            }
             for tid, c in top
         ]
 
         bottom = tok_counts.most_common()[-20:] if len(tok_counts) > 20 else []
         bottom_tokens = [
             {"id": tid, "token": self.itos.get(tid, "?"), "count": c}
-            for tid, c in bottom if c == min(t[1] for t in tok_counts.most_common())
+            for tid, c in bottom
+            if c == min(t[1] for t in tok_counts.most_common())
         ][:10]
 
         return {
@@ -1421,7 +1510,7 @@ class SloUnigram:
         verbose: bool = False,
         pretokenizer: str = "gpt2",
         **algo_kwargs,
-    ) -> "SloUnigram":
+    ) -> SloUnigram:
         """Train a tokenizer on all text files in a directory.
 
         Args:
@@ -1438,46 +1527,60 @@ class SloUnigram:
             trained SloUnigram instance
         """
         base = Path(dir_path)
-        texts: List[str] = []
+        texts: list[str] = []
         it = base.rglob(pattern) if recursive else base.glob(pattern)
         for p in it:
             if p.is_file():
                 texts.append(p.read_text(encoding="utf-8", errors="replace"))
         tok = cls(pretokenizer=pretokenizer)
-        tok.train(texts, vocab_size=vocab_size, lowercase=lowercase,
-                  verbose=verbose, **algo_kwargs)
+        tok.train(texts, vocab_size=vocab_size, lowercase=lowercase, verbose=verbose, **algo_kwargs)
         return tok
 
     def show_vocab(self, top_n: int = 30) -> None:
         """Print vocabulary with scores."""
         scored = sorted(
-            [(tid, t, self._scores.get(tid, 0))
-             for tid, t in enumerate(self.vocab)],
+            [(tid, t, self._scores.get(tid, 0)) for tid, t in enumerate(self.vocab)],
             key=lambda x: -x[2],
         )
-        logger.info("Top %d tokens (by score):", min(top_n, len(scored)),
-            extra={"tag": "TRAIN"},)
-        logger.info("%4s  %-24s  %-10s", "ID", "Token", "Log-P",
-            extra={"tag": "TRAIN"},)
-        logger.info("-" * 42,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "Top %d tokens (by score):",
+            min(top_n, len(scored)),
+            extra={"tag": "TRAIN"},
+        )
+        logger.info(
+            "%4s  %-24s  %-10s",
+            "ID",
+            "Token",
+            "Log-P",
+            extra={"tag": "TRAIN"},
+        )
+        logger.info(
+            "-" * 42,
+            extra={"tag": "TRAIN"},
+        )
         for tid, t, lp in scored[:top_n]:
             marker = " [SPECIAL]" if t in self.SPECIAL_TOKENS else ""
-            logger.info("%4d  %-24s  %.4f%s", tid, t, lp, marker,
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "%4d  %-24s  %.4f%s",
+                tid,
+                t,
+                lp,
+                marker,
+                extra={"tag": "TRAIN"},
+            )
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
-    def _pretokenize(self, text: str, lowercase: bool = True) -> List[str]:
+    def _pretokenize(self, text: str, lowercase: bool = True) -> list[str]:
         if self._pretokenizer == "gpt2":
             return gpt2_pretokenize(text)
         return text.split()
 
     @property
-    def _special_token_ids(self) -> Set[int]:
-        return set(self.stoi[t] for t in self._special_set if t in self.stoi)
+    def _special_token_ids(self) -> set[int]:
+        return {self.stoi[t] for t in self._special_set if t in self.stoi}
 
     @staticmethod
     def _normalize(text: str, lowercase: bool = True) -> str:

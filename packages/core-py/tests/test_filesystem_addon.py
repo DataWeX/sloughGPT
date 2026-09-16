@@ -2,20 +2,22 @@
 Tests for the filesystem addon — VFS mount points, path resolution, read/write.
 """
 
-import os
-import tempfile
 import pytest
 
-from domain.shell._internal.kernel import Kernel
 from domain.shell._internal.addons import filesystem
 from domain.shell._internal.addons.filesystem import (
-    VFS, VFSEntry, VFSDirectory, VFSGeneratedFile, VFSWriteOnlyFile,
+    VFS,
+    VFSDirectory,
+    VFSEntry,
+    VFSGeneratedFile,
+    VFSWriteOnlyFile,
 )
-
+from domain.shell._internal.kernel import Kernel
 
 # ---------------------------------------------------------------------------
 # VFSEntry / VFSDirectory unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestVFSEntry:
     def test_default_properties(self):
@@ -78,6 +80,7 @@ class TestVFSDirectory:
 # VFS path resolution and I/O
 # ---------------------------------------------------------------------------
 
+
 class TestVFS:
     def test_mount_and_listdir(self):
         vfs = VFS()
@@ -119,6 +122,7 @@ class TestVFS:
 
     def test_stat_virtual_directory(self):
         import stat as stat_mod
+
         vfs = VFS()
         dev = VFSDirectory("dev")
         vfs.mount("/dev", dev)
@@ -177,12 +181,15 @@ class TestVFS:
 # Kernel addon integration
 # ---------------------------------------------------------------------------
 
+
 class TestKernelFilesystemAddon:
     def _booted_kernel(self):
         from domain.shell._internal.kernel import Kernel
+
         k = Kernel()
         k.boot()
         from domain.shell._internal.addons import filesystem
+
         filesystem.setup(k)
         return k
 
@@ -226,6 +233,7 @@ class TestKernelFilesystemAddon:
 # ---------------------------------------------------------------------------
 # setup() function
 # ---------------------------------------------------------------------------
+
 
 class TestSetup:
     def test_setup_installs_vfs(self):

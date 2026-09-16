@@ -7,14 +7,13 @@ Note: the learner router imports get_learner INSIDE each handler function body,
 so we must patch 'domain.learner.get_learner' (the import target), not
 'routers.learner.get_learner'.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Path setup — identical to the other router test files
@@ -26,10 +25,11 @@ if _server_dir not in sys.path:
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
-from routers.learner import router  # noqa: E402
-
 # Import build_test_app from the core-py tests conftest directly
 import importlib.util as _iu
+
+from routers.learner import router  # noqa: E402
+
 _core_conftest = Path(__file__).resolve().parent / "conftest.py"
 _spec = _iu.spec_from_file_location("_core_conftest", _core_conftest)
 _mod = _iu.module_from_spec(_spec)
@@ -40,16 +40,17 @@ build_test_app = _mod.build_test_app
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_learner(**overrides):
     """Build a fake learner object with all methods the router calls."""
-    defaults = dict(
-        search_and_learn=lambda q, n: {
+    defaults = {
+        "search_and_learn": lambda q, n: {
             "tokens_ingested": 100,
             "new_facts": 5,
             "rejected": 1,
             "filter_stats": {"removed": 1},
         },
-        status=lambda: {
+        "status": lambda: {
             "soul_name": "test",
             "total_tokens_ingested": 500,
             "train_steps_completed": 10,
@@ -57,18 +58,30 @@ def _make_learner(**overrides):
             "buffer_size": 200,
             "pending_tokens": 50,
         },
-        subscribe_feed=lambda url, interval: True,
-        unsubscribe_feed=lambda url: True,
-        list_feeds=lambda: ["http://example.com/rss"],
-        ingest_url=lambda url: {"facts": 3, "status": "ok"},
-        query_knowledge=lambda topic: [{"content": "fact1", "topic": topic}],
-        search_knowledge=lambda q, top_k=10: [{"content": "fact1"}],
-        ingest_text=lambda text: None,
-        ingest_conversation=lambda pairs: None,
-        train_now=lambda: {"loss": 1.2, "steps": 1},
-        deploy=lambda name=None: {"path": "/tmp/model.soul", "soul_name": "test", "steps": 10, "loss": 1.0, "file_size": 1024},
-        evaluate=lambda text=None: {"loss": 2.0, "perplexity": 7.4, "eval_tokens": 100, "train_steps": 10, "total_tokens_ingested": 500},
-    )
+        "subscribe_feed": lambda url, interval: True,
+        "unsubscribe_feed": lambda url: True,
+        "list_feeds": lambda: ["http://example.com/rss"],
+        "ingest_url": lambda url: {"facts": 3, "status": "ok"},
+        "query_knowledge": lambda topic: [{"content": "fact1", "topic": topic}],
+        "search_knowledge": lambda q, top_k=10: [{"content": "fact1"}],
+        "ingest_text": lambda text: None,
+        "ingest_conversation": lambda pairs: None,
+        "train_now": lambda: {"loss": 1.2, "steps": 1},
+        "deploy": lambda name=None: {
+            "path": "/tmp/model.soul",
+            "soul_name": "test",
+            "steps": 10,
+            "loss": 1.0,
+            "file_size": 1024,
+        },
+        "evaluate": lambda text=None: {
+            "loss": 2.0,
+            "perplexity": 7.4,
+            "eval_tokens": 100,
+            "train_steps": 10,
+            "total_tokens_ingested": 500,
+        },
+    }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
 
@@ -113,7 +126,9 @@ class TestLearnFeed:
     def test_subscribe_adds_feed(self, mock_get):
         mock_get.return_value = _make_learner()
         client = TestClient(_app())
-        resp = client.post("/learn/feed", params={"action": "subscribe", "url": "http://example.com/rss"})
+        resp = client.post(
+            "/learn/feed", params={"action": "subscribe", "url": "http://example.com/rss"}
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "ok"
@@ -131,7 +146,9 @@ class TestLearnFeed:
     def test_unsubscribe_removes_feed(self, mock_get):
         mock_get.return_value = _make_learner()
         client = TestClient(_app())
-        resp = client.post("/learn/feed", params={"action": "unsubscribe", "url": "http://example.com/rss"})
+        resp = client.post(
+            "/learn/feed", params={"action": "unsubscribe", "url": "http://example.com/rss"}
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "ok"
 

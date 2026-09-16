@@ -43,11 +43,12 @@ def migrate():
         ts_str = p.get("timestamp", "")
         try:
             # "2026-04-16T17:03:53.175478" → epoch
-            from datetime import datetime, timezone
+            from datetime import datetime
+
             dt = datetime.fromisoformat(ts_str)
-            timestamp = dt.timestamp()
+            dt.timestamp()
         except Exception:
-            timestamp = time.time()
+            time.time()
 
         store.add_pair(
             user_msg=user_msg,

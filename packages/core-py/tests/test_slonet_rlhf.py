@@ -2,25 +2,23 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+
 from domain.training._internal.rlhf import (
-    RLHFMetric,
-    RLHFConfig,
-    _as_array,
-    _get_logprobs,
-    _compute_gae,
     RewardModel,
+    RLHFConfig,
+    RLHFMetric,
     ValueHead,
+    _as_array,
+    _compute_gae,
+    _get_logprobs,
 )
 from domain.training._internal.slonet import Tensor
-
 
 # ── RLHFMetric ──────────────────────────────────────────────────────────────
 
 
 class TestRLHFMetric:
-
     def test_values(self):
         assert RLHFMetric.REWARD.value == "reward"
         assert RLHFMetric.KL_DIVERGENCE.value == "kl_divergence"
@@ -31,7 +29,6 @@ class TestRLHFMetric:
 
 
 class TestRLHFConfig:
-
     def test_default(self):
         config = RLHFConfig()
         assert config.ppo_epochs == 4
@@ -43,7 +40,6 @@ class TestRLHFConfig:
 
 
 class TestAsArray:
-
     def test_numpy(self):
         arr = np.array([1.0, 2.0])
         result = _as_array(arr)
@@ -60,11 +56,11 @@ class TestAsArray:
 
 
 class TestGetLogprobs:
-
     def test_tuple_output(self):
         class MockModel:
             def __call__(self, x):
                 return (np.random.randn(1, 3, 10), None)
+
         logprobs = _get_logprobs(MockModel(), np.array([[1, 2, 3]]))
         assert logprobs.shape == (1, 3, 10)
 
@@ -72,6 +68,7 @@ class TestGetLogprobs:
         class MockModel:
             def __call__(self, x):
                 return np.random.randn(1, 3, 10)
+
         logprobs = _get_logprobs(MockModel(), np.array([[1, 2, 3]]))
         assert logprobs.shape == (1, 3, 10)
 
@@ -80,7 +77,6 @@ class TestGetLogprobs:
 
 
 class TestComputeGae:
-
     def test_basic(self):
         rewards = np.array([1.0, 1.0, 1.0])
         values = np.array([0.0, 0.0, 0.0])
@@ -108,11 +104,11 @@ class TestComputeGae:
 
 
 class TestRewardModel:
-
     def test_init(self):
         class MockModel:
             def __call__(self, x):
                 return np.random.randn(1, 3, 10)
+
         model = RewardModel(MockModel(), hidden_size=10)
         assert model.hidden_size == 10
 
@@ -120,6 +116,7 @@ class TestRewardModel:
         class MockModel:
             def __call__(self, x):
                 return np.random.randn(1, 3, 10)
+
         model = RewardModel(MockModel(), hidden_size=10)
         x = np.array([[1, 2, 3]])
         reward = model.forward(x)
@@ -130,11 +127,11 @@ class TestRewardModel:
 
 
 class TestValueHead:
-
     def test_init(self):
         class MockModel:
             def __call__(self, x):
                 return np.random.randn(1, 3, 10)
+
         head = ValueHead(MockModel())
         assert head.base_model is not None
 
@@ -142,6 +139,7 @@ class TestValueHead:
         class MockModel:
             def __call__(self, x):
                 return np.random.randn(1, 3, 10)
+
         head = ValueHead(MockModel())
         x = np.array([[1, 2, 3]])
         value = head.forward(x)

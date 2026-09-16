@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import logging
-import pytest
 
-from domain.logging._internal.bridge import BridgeHandler, record_extra_context
 from domain.logging._internal.base import LogLevel
+from domain.logging._internal.bridge import BridgeHandler, record_extra_context
 from domain.logging._internal.console_logger import ConsoleLogger
 
 

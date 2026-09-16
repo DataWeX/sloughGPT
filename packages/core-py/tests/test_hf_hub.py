@@ -2,20 +2,18 @@
 
 from pathlib import Path
 
-import pytest
-
 from domain.infrastructure._internal.hf_hub import (
+    IGNORED_PATTERNS,
     HFFile,
     ResumeInfo,
-    _matches_ignore,
-    _strip_incomplete_suffix,
     _derive_model_id,
     _match_repo_file,
-    IGNORED_PATTERNS,
+    _matches_ignore,
+    _strip_incomplete_suffix,
 )
 
-
 # ── IGNORED_PATTERNS ────────────────────────────────────────────────────────
+
 
 class TestIgnoredPatterns:
     def test_contains_h5(self):
@@ -41,6 +39,7 @@ class TestIgnoredPatterns:
 
 
 # ── HFFile ───────────────────────────────────────────────────────────────────
+
 
 class TestHFFile:
     def test_fields(self):
@@ -79,13 +78,19 @@ class TestHFFile:
 
 # ── ResumeInfo ───────────────────────────────────────────────────────────────
 
+
 class TestResumeInfo:
     def test_fields(self):
         ri = ResumeInfo(
-            model_id="gpt2", repo_path="model.safetensors",
-            partial_path=Path("/tmp/p"), final_path=Path("/tmp/f"),
-            resume_offset=100, total_bytes=1000,
-            download_url="http://x", checksum="abc", complete=False,
+            model_id="gpt2",
+            repo_path="model.safetensors",
+            partial_path=Path("/tmp/p"),
+            final_path=Path("/tmp/f"),
+            resume_offset=100,
+            total_bytes=1000,
+            download_url="http://x",
+            checksum="abc",
+            complete=False,
         )
         assert ri.model_id == "gpt2"
         assert ri.repo_path == "model.safetensors"
@@ -99,30 +104,49 @@ class TestResumeInfo:
 
     def test_complete_true(self):
         ri = ResumeInfo(
-            model_id="m", repo_path="r", partial_path=Path("/p"),
-            final_path=Path("/f"), resume_offset=0, total_bytes=0,
-            download_url="", checksum="", complete=True,
+            model_id="m",
+            repo_path="r",
+            partial_path=Path("/p"),
+            final_path=Path("/f"),
+            resume_offset=0,
+            total_bytes=0,
+            download_url="",
+            checksum="",
+            complete=True,
         )
         assert ri.complete is True
 
     def test_zero_offset(self):
         ri = ResumeInfo(
-            model_id="m", repo_path="r", partial_path=Path("/p"),
-            final_path=Path("/f"), resume_offset=0, total_bytes=100,
-            download_url="", checksum="", complete=False,
+            model_id="m",
+            repo_path="r",
+            partial_path=Path("/p"),
+            final_path=Path("/f"),
+            resume_offset=0,
+            total_bytes=100,
+            download_url="",
+            checksum="",
+            complete=False,
         )
         assert ri.resume_offset == 0
 
     def test_large_offset(self):
         ri = ResumeInfo(
-            model_id="m", repo_path="r", partial_path=Path("/p"),
-            final_path=Path("/f"), resume_offset=10**9, total_bytes=10**10,
-            download_url="", checksum="", complete=False,
+            model_id="m",
+            repo_path="r",
+            partial_path=Path("/p"),
+            final_path=Path("/f"),
+            resume_offset=10**9,
+            total_bytes=10**10,
+            download_url="",
+            checksum="",
+            complete=False,
         )
         assert ri.resume_offset == 10**9
 
 
 # ── _matches_ignore ─────────────────────────────────────────────────────────
+
 
 class TestMatchesIgnore:
     def test_h5(self):
@@ -173,6 +197,7 @@ class TestMatchesIgnore:
 
 # ── _strip_incomplete_suffix ────────────────────────────────────────────────
 
+
 class TestStripIncompleteSuffix:
     def test_sgpart(self):
         assert _strip_incomplete_suffix("model.bin.sgpart") == "model.bin"
@@ -204,13 +229,16 @@ class TestStripIncompleteSuffix:
 
 # ── _derive_model_id ────────────────────────────────────────────────────────
 
+
 class TestDeriveModelId:
     def test_single_slash_model(self):
         result = _derive_model_id("/cache/models--gpt2/snapshots/abc/file.bin")
         assert result == "gpt2"
 
     def test_org_model(self):
-        result = _derive_model_id("/cache/models--Qwen--Qwen2.5-0.5B-Instruct/snapshots/abc/file.bin")
+        result = _derive_model_id(
+            "/cache/models--Qwen--Qwen2.5-0.5B-Instruct/snapshots/abc/file.bin"
+        )
         assert result == "Qwen/Qwen2.5-0.5B-Instruct"
 
     def test_no_models_prefix(self):
@@ -228,6 +256,7 @@ class TestDeriveModelId:
 
 # ── _match_repo_file ────────────────────────────────────────────────────────
 
+
 class TestMatchRepoFile:
     def test_exact_match(self):
         files = [HFFile(path="model.bin", size=100, checksum="", download_url="")]
@@ -236,7 +265,9 @@ class TestMatchRepoFile:
         assert match.path == "model.bin"
 
     def test_basename_match(self):
-        files = [HFFile(path="shard-00001-of-00003.safetensors", size=100, checksum="", download_url="")]
+        files = [
+            HFFile(path="shard-00001-of-00003.safetensors", size=100, checksum="", download_url="")
+        ]
         match = _match_repo_file("shard-00001-of-00003.safetensors", files)
         assert match is not None
 

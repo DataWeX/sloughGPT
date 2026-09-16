@@ -4,14 +4,15 @@ Health check script for SloughGPT API
 Can be used for monitoring or as a simple CLI tool
 """
 
-import sys
 import argparse
-import requests
+import sys
 import time
-from typing import Optional
+
+import requests
 
 try:
     import psutil
+
     HAS_PSUTIL = True
 except ImportError:
     HAS_PSUTIL = False
@@ -29,7 +30,7 @@ class HealthChecker:
             return {
                 "status": "ok" if r.status_code == 200 else "error",
                 "code": r.status_code,
-                "data": r.json()
+                "data": r.json(),
             }
         except Exception as e:
             return {"status": "error", "error": str(e)}
@@ -41,7 +42,7 @@ class HealthChecker:
             return {
                 "status": "ok" if r.status_code == 200 else "error",
                 "code": r.status_code,
-                "data": r.json()
+                "data": r.json(),
             }
         except Exception as e:
             return {"status": "error", "error": str(e)}
@@ -53,7 +54,7 @@ class HealthChecker:
             return {
                 "status": "ok" if r.status_code == 200 else "error",
                 "code": r.status_code,
-                "data": r.json()
+                "data": r.json(),
             }
         except Exception as e:
             return {"status": "error", "error": str(e)}
@@ -65,7 +66,7 @@ class HealthChecker:
             return {
                 "status": "ok" if r.status_code == 200 else "error",
                 "code": r.status_code,
-                "data": r.json()
+                "data": r.json(),
             }
         except Exception as e:
             return {"status": "error", "error": str(e)}
@@ -77,7 +78,7 @@ class HealthChecker:
             return {
                 "status": "ok" if r.status_code == 200 else "error",
                 "code": r.status_code,
-                "data": r.json()
+                "data": r.json(),
             }
         except Exception as e:
             return {"status": "error", "error": str(e)}
@@ -127,7 +128,7 @@ def main():
     checker = HealthChecker(args.url, args.timeout)
 
     if args.watch:
-        print(f"Watching health status (Ctrl+C to stop)...\n")
+        print("Watching health status (Ctrl+C to stop)...\n")
         try:
             while True:
                 results = checker.check_all()

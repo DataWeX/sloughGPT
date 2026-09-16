@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import time
-import threading
-from dataclasses import FrozenInstanceError
 
 import pytest
 
 from domain.collections._internal.scheduler import JobConfig, JobScheduler
 
-
 # ---------------------------------------------------------------------------
 # JobConfig — construction & defaults
 # ---------------------------------------------------------------------------
+
 
 class TestJobConfig:
     def test_defaults(self):
@@ -132,6 +130,7 @@ class TestJobConfig:
 # JobScheduler — add / remove / list
 # ---------------------------------------------------------------------------
 
+
 class TestJobSchedulerAddRemove:
     def test_add_job(self):
         sched = JobScheduler()
@@ -227,6 +226,7 @@ class TestJobSchedulerAddRemove:
 # JobScheduler — start / stop / is_running
 # ---------------------------------------------------------------------------
 
+
 class TestJobSchedulerStartStop:
     def test_start_enabled_job(self):
         sched = JobScheduler()
@@ -314,6 +314,7 @@ class TestJobSchedulerStartStop:
 # JobScheduler — start_all / stop_all
 # ---------------------------------------------------------------------------
 
+
 class TestJobSchedulerBatch:
     def test_start_all(self):
         sched = JobScheduler()
@@ -325,9 +326,13 @@ class TestJobSchedulerBatch:
 
     def test_start_all_skips_disabled(self):
         sched = JobScheduler()
-        sched.add_job(JobConfig(name="a", interval=10, max_runs=100, enabled=True), _noop_collector())
+        sched.add_job(
+            JobConfig(name="a", interval=10, max_runs=100, enabled=True), _noop_collector()
+        )
         sched.add_job(JobConfig(name="b", interval=10, enabled=False), _noop_collector())
-        sched.add_job(JobConfig(name="c", interval=10, max_runs=100, enabled=True), _noop_collector())
+        sched.add_job(
+            JobConfig(name="c", interval=10, max_runs=100, enabled=True), _noop_collector()
+        )
         count = sched.start_all()
         assert count == 2
         sched.stop_all()
@@ -369,6 +374,7 @@ class TestJobSchedulerBatch:
 # ---------------------------------------------------------------------------
 # JobScheduler — stats
 # ---------------------------------------------------------------------------
+
 
 class TestJobSchedulerStats:
     def test_initial_stats(self):
@@ -437,6 +443,7 @@ class TestJobSchedulerStats:
 # JobScheduler — max_runs
 # ---------------------------------------------------------------------------
 
+
 class TestJobSchedulerMaxRuns:
     def test_max_runs_stops_job(self):
         sched = JobScheduler()
@@ -477,13 +484,18 @@ class TestJobSchedulerMaxRuns:
 # JobScheduler — callbacks
 # ---------------------------------------------------------------------------
 
+
 class TestJobSchedulerCallbacks:
     def test_on_complete_called(self):
         completed = []
         sched = JobScheduler()
         sched.add_job(
-            JobConfig(name="j1", interval=0.05, max_runs=1,
-                      on_complete=lambda n, c: completed.append((n, c))),
+            JobConfig(
+                name="j1",
+                interval=0.05,
+                max_runs=1,
+                on_complete=lambda n, c: completed.append((n, c)),
+            ),
             _CountingCollector(),
         )
         sched.start_job("j1")
@@ -499,8 +511,12 @@ class TestJobSchedulerCallbacks:
 
         sched = JobScheduler()
         sched.add_job(
-            JobConfig(name="j1", interval=0.05, max_runs=1,
-                      on_error=lambda n, e: errors.append((n, str(e)))),
+            JobConfig(
+                name="j1",
+                interval=0.05,
+                max_runs=1,
+                on_error=lambda n, e: errors.append((n, str(e))),
+            ),
             _FailCollector(),
         )
         sched.start_job("j1")
@@ -512,8 +528,9 @@ class TestJobSchedulerCallbacks:
         received = []
         sched = JobScheduler()
         sched.add_job(
-            JobConfig(name="j1", interval=0.05, max_runs=1,
-                      on_complete=lambda n, c: received.append(c)),
+            JobConfig(
+                name="j1", interval=0.05, max_runs=1, on_complete=lambda n, c: received.append(c)
+            ),
             _CountingCollector(),
         )
         sched.start_job("j1")
@@ -525,8 +542,12 @@ class TestJobSchedulerCallbacks:
         received = []
         sched = JobScheduler()
         sched.add_job(
-            JobConfig(name="j1", interval=0.05, max_runs=1,
-                      on_error=lambda n, e: received.append(type(e).__name__)),
+            JobConfig(
+                name="j1",
+                interval=0.05,
+                max_runs=1,
+                on_error=lambda n, e: received.append(type(e).__name__),
+            ),
             _FailCollector(),
         )
         sched.start_job("j1")
@@ -553,6 +574,7 @@ class TestJobSchedulerCallbacks:
 # ---------------------------------------------------------------------------
 # JobScheduler — remove while running
 # ---------------------------------------------------------------------------
+
 
 class TestJobSchedulerRemoveWhileRunning:
     def test_remove_stops_running_job(self):
@@ -581,6 +603,7 @@ class TestJobSchedulerRemoveWhileRunning:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class _noop_collector:
     def collect(self):

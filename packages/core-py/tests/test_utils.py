@@ -2,33 +2,32 @@
 
 from __future__ import annotations
 
-import json
 import time
+
 import pytest
-from pathlib import Path
 
 from domain.shared._internal.utils import (
-    generate_id,
-    hash_string,
-    format_size,
-    format_time,
-    load_json,
-    save_json,
-    merge_dicts,
-    clamp,
-    retry,
-    Timer,
     Cache,
     RateLimiter,
-    validate_config,
-    get_timestamp,
+    Timer,
+    clamp,
     find_available_port,
     find_repo_root,
     find_server_python,
+    format_size,
+    format_time,
+    generate_id,
+    get_timestamp,
+    hash_string,
+    load_json,
+    merge_dicts,
+    retry,
+    save_json,
+    validate_config,
 )
 
-
 # ── generate_id ───────────────────────────────────────────────────────────────
+
 
 class TestGenerateId:
     def test_default(self):
@@ -44,6 +43,7 @@ class TestGenerateId:
 
 
 # ── hash_string ───────────────────────────────────────────────────────────────
+
 
 class TestHashString:
     def test_sha256(self):
@@ -62,10 +62,11 @@ class TestHashString:
     def test_unknown_algo(self):
         assert hash_string("hello", "unknown") == "hello"
 
+
 import hashlib
 
-
 # ── format_size ───────────────────────────────────────────────────────────────
+
 
 class TestFormatSize:
     def test_bytes(self):
@@ -86,6 +87,7 @@ class TestFormatSize:
 
 # ── format_time ───────────────────────────────────────────────────────────────
 
+
 class TestFormatTime:
     def test_seconds(self):
         assert format_time(30.5) == "30.5s"
@@ -101,6 +103,7 @@ class TestFormatTime:
 
 
 # ── load_json / save_json ────────────────────────────────────────────────────
+
 
 class TestJsonIO:
     def test_roundtrip(self, tmp_path):
@@ -120,6 +123,7 @@ class TestJsonIO:
 
 # ── merge_dicts ───────────────────────────────────────────────────────────────
 
+
 class TestMergeDicts:
     def test_basic(self):
         result = merge_dicts({"a": 1}, {"b": 2})
@@ -135,6 +139,7 @@ class TestMergeDicts:
 
 # ── clamp ─────────────────────────────────────────────────────────────────────
 
+
 class TestClamp:
     def test_in_range(self):
         assert clamp(5, 0, 10) == 5
@@ -148,19 +153,23 @@ class TestClamp:
 
 # ── retry ─────────────────────────────────────────────────────────────────────
 
+
 class TestRetry:
     def test_success_first_try(self):
         call_count = 0
+
         @retry(max_attempts=3, delay=0.01)
         def succeed():
             nonlocal call_count
             call_count += 1
             return "ok"
+
         assert succeed() == "ok"
         assert call_count == 1
 
     def test_retry_then_success(self):
         call_count = 0
+
         @retry(max_attempts=3, delay=0.01)
         def fail_twice():
             nonlocal call_count
@@ -168,6 +177,7 @@ class TestRetry:
             if call_count < 3:
                 raise ValueError("not yet")
             return "ok"
+
         assert fail_twice() == "ok"
         assert call_count == 3
 
@@ -175,11 +185,13 @@ class TestRetry:
         @retry(max_attempts=2, delay=0.01)
         def always_fail():
             raise ValueError("always")
+
         with pytest.raises(ValueError):
             always_fail()
 
 
 # ── Timer ─────────────────────────────────────────────────────────────────────
+
 
 class TestTimer:
     def test_context_manager(self):
@@ -195,6 +207,7 @@ class TestTimer:
 
 
 # ── Cache ─────────────────────────────────────────────────────────────────────
+
 
 class TestCache:
     def test_set_get(self):
@@ -230,21 +243,26 @@ class TestCache:
 
 # ── RateLimiter ───────────────────────────────────────────────────────────────
 
+
 class TestRateLimiter:
     def test_allows_within_limit(self):
         limiter = RateLimiter(max_calls=3, period=1.0)
+
         @limiter
         def fn():
             return "ok"
+
         assert fn() == "ok"
         assert fn() == "ok"
         assert fn() == "ok"
 
     def test_raises_on_exceed(self):
         limiter = RateLimiter(max_calls=2, period=10.0)
+
         @limiter
         def fn():
             return "ok"
+
         fn()
         fn()
         with pytest.raises(Exception, match="Rate limit"):
@@ -252,6 +270,7 @@ class TestRateLimiter:
 
 
 # ── validate_config ───────────────────────────────────────────────────────────
+
 
 class TestValidateConfig:
     def test_valid(self):
@@ -266,6 +285,7 @@ class TestValidateConfig:
 
 # ── get_timestamp ─────────────────────────────────────────────────────────────
 
+
 class TestGetTimestamp:
     def test_returns_iso(self):
         ts = get_timestamp()
@@ -275,6 +295,7 @@ class TestGetTimestamp:
 
 # ── find_available_port ──────────────────────────────────────────────────────
 
+
 class TestFindAvailablePort:
     def test_finds_port(self):
         port = find_available_port(start_port=9000, max_attempts=100)
@@ -283,6 +304,7 @@ class TestFindAvailablePort:
 
 # ── find_repo_root ────────────────────────────────────────────────────────────
 
+
 class TestFindRepoRoot:
     def test_finds_root(self):
         root = find_repo_root()
@@ -290,6 +312,7 @@ class TestFindRepoRoot:
 
 
 # ── find_server_python ────────────────────────────────────────────────────────
+
 
 class TestFindServerPython:
     def test_returns_string(self):

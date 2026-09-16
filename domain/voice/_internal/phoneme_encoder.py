@@ -10,23 +10,23 @@ Phoneme set based on ARPAbet (simplified).
 from __future__ import annotations
 
 import re
-import numpy as np
 
+import numpy as np
 
 # ── Phoneme inventory ──────────────────────────────────────────────────────
 
 # Vowels (monophthongs + diphthongs)
 VOWELS = {
-    "AA": 0,   # father
-    "AE": 1,   # cat
-    "AH": 2,   # hut
-    "AO": 3,   # thought
-    "AW": 4,   # cow
-    "AY": 5,   # bike
-    "EH": 6,   # bet
-    "ER": 7,   # bird
-    "EY": 8,   # bake
-    "IH": 9,   # bit
+    "AA": 0,  # father
+    "AE": 1,  # cat
+    "AH": 2,  # hut
+    "AO": 3,  # thought
+    "AW": 4,  # cow
+    "AY": 5,  # bike
+    "EH": 6,  # bet
+    "ER": 7,  # bird
+    "EY": 8,  # bake
+    "IH": 9,  # bit
     "IY": 10,  # beat
     "OW": 11,  # boat
     "OY": 12,  # boy
@@ -36,29 +36,29 @@ VOWELS = {
 
 # Consonants
 CONSONANTS = {
-    "B": 15,   # bay
+    "B": 15,  # bay
     "CH": 16,  # chin
-    "D": 17,   # day
+    "D": 17,  # day
     "DH": 18,  # then
-    "F": 19,   # fat
-    "G": 20,   # go
+    "F": 19,  # fat
+    "G": 20,  # go
     "HH": 21,  # hat
     "JH": 22,  # joy
-    "K": 23,   # key
-    "L": 24,   # law
-    "M": 25,   # met
-    "N": 26,   # net
+    "K": 23,  # key
+    "L": 24,  # law
+    "M": 25,  # met
+    "N": 26,  # net
     "NG": 27,  # sing
-    "P": 28,   # pay
-    "R": 29,   # ray
-    "S": 30,   # sea
+    "P": 28,  # pay
+    "R": 29,  # ray
+    "S": 30,  # sea
     "SH": 31,  # she
-    "T": 32,   # tea
+    "T": 32,  # tea
     "TH": 33,  # think
-    "V": 34,   # vat
-    "W": 35,   # way
-    "Y": 36,   # yes
-    "Z": 37,   # zoo
+    "V": 34,  # vat
+    "W": 35,  # way
+    "Y": 36,  # yes
+    "Z": 37,  # zoo
     "ZH": 38,  # vision
 }
 
@@ -127,9 +127,7 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "each": ["IY", "CH"],
     "which": ["W", "IH", "CH"],
     "she": ["SH", "IY"],
-    "do": ["D", "UW"],
     "how": ["HH", "AW"],
-    "their": ["DH", "EH", "R"],
     "if": ["IH", "F"],
     "will": ["W", "IH", "L"],
     "up": ["AH", "P"],
@@ -174,7 +172,6 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "may": ["M", "EY"],
     "hello": ["HH", "EH", "L", "OW"],
     "yes": ["Y", "EH", "S"],
-    "no": ["N", "OW"],
     "please": ["P", "L", "IY", "Z"],
     "thank": ["TH", "AE", "NG", "K"],
     "thanks": ["TH", "AE", "NG", "K", "S"],
@@ -193,11 +190,7 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "old": ["OW", "L", "D"],
     "here": ["HH", "IH", "R"],
     "where": ["W", "EH", "R"],
-    "when": ["W", "EH", "N"],
     "why": ["W", "AY"],
-    "how": ["HH", "AW"],
-    "what": ["W", "AH", "T"],
-    "who": ["HH", "UW"],
     "name": ["N", "EY", "M"],
     "people": ["P", "IY", "P", "AH", "L"],
     "quick": ["K", "W", "IH", "K"],
@@ -249,9 +242,7 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "slow": ["S", "L", "OW"],
     "easy": ["IY", "Z", "IY"],
     "hard": ["HH", "AA", "R", "D"],
-    "time": ["T", "AY", "M"],
     "year": ["Y", "IH", "R"],
-    "day": ["D", "EY"],
     "world": ["W", "ER", "L", "D"],
     "life": ["L", "AY", "F"],
     "hand": ["HH", "AE", "N", "D"],
@@ -278,7 +269,6 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "fact": ["F", "AE", "K", "T"],
     "month": ["M", "AH", "N", "TH"],
     "lot": ["L", "AA", "T"],
-    "right": ["R", "AY", "T"],
     "study": ["S", "T", "AH", "D", "IY"],
     "book": ["B", "UH", "K"],
     "eye": ["AY"],
@@ -303,7 +293,6 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "car": ["K", "AA", "R"],
     "city": ["S", "IH", "T", "IY"],
     "community": ["K", "AH", "M", "Y", "UW", "N", "IH", "T", "IY"],
-    "name": ["N", "EY", "M"],
     "president": ["P", "R", "EH", "Z", "AH", "N", "T"],
     "team": ["T", "IY", "M"],
     "minute": ["M", "IH", "N", "AH", "T"],
@@ -360,8 +349,6 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "yellow": ["Y", "EH", "L", "OW"],
     "black": ["B", "L", "AE", "K"],
     "white": ["W", "AY", "T"],
-    "one": ["W", "AH", "N"],
-    "two": ["T", "UW"],
     "three": ["TH", "R", "IY"],
     "four": ["F", "AO", "R"],
     "five": ["F", "AY", "V"],
@@ -391,25 +378,15 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "window": ["W", "IH", "N", "D", "OW"],
     "bed": ["B", "EH", "D"],
     "bath": ["B", "AE", "TH"],
-    "car": ["K", "AA", "R"],
     "bus": ["B", "AH", "S"],
     "train": ["T", "R", "EY", "N"],
     "plane": ["P", "L", "EY", "N"],
     "bike": ["B", "AY", "K"],
-    "book": ["B", "UH", "K"],
     "pen": ["P", "EH", "N"],
     "paper": ["P", "EY", "P", "ER"],
-    "phone": ["F", "OW", "N"],
-    "computer": ["K", "AH", "M", "P", "Y", "UW", "T", "ER"],
-    "internet": ["IH", "N", "T", "ER", "N", "EH", "T"],
-    "email": ["IY", "M", "EY", "L"],
     "website": ["W", "EH", "B", "S", "AY", "T"],
     "video": ["V", "IH", "D", "IY", "OW"],
-    "music": ["M", "Y", "UW", "Z", "IH", "K"],
-    "movie": ["M", "UW", "V", "IY"],
-    "game": ["G", "EY", "M"],
     "sport": ["S", "P", "AO", "R", "T"],
-    "team": ["T", "IY", "M"],
     "player": ["P", "L", "EY", "ER"],
     "coach": ["K", "OW", "CH"],
     "win": ["W", "IH", "N"],
@@ -447,7 +424,6 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "cup": ["K", "AH", "P"],
     "glass": ["G", "L", "AE", "S"],
     "bottle": ["B", "AA", "T", "AH", "L"],
-    "can": ["K", "AE", "N"],
     "jar": ["JH", "AA", "R"],
     "bowl": ["B", "OW", "L"],
     "pan": ["P", "AE", "N"],
@@ -474,7 +450,6 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "broom": ["B", "R", "UW", "M"],
     "mop": ["M", "AA", "P"],
     "bucket": ["B", "AH", "K", "IH", "T"],
-    "towel": ["T", "AW", "AH", "L"],
     "closet": ["K", "L", "OW", "Z", "IH", "T"],
     "drawer": ["D", "R", "AO", "ER"],
     "shelf": ["SH", "EH", "L", "F"],
@@ -490,7 +465,6 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "road": ["R", "OW", "D"],
     "street": ["S", "T", "R", "IY", "T"],
     "bridge": ["B", "R", "IH", "JH"],
-    "river": ["R", "IH", "V", "ER"],
     "lake": ["L", "EY", "K"],
     "mountain": ["M", "AW", "N", "T", "AH", "N"],
     "hill": ["HH", "IH", "L"],
@@ -507,14 +481,11 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "metal": ["M", "EH", "T", "AH", "L"],
     "wood": ["W", "UH", "D"],
     "plastic": ["P", "L", "AE", "S", "T", "IH", "K"],
-    "glass": ["G", "L", "AE", "S"],
-    "paper": ["P", "EY", "P", "ER"],
     "cotton": ["K", "AA", "T", "AH", "N"],
     "silk": ["S", "IH", "L", "K"],
     "wool": ["W", "UH", "L"],
     "leather": ["L", "EH", "DH", "ER"],
     "rubber": ["R", "AH", "B", "ER"],
-    "cotton": ["K", "AA", "T", "AH", "N"],
     "sugar": ["SH", "UH", "G", "ER"],
     "salt": ["S", "AO", "L", "T"],
     "pepper": ["P", "EH", "P", "ER"],
@@ -525,7 +496,6 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "cheese": ["CH", "IY", "Z"],
     "meat": ["M", "IY", "T"],
     "chicken": ["CH", "IH", "K", "AH", "N"],
-    "fish": ["F", "IH", "SH"],
     "pork": ["P", "AO", "R", "K"],
     "beef": ["B", "IY", "F"],
     "lamb": ["L", "AE", "M"],
@@ -556,7 +526,6 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "garlic": ["G", "AA", "R", "L", "IH", "K"],
     "lettuce": ["L", "EH", "T", "IH", "S"],
     "cucumber": ["K", "Y", "UW", "K", "AH", "M", "B", "ER"],
-    "pepper": ["P", "EH", "P", "ER"],
     "mushroom": ["M", "AH", "SH", "R", "UW", "M"],
     "mango": ["M", "AE", "NG", "G", "OW"],
     "peach": ["P", "IY", "CH"],
@@ -593,16 +562,10 @@ _PRONUNCIATION_DICT: dict[str, list[str]] = {
     "baguette": ["B", "AE", "G", "EH", "T"],
     "pretzel": ["P", "R", "EH", "T", "S", "AH", "L"],
     "cracker": ["K", "R", "AE", "K", "ER"],
-    "popcorn": ["P", "AA", "P", "K", "AO", "R", "N"],
     "peanut": ["P", "IY", "N", "AH", "T"],
     "almond": ["AA", "M", "AH", "N", "D"],
     "walnut": ["W", "AO", "L", "N", "AH", "T"],
     "cashew": ["K", "AE", "SH", "UW"],
-    "pecan": ["P", "IH", "K", "AE", "N"],
-    "hazelnut": ["HH", "EY", "Z", "AH", "L", "N", "AH", "T"],
-    "macadamia": ["M", "AE", "K", "AH", "D", "EY", "M", "IY", "AH"],
-    "pistachio": ["P", "IH", "S", "T", "AE", "SH", "IY", "OW"],
-    "walnut": ["W", "AO", "L", "N", "AH", "T"],
     "pecan": ["P", "IH", "K", "AE", "N"],
     "hazelnut": ["HH", "EY", "Z", "AH", "L", "N", "AH", "T"],
     "macadamia": ["M", "AE", "K", "AH", "D", "EY", "M", "IY", "AH"],
@@ -743,17 +706,46 @@ def text_to_phonemes(text: str) -> list[str]:
 # Phoneme-to-grapheme mapping for decode
 PHONEME_TO_GRAPHEME: dict[str, str] = {
     # Vowels
-    "AA": "a", "AE": "a", "AH": "u", "AO": "o",
-    "AW": "ow", "AY": "i", "EH": "e", "ER": "er",
-    "EY": "a", "IH": "i", "IY": "ee", "OW": "o",
-    "OY": "oy", "UH": "u", "UW": "oo",
+    "AA": "a",
+    "AE": "a",
+    "AH": "u",
+    "AO": "o",
+    "AW": "ow",
+    "AY": "i",
+    "EH": "e",
+    "ER": "er",
+    "EY": "a",
+    "IH": "i",
+    "IY": "ee",
+    "OW": "o",
+    "OY": "oy",
+    "UH": "u",
+    "UW": "oo",
     # Consonants
-    "B": "b", "CH": "ch", "D": "d", "DH": "th",
-    "F": "f", "G": "g", "HH": "h", "JH": "j",
-    "K": "k", "L": "l", "M": "m", "N": "n",
-    "NG": "ng", "P": "p", "R": "r", "S": "s",
-    "SH": "sh", "T": "t", "TH": "th", "V": "v",
-    "W": "w", "Y": "y", "Z": "z", "ZH": "zh",
+    "B": "b",
+    "CH": "ch",
+    "D": "d",
+    "DH": "th",
+    "F": "f",
+    "G": "g",
+    "HH": "h",
+    "JH": "j",
+    "K": "k",
+    "L": "l",
+    "M": "m",
+    "N": "n",
+    "NG": "ng",
+    "P": "p",
+    "R": "r",
+    "S": "s",
+    "SH": "sh",
+    "T": "t",
+    "TH": "th",
+    "V": "v",
+    "W": "w",
+    "Y": "y",
+    "Z": "z",
+    "ZH": "zh",
 }
 
 
@@ -762,8 +754,13 @@ class PhonemeEncoder:
 
     def __init__(self):
         self.phoneme_to_id: dict[str, int] = {
-            **VOWELS, **CONSONANTS,
-            "_": PAD, "<": BOS, ">": EOS, " ": SPACE, "-": SILENCE,
+            **VOWELS,
+            **CONSONANTS,
+            "_": PAD,
+            "<": BOS,
+            ">": EOS,
+            " ": SPACE,
+            "-": SILENCE,
         }
 
     def encode(self, text: str) -> np.ndarray:
@@ -799,13 +796,13 @@ class PhonemeEncoder:
             # Return list of arrays with different lengths
             result = np.zeros((len(all_ids), max(len(ids) for ids in all_ids)), dtype=np.int32)
             for i, ids in enumerate(all_ids):
-                result[i, :len(ids)] = ids
+                result[i, : len(ids)] = ids
             return result
 
         max_len = max(len(ids) for ids in all_ids)
         result = np.zeros((len(all_ids), max_len), dtype=np.int32)
         for i, ids in enumerate(all_ids):
-            result[i, :len(ids)] = ids
+            result[i, : len(ids)] = ids
         return result
 
     def decode(self, ids: np.ndarray) -> str:
@@ -883,8 +880,12 @@ class PhonemeEncoder:
         spoken_ids = self.encode(spoken).flatten()
 
         # Strip BOS/EOS for comparison
-        target_phonemes = [ID_TO_PHONEME.get(i, "?") for i in target_ids if i not in (BOS, EOS, PAD)]
-        spoken_phonemes = [ID_TO_PHONEME.get(i, "?") for i in spoken_ids if i not in (BOS, EOS, PAD)]
+        target_phonemes = [
+            ID_TO_PHONEME.get(i, "?") for i in target_ids if i not in (BOS, EOS, PAD)
+        ]
+        spoken_phonemes = [
+            ID_TO_PHONEME.get(i, "?") for i in spoken_ids if i not in (BOS, EOS, PAD)
+        ]
 
         # Calculate similarity using longest common subsequence
         lcs_len = self._lcs_length(target_phonemes, spoken_phonemes)
@@ -919,10 +920,10 @@ class PhonemeEncoder:
         dp = [[0] * (n + 1) for _ in range(m + 1)]
         for i in range(1, m + 1):
             for j in range(1, n + 1):
-                if a[i-1] == b[j-1]:
-                    dp[i][j] = dp[i-1][j-1] + 1
+                if a[i - 1] == b[j - 1]:
+                    dp[i][j] = dp[i - 1][j - 1] + 1
                 else:
-                    dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+                    dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
         return dp[m][n]
 
     @property

@@ -5,7 +5,6 @@ Defines personalities that can be applied to model outputs
 
 from __future__ import annotations
 
-from typing import Dict, List
 from dataclasses import dataclass
 from enum import Enum
 
@@ -27,8 +26,8 @@ class Personality:
 
     name: str
     description: str
-    traits: Dict[str, float]
-    examples: List[str]
+    traits: dict[str, float]
+    examples: list[str]
 
     def apply(self, text: str) -> str:
         """Apply personality to text."""
@@ -41,7 +40,7 @@ class Personality:
 
 
 # Define personalities
-PERSONALITIES: Dict[PersonalityType, Personality] = {
+PERSONALITIES: dict[PersonalityType, Personality] = {
     PersonalityType.HELPFUL: Personality(
         name="Helpful",
         description="Friendly and assistance-oriented",
@@ -116,7 +115,7 @@ class PersonalityManager:
         """Get current personality."""
         return self.current
 
-    def list_personalities(self) -> List[Dict]:
+    def list_personalities(self) -> list[dict]:
         """List all available personalities."""
         return [
             {"type": ptype.value, "name": p.name, "description": p.description, "traits": p.traits}
@@ -137,6 +136,6 @@ def get_personality_manager() -> PersonalityManager:
     return _default_manager
 
 
-def list_personalities() -> List[Dict]:
+def list_personalities() -> list[dict]:
     """List all available personalities."""
     return _default_manager.list_personalities()

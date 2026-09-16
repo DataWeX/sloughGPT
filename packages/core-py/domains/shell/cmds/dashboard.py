@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from ..console import Console
 from ..commands import ShellCommands, _api_get
+from ..console import Console
 
 help = "Show live server dashboard (health, processes, events)"
 
@@ -25,7 +25,7 @@ def _format_uptime(seconds: int) -> str:
 
 
 def _format_ts(ts: float) -> str:
-    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%H:%M:%S")
+    return datetime.fromtimestamp(ts, tz=UTC).strftime("%H:%M:%S")
 
 
 def _sparkline(values: list[float], width: int = 12) -> str:

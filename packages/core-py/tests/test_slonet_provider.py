@@ -3,8 +3,7 @@ Tests for slonet_provider — tokenizers, config, provider wiring, generation lo
 
 FEATURE: slonet-provider-tests — pure logic only, no external API mocks.
 """
-import math
-import struct
+
 import threading
 import time
 
@@ -12,20 +11,20 @@ import numpy as np
 import pytest
 
 from domain.inference._internal.slonet_provider import (
-    SloNetChatProvider,
-    _CharTokenizer,
-    _TreeTokenizer,
-    _split_fused_qkv,
+    _ARCH_TO_SLONET_GELU,
     _ARCH_TO_SLONET_SHARED,
     _ARCH_TO_SLONET_SWIGLU,
-    _ARCH_TO_SLONET_GELU,
+    SloNetChatProvider,
+    _CharTokenizer,
+    _split_fused_qkv,
+    _TreeTokenizer,
     convert_hf_to_slonet,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class MockTokenizer:
     def __init__(self, vocab_size=1000):
@@ -68,14 +67,24 @@ class MockModel:
 
     def forward_pass(self, input_ids):
         from domain.inference._internal.forward_pass import ForwardPassResult
+
         batch, seq_len = input_ids.shape
         logits = np.random.randn(batch, seq_len, self.vocab_size)
         return ForwardPassResult(logits=logits, engine="mock")
 
-    def generate_numpy_stream(self, input_ids, max_new_tokens=50, eos_token=0,
-                               temperature=1.0, top_k=None, top_p=None,
-                               repetition_penalty=1.0, extra_stop_ids=None, kv_state=None,
-                               return_logprobs=False):
+    def generate_numpy_stream(
+        self,
+        input_ids,
+        max_new_tokens=50,
+        eos_token=0,
+        temperature=1.0,
+        top_k=None,
+        top_p=None,
+        repetition_penalty=1.0,
+        extra_stop_ids=None,
+        kv_state=None,
+        return_logprobs=False,
+    ):
         stop_ids = {eos_token} | set(extra_stop_ids or ())
         for i in range(max_new_tokens):
             tok = (self._counter + i) % self.vocab_size
@@ -87,13 +96,30 @@ class MockModel:
             else:
                 yield tok
 
-    def generate_numpy(self, input_ids, max_new_tokens=50, temperature=1.0,
-                        top_k=None, top_p=None, repetition_penalty=1.0,
-                        eos_token=0, extra_stop_ids=None, kv_state=None):
-        tokens = list(self.generate_numpy_stream(
-            input_ids, max_new_tokens, eos_token, temperature, top_k, top_p,
-            repetition_penalty, extra_stop_ids,
-        ))
+    def generate_numpy(
+        self,
+        input_ids,
+        max_new_tokens=50,
+        temperature=1.0,
+        top_k=None,
+        top_p=None,
+        repetition_penalty=1.0,
+        eos_token=0,
+        extra_stop_ids=None,
+        kv_state=None,
+    ):
+        tokens = list(
+            self.generate_numpy_stream(
+                input_ids,
+                max_new_tokens,
+                eos_token,
+                temperature,
+                top_k,
+                top_p,
+                repetition_penalty,
+                extra_stop_ids,
+            )
+        )
         if not tokens:
             return input_ids
         return np.array([tokens], dtype=np.int64)
@@ -124,6 +150,7 @@ def _make_provider(**overrides):
 # ═══════════════════════════════════════════════════════════════════════════════
 # _CharTokenizer
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestCharTokenizer:
     def test_encode_single_chars(self):
@@ -210,6 +237,7 @@ class TestCharTokenizer:
 # _TreeTokenizer
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestTreeTokenizer:
     def test_eos_and_pad_from_tree(self):
         tree = MagicMock()
@@ -257,6 +285,7 @@ class TestTreeTokenizer:
 # _split_fused_qkv
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestSplitFusedQKV:
     def test_weight_split(self):
         n_embed = 64
@@ -299,6 +328,7 @@ class TestSplitFusedQKV:
 # SloNetChatProvider.__init__
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestInit:
     def test_direct_init_raises_typeerror(self):
         with pytest.raises(TypeError, match="removed"):
@@ -312,6 +342,7 @@ class TestInit:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Provider configuration & properties
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestProviderConfig:
     def test_model_id_property(self):
@@ -339,19 +370,20 @@ class TestProviderConfig:
 
     def test_to_server_returns_server_instance(self):
         from domain.infrastructure._internal.slonet_server import SloNetServer
+
         p = _make_provider()
         server = p.to_server()
         assert isinstance(server, SloNetServer)
 
     def test_to_server_with_guard(self):
-        from domain.infrastructure._internal.slonet_server import SloNetServer
+
         p = _make_provider()
         guard = MagicMock()
         server = p.to_server(process_guard=guard)
         assert server._process_guard is guard
 
     def test_to_server_with_lazy_lock_sets_factory(self):
-        from domain.infrastructure._internal.slonet_server import SloNetServer
+
         p = _make_provider()
         p._lazy_lock = threading.Lock()
         server = p.to_server()
@@ -361,6 +393,7 @@ class TestProviderConfig:
 # ═══════════════════════════════════════════════════════════════════════════════
 # _build_prompt
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestBuildPrompt:
     def test_empty_messages(self):
@@ -398,6 +431,7 @@ class TestBuildPrompt:
 # num_parameters
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestNumParameters:
     def test_returns_from_meta_when_available(self):
         p = _make_provider()
@@ -426,6 +460,7 @@ class TestNumParameters:
 # quantization_report
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestQuantizationReport:
     def test_not_quantized(self):
         p = _make_provider()
@@ -447,6 +482,7 @@ class TestQuantizationReport:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Session management (KV cache)
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestSessionManagement:
     def test_session_stats_empty(self):
@@ -553,6 +589,7 @@ class TestSessionManagement:
 # _load_tokenizer
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestLoadTokenizer:
     def test_raises_runtime_error_on_failure(self):
         p = _make_provider()
@@ -563,6 +600,7 @@ class TestLoadTokenizer:
 # ═══════════════════════════════════════════════════════════════════════════════
 # _get_model
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestGetModel:
     def test_returns_model_when_set(self):
@@ -581,6 +619,7 @@ class TestGetModel:
 # ═══════════════════════════════════════════════════════════════════════════════
 # generate / generate_with_stop / generate_with_logprobs
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestGenerate:
     def test_generate_returns_string(self):
@@ -650,6 +689,7 @@ class TestGenerate:
 # tokenize / detokenize / count_tokens
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestTokenize:
     def test_tokenize_returns_int_list(self):
         p = _make_provider()
@@ -671,12 +711,21 @@ class TestTokenize:
 # metadata
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestMetadata:
     def test_metadata_has_required_keys(self):
         p = _make_provider()
         meta = p.metadata()
-        for key in ["model_id", "architecture", "total_params", "vocab_size",
-                     "max_seq_len", "device", "quantized", "has_tokenizer"]:
+        for key in [
+            "model_id",
+            "architecture",
+            "total_params",
+            "vocab_size",
+            "max_seq_len",
+            "device",
+            "quantized",
+            "has_tokenizer",
+        ]:
             assert key in meta, f"Missing: {key}"
 
     def test_metadata_model_id(self):
@@ -698,6 +747,7 @@ class TestMetadata:
 # ═══════════════════════════════════════════════════════════════════════════════
 # release_model
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestReleaseModel:
     def test_eager_provider_returns_false(self):
@@ -726,6 +776,7 @@ class TestReleaseModel:
 # Mapping tables sanity
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestArchMappings:
     def test_shared_has_expected_keys(self):
         for key in ["embed.token", "embed.pos", "layers.{i}.q.weight", "final_norm.weight"]:
@@ -749,45 +800,46 @@ class TestArchMappings:
 # convert_hf_to_slonet — additional
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestConvertHfToSlonet:
     def test_lm_head_tied_to_tok_emb(self):
-        n_embed, n_layer = 32, 1
+        n_embed, _n_layer = 32, 1
         sd = {
             "wte.weight": np.random.randn(100, n_embed).astype(np.float32),
             "ln_f.weight": np.ones(n_embed, dtype=np.float32),
-            f"h.0.ln_1.weight": np.ones(n_embed, dtype=np.float32),
-            f"h.0.ln_1.bias": np.zeros(n_embed, dtype=np.float32),
-            f"h.0.attn.c_attn.weight": np.random.randn(n_embed, 3 * n_embed).astype(np.float32),
-            f"h.0.attn.c_attn.bias": np.random.randn(3 * n_embed).astype(np.float32),
-            f"h.0.attn.c_proj.weight": np.random.randn(n_embed, n_embed).astype(np.float32),
-            f"h.0.attn.c_proj.bias": np.zeros(n_embed, dtype=np.float32),
-            f"h.0.ln_2.weight": np.ones(n_embed, dtype=np.float32),
-            f"h.0.ln_2.bias": np.zeros(n_embed, dtype=np.float32),
-            f"h.0.mlp.c_fc.weight": np.random.randn(n_embed, 4 * n_embed).astype(np.float32),
-            f"h.0.mlp.c_fc.bias": np.zeros(4 * n_embed, dtype=np.float32),
-            f"h.0.mlp.c_proj.weight": np.random.randn(4 * n_embed, n_embed).astype(np.float32),
-            f"h.0.mlp.c_proj.bias": np.zeros(n_embed, dtype=np.float32),
+            "h.0.ln_1.weight": np.ones(n_embed, dtype=np.float32),
+            "h.0.ln_1.bias": np.zeros(n_embed, dtype=np.float32),
+            "h.0.attn.c_attn.weight": np.random.randn(n_embed, 3 * n_embed).astype(np.float32),
+            "h.0.attn.c_attn.bias": np.random.randn(3 * n_embed).astype(np.float32),
+            "h.0.attn.c_proj.weight": np.random.randn(n_embed, n_embed).astype(np.float32),
+            "h.0.attn.c_proj.bias": np.zeros(n_embed, dtype=np.float32),
+            "h.0.ln_2.weight": np.ones(n_embed, dtype=np.float32),
+            "h.0.ln_2.bias": np.zeros(n_embed, dtype=np.float32),
+            "h.0.mlp.c_fc.weight": np.random.randn(n_embed, 4 * n_embed).astype(np.float32),
+            "h.0.mlp.c_fc.bias": np.zeros(4 * n_embed, dtype=np.float32),
+            "h.0.mlp.c_proj.weight": np.random.randn(4 * n_embed, n_embed).astype(np.float32),
+            "h.0.mlp.c_proj.bias": np.zeros(n_embed, dtype=np.float32),
         }
         result = convert_hf_to_slonet(sd, n_layer=1)
         np.testing.assert_array_equal(result["tok_emb.weight"], result["lm_head.weight"])
 
     def test_unknown_architecture_still_works(self):
-        n_embed, n_layer = 32, 1
+        n_embed, _n_layer = 32, 1
         sd = {
             "wte.weight": np.random.randn(100, n_embed).astype(np.float32),
             "ln_f.weight": np.ones(n_embed, dtype=np.float32),
-            f"h.0.ln_1.weight": np.ones(n_embed, dtype=np.float32),
-            f"h.0.ln_1.bias": np.zeros(n_embed, dtype=np.float32),
-            f"h.0.attn.c_attn.weight": np.random.randn(n_embed, 3 * n_embed).astype(np.float32),
-            f"h.0.attn.c_attn.bias": np.random.randn(3 * n_embed).astype(np.float32),
-            f"h.0.attn.c_proj.weight": np.random.randn(n_embed, n_embed).astype(np.float32),
-            f"h.0.attn.c_proj.bias": np.zeros(n_embed, dtype=np.float32),
-            f"h.0.ln_2.weight": np.ones(n_embed, dtype=np.float32),
-            f"h.0.ln_2.bias": np.zeros(n_embed, dtype=np.float32),
-            f"h.0.mlp.c_fc.weight": np.random.randn(n_embed, 4 * n_embed).astype(np.float32),
-            f"h.0.mlp.c_fc.bias": np.zeros(4 * n_embed, dtype=np.float32),
-            f"h.0.mlp.c_proj.weight": np.random.randn(4 * n_embed, n_embed).astype(np.float32),
-            f"h.0.mlp.c_proj.bias": np.zeros(n_embed, dtype=np.float32),
+            "h.0.ln_1.weight": np.ones(n_embed, dtype=np.float32),
+            "h.0.ln_1.bias": np.zeros(n_embed, dtype=np.float32),
+            "h.0.attn.c_attn.weight": np.random.randn(n_embed, 3 * n_embed).astype(np.float32),
+            "h.0.attn.c_attn.bias": np.random.randn(3 * n_embed).astype(np.float32),
+            "h.0.attn.c_proj.weight": np.random.randn(n_embed, n_embed).astype(np.float32),
+            "h.0.attn.c_proj.bias": np.zeros(n_embed, dtype=np.float32),
+            "h.0.ln_2.weight": np.ones(n_embed, dtype=np.float32),
+            "h.0.ln_2.bias": np.zeros(n_embed, dtype=np.float32),
+            "h.0.mlp.c_fc.weight": np.random.randn(n_embed, 4 * n_embed).astype(np.float32),
+            "h.0.mlp.c_fc.bias": np.zeros(4 * n_embed, dtype=np.float32),
+            "h.0.mlp.c_proj.weight": np.random.randn(4 * n_embed, n_embed).astype(np.float32),
+            "h.0.mlp.c_proj.bias": np.zeros(n_embed, dtype=np.float32),
         }
         result = convert_hf_to_slonet(sd, n_layer=1, config={"architectures": ["UnknownArch"]})
         assert isinstance(result, dict)
@@ -795,22 +847,22 @@ class TestConvertHfToSlonet:
 
     def test_w3_synth_bias_ones_for_gelu(self):
         """GELU synthesis: w3.bias should be ones."""
-        n_embed, n_layer = 32, 1
+        n_embed, _n_layer = 32, 1
         sd = {
             "wte.weight": np.random.randn(100, n_embed).astype(np.float32),
             "ln_f.weight": np.ones(n_embed, dtype=np.float32),
-            f"h.0.ln_1.weight": np.ones(n_embed, dtype=np.float32),
-            f"h.0.ln_1.bias": np.zeros(n_embed, dtype=np.float32),
-            f"h.0.attn.c_attn.weight": np.random.randn(n_embed, 3 * n_embed).astype(np.float32),
-            f"h.0.attn.c_attn.bias": np.random.randn(3 * n_embed).astype(np.float32),
-            f"h.0.attn.c_proj.weight": np.random.randn(n_embed, n_embed).astype(np.float32),
-            f"h.0.attn.c_proj.bias": np.zeros(n_embed, dtype=np.float32),
-            f"h.0.ln_2.weight": np.ones(n_embed, dtype=np.float32),
-            f"h.0.ln_2.bias": np.zeros(n_embed, dtype=np.float32),
-            f"h.0.mlp.c_fc.weight": np.random.randn(n_embed, 4 * n_embed).astype(np.float32),
-            f"h.0.mlp.c_fc.bias": np.zeros(4 * n_embed, dtype=np.float32),
-            f"h.0.mlp.c_proj.weight": np.random.randn(4 * n_embed, n_embed).astype(np.float32),
-            f"h.0.mlp.c_proj.bias": np.zeros(n_embed, dtype=np.float32),
+            "h.0.ln_1.weight": np.ones(n_embed, dtype=np.float32),
+            "h.0.ln_1.bias": np.zeros(n_embed, dtype=np.float32),
+            "h.0.attn.c_attn.weight": np.random.randn(n_embed, 3 * n_embed).astype(np.float32),
+            "h.0.attn.c_attn.bias": np.random.randn(3 * n_embed).astype(np.float32),
+            "h.0.attn.c_proj.weight": np.random.randn(n_embed, n_embed).astype(np.float32),
+            "h.0.attn.c_proj.bias": np.zeros(n_embed, dtype=np.float32),
+            "h.0.ln_2.weight": np.ones(n_embed, dtype=np.float32),
+            "h.0.ln_2.bias": np.zeros(n_embed, dtype=np.float32),
+            "h.0.mlp.c_fc.weight": np.random.randn(n_embed, 4 * n_embed).astype(np.float32),
+            "h.0.mlp.c_fc.bias": np.zeros(4 * n_embed, dtype=np.float32),
+            "h.0.mlp.c_proj.weight": np.random.randn(4 * n_embed, n_embed).astype(np.float32),
+            "h.0.mlp.c_proj.bias": np.zeros(n_embed, dtype=np.float32),
         }
         result = convert_hf_to_slonet(sd, n_layer=1)
         np.testing.assert_array_equal(
@@ -823,7 +875,9 @@ class TestConvertHfToSlonet:
 # Backward compat alias
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestBackwardCompat:
     def test_alias_exists(self):
         from domain.inference._internal.slonet_provider import SlonetChatProvider
+
         assert SlonetChatProvider is SloNetChatProvider

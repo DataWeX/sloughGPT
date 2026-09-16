@@ -1,16 +1,15 @@
 """Tests for cognitive/reasoning/deep.py — dataclasses + FormalLogicEngine + WorkingMemory."""
 
-import pytest
 from domain.cognitive._internal.reasoning.deep import (
+    DeepReasoningContext,
+    FormalLogicEngine,
+    LogicalOperator,
+    Predicate,
     RetrievalSource,
     RetrievedKnowledge,
-    DeepReasoningContext,
-    LogicalOperator,
-    Term,
-    Predicate,
-    WellFormedFormula,
     Substitution,
-    FormalLogicEngine,
+    Term,
+    WellFormedFormula,
     WorkingMemory,
 )
 
@@ -35,7 +34,9 @@ class TestRetrievedKnowledge:
         assert k.source_id is None
 
     def test_with_source_id(self):
-        k = RetrievedKnowledge(content="x", source=RetrievalSource.VECTOR_STORE, relevance=0.5, source_id="v1")
+        k = RetrievedKnowledge(
+            content="x", source=RetrievalSource.VECTOR_STORE, relevance=0.5, source_id="v1"
+        )
         assert k.source_id == "v1"
 
 
@@ -51,8 +52,11 @@ class TestDeepReasoningContext:
     def test_with_values(self):
         k = RetrievedKnowledge(content="c", source=RetrievalSource.MEMORY, relevance=0.8)
         ctx = DeepReasoningContext(
-            query="q", retrieved_knowledge=[k], working_memory=["m1"],
-            constraints=["c1"], assumptions=["a1"],
+            query="q",
+            retrieved_knowledge=[k],
+            working_memory=["m1"],
+            constraints=["c1"],
+            assumptions=["a1"],
         )
         assert len(ctx.retrieved_knowledge) == 1
         assert ctx.working_memory == ["m1"]
@@ -138,7 +142,9 @@ class TestWellFormedFormula:
 
     def test_quantifier_wff(self):
         var = Term(name="X", is_variable=True)
-        sub = WellFormedFormula(predicate=Predicate(name="human", terms=[Term(name="X", is_variable=True)]))
+        sub = WellFormedFormula(
+            predicate=Predicate(name="human", terms=[Term(name="X", is_variable=True)])
+        )
         wff = WellFormedFormula(
             quantifier_var=var,
             quantifier_type=LogicalOperator.FORALL,
@@ -206,8 +212,12 @@ class TestFormalLogicEngine:
         # human(X) → mortal(X)
         wff = WellFormedFormula(
             operator=LogicalOperator.IMPLIES,
-            left=WellFormedFormula(predicate=Predicate(name="human", terms=[Term(name="X", is_variable=True)])),
-            right=WellFormedFormula(predicate=Predicate(name="mortal", terms=[Term(name="X", is_variable=True)])),
+            left=WellFormedFormula(
+                predicate=Predicate(name="human", terms=[Term(name="X", is_variable=True)])
+            ),
+            right=WellFormedFormula(
+                predicate=Predicate(name="mortal", terms=[Term(name="X", is_variable=True)])
+            ),
         )
         engine.assert_fact(wff)
         engine.assert_predicate("human", "socrates")

@@ -1,4 +1,5 @@
 """Tests for RLHF config and metrics."""
+
 from __future__ import annotations
 
 from domain.training._internal.rlhf import RLHFConfig, RLHFMetric

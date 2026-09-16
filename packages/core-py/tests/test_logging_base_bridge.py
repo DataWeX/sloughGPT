@@ -11,17 +11,23 @@ Covers:
 """
 
 import logging
-import pytest
 from unittest.mock import MagicMock
+
 from domain.logging._internal.base import (
-    Logger, LogLevel, LogRecord, ErrorCode, LogTag, TaggedLogger, ChildLogger,
+    ErrorCode,
+    Logger,
+    LogLevel,
+    LogRecord,
+    LogTag,
 )
-from domain.logging._internal.bridge import BridgeHandler, _LEVEL_MAP
+from domain.logging._internal.bridge import _LEVEL_MAP, BridgeHandler
 
 
 class TestLogLevel:
     def test_ordering(self):
-        assert LogLevel.DEBUG < LogLevel.INFO < LogLevel.WARNING < LogLevel.ERROR < LogLevel.CRITICAL
+        assert (
+            LogLevel.DEBUG < LogLevel.INFO < LogLevel.WARNING < LogLevel.ERROR < LogLevel.CRITICAL
+        )
 
     def test_ge(self):
         assert LogLevel.ERROR >= LogLevel.WARNING
@@ -212,8 +218,13 @@ class TestChildLogger:
 class TestBridgeHandler:
     def _make_record(self, level, msg, **extra):
         record = logging.LogRecord(
-            name="slo.test", level=level, pathname="", lineno=0,
-            msg=msg, args=(), exc_info=None,
+            name="slo.test",
+            level=level,
+            pathname="",
+            lineno=0,
+            msg=msg,
+            args=(),
+            exc_info=None,
         )
         for k, v in extra.items():
             setattr(record, k, v)
@@ -265,8 +276,13 @@ class TestBridgeHandler:
         mock_logger = MagicMock()
         handler = BridgeHandler(mock_logger)
         record = logging.LogRecord(
-            name="slo.test", level=logging.ERROR, pathname="", lineno=0,
-            msg="err", args=(), exc_info=(ValueError, ValueError("bad"), None),
+            name="slo.test",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="err",
+            args=(),
+            exc_info=(ValueError, ValueError("bad"), None),
         )
         handler.emit(record)
         emitted = mock_logger.emit.call_args[0][0]

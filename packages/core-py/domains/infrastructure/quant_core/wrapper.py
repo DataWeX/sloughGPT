@@ -21,7 +21,6 @@ import logging
 import os
 import subprocess
 import sys
-from typing import Optional, Union
 
 import numpy as np
 
@@ -43,13 +42,11 @@ _SRCS = {
     "matmul_int8": os.path.join(_HERE, "matmul_int8.c"),
     "matmul_int4": os.path.join(_HERE, "matmul_int4.c"),
 }
-_DYLIBS = {
-    name: os.path.join(_HERE, f"{name}{_EXT}")
-    for name in _SRCS
-}
+_DYLIBS = {name: os.path.join(_HERE, f"{name}{_EXT}") for name in _SRCS}
 
 
 # ── Build ──────────────────────────────────────────────────────────
+
 
 def _build_one(name: str) -> bool:
     """Compile a single C extension with gcc/clang.
@@ -68,22 +65,25 @@ def _build_one(name: str) -> bool:
     dylib = _DYLIBS[name]
     try:
         if not os.path.exists(src):
-            logger.warning("quant_core: source not found: %s", src,
-                extra={"tag": "INFRA"})
+            logger.warning("quant_core: source not found: %s", src, extra={"tag": "INFRA"})
             return False
 
         def _compile(flags):
             return subprocess.run(
-                ["gcc", "-O3", *flags, "-shared", "-fPIC", "-pthread",
-                 "-o", dylib, src],
-                capture_output=True, text=True, timeout=60,
+                ["gcc", "-O3", *flags, "-shared", "-fPIC", "-pthread", "-o", dylib, src],
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
 
         base = ["-mavx2"]
         # AVX-512 BW + VNNI fused int8 dot-product (llama.cpp-style). Try it
         # first; if the toolchain rejects the flags, retry plain AVX2.
         avx512 = [
-            "-mavx512f", "-mavx512bw", "-mavx512vnni", "-fno-tree-vectorize",
+            "-mavx512f",
+            "-mavx512bw",
+            "-mavx512vnni",
+            "-fno-tree-vectorize",
         ]
         result = _compile(base + avx512)
         if result.returncode != 0:
@@ -92,20 +92,25 @@ def _build_one(name: str) -> bool:
         if result.returncode != 0:
             logger.warning(
                 "quant_core: %s compilation failed (stderr):\n%s",
-                name, result.stderr,
+                name,
+                result.stderr,
                 extra={"tag": "INFRA"},
             )
             return False
-        logger.info("quant_core: compiled %s", dylib,
-            extra={"tag": "INFRA"})
+        logger.info("quant_core: compiled %s", dylib, extra={"tag": "INFRA"})
         return True
     except FileNotFoundError:
-        logger.warning("quant_core: gcc/clang not found — using numpy fallback",
-            extra={"tag": "INFRA"})
+        logger.warning(
+            "quant_core: gcc/clang not found — using numpy fallback", extra={"tag": "INFRA"}
+        )
         return False
     except Exception as exc:
-        logger.warning("quant_core: %s build error (%s) — using numpy fallback", name, exc,
-            extra={"tag": "INFRA"})
+        logger.warning(
+            "quant_core: %s build error (%s) — using numpy fallback",
+            name,
+            exc,
+            extra={"tag": "INFRA"},
+        )
         return False
 
 
@@ -158,9 +163,9 @@ def _load_lib():
             ctypes.c_void_p,  # A
             ctypes.c_void_p,  # B
             ctypes.c_void_p,  # C (output)
-            ctypes.c_int,     # M
-            ctypes.c_int,     # N
-            ctypes.c_int,     # K
+            ctypes.c_int,  # M
+            ctypes.c_int,  # N
+            ctypes.c_int,  # K
         ]
         _LIB.matmul_int8.restype = None
         _LIB.matmul_int8_f32.argtypes = [
@@ -169,16 +174,15 @@ def _load_lib():
             ctypes.c_void_p,  # B_scale (float)
             ctypes.c_void_p,  # bias (float, nullable)
             ctypes.c_void_p,  # C (float32 output)
-            ctypes.c_int,     # M
-            ctypes.c_int,     # N
-            ctypes.c_int,     # K
-            ctypes.c_int,     # b_scale_per_row
+            ctypes.c_int,  # M
+            ctypes.c_int,  # N
+            ctypes.c_int,  # K
+            ctypes.c_int,  # b_scale_per_row
         ]
         _LIB.matmul_int8_f32.restype = None
         has_int8 = True
     except Exception as exc:
-        logger.warning("quant_core: int8 lib load failed (%s)", exc,
-            extra={"tag": "INFRA"})
+        logger.warning("quant_core: int8 lib load failed (%s)", exc, extra={"tag": "INFRA"})
         has_int8 = False
 
     # Expose whether the AVX-512 VNNI kernel is active (compiled + supported).
@@ -209,22 +213,20 @@ def _load_lib():
             ctypes.c_void_p,  # A
             ctypes.c_void_p,  # B_packed
             ctypes.c_void_p,  # C (output)
-            ctypes.c_int,     # M
-            ctypes.c_int,     # N
-            ctypes.c_int,     # K
+            ctypes.c_int,  # M
+            ctypes.c_int,  # N
+            ctypes.c_int,  # K
         ]
         _lib4.matmul_int4.restype = None
         # Attach to _LIB so hasattr and call syntax work
         _LIB.matmul_int4 = _lib4.matmul_int4
         has_int4 = True
     except Exception as exc:
-        logger.info("quant_core: matmul_int4 not available (%s)", exc,
-            extra={"tag": "INFRA"})
+        logger.info("quant_core: matmul_int4 not available (%s)", exc, extra={"tag": "INFRA"})
 
     if has_int4 or has_int8:
         return True
-    logger.warning("quant_core: no library loaded",
-        extra={"tag": "INFRA"})
+    logger.warning("quant_core: no library loaded", extra={"tag": "INFRA"})
     return False
 
 
@@ -267,9 +269,9 @@ def matmul_int8_c(A: np.ndarray, B: np.ndarray) -> np.ndarray:
 def matmul_int8_f32_c(
     A: np.ndarray,
     B: np.ndarray,
-    B_scale: Union[float, np.ndarray],
-    bias: Optional[np.ndarray] = None,
-) -> Optional[np.ndarray]:
+    B_scale: float | np.ndarray,
+    bias: np.ndarray | None = None,
+) -> np.ndarray | None:
     """Fused float32 activation → quantized int8 → GEMM → float32 output.
 
     Performs the whole per-token symmetric W8A8 linear in one C call:
@@ -301,8 +303,7 @@ def matmul_int8_f32_c(
         b_scale_per_row = 0
     else:
         b_scale_arr = np.asarray(B_scale, dtype=np.float32).ravel().copy()
-        assert b_scale_arr.shape[0] == N, \
-            f"B_scale has {b_scale_arr.shape[0]} rows, expected {N}"
+        assert b_scale_arr.shape[0] == N, f"B_scale has {b_scale_arr.shape[0]} rows, expected {N}"
         b_scale_per_row = 1
     bias_ptr = None
     if bias is not None:
@@ -344,7 +345,7 @@ def matmul_int4_c(A: np.ndarray, B_packed: np.ndarray, K: int) -> np.ndarray:
     M = A.shape[0]
     N = B_packed.shape[0]
     assert A.shape[1] == K, f"A.shape[1]={A.shape[1]} != K={K}"
-    assert B_packed.shape[1] == K // 2, f"B_packed.shape[1]={B_packed.shape[1]} != K/2={K//2}"
+    assert B_packed.shape[1] == K // 2, f"B_packed.shape[1]={B_packed.shape[1]} != K/2={K // 2}"
 
     C = np.zeros((M, N), dtype=np.int32)
     _LIB.matmul_int4(
@@ -382,14 +383,11 @@ if not HAS_AVX2:
     HAS_AVX512 = False  # no native kernel; set by _load_lib when present
 if HAS_AVX2:
     if hasattr(_LIB, "matmul_int4"):
-        logger.info("quant_core: AVX2 int8 + int4 GEMM loaded",
-            extra={"tag": "INFRA"})
+        logger.info("quant_core: AVX2 int8 + int4 GEMM loaded", extra={"tag": "INFRA"})
     else:
-        logger.info("quant_core: AVX2 int8 GEMM loaded",
-            extra={"tag": "INFRA"})
+        logger.info("quant_core: AVX2 int8 GEMM loaded", extra={"tag": "INFRA"})
 else:
-    logger.info("quant_core: using numpy fallback for all quantized GEMM",
-        extra={"tag": "INFRA"})
+    logger.info("quant_core: using numpy fallback for all quantized GEMM", extra={"tag": "INFRA"})
 
 
 # ── Smart per-shape kernel dispatch ──────────────────────────────────

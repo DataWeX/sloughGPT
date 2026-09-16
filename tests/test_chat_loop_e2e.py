@@ -5,7 +5,9 @@ Uses the real FastAPI app with targeted mocks for the provider pipeline.
 Only the regenerate endpoint requires real model inference, so it's tested
 separately with the "model not loaded" error path.
 """
+
 import os
+
 os.environ.setdefault("MAN_AUTOLOAD_MODEL", "")
 os.environ.setdefault("MAN_AUTO_WORKFLOW", "false")
 os.environ.setdefault("MAN_HEALTH_MONITOR", "false")
@@ -13,8 +15,9 @@ os.environ.setdefault("MAN_WATCHDOG", "false")
 os.environ.setdefault("SLO_STARTUP_PROFILE", "quick")
 
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 
 pytestmark = pytest.mark.slow
@@ -22,6 +25,7 @@ pytestmark = pytest.mark.slow
 
 class AsyncIteratorMock:
     """Async iterator yielding SSE tokens on-demand."""
+
     def __init__(self, tokens):
         self._tokens = list(tokens)
 
@@ -37,6 +41,7 @@ class AsyncIteratorMock:
 @pytest.fixture(scope="module")
 def client():
     from apps.api.server.main import app
+
     with TestClient(app) as c:
         yield c
 
@@ -45,6 +50,7 @@ def client():
 def mock_chat_deps():
     """Mock provider pipeline + learner + session to avoid HF model loading."""
     import startup_progress
+
     startup_progress.STARTUP_PHASE.update(phase="ready", message="Server ready (test mock)")
     in_memory_sessions: dict = {}
 
@@ -66,21 +72,29 @@ def mock_chat_deps():
     model_ctrl._hf_model = MagicMock()
     model_ctrl._tokenizer = MagicMock()
 
-    with patch("domains.models.provider.get_provider", return_value=provider), \
-         patch("routers.inference._enrich_knowledge",
-               return_value={"source": "none", "facts": [], "topics": []}), \
-         patch("domains.infrastructure.session_core.SessionCore.store_context",
-               side_effect=fake_store_context), \
-         patch("domains.infrastructure.session_core.SessionCore.get_messages",
-               side_effect=fake_get_messages), \
-         patch("controllers.feedback.get_feedback_controller") as mock_fb_ctrl, \
-         patch("controllers.models.get_models_controller", return_value=model_ctrl), \
-         patch("domains.learner.get_learner"), \
-         patch("state.model", new_callable=MagicMock):
+    with (
+        patch("domains.models.provider.get_provider", return_value=provider),
+        patch(
+            "routers.inference._enrich_knowledge",
+            return_value={"source": "none", "facts": [], "topics": []},
+        ),
+        patch(
+            "domains.infrastructure.session_core.SessionCore.store_context",
+            side_effect=fake_store_context,
+        ),
+        patch(
+            "domains.infrastructure.session_core.SessionCore.get_messages",
+            side_effect=fake_get_messages,
+        ),
+        patch("controllers.feedback.get_feedback_controller") as mock_fb_ctrl,
+        patch("controllers.models.get_models_controller", return_value=model_ctrl),
+        patch("domains.learner.get_learner"),
+        patch("state.model", new_callable=MagicMock),
+    ):
         mock_fb = MagicMock()
-        mock_fb.record_feedback = MagicMock(return_value={
-            "status": "recorded", "feedback_id": "mock-fb-1"
-        })
+        mock_fb.record_feedback = MagicMock(
+            return_value={"status": "recorded", "feedback_id": "mock-fb-1"}
+        )
         mock_fb_ctrl.return_value = mock_fb
         yield {
             "provider": provider,
@@ -118,10 +132,7 @@ class TestChatLoopE2E:
                 events.append(json.loads(line[6:]))
 
         assert len(events) >= 2
-        tokens = "".join(
-            e["data"]["token"] for e in events
-            if e.get("data", {}).get("token")
-        )
+        tokens = "".join(e["data"]["token"] for e in events if e.get("data", {}).get("token"))
         assert "Hello! How can I help?" in tokens
         assert any(e["status"] == "complete" for e in events), "Missing complete event"
 

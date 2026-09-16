@@ -1,13 +1,13 @@
 """Tests for domain.infrastructure.cancel_manager — OpType, OpStatus, Operation; domain.infrastructure.cpu_topology — CpuTopology."""
 
-import enum
-from domain.infrastructure._internal.cancel_manager import OpType, OpStatus, Operation
+from domain.infrastructure._internal.cancel_manager import Operation, OpStatus, OpType
 from domain.infrastructure._internal.cpu_topology import CpuTopology
 
 
 class TestOpType:
     def test_all_members(self):
         assert len(OpType) == 6
+
     def test_values(self):
         assert OpType.TRAINING.value == "training"
         assert OpType.INFERENCE.value == "inference"
@@ -20,6 +20,7 @@ class TestOpType:
 class TestOpStatus:
     def test_all_members(self):
         assert len(OpStatus) == 6
+
     def test_values(self):
         assert OpStatus.REGISTERED.value == "registered"
         assert OpStatus.RUNNING.value == "running"
@@ -31,8 +32,12 @@ class TestOpStatus:
 class TestOperation:
     def test_fields(self):
         op = Operation(
-            id="op1", op_type=OpType.TRAINING, label="train job",
-            status=OpStatus.REGISTERED, cancel_fn=lambda: None, created_at=1.0,
+            id="op1",
+            op_type=OpType.TRAINING,
+            label="train job",
+            status=OpStatus.REGISTERED,
+            cancel_fn=lambda: None,
+            created_at=1.0,
         )
         assert op.id == "op1"
         assert op.op_type == OpType.TRAINING
@@ -41,8 +46,12 @@ class TestOperation:
 
     def test_to_dict(self):
         op = Operation(
-            id="op1", op_type=OpType.TRAINING, label="train",
-            status=OpStatus.RUNNING, cancel_fn=lambda: None, created_at=1.0,
+            id="op1",
+            op_type=OpType.TRAINING,
+            label="train",
+            status=OpStatus.RUNNING,
+            cancel_fn=lambda: None,
+            created_at=1.0,
         )
         d = op.to_dict()
         assert d["id"] == "op1"
@@ -80,6 +89,6 @@ class TestCpuTopology:
         ct = CpuTopology()
         try:
             ct.logical_cores = 16
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass

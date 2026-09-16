@@ -2,23 +2,22 @@
 
 from __future__ import annotations
 
-import time
-import threading
-from unittest.mock import MagicMock
-
 import pytest
 
 from domain.logging._internal.base import (
-    LogLevel, ErrorCode, LogTag, LogRecord, Logger,
-    TaggedLogger, ChildLogger, CompositeLogger,
+    CompositeLogger,
+    ErrorCode,
+    Logger,
+    LogLevel,
+    LogRecord,
+    LogTag,
+    TaggedLogger,
 )
-
 
 # ── LogLevel ────────────────────────────────────────────────────────────────
 
 
 class TestLogLevel:
-
     def test_values(self):
         assert LogLevel.DEBUG.value == "debug"
         assert LogLevel.INFO.value == "info"
@@ -55,7 +54,6 @@ class TestLogLevel:
 
 
 class TestErrorCode:
-
     def test_auth_codes(self):
         assert ErrorCode.E_AUTH_MISSING.value == "E_AUTH_MISSING"
         assert ErrorCode.E_AUTH_EXPIRED.value == "E_AUTH_EXPIRED"
@@ -72,7 +70,6 @@ class TestErrorCode:
 
 
 class TestLogTag:
-
     def test_values(self):
         assert LogTag.REQ.value == "REQ"
         assert LogTag.TRAIN.value == "TRAIN"
@@ -86,7 +83,6 @@ class TestLogTag:
 
 
 class TestLogRecord:
-
     def test_defaults(self):
         r = LogRecord(level=LogLevel.INFO, message="hello")
         assert r.level == LogLevel.INFO
@@ -133,7 +129,6 @@ class ConcreteLogger(Logger):
 
 
 class TestLogger:
-
     def test_init(self):
         log = ConcreteLogger("test")
         assert log.name == "test"
@@ -235,7 +230,6 @@ class TestLogger:
 
 
 class TestTaggedLogger:
-
     def test_emit_delegates_to_parent(self):
         parent = ConcreteLogger("parent")
         tagged = parent.tag("TRAIN")
@@ -262,7 +256,6 @@ class TestTaggedLogger:
 
 
 class TestChildLogger:
-
     def test_emit_delegates_to_parent(self):
         parent = ConcreteLogger("parent")
         child = parent.child("sub")
@@ -286,7 +279,6 @@ class TestChildLogger:
 
 
 class TestCompositeLogger:
-
     def test_emit_to_children(self):
         c1 = ConcreteLogger("c1")
         c2 = ConcreteLogger("c2")

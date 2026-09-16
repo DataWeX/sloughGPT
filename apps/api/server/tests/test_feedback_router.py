@@ -11,7 +11,6 @@ from controllers.feedback import (
     reset_feedback_controller,
     set_feedback_controller,
 )
-
 from tests.test_support import get_test_client
 
 
@@ -216,8 +215,8 @@ class TestConversations:
         assert resp.status_code == 200
 
     def test_list_conversations_sorted_by_updated(self):
-        c1 = client.post("/feedback/conversations", json={"name": "First"})
-        c2 = client.post("/feedback/conversations", json={"name": "Second"})
+        client.post("/feedback/conversations", json={"name": "First"})
+        client.post("/feedback/conversations", json={"name": "Second"})
         resp = client.get("/feedback/conversations")
         names = [c["name"] for c in resp.json()]
         assert "Second" in names

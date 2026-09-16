@@ -6,14 +6,13 @@ All domain calls are mocked; only HTTP-level behavior is tested.
 Note: the companion router imports get_companion / create_companion inside
 the handler function body, so we must patch at the domain module level.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -32,28 +31,41 @@ from routers.companion import router  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_companion(**overrides):
-    defaults = dict(
-        _traits={"name": "Friend", "warmth": 0.7, "curiosity": 0.6, "creativity": 0.5, "confidence": 0.5, "humor": 0.4},
-        set_personality=lambda **kw: None,
-        get_system_prompt=lambda: "You are a friendly companion.",
-        build_system_prompt=lambda: "You are a friendly companion.",
-        adjust_for_mood=lambda mood: None,
-    )
+    defaults = {
+        "_traits": {
+            "name": "Friend",
+            "warmth": 0.7,
+            "curiosity": 0.6,
+            "creativity": 0.5,
+            "confidence": 0.5,
+            "humor": 0.4,
+        },
+        "set_personality": lambda **kw: None,
+        "get_system_prompt": lambda: "You are a friendly companion.",
+        "build_system_prompt": lambda: "You are a friendly companion.",
+        "adjust_for_mood": lambda mood: None,
+    }
     defaults.update(overrides)
     ns = SimpleNamespace(**defaults)
+
     # Allow set_personality to update _traits
     def _set_personality(**kw):
         ns._traits.update(kw)
+
     ns.set_personality = _set_personality
     # Make to_dict return current traits
     ns.to_dict = lambda: {"name": ns._traits.get("name", "Friend"), "traits": dict(ns._traits)}
+
     # generate() async method — checks provider availability
     async def _generate(**kwargs):
         from domain.models._internal.provider import get_provider
+
         if get_provider("default") is None:
             raise RuntimeError("No model loaded")
         return "Hello there!"
+
     ns.generate = _generate
     return ns
 
@@ -62,6 +74,7 @@ def _app():
     app = FastAPI()
     app.include_router(router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 
@@ -93,14 +106,17 @@ class TestSetPersonality:
         comp = _make_companion()
         mock_get.return_value = comp
         client = TestClient(_app())
-        resp = client.post("/companion/personality", json={
-            "name": "Alice",
-            "warmth": 0.9,
-            "curiosity": 0.8,
-            "creativity": 0.7,
-            "confidence": 0.6,
-            "humor": 0.5,
-        })
+        resp = client.post(
+            "/companion/personality",
+            json={
+                "name": "Alice",
+                "warmth": 0.9,
+                "curiosity": 0.8,
+                "creativity": 0.7,
+                "confidence": 0.6,
+                "humor": 0.5,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert "traits" in data

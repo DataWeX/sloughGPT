@@ -9,6 +9,7 @@ Install via:
     domain.shell._internal.addons import shell_ui
     kernel.install_addon(shell_ui)
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,6 +29,7 @@ def spawn_shell(kernel: Any, shell_class: Any = None, **kwargs: Any) -> Process:
     """
     if shell_class is None:
         from ..repl import ShellREPL
+
         shell_class = ShellREPL
 
     def _shell_entry():
@@ -91,8 +93,9 @@ def spawn_kernel_shell(kernel: Any, stdin_fn=None, stdout_fn=None) -> Process:
                     if stdout_fn:
                         stdout_fn(f"loading {prog_name}...\n")
                     try:
-                        from ..vm import DiskProgramLoader, FlatFS, BlockDevice
-                        if not hasattr(kernel, '_block_device'):
+                        from ..vm import BlockDevice, DiskProgramLoader, FlatFS
+
+                        if not hasattr(kernel, "_block_device"):
                             kernel._block_device = BlockDevice()
                             kernel._fs = FlatFS(kernel._block_device)
                         loader = DiskProgramLoader(kernel._fs)
@@ -103,7 +106,7 @@ def spawn_kernel_shell(kernel: Any, stdin_fn=None, stdout_fn=None) -> Process:
                         if stdout_fn:
                             stdout_fn(f"error: {e}\n")
             elif cmd == "ls":
-                if not hasattr(kernel, '_fs'):
+                if not hasattr(kernel, "_fs"):
                     if stdout_fn:
                         stdout_fn("no filesystem mounted\n")
                 else:
@@ -119,14 +122,14 @@ def spawn_kernel_shell(kernel: Any, stdin_fn=None, stdout_fn=None) -> Process:
                 if not args:
                     if stdout_fn:
                         stdout_fn("usage: cat <file>\n")
-                elif not hasattr(kernel, '_fs'):
+                elif not hasattr(kernel, "_fs"):
                     if stdout_fn:
                         stdout_fn("no filesystem mounted\n")
                 else:
                     try:
                         data = kernel._fs.read(args[0])
                         if stdout_fn:
-                            stdout_fn(data.decode('utf-8', errors='replace').rstrip('\x00') + "\n")
+                            stdout_fn(data.decode("utf-8", errors="replace").rstrip("\x00") + "\n")
                     except Exception as e:
                         if stdout_fn:
                             stdout_fn(f"error: {e}\n")
@@ -134,14 +137,14 @@ def spawn_kernel_shell(kernel: Any, stdin_fn=None, stdout_fn=None) -> Process:
                 if len(args) < 2:
                     if stdout_fn:
                         stdout_fn("usage: write <file> <content>\n")
-                elif not hasattr(kernel, '_fs'):
+                elif not hasattr(kernel, "_fs"):
                     if stdout_fn:
                         stdout_fn("no filesystem mounted\n")
                 else:
                     fname = args[0]
                     content = " ".join(args[1:])
                     try:
-                        kernel._fs.write(fname, content.encode('utf-8'))
+                        kernel._fs.write(fname, content.encode("utf-8"))
                         if stdout_fn:
                             stdout_fn(f"wrote {len(content)} bytes to {fname}\n")
                     except Exception as e:
@@ -166,10 +169,15 @@ def spawn_kernel_shell(kernel: Any, stdin_fn=None, stdout_fn=None) -> Process:
     return proc
 
 
-def spawn_vm_process(kernel: Any, name: str, source: str,
-                     stdin_fn=None, stdout_fn=None,
-                     priority: Priority = Priority.NORMAL,
-                     use_syscalls: bool = False) -> Process:
+def spawn_vm_process(
+    kernel: Any,
+    name: str,
+    source: str,
+    stdin_fn=None,
+    stdout_fn=None,
+    priority: Priority = Priority.NORMAL,
+    use_syscalls: bool = False,
+) -> Process:
     """Spawn a process that runs VM assembly code.
 
     Creates a VirtualSystem, loads the assembled program, and executes
@@ -182,6 +190,7 @@ def spawn_vm_process(kernel: Any, name: str, source: str,
 
     def _handle_syscall(num, args):
         from ..kernel_syscall import SyscallNumber
+
         if num == SyscallNumber.CONSOLE_WRITE:
             val = args[0]
             if stdout_fn:
@@ -235,13 +244,14 @@ def run_program(kernel: Any, source: str, trace: bool = False) -> dict:
     Creates a VM CPU, wires it to the kernel's devices, and executes
     the assembled program. Returns output, trace, and step count.
     """
-    from ..vm import CPU, Assembler, DeviceBus as VMBus
+    from ..vm import CPU, Assembler
+    from ..vm import DeviceBus as VMBus
 
     vm_bus = VMBus()
-    if hasattr(kernel._devices, '_table'):
+    if hasattr(kernel._devices, "_table"):
         for name, dev in kernel._devices._table._devices.items():
             vm_bus.register(name, dev)
-    elif hasattr(kernel._devices, '_devices'):
+    elif hasattr(kernel._devices, "_devices"):
         for name, dev in kernel._devices._devices.items():
             vm_bus.register(name, dev)
 
@@ -261,6 +271,7 @@ def run_program(kernel: Any, source: str, trace: bool = False) -> dict:
 
 
 # --- Addon setup ---
+
 
 def setup(kernel: Any) -> None:
     """Install shell/VM spawn capabilities on the kernel."""

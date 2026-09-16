@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-import pytest
+
 from domain.infrastructure._internal.pugqeep.dedup import PointDeduplicator, PointLibrarySync
 from domain.infrastructure._internal.pugqeep.library import PointLibrary
 from domain.infrastructure._internal.pugqeep.point import Point
@@ -14,7 +14,9 @@ from domain.infrastructure._internal.pugqeep.point import Point
 
 class TestPointDeduplicator:
     def _make_point(self, identity, data):
-        return Point(identity=identity, function_type="periodic", params={"a": 1.0, "b": 2.0, "w": data})
+        return Point(
+            identity=identity, function_type="periodic", params={"a": 1.0, "b": 2.0, "w": data}
+        )
 
     def test_no_duplicates(self):
         lib = PointLibrary()
@@ -79,8 +81,11 @@ class TestPointDeduplicator:
         p = Point(
             identity="raw1",
             function_type="raw",
-            params={"data_b64": base64.b64encode(data.tobytes()).decode(),
-                    "shape": list(data.shape), "dtype": "float32"},
+            params={
+                "data_b64": base64.b64encode(data.tobytes()).decode(),
+                "shape": list(data.shape),
+                "dtype": "float32",
+            },
         )
         lib = PointLibrary()
         lib.add(p)
@@ -90,12 +95,24 @@ class TestPointDeduplicator:
 
     def test_duplicate_raw_points(self):
         data = np.array([1.0, 2.0], dtype=np.float32)
-        p1 = Point(identity="r1", function_type="raw",
-                    params={"data_b64": base64.b64encode(data.tobytes()).decode(),
-                            "shape": list(data.shape), "dtype": "float32"})
-        p2 = Point(identity="r2", function_type="raw",
-                    params={"data_b64": base64.b64encode(data.tobytes()).decode(),
-                            "shape": list(data.shape), "dtype": "float32"})
+        p1 = Point(
+            identity="r1",
+            function_type="raw",
+            params={
+                "data_b64": base64.b64encode(data.tobytes()).decode(),
+                "shape": list(data.shape),
+                "dtype": "float32",
+            },
+        )
+        p2 = Point(
+            identity="r2",
+            function_type="raw",
+            params={
+                "data_b64": base64.b64encode(data.tobytes()).decode(),
+                "shape": list(data.shape),
+                "dtype": "float32",
+            },
+        )
         lib = PointLibrary()
         lib.add(p1)
         lib.add(p2)
@@ -124,10 +141,12 @@ class TestPointDeduplicator:
         assert dedup.deduplicate()["merged"] == 0
 
     def test_tolerance_affects_fingerprint(self):
-        p1 = Point(identity="t1", function_type="periodic",
-                    params={"a": 1.0, "b": 2.0, "w": 1.0000001})
-        p2 = Point(identity="t2", function_type="periodic",
-                    params={"a": 1.0, "b": 2.0, "w": 1.0000002})
+        p1 = Point(
+            identity="t1", function_type="periodic", params={"a": 1.0, "b": 2.0, "w": 1.0000001}
+        )
+        p2 = Point(
+            identity="t2", function_type="periodic", params={"a": 1.0, "b": 2.0, "w": 1.0000002}
+        )
         lib = PointLibrary()
         lib.add(p1)
         lib.add(p2)
@@ -209,10 +228,16 @@ class TestPointDeduplicator:
         assignments1 = np.array([0, 1], dtype=np.uint8)
         centroids2 = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
         assignments2 = np.array([0, 1], dtype=np.uint8)
-        p1 = Point(identity="c1", function_type="cluster",
-                    params={"centroids": centroids1, "assignments": assignments1})
-        p2 = Point(identity="c2", function_type="cluster",
-                    params={"centroids": centroids2, "assignments": assignments2})
+        p1 = Point(
+            identity="c1",
+            function_type="cluster",
+            params={"centroids": centroids1, "assignments": assignments1},
+        )
+        p2 = Point(
+            identity="c2",
+            function_type="cluster",
+            params={"centroids": centroids2, "assignments": assignments2},
+        )
         lib = PointLibrary()
         lib.add(p1)
         lib.add(p2)
@@ -224,9 +249,15 @@ class TestPointDeduplicator:
     def test_different_function_types_no_match(self):
         p1 = Point(identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 1.0})
         data = np.array([1.0], dtype=np.float32)
-        p2 = Point(identity="p2", function_type="raw",
-                    params={"data_b64": base64.b64encode(data.tobytes()).decode(),
-                            "shape": [1], "dtype": "float32"})
+        p2 = Point(
+            identity="p2",
+            function_type="raw",
+            params={
+                "data_b64": base64.b64encode(data.tobytes()).decode(),
+                "shape": [1],
+                "dtype": "float32",
+            },
+        )
         lib = PointLibrary()
         lib.add(p1)
         lib.add(p2)
@@ -246,13 +277,29 @@ class TestPointDeduplicator:
     def test_deduplicate_cross_library_raw(self):
         data = np.array([5.0, 6.0], dtype=np.float32)
         lib1 = PointLibrary()
-        lib1.add(Point(identity="r1", function_type="raw",
-                       params={"data_b64": base64.b64encode(data.tobytes()).decode(),
-                               "shape": [2], "dtype": "float32"}))
+        lib1.add(
+            Point(
+                identity="r1",
+                function_type="raw",
+                params={
+                    "data_b64": base64.b64encode(data.tobytes()).decode(),
+                    "shape": [2],
+                    "dtype": "float32",
+                },
+            )
+        )
         lib2 = PointLibrary()
-        lib2.add(Point(identity="r2", function_type="raw",
-                       params={"data_b64": base64.b64encode(data.tobytes()).decode(),
-                               "shape": [2], "dtype": "float32"}))
+        lib2.add(
+            Point(
+                identity="r2",
+                function_type="raw",
+                params={
+                    "data_b64": base64.b64encode(data.tobytes()).decode(),
+                    "shape": [2],
+                    "dtype": "float32",
+                },
+            )
+        )
         dedup = PointDeduplicator()
         dedup.add_library(lib1)
         dedup.add_library(lib2)
@@ -265,8 +312,16 @@ class TestPointDeduplicator:
         c2 = np.array([[10.0, 20.0], [30.0, 40.0]], dtype=np.float32)
         a = np.array([0, 1], dtype=np.uint8)
         lib = PointLibrary()
-        lib.add(Point(identity="c1", function_type="cluster", params={"centroids": c1, "assignments": a}))
-        lib.add(Point(identity="c2", function_type="cluster", params={"centroids": c2, "assignments": a}))
+        lib.add(
+            Point(
+                identity="c1", function_type="cluster", params={"centroids": c1, "assignments": a}
+            )
+        )
+        lib.add(
+            Point(
+                identity="c2", function_type="cluster", params={"centroids": c2, "assignments": a}
+            )
+        )
         dedup = PointDeduplicator()
         dedup.add_library(lib)
         groups = dedup.find_duplicates()
@@ -276,12 +331,28 @@ class TestPointDeduplicator:
         d1 = np.array([1.0], dtype=np.float32)
         d2 = np.array([99.0], dtype=np.float32)
         lib = PointLibrary()
-        lib.add(Point(identity="r1", function_type="raw",
-                       params={"data_b64": base64.b64encode(d1.tobytes()).decode(),
-                               "shape": [1], "dtype": "float32"}))
-        lib.add(Point(identity="r2", function_type="raw",
-                       params={"data_b64": base64.b64encode(d2.tobytes()).decode(),
-                               "shape": [1], "dtype": "float32"}))
+        lib.add(
+            Point(
+                identity="r1",
+                function_type="raw",
+                params={
+                    "data_b64": base64.b64encode(d1.tobytes()).decode(),
+                    "shape": [1],
+                    "dtype": "float32",
+                },
+            )
+        )
+        lib.add(
+            Point(
+                identity="r2",
+                function_type="raw",
+                params={
+                    "data_b64": base64.b64encode(d2.tobytes()).decode(),
+                    "shape": [1],
+                    "dtype": "float32",
+                },
+            )
+        )
         dedup = PointDeduplicator()
         dedup.add_library(lib)
         groups = dedup.find_duplicates()
@@ -301,8 +372,12 @@ class TestPointDeduplicator:
 class TestPointLibrarySync:
     def test_export_import_bytes(self):
         lib = PointLibrary(name="sync_test")
-        lib.add(Point(identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 1.0}))
-        lib.add(Point(identity="p2", function_type="periodic", params={"a": 0.0, "b": 1.0, "w": 2.0}))
+        lib.add(
+            Point(identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 1.0})
+        )
+        lib.add(
+            Point(identity="p2", function_type="periodic", params={"a": 0.0, "b": 1.0, "w": 2.0})
+        )
 
         sync = PointLibrarySync()
         data = sync.export_bytes(lib)
@@ -316,7 +391,11 @@ class TestPointLibrarySync:
     def test_sync_to_directory(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             lib = PointLibrary(name="to_dir")
-            lib.add(Point(identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}))
+            lib.add(
+                Point(
+                    identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}
+                )
+            )
 
             sync = PointLibrarySync()
             path = sync.sync_to_directory(lib, Path(tmpdir))
@@ -325,7 +404,11 @@ class TestPointLibrarySync:
     def test_sync_from_directory(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             lib = PointLibrary(name="from_dir")
-            lib.add(Point(identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}))
+            lib.add(
+                Point(
+                    identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}
+                )
+            )
             lib.save(Path(tmpdir) / "from_dir.points.json")
 
             sync = PointLibrarySync()
@@ -342,7 +425,9 @@ class TestPointLibrarySync:
     def test_sync_from_directory_auto_find(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             lib = PointLibrary(name="auto")
-            lib.add(Point(identity="x", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}))
+            lib.add(
+                Point(identity="x", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0})
+            )
             lib.save(Path(tmpdir) / "auto.points.json")
 
             sync = PointLibrarySync()
@@ -358,9 +443,13 @@ class TestPointLibrarySync:
 
     def test_merge_libraries(self):
         lib1 = PointLibrary(name="l1")
-        lib1.add(Point(identity="a", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}))
+        lib1.add(
+            Point(identity="a", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0})
+        )
         lib2 = PointLibrary(name="l2")
-        lib2.add(Point(identity="b", function_type="periodic", params={"a": 2.0, "b": 0.0, "w": 0.0}))
+        lib2.add(
+            Point(identity="b", function_type="periodic", params={"a": 2.0, "b": 0.0, "w": 0.0})
+        )
 
         sync = PointLibrarySync()
         merged = sync.merge([lib1, lib2])
@@ -369,7 +458,9 @@ class TestPointLibrarySync:
 
     def test_export_import_preserves_name(self):
         lib = PointLibrary(name="my_special_lib")
-        lib.add(Point(identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}))
+        lib.add(
+            Point(identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0})
+        )
         sync = PointLibrarySync()
         data = sync.export_bytes(lib)
         imported = sync.import_bytes(data)
@@ -378,8 +469,12 @@ class TestPointLibrarySync:
     def test_merge_deduplicates(self):
         lib1 = PointLibrary(name="m1")
         lib2 = PointLibrary(name="m2")
-        lib1.add(Point(identity="dup", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 1.0}))
-        lib2.add(Point(identity="dup2", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 1.0}))
+        lib1.add(
+            Point(identity="dup", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 1.0})
+        )
+        lib2.add(
+            Point(identity="dup2", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 1.0})
+        )
         sync = PointLibrarySync()
         merged = sync.merge([lib1, lib2])
         stats = merged.stats()
@@ -388,7 +483,11 @@ class TestPointLibrarySync:
     def test_sync_to_directory_creates_nested(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             lib = PointLibrary(name="nested")
-            lib.add(Point(identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}))
+            lib.add(
+                Point(
+                    identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}
+                )
+            )
             sync = PointLibrarySync()
             target = Path(tmpdir) / "subdir" / "deep"
             path = sync.sync_to_directory(lib, target)
@@ -397,8 +496,11 @@ class TestPointLibrarySync:
     def test_export_import_cluster_point(self):
         centroids = np.random.randn(4, 3).astype(np.float32)
         assignments = np.array([0, 1, 2, 3], dtype=np.uint8)
-        p = Point(identity="cl1", function_type="cluster",
-                  params={"centroids": centroids, "assignments": assignments})
+        p = Point(
+            identity="cl1",
+            function_type="cluster",
+            params={"centroids": centroids, "assignments": assignments},
+        )
         lib = PointLibrary(name="cluster_lib")
         lib.add(p)
         sync = PointLibrarySync()
@@ -415,9 +517,15 @@ class TestPointLibrarySync:
 
     def test_export_import_raw_point(self):
         data = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-        p = Point(identity="raw1", function_type="raw",
-                  params={"data_b64": base64.b64encode(data.tobytes()).decode(),
-                          "shape": list(data.shape), "dtype": "float32"})
+        p = Point(
+            identity="raw1",
+            function_type="raw",
+            params={
+                "data_b64": base64.b64encode(data.tobytes()).decode(),
+                "shape": list(data.shape),
+                "dtype": "float32",
+            },
+        )
         lib = PointLibrary(name="raw_lib")
         lib.add(p)
         sync = PointLibrarySync()
@@ -427,7 +535,9 @@ class TestPointLibrarySync:
 
     def test_export_bytes_is_json(self):
         lib = PointLibrary(name="json_test")
-        lib.add(Point(identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}))
+        lib.add(
+            Point(identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0})
+        )
         sync = PointLibrarySync()
         data = sync.export_bytes(lib)
         parsed = json.loads(data)
@@ -444,8 +554,13 @@ class TestPointLibrarySync:
         libs = []
         for i in range(3):
             lib = PointLibrary(name=f"lib{i}")
-            lib.add(Point(identity=f"p{i}", function_type="periodic",
-                          params={"a": float(i), "b": 0.0, "w": 0.0}))
+            lib.add(
+                Point(
+                    identity=f"p{i}",
+                    function_type="periodic",
+                    params={"a": float(i), "b": 0.0, "w": 0.0},
+                )
+            )
             libs.append(lib)
         sync = PointLibrarySync()
         merged = sync.merge(libs)
@@ -454,8 +569,13 @@ class TestPointLibrarySync:
     def test_export_import_preserves_points_count(self):
         lib = PointLibrary(name="count_test")
         for i in range(5):
-            lib.add(Point(identity=f"p{i}", function_type="periodic",
-                          params={"a": float(i), "b": 0.0, "w": 0.0}))
+            lib.add(
+                Point(
+                    identity=f"p{i}",
+                    function_type="periodic",
+                    params={"a": float(i), "b": 0.0, "w": 0.0},
+                )
+            )
         sync = PointLibrarySync()
         data = sync.export_bytes(lib)
         imported = sync.import_bytes(data)
@@ -464,7 +584,11 @@ class TestPointLibrarySync:
     def test_sync_to_directory_file_name(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             lib = PointLibrary(name="mylib")
-            lib.add(Point(identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}))
+            lib.add(
+                Point(
+                    identity="p1", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}
+                )
+            )
             sync = PointLibrarySync()
             path = sync.sync_to_directory(lib, Path(tmpdir))
             assert path.name == "mylib.points.json"
@@ -478,7 +602,9 @@ class TestPointLibrarySync:
 
     def test_merge_single_library(self):
         lib = PointLibrary(name="single")
-        lib.add(Point(identity="a", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}))
+        lib.add(
+            Point(identity="a", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0})
+        )
         sync = PointLibrarySync()
         merged = sync.merge([lib])
         assert merged.has("a")
@@ -487,9 +613,15 @@ class TestPointLibrarySync:
     def test_merge_preserves_all_points(self):
         lib1 = PointLibrary(name="p1")
         lib2 = PointLibrary(name="p2")
-        lib1.add(Point(identity="a", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0}))
-        lib1.add(Point(identity="b", function_type="periodic", params={"a": 2.0, "b": 0.0, "w": 0.0}))
-        lib2.add(Point(identity="c", function_type="periodic", params={"a": 3.0, "b": 0.0, "w": 0.0}))
+        lib1.add(
+            Point(identity="a", function_type="periodic", params={"a": 1.0, "b": 0.0, "w": 0.0})
+        )
+        lib1.add(
+            Point(identity="b", function_type="periodic", params={"a": 2.0, "b": 0.0, "w": 0.0})
+        )
+        lib2.add(
+            Point(identity="c", function_type="periodic", params={"a": 3.0, "b": 0.0, "w": 0.0})
+        )
         sync = PointLibrarySync()
         merged = sync.merge([lib1, lib2])
         assert merged.has("a")

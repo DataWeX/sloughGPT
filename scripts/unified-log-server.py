@@ -6,9 +6,8 @@ Displays them in real-time in the terminal.
 """
 
 import http.server
-import socketserver
 import json
-import threading
+import socketserver
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -72,7 +71,7 @@ class LogHandler(http.server.BaseHTTPRequestHandler):
 def run_server(port: int = 9999):
     with socketserver.TCPServer(("", port), LogHandler) as httpd:
         print(f"🪵 Unified log server listening on port {port}")
-        print(f"   Send logs via: POST /log with JSON body")
+        print("   Send logs via: POST /log with JSON body")
         print(f"   View logs: tail -f {LOG_FILE}")
         print("-" * 60)
         try:

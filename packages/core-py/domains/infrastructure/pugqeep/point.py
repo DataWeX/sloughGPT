@@ -12,12 +12,13 @@ time series, sensor data, or any structured numerical data.
 
 Implements PointProtocol — the abstract interface for compressed data.
 """
+
 from __future__ import annotations
 
 import base64
 import struct
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -30,13 +31,14 @@ class Point(PointProtocol):
 
     Implements PointProtocol for type-safe, swappable compression backends.
     """
-    identity: str           # what this point represents
-    function_type: str      # "periodic", "linear", "polynomial", "cluster", "raw"
-    params: dict            # function parameters
-    residual: Optional[np.ndarray] = None  # difference from exact
-    accuracy: float = 0.0   # how well it fits (0-1)
+
+    identity: str  # what this point represents
+    function_type: str  # "periodic", "linear", "polynomial", "cluster", "raw"
+    params: dict  # function parameters
+    residual: np.ndarray | None = None  # difference from exact
+    accuracy: float = 0.0  # how well it fits (0-1)
     dtype: str = "float32"  # original data dtype
-    shape: tuple = ()       # original data shape
+    shape: tuple = ()  # original data shape
 
     def generate(self, n: int) -> np.ndarray:
         """Generate n values from this point's function."""
@@ -51,11 +53,11 @@ class Point(PointProtocol):
             huffman_data = self.params.get("huffman_data")
             if huffman_data is not None:
                 from .compressor import HuffmanTree
+
                 huffman_codes = self.params["huffman_codes"]
                 total_bits = self.params["huffman_bits"]
                 tree = HuffmanTree.from_dict(huffman_codes).tree
-                assignments = HuffmanTree.decode(
-                    huffman_data, total_bits, tree, len(assignments))
+                assignments = HuffmanTree.decode(huffman_data, total_bits, tree, len(assignments))
             if self.params.get("centroid_quantized"):
                 scale = self.params["centroid_scale"]
                 zp = self.params["centroid_zero_point"]
@@ -96,8 +98,11 @@ class Point(PointProtocol):
                 if self.params.get("centroid_quantized"):
                     nc = len(centroids)
                     return nc + 8 + assignments.nbytes
-                return (centroids.nbytes + assignments.nbytes +
-                        (self.residual.nbytes if self.residual is not None else 0))
+                return (
+                    centroids.nbytes
+                    + assignments.nbytes
+                    + (self.residual.nbytes if self.residual is not None else 0)
+                )
             return 0
         elif self.function_type == "block_q4":
             mins = self.params.get("mins")
@@ -116,8 +121,11 @@ class Point(PointProtocol):
         elif self.function_type == "raw":
             return len(base64.b64decode(self.params.get("data_b64", "")))
         else:
-            return 4 + len(self.params) * 4 + (
-                self.residual.nbytes if self.residual is not None else 0)
+            return (
+                4
+                + len(self.params) * 4
+                + (self.residual.nbytes if self.residual is not None else 0)
+            )
 
     def _estimate_raw_bytes(self) -> int:
         """Estimate uncompressed size for compression ratio calculation."""
@@ -153,55 +161,55 @@ class Point(PointProtocol):
           periodic/linear/polynomial: [params:f32*k] [has_residual:u8] [residual_bytes?]
           raw:     [n_bytes:uint32] [raw_data]
         """
-        type_bytes = self._TYPE_CODES.get(self.function_type, b'\0\0\0\0')
+        type_bytes = self._TYPE_CODES.get(self.function_type, b"\0\0\0\0")
 
         if self.function_type == "cluster":
             centroids = self.params["centroids"]
             assignments = self.params["assignments"]
             is_quantized = self.params.get("centroid_quantized", False)
-            param_bytes = struct.pack('<I', len(centroids))
-            param_bytes += struct.pack('<B', 1 if is_quantized else 0)
+            param_bytes = struct.pack("<I", len(centroids))
+            param_bytes += struct.pack("<B", 1 if is_quantized else 0)
             if is_quantized:
                 param_bytes += centroids.tobytes()  # uint8
-                param_bytes += struct.pack('f', self.params["centroid_scale"])
-                param_bytes += struct.pack('f', self.params["centroid_zero_point"])
+                param_bytes += struct.pack("f", self.params["centroid_scale"])
+                param_bytes += struct.pack("f", self.params["centroid_zero_point"])
             else:
                 param_bytes += centroids.astype(np.float32).tobytes()
-            param_bytes += struct.pack('<I', len(assignments))
+            param_bytes += struct.pack("<I", len(assignments))
             param_bytes += assignments.tobytes()
             has_res = 1 if self.residual is not None else 0
-            param_bytes += struct.pack('<B', has_res)
+            param_bytes += struct.pack("<B", has_res)
             if self.residual is not None:
                 res_bytes = self.residual.astype(np.float32).tobytes()
-                param_bytes += struct.pack('<I', len(res_bytes))
+                param_bytes += struct.pack("<I", len(res_bytes))
                 param_bytes += res_bytes
         elif self.function_type == "periodic":
-            param_bytes = struct.pack('fff', self.params["a"], self.params["b"], self.params["w"])
+            param_bytes = struct.pack("fff", self.params["a"], self.params["b"], self.params["w"])
             has_res = 1 if self.residual is not None else 0
-            param_bytes += struct.pack('<B', has_res)
+            param_bytes += struct.pack("<B", has_res)
             if self.residual is not None:
                 res_bytes = self.residual.astype(np.float32).tobytes()
-                param_bytes += struct.pack('<I', len(res_bytes))
+                param_bytes += struct.pack("<I", len(res_bytes))
                 param_bytes += res_bytes
         elif self.function_type in ("linear", "polynomial"):
-            param_bytes = struct.pack(f'{len(self.params)}f', *self.params.values())
+            param_bytes = struct.pack(f"{len(self.params)}f", *self.params.values())
             has_res = 1 if self.residual is not None else 0
-            param_bytes += struct.pack('<B', has_res)
+            param_bytes += struct.pack("<B", has_res)
             if self.residual is not None:
                 res_bytes = self.residual.astype(np.float32).tobytes()
-                param_bytes += struct.pack('<I', len(res_bytes))
+                param_bytes += struct.pack("<I", len(res_bytes))
                 param_bytes += res_bytes
         elif self.function_type == "raw":
             raw_data = base64.b64decode(self.params["data_b64"])
-            param_bytes = struct.pack('<I', len(raw_data))
+            param_bytes = struct.pack("<I", len(raw_data))
             param_bytes += raw_data
         else:
-            param_bytes = b''
+            param_bytes = b""
 
         return type_bytes + param_bytes
 
     @classmethod
-    def from_bytes(cls, data: bytes, identity: str = "unknown") -> "Point":
+    def from_bytes(cls, data: bytes, identity: str = "unknown") -> Point:
         """Deserialize point from bytes."""
         type_bytes = data[:4]
         function_type = cls._TYPE_DECODE.get(type_bytes)
@@ -212,74 +220,93 @@ class Point(PointProtocol):
         residual = None
 
         if function_type == "periodic":
-            a, b, w = struct.unpack('fff', param_bytes[:12])
+            a, b, w = struct.unpack("fff", param_bytes[:12])
             params = {"a": a, "b": b, "w": w}
             offset = 12
             if len(param_bytes) > offset:
-                has_res = struct.unpack('<B', param_bytes[offset:offset + 1])[0]
+                has_res = struct.unpack("<B", param_bytes[offset : offset + 1])[0]
                 offset += 1
                 if has_res:
-                    res_len = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
+                    res_len = struct.unpack("<I", param_bytes[offset : offset + 4])[0]
                     offset += 4
-                    residual = np.frombuffer(param_bytes[offset:offset + res_len], dtype=np.float32)
+                    residual = np.frombuffer(
+                        param_bytes[offset : offset + res_len], dtype=np.float32
+                    )
         elif function_type == "linear":
-            a, b = struct.unpack('ff', param_bytes[:8])
+            a, b = struct.unpack("ff", param_bytes[:8])
             params = {"a": a, "b": b}
             offset = 8
             if len(param_bytes) > offset:
-                has_res = struct.unpack('<B', param_bytes[offset:offset + 1])[0]
+                has_res = struct.unpack("<B", param_bytes[offset : offset + 1])[0]
                 offset += 1
                 if has_res:
-                    res_len = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
+                    res_len = struct.unpack("<I", param_bytes[offset : offset + 4])[0]
                     offset += 4
-                    residual = np.frombuffer(param_bytes[offset:offset + res_len], dtype=np.float32)
+                    residual = np.frombuffer(
+                        param_bytes[offset : offset + res_len], dtype=np.float32
+                    )
         elif function_type == "polynomial":
-            a, b, c = struct.unpack('fff', param_bytes[:12])
+            a, b, c = struct.unpack("fff", param_bytes[:12])
             params = {"a": a, "b": b, "c": c}
             offset = 12
             if len(param_bytes) > offset:
-                has_res = struct.unpack('<B', param_bytes[offset:offset + 1])[0]
+                has_res = struct.unpack("<B", param_bytes[offset : offset + 1])[0]
                 offset += 1
                 if has_res:
-                    res_len = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
+                    res_len = struct.unpack("<I", param_bytes[offset : offset + 4])[0]
                     offset += 4
-                    residual = np.frombuffer(param_bytes[offset:offset + res_len], dtype=np.float32)
+                    residual = np.frombuffer(
+                        param_bytes[offset : offset + res_len], dtype=np.float32
+                    )
         elif function_type == "cluster":
             offset = 0
-            n_centroids = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
+            n_centroids = struct.unpack("<I", param_bytes[offset : offset + 4])[0]
             offset += 4
-            is_quantized = struct.unpack('<B', param_bytes[offset:offset + 1])[0]
+            is_quantized = struct.unpack("<B", param_bytes[offset : offset + 1])[0]
             offset += 1
             if is_quantized:
-                centroids = np.frombuffer(param_bytes[offset:offset + n_centroids], dtype=np.uint8)
+                centroids = np.frombuffer(
+                    param_bytes[offset : offset + n_centroids], dtype=np.uint8
+                )
                 offset += n_centroids
-                scale = struct.unpack('f', param_bytes[offset:offset + 4])[0]
+                scale = struct.unpack("f", param_bytes[offset : offset + 4])[0]
                 offset += 4
-                zp = struct.unpack('f', param_bytes[offset:offset + 4])[0]
+                zp = struct.unpack("f", param_bytes[offset : offset + 4])[0]
                 offset += 4
-                params = {"centroids": centroids, "assignments": None,
-                          "centroid_quantized": True, "centroid_scale": scale,
-                          "centroid_zero_point": zp}
+                params = {
+                    "centroids": centroids,
+                    "assignments": None,
+                    "centroid_quantized": True,
+                    "centroid_scale": scale,
+                    "centroid_zero_point": zp,
+                }
             else:
-                centroids = np.frombuffer(param_bytes[offset:offset + n_centroids * 4], dtype=np.float32)
+                centroids = np.frombuffer(
+                    param_bytes[offset : offset + n_centroids * 4], dtype=np.float32
+                )
                 offset += n_centroids * 4
                 params = {"centroids": centroids, "assignments": None}
-            n_assignments = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
+            n_assignments = struct.unpack("<I", param_bytes[offset : offset + 4])[0]
             offset += 4
-            assignments = np.frombuffer(param_bytes[offset:offset + n_assignments], dtype=np.uint8)
+            assignments = np.frombuffer(
+                param_bytes[offset : offset + n_assignments], dtype=np.uint8
+            )
             offset += n_assignments
             params["assignments"] = assignments
-            has_res = struct.unpack('<B', param_bytes[offset:offset + 1])[0]
+            has_res = struct.unpack("<B", param_bytes[offset : offset + 1])[0]
             offset += 1
             if has_res:
-                res_len = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
+                res_len = struct.unpack("<I", param_bytes[offset : offset + 4])[0]
                 offset += 4
-                residual = np.frombuffer(param_bytes[offset:offset + res_len], dtype=np.float32)
+                residual = np.frombuffer(param_bytes[offset : offset + res_len], dtype=np.float32)
         elif function_type == "raw":
-            n_bytes = struct.unpack('<I', param_bytes[:4])[0]
-            raw_data = param_bytes[4:4 + n_bytes]
-            params = {"data_b64": base64.b64encode(raw_data).decode(),
-                      "shape": [], "dtype": "float32"}
+            n_bytes = struct.unpack("<I", param_bytes[:4])[0]
+            raw_data = param_bytes[4 : 4 + n_bytes]
+            params = {
+                "data_b64": base64.b64encode(raw_data).decode(),
+                "shape": [],
+                "dtype": "float32",
+            }
         else:
             raise ValueError(f"Unknown function type: {function_type}")
 
@@ -328,7 +355,7 @@ class Point(PointProtocol):
         return d
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Point":
+    def from_dict(cls, d: dict) -> Point:
         """Deserialize point from dict."""
         func_type = d["function_type"]
 

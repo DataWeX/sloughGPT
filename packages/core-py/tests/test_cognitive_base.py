@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from domain.cognitive._internal.base import CognitiveDomain, CognitiveException
 from domains import DomainException
 
+from domain.cognitive._internal.base import CognitiveDomain, CognitiveException
 
 # ── CognitiveException ────────────────────────────────────────────────────
 
 
 class TestCognitiveException:
-
     def test_is_domain_exception(self):
         assert issubclass(CognitiveException, DomainException)
 
@@ -28,7 +26,6 @@ class TestCognitiveException:
 
 
 class TestCognitiveDomain:
-
     def test_init(self):
         domain = CognitiveDomain()
         assert domain.domain_name == "cognitive"

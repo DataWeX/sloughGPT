@@ -1,7 +1,7 @@
 """Tests for domain.memory._internal.config — MemoryConfig."""
 
 import os
-import pytest
+
 from domain.memory._internal.config import MemoryConfig
 
 
@@ -111,9 +111,12 @@ class TestMemoryConfigSingleton:
 
     def test_singleton_thread_safety(self):
         import threading
+
         instances = []
+
         def get_instance():
             instances.append(MemoryConfig.get())
+
         threads = [threading.Thread(target=get_instance) for _ in range(10)]
         for t in threads:
             t.start()
@@ -191,9 +194,14 @@ class TestMemoryConfigSnapshot:
         mc = MemoryConfig()
         snap = mc.snapshot()
         expected_keys = {
-            "enabled", "min_chars", "max_facts", "store_path",
-            "sync_remember", "consolidation_threshold",
-            "maintenance_interval_minutes", "archive_retention_days",
+            "enabled",
+            "min_chars",
+            "max_facts",
+            "store_path",
+            "sync_remember",
+            "consolidation_threshold",
+            "maintenance_interval_minutes",
+            "archive_retention_days",
         }
         assert set(snap.keys()) == expected_keys
 

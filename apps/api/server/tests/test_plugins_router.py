@@ -83,7 +83,10 @@ class TestReloadPlugins:
         mock_path.exists.return_value = True
         with (
             patch("domains.plugins.get_plugin_manager", return_value=mock_pm),
-            patch("routers.plugins.find_repo_root", return_value=MagicMock(__truediv__=lambda self, x: mock_path)),
+            patch(
+                "routers.plugins.find_repo_root",
+                return_value=MagicMock(__truediv__=lambda self, x: mock_path),
+            ),
         ):
             resp = TestClient(_app).post("/plugins/reload")
         assert resp.status_code == 200

@@ -13,11 +13,10 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
 
-class Tier(str, Enum):
+class Tier(StrEnum):
     FREE = "free"
     PRO = "pro"
     ENTERPRISE = "enterprise"
@@ -152,7 +151,9 @@ class TokenBillingService:
         self._load_accounts()
 
     def _load_accounts(self) -> None:
-        from domain.core._internal.database import get_db; db = get_db()
+        from domain.core._internal.database import get_db
+
+        db = get_db()
         accounts = db.find("token_accounts", {})
         for acc_data in accounts:
             account = TokenAccount(
@@ -167,7 +168,9 @@ class TokenBillingService:
             self._accounts[account.user_id] = account
 
     def _save_account(self, account: TokenAccount) -> None:
-        from domain.core._internal.database import get_db; db = get_db()
+        from domain.core._internal.database import get_db
+
+        db = get_db()
         db.upsert("token_accounts", {"user_id": account.user_id}, account.to_dict())
 
     def get_or_create_account(self, user_id: str) -> TokenAccount:
@@ -181,7 +184,9 @@ class TokenBillingService:
             self._save_account(account)
         return self._accounts[user_id]
 
-    def check_and_deduct(self, user_id: str, model: str, input_tokens: int, output_tokens: int, request_id: str = "") -> tuple[bool, str]:
+    def check_and_deduct(
+        self, user_id: str, model: str, input_tokens: int, output_tokens: int, request_id: str = ""
+    ) -> tuple[bool, str]:
         account = self.get_or_create_account(user_id)
         total_tokens = input_tokens + output_tokens
 
@@ -207,7 +212,9 @@ class TokenBillingService:
         )
         self._usage.append(record)
 
-        from domain.core._internal.database import get_db; db = get_db()
+        from domain.core._internal.database import get_db
+
+        db = get_db()
         db.insert("token_usage", record.to_dict())
         self._save_account(account)
 
@@ -255,13 +262,15 @@ class TokenBillingService:
             "byDay": by_day,
         }
 
-    def get_usage_history(self, user_id: str, limit: int = 50, offset: int = 0) -> list[UsageRecord]:
+    def get_usage_history(
+        self, user_id: str, limit: int = 50, offset: int = 0
+    ) -> list[UsageRecord]:
         user_usage = [r for r in self._usage if r.user_id == user_id]
         user_usage.sort(key=lambda r: r.timestamp, reverse=True)
-        return user_usage[offset:offset + limit]
+        return user_usage[offset : offset + limit]
 
 
-_token_billing_service: Optional[TokenBillingService] = None
+_token_billing_service: TokenBillingService | None = None
 
 
 def get_token_billing_service() -> TokenBillingService:

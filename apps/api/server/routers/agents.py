@@ -6,12 +6,19 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator
 
-from domain.api._internal.sse_envelope import sse_complete, sse_error, sse_event
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
+
+from domain.api._internal.sse_envelope import sse_complete, sse_error, sse_event
 
 logger = logging.getLogger("slo.routers.agents")
 
@@ -88,6 +95,7 @@ class AgentsRouter:
         system = self._get_system()
         agents = await asyncio.to_thread(system.list)
         return success_response(data=[AgentOut(**a).model_dump() for a in agents])
+
     @endpoint("agents.create_agent")
     async def create_agent(
         self, req: AgentCreate, auth_user: dict = Depends(require_auth_if_enabled)
@@ -137,6 +145,7 @@ class AgentsRouter:
         if result is None:
             raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
         return success_response(data=AgentOut(**result).model_dump())
+
     @endpoint("agents.update_agent")
     async def update_agent(
         self, agent_id: str, req: AgentUpdate, auth_user: dict = Depends(require_auth_if_enabled)
@@ -416,5 +425,6 @@ class AgentsRouter:
         if record is None:
             raise_error("Run not found", "E_NOT_FOUND", status_code=404)
         return success_response(data=record)
+
 
 router = AgentsRouter().router

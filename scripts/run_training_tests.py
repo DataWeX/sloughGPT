@@ -61,10 +61,10 @@ CHECKPOINT_EXPORT_FILE = "packages/core-py/tests/test_training_checkpoint_export
 def run_pytest(args: list[str], label: str) -> tuple[bool, float]:
     """Run pytest with given args, return (success, duration)."""
     cmd = PYTEST + args
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Running: {label}")
     print(f"Command: {' '.join(cmd)}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     t0 = time.time()
     result = subprocess.run(cmd, cwd=str(REPO_ROOT))
@@ -79,7 +79,9 @@ def run_pytest(args: list[str], label: str) -> tuple[bool, float]:
 def main():
     parser = argparse.ArgumentParser(description="Run comprehensive training tests")
     parser.add_argument("--unit", action="store_true", help="Run unit tests only")
-    parser.add_argument("--local", action="store_true", help="Run local tests (unit + streaming + benchmarks)")
+    parser.add_argument(
+        "--local", action="store_true", help="Run local tests (unit + streaming + benchmarks)"
+    )
     parser.add_argument("--journeys", action="store_true", help="Run user journey tests")
     parser.add_argument("--e2e", action="store_true", help="Run E2E training trigger tests")
     parser.add_argument("--integration", action="store_true", help="Run integration tests")
@@ -91,8 +93,18 @@ def main():
     parser.add_argument("--json", action="store_true", help="Output results as JSON")
     args = parser.parse_args()
 
-    if not any([args.unit, args.local, args.journeys, args.e2e, args.integration,
-                args.streaming, args.benchmarks, args.all]):
+    if not any(
+        [
+            args.unit,
+            args.local,
+            args.journeys,
+            args.e2e,
+            args.integration,
+            args.streaming,
+            args.benchmarks,
+            args.all,
+        ]
+    ):
         args.unit = True
 
     results = []
@@ -180,21 +192,26 @@ def main():
     all_passed = all(r["passed"] for r in results)
 
     if args.json:
-        print(json.dumps({
-            "results": results,
-            "total_duration_s": round(total_duration, 1),
-            "all_passed": all_passed,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "results": results,
+                    "total_duration_s": round(total_duration, 1),
+                    "all_passed": all_passed,
+                },
+                indent=2,
+            )
+        )
     else:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("SUMMARY")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         for r in results:
             status = "ok" if r["passed"] else "FAIL"
             print(f"  [{status}] {r['suite']}: {r['duration_s']:.1f}s")
         print(f"  Total: {total_duration:.1f}s")
         print(f"  Result: {'ALL PASSED' if all_passed else 'SOME FAILED'}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
     sys.exit(0 if all_passed else 1)
 

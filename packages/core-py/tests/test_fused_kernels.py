@@ -7,7 +7,6 @@ to machine precision.
 """
 
 import numpy as np
-import pytest
 
 
 class TestFusedLayerNorm:
@@ -37,8 +36,8 @@ class TestFusedLayerNorm:
         assert np.all(np.isfinite(out))
 
     def test_matches_einsum_with_kernels_disabled(self):
-        from domain.training._internal.slonet import SloLayerNorm
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(7)
         ln = SloLayerNorm(32)
@@ -129,8 +128,8 @@ class TestFusedAttentionSingle:
     """Single-token attention in forward_numpy with KV cache."""
 
     def test_matches_einsum_path(self):
-        from domain.training._internal.slonet import SloMultiHeadAttention
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(42)
         attn = SloMultiHeadAttention(64, 4)
@@ -142,11 +141,11 @@ class TestFusedAttentionSingle:
         v = np.random.randn(1, 1, 64).astype(np.float32)
 
         slonet_mod._KERNELS_AVAILABLE = False
-        out_einsum, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(),
-                                            kv_cache=(k_cache, v_cache))
+        out_einsum, _ = attn.forward_numpy(
+            q.copy(), k.copy(), v.copy(), kv_cache=(k_cache, v_cache)
+        )
         slonet_mod._KERNELS_AVAILABLE = True
-        out_fused, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(),
-                                           kv_cache=(k_cache, v_cache))
+        out_fused, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(), kv_cache=(k_cache, v_cache))
 
         diff = np.abs(out_fused - out_einsum).max()
         assert diff < 1e-5, f"Single-token fused vs einsum diff: {diff}"
@@ -165,8 +164,8 @@ class TestFusedAttentionSingle:
         assert np.all(np.isfinite(out))
 
     def test_preserves_output_projection(self):
-        from domain.training._internal.slonet import SloMultiHeadAttention
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(55)
         attn = SloMultiHeadAttention(64, 4)
@@ -224,8 +223,8 @@ class TestFusedAttentionMulti:
     """Multi-token attention in forward_numpy with causal masking."""
 
     def test_matches_einsum_with_causal_mask(self):
-        from domain.training._internal.slonet import SloMultiHeadAttention
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(42)
         attn = SloMultiHeadAttention(64, 4)
@@ -240,11 +239,9 @@ class TestFusedAttentionMulti:
                 causal_4d[0, 0, i, j] = -1e9
 
         slonet_mod._KERNELS_AVAILABLE = False
-        out_einsum, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(),
-                                            mask=causal_4d)
+        out_einsum, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(), mask=causal_4d)
         slonet_mod._KERNELS_AVAILABLE = True
-        out_fused, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(),
-                                           mask=causal_4d)
+        out_fused, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(), mask=causal_4d)
 
         diff = np.abs(out_fused - out_einsum).max()
         assert diff < 1e-5, f"Multi-token fused vs einsum diff: {diff}"
@@ -319,8 +316,8 @@ class TestFusedAttentionStability:
 
     def test_single_vs_multi_agree_on_one_token(self):
         """Single-token path should agree with multi-token path when seq_len=1."""
-        from domain.training._internal.slonet import SloMultiHeadAttention
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(42)
         attn = SloMultiHeadAttention(64, 4)
@@ -348,10 +345,8 @@ class TestFusedAttentionStability:
         k = np.random.randn(1, 1, 64).astype(np.float32)
         v = np.random.randn(1, 1, 64).astype(np.float32)
 
-        out1, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(),
-                                      kv_cache=(k_cache, v_cache))
-        out2, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(),
-                                      kv_cache=(k_cache, v_cache))
+        out1, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(), kv_cache=(k_cache, v_cache))
+        out2, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(), kv_cache=(k_cache, v_cache))
         assert np.array_equal(out1, out2)
 
     def test_stable_across_different_seeds(self):
@@ -376,12 +371,13 @@ class TestFusedKernelsAvailability:
 
     def test_kernels_flag_is_set(self):
         import domain.training._internal.slonet as slonet_mod
-        assert hasattr(slonet_mod, '_KERNELS_AVAILABLE')
+
+        assert hasattr(slonet_mod, "_KERNELS_AVAILABLE")
         assert isinstance(slonet_mod._KERNELS_AVAILABLE, bool)
 
     def test_layer_norm_works_with_kernels_disabled(self):
-        from domain.training._internal.slonet import SloLayerNorm
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(42)
         ln = SloLayerNorm(32)
@@ -395,8 +391,8 @@ class TestFusedKernelsAvailability:
         assert np.all(np.isfinite(out))
 
     def test_attention_works_with_kernels_disabled(self):
-        from domain.training._internal.slonet import SloMultiHeadAttention
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(42)
         attn = SloMultiHeadAttention(64, 4)
@@ -412,8 +408,8 @@ class TestFusedKernelsAvailability:
         assert np.all(np.isfinite(out))
 
     def test_toggling_kernels_produces_same_result(self):
-        from domain.training._internal.slonet import SloLayerNorm
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(44)
         ln = SloLayerNorm(32)
@@ -429,8 +425,8 @@ class TestFusedKernelsAvailability:
         assert diff < 1e-5
 
     def test_single_token_with_kernels_disabled(self):
-        from domain.training._internal.slonet import SloMultiHeadAttention
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(45)
         attn = SloMultiHeadAttention(64, 4)
@@ -446,8 +442,8 @@ class TestFusedKernelsAvailability:
         assert np.all(np.isfinite(out))
 
     def test_multi_token_no_mask_with_kernels_disabled(self):
-        from domain.training._internal.slonet import SloMultiHeadAttention
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(46)
         attn = SloMultiHeadAttention(64, 4)
@@ -463,8 +459,8 @@ class TestFusedKernelsAvailability:
         assert np.all(np.isfinite(out))
 
     def test_layer_norm_disabled_vs_enabled_shape(self):
-        from domain.training._internal.slonet import SloLayerNorm
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(47)
         ln = SloLayerNorm(64)
@@ -478,8 +474,8 @@ class TestFusedKernelsAvailability:
         assert out_off.shape == out_on.shape
 
     def test_layer_norm_disabled_matches_manual(self):
-        from domain.training._internal.slonet import SloLayerNorm
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(48)
         ln = SloLayerNorm(32)
@@ -496,8 +492,8 @@ class TestFusedKernelsAvailability:
         assert diff < 1e-5
 
     def test_attention_with_cache_disabled_kernels(self):
-        from domain.training._internal.slonet import SloMultiHeadAttention
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(49)
         attn = SloMultiHeadAttention(64, 4)
@@ -736,8 +732,8 @@ class TestFusedAttentionExpanded:
         assert np.all(np.isfinite(out))
 
     def test_gqa_output_matches_non_gqa_when_same_heads(self):
-        from domain.training._internal.slonet import SloMultiHeadAttention
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(307)
         attn = SloMultiHeadAttention(64, 4, n_kv_head=4)
@@ -819,8 +815,8 @@ class TestFusedAttentionExpanded:
         assert np.abs(out - expected).max() < 1e-5
 
     def test_single_vs_multi_agree_with_cache(self):
-        from domain.training._internal.slonet import SloMultiHeadAttention
         import domain.training._internal.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(401)
         attn = SloMultiHeadAttention(64, 4)
@@ -830,11 +826,13 @@ class TestFusedAttentionExpanded:
         k = np.random.randn(1, 1, 64).astype(np.float32)
         v = np.random.randn(1, 1, 64).astype(np.float32)
         slonet_mod._KERNELS_AVAILABLE = True
-        out_single, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(),
-                                           kv_cache=(k_cache, v_cache))
+        out_single, _ = attn.forward_numpy(
+            q.copy(), k.copy(), v.copy(), kv_cache=(k_cache, v_cache)
+        )
         slonet_mod._KERNELS_AVAILABLE = False
-        out_einsum, _ = attn.forward_numpy(q.copy(), k.copy(), v.copy(),
-                                           kv_cache=(k_cache, v_cache))
+        out_einsum, _ = attn.forward_numpy(
+            q.copy(), k.copy(), v.copy(), kv_cache=(k_cache, v_cache)
+        )
         slonet_mod._KERNELS_AVAILABLE = True
         diff = np.abs(out_single - out_einsum).max()
         assert diff < 1e-5

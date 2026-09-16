@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import json
 import logging
-from copy import deepcopy
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("slo.settings")
 
@@ -21,6 +21,7 @@ DEFAULT_SETTINGS_PATH = Path.home() / ".config" / "sloughgpt" / "settings.json"
 @dataclass
 class GenerationSettings:
     """Text generation parameters."""
+
     temperature: float = 0.8
     top_p: float = 0.95
     top_k: int = 50
@@ -32,6 +33,7 @@ class GenerationSettings:
 @dataclass
 class TrainingSettings:
     """User's preferred training defaults."""
+
     preferred_model: str = ""
     auto_train: bool = False
     auto_train_threshold: int = 100
@@ -43,6 +45,7 @@ class TrainingSettings:
 @dataclass
 class AdaptiveSettings:
     """Adaptive/learning system preferences."""
+
     enabled: bool = True
     exploration_rate: float = 0.2  # How often to try variations
     learning_enabled: bool = True  # Whether system learns from outcomes
@@ -51,6 +54,7 @@ class AdaptiveSettings:
 @dataclass
 class VoiceSettings:
     """Voice/audio preferences."""
+
     noise_gate_db: float = -40.0
     target_level_db: float = -20.0
     vad_enabled: bool = True
@@ -61,6 +65,7 @@ class VoiceSettings:
 @dataclass
 class UISettings:
     """User interface preferences."""
+
     theme: str = "dark"
     language: str = "en"
     show_confidence: bool = True
@@ -70,6 +75,7 @@ class UISettings:
 @dataclass
 class AppSettings:
     """All user settings in one place."""
+
     generation: GenerationSettings = field(default_factory=GenerationSettings)
     training: TrainingSettings = field(default_factory=TrainingSettings)
     adaptive: AdaptiveSettings = field(default_factory=AdaptiveSettings)
@@ -77,38 +83,45 @@ class AppSettings:
     ui: UISettings = field(default_factory=UISettings)
     version: int = 1
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> AppSettings:
+    def from_dict(cls, d: dict[str, Any]) -> AppSettings:
         """Build settings from dict, using defaults for missing fields."""
         settings = cls()
         if "generation" in d:
-            settings.generation = GenerationSettings(**{
-                k: v for k, v in d["generation"].items()
-                if k in GenerationSettings.__dataclass_fields__
-            })
+            settings.generation = GenerationSettings(
+                **{
+                    k: v
+                    for k, v in d["generation"].items()
+                    if k in GenerationSettings.__dataclass_fields__
+                }
+            )
         if "training" in d:
-            settings.training = TrainingSettings(**{
-                k: v for k, v in d["training"].items()
-                if k in TrainingSettings.__dataclass_fields__
-            })
+            settings.training = TrainingSettings(
+                **{
+                    k: v
+                    for k, v in d["training"].items()
+                    if k in TrainingSettings.__dataclass_fields__
+                }
+            )
         if "adaptive" in d:
-            settings.adaptive = AdaptiveSettings(**{
-                k: v for k, v in d["adaptive"].items()
-                if k in AdaptiveSettings.__dataclass_fields__
-            })
+            settings.adaptive = AdaptiveSettings(
+                **{
+                    k: v
+                    for k, v in d["adaptive"].items()
+                    if k in AdaptiveSettings.__dataclass_fields__
+                }
+            )
         if "voice" in d:
-            settings.voice = VoiceSettings(**{
-                k: v for k, v in d["voice"].items()
-                if k in VoiceSettings.__dataclass_fields__
-            })
+            settings.voice = VoiceSettings(
+                **{k: v for k, v in d["voice"].items() if k in VoiceSettings.__dataclass_fields__}
+            )
         if "ui" in d:
-            settings.ui = UISettings(**{
-                k: v for k, v in d["ui"].items()
-                if k in UISettings.__dataclass_fields__
-            })
+            settings.ui = UISettings(
+                **{k: v for k, v in d["ui"].items() if k in UISettings.__dataclass_fields__}
+            )
         if "version" in d:
             settings.version = d["version"]
         return settings
@@ -123,7 +136,7 @@ class PersistentSettings:
     Supports per-user profiles: pass user_id to get user-specific settings.
     """
 
-    def __init__(self, settings_path: Optional[Path] = None, user_id: Optional[str] = None):
+    def __init__(self, settings_path: Path | None = None, user_id: str | None = None):
         if settings_path:
             self._path = settings_path
         elif user_id:
@@ -131,8 +144,8 @@ class PersistentSettings:
         else:
             self._path = DEFAULT_SETTINGS_PATH
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._settings: Optional[AppSettings] = None
-        self._listeners: List[Callable[[AppSettings], None]] = []
+        self._settings: AppSettings | None = None
+        self._listeners: list[Callable[[AppSettings], None]] = []
         self._user_id = user_id
 
     def load(self) -> AppSettings:
@@ -217,26 +230,26 @@ class PersistentSettings:
             except Exception:
                 pass
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return self.settings.to_dict()
 
-    def from_dict(self, data: Dict[str, Any]) -> AppSettings:
+    def from_dict(self, data: dict[str, Any]) -> AppSettings:
         self._settings = AppSettings.from_dict(data)
         self.save()
         self._notify_listeners()
         return self._settings
 
     @classmethod
-    def for_user(cls, user_id: str) -> "PersistentSettings":
+    def for_user(cls, user_id: str) -> PersistentSettings:
         """Get settings instance for a specific user."""
         return cls(user_id=user_id)
 
 
 # Singleton for convenience
-_default_settings: Optional[PersistentSettings] = None
+_default_settings: PersistentSettings | None = None
 
 
-def get_settings(user_id: Optional[str] = None) -> PersistentSettings:
+def get_settings(user_id: str | None = None) -> PersistentSettings:
     """Get the global settings instance, or user-specific if user_id provided."""
     global _default_settings
     if user_id:

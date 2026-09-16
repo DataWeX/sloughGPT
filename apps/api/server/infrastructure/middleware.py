@@ -24,12 +24,13 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 
-from domain.infrastructure.correlation import set_correlation_id
-from domain.logging._internal.config import set_request_id
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 from schemas.common import error_response
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from domain.infrastructure.correlation import set_correlation_id
+from domain.logging._internal.config import set_request_id
 
 logger = logging.getLogger("slo.middleware")
 
@@ -56,7 +57,14 @@ _COLD_START_PATHS = frozenset(
 
 # Inference endpoints that require a loaded model
 _INFERENCE_PATHS = frozenset(
-    {"/chat", "/chat/stream", "/inference/generate", "/inference/generate/stream"}
+    {
+        "/chat",
+        "/chat/stream",
+        "/inference/generate",
+        "/inference/generate/stream",
+        "/infer",
+        "/infer/stream",
+    }
 )
 
 
@@ -126,29 +134,19 @@ class ReadinessGateMiddleware(BaseHTTPMiddleware):
         if _model_ready():
             return await call_next(request)
 
-        phase = _get_startup_phase()
-        phase_name = phase.get("phase", "unknown")
-        step = phase.get("step", 0)
-        total = phase.get("total", 9)
-        msg = phase.get("message", "Starting...")
+        # Use the same model-status logic as inference routers
+        from routers.inference import _get_model_status
 
-        if phase_name in ("initializing", "unknown"):
-            retry_after = 30
-        elif phase_name == "ready":
-            retry_after = 2
-        else:
-            remaining_steps = max(1, total - step)
-            retry_after = min(30, remaining_steps * 10)
+        ms = _get_model_status()
+        if ms["ready"]:
+            return await call_next(request)
 
         corr_id = request.scope.get("correlation_id", "-")
         logger.warning(
-            "readiness_gate: %s %s blocked (phase=%s step=%d/%d) retry_after=%ds corr=%s",
+            "readiness_gate: %s %s blocked (code=%s) corr=%s",
             request.method,
             path,
-            phase_name,
-            step,
-            total,
-            retry_after,
+            ms["code"],
             corr_id,
             extra={
                 "tag": "INFRA",
@@ -159,11 +157,10 @@ class ReadinessGateMiddleware(BaseHTTPMiddleware):
         return JSONResponse(
             status_code=503,
             content=error_response(
-                f"Model still loading — {msg} (step {step}/{total})",
-                "E_MODEL_LOADING",
-                details={"phase": phase_name, "step": step, "total": total, "message": msg},
+                ms["reason"],
+                ms["code"],
             ),
-            headers={"Retry-After": str(retry_after)},
+            headers={"Retry-After": "2"},
         )
 
 
@@ -185,7 +182,7 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         try:
             return await asyncio.wait_for(call_next(request), timeout=self.timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             elapsed_str = f"{self.timeout:.3f}s"
             corr_id = request.scope.get("correlation_id", "-")
             logger.warning(
@@ -239,7 +236,9 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
             or str(uuid.uuid4())[:8]
         )
         # Sanitize: strip control chars, newlines, truncate to 64 chars
-        corr_id = "".join(c for c in raw_id if c.isalnum() or c in "-_.")[:64] or str(uuid.uuid4())[:8]
+        corr_id = (
+            "".join(c for c in raw_id if c.isalnum() or c in "-_.")[:64] or str(uuid.uuid4())[:8]
+        )
         request.scope["correlation_id"] = corr_id
         set_correlation_id(corr_id)
         set_request_id(corr_id)  # also set for logging contextvars

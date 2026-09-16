@@ -3,17 +3,16 @@
 import numpy as np
 import pytest
 
+from domain.infrastructure._internal.arch_config import LLAMA_WEIGHT_MAP, ArchConfig
 from domain.infrastructure._internal.compute_backend import (
+    _BACKENDS,
     ComputeBackend,
-    create_backend,
     get_backend,
     register_backend,
-    _BACKENDS,
 )
-from domain.infrastructure._internal.arch_config import ArchConfig, build_arch, LLAMA_WEIGHT_MAP
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
+
 
 def _make_qwen_arch():
     """Build ArchConfig matching Qwen2.5-0.5B (reduced to 2 layers for tests)."""
@@ -93,10 +92,12 @@ def qwen_weights(qwen_arch):
 @pytest.fixture
 def numpy_backend(qwen_weights, qwen_arch):
     from domain.infrastructure._internal.numpy_backend import NumpyBE
+
     return NumpyBE.from_weights(qwen_weights, qwen_arch)
 
 
 # ── Protocol compliance ──────────────────────────────────────────────────
+
 
 class TestComputeBackendProtocol:
     """Verify the protocol is well-defined and NumpyBE conforms."""
@@ -116,6 +117,7 @@ class TestComputeBackendProtocol:
 
 # ── Registry ─────────────────────────────────────────────────────────────
 
+
 class TestRegistry:
     """Backend registration and lookup."""
 
@@ -132,25 +134,62 @@ class TestRegistry:
 
     def test_register_custom_backend(self):
         class FakeBE(ComputeBackend):
-            def from_weights(cls, w, a): return cls()
-            def warmup(self, s=1): pass
-            def matmul(self, a, b): pass
-            def softmax(self, x, axis=-1): pass
-            def rmsnorm(self, x, w, eps=1e-6): pass
-            def silu(self, x): pass
-            def gelu(self, x): pass
-            def rope(self, x, cos, sin): pass
-            def repeat_kv(self, x, n): pass
-            def argmax(self, x): pass
-            def clip(self, x, lo, hi): pass
-            def from_numpy(self, a): pass
-            def to_numpy(self, t): pass
-            def forward(self, token_ids, **kw): pass
-            def generate_stream(self, token_ids, **kw): yield 0
-            def generate(self, token_ids, **kw): pass
-            def backend_name(self): return "fake"
-            def vocab_size(self): return 0
-            def n_layers(self): return 0
+            def from_weights(cls, w, a):
+                return cls()
+
+            def warmup(self, s=1):
+                pass
+
+            def matmul(self, a, b):
+                pass
+
+            def softmax(self, x, axis=-1):
+                pass
+
+            def rmsnorm(self, x, w, eps=1e-6):
+                pass
+
+            def silu(self, x):
+                pass
+
+            def gelu(self, x):
+                pass
+
+            def rope(self, x, cos, sin):
+                pass
+
+            def repeat_kv(self, x, n):
+                pass
+
+            def argmax(self, x):
+                pass
+
+            def clip(self, x, lo, hi):
+                pass
+
+            def from_numpy(self, a):
+                pass
+
+            def to_numpy(self, t):
+                pass
+
+            def forward(self, token_ids, **kw):
+                pass
+
+            def generate_stream(self, token_ids, **kw):
+                yield 0
+
+            def generate(self, token_ids, **kw):
+                pass
+
+            def backend_name(self):
+                return "fake"
+
+            def vocab_size(self):
+                return 0
+
+            def n_layers(self):
+                return 0
 
         register_backend("fake_test", FakeBE)
         assert "fake_test" in _BACKENDS
@@ -158,6 +197,7 @@ class TestRegistry:
 
 
 # ── NumpyBE tensor primitives ────────────────────────────────────────────
+
 
 class TestNumpyBEPrimitives:
     """Test individual tensor operations."""
@@ -244,6 +284,7 @@ class TestNumpyBEPrimitives:
 
 # ── NumpyBE forward pass ─────────────────────────────────────────────────
 
+
 class TestNumpyBEForward:
     """Test full forward pass with random weights."""
 
@@ -266,6 +307,7 @@ class TestNumpyBEForward:
 
 
 # ── NumpyBE generation ───────────────────────────────────────────────────
+
 
 class TestNumpyBEGeneration:
     """Test generate_stream and generate."""
@@ -298,13 +340,16 @@ class TestNumpyBEGeneration:
 
 # ── Factory function ─────────────────────────────────────────────────────
 
+
 class TestFactory:
     """Test create_backend_from_slnc."""
 
     def test_create_from_slnc(self):
         from domain.infrastructure._internal.numpy_backend import create_backend_from_slnc
+
         slnc_path = "/home/mana/Documents/Default Project/sloughGPT/models/hf-cache/hub/models--Qwen--Qwen2.5-0.5B-Instruct/model.slnc"
         import os
+
         if not os.path.exists(slnc_path):
             pytest.skip("SLNC model not available")
 

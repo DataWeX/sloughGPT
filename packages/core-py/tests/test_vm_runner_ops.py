@@ -7,19 +7,19 @@ the VMRunner public entry point, plus direct handler/helper calls where a
 runner path is impractical (unreachable via valid assembly).
 """
 
-import pytest
 import numpy as np
+import pytest
 
 import domain.shell._internal.vm as vm
 from domain.shell._internal.vm import (
-    VMRunner,
     CPU,
-    DeviceBus,
-    ConsoleDevice,
-    ClockDevice,
-    InsFault,
-    DeviceFault,
     MAX_CALL_DEPTH,
+    ClockDevice,
+    ConsoleDevice,
+    DeviceBus,
+    DeviceFault,
+    InsFault,
+    VMRunner,
 )
 
 
@@ -33,6 +33,7 @@ def _run(program, devices=None):
 # ══════════════════════════════════════════════════════════════════════════════
 # Integer ALU
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_integer_alu_ops():
     cpu = _run("""
@@ -60,6 +61,7 @@ def test_integer_alu_ops():
 # ══════════════════════════════════════════════════════════════════════════════
 # I/O ops (IN / OUT)
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _console_bus(stdin=None, stdout=None):
     bus = DeviceBus()
@@ -97,6 +99,7 @@ def test_in_device_without_read_uses_info_status():
 def test_in_device_read_exception_returns_zero():
     def boom():
         raise RuntimeError("no data")
+
     cpu = _run("IN R0, 0\nHALT", devices=_console_bus(stdin=boom))
     assert cpu.regs[0] == 0
 
@@ -108,6 +111,7 @@ def test_out_writes_and_swallows_exception():
 
     def boom(v):
         raise RuntimeError("write fail")
+
     cpu = _run("OUT 1, 7\nHALT", devices=_console_bus(stdout=boom))
     assert cpu.regs is not None
 
@@ -115,6 +119,7 @@ def test_out_writes_and_swallows_exception():
 # ══════════════════════════════════════════════════════════════════════════════
 # Tensor ALU
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_tensor_arith_add_sub_mul():
     cpu = _run("""
@@ -234,9 +239,7 @@ def test_activation_ops():
 
 def test_softmax_values():
     cpu = _run("LOAD_CONST R1, [1.0, 2.0, 3.0]\nSOFTMAX R2, R1\nHALT")
-    np.testing.assert_allclose(
-        cpu.regs[2], [0.09003057, 0.24472847, 0.66524096], rtol=1e-5
-    )
+    np.testing.assert_allclose(cpu.regs[2], [0.09003057, 0.24472847, 0.66524096], rtol=1e-5)
 
 
 def test_random_ops_shapes_and_ranges():
@@ -250,6 +253,7 @@ def test_random_ops_shapes_and_ranges():
 # ══════════════════════════════════════════════════════════════════════════════
 # Comparison / TEST
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_cmp_scalar():
     cpu = _run("CMP 5, 3\nHALT")
@@ -300,6 +304,7 @@ def test_test_op():
 # Helpers: _truthy / _parse_tensor
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_truthy_helper():
     cpu = CPU()
     assert cpu._truthy(True) is True
@@ -328,6 +333,7 @@ def test_parse_tensor_helper():
 # ══════════════════════════════════════════════════════════════════════════════
 # Control flow
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_jmp_and_resolve_label_int():
     cpu = _run("""
@@ -379,6 +385,7 @@ def test_ret_empty_stack():
 # ══════════════════════════════════════════════════════════════════════════════
 # Data movement
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_load_const_tensor_json():
     cpu = _run("LOAD_CONST R0, [1, 2, 3]\nHALT")
@@ -432,17 +439,21 @@ def test_data_movement_ops():
 # Device bus ops
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_dev_ops():
     bus = DeviceBus()
     bus.register("console", ConsoleDevice(0, stdin_fn=lambda: "7", stdout_fn=lambda v: None))
-    cpu = _run("""
+    cpu = _run(
+        """
         DEV_OPEN R0, "console"
         DEV_CALL R1, R0, "read"
         DEV_CALL R2, R0, "write", 99
         DEV_INFO R3, R0
         DEV_CLOSE R0
         HALT
-    """, devices=bus)
+    """,
+        devices=bus,
+    )
     assert cpu.regs[0] == "console"
     assert cpu.regs[1] == "7"
     assert cpu.regs[2] is None

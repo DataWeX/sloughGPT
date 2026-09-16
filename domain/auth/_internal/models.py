@@ -5,11 +5,11 @@ from __future__ import annotations
 import enum
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _new_id() -> str:
@@ -19,7 +19,7 @@ def _new_id() -> str:
 # ─── Roles & Permissions ──────────────────────────────────────
 
 
-class Permission(str, enum.Enum):
+class Permission(enum.StrEnum):
     """Granular permissions."""
 
     # Model
@@ -65,7 +65,7 @@ class Permission(str, enum.Enum):
     SYSTEM_ADMIN = "system:admin"
 
 
-class Role(str, enum.Enum):
+class Role(enum.StrEnum):
     """Built-in roles with predefined permission sets."""
 
     VIEWER = "viewer"
@@ -120,14 +120,14 @@ ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.WORKSPACE_DELETE,
         Permission.SYSTEM_READ,
     },
-    Role.OWNER: {p for p in Permission},  # all permissions
+    Role.OWNER: set(Permission),  # all permissions
 }
 
 
 # ─── User ──────────────────────────────────────────────────────
 
 
-class UserRole(str, enum.Enum):
+class UserRole(enum.StrEnum):
     """User status."""
 
     ACTIVE = "active"

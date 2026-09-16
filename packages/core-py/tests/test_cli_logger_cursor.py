@@ -1,8 +1,7 @@
 """Tests for CLILogger cursor control methods."""
+
 import threading
 from unittest.mock import MagicMock
-
-import pytest
 
 
 class TestCursorControl:

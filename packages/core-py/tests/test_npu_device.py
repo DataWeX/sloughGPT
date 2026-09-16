@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import time
 from unittest.mock import MagicMock, patch
 
-import pytest
 import numpy as np
+import pytest
 
-from domain.shell._internal.npu_device import NPUDevice
 from domain.shell._internal.kernel_syscall import SyscallResult
+from domain.shell._internal.npu_device import NPUDevice
 
 
 def _make_provider():
@@ -31,7 +30,6 @@ def _make_provider():
 
 
 class TestNPUDevice:
-
     def test_init(self):
         npu = NPUDevice()
         assert npu.name == "npu"

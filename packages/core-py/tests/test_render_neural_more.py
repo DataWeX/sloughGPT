@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from domain.shell._internal.render_neural import RenderNeuralDevice
 from domain.shell._internal.cycles_device import CyclesDevice
+from domain.shell._internal.render_neural import RenderNeuralDevice
 from domain.shell._internal.vm import DeviceFault
 
 

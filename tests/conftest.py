@@ -43,6 +43,7 @@ def build_test_app(*routers):
         app.include_router(r)
 
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
 
     return app
@@ -88,7 +89,9 @@ def test_training_config() -> dict:
 class TestHelpers:
     @staticmethod
     def assert_response_success(response, status_code=200):
-        assert response.status_code == status_code, f"Expected {status_code}, got {response.status_code}"
+        assert response.status_code == status_code, (
+            f"Expected {status_code}, got {response.status_code}"
+        )
 
     @staticmethod
     def assert_has_keys(data: dict, keys: list):

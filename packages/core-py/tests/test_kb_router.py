@@ -3,13 +3,12 @@
 Covers: list, create, get, delete, batch_delete, search.
 KnowledgeMemory is mocked.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -19,17 +18,36 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.kb import KBRouter as KnowledgeRouter  # noqa: E402
+
 from conftest import build_test_app
 
 
 def _mock_km(**overrides) -> MagicMock:
     km = MagicMock()
     km.list_all.return_value = [
-        {"id": "f1", "content": "AI is great", "topic": "ai", "source": "manual", "timestamp": 1.0, "importance": 0.8, "score": 0.0},
+        {
+            "id": "f1",
+            "content": "AI is great",
+            "topic": "ai",
+            "source": "manual",
+            "timestamp": 1.0,
+            "importance": 0.8,
+            "score": 0.0,
+        },
     ]
     km.add_fact.return_value = True
     km.delete_by_id.return_value = True
-    km.search.return_value = [{"id": "f1", "content": "AI is great", "topic": "ai", "source": "manual", "timestamp": 1.0, "importance": 0.8, "score": 0.9}]
+    km.search.return_value = [
+        {
+            "id": "f1",
+            "content": "AI is great",
+            "topic": "ai",
+            "source": "manual",
+            "timestamp": 1.0,
+            "importance": 0.8,
+            "score": 0.9,
+        }
+    ]
     km.stats.return_value = {"total_facts": 1, "topics": [("ai", 1)]}
     km.all_topics.return_value = [("ai", 1)]
     return km

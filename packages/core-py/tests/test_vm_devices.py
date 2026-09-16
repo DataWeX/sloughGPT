@@ -9,24 +9,24 @@ No mocks for external APIs — only real numpy and Python operations.
 from __future__ import annotations
 
 import math
-import pytest
-import numpy as np
 
+import numpy as np
+import pytest
+
+from domain.shell._internal.vm import DeviceFault
 from domain.shell._internal.vm_devices import (
-    TensorDevice,
+    EngineDevice,
+    MultimodalDevice,
+    NPUVMDevice,
     PythonExecDevice,
     SlonetDevice,
-    MultimodalDevice,
-    EngineDevice,
-    SlonetTrainingDevice,
-    NPUVMDevice,
+    TensorDevice,
 )
-from domain.shell._internal.vm import DeviceFault
-
 
 # =============================================================================
 # TensorDevice
 # =============================================================================
+
 
 class TestTensorDevice:
     def _dev(self, weights=None):
@@ -307,30 +307,36 @@ class TestTensorDevice:
             d.call("forward", np.array([1, 2]))
 
     def test_forward_without_biases(self):
-        d = self._dev(weights={
-            "w1": np.array([[0.5, 0.5], [0.5, 0.5]]),
-            "w2": np.array([[0.5, 0.5]]),
-        })
+        d = self._dev(
+            weights={
+                "w1": np.array([[0.5, 0.5], [0.5, 0.5]]),
+                "w2": np.array([[0.5, 0.5]]),
+            }
+        )
         result = d.call("forward", np.array([1.0, 2.0]))
         assert result.ndim == 1
         assert result.sum() == pytest.approx(1.0)  # softmax output
 
     def test_forward_with_biases(self):
-        d = self._dev(weights={
-            "w1": np.array([[0.5, 0.5], [0.5, 0.5]]),
-            "b1": np.array([0.1, 0.1]),
-            "w2": np.array([[0.5, 0.5]]),
-            "b2": np.array([0.05]),
-        })
+        d = self._dev(
+            weights={
+                "w1": np.array([[0.5, 0.5], [0.5, 0.5]]),
+                "b1": np.array([0.1, 0.1]),
+                "w2": np.array([[0.5, 0.5]]),
+                "b2": np.array([0.05]),
+            }
+        )
         result = d.call("forward", np.array([1.0, 2.0]))
         assert result.ndim == 1
         assert result.sum() == pytest.approx(1.0)
 
     def test_forward_stable_with_large_input(self):
-        d = self._dev(weights={
-            "w1": np.ones((2, 2)),
-            "w2": np.ones((1, 2)),
-        })
+        d = self._dev(
+            weights={
+                "w1": np.ones((2, 2)),
+                "w2": np.ones((1, 2)),
+            }
+        )
         result = d.call("forward", np.array([1000.0, 2000.0]))
         assert result.sum() == pytest.approx(1.0)
         assert all(np.isfinite(result))
@@ -339,6 +345,7 @@ class TestTensorDevice:
 # =============================================================================
 # PythonExecDevice
 # =============================================================================
+
 
 class TestPythonExecDevice:
     def _dev(self):
@@ -432,11 +439,13 @@ class TestPythonExecDevice:
 # EngineDevice (no real engine needed — use simple callable)
 # =============================================================================
 
+
 class TestEngineDevice:
     def _dev(self, engine_name="fake"):
         class FakeEngine:
             def generate(self, prompt, max_tokens=50, temperature=1.0, **kw):
                 return f"response:{prompt}"
+
         return EngineDevice(FakeEngine(), engine_name=engine_name)
 
     def test_generate(self):
@@ -465,12 +474,15 @@ class TestEngineDevice:
 # SlonetDevice (needs provider with tokenizer + model)
 # =============================================================================
 
+
 class TestSlonetDevice:
     def _make_provider(self):
         class FakeTokenizer:
             eos_token_id = 0
+
             def encode(self, text):
                 return list(range(len(text)))
+
             def decode(self, ids):
                 return "".join(chr(i + 65) for i in ids)
 
@@ -484,13 +496,13 @@ class TestSlonetDevice:
                 return np.arange(max_new_tokens).reshape(1, -1)
 
             def generate_numpy_stream(self, input_ids, max_new_tokens=10, **kw):
-                for i in range(max_new_tokens):
-                    yield i
+                yield from range(max_new_tokens)
 
             def forward(self, tensor):
                 class Logits:
                     def __init__(self, data):
                         self.data = data
+
                 return Logits(np.ones((1, 10, 100))), None
 
         class FakeProvider:
@@ -549,6 +561,7 @@ class TestSlonetDevice:
 # MultimodalDevice
 # =============================================================================
 
+
 class TestMultimodalDevice:
     def _make_engine(self):
         class FakeVision:
@@ -561,12 +574,14 @@ class TestMultimodalDevice:
             def generate(self, image_np=None, max_len=20, temperature=1.0):
                 class Output:
                     text = "caption:cat"
+
                 return Output()
 
             def _concat_modalities(self, img, audio, text):
                 class Embed:
                     def __init__(self):
                         self.data = np.zeros(64)
+
                 return Embed(), None, None
 
         return FakeEngine()
@@ -606,6 +621,7 @@ class TestMultimodalDevice:
 # =============================================================================
 # NPUVMDevice
 # =============================================================================
+
 
 class TestNPUVMDevice:
     def _make_npu(self):
@@ -832,7 +848,9 @@ class TestNPUVMDevice:
                 class R:
                     success = False
                     error = "disk full"
+
                 return R()
+
         d = NPUVMDevice(FailNPU())
         with pytest.raises(DeviceFault, match="load_model failed"):
             d.call("load_model", "m", "src")

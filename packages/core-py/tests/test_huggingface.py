@@ -4,12 +4,11 @@ Covers model_map.py (offline registry), api_loader.py (requests mocked),
 local_loader.py (transformers mocked), and client.py dispatch.
 """
 
-import os
 from types import SimpleNamespace
 
 import pytest
 
-from domain.training._internal.huggingface import api_loader
+from domain.training._internal.huggingface import api_loader, local_loader, model_map
 from domain.training._internal.huggingface.api_loader import (
     HFAPIConfig,
     HFInferenceClient,
@@ -18,7 +17,13 @@ from domain.training._internal.huggingface.api_loader import (
     create_api_client,
     generate_via_api,
 )
-from domain.training._internal.huggingface import local_loader
+from domain.training._internal.huggingface.client import (
+    HFClient,
+    chat,
+    generate,
+    get_model_memory,
+    list_models,
+)
 from domain.training._internal.huggingface.local_loader import (
     HFLocalConfig,
     HuggingFaceLocalClient,
@@ -27,10 +32,9 @@ from domain.training._internal.huggingface.local_loader import (
     generate_local,
     load_model,
 )
-from domain.training._internal.huggingface import model_map
 from domain.training._internal.huggingface.model_map import (
-    HFModelInfo,
     HF_MODELS,
+    HFModelInfo,
     ModelSize,
     get_model_info,
     get_model_requirements,
@@ -38,18 +42,11 @@ from domain.training._internal.huggingface.model_map import (
     map_to_sloughgpt_config,
     search_models,
 )
-from domain.training._internal.huggingface.client import (
-    HFClient,
-    chat,
-    generate,
-    get_model_memory,
-    list_models,
-)
-
 
 # ---------------------------------------------------------------------------
 # model_map
 # ---------------------------------------------------------------------------
+
 
 class TestModelSize:
     def test_enum_values(self):
@@ -231,6 +228,7 @@ class TestMapToSloughgptConfig:
 # ---------------------------------------------------------------------------
 # api_loader
 # ---------------------------------------------------------------------------
+
 
 class FakeResponse:
     def __init__(self, status_code=200, json_data=None, raise_error=None):
@@ -423,7 +421,10 @@ class TestApiHelpers:
 
     def test_chat_via_api(self, fake_api):
         fake_api.set_response(FakeResponse(json_data=[{"generated_text": "via-chat"}]))
-        assert chat_via_api([{"role": "user", "content": "hi"}], model="gpt2", api_key="k") == "via-chat"
+        assert (
+            chat_via_api([{"role": "user", "content": "hi"}], model="gpt2", api_key="k")
+            == "via-chat"
+        )
 
     def test_api_base_url(self):
         assert api_loader.HF_API_BASE == "https://api-inference.huggingface.co/models"
@@ -432,6 +433,7 @@ class TestApiHelpers:
 # ---------------------------------------------------------------------------
 # local_loader
 # ---------------------------------------------------------------------------
+
 
 class FakeTensor:
     def __init__(self, data, device="cpu"):
@@ -694,6 +696,7 @@ class TestLocalAliases:
 # ---------------------------------------------------------------------------
 # client
 # ---------------------------------------------------------------------------
+
 
 class TestHFClientApiMode:
     def test_api_mode_uses_api_loader(self):

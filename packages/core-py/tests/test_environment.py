@@ -11,17 +11,30 @@ import numpy as np
 import pytest
 
 from domain.shell._internal.simulation import (
-    WorldGrid, WorldParams,
-    cell_update_combustion, cell_update_metabolism, cell_update_ember,
-    cell_update_living, cell_update_water, cell_update_conduction,
-    cell_update_temperature, cell_update_materials, cell_update_default,
-    generate_world, SimScene, Simulation,
-    MATERIAL_AIR, MATERIAL_STONE, MATERIAL_WATER, MATERIAL_ORGANIC,
-    MATERIAL_METAL, MATERIAL_EMBER, MATERIAL_LIVING,
+    MATERIAL_AIR,
+    MATERIAL_EMBER,
+    MATERIAL_LIVING,
+    MATERIAL_METAL,
+    MATERIAL_ORGANIC,
+    MATERIAL_STONE,
+    MATERIAL_WATER,
+    SimScene,
+    Simulation,
+    WorldGrid,
+    WorldParams,
+    cell_update_combustion,
+    cell_update_conduction,
+    cell_update_default,
+    cell_update_ember,
+    cell_update_living,
+    cell_update_metabolism,
+    cell_update_temperature,
+    cell_update_water,
+    generate_world,
 )
 
-
 # ── Combustion & temperature ─────────────────────────────────────────────────
+
 
 class TestCombustion:
     def test_organic_ignites_above_ignition_temp(self):
@@ -46,8 +59,11 @@ class TestCombustion:
         i = g.idx(1, 1, 1)
         g.place_material(1, 1, 1, MATERIAL_ORGANIC, energy=80.0, temperature=250.0)
         params = WorldParams(
-            diffusion_rate=0.0, ambient_cooling=0.0, energy_loss=0.0,
-            ignition_temp=100.0, burn_temp=150.0,
+            diffusion_rate=0.0,
+            ambient_cooling=0.0,
+            energy_loss=0.0,
+            ignition_temp=100.0,
+            burn_temp=150.0,
         )
         cell_update_default(g, params)
         assert g.material[i] == MATERIAL_EMBER
@@ -61,6 +77,7 @@ class TestCombustion:
 
 
 # ── Metabolism & ember ────────────────────────────────────────────────────────
+
 
 class TestMetabolism:
     def test_organic_rots(self):
@@ -82,7 +99,9 @@ class TestEmber:
         i = g.idx(1, 1, 1)
         g.place_material(1, 1, 1, MATERIAL_EMBER, energy=100.0, temperature=150.0)
         params = WorldParams(
-            ember_heat_rate=0.5, ember_energy_fraction=0.5, heat_to_temp=1.0,
+            ember_heat_rate=0.5,
+            ember_energy_fraction=0.5,
+            heat_to_temp=1.0,
         )
         before = g.total_energy
         cell_update_ember(g, params)
@@ -115,7 +134,9 @@ class TestEmber:
         g.place_material(1, 1, 1, MATERIAL_EMBER, energy=100.0)
         g.place_material(2, 1, 1, MATERIAL_EMBER, energy=100.0)
         params = WorldParams(
-            ember_heat_rate=0.5, ember_energy_fraction=0.5, heat_to_temp=1.0,
+            ember_heat_rate=0.5,
+            ember_energy_fraction=0.5,
+            heat_to_temp=1.0,
         )
         before = g.total_energy
         cell_update_ember(g, params)
@@ -131,13 +152,15 @@ class TestEmber:
 
 # ── Living growth ─────────────────────────────────────────────────────────────
 
+
 class TestLiving:
     def test_grows_into_adjacent_air(self):
         g = WorldGrid((4, 4, 4))
         i = g.idx(1, 1, 1)
         g.place_material(1, 1, 1, MATERIAL_LIVING, energy=100.0)
         params = WorldParams(
-            living_growth_rate=0.5, living_growth_cost=10.0,
+            living_growth_rate=0.5,
+            living_growth_cost=10.0,
             growth_transfer_fraction=0.8,
         )
         cell_update_living(g, params)
@@ -151,7 +174,8 @@ class TestLiving:
         i = g.idx(1, 1, 1)
         g.place_material(1, 1, 1, MATERIAL_LIVING, energy=3.0)
         params = WorldParams(
-            living_growth_rate=0.5, living_growth_cost=10.0,
+            living_growth_rate=0.5,
+            living_growth_cost=10.0,
         )
         cell_update_living(g, params)
         assert np.flatnonzero(g.material == MATERIAL_ORGANIC).size == 0
@@ -173,7 +197,8 @@ class TestLiving:
         g.place_material(1, 1, 1, MATERIAL_LIVING, energy=100.0)
         g.place_material(0, 1, 1, MATERIAL_STONE)  # block first scan neighbor
         params = WorldParams(
-            living_growth_rate=0.5, living_growth_cost=10.0,
+            living_growth_rate=0.5,
+            living_growth_cost=10.0,
             growth_transfer_fraction=0.8,
         )
         cell_update_living(g, params)
@@ -190,7 +215,8 @@ class TestLiving:
         g.place_material(3, 1, 1, MATERIAL_LIVING, energy=100.0)
         g.place_material(2, 1, 1, MATERIAL_STONE)  # block B's first scan neighbor
         params = WorldParams(
-            living_growth_rate=0.5, living_growth_cost=10.0,
+            living_growth_rate=0.5,
+            living_growth_cost=10.0,
             growth_transfer_fraction=0.8,
         )
         cell_update_living(g, params)
@@ -204,6 +230,7 @@ class TestLiving:
 
 
 # ── Water ─────────────────────────────────────────────────────────────────────
+
 
 class TestWater:
     def test_damps_signal(self):
@@ -224,6 +251,7 @@ class TestWater:
 
 
 # ── Metal conduction ──────────────────────────────────────────────────────────
+
 
 class TestMetal:
     def test_metal_spreads_energy_faster_than_baseline(self):
@@ -250,10 +278,12 @@ class TestMetal:
 
 def _diffuse_only(g, params):
     from domain.shell._internal.simulation import cell_update_diffusion
+
     cell_update_diffusion(g, params)
 
 
 # ── Terrain generation ────────────────────────────────────────────────────────
+
 
 class TestGenerateWorld:
     def test_creates_floor_food_water_and_ember(self):
@@ -292,11 +322,16 @@ class TestGenerateWorld:
 
 # ── Scene integration ─────────────────────────────────────────────────────────
 
+
 class TestSceneTerrain:
     def test_scene_generates_world_when_enabled(self):
-        scene = SimScene(WorldParams(
-            grid_size=(16, 8, 16), generate_world=True, world_seed=5,
-        ))
+        scene = SimScene(
+            WorldParams(
+                grid_size=(16, 8, 16),
+                generate_world=True,
+                world_seed=5,
+            )
+        )
         assert (scene.world.material == MATERIAL_ORGANIC).any()
 
     def test_scene_does_not_generate_by_default(self):
@@ -321,16 +356,24 @@ class TestSceneTerrain:
     def test_resume_matches_continuous_run_with_terrain(self):
         ticks = 6
         np.random.seed(7)
-        continuous = SimScene(WorldParams(
-            grid_size=(16, 8, 16), generate_world=True, world_seed=5,
-        ))
+        continuous = SimScene(
+            WorldParams(
+                grid_size=(16, 8, 16),
+                generate_world=True,
+                world_seed=5,
+            )
+        )
         continuous.spawn_babies()
         Simulation(continuous, max_ticks=ticks).run()
 
         np.random.seed(7)
-        resumed = SimScene(WorldParams(
-            grid_size=(16, 8, 16), generate_world=True, world_seed=5,
-        ))
+        resumed = SimScene(
+            WorldParams(
+                grid_size=(16, 8, 16),
+                generate_world=True,
+                world_seed=5,
+            )
+        )
         resumed.spawn_babies()
         Simulation(resumed, max_ticks=3).run()
         restored = SimScene.from_dict(resumed.to_dict())

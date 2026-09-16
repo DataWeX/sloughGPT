@@ -1,8 +1,9 @@
 """Tests for the /world router — rendering, simulation, stats."""
 
-import pytest
+from unittest.mock import MagicMock, patch
+
 import numpy as np
-from unittest.mock import patch, MagicMock, AsyncMock
+import pytest
 from test_support import get_test_client
 
 
@@ -48,13 +49,14 @@ def _mock_simulation():
 def _fresh_world():
     """Reset the world render router singleton state."""
     import routers.world_render as wr_mod
+
     for attr in dir(wr_mod):
         obj = getattr(wr_mod, attr, None)
-        if hasattr(obj, '_world'):
+        if hasattr(obj, "_world"):
             obj._world = None
-        if hasattr(obj, '_scene'):
+        if hasattr(obj, "_scene"):
             obj._scene = None
-        if hasattr(obj, '_last_render_bridge'):
+        if hasattr(obj, "_last_render_bridge"):
             obj._last_render_bridge = None
     yield
 

@@ -1,15 +1,14 @@
 """Tests for ContinualLearner — ring buffer, ingestion, training."""
+
+from unittest.mock import patch
+
 import pytest
-import tempfile
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-from domains.learner.continual import (
-    ContinualLearner,
-    _tokenize,
-    _detokenize,
+
+from domain.learner._internal.continual import (
     VOCAB,
-    LEARNER_STATE_DIR,
-    STATE_PATH,
+    ContinualLearner,
+    _detokenize,
+    _tokenize,
 )
 
 
@@ -117,9 +116,7 @@ class TestContinualLearner:
 
     def test_vocab_size(self):
         assert VOCAB > 0
-        assert VOCAB == len(
-            " abcdefghijklmnopqrstuvwxyz0123456789.,!?-'"
-        )
+        assert VOCAB == len(" abcdefghijklmnopqrstuvwxyz0123456789.,!?-'")
 
     @pytest.mark.slow
     def test_deploy(self, tmp_path):

@@ -1,19 +1,14 @@
 """Tests for tokenizer.py — pure logic, no mocks."""
 
-import json
-import math
-import tempfile
-from pathlib import Path
 
 import pytest
 
 from domain.training._internal.tokenizer import (
     SloBPE,
     SloUnigram,
-    gpt2_pretokenize,
     default_pretokenize,
+    gpt2_pretokenize,
 )
-
 
 # ── gpt2_pretokenize ──────────────────────────────────────────────
 
@@ -29,7 +24,7 @@ class TestGPT2Pretokenize:
         assert any(" " in t for t in result)
 
     def test_contraction(self):
-        result = gpt2_pretokenize("it's a dog")
+        gpt2_pretokenize("it's a dog")
         tokens = gpt2_pretokenize("it's a dog")
         assert "'s" in tokens
 
@@ -85,8 +80,8 @@ class TestSloBPETraining:
     def test_train_basic(self):
         tok = SloBPE()
         # Use enough variety so BPE can reach 64 vocab
-        words = [chr(i) for i in range(ord('a'), ord('z')+1)] + [str(i) for i in range(10)]
-        texts = [" ".join(words[i:i+5]) for i in range(len(words)-4)]
+        words = [chr(i) for i in range(ord("a"), ord("z") + 1)] + [str(i) for i in range(10)]
+        texts = [" ".join(words[i : i + 5]) for i in range(len(words) - 4)]
         tok.train(texts, vocab_size=64)
         assert tok.vocab_size >= 40  # BPE may stop early if pairs run out
         assert len(tok.merges) > 0
@@ -259,7 +254,15 @@ class TestSloBPESerialization:
             "vocab": ["<PAD>", "<UNK>", "<BOS>", "<EOS>", "</w>", "a", "b"],
             "merges": [],
             "stoi": {"<PAD>": 0, "<UNK>": 1, "<BOS>": 2, "<EOS>": 3, "</w>": 4, "a": 5, "b": 6},
-            "itos": {"0": "<PAD>", "1": "<UNK>", "2": "<BOS>", "3": "<EOS>", "4": "</w>", "5": "a", "6": "b"},
+            "itos": {
+                "0": "<PAD>",
+                "1": "<UNK>",
+                "2": "<BOS>",
+                "3": "<EOS>",
+                "4": "</w>",
+                "5": "a",
+                "6": "b",
+            },
         }
         tok = SloBPE.from_dict(data)
         assert tok._pretokenizer == "whitespace"
@@ -283,8 +286,11 @@ class TestSloBPEDecomposeToken:
         tok.train(["hello world", "hello there"] * 10, vocab_size=128)
         # Find a token created by a merge (not special tokens or </w>)
         merged = [
-            t for t in tok.vocab
-            if len(t) > 1 and t not in SloBPE.SPECIAL_TOKENS and t != SloBPE.WORD_SUFFIX
+            t
+            for t in tok.vocab
+            if len(t) > 1
+            and t not in SloBPE.SPECIAL_TOKENS
+            and t != SloBPE.WORD_SUFFIX
             and t in {l + r for l, r in tok.merges}
         ]
         if merged:

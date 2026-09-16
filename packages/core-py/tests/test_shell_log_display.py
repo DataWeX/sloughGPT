@@ -1,11 +1,9 @@
 """Tests for domain.shell._internal.log_display — LineModeLogDisplay."""
 
-import os
 import time
 
-import pytest
-from domain.shell._internal.log_display import LineModeLogDisplay, _LEVEL_LABELS, _LEVEL_COLORS
 from domain.shell._internal.log_buffer import LogBuffer, LogEntry
+from domain.shell._internal.log_display import _LEVEL_COLORS, _LEVEL_LABELS, LineModeLogDisplay
 
 
 def _make_entry(level="INFO", message="test msg", source="slo.test"):
@@ -15,6 +13,7 @@ def _make_entry(level="INFO", message="test msg", source="slo.test"):
 # =============================================================================
 # Badge
 # =============================================================================
+
 
 class TestLineModeLogDisplayBadge:
     def test_empty_when_no_logs(self):
@@ -101,6 +100,7 @@ class TestLineModeLogDisplayBadge:
 # =============================================================================
 # Poll
 # =============================================================================
+
 
 class TestLineModeLogDisplayPoll:
     def test_poll_increments_counts(self):
@@ -193,6 +193,7 @@ class TestLineModeLogDisplayPoll:
 # ClearCounts
 # =============================================================================
 
+
 class TestLineModeLogDisplayClearCounts:
     def test_clear_counts(self):
         buf = LogBuffer(max_size=100)
@@ -227,6 +228,7 @@ class TestLineModeLogDisplayClearCounts:
 # =============================================================================
 # RenderRecent
 # =============================================================================
+
 
 class TestLineModeLogDisplayRenderRecent:
     def test_render_recent_empty(self):
@@ -312,6 +314,7 @@ class TestLineModeLogDisplayRenderRecent:
 # RenderLast
 # =============================================================================
 
+
 class TestLineModeLogDisplayRenderLast:
     def test_render_last_empty(self):
         buf = LogBuffer(max_size=100)
@@ -346,6 +349,7 @@ class TestLineModeLogDisplayRenderLast:
 # =============================================================================
 # FormatEntry
 # =============================================================================
+
 
 class TestFormatEntry:
     def test_format_entry(self):
@@ -420,13 +424,14 @@ class TestFormatEntry:
 # Color constants
 # =============================================================================
 
+
 class TestColorConstants:
     def test_level_colors_has_all_levels(self):
         for level in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
             assert level in _LEVEL_COLORS
 
     def test_level_colors_are_strings(self):
-        for level, color in _LEVEL_COLORS.items():
+        for _level, color in _LEVEL_COLORS.items():
             assert isinstance(color, str)
 
     def test_level_colors_debug_is_dim(self):
@@ -439,6 +444,7 @@ class TestColorConstants:
 # =============================================================================
 # Integration
 # =============================================================================
+
 
 class TestIntegration:
     def test_full_workflow(self):

@@ -1,102 +1,144 @@
 """Tests for domain.infrastructure.context_core — ContextCore."""
 
-import pytest
 from domain.infrastructure._internal.context_core import (
     ContextCore,
-    ContextLayer,
     ContextFrame,
+    ContextLayer,
 )
 
 
 class TestContextLayer:
     def test_defaults(self):
         cl = ContextLayer(
-            layer_type="session", content="hi", tokens=1,
-            source="test", timestamp="2024-01-01",
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="test",
+            timestamp="2024-01-01",
         )
         assert cl.priority == 1.0
 
     def test_custom_priority(self):
         cl = ContextLayer(
-            layer_type="rag", content="doc", tokens=10,
-            source="vs", timestamp="2024-01-01", priority=0.5,
+            layer_type="rag",
+            content="doc",
+            tokens=10,
+            source="vs",
+            timestamp="2024-01-01",
+            priority=0.5,
         )
         assert cl.priority == 0.5
 
     def test_layer_type_session(self):
         cl = ContextLayer(
-            layer_type="session", content="hi", tokens=1,
-            source="test", timestamp="t",
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="test",
+            timestamp="t",
         )
         assert cl.layer_type == "session"
 
     def test_layer_type_memory(self):
         cl = ContextLayer(
-            layer_type="memory", content="fact", tokens=2,
-            source="ep", timestamp="t",
+            layer_type="memory",
+            content="fact",
+            tokens=2,
+            source="ep",
+            timestamp="t",
         )
         assert cl.layer_type == "memory"
 
     def test_layer_type_rag(self):
         cl = ContextLayer(
-            layer_type="rag", content="doc", tokens=3,
-            source="vs", timestamp="t",
+            layer_type="rag",
+            content="doc",
+            tokens=3,
+            source="vs",
+            timestamp="t",
         )
         assert cl.layer_type == "rag"
 
     def test_layer_type_system(self):
         cl = ContextLayer(
-            layer_type="system", content="prompt", tokens=4,
-            source="sys", timestamp="t",
+            layer_type="system",
+            content="prompt",
+            tokens=4,
+            source="sys",
+            timestamp="t",
         )
         assert cl.layer_type == "system"
 
     def test_content_preserved(self):
         cl = ContextLayer(
-            layer_type="session", content="hello world", tokens=2,
-            source="test", timestamp="t",
+            layer_type="session",
+            content="hello world",
+            tokens=2,
+            source="test",
+            timestamp="t",
         )
         assert cl.content == "hello world"
 
     def test_tokens_preserved(self):
         cl = ContextLayer(
-            layer_type="session", content="hi", tokens=42,
-            source="test", timestamp="t",
+            layer_type="session",
+            content="hi",
+            tokens=42,
+            source="test",
+            timestamp="t",
         )
         assert cl.tokens == 42
 
     def test_source_preserved(self):
         cl = ContextLayer(
-            layer_type="session", content="hi", tokens=1,
-            source="my_source", timestamp="t",
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="my_source",
+            timestamp="t",
         )
         assert cl.source == "my_source"
 
     def test_timestamp_preserved(self):
         cl = ContextLayer(
-            layer_type="session", content="hi", tokens=1,
-            source="test", timestamp="2024-01-01T00:00:00",
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="test",
+            timestamp="2024-01-01T00:00:00",
         )
         assert cl.timestamp == "2024-01-01T00:00:00"
 
     def test_priority_zero(self):
         cl = ContextLayer(
-            layer_type="session", content="hi", tokens=1,
-            source="test", timestamp="t", priority=0.0,
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="test",
+            timestamp="t",
+            priority=0.0,
         )
         assert cl.priority == 0.0
 
     def test_priority_negative(self):
         cl = ContextLayer(
-            layer_type="session", content="hi", tokens=1,
-            source="test", timestamp="t", priority=-1.0,
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="test",
+            timestamp="t",
+            priority=-1.0,
         )
         assert cl.priority == -1.0
 
     def test_priority_large(self):
         cl = ContextLayer(
-            layer_type="session", content="hi", tokens=1,
-            source="test", timestamp="t", priority=100.0,
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="test",
+            timestamp="t",
+            priority=100.0,
         )
         assert cl.priority == 100.0
 
@@ -104,8 +146,12 @@ class TestContextLayer:
 class TestContextFrame:
     def test_to_prompt_system_only(self):
         cf = ContextFrame(
-            id="a", system_prompt="Be helpful", layers=[],
-            total_tokens=10, max_tokens=2048, created_at="2024-01-01",
+            id="a",
+            system_prompt="Be helpful",
+            layers=[],
+            total_tokens=10,
+            max_tokens=2048,
+            created_at="2024-01-01",
         )
         assert cf.to_prompt() == "Be helpful"
 
@@ -115,8 +161,12 @@ class TestContextFrame:
             ContextLayer("session", "user msg", 3, "sess", "t", priority=1.0),
         ]
         cf = ContextFrame(
-            id="b", system_prompt="sys", layers=layers,
-            total_tokens=10, max_tokens=2048, created_at="t",
+            id="b",
+            system_prompt="sys",
+            layers=layers,
+            total_tokens=10,
+            max_tokens=2048,
+            created_at="t",
         )
         result = cf.to_prompt()
         lines = result.split("\n\n")
@@ -128,15 +178,23 @@ class TestContextFrame:
             ContextLayer("memory", "fact", 2, "ep", "t", priority=0.8),
         ]
         cf = ContextFrame(
-            id="c", system_prompt="", layers=layers,
-            total_tokens=5, max_tokens=2048, created_at="t",
+            id="c",
+            system_prompt="",
+            layers=layers,
+            total_tokens=5,
+            max_tokens=2048,
+            created_at="t",
         )
         assert "[MEMORY] fact" in cf.to_prompt()
 
     def test_to_prompt_empty_system(self):
         cf = ContextFrame(
-            id="d", system_prompt="", layers=[],
-            total_tokens=0, max_tokens=2048, created_at="t",
+            id="d",
+            system_prompt="",
+            layers=[],
+            total_tokens=0,
+            max_tokens=2048,
+            created_at="t",
         )
         assert cf.to_prompt() == ""
 
@@ -147,8 +205,12 @@ class TestContextFrame:
             ContextLayer("memory", "fact", 2, "ep", "t", priority=0.6),
         ]
         cf = ContextFrame(
-            id="e", system_prompt="sys", layers=layers,
-            total_tokens=10, max_tokens=2048, created_at="t",
+            id="e",
+            system_prompt="sys",
+            layers=layers,
+            total_tokens=10,
+            max_tokens=2048,
+            created_at="t",
         )
         result = cf.to_prompt()
         assert "[SESSION] msg" in result
@@ -157,29 +219,45 @@ class TestContextFrame:
 
     def test_frame_id_preserved(self):
         cf = ContextFrame(
-            id="my_id", system_prompt="sys", layers=[],
-            total_tokens=0, max_tokens=2048, created_at="t",
+            id="my_id",
+            system_prompt="sys",
+            layers=[],
+            total_tokens=0,
+            max_tokens=2048,
+            created_at="t",
         )
         assert cf.id == "my_id"
 
     def test_total_tokens_preserved(self):
         cf = ContextFrame(
-            id="a", system_prompt="sys", layers=[],
-            total_tokens=123, max_tokens=2048, created_at="t",
+            id="a",
+            system_prompt="sys",
+            layers=[],
+            total_tokens=123,
+            max_tokens=2048,
+            created_at="t",
         )
         assert cf.total_tokens == 123
 
     def test_max_tokens_preserved(self):
         cf = ContextFrame(
-            id="a", system_prompt="sys", layers=[],
-            total_tokens=0, max_tokens=4096, created_at="t",
+            id="a",
+            system_prompt="sys",
+            layers=[],
+            total_tokens=0,
+            max_tokens=4096,
+            created_at="t",
         )
         assert cf.max_tokens == 4096
 
     def test_created_at_preserved(self):
         cf = ContextFrame(
-            id="a", system_prompt="sys", layers=[],
-            total_tokens=0, max_tokens=2048, created_at="2024-01-01",
+            id="a",
+            system_prompt="sys",
+            layers=[],
+            total_tokens=0,
+            max_tokens=2048,
+            created_at="2024-01-01",
         )
         assert cf.created_at == "2024-01-01"
 
@@ -480,6 +558,7 @@ class TestContextCore:
     def test_build_context_frame_basic(self):
         cc = ContextCore()
         import asyncio
+
         frame = asyncio.get_event_loop().run_until_complete(
             cc.build_context_frame(include_rag=False, include_memory=False)
         )
@@ -491,6 +570,7 @@ class TestContextCore:
         cc = ContextCore()
         cc.add_message("user", "hello")
         import asyncio
+
         frame = asyncio.get_event_loop().run_until_complete(
             cc.build_context_frame(include_rag=False, include_memory=False)
         )
@@ -501,6 +581,7 @@ class TestContextCore:
     def test_build_context_frame_recorded_in_history(self):
         cc = ContextCore()
         import asyncio
+
         asyncio.get_event_loop().run_until_complete(
             cc.build_context_frame(include_rag=False, include_memory=False)
         )
@@ -509,6 +590,7 @@ class TestContextCore:
     def test_build_context_frame_history_max_50(self):
         cc = ContextCore()
         import asyncio
+
         for _ in range(55):
             asyncio.get_event_loop().run_until_complete(
                 cc.build_context_frame(include_rag=False, include_memory=False)
@@ -528,6 +610,7 @@ class TestContextCore:
     def test_reset_session_preserves_frame_history(self):
         cc = ContextCore()
         import asyncio
+
         asyncio.get_event_loop().run_until_complete(
             cc.build_context_frame(include_rag=False, include_memory=False)
         )
@@ -537,11 +620,13 @@ class TestContextCore:
     def test_episodic_memory_non_dict_content(self):
         cc = ContextCore()
         cc.set_session_id("s1")
-        cc.episodic_memory["s1"].append({
-            "content": "plain string",
-            "timestamp": "2024-01-01",
-            "importance": 1.0,
-        })
+        cc.episodic_memory["s1"].append(
+            {
+                "content": "plain string",
+                "timestamp": "2024-01-01",
+                "importance": 1.0,
+            }
+        )
         ctx = cc.get_episodic_context()
         assert "plain string" in ctx
 
@@ -709,6 +794,7 @@ class TestContextCoreAdditional:
         cc.set_session_id("s1")
         cc.add_message("user", "test")
         import asyncio
+
         frame = asyncio.get_event_loop().run_until_complete(
             cc.build_context_frame(include_memory=True)
         )
@@ -718,6 +804,7 @@ class TestContextCoreAdditional:
     def test_build_context_frame_with_rag_disabled(self):
         cc = ContextCore(rag_enabled=False)
         import asyncio
+
         frame = asyncio.get_event_loop().run_until_complete(
             cc.build_context_frame(include_rag=True)
         )
@@ -728,6 +815,7 @@ class TestContextCoreAdditional:
         cc = ContextCore()
         cc.add_message("user", "hello")
         import asyncio
+
         frame = asyncio.get_event_loop().run_until_complete(
             cc.build_context_frame(include_rag=False, include_memory=False)
         )
@@ -738,6 +826,7 @@ class TestContextCoreAdditional:
         class MockManager:
             def apply(self, prompt):
                 return " extra"
+
         cc = ContextCore()
         cc._personality = MockManager()
         cc._style = MockManager()
@@ -835,6 +924,7 @@ class TestContextCoreAdditional:
     def test_build_context_frame_id_is_hash(self):
         cc = ContextCore()
         import asyncio
+
         frame = asyncio.get_event_loop().run_until_complete(
             cc.build_context_frame(include_rag=False, include_memory=False)
         )

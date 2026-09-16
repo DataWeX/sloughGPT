@@ -19,13 +19,14 @@ Usage:
 from __future__ import annotations
 
 from domain.memory._internal.config import MemoryConfig
-from domain.memory._internal.provider import KnowledgeMemoryProvider, MemoryProvider
-from domain.memory._internal.service import MemoryService, get_memory_service
+from domain.memory._internal.consolidation import plan_consolidation
 from domain.memory._internal.maintenance import (
     maintenance_tick,
     start_memory_maintenance,
     stop_memory_maintenance,
 )
+from domain.memory._internal.provider import KnowledgeMemoryProvider, MemoryProvider
+from domain.memory._internal.service import MemoryService, get_memory_service
 from domain.memory._internal.task_memory import (
     TASK_CONSOLIDATE,
     TASK_REMEMBER,
@@ -39,7 +40,6 @@ from domain.memory._internal.task_memory import (
     submit_memory_store,
     unregister_memory_handlers,
 )
-from domain.memory._internal.consolidation import plan_consolidation
 
 __all__ = [
     "MemoryConfig",

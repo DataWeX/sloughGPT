@@ -1,11 +1,12 @@
 """Tests for domain.shell._internal.kernel_process — ProcessState, Priority, TensorRef, Process."""
 
-from domain.shell._internal.kernel_process import ProcessState, Priority, TensorRef, Process
+from domain.shell._internal.kernel_process import Priority, Process, ProcessState, TensorRef
 
 
 class TestProcessState:
     def test_all_members(self):
         assert len(ProcessState) == 6
+
     def test_values(self):
         assert ProcessState.CREATED.value == 0
         assert ProcessState.RUNNING.value == 2
@@ -46,6 +47,7 @@ class TestProcessState:
 
     def test_is_intenum(self):
         from enum import IntEnum
+
         assert issubclass(ProcessState, IntEnum)
 
     def test_comparison(self):
@@ -63,6 +65,7 @@ class TestProcessState:
 class TestPriority:
     def test_all_members(self):
         assert len(Priority) == 5
+
     def test_values(self):
         assert Priority.CRITICAL.value == 0
         assert Priority.HIGH.value == 1
@@ -84,6 +87,7 @@ class TestPriority:
 
     def test_is_intenum(self):
         from enum import IntEnum
+
         assert issubclass(Priority, IntEnum)
 
     def test_ordering(self):
@@ -121,7 +125,9 @@ class TestTensorRef:
         assert isinstance(tr.shape, tuple)
 
     def test_large_shape(self):
-        tr = TensorRef(block_id=0, shape=(1024, 1024, 3), dtype="float32", size_bytes=12582912, owner_pid=1)
+        tr = TensorRef(
+            block_id=0, shape=(1024, 1024, 3), dtype="float32", size_bytes=12582912, owner_pid=1
+        )
         assert tr.shape == (1024, 1024, 3)
 
     def test_equality(self):
@@ -165,6 +171,7 @@ class TestProcess:
 
     def test_uptime_running(self):
         import time
+
         p = Process(pid=1, name="test", started_at=time.time() - 1.0)
         assert p.uptime >= 0.9
 
@@ -178,6 +185,7 @@ class TestProcess:
 
     def test_is_active_running(self):
         import time
+
         p = Process(pid=1, name="test", state=ProcessState.RUNNING, started_at=time.time())
         assert p.is_active is True
 
@@ -208,6 +216,7 @@ class TestProcess:
 
     def test_transition_to_running_sets_started_at(self):
         import time
+
         p = Process(pid=1, name="test")
         before = time.time()
         p.transition(ProcessState.RUNNING)
@@ -215,14 +224,12 @@ class TestProcess:
         assert p.started_at >= before
 
     def test_transition_to_stopped_sets_finished_at(self):
-        import time
         p = Process(pid=1, name="test")
         p.transition(ProcessState.RUNNING)
         p.transition(ProcessState.STOPPED)
         assert p.finished_at is not None
 
     def test_transition_to_zombie_sets_finished_at(self):
-        import time
         p = Process(pid=1, name="test")
         p.transition(ProcessState.RUNNING)
         p.transition(ProcessState.ZOMBIE)
@@ -230,13 +237,13 @@ class TestProcess:
 
     def test_transition_does_not_overwrite_started_at(self):
         import time
+
         p = Process(pid=1, name="test", started_at=time.time() - 5.0)
         original = p.started_at
         p.transition(ProcessState.RUNNING)
         assert p.started_at == original
 
     def test_transition_does_not_overwrite_finished_at(self):
-        import time
         p = Process(pid=1, name="test")
         p.transition(ProcessState.STOPPED)
         finished = p.finished_at
@@ -244,7 +251,6 @@ class TestProcess:
         assert p.finished_at == finished
 
     def test_acquire_tensor(self):
-        import time
         p = Process(pid=1, name="test")
         ref = TensorRef(block_id=0, shape=(2, 3), dtype="float32", size_bytes=24, owner_pid=1)
         p.acquire_tensor(ref)
@@ -252,7 +258,6 @@ class TestProcess:
         assert p.memory_bytes == 24
 
     def test_acquire_multiple_tensors(self):
-        import time
         p = Process(pid=1, name="test")
         ref1 = TensorRef(block_id=0, shape=(2, 3), dtype="float32", size_bytes=24, owner_pid=1)
         ref2 = TensorRef(block_id=1, shape=(4, 4), dtype="float32", size_bytes=64, owner_pid=1)
@@ -262,7 +267,6 @@ class TestProcess:
         assert p.memory_bytes == 88
 
     def test_release_tensor(self):
-        import time
         p = Process(pid=1, name="test")
         ref = TensorRef(block_id=0, shape=(2, 3), dtype="float32", size_bytes=24, owner_pid=1)
         p.acquire_tensor(ref)
@@ -273,7 +277,6 @@ class TestProcess:
         assert p.memory_bytes == 0
 
     def test_release_nonexistent_tensor(self):
-        import time
         p = Process(pid=1, name="test")
         released = p.release_tensor(999)
         assert released is None
@@ -291,6 +294,7 @@ class TestProcess:
 
     def test_status_line_running(self):
         import time
+
         p = Process(pid=1, name="test", started_at=time.time())
         p.transition(ProcessState.RUNNING)
         status = p.status_line()
@@ -299,6 +303,7 @@ class TestProcess:
     def test_custom_entry(self):
         def my_func():
             return 42
+
         p = Process(pid=1, name="test", entry=my_func)
         assert p.entry is not None
         assert p.entry() == 42
@@ -334,6 +339,7 @@ class TestProcess:
 
     def test_uptime_after_stop(self):
         import time
+
         t0 = time.time() - 2.0
         p = Process(pid=1, name="test", started_at=t0, finished_at=time.time())
         assert p.uptime >= 1.9

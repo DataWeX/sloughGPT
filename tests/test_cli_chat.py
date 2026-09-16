@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-from unittest.mock import MagicMock
-
 import io
+from types import SimpleNamespace
+
 import pytest
 
 from apps.cli.src.commands.chat import cmd_chat
@@ -41,17 +40,17 @@ class _Resp:
 
 
 def _chat_args(**overrides) -> SimpleNamespace:
-    base = dict(
-        host="localhost",
-        port=8000,
-        max_tokens=64,
-        temperature=0.8,
-        no_serve=False,
-        model=None,
-        auto_model=None,
-        load_mode="local",
-        device="auto",
-    )
+    base = {
+        "host": "localhost",
+        "port": 8000,
+        "max_tokens": 64,
+        "temperature": 0.8,
+        "no_serve": False,
+        "model": None,
+        "auto_model": None,
+        "load_mode": "local",
+        "device": "auto",
+    }
     base.update(overrides)
     return SimpleNamespace(**base)
 

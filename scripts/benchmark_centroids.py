@@ -18,16 +18,15 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
 
 import numpy as np
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Data generation
 # ══════════════════════════════════════════════════════════════════════════════
 
-def make_weight(shape: Tuple[int, ...], seed: int = 0) -> np.ndarray:
+
+def make_weight(shape: tuple[int, ...], seed: int = 0) -> np.ndarray:
     rng = np.random.RandomState(seed)
     w = rng.randn(*shape).astype(np.float32) * 0.02
     if len(shape) == 2 and shape[0] > 16 and shape[1] > 16:
@@ -38,14 +37,14 @@ def make_weight(shape: Tuple[int, ...], seed: int = 0) -> np.ndarray:
     return w
 
 
-def make_test_suite() -> Dict[str, np.ndarray]:
+def make_test_suite() -> dict[str, np.ndarray]:
     return {
-        "attn_qkv":  make_weight((768, 2304)),
-        "attn_out":  make_weight((768, 768)),
-        "ffn_up":    make_weight((768, 3072)),
-        "ffn_down":  make_weight((3072, 768)),
+        "attn_qkv": make_weight((768, 2304)),
+        "attn_out": make_weight((768, 768)),
+        "ffn_up": make_weight((768, 3072)),
+        "ffn_down": make_weight((3072, 768)),
         "ln_weight": make_weight((768,)),
-        "bias":      make_weight((768,)),
+        "bias": make_weight((768,)),
     }
 
 
@@ -53,10 +52,11 @@ def make_test_suite() -> Dict[str, np.ndarray]:
 # Metrics
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class BenchResult:
     name: str
-    shape: Tuple[int, ...]
+    shape: tuple[int, ...]
     raw_bytes: int
     compressed_bytes: int
     ratio: float
@@ -87,6 +87,7 @@ def measure(func, *args, repeats: int = 2):
 # Adaptive k (shared)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def compute_adaptive_k(flat: np.ndarray, base_k: int = 16) -> int:
     hist, _ = np.histogram(flat, bins=256)
     hist = hist[hist > 0].astype(np.float64)
@@ -100,6 +101,7 @@ def compute_adaptive_k(flat: np.ndarray, base_k: int = 16) -> int:
 # ══════════════════════════════════════════════════════════════════════════════
 # k-means++ init (lighter version — used only for seeding)
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def kmeans_pp_init(flat: np.ndarray, k: int, rng: np.random.RandomState) -> np.ndarray:
     n = len(flat)
@@ -115,6 +117,7 @@ def kmeans_pp_init(flat: np.ndarray, k: int, rng: np.random.RandomState) -> np.n
 # ══════════════════════════════════════════════════════════════════════════════
 # Approach 0: Baseline — quantile init + Lloyd's 3 iters
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def vq_compress(flat, k, lloyd_iters=3, init="quantile"):
     nc = k
@@ -169,11 +172,12 @@ def bench_kmeanspp(flat):
 # Approach 4: Hierarchical centroids — store centroid pattern as function
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def fit_centroid_function(centroids: np.ndarray):
     """Try to compress centroids as a linear function a*i + b."""
     nc = len(centroids)
     if nc < 4:
-        return None, float('inf')
+        return None, float("inf")
 
     i = np.arange(nc, dtype=np.float32)
     A = np.column_stack([i, np.ones(nc)])
@@ -225,6 +229,7 @@ def decompress_hierarchical(r, n):
 # Approach 5: Centroid int8 — quantize centroids to int8
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def bench_centroid_int8(flat):
     flat = flat.flatten()
     k = compute_adaptive_k(flat, 16)
@@ -268,6 +273,7 @@ def decompress_centroid_int8(r, n):
 # Benchmark runner
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def bench_one(name, flat, compress_fn, decompress_fn):
     raw_bytes = flat.nbytes
     flat_1d = flat.flatten()
@@ -283,46 +289,59 @@ def bench_one(name, flat, compress_fn, decompress_fn):
     else:
         compressed_bytes = result[-1]  # all other paths: last element is nbytes
     ratio = raw_bytes / max(compressed_bytes, 1)
-    return BenchResult(name=name, shape=flat.shape, raw_bytes=raw_bytes,
-                       compressed_bytes=compressed_bytes, ratio=ratio,
-                       cosine=cosine, mse=mse,
-                       compress_ms=compress_ms, decompress_ms=decompress_ms)
+    return BenchResult(
+        name=name,
+        shape=flat.shape,
+        raw_bytes=raw_bytes,
+        compressed_bytes=compressed_bytes,
+        ratio=ratio,
+        cosine=cosine,
+        mse=mse,
+        compress_ms=compress_ms,
+        decompress_ms=decompress_ms,
+    )
 
 
 def run_benchmarks():
     suite = make_test_suite()
 
     approaches = [
-        ("0_baseline",   bench_baseline,   lambda r, n: r[0][r[1][:n]]),
-        ("1_lloyd10",    bench_lloyd10,    lambda r, n: r[0][r[1][:n]]),
-        ("2_lloyd20",    bench_lloyd20,    lambda r, n: r[0][r[1][:n]]),
-        ("3_kmeanspp",   bench_kmeanspp,   lambda r, n: r[0][r[1][:n]]),
-        ("4_hierarch",   bench_hierarchical, decompress_hierarchical),
-        ("5_cent_int8",  bench_centroid_int8, decompress_centroid_int8),
+        ("0_baseline", bench_baseline, lambda r, n: r[0][r[1][:n]]),
+        ("1_lloyd10", bench_lloyd10, lambda r, n: r[0][r[1][:n]]),
+        ("2_lloyd20", bench_lloyd20, lambda r, n: r[0][r[1][:n]]),
+        ("3_kmeanspp", bench_kmeanspp, lambda r, n: r[0][r[1][:n]]),
+        ("4_hierarch", bench_hierarchical, decompress_hierarchical),
+        ("5_cent_int8", bench_centroid_int8, decompress_centroid_int8),
     ]
 
-    all_results: List[BenchResult] = []
+    all_results: list[BenchResult] = []
 
     print("=" * 100)
     print("CENTROID-FOCUSED VQ BENCHMARK")
     print("=" * 100)
-    print(f"{'Approach':<16} {'Shape':<16} {'Ratio':>7} {'Cosine':>8} {'MSE':>12} {'Compress':>10} {'Decompress':>10}")
+    print(
+        f"{'Approach':<16} {'Shape':<16} {'Ratio':>7} {'Cosine':>8} {'MSE':>12} {'Compress':>10} {'Decompress':>10}"
+    )
     print("-" * 100)
 
-    for weight_name, flat in suite.items():
+    for _weight_name, flat in suite.items():
         for approach_name, compress_fn, decompress_fn in approaches:
             result = bench_one(approach_name, flat, compress_fn, decompress_fn)
             all_results.append(result)
-            print(f"{approach_name:<16} {str(flat.shape):<16} {result.ratio:>7.2f}x "
-                  f"{result.cosine:>8.5f} {result.mse:>12.2e} "
-                  f"{result.compress_ms:>8.1f}ms {result.decompress_ms:>8.1f}ms")
+            print(
+                f"{approach_name:<16} {str(flat.shape):<16} {result.ratio:>7.2f}x "
+                f"{result.cosine:>8.5f} {result.mse:>12.2e} "
+                f"{result.compress_ms:>8.1f}ms {result.decompress_ms:>8.1f}ms"
+            )
         print()
 
     # Summary
     print("=" * 100)
     print("AVERAGE BY APPROACH")
     print("=" * 100)
-    print(f"{'Approach':<16} {'Avg Ratio':>10} {'Avg Cosine':>11} {'Avg MSE':>12} {'Avg Compress':>13} {'Avg Decompress':>14}")
+    print(
+        f"{'Approach':<16} {'Avg Ratio':>10} {'Avg Cosine':>11} {'Avg MSE':>12} {'Avg Compress':>13} {'Avg Decompress':>14}"
+    )
     print("-" * 100)
 
     names = [a[0] for a in approaches]
@@ -354,25 +373,32 @@ def run_benchmarks():
         d_cosine = np.mean([r.cosine for r in rs]) - b_cosine
         d_mse = np.mean([r.mse for r in rs]) - b_mse
         d_speed = np.mean([r.compress_ms for r in rs]) - b_speed
-        print(f"{name:<16} ratio={d_ratio:+.2f}x  cosine={d_cosine:+.5f}  mse={d_mse:+.2e}  speed={d_speed:+.1f}ms")
+        print(
+            f"{name:<16} ratio={d_ratio:+.2f}x  cosine={d_cosine:+.5f}  mse={d_mse:+.2e}  speed={d_speed:+.1f}ms"
+        )
 
     # Verdict
     print()
     print("=" * 100)
     print("VERDICT (accuracy-first)")
     print("=" * 100)
-    metrics = {n: {
-        "ratio": np.mean([r.ratio for r in all_results if r.name == n]),
-        "cosine": np.mean([r.cosine for r in all_results if r.name == n]),
-        "mse": np.mean([r.mse for r in all_results if r.name == n]),
-        "speed": np.mean([r.compress_ms for r in all_results if r.name == n]),
-    } for n in names}
+    metrics = {
+        n: {
+            "ratio": np.mean([r.ratio for r in all_results if r.name == n]),
+            "cosine": np.mean([r.cosine for r in all_results if r.name == n]),
+            "mse": np.mean([r.mse for r in all_results if r.name == n]),
+            "speed": np.mean([r.compress_ms for r in all_results if r.name == n]),
+        }
+        for n in names
+    }
 
     by_cosine = sorted(names, key=lambda n: metrics[n]["cosine"], reverse=True)
     for i, n in enumerate(by_cosine):
         m = metrics[n]
         tag = " <-- BEST" if i == 0 else ""
-        print(f"  {i+1}. {n:<16} cos={m['cosine']:.5f}  ratio={m['ratio']:.2f}x  speed={m['speed']:.1f}ms{tag}")
+        print(
+            f"  {i + 1}. {n:<16} cos={m['cosine']:.5f}  ratio={m['ratio']:.2f}x  speed={m['speed']:.1f}ms{tag}"
+        )
 
 
 if __name__ == "__main__":

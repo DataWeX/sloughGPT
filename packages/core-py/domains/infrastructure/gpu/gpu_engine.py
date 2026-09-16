@@ -18,13 +18,18 @@ Usage:
 from __future__ import annotations
 
 import ctypes
-import os
 import logging
+import os
 from ctypes import (
-    c_void_p, c_char_p, c_uint32, c_int32, c_uint64, c_size_t,
-    Structure, POINTER,
+    POINTER,
+    Structure,
+    c_char_p,
+    c_int32,
+    c_size_t,
+    c_uint32,
+    c_uint64,
+    c_void_p,
 )
-from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -50,23 +55,30 @@ GPU_BUF_COPY_DST = 1 << 4
 
 # ── C types ──────────────────────────────────────────────────────────────
 
+
 class GpuDeviceT(c_void_p):
     pass
+
 
 class GpuBufferT(c_void_p):
     pass
 
+
 class GpuShaderT(c_void_p):
     pass
+
 
 class GpuPipelineT(c_void_p):
     pass
 
+
 class GpuContextT(c_void_p):
     pass
 
+
 class GpuBufferPoolT(c_void_p):
     pass
+
 
 class GpuBindEntry(Structure):
     _fields_ = [
@@ -77,6 +89,7 @@ class GpuBindEntry(Structure):
 
 
 # ── Library loading ──────────────────────────────────────────────────────
+
 
 def _find_library() -> ctypes.CDLL:
     """Find and load the gpu_engine shared library."""
@@ -107,7 +120,7 @@ def _find_library() -> ctypes.CDLL:
     )
 
 
-_lib: Optional[ctypes.CDLL] = None
+_lib: ctypes.CDLL | None = None
 
 
 def _get_lib() -> ctypes.CDLL:
@@ -168,8 +181,13 @@ def _setup_functions(lib: ctypes.CDLL) -> None:
 
     # Pipelines
     lib.gpu_pipeline_create.restype = GpuPipelineT
-    lib.gpu_pipeline_create.argtypes = [GpuDeviceT, GpuShaderT, c_char_p,
-                                         POINTER(GpuBindEntry), c_uint32]
+    lib.gpu_pipeline_create.argtypes = [
+        GpuDeviceT,
+        GpuShaderT,
+        c_char_p,
+        POINTER(GpuBindEntry),
+        c_uint32,
+    ]
 
     lib.gpu_pipeline_destroy.restype = None
     lib.gpu_pipeline_destroy.argtypes = [GpuPipelineT]
@@ -209,10 +227,11 @@ def _setup_functions(lib: ctypes.CDLL) -> None:
 
 # ── Python wrappers ──────────────────────────────────────────────────────
 
+
 class GpuDevice:
     """Python wrapper for GpuDevice."""
 
-    def __init__(self, backend: Optional[str] = None):
+    def __init__(self, backend: str | None = None):
         lib = _get_lib()
         if backend:
             self._ptr = lib.gpu_device_create_backend(backend.encode())
@@ -234,50 +253,47 @@ class GpuDevice:
     def vram(self) -> int:
         return self._vram
 
-    def buffer_create(self, size: int, usage: int) -> "GpuBuffer":
+    def buffer_create(self, size: int, usage: int) -> GpuBuffer:
         return GpuBuffer(self, size, usage)
 
-    def shader_create_wgsl(self, source: str, entry: str = "main") -> "GpuShader":
+    def shader_create_wgsl(self, source: str, entry: str = "main") -> GpuShader:
         src_bytes = source.encode()
-        ptr = self._lib.gpu_shader_create_wgsl(
-            self._ptr, src_bytes, len(src_bytes), entry.encode()
-        )
+        ptr = self._lib.gpu_shader_create_wgsl(self._ptr, src_bytes, len(src_bytes), entry.encode())
         if not ptr:
             raise RuntimeError("Failed to create WGSL shader")
         return GpuShader(self, ptr)
 
-    def shader_create_spirv(self, code: np.ndarray, entry: str = "main") -> "GpuShader":
+    def shader_create_spirv(self, code: np.ndarray, entry: str = "main") -> GpuShader:
         code_ptr = code.ctypes.data_as(POINTER(c_uint32))
-        ptr = self._lib.gpu_shader_create_spirv(
-            self._ptr, code_ptr, len(code), entry.encode()
-        )
+        ptr = self._lib.gpu_shader_create_spirv(self._ptr, code_ptr, len(code), entry.encode())
         if not ptr:
             raise RuntimeError("Failed to create SPIR-V shader")
         return GpuShader(self, ptr)
 
-    def pipeline_create(self, shader: "GpuShader", entries: List[Tuple[int, int, int]]) -> "GpuPipeline":
+    def pipeline_create(
+        self, shader: GpuShader, entries: list[tuple[int, int, int]]
+    ) -> GpuPipeline:
         """Create compute pipeline.
 
         Args:
             shader: Compiled shader.
             entries: List of (binding, type, stages) tuples.
         """
-        bind_entries = (GpuBindEntry * len(entries))(*[
-            GpuBindEntry(binding=e[0], type=e[1], stages=e[2]) for e in entries
-        ])
+        bind_entries = (GpuBindEntry * len(entries))(
+            *[GpuBindEntry(binding=e[0], type=e[1], stages=e[2]) for e in entries]
+        )
         ptr = self._lib.gpu_pipeline_create(
-            self._ptr, shader._ptr, b"main",
-            bind_entries, len(entries)
+            self._ptr, shader._ptr, b"main", bind_entries, len(entries)
         )
         if not ptr:
             raise RuntimeError("Failed to create pipeline")
         return GpuPipeline(self, ptr)
 
-    def compute_begin(self) -> "GpuContext":
+    def compute_begin(self) -> GpuContext:
         return GpuContext(self, self._lib.gpu_compute_begin(self._ptr))
 
     def __del__(self):
-        if hasattr(self, '_ptr') and self._ptr:
+        if hasattr(self, "_ptr") and self._ptr:
             self._lib.gpu_device_destroy(self._ptr)
 
 
@@ -304,7 +320,7 @@ class GpuBuffer:
         if err != GPU_OK:
             raise RuntimeError(f"Buffer write failed: {err}")
 
-    def read(self, shape: Tuple[int, ...], dtype=np.float32, offset: int = 0) -> np.ndarray:
+    def read(self, shape: tuple[int, ...], dtype=np.float32, offset: int = 0) -> np.ndarray:
         """Read GPU buffer into numpy array."""
         arr = np.empty(shape, dtype=dtype)
         ptr = arr.ctypes.data_as(c_void_p)
@@ -314,7 +330,7 @@ class GpuBuffer:
         return arr
 
     def __del__(self):
-        if hasattr(self, '_ptr') and self._ptr:
+        if hasattr(self, "_ptr") and self._ptr:
             self._lib.gpu_buffer_destroy(self._ptr)
 
 
@@ -327,7 +343,7 @@ class GpuShader:
         self._ptr = ptr
 
     def __del__(self):
-        if hasattr(self, '_ptr') and self._ptr:
+        if hasattr(self, "_ptr") and self._ptr:
             self._lib.gpu_shader_destroy(self._ptr)
 
 
@@ -340,7 +356,7 @@ class GpuPipeline:
         self._ptr = ptr
 
     def __del__(self):
-        if hasattr(self, '_ptr') and self._ptr:
+        if hasattr(self, "_ptr") and self._ptr:
             self._lib.gpu_pipeline_destroy(self._ptr)
 
 
@@ -392,13 +408,14 @@ class GpuBufferPool:
         buffer._ptr = None
 
     def __del__(self):
-        if hasattr(self, '_ptr') and self._ptr:
+        if hasattr(self, "_ptr") and self._ptr:
             self._lib.gpu_pool_destroy(self._ptr)
 
 
 # ── Convenience ──────────────────────────────────────────────────────────
 
-def auto_device(backend: Optional[str] = None) -> GpuDevice:
+
+def auto_device(backend: str | None = None) -> GpuDevice:
     """Create the best available GPU device."""
     return GpuDevice(backend)
 

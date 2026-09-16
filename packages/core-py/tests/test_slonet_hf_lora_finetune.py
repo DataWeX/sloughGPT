@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import pytest
 from domain.training._internal.hf_lora_finetune import (
     HFLoraConfig,
     HFLoraTrainer,
 )
 
-
 # ── HFLoraConfig ────────────────────────────────────────────────────────────
 
 
 class TestHFLoraConfig:
-
     def test_default(self):
         config = HFLoraConfig()
         assert config.rank == 8
@@ -40,7 +37,6 @@ class TestHFLoraConfig:
 
 
 class TestHFLoraTrainer:
-
     def test_init(self):
         config = HFLoraConfig()
         trainer = HFLoraTrainer(config)

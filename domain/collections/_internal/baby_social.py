@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import numpy as np
 from dataclasses import dataclass
+
+import numpy as np
 
 
 @dataclass
@@ -49,7 +50,7 @@ class BabySocial:
     def receive_message(self, message: Message):
         self._inbox.append(message)
         if len(self._inbox) > self.config.max_message_buffer:
-            self._inbox = self._inbox[-self.config.max_message_buffer:]
+            self._inbox = self._inbox[-self.config.max_message_buffer :]
 
     def get_messages(self) -> list[Message]:
         messages = list(self._inbox)
@@ -73,7 +74,7 @@ class BabySocial:
             }
             self._social_memory.append(observation)
             if len(self._social_memory) > self.config.max_message_buffer:
-                self._social_memory = self._social_memory[-self.config.max_message_buffer:]
+                self._social_memory = self._social_memory[-self.config.max_message_buffer :]
 
     def try_imitate(self, other_baby, world) -> dict:
         if np.random.random() > self.config.imitation_chance:
@@ -109,7 +110,7 @@ class BabySocial:
         self._teach_count += 1
 
         msg = self.send_message(other_baby.entity.id, lesson, message_type="teach")
-        other_baby_social = getattr(other_baby, '_social', None)
+        other_baby_social = getattr(other_baby, "_social", None)
         if other_baby_social:
             other_baby_social.receive_message(msg)
 
@@ -122,8 +123,8 @@ class BabySocial:
 
     def share_knowledge(self, other_baby) -> dict:
         knowledge = {
-            "material_preference": getattr(self.baby, '_learning', {}).get("preferred_material", 1),
-            "total_experiences": getattr(self.baby, '_learning', {}).get("total_experiences", 0),
+            "material_preference": getattr(self.baby, "_learning", {}).get("preferred_material", 1),
+            "total_experiences": getattr(self.baby, "_learning", {}).get("total_experiences", 0),
             "energy": self.baby.energy,
         }
         return self.teach(other_baby, knowledge)
@@ -242,7 +243,11 @@ class BabySocialSystem:
                 if dist <= self.config.communication_range:
                     nearby.append((other, dist))
 
-            interaction = {"baby_id": baby.entity.id, "nearby": len(nearby), "messages": len(messages)}
+            interaction = {
+                "baby_id": baby.entity.id,
+                "nearby": len(nearby),
+                "messages": len(messages),
+            }
 
             if nearby and baby.energy > 20:
                 other, dist = min(nearby, key=lambda x: x[1])

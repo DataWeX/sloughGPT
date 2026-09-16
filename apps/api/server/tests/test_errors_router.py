@@ -2,7 +2,6 @@
 
 import pytest
 from routers.errors import _dedup_map, _error_buffer
-
 from tests.test_support import get_test_client
 
 client = get_test_client()

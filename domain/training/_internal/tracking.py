@@ -7,9 +7,9 @@ Experiment tracking and logging.
 from __future__ import annotations
 
 import logging
-from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 from domain.infrastructure._internal.config import get_config
 
@@ -31,15 +31,15 @@ class TrackingConfig:
 
     backend: TrackerBackend = TrackerBackend.NONE
     experiment_name: str = "sloughgpt_experiment"
-    run_name: Optional[str] = None
-    tracking_uri: Optional[str] = None
-    api_key: Optional[str] = None
+    run_name: str | None = None
+    tracking_uri: str | None = None
+    api_key: str | None = None
     project: str = "sloughgpt"
-    entity: Optional[str] = None
+    entity: str | None = None
     #: Passed to ``wandb.init`` (e.g. ``train``, ``server``).
-    job_type: Optional[str] = None
+    job_type: str | None = None
     #: Optional W&B run tags (e.g. ``["sloughgpt", "api"]``).
-    tags: Optional[list] = None
+    tags: list | None = None
 
     def __post_init__(self):
         cfg = get_config().tracking
@@ -74,8 +74,10 @@ class ExperimentTracker:
         elif self.config.backend == TrackerBackend.COMET:
             self._init_comet()
         else:
-            logger.info("No tracking backend selected",
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "No tracking backend selected",
+                extra={"tag": "TRAIN"},
+            )
 
     def _init_mlflow(self):
         """Initialize MLflow."""
@@ -85,11 +87,16 @@ class ExperimentTracker:
             mlflow.set_tracking_uri(self.config.tracking_uri)
             mlflow.set_experiment(self.config.experiment_name)
             self._client = mlflow
-            logger.info("MLflow initialized: %s", self.config.tracking_uri,
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "MLflow initialized: %s",
+                self.config.tracking_uri,
+                extra={"tag": "TRAIN"},
+            )
         except ImportError:
-            logger.warning("MLflow not installed: pip install mlflow",
-                extra={"tag": "TRAIN"},)
+            logger.warning(
+                "MLflow not installed: pip install mlflow",
+                extra={"tag": "TRAIN"},
+            )
 
     def _init_wandb(self):
         """Initialize Weights & Biases."""
@@ -98,7 +105,7 @@ class ExperimentTracker:
 
             from domain.training._internal.wandb_helpers import default_wandb_project
 
-            kwargs: Dict[str, Any] = {
+            kwargs: dict[str, Any] = {
                 "project": self.config.project or default_wandb_project(),
                 "name": self.config.run_name,
                 "entity": self.config.entity,
@@ -118,11 +125,16 @@ class ExperimentTracker:
 
             wandb.init(**kwargs)
             self._client = wandb
-            logger.info("WandB initialized: project=%s", kwargs.get("project"),
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "WandB initialized: project=%s",
+                kwargs.get("project"),
+                extra={"tag": "TRAIN"},
+            )
         except ImportError:
-            logger.warning("WandB not installed: pip install wandb",
-                extra={"tag": "TRAIN"},)
+            logger.warning(
+                "WandB not installed: pip install wandb",
+                extra={"tag": "TRAIN"},
+            )
 
     def _init_comet(self):
         """Initialize Comet.ml."""
@@ -134,13 +146,18 @@ class ExperimentTracker:
                 api_key=self.config.api_key,
             )
             self._client = experiment
-            logger.info("Comet initialized: %s", self.config.project,
-                extra={"tag": "TRAIN"},)
+            logger.info(
+                "Comet initialized: %s",
+                self.config.project,
+                extra={"tag": "TRAIN"},
+            )
         except ImportError:
-            logger.warning("Comet not installed: pip install comet-ml",
-                extra={"tag": "TRAIN"},)
+            logger.warning(
+                "Comet not installed: pip install comet-ml",
+                extra={"tag": "TRAIN"},
+            )
 
-    def start_run(self, run_name: Optional[str] = None):
+    def start_run(self, run_name: str | None = None):
         """Start a new run."""
         if self.config.backend == TrackerBackend.MLFLOW:
             self._run = self._client.start_run(run_name=run_name)
@@ -149,7 +166,7 @@ class ExperimentTracker:
         elif self.config.backend == TrackerBackend.COMET:
             self._run = self._client
 
-    def log_metric(self, name: str, value: float, step: Optional[int] = None):
+    def log_metric(self, name: str, value: float, step: int | None = None):
         """Log a metric."""
         if self._run is None:
             return
@@ -161,7 +178,7 @@ class ExperimentTracker:
         elif self.config.backend == TrackerBackend.COMET:
             self._client.log_metric(name, value, step=step)
 
-    def log_metrics(self, metrics: Dict[str, float], step: Optional[int] = None):
+    def log_metrics(self, metrics: dict[str, float], step: int | None = None):
         """Log multiple metrics."""
         if self._run is None:
             return
@@ -183,7 +200,7 @@ class ExperimentTracker:
         elif self.config.backend == TrackerBackend.COMET:
             self._client.log_parameter(name, value)
 
-    def log_params(self, params: Dict[str, Any]):
+    def log_params(self, params: dict[str, Any]):
         """Log multiple parameters."""
         if self._run is None:
             return
@@ -196,7 +213,7 @@ class ExperimentTracker:
             for k, v in params.items():
                 self._client.log_parameter(k, v)
 
-    def log_artifact(self, local_path: str, name: Optional[str] = None):
+    def log_artifact(self, local_path: str, name: str | None = None):
         """Log an artifact."""
         if self._run is None:
             return
@@ -271,7 +288,7 @@ def create_tracker(backend: str = "mlflow", **kwargs) -> ExperimentTracker:
 def log_training_metrics(
     tracker: ExperimentTracker,
     epoch: int,
-    metrics: Dict[str, float],
+    metrics: dict[str, float],
     lr: float,
 ):
     """Log standard training metrics."""
@@ -284,7 +301,7 @@ def log_training_metrics(
 def log_eval_metrics(
     tracker: ExperimentTracker,
     epoch: int,
-    metrics: Dict[str, float],
+    metrics: dict[str, float],
 ):
     """Log evaluation metrics."""
     tracker.log_metrics(

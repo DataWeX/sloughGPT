@@ -3,14 +3,18 @@ Tests for VideoCaptionTrainer — creation, vocab, encode/decode, dataset loadin
 checkpoint save/load, causal mask, generation, and training orchestration.
 """
 
-from pathlib import Path
 import json
 import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
 
-from domain.training._internal.video_trainer import VideoCaptionTrainer, list_video_checkpoints, _causal_mask
-
+from domain.training._internal.video_trainer import (
+    VideoCaptionTrainer,
+    _causal_mask,
+    list_video_checkpoints,
+)
 
 # ============================================================================
 # _causal_mask tests

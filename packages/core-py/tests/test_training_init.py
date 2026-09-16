@@ -1,15 +1,25 @@
 """Tests for domain.training — detect_dataset_type, DatasetType, DatasetManager, etc."""
 
 import json
-import pytest
-from domain.training import (
-    DatasetType, DataFormat, DatasetConfig, DatasetManager,
-    detect_dataset_type,
-    DataPreprocessor, PreprocessingStepType,
-    PipelineConfig, PipelineStageType, TrainingPipeline,
-    ModelType, ModelArchitecture, ModelConfig, ModelManager,
-)
 
+import pytest
+
+from domain.training import (
+    DataFormat,
+    DataPreprocessor,
+    DatasetConfig,
+    DatasetManager,
+    DatasetType,
+    ModelArchitecture,
+    ModelConfig,
+    ModelManager,
+    ModelType,
+    PipelineConfig,
+    PipelineStageType,
+    PreprocessingStepType,
+    TrainingPipeline,
+    detect_dataset_type,
+)
 
 # ── DatasetType ────────────────────────────────────────────────────────
 
@@ -57,6 +67,7 @@ class TestDatasetType:
 
     def test_is_enum(self):
         from enum import Enum
+
         assert issubclass(DatasetType, Enum)
 
 
@@ -204,8 +215,11 @@ class TestDatasetConfig:
 
     def test_all_fields(self):
         cfg = DatasetConfig(
-            name="n", dataset_type=DatasetType.CONVERSATION,
-            data_format=DataFormat.CSV, path="/p", max_samples=50,
+            name="n",
+            dataset_type=DatasetType.CONVERSATION,
+            data_format=DataFormat.CSV,
+            path="/p",
+            max_samples=50,
         )
         assert cfg.dataset_type == DatasetType.CONVERSATION
         assert cfg.data_format == DataFormat.CSV
@@ -249,7 +263,9 @@ class TestDatasetManager:
         f = tmp_path / "data.jsonl"
         f.write_text('{"text": "a"}\n{"text": "b"}\n{"text": "c"}\n')
         mgr = DatasetManager()
-        mgr.register_dataset(DatasetConfig("d1", DatasetType.TEXT, DataFormat.JSONL, str(f), max_samples=2))
+        mgr.register_dataset(
+            DatasetConfig("d1", DatasetType.TEXT, DataFormat.JSONL, str(f), max_samples=2)
+        )
         records = mgr.load_dataset("d1")
         assert len(records) == 2
 
@@ -591,9 +607,11 @@ class TestModelConfig:
 
     def test_custom(self):
         cfg = ModelConfig(
-            name="m", model_type=ModelType.CHAT_MODEL,
+            name="m",
+            model_type=ModelType.CHAT_MODEL,
             architecture=ModelArchitecture.CUSTOM,
-            hidden_size=256, num_layers=4,
+            hidden_size=256,
+            num_layers=4,
         )
         assert cfg.hidden_size == 256
         assert cfg.num_layers == 4
@@ -631,8 +649,11 @@ class TestModelManager:
     def test_create_model_config(self):
         mgr = ModelManager()
         cfg = ModelConfig(
-            "m", ModelType.CHAT_MODEL, ModelArchitecture.BERT,
-            hidden_size=512, num_layers=6,
+            "m",
+            ModelType.CHAT_MODEL,
+            ModelArchitecture.BERT,
+            hidden_size=512,
+            num_layers=6,
         )
         mgr.register_model(cfg)
         result = mgr.create_model("m")

@@ -1,4 +1,5 @@
 """Tests for training runtime protocol — registration and stub."""
+
 from __future__ import annotations
 
 from domain.training._internal.runtime_protocol import (
@@ -27,8 +28,10 @@ class TestSetGetRuntime:
         class FakeRuntime:
             def register(self, job_id, job, cancel_event=None, config=None):
                 pass
+
             def get(self, job_id):
                 return {"id": job_id}
+
             def sync(self, job_id):
                 pass
 

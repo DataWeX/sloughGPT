@@ -12,11 +12,11 @@ from domain.cognitive._internal.base import (
 )
 from domain.cognitive._internal.core import (
     CognitiveCore,
-    ThinkingMode,
-    ReasoningType,
-    ThoughtProcess,
     CreativeIdea,
     ReasoningChain,
+    ReasoningType,
+    ThinkingMode,
+    ThoughtProcess,
 )
 from domain.cognitive._internal.processor import (
     CognitiveProcessor,

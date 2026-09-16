@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import pytest
+
 from domain.shell._internal.pane import (
-    Rect,
     Border,
     Pane,
     PaneLayout,
+    Rect,
     split,
     vsplit,
 )
 
-
 # ── Rect ──────────────────────────────────────────────────────────────────────
+
 
 class TestRect:
     def test_basic(self):
@@ -48,6 +49,7 @@ class TestRect:
 
 
 # ── Border ────────────────────────────────────────────────────────────────────
+
 
 class TestBorder:
     def test_none(self):
@@ -89,6 +91,7 @@ class TestBorder:
 
 
 # ── Pane ──────────────────────────────────────────────────────────────────────
+
 
 class TestPane:
     def test_defaults(self):
@@ -142,6 +145,7 @@ class TestPane:
 
 
 # ── PaneLayout ────────────────────────────────────────────────────────────────
+
 
 class TestPaneLayout:
     def test_empty(self):
@@ -210,6 +214,7 @@ class TestPaneLayout:
 
 # ── Focus ─────────────────────────────────────────────────────────────────────
 
+
 class TestFocus:
     def test_initial_focus(self):
         p1 = Pane(name="a")
@@ -275,6 +280,7 @@ class TestFocus:
 
 # ── Visibility ────────────────────────────────────────────────────────────────
 
+
 class TestVisibility:
     def test_set_visible(self):
         p = Pane(name="a")
@@ -288,6 +294,7 @@ class TestVisibility:
 
 
 # ── split / vsplit ────────────────────────────────────────────────────────────
+
 
 class TestSplitHelpers:
     def test_split_basic(self):

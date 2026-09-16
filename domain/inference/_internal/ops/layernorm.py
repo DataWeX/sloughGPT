@@ -7,8 +7,7 @@ from __future__ import annotations
 import numpy as np
 
 
-def layernorm(x: np.ndarray, weight: np.ndarray, bias: np.ndarray,
-              eps: float = 1e-5) -> np.ndarray:
+def layernorm(x: np.ndarray, weight: np.ndarray, bias: np.ndarray, eps: float = 1e-5) -> np.ndarray:
     """Layer normalization: y = (x - mean) / sqrt(var + eps) * weight + bias.
 
     Args:

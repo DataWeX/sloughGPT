@@ -1,12 +1,11 @@
 """Tests for domain.soul._internal.hd_memory — HDMemoryItem, HDMemoryStore."""
 
-import pytest
 from domain.soul._internal.hd_memory import HDMemoryItem, HDMemoryStore
-
 
 # ===================================================================
 # HDMemoryItem (dataclass)
 # ===================================================================
+
 
 class TestHDMemoryItem:
     def test_creation(self):
@@ -38,6 +37,7 @@ class TestHDMemoryItem:
 # ===================================================================
 # HDMemoryStore — unit-level tests (low dimension for speed)
 # ===================================================================
+
 
 class TestHDMemoryStore:
     """Tests use dim=256 for fast execution while still exercising real HD ops."""
@@ -177,6 +177,7 @@ class TestHDMemoryStore:
 # ===================================================================
 # HDMemoryStore — role binding integration
 # ===================================================================
+
 
 class TestHDMemoryStoreRoleBinding:
     def setup_method(self):

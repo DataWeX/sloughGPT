@@ -22,25 +22,25 @@ Usage:
 
 from __future__ import annotations
 
-import time
 import logging
 import threading
-from typing import Optional
+import time
 from pathlib import Path
-
-
 
 from domain.shared import find_repo_root
 from domain.training._internal.slonet import (
-    SloTransformer, SloAdam,
-    tensor, export_to_sou, import_from_sou,
+    SloAdam,
+    SloTransformer,
+    export_to_sou,
+    import_from_sou,
+    tensor,
 )
 
 logger = logging.getLogger("slo.learner")
 
 CHAR_SET = " abcdefghijklmnopqrstuvwxyz0123456789.,!?-'"
 STOI = {c: i for i, c in enumerate(CHAR_SET)}
-ITOS = {i: c for i, c in enumerate(CHAR_SET)}
+ITOS = dict(enumerate(CHAR_SET))
 UNK = 0
 VOCAB = len(CHAR_SET)
 
@@ -135,6 +135,7 @@ class ContinualLearner:
 
         # Knowledge ingestion pipeline
         from domain.learner._internal.knowledge import get_knowledge_ingestor, get_knowledge_memory
+
         self.ingestor = get_knowledge_ingestor()
         self.knowledge = get_knowledge_memory()
         # Start background RSS polling (every 10 min)
@@ -150,9 +151,13 @@ class ContinualLearner:
             try:
                 net = import_from_sou(str(STATE_PATH))
                 if isinstance(net, SloTransformer):
-                    logger.info("Loaded learner transformer from %s", STATE_PATH, extra={"tag": "INF"})
+                    logger.info(
+                        "Loaded learner transformer from %s", STATE_PATH, extra={"tag": "INF"}
+                    )
                     return net
-                logger.warning("Existing checkpoint is not a SloTransformer — recreating", extra={"tag": "INF"})
+                logger.warning(
+                    "Existing checkpoint is not a SloTransformer — recreating", extra={"tag": "INF"}
+                )
             except Exception as e:
                 logger.warning("Failed to load learner state: %s", e, extra={"tag": "INF"})
 
@@ -164,8 +169,11 @@ class ContinualLearner:
         )
         logger.info(
             "Created fresh SloTransformer learner (vocab=%s, embed=%s, layers=%s, heads=%s)",
-            VOCAB, self.n_embed, self.n_layer, self.n_head,
-            extra={"tag": "INF"}
+            VOCAB,
+            self.n_embed,
+            self.n_layer,
+            self.n_head,
+            extra={"tag": "INF"},
         )
         return net
 
@@ -173,7 +181,11 @@ class ContinualLearner:
         """Save learner model to disk as .soul."""
         STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         export_to_sou(self.net, str(STATE_PATH))
-        logger.info("Saved learner checkpoint (%.0f KB)", STATE_PATH.stat().st_size / 1024, extra={"tag": "INF"})
+        logger.info(
+            "Saved learner checkpoint (%.0f KB)",
+            STATE_PATH.stat().st_size / 1024,
+            extra={"tag": "INF"},
+        )
 
     # -----------------------------------------------------------------
     # INGESTION
@@ -224,7 +236,12 @@ class ContinualLearner:
         rejected = result.get("rejected", 0)
 
         if new_facts == 0:
-            return {"new_facts": 0, "rejected": rejected, "tokens_ingested": 0, "filter_stats": result.get("stats", {})}
+            return {
+                "new_facts": 0,
+                "rejected": rejected,
+                "tokens_ingested": 0,
+                "filter_stats": result.get("stats", {}),
+            }
 
         # Feed article text into training buffer for fine-tuning
         topics = self.knowledge.search(query, top_k=3)
@@ -235,7 +252,14 @@ class ContinualLearner:
             self.ingest_text(text)
             total_tokens += len(_tokenize(text))
 
-        logger.info("search_and_learn(%r): %s facts, %s rejected, %s tokens", query, new_facts, rejected, total_tokens, extra={"tag": "INF"})
+        logger.info(
+            "search_and_learn(%r): %s facts, %s rejected, %s tokens",
+            query,
+            new_facts,
+            rejected,
+            total_tokens,
+            extra={"tag": "INF"},
+        )
         return {
             "new_facts": new_facts,
             "rejected": rejected,
@@ -266,7 +290,9 @@ class ContinualLearner:
                 for topic in self.knowledge.all_topics():
                     for fact in self.knowledge.get_topic_facts(topic):
                         self.ingest_text(f"rss: {fact.get('content', '')}")
-            logger.info("Feed %s: %s initial articles ingested", url, new_count, extra={"tag": "INF"})
+            logger.info(
+                "Feed %s: %s initial articles ingested", url, new_count, extra={"tag": "INF"}
+            )
         return result
 
     def unsubscribe_feed(self, url: str) -> bool:
@@ -309,10 +335,10 @@ class ContinualLearner:
         losses = []
 
         for start in range(0, len(buf) - TRAIN_SEQ_LEN, TRAIN_BATCH_SIZE):
-            chunk = buf[start:start + TRAIN_BATCH_SIZE + TRAIN_SEQ_LEN]
+            chunk = buf[start : start + TRAIN_BATCH_SIZE + TRAIN_SEQ_LEN]
 
             xi = chunk[:TRAIN_SEQ_LEN]
-            yi = chunk[1:TRAIN_SEQ_LEN + 1]
+            yi = chunk[1 : TRAIN_SEQ_LEN + 1]
 
             x = tensor([xi], requires_grad=True)
             y = tensor([yi])
@@ -328,12 +354,14 @@ class ContinualLearner:
             avg_loss = sum(losses) / len(losses)
             self.current_loss = avg_loss
             self.train_steps_completed += 1
-            self.loss_history.append({
-                "step": self.train_steps_completed,
-                "loss": round(avg_loss, 4),
-                "tokens": len(buf) if 'buf' in dir() else 0,
-                "timestamp": time.time(),
-            })
+            self.loss_history.append(
+                {
+                    "step": self.train_steps_completed,
+                    "loss": round(avg_loss, 4),
+                    "tokens": len(buf) if "buf" in dir() else 0,
+                    "timestamp": time.time(),
+                }
+            )
             if len(self.loss_history) > 500:
                 self.loss_history = self.loss_history[-500:]
             self._save_checkpoint()
@@ -341,6 +369,7 @@ class ContinualLearner:
     def _background_loop(self):
         """Background thread: poll feeds, train when enough new data arrives."""
         import asyncio
+
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -412,7 +441,7 @@ class ContinualLearner:
         self._train_step()
         return self.status()
 
-    def evaluate(self, text: Optional[str] = None) -> dict:
+    def evaluate(self, text: str | None = None) -> dict:
         """Evaluate the learner on test data and return metrics.
 
         Args:
@@ -427,17 +456,28 @@ class ContinualLearner:
             ids = _tokenize(text)
             if len(ids) < TRAIN_SEQ_LEN + 1:
                 return {"loss": 0.0, "perplexity": 0.0, "eval_tokens": 0, "error": "text too short"}
-            chunks = [ids[i:i+TRAIN_SEQ_LEN+1] for i in range(0, len(ids), TRAIN_BATCH_SIZE)
-                      if i + TRAIN_SEQ_LEN + 1 <= len(ids)]
+            chunks = [
+                ids[i : i + TRAIN_SEQ_LEN + 1]
+                for i in range(0, len(ids), TRAIN_BATCH_SIZE)
+                if i + TRAIN_SEQ_LEN + 1 <= len(ids)
+            ]
         else:
             with self._lock:
                 buf = list(self.buffer)
             if len(buf) < TRAIN_SEQ_LEN + 1:
-                return {"loss": 0.0, "perplexity": 0.0, "eval_tokens": 0, "error": "buffer too small"}
+                return {
+                    "loss": 0.0,
+                    "perplexity": 0.0,
+                    "eval_tokens": 0,
+                    "error": "buffer too small",
+                }
             split = int(len(buf) * 0.8)
             test_buf = buf[split:]
-            chunks = [test_buf[i:i+TRAIN_SEQ_LEN+1] for i in range(0, len(test_buf), TRAIN_BATCH_SIZE)
-                      if i + TRAIN_SEQ_LEN + 1 <= len(test_buf)]
+            chunks = [
+                test_buf[i : i + TRAIN_SEQ_LEN + 1]
+                for i in range(0, len(test_buf), TRAIN_BATCH_SIZE)
+                if i + TRAIN_SEQ_LEN + 1 <= len(test_buf)
+            ]
 
         if not chunks:
             return {"loss": 0.0, "perplexity": 0.0, "eval_tokens": 0, "error": "no eval chunks"}
@@ -446,7 +486,7 @@ class ContinualLearner:
         total_tokens = 0
         for chunk in chunks:
             xi = chunk[:TRAIN_SEQ_LEN]
-            yi = chunk[1:TRAIN_SEQ_LEN + 1]
+            yi = chunk[1 : TRAIN_SEQ_LEN + 1]
             x = tensor([xi])
             y = tensor([yi])
             _, loss = self.net.forward(x, targets=y)
@@ -456,7 +496,7 @@ class ContinualLearner:
                 total_tokens += len(yi)
 
         avg_loss = total_loss / total_tokens if total_tokens > 0 else 0.0
-        perplexity = math.exp(avg_loss) if avg_loss > 0 else float('inf')
+        perplexity = math.exp(avg_loss) if avg_loss > 0 else float("inf")
 
         return {
             "loss": round(avg_loss, 4),
@@ -467,7 +507,7 @@ class ContinualLearner:
             "buffer_size": len(self.buffer),
         }
 
-    def deploy(self, name: Optional[str] = None) -> dict:
+    def deploy(self, name: str | None = None) -> dict:
         """Export the learner's SloTransformer as a deployable .soul file.
 
         Args:
@@ -477,6 +517,7 @@ class ContinualLearner:
             dict with path, soul_name, steps, loss, and file_size
         """
         from domain.training._internal.slonet import export_to_sou
+
         safe = self.soul_name.lower().replace(" ", "_")[:32]
         step = self.train_steps_completed
         name = name or f"learner-{safe}-step-{step}"
@@ -507,7 +548,7 @@ class ContinualLearner:
 
 
 # Global singleton
-_learner: Optional[ContinualLearner] = None
+_learner: ContinualLearner | None = None
 
 
 def get_learner() -> ContinualLearner:

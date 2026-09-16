@@ -18,14 +18,14 @@ import logging
 import time as _time
 from collections.abc import AsyncGenerator, AsyncIterator
 
-from domain.infrastructure._internal.errors import AppError
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log
+from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log
 
 from config import ServerConfig
+from domain.infrastructure._internal.errors import AppError
 
 logger = logging.getLogger("slo.infer")
 cfg = ServerConfig.from_env()
@@ -220,13 +220,17 @@ class InferRouter:
             logger.debug("Memory pressure guard unavailable: %s", exc)
 
         from domain.models._internal.provider import get_provider
+        from routers.inference import _get_model_status
 
-        if self._get_model() is None:
-            raise_error("Model still loading — please wait.", "E_BAD_REQUEST", status_code=503)
+        ms = _get_model_status()
+        if not ms["ready"]:
+            raise_error(ms["reason"], ms["code"], status_code=ms["status"])
 
         provider = get_provider("default")
         if provider is None:
-            raise_error("No provider available — load a model first", "E_INFRA_REGISTRY", status_code=500)
+            raise_error(
+                "No provider available — load a model first", "E_INFRA_REGISTRY", status_code=500
+            )
 
         prompt_text = req.prompt
         if req.response_format == "json":
@@ -311,16 +315,19 @@ class InferRouter:
             logger.debug("Memory pressure guard unavailable: %s", exc)
 
         try:
-            if self._get_model() is None:
+            from routers.inference import _get_model_status
+
+            ms = _get_model_status()
+            if not ms["ready"]:
 
                 async def error_stream() -> AsyncIterator[str]:
                     """error_stream."""
                     yield self._sse_error(
                         "infer",
                         "IDLE",
-                        "Model still loading — please wait.",
-                        code="MODEL_LOADING",
-                        http_status=503,
+                        ms["reason"],
+                        code=ms["code"],
+                        http_status=ms["status"],
                     )
 
                 return StreamingResponse(error_stream(), media_type="text/event-stream")
@@ -390,7 +397,10 @@ class InferRouter:
                             )
                             return
                 except Exception as e:
-                    from domain.infrastructure._internal.errors import classify_exception, emit_error_event
+                    from domain.infrastructure._internal.errors import (
+                        classify_exception,
+                        emit_error_event,
+                    )
 
                     err = classify_exception(e)
                     emit_error_event(err, source="infer_stream")
@@ -459,13 +469,16 @@ class InferRouter:
                     )
                     return EmbedResponse(embedding=vec, dimensions=len(vec), model=model_name)
                 except NotImplementedError:
-                    logger.debug("Model %s does not support embed, falling back to n-gram", model_name)
+                    logger.debug(
+                        "Model %s does not support embed, falling back to n-gram", model_name
+                    )
                 except Exception as e:
                     logger.debug("Model embed failed, falling back to n-gram: %s", e)
 
             # Fallback: n-gram TF-IDF embedder
             try:
                 import numpy as np
+
                 from domain.inference._internal.vector_store import _ngram_embed
 
                 vec = _ngram_embed(req.text)
@@ -567,6 +580,7 @@ class InferRouter:
                 return DetokenizeResponse(text=text, count=len(req.ids))
             except Exception as exc:
                 import logging
+
                 logging.getLogger("slo.infer").warning("Detokenize failed: %s", exc)
                 return DetokenizeResponse(text="", count=len(req.ids))
 
@@ -598,18 +612,20 @@ class InferRouter:
     @endpoint("infer.infer_info")
     async def infer_info(self) -> InferInfoResponse:
         """Metadata about the currently loaded model."""
+        from routers.inference import _get_model_status
+
+        ms = _get_model_status()
+        if not ms["ready"]:
+            raise_error(ms["reason"], ms["code"], status_code=ms["status"])
+
         model = self._get_model_interface()
-        if model is None:
-            raise_error("No model loaded", "E_BAD_REQUEST", status_code=503)
 
         info = model.info() if hasattr(model, "info") else None
         if info is None:
             return InferInfoResponse(
                 model_id="unknown",
                 model_type=type(model).__name__,
-                num_parameters=model.num_parameters()
-                if hasattr(model, "num_parameters")
-                else 0,
+                num_parameters=model.num_parameters() if hasattr(model, "num_parameters") else 0,
             )
 
         return InferInfoResponse(

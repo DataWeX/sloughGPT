@@ -4,11 +4,9 @@ import builtins
 import io
 import os
 import subprocess
-import tempfile
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
+
 from domain.infrastructure._internal import cpu_topology as ct
 from domain.infrastructure._internal.cpu_topology import CpuTopology, detect_topology
 
@@ -150,7 +148,7 @@ class TestTopologyEdgeCases:
         assert t.effective_cores <= t.logical_cores
 
     def test_physical_exceeds_logical(self):
-        t = CpuTopology(physical_cores=8, logical_cores=4)
+        CpuTopology(physical_cores=8, logical_cores=4)
         # No validation — dataclass is frozen, not validated
 
 

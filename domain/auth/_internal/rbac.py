@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from domain.auth._internal.models import (
+    ROLE_PERMISSIONS,
     Permission,
     Role,
-    ROLE_PERMISSIONS,
     User,
     WorkspaceMember,
 )
@@ -82,11 +81,7 @@ class RBAC:
         role_hierarchy = [Role.VIEWER, Role.USER, Role.ADMIN, Role.OWNER]
 
         global_idx = role_hierarchy.index(user.role)
-        workspace_idx = (
-            role_hierarchy.index(workspace_member.role)
-            if workspace_member
-            else -1
-        )
+        workspace_idx = role_hierarchy.index(workspace_member.role) if workspace_member else -1
 
         return role_hierarchy[max(global_idx, workspace_idx)]
 

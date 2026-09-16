@@ -25,62 +25,67 @@ Reactive state:
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
-
 
 # ── Box-drawing characters (text placeholders, swap for real later) ────
 
+
 class Box:
-    H = "\u2500"   # ─
-    V = "\u2502"   # │
+    H = "\u2500"  # ─
+    V = "\u2502"  # │
     TL = "\u250c"  # ┌
     TR = "\u2510"  # ┐
     BL = "\u2514"  # └
     BR = "\u2518"  # ┘
-    T = "\u252c"   # ┬
-    B = "\u2534"   # ┴
-    L = "\u251c"   # ├
-    R = "\u2524"   # ┤
-    X = "\u253c"   # ┼
+    T = "\u252c"  # ┬
+    B = "\u2534"  # ┴
+    L = "\u251c"  # ├
+    R = "\u2524"  # ┤
+    X = "\u253c"  # ┼
     # Double
     DH = "\u2550"  # ═
     DV = "\u2551"  # ║
-    DTL = "\u2554" # ╔
-    DTR = "\u2557" # ╗
-    DBL = "\u255a" # ╚
-    DBR = "\u255d" # ╝
+    DTL = "\u2554"  # ╔
+    DTR = "\u2557"  # ╗
+    DBL = "\u255a"  # ╚
+    DBR = "\u255d"  # ╝
     # Shorthand
     DASH = "-"
     PIPE = "|"
     DOT = "\u00b7"  # ·
     ARROW_R = "\u25b6"  # ▶
     ARROW_D = "\u25bc"  # ▼
-    CHECK = "\u2713"    # ✓
-    CROSS = "\u2717"    # ✗
-    BULLET = "\u2022"   # •
+    CHECK = "\u2713"  # ✓
+    CROSS = "\u2717"  # ✗
+    BULLET = "\u2022"  # •
 
 
 # ── Event types ───────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class KeyEvent:
-    key: str          # "a", "enter", "esc", "tab", "up", "down", "ctrl+c", etc.
-    raw: int = 0      # raw byte value (for debug)
+    key: str  # "a", "enter", "esc", "tab", "up", "down", "ctrl+c", etc.
+    raw: int = 0  # raw byte value (for debug)
+
 
 @dataclass(frozen=True)
 class ResizeEvent:
     rows: int
     cols: int
 
+
 @dataclass(frozen=True)
 class FocusEvent:
     gained: bool
+
 
 Event = KeyEvent | ResizeEvent | FocusEvent
 
 
 # ── Event bus ─────────────────────────────────────────────────────────
+
 
 class EventBus:
     """Pub-sub event bus.  Widgets subscribe to event types."""
@@ -107,6 +112,7 @@ class EventBus:
 
 
 # ── Widget base ───────────────────────────────────────────────────────
+
 
 class Widget:
     """Base class for all widgets.
@@ -248,16 +254,16 @@ class Widget:
             return text
         if max_width <= 3:
             return text[:max_width]
-        return text[:max_width - 1] + "\u2026"
+        return text[: max_width - 1] + "\u2026"
 
 
 # ── Container ─────────────────────────────────────────────────────────
 
+
 class Container(Widget):
     """Base for widgets that hold children."""
 
-    def __init__(self, name: str = "", direction: str = "vertical",
-                 gap: int = 0, **kwargs) -> None:
+    def __init__(self, name: str = "", direction: str = "vertical", gap: int = 0, **kwargs) -> None:
         super().__init__(name=name, **kwargs)
         self.direction = direction  # "vertical" or "horizontal"
         self.gap = gap
@@ -288,7 +294,7 @@ class Container(Widget):
         # First pass: discover natural heights (only for content-sized widgets)
         natural = []
         for child in visible:
-            if hasattr(child, '_natural_height'):
+            if hasattr(child, "_natural_height"):
                 natural.append(child._natural_height())
             else:
                 natural.append(0)  # 0 = use equal distribution
@@ -364,7 +370,7 @@ class Container(Widget):
             while len(lines) < self._computed_rows:
                 lines.append(" " * self._computed_cols)
             self._dirty = False
-            return lines[:self._computed_rows] if lines else [""]
+            return lines[: self._computed_rows] if lines else [""]
 
         else:  # horizontal
             child_renders = [c.render() for c in visible]
@@ -380,12 +386,12 @@ class Container(Widget):
                         parts.append(" " * child._computed_cols)
                     if self.gap > 0 and ci < len(visible) - 1:
                         parts.append(" " * self.gap)
-                lines.append("".join(parts)[:self._computed_cols])
+                lines.append("".join(parts)[: self._computed_cols])
             # Pad to computed rows
             while len(lines) < self._computed_rows:
                 lines.append(" " * self._computed_cols)
             self._dirty = False
-            return lines[:self._computed_rows] if lines else [""]
+            return lines[: self._computed_rows] if lines else [""]
 
     def handle(self, key: KeyEvent) -> bool:
         for child in self._children:
@@ -396,11 +402,18 @@ class Container(Widget):
 
 # ── Panel ─────────────────────────────────────────────────────────────
 
+
 class Panel(Widget):
     """Bordered box with title.  Text borders — replaced with real TUI later."""
 
-    def __init__(self, title: str = "", child: Widget | None = None,
-                 border: bool = True, padding: int = 1, **kwargs) -> None:
+    def __init__(
+        self,
+        title: str = "",
+        child: Widget | None = None,
+        border: bool = True,
+        padding: int = 1,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self.title = title
         self.child = child
@@ -484,6 +497,7 @@ class Panel(Widget):
 
 # ── Text ──────────────────────────────────────────────────────────────
 
+
 class Text(Widget):
     """Static or dynamic text display."""
 
@@ -524,16 +538,18 @@ class Text(Widget):
         while len(result) < self._computed_rows:
             result.append(" " * self._computed_cols)
         self._dirty = False
-        return result[:self._computed_rows]
+        return result[: self._computed_rows]
 
 
 # ── Button ────────────────────────────────────────────────────────────
 
+
 class Button(Widget):
     """Clickable button with label."""
 
-    def __init__(self, label: str = "", on_click: Callable | None = None,
-                 style: str = "default", **kwargs) -> None:
+    def __init__(
+        self, label: str = "", on_click: Callable | None = None, style: str = "default", **kwargs
+    ) -> None:
         super().__init__(**kwargs)
         self.label = label
         self.on_click = on_click
@@ -569,12 +585,18 @@ class Button(Widget):
 
 # ── Input ─────────────────────────────────────────────────────────────
 
+
 class Input(Widget):
     """Text input field with cursor."""
 
-    def __init__(self, prompt: str = "", default: str = "",
-                 on_submit: Callable | None = None, password: bool = False,
-                 **kwargs) -> None:
+    def __init__(
+        self,
+        prompt: str = "",
+        default: str = "",
+        on_submit: Callable | None = None,
+        password: bool = False,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self.prompt = prompt
         self._value = default
@@ -646,13 +668,13 @@ class Input(Widget):
             return True
         elif key.key == "backspace":
             if self._cursor > 0:
-                self._value = self._value[:self._cursor - 1] + self._value[self._cursor:]
+                self._value = self._value[: self._cursor - 1] + self._value[self._cursor :]
                 self._cursor -= 1
                 self._dirty = True
             return True
         elif key.key == "delete":
             if self._cursor < len(self._value):
-                self._value = self._value[:self._cursor] + self._value[self._cursor + 1:]
+                self._value = self._value[: self._cursor] + self._value[self._cursor + 1 :]
                 self._dirty = True
             return True
         elif key.key == "left":
@@ -674,7 +696,7 @@ class Input(Widget):
             self._dirty = True
             return True
         elif len(key.key) == 1 and key.key.isprintable():
-            self._value = self._value[:self._cursor] + key.key + self._value[self._cursor:]
+            self._value = self._value[: self._cursor] + key.key + self._value[self._cursor :]
             self._cursor += 1
             self._dirty = True
             return True
@@ -683,11 +705,13 @@ class Input(Widget):
 
 # ── List ──────────────────────────────────────────────────────────────
 
+
 class List(Widget):
     """Scrollable list with selectable items."""
 
-    def __init__(self, items: list[str] | None = None, on_select: Callable | None = None,
-                 **kwargs) -> None:
+    def __init__(
+        self, items: list[str] | None = None, on_select: Callable | None = None, **kwargs
+    ) -> None:
         super().__init__(**kwargs)
         self._items: list[str] = items or []
         self._selected = 0
@@ -812,11 +836,17 @@ class List(Widget):
 
 # ── Menu ──────────────────────────────────────────────────────────────
 
+
 class Menu(Widget):
     """Dropdown-style menu with options."""
 
-    def __init__(self, title: str = "", options: list[str] | None = None,
-                 on_select: Callable | None = None, **kwargs) -> None:
+    def __init__(
+        self,
+        title: str = "",
+        options: list[str] | None = None,
+        on_select: Callable | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self.title = title
         self._options: list[str] = options or []
@@ -894,6 +924,7 @@ class Menu(Widget):
 
 # ── Tabs ──────────────────────────────────────────────────────────────
 
+
 class Tabs(Widget):
     """Tabbed container.  Switches visible child by tab."""
 
@@ -923,7 +954,7 @@ class Tabs(Widget):
     def set_active(self, name: str) -> None:
         if name in self._tab_widgets:
             for n, w in self._tab_widgets.items():
-                w.visible = (n == name)
+                w.visible = n == name
             self._active = name
             self._dirty = True
             # Re-compute the newly active widget so it has valid dimensions
@@ -999,11 +1030,17 @@ class Tabs(Widget):
 
 # ── Dialog ────────────────────────────────────────────────────────────
 
+
 class Dialog(Widget):
     """Modal dialog overlay.  Wraps a child widget in a centered box."""
 
-    def __init__(self, title: str = "", child: Widget | None = None,
-                 on_close: Callable | None = None, **kwargs) -> None:
+    def __init__(
+        self,
+        title: str = "",
+        child: Widget | None = None,
+        on_close: Callable | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self.title = title
         self.child = child
@@ -1118,6 +1155,7 @@ class Dialog(Widget):
 
 # ── Separator ─────────────────────────────────────────────────────────
 
+
 class Separator(Widget):
     """Horizontal or vertical line separator."""
 
@@ -1144,6 +1182,7 @@ class Separator(Widget):
 
 
 # ── ProgressBar ───────────────────────────────────────────────────────
+
 
 class ProgressBar(Widget):
     """Text-based progress bar."""
@@ -1183,11 +1222,22 @@ class ProgressBar(Widget):
 
 # ── Spinner ───────────────────────────────────────────────────────────
 
+
 class Spinner(Widget):
     """Animated spinner (frames cycled by caller)."""
 
-    FRAMES = ["\u280b", "\u2819", "\u2839", "\u2838", "\u283c", "\u2834", "\u2826", "\u2827",
-              "\u2807", "\u280f"]
+    FRAMES = [
+        "\u280b",
+        "\u2819",
+        "\u2839",
+        "\u2838",
+        "\u283c",
+        "\u2834",
+        "\u2826",
+        "\u2827",
+        "\u2807",
+        "\u280f",
+    ]
 
     def __init__(self, text: str = "", **kwargs) -> None:
         super().__init__(**kwargs)
@@ -1211,6 +1261,7 @@ class Spinner(Widget):
 
 
 # ── App (root container with event loop) ──────────────────────────────
+
 
 class App:
     """Root application.  Manages the widget tree and event loop."""

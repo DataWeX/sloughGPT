@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domain.shell._internal.network_device import NetworkDevice
 from domain.shell._internal.kernel_syscall import SyscallResult
+from domain.shell._internal.network_device import NetworkDevice
 
 
 @pytest.fixture
@@ -19,7 +19,6 @@ def dev():
 
 
 class TestNetworkDeviceBasics:
-
     def test_name(self, dev):
         assert dev.name == "test-net"
 
@@ -48,7 +47,6 @@ class TestNetworkDeviceBasics:
 
 
 class TestNetworkDeviceIoctl:
-
     def test_ioctl_unknown_command(self, dev):
         result = dev.ioctl("NONEXISTENT")
         assert isinstance(result, SyscallResult)
@@ -109,7 +107,6 @@ class TestNetworkDeviceIoctl:
 
 
 class TestNetworkDeviceCall:
-
     def test_call_success(self, dev):
         with patch.object(dev, "dns_resolve", return_value="1.2.3.4"):
             assert dev.call("DNS_RESOLVE", "example.com") == "1.2.3.4"
@@ -123,7 +120,6 @@ class TestNetworkDeviceCall:
 
 
 class TestNetworkDeviceSockets:
-
     def test_tcp_connect(self, dev):
         with patch("socket.socket") as mock_cls:
             mock_sock = MagicMock()

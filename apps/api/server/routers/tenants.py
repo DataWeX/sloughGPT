@@ -3,20 +3,20 @@
 Provides CRUD operations for managing tenants (organizations).
 Only admins and owners can manage tenants.
 """
+
 from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
-
-from domain.auth._internal.models import Role, Tenant, User, UserRole
-from domain.auth._internal.repositories import TenantRepository, UserRepository
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import classify_and_raise, endpoint, raise_error, success_response
+from pydantic import BaseModel, Field
+from schemas.common import endpoint, raise_error, success_response
+
+from domain.auth._internal.models import Role, Tenant, User
+from domain.auth._internal.repositories import TenantRepository, UserRepository
 
 logger = logging.getLogger("slo.tenants")
 
@@ -150,7 +150,7 @@ class TenantsRouter:
             if req.max_workspaces is not None:
                 tenant.max_workspaces = req.max_workspaces
 
-            tenant.updated_at = datetime.now(timezone.utc).isoformat()
+            tenant.updated_at = datetime.now(UTC).isoformat()
             self._repo.update(tenant)
             return success_response(data=self._to_response(tenant).model_dump())
 

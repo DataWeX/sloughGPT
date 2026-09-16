@@ -3,13 +3,10 @@ Comprehensive Test Suite for Sprint 8 Advanced Features
 Tests all implemented features from Sprint 8
 """
 
+import logging
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-import logging
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sprint8_tests")
@@ -19,7 +16,7 @@ logger = logging.getLogger("sprint8_tests")
 # =============================================================================
 print("\n=== Test 1: Model Registry ===")
 
-from domain.training.model_registry import get_available_models, create_model
+from domain.training.model_registry import create_model, get_available_models
 
 # Test model discovery
 models = get_available_models()
@@ -69,7 +66,9 @@ if models:
         print(f"  - LoRA forward pass successful, output shape: {logits.shape}")
 
         # Test parameter counting
-        lora_params = sum(p.numel() for p in lora_model.parameters() if any("lora_" in n for n in p.names))
+        lora_params = sum(
+            p.numel() for p in lora_model.parameters() if any("lora_" in n for n in p.names)
+        )
         print(f"  - LoRA parameters: {lora_params:,}")
 
     except Exception as e:
@@ -82,7 +81,7 @@ else:
 # =============================================================================
 print("\n=== Test 3: RLHF Reward Model ===")
 
-from domain.training.rlhf import RewardModel, RLHFConfig
+from domain.training.rlhf import RewardModel
 
 # Test RLHF functionality
 if models:
@@ -136,11 +135,12 @@ if models:
 
         # Test memory estimation
         from domain.training.efficient_inference import estimate_memory_usage
+
         mem_est = estimate_memory_usage(
             sum(p.numel() for p in model.parameters()),
             quantization="int8",
             batch_size=2,
-            sequence_length=10
+            sequence_length=10,
         )
         print(f"  - Memory estimate: {mem_est}")
 
@@ -167,10 +167,7 @@ if models:
 
         # Create distillation trainer
         config = DistillationConfig(
-            temperature=4.0,
-            alpha=0.5,
-            beta=0.5,
-            distillation_type="logits"
+            temperature=4.0, alpha=0.5, beta=0.5, distillation_type="logits"
         )
 
         trainer = DistillationTrainer(teacher, student, config)
@@ -193,7 +190,7 @@ else:
 # =============================================================================
 print("\n=== Test 6: Quantization ===")
 
-from domain.training.efficient_inference import Quantizer, EfficientInference
+from domain.training.efficient_inference import EfficientInference, Quantizer
 
 # Test quantization functionality
 if models:
@@ -210,12 +207,7 @@ if models:
 
         # Test efficient inference
         config = EfficientInference(
-            model,
-            EfficientConfig(
-                device_type="cpu",
-                quantization="int8",
-                use_compile=True
-            )
+            model, EfficientConfig(device_type="cpu", quantization="int8", use_compile=True)
         )
 
         optimized_model = config.optimize()
@@ -310,7 +302,9 @@ if model:
         # Test cache retrieval
         cache = optimizer.get_cache(seq_id)
         if cache:
-            print(f"  - KV cache retrieval successful, cache shapes: {cache[0].shape}, {cache[1].shape}")
+            print(
+                f"  - KV cache retrieval successful, cache shapes: {cache[0].shape}, {cache[1].shape}"
+            )
 
     except Exception as e:
         print(f"KV cache test failed: {e}")
@@ -355,7 +349,9 @@ results = {
     "LoRA Training": "PASS" if "LoRA" in locals() else "FAIL/SKIP",
     "RLHF/PPO Training": "PASS" if "trainer" in locals() else "FAIL/SKIP",
     "Model Pruning": "PASS" if "pruner" in locals() else "FAIL/SKIP",
-    "Knowledge Distillation": "PASS" if "trainer" in locals() and "DistillationTrainer" in str(trainer) else "FAIL/SKIP",
+    "Knowledge Distillation": "PASS"
+    if "trainer" in locals() and "DistillationTrainer" in str(trainer)
+    else "FAIL/SKIP",
     "Quantization": "PASS" if "quantized_model" in locals() else "FAIL/SKIP",
     "AWQ/GPTQ": "PASS" if "awq" in locals() else "FAIL/SKIP",
     "KV Cache": "PASS" if "optimizer" in locals() else "FAIL/SKIP",

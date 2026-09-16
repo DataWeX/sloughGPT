@@ -1,12 +1,28 @@
 """Tests for backward pass optimizations: _copy=False + in-place gradient accumulation."""
+
 import numpy as np
-import pytest
+
 from domain.training._internal.slonet import (
-    Tensor, SloLinear, SloEmbedding, SloLayerNorm, SloDropout,
-    SloTransformer, SloAdamW, cross_entropy,
-    _add, _mul, _neg, _pow, _matmul, _transpose, _reshape, _slice,
-    _softmax, _layernorm, _rmsnorm, gelu, sigmoid, tanh, relu,
-    flatten, zeros, ones,
+    SloAdamW,
+    SloEmbedding,
+    SloLinear,
+    SloTransformer,
+    Tensor,
+    _add,
+    _layernorm,
+    _matmul,
+    _mul,
+    _reshape,
+    _rmsnorm,
+    _slice,
+    _softmax,
+    _transpose,
+    cross_entropy,
+    flatten,
+    gelu,
+    relu,
+    sigmoid,
+    tanh,
 )
 
 
@@ -69,7 +85,7 @@ class TestCopyFalseGradientAssignment:
         assert x.grad is not None and w.grad is not None and b.grad is not None
 
     def test_rmsnorm_grad(self):
-        from domain.training._internal.slonet import _rmsnorm
+
         x = Tensor(np.random.randn(2, 4), requires_grad=True)
         w = Tensor(np.ones(4), requires_grad=True)
         out = _rmsnorm(x, w)
@@ -152,7 +168,8 @@ class TestGradientValues:
         x2 = Tensor([0.0, 1.0, 2.0], requires_grad=True)
         out2 = _softmax(x2)
         out2.backward()  # initialize graph
-        s = np.exp([0.0, 1.0, 2.0]); s = s / s.sum()
+        s = np.exp([0.0, 1.0, 2.0])
+        s = s / s.sum()
         g = np.array([1.0, 0.5, 0.2])
         sg = np.sum(s * g)
         expected = s * (g - sg)
@@ -175,8 +192,9 @@ class TestTrainingConvergence:
     """Verify training still converges with optimized backward pass."""
 
     def test_transformer_convergence(self):
-        model = SloTransformer(vocab_size=256, n_embed=64, n_layer=2,
-                               n_head=2, block_size=32, dropout=0.0)
+        model = SloTransformer(
+            vocab_size=256, n_embed=64, n_layer=2, n_head=2, block_size=32, dropout=0.0
+        )
         optimizer = SloAdamW(lr=1e-3)
 
         x = np.random.randint(0, 256, (4, 32))
@@ -185,8 +203,7 @@ class TestTrainingConvergence:
         losses = []
         for _ in range(50):
             logits, _ = model.forward(Tensor(x, _copy=False))
-            loss = cross_entropy(logits.reshape(-1, 256),
-                                 Tensor(y.reshape(-1).astype(np.int64)))
+            loss = cross_entropy(logits.reshape(-1, 256), Tensor(y.reshape(-1).astype(np.int64)))
             loss.backward()
             optimizer.step(model.parameters())
             losses.append(loss.data)
@@ -222,8 +239,10 @@ class TestBackwardCorrectness:
         _add(a, b).backward()
         eps = 1e-3
         for i in range(2):
-            a_p = a.data.copy(); a_p[i] += eps
-            a_m = a.data.copy(); a_m[i] -= eps
+            a_p = a.data.copy()
+            a_p[i] += eps
+            a_m = a.data.copy()
+            a_m[i] -= eps
             num = float(((a_p + b.data).sum() - (a_m + b.data).sum()) / (2 * eps))
             assert abs(float(a.grad.data[i]) - num) < 1e-3
 
@@ -234,8 +253,10 @@ class TestBackwardCorrectness:
         eps = 1e-3
         for i in range(2):
             for j in range(3):
-                a_p = a.data.copy(); a_p[i, j] += eps
-                a_m = a.data.copy(); a_m[i, j] -= eps
+                a_p = a.data.copy()
+                a_p[i, j] += eps
+                a_m = a.data.copy()
+                a_m[i, j] -= eps
                 num = (np.matmul(a_p, b.data).sum() - np.matmul(a_m, b.data).sum()) / (2 * eps)
                 assert abs(float(a.grad.data[i, j]) - float(num)) < 1e-3
 
@@ -245,8 +266,10 @@ class TestBackwardCorrectness:
         eps = 1e-3
         xd = x.data.astype(np.float64)
         for i in range(3):
-            xp = xd.copy(); xp[i] += eps
-            xm = xd.copy(); xm[i] -= eps
+            xp = xd.copy()
+            xp[i] += eps
+            xm = xd.copy()
+            xm[i] -= eps
             sp = np.exp(xp) / np.exp(xp).sum()
             sm = np.exp(xm) / np.exp(xm).sum()
             num = float((sp - sm).sum() / (2 * eps))

@@ -1,7 +1,8 @@
 """Tests for domain.shell._internal.io — MemoryIO, _Capture, capture_output, capture_cmd."""
 
 import pytest
-from domain.shell._internal.io import MemoryIO, _Capture, capture_output
+
+from domain.shell._internal.io import MemoryIO, capture_output
 
 
 class TestMemoryIO:

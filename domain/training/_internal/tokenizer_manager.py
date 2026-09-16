@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("slo.training.tokenizer_manager")
 
@@ -39,10 +39,10 @@ class TokenizerManager:
     — they call ``get_tokenizer_manager()`` and use its public API.
     """
 
-    _instance: Optional[TokenizerManager] = None
+    _instance: TokenizerManager | None = None
 
     def __init__(self) -> None:
-        self._tokenizer: Optional[Any] = None
+        self._tokenizer: Any | None = None
         self._algo: str = "bpe"
 
     # ------------------------------------------------------------------
@@ -50,7 +50,7 @@ class TokenizerManager:
     # ------------------------------------------------------------------
 
     @classmethod
-    def get_instance(cls) -> "TokenizerManager":
+    def get_instance(cls) -> TokenizerManager:
         """Return the global singleton."""
         if cls._instance is None:
             cls._instance = cls()
@@ -64,19 +64,20 @@ class TokenizerManager:
         """Return the current tokenizer, creating a default one if needed."""
         if self._tokenizer is None:
             from domain.training._internal.tokenizer import SloBPE
+
             self._tokenizer = SloBPE()
         return self._tokenizer
 
     def train(
         self,
-        texts: List[str],
+        texts: list[str],
         vocab_size: int = 512,
         min_frequency: int = 2,
         lowercase: bool = True,
         pretokenizer: str = "gpt2",
         algo: str = "bpe",
         **algo_kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Train the tokenizer on a corpus of texts.
 
         Args:
@@ -94,6 +95,7 @@ class TokenizerManager:
         """
         if algo == "unigram":
             from domain.training._internal.tokenizer import SloUnigram
+
             self._tokenizer = SloUnigram(pretokenizer=pretokenizer)
             self._tokenizer.train(
                 texts,
@@ -103,6 +105,7 @@ class TokenizerManager:
             )
         else:
             from domain.training._internal.tokenizer import SloBPE
+
             self._tokenizer = SloBPE(pretokenizer=pretokenizer)
             self._tokenizer.train(
                 texts,
@@ -113,21 +116,26 @@ class TokenizerManager:
         self._algo = algo
         return self._tokenizer.vocab_stats()
 
-    def analyze_corpus(self, texts: List[str]) -> Dict[str, Any]:
+    def analyze_corpus(self, texts: list[str]) -> dict[str, Any]:
         tok = self.get_tokenizer()
-        if hasattr(tok, 'analyze_corpus'):
+        if hasattr(tok, "analyze_corpus"):
             return tok.analyze_corpus(texts)
         return {"error": "analyze_corpus not available for this tokenizer type"}
 
-    def show_pretokenization(self, text: str) -> Dict[str, Any]:
+    def show_pretokenization(self, text: str) -> dict[str, Any]:
         tok = self.get_tokenizer()
-        if hasattr(tok, 'show_pretokenization'):
+        if hasattr(tok, "show_pretokenization"):
             return tok.show_pretokenization(text)
-        return {"error": "show_pretokenization not available for this tokenizer type", "pretokens": [], "segments": [], "count": 0}
+        return {
+            "error": "show_pretokenization not available for this tokenizer type",
+            "pretokens": [],
+            "segments": [],
+            "count": 0,
+        }
 
-    def decompose_token(self, token: str) -> Dict[str, Any]:
+    def decompose_token(self, token: str) -> dict[str, Any]:
         tok = self.get_tokenizer()
-        if hasattr(tok, 'decompose_token'):
+        if hasattr(tok, "decompose_token"):
             return tok.decompose_token(token)
         raise ValueError("decompose_token not available for this tokenizer type")
 
@@ -142,7 +150,7 @@ class TokenizerManager:
         pretokenizer: str = "gpt2",
         algo: str = "bpe",
         **algo_kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Train the tokenizer on all text files in a directory.
 
         Args:
@@ -161,14 +169,21 @@ class TokenizerManager:
         """
         # Collect texts from directory
         root = Path(dir_path)
-        texts: List[str] = []
+        texts: list[str] = []
         it = root.rglob(pattern) if recursive else root.glob(pattern)
         for p in it:
             if p.is_file():
                 texts.append(p.read_text(encoding="utf-8", errors="replace"))
 
-        return self.train(texts, vocab_size=vocab_size, min_frequency=min_frequency,
-                          lowercase=lowercase, pretokenizer=pretokenizer, algo=algo, **algo_kwargs)
+        return self.train(
+            texts,
+            vocab_size=vocab_size,
+            min_frequency=min_frequency,
+            lowercase=lowercase,
+            pretokenizer=pretokenizer,
+            algo=algo,
+            **algo_kwargs,
+        )
 
     @property
     def tokenizer_type(self) -> str:
@@ -179,22 +194,29 @@ class TokenizerManager:
     def pretokenizer(self) -> str:
         """Current pre-tokenizer type (``"gpt2"`` or ``"whitespace"``)."""
         tok = self.get_tokenizer()
-        return tok._pretokenizer if hasattr(tok, '_pretokenizer') else 'whitespace'
+        return tok._pretokenizer if hasattr(tok, "_pretokenizer") else "whitespace"
 
     # -- note: there was a dangling docstring here from an earlier edit --
-    def tokenize(self, text: str) -> List[int]:
+    def tokenize(self, text: str) -> list[int]:
         """Encode text to token IDs."""
         return self.get_tokenizer().encode(text)
 
-    def detokenize(self, ids: List[int]) -> str:
+    def detokenize(self, ids: list[int]) -> str:
         """Decode token IDs back to text."""
         return self.get_tokenizer().decode(ids)
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Return vocabulary statistics."""
         tok = self.get_tokenizer()
         if tok.vocab_size == 0:
-            return {"vocab_size": 0, "base_chars": 0, "merged_subwords": 0, "special_tokens": 0, "total_merges": 0, "trained": False}
+            return {
+                "vocab_size": 0,
+                "base_chars": 0,
+                "merged_subwords": 0,
+                "special_tokens": 0,
+                "total_merges": 0,
+                "trained": False,
+            }
         s = tok.vocab_stats()
         s["trained"] = True
         s["algo"] = self._algo
@@ -222,9 +244,11 @@ class TokenizerManager:
         algo = data.get(_TOKENIZER_ALGO_KEY, "bpe")
         if algo == "unigram":
             from domain.training._internal.tokenizer import SloUnigram
+
             self._tokenizer = SloUnigram.from_dict(data)
         else:
             from domain.training._internal.tokenizer import SloBPE
+
             self._tokenizer = SloBPE.from_dict(data)
         self._algo = algo
 
@@ -234,7 +258,7 @@ class TokenizerManager:
             json.dump(data, f, ensure_ascii=False)
 
     def load(self, path: str) -> None:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         self.from_dict(data)
 
@@ -247,6 +271,7 @@ class TokenizerManager:
             return True
         try:
             from domain.training._internal.service import get_state
+
             at_state = get_state()
             at_tok = at_state.student_tokenizer
             if at_tok is not None and hasattr(at_tok, "vocab_size") and at_tok.vocab_size > 10:
@@ -265,6 +290,7 @@ class TokenizerManager:
 
     def reset(self) -> None:
         from domain.training._internal.tokenizer import SloBPE
+
         self._tokenizer = SloBPE()
         self._algo = "bpe"
 

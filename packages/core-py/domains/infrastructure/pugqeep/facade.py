@@ -26,21 +26,23 @@ Quick start:
 
 import logging
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional
 
 import numpy as np
 
-from .config import TreeConfig, QueueConfig
-from .point import Point
+from .cache import Tier, TieredCache
 from .compressor import PointCompressor
+from .config import QueueConfig, TreeConfig
+from .engine import Engine, Process, ProcessGroup, ProcessStatus, Stem
+from .engine import Tree as EngineTree
 from .library import PointLibrary
 from .model_tree import ModelTree
-from .tree import load_model_to_points
-from .cache import TieredCache, Tier
+from .point import Point
 from .queue import ModelQueue
-from .task_queue import TaskQueue, Task, TaskStatus
-from .engine import Engine, Process, Stem, Tree as EngineTree, ProcessStatus, ProcessGroup
+from .task_queue import Task, TaskQueue, TaskStatus
+from .tree import load_model_to_points
 
 logger = logging.getLogger("slo.pugqeep")
 
@@ -52,13 +54,16 @@ class PGQ:
     caching, and task queuing.
     """
 
-    def __init__(self, name: str = "model",
-                 storage_dir: Optional[Path] = None,
-                 cache_dir: Optional[Path] = None,
-                 n_clusters: int = 16,
-                 method: str = "cluster",
-                 memory_max_mb: int = 512,
-                 hot_max_mb: int = 128):
+    def __init__(
+        self,
+        name: str = "model",
+        storage_dir: Path | None = None,
+        cache_dir: Path | None = None,
+        n_clusters: int = 16,
+        method: str = "cluster",
+        memory_max_mb: int = 512,
+        hot_max_mb: int = 128,
+    ):
         """Initialize PGQ system.
 
         Args:
@@ -92,15 +97,19 @@ class PGQ:
         self._engine = Engine(name=name)
 
         # Metadata
-        self._shapes: Dict[str, Tuple[int, ...]] = {}
-        self._dtypes: Dict[str, np.dtype] = {}
+        self._shapes: dict[str, tuple[int, ...]] = {}
+        self._dtypes: dict[str, np.dtype] = {}
 
     # ── Factory methods ──
 
     @classmethod
-    def from_model(cls, model_id: str, n_clusters: int = 16,
-                   method: str = "cluster",
-                   storage_dir: Optional[Path] = None) -> "PGQ":
+    def from_model(
+        cls,
+        model_id: str,
+        n_clusters: int = 16,
+        method: str = "cluster",
+        storage_dir: Path | None = None,
+    ) -> "PGQ":
         """Load a HuggingFace model and compress all weights."""
         tree = load_model_to_points(
             model_id,
@@ -124,8 +133,9 @@ class PGQ:
         return sys
 
     @classmethod
-    def queue(cls, model_ids: List[str], n_clusters: int = 16,
-              storage_dir: Optional[Path] = None) -> ModelQueue:
+    def queue(
+        cls, model_ids: list[str], n_clusters: int = 16, storage_dir: Path | None = None
+    ) -> ModelQueue:
         """Create a queue with multiple models."""
         config = QueueConfig(
             default_n_clusters=n_clusters,
@@ -138,10 +148,14 @@ class PGQ:
 
     # ── Core data operations ──
 
-    def put(self, name: str, data: np.ndarray,
-            method: Optional[str] = None,
-            tier: str = "memory",
-            compress: bool = True) -> Union[Point, np.ndarray]:
+    def put(
+        self,
+        name: str,
+        data: np.ndarray,
+        method: str | None = None,
+        tier: str = "memory",
+        compress: bool = True,
+    ) -> Point | np.ndarray:
         """Store data, optionally compressing into a Point.
 
         Args:
@@ -172,8 +186,14 @@ class PGQ:
             self._dtypes[name] = data.dtype
             return data
 
-    def put_raw(self, name: str, data: Any, tier: str = "memory",
-                size_bytes: int = 0, ttl: Optional[float] = None) -> None:
+    def put_raw(
+        self,
+        name: str,
+        data: Any,
+        tier: str = "memory",
+        size_bytes: int = 0,
+        ttl: float | None = None,
+    ) -> None:
         """Store any data (not just numpy) in the cache.
 
         Args:
@@ -185,7 +205,7 @@ class PGQ:
         """
         self._cache.put(name, data, Tier(tier), size_bytes=size_bytes, ttl=ttl)
 
-    def get(self, name: str) -> Optional[np.ndarray]:
+    def get(self, name: str) -> np.ndarray | None:
         """Get data by name, decompressing if needed."""
         # Try cache first
         cached = self._cache.get(name)
@@ -205,7 +225,7 @@ class PGQ:
             flat = flat.reshape(shape)
         return flat.astype(dtype)
 
-    def get_any(self, name: str) -> Optional[Any]:
+    def get_any(self, name: str) -> Any | None:
         """Get any data from cache (not just numpy)."""
         return self._cache.get(name)
 
@@ -227,27 +247,27 @@ class PGQ:
         """Submit a task to the queue."""
         return self._task_queue.submit(task)
 
-    def next_task(self) -> Optional[Task]:
+    def next_task(self) -> Task | None:
         """Get next task to process."""
         return self._task_queue.next()
 
-    def complete_task(self, task_id: str, result: Any = None) -> Optional[Task]:
+    def complete_task(self, task_id: str, result: Any = None) -> Task | None:
         """Mark task as completed."""
         return self._task_queue.complete(task_id, result)
 
-    def fail_task(self, task_id: str, error: str) -> Optional[Task]:
+    def fail_task(self, task_id: str, error: str) -> Task | None:
         """Mark task as failed."""
         return self._task_queue.fail(task_id, error)
 
-    def cancel_task(self, task_id: str) -> Optional[Task]:
+    def cancel_task(self, task_id: str) -> Task | None:
         """Cancel a task."""
         return self._task_queue.cancel(task_id)
 
-    def get_task(self, task_id: str) -> Optional[Task]:
+    def get_task(self, task_id: str) -> Task | None:
         """Get task by ID."""
         return self._task_queue.get_task(task_id)
 
-    def list_tasks(self, status: Optional[TaskStatus] = None) -> List[Task]:
+    def list_tasks(self, status: TaskStatus | None = None) -> list[Task]:
         """List tasks, optionally filtered by status."""
         return self._task_queue.list_tasks(status)
 
@@ -261,9 +281,15 @@ class PGQ:
 
     # ── Core infra engine (Process/Tree/Stem) ──
 
-    def spawn(self, fn: Callable[..., Any], *args: Any,
-              name: str = "", timeout: Optional[float] = None,
-              priority: int = 2, **kwargs: Any) -> Process:
+    def spawn(
+        self,
+        fn: Callable[..., Any],
+        *args: Any,
+        name: str = "",
+        timeout: float | None = None,
+        priority: int = 2,
+        **kwargs: Any,
+    ) -> Process:
         """Spawn a new process on the core engine.
 
         Creates a Process wrapping ``fn(*args, **kwargs)`` and adds it
@@ -281,11 +307,11 @@ class PGQ:
         Returns:
             A ``Process`` instance with a unique id.
         """
-        return self._engine.spawn(fn, *args, name=name,
-                                  timeout=timeout, priority=priority, **kwargs)
+        return self._engine.spawn(
+            fn, *args, name=name, timeout=timeout, priority=priority, **kwargs
+        )
 
-    def tree(self, name: str, max_stems: int = 8,
-             pool_workers: int = 4) -> "EngineTree":
+    def tree(self, name: str, max_stems: int = 8, pool_workers: int = 4) -> "EngineTree":
         """Create a Tree on the core engine.
 
         A Tree is a model instance that branches Stems of parallel tasks.
@@ -298,10 +324,9 @@ class PGQ:
         Returns:
             A ``Tree`` instance.
         """
-        return self._engine.tree(name, max_stems=max_stems,
-                                 pool_workers=pool_workers)
+        return self._engine.tree(name, max_stems=max_stems, pool_workers=pool_workers)
 
-    def branch(self, tree_name: str, processes: List[Process]) -> Stem:
+    def branch(self, tree_name: str, processes: list[Process]) -> Stem:
         """Branch a Stem of parallel processes on a Tree.
 
         Submits all processes to the tree's thread pool and returns
@@ -328,7 +353,7 @@ class PGQ:
         """Stop the core engine and shutdown all trees."""
         self._engine.stop()
 
-    def get_process(self, proc_id: str) -> Optional[Process]:
+    def get_process(self, proc_id: str) -> Process | None:
         """Get a process by id."""
         return self._engine.get_process(proc_id)
 
@@ -336,7 +361,7 @@ class PGQ:
         """Get a Tree by name."""
         return self._engine.get_tree(name)
 
-    def list_processes(self, status: Optional[ProcessStatus] = None) -> List[Process]:
+    def list_processes(self, status: ProcessStatus | None = None) -> list[Process]:
         """List processes, optionally filtered by status."""
         return self._engine.list_processes(status=status)
 
@@ -374,7 +399,7 @@ class PGQ:
         """
         return self._engine.run_background(poll_interval=poll_interval)
 
-    def wait(self, timeout: Optional[float] = None) -> None:
+    def wait(self, timeout: float | None = None) -> None:
         """Wait for all pending and running processes to complete.
 
         Args:
@@ -382,7 +407,7 @@ class PGQ:
         """
         self._engine.wait(timeout=timeout)
 
-    def wait_all(self, timeout: Optional[float] = None) -> List[Process]:
+    def wait_all(self, timeout: float | None = None) -> list[Process]:
         """Wait for all processes and return completed/failed/cancelled list.
 
         Args:
@@ -393,7 +418,7 @@ class PGQ:
         """
         return self._engine.wait_all(timeout=timeout)
 
-    def get_completed(self) -> List[Process]:
+    def get_completed(self) -> list[Process]:
         """Return all completed processes since last call."""
         return self._engine.get_completed()
 
@@ -403,7 +428,7 @@ class PGQ:
         self,
         fn: Callable[..., Any],
         job_id: str,
-        tree_id: Optional[str] = None,
+        tree_id: str | None = None,
         **kwargs: Any,
     ) -> str:
         """Submit a training job through the shared TrainingExecutor.
@@ -427,32 +452,38 @@ class PGQ:
         tid = tree_id or self.name
         executor = get_training_executor()
         return executor.submit_training(
-            fn, job_id, tid, self._library, **kwargs,
+            fn,
+            job_id,
+            tid,
+            self._library,
+            **kwargs,
         )
 
-    def training_status(self, job_id: str) -> Optional[dict[str, Any]]:
+    def training_status(self, job_id: str) -> dict[str, Any] | None:
         """Get training job status from the executor."""
         from domain.training._internal.executor import get_training_executor
+
         return get_training_executor().status(job_id)
 
     def cancel_training(self, job_id: str) -> bool:
         """Cancel a training job via the executor."""
         from domain.training._internal.executor import get_training_executor
+
         return get_training_executor().cancel(job_id)
 
     # ── Search ──
 
-    def search(self, query: str) -> List[Point]:
+    def search(self, query: str) -> list[Point]:
         """Search points by identity."""
         return self._library.search(query)
 
-    def best(self, n: int = 10) -> List[Point]:
+    def best(self, n: int = 10) -> list[Point]:
         """Get best points by accuracy."""
         return self._library.best_points(n)
 
     # ── Persistence ──
 
-    def save(self, path: Union[Path, str]) -> Path:
+    def save(self, path: Path | str) -> Path:
         """Save to disk (library + task queue)."""
         p = Path(path)
         self._library.save(p)
@@ -462,7 +493,7 @@ class PGQ:
         return p
 
     @classmethod
-    def load(cls, path: Union[Path, str]) -> "PGQ":
+    def load(cls, path: Path | str) -> "PGQ":
         """Load from disk (library + task queue)."""
         p = Path(path)
         sys = cls.from_file(p)
@@ -523,11 +554,25 @@ class PGQ:
     def engine(self) -> Engine:
         return self._engine
 
-    def run_subprocess(self, fn, *args, cwd=None, env=None,
-                       memory_limit_mb=None, capture_output=False, timeout=None):
-        return self._engine.run_subprocess(fn, *args, cwd=cwd, env=env,
-                                           memory_limit_mb=memory_limit_mb,
-                                           capture_output=capture_output, timeout=timeout)
+    def run_subprocess(
+        self,
+        fn,
+        *args,
+        cwd=None,
+        env=None,
+        memory_limit_mb=None,
+        capture_output=False,
+        timeout=None,
+    ):
+        return self._engine.run_subprocess(
+            fn,
+            *args,
+            cwd=cwd,
+            env=env,
+            memory_limit_mb=memory_limit_mb,
+            capture_output=capture_output,
+            timeout=timeout,
+        )
 
     def group(self, name: str) -> ProcessGroup:
         return self._engine.group(name)
@@ -555,8 +600,13 @@ class PGQ:
 
     # ── Batch operations ──
 
-    def put_many(self, data: Dict[str, np.ndarray], compress: bool = True,
-                 method: Optional[str] = None, num_workers: int = 0) -> dict:
+    def put_many(
+        self,
+        data: dict[str, np.ndarray],
+        compress: bool = True,
+        method: str | None = None,
+        num_workers: int = 0,
+    ) -> dict:
         """Store multiple arrays at once.
 
         Args:
@@ -573,8 +623,9 @@ class PGQ:
 
         return self._put_many_parallel(data, compress, method, num_workers)
 
-    def _put_many_sequential(self, data: Dict[str, np.ndarray],
-                             compress: bool, method: Optional[str]) -> dict:
+    def _put_many_sequential(
+        self, data: dict[str, np.ndarray], compress: bool, method: str | None
+    ) -> dict:
         total_bytes = 0
         count = 0
         for name, arr in data.items():
@@ -583,13 +634,16 @@ class PGQ:
             count += 1
         return {"count": count, "total_bytes": total_bytes}
 
-    def _put_many_parallel(self, data: Dict[str, np.ndarray], compress: bool,
-                           method: Optional[str], num_workers: int) -> dict:
+    def _put_many_parallel(
+        self, data: dict[str, np.ndarray], compress: bool, method: str | None, num_workers: int
+    ) -> dict:
         import threading
+
         from domain.infrastructure._internal.producer_consumer import ProducerConsumerQueue
 
         if num_workers < 0:
             import os
+
             num_workers = os.cpu_count() or 4
 
         total_bytes = 0
@@ -620,6 +674,7 @@ class PGQ:
             for item in data.items():
                 q.put(item)
             import time
+
             while not q.empty:
                 time.sleep(0.01)
         finally:
@@ -630,7 +685,7 @@ class PGQ:
             result["errors"] = errors
         return result
 
-    def get_many(self, names: List[str], num_workers: int = 0) -> Dict[str, Optional[np.ndarray]]:
+    def get_many(self, names: list[str], num_workers: int = 0) -> dict[str, np.ndarray | None]:
         """Get multiple arrays at once.
 
         Args:
@@ -645,15 +700,19 @@ class PGQ:
 
         return self._get_many_parallel(names, num_workers)
 
-    def _get_many_parallel(self, names: List[str], num_workers: int) -> Dict[str, Optional[np.ndarray]]:
+    def _get_many_parallel(
+        self, names: list[str], num_workers: int
+    ) -> dict[str, np.ndarray | None]:
         import threading
+
         from domain.infrastructure._internal.producer_consumer import ProducerConsumerQueue
 
         if num_workers < 0:
             import os
+
             num_workers = os.cpu_count() or 4
 
-        results: Dict[str, Optional[np.ndarray]] = {}
+        results: dict[str, np.ndarray | None] = {}
         lock = threading.Lock()
 
         def get_one(name):
@@ -672,6 +731,7 @@ class PGQ:
             for name in names:
                 q.put(name)
             import time
+
             while not q.empty:
                 time.sleep(0.01)
         finally:
@@ -679,11 +739,11 @@ class PGQ:
 
         return results
 
-    def exists_many(self, names: List[str]) -> Dict[str, bool]:
+    def exists_many(self, names: list[str]) -> dict[str, bool]:
         """Check existence of multiple keys."""
         return {name: self.has(name) for name in names}
 
-    def remove_many(self, names: List[str]) -> int:
+    def remove_many(self, names: list[str]) -> int:
         """Remove multiple items. Returns count removed."""
         return sum(1 for name in names if self.remove(name))
 

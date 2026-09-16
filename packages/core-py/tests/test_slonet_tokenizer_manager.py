@@ -4,16 +4,13 @@ from __future__ import annotations
 
 import os
 import tempfile
-import pytest
-import numpy as np
-from domain.training._internal.tokenizer_manager import TokenizerManager
 
+from domain.training._internal.tokenizer_manager import TokenizerManager
 
 # ── TokenizerManager ───────────────────────────────────────────────────────
 
 
 class TestTokenizerManager:
-
     def test_init(self):
         mgr = TokenizerManager()
         assert mgr._algo == "bpe"

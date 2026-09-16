@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -20,7 +20,7 @@ logger = logging.getLogger("slo.gguf_export")
 # Arrays may be numpy ndarrays or SloNet/Torch tensors; conversion is
 # handled at export time via ``_as_float16``.
 ModelLike = Any
-StateDict = Dict[str, Any]
+StateDict = dict[str, Any]
 
 QUANTIZATION_TYPES = {
     "F32": "32-bit float (full precision)",
@@ -52,7 +52,7 @@ class GGUFExportConfig:
         n_ctx: int = 2048,
         rope_freq_base: float = 10000.0,
         rope_freq_scale: float = 1.0,
-        architecture: Optional[str] = None,
+        architecture: str | None = None,
     ):
         self.model_name = model_name
         self.model_version = model_version
@@ -72,7 +72,7 @@ class TensorMapping(ABC):
         self.gguf_type = gguf_type
 
     @abstractmethod
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         """Return dict mapping model tensor names to GGUF tensor names."""
         ...
 
@@ -91,15 +91,15 @@ class TensorMapping(ABC):
         """Return True if this architecture uses position embeddings."""
         ...
 
-    def get_special_tensors(self) -> Dict[str, str]:
+    def get_special_tensors(self) -> dict[str, str]:
         """Return any special tensor mappings."""
         return {}
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         """Return mapping for transformer block tensors."""
         return {}
 
-    def get_fused_qkv_keys(self) -> List[Tuple[str, str]]:
+    def get_fused_qkv_keys(self) -> list[tuple[str, str]]:
         """Return list of (source_suffix, arch_name) for fused QKV tensors.
 
         Architectures like Falcon/GPT-NeoX/Bloom use a single fused
@@ -115,7 +115,7 @@ class SloughGPTMapping(TensorMapping):
     def __init__(self):
         super().__init__("sloughgpt", "llama")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "tok_emb.weight": "token_embd.weight",
             "lm_head.weight": "output.weight",
@@ -131,13 +131,13 @@ class SloughGPTMapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return False
 
-    def get_special_tensors(self) -> Dict[str, str]:
+    def get_special_tensors(self) -> dict[str, str]:
         return {
             "rope.cos": "rope.cos",
             "rope.sin": "rope.sin",
         }
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"blocks.{i}."
@@ -163,7 +163,7 @@ class LLaMAMapping(TensorMapping):
     def __init__(self):
         super().__init__("llama", "llama")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "model.embed_tokens.weight": "token_embd.weight",
             "lm_head.weight": "output.weight",
@@ -179,7 +179,7 @@ class LLaMAMapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return False
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"model.layers.{i}."
@@ -205,7 +205,7 @@ class MistralMapping(TensorMapping):
     def __init__(self):
         super().__init__("mistral", "mistral")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "model.embed_tokens.weight": "token_embd.weight",
             "lm_head.weight": "output.weight",
@@ -221,7 +221,7 @@ class MistralMapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return False
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"model.layers.{i}."
@@ -247,7 +247,7 @@ class GPT2Mapping(TensorMapping):
     def __init__(self):
         super().__init__("gpt2", "gpt2")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "wte.weight": "token_embd.weight",
             "lm_head.weight": "output.weight",
@@ -263,11 +263,11 @@ class GPT2Mapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return True
 
-    def get_fused_qkv_keys(self) -> List[Tuple[str, str]]:
+    def get_fused_qkv_keys(self) -> list[tuple[str, str]]:
         """GPT-2 uses fused c_attn.weight (Q/K/V concatenated on dim 0)."""
         return [("attn.c_attn.weight", "gpt2")]
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"h.{i}."
@@ -290,7 +290,7 @@ class OPTMapping(TensorMapping):
     def __init__(self):
         super().__init__("opt", "llama")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "model.embed_tokens.weight": "token_embd.weight",
             "lm_head.weight": "output.weight",
@@ -306,7 +306,7 @@ class OPTMapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return True
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"model.decoder.layers.{i}."
@@ -331,7 +331,7 @@ class FalconMapping(TensorMapping):
     def __init__(self):
         super().__init__("falcon", "llama")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "transformer.word_embeddings.weight": "token_embd.weight",
             "lm_head.weight": "output.weight",
@@ -347,7 +347,7 @@ class FalconMapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return True
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"transformer.h.{i}."
@@ -363,7 +363,7 @@ class FalconMapping(TensorMapping):
 
         return mapping
 
-    def get_fused_qkv_keys(self) -> List[Tuple[str, str]]:
+    def get_fused_qkv_keys(self) -> list[tuple[str, str]]:
         """Return (source_key_pattern, architecture_name) for fused QKV splits.
 
         Falcon uses fused query_key_value.weight that must be split into Q/K/V.
@@ -377,7 +377,7 @@ class GPTNeoXMapping(TensorMapping):
     def __init__(self):
         super().__init__("gpt_neox", "llama")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "embed_in.weight": "token_embd.weight",
             "embed_out.weight": "output.weight",
@@ -393,7 +393,7 @@ class GPTNeoXMapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return True
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"layers.{i}."
@@ -409,7 +409,7 @@ class GPTNeoXMapping(TensorMapping):
 
         return mapping
 
-    def get_fused_qkv_keys(self) -> List[Tuple[str, str]]:
+    def get_fused_qkv_keys(self) -> list[tuple[str, str]]:
         """GPT-NeoX uses fused query_key_value that must be split into Q/K/V."""
         return [("query_key_value.weight", "gpt_neox")]
 
@@ -420,7 +420,7 @@ class BloomMapping(TensorMapping):
     def __init__(self):
         super().__init__("bloom", "llama")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "word_embeddings.weight": "token_embd.weight",
             "lm_head.weight": "output.weight",
@@ -436,7 +436,7 @@ class BloomMapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return True
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"h.{i}."
@@ -452,12 +452,12 @@ class BloomMapping(TensorMapping):
 
         return mapping
 
-    def get_fused_qkv_keys(self) -> List[Tuple[str, str]]:
+    def get_fused_qkv_keys(self) -> list[tuple[str, str]]:
         """Bloom uses fused query_key_value that must be split into Q/K/V."""
         return [("query_key_value.weight", "bloom")]
 
 
-ARCHITECTURE_MAPPINGS: Dict[str, TensorMapping] = {
+ARCHITECTURE_MAPPINGS: dict[str, TensorMapping] = {
     "sloughgpt": SloughGPTMapping(),
     "llama": LLaMAMapping(),
     "mistral": MistralMapping(),
@@ -475,7 +475,7 @@ class PhiMapping(TensorMapping):
     def __init__(self):
         super().__init__("phi", "llama")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "model.embed_tokens.weight": "token_embd.weight",
             "lm_head.weight": "output.weight",
@@ -491,7 +491,7 @@ class PhiMapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return False
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"model.h.{i}."
@@ -517,7 +517,7 @@ class GemmaMapping(TensorMapping):
     def __init__(self):
         super().__init__("gemma", "gemma")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "model.embed_tokens.weight": "token_embd.weight",
             "lm_head.weight": "output.weight",
@@ -533,7 +533,7 @@ class GemmaMapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return False
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"model.layers.{i}."
@@ -559,7 +559,7 @@ class QwenMapping(TensorMapping):
     def __init__(self):
         super().__init__("qwen", "qwen")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "transformer.wte.weight": "token_embd.weight",
             "lm_head.weight": "output.weight",
@@ -575,7 +575,7 @@ class QwenMapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return False
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"transformer.h.{i}."
@@ -600,7 +600,7 @@ class DeepseekMapping(TensorMapping):
     def __init__(self):
         super().__init__("deepseek", "llama")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "model.embed_tokens.weight": "token_embd.weight",
             "lm_head.weight": "output.weight",
@@ -616,7 +616,7 @@ class DeepseekMapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return False
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"model.layers.{i}."
@@ -642,7 +642,7 @@ class YiMapping(TensorMapping):
     def __init__(self):
         super().__init__("yi", "llama")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "model.embed_tokens.weight": "token_embd.weight",
             "lm_head.weight": "output.weight",
@@ -658,7 +658,7 @@ class YiMapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return False
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"model.layers.{i}."
@@ -688,7 +688,7 @@ class Phi3Mapping(TensorMapping):
     def __init__(self):
         super().__init__("phi3", "llama")
 
-    def get_tensor_map(self) -> Dict[str, str]:
+    def get_tensor_map(self) -> dict[str, str]:
         return {
             "model.embed_tokens.weight": "token_embd.weight",
             "lm_head.weight": "output.weight",
@@ -704,7 +704,7 @@ class Phi3Mapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return False
 
-    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+    def get_block_mapping(self, n_layers: int = 100) -> dict[str, str]:
         mapping = {}
         for i in range(n_layers):
             prefix = f"model.layers.{i}."
@@ -724,18 +724,20 @@ class Phi3Mapping(TensorMapping):
         return mapping
 
 
-ARCHITECTURE_MAPPINGS.update({
-    "phi": PhiMapping(),
-    "phi3": Phi3Mapping(),
-    "gemma": GemmaMapping(),
-    "qwen": QwenMapping(),
-    "starcoder": DeepseekMapping(),  # Starcoder uses same structure
-    "deepseek": DeepseekMapping(),
-    "yi": YiMapping(),
-})
+ARCHITECTURE_MAPPINGS.update(
+    {
+        "phi": PhiMapping(),
+        "phi3": Phi3Mapping(),
+        "gemma": GemmaMapping(),
+        "qwen": QwenMapping(),
+        "starcoder": DeepseekMapping(),  # Starcoder uses same structure
+        "deepseek": DeepseekMapping(),
+        "yi": YiMapping(),
+    }
+)
 
 
-def _as_float16(tensor) -> Optional[np.ndarray]:
+def _as_float16(tensor) -> np.ndarray | None:
     """Convert a tensor (numpy / SloNet / torch) to a float16 numpy array.
 
     Returns None for values that cannot be converted.
@@ -758,7 +760,7 @@ def _as_float16(tensor) -> Optional[np.ndarray]:
     return arr.astype(np.float16)
 
 
-def detect_architecture(state_dict: StateDict) -> Optional[TensorMapping]:
+def detect_architecture(state_dict: StateDict) -> TensorMapping | None:
     """Auto-detect model architecture from tensor names."""
     keys = list(state_dict.keys())
 
@@ -780,24 +782,33 @@ def detect_architecture(state_dict: StateDict) -> Optional[TensorMapping]:
 
     max_score = max(scores.values())
     if max_score == 0:
-        logger.warning("Could not detect architecture, defaulting to SloughGPT",
-            extra={"tag": "TRAIN"},)
+        logger.warning(
+            "Could not detect architecture, defaulting to SloughGPT",
+            extra={"tag": "TRAIN"},
+        )
         return SloughGPTMapping()
 
     detected = max(scores, key=scores.get)
-    logger.info("Detected architecture: %s (score: %s)", detected, max_score,
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Detected architecture: %s (score: %s)",
+        detected,
+        max_score,
+        extra={"tag": "TRAIN"},
+    )
     return ARCHITECTURE_MAPPINGS.get(detected, SloughGPTMapping())
 
 
 def register_architecture(name: str, mapping: TensorMapping) -> None:
     """Register a custom architecture mapping."""
     ARCHITECTURE_MAPPINGS[name] = mapping
-    logger.info("Registered custom architecture: %s", name,
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Registered custom architecture: %s",
+        name,
+        extra={"tag": "TRAIN"},
+    )
 
 
-def get_tensor_mapping(model: ModelLike) -> Dict[str, str]:
+def get_tensor_mapping(model: ModelLike) -> dict[str, str]:
     """Get GGUF tensor name mapping for the model architecture."""
     state_dict = model.state_dict()
     mapping = detect_architecture(state_dict)
@@ -830,7 +841,7 @@ def count_layers(state_dict: StateDict, block_prefix: str) -> int:
     return n_layer
 
 
-def get_block_mapping(model: ModelLike = None, n_layers: int = 100) -> Dict[str, str]:
+def get_block_mapping(model: ModelLike = None, n_layers: int = 100) -> dict[str, str]:
     """Get GGUF tensor name mapping for transformer blocks."""
     if model is not None:
         state_dict = model.state_dict()
@@ -846,8 +857,8 @@ def get_block_mapping(model: ModelLike = None, n_layers: int = 100) -> Dict[str,
 def export_to_gguf(
     model: ModelLike,
     output_path: str,
-    tokenizer: Optional[Any] = None,
-    config: Optional[GGUFExportConfig] = None,
+    tokenizer: Any | None = None,
+    config: GGUFExportConfig | None = None,
 ) -> str:
     """Export model to GGUF format for llama.rn.
 
@@ -879,7 +890,9 @@ def export_to_gguf(
 
     if config.architecture:
         if config.architecture not in ARCHITECTURE_MAPPINGS:
-            raise ValueError(f"Unknown architecture: {config.architecture}. Available: {list(ARCHITECTURE_MAPPINGS.keys())}")
+            raise ValueError(
+                f"Unknown architecture: {config.architecture}. Available: {list(ARCHITECTURE_MAPPINGS.keys())}"
+            )
         mapping = ARCHITECTURE_MAPPINGS[config.architecture]
     else:
         mapping = detect_architecture(state_dict) or SloughGPTMapping()
@@ -917,7 +930,10 @@ def export_to_gguf(
     if tokenizer is not None:
         if hasattr(tokenizer, "get_vocab"):
             vocab = tokenizer.get_vocab()
-            token_list = [tokenizer.decode([i]) if hasattr(tokenizer, 'decode') else chr(i) for i in range(len(vocab))]
+            token_list = [
+                tokenizer.decode([i]) if hasattr(tokenizer, "decode") else chr(i)
+                for i in range(len(vocab))
+            ]
         else:
             token_list = [chr(i) if i < 256 else f"<0x{i:02X}>" for i in range(vocab_size)]
     else:
@@ -950,8 +966,8 @@ def export_to_gguf(
             dim0 = qkv.shape[0]
             third = dim0 // 3
             q_part = qkv[:third]
-            k_part = qkv[third:2 * third]
-            v_part = qkv[2 * third:]
+            k_part = qkv[third : 2 * third]
+            v_part = qkv[2 * third :]
 
             q_target = tensor_map[key]
             k_target = q_target.replace(".attn_q.", ".attn_k.")
@@ -969,24 +985,32 @@ def export_to_gguf(
     writer.write_tensors_to_file()
     writer.flush()
 
-    logger.info("Exported GGUF (%s): %s", mapping.name, output_path,
-        extra={"tag": "TRAIN"},)
+    logger.info(
+        "Exported GGUF (%s): %s",
+        mapping.name,
+        output_path,
+        extra={"tag": "TRAIN"},
+    )
     return output_path
 
 
 def export_to_gguf_fp16(model, output_path, tokenizer=None, architecture=None):
     """Export to GGUF FP16 (no quantization)."""
     return export_to_gguf(
-        model, output_path, tokenizer,
-        GGUFExportConfig(quantization="F16", architecture=architecture)
+        model,
+        output_path,
+        tokenizer,
+        GGUFExportConfig(quantization="F16", architecture=architecture),
     )
 
 
 def export_to_gguf_q4_k_m(model, output_path, tokenizer=None, architecture=None):
     """Export to GGUF Q4_K_M (recommended for mobile)."""
     return export_to_gguf(
-        model, output_path, tokenizer,
-        GGUFExportConfig(quantization="Q4_K_M", architecture=architecture)
+        model,
+        output_path,
+        tokenizer,
+        GGUFExportConfig(quantization="Q4_K_M", architecture=architecture),
     )
 
 
@@ -996,40 +1020,38 @@ def quantize_gguf(input_path: str, output_path: str, quantization: str = "Q4_K_M
     Returns the quantized output path on success.
     Raises RuntimeError if llama-quantize is missing or quantization fails.
     """
-    import subprocess
     import shutil
+    import subprocess
 
     llama_quantize = shutil.which("llama-quantize")
     if llama_quantize is None:
-        raise RuntimeError(
-            "llama-quantize not found. Install llama.cpp to enable quantization."
-        )
+        raise RuntimeError("llama-quantize not found. Install llama.cpp to enable quantization.")
 
     result = subprocess.run(
         [llama_quantize, input_path, output_path, quantization],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            f"llama-quantize failed (exit {result.returncode}): {result.stderr}"
-        )
+        raise RuntimeError(f"llama-quantize failed (exit {result.returncode}): {result.stderr}")
 
     logger.info("Quantized: %s -> %s", input_path, output_path, extra={"tag": "TRAIN"})
     return output_path
 
 
-def get_model_info_gguf(gguf_path: str) -> Dict[str, Any]:
+def get_model_info_gguf(gguf_path: str) -> dict[str, Any]:
     """Get metadata from GGUF file.
 
     Reads architecture, vocab_size, context_length, n_layer, n_embed, n_head,
     and other fields written by ``export_to_gguf``.
     """
-    info: Dict[str, Any] = {
+    info: dict[str, Any] = {
         "path": gguf_path,
         "file_size_mb": round(Path(gguf_path).stat().st_size / (1024 * 1024), 2),
     }
     try:
         from gguf import GGUFReader
+
         reader = GGUFReader(gguf_path)
         for field in reader.fields.values():
             if not field.parts:
@@ -1060,17 +1082,23 @@ def get_model_info_gguf(gguf_path: str) -> Dict[str, Any]:
 
 
 def estimate_memory_requirements(
-    vocab_size: int,
-    n_layer: int,
-    n_embed: int,
-    n_ctx: int,
-    quantization: str = "Q4_K_M"
-) -> Dict[str, float]:
+    vocab_size: int, n_layer: int, n_embed: int, n_ctx: int, quantization: str = "Q4_K_M"
+) -> dict[str, float]:
     """Estimate memory requirements for GGUF model."""
     bytes_per_param = {
-        "F32": 4.0, "F16": 2.0, "Q8_0": 1.0, "Q5_K_M": 0.7, "Q5_1": 0.6,
-        "Q5_0": 0.5, "Q4_1": 0.5, "Q4_0": 0.4, "Q4_K_M": 0.45, "Q4_K_S": 0.4,
-        "Q3_K_M": 0.35, "Q3_K_S": 0.3, "Q2_K": 0.25,
+        "F32": 4.0,
+        "F16": 2.0,
+        "Q8_0": 1.0,
+        "Q5_K_M": 0.7,
+        "Q5_1": 0.6,
+        "Q5_0": 0.5,
+        "Q4_1": 0.5,
+        "Q4_0": 0.4,
+        "Q4_K_M": 0.45,
+        "Q4_K_S": 0.4,
+        "Q3_K_M": 0.35,
+        "Q3_K_S": 0.3,
+        "Q2_K": 0.25,
     }
     bpp = bytes_per_param.get(quantization, 0.45)
     params = vocab_size * n_embed + n_layer * (4 * n_embed * n_embed) + n_embed * vocab_size
@@ -1079,16 +1107,16 @@ def estimate_memory_requirements(
     return {
         "model_mb": round(model_mem, 2),
         "kv_cache_mb": round(kv_mem, 2),
-        "total_mb": round(model_mem + kv_mem, 2)
+        "total_mb": round(model_mem + kv_mem, 2),
     }
 
 
-def list_available_quantizations() -> List[Tuple[str, str, bool]]:
+def list_available_quantizations() -> list[tuple[str, str, bool]]:
     """List available GGUF quantization types."""
     return [(n, d, n in MOBILE_RECOMMENDED) for n, d in QUANTIZATION_TYPES.items()]
 
 
-def list_supported_architectures() -> List[str]:
+def list_supported_architectures() -> list[str]:
     """List supported model architectures."""
     return list(ARCHITECTURE_MAPPINGS.keys())
 

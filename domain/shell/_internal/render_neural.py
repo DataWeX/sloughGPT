@@ -23,15 +23,16 @@ from __future__ import annotations
 
 import numpy as np
 
-from .vm import Device, DeviceFault
 from .cycles_device import CyclesDevice
+from .vm import Device, DeviceFault
 
 
 class RenderNeuralDevice(Device):
     """VM device that processes rendered state tensors through a neural pipeline."""
 
-    def __init__(self, cycles_device: CyclesDevice | None = None,
-                 embed_dim: int = 64, num_classes: int = 8):
+    def __init__(
+        self, cycles_device: CyclesDevice | None = None, embed_dim: int = 64, num_classes: int = 8
+    ):
         self._cycles = cycles_device
         self._embed_dim = embed_dim
         self._num_classes = num_classes
@@ -136,10 +137,10 @@ class RenderNeuralDevice(Device):
         xp = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode="constant")
 
         # Build col indices once
-        if not hasattr(self, '_col_indices') or self._col_shape != (C_in, k, H, W):
+        if not hasattr(self, "_col_indices") or self._col_shape != (C_in, k, H, W):
             idx_h = np.arange(k)[:, None] + np.arange(H)[None, :]
             idx_w = np.arange(k)[:, None] + np.arange(W)[None, :]
-            ih, iw = np.meshgrid(idx_h.ravel(), idx_w.ravel(), indexing='ij')
+            ih, iw = np.meshgrid(idx_h.ravel(), idx_w.ravel(), indexing="ij")
             self._col_indices = (ih, iw)
             self._col_shape = (C_in, k, H, W)
 
@@ -221,7 +222,9 @@ class RenderNeuralDevice(Device):
         x = self._stack_channels(tensors)
         out = self._forward(x)
         desc["neural_embedding_norm"] = float(np.linalg.norm(out["embedding"]))
-        desc["neural_entropy"] = float(-np.sum(out["probabilities"] * np.log(out["probabilities"] + 1e-10)))
+        desc["neural_entropy"] = float(
+            -np.sum(out["probabilities"] * np.log(out["probabilities"] + 1e-10))
+        )
         desc["dominant_class"] = int(np.argmax(out["probabilities"]))
         return desc
 

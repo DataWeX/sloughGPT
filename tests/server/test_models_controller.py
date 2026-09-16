@@ -1,9 +1,12 @@
 """Tests for ModelsController."""
+
+import os
+import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from pathlib import Path
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'apps', 'api', 'server'))
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "apps", "api", "server"))
 
 from controllers.models import ModelsController
 
@@ -172,6 +175,7 @@ class TestProcessGuard:
 class TestInferConfig:
     def test_infers_vocab_and_embed(self, ctrl):
         import numpy as np
+
         state_dict = {"tok_emb.weight": np.zeros((1000, 64), dtype=np.float32)}
         config = ctrl._infer_config(state_dict)
         assert config["vocab_size"] == 1000
@@ -180,6 +184,7 @@ class TestInferConfig:
 
     def test_infers_layer_count(self, ctrl):
         import numpy as np
+
         state_dict = {
             "tok_emb.weight": np.zeros((1000, 64), dtype=np.float32),
             "blocks.0.attn_norm.weight": np.zeros((64,)),
@@ -231,7 +236,9 @@ class TestLoadModel:
         assert "no weights" in result["error"]
 
     def test_load_gguf_path(self, ctrl):
-        with patch.object(ctrl, "_load_gguf_model", return_value={"model_id": "m.gguf", "type": "gguf"}) as mock_gguf:
+        with patch.object(
+            ctrl, "_load_gguf_model", return_value={"model_id": "m.gguf", "type": "gguf"}
+        ) as mock_gguf:
             result = ctrl.load_model("my-model.gguf", device="cpu")
         mock_gguf.assert_called_once_with("my-model.gguf", "cpu")
         assert result["status"] == "loaded"
@@ -274,21 +281,31 @@ class TestResolveActiveModelId:
     def test_registry_default_fallback(self, ctrl):
         registry = MagicMock()
         registry.default_id = "reg-model"
-        with patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry):
+        with patch(
+            "domains.infrastructure.model_registry.get_model_registry", return_value=registry
+        ):
             assert ctrl._resolve_active_model_id() == "reg-model"
 
     def test_server_state_fallback(self, ctrl):
         registry = MagicMock()
         registry.default_id = None
-        with patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry), \
-             patch("state.model_type", "state-model", create=True):
+        with (
+            patch(
+                "domains.infrastructure.model_registry.get_model_registry", return_value=registry
+            ),
+            patch("state.model_type", "state-model", create=True),
+        ):
             assert ctrl._resolve_active_model_id() == "state-model"
 
     def test_none_when_nothing_loaded(self, ctrl):
         registry = MagicMock()
         registry.default_id = None
-        with patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry), \
-             patch("state.model_type", None, create=True):
+        with (
+            patch(
+                "domains.infrastructure.model_registry.get_model_registry", return_value=registry
+            ),
+            patch("state.model_type", None, create=True),
+        ):
             assert ctrl._resolve_active_model_id() is None
 
 
@@ -308,7 +325,12 @@ class TestListHFModels:
         fake_resp = MagicMock()
         fake_resp.status_code = 200
         fake_resp.json.return_value = [
-            {"id": "gpt2", "pipeline_tag": "text-generation", "num_parameters": 124000000, "config": {"vocab_size": 50257}},
+            {
+                "id": "gpt2",
+                "pipeline_tag": "text-generation",
+                "num_parameters": 124000000,
+                "config": {"vocab_size": 50257},
+            },
         ]
         with patch("requests.get", return_value=fake_resp):
             models = ctrl.list_hf_models(q="gpt2")
@@ -328,14 +350,17 @@ class TestListHFModels:
 
 
 class TestEstimateParams:
-    @pytest.mark.parametrize("mid,expected", [
-        ("llama-13b", 13000000000),
-        ("falcon-7b", 7000000000),
-        ("gemma-3b", 3000000000),
-        ("bloom-1b", 1000000000),
-        ("qwen-0.5b", 500000000),
-        ("tiny-125m", 125000000),
-        ("unknown", 0),
-    ])
+    @pytest.mark.parametrize(
+        "mid,expected",
+        [
+            ("llama-13b", 13000000000),
+            ("falcon-7b", 7000000000),
+            ("gemma-3b", 3000000000),
+            ("bloom-1b", 1000000000),
+            ("qwen-0.5b", 500000000),
+            ("tiny-125m", 125000000),
+            ("unknown", 0),
+        ],
+    )
     def test_estimates(self, ctrl, mid, expected):
         assert ctrl._estimate_params(mid) == expected

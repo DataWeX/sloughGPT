@@ -1,8 +1,8 @@
 """Tests for domain.shell._internal.pane — Rect, Border, Pane, PaneLayout, split, vsplit."""
 
 import pytest
-from domain.shell._internal.pane import Rect, Border, Pane, PaneLayout, split, vsplit
 
+from domain.shell._internal.pane import Border, Pane, PaneLayout, Rect, split, vsplit
 
 # ── Rect ──────────────────────────────────────────────────────────────
 
@@ -173,19 +173,23 @@ class TestPaneLayout:
         assert regions["main"].cols == 80
 
     def test_two_pane_ratio(self):
-        layout = PaneLayout([
-            Pane(name="top", ratio=0.3),
-            Pane(name="bot", ratio=0.7),
-        ])
+        layout = PaneLayout(
+            [
+                Pane(name="top", ratio=0.3),
+                Pane(name="bot", ratio=0.7),
+            ]
+        )
         regions = layout.compute(20, 80)
         total = regions["top"].rows + regions["bot"].rows
         assert total == 20
 
     def test_fixed_pane(self):
-        layout = PaneLayout([
-            Pane(name="bar", fixed=3),
-            Pane(name="main"),
-        ])
+        layout = PaneLayout(
+            [
+                Pane(name="bar", fixed=3),
+                Pane(name="main"),
+            ]
+        )
         regions = layout.compute(24, 80)
         assert regions["bar"].rows == 3
         assert regions["main"].rows == 21
@@ -207,22 +211,26 @@ class TestPaneLayout:
         assert regions["a"].cols == 80
 
     def test_border_between_panes(self):
-        layout = PaneLayout([
-            Pane(name="top", ratio=0.5, border=Border("bottom")),
-            Pane(name="bot", ratio=0.5),
-        ])
+        layout = PaneLayout(
+            [
+                Pane(name="top", ratio=0.5, border=Border("bottom")),
+                Pane(name="bot", ratio=0.5),
+            ]
+        )
         regions = layout.compute(20, 80)
         # border_bottom of "top" consumes 1 row from available space
         total = regions["top"].rows + regions["bot"].rows
         assert total == 20
         assert regions["top"].rows == 11  # 10 content + 1 border
-        assert regions["bot"].rows == 9   # 9 content (1 row lost to border)
+        assert regions["bot"].rows == 9  # 9 content (1 row lost to border)
 
     def test_hidden_pane_skipped(self):
-        layout = PaneLayout([
-            Pane(name="top", visible=False),
-            Pane(name="bot"),
-        ])
+        layout = PaneLayout(
+            [
+                Pane(name="top", visible=False),
+                Pane(name="bot"),
+            ]
+        )
         regions = layout.compute(20, 80)
         assert "top" not in regions
         assert regions["bot"].rows == 20
@@ -230,10 +238,12 @@ class TestPaneLayout:
     # ── max_rows ───────────────────────────────────────────────────────
 
     def test_max_rows_clamps(self):
-        layout = PaneLayout([
-            Pane(name="a", ratio=1.0, max_rows=5),
-            Pane(name="b", ratio=1.0),
-        ])
+        layout = PaneLayout(
+            [
+                Pane(name="a", ratio=1.0, max_rows=5),
+                Pane(name="b", ratio=1.0),
+            ]
+        )
         regions = layout.compute(20, 80)
         assert regions["a"].rows <= 5
 
@@ -241,7 +251,7 @@ class TestPaneLayout:
 
     def test_content_regions_strip_border(self):
         p = Pane(name="a", border=Border("all"))
-        layout = Layout = PaneLayout([p])
+        layout = PaneLayout([p])
         cr = layout.content_regions(12, 82)
         assert cr["a"] == Rect(1, 1, 10, 80)
 
@@ -271,18 +281,22 @@ class TestFocus:
         assert layout.set_focus("z") is False
 
     def test_set_focus_not_focusable(self):
-        layout = PaneLayout([
-            Pane(name="a"),
-            Pane(name="b", focusable=False),
-        ])
+        layout = PaneLayout(
+            [
+                Pane(name="a"),
+                Pane(name="b", focusable=False),
+            ]
+        )
         assert layout.set_focus("b") is False
         assert layout.focus_name == "a"
 
     def test_set_focus_not_visible(self):
-        layout = PaneLayout([
-            Pane(name="a"),
-            Pane(name="b", visible=False),
-        ])
+        layout = PaneLayout(
+            [
+                Pane(name="a"),
+                Pane(name="b", visible=False),
+            ]
+        )
         assert layout.set_focus("b") is False
         assert layout.focus_name == "a"
 
@@ -293,20 +307,24 @@ class TestFocus:
         assert layout.focus_next() == "a"  # wraps
 
     def test_focus_next_skips_unfocusable(self):
-        layout = PaneLayout([
-            Pane(name="a"),
-            Pane(name="b", focusable=False),
-            Pane(name="c"),
-        ])
+        layout = PaneLayout(
+            [
+                Pane(name="a"),
+                Pane(name="b", focusable=False),
+                Pane(name="c"),
+            ]
+        )
         assert layout.focus_next() == "c"
         assert layout.focus_next() == "a"  # wraps
 
     def test_focus_next_skips_hidden(self):
-        layout = PaneLayout([
-            Pane(name="a"),
-            Pane(name="b", visible=False),
-            Pane(name="c"),
-        ])
+        layout = PaneLayout(
+            [
+                Pane(name="a"),
+                Pane(name="b", visible=False),
+                Pane(name="c"),
+            ]
+        )
         assert layout.focus_next() == "c"
 
     def test_focus_prev(self):

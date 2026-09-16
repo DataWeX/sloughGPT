@@ -2,8 +2,8 @@
 
 from domain.training._internal.huggingface.api_loader import (
     HFAPIConfig,
-    HuggingFaceAPILoader,
     HFInferenceClient,
+    HuggingFaceAPILoader,
     create_api_client,
 )
 
@@ -39,14 +39,23 @@ class TestHFAPIConfigDefaults:
 
     def test_field_count(self):
         import dataclasses
+
         fields = [f.name for f in dataclasses.fields(HFAPIConfig)]
         assert len(fields) == 7
 
     def test_field_names(self):
         import dataclasses
+
         names = {f.name for f in dataclasses.fields(HFAPIConfig)}
-        expected = {"model", "api_key", "timeout", "max_new_tokens",
-                    "temperature", "top_p", "repetition_penalty"}
+        expected = {
+            "model",
+            "api_key",
+            "timeout",
+            "max_new_tokens",
+            "temperature",
+            "top_p",
+            "repetition_penalty",
+        }
         assert names == expected
 
 
@@ -212,6 +221,7 @@ class TestHFAPIConfigEdgeCases:
 
     def test_copy_semantics(self):
         import dataclasses
+
         a = HFAPIConfig(model="gpt2", temperature=0.7)
         b = dataclasses.replace(a, temperature=0.1)
         assert a.temperature == 0.7
@@ -220,6 +230,7 @@ class TestHFAPIConfigEdgeCases:
 
     def test_copy_preserves_api_key(self):
         import dataclasses
+
         a = HFAPIConfig(model="gpt2", api_key="secret")
         b = dataclasses.replace(a, model="llama")
         assert b.api_key == "secret"
@@ -239,6 +250,7 @@ class TestHFAPIConfigLoaderInteraction:
 
     def test_loader_api_key_none_when_not_set(self):
         import os
+
         old_key = os.environ.pop("HF_API_KEY", None)
         old_token = os.environ.pop("HF_TOKEN", None)
         try:
@@ -258,6 +270,7 @@ class TestHFAPIConfigLoaderInteraction:
 
     def test_loader_headers_empty_without_key(self):
         import os
+
         old_key = os.environ.pop("HF_API_KEY", None)
         old_token = os.environ.pop("HF_TOKEN", None)
         try:

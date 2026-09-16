@@ -2,21 +2,15 @@
 Tests for DataFilter (domains/learner/data_filter.py).
 """
 
-import os
-import json
-from pathlib import Path
-
 import pytest
 
-from domains.learner.data_filter import (
+from domain.learner._internal.data_filter import (
     DataFilter,
-    _score_quality,
-    _score_relevance,
     _matches_blacklist,
     _matches_whitelist,
-    DEFAULT_CONFIG,
-    set_data_filter_db,
+    _score_quality,
     reset_data_filter_db,
+    set_data_filter_db,
 )
 
 
@@ -107,33 +101,44 @@ class TestDataFilter:
         assert reason == ""
 
     def test_whitelist_hard_gate_rejects_non_match(self):
-        f = DataFilter({
-            "enabled": True,
-            "min_quality_score": 0,
-            "min_content_length": 0,
-            "topic_whitelist": ["python"],
-            "whitelist_is_hard_gate": True,
-        })
+        f = DataFilter(
+            {
+                "enabled": True,
+                "min_quality_score": 0,
+                "min_content_length": 0,
+                "topic_whitelist": ["python"],
+                "whitelist_is_hard_gate": True,
+            }
+        )
         content = "Cooking recipes for dinner. Pasta is delicious. " * 15
         ok, reason = f.filter_article("http://x.com", "cooking", content)
         assert ok is False
         assert reason == "not_in_whitelist"
 
     def test_whitelist_hard_gate_allows_match(self):
-        f = DataFilter({
-            "enabled": True,
-            "min_quality_score": 0,
-            "min_content_length": 0,
-            "topic_whitelist": ["python"],
-            "whitelist_is_hard_gate": True,
-        })
+        f = DataFilter(
+            {
+                "enabled": True,
+                "min_quality_score": 0,
+                "min_content_length": 0,
+                "topic_whitelist": ["python"],
+                "whitelist_is_hard_gate": True,
+            }
+        )
         content = "Python programming tips. Learn to code. " * 15
         ok, reason = f.filter_article("http://x.com", "python", content)
         assert ok is True
 
     def test_near_dup_rejected(self):
         text = "Python is a great programming language for beginners. " * 20
-        f = DataFilter({"enabled": True, "min_quality_score": 0, "min_content_length": 0, "dup_similarity_threshold": 0.9})
+        f = DataFilter(
+            {
+                "enabled": True,
+                "min_quality_score": 0,
+                "min_content_length": 0,
+                "dup_similarity_threshold": 0.9,
+            }
+        )
         ok, reason = f.filter_article("http://x.com", "Python", text, existing_facts=[text])
         assert ok is False
         assert reason == "near_duplicate"

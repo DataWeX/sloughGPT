@@ -2,13 +2,12 @@
 
 Covers: get_export_formats, current_model, get_model_logs, get_catalog, get_catalog_stats.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -18,6 +17,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.models import ModelsRouter  # noqa: E402
+
 from conftest import build_test_app
 
 
@@ -56,7 +56,11 @@ class TestCurrentModel:
     @patch("routers.models.get_models_controller")
     def test_with_model(self, mock_get):
         ctrl = _mock_ctrl()
-        ctrl.get_current_model.return_value = {"model_id": "gpt2", "device": "cpu", "parameters": 124000000}
+        ctrl.get_current_model.return_value = {
+            "model_id": "gpt2",
+            "device": "cpu",
+            "parameters": 124000000,
+        }
         mock_get.return_value = ctrl
         mr = ModelsRouter()
         client = TestClient(_app(mr))

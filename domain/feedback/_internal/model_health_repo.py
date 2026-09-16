@@ -8,9 +8,9 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from domain.infrastructure._internal.repository import FileRepository
 
@@ -20,6 +20,7 @@ logger = logging.getLogger("slo.model_health_repo")
 @dataclass
 class HealthSnapshot:
     """A single model health measurement."""
+
     timestamp: float
     perplexity: float
     loss: float
@@ -65,7 +66,7 @@ class ModelHealthRepository:
             data = json.loads(self._legacy_path.read_text())
             if not isinstance(data, list):
                 return
-            for i, entry in enumerate(data[-self._max_history:]):
+            for i, entry in enumerate(data[-self._max_history :]):
                 snapshot = HealthSnapshot.from_dict(entry)
                 snapshot_id = f"snapshot_{snapshot.timestamp:.0f}_{i}"
                 self._repo.save(snapshot_id, snapshot.to_dict())
@@ -81,7 +82,7 @@ class ModelHealthRepository:
         snapshot_id = f"snapshot_{snapshot.timestamp:.0f}"
         return self._repo.save(snapshot_id, snapshot.to_dict())
 
-    def get_latest(self) -> Optional[HealthSnapshot]:
+    def get_latest(self) -> HealthSnapshot | None:
         """Get the most recent health snapshot."""
         all_snapshots = self.list_snapshots()
         if not all_snapshots:
@@ -102,7 +103,7 @@ class ModelHealthRepository:
         cutoff = time.time() - (hours * 3600)
         return [s for s in self.list_snapshots() if s.timestamp >= cutoff]
 
-    def detect_drift(self, threshold: float = 0.15) -> Optional[dict[str, Any]]:
+    def detect_drift(self, threshold: float = 0.15) -> dict[str, Any] | None:
         """Detect significant perplexity drift compared to recent average.
 
         Returns drift info dict if drift detected, None otherwise.

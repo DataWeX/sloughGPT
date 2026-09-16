@@ -5,20 +5,32 @@ VM process syscall handling, and run_program device wiring.
 
 import types
 
-from domain.shell._internal.kernel import Kernel
 from domain.shell._internal.addons import shell_ui
+from domain.shell._internal.kernel import Kernel
 
-SYS_SRC = "\n".join([
-    "LOAD_CONST R7, 111", "LOAD_CONST R0, 42", "SYSCALL",
-    "LOAD_CONST R7, 110", "SYSCALL",
-    "LOAD_CONST R7, 20", "LOAD_CONST R0, 4", "SYSCALL",
-    "LOAD_CONST R7, 21", "SYSCALL",
-    "LOAD_CONST R7, 200", "SYSCALL",
-    "LOAD_CONST R7, 201", "SYSCALL",
-    "LOAD_CONST R7, 999", "SYSCALL",
-    "LOAD_CONST R7, 2", "SYSCALL",
-    "HALT",
-])
+SYS_SRC = "\n".join(
+    [
+        "LOAD_CONST R7, 111",
+        "LOAD_CONST R0, 42",
+        "SYSCALL",
+        "LOAD_CONST R7, 110",
+        "SYSCALL",
+        "LOAD_CONST R7, 20",
+        "LOAD_CONST R0, 4",
+        "SYSCALL",
+        "LOAD_CONST R7, 21",
+        "SYSCALL",
+        "LOAD_CONST R7, 200",
+        "SYSCALL",
+        "LOAD_CONST R7, 201",
+        "SYSCALL",
+        "LOAD_CONST R7, 999",
+        "SYSCALL",
+        "LOAD_CONST R7, 2",
+        "SYSCALL",
+        "HALT",
+    ]
+)
 
 
 def _shell_outputs(k, lines):
@@ -37,6 +49,7 @@ def _shell_outputs(k, lines):
 # ---------------------------------------------------------------------------
 # spawn_shell
 # ---------------------------------------------------------------------------
+
 
 class TestSpawnShell:
     def test_spawn_shell_with_given_class(self):
@@ -99,6 +112,7 @@ class TestSpawnShell:
         class FakeShell:
             def __init__(self, **kw):
                 pass
+
             def run(self):
                 pass
 
@@ -112,6 +126,7 @@ class TestSpawnShell:
         class FakeShell:
             def __init__(self, **kw):
                 pass
+
             def run(self):
                 pass
 
@@ -123,26 +138,30 @@ class TestSpawnShell:
 # spawn_kernel_shell command loop
 # ---------------------------------------------------------------------------
 
+
 class TestKernelShell:
     def test_command_dispatch_without_filesystem(self):
         k = Kernel()
         k.boot()
-        out = _shell_outputs(k, [
-            "help",
-            "meminfo",
-            "procs",
-            "run",
-            "ls",
-            "cat",
-            "cat foo.txt",
-            "write",
-            "write a.txt x",
-            "run missing",
-            "ls",
-            "boguscmd",
-            "",
-            "halt",
-        ])
+        out = _shell_outputs(
+            k,
+            [
+                "help",
+                "meminfo",
+                "procs",
+                "run",
+                "ls",
+                "cat",
+                "cat foo.txt",
+                "write",
+                "write a.txt x",
+                "run missing",
+                "ls",
+                "boguscmd",
+                "",
+                "halt",
+            ],
+        )
         joined = "\n".join(out)
         assert "commands: help, meminfo, procs, run, ls, cat, write, halt" in joined
         assert "blocks: 0" in joined
@@ -168,20 +187,24 @@ class TestKernelShell:
         k = Kernel()
         k.boot()
         from domain.shell._internal.vm import BlockDevice, FlatFS
+
         block = BlockDevice()
         fs = FlatFS(block)
         fs.write("hello.txt", b"hello world")
         fs.write("test.asm", b"HALT")
         k._block_device = block
         k._fs = fs
-        out = _shell_outputs(k, [
-            "ls",
-            "cat hello.txt",
-            "cat missing.txt",
-            "write out.txt data",
-            "run test",
-            "halt",
-        ])
+        out = _shell_outputs(
+            k,
+            [
+                "ls",
+                "cat hello.txt",
+                "cat missing.txt",
+                "write out.txt data",
+                "run test",
+                "halt",
+            ],
+        )
         joined = "\n".join(out)
         assert "hello.txt" in joined
         assert "test.asm" in joined
@@ -257,6 +280,7 @@ class TestKernelShell:
         k = Kernel()
         k.boot()
         from domain.shell._internal.vm import BlockDevice, FlatFS
+
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block
@@ -268,6 +292,7 @@ class TestKernelShell:
         k = Kernel()
         k.boot()
         from domain.shell._internal.vm import BlockDevice, FlatFS
+
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block
@@ -279,6 +304,7 @@ class TestKernelShell:
         k = Kernel()
         k.boot()
         from domain.shell._internal.vm import BlockDevice, FlatFS
+
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block
@@ -308,6 +334,7 @@ class TestKernelShell:
         k = Kernel()
         k.boot()
         from domain.shell._internal.vm import BlockDevice, FlatFS
+
         block = BlockDevice()
         fs = FlatFS(block)
         fs.write("data.txt", b"some data here")
@@ -320,15 +347,19 @@ class TestKernelShell:
         k = Kernel()
         k.boot()
         from domain.shell._internal.vm import BlockDevice, FlatFS
+
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block
         k._fs = fs
-        out = _shell_outputs(k, [
-            "write test.txt hello world",
-            "cat test.txt",
-            "halt",
-        ])
+        out = _shell_outputs(
+            k,
+            [
+                "write test.txt hello world",
+                "cat test.txt",
+                "halt",
+            ],
+        )
         joined = "\n".join(out)
         assert "wrote 11 bytes to test.txt" in joined
         assert "hello world" in joined
@@ -338,13 +369,16 @@ class TestKernelShell:
 # spawn_vm_process syscall handling
 # ---------------------------------------------------------------------------
 
+
 class TestSpawnVMProcess:
     def test_syscalls_with_stdout_and_stdin(self):
         k = Kernel()
         k.boot()
         outputs = []
         proc = k.spawn_vm_process(
-            "vmtest", SYS_SRC, use_syscalls=True,
+            "vmtest",
+            SYS_SRC,
+            use_syscalls=True,
             stdin_fn=lambda: "typed-input",
             stdout_fn=outputs.append,
         )
@@ -363,7 +397,9 @@ class TestSpawnVMProcess:
         k.boot()
         outputs = []
         proc = k.spawn_vm_process(
-            "vmplain", "LOAD_CONST R0, 5\nHALT", stdout_fn=outputs.append,
+            "vmplain",
+            "LOAD_CONST R0, 5\nHALT",
+            stdout_fn=outputs.append,
         )
         proc.entry()
         assert outputs == []
@@ -389,6 +425,7 @@ class TestSpawnVMProcess:
 
     def test_vm_process_priority(self):
         from domain.shell._internal.kernel_process import Priority
+
         k = Kernel()
         k.boot()
         proc = k.spawn_vm_process("test", "HALT", priority=Priority.HIGH)
@@ -404,6 +441,7 @@ class TestSpawnVMProcess:
 # ---------------------------------------------------------------------------
 # run_program device wiring
 # ---------------------------------------------------------------------------
+
 
 class TestRunProgram:
     def test_no_devices_registered(self):
@@ -482,6 +520,7 @@ class TestRunProgram:
 # setup()
 # ---------------------------------------------------------------------------
 
+
 class TestSetup:
     def test_setup_installs_functions(self):
         k = Kernel()
@@ -502,6 +541,7 @@ class TestSetup:
         class FakeShell:
             def __init__(self, **kw):
                 pass
+
             def run(self):
                 pass
 
@@ -544,11 +584,13 @@ class TestSetup:
 # Kernel shell — extended command coverage
 # ---------------------------------------------------------------------------
 
+
 class TestKernelShellExtended:
     def test_multiple_files_ls(self):
         k = Kernel()
         k.boot()
         from domain.shell._internal.vm import BlockDevice, FlatFS
+
         block = BlockDevice()
         fs = FlatFS(block)
         fs.write("a.txt", b"aaa")
@@ -566,15 +608,19 @@ class TestKernelShellExtended:
         k = Kernel()
         k.boot()
         from domain.shell._internal.vm import BlockDevice, FlatFS
+
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block
         k._fs = fs
-        out = _shell_outputs(k, [
-            "write test.txt hello beautiful world",
-            "cat test.txt",
-            "halt",
-        ])
+        out = _shell_outputs(
+            k,
+            [
+                "write test.txt hello beautiful world",
+                "cat test.txt",
+                "halt",
+            ],
+        )
         joined = "\n".join(out)
         assert "wrote 21 bytes to test.txt" in joined
         assert "hello beautiful world" in joined
@@ -583,6 +629,7 @@ class TestKernelShellExtended:
         k = Kernel()
         k.boot()
         from domain.shell._internal.vm import BlockDevice, FlatFS
+
         block = BlockDevice()
         fs = FlatFS(block)
         fs.write("p1.asm", b"HALT")
@@ -597,6 +644,7 @@ class TestKernelShellExtended:
         k = Kernel()
         k.boot()
         from domain.shell._internal.vm import BlockDevice, FlatFS
+
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block
@@ -617,17 +665,24 @@ class TestKernelShellExtended:
 # VM process — extended syscall coverage
 # ---------------------------------------------------------------------------
 
+
 class TestSpawnVMProcessExtended:
     def test_vm_console_write_with_stdout_fn(self):
         k = Kernel()
         k.boot()
         outputs = []
-        src = "\n".join([
-            "LOAD_CONST R7, 111", "LOAD_CONST R0, 42", "SYSCALL",
-            "HALT",
-        ])
+        src = "\n".join(
+            [
+                "LOAD_CONST R7, 111",
+                "LOAD_CONST R0, 42",
+                "SYSCALL",
+                "HALT",
+            ]
+        )
         proc = k.spawn_vm_process(
-            "vmtest", src, use_syscalls=True,
+            "vmtest",
+            src,
+            use_syscalls=True,
             stdout_fn=outputs.append,
         )
         proc.entry()
@@ -636,10 +691,14 @@ class TestSpawnVMProcessExtended:
     def test_vm_console_write_without_stdout_fn(self):
         k = Kernel()
         k.boot()
-        src = "\n".join([
-            "LOAD_CONST R7, 111", "LOAD_CONST R0, 42", "SYSCALL",
-            "HALT",
-        ])
+        src = "\n".join(
+            [
+                "LOAD_CONST R7, 111",
+                "LOAD_CONST R0, 42",
+                "SYSCALL",
+                "HALT",
+            ]
+        )
         proc = k.spawn_vm_process("vmtest", src, use_syscalls=True)
         proc.entry()
         assert proc.metadata["output_log"] == ["42"]
@@ -647,12 +706,18 @@ class TestSpawnVMProcessExtended:
     def test_vm_console_read_with_stdin(self):
         k = Kernel()
         k.boot()
-        src = "\n".join([
-            "LOAD_CONST R7, 111", "LOAD_CONST R7, 110", "SYSCALL",
-            "HALT",
-        ])
+        src = "\n".join(
+            [
+                "LOAD_CONST R7, 111",
+                "LOAD_CONST R7, 110",
+                "SYSCALL",
+                "HALT",
+            ]
+        )
         proc = k.spawn_vm_process(
-            "vmtest", src, use_syscalls=True,
+            "vmtest",
+            src,
+            use_syscalls=True,
             stdin_fn=lambda: "hello",
             stdout_fn=lambda v: None,
         )
@@ -662,11 +727,16 @@ class TestSpawnVMProcessExtended:
     def test_vm_malloc_and_free_no_crash(self):
         k = Kernel()
         k.boot()
-        src = "\n".join([
-            "LOAD_CONST R7, 20", "LOAD_CONST R0, 4", "SYSCALL",
-            "LOAD_CONST R7, 21", "SYSCALL",
-            "HALT",
-        ])
+        src = "\n".join(
+            [
+                "LOAD_CONST R7, 20",
+                "LOAD_CONST R0, 4",
+                "SYSCALL",
+                "LOAD_CONST R7, 21",
+                "SYSCALL",
+                "HALT",
+            ]
+        )
         proc = k.spawn_vm_process("vmtest", src, use_syscalls=True)
         proc.entry()
         assert isinstance(proc.metadata["output_log"], list)
@@ -674,10 +744,13 @@ class TestSpawnVMProcessExtended:
     def test_vm_uptime_syscall_no_crash(self):
         k = Kernel()
         k.boot()
-        src = "\n".join([
-            "LOAD_CONST R7, 200", "SYSCALL",
-            "HALT",
-        ])
+        src = "\n".join(
+            [
+                "LOAD_CONST R7, 200",
+                "SYSCALL",
+                "HALT",
+            ]
+        )
         proc = k.spawn_vm_process("vmtest", src, use_syscalls=True)
         proc.entry()
         assert isinstance(proc.metadata["output_log"], list)
@@ -685,10 +758,13 @@ class TestSpawnVMProcessExtended:
     def test_vm_stats_syscall_no_crash(self):
         k = Kernel()
         k.boot()
-        src = "\n".join([
-            "LOAD_CONST R7, 201", "SYSCALL",
-            "HALT",
-        ])
+        src = "\n".join(
+            [
+                "LOAD_CONST R7, 201",
+                "SYSCALL",
+                "HALT",
+            ]
+        )
         proc = k.spawn_vm_process("vmtest", src, use_syscalls=True)
         proc.entry()
         assert isinstance(proc.metadata["output_log"], list)
@@ -705,16 +781,20 @@ class TestSpawnVMProcessExtended:
         k.boot()
         proc = k.spawn_vm_process("test", "HALT")
         from domain.shell._internal.kernel_process import Priority
+
         assert proc.priority == Priority.NORMAL
 
     def test_vm_exit_syscall(self):
         k = Kernel()
         k.boot()
-        src = "\n".join([
-            "LOAD_CONST R7, 2", "SYSCALL",
-            "LOAD_CONST R0, 99",
-            "HALT",
-        ])
+        src = "\n".join(
+            [
+                "LOAD_CONST R7, 2",
+                "SYSCALL",
+                "LOAD_CONST R0, 99",
+                "HALT",
+            ]
+        )
         proc = k.spawn_vm_process("vmtest", src, use_syscalls=True)
         proc.entry()
         assert isinstance(proc.metadata["output_log"], list)
@@ -723,13 +803,21 @@ class TestSpawnVMProcessExtended:
         k = Kernel()
         k.boot()
         outputs = []
-        src = "\n".join([
-            "LOAD_CONST R7, 111", "LOAD_CONST R0, 10", "SYSCALL",
-            "LOAD_CONST R7, 111", "LOAD_CONST R0, 20", "SYSCALL",
-            "HALT",
-        ])
+        src = "\n".join(
+            [
+                "LOAD_CONST R7, 111",
+                "LOAD_CONST R0, 10",
+                "SYSCALL",
+                "LOAD_CONST R7, 111",
+                "LOAD_CONST R0, 20",
+                "SYSCALL",
+                "HALT",
+            ]
+        )
         proc = k.spawn_vm_process(
-            "vmtest", src, use_syscalls=True,
+            "vmtest",
+            src,
+            use_syscalls=True,
             stdout_fn=outputs.append,
         )
         proc.entry()
@@ -742,7 +830,9 @@ class TestSpawnVMProcessExtended:
         outputs = []
         src = "LOAD_CONST R0, 42\nHALT"
         proc = k.spawn_vm_process(
-            "vmtest", src, use_syscalls=False,
+            "vmtest",
+            src,
+            use_syscalls=False,
             stdout_fn=outputs.append,
         )
         proc.entry()
@@ -759,6 +849,7 @@ class TestSpawnVMProcessExtended:
 # ---------------------------------------------------------------------------
 # Extended run_program tests
 # ---------------------------------------------------------------------------
+
 
 class TestRunProgramExtended:
     def test_run_program_load_const(self):
@@ -805,6 +896,7 @@ class TestRunProgramExtended:
 # Extended kernel shell — additional commands
 # ---------------------------------------------------------------------------
 
+
 class TestKernelShellAdditional:
     def test_help_lists_all_commands(self):
         k = Kernel()
@@ -839,6 +931,7 @@ class TestKernelShellAdditional:
         k = Kernel()
         k.boot()
         from domain.shell._internal.vm import BlockDevice, FlatFS
+
         block = BlockDevice()
         fs = FlatFS(block)
         fs.write("prog.asm", "LOAD_CONST R0, 55\nHALT")
@@ -853,6 +946,7 @@ class TestKernelShellAdditional:
         k = Kernel()
         k.boot()
         from domain.shell._internal.vm import BlockDevice, FlatFS
+
         block = BlockDevice()
         fs = FlatFS(block)
         fs.write("a.txt", b"aaa")
@@ -868,15 +962,19 @@ class TestKernelShellAdditional:
         k = Kernel()
         k.boot()
         from domain.shell._internal.vm import BlockDevice, FlatFS
+
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block
         k._fs = fs
-        out = _shell_outputs(k, [
-            "write prog.asm LOAD_CONST R0, 77\nHALT",
-            "run prog",
-            "halt",
-        ])
+        out = _shell_outputs(
+            k,
+            [
+                "write prog.asm LOAD_CONST R0, 77\nHALT",
+                "run prog",
+                "halt",
+            ],
+        )
         joined = "\n".join(out)
         assert "wrote" in joined
         assert "done" in joined
@@ -910,6 +1008,7 @@ class TestKernelShellAdditional:
 # Extended setup() tests
 # ---------------------------------------------------------------------------
 
+
 class TestSetupExtended:
     def test_setup_adds_shell_ui_addon(self):
         k = Kernel()
@@ -929,6 +1028,7 @@ class TestSetupExtended:
         class FakeShell:
             def __init__(self, **kw):
                 pass
+
             def run(self):
                 pass
 

@@ -2,23 +2,21 @@
 
 from __future__ import annotations
 
-import asyncio
 import pytest
 
 from domain.cognitive._internal.reasoning.advanced import (
-    ReasoningMode,
-    ThoughtStep,
-    ReasoningResult,
-    ChainOfThought,
-    TreeOfThoughts,
-    SelfConsistency,
-    ConstitutionalAI,
     CausalReasoning,
-    SyllogismReasoning,
+    ChainOfThought,
+    ConstitutionalAI,
     ReActReasoning,
+    ReasoningMode,
+    ReasoningResult,
+    SelfConsistency,
+    SyllogismReasoning,
+    ThoughtStep,
+    TreeOfThoughts,
     advanced_reasoning,
 )
-
 
 # ── Data classes ──────────────────────────────────────────────────────────────
 
@@ -41,14 +39,18 @@ class TestReasoningMode:
 
 class TestThoughtStep:
     def test_defaults(self):
-        step = ThoughtStep(step_id=0, thought="test", reasoning_type="decomposition", confidence=0.8)
+        step = ThoughtStep(
+            step_id=0, thought="test", reasoning_type="decomposition", confidence=0.8
+        )
         assert step.parent_id is None
         assert step.children_ids == []
         assert step.value == 0.0
         assert step.is_final is False
 
     def test_with_parent(self):
-        step = ThoughtStep(step_id=1, thought="child", reasoning_type="branch", confidence=0.7, parent_id=0)
+        step = ThoughtStep(
+            step_id=1, thought="child", reasoning_type="branch", confidence=0.7, parent_id=0
+        )
         assert step.parent_id == 0
 
 
@@ -210,7 +212,7 @@ class TestSelfConsistency:
             return "Answer: 42"
 
         sc = SelfConsistency(llm_call=mock_llm, num_paths=2)
-        result = await sc.reason("Problem")
+        await sc.reason("Problem")
         assert call_count >= 2
 
     def test_majority_vote(self):
@@ -301,9 +303,7 @@ class TestCausalReasoning:
 
     def test_build_causal_conclusion(self):
         cr = CausalReasoning()
-        result = cr._build_causal_conclusion(
-            ["rain"], ["flooding"], [("rain", "flooding", 0.8)]
-        )
+        result = cr._build_causal_conclusion(["rain"], ["flooding"], [("rain", "flooding", 0.8)])
         assert "rain" in result
         assert "flooding" in result
 
@@ -414,12 +414,16 @@ class TestAdvancedReasoning:
 
     @pytest.mark.asyncio
     async def test_tree_of_thoughts(self):
-        result = await advanced_reasoning("Problem", mode=ReasoningMode.TREE_OF_THOUGHTS, max_depth=2)
+        result = await advanced_reasoning(
+            "Problem", mode=ReasoningMode.TREE_OF_THOUGHTS, max_depth=2
+        )
         assert result.mode == ReasoningMode.TREE_OF_THOUGHTS
 
     @pytest.mark.asyncio
     async def test_self_consistency(self):
-        result = await advanced_reasoning("Problem", mode=ReasoningMode.SELF_CONSISTENCY, num_paths=2)
+        result = await advanced_reasoning(
+            "Problem", mode=ReasoningMode.SELF_CONSISTENCY, num_paths=2
+        )
         assert result.mode == ReasoningMode.SELF_CONSISTENCY
 
     @pytest.mark.asyncio
@@ -434,7 +438,9 @@ class TestAdvancedReasoning:
 
     @pytest.mark.asyncio
     async def test_syllogism(self):
-        result = await advanced_reasoning("All men are mortal. Socrates is a man.", mode=ReasoningMode.SYLLOGISM)
+        result = await advanced_reasoning(
+            "All men are mortal. Socrates is a man.", mode=ReasoningMode.SYLLOGISM
+        )
         assert result.mode == ReasoningMode.SYLLOGISM
 
     @pytest.mark.asyncio

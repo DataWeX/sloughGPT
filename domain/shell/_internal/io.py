@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Callable, Optional, Protocol
+from collections.abc import Callable
+from typing import Protocol
 
 logger = logging.getLogger("slo.shell.io")
 
@@ -64,6 +65,7 @@ class ConsoleIO:
 
         try:
             import readline  # noqa: F401
+
             self._has_readline = True
         except ImportError:
             pass
@@ -93,12 +95,13 @@ class ConsoleIO:
         else:
             sys.stdout.flush()
 
-    def setup_completion(self, completer: Callable[[str, int], Optional[str]]) -> None:
+    def setup_completion(self, completer: Callable[[str, int], str | None]) -> None:
         """Wire readline tab completion."""
         if not self._has_readline:
             return
         try:
             import readline
+
             readline.set_completer(completer)
             readline.parse_and_bind("tab: complete")
             readline.parse_and_bind('"\\C-r": reverse-search-history')
@@ -111,6 +114,7 @@ class ConsoleIO:
             return
         try:
             import readline
+
             readline.write_history_file(path)
         except Exception as e:
             logger.debug("readline history save failed: %s", e)
@@ -120,6 +124,7 @@ class ConsoleIO:
             return
         try:
             import readline
+
             readline.read_history_file(path)
             readline.set_history_length(500)
         except FileNotFoundError:
@@ -129,7 +134,7 @@ class ConsoleIO:
         """Close the TTY handle if not already closed."""
         self.close()
 
-    def __enter__(self) -> "ConsoleIO":
+    def __enter__(self) -> ConsoleIO:
         return self
 
     def __exit__(self, *exc) -> None:
@@ -192,7 +197,7 @@ class _Capture:
         self._buf: list[str] = []
         self._old_write: Callable | None = None
 
-    def __enter__(self) -> "_Capture":
+    def __enter__(self) -> _Capture:
         self._buf.clear()
         self._old_write = self._io.write
         self._io.write = self._write_to_buf  # type: ignore

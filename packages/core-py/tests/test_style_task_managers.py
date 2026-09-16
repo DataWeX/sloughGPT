@@ -1,12 +1,17 @@
 """Tests for domain.context._internal.managers — StyleManager, TaskManager, TraitWeightsConfig."""
 
 import pytest
+
 from domain.context._internal.managers import (
-    StyleManager, TaskManager, TraitWeightsConfig,
-    PersonalityManager, MemoryManager,
-    TRAIT_SCHEMA, ALL_TRAITS,
-    get_trait_config, reset_trait_config,
-    _describe_trait, _if_above,
+    ALL_TRAITS,
+    TRAIT_SCHEMA,
+    MemoryManager,
+    PersonalityManager,
+    StyleManager,
+    TaskManager,
+    TraitWeightsConfig,
+    _describe_trait,
+    _if_above,
 )
 
 
@@ -19,6 +24,7 @@ def _make_cfg(overrides, tmp_path=None):
 
 
 # ── TraitWeightsConfig ──────────────────────────────────────────────
+
 
 class TestTraitWeightsConfig:
     def test_get_default(self, tmp_path):
@@ -165,6 +171,7 @@ class TestTraitWeightsConfig:
 
 # ── Helper functions ────────────────────────────────────────────────
 
+
 class TestHelpers:
     def test_describe_trait_high(self):
         assert "warm" in _describe_trait(0.9, "warm", "cold")
@@ -184,6 +191,7 @@ class TestHelpers:
 
 
 # ── PersonalityManager ──────────────────────────────────────────────
+
 
 class TestPersonalityManager:
     def test_apply_default(self, tmp_path):
@@ -246,6 +254,7 @@ class TestPersonalityManager:
 
 
 # ── StyleManager ────────────────────────────────────────────────────
+
 
 class TestStyleManager:
     def test_apply_formal(self, tmp_path):
@@ -334,6 +343,7 @@ class TestStyleManager:
 
 # ── TaskManager ─────────────────────────────────────────────────────
 
+
 class TestTaskManager:
     def test_apply_analytical(self, tmp_path):
         tm = TaskManager(_make_cfg({"abstract_reasoning": 0.9}, tmp_path))
@@ -383,49 +393,53 @@ class TestTaskManager:
         assert isinstance(mode["scores"], dict)
 
     def test_get_mode_analytical(self, tmp_path):
-        tm = TaskManager(_make_cfg({
-            "abstract_reasoning": 0.9, "metacognitive_awareness": 0.9, "systematic_planning": 0.9
-        }, tmp_path))
+        tm = TaskManager(
+            _make_cfg(
+                {
+                    "abstract_reasoning": 0.9,
+                    "metacognitive_awareness": 0.9,
+                    "systematic_planning": 0.9,
+                },
+                tmp_path,
+            )
+        )
         mode = tm.get_mode()
         assert mode["label"] == "Analytical"
 
     def test_get_mode_creative(self, tmp_path):
-        tm = TaskManager(_make_cfg({
-            "creative_divergence": 0.9, "systematic_planning": 0.1
-        }, tmp_path))
+        tm = TaskManager(
+            _make_cfg({"creative_divergence": 0.9, "systematic_planning": 0.1}, tmp_path)
+        )
         mode = tm.get_mode()
         assert mode["label"] == "Creative"
 
     def test_get_mode_methodical(self, tmp_path):
-        tm = TaskManager(_make_cfg({
-            "systematic_planning": 0.9, "patience": 0.9
-        }, tmp_path))
+        tm = TaskManager(_make_cfg({"systematic_planning": 0.9, "patience": 0.9}, tmp_path))
         mode = tm.get_mode()
         assert mode["label"] == "Methodical"
 
     def test_get_mode_exploratory(self, tmp_path):
-        tm = TaskManager(_make_cfg({
-            "creative_divergence": 0.8, "systematic_planning": 0.1
-        }, tmp_path))
+        tm = TaskManager(
+            _make_cfg({"creative_divergence": 0.8, "systematic_planning": 0.1}, tmp_path)
+        )
         mode = tm.get_mode()
         assert mode["label"] == "Exploratory"
 
     def test_get_mode_structured(self, tmp_path):
-        tm = TaskManager(_make_cfg({
-            "systematic_planning": 0.9, "abstract_reasoning": 0.9
-        }, tmp_path))
+        tm = TaskManager(
+            _make_cfg({"systematic_planning": 0.9, "abstract_reasoning": 0.9}, tmp_path)
+        )
         mode = tm.get_mode()
         assert mode["label"] in ("Structured", "Analytical")
 
     def test_get_mode_reflective(self, tmp_path):
-        tm = TaskManager(_make_cfg({
-            "metacognitive_awareness": 0.9, "patience": 0.9
-        }, tmp_path))
+        tm = TaskManager(_make_cfg({"metacognitive_awareness": 0.9, "patience": 0.9}, tmp_path))
         mode = tm.get_mode()
         assert mode["label"] in ("Reflective", "Analytical")
 
 
 # ── MemoryManager ───────────────────────────────────────────────────
+
 
 class TestMemoryManager:
     def test_working_capacity_default(self, tmp_path):

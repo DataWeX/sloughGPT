@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-import json
 import hashlib
-import numpy as np
+import json
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any
 
-from .sources import Record, Source
+import numpy as np
+
 from .collector import Collector
 from .filters import FilterChain
-
+from .sources import Record, Source
 
 MATERIAL_SIGNAL = 4
 MATERIAL_FOOD = 2
@@ -57,9 +58,7 @@ class RecordToWorldMapper:
         if pos and len(pos) == 3:
             return int(pos[0]), int(pos[1]), int(pos[2])
 
-        content_hash = hashlib.md5(
-            (record.content + str(index)).encode("utf-8")
-        ).digest()
+        content_hash = hashlib.md5((record.content + str(index)).encode("utf-8")).digest()
         h = np.frombuffer(content_hash[:12], dtype=np.uint32)
 
         nx, ny, nz = self.config.grid_size
@@ -70,16 +69,20 @@ class RecordToWorldMapper:
         for i, record in enumerate(records):
             pos = self.record_to_position(record, i)
             cell = self.record_to_cell_signal(record)
-            ops.append({
-                "type": "place_cell",
-                "x": pos[0], "y": pos[1], "z": pos[2],
-                "material": MATERIAL_SIGNAL,
-                "energy": cell["energy"],
-                "temperature": cell["temperature"],
-                "signal_amplitude": cell["signal"],
-                "record_content": record.content[:100],
-                "record_metadata": record.metadata,
-            })
+            ops.append(
+                {
+                    "type": "place_cell",
+                    "x": pos[0],
+                    "y": pos[1],
+                    "z": pos[2],
+                    "material": MATERIAL_SIGNAL,
+                    "energy": cell["energy"],
+                    "temperature": cell["temperature"],
+                    "signal_amplitude": cell["signal"],
+                    "record_content": record.content[:100],
+                    "record_metadata": record.metadata,
+                }
+            )
         return ops
 
 
@@ -103,7 +106,9 @@ class WorldGridBridge:
                 ops = self._mapper.records_to_world_ops([record])
                 for op in ops:
                     self._grid.place_material(
-                        op["x"], op["y"], op["z"],
+                        op["x"],
+                        op["y"],
+                        op["z"],
                         op["material"],
                         energy=op["energy"],
                         temperature=op["temperature"],
@@ -119,54 +124,66 @@ class WorldGridBridge:
         records = list(collector.source.read())
         return self.inject_records(records)
 
-    def read_grid_as_records(self, center: tuple[int, int, int] | None = None,
-                              radius: int | None = None) -> list[Record]:
+    def read_grid_as_records(
+        self, center: tuple[int, int, int] | None = None, radius: int | None = None
+    ) -> list[Record]:
         if self._grid is None:
             return []
         radius = radius or self.config.feed_radius
-        cx, cy, cz = center or (self.config.grid_size[0] // 2,
-                                 self.config.grid_size[1] // 2,
-                                 self.config.grid_size[2] // 2)
+        cx, cy, cz = center or (
+            self.config.grid_size[0] // 2,
+            self.config.grid_size[1] // 2,
+            self.config.grid_size[2] // 2,
+        )
 
         cells = self._grid.get_nearby_cells(cx, cy, cz, radius)
         records = []
         count = int(cells["count"]) if "count" in cells else 0
 
         for i in range(min(count, self.config.max_records)):
-            content = json.dumps({
-                "material": int(cells["material"][i]) if "material" in cells else 0,
-                "energy": float(cells["energy"][i]) if "energy" in cells else 0.0,
-                "temperature": float(cells["temperature"][i]) if "temperature" in cells else 0.0,
-            })
-            records.append(Record(
-                content=content,
-                metadata={
-                    "source": "world_grid",
-                    "position": [cx, cy, cz],
-                    "radius": radius,
-                },
-            ))
+            content = json.dumps(
+                {
+                    "material": int(cells["material"][i]) if "material" in cells else 0,
+                    "energy": float(cells["energy"][i]) if "energy" in cells else 0.0,
+                    "temperature": float(cells["temperature"][i])
+                    if "temperature" in cells
+                    else 0.0,
+                }
+            )
+            records.append(
+                Record(
+                    content=content,
+                    metadata={
+                        "source": "world_grid",
+                        "position": [cx, cy, cz],
+                        "radius": radius,
+                    },
+                )
+            )
 
         self.stats["read"] += len(records)
         return records
 
-    def grid_to_source(self, center: tuple[int, int, int] | None = None,
-                        radius: int | None = None) -> WorldGridSource:
+    def grid_to_source(
+        self, center: tuple[int, int, int] | None = None, radius: int | None = None
+    ) -> WorldGridSource:
         return WorldGridSource(self, center=center, radius=radius)
 
 
 class WorldGridSource:
-    def __init__(self, bridge: WorldGridBridge, center: tuple[int, int, int] | None = None,
-                 radius: int | None = None):
+    def __init__(
+        self,
+        bridge: WorldGridBridge,
+        center: tuple[int, int, int] | None = None,
+        radius: int | None = None,
+    ):
         self._bridge = bridge
         self._center = center
         self._radius = radius
         self.name = "world_grid"
 
     def read(self) -> Iterator[Record]:
-        return iter(self._bridge.read_grid_as_records(
-            center=self._center, radius=self._radius
-        ))
+        return iter(self._bridge.read_grid_as_records(center=self._center, radius=self._radius))
 
 
 class WorldStoreAdapter:
@@ -187,8 +204,9 @@ class WorldStoreAdapter:
 
 
 class CollectionWorldPipeline:
-    def __init__(self, source: Source, world_grid=None, config: WorldFeedConfig | None = None,
-                 filters=None):
+    def __init__(
+        self, source: Source, world_grid=None, config: WorldFeedConfig | None = None, filters=None
+    ):
         self._source = source
         self._bridge = WorldGridBridge(world_grid, config)
         self._filters = FilterChain(filters or [])
@@ -212,6 +230,7 @@ class CollectionWorldPipeline:
 
     def run_continuous(self, interval: float = 60.0, max_rounds: int | None = None) -> None:
         import time
+
         rounds = 0
         while max_rounds is None or rounds < max_rounds:
             self.run()

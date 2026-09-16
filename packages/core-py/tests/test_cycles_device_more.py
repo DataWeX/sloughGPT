@@ -10,8 +10,8 @@ import pytest
 from domain.shell._internal.cycles_device import CyclesDevice
 from domain.shell._internal.vm import DeviceFault
 
-
 # ── Initialization ───────────────────────────────────────────────────────────
+
 
 class TestInit:
     def test_default_resolution(self):
@@ -65,6 +65,7 @@ class TestInit:
 
 # ── Info ─────────────────────────────────────────────────────────────────────
 
+
 class TestInfo:
     def test_info_type(self):
         d = CyclesDevice()
@@ -75,9 +76,19 @@ class TestInfo:
         d = CyclesDevice()
         info = d.call("info")
         expected_ops = {
-            "render", "state_tensors", "add_sphere", "add_cube", "add_plane",
-            "add_light", "set_camera", "set_material", "set_background",
-            "info", "clear", "set_samples", "set_resolution",
+            "render",
+            "state_tensors",
+            "add_sphere",
+            "add_cube",
+            "add_plane",
+            "add_light",
+            "set_camera",
+            "set_material",
+            "set_background",
+            "info",
+            "clear",
+            "set_samples",
+            "set_resolution",
         }
         assert set(info["ops"]) == expected_ops
 
@@ -109,6 +120,7 @@ class TestInfo:
 
 # ── Unknown op ───────────────────────────────────────────────────────────────
 
+
 class TestUnknownOp:
     def test_unknown_op_raises_device_fault(self):
         d = CyclesDevice()
@@ -127,6 +139,7 @@ class TestUnknownOp:
 
 
 # ── Render ───────────────────────────────────────────────────────────────────
+
 
 class TestRender:
     def test_render_shape(self):
@@ -178,6 +191,7 @@ class TestRender:
 
 
 # ── State tensors ────────────────────────────────────────────────────────────
+
 
 class TestStateTensors:
     def test_state_tensor_keys(self):
@@ -238,6 +252,7 @@ class TestStateTensors:
 
 # ── Add sphere ───────────────────────────────────────────────────────────────
 
+
 class TestAddSphere:
     def test_add_sphere_returns_index(self):
         d = CyclesDevice()
@@ -268,7 +283,7 @@ class TestAddSphere:
 
     def test_add_sphere_with_material(self):
         d = CyclesDevice()
-        idx = d.call("add_sphere", 0.5, 0, 0, 0, 1)
+        d.call("add_sphere", 0.5, 0, 0, 0, 1)
         mesh = d._scene.meshes[0]
         assert mesh.material_idx[0] == 1
 
@@ -286,6 +301,7 @@ class TestAddSphere:
 
 
 # ── Add cube ─────────────────────────────────────────────────────────────────
+
 
 class TestAddCube:
     def test_add_cube_returns_index(self):
@@ -324,6 +340,7 @@ class TestAddCube:
 
 # ── Add plane ────────────────────────────────────────────────────────────────
 
+
 class TestAddPlane:
     def test_add_plane_returns_index(self):
         d = CyclesDevice()
@@ -361,6 +378,7 @@ class TestAddPlane:
 
 # ── Add light ────────────────────────────────────────────────────────────────
 
+
 class TestAddLight:
     def test_add_light_returns_index(self):
         d = CyclesDevice()
@@ -380,16 +398,12 @@ class TestAddLight:
     def test_add_light_position(self):
         d = CyclesDevice()
         d.call("add_light", 1.0, 2.0, 3.0)
-        np.testing.assert_array_equal(
-            d._scene.lights[0].position, np.array([1.0, 2.0, 3.0])
-        )
+        np.testing.assert_array_equal(d._scene.lights[0].position, np.array([1.0, 2.0, 3.0]))
 
     def test_add_light_color(self):
         d = CyclesDevice()
         d.call("add_light", 0, 0, 0, 0.5, 0.3, 0.1)
-        np.testing.assert_array_equal(
-            d._scene.lights[0].color, np.array([0.5, 0.3, 0.1])
-        )
+        np.testing.assert_array_equal(d._scene.lights[0].color, np.array([0.5, 0.3, 0.1]))
 
     def test_add_multiple_lights(self):
         d = CyclesDevice()
@@ -417,6 +431,7 @@ class TestAddLight:
 
 
 # ── Set camera ───────────────────────────────────────────────────────────────
+
 
 class TestSetCamera:
     def test_set_camera_origin(self):
@@ -455,6 +470,7 @@ class TestSetCamera:
 
 # ── Set background ───────────────────────────────────────────────────────────
 
+
 class TestSetBackground:
     def test_set_background(self):
         d = CyclesDevice()
@@ -485,6 +501,7 @@ class TestSetBackground:
 
 
 # ── Set material ─────────────────────────────────────────────────────────────
+
 
 class TestSetMaterial:
     def test_set_material_grows_list(self):
@@ -543,6 +560,7 @@ class TestSetMaterial:
 
 # ── Clear ────────────────────────────────────────────────────────────────────
 
+
 class TestClear:
     def test_clear_resets_scene(self):
         d = CyclesDevice(width=4, height=4, samples=1)
@@ -594,6 +612,7 @@ class TestClear:
 
 # ── Set samples ──────────────────────────────────────────────────────────────
 
+
 class TestSetSamples:
     def test_set_samples(self):
         d = CyclesDevice()
@@ -619,6 +638,7 @@ class TestSetSamples:
 
 
 # ── Set resolution ───────────────────────────────────────────────────────────
+
 
 class TestSetResolution:
     def test_set_resolution(self):
@@ -654,6 +674,7 @@ class TestSetResolution:
 
 
 # ── Renderer invalidation ───────────────────────────────────────────────────
+
 
 class TestInvalidation:
     def test_add_sphere_invalidates(self):
@@ -723,6 +744,7 @@ class TestInvalidation:
 
 # ── Scene composition ────────────────────────────────────────────────────────
 
+
 class TestSceneComposition:
     def test_full_scene(self):
         d = CyclesDevice(width=8, height=6, samples=1)
@@ -755,6 +777,7 @@ class TestSceneComposition:
 
 
 # ── Negative/edge indices ───────────────────────────────────────────────────
+
 
 class TestEdgeCases:
     def test_add_sphere_negative_position(self):
@@ -840,7 +863,7 @@ class TestEdgeCases:
 
     def test_add_sphere_stores_mesh(self):
         d = CyclesDevice()
-        idx = d.call("add_sphere", 1.0, 0, 0, 0, 0, 16)
+        d.call("add_sphere", 1.0, 0, 0, 0, 0, 16)
         assert d._scene.meshes[0] is not None
 
     def test_add_cube_stores_mesh(self):

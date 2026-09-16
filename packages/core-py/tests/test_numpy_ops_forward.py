@@ -3,7 +3,8 @@
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.arch_config import ArchConfig, build_arch
+from domain.infrastructure._internal.arch_config import build_arch
+from domain.infrastructure._internal.numpy_engine import KVCache
 from domain.infrastructure._internal.numpy_forward import (
     forward,
     forward_cached,
@@ -14,13 +15,12 @@ from domain.infrastructure._internal.numpy_forward import (
 from domain.infrastructure._internal.numpy_ops import (
     gelu,
     layer_norm,
-    rope,
     rmsnorm,
+    rope,
     silu,
     softmax,
     to_float32,
 )
-from domain.infrastructure._internal.numpy_engine import KVCache
 
 
 class TestToFloat32:
@@ -100,7 +100,7 @@ class TestOps:
     def test_gelu_matches_formula(self):
         x = np.array([0.5, -0.5, 1.0])
         out = gelu(x)
-        expected = 0.5 * x * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * x ** 3)))
+        expected = 0.5 * x * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * x**3)))
         assert np.allclose(out, expected, atol=1e-7)
 
     def test_gelu_sign_and_order(self):
@@ -164,8 +164,12 @@ def make_gpt2_weights(vocab=8, n_embed=4, n_layers=1, seq_max=16):
 
 
 def make_gpt2_arch(n_layers=1, n_embed=4, n_head=2):
-    config = {"architectures": ["GPT2LMHeadModel"], "n_head": n_head,
-              "n_embd": n_embed, "n_layer": n_layers}
+    config = {
+        "architectures": ["GPT2LMHeadModel"],
+        "n_head": n_head,
+        "n_embd": n_embed,
+        "n_layer": n_layers,
+    }
     keys = {"wte.weight", "h.0.ln_1.weight", "h.0.attn.c_attn.weight"}
     return build_arch("gpt2", config, keys)
 
@@ -179,11 +183,17 @@ def make_llama_weights(vocab=8, n_embed=8, n_head=4, n_kv=2, n_layers=1):
     for i in range(n_layers):
         p = f"model.layers.{i}."
         W[p + "input_layernorm.weight"] = rng.standard_normal((n_embed,)).astype(np.float32)
-        W[p + "post_attention_layernorm.weight"] = rng.standard_normal((n_embed,)).astype(np.float32)
-        W[p + "self_attn.q_proj.weight"] = rng.standard_normal((n_embed, n_embed)).astype(np.float32)
+        W[p + "post_attention_layernorm.weight"] = rng.standard_normal((n_embed,)).astype(
+            np.float32
+        )
+        W[p + "self_attn.q_proj.weight"] = rng.standard_normal((n_embed, n_embed)).astype(
+            np.float32
+        )
         W[p + "self_attn.k_proj.weight"] = rng.standard_normal((kv_dim, n_embed)).astype(np.float32)
         W[p + "self_attn.v_proj.weight"] = rng.standard_normal((kv_dim, n_embed)).astype(np.float32)
-        W[p + "self_attn.o_proj.weight"] = rng.standard_normal((n_embed, n_embed)).astype(np.float32)
+        W[p + "self_attn.o_proj.weight"] = rng.standard_normal((n_embed, n_embed)).astype(
+            np.float32
+        )
         W[p + "mlp.gate_proj.weight"] = rng.standard_normal((n_embed, n_embed)).astype(np.float32)
         W[p + "mlp.up_proj.weight"] = rng.standard_normal((n_embed, n_embed)).astype(np.float32)
         W[p + "mlp.down_proj.weight"] = rng.standard_normal((n_embed, n_embed)).astype(np.float32)
@@ -191,11 +201,19 @@ def make_llama_weights(vocab=8, n_embed=8, n_head=4, n_kv=2, n_layers=1):
 
 
 def make_llama_arch(n_layers=1, n_embed=8, n_head=4, n_kv=2):
-    config = {"architectures": ["LlamaForCausalLM"], "num_attention_heads": n_head,
-              "num_key_value_heads": n_kv, "hidden_size": n_embed,
-              "num_hidden_layers": n_layers}
-    keys = {"model.embed_tokens.weight", "model.layers.0.self_attn.q_proj.weight",
-            "model.layers.0.input_layernorm.weight", "model.layers.0.mlp.gate_proj.weight"}
+    config = {
+        "architectures": ["LlamaForCausalLM"],
+        "num_attention_heads": n_head,
+        "num_key_value_heads": n_kv,
+        "hidden_size": n_embed,
+        "num_hidden_layers": n_layers,
+    }
+    keys = {
+        "model.embed_tokens.weight",
+        "model.layers.0.self_attn.q_proj.weight",
+        "model.layers.0.input_layernorm.weight",
+        "model.layers.0.mlp.gate_proj.weight",
+    }
     return build_arch("llama", config, keys)
 
 
@@ -280,7 +298,8 @@ class TestForwardGpt2:
         full = forward(W, arch, tokens)
 
         kv = KVCache(arch.n_layers)
-        get = lambda n: W[n]
+        def get(n):
+            return W[n]
         forward_cached(get, arch, [tokens[0]], kv_cache=kv)
         last = None
         for i in range(1, len(tokens)):
@@ -355,7 +374,8 @@ class TestForwardLlama:
         tokens = [0, 1, 2, 3, 4]
         full = forward(W, arch, tokens)
         kv = KVCache(arch.n_layers)
-        get = lambda n: W[n]
+        def get(n):
+            return W[n]
         forward_cached(get, arch, [tokens[0]], kv_cache=kv)
         last = None
         for i in range(1, len(tokens)):

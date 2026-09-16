@@ -2,13 +2,12 @@
 
 Covers: record_feedback_workflow, get_feedback_stats, conversations CRUD, get_feedback.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -34,10 +33,36 @@ def _mock_ctrl(**overrides) -> MagicMock:
         "thumbs_up": 7,
         "thumbs_down": 3,
     }
-    ctrl.create_conversation.return_value = {"id": "conv-1", "name": "Test", "session_id": "s1", "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00"}
-    ctrl.list_conversations.return_value = [{"id": "conv-1", "name": "Test", "session_id": "s1", "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00"}]
-    ctrl.get_conversation.return_value = {"id": "conv-1", "name": "Test", "session_id": "s1", "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00"}
-    ctrl.update_conversation.return_value = {"id": "conv-1", "name": "Updated", "session_id": "s1", "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00"}
+    ctrl.create_conversation.return_value = {
+        "id": "conv-1",
+        "name": "Test",
+        "session_id": "s1",
+        "created_at": "2026-01-01T00:00:00",
+        "updated_at": "2026-01-01T00:00:00",
+    }
+    ctrl.list_conversations.return_value = [
+        {
+            "id": "conv-1",
+            "name": "Test",
+            "session_id": "s1",
+            "created_at": "2026-01-01T00:00:00",
+            "updated_at": "2026-01-01T00:00:00",
+        }
+    ]
+    ctrl.get_conversation.return_value = {
+        "id": "conv-1",
+        "name": "Test",
+        "session_id": "s1",
+        "created_at": "2026-01-01T00:00:00",
+        "updated_at": "2026-01-01T00:00:00",
+    }
+    ctrl.update_conversation.return_value = {
+        "id": "conv-1",
+        "name": "Updated",
+        "session_id": "s1",
+        "created_at": "2026-01-01T00:00:00",
+        "updated_at": "2026-01-01T00:00:00",
+    }
     ctrl.delete_conversation.return_value = True
     ctrl.get_feedback.return_value = {"message_id": "msg-1", "rating": "thumbs_up"}
     return ctrl
@@ -47,6 +72,7 @@ def _app(fr: FeedbackRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(fr.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 
@@ -57,12 +83,15 @@ class TestWorkflowFeedback:
         mock_get.return_value = _mock_ctrl()
         fr = FeedbackRouter()
         client = TestClient(_app(fr))
-        resp = client.post("/feedback/workflow-record", json={
-            "conversation_id": "conv-1",
-            "rating": "thumbs_up",
-            "assistant_response": "Hello!",
-            "user_message": "Hi",
-        })
+        resp = client.post(
+            "/feedback/workflow-record",
+            json={
+                "conversation_id": "conv-1",
+                "rating": "thumbs_up",
+                "assistant_response": "Hello!",
+                "user_message": "Hi",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["workflow_active"] is True

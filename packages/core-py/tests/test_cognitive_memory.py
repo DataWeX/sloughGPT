@@ -1,13 +1,15 @@
 """Meaningful tests for SessionMemory, EpisodicMemoryStore, CognitiveArchitecture, NeuralPlasticityEngine, MetaLearningEngine."""
 
-import time
 from domain.soul._internal.cognitive import (
-    SessionMemory, EpisodicMemoryStore, CognitiveArchitecture,
-    NeuralPlasticityEngine, MetaLearningEngine,
+    CognitiveArchitecture,
+    EpisodicMemoryStore,
+    MetaLearningEngine,
+    NeuralPlasticityEngine,
+    SessionMemory,
 )
 
-
 # ── SessionMemory ──────────────────────────────────────────────────────
+
 
 class TestSessionMemory:
     def test_add_message(self):
@@ -74,6 +76,7 @@ class TestSessionMemory:
 
 # ── EpisodicMemoryStore ────────────────────────────────────────────────
 
+
 class TestEpisodicMemoryStore:
     def test_save_episode(self):
         em = EpisodicMemoryStore()
@@ -130,6 +133,7 @@ class TestEpisodicMemoryStore:
 
 
 # ── CognitiveArchitecture ──────────────────────────────────────────────
+
 
 class TestCognitiveArchitecture:
     def test_process_sensory(self):
@@ -195,6 +199,7 @@ class TestCognitiveArchitecture:
 
 # ── NeuralPlasticityEngine ─────────────────────────────────────────────
 
+
 class TestNeuralPlasticityEngine:
     def test_activate(self):
         npe = NeuralPlasticityEngine()
@@ -248,6 +253,7 @@ class TestNeuralPlasticityEngine:
 
 
 # ── MetaLearningEngine ─────────────────────────────────────────────────
+
 
 class TestMetaLearningEngine:
     def test_initial_best_strategy(self):

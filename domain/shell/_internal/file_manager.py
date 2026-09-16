@@ -16,7 +16,6 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("slo.shell.file_manager")
 
@@ -31,12 +30,13 @@ class FileManager:
         if self._vfs is None:
             try:
                 from domain.shell._internal.vfs import get_vfs
+
                 self._vfs = get_vfs()
             except ImportError:
                 self._vfs = False  # sentinel: VFS unavailable
         return self._vfs if self._vfs is not False else None
 
-    def read_text(self, path: str) -> Optional[str]:
+    def read_text(self, path: str) -> str | None:
         """Read text from path. Tries VFS first, then host FS.
 
         Args:
@@ -60,7 +60,7 @@ class FileManager:
             logger.debug("file not found: %s", path)
             return None
 
-    def read_bytes(self, path: str) -> Optional[bytes]:
+    def read_bytes(self, path: str) -> bytes | None:
         """Read binary content from path.
 
         Args:
@@ -76,7 +76,7 @@ class FileManager:
         except (OSError, PermissionError):
             return None
 
-    def write_text(self, path: str, data: str) -> Optional[str]:
+    def write_text(self, path: str, data: str) -> str | None:
         """Write text to path. Tries VFS first, then host FS.
 
         Args:
@@ -114,6 +114,7 @@ class FileManager:
         vfs = self._get_vfs()
         if vfs is not None:
             from domain.shell._internal.vfs import VFS
+
             if isinstance(vfs, VFS) and vfs.isfile(path):
                 return True
         return os.path.isfile(os.path.expanduser(path))
@@ -123,11 +124,12 @@ class FileManager:
         vfs = self._get_vfs()
         if vfs is not None:
             from domain.shell._internal.vfs import VFS
+
             if isinstance(vfs, VFS) and vfs.isdir(path):
                 return True
         return os.path.isdir(os.path.expanduser(path))
 
-    def listdir(self, path: str) -> Optional[list[str]]:
+    def listdir(self, path: str) -> list[str] | None:
         """List directory contents. VFS first, then host FS.
 
         Returns:
@@ -143,7 +145,7 @@ class FileManager:
         except (OSError, PermissionError):
             return None
 
-    def resolve(self, path: str) -> Optional[str]:
+    def resolve(self, path: str) -> str | None:
         """Resolve to an absolute path. Returns None if not found anywhere.
 
         For VFS paths, returns the original path.
@@ -160,7 +162,7 @@ class FileManager:
 
 # ── Singleton ────────────────────────────────────────────────────────────────
 
-_instance: Optional[FileManager] = None
+_instance: FileManager | None = None
 
 
 def get_file_manager() -> FileManager:

@@ -2,11 +2,20 @@
 
 import asyncio
 import time
+
 import pytest
 from domains import (
-    BaseComponent, ComponentException, Memory, Thought, ThoughtType,
-    BaseDomain, DomainException,
-    ICognitiveProcessor, IMemoryManager, IMetacognitiveMonitor, IReasoningEngine,
+    BaseComponent,
+    BaseDomain,
+    ComponentException,
+    DomainException,
+    ICognitiveProcessor,
+    IMemoryManager,
+    IMetacognitiveMonitor,
+    IReasoningEngine,
+    Memory,
+    Thought,
+    ThoughtType,
 )
 
 
@@ -109,6 +118,7 @@ class TestComponentException:
 
     def test_is_app_error(self):
         from domain.infrastructure._internal.errors import AppError
+
         assert issubclass(ComponentException, AppError)
 
     def test_message(self):
@@ -224,7 +234,7 @@ class TestMemory:
 
     def test_retrieval_count_increment(self):
         m = Memory("k", "v")
-        for i in range(10):
+        for _i in range(10):
             m.retrieval_count += 1
         assert m.retrieval_count == 10
 
@@ -287,16 +297,20 @@ class TestThoughtType:
 
     def test_unique_values(self):
         values = [
-            ThoughtType.PERCEPTION, ThoughtType.REASONING,
-            ThoughtType.CREATIVITY, ThoughtType.REFLECTION,
+            ThoughtType.PERCEPTION,
+            ThoughtType.REASONING,
+            ThoughtType.CREATIVITY,
+            ThoughtType.REFLECTION,
             ThoughtType.DECISION,
         ]
         assert len(values) == len(set(values))
 
     def test_count(self):
         values = [
-            ThoughtType.PERCEPTION, ThoughtType.REASONING,
-            ThoughtType.CREATIVITY, ThoughtType.REFLECTION,
+            ThoughtType.PERCEPTION,
+            ThoughtType.REASONING,
+            ThoughtType.CREATIVITY,
+            ThoughtType.REFLECTION,
             ThoughtType.DECISION,
         ]
         assert len(values) == 5
@@ -438,6 +452,7 @@ class TestDomainException:
 
     def test_is_app_error(self):
         from domain.infrastructure._internal.errors import AppError
+
         assert issubclass(DomainException, AppError)
 
     def test_message(self):
@@ -496,16 +511,19 @@ class TestDomainException:
 
 # ── Protocol tests ────────────────────────────────────────────────────
 
+
 class TestICognitiveProcessor:
     def test_protocol_check(self):
         class Good:
             async def process(self, input_data):
                 return input_data
+
         assert isinstance(Good(), ICognitiveProcessor)
 
     def test_protocol_reject_missing(self):
         class Bad:
             pass
+
         assert not isinstance(Bad(), ICognitiveProcessor)
 
     def test_protocol_runtime_checkable(self):
@@ -515,21 +533,26 @@ class TestICognitiveProcessor:
         class Overloaded:
             async def process(self, input_data):
                 return input_data
+
             async def extra(self):
                 pass
+
         assert isinstance(Overloaded(), ICognitiveProcessor)
 
     def test_wrong_signature_still_satisfies(self):
         class WrongSig:
             async def process(self):
                 return None
+
         assert isinstance(WrongSig(), ICognitiveProcessor)
 
     def test_sync_process_satisfies_py312(self):
         """In Python 3.12+, runtime_checkable protocols accept sync methods."""
+
         class Sync:
             def process(self, input_data):
                 return input_data
+
         # Python 3.12+ relaxed runtime_checkable to accept sync implementations
         assert isinstance(Sync(), ICognitiveProcessor)
 
@@ -545,45 +568,56 @@ class TestIMemoryManager:
         class Good:
             async def store(self, key, value):
                 pass
+
             async def recall(self, key):
                 return None
+
         assert isinstance(Good(), IMemoryManager)
 
     def test_protocol_reject_missing(self):
         class Bad:
             async def store(self, key, value):
                 pass
+
         assert not isinstance(Bad(), IMemoryManager)
 
     def test_extra_methods_ok(self):
         class Overloaded:
             async def store(self, key, value):
                 pass
+
             async def recall(self, key):
                 return None
+
             async def delete(self, key):
                 pass
+
         assert isinstance(Overloaded(), IMemoryManager)
 
     def test_missing_recall_only(self):
         class NoRecall:
             async def store(self, key, value):
                 pass
+
         assert not isinstance(NoRecall(), IMemoryManager)
 
     def test_missing_store_only(self):
         class NoStore:
             async def recall(self, key):
                 return None
+
         assert not isinstance(NoStore(), IMemoryManager)
 
     def test_sync_store_satisfies_py312(self):
         """In Python 3.12+, runtime_checkable protocols accept sync methods."""
+
         class Sync:
             def store(self, key, value):
                 pass
+
             async def recall(self, key):
                 return None
+
         assert isinstance(Sync(), IMemoryManager)
 
 
@@ -592,38 +626,46 @@ class TestIMetacognitiveMonitor:
         class Good:
             async def monitor(self, state):
                 pass
+
         assert isinstance(Good(), IMetacognitiveMonitor)
 
     def test_protocol_reject_missing(self):
         class Bad:
             pass
+
         assert not isinstance(Bad(), IMetacognitiveMonitor)
 
     def test_extra_methods_ok(self):
         class Overloaded:
             async def monitor(self, state):
                 pass
+
             async def extra(self):
                 pass
+
         assert isinstance(Overloaded(), IMetacognitiveMonitor)
 
     def test_wrong_param_name_still_satisfies(self):
         class DifferentParam:
             async def monitor(self, something_else):
                 pass
+
         assert isinstance(DifferentParam(), IMetacognitiveMonitor)
 
     def test_sync_monitor_satisfies_py312(self):
         """In Python 3.12+, runtime_checkable protocols accept sync methods."""
+
         class Sync:
             def monitor(self, state):
                 pass
+
         assert isinstance(Sync(), IMetacognitiveMonitor)
 
     def test_missing_monitor_wrong_method(self):
         class WrongMethod:
             async def observe(self, state):
                 pass
+
         assert not isinstance(WrongMethod(), IMetacognitiveMonitor)
 
 
@@ -632,38 +674,46 @@ class TestIReasoningEngine:
         class Good:
             async def reason(self, context):
                 return None
+
         assert isinstance(Good(), IReasoningEngine)
 
     def test_protocol_reject_missing(self):
         class Bad:
             pass
+
         assert not isinstance(Bad(), IReasoningEngine)
 
     def test_extra_methods_ok(self):
         class Overloaded:
             async def reason(self, context):
                 return None
+
             async def plan(self, context):
                 return None
+
         assert isinstance(Overloaded(), IReasoningEngine)
 
     def test_sync_reason_satisfies_py312(self):
         """In Python 3.12+, runtime_checkable protocols accept sync methods."""
+
         class Sync:
             def reason(self, context):
                 return None
+
         assert isinstance(Sync(), IReasoningEngine)
 
     def test_wrong_return_still_satisfies(self):
         class NoReturn:
             async def reason(self, context):
                 pass
+
         assert isinstance(NoReturn(), IReasoningEngine)
 
     def test_missing_reason_wrong_name(self):
         class WrongName:
             async def think(self, context):
                 return None
+
         assert not isinstance(WrongName(), IReasoningEngine)
 
     def test_class_not_instance(self):

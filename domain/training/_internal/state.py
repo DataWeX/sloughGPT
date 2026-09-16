@@ -13,7 +13,7 @@ CHECKPOINTS_DIR = REPO_ROOT / "models" / "auto-training"
 LORA_DIR = REPO_ROOT / "data" / "user_adapters"
 TURBO_DIR = REPO_ROOT / "models" / "turbo-trained"
 MAX_CHECKPOINT_DISK_MB = 500
-VALID_CKPT_NAME = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
+VALID_CKPT_NAME = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 SOU_MAGIC = b"SOUL"
 
 for d in (CHECKPOINTS_DIR, LORA_DIR, TURBO_DIR):
@@ -62,6 +62,7 @@ _auto_train_pause_event: threading.Event | None = None
 
 try:
     from domain.infrastructure._internal.pugqeep import PGQ
+
     _auto_train_pgq = PGQ(
         name="auto-train",
         storage_dir=REPO_ROOT / "models" / "auto-training" / ".pgq",

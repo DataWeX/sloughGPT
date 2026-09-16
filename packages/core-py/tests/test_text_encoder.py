@@ -1,8 +1,9 @@
 """Tests for multimodal/text_encoder.py — TextEncoder encode_tokens, encode_text, parameters."""
 
+
 import numpy as np
 import pytest
-from unittest.mock import MagicMock, patch
+
 from domain.multimodal._internal.text_encoder import TextEncoder
 
 
@@ -138,7 +139,8 @@ class TestTextEncoderTrainTokenizer:
         params = enc.parameters()
         param_ids = [id(p) for p in params]
         assert id(enc.token_embedding) in param_ids or any(
-            hasattr(p, 'data') and p.data.shape == enc.token_embedding.weight.data.shape for p in params
+            hasattr(p, "data") and p.data.shape == enc.token_embedding.weight.data.shape
+            for p in params
         )
 
     def test_parameters_includes_pos_embedding(self):
@@ -284,6 +286,7 @@ class TestTextEncoderStructure:
 
     def test_encode_tokens_returns_tensor(self):
         from domain.training._internal.slonet import Tensor
+
         enc = TextEncoder(vocab_size=50, embed_dim=16, n_heads=2, n_layers=1, max_seq_len=10)
         token_ids = np.array([[1, 2, 3]], dtype=np.int32)
         result = enc.encode_tokens(token_ids)

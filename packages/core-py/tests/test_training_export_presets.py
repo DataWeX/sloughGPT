@@ -7,6 +7,7 @@ system for quick-start training configurations.
 Usage:
     .venv/bin/python -m pytest tests/test_training_export_presets.py -x -v
 """
+
 import csv
 import io
 import json
@@ -33,53 +34,68 @@ class TestOutcomeTrackerExport:
     """Tests for TrainingOutcomeTracker export functionality."""
 
     def test_export_json(self):
-        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import (
+            TrainingOutcome,
+            TrainingOutcomeTracker,
+        )
 
         tracker = TrainingOutcomeTracker()
         initial_count = len(tracker.export_json())
         for i in range(5):
-            tracker.record(TrainingOutcome(
-                run_id=f"export_test_{i}",
-                timestamp=time.time(),
-                dataset_size=1000 + i * 100,
-                model="test",
-                method="sft",
-                final_loss=1.0 - i * 0.1,
-            ))
+            tracker.record(
+                TrainingOutcome(
+                    run_id=f"export_test_{i}",
+                    timestamp=time.time(),
+                    dataset_size=1000 + i * 100,
+                    model="test",
+                    method="sft",
+                    final_loss=1.0 - i * 0.1,
+                )
+            )
         json_data = tracker.export_json()
         assert isinstance(json_data, list)
         assert len(json_data) >= initial_count + 5
         assert all("run_id" in o for o in json_data[-5:])
 
     def test_export_json_with_limit(self):
-        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import (
+            TrainingOutcome,
+            TrainingOutcomeTracker,
+        )
 
         tracker = TrainingOutcomeTracker()
         for i in range(10):
-            tracker.record(TrainingOutcome(
-                run_id=f"limit_test_{i}",
-                timestamp=time.time(),
-                dataset_size=1000,
-                model="test",
-                method="sft",
-                final_loss=1.0,
-            ))
+            tracker.record(
+                TrainingOutcome(
+                    run_id=f"limit_test_{i}",
+                    timestamp=time.time(),
+                    dataset_size=1000,
+                    model="test",
+                    method="sft",
+                    final_loss=1.0,
+                )
+            )
         json_data = tracker.export_json(limit=3)
         assert len(json_data) == 3
 
     def test_export_csv(self):
-        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import (
+            TrainingOutcome,
+            TrainingOutcomeTracker,
+        )
 
         tracker = TrainingOutcomeTracker()
         for i in range(3):
-            tracker.record(TrainingOutcome(
-                run_id=f"csv_test_{i}",
-                timestamp=time.time(),
-                dataset_size=1000,
-                model="test",
-                method="sft",
-                final_loss=1.0 - i * 0.1,
-            ))
+            tracker.record(
+                TrainingOutcome(
+                    run_id=f"csv_test_{i}",
+                    timestamp=time.time(),
+                    dataset_size=1000,
+                    model="test",
+                    method="sft",
+                    final_loss=1.0 - i * 0.1,
+                )
+            )
         csv_str = tracker.export_csv()
         assert isinstance(csv_str, str)
         reader = csv.reader(io.StringIO(csv_str))
@@ -88,18 +104,23 @@ class TestOutcomeTrackerExport:
         assert "run_id" in rows[0]
 
     def test_export_csv_with_limit(self):
-        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import (
+            TrainingOutcome,
+            TrainingOutcomeTracker,
+        )
 
         tracker = TrainingOutcomeTracker()
         for i in range(10):
-            tracker.record(TrainingOutcome(
-                run_id=f"csv_limit_{i}",
-                timestamp=time.time(),
-                dataset_size=1000,
-                model="test",
-                method="sft",
-                final_loss=1.0,
-            ))
+            tracker.record(
+                TrainingOutcome(
+                    run_id=f"csv_limit_{i}",
+                    timestamp=time.time(),
+                    dataset_size=1000,
+                    model="test",
+                    method="sft",
+                    final_loss=1.0,
+                )
+            )
         csv_str = tracker.export_csv(limit=5)
         reader = csv.reader(io.StringIO(csv_str))
         rows = list(reader)
@@ -264,18 +285,23 @@ class TestExportFileOutput:
     """Tests for writing export data to files."""
 
     def test_export_json_to_file(self):
-        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import (
+            TrainingOutcome,
+            TrainingOutcomeTracker,
+        )
 
         tracker = TrainingOutcomeTracker()
         for i in range(3):
-            tracker.record(TrainingOutcome(
-                run_id=f"file_test_{i}",
-                timestamp=time.time(),
-                dataset_size=1000,
-                model="test",
-                method="sft",
-                final_loss=1.0,
-            ))
+            tracker.record(
+                TrainingOutcome(
+                    run_id=f"file_test_{i}",
+                    timestamp=time.time(),
+                    dataset_size=1000,
+                    model="test",
+                    method="sft",
+                    final_loss=1.0,
+                )
+            )
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(tracker.export_json(limit=3), f)
             f.flush()
@@ -284,18 +310,23 @@ class TestExportFileOutput:
             assert len(data) == 3
 
     def test_export_csv_to_file(self):
-        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import (
+            TrainingOutcome,
+            TrainingOutcomeTracker,
+        )
 
         tracker = TrainingOutcomeTracker()
         for i in range(3):
-            tracker.record(TrainingOutcome(
-                run_id=f"csv_file_{i}",
-                timestamp=time.time(),
-                dataset_size=1000,
-                model="test",
-                method="sft",
-                final_loss=1.0,
-            ))
+            tracker.record(
+                TrainingOutcome(
+                    run_id=f"csv_file_{i}",
+                    timestamp=time.time(),
+                    dataset_size=1000,
+                    model="test",
+                    method="sft",
+                    final_loss=1.0,
+                )
+            )
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write(tracker.export_csv(limit=3))
             f.flush()

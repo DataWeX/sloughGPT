@@ -1,23 +1,25 @@
 """
 Tests for VM debugger and module loader.
 """
-import pytest
+
 from pathlib import Path
 
-
 # ── Debugger Tests ────────────────────────────────────────────────────────────
+
 
 class TestDebugger:
     """Test the VM debugger."""
 
     def test_debugger_creation(self):
         from domain.shell._internal.vm_debugger import Debugger
+
         debugger = Debugger()
         assert debugger.engine is not None
         assert debugger.symbols is not None
 
     def test_symbol_table(self):
         from domain.shell._internal.vm_debugger import SymbolTable
+
         st = SymbolTable()
         st.add("main", 0x1000)
         st.add("loop", 0x1010)
@@ -27,16 +29,19 @@ class TestDebugger:
 
     def test_symbol_resolve_hex(self):
         from domain.shell._internal.vm_debugger import SymbolTable
+
         st = SymbolTable()
         assert st.resolve("0x1000") == 0x1000
 
     def test_symbol_resolve_decimal(self):
         from domain.shell._internal.vm_debugger import SymbolTable
+
         st = SymbolTable()
         assert st.resolve("4096") == 4096
 
     def test_breakpoint_set(self):
         from domain.shell._internal.vm_debugger import Debugger
+
         debugger = Debugger()
         # Set breakpoint at an address
         bp_id = debugger.bp_set("0x1000", "test_bp")
@@ -47,14 +52,16 @@ class TestDebugger:
 
     def test_breakpoint_list_with_symbol(self):
         from domain.shell._internal.vm_debugger import Debugger
+
         debugger = Debugger()
         debugger.symbols.add("main", 0x1000)
-        bp_id = debugger.bp_set("main")
+        debugger.bp_set("main")
         bps = debugger.bp_list()
         assert bps[0]["symbol"] == "main"
 
     def test_breakpoint_remove(self):
         from domain.shell._internal.vm_debugger import Debugger
+
         debugger = Debugger()
         bp_id = debugger.bp_set("0x1000")
         debugger.bp_remove(bp_id)
@@ -63,6 +70,7 @@ class TestDebugger:
 
     def test_breakpoint_clear(self):
         from domain.shell._internal.vm_debugger import Debugger
+
         debugger = Debugger()
         debugger.bp_set("0x1000")
         debugger.bp_set("0x2000")
@@ -72,6 +80,7 @@ class TestDebugger:
 
     def test_watchpoint_set(self):
         from domain.shell._internal.vm_debugger import Debugger
+
         debugger = Debugger()
         wp_id = debugger.wp_set("0x2000", 4, "data")
         assert wp_id >= 0
@@ -80,6 +89,7 @@ class TestDebugger:
 
     def test_watchpoint_remove(self):
         from domain.shell._internal.vm_debugger import Debugger
+
         debugger = Debugger()
         wp_id = debugger.wp_set("0x2000")
         debugger.wp_remove(wp_id)
@@ -88,6 +98,7 @@ class TestDebugger:
 
     def test_stepi(self):
         from domain.shell._internal.vm_debugger import Debugger
+
         debugger = Debugger()
         engine = debugger.engine
         # Load a simple program
@@ -98,6 +109,7 @@ class TestDebugger:
 
     def test_dump_regs(self):
         from domain.shell._internal.vm_debugger import Debugger
+
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("mov eax, 0x42")
@@ -108,6 +120,7 @@ class TestDebugger:
 
     def test_dump_memory(self):
         from domain.shell._internal.vm_debugger import Debugger
+
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("mov eax, 0xDEADBEEF\nmov [0x1000], eax")
@@ -117,6 +130,7 @@ class TestDebugger:
 
     def test_analyze_trace(self):
         from domain.shell._internal.vm_debugger import Debugger
+
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("mov eax, 1\nmov ebx, 2\nhlt")
@@ -127,6 +141,7 @@ class TestDebugger:
 
     def test_list_symbols(self):
         from domain.shell._internal.vm_debugger import Debugger
+
         debugger = Debugger()
         debugger.symbols.add("main", 0x1000, kind="function")
         syms = debugger.list_symbols()
@@ -137,34 +152,40 @@ class TestDebugger:
 
 # ── Module Loader Tests ──────────────────────────────────────────────────────
 
+
 class TestModuleLoader:
     """Test the kernel module loader."""
 
     def test_loader_creation(self):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         loader = ModuleLoader()
         assert loader.list_modules() == []
 
     def test_add_addon_dir(self):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         loader = ModuleLoader()
         loader.add_addon_dir("/tmp/test_addons")
         assert len(loader._addon_dirs) == 1
 
     def test_discover_empty(self):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         loader = ModuleLoader()
         found = loader.discover()
         assert found == []
 
     def test_module_info_states(self):
         from domain.shell._internal.addons.module_loader import ModuleInfo
+
         info = ModuleInfo(name="test", path="/tmp/test.py")
         assert info.state == "unloaded"
         assert info.error is None
 
     def test_summary(self):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         loader = ModuleLoader()
         summary = loader.summary()
         assert summary["total"] == 0
@@ -172,16 +193,19 @@ class TestModuleLoader:
 
     def test_loaded_list(self):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         loader = ModuleLoader()
         assert loader.loaded() == []
 
     def test_errors_list(self):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         loader = ModuleLoader()
         assert loader.errors() == []
 
     def test_discover_with_addon_dir(self, tmp_path):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "test_addon.py"
@@ -204,6 +228,7 @@ class Addon:
 
     def test_load_addon(self, tmp_path):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "my_addon.py"
@@ -223,6 +248,7 @@ class Addon:
 
         class MockKernel:
             pass
+
         loader.set_kernel(MockKernel())
         loader.add_addon_dir(addon_dir)
         loader.discover()
@@ -237,6 +263,7 @@ class Addon:
 
     def test_unload_addon(self, tmp_path):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "unload_test.py"
@@ -259,8 +286,10 @@ class Addon:
         assert loader.loaded() == []
 
     def test_hot_reload(self, tmp_path):
-        from domain.shell._internal.addons.module_loader import ModuleLoader
         import sys
+
+        from domain.shell._internal.addons.module_loader import ModuleLoader
+
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "reload_v1.py"
@@ -273,6 +302,7 @@ class Addon:
 
         class MockKernel:
             pass
+
         loader.set_kernel(MockKernel())
         loader.add_addon_dir(addon_dir)
         loader.discover()
@@ -290,6 +320,7 @@ class Addon:
 
     def test_lifecycle_hooks(self, tmp_path):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "hook_test.py"
@@ -319,15 +350,17 @@ class Addon:
 
     def test_load_nonexistent_raises(self):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         loader = ModuleLoader()
         try:
             loader.load("nonexistent_module")
-            assert False, "Should have raised ImportError"
+            raise AssertionError("Should have raised ImportError")
         except ImportError as e:
             assert "nonexistent_module" in str(e)
 
     def test_load_broken_addon(self, tmp_path):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "broken.py"
@@ -337,7 +370,7 @@ class Addon:
         loader.discover()
         try:
             loader.load("broken")
-            assert False, "Should have raised RuntimeError"
+            raise AssertionError("Should have raised RuntimeError")
         except RuntimeError as e:
             assert "broken" in str(e)
         info = loader.get_module("broken")
@@ -346,6 +379,7 @@ class Addon:
 
     def test_summary_with_loaded(self, tmp_path):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "summary_addon.py"
@@ -367,6 +401,7 @@ class Addon:
 
     def test_cleanup_called_on_unload(self, tmp_path):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "cleanup_addon.py"
@@ -387,6 +422,7 @@ class Addon:
 
     def test_set_kernel(self, tmp_path):
         from domain.shell._internal.addons.module_loader import ModuleLoader
+
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "kernel_test.py"
@@ -400,8 +436,10 @@ class Addon:
         loader = ModuleLoader()
         loader.add_addon_dir(addon_dir)
         loader.discover()
+
         class MockKernel:
             pass
+
         kernel = MockKernel()
         loader.set_kernel(kernel)
         addon = loader.load("kernel_test")
@@ -409,6 +447,7 @@ class Addon:
 
 
 # ── CLI Command Tests ────────────────────────────────────────────────────────
+
 
 class TestVMCLICommands:
     """Test VM CLI command files."""
@@ -429,5 +468,7 @@ class TestVMCLICommands:
         assert "from domain.shell._internal.vm_debugger import Debugger" in content
 
     def test_build_command_exists(self):
-        build_cmd = Path(__file__).resolve().parents[3] / "apps" / "cli" / "src" / "commands" / "build.py"
+        build_cmd = (
+            Path(__file__).resolve().parents[3] / "apps" / "cli" / "src" / "commands" / "build.py"
+        )
         assert build_cmd.exists()

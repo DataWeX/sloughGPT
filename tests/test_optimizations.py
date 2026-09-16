@@ -2,14 +2,17 @@
 SloughGPT Optimizations Tests
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
+
 torch = pytest.importorskip("torch")
-import torch.nn as nn
 from unittest.mock import Mock
+
+import torch.nn as nn
 
 
 class TestOptimizationConfig:
@@ -32,11 +35,7 @@ class TestOptimizationConfig:
         """Test custom configuration."""
         from domains.inference.optimizations import OptimizationConfig
 
-        config = OptimizationConfig(
-            use_kv_cache=True,
-            max_batch_size=64,
-            speculative_tokens=8
-        )
+        config = OptimizationConfig(use_kv_cache=True, max_batch_size=64, speculative_tokens=8)
 
         assert config.max_batch_size == 64
         assert config.speculative_tokens == 8
@@ -50,11 +49,7 @@ class TestKVCacheOptimizer:
         from domains.inference.optimizations import KVCacheOptimizer
 
         cache = KVCacheOptimizer(
-            num_layers=4,
-            num_heads=8,
-            head_dim=64,
-            max_length=1024,
-            device="cpu"
+            num_layers=4, num_heads=8, head_dim=64, max_length=1024, device="cpu"
         )
 
         assert cache.num_layers == 4
@@ -68,11 +63,7 @@ class TestKVCacheOptimizer:
         from domains.inference.optimizations import KVCacheOptimizer
 
         cache = KVCacheOptimizer(
-            num_layers=2,
-            num_heads=4,
-            head_dim=32,
-            max_length=512,
-            device="cpu"
+            num_layers=2, num_heads=4, head_dim=32, max_length=512, device="cpu"
         )
 
         key = torch.randn(1, 4, 10, 32)
@@ -87,11 +78,7 @@ class TestKVCacheOptimizer:
         from domains.inference.optimizations import KVCacheOptimizer
 
         cache = KVCacheOptimizer(
-            num_layers=2,
-            num_heads=4,
-            head_dim=32,
-            max_length=512,
-            device="cpu"
+            num_layers=2, num_heads=4, head_dim=32, max_length=512, device="cpu"
         )
 
         key = torch.randn(1, 4, 10, 32)
@@ -109,11 +96,7 @@ class TestKVCacheOptimizer:
         from domains.inference.optimizations import KVCacheOptimizer
 
         cache = KVCacheOptimizer(
-            num_layers=2,
-            num_heads=4,
-            head_dim=32,
-            max_length=512,
-            device="cpu"
+            num_layers=2, num_heads=4, head_dim=32, max_length=512, device="cpu"
         )
 
         key = torch.randn(1, 4, 10, 32)
@@ -129,11 +112,7 @@ class TestKVCacheOptimizer:
         from domains.inference.optimizations import KVCacheOptimizer
 
         cache = KVCacheOptimizer(
-            num_layers=12,
-            num_heads=12,
-            head_dim=64,
-            max_length=4096,
-            device="cpu"
+            num_layers=12, num_heads=12, head_dim=64, max_length=4096, device="cpu"
         )
 
         memory_mb = cache.get_allocated_memory_mb()
@@ -273,11 +252,7 @@ class TestEstimateInferenceMemory:
         """Test KV cache multiplier."""
         from domains.inference.optimizations import estimate_inference_memory
 
-        result = estimate_inference_memory(
-            1000000000,
-            precision="fp16",
-            kv_cache_multiplier=2.0
-        )
+        result = estimate_inference_memory(1000000000, precision="fp16", kv_cache_multiplier=2.0)
 
         assert result["total_memory_gb"] > result["model_memory_gb"]
 

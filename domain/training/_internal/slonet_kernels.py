@@ -35,6 +35,7 @@ def _check_numba() -> bool:
     if _NUMBA_AVAILABLE is None:
         try:
             from numba import njit  # noqa: F401
+
             _NUMBA_AVAILABLE = True
         except ImportError:
             _NUMBA_AVAILABLE = False
@@ -44,6 +45,7 @@ def _check_numba() -> bool:
 # ---------------------------------------------------------------------------
 #  Numba-compiled inner loops
 # ---------------------------------------------------------------------------
+
 
 def _build_kernels():
     """Build and return compiled kernels (called lazily)."""
@@ -175,7 +177,15 @@ def _build_kernels():
     # ---- Warmup: compile all kernels with tiny inputs ---------------------
     _warmup(eps=np.float32(1e-5), has_bias=True)
 
-    return nb_rmsnorm, nb_layernorm, nb_swiglu, nb_softmax_last_axis, nb_embed, nb_add_pos, nb_swi_glu_mul
+    return (
+        nb_rmsnorm,
+        nb_layernorm,
+        nb_swiglu,
+        nb_softmax_last_axis,
+        nb_embed,
+        nb_add_pos,
+        nb_swi_glu_mul,
+    )
 
 
 def _warmup(eps=np.float32(1e-5), has_bias=True):
@@ -307,18 +317,29 @@ _kernels_built = False
 
 def _ensure_kernels():
     """Build kernels on first call.  Subsequent calls are free."""
-    global _nb_rmsnorm, _nb_layernorm, _nb_swiglu, _nb_softmax, _nb_embed, _nb_add_pos, _nb_swi_glu_mul, _kernels_built
+    global \
+        _nb_rmsnorm, \
+        _nb_layernorm, \
+        _nb_swiglu, \
+        _nb_softmax, \
+        _nb_embed, \
+        _nb_add_pos, \
+        _nb_swi_glu_mul, \
+        _kernels_built
     if _kernels_built:
         return
     if not _check_numba():
         return
-    _nb_rmsnorm, _nb_layernorm, _nb_swiglu, _nb_softmax, _nb_embed, _nb_add_pos, _nb_swi_glu_mul = _build_kernels()
+    _nb_rmsnorm, _nb_layernorm, _nb_swiglu, _nb_softmax, _nb_embed, _nb_add_pos, _nb_swi_glu_mul = (
+        _build_kernels()
+    )
     _kernels_built = True
 
 
 # ---------------------------------------------------------------------------
 #  Public API — numpy fallback when numba unavailable
 # ---------------------------------------------------------------------------
+
 
 def nb_rmsnorm(x, w, eps=np.float32(1e-5)):
     """RMSNorm with numba acceleration."""
@@ -450,7 +471,15 @@ def _build_fused_kernels():
 
     @njit(cache=True)
     def _fused_attention_single(
-        q, k_full, v_full, out, scale, H, E_head, seq_len, new_len,
+        q,
+        k_full,
+        v_full,
+        out,
+        scale,
+        H,
+        E_head,
+        seq_len,
+        new_len,
     ):
         """Attention for single-token query (seq_len=1) with full KV cache.
 
@@ -491,7 +520,15 @@ def _build_fused_kernels():
 
     @njit(cache=True)
     def _fused_attention_multi(
-        q, k_full, v_full, out, scale, H, E_head, seq_len, new_len,
+        q,
+        k_full,
+        v_full,
+        out,
+        scale,
+        H,
+        E_head,
+        seq_len,
+        new_len,
     ):
         """Attention for multi-token query (prompt processing, step 0).
 
@@ -603,10 +640,12 @@ def _ensure_fused():
         return
     if not _check_numba():
         return
-    (_nb_fused_block_layer_norm,
-     _nb_fused_attention_single,
-     _nb_fused_attention_multi,
-     _nb_gqa_expand) = _build_fused_kernels()
+    (
+        _nb_fused_block_layer_norm,
+        _nb_fused_attention_single,
+        _nb_fused_attention_multi,
+        _nb_gqa_expand,
+    ) = _build_fused_kernels()
     _fused_built = True
 
 
@@ -633,10 +672,10 @@ def fused_attention_single(q, k, v, scale, H, E_head):
         _nb_fused_attention_single(q, k, v, out, scale, H, E_head, 1, new_len)
     else:
         # Numpy fallback
-        scores = np.einsum('hd,hnd->hn', q, k) * scale  # (H, new_len)
+        scores = np.einsum("hd,hnd->hn", q, k) * scale  # (H, new_len)
         attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
         attn = attn / attn.sum(axis=-1, keepdims=True)
-        out = np.einsum('hn,hnd->hd', attn, v)
+        out = np.einsum("hn,hnd->hd", attn, v)
     return out
 
 
@@ -650,12 +689,12 @@ def fused_attention_multi(q, k, v, scale, H, E_head):
         _nb_fused_attention_multi(q, k, v, out, scale, H, E_head, seq_len, new_len)
     else:
         # Numpy fallback
-        scores = np.einsum('she,hne->hsn', q, k) * scale  # (H, seq, new_len)
+        scores = np.einsum("she,hne->hsn", q, k) * scale  # (H, seq, new_len)
         causal = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
         scores = scores + causal
         attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
         attn = attn / attn.sum(axis=-1, keepdims=True)
-        out = np.einsum('hsn,hne->she', attn, v)
+        out = np.einsum("hsn,hne->she", attn, v)
     return out
 
 

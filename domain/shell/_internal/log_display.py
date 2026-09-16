@@ -76,7 +76,7 @@ class LineModeLogDisplay:
         Call this once per prompt render (before ``badge()``).
         """
         entries = self._buffer.get()
-        new_entries = entries[self._last_index:]
+        new_entries = entries[self._last_index :]
         self._last_index = len(entries)
 
         for entry in new_entries:

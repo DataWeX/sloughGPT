@@ -1,28 +1,40 @@
 """Tests for domain.logging — factory functions, global logger, LogLevel, LogRecord, Logger ABC, ChildLogger, TaggedLogger, CompositeLogger, ErrorCode, LogTag."""
 
 import io
-import time
 import threading
+import time
 
 import pytest
 
 from domain.logging import (
-    get_logger, set_global, get_global,
-    ConsoleLogger, CLILogger, ShellLogger, WebLogger,
+    CLILogger,
+    ConsoleLogger,
     LogLevel,
+    ShellLogger,
+    WebLogger,
+    get_global,
+    get_logger,
+    set_global,
 )
 from domain.logging._internal.base import (
-    Logger, LogRecord, ChildLogger, TaggedLogger, CompositeLogger,
-    ErrorCode, LogTag,
+    CompositeLogger,
+    ErrorCode,
+    Logger,
+    LogRecord,
+    LogTag,
 )
 from domain.logging._internal.config import (
-    get_request_id, set_request_id, get_log_context, set_log_context, clear_log_context,
+    clear_log_context,
+    get_log_context,
+    get_request_id,
+    set_log_context,
+    set_request_id,
 )
-
 
 # ---------------------------------------------------------------------------
 # get_logger factory
 # ---------------------------------------------------------------------------
+
 
 class TestGetLogger:
     def test_api_returns_console(self):
@@ -111,6 +123,7 @@ class TestGetLogger:
 # LogLevel
 # ---------------------------------------------------------------------------
 
+
 class TestLogLevel:
     def test_five_members(self):
         assert len(LogLevel) == 5
@@ -157,6 +170,7 @@ class TestLogLevel:
 # ---------------------------------------------------------------------------
 # LogRecord
 # ---------------------------------------------------------------------------
+
 
 class TestLogRecord:
     def test_creation_minimal(self):
@@ -211,6 +225,7 @@ class TestLogRecord:
 # ---------------------------------------------------------------------------
 # ErrorCode
 # ---------------------------------------------------------------------------
+
 
 class TestErrorCode:
     def test_auth_codes(self):
@@ -269,6 +284,7 @@ class TestErrorCode:
 # LogTag
 # ---------------------------------------------------------------------------
 
+
 class TestLogTag:
     def test_all_members(self):
         tags = [t.value for t in LogTag]
@@ -297,6 +313,7 @@ class TestLogTag:
 # Global logger
 # ---------------------------------------------------------------------------
 
+
 class TestGlobalLogger:
     def test_set_and_get(self):
         log = ConsoleLogger("slo.test_global")
@@ -306,6 +323,7 @@ class TestGlobalLogger:
     def test_get_creates_default(self):
         set_global(None)
         import domain.logging as pkg
+
         pkg._global_logger = None
         log = get_global()
         assert isinstance(log, ConsoleLogger)
@@ -329,6 +347,7 @@ class TestGlobalLogger:
 # ---------------------------------------------------------------------------
 # Logger ABC — concrete subclass for testing
 # ---------------------------------------------------------------------------
+
 
 class _CaptureLogger(Logger):
     def __init__(self, **kwargs):
@@ -422,6 +441,7 @@ class TestLoggerABC:
 # ChildLogger
 # ---------------------------------------------------------------------------
 
+
 class TestChildLogger:
     def test_emits_to_parent(self):
         parent = _CaptureLogger(name="slo.parent", level=LogLevel.DEBUG)
@@ -455,6 +475,7 @@ class TestChildLogger:
 # ---------------------------------------------------------------------------
 # TaggedLogger
 # ---------------------------------------------------------------------------
+
 
 class TestTaggedLogger:
     def test_tag_attached(self):
@@ -492,6 +513,7 @@ class TestTaggedLogger:
 # ---------------------------------------------------------------------------
 # CompositeLogger
 # ---------------------------------------------------------------------------
+
 
 class TestCompositeLogger:
     def test_emits_to_all_children(self):
@@ -541,6 +563,7 @@ class TestCompositeLogger:
 # ConsoleLogger
 # ---------------------------------------------------------------------------
 
+
 class TestConsoleLogger:
     def test_emit_to_stream(self):
         stream = io.StringIO()
@@ -551,6 +574,7 @@ class TestConsoleLogger:
 
     def test_json_format(self):
         import json
+
         stream = io.StringIO()
         log = ConsoleLogger("slo.test", stream=stream, format="json")
         log.info("structured", key="value")
@@ -561,6 +585,7 @@ class TestConsoleLogger:
 
     def test_json_includes_tag(self):
         import json
+
         stream = io.StringIO()
         log = ConsoleLogger("slo.test", stream=stream, format="json")
         log.tag("REQ").info("handled")
@@ -570,6 +595,7 @@ class TestConsoleLogger:
 
     def test_json_includes_error_code(self):
         import json
+
         stream = io.StringIO()
         log = ConsoleLogger("slo.test", stream=stream, format="json")
         log.error("fail", error_code="E_MODEL_LOAD")
@@ -579,6 +605,7 @@ class TestConsoleLogger:
 
     def test_json_includes_context(self):
         import json
+
         stream = io.StringIO()
         log = ConsoleLogger("slo.test", stream=stream, format="json")
         log.info("msg", port=8000)
@@ -588,6 +615,7 @@ class TestConsoleLogger:
 
     def test_json_includes_exception(self):
         import json
+
         stream = io.StringIO()
         log = ConsoleLogger("slo.test", stream=stream, format="json")
         log.error("fail", exception="RuntimeError: oops")
@@ -638,6 +666,7 @@ class TestConsoleLogger:
 # ---------------------------------------------------------------------------
 # CLILogger
 # ---------------------------------------------------------------------------
+
 
 class TestCLILogger:
     def test_emit_to_stream(self):
@@ -775,6 +804,7 @@ class TestCLILogger:
 # ShellLogger
 # ---------------------------------------------------------------------------
 
+
 class TestShellLogger:
     def test_emit_to_stream(self):
         stream = io.StringIO()
@@ -831,6 +861,7 @@ class TestShellLogger:
 # WebLogger
 # ---------------------------------------------------------------------------
 
+
 class TestWebLogger:
     def test_emit_to_writable(self):
         stream = io.StringIO()
@@ -841,6 +872,7 @@ class TestWebLogger:
 
     def test_emit_json_structure(self):
         import json
+
         stream = io.StringIO()
         log = WebLogger("slo.web", writable=stream)
         log.info("test msg")
@@ -851,6 +883,7 @@ class TestWebLogger:
 
     def test_to_json(self):
         import json
+
         log = WebLogger("slo.web")
         record = LogRecord(level=LogLevel.INFO, message="test", logger="slo.web")
         raw = log.to_json(record)
@@ -859,8 +892,11 @@ class TestWebLogger:
 
     def test_from_json(self):
         import json
+
         log = WebLogger("slo.web")
-        data = json.dumps({"level": "info", "message": "hello", "logger": "slo.web", "timestamp": 1.0})
+        data = json.dumps(
+            {"level": "info", "message": "hello", "logger": "slo.web", "timestamp": 1.0}
+        )
         record = log.from_json(data)
         assert record.message == "hello"
         assert record.level == LogLevel.INFO
@@ -873,15 +909,33 @@ class TestWebLogger:
 
     def test_from_json_with_context(self):
         import json
+
         log = WebLogger("slo.web")
-        data = json.dumps({"level": "error", "message": "fail", "logger": "slo.web", "timestamp": 1.0, "context": {"key": "val"}})
+        data = json.dumps(
+            {
+                "level": "error",
+                "message": "fail",
+                "logger": "slo.web",
+                "timestamp": 1.0,
+                "context": {"key": "val"},
+            }
+        )
         record = log.from_json(data)
         assert record.context["key"] == "val"
 
     def test_from_json_with_exception(self):
         import json
+
         log = WebLogger("slo.web")
-        data = json.dumps({"level": "error", "message": "fail", "logger": "slo.web", "timestamp": 1.0, "exception": "RuntimeError: oops"})
+        data = json.dumps(
+            {
+                "level": "error",
+                "message": "fail",
+                "logger": "slo.web",
+                "timestamp": 1.0,
+                "exception": "RuntimeError: oops",
+            }
+        )
         record = log.from_json(data)
         assert record.exception == "RuntimeError: oops"
 
@@ -889,8 +943,10 @@ class TestWebLogger:
         class FakeConsole:
             def __init__(self):
                 self.calls = []
+
             def log(self, *args):
                 self.calls.append(("log", args))
+
         console = FakeConsole()
         log = WebLogger("slo.web", console=console)
         log.info("hello")
@@ -901,8 +957,10 @@ class TestWebLogger:
         class FakeConsole:
             def __init__(self):
                 self.calls = []
+
             def error(self, *args):
                 self.calls.append(("error", args))
+
         console = FakeConsole()
         log = WebLogger("slo.web", console=console)
         log.error("fail")
@@ -912,8 +970,10 @@ class TestWebLogger:
         class FakeConsole:
             def __init__(self):
                 self.calls = []
+
             def warn(self, *args):
                 self.calls.append(("warn", args))
+
         console = FakeConsole()
         log = WebLogger("slo.web", console=console)
         log.warning("warn")
@@ -923,8 +983,10 @@ class TestWebLogger:
         class FakeConsole:
             def __init__(self):
                 self.calls = []
+
             def debug(self, *args):
                 self.calls.append(("debug", args))
+
         console = FakeConsole()
         log = WebLogger("slo.web", console=console, level=LogLevel.DEBUG)
         log.debug("dbg")
@@ -934,6 +996,7 @@ class TestWebLogger:
 # ---------------------------------------------------------------------------
 # Config — request_id and log context
 # ---------------------------------------------------------------------------
+
 
 class TestConfigContext:
     def test_set_get_request_id(self):
@@ -971,7 +1034,7 @@ class TestConfigContext:
         clear_log_context()
         set_log_context(a=1)
         ctx1 = get_log_context()
-        ctx2 = get_log_context()
+        get_log_context()
         ctx1["b"] = 2
         assert "b" not in get_log_context()
 
@@ -979,6 +1042,7 @@ class TestConfigContext:
 # ---------------------------------------------------------------------------
 # Thread safety
 # ---------------------------------------------------------------------------
+
 
 class TestThreadSafety:
     def test_concurrent_emit(self):
@@ -1006,6 +1070,7 @@ class TestThreadSafety:
 # ---------------------------------------------------------------------------
 # Extended Logger ABC tests
 # ---------------------------------------------------------------------------
+
 
 class TestLoggerABCExtended:
     def test_level_setter(self):
@@ -1083,6 +1148,7 @@ class TestLoggerABCExtended:
 # Extended ChildLogger tests
 # ---------------------------------------------------------------------------
 
+
 class TestChildLoggerExtended:
     def test_nested_children(self):
         parent = _CaptureLogger(name="slo", level=LogLevel.DEBUG)
@@ -1093,7 +1159,7 @@ class TestChildLoggerExtended:
 
     def test_child_context_does_not_mutate_parent(self):
         parent = _CaptureLogger(name="slo", level=LogLevel.DEBUG, context={"a": 1})
-        child = parent.child("sub", b=2)
+        parent.child("sub", b=2)
         assert "b" not in parent.context
 
     def test_child_debug_respects_parent_level(self):
@@ -1123,6 +1189,7 @@ class TestChildLoggerExtended:
 # ---------------------------------------------------------------------------
 # Extended TaggedLogger tests
 # ---------------------------------------------------------------------------
+
 
 class TestTaggedLoggerExtended:
     def test_tag_on_debug(self):
@@ -1177,6 +1244,7 @@ class TestTaggedLoggerExtended:
 # Extended CompositeLogger tests
 # ---------------------------------------------------------------------------
 
+
 class TestCompositeLoggerExtended:
     def test_composite_level_filtering(self):
         c1 = _CaptureLogger(name="a", level=LogLevel.DEBUG)
@@ -1189,7 +1257,9 @@ class TestCompositeLoggerExtended:
 
     def test_composite_context_merge(self):
         c1 = _CaptureLogger(name="a", level=LogLevel.DEBUG)
-        composite = CompositeLogger(name="slo", children=[c1], level=LogLevel.DEBUG, context={"x": 1})
+        composite = CompositeLogger(
+            name="slo", children=[c1], level=LogLevel.DEBUG, context={"x": 1}
+        )
         composite.info("msg", y=2)
         assert c1.records[0].context["x"] == 1
         assert c1.records[0].context["y"] == 2
@@ -1199,7 +1269,7 @@ class TestCompositeLoggerExtended:
         composite = CompositeLogger(name="slo", children=[c1], level=LogLevel.DEBUG)
         try:
             composite.remove(_CaptureLogger(name="b", level=LogLevel.DEBUG))
-            assert False, "Should have raised ValueError"
+            raise AssertionError("Should have raised ValueError")
         except ValueError:
             pass
 
@@ -1214,6 +1284,7 @@ class TestCompositeLoggerExtended:
 # ---------------------------------------------------------------------------
 # Extended ConsoleLogger tests
 # ---------------------------------------------------------------------------
+
 
 class TestConsoleLoggerExtended:
     def test_default_name(self):
@@ -1234,6 +1305,7 @@ class TestConsoleLoggerExtended:
 
     def test_json_level_mapping(self):
         import json
+
         stream = io.StringIO()
         log = ConsoleLogger("slo.test", stream=stream, format="json")
         log.warning("warn")
@@ -1242,6 +1314,7 @@ class TestConsoleLoggerExtended:
 
     def test_json_critical_level(self):
         import json
+
         stream = io.StringIO()
         log = ConsoleLogger("slo.test", stream=stream, format="json")
         log.critical("crit")
@@ -1262,9 +1335,11 @@ class TestConsoleLoggerExtended:
 # Extended CLILogger tests
 # ---------------------------------------------------------------------------
 
+
 class TestCLILoggerExtended:
     def test_json_format(self):
         import json
+
         stream = io.StringIO()
         log = CLILogger("slo.cli", stream=stream, colors=False)
         log.json({"key": "value"})
@@ -1273,6 +1348,7 @@ class TestCLILoggerExtended:
 
     def test_json_nested(self):
         import json
+
         stream = io.StringIO()
         log = CLILogger("slo.cli", stream=stream, colors=False)
         log.json({"nested": {"a": 1}})
@@ -1310,9 +1386,11 @@ class TestCLILoggerExtended:
 # Extended WebLogger tests
 # ---------------------------------------------------------------------------
 
+
 class TestWebLoggerExtended:
     def test_emit_json_includes_timestamp(self):
         import json
+
         stream = io.StringIO()
         log = WebLogger("slo.web", writable=stream)
         log.info("msg")
@@ -1321,6 +1399,7 @@ class TestWebLoggerExtended:
 
     def test_emit_json_includes_context(self):
         import json
+
         stream = io.StringIO()
         log = WebLogger("slo.web", writable=stream)
         log.info("msg", key="val")
@@ -1329,6 +1408,7 @@ class TestWebLoggerExtended:
 
     def test_emit_json_includes_logger(self):
         import json
+
         stream = io.StringIO()
         log = WebLogger("slo.web", writable=stream)
         log.info("msg")
@@ -1337,6 +1417,7 @@ class TestWebLoggerExtended:
 
     def test_emit_json_includes_timestamp(self):
         import json
+
         stream = io.StringIO()
         log = WebLogger("slo.web", writable=stream)
         log.info("msg")
@@ -1345,6 +1426,7 @@ class TestWebLoggerExtended:
 
     def test_emit_json_error_level(self):
         import json
+
         stream = io.StringIO()
         log = WebLogger("slo.web", writable=stream)
         log.error("fail")
@@ -1353,6 +1435,7 @@ class TestWebLoggerExtended:
 
     def test_emit_json_warning_level(self):
         import json
+
         stream = io.StringIO()
         log = WebLogger("slo.web", writable=stream)
         log.warning("warn")
@@ -1361,6 +1444,7 @@ class TestWebLoggerExtended:
 
     def test_emit_json_debug_level(self):
         import json
+
         stream = io.StringIO()
         log = WebLogger("slo.web", writable=stream, level=LogLevel.DEBUG)
         log.debug("dbg")
@@ -1369,6 +1453,7 @@ class TestWebLoggerExtended:
 
     def test_emit_json_critical_level(self):
         import json
+
         stream = io.StringIO()
         log = WebLogger("slo.web", writable=stream)
         log.critical("crit")
@@ -1377,20 +1462,39 @@ class TestWebLoggerExtended:
 
     def test_from_json_with_context(self):
         import json
+
         log = WebLogger("slo.web")
-        data = json.dumps({"level": "info", "message": "hi", "logger": "slo.web", "timestamp": 1.0, "context": {"key": "val"}})
+        data = json.dumps(
+            {
+                "level": "info",
+                "message": "hi",
+                "logger": "slo.web",
+                "timestamp": 1.0,
+                "context": {"key": "val"},
+            }
+        )
         record = log.from_json(data)
         assert record.context["key"] == "val"
 
     def test_from_json_with_exception(self):
         import json
+
         log = WebLogger("slo.web")
-        data = json.dumps({"level": "error", "message": "fail", "logger": "slo.web", "timestamp": 1.0, "exception": "RuntimeError: oops"})
+        data = json.dumps(
+            {
+                "level": "error",
+                "message": "fail",
+                "logger": "slo.web",
+                "timestamp": 1.0,
+                "exception": "RuntimeError: oops",
+            }
+        )
         record = log.from_json(data)
         assert record.exception == "RuntimeError: oops"
 
     def test_from_json_missing_fields(self):
         import json
+
         log = WebLogger("slo.web")
         data = json.dumps({"level": "info"})
         record = log.from_json(data)
@@ -1405,22 +1509,27 @@ class TestWebLoggerExtended:
 
     def test_to_json_includes_exception(self):
         import json
+
         log = WebLogger("slo.web")
-        record = LogRecord(level=LogLevel.ERROR, message="fail", logger="slo.web", exception="RuntimeError: oops")
+        record = LogRecord(
+            level=LogLevel.ERROR, message="fail", logger="slo.web", exception="RuntimeError: oops"
+        )
         raw = log.to_json(record)
         data = json.loads(raw)
         assert data["exception"] == "RuntimeError: oops"
 
     def test_to_json_includes_context(self):
         import json
+
         log = WebLogger("slo.web")
-        record = LogRecord(level=LogLevel.INFO, message="msg", logger="slo.web", context={"key": "val"})
+        record = LogRecord(
+            level=LogLevel.INFO, message="msg", logger="slo.web", context={"key": "val"}
+        )
         raw = log.to_json(record)
         data = json.loads(raw)
         assert data["context"]["key"] == "val"
 
     def test_to_json_roundtrip(self):
-        import json
         log = WebLogger("slo.web")
         record = LogRecord(level=LogLevel.ERROR, message="test", logger="slo.web", context={"a": 1})
         raw = log.to_json(record)
@@ -1433,6 +1542,7 @@ class TestWebLoggerExtended:
 # ---------------------------------------------------------------------------
 # Extended Config context tests
 # ---------------------------------------------------------------------------
+
 
 class TestConfigContextExtended:
     def test_set_request_id_overwrites(self):
@@ -1452,12 +1562,13 @@ class TestConfigContextExtended:
         assert get_log_context()["a"] == 2
 
     def test_request_id_in_context(self):
-        from domain.logging._internal.base import Logger, LogLevel, LogRecord
+        from domain.logging._internal.base import Logger, LogLevel
 
         class _TestLogger(Logger):
             def __init__(self, **kw):
                 super().__init__(**kw)
                 self.records = []
+
             def emit(self, record):
                 self.records.append(record)
 
@@ -1468,12 +1579,13 @@ class TestConfigContextExtended:
         set_request_id(None)
 
     def test_log_context_in_record(self):
-        from domain.logging._internal.base import Logger, LogLevel, LogRecord
+        from domain.logging._internal.base import Logger, LogLevel
 
         class _TestLogger(Logger):
             def __init__(self, **kw):
                 super().__init__(**kw)
                 self.records = []
+
             def emit(self, record):
                 self.records.append(record)
 

@@ -91,7 +91,7 @@ class TestSafeThreshold:
 class TestCaching:
     def test_check_cached_within_interval(self, monitor):
         calls = {"n": 0}
-        monitor._get_mps_usage = lambda: (calls.__setitem__("n", calls["n"] + 1) or 0.30)
+        monitor._get_mps_usage = lambda: calls.__setitem__("n", calls["n"] + 1) or 0.30
         monitor.get_device("auto")
         monitor.get_device("auto")
         monitor.get_device("auto")
@@ -99,7 +99,7 @@ class TestCaching:
 
     def test_check_recovers_after_interval(self, monitor):
         calls = {"n": 0}
-        monitor._get_mps_usage = lambda: (calls.__setitem__("n", calls["n"] + 1) or 0.0)
+        monitor._get_mps_usage = lambda: calls.__setitem__("n", calls["n"] + 1) or 0.0
         monitor.get_device("auto")
         monitor._last_check = 0.0
         monitor.get_device("auto")
@@ -115,7 +115,7 @@ class TestCheckMidGeneration:
         usage = {"value": 0.50}
         monitor._get_mps_usage = lambda: usage["value"]
         cleared = []
-        monitor._clear_mps_cache = lambda: (cleared.append(1) or usage.__setitem__("value", 0.60))
+        monitor._clear_mps_cache = lambda: cleared.append(1) or usage.__setitem__("value", 0.60)
         assert monitor.check_mid_generation() is False
         assert monitor.is_locked_to_cpu() is True
         assert cleared == [1]
@@ -124,7 +124,7 @@ class TestCheckMidGeneration:
         usage = {"value": 0.50}
         monitor._get_mps_usage = lambda: usage["value"]
         cleared = []
-        monitor._clear_mps_cache = lambda: (cleared.append(1) or usage.__setitem__("value", 0.20))
+        monitor._clear_mps_cache = lambda: cleared.append(1) or usage.__setitem__("value", 0.20)
         assert monitor.check_mid_generation() is True
         assert monitor.is_locked_to_cpu() is False
 
@@ -162,7 +162,7 @@ class TestState:
         monitor._clear_mps_cache()
 
     def test_clear_cache_clears_when_available(self, monkeypatch, monitor, caplog):
-        import domain.infrastructure.ml_types as ml_types
+        import domain.infrastructure._internal.ml_types as ml_types
 
         caplog.set_level(logging.INFO, logger="slo.infrastructure.mps_monitor")
         monkeypatch.setattr(ml_types.mps, "is_available", lambda: True)
@@ -171,9 +171,7 @@ class TestState:
         assert "MPS cache cleared" in caplog.text
 
     def test_clear_cache_survives_errors(self, monkeypatch, monitor):
-        monkeypatch.setattr(
-            "gc.collect", lambda: (_ for _ in ()).throw(RuntimeError("boom"))
-        )
+        monkeypatch.setattr("gc.collect", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
         monitor._clear_mps_cache()
 
     def test_get_mps_usage_returns_float(self, monitor):
@@ -182,13 +180,13 @@ class TestState:
         assert 0.0 <= usage <= 1.0
 
     def test_get_mps_usage_available_backend(self, monkeypatch, monitor):
-        import domain.infrastructure.ml_types as ml_types
+        import domain.infrastructure._internal.ml_types as ml_types
 
         monkeypatch.setattr(ml_types.mps, "is_available", lambda: True)
         assert monitor._get_mps_usage() == 0.0
 
     def test_get_mps_usage_handles_error(self, monkeypatch, monitor):
-        import domain.infrastructure.ml_types as ml_types
+        import domain.infrastructure._internal.ml_types as ml_types
 
         monkeypatch.setattr(
             ml_types.mps,

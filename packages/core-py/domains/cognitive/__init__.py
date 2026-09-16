@@ -1,17 +1,16 @@
 """Backward-compatibility shim — imports from the new ``domain.cognitive`` package."""
 
 from domain.cognitive import (
+    CognitiveCore,
     CognitiveDomain,
     CognitiveException,
-    CognitiveCore,
-    ThinkingMode,
-    ReasoningType,
-    ThoughtProcess,
+    CognitiveProcessor,
     CreativeIdea,
     ReasoningChain,
-    CognitiveProcessor,
+    ReasoningType,
+    ThinkingMode,
+    ThoughtProcess,
 )
-
 from domain.cognitive._internal import rag_service  # noqa: F401
 
 __all__ = [

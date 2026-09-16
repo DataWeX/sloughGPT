@@ -15,6 +15,7 @@ from pathlib import Path
 
 _LIB = None
 
+
 def _find_lib():
     global _LIB
     if _LIB is not None:
@@ -46,6 +47,7 @@ def _find_lib():
 
 def _setup_signatures(lib):
     """Set argtypes/restype for all exported functions."""
+
     class TransformerConfig(ctypes.Structure):
         _fields_ = [
             ("n_layers", ctypes.c_int),

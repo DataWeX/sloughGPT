@@ -16,9 +16,17 @@ from typing import Any, Dict, List, Optional
 
 from domains import (
     BaseComponent as BaseComponent,
+)
+from domains import (
     ComponentException as ComponentException,
+)
+from domains import (
     IMetacognitiveMonitor as IMetacognitiveMonitor,
+)
+from domains import (
     Thought as Thought,
+)
+from domains import (
     ThoughtType as ThoughtType,
 )
 
@@ -53,7 +61,7 @@ class MetacognitiveAssessment:
     accuracy_score: float
     confidence_level: float
     cognitive_load: float
-    recommendations: List[str]
+    recommendations: list[str]
     timestamp: float
 
 
@@ -64,7 +72,7 @@ class ReflectionInsight:
     insight_type: str
     content: str
     confidence: float
-    action_items: List[str]
+    action_items: list[str]
     created_at: float
 
 
@@ -104,9 +112,9 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
         )
 
         # History tracking
-        self.assessment_history: List[MetacognitiveAssessment] = []
-        self.reflection_insights: List[ReflectionInsight] = []
-        self.cognitive_state_history: List[CognitiveStateSnapshot] = []
+        self.assessment_history: list[MetacognitiveAssessment] = []
+        self.reflection_insights: list[ReflectionInsight] = []
+        self.cognitive_state_history: list[CognitiveStateSnapshot] = []
 
         # Monitoring thresholds
         self.thresholds = {
@@ -118,8 +126,8 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
         }
 
         # Background monitoring
-        self.monitoring_task: Optional[asyncio.Task[Any]] = None
-        self.reflection_task: Optional[asyncio.Task[Any]] = None
+        self.monitoring_task: asyncio.Task[Any] | None = None
+        self.reflection_task: asyncio.Task[Any] | None = None
 
         self.is_initialized = False
 
@@ -136,7 +144,9 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             self.logger.info("Metacognitive Monitor initialized successfully", extra={"tag": "COG"})
 
         except Exception as e:
-            self.logger.error("Failed to initialize Metacognitive Monitor: %s", e, extra={"tag": "COG"})
+            self.logger.error(
+                "Failed to initialize Metacognitive Monitor: %s", e, extra={"tag": "COG"}
+            )
             raise ComponentException(f"Metacognitive Monitor initialization failed: {e}")
 
     async def shutdown(self) -> None:
@@ -167,16 +177,18 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             self.logger.info("Metacognitive Monitor shutdown successfully", extra={"tag": "COG"})
 
         except Exception as e:
-            self.logger.error("Failed to shutdown Metacognitive Monitor: %s", e, extra={"tag": "COG"})
+            self.logger.error(
+                "Failed to shutdown Metacognitive Monitor: %s", e, extra={"tag": "COG"}
+            )
             raise ComponentException(f"Metacognitive Monitor shutdown failed: {e}")
 
-    async def monitor_thought_process(self, thoughts: List[Thought]) -> Dict[str, Any]:
+    async def monitor_thought_process(self, thoughts: list[Thought]) -> dict[str, Any]:
         """Monitor and analyze thought processes"""
         try:
             if not thoughts:
                 return {"status": "no_thoughts_to_monitor"}
 
-            monitoring_results: Dict[str, Any] = {
+            monitoring_results: dict[str, Any] = {
                 "thoughts_analyzed": len(thoughts),
                 "assessments": [],
                 "recommendations": [],
@@ -216,7 +228,8 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
 
             self.logger.debug(
                 "Monitored %d thoughts, efficiency: %.2f",
-                len(thoughts), monitoring_results['overall_efficiency']
+                len(thoughts),
+                monitoring_results["overall_efficiency"],
             )
             return monitoring_results
 
@@ -277,17 +290,21 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
                 # Apply reflection insights
                 await self._apply_reflection_insights(reflection_insight)
 
-                self.logger.info("Reflection completed: %s", reflection_insight.content, extra={"tag": "COG"})
+                self.logger.info(
+                    "Reflection completed: %s", reflection_insight.content, extra={"tag": "COG"}
+                )
             else:
                 self.logger.warning(
-                    "Reflection failed to generate insights for trigger: %s", trigger, extra={"tag": "COG"}
+                    "Reflection failed to generate insights for trigger: %s",
+                    trigger,
+                    extra={"tag": "COG"},
                 )
 
         except Exception as e:
             self.logger.error("Reflection process failed: %s", e, extra={"tag": "COG"})
             raise ComponentException(f"Reflection process failed: {e}")
 
-    async def get_cognitive_state_snapshot(self) -> Dict[str, Any]:
+    async def get_cognitive_state_snapshot(self) -> dict[str, Any]:
         """Get current cognitive state snapshot"""
         return {
             "attention_level": self.current_cognitive_state.attention_level,
@@ -321,7 +338,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
         except ValueError:
             raise ComponentException(f"Invalid monitoring level: {level}")
 
-    async def get_metacognitive_report(self, time_range: str = "1h") -> Dict[str, Any]:
+    async def get_metacognitive_report(self, time_range: str = "1h") -> dict[str, Any]:
         """Generate metacognitive monitoring report"""
         try:
             current_time = time.time()
@@ -360,7 +377,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
                 ) / len(recent_assessments)
 
             # Process breakdown
-            process_counts: Dict[str, Dict[str, Any]] = {}
+            process_counts: dict[str, dict[str, Any]] = {}
             for assessment in recent_assessments:
                 process = assessment.process_type.value
                 if process not in process_counts:
@@ -386,7 +403,9 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             return report
 
         except Exception as e:
-            self.logger.error("Failed to generate metacognitive report: %s", e, extra={"tag": "COG"})
+            self.logger.error(
+                "Failed to generate metacognitive report: %s", e, extra={"tag": "COG"}
+            )
             raise ComponentException(f"Report generation failed: {e}")
 
     # Private helper methods
@@ -491,7 +510,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
         }
         return type_confidence.get(thought_type, 0.7)
 
-    async def _assess_context_confidence(self, metadata: Dict[str, Any]) -> float:
+    async def _assess_context_confidence(self, metadata: dict[str, Any]) -> float:
         """Assess confidence based on context"""
         if not metadata:
             return 0.5
@@ -526,8 +545,8 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             return 0.4  # Very high load
 
     async def _generate_recommendations(
-        self, assessments: List[MetacognitiveAssessment]
-    ) -> List[str]:
+        self, assessments: list[MetacognitiveAssessment]
+    ) -> list[str]:
         """Generate recommendations from assessments"""
         recommendations = []
 
@@ -594,7 +613,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
         efficiency: float,
         accuracy: float,
         cognitive_load: float,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate recommendations for a specific process"""
         recommendations = []
 
@@ -615,7 +634,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
 
         return recommendations
 
-    async def _update_cognitive_state(self, thoughts: List[Thought]) -> None:
+    async def _update_cognitive_state(self, thoughts: list[Thought]) -> None:
         """Update current cognitive state based on thoughts"""
         if not thoughts:
             return
@@ -660,7 +679,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
         if len(self.cognitive_state_history) > 1000:
             self.cognitive_state_history = self.cognitive_state_history[-500:]
 
-    async def _perform_reflection(self, trigger: str) -> Optional[ReflectionInsight]:
+    async def _perform_reflection(self, trigger: str) -> ReflectionInsight | None:
         """Perform reflection on a trigger"""
         try:
             # Analyze recent cognitive performance
@@ -693,8 +712,8 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             return None
 
     async def _identify_cognitive_patterns(
-        self, assessments: List[MetacognitiveAssessment]
-    ) -> List[str]:
+        self, assessments: list[MetacognitiveAssessment]
+    ) -> list[str]:
         """Identify cognitive patterns from assessments"""
         patterns = []
 
@@ -713,8 +732,8 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
         return patterns
 
     async def _identify_cognitive_issues(
-        self, assessments: List[MetacognitiveAssessment]
-    ) -> List[str]:
+        self, assessments: list[MetacognitiveAssessment]
+    ) -> list[str]:
         """Identify cognitive issues from assessments"""
         issues = []
 
@@ -729,7 +748,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
         return list(set(issues))  # Remove duplicates
 
     async def _generate_reflection_insight(
-        self, trigger: str, patterns: List[str], issues: List[str]
+        self, trigger: str, patterns: list[str], issues: list[str]
     ) -> str:
         """Generate reflection insight content"""
         insight_parts = [f"Reflection on {trigger}:"]
@@ -754,8 +773,8 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
         return " ".join(insight_parts)
 
     async def _generate_reflection_actions(
-        self, patterns: List[str], issues: List[str]
-    ) -> List[str]:
+        self, patterns: list[str], issues: list[str]
+    ) -> list[str]:
         """Generate action items from reflection"""
         actions = []
 
@@ -817,7 +836,9 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
 
         # Check for critical conditions
         if current_load > self.thresholds["cognitive_load_critical"]:
-            self.logger.warning("Critical cognitive load detected - recommend immediate break", extra={"tag": "COG"})
+            self.logger.warning(
+                "Critical cognitive load detected - recommend immediate break", extra={"tag": "COG"}
+            )
             await self.trigger_reflection("critical_cognitive_load")
 
         if current_attention < self.thresholds["attention_low"]:
@@ -836,8 +857,8 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             return 3600  # Default to 1 hour
 
     async def _generate_periodic_recommendations(
-        self, assessments: List[MetacognitiveAssessment]
-    ) -> List[str]:
+        self, assessments: list[MetacognitiveAssessment]
+    ) -> list[str]:
         """Generate periodic recommendations"""
         if not assessments:
             return []
@@ -860,7 +881,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
 
         return recommendations
 
-    async def _calculate_trends(self, states: List[CognitiveStateSnapshot]) -> Dict[str, str]:
+    async def _calculate_trends(self, states: list[CognitiveStateSnapshot]) -> dict[str, str]:
         """Calculate cognitive state trends"""
         if len(states) < 2:
             return {}

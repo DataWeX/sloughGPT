@@ -5,6 +5,7 @@ encode, decode, lineage. Domain calls are mocked; only HTTP-level behavior
 is tested. The router imports get_token_tree_manager at module level, so
 patching 'routers.token_tree.get_token_tree_manager' works directly.
 """
+
 from __future__ import annotations
 
 import sys
@@ -24,8 +25,8 @@ from routers.token_tree import router  # noqa: E402
 
 
 def _make_mgr(**overrides):
-    defaults = dict(
-        stats=lambda: {
+    defaults = {
+        "stats": lambda: {
             "trained": True,
             "vocab_size": 200,
             "num_merges": 100,
@@ -34,13 +35,13 @@ def _make_mgr(**overrides):
             "embedding_compression_ratio": 4.0,
             "embed_dim": 16,
         },
-        top_merges=lambda top_n=20: [
+        "top_merges": lambda top_n=20: [
             {"rank": 1, "left": "th", "right": "e", "token": "the", "count": 42},
         ],
-        search_merges=lambda query, limit=20: [
+        "search_merges": lambda query, limit=20: [
             {"rank": 1, "left": "th", "right": "e", "token": "the", "count": 42},
         ],
-        vocab_entries=lambda offset=0, limit=50: {
+        "vocab_entries": lambda offset=0, limit=50: {
             "total": 3,
             "entries": [
                 {"id": 0, "token": "<pad>", "freq": 0, "is_special": True, "is_merged": False},
@@ -48,8 +49,8 @@ def _make_mgr(**overrides):
                 {"id": 2, "token": "the</w>", "freq": 7, "is_special": False, "is_merged": True},
             ],
         },
-        train=lambda texts, vocab_size=512, min_frequency=2, embed_dim=16: None,
-        get_tree=lambda vocab_size=512, embed_dim=16: SimpleNamespace(
+        "train": lambda texts, vocab_size=512, min_frequency=2, embed_dim=16: None,
+        "get_tree": lambda vocab_size=512, embed_dim=16: SimpleNamespace(
             stats=lambda: {
                 "trained": True,
                 "vocab_size": 512,
@@ -58,11 +59,11 @@ def _make_mgr(**overrides):
                 "embed_dim": 16,
             }
         ),
-        similar=lambda token, top_k=5: {
+        "similar": lambda token, top_k=5: {
             "query": "the",
             "neighbors": [{"id": 3, "token": "the", "score": 0.99}],
         },
-        embedding_info=lambda token, top_k=8: {
+        "embedding_info": lambda token, top_k=8: {
             "token": "the",
             "id": 3,
             "dim": 8,
@@ -71,18 +72,18 @@ def _make_mgr(**overrides):
             "embedding_points": 200,
             "compression_ratio": 4.0,
         },
-        encode=lambda text: {"tokens": ["the"], "ids": [3]},
-        path=lambda text: {
+        "encode": lambda text: {"tokens": ["the"], "ids": [3]},
+        "path": lambda text: {
             "steps": [{"remaining": "the</w>", "token": "the", "id": 3, "consumed": 7}],
             "ids": [3],
         },
-        decode=lambda ids: {"text": "the"},
-        lineage=lambda token: {
+        "decode": lambda ids: {"text": "the"},
+        "lineage": lambda token: {
             "token": "the",
             "leaves": ["t", "h", "e"],
             "tree": "the",
         },
-        list_saved=lambda: [
+        "list_saved": lambda: [
             {
                 "name": "the-default",
                 "path": "/data/token_trees/the-default",
@@ -92,7 +93,7 @@ def _make_mgr(**overrides):
                 "saved_at": 1000.0,
             }
         ],
-        save=lambda name: {
+        "save": lambda name: {
             "name": name,
             "path": f"/data/token_trees/{name}",
             "vocab_size": 200,
@@ -100,7 +101,7 @@ def _make_mgr(**overrides):
             "trained": True,
             "saved_at": 1000.0,
         },
-        load=lambda name: {
+        "load": lambda name: {
             "name": name,
             "path": f"/data/token_trees/{name}",
             "vocab_size": 200,
@@ -108,8 +109,8 @@ def _make_mgr(**overrides):
             "trained": True,
             "saved_at": 1000.0,
         },
-        delete_saved=lambda name: True,
-    )
+        "delete_saved": lambda name: True,
+    }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
 
@@ -232,7 +233,17 @@ class TestEmbedding:
     @patch(MOCK_TARGET)
     def test_top_k_defaults_to_eight(self, mock_get):
         mgr = _make_mgr()
-        mgr.embedding_info = Mock(return_value={"token": "the", "id": 3, "dim": 8, "norm": 1.0, "top": [], "embedding_points": 200, "compression_ratio": 4.0})
+        mgr.embedding_info = Mock(
+            return_value={
+                "token": "the",
+                "id": 3,
+                "dim": 8,
+                "norm": 1.0,
+                "top": [],
+                "embedding_points": 200,
+                "compression_ratio": 4.0,
+            }
+        )
         mock_get.return_value = mgr
         resp = TestClient(_app()).post("/token-tree/embedding", json={"token": "the"})
         assert resp.status_code == 200
@@ -255,7 +266,9 @@ class TestEmbedding:
     @patch(MOCK_TARGET)
     def test_disabled_embeddings_return_422(self, mock_get):
         mgr = _make_mgr()
-        mgr.embedding_info = Mock(side_effect=ValueError("Token embeddings are not enabled (embed_dim = 0)"))
+        mgr.embedding_info = Mock(
+            side_effect=ValueError("Token embeddings are not enabled (embed_dim = 0)")
+        )
         mock_get.return_value = mgr
         resp = TestClient(_app()).post("/token-tree/embedding", json={"token": "the"})
         assert resp.status_code == 422

@@ -1,4 +1,5 @@
 """Tests for domain exceptions and require_non_empty_prompt."""
+
 from __future__ import annotations
 
 import pytest
@@ -29,7 +30,8 @@ class TestDomainExceptions:
         assert e.code == "E_VAL_FIELD"
 
     def test_hierarchy(self):
-        from domain.infrastructure._internal.errors import ValidationError, AppError
+        from domain.infrastructure._internal.errors import AppError, ValidationError
+
         assert issubclass(InvalidGenerationInputError, ValidationError)
         assert issubclass(InvalidGenerationInputError, AppError)
         assert issubclass(EmptyPromptError, InvalidGenerationInputError)

@@ -8,6 +8,7 @@ import math
 import re
 import struct
 from dataclasses import asdict, is_dataclass
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,7 @@ from .state import REPO_ROOT, SOU_MAGIC
 
 logger = logging.getLogger("slo.training")
 
-_VALID_DATASET_ID = re.compile(r'^[a-zA-Z0-9_\-]+$')
+_VALID_DATASET_ID = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 
 def _finite_payload(o: Any) -> Any:
@@ -34,7 +35,8 @@ def _finite_payload(o: Any) -> Any:
 
 def log_experiment_metric(experiment_id: str, metric: str, value: float, step: int = 0) -> None:
     try:
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         exp_dir = REPO_ROOT / "data" / "experiments"
         exp_dir.mkdir(parents=True, exist_ok=True)
         metrics_file = exp_dir / f"{experiment_id}_metrics.jsonl"
@@ -43,7 +45,7 @@ def log_experiment_metric(experiment_id: str, metric: str, value: float, step: i
             "metric": metric,
             "value": value,
             "step": step,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         with open(metrics_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
@@ -53,7 +55,8 @@ def log_experiment_metric(experiment_id: str, metric: str, value: float, step: i
 
 def log_experiment_param(experiment_id: str, param_name: str, value: Any) -> None:
     try:
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         exp_dir = REPO_ROOT / "data" / "experiments"
         exp_dir.mkdir(parents=True, exist_ok=True)
         params_file = exp_dir / f"{experiment_id}_params.jsonl"
@@ -61,7 +64,7 @@ def log_experiment_param(experiment_id: str, param_name: str, value: Any) -> Non
             "experiment_id": experiment_id,
             "param": param_name,
             "value": value,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         with open(params_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
@@ -71,24 +74,24 @@ def log_experiment_param(experiment_id: str, param_name: str, value: Any) -> Non
 
 def parse_subtitle_text(text: str) -> list:
     lines = []
-    srt_pattern = re.compile(r'\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}')
-    vtt_pattern = re.compile(r'\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}\.\d{3}')
+    srt_pattern = re.compile(r"\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}")
+    vtt_pattern = re.compile(r"\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}\.\d{3}")
 
     if srt_pattern.search(text) or vtt_pattern.search(text):
-        for line in text.split('\n'):
+        for line in text.split("\n"):
             line = line.strip()
             if srt_pattern.match(line) or vtt_pattern.match(line):
                 continue
-            if re.match(r'^\d+$', line):
+            if re.match(r"^\d+$", line):
                 continue
-            if line.startswith('WEBVTT'):
+            if line.startswith("WEBVTT"):
                 continue
-            if '-->' in line:
+            if "-->" in line:
                 continue
-            if line and not line.startswith('['):
+            if line and not line.startswith("["):
                 lines.append(line)
     else:
-        for line in text.split('\n'):
+        for line in text.split("\n"):
             line = line.strip()
             if line and len(line) > 2:
                 lines.append(line)
@@ -128,22 +131,22 @@ def build_soul_prompt(soul_name: str) -> str:
 
 
 def get_soul_name(soul) -> str:
-    if hasattr(soul, 'name') and soul.name:
+    if hasattr(soul, "name") and soul.name:
         return soul.name
-    return getattr(soul, 'soul_name', 'unknown')
+    return getattr(soul, "soul_name", "unknown")
 
 
 def get_soul_traits(soul) -> dict:
-    raw = getattr(soul, 'soul_traits', None)
+    raw = getattr(soul, "soul_traits", None)
     if raw:
         return raw
-    if hasattr(soul, 'personality'):
+    if hasattr(soul, "personality"):
         p = soul.personality
         if isinstance(p, dict):
             return p
-        if hasattr(p, 'to_dict'):
+        if hasattr(p, "to_dict"):
             return p.to_dict()
-        if hasattr(p, '__dict__'):
+        if hasattr(p, "__dict__"):
             return vars(p)
         return dict(p)
     return {}

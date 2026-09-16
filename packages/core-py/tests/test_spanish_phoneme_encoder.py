@@ -1,10 +1,12 @@
 """Tests for multimodal/spanish_phoneme_encoder.py — SpanishPhonemeEncoder."""
 
 import numpy as np
-import pytest
+
 from domain.multimodal._internal.spanish_phoneme_encoder import (
-    SpanishPhonemeEncoder, spanish_text_to_phonemes,
-    SPANISH_ID_TO_PHONEME, BOS, EOS, PAD, SPACE, NUM_SPANISH_PHONEMES,
+    BOS,
+    EOS,
+    NUM_SPANISH_PHONEMES,
+    SpanishPhonemeEncoder,
 )
 
 

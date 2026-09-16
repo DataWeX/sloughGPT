@@ -3,26 +3,25 @@
 from __future__ import annotations
 
 import os
-import json
 import tempfile
-import pytest
+
 import numpy as np
+import pytest
+
 from domain.training._internal.slonet import (
-    Tensor,
+    SloLinear,
     SloNet,
     SloTransformer,
-    SloLinear,
-    save_checkpoint_npz,
-    load_checkpoint_npz,
+    Tensor,
     _state_dict_to_numpy,
+    load_checkpoint_npz,
+    save_checkpoint_npz,
 )
-
 
 # ── _state_dict_to_numpy ────────────────────────────────────────────────────
 
 
 class TestStateDictToNumpy:
-
     def test_numpy_array(self):
         sd = {"w": np.array([1.0, 2.0])}
         result = _state_dict_to_numpy(sd)
@@ -48,7 +47,6 @@ class TestStateDictToNumpy:
 
 
 class TestCheckpointNPZ:
-
     def test_save_load(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "test.npz")
@@ -92,7 +90,6 @@ class TestCheckpointNPZ:
 
 
 class TestSloNetStateDict:
-
     def test_state_dict(self):
         net = SloNet(layers=[SloLinear(10, 5)])
         sd = net.state_dict()
@@ -102,7 +99,7 @@ class TestSloNetStateDict:
     def test_state_dict_values(self):
         net = SloNet(layers=[SloLinear(10, 5)])
         sd = net.state_dict()
-        for k, v in sd.items():
+        for _k, v in sd.items():
             assert isinstance(v, np.ndarray)
 
 
@@ -110,7 +107,6 @@ class TestSloNetStateDict:
 
 
 class TestSloTransformerStateDict:
-
     def test_state_dict(self):
         model = SloTransformer(vocab_size=100, n_embed=32, n_layer=1, n_head=2)
         sd = model.state_dict()
@@ -131,13 +127,16 @@ class TestSloTransformerStateDict:
 
 
 class TestExportImportRoundtrip:
-
     def test_sou_roundtrip(self):
         from domain.training._internal.slonet import export_to_sou, import_from_sou
+
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "test.soul")
             model = SloTransformer(
-                vocab_size=100, n_embed=32, n_layer=1, n_head=2,
+                vocab_size=100,
+                n_embed=32,
+                n_layer=1,
+                n_head=2,
                 soul_name="RoundtripTest",
             )
             export_to_sou(model, path, include_weights=True)

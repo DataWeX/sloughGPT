@@ -1,4 +1,5 @@
 """Tests for IoctlCommand enum — type-safe command identifiers."""
+
 from __future__ import annotations
 
 from domain.shell._internal.ioctl import IoctlCommand

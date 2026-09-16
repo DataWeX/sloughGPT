@@ -20,7 +20,8 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
+
 from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.training.auto_trainer")
@@ -53,7 +54,7 @@ class AutoTrainer:
         self._last_train_checkpoint: str = ""
         self._conversation_count: int = 0
         self._total_trains: int = 0
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._sessions_mtime: float = 0
         self._logs_mtime: float = 0
@@ -65,13 +66,12 @@ class AutoTrainer:
             return
 
         self._stop_event.clear()
-        self._thread = threading.Thread(
-            target=self._loop, daemon=True, name="auto-trainer"
-        )
+        self._thread = threading.Thread(target=self._loop, daemon=True, name="auto-trainer")
         self._thread.start()
         logger.info(
             "AutoTrainer started (threshold=%d, interval=%ds)",
-            self.threshold, self.interval_s,
+            self.threshold,
+            self.interval_s,
             extra={"tag": "TRAIN"},
         )
 
@@ -80,8 +80,10 @@ class AutoTrainer:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=5)
-        logger.info("AutoTrainer stopped",
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "AutoTrainer stopped",
+            extra={"tag": "TRAIN"},
+        )
 
     def _loop(self) -> None:
         """Main monitoring loop — polls every 30s."""
@@ -89,8 +91,12 @@ class AutoTrainer:
             try:
                 self._check_and_train()
             except Exception as e:
-                logger.error("AutoTrainer error: %s", e, exc_info=True,
-                    extra={"tag": "TRAIN"},)
+                logger.error(
+                    "AutoTrainer error: %s",
+                    e,
+                    exc_info=True,
+                    extra={"tag": "TRAIN"},
+                )
             self._stop_event.wait(30)
 
     def _check_and_train(self) -> None:
@@ -100,9 +106,11 @@ class AutoTrainer:
         logs_mtime = self._dir_mtime(_RESPONSE_LOGS_DIR)
         corpus_mtime = self._dir_mtime(_CAPTURED_CORPUS)
 
-        if (sessions_mtime == self._sessions_mtime
-                and logs_mtime == self._logs_mtime
-                and corpus_mtime == self._corpus_mtime):
+        if (
+            sessions_mtime == self._sessions_mtime
+            and logs_mtime == self._logs_mtime
+            and corpus_mtime == self._corpus_mtime
+        ):
             return
 
         # New data detected — count new conversations
@@ -121,9 +129,9 @@ class AutoTrainer:
     def _do_train(self) -> bool:
         """Extract pairs and spawn training subprocess."""
         from domain.training._internal.pair_extractor import (
-            extract_pairs_from_sessions,
             extract_pairs_from_corpus,
             extract_pairs_from_logs,
+            extract_pairs_from_sessions,
             write_training_text,
         )
 
@@ -143,8 +151,11 @@ class AutoTrainer:
             self._conversation_count = 0
             return False
 
-        logger.info("AutoTrainer: found %d pairs, starting training", len(pairs),
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "AutoTrainer: found %d pairs, starting training",
+            len(pairs),
+            extra={"tag": "TRAIN"},
+        )
 
         # Write text file
         text_file = write_training_text(pairs)
@@ -158,8 +169,10 @@ class AutoTrainer:
         train_script = _REPO_ROOT / "scripts" / "hf_train.py"
 
         if not venv_python.exists():
-            logger.error("AutoTrainer: .venv Python not found",
-                extra={"tag": "TRAIN"},)
+            logger.error(
+                "AutoTrainer: .venv Python not found",
+                extra={"tag": "TRAIN"},
+            )
             return False
 
         t0 = time.time()
@@ -168,15 +181,23 @@ class AutoTrainer:
                 [
                     str(venv_python),
                     str(train_script),
-                    "--data", str(text_file),
-                    "--output", str(output_dir),
-                    "--model", "gpt2",
-                    "--epochs", "1",
-                    "--batch-size", "2",
-                    "--lr", "5e-5",
-                    "--max-seq-length", "256",
+                    "--data",
+                    str(text_file),
+                    "--output",
+                    str(output_dir),
+                    "--model",
+                    "gpt2",
+                    "--epochs",
+                    "1",
+                    "--batch-size",
+                    "2",
+                    "--lr",
+                    "5e-5",
+                    "--max-seq-length",
+                    "256",
                     "--use-lora",
-                    "--lora-rank", "8",
+                    "--lora-rank",
+                    "8",
                 ],
                 capture_output=True,
                 text=True,
@@ -184,17 +205,24 @@ class AutoTrainer:
             )
 
             if proc.returncode != 0:
-                logger.error("AutoTrainer subprocess failed: %s", proc.stderr[-500:],
-                    extra={"tag": "TRAIN"},)
+                logger.error(
+                    "AutoTrainer subprocess failed: %s",
+                    proc.stderr[-500:],
+                    extra={"tag": "TRAIN"},
+                )
                 return False
 
             try:
                 result = json.loads(proc.stdout.strip().split("\n")[-1])
             except (json.JSONDecodeError, IndexError) as e:
-                logger.error("AutoTrainer: invalid JSON from subprocess", extra={
-                    "tag": "TRAIN", "error": str(e),
-                    "stdout_tail": proc.stdout[-500:] if proc.stdout else "",
-                })
+                logger.error(
+                    "AutoTrainer: invalid JSON from subprocess",
+                    extra={
+                        "tag": "TRAIN",
+                        "error": str(e),
+                        "stdout_tail": proc.stdout[-500:] if proc.stdout else "",
+                    },
+                )
                 return False
             elapsed = time.time() - t0
 
@@ -217,34 +245,48 @@ class AutoTrainer:
                 try:
                     from domain.training._internal.mobile_training_store import get_training_store
                     from domain.training._internal.quality_scorer import score_batch
+
                     quality_scores = score_batch(pairs)
                     store = get_training_store()
-                    store.add_batch([
-                        {
-                            "user_msg": p["user_msg"],
-                            "assistant_msg": p["assistant_msg"],
-                            "session_id": p.get("session_id", ""),
-                            "quality": quality_scores[i] if i < len(quality_scores) else 0,
-                        }
-                        for i, p in enumerate(pairs)
-                    ])
+                    store.add_batch(
+                        [
+                            {
+                                "user_msg": p["user_msg"],
+                                "assistant_msg": p["assistant_msg"],
+                                "session_id": p.get("session_id", ""),
+                                "quality": quality_scores[i] if i < len(quality_scores) else 0,
+                            }
+                            for i, p in enumerate(pairs)
+                        ]
+                    )
                 except Exception as e:
-                    logger.warning("AutoTrainer: failed to store pairs in MogDB: %s", e,
-                        extra={"tag": "TRAIN"},)
+                    logger.warning(
+                        "AutoTrainer: failed to store pairs in MogDB: %s",
+                        e,
+                        extra={"tag": "TRAIN"},
+                    )
 
                 return True
             else:
-                logger.error("AutoTrainer training failed: %s", result.get("error"),
-                    extra={"tag": "TRAIN"},)
+                logger.error(
+                    "AutoTrainer training failed: %s",
+                    result.get("error"),
+                    extra={"tag": "TRAIN"},
+                )
                 return False
 
         except subprocess.TimeoutExpired:
-            logger.error("AutoTrainer: training timed out (300s)",
-                extra={"tag": "TRAIN"},)
+            logger.error(
+                "AutoTrainer: training timed out (300s)",
+                extra={"tag": "TRAIN"},
+            )
             return False
         except Exception as e:
-            logger.error("AutoTrainer: training error: %s", e,
-                extra={"tag": "TRAIN"},)
+            logger.error(
+                "AutoTrainer: training error: %s",
+                e,
+                extra={"tag": "TRAIN"},
+            )
             return False
 
     @staticmethod
@@ -260,11 +302,14 @@ class AutoTrainer:
                 latest = max(latest, f.stat().st_mtime)
         return latest
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         """Return current auto-trainer status."""
         session_count = len(list(_SESSIONS_DIR.glob("*.json"))) if _SESSIONS_DIR.exists() else 0
-        log_count = len(list(_RESPONSE_LOGS_DIR.glob("*.jsonl"))) if _RESPONSE_LOGS_DIR.exists() else 0
+        log_count = (
+            len(list(_RESPONSE_LOGS_DIR.glob("*.jsonl"))) if _RESPONSE_LOGS_DIR.exists() else 0
+        )
         from domain.training._internal.pair_extractor import count_pairs_in_corpus
+
         return {
             "enabled": self._thread is not None and self._thread.is_alive(),
             "threshold": self.threshold,
@@ -285,7 +330,7 @@ class AutoTrainer:
 
 
 # Global singleton
-_auto_trainer: Optional[AutoTrainer] = None
+_auto_trainer: AutoTrainer | None = None
 
 
 def get_auto_trainer() -> AutoTrainer:
@@ -299,7 +344,7 @@ def get_auto_trainer() -> AutoTrainer:
     return _auto_trainer
 
 
-def start_auto_trainer_if_enabled() -> Optional[AutoTrainer]:
+def start_auto_trainer_if_enabled() -> AutoTrainer | None:
     """Start auto-trainer if SLO_AUTO_TRAIN=1. Returns the trainer or None."""
     if os.environ.get("SLO_AUTO_TRAIN", "0") != "1":
         return None

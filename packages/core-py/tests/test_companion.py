@@ -11,10 +11,10 @@ from domain.companion import (
     get_companion,
 )
 
-
 # ---------------------------------------------------------------------------
 # ResponseStyle enum
 # ---------------------------------------------------------------------------
+
 
 class TestResponseStyle:
     def test_values(self):
@@ -31,6 +31,7 @@ class TestResponseStyle:
 # ---------------------------------------------------------------------------
 # CompanionTraits defaults
 # ---------------------------------------------------------------------------
+
 
 class TestCompanionTraits:
     def test_defaults(self):
@@ -58,6 +59,7 @@ class TestCompanionTraits:
 # ConversationContext defaults
 # ---------------------------------------------------------------------------
 
+
 class TestConversationContext:
     def test_defaults(self):
         ctx = ConversationContext()
@@ -71,6 +73,7 @@ class TestConversationContext:
 # ---------------------------------------------------------------------------
 # CompanionSystem
 # ---------------------------------------------------------------------------
+
 
 class TestCompanionSystem:
     def test_init_defaults(self):
@@ -230,9 +233,11 @@ class TestCompanionSystem:
 # Module-level helpers
 # ---------------------------------------------------------------------------
 
+
 class TestGetCompanion:
     def test_returns_singleton(self):
         import domain.companion as mod
+
         mod._companion = None
         c1 = get_companion()
         c2 = get_companion()
@@ -240,6 +245,7 @@ class TestGetCompanion:
 
     def test_singleton_resets(self):
         import domain.companion as mod
+
         mod._companion = None
         c = get_companion()
         c.set_personality(name="ShouldPersist")

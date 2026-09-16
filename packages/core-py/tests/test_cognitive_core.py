@@ -4,23 +4,19 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
 from domain.cognitive._internal.core import (
     CognitiveCore,
-    ThinkingMode,
-    ReasoningType,
-    ThoughtProcess,
     CreativeIdea,
     ReasoningChain,
+    ReasoningType,
+    ThinkingMode,
+    ThoughtProcess,
 )
-
 
 # ── Enums ─────────────────────────────────────────────────────────────────
 
 
 class TestEnums:
-
     def test_thinking_mode_values(self):
         assert ThinkingMode.ANALYTICAL.value == "analytical"
         assert ThinkingMode.CREATIVE.value == "creative"
@@ -40,35 +36,47 @@ class TestEnums:
 
 
 class TestDataclasses:
-
     def test_thought_process_fields(self):
         tp = ThoughtProcess(
-            id="t1", mode=ThinkingMode.ANALYTICAL,
+            id="t1",
+            mode=ThinkingMode.ANALYTICAL,
             reasoning_type=ReasoningType.DEDUCTIVE,
-            input_prompt="test", thought_content="thinking",
-            confidence=0.9, creativity_score=0.5, logical_score=0.8,
-            timestamp=1.0, processing_time=0.1,
+            input_prompt="test",
+            thought_content="thinking",
+            confidence=0.9,
+            creativity_score=0.5,
+            logical_score=0.8,
+            timestamp=1.0,
+            processing_time=0.1,
         )
         assert tp.id == "t1"
         assert tp.confidence == 0.9
 
     def test_creative_idea_fields(self):
         idea = CreativeIdea(
-            id="i1", concept="AI", description="An AI idea",
-            novelty_score=0.8, feasibility_score=0.7,
-            creativity_score=0.9, category="tech",
-            tags=["ai", "ml"], timestamp=1.0,
+            id="i1",
+            concept="AI",
+            description="An AI idea",
+            novelty_score=0.8,
+            feasibility_score=0.7,
+            creativity_score=0.9,
+            category="tech",
+            tags=["ai", "ml"],
+            timestamp=1.0,
         )
         assert idea.concept == "AI"
         assert len(idea.tags) == 2
 
     def test_reasoning_chain_fields(self):
         chain = ReasoningChain(
-            id="c1", question="Why?",
+            id="c1",
+            question="Why?",
             reasoning_steps=["step1", "step2"],
-            conclusion="Because", confidence=0.85,
+            conclusion="Because",
+            confidence=0.85,
             reasoning_type=ReasoningType.DEDUCTIVE,
-            evidence=["e1"], timestamp=1.0,
+            evidence=["e1"],
+            timestamp=1.0,
         )
         assert chain.conclusion == "Because"
         assert len(chain.reasoning_steps) == 2
@@ -78,7 +86,6 @@ class TestDataclasses:
 
 
 class TestCognitiveCore:
-
     def setup_method(self):
         self.core = CognitiveCore(db_path=":memory:")
 

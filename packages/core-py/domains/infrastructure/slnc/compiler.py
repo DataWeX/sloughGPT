@@ -23,24 +23,23 @@ import json
 import logging
 import struct
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from domain.shared import find_repo_root
 from domain.infrastructure._internal.slnc.spec import (
     MAGIC,
-    VERSION,
+    MAX_NAME_LEN,
     MAX_NDIM,
     MAX_TENSOR_COUNT,
-    MAX_NAME_LEN,
+    VERSION,
     SLNCConfig,
+    _align,
+    _align_offset,
     compute_header_size,
     compute_tensor_table_size,
     dtype_to_code,
-    _align,
-    _align_offset,
 )
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.infrastructure.slnc.compiler")
 
@@ -98,15 +97,15 @@ _ARCH_LAYOUTS = {
 class SLNCCompiler:
     """Compiles model weights into .slnc format."""
 
-    def __init__(self, config: Optional[SLNCConfig] = None):
+    def __init__(self, config: SLNCConfig | None = None):
         self._config = config or SLNCConfig()
-        self._tensor_entries: List[Tuple[str, int, bytes, np.dtype, int, int]] = []
+        self._tensor_entries: list[tuple[str, int, bytes, np.dtype, int, int]] = []
         # (name, offset, data_bytes, dtype, ndim, crc32)
 
     def compile(
         self,
         model_id: str,
-        output: Optional[str] = None,
+        output: str | None = None,
     ) -> str:
         """Compile HuggingFace model to .slnc.
 
@@ -118,8 +117,12 @@ class SLNCCompiler:
             Path to created .slnc file
         """
         from domain.infrastructure._internal.model_resolver import (
-            get_model_dir as _get_model_dir,
             find_safetensors as _find_safetensors,
+        )
+        from domain.infrastructure._internal.model_resolver import (
+            get_model_dir as _get_model_dir,
+        )
+        from domain.infrastructure._internal.model_resolver import (
             load_model_config,
         )
 
@@ -139,6 +142,7 @@ class SLNCCompiler:
 
         try:
             from domain.infrastructure._internal.model_protector import protect_model
+
             protect_model(model_id, [output])
         except Exception as e:
             logger.debug("Could not protect .slnc file: %s", e)
@@ -149,7 +153,7 @@ class SLNCCompiler:
         self,
         model_dir: str,
         output: str,
-        config_path: Optional[str] = None,
+        config_path: str | None = None,
     ) -> str:
         """Compile a local fine-tuned model directory to .slnc."""
         directory = Path(model_dir)
@@ -162,7 +166,10 @@ class SLNCCompiler:
         with open(cfg_path) as f:
             config = json.load(f)
 
-        from domain.infrastructure._internal.model_resolver import find_safetensors as _find_safetensors
+        from domain.infrastructure._internal.model_resolver import (
+            find_safetensors as _find_safetensors,
+        )
+
         safetensors_path = _find_safetensors(directory)
         if safetensors_path is None:
             raise FileNotFoundError(f"No .safetensors in {model_dir}")
@@ -172,9 +179,10 @@ class SLNCCompiler:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         return self.compile_from_dict(config, weights, str(out_path))
 
-    def _read_weights(self, safetensors_path: Path) -> Dict[str, np.ndarray]:
+    def _read_weights(self, safetensors_path: Path) -> dict[str, np.ndarray]:
         """Read all weight arrays from a safetensors file."""
         import json as _json
+
         weights = {}
         with open(str(safetensors_path), "rb") as f:
             header_len = struct.unpack("<Q", f.read(8))[0]
@@ -194,7 +202,11 @@ class SLNCCompiler:
                 elif dtype_str == "F32":
                     weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
                 elif dtype_str == "F16":
-                    weights[key] = np.frombuffer(raw, dtype=np.float16).reshape(info["shape"]).astype(np.float32)
+                    weights[key] = (
+                        np.frombuffer(raw, dtype=np.float16)
+                        .reshape(info["shape"])
+                        .astype(np.float32)
+                    )
                 else:
                     weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
         return weights
@@ -202,7 +214,7 @@ class SLNCCompiler:
     def compile_from_dict(
         self,
         config: dict,
-        weights: Dict[str, np.ndarray],
+        weights: dict[str, np.ndarray],
         output: str,
     ) -> str:
         """Compile from config + weight dict.
@@ -215,8 +227,7 @@ class SLNCCompiler:
         Returns:
             Path to created .slnc file
         """
-        logger.info("Compiling %s (%d tensors)", output, len(weights),
-            extra={"tag": "INFRA"})
+        logger.info("Compiling %s (%d tensors)", output, len(weights), extra={"tag": "INFRA"})
 
         # Validate tensor count
         if len(weights) > MAX_TENSOR_COUNT:
@@ -260,14 +271,16 @@ class SLNCCompiler:
             if self._config.align_tensors:
                 current_offset = _align_offset(current_offset)
 
-            self._tensor_entries.append((
-                name,
-                current_offset,
-                tensor_bytes,
-                tensor.dtype,
-                ndim,
-                crc,
-            ))
+            self._tensor_entries.append(
+                (
+                    name,
+                    current_offset,
+                    tensor_bytes,
+                    tensor.dtype,
+                    ndim,
+                    crc,
+                )
+            )
             current_offset += len(tensor_bytes)
 
         total_size = current_offset
@@ -335,7 +348,9 @@ class SLNCCompiler:
             for name, offset, data_bytes, dtype, ndim, crc in self._tensor_entries:
                 name_bytes = name.encode()
                 if len(name_bytes) > MAX_NAME_LEN:
-                    raise ValueError(f"Tensor name too long: {name} ({len(name_bytes)} > {MAX_NAME_LEN})")
+                    raise ValueError(
+                        f"Tensor name too long: {name} ({len(name_bytes)} > {MAX_NAME_LEN})"
+                    )
 
                 f.write(struct.pack("<I", len(name_bytes)))
                 f.write(name_bytes)
@@ -372,14 +387,17 @@ class SLNCCompiler:
         return output
 
     def _order_tensors(
-        self, config: dict, weights: Dict[str, np.ndarray]
-    ) -> List[Tuple[str, np.ndarray]]:
+        self, config: dict, weights: dict[str, np.ndarray]
+    ) -> list[tuple[str, np.ndarray]]:
         """Order tensors in computation order. Auto-detects GPT-2 vs LLaMA/Qwen."""
         n_layer = config.get("n_layer", config.get("num_hidden_layers", 12))
         result = []
 
         weight_keys = set(weights.keys())
-        if "model.embed_tokens.weight" in weight_keys and "model.layers.0.self_attn.q_proj.weight" in weight_keys:
+        if (
+            "model.embed_tokens.weight" in weight_keys
+            and "model.layers.0.self_attn.q_proj.weight" in weight_keys
+        ):
             arch = "llama"
         elif "wte.weight" in weight_keys:
             arch = "gpt2"
@@ -396,7 +414,7 @@ class SLNCCompiler:
                 if key in weights:
                     result.append((key, weights[key]))
                 if tensor_name.endswith(".weight"):
-                    bias_key = prefix + tensor_name[:-len(".weight")] + ".bias"
+                    bias_key = prefix + tensor_name[: -len(".weight")] + ".bias"
                     if bias_key in weights and bias_key not in (prefix + t for t in block_layout):
                         result.append((bias_key, weights[bias_key]))
 
@@ -415,7 +433,9 @@ class SLNCCompiler:
         n_embd = config.get("n_embd", config.get("hidden_size", 768))
         n_inner = config.get("n_inner", config.get("intermediate_size", n_embd * 4))
 
-        has_rope = config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
+        has_rope = (
+            config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
+        )
 
         if has_rope:
             shapes = {
@@ -451,6 +471,7 @@ class SLNCCompiler:
 def _crc32(data: bytes) -> int:
     """Compute CRC32 checksum."""
     import zlib
+
     return zlib.crc32(data) & 0xFFFFFFFF
 
 
@@ -458,6 +479,7 @@ def _xxhash64(data: bytes) -> int:
     """Compute xxHash64 (fast hash for tensor names)."""
     try:
         import xxhash
+
         return xxhash.xxh64(data).intdigest()
     except ImportError:
         return _crc32(data) | (_crc32(data[::-1]) << 32)

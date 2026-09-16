@@ -1,26 +1,22 @@
 """Tests for domains/infrastructure/pugqeep/model_tree.py and queue.py."""
 
-import base64
-from pathlib import Path
 
 import numpy as np
 import pytest
 
 import domain.infrastructure._internal.numpy_engine as numpy_engine
-import domain.infrastructure._internal.pugqeep.model_tree as model_tree_module
 import domain.infrastructure._internal.pugqeep.tree as tree_module
-from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
-from domain.infrastructure._internal.pugqeep.tree import (
-    save_library,
-    load_library,
-    load_from_points,
-    load_model_to_points,
-    decompress_tree,
-)
-from domain.infrastructure._internal.pugqeep.queue import ModelQueue
 from domain.infrastructure._internal.pugqeep.config import QueueConfig, TreeConfig
 from domain.infrastructure._internal.pugqeep.library import PointLibrary
-from domain.infrastructure._internal.pugqeep.point import Point
+from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+from domain.infrastructure._internal.pugqeep.queue import ModelQueue
+from domain.infrastructure._internal.pugqeep.tree import (
+    decompress_tree,
+    load_from_points,
+    load_library,
+    load_model_to_points,
+    save_library,
+)
 
 
 def _weights(n=256):
@@ -53,7 +49,9 @@ def test_tree_init_with_existing_library():
 
 
 def test_tree_init_with_config():
-    cfg = TreeConfig(name="m1", n_clusters=8, method="function", skip_embeddings=False, skip_biases=False)
+    cfg = TreeConfig(
+        name="m1", n_clusters=8, method="function", skip_embeddings=False, skip_biases=False
+    )
     tree = ModelTree("m1", n_clusters=16, config=cfg)
     assert tree.n_clusters == 8
     assert tree._method == "function"
@@ -185,7 +183,9 @@ def test_load_from_points_round_trip(tmp_path):
     loaded, meta = load_from_points(str(tmp_path / "mymodel"))
     assert loaded.name == "mymodel"
     assert loaded.is_loaded is True
-    assert meta == {"metadata": {"weight_shapes": {"weight": [64], "bias": [4], "embedding": [50, 8]}}}
+    assert meta == {
+        "metadata": {"weight_shapes": {"weight": [64], "bias": [4], "embedding": [50, 8]}}
+    }
     assert loaded._weight_shapes["weight"] == (64,)
 
 
@@ -203,10 +203,13 @@ def test_decompress_tree_round_trip():
 
 def test_load_model_to_points_creates_own_library(monkeypatch):
     def fake_load_weights(model_id):
-        return ({"arch": "test"}, {
-            "w": np.ones(32, dtype=np.float32),
-            "bias": np.zeros(4, dtype=np.float32),
-        })
+        return (
+            {"arch": "test"},
+            {
+                "w": np.ones(32, dtype=np.float32),
+                "bias": np.zeros(4, dtype=np.float32),
+            },
+        )
 
     monkeypatch.setattr(numpy_engine, "_load_weights", fake_load_weights)
     tree = load_model_to_points("fake", n_clusters=4)

@@ -2,12 +2,13 @@
 
 import numpy as np
 import pytest
+
+from domain.inference._internal.ops.blas import _load_accelerate, is_available, sgemm
 from domain.inference._internal.ops.layernorm import layernorm
 from domain.inference._internal.ops.rmsnorm import rmsnorm
-from domain.inference._internal.ops.blas import sgemm, is_available, _load_accelerate, _setup_sgemm
-
 
 # ── LayerNorm ────────────────────────────────────────────────────────────────
+
 
 class TestLayernorm:
     def test_output_shape(self):
@@ -153,8 +154,7 @@ class TestLayernorm:
             assert np.allclose(y[i].mean(), 0.0, atol=1e-5)
 
     def test_with_varying_scale_per_element(self):
-        x = np.array([[1.0, 2.0, 3.0, 4.0],
-                       [4.0, 3.0, 2.0, 1.0]], dtype=np.float32)
+        x = np.array([[1.0, 2.0, 3.0, 4.0], [4.0, 3.0, 2.0, 1.0]], dtype=np.float32)
         w = np.ones(4, dtype=np.float32)
         b = np.zeros(4, dtype=np.float32)
         y = layernorm(x, w, b)
@@ -170,6 +170,7 @@ class TestLayernorm:
 
 # ── RMSNorm ──────────────────────────────────────────────────────────────────
 
+
 class TestRmsnorm:
     def test_output_shape(self):
         x = np.random.randn(2, 4, 8).astype(np.float32)
@@ -181,7 +182,7 @@ class TestRmsnorm:
         x = np.random.randn(4, 16).astype(np.float32) * 10
         w = np.ones(16, dtype=np.float32)
         y = rmsnorm(x, w)
-        rms = np.sqrt(np.mean(y ** 2, axis=-1))
+        rms = np.sqrt(np.mean(y**2, axis=-1))
         assert np.allclose(rms, 1.0, atol=0.1)
 
     def test_weight_scales(self):
@@ -256,7 +257,7 @@ class TestRmsnorm:
         x = np.random.randn(4, 16).astype(np.float32) * 1000
         w = np.ones(16, dtype=np.float32)
         y = rmsnorm(x, w)
-        rms = np.sqrt(np.mean(y ** 2, axis=-1))
+        rms = np.sqrt(np.mean(y**2, axis=-1))
         assert np.allclose(rms, 1.0, atol=0.1)
 
     def test_single_element_last_dim(self):
@@ -276,7 +277,7 @@ class TestRmsnorm:
         x = np.random.randn(2, 8).astype(np.float32) * 5.0
         w = np.full(8, 3.0, dtype=np.float32)
         y = rmsnorm(x, w)
-        rms = np.sqrt(np.mean(y ** 2, axis=-1))
+        rms = np.sqrt(np.mean(y**2, axis=-1))
         assert np.allclose(rms, 3.0, atol=0.1)
 
     def test_small_eps_all_finite(self):
@@ -292,16 +293,16 @@ class TestRmsnorm:
         assert np.all(np.isfinite(y))
 
     def test_mixed_sign_input(self):
-        x = np.array([[-1.0, 1.0, -1.0, 1.0],
-                       [1.0, -1.0, 1.0, -1.0]], dtype=np.float32)
+        x = np.array([[-1.0, 1.0, -1.0, 1.0], [1.0, -1.0, 1.0, -1.0]], dtype=np.float32)
         w = np.ones(4, dtype=np.float32)
         y = rmsnorm(x, w)
         assert np.all(np.isfinite(y))
-        rms = np.sqrt(np.mean(y ** 2, axis=-1))
+        rms = np.sqrt(np.mean(y**2, axis=-1))
         assert np.allclose(rms, 1.0, atol=0.1)
 
 
 # ── BLAS ─────────────────────────────────────────────────────────────────────
+
 
 class TestBlas:
     def test_numpy_fallback(self):
@@ -424,6 +425,7 @@ class TestBlas:
 
 # ── BLAS Internal Functions ──────────────────────────────────────────────────
 
+
 class TestBlasInternals:
     def test_load_accelerate_returns_none_or_lib(self):
         result = _load_accelerate()
@@ -441,6 +443,7 @@ class TestBlasInternals:
 
     def test_load_accelerate_when_unavailable(self):
         import domain.inference._internal.ops.blas as blas_mod
+
         old = blas_mod._accelerate
         old_unavail = blas_mod._unavailable
         try:
@@ -454,6 +457,7 @@ class TestBlasInternals:
 
     def test_load_accelerate_cache_hit(self):
         import domain.inference._internal.ops.blas as blas_mod
+
         old = blas_mod._accelerate
         old_unavail = blas_mod._unavailable
         try:
@@ -512,6 +516,7 @@ class TestBlasInternals:
 
 
 # ── LayerNorm Advanced ───────────────────────────────────────────────────────
+
 
 class TestLayernormAdvanced:
     def test_all_same_value_input(self):
@@ -577,6 +582,7 @@ class TestLayernormAdvanced:
 
 # ── RMSNorm Advanced ─────────────────────────────────────────────────────────
 
+
 class TestRmsnormAdvanced:
     def test_all_same_value(self):
         x = np.full((4, 8), 5.0, dtype=np.float32)
@@ -589,14 +595,14 @@ class TestRmsnormAdvanced:
         x = np.random.randn(4, 8).astype(np.float32) * 10
         w = np.ones(8, dtype=np.float32)
         y = rmsnorm(x, w)
-        rms = np.sqrt(np.mean(y ** 2, axis=-1))
+        rms = np.sqrt(np.mean(y**2, axis=-1))
         assert np.allclose(rms, 1.0, atol=0.1)
 
     def test_weight_2x(self):
         x = np.random.randn(4, 8).astype(np.float32) * 10
         w = np.full(8, 2.0, dtype=np.float32)
         y = rmsnorm(x, w)
-        rms = np.sqrt(np.mean(y ** 2, axis=-1))
+        rms = np.sqrt(np.mean(y**2, axis=-1))
         assert np.allclose(rms, 2.0, atol=0.2)
 
     def test_zero_input_nonzero_weight(self):

@@ -4,13 +4,12 @@ RateLimiter, CallableSource, CallableStore, CollectorRunner.
 Covers: schema validation, enrichment rules, rate limiting, callable adapters,
 collector orchestration. Uses Record from sources module.
 """
+
 from __future__ import annotations
 
 import sys
 import time
 from pathlib import Path
-
-import pytest
 
 _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
@@ -18,18 +17,18 @@ if _core_dir not in sys.path:
 
 from domain.collections._internal.sources import Record
 from domain.collections._internal.validators import (
-    Schema,
-    DataValidator,
-    EnrichmentRule,
-    DataEnricher,
-    RateLimiter,
     CallableSource,
     CallableStore,
     CollectorRunner,
+    DataEnricher,
+    DataValidator,
+    EnrichmentRule,
+    RateLimiter,
+    Schema,
 )
 
-
 # ── Schema ───────────────────────────────────────────────────────────
+
 
 class TestSchema:
     def test_valid_record(self):
@@ -76,6 +75,7 @@ class TestSchema:
 
 # ── DataValidator ────────────────────────────────────────────────────
 
+
 class TestDataValidator:
     def test_valid(self):
         dv = DataValidator(Schema())
@@ -101,6 +101,7 @@ class TestDataValidator:
 
 
 # ── EnrichmentRule ───────────────────────────────────────────────────
+
 
 class TestEnrichmentRule:
     def test_fixed_value(self):
@@ -130,6 +131,7 @@ class TestEnrichmentRule:
 
 # ── DataEnricher ─────────────────────────────────────────────────────
 
+
 class TestDataEnricher:
     def test_enrich(self):
         de = DataEnricher([EnrichmentRule(key="k", value="v")])
@@ -157,6 +159,7 @@ class TestDataEnricher:
 
 
 # ── RateLimiter ──────────────────────────────────────────────────────
+
 
 class TestRateLimiter:
     def test_acquire_within_burst(self):
@@ -187,11 +190,13 @@ class TestRateLimiter:
 
 # ── CallableSource ───────────────────────────────────────────────────
 
+
 class TestCallableSource:
     def test_read(self):
         def gen():
             yield Record(content="a")
             yield Record(content="b")
+
         cs = CallableSource(gen, name="test")
         records = list(cs.read())
         assert len(records) == 2
@@ -199,6 +204,7 @@ class TestCallableSource:
 
 
 # ── CallableStore ────────────────────────────────────────────────────
+
 
 class TestCallableStore:
     def test_write(self):
@@ -214,6 +220,7 @@ class TestCallableStore:
 
 
 # ── CollectorRunner ──────────────────────────────────────────────────
+
 
 class TestCollectorRunner:
     def test_add_and_list(self):

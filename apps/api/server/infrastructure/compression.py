@@ -13,8 +13,7 @@ Everything else gets gzip compression for reduced bandwidth.
 from __future__ import annotations
 
 import gzip
-import io
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware

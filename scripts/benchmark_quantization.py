@@ -31,22 +31,22 @@ Usage:
     # --bits 8,4 also emits a best-precision recommendation (text/--report/--json)
 """
 
-import gc
+import argparse
+import contextlib
 import csv
+import gc
+import io
 import json
-import math
 import os
 import platform
 import sys
 import time
-import argparse
-import contextlib
-import io
-from datetime import datetime, timezone
-import numpy as np
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any
+
+import numpy as np
 
 # Add core-py to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packages" / "core-py"))
@@ -74,7 +74,7 @@ _PPL_PASSAGE = (
 from domain.training._internal.slonet import SloTransformer
 
 
-def _list_cached_models() -> List[str]:
+def _list_cached_models() -> list[str]:
     """List cached model ids available on this machine.
 
     Scans both the HF cache root and the project-local models/hf-cache/hub/
@@ -84,6 +84,7 @@ def _list_cached_models() -> List[str]:
         Sorted list of model ids like ``Qwen/Qwen2.5-0.5B-Instruct``.
     """
     import os
+
     hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
     hub_dirs = {
         Path(hf_home) / "hub",
@@ -98,7 +99,7 @@ def _list_cached_models() -> List[str]:
             if entry.name in seen or not (entry / "model.slnc").exists():
                 continue
             seen.add(entry.name)
-            found.append(entry.name[len("models--"):].replace("--", "/"))
+            found.append(entry.name[len("models--") :].replace("--", "/"))
     return found
 
 
@@ -129,7 +130,7 @@ def _create_tiny_model(vocab=256, embed=128, layers=4, heads=8, seq_len=512):
 class _CharTokenizer:
     """Lossless byte-level tokenizer for the tiny vocab=256 model."""
 
-    def encode(self, text: str) -> List[int]:
+    def encode(self, text: str) -> list[int]:
         return [ord(c) % 256 for c in text]
 
     def decode(self, ids) -> str:
@@ -140,15 +141,16 @@ class _CharTokenizer:
 class TestResult:
     name: str
     passed: bool
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
     details: str = ""
 
 
 class QuantizationBenchmark:
     """Comprehensive benchmark suite for int4/int8 quantized generate_numpy."""
 
-    def __init__(self, model_name: str = "gpt2", quick: bool = False, bits: int = 8,
-                 tiny: bool = True):
+    def __init__(
+        self, model_name: str = "gpt2", quick: bool = False, bits: int = 8, tiny: bool = True
+    ):
         self.model_name = model_name
         self.quick = quick
         self.bits = bits
@@ -156,7 +158,7 @@ class QuantizationBenchmark:
         self.model = None  # non-quantized
         self.quant_model = None  # quantized (separate instance)
         self._tokenizer = _CharTokenizer()
-        self.results: List[TestResult] = []
+        self.results: list[TestResult] = []
         # Benchmark parameters
         self.n_warmup = 2 if quick else 3
         self.n_measured = 5 if quick else 7
@@ -181,15 +183,20 @@ class QuantizationBenchmark:
     def _load_slnc(self):
         """Load a real model via the SloNetChatProvider .slnc path."""
         from domain.inference.slonet_provider import SloNetChatProvider
+
         from domain.infrastructure.safetensors_loader import _get_model_dir
+
         print(f"  Loading {self.model_name}...")
         t0 = time.perf_counter()
         cache_dir = _get_model_dir(self.model_name)
         slnc_path = cache_dir / "model.slnc"
         if not slnc_path.exists():
             cached = _list_cached_models()
-            hint = (f"\n  Cached models: {', '.join(cached) or '(none)'}"
-                    if cached else "\n  No cached models found on this machine.")
+            hint = (
+                f"\n  Cached models: {', '.join(cached) or '(none)'}"
+                if cached
+                else "\n  No cached models found on this machine."
+            )
             raise FileNotFoundError(
                 f"no cached model.slnc for '{self.model_name}'. "
                 f"Looked in {slnc_path}.{hint} "
@@ -223,6 +230,7 @@ class QuantizationBenchmark:
             quant_model = _create_tiny_model(seq_len=512)
         else:
             import copy
+
             quant_model = copy.deepcopy(model)
 
         # Quantize all SloLinear layers
@@ -249,7 +257,7 @@ class QuantizationBenchmark:
         """Decode token IDs back to text using the benchmark's tokenizer."""
         return self._tokenizer.decode(ids)
 
-    def _speed_gate(self, geomean: float) -> Tuple[bool, str]:
+    def _speed_gate(self, geomean: float) -> tuple[bool, str]:
         """Decide PASS/FAIL for a throughput speedup geomean.
 
         On the tiny in-process model (embed=128) the speed ratio is
@@ -284,13 +292,16 @@ class QuantizationBenchmark:
             self._time_generate(self.model, ids, 16)
             self._time_generate(self.quant_model, ids, 16)
 
-    def _time_generate(self, model, input_ids, max_tokens, temperature=0.0) -> Tuple[float, np.ndarray]:
+    def _time_generate(
+        self, model, input_ids, max_tokens, temperature=0.0
+    ) -> tuple[float, np.ndarray]:
         """Time a single generate_numpy call. Returns (elapsed_seconds, output_ids)."""
         gc.collect()
         gc.disable()
         t0 = time.perf_counter()
         out = model.generate_numpy(
-            input_ids, max_new_tokens=max_tokens,
+            input_ids,
+            max_new_tokens=max_tokens,
             temperature=temperature,
             eos_token=-1,  # disable early stopping for benchmarking
         )
@@ -317,30 +328,39 @@ class QuantizationBenchmark:
             (the caller treats 0 as "unavailable" without failing the run).
         """
         import subprocess
-        cfg = json.dumps({
-            "tiny": self.tiny,
-            "model": None if self.tiny else self.model_name,
-            "bits": self.bits,
-            "quantize": quantize,
-        })
+
+        cfg = json.dumps(
+            {
+                "tiny": self.tiny,
+                "model": None if self.tiny else self.model_name,
+                "bits": self.bits,
+                "quantize": quantize,
+            }
+        )
         timeout = 180 if self.tiny else 1200
         try:
             proc = subprocess.run(
                 [sys.executable, os.path.abspath(__file__), "--rss-worker", cfg],
-                capture_output=True, text=True, timeout=timeout,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
             )
         except subprocess.TimeoutExpired:
             print(f"    WARNING: isolated RSS worker timed out after {timeout}s")
             return 0
         if proc.returncode != 0:
-            print(f"    WARNING: isolated RSS worker failed (exit {proc.returncode}): "
-                  f"{proc.stderr.strip()[-500:]}")
+            print(
+                f"    WARNING: isolated RSS worker failed (exit {proc.returncode}): "
+                f"{proc.stderr.strip()[-500:]}"
+            )
             return 0
         try:
             return int(proc.stdout.strip().splitlines()[-1]) // (1024 * 1024)
         except (ValueError, IndexError):
-            print(f"    WARNING: could not parse isolated RSS worker output: "
-                  f"{proc.stdout.strip()[-200:]}")
+            print(
+                f"    WARNING: could not parse isolated RSS worker output: "
+                f"{proc.stdout.strip()[-200:]}"
+            )
             return 0
 
     def _token_agreement(self, ids1: np.ndarray, ids2: np.ndarray) -> float:
@@ -515,7 +535,7 @@ class QuantizationBenchmark:
         for prompt_len in self.prompt_lengths:
             # Approximate prompt by repeating base text
             repeats = (prompt_len // len(base_text.split())) + 1
-            text = (base_text * repeats)[:prompt_len * 5]  # rough char estimate
+            text = (base_text * repeats)[: prompt_len * 5]  # rough char estimate
             try:
                 input_ids = self._encode(text)[:prompt_len]
             except Exception:
@@ -591,14 +611,17 @@ class QuantizationBenchmark:
 
         # Calculate model weight sizes
         from domain.infrastructure.quantization import walk_slo_linears
-        nq_bytes = sum(
-            m.weight.data.nbytes for m in walk_slo_linears(self.model).values()
-        )
+
+        nq_bytes = sum(m.weight.data.nbytes for m in walk_slo_linears(self.model).values())
         # Quantized: use the packed quantized data size, not the original float32 weights
         q_bytes = 0
         q_info_count = 0
         for m in walk_slo_linears(self.quant_model).values():
-            if hasattr(m, "_quant_info") and m._quant_info is not None and m._quant_info.is_quantized:
+            if (
+                hasattr(m, "_quant_info")
+                and m._quant_info is not None
+                and m._quant_info.is_quantized
+            ):
                 q_bytes += m._quant_info.array.nbytes
                 q_info_count += 1
             else:
@@ -621,11 +644,15 @@ class QuantizationBenchmark:
             "quantized_layers": q_info_count,
         }
 
-        print(f"  Non-quantized RSS: {mem_nq_mb} MB (weights: {results['non_quantized_weight_mb']} MB)")
+        print(
+            f"  Non-quantized RSS: {mem_nq_mb} MB (weights: {results['non_quantized_weight_mb']} MB)"
+        )
         print(f"  Quantized RSS:     {mem_q_mb} MB (weights: {results['quantized_weight_mb']} MB)")
         print(f"  Weight compression: {weight_ratio:.1f}x ({q_info_count} layers quantized)")
-        print(f"  RSS delta:         {results['rss_delta_mb']} MB "
-              f"({'isolated' if rss_ok else 'unavailable'})")
+        print(
+            f"  RSS delta:         {results['rss_delta_mb']} MB "
+            f"({'isolated' if rss_ok else 'unavailable'})"
+        )
 
         # Pass if quantized uses less weight memory
         passed = q_bytes < nq_bytes
@@ -661,11 +688,10 @@ class QuantizationBenchmark:
         cosines = []
         ppl_nqs = []
         ppl_qs = []
-        all_passed = True
 
         for i, prompt in enumerate(self.test_prompts):
             input_ids = self._encode(prompt)
-            print(f"  Prompt {i+1}: '{prompt[:40]}...'")
+            print(f"  Prompt {i + 1}: '{prompt[:40]}...'")
 
             # Logit cosine on the prompt prefix (deterministic, no sampling)
             cosine = self._logit_cosine(self.model, self.quant_model, input_ids)
@@ -681,8 +707,8 @@ class QuantizationBenchmark:
             _, out_nq = self._time_generate(self.model, input_ids, 50, temperature=0.7)
             _, out_q = self._time_generate(self.quant_model, input_ids, 50, temperature=0.7)
 
-            gen_nq = out_nq[0, len(input_ids):]
-            gen_q = out_q[0, len(input_ids):]
+            gen_nq = out_nq[0, len(input_ids) :]
+            gen_q = out_q[0, len(input_ids) :]
 
             # Token agreement
             agreement = self._token_agreement(gen_nq, gen_q)
@@ -702,11 +728,13 @@ class QuantizationBenchmark:
                 "nq_tokens": len(gen_nq),
                 "q_tokens": len(gen_q),
             }
-            print(f"    Logit cosine: {cosine:.4f}  Token agreement: {agreement:.1%}  "
-                  f"Perplexity: NQ {nq_ppl:.1f} / Q {q_ppl:.1f}")
+            print(
+                f"    Logit cosine: {cosine:.4f}  Token agreement: {agreement:.1%}  "
+                f"Perplexity: NQ {nq_ppl:.1f} / Q {q_ppl:.1f}"
+            )
 
             if agreement < 0.1:
-                all_passed = False
+                pass
 
         # Headline perplexity comes from a single fixed passage scored on both
         # models, so the Q/NQ ratio is not dominated by the 4-6 target tokens
@@ -740,9 +768,11 @@ class QuantizationBenchmark:
         min_cosine = 0.95 if self.bits == 8 else 0.85
         max_ppl_ratio = 1.5
         passed = (avg_cosine > min_cosine) and (ppl_ratio < max_ppl_ratio)
-        details = (f"Avg logit cosine: {avg_cosine:.4f} (threshold: {min_cosine:.2f}), "
-                   f"token agreement: {avg_agreement:.1%}, "
-                   f"perplexity ratio (Q/NQ): {ppl_ratio:.2f} (threshold: {max_ppl_ratio:.1f})")
+        details = (
+            f"Avg logit cosine: {avg_cosine:.4f} (threshold: {min_cosine:.2f}), "
+            f"token agreement: {avg_agreement:.1%}, "
+            f"perplexity ratio (Q/NQ): {ppl_ratio:.2f} (threshold: {max_ppl_ratio:.1f})"
+        )
 
         print(f"  Result: {'PASS' if passed else 'FAIL'} — {details}")
         print()
@@ -772,7 +802,7 @@ class QuantizationBenchmark:
             elapsed_q, _ = self._time_generate(self.quant_model, input_ids, n_tok)
             times_nq.append(elapsed)
             times_q.append(elapsed_q)
-            print(f"  Run {run+1:2d}/{self.n_cold_runs}: NQ={elapsed:.3f}s  Q={elapsed_q:.3f}s")
+            print(f"  Run {run + 1:2d}/{self.n_cold_runs}: NQ={elapsed:.3f}s  Q={elapsed_q:.3f}s")
 
         # Cold = first run; warm = median of remaining runs
         def _cold_warm(times):
@@ -801,14 +831,18 @@ class QuantizationBenchmark:
             },
         }
 
-        print(f"  Non-quantized: cold={cold_nq:.3f}s, warm={warm_nq:.3f}s ({cold_nq/warm_nq:.1f}x startup overhead)")
-        print(f"  Quantized:     cold={cold_q:.3f}s, warm={warm_q:.3f}s ({cold_q/warm_q:.1f}x startup overhead)")
+        print(
+            f"  Non-quantized: cold={cold_nq:.3f}s, warm={warm_nq:.3f}s ({cold_nq / warm_nq:.1f}x startup overhead)"
+        )
+        print(
+            f"  Quantized:     cold={cold_q:.3f}s, warm={warm_q:.3f}s ({cold_q / warm_q:.1f}x startup overhead)"
+        )
 
         # Pass if warm steady state is achievable (variance < 50% of mean)
         mean_warm = (warm_nq + warm_q) / 2
         total_var = (variance_nq + variance_q) / 2
         passed = total_var < mean_warm * 0.5
-        details = f"Startup overhead: NQ={cold_nq/warm_nq:.1f}x, Q={cold_q/warm_q:.1f}x"
+        details = f"Startup overhead: NQ={cold_nq / warm_nq:.1f}x, Q={cold_q / warm_q:.1f}x"
 
         print(f"  Result: {'PASS' if passed else 'FAIL'} — {details}")
         print()
@@ -927,7 +961,7 @@ class QuantizationBenchmark:
     # -------------------------------------------------------------------------
     # Run All Tests
     # -------------------------------------------------------------------------
-    def run_all(self) -> List[TestResult]:
+    def run_all(self) -> list[TestResult]:
         print("=" * 60)
         print(f"Int{self.bits} Quantization Benchmark")
         print(f"Model: {'tiny (in-process)' if self.tiny else self.model_name}")
@@ -991,17 +1025,20 @@ class QuantizationBenchmark:
             print()
 
     def to_json(self) -> str:
-        return json.dumps({
-            "model": self.model_name,
-            "device": platform.processor() or platform.machine(),
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "quick": self.quick,
-            "bits": self.bits,
-            "tiny": self.tiny,
-            "results": [asdict(r) for r in self.results],
-            "passed": sum(1 for r in self.results if r.passed),
-            "total": len(self.results),
-        }, indent=2)
+        return json.dumps(
+            {
+                "model": self.model_name,
+                "device": platform.processor() or platform.machine(),
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "quick": self.quick,
+                "bits": self.bits,
+                "tiny": self.tiny,
+                "results": [asdict(r) for r in self.results],
+                "passed": sum(1 for r in self.results if r.passed),
+                "total": len(self.results),
+            },
+            indent=2,
+        )
 
     def to_markdown(self) -> str:
         """Render the benchmark results as a self-contained markdown report.
@@ -1080,22 +1117,23 @@ class QuantizationBenchmark:
                 for path in ("non_quantized", "quantized"):
                     d = m[path]
                     lines.append(
-                        f"| {path} | {d['cold_s']} | {d['warm_median_s']} | "
-                        f"{d['variance_s']} |"
+                        f"| {path} | {d['cold_s']} | {d['warm_median_s']} | {d['variance_s']} |"
                     )
             lines.append("")
         if self.tiny:
-            lines.extend([
-                "## Notes",
-                "",
-                "Ran on the tiny in-process model (embed=128). Confirmed wins are "
-                "memory compression (4x int8 / 8x int4) and quality preservation "
-                "(logit cosine ~1.0 int8 / ~0.85 int4). Throughput figures are "
-                "informational: the float32 numpy path is machine-state dependent, "
-                "so speed ratios here reflect the int8/int4 overhead floor, not the "
-                "plan's >1.3x GPT-2-scale target (measure that with `--model <cached-id>`).",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## Notes",
+                    "",
+                    "Ran on the tiny in-process model (embed=128). Confirmed wins are "
+                    "memory compression (4x int8 / 8x int4) and quality preservation "
+                    "(logit cosine ~1.0 int8 / ~0.85 int4). Throughput figures are "
+                    "informational: the float32 numpy path is machine-state dependent, "
+                    "so speed ratios here reflect the int8/int4 overhead floor, not the "
+                    "plan's >1.3x GPT-2-scale target (measure that with `--model <cached-id>`).",
+                    "",
+                ]
+            )
         return "\n".join(lines)
 
     def write_report(self, path) -> Path:
@@ -1113,7 +1151,7 @@ class QuantizationBenchmark:
         return p
 
 
-def _parse_bits(value: str) -> List[int]:
+def _parse_bits(value: str) -> list[int]:
     """Parse --bits value: single int ('8') or comma-separated ('8,4')."""
     try:
         return [int(b.strip()) for b in value.split(",")]
@@ -1123,7 +1161,7 @@ def _parse_bits(value: str) -> List[int]:
         )
 
 
-def _comparison_table(runs: List[Dict[str, Any]]) -> str:
+def _comparison_table(runs: list[dict[str, Any]]) -> str:
     """Build a markdown comparison table across multiple precision runs."""
     lines = [
         "## Precision Comparison",
@@ -1205,7 +1243,7 @@ def _comparison_table(runs: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _run_metric(run: Dict[str, Any], test_name: str, key: str) -> Optional[float]:
+def _run_metric(run: dict[str, Any], test_name: str, key: str) -> float | None:
     """Extract a scalar metric from a single benchmark run.
 
     Args:
@@ -1225,7 +1263,7 @@ def _run_metric(run: Dict[str, Any], test_name: str, key: str) -> Optional[float
     return None
 
 
-def _run_geomean_speedup(run: Dict[str, Any], test_name: str) -> Optional[float]:
+def _run_geomean_speedup(run: dict[str, Any], test_name: str) -> float | None:
     """Geometric mean of the ``speedup`` values inside a run's test metrics.
 
     Args:
@@ -1242,16 +1280,14 @@ def _run_geomean_speedup(run: Dict[str, Any], test_name: str) -> Optional[float]
         if not isinstance(metrics, dict):
             return None
         speedups = [
-            m["speedup"]
-            for m in metrics.values()
-            if isinstance(m, dict) and "speedup" in m
+            m["speedup"] for m in metrics.values() if isinstance(m, dict) and "speedup" in m
         ]
         if speedups:
             return round(float(np.exp(np.mean(np.log(speedups)))), 4)
     return None
 
 
-def _run_nested_metric(run: Dict[str, Any], test_name: str, key: str) -> Optional[float]:
+def _run_nested_metric(run: dict[str, Any], test_name: str, key: str) -> float | None:
     """Extract a metric that may be nested under a group dict (e.g. cold/warm).
 
     Checks the test's top-level ``metrics`` dict first, then any ``metrics``
@@ -1286,7 +1322,7 @@ def _quality_floor(bits: int) -> float:
     return 0.95 if bits == 8 else 0.85
 
 
-def _recommendations(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _recommendations(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Pick the best precision per model on a weighted quality/size/speed score.
 
     Only models with at least two candidate precisions are scored. Each metric
@@ -1301,7 +1337,7 @@ def _recommendations(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     Returns:
         List of ``{model, candidates, recommended_bits, score}`` dicts.
     """
-    groups: Dict[str, List[Dict[str, Any]]] = {}
+    groups: dict[str, list[dict[str, Any]]] = {}
     for run in runs:
         groups.setdefault(run.get("model", "tiny"), []).append(run)
 
@@ -1315,14 +1351,16 @@ def _recommendations(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             comp = _run_metric(run, "memory_usage", "weight_compression")
             gen = _run_geomean_speedup(run, "throughput_vs_length")
             floor = _quality_floor(run["bits"])
-            candidates.append({
-                "bits": run["bits"],
-                "avg_logit_cosine": cos,
-                "weight_compression": comp,
-                "gen_geomean": gen,
-                "floor": floor,
-                "qualified": cos is not None and cos > floor,
-            })
+            candidates.append(
+                {
+                    "bits": run["bits"],
+                    "avg_logit_cosine": cos,
+                    "weight_compression": comp,
+                    "gen_geomean": gen,
+                    "floor": floor,
+                    "qualified": cos is not None and cos > floor,
+                }
+            )
         best_comp = max((c["weight_compression"] or 0 for c in candidates), default=1)
         best_gen = max((c["gen_geomean"] or 0 for c in candidates), default=1)
         best_cos = max((c["avg_logit_cosine"] or 0 for c in candidates), default=1)
@@ -1339,16 +1377,18 @@ def _recommendations(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if not winners:
             continue
         best = max(winners, key=lambda c: c["score"])
-        recs.append({
-            "model": model,
-            "candidates": scored,
-            "recommended_bits": best["bits"],
-            "score": best["score"],
-        })
+        recs.append(
+            {
+                "model": model,
+                "candidates": scored,
+                "recommended_bits": best["bits"],
+                "score": best["score"],
+            }
+        )
     return recs
 
 
-def _recommendation_table(runs: List[Dict[str, Any]]) -> str:
+def _recommendation_table(runs: list[dict[str, Any]]) -> str:
     """Markdown table of per-model best-precision recommendations.
 
     Args:
@@ -1422,7 +1462,7 @@ _BASELINE_SPEED_METRICS = ("gen_geomean", "prompt_geomean", "temp_geomean")
 _BASELINE_LOWER_IS_BETTER = ("perplexity_ratio",)
 
 
-def _headline_metrics(runs: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+def _headline_metrics(runs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Map each ``model:int<bits>`` run to its headline metric dict."""
 
     out = {}
@@ -1445,20 +1485,21 @@ def _headline_metrics(runs: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     return out
 
 
-def _save_baseline(path: Path, current: Dict[str, Dict[str, Any]]) -> None:
+def _save_baseline(path: Path, current: dict[str, dict[str, Any]]) -> None:
     """Persist current headline metrics to a baseline file."""
 
     payload = {
         "tool": "benchmark_quantization.py",
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "metrics": current,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
-def _compare_baselines(current: Dict[str, Dict[str, Any]],
-                       saved: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+def _compare_baselines(
+    current: dict[str, dict[str, Any]], saved: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
     """Compare current headline metrics against a saved baseline.
 
     Returns ``{"regressions": [...], "deltas": {...}}``. Regressions gate the
@@ -1485,16 +1526,21 @@ def _compare_baselines(current: Dict[str, Dict[str, Any]],
                 regressed = cv < bv and same_set
                 deltas[key][metric] = {"baseline": bv, "current": cv}
                 if regressed:
-                    regressions.append({"key": key, "metric": metric,
-                                        "baseline": bv, "current": cv})
+                    regressions.append(
+                        {"key": key, "metric": metric, "baseline": bv, "current": cv}
+                    )
                 continue
             if bv is None or cv is None:
                 continue
             tol = _BASELINE_TOLERANCES.get(metric)
             if tol is None:
                 # Informational only (e.g. cold/warm latency).
-                deltas[key][metric] = {"baseline": bv, "current": cv,
-                                       "delta": round(cv - bv, 4), "regressed": False}
+                deltas[key][metric] = {
+                    "baseline": bv,
+                    "current": cv,
+                    "delta": round(cv - bv, 4),
+                    "regressed": False,
+                }
                 continue
             if metric in ("avg_logit_cosine", "avg_token_agreement"):
                 regressed = cv < bv - tol
@@ -1503,21 +1549,27 @@ def _compare_baselines(current: Dict[str, Dict[str, Any]],
             elif cur.get("tiny") and metric in _BASELINE_SPEED_METRICS:
                 # Speed measurements on the in-process tiny fixture are
                 # timing-noise dominated — record the delta, never gate.
-                deltas[key][metric] = {"baseline": bv, "current": cv,
-                                       "delta": round(cv - bv, 4), "regressed": False}
+                deltas[key][metric] = {
+                    "baseline": bv,
+                    "current": cv,
+                    "delta": round(cv - bv, 4),
+                    "regressed": False,
+                }
                 continue
             else:
                 regressed = cv < bv * (1.0 - tol)
-            deltas[key][metric] = {"baseline": bv, "current": cv,
-                                   "delta": round(cv - bv, 4), "regressed": regressed}
+            deltas[key][metric] = {
+                "baseline": bv,
+                "current": cv,
+                "delta": round(cv - bv, 4),
+                "regressed": regressed,
+            }
             if regressed:
-                regressions.append({"key": key, "metric": metric,
-                                    "baseline": bv, "current": cv})
+                regressions.append({"key": key, "metric": metric, "baseline": bv, "current": cv})
     return {"regressions": regressions, "deltas": deltas}
 
 
-def _baseline_section_text(result: Dict[str, Any], created: bool,
-                           path: str) -> str:
+def _baseline_section_text(result: dict[str, Any], created: bool, path: str) -> str:
     """Markdown section describing the baseline outcome."""
 
     if created:
@@ -1535,7 +1587,7 @@ def _baseline_section_text(result: Dict[str, Any], created: bool,
     return "\n".join(lines)
 
 
-def _comparison_json(runs: List[Dict[str, Any]]) -> str:
+def _comparison_json(runs: list[dict[str, Any]]) -> str:
     """Build a JSON comparison object across multiple precision runs."""
 
     comparison = {}
@@ -1557,7 +1609,7 @@ def _comparison_json(runs: List[Dict[str, Any]]) -> str:
     return comparison
 
 
-def _parse_models(value: str) -> List[str]:
+def _parse_models(value: str) -> list[str]:
     """Parse a comma-separated model list.
 
     ``tiny`` selects the deterministic in-process model; any other id is a
@@ -1575,7 +1627,7 @@ def _parse_models(value: str) -> List[str]:
     return models
 
 
-def _model_comparison_table(runs: List[Dict[str, Any]]) -> str:
+def _model_comparison_table(runs: list[dict[str, Any]]) -> str:
     """Build a markdown table comparing quantization impact across models.
 
     One row per model; one column per precision showing weight compression,
@@ -1604,8 +1656,7 @@ def _model_comparison_table(runs: List[Dict[str, Any]]) -> str:
         row = [model]
         for p in precisions:
             match = next(
-                (r for r in runs
-                 if r.get("model", "tiny") == model and f"int{r['bits']}" == p),
+                (r for r in runs if r.get("model", "tiny") == model and f"int{r['bits']}" == p),
                 None,
             )
             if match is None:
@@ -1632,7 +1683,7 @@ def _model_comparison_table(runs: List[Dict[str, Any]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _model_comparison(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _model_comparison(runs: list[dict[str, Any]]) -> dict[str, Any]:
     """Build a JSON comparison object keyed by model and precision.
 
     Args:
@@ -1662,7 +1713,7 @@ def _model_comparison(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
     return models
 
 
-def _csv_output(runs: List[Dict[str, Any]]) -> str:
+def _csv_output(runs: list[dict[str, Any]]) -> str:
     """Flatten each run into one CSV row of headline metrics.
 
     Args:
@@ -1672,36 +1723,53 @@ def _csv_output(runs: List[Dict[str, Any]]) -> str:
         CSV string with header row ``model,bits,passed,total,...``.
     """
     header = [
-        "model", "bits", "quick", "tiny",
-        "passed", "total",
-        "gen_geomean", "prompt_geomean", "temp_geomean",
-        "weight_compression", "avg_logit_cosine", "avg_token_agreement",
+        "model",
+        "bits",
+        "quick",
+        "tiny",
+        "passed",
+        "total",
+        "gen_geomean",
+        "prompt_geomean",
+        "temp_geomean",
+        "weight_compression",
+        "avg_logit_cosine",
+        "avg_token_agreement",
         "perplexity_ratio",
-        "cold_start_s", "warm_median_s",
+        "cold_start_s",
+        "warm_median_s",
     ]
     rows = []
 
-    def _cell(value: Optional[Any]) -> Any:
+    def _cell(value: Any | None) -> Any:
         return "" if value is None else value
 
     for run in runs:
-        rows.append({
-            "model": run.get("model", "tiny"),
-            "bits": run["bits"],
-            "quick": run.get("quick", False),
-            "tiny": run.get("tiny", False),
-            "passed": run["passed"],
-            "total": run["total"],
-            "gen_geomean": _cell(_run_geomean_speedup(run, "throughput_vs_length")),
-            "prompt_geomean": _cell(_run_geomean_speedup(run, "throughput_vs_prompt")),
-            "temp_geomean": _cell(_run_geomean_speedup(run, "temperature_impact")),
-            "weight_compression": _cell(_run_metric(run, "memory_usage", "weight_compression")),
-            "avg_logit_cosine": _cell(_run_metric(run, "quality_degradation", "avg_logit_cosine")),
-            "avg_token_agreement": _cell(_run_metric(run, "quality_degradation", "avg_token_agreement")),
-            "perplexity_ratio": _cell(_run_metric(run, "quality_degradation", "perplexity_ratio")),
-            "cold_start_s": _cell(_run_nested_metric(run, "cold_vs_warm", "cold_s")),
-            "warm_median_s": _cell(_run_nested_metric(run, "cold_vs_warm", "warm_median_s")),
-        })
+        rows.append(
+            {
+                "model": run.get("model", "tiny"),
+                "bits": run["bits"],
+                "quick": run.get("quick", False),
+                "tiny": run.get("tiny", False),
+                "passed": run["passed"],
+                "total": run["total"],
+                "gen_geomean": _cell(_run_geomean_speedup(run, "throughput_vs_length")),
+                "prompt_geomean": _cell(_run_geomean_speedup(run, "throughput_vs_prompt")),
+                "temp_geomean": _cell(_run_geomean_speedup(run, "temperature_impact")),
+                "weight_compression": _cell(_run_metric(run, "memory_usage", "weight_compression")),
+                "avg_logit_cosine": _cell(
+                    _run_metric(run, "quality_degradation", "avg_logit_cosine")
+                ),
+                "avg_token_agreement": _cell(
+                    _run_metric(run, "quality_degradation", "avg_token_agreement")
+                ),
+                "perplexity_ratio": _cell(
+                    _run_metric(run, "quality_degradation", "perplexity_ratio")
+                ),
+                "cold_start_s": _cell(_run_nested_metric(run, "cold_vs_warm", "cold_s")),
+                "warm_median_s": _cell(_run_nested_metric(run, "cold_vs_warm", "warm_median_s")),
+            }
+        )
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=header, extrasaction="ignore")
     writer.writeheader()
@@ -1709,7 +1777,7 @@ def _csv_output(runs: List[Dict[str, Any]]) -> str:
     return buf.getvalue()
 
 
-def _run_rss_worker(cfg: Dict[str, Any]) -> int:
+def _run_rss_worker(cfg: dict[str, Any]) -> int:
     """Measure resident RSS of one freshly-loaded (optionally quantized) model.
 
     Runs as a fresh subprocess (``--rss-worker``) so the footprint of a
@@ -1749,6 +1817,7 @@ def _run_rss_worker(cfg: Dict[str, Any]) -> int:
         return int(parts[1]) * page_bytes
 
     import resource as _resource
+
     ru = _resource.getrusage(_resource.RUSAGE_SELF)
     peak_kb = ru.ru_maxrss if sys.platform != "darwin" else ru.ru_maxrss / 1024.0
     return int(peak_kb * 1024)
@@ -1756,35 +1825,63 @@ def _run_rss_worker(cfg: Dict[str, Any]) -> int:
 
 def main():
     parser = argparse.ArgumentParser(description="Int4/Int8 Quantization Benchmark")
-    parser.add_argument("--model", default=None,
-                        help="Cached .slnc model name (default: tiny in-process model)")
-    parser.add_argument("--models", type=_parse_models, default=None,
-                        help="Comma-separated model ids to compare (e.g. tiny,<cached-id>); "
-                             "mutually exclusive with --model")
+    parser.add_argument(
+        "--model", default=None, help="Cached .slnc model name (default: tiny in-process model)"
+    )
+    parser.add_argument(
+        "--models",
+        type=_parse_models,
+        default=None,
+        help="Comma-separated model ids to compare (e.g. tiny,<cached-id>); "
+        "mutually exclusive with --model",
+    )
     parser.add_argument("--quick", action="store_true", help="Reduced runs for faster testing")
     parser.add_argument("--json", action="store_true", help="Machine-readable JSON output")
-    parser.add_argument("--bits", type=_parse_bits, default=[8],
-                        help="Quantization bits: single (8) or comma-separated (8,4)")
-    parser.add_argument("--report", nargs="?", const="benchmark_quantization_report.md",
-                        default=None, metavar="PATH",
-                        help="Write a markdown report to PATH "
-                             "(default: benchmark_quantization_report.md)")
-    parser.add_argument("--csv", nargs="?", const="benchmark_quantization.csv",
-                        default=None, metavar="PATH",
-                        help="Write one-row-per-run CSV to PATH "
-                             "(default: benchmark_quantization.csv); "
-                             "prints to stdout when used without a path")
-    parser.add_argument("--validate", action="store_true",
-                        help="CI mode: run only quality + compression checks, exit 0/1")
-    parser.add_argument("--per-layer", action="store_true",
-                        help="Print per-layer quantization stats (size, ratio, weight fidelity)")
-    parser.add_argument("--baseline", nargs="?", const="quantization_baseline.json",
-                        default=None, metavar="PATH",
-                        help="Compare headline metrics against a saved baseline: "
-                             "write PATH when absent (default: quantization_baseline.json), "
-                             "or exit 1 on regression when it exists")
-    parser.add_argument("--rss-worker", default=None, metavar="JSON",
-                        help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--bits",
+        type=_parse_bits,
+        default=[8],
+        help="Quantization bits: single (8) or comma-separated (8,4)",
+    )
+    parser.add_argument(
+        "--report",
+        nargs="?",
+        const="benchmark_quantization_report.md",
+        default=None,
+        metavar="PATH",
+        help="Write a markdown report to PATH (default: benchmark_quantization_report.md)",
+    )
+    parser.add_argument(
+        "--csv",
+        nargs="?",
+        const="benchmark_quantization.csv",
+        default=None,
+        metavar="PATH",
+        help="Write one-row-per-run CSV to PATH "
+        "(default: benchmark_quantization.csv); "
+        "prints to stdout when used without a path",
+    )
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="CI mode: run only quality + compression checks, exit 0/1",
+    )
+    parser.add_argument(
+        "--per-layer",
+        action="store_true",
+        help="Print per-layer quantization stats (size, ratio, weight fidelity)",
+    )
+    parser.add_argument(
+        "--baseline",
+        nargs="?",
+        const="quantization_baseline.json",
+        default=None,
+        metavar="PATH",
+        help="Compare headline metrics against a saved baseline: "
+        "write PATH when absent (default: quantization_baseline.json), "
+        "or exit 1 on regression when it exists",
+    )
+    parser.add_argument("--rss-worker", default=None, metavar="JSON", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     if args.rss_worker is not None:
@@ -1837,7 +1934,8 @@ def main():
     per_layer_data = {}
     if args.per_layer and run_data:
         from domain.infrastructure.quantization import walk_slo_linears as _wsl
-        for bench_obj, run in zip(bench_objs, run_data):
+
+        for bench_obj, run in zip(bench_objs, run_data, strict=False):
             bits_val = run["bits"]
             model_id = run.get("model", "tiny")
             if bench_obj.model is None:
@@ -1863,13 +1961,15 @@ def main():
                 ratio = nq_kb / max(q_kb, 0.001)
                 total_nq += nq_kb
                 total_q += q_kb
-                entries.append({
-                    "layer": name,
-                    "fp32_kb": round(nq_kb, 2),
-                    "quant_kb": round(q_kb, 2),
-                    "ratio": round(ratio, 2),
-                    "weight_cosine": cosine,
-                })
+                entries.append(
+                    {
+                        "layer": name,
+                        "fp32_kb": round(nq_kb, 2),
+                        "quant_kb": round(q_kb, 2),
+                        "ratio": round(ratio, 2),
+                        "weight_cosine": cosine,
+                    }
+                )
             pl_key = f"{model_id} int{bits_val}" if len(args.models) > 1 else f"int{bits_val}"
             per_layer_data[pl_key] = {
                 "layers": entries,
@@ -1884,12 +1984,18 @@ def main():
                 print(f"{'Layer':<45} {'FP32 KB':>8} {'Q KB':>8} {'Ratio':>6} {'Cos':>8}")
                 print("-" * 79)
                 for e in entries:
-                    cos_str = f"{e['weight_cosine']:.4f}" if e["weight_cosine"] < 0.999 else "1.0000"
-                    print(f"  {e['layer']:<43} {e['fp32_kb']:>8.2f} {e['quant_kb']:>8.2f} "
-                          f"{e['ratio']:>5.1f}x {cos_str:>8}")
+                    cos_str = (
+                        f"{e['weight_cosine']:.4f}" if e["weight_cosine"] < 0.999 else "1.0000"
+                    )
+                    print(
+                        f"  {e['layer']:<43} {e['fp32_kb']:>8.2f} {e['quant_kb']:>8.2f} "
+                        f"{e['ratio']:>5.1f}x {cos_str:>8}"
+                    )
                 print("-" * 79)
-                print(f"  {'TOTAL':<43} {total_nq:>8.2f} {total_q:>8.2f} "
-                      f"{total_nq/max(total_q,0.001):>5.1f}x")
+                print(
+                    f"  {'TOTAL':<43} {total_nq:>8.2f} {total_q:>8.2f} "
+                    f"{total_nq / max(total_q, 0.001):>5.1f}x"
+                )
                 print()
 
     multi_model = len(args.models) > 1
@@ -1905,20 +2011,19 @@ def main():
             baseline_result = _compare_baselines(current, saved)
             baseline_result["exists"] = True
             if not args.json:
-                print(_baseline_section_text(baseline_result, created=False,
-                                             path=args.baseline))
+                print(_baseline_section_text(baseline_result, created=False, path=args.baseline))
         else:
             _save_baseline(bpath, current)
             baseline_result = {"exists": False, "regressions": [], "deltas": {}}
             if not args.json:
-                print(_baseline_section_text(baseline_result, created=True,
-                                             path=args.baseline))
+                print(_baseline_section_text(baseline_result, created=True, path=args.baseline))
 
     if args.json:
         out = {
             "runs": run_data,
-            "comparison": None if multi_model else (
-                _comparison_json(run_data) if len(run_data) > 1 else None),
+            "comparison": None
+            if multi_model
+            else (_comparison_json(run_data) if len(run_data) > 1 else None),
         }
         if multi_model:
             out["model_comparison"] = _model_comparison(run_data)
@@ -1954,7 +2059,9 @@ def main():
             print(rec_table)
         # Tiny-mode note
         if run_data and run_data[0].get("tiny"):
-            print("Note: tiny model throughput is informational; use --model <cached-id> for the >1.3x claim.")
+            print(
+                "Note: tiny model throughput is informational; use --model <cached-id> for the >1.3x claim."
+            )
 
     if args.report:
         # Build combined report
@@ -1980,9 +2087,9 @@ def main():
                 status = "PASS" if r["passed"] else "FAIL"
                 report_lines.append(f"### {r['name']} [{status}]")
                 report_lines.append("")
-                report_lines.append(f"```json")
+                report_lines.append("```json")
                 report_lines.append(json.dumps(r["metrics"], indent=2))
-                report_lines.append(f"```")
+                report_lines.append("```")
                 report_lines.append("")
         if len(run_data) > 1:
             if multi_model:
@@ -1993,7 +2100,11 @@ def main():
         if rec_table:
             report_lines.append(rec_table)
         if baseline_result is not None:
-            report_lines.append(_baseline_section_text(baseline_result, created=not baseline_result["exists"], path=args.baseline))
+            report_lines.append(
+                _baseline_section_text(
+                    baseline_result, created=not baseline_result["exists"], path=args.baseline
+                )
+            )
         if per_layer_data:
             report_lines.append("")
             report_lines.append("## Per-Layer Stats")
@@ -2041,8 +2152,11 @@ def main():
         all_passed = all(run["passed"] == run["total"] for run in run_data)
         if not all_passed:
             exit_code = 1
-    if (baseline_result is not None and baseline_result.get("exists")
-            and baseline_result["regressions"]):
+    if (
+        baseline_result is not None
+        and baseline_result.get("exists")
+        and baseline_result["regressions"]
+    ):
         exit_code = 1
     sys.exit(exit_code)
 

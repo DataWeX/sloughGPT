@@ -125,10 +125,10 @@ class TestSloAdamW:
         p_ref = p0.copy()
         for t, g in enumerate(gs, start=1):
             m = b1 * m + (1 - b1) * g
-            v = b2 * v + (1 - b2) * g ** 2
-            mh = m / (1 - b1 ** t)
+            v = b2 * v + (1 - b2) * g**2
+            mh = m / (1 - b1**t)
             vmax = np.maximum(vmax, v)
-            vh = vmax / (1 - b2 ** t)
+            vh = vmax / (1 - b2**t)
             p_ref -= lr * mh / (np.sqrt(vh) + eps)
             p_ref -= lr * wd * p_ref
         assert np.allclose(p.data, p_ref, atol=1e-12)
@@ -141,11 +141,13 @@ class TestSloAdamW:
         for _ in range(20):
             pa.grad = Tensor(np.array([1.0]))
             pb.grad = Tensor(np.array([1.0]))
-            amsg.step([pa]); plain.step([pb])
+            amsg.step([pa])
+            plain.step([pb])
         for _ in range(20):
             pa.grad = Tensor(np.array([0.1]))
             pb.grad = Tensor(np.array([0.1]))
-            amsg.step([pa]); plain.step([pb])
+            amsg.step([pa])
+            plain.step([pb])
         # amsgrad holds the historical max of the second moment, so small
         # second-phase gradients cannot shrink the denominator; the parameter
         # therefore moves less and ends up closer to zero than plain AdamW.
@@ -218,9 +220,9 @@ class TestSloAdamW:
         p_ref = p0.copy()
         for t, g in enumerate((g0, g1), start=1):
             m = b1 * m + (1 - b1) * g
-            v = b2 * v + (1 - b2) * g ** 2
-            mh = m / (1 - b1 ** t)
-            vh = v / (1 - b2 ** t)
+            v = b2 * v + (1 - b2) * g**2
+            mh = m / (1 - b1**t)
+            vh = v / (1 - b2**t)
             p_ref -= lr * mh / (np.sqrt(vh) + eps)
             p_ref -= lr * wd * p_ref
         assert np.allclose(p.data, p_ref, atol=1e-12)

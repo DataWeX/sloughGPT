@@ -4,22 +4,21 @@ from __future__ import annotations
 
 import json
 import time
-import tempfile
-import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
-
-from domain.collections._internal.scheduler import JobConfig, JobScheduler, CollectorMonitor, CollectorExporter
+from domain.collections._internal.scheduler import (
+    CollectorExporter,
+    CollectorMonitor,
+    JobConfig,
+    JobScheduler,
+)
 from domain.collections._internal.sources import Record
 from domain.collections._internal.stores import MemoryStore
-
 
 # ── JobConfig ──────────────────────────────────────────────────────────────
 
 
 class TestJobConfig:
-
     def test_defaults(self):
         cfg = JobConfig(name="test")
         assert cfg.name == "test"
@@ -49,7 +48,6 @@ class TestJobConfig:
 
 
 class TestJobScheduler:
-
     def setup_method(self):
         self.scheduler = JobScheduler()
 
@@ -129,7 +127,9 @@ class TestJobScheduler:
         cb = MagicMock()
         collector = MagicMock()
         collector.collect.return_value = 5
-        self.scheduler.add_job(JobConfig(name="j1", interval=0.05, max_runs=1, on_complete=cb), collector)
+        self.scheduler.add_job(
+            JobConfig(name="j1", interval=0.05, max_runs=1, on_complete=cb), collector
+        )
         self.scheduler.start_job("j1")
         time.sleep(0.3)
         cb.assert_called_once_with("j1", 5)
@@ -138,7 +138,9 @@ class TestJobScheduler:
         cb = MagicMock()
         collector = MagicMock()
         collector.collect.side_effect = RuntimeError("boom")
-        self.scheduler.add_job(JobConfig(name="j1", interval=0.05, max_runs=1, on_error=cb), collector)
+        self.scheduler.add_job(
+            JobConfig(name="j1", interval=0.05, max_runs=1, on_error=cb), collector
+        )
         self.scheduler.start_job("j1")
         time.sleep(0.3)
         cb.assert_called_once()
@@ -198,7 +200,6 @@ class TestJobScheduler:
 
 
 class TestCollectorMonitor:
-
     def test_init(self):
         monitor = CollectorMonitor()
         assert monitor._runner is None
@@ -272,7 +273,6 @@ class TestCollectorMonitor:
 
 
 class TestCollectorExporter:
-
     def test_init(self):
         exporter = CollectorExporter()
         assert exporter._store is None

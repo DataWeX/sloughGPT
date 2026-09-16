@@ -1,18 +1,17 @@
 import hashlib
-import numpy as np
-import pytest
-import tempfile
 from pathlib import Path
 
-from domain.collections._internal.sources import Record, FileSource
-from domain.collections._internal.stores import MemoryStore
+import numpy as np
+
 from domain.collections._internal.collector import Collector
+from domain.collections._internal.sources import FileSource, Record
+from domain.collections._internal.stores import MemoryStore
 from domain.collections._internal.training_bridge import (
-    TrainingDataConfig,
-    TrainingDataAdapter,
-    RecordToTrainingSource,
-    TrainingDatasetBuilder,
     CollectorTrainingBridge,
+    RecordToTrainingSource,
+    TrainingDataAdapter,
+    TrainingDataConfig,
+    TrainingDatasetBuilder,
 )
 
 
@@ -30,6 +29,7 @@ class _FixedSource:
 # ---------------------------------------------------------------------------
 # TrainingDataConfig
 # ---------------------------------------------------------------------------
+
 
 class TestTrainingDataConfig:
     def test_defaults(self):
@@ -52,6 +52,7 @@ class TestTrainingDataConfig:
 # ---------------------------------------------------------------------------
 # TrainingDataAdapter
 # ---------------------------------------------------------------------------
+
 
 class TestTrainingDataAdapter:
     def setup_method(self):
@@ -150,8 +151,8 @@ class TestTrainingDataAdapter:
         assert adapter.stats["too_short"] == 1
 
     def test_dedup_hash_deterministic(self):
-        h1 = hashlib.md5("test".encode("utf-8")).hexdigest()
-        h2 = hashlib.md5("test".encode("utf-8")).hexdigest()
+        h1 = hashlib.md5(b"test").hexdigest()
+        h2 = hashlib.md5(b"test").hexdigest()
         assert h1 == h2
 
     def test_records_to_training_data_mapping(self):
@@ -165,6 +166,7 @@ class TestTrainingDataAdapter:
 # ---------------------------------------------------------------------------
 # RecordToTrainingSource
 # ---------------------------------------------------------------------------
+
 
 class TestRecordToTrainingSource:
     def test_read(self):
@@ -187,6 +189,7 @@ class TestRecordToTrainingSource:
 # ---------------------------------------------------------------------------
 # TrainingDatasetBuilder
 # ---------------------------------------------------------------------------
+
 
 class TestTrainingDatasetBuilder:
     def setup_method(self):
@@ -283,6 +286,7 @@ class TestTrainingDatasetBuilder:
 # CollectorTrainingBridge
 # ---------------------------------------------------------------------------
 
+
 class TestCollectorTrainingBridge:
     def test_collect_and_prepare(self, tmp_path):
         f = tmp_path / "data.txt"
@@ -356,7 +360,9 @@ class TestCollectorTrainingBridge:
         f1 = tmp_path / "a.txt"
         f1.write_text("hello world\nhello world\n")
         collector = Collector(FileSource(str(f1)), MemoryStore())
-        bridge = CollectorTrainingBridge(collector, TrainingDataConfig(min_length=1, deduplicate=True))
+        bridge = CollectorTrainingBridge(
+            collector, TrainingDataConfig(min_length=1, deduplicate=True)
+        )
         data, _ = bridge.collect_and_prepare()
         # Dedup should have removed one record
         assert bridge.adapter.stats["deduplicated"] >= 1
@@ -365,6 +371,7 @@ class TestCollectorTrainingBridge:
 # ---------------------------------------------------------------------------
 # Integration: CollectorTrainingBridge with GeneratorSource
 # ---------------------------------------------------------------------------
+
 
 class TestCollectorTrainingBridgeIntegration:
     def test_with_generator_source(self):

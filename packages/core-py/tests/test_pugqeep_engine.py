@@ -8,7 +8,10 @@ import time
 
 import pytest
 
-from domain.infrastructure._internal.pugqeep.config import EngineConfig, MonitorConfig, RestartPolicy, SubprocessConfig
+from domain.infrastructure._internal.pugqeep.config import (
+    EngineConfig,
+    RestartPolicy,
+)
 from domain.infrastructure._internal.pugqeep.engine import (
     Engine,
     EngineMetrics,
@@ -24,8 +27,8 @@ from domain.infrastructure._internal.pugqeep.engine import (
     TreeStatus,
 )
 
-
 # ── Helpers ──────────────────────────────────────────────────────
+
 
 def _noop():
     return "ok"
@@ -51,6 +54,7 @@ def _add(a, b):
 # ══════════════════════════════════════════════════════════════════
 # Process lifecycle
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestProcess:
     def test_created_by_default(self):
@@ -112,7 +116,12 @@ class TestProcess:
             assert p.is_done
 
     def test_is_not_done_for_non_terminal(self):
-        for status in (ProcessStatus.CREATED, ProcessStatus.READY, ProcessStatus.RUNNING, ProcessStatus.WAITING):
+        for status in (
+            ProcessStatus.CREATED,
+            ProcessStatus.READY,
+            ProcessStatus.RUNNING,
+            ProcessStatus.WAITING,
+        ):
             p = Process(fn=_noop)
             p.status = status
             assert not p.is_done
@@ -244,6 +253,7 @@ class TestProcess:
 # Stem
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestStem:
     def test_all_done_when_empty(self):
         s = Stem()
@@ -322,6 +332,7 @@ class TestStem:
 # ══════════════════════════════════════════════════════════════════
 # Tree
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestTree:
     def test_branch_executes_processes(self):
@@ -428,6 +439,7 @@ class TestTree:
 # ══════════════════════════════════════════════════════════════════
 # EngineMetrics
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestEngineMetrics:
     def test_initial_snapshot(self):
@@ -550,6 +562,7 @@ class TestEngineMetrics:
 # ResultCache
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestResultCache:
     def test_put_and_get(self):
         cache = ResultCache(maxsize=10)
@@ -639,6 +652,7 @@ class TestResultCache:
 # ══════════════════════════════════════════════════════════════════
 # ProcessMonitor
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestProcessMonitor:
     def test_track_and_active_count(self):
@@ -786,6 +800,7 @@ class TestProcessMonitor:
 # ProcessGroup
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestProcessGroup:
     def test_add(self):
         g = ProcessGroup("g")
@@ -880,6 +895,7 @@ class TestProcessGroup:
 # Engine: core lifecycle
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestEngineCore:
     def test_spawn_and_branch(self):
         engine = Engine("test")
@@ -906,8 +922,8 @@ class TestEngineCore:
     def test_list_processes(self):
         engine = Engine("test")
         engine.tree("t")
-        p1 = engine.spawn(_noop)
-        p2 = engine.spawn(_noop)
+        engine.spawn(_noop)
+        engine.spawn(_noop)
         all_procs = engine.list_processes()
         assert len(all_procs) == 2
         engine.stop()
@@ -915,7 +931,7 @@ class TestEngineCore:
     def test_list_processes_by_status(self):
         engine = Engine("test")
         p1 = engine.spawn(_noop)
-        p2 = engine.spawn(_noop)
+        engine.spawn(_noop)
         p1.complete()
         completed = engine.list_processes(status=ProcessStatus.COMPLETED)
         assert len(completed) == 1
@@ -999,6 +1015,7 @@ class TestEngineCore:
 # Engine: dispatch mode
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestEngineDispatch:
     def test_dispatch_routes_by_name(self):
         engine = Engine("test")
@@ -1045,7 +1062,7 @@ class TestEngineDispatch:
         engine.tree("t", pool_workers=1)
         engine.route("work", "t")
         engine._dispatch_batch_size = 2
-        procs = [engine.spawn(_noop, name="work") for _ in range(5)]
+        [engine.spawn(_noop, name="work") for _ in range(5)]
         dispatched = engine.dispatch()
         assert dispatched == 5
         engine.stop()
@@ -1096,6 +1113,7 @@ class TestEngineDispatch:
 # Engine: run loop
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestEngineRun:
     def test_run_dispatches_pending(self):
         engine = Engine("test")
@@ -1143,7 +1161,7 @@ class TestEngineRun:
         engine.route("fail", "t")
         results = []
         engine.on_complete(lambda p: results.append(p.status))
-        p = engine.spawn(_fail, name="fail")
+        engine.spawn(_fail, name="fail")
         engine.run_background(poll_interval=0.01)
         engine.wait(timeout=5)
         engine.stop()
@@ -1173,7 +1191,7 @@ class TestEngineRun:
         def on_progress(data):
             progress_data.append(data)
 
-        p = engine.spawn(_sleep_and_return, 0.01, "x", name="work")
+        engine.spawn(_sleep_and_return, 0.01, "x", name="work")
 
         def _run():
             engine.run(poll_interval=0.01, on_progress=on_progress)
@@ -1249,6 +1267,7 @@ class TestEngineRun:
 # Engine: cancellation
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestEngineCancellation:
     def test_cancel_process(self):
         engine = Engine("test")
@@ -1301,8 +1320,8 @@ class TestEngineCancellation:
 
     def test_cancel_all(self):
         engine = Engine("test")
-        p1 = engine.spawn(_noop)
-        p2 = engine.spawn(_noop)
+        engine.spawn(_noop)
+        engine.spawn(_noop)
         count = engine.cancel_all()
         assert count == 2
         engine.stop()
@@ -1329,6 +1348,7 @@ class TestEngineCancellation:
 # ══════════════════════════════════════════════════════════════════
 # Engine: dependency graph
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestEngineDependencies:
     def test_dependency_graph(self):
@@ -1377,7 +1397,7 @@ class TestEngineDependencies:
         engine = Engine("test")
         p1 = engine.spawn(_noop, name="a")
         p1.complete()
-        p2 = engine.spawn(_noop, name="b", depends_on=[p1.id])
+        engine.spawn(_noop, name="b", depends_on=[p1.id])
         orphans = engine.orphan_processes()
         assert len(orphans) == 0
         engine.stop()
@@ -1422,6 +1442,7 @@ class TestEngineDependencies:
 # ══════════════════════════════════════════════════════════════════
 # Engine: batch operations
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestEngineBatch:
     def test_spawn_batch(self):
@@ -1468,6 +1489,7 @@ class TestEngineBatch:
 # Engine: cache integration
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestEngineCache:
     def test_enable_disable_cache(self):
         engine = Engine("test")
@@ -1495,6 +1517,7 @@ class TestEngineCache:
 # Engine: save_state
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestEngineSaveState:
     def test_save_state(self):
         engine = Engine("test")
@@ -1518,6 +1541,7 @@ class TestEngineSaveState:
 # Engine: config integration
 # ══════════════════════════════════════════════════════════════════
 
+
 class TestEngineConfig:
     def test_config_overrides(self):
         cfg = EngineConfig(name="from_config", max_trees=4)
@@ -1536,6 +1560,7 @@ class TestEngineConfig:
 # ══════════════════════════════════════════════════════════════════
 # Integration: model loading + training scenario
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestEngineIntegration:
     def test_model_load_then_train(self):
@@ -1651,6 +1676,7 @@ class TestEngineIntegration:
 # ══════════════════════════════════════════════════════════════════
 # Process timeout
 # ══════════════════════════════════════════════════════════════════
+
 
 class TestProcessTimeout:
     def test_timeout_fails_process(self):

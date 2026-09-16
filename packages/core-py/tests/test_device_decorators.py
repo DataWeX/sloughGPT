@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from domain.shell._internal.device_decorators import with_ioctl, add_ioctl_command
-
+from domain.shell._internal.device_decorators import add_ioctl_command, with_ioctl
 
 # ── with_ioctl decorator ──────────────────────────────────────────────────
 
 
 class TestWithIoctl:
-
     def test_adds_ioctl_method(self):
         @with_ioctl({"MATMUL": "matmul"})
         class Dev:
@@ -26,6 +24,7 @@ class TestWithIoctl:
         class Dev:
             def matmul(self, a, b):
                 return a + b
+
             def relu(self, a):
                 return max(0, a)
 
@@ -72,9 +71,14 @@ class TestWithIoctl:
     def test_list_commands_sorted(self):
         @with_ioctl({"Z": "z", "A": "a", "M": "m"})
         class Dev:
-            def z(self): pass
-            def a(self): pass
-            def m(self): pass
+            def z(self):
+                pass
+
+            def a(self):
+                pass
+
+            def m(self):
+                pass
 
         dev = Dev()
         assert dev.list_commands() == ["A", "M", "Z"]
@@ -84,7 +88,6 @@ class TestWithIoctl:
 
 
 class TestAddIoctlCommand:
-
     def test_adds_command_to_existing_class(self):
         class Dev:
             def matmul(self, a, b):
@@ -98,6 +101,7 @@ class TestAddIoctlCommand:
         class Dev:
             def matmul(self, a, b):
                 return a + b
+
             def relu(self, a):
                 return max(0, a)
 
@@ -109,8 +113,11 @@ class TestAddIoctlCommand:
 
     def test_list_commands_returns_sorted(self):
         class Dev:
-            def matmul(self, a, b): return a
-            def relu(self, a): return a
+            def matmul(self, a, b):
+                return a
+
+            def relu(self, a):
+                return a
 
         add_ioctl_command(Dev, "RELU", "relu")
         add_ioctl_command(Dev, "MATMUL", "matmul")
@@ -145,7 +152,8 @@ class TestAddIoctlCommand:
     def test_decorator_returns_class(self):
         @with_ioctl({"A": "a"})
         class Dev:
-            def a(self): return 1
+            def a(self):
+                return 1
 
         assert Dev.__name__ == "Dev"
         dev = Dev()

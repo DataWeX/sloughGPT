@@ -11,7 +11,6 @@ from domain.training._internal.tokenizer_manager import (
     get_tokenizer_manager,
 )
 
-
 CORPUS = [
     "hello world this is a test corpus",
     "the quick brown fox jumps over the lazy dog",
@@ -44,6 +43,7 @@ class TestLifecycle:
     def test_get_tokenizer_creates_bpe(self):
         mgr = TokenizerManager()
         from domain.training._internal.tokenizer import SloBPE
+
         assert isinstance(mgr.get_tokenizer(), SloBPE)
 
     def test_train_bpe(self):
@@ -62,8 +62,7 @@ class TestLifecycle:
 
     def test_train_passes_algo_kwargs(self):
         mgr = TokenizerManager()
-        stats = mgr.train(CORPUS, vocab_size=128, algo="unigram",
-                          seed_max_len=3, pruning_ratio=0.3)
+        stats = mgr.train(CORPUS, vocab_size=128, algo="unigram", seed_max_len=3, pruning_ratio=0.3)
         assert mgr.tokenizer_type == "unigram"
         assert stats["vocab_size"] > 0
 
@@ -99,6 +98,7 @@ class TestLifecycle:
         assert mgr.tokenizer_type == "bpe"
         assert mgr.is_trained() is False
         from domain.training._internal.tokenizer import SloBPE
+
         assert isinstance(mgr._tokenizer, SloBPE)
 
 
@@ -136,7 +136,8 @@ class TestIntrospection:
         mgr = TokenizerManager()
         mgr.set_tokenizer(SimpleNamespace(vocab_size=10))
         assert mgr.analyze_corpus(["x"]) == {
-            "error": "analyze_corpus not available for this tokenizer type"}
+            "error": "analyze_corpus not available for this tokenizer type"
+        }
 
     def test_show_pretokenization_delegates(self):
         mgr = TokenizerManager()
@@ -171,8 +172,9 @@ class TestDirectory:
         (tmp_path / "a" / "one.txt").write_text(CORPUS[0], encoding="utf-8")
         (tmp_path / "two.txt").write_text(CORPUS[1], encoding="utf-8")
         mgr = TokenizerManager()
-        stats = mgr.train_from_directory(str(tmp_path), pattern="*.txt", vocab_size=256,
-                                         min_frequency=1)
+        stats = mgr.train_from_directory(
+            str(tmp_path), pattern="*.txt", vocab_size=256, min_frequency=1
+        )
         assert mgr.is_trained() is True
         assert stats["vocab_size"] > 0
 
@@ -181,8 +183,9 @@ class TestDirectory:
         (tmp_path / "sub" / "nested.txt").write_text(CORPUS[2], encoding="utf-8")
         (tmp_path / "top.txt").write_text(CORPUS[3], encoding="utf-8")
         mgr = TokenizerManager()
-        mgr.train_from_directory(str(tmp_path), pattern="*.txt", vocab_size=256,
-                                 min_frequency=1, recursive=False)
+        mgr.train_from_directory(
+            str(tmp_path), pattern="*.txt", vocab_size=256, min_frequency=1, recursive=False
+        )
         assert mgr.is_trained() is True
         assert "nested" not in mgr.tokenize("nested word")
 
@@ -250,8 +253,9 @@ class TestIntegration:
         assert mgr.borrow_from_autotrain() is False
 
     def test_borrow_from_autotrain_adopts(self, monkeypatch):
-        import types as _types
         import sys
+        import types as _types
+
         fake_tok = SimpleNamespace(vocab_size=100)
         fake_service = _types.ModuleType("domain.training._internal.service")
         fake_service.get_state = lambda: SimpleNamespace(student_tokenizer=fake_tok)
@@ -262,10 +266,13 @@ class TestIntegration:
         assert mgr._tokenizer is fake_tok
 
     def test_borrow_from_autotrain_ignores_small(self, monkeypatch):
-        import types as _types
         import sys
+        import types as _types
+
         fake_service = _types.ModuleType("domain.training._internal.service")
-        fake_service.get_state = lambda: SimpleNamespace(student_tokenizer=SimpleNamespace(vocab_size=3))
+        fake_service.get_state = lambda: SimpleNamespace(
+            student_tokenizer=SimpleNamespace(vocab_size=3)
+        )
         monkeypatch.setitem(sys.modules, "domain.training._internal.service", fake_service)
         mgr = TokenizerManager()
         mgr._tokenizer = None

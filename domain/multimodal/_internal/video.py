@@ -7,15 +7,17 @@ and uses a temporal transformer to understand video content.
 
 from __future__ import annotations
 
-from typing import List
-import numpy as np
 import logging
+
+import numpy as np
 
 logger = logging.getLogger("slo.multimodal.video")
 
 from domain.training._internal.slonet import (
-    Tensor, SloLayerNorm, SloTransformerBlock,
     SloAdam,
+    SloLayerNorm,
+    SloTransformerBlock,
+    Tensor,
 )
 
 
@@ -32,14 +34,14 @@ class TemporalEncoder:
 
         # Temporal positional embedding
         self.temp_pos_embed = Tensor(
-            np.random.randn(1, max_frames, embed_dim).astype(np.float32) * 0.02,
-            requires_grad=True
+            np.random.randn(1, max_frames, embed_dim).astype(np.float32) * 0.02, requires_grad=True
         )
 
         # Transformer blocks for temporal modeling
         self.blocks = [
-            SloTransformerBlock(embed_dim, n_heads, use_rope=True, dropout=0.1,
-                              name=f"temporal_block_{i}")
+            SloTransformerBlock(
+                embed_dim, n_heads, use_rope=True, dropout=0.1, name=f"temporal_block_{i}"
+            )
             for i in range(n_layers)
         ]
 
@@ -92,7 +94,7 @@ class VideoProcessor:
         self.temporal_encoder = TemporalEncoder(embed_dim, n_heads, n_temporal_layers, max_frames)
         self.optimizer = SloAdam(lr=3e-4)
 
-    def extract_frames(self, video_path: str, num_frames: int = None) -> List[np.ndarray]:
+    def extract_frames(self, video_path: str, num_frames: int = None) -> list[np.ndarray]:
         """
         Extract frames from video file.
 
@@ -109,7 +111,9 @@ class VideoProcessor:
         try:
             import cv2
         except ImportError:
-            raise ImportError("Video processing requires opencv-python (cv2). Install with: pip install opencv-python")
+            raise ImportError(
+                "Video processing requires opencv-python (cv2). Install with: pip install opencv-python"
+            )
 
         num_frames = num_frames or self.max_frames
         cap = cv2.VideoCapture(video_path)
@@ -141,7 +145,7 @@ class VideoProcessor:
         cap.release()
         return frames
 
-    def encode_video(self, frames: List[np.ndarray], vision_encoder) -> Tensor:
+    def encode_video(self, frames: list[np.ndarray], vision_encoder) -> Tensor:
         """
         Encode video frames to temporal embeddings.
 

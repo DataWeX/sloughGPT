@@ -2,8 +2,9 @@
 Tests for the benchmark router — run, metrics, quality, responses, stats, clear.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -48,8 +49,7 @@ def _patch_server(provider):
     """Replace the ServerState singleton with a fake holding ``provider``."""
     fake_core = MagicMock()
     fake_core.model.get.return_value = provider
-    return patch("domains.infrastructure.server_state.get_server_state",
-                 return_value=fake_core)
+    return patch("domains.infrastructure.server_state.get_server_state", return_value=fake_core)
 
 
 @pytest.fixture
@@ -84,7 +84,11 @@ class TestRunBenchmark:
 
     @patch("apps.api.server.routers.benchmark.BenchmarkRouter._get_model_metrics")
     def test_uses_injected_metrics(self, mock_metrics, client):
-        mock_metrics.return_value = {"model": "gpt2", "model_loaded": True, "tokens_per_second": 3.5}
+        mock_metrics.return_value = {
+            "model": "gpt2",
+            "model_loaded": True,
+            "tokens_per_second": 3.5,
+        }
         resp = client.post("/benchmark/run")
         assert resp.json()["data"]["model_loaded"] is True
         assert resp.json()["data"]["tokens_per_second"] == 3.5
@@ -108,7 +112,7 @@ class TestGetMetrics:
     @patch("apps.api.server.routers.benchmark.BenchmarkRouter._get_model_metrics")
     def test_metrics_forwards_model(self, mock_metrics, client):
         mock_metrics.return_value = {"model": "gpt2", "model_loaded": False}
-        resp = client.get("/benchmark/metrics?model=custom")
+        client.get("/benchmark/metrics?model=custom")
         mock_metrics.assert_called_once_with("custom")
 
 
@@ -211,14 +215,12 @@ class TestTrackerStats:
 class TestClearHistory:
     @patch("domains.get_benchmark_domain")
     def test_clears_history(self, mock_get_bench, client):
-        bench = mock_get_bench.return_value
         resp = client.post("/benchmark/history/clear")
         assert resp.status_code == 200
         assert resp.json()["data"]["cleared"] is True
 
     @patch("domains.get_benchmark_domain")
     def test_clear_returns_success(self, mock_get_bench, client):
-        bench = mock_get_bench.return_value
         resp = client.post("/benchmark/history/clear")
         assert resp.json()["status"] == "success"
 
@@ -288,14 +290,19 @@ class TestPerplexityPath:
         assert resp.status_code == 400
 
     def test_perplexity_error_returns_500(self, client):
-        with patch("domains.infrastructure.server_state.get_server_state",
-                   side_effect=RuntimeError("controller crash")), \
-             patch("domains.infrastructure.errors.emit_error_event"):
+        with (
+            patch(
+                "domains.infrastructure.server_state.get_server_state",
+                side_effect=RuntimeError("controller crash"),
+            ),
+            patch("domains.infrastructure.errors.emit_error_event"),
+        ):
             resp = client.post("/benchmark/perplexity?text=hello")
         assert resp.status_code == 500
 
     def test_perplexity_computes_value(self, client):
         import numpy as np
+
         # ids [0, 1, 2]; successors [1, 2] scored with certainty → ppl 1.0
         logits = np.zeros((1, 3, 3), dtype=np.float64)
         logits[0, 0, 1] = 100.0
@@ -311,12 +318,15 @@ class TestPerplexityPath:
 
     def test_perplexity_uses_text_preview(self, client):
         import numpy as np
+
         logits = np.zeros((1, 3, 3), dtype=np.float64)
         logits[0, 0, 1] = 100.0
         logits[0, 1, 2] = 100.0
         provider = _fake_provider([0, 1, 2], logits)
         with _patch_server(provider):
-            resp = client.post("/benchmark/perplexity?text=a%20very%20long%20sentence%20that%20exceeds%20thirty%20chars")
+            resp = client.post(
+                "/benchmark/perplexity?text=a%20very%20long%20sentence%20that%20exceeds%20thirty%20chars"
+            )
         assert resp.json()["data"]["text"] == "a very long sentence that exce"
 
 

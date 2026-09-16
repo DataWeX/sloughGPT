@@ -1,4 +1,5 @@
 """Tests for ForwardPassResult and timed_forward."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -36,4 +37,5 @@ class TestTimedForward:
                 return ForwardPassResult(logits=np.zeros((1, 1, 5), dtype=np.float32))
 
         from domain.inference._internal.forward_pass import ForwardPassable
+
         assert isinstance(GoodModel(), ForwardPassable)

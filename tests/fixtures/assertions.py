@@ -17,9 +17,9 @@ Usage:
 from __future__ import annotations
 
 import importlib
-import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any
 
 
 def assert_contains(haystack: str, needle: str, msg: str = "") -> None:
@@ -60,8 +60,7 @@ def assert_json_structure(data: Any, paths: list[str], msg: str = "") -> None:
                     )
             except (KeyError, IndexError, ValueError) as e:
                 raise AssertionError(
-                    f"Missing path {path!r} at '{part}': {e}"
-                    + (f"\n  {msg}" if msg else "")
+                    f"Missing path {path!r} at '{part}': {e}" + (f"\n  {msg}" if msg else "")
                 )
 
 
@@ -70,10 +69,7 @@ def assert_importable(module_name: str, msg: str = "") -> None:
     try:
         importlib.import_module(module_name)
     except ImportError as e:
-        raise AssertionError(
-            f"Cannot import {module_name!r}: {e}"
-            + (f"\n  {msg}" if msg else "")
-        )
+        raise AssertionError(f"Cannot import {module_name!r}: {e}" + (f"\n  {msg}" if msg else ""))
 
 
 def assert_no_exceptions(func, *args, _msg: str = "", **kwargs) -> Any:
@@ -82,14 +78,14 @@ def assert_no_exceptions(func, *args, _msg: str = "", **kwargs) -> Any:
         return func(*args, **kwargs)
     except Exception as e:
         raise AssertionError(
-            f"Expected no exception, got {type(e).__name__}: {e}"
-            + (f"\n  {_msg}" if _msg else "")
+            f"Expected no exception, got {type(e).__name__}: {e}" + (f"\n  {_msg}" if _msg else "")
         )
 
 
 def assert_changed(file_path: str, expect_diff: bool = True) -> None:
     """Assert that a file has uncommitted changes (git diff)."""
     import subprocess
+
     result = subprocess.run(
         ["git", "diff", "--quiet", "--", file_path],
         capture_output=True,
@@ -105,8 +101,7 @@ def assert_changed(file_path: str, expect_diff: bool = True) -> None:
 def assert_response_ok(response, status_code: int = 200, msg: str = "") -> None:
     """Assert HTTP response has expected status and success envelope."""
     assert response.status_code == status_code, (
-        f"Expected status {status_code}, got {response.status_code}"
-        + (f"\n  {msg}" if msg else "")
+        f"Expected status {status_code}, got {response.status_code}" + (f"\n  {msg}" if msg else "")
     )
 
 
@@ -123,8 +118,7 @@ def assert_has_keys(data: dict, keys: Sequence[str], msg: str = "") -> None:
     missing = [k for k in keys if k not in data]
     if missing:
         raise AssertionError(
-            f"Missing keys: {missing}\n  has: {list(data.keys())}"
-            + (f"\n  {msg}" if msg else "")
+            f"Missing keys: {missing}\n  has: {list(data.keys())}" + (f"\n  {msg}" if msg else "")
         )
 
 
@@ -132,10 +126,7 @@ def assert_no_keys(data: dict, keys: Sequence[str], msg: str = "") -> None:
     """Assert that a dict does NOT have any of the given keys."""
     present = [k for k in keys if k in data]
     if present:
-        raise AssertionError(
-            f"Unexpected keys present: {present}"
-            + (f"\n  {msg}" if msg else "")
-        )
+        raise AssertionError(f"Unexpected keys present: {present}" + (f"\n  {msg}" if msg else ""))
 
 
 def assert_type(value: Any, expected_type: type, msg: str = "") -> None:
@@ -152,18 +143,14 @@ def assert_length(value: Any, expected: int, msg: str = "") -> None:
     actual = len(value)
     if actual != expected:
         raise AssertionError(
-            f"Expected length {expected}, got {actual}: {value!r}"
-            + (f"\n  {msg}" if msg else "")
+            f"Expected length {expected}, got {actual}: {value!r}" + (f"\n  {msg}" if msg else "")
         )
 
 
 def assert_in_range(value: float, low: float, high: float, msg: str = "") -> None:
     """Assert value is within [low, high]."""
     if not (low <= value <= high):
-        raise AssertionError(
-            f"Expected {low} <= {value} <= {high}"
-            + (f"\n  {msg}" if msg else "")
-        )
+        raise AssertionError(f"Expected {low} <= {value} <= {high}" + (f"\n  {msg}" if msg else ""))
 
 
 def assert_file_exists(path: str | Path, msg: str = "") -> None:

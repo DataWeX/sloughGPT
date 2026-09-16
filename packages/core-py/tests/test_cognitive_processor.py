@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
-import time
-from unittest.mock import MagicMock, AsyncMock
-
 import pytest
+from domains import ComponentException, Thought
 
-from domains import BaseComponent, ComponentException, Thought, ThoughtType
 from domain.cognitive._internal.processor import CognitiveProcessor
-
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -93,7 +88,6 @@ class MockMetacognitiveMonitor:
 
 
 class TestCognitiveProcessor:
-
     def test_init(self):
         proc = CognitiveProcessor()
         assert proc.component_name == "cognitive_processor"
@@ -196,8 +190,10 @@ class TestCognitiveProcessor:
     async def test_process_thought_failure(self):
         proc = CognitiveProcessor()
         await proc.initialize()
+
         async def fail_store(thought):
             raise RuntimeError("boom")
+
         proc._store_thought_memory = fail_store
         thought = _make_thought()
         with pytest.raises(Exception, match="Thought processing failed"):

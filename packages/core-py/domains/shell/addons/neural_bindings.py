@@ -5,6 +5,7 @@ These functions are attached to the kernel instance during addon setup(),
 making the neural addon fully self-contained. The kernel retains only thin
 property wrappers for attribute-access compatibility.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -17,8 +18,7 @@ from ..kernel_process import Priority
 class Property:
     """Instance-attachable property descriptor for addon-injected attributes."""
 
-    def __init__(self, attr_name: str, require_addon: bool = True,
-                 default_factory: Any = None):
+    def __init__(self, attr_name: str, require_addon: bool = True, default_factory: Any = None):
         self._attr = attr_name
         self._require = require_addon
         self._default_factory = default_factory
@@ -31,8 +31,10 @@ class Property:
             return self
         if self._require:
             obj._require_addon("neural")
-        return getattr(obj, self._attr, None) if not self._default_factory else (
-            getattr(obj, self._attr, None) or self._default_factory()
+        return (
+            getattr(obj, self._attr, None)
+            if not self._default_factory
+            else (getattr(obj, self._attr, None) or self._default_factory())
         )
 
 
@@ -51,6 +53,7 @@ batch_processor = Property("_batch_processor")
 def embedding_store(kernel: Any) -> Any:
     """Return the first embedding store, or an empty one."""
     from .neural import NeuralEmbeddingStore
+
     kernel._require_addon("neural")
     stores = list(kernel._embedding_stores.values())
     return stores[0] if stores else NeuralEmbeddingStore()
@@ -60,10 +63,17 @@ def embedding_store(kernel: Any) -> Any:
 # Neural process management
 # ---------------------------------------------------------------------------
 
-def create_neural_process(kernel: Any, name: str, neural_type: Any = None,
-                          model_name: str = "", priority: Priority = Priority.NORMAL,
-                          **kwargs) -> Any:
+
+def create_neural_process(
+    kernel: Any,
+    name: str,
+    neural_type: Any = None,
+    model_name: str = "",
+    priority: Priority = Priority.NORMAL,
+    **kwargs,
+) -> Any:
     from .neural import NeuralProcess, NeuralProcessType
+
     kernel._require_addon("neural")
     proc = kernel.spawn_process(name, priority)
     neural = NeuralProcess(process=proc, model_name=model_name)
@@ -87,10 +97,11 @@ def list_neural_processes(kernel: Any) -> list:
 # Tokenization / embedding
 # ---------------------------------------------------------------------------
 
+
 def tokenize(kernel: Any, text: str) -> list[int]:
     kernel._require_addon("neural")
     result = kernel._tokenizer_device.ioctl("encode", text)
-    if result and hasattr(result, 'value') and result.value:
+    if result and hasattr(result, "value") and result.value:
         return result.value.get("tokens", [])
     return list(text.encode("utf-8"))
 
@@ -98,7 +109,7 @@ def tokenize(kernel: Any, text: str) -> list[int]:
 def detokenize(kernel: Any, tokens: list[int]) -> str:
     kernel._require_addon("neural")
     result = kernel._tokenizer_device.ioctl("decode", tokens)
-    if result and hasattr(result, 'value') and result.value:
+    if result and hasattr(result, "value") and result.value:
         return result.value.get("text", "")
     return bytes(tokens).decode("utf-8", errors="replace")
 
@@ -113,14 +124,21 @@ def embed(kernel: Any, ids: np.ndarray, store_name: str = "default") -> np.ndarr
 
 def embed_text(kernel: Any, text: str) -> np.ndarray:
     from .neural import NeuralEmbeddingStore, NeuralSyscall
+
     kernel._require_addon("neural")
-    store = list(kernel._embedding_stores.values())[0] if kernel._embedding_stores else NeuralEmbeddingStore()
+    store = (
+        list(kernel._embedding_stores.values())[0]
+        if kernel._embedding_stores
+        else NeuralEmbeddingStore()
+    )
     return NeuralSyscall.embed(store, text)
 
 
-def create_embedding_store(kernel: Any, name: str, vocab_size: int = 1000,
-                           embed_dim: int = 64) -> Any:
+def create_embedding_store(
+    kernel: Any, name: str, vocab_size: int = 1000, embed_dim: int = 64
+) -> Any:
     from .neural import NeuralEmbeddingStore
+
     kernel._require_addon("neural")
     store = NeuralEmbeddingStore(vocab_size=vocab_size, embed_dim=embed_dim)
     kernel._embedding_stores[name] = store
@@ -131,12 +149,16 @@ def create_embedding_store(kernel: Any, name: str, vocab_size: int = 1000,
 # KV cache management
 # ---------------------------------------------------------------------------
 
-def create_kv_cache(kernel: Any, name: str, num_layers: int = 6,
-                    head_dim: int = 32, **kwargs: Any) -> Any:
+
+def create_kv_cache(
+    kernel: Any, name: str, num_layers: int = 6, head_dim: int = 32, **kwargs: Any
+) -> Any:
     from .neural import NeuralKVCache
+
     kernel._require_addon("neural")
-    cache = NeuralKVCache(num_layers=num_layers, head_dim=head_dim,
-                          max_positions=kwargs.get('max_positions', 512))
+    cache = NeuralKVCache(
+        num_layers=num_layers, head_dim=head_dim, max_positions=kwargs.get("max_positions", 512)
+    )
     kernel._kv_caches[name] = cache
     return cache
 
@@ -156,31 +178,36 @@ def remove_kv_cache(kernel: Any, name: str) -> None:
 # Generation / forward / backward / attention
 # ---------------------------------------------------------------------------
 
-def generate(kernel: Any, model_name: str, prompt: str,
-             max_tokens: int = 10, **kwargs: Any) -> dict[str, Any] | None:
+
+def generate(
+    kernel: Any, model_name: str, prompt: str, max_tokens: int = 10, **kwargs: Any
+) -> dict[str, Any] | None:
     kernel._require_addon("neural")
-    result = kernel._engine.ioctl("generate", model_name, prompt,
-                                  max_tokens=max_tokens, **kwargs)
-    if result and hasattr(result, 'value') and result.value:
+    result = kernel._engine.ioctl("generate", model_name, prompt, max_tokens=max_tokens, **kwargs)
+    if result and hasattr(result, "value") and result.value:
         return result.value
     return None
 
 
-def forward(kernel: Any, neural_proc: Any,
-            inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+def forward(kernel: Any, neural_proc: Any, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     from .neural import NeuralSyscall
+
     return NeuralSyscall.forward(neural_proc, inputs)
 
 
-def backward(kernel: Any, neural_proc: Any,
-             grad_output: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+def backward(
+    kernel: Any, neural_proc: Any, grad_output: dict[str, np.ndarray]
+) -> dict[str, np.ndarray]:
     from .neural import NeuralSyscall
+
     return NeuralSyscall.backward(neural_proc, grad_output)
 
 
-def attention(kernel: Any, q: np.ndarray, k: np.ndarray, v: np.ndarray,
-              mask: np.ndarray | None = None) -> np.ndarray:
+def attention(
+    kernel: Any, q: np.ndarray, k: np.ndarray, v: np.ndarray, mask: np.ndarray | None = None
+) -> np.ndarray:
     from .neural import NeuralSyscall
+
     return NeuralSyscall.attention(kernel._attention_device, q, k, v, mask)
 
 
@@ -188,23 +215,25 @@ def attention(kernel: Any, q: np.ndarray, k: np.ndarray, v: np.ndarray,
 # Generic neural syscall
 # ---------------------------------------------------------------------------
 
-def neural_syscall(kernel: Any, proc: Any, op: str,
-                   *args: Any, **kwargs: Any) -> Any:
-    from .neural import NeuralSyscall, NeuralEmbeddingStore
+
+def neural_syscall(kernel: Any, proc: Any, op: str, *args: Any, **kwargs: Any) -> Any:
+    from .neural import NeuralEmbeddingStore, NeuralSyscall
+
     if op == "forward":
         return NeuralSyscall.forward(proc, *args, **kwargs)
     elif op == "backward":
         return NeuralSyscall.backward(proc, *args, **kwargs)
     elif op == "embed":
         return NeuralSyscall.embed(
-            kernel._embedding_stores.get("default", NeuralEmbeddingStore()),
-            *args, **kwargs)
+            kernel._embedding_stores.get("default", NeuralEmbeddingStore()), *args, **kwargs
+        )
     return None
 
 
 # ---------------------------------------------------------------------------
 # Device registration / cleanup / stats
 # ---------------------------------------------------------------------------
+
 
 def register_devices(kernel: Any) -> None:
     if "neural" in kernel._addons:

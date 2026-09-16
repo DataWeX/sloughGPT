@@ -22,16 +22,15 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Optional, TextIO
+from typing import TextIO
 
 from .base import Logger, LogLevel, LogRecord
-
 
 _NO_COLOR = os.environ.get("NO_COLOR", "").strip() == "1"
 _FORCE_COLOR = os.environ.get("FORCE_COLOR", "").strip() == "1"
 
 
-def _default_color_enabled(stream: Optional[TextIO] = None) -> bool:
+def _default_color_enabled(stream: TextIO | None = None) -> bool:
     if _NO_COLOR:
         return False
     if _FORCE_COLOR:
@@ -61,8 +60,8 @@ class ConsoleLogger(Logger):
         self,
         name: str = "slo",
         level: LogLevel = LogLevel.INFO,
-        stream: Optional[TextIO] = None,
-        colors: Optional[bool] = None,
+        stream: TextIO | None = None,
+        colors: bool | None = None,
         context=None,
         format: str = "human",
     ) -> None:
@@ -71,6 +70,7 @@ class ConsoleLogger(Logger):
         self._colors = _default_color_enabled(self._stream) if colors is None else colors
         self._format = format
         from .config import LogFormatter
+
         self._formatter = LogFormatter(fmt=format, colors=self._colors)
 
     # ── Cursor methods (for StatusBlock TTY detection) ──────────────────
@@ -183,8 +183,15 @@ class ConsoleLogger(Logger):
         """Return ANSI color code for an exception type."""
         from .config import _A
 
-        _PROGRAMMING = {"ValueError", "TypeError", "KeyError", "IndexError",
-                        "AttributeError", "NameError", "SyntaxError"}
+        _PROGRAMMING = {
+            "ValueError",
+            "TypeError",
+            "KeyError",
+            "IndexError",
+            "AttributeError",
+            "NameError",
+            "SyntaxError",
+        }
         _SYSTEM = {"RuntimeError", "OSError", "MemoryError", "PermissionError"}
         _TRANSIENT = {"TimeoutError", "ConnectionError", "BrokenPipeError"}
         _DEPENDENCY = {"ImportError", "ModuleNotFoundError"}

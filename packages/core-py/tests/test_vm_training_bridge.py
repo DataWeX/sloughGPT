@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from domain.shell._internal.vm_training_bridge import VMTrainingBridge, get_bridge
-
 
 # ── VMTrainingBridge ───────────────────────────────────────────────────────
 
 
 class TestVMTrainingBridge:
-
     def setup_method(self):
         self.bridge = VMTrainingBridge()
 
@@ -40,7 +36,10 @@ class TestVMTrainingBridge:
 
     def test_start_api_error(self):
         import requests
-        with patch.object(self.bridge._session, "post", side_effect=requests.RequestException("fail")):
+
+        with patch.object(
+            self.bridge._session, "post", side_effect=requests.RequestException("fail")
+        ):
             assert self.bridge.start(json.dumps({"dataset": "test"})) == -1
 
     def test_start_multiple_jobs(self):
@@ -84,6 +83,7 @@ class TestVMTrainingBridge:
     def test_status_api_404(self):
         self.bridge._jobs[1] = {"api_job_id": "api-1", "status": "running"}
         import requests
+
         mock_resp = MagicMock()
         mock_resp.status_code = 404
         mock_resp.raise_for_status = MagicMock(side_effect=requests.RequestException("404"))
@@ -95,7 +95,10 @@ class TestVMTrainingBridge:
     def test_status_api_error(self):
         self.bridge._jobs[1] = {"api_job_id": "api-1", "status": "running"}
         import requests
-        with patch.object(self.bridge._session, "get", side_effect=requests.RequestException("fail")):
+
+        with patch.object(
+            self.bridge._session, "get", side_effect=requests.RequestException("fail")
+        ):
             result = self.bridge.status(1)
             assert result["status"] == "running"
 
@@ -136,7 +139,10 @@ class TestVMTrainingBridge:
     def test_stop_api_error(self):
         self.bridge._jobs[1] = {"api_job_id": "api-1", "status": "running"}
         import requests
-        with patch.object(self.bridge._session, "post", side_effect=requests.RequestException("fail")):
+
+        with patch.object(
+            self.bridge._session, "post", side_effect=requests.RequestException("fail")
+        ):
             assert self.bridge.stop(1) is False
 
     def test_remove_existing(self):
@@ -171,9 +177,9 @@ class TestVMTrainingBridge:
 
 
 class TestSingleton:
-
     def test_get_returns_same(self):
         import domain.shell._internal.vm_training_bridge as mod
+
         mod._bridge = None
         b1 = get_bridge()
         b2 = get_bridge()

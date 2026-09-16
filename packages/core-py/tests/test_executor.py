@@ -50,6 +50,7 @@ PC_PATCH = "domain.infrastructure._internal.pugqeep.PointCompressor"
 @pytest.fixture(autouse=True)
 def _reset_singleton():
     import domain.training._internal.executor as exec_mod
+
     old = exec_mod._instance
     exec_mod._instance = None
     yield
@@ -76,8 +77,8 @@ def executor():
 
 # ── JobInfo ──────────────────────────────────────────────────────────────
 
-class TestJobInfo:
 
+class TestJobInfo:
     def test_construction_defaults(self):
         info = JobInfo(job_id="j1")
         assert info.job_id == "j1"
@@ -135,8 +136,8 @@ class TestJobInfo:
 
 # ── TrainingExecutor basic ──────────────────────────────────────────────
 
-class TestTrainingExecutorBasic:
 
+class TestTrainingExecutorBasic:
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_submit_runs_function(self, _mock_rm, executor):
         job_id = executor.submit(_noop, "job_a")
@@ -216,8 +217,8 @@ class TestTrainingExecutorBasic:
 
 # ── TrainingExecutor error ──────────────────────────────────────────────
 
-class TestTrainingExecutorError:
 
+class TestTrainingExecutorError:
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_failed_job_status(self, _mock_rm, executor):
         job_id = executor.submit(_fail_fn, "err1")
@@ -243,8 +244,8 @@ class TestTrainingExecutorError:
 
 # ── TrainingExecutor cancel ─────────────────────────────────────────────
 
-class TestTrainingExecutorCancel:
 
+class TestTrainingExecutorCancel:
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_cancel_queued_job_returns_true(self, _mock_rm, executor):
         started = threading.Event()
@@ -311,8 +312,8 @@ class TestTrainingExecutorCancel:
 
 # ── TrainingExecutor purge ──────────────────────────────────────────────
 
-class TestTrainingExecutorPurge:
 
+class TestTrainingExecutorPurge:
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_purge_removes_old_completed(self, _mock_rm, executor):
         job_id = executor.submit(_noop, "p1")
@@ -344,8 +345,8 @@ class TestTrainingExecutorPurge:
 
 # ── TrainingExecutor shutdown ───────────────────────────────────────────
 
-class TestTrainingExecutorShutdown:
 
+class TestTrainingExecutorShutdown:
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_shutdown_waits(self, _mock_rm, executor):
         results = []
@@ -384,8 +385,8 @@ class TestTrainingExecutorShutdown:
 
 # ── submit_training ─────────────────────────────────────────────────────
 
-class TestSubmitTraining:
 
+class TestSubmitTraining:
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_passes_tree_id_and_is_cancelled(self, _mock_rm, executor):
         received = {}
@@ -419,9 +420,7 @@ class TestSubmitTraining:
         mock_compressor.compress_cluster.return_value = mock_point
 
         with patch(PC_PATCH, return_value=mock_compressor):
-            job_id = executor.submit_training(
-                train_fn, "st2", "tree_xyz", point_library=mock_lib
-            )
+            job_id = executor.submit_training(train_fn, "st2", "tree_xyz", point_library=mock_lib)
             time.sleep(0.3)
             s = executor.status(job_id)
             assert s["status"] == JobStatus.COMPLETED.value
@@ -437,9 +436,7 @@ class TestSubmitTraining:
             return {"layer1": arr}
 
         with patch(PC_PATCH, side_effect=RuntimeError("compressor boom")):
-            job_id = executor.submit_training(
-                train_fn, "st3", "tree_fail", point_library=mock_lib
-            )
+            job_id = executor.submit_training(train_fn, "st3", "tree_fail", point_library=mock_lib)
             time.sleep(0.3)
             s = executor.status(job_id)
             assert s["status"] == JobStatus.COMPLETED.value
@@ -449,8 +446,8 @@ class TestSubmitTraining:
 
 # ── result_summary ──────────────────────────────────────────────────────
 
-class TestResultSummary:
 
+class TestResultSummary:
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_returns_none_for_unknown_job(self, _mock_rm, executor):
         assert executor.result_summary("nope") is None
@@ -496,11 +493,12 @@ class TestResultSummary:
 
 # ── get_training_executor singleton ─────────────────────────────────────
 
-class TestGetTrainingExecutor:
 
+class TestGetTrainingExecutor:
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_returns_same_instance(self, _mock_rm):
         import domain.training._internal.executor as exec_mod
+
         exec_mod._instance = None
         a = get_training_executor()
         b = get_training_executor()
@@ -511,6 +509,7 @@ class TestGetTrainingExecutor:
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_thread_safe(self, _mock_rm):
         import domain.training._internal.executor as exec_mod
+
         exec_mod._instance = None
         instances = []
 
@@ -529,8 +528,8 @@ class TestGetTrainingExecutor:
 
 # ── _running() internal ─────────────────────────────────────────────────
 
-class TestRunningInternal:
 
+class TestRunningInternal:
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_running_counts_correctly(self, _mock_rm, executor):
         barrier = threading.Barrier(3, timeout=3)
@@ -554,8 +553,8 @@ class TestRunningInternal:
 
 # ── JobStatus enum ──────────────────────────────────────────────────────
 
-class TestJobStatus:
 
+class TestJobStatus:
     def test_all_statuses_exist(self):
         assert JobStatus.QUEUED.value == "queued"
         assert JobStatus.RUNNING.value == "running"
@@ -570,8 +569,8 @@ class TestJobStatus:
 
 # ── Submit kwargs forwarding ────────────────────────────────────────────
 
-class TestSubmitKwargs:
 
+class TestSubmitKwargs:
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_call_args_merged(self, _mock_rm, executor):
         received = {}

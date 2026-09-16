@@ -6,23 +6,24 @@ Verifies:
 - Scheduled DPO triggers at the configured interval and is suppressed before it
 - `get_status()` exposes the new fields (dpo, auto_dpo_interval, last_rollback)
 """
-import copy
+
 import time
-import pytest
+
 import numpy as np
+import pytest
 
 
 @pytest.fixture
 def mock_net():
     """A minimal model stub with weight‑bearing layers."""
+
     class Layer:
         def __init__(self, val):
             self.weight = type("W", (), {"data": np.array(val, dtype=np.float32)})()
 
     class Net:
         def __init__(self):
-            self.layers = [Layer([[0.5, 0.3], [0.2, 0.9]]),
-                           Layer([[0.1, 0.7], [0.8, 0.4]])]
+            self.layers = [Layer([[0.5, 0.3], [0.2, 0.9]]), Layer([[0.1, 0.7], [0.8, 0.4]])]
             self.hidden_dim = 768
 
         def parameters(self):
@@ -35,29 +36,35 @@ def mock_net():
 def mock_tokenizer():
     class Tok:
         pad_id = 0
+
         def encode(self, text):
             return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
     return Tok()
 
 
 @pytest.fixture
 def wf(mock_net, mock_tokenizer, tmp_path):
-    from domains.feedback.workflow import FeedbackWorkflowManager, WorkflowConfig
     from domains.feedback.database import FeedbackDB
+    from domains.feedback.workflow import FeedbackWorkflowManager, WorkflowConfig
 
     class MockMetaManager:
         def get_weights(self):
             return {}
+
         def update_weights(self, *a, **kw):
             pass
+
         def get_stats(self):
             return {}
 
     class MockLoraStore:
         def aggregate_best_adapters(self, **kw):
             return {"status": "ok", "merged": 0}
+
         def prune_low_quality(self, **kw):
             return []
+
         def get_stats(self):
             return {}
 
@@ -94,8 +101,10 @@ class TestDPOScheduler:
     def test_dpo_triggers_after_interval(self, wf, monkeypatch):
         wf._last_dpo_time = 0
         called = [False]
+
         def fake_dpo():
             called[0] = True
+
         monkeypatch.setattr(wf, "_do_dpo", fake_dpo)
         wf.run_scheduled_tasks()
         assert called[0]
@@ -103,8 +112,10 @@ class TestDPOScheduler:
     def test_dpo_skips_before_interval(self, wf, monkeypatch):
         wf._last_dpo_time = time.time()
         called = [False]
+
         def fake_dpo():
             called[0] = True
+
         monkeypatch.setattr(wf, "_do_dpo", fake_dpo)
         wf.run_scheduled_tasks()
         assert not called[0]

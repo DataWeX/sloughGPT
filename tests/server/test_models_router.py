@@ -2,8 +2,9 @@
 Tests for the models router — list, load, unload, HF models.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -21,6 +22,7 @@ def router():
 @pytest.fixture
 def app(router):
     from apps.api.server.infrastructure.exception_handlers import register_all_handlers
+
     _app = FastAPI()
     register_all_handlers(_app)
     _app.include_router(router.router)
@@ -43,8 +45,10 @@ class TestListModels:
         mock_size.return_value = 0.5
         ctrl = MagicMock()
         ctrl.get_current_model.return_value = {
-            "model_id": "gpt2", "device": "cpu",
-            "parameters": 124000000, "vocab_size": 50257,
+            "model_id": "gpt2",
+            "device": "cpu",
+            "parameters": 124000000,
+            "vocab_size": 50257,
             "loaded_at": "2026-01-01T00:00:00",
         }
         ctrl.list_hf_models.return_value = []
@@ -74,6 +78,7 @@ class TestListModels:
         must return 200 with a real device on the loaded entry. Previously the
         adopt path left device null and ModelInfo rejected it with a 422."""
         from pathlib import Path
+
         from apps.api.server.controllers.models import ModelsController
 
         class _FakeGuard:
@@ -113,8 +118,10 @@ class TestLoadModel:
     def test_load_model_success(self, mock_get_ctrl, client):
         ctrl = MagicMock()
         ctrl.load_model.return_value = {
-            "status": "loaded", "model_id": "gpt2",
-            "device": "cpu", "parameters": 124000000,
+            "status": "loaded",
+            "model_id": "gpt2",
+            "device": "cpu",
+            "parameters": 124000000,
         }
         mock_get_ctrl.return_value = ctrl
 
@@ -140,8 +147,10 @@ class TestLoadModel:
         validates availability and the response echoes the resolved device."""
         ctrl = MagicMock()
         ctrl.load_model.return_value = {
-            "status": "loaded", "model_id": "gpt2",
-            "device": "cpu", "parameters": 124000000,
+            "status": "loaded",
+            "model_id": "gpt2",
+            "device": "cpu",
+            "parameters": 124000000,
         }
         mock_get_ctrl.return_value = ctrl
 
@@ -157,8 +166,10 @@ class TestLoadModel:
         a cuda request on a GPU-less box), not the requested device string."""
         ctrl = MagicMock()
         ctrl.load_model.return_value = {
-            "status": "loaded", "model_id": "gpt2",
-            "device": "cpu", "parameters": 124000000,
+            "status": "loaded",
+            "model_id": "gpt2",
+            "device": "cpu",
+            "parameters": 124000000,
         }
         mock_get_ctrl.return_value = ctrl
         ss = MagicMock()
@@ -208,7 +219,9 @@ class TestListHFModels:
     @patch("apps.api.server.routers.models.is_model_cached")
     @patch("apps.api.server.routers.models._hf_cache_dir")
     @patch("domains.infrastructure.resource_manager.get_resource_manager")
-    def test_list_hf_models(self, mock_rm, mock_cached, mock_size, mock_cache_dir, mock_get_ctrl, client):
+    def test_list_hf_models(
+        self, mock_rm, mock_cached, mock_size, mock_cache_dir, mock_get_ctrl, client
+    ):
         mock_rm.return_value = MagicMock(inference_pool_size=2)
         mock_cached.return_value = False
         mock_size.return_value = 0.5
@@ -296,8 +309,10 @@ class TestExportModel:
     @patch("apps.api.server.routers.models.raise_error")
     def test_export_requires_loaded_model(self, mock_raise, client):
         from fastapi import HTTPException
+
         mock_raise.side_effect = HTTPException(status_code=404, detail="No model loaded")
         import state as server_state
+
         prev = server_state.model
         try:
             server_state.model = None
@@ -312,6 +327,7 @@ class TestExportModel:
     def test_export_success(self, mock_export, client):
         mock_export.return_value = ["weights.sout", "a.sln"]
         import state as server_state
+
         prev = server_state.model
         prev_tok = server_state.tokenizer
         try:
@@ -443,7 +459,9 @@ class TestRetryDownload:
     @patch("domains.infrastructure.download_manager.is_download_complete")
     @patch("domains.infrastructure.download_manager.cleanup_incomplete")
     @patch("domains.infrastructure.download_manager.get_download_manager")
-    def test_retry_with_complete_cleanup(self, mock_mgr, mock_cleanup, mock_complete, mock_run, client):
+    def test_retry_with_complete_cleanup(
+        self, mock_mgr, mock_cleanup, mock_complete, mock_run, client
+    ):
         mgr = MagicMock()
         mgr.is_downloading.return_value = False
         mock_mgr.return_value = mgr
@@ -531,7 +549,12 @@ class TestPrecision:
         acc.name = "cpu"
         acc.device_type = "cpu"
         mock_acc.return_value = acc
-        mock_suggest.return_value = {"format": "fp32", "bits": 32, "reason": "fastest", "benchmark": {}}
+        mock_suggest.return_value = {
+            "format": "fp32",
+            "bits": 32,
+            "reason": "fastest",
+            "benchmark": {},
+        }
         resp = client.post("/models/precision", json={"mode": "auto"})
         assert resp.status_code == 200
         data = resp.json()["data"]
@@ -623,6 +646,7 @@ class TestCacheUsage:
 
     def test_counts_real_model_dirs(self, tmp_path, client):
         from apps.api.server.routers import models as models_mod
+
         blobs = tmp_path / "models--gpt2" / "blobs"
         blobs.mkdir(parents=True)
         (blobs / "w1.bin").write_bytes(b"\x00" * 100)

@@ -1,18 +1,32 @@
 """Tests for domain.infrastructure._internal.slnc.compiler — helper functions and SLNCCompiler."""
 
-import json
 import struct
-import numpy as np
-from pathlib import Path
 import tempfile
+from pathlib import Path
+
+import numpy as np
+
 from domain.infrastructure._internal.slnc.compiler import (
-    _crc32, _xxhash64, SLNCCompiler, GPT2_BLOCK_LAYOUT, GPT2_NON_BLOCK_LAYOUT,
-    LLAMA_BLOCK_LAYOUT, LLAMA_NON_BLOCK_LAYOUT, _ARCH_LAYOUTS,
+    _ARCH_LAYOUTS,
+    GPT2_BLOCK_LAYOUT,
+    GPT2_NON_BLOCK_LAYOUT,
+    LLAMA_BLOCK_LAYOUT,
+    LLAMA_NON_BLOCK_LAYOUT,
+    SLNCCompiler,
+    _crc32,
+    _xxhash64,
 )
 from domain.infrastructure._internal.slnc.spec import (
-    MAGIC, VERSION, FLAGS_DEFAULT, ALIGNMENT, DTYPE_FLOAT32,
-    compute_header_size, compute_tensor_entry_size, compute_tensor_table_size,
-    dtype_to_code, _align, DTYPE_MAP,
+    ALIGNMENT,
+    DTYPE_FLOAT32,
+    DTYPE_MAP,
+    MAGIC,
+    VERSION,
+    _align,
+    compute_header_size,
+    compute_tensor_entry_size,
+    compute_tensor_table_size,
+    dtype_to_code,
 )
 
 
@@ -164,8 +178,14 @@ class TestSLNCCompiler:
 
     def test_compile_from_dict(self):
         comp = SLNCCompiler()
-        config = {"n_layer": 1, "n_embd": 16, "n_head": 2, "n_inner": 32,
-                  "vocab_size": 100, "n_positions": 128}
+        config = {
+            "n_layer": 1,
+            "n_embd": 16,
+            "n_head": 2,
+            "n_inner": 32,
+            "vocab_size": 100,
+            "n_positions": 128,
+        }
         weights = {
             "h.0.ln_1.weight": np.ones(16, dtype=np.float32),
             "h.0.ln_1.bias": np.zeros(16, dtype=np.float32),
@@ -198,8 +218,14 @@ class TestSLNCCompiler:
 
     def test_compile_from_dict_tensor_count(self):
         comp = SLNCCompiler()
-        config = {"n_layer": 1, "n_embd": 8, "n_head": 2, "n_inner": 16,
-                  "vocab_size": 10, "n_positions": 32}
+        config = {
+            "n_layer": 1,
+            "n_embd": 8,
+            "n_head": 2,
+            "n_inner": 16,
+            "vocab_size": 10,
+            "n_positions": 32,
+        }
         weights = {
             "h.0.ln_1.weight": np.ones(8, dtype=np.float32),
             "h.0.ln_1.bias": np.zeros(8, dtype=np.float32),
@@ -240,8 +266,14 @@ class TestSLNCCompiler:
 
     def test_multiple_layers(self):
         comp = SLNCCompiler()
-        config = {"n_layer": 3, "n_embd": 8, "n_head": 2, "n_inner": 16,
-                  "vocab_size": 10, "n_positions": 32}
+        config = {
+            "n_layer": 3,
+            "n_embd": 8,
+            "n_head": 2,
+            "n_inner": 16,
+            "vocab_size": 10,
+            "n_positions": 32,
+        }
         weights = {}
         for i in range(3):
             weights[f"h.{i}.ln_1.weight"] = np.ones(8, dtype=np.float32)
@@ -264,15 +296,21 @@ class TestSLNCCompiler:
         with tempfile.NamedTemporaryFile(suffix=".slnc", delete=False) as f:
             output = f.name
 
-        result = comp.compile_from_dict(config, weights, output)
+        comp.compile_from_dict(config, weights, output)
         assert Path(output).exists()
         size = Path(output).stat().st_size
         assert size > 0
 
     def test_compile_from_dict_file_size(self):
         comp = SLNCCompiler()
-        config = {"n_layer": 1, "n_embd": 8, "n_head": 2, "n_inner": 16,
-                  "vocab_size": 10, "n_positions": 32}
+        config = {
+            "n_layer": 1,
+            "n_embd": 8,
+            "n_head": 2,
+            "n_inner": 16,
+            "vocab_size": 10,
+            "n_positions": 32,
+        }
         weights = {
             "h.0.ln_1.weight": np.ones(8, dtype=np.float32),
             "h.0.ln_1.bias": np.zeros(8, dtype=np.float32),
@@ -301,9 +339,15 @@ class TestSLNCCompiler:
 
     def test_compile_llama_from_dict(self):
         comp = SLNCCompiler()
-        config = {"num_hidden_layers": 1, "hidden_size": 16, "num_attention_heads": 2,
-                  "intermediate_size": 32, "vocab_size": 100, "max_position_embeddings": 128,
-                  "rope_theta": 10000.0}
+        config = {
+            "num_hidden_layers": 1,
+            "hidden_size": 16,
+            "num_attention_heads": 2,
+            "intermediate_size": 32,
+            "vocab_size": 100,
+            "max_position_embeddings": 128,
+            "rope_theta": 10000.0,
+        }
         weights = {
             "model.embed_tokens.weight": np.random.randn(100, 16).astype(np.float32),
             "model.layers.0.self_attn.q_proj.weight": np.random.randn(16, 16).astype(np.float32),
@@ -322,13 +366,19 @@ class TestSLNCCompiler:
         with tempfile.NamedTemporaryFile(suffix=".slnc", delete=False) as f:
             output = f.name
 
-        result = comp.compile_from_dict(config, weights, output)
+        comp.compile_from_dict(config, weights, output)
         assert Path(output).exists()
 
     def test_compile_preserves_weight_data(self):
         comp = SLNCCompiler()
-        config = {"n_layer": 1, "n_embd": 8, "n_head": 2, "n_inner": 16,
-                  "vocab_size": 10, "n_positions": 32}
+        config = {
+            "n_layer": 1,
+            "n_embd": 8,
+            "n_head": 2,
+            "n_inner": 16,
+            "vocab_size": 10,
+            "n_positions": 32,
+        }
         weight_val = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], dtype=np.float32)
         weights = {
             "h.0.ln_1.weight": weight_val.copy(),
@@ -387,11 +437,13 @@ class TestSpecHelpers:
 
     def test_dtype_to_code_unsupported(self):
         import pytest
+
         with pytest.raises(ValueError):
             dtype_to_code(np.float64)
 
     def test_code_to_dtype(self):
         from domain.infrastructure._internal.slnc.spec import code_to_dtype
+
         assert code_to_dtype(0) == np.float32
         assert code_to_dtype(1) == np.float16
         assert code_to_dtype(3) == np.int32
@@ -400,7 +452,9 @@ class TestSpecHelpers:
 
     def test_code_to_dtype_invalid(self):
         import pytest
+
         from domain.infrastructure._internal.slnc.spec import code_to_dtype
+
         with pytest.raises(ValueError):
             code_to_dtype(999)
 
@@ -415,7 +469,7 @@ class TestSpecHelpers:
         assert ALIGNMENT == 64
 
     def test_dtype_map_coverage(self):
-        for code, name in DTYPE_MAP.items():
+        for _code, name in DTYPE_MAP.items():
             if name == "bfloat16":
                 continue
             assert hasattr(np, name)

@@ -62,9 +62,9 @@ FLAGS_DEFAULT = 0
 # Feature flags (bitmask in Flags field)
 # ══════════════════════════════════════════════════════════════════════════════
 
-FLAG_HAS_HEADER_CRC   = 0x01  # reserved region contains header CRC32
-FLAG_ALIGNED_TENSORS  = 0x02  # each tensor starts at 64B-aligned offset
-FLAG_HAS_FILE_HASH    = 0x08  # reserved region contains file-level hash
+FLAG_HAS_HEADER_CRC = 0x01  # reserved region contains header CRC32
+FLAG_ALIGNED_TENSORS = 0x02  # each tensor starts at 64B-aligned offset
+FLAG_HAS_FILE_HASH = 0x08  # reserved region contains file-level hash
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Field sizes (bytes)
@@ -79,7 +79,7 @@ JSON_LEN_SIZE = 4
 
 # Reserved region layout (24 bytes within MODEL_META)
 RESERVED_SIZE = 24
-HEADER_CRC_OFFSET = 0    # offset within reserved region
+HEADER_CRC_OFFSET = 0  # offset within reserved region
 
 # Tensor table entry (variable length due to name string)
 # name_len(4) + name_bytes[name_len] + offset(8) + size(4) + ndim(4) + shape[ndim](4 each) + dtype(4) + crc32(4)
@@ -88,9 +88,9 @@ HEADER_CRC_OFFSET = 0    # offset within reserved region
 ALIGNMENT = 64  # cache line alignment
 
 # Bounds
-MAX_NDIM = 8          # no tensor > 8D
+MAX_NDIM = 8  # no tensor > 8D
 MAX_TENSOR_COUNT = 100_000  # no model has >100K tensors
-MAX_NAME_LEN = 256    # max tensor name length
+MAX_NAME_LEN = 256  # max tensor name length
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Dtype codes
@@ -117,9 +117,11 @@ DTYPE_MAP = {
 # Config dataclass (pugqeep config pattern)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class SLNCConfig:
     """SLNC format configuration — single source of truth for all tunables."""
+
     alignment: int = ALIGNMENT
     max_ndim: int = MAX_NDIM
     max_tensor_count: int = MAX_TENSOR_COUNT
@@ -129,7 +131,7 @@ class SLNCConfig:
     write_header_crc: bool = False  # default: no header CRC (backward compatible)
 
     @classmethod
-    def from_flags(cls, flags: int) -> "SLNCConfig":
+    def from_flags(cls, flags: int) -> SLNCConfig:
         """Create config from file flags bitmask."""
         return cls(
             align_tensors=bool(flags & FLAG_ALIGNED_TENSORS),
@@ -150,15 +152,11 @@ class SLNCConfig:
 # Layout helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def compute_header_size(json_bytes: bytes) -> int:
     """Compute total header size (aligned to ALIGNMENT)."""
     size = (
-        MAGIC_SIZE
-        + VERSION_SIZE
-        + FLAGS_SIZE
-        + MODEL_META_SIZE
-        + JSON_LEN_SIZE
-        + len(json_bytes)
+        MAGIC_SIZE + VERSION_SIZE + FLAGS_SIZE + MODEL_META_SIZE + JSON_LEN_SIZE + len(json_bytes)
     )
     return _align(size)
 
@@ -194,11 +192,12 @@ def _align_offset(offset: int) -> int:
 def dtype_to_code(dtype) -> int:
     """Convert numpy dtype to format code."""
     import numpy as np
+
     if dtype == np.float32:
         return DTYPE_FLOAT32
     elif dtype == np.float16:
         return DTYPE_FLOAT16
-    elif hasattr(np, 'bfloat16') and dtype == np.bfloat16:
+    elif hasattr(np, "bfloat16") and dtype == np.bfloat16:
         return DTYPE_BFLOAT16
     elif dtype == np.int32:
         return DTYPE_INT32
@@ -213,6 +212,7 @@ def dtype_to_code(dtype) -> int:
 def code_to_dtype(code: int):
     """Convert format code to numpy dtype."""
     import numpy as np
+
     if code == DTYPE_BFLOAT16:
         # bfloat16 not in standard numpy; return uint16 as storage dtype
         return np.uint16

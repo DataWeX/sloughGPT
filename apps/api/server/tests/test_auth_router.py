@@ -18,6 +18,7 @@ from routers.auth import AuthRouter, _get_auth_deps, reset_auth_router, set_auth
 def _isolated_auth(tmp_path):
     """Create an AuthRouter backed by a temp MogDB, inject it, clean up."""
     from routers.auth import _login_limiter, _register_limiter
+
     _login_limiter._attempts.clear()
     _register_limiter._attempts.clear()
     db_path = str(tmp_path / "auth_mogdb")

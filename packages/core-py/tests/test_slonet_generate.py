@@ -2,27 +2,26 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+import pytest
+
 from domain.training._internal.slonet import (
-    Tensor,
-    SloTransformer,
     NumpyKVState,
-    _sample_from_logits,
+    SloTransformer,
+    Tensor,
+    _apply_frequency_penalty,
+    _apply_presence_penalty,
+    _apply_repetition_penalty,
     _apply_temperature,
     _apply_top_k,
     _apply_top_p,
-    _apply_repetition_penalty,
-    _apply_frequency_penalty,
-    _apply_presence_penalty,
+    _sample_from_logits,
 )
-
 
 # ── _sample_from_logits ─────────────────────────────────────────────────────
 
 
 class TestSampleFromLogits:
-
     def test_greedy(self):
         logits = np.array([[1.0, 5.0, 3.0]])
         result = _sample_from_logits(logits, temperature=0.0)
@@ -67,7 +66,6 @@ class TestSampleFromLogits:
 
 
 class TestLogitProcessors:
-
     def test_temperature(self):
         logits = np.array([[1.0, 2.0, 3.0]])
         out = _apply_temperature(logits, 2.0)
@@ -107,7 +105,6 @@ class TestLogitProcessors:
 
 
 class TestGenerate:
-
     def test_generate_basic(self):
         model = SloTransformer(vocab_size=100, n_embed=32, n_layer=1, n_head=2, max_seq_len=50)
         x = np.array([[1, 2, 3, 4]])
@@ -156,7 +153,6 @@ class TestGenerate:
 
 
 class TestNumpyKVState:
-
     def test_init(self):
         state = NumpyKVState()
         assert state.prev_ids is None

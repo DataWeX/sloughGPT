@@ -1,14 +1,26 @@
 """Tests for domain.cognitive._internal.rag — TextChunk, RetrievalResult, BM25Indexer, HybridRetriever, CitationTracker, HallucinationDetector, ProductionRAG; domain.cognitive._internal.grounding — Document, FisherInformation, KnowledgeNode, KnowledgeEdge, RAGGrounder, KnowledgeGrounding, CurriculumLearner, GroundingOrchestrator, HierarchicalContext."""
 
 import numpy as np
-from domain.cognitive._internal.rag import (
-    TextChunk, RetrievalResult, BM25Indexer, HybridRetriever,
-    CitationTracker, HallucinationDetector, ProductionRAG,
-)
+
 from domain.cognitive._internal.grounding import (
-    Document, FisherInformation, KnowledgeNode, KnowledgeEdge,
-    RAGGrounder, KnowledgeGrounding, CurriculumLearner,
-    GroundingOrchestrator, HierarchicalContext,
+    CurriculumLearner,
+    Document,
+    FisherInformation,
+    GroundingOrchestrator,
+    HierarchicalContext,
+    KnowledgeEdge,
+    KnowledgeGrounding,
+    KnowledgeNode,
+    RAGGrounder,
+)
+from domain.cognitive._internal.rag import (
+    BM25Indexer,
+    CitationTracker,
+    HallucinationDetector,
+    HybridRetriever,
+    ProductionRAG,
+    RetrievalResult,
+    TextChunk,
 )
 
 
@@ -57,23 +69,31 @@ class TestTextChunk:
 class TestRetrievalResult:
     def test_fields(self):
         tc = TextChunk(id="c1", content="x", metadata={})
-        rr = RetrievalResult(chunk=tc, dense_score=0.9, sparse_score=0.8, combined_score=0.85, rank=1)
+        rr = RetrievalResult(
+            chunk=tc, dense_score=0.9, sparse_score=0.8, combined_score=0.85, rank=1
+        )
         assert rr.dense_score == 0.9
         assert rr.rank == 1
 
     def test_chunk_reference(self):
         tc = TextChunk(id="c2", content="test", metadata={})
-        rr = RetrievalResult(chunk=tc, dense_score=0.5, sparse_score=0.5, combined_score=0.5, rank=2)
+        rr = RetrievalResult(
+            chunk=tc, dense_score=0.5, sparse_score=0.5, combined_score=0.5, rank=2
+        )
         assert rr.chunk.id == "c2"
 
     def test_zero_scores(self):
         tc = TextChunk(id="c1", content="x", metadata={})
-        rr = RetrievalResult(chunk=tc, dense_score=0.0, sparse_score=0.0, combined_score=0.0, rank=0)
+        rr = RetrievalResult(
+            chunk=tc, dense_score=0.0, sparse_score=0.0, combined_score=0.0, rank=0
+        )
         assert rr.dense_score == 0.0
 
     def test_high_rank(self):
         tc = TextChunk(id="c1", content="x", metadata={})
-        rr = RetrievalResult(chunk=tc, dense_score=0.9, sparse_score=0.9, combined_score=0.9, rank=100)
+        rr = RetrievalResult(
+            chunk=tc, dense_score=0.9, sparse_score=0.9, combined_score=0.9, rank=100
+        )
         assert rr.rank == 100
 
 
@@ -173,7 +193,9 @@ class TestHybridRetriever:
     def test_retrieve(self):
         retriever = HybridRetriever()
         for i in range(10):
-            retriever.add_chunk(TextChunk(id=str(i), content=f"document {i} about python", metadata={}))
+            retriever.add_chunk(
+                TextChunk(id=str(i), content=f"document {i} about python", metadata={})
+            )
         retriever.build_index()
         results = retriever.retrieve("python", top_k=3)
         assert len(results) <= 3
@@ -193,11 +215,13 @@ class TestHybridRetriever:
     def test_rank_ordering(self):
         retriever = HybridRetriever(use_rerank=False)
         for i in range(5):
-            retriever.add_chunk(TextChunk(id=str(i), content=f"python coding example {i}", metadata={}))
+            retriever.add_chunk(
+                TextChunk(id=str(i), content=f"python coding example {i}", metadata={})
+            )
         retriever.build_index()
         results = retriever.retrieve("python", top_k=5)
         for i in range(len(results) - 1):
-            assert results[i].combined_score >= results[i+1].combined_score
+            assert results[i].combined_score >= results[i + 1].combined_score
 
     def test_min_score_filter(self):
         retriever = HybridRetriever(use_rerank=False)
@@ -217,9 +241,15 @@ class TestHybridRetriever:
 
     def test_different_queries(self):
         retriever = HybridRetriever(use_rerank=True)
-        retriever.add_chunk(TextChunk(id="1", content="the quick brown fox jumps over the lazy dog", metadata={}))
-        retriever.add_chunk(TextChunk(id="2", content="a lazy dog sleeps on the warm sunny porch", metadata={}))
-        retriever.add_chunk(TextChunk(id="3", content="colorful tropical fish swim in coral reefs", metadata={}))
+        retriever.add_chunk(
+            TextChunk(id="1", content="the quick brown fox jumps over the lazy dog", metadata={})
+        )
+        retriever.add_chunk(
+            TextChunk(id="2", content="a lazy dog sleeps on the warm sunny porch", metadata={})
+        )
+        retriever.add_chunk(
+            TextChunk(id="3", content="colorful tropical fish swim in coral reefs", metadata={})
+        )
         retriever.build_index()
         r1 = retriever.retrieve("fox", top_k=1)
         r2 = retriever.retrieve("fish", top_k=1)
@@ -244,7 +274,11 @@ class TestCitationTracker:
 
     def test_cite(self):
         tracker = CitationTracker()
-        claim = {"subject": "Python", "predicate": "is a programming language", "text": "Python is a programming language."}
+        claim = {
+            "subject": "Python",
+            "predicate": "is a programming language",
+            "text": "Python is a programming language.",
+        }
         chunk = TextChunk(id="c1", content="Python is a language", metadata={"source": "wiki"})
         cited = tracker.cite(claim, [chunk])
         assert cited["supported"] is True
@@ -430,7 +464,9 @@ class TestKnowledgeGrounding:
 class TestRAGGrounder:
     def test_add_document(self):
         grounder = RAGGrounder()
-        doc = Document(id="d1", content="this is a test document with many words " * 10, source="test")
+        doc = Document(
+            id="d1", content="this is a test document with many words " * 10, source="test"
+        )
         grounder.add_document(doc, chunk_size=10)
         assert len(grounder.chunks) > 0
 
@@ -441,6 +477,7 @@ class TestRAGGrounder:
 
     def test_retrieve(self):
         import asyncio
+
         grounder = RAGGrounder()
         grounder.add_text("python programming language tutorial")
         results = asyncio.run(grounder.retrieve("python", top_k=5))
@@ -456,6 +493,7 @@ class TestRAGGrounder:
 
     def test_empty_retrieve(self):
         import asyncio
+
         grounder = RAGGrounder()
         results = asyncio.run(grounder.retrieve("anything", top_k=5))
         assert len(results) == 0
@@ -465,6 +503,7 @@ class TestRAGGrounder:
         grounder.add_text("python is a programming language")
         grounder.add_text("java is another programming language")
         import asyncio
+
         results = asyncio.run(grounder.retrieve("programming", top_k=5))
         assert len(results) > 0
 
@@ -613,7 +652,9 @@ class TestGroundingOrchestrator:
 class TestHallucinationDetector:
     def test_detect_basic(self):
         retriever = HybridRetriever()
-        retriever.add_chunk(TextChunk(id="1", content="python is a programming language", metadata={}))
+        retriever.add_chunk(
+            TextChunk(id="1", content="python is a programming language", metadata={})
+        )
         retriever.build_index()
         detector = HallucinationDetector(retriever)
         result = detector.detect("Python is a programming language.")
@@ -639,7 +680,13 @@ class TestHallucinationDetector:
 
     def test_detect_with_evidence(self):
         retriever = HybridRetriever()
-        retriever.add_chunk(TextChunk(id="1", content="Python is a programming language used for web development", metadata={}))
+        retriever.add_chunk(
+            TextChunk(
+                id="1",
+                content="Python is a programming language used for web development",
+                metadata={},
+            )
+        )
         retriever.build_index()
         detector = HallucinationDetector(retriever)
         result = detector.detect("Python is a programming language.")

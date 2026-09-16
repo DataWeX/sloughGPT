@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from domain.memory._internal.config import MemoryConfig
 from domain.memory._internal.provider import KnowledgeMemoryProvider, MemoryProvider
@@ -34,8 +34,7 @@ class MemoryService:
     ``config.sync_remember`` requests inline execution.
     """
 
-    def __init__(self, provider: Optional[MemoryProvider] = None,
-                 config: Optional[MemoryConfig] = None):
+    def __init__(self, provider: MemoryProvider | None = None, config: MemoryConfig | None = None):
         """
         Args:
             provider: storage adapter; defaults to KnowledgeMemoryProvider.
@@ -134,7 +133,7 @@ class MemoryService:
             return self.remember(user_message, assistant_response)
         return await asyncio.to_thread(self.remember, user_message, assistant_response)
 
-    def remember_facts(self, user_message: str, assistant_response: str) -> List[str]:
+    def remember_facts(self, user_message: str, assistant_response: str) -> list[str]:
         """
         Silently persist one completed turn and return the newly stored facts.
 
@@ -156,7 +155,7 @@ class MemoryService:
             return []
         return self._provider.store_turn_facts(user_message, assistant_response)
 
-    async def remember_facts_async(self, user_message: str, assistant_response: str) -> List[str]:
+    async def remember_facts_async(self, user_message: str, assistant_response: str) -> list[str]:
         """
         Non-blocking variant of ``remember_facts`` for async producers.
 
@@ -178,7 +177,7 @@ class MemoryService:
             return self.remember_facts(user_message, assistant_response)
         return await asyncio.to_thread(self.remember_facts, user_message, assistant_response)
 
-    def retrieve(self, query: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def retrieve(self, query: str, limit: int | None = None) -> list[dict[str, Any]]:
         """
         Return memory items relevant to ``query``.
 
@@ -215,11 +214,11 @@ class MemoryService:
             return False
         return self._provider.store(content, topic, source)
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Return memory statistics (total facts, topics)."""
         return self._provider.stats()
 
-    def list_all(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def list_all(self, limit: int = 100) -> list[dict[str, Any]]:
         """
         Return stored memory items (most recent first).
 
@@ -250,7 +249,7 @@ class MemoryService:
             return 0
         return self._provider.clear()
 
-    def delete(self, ids: List[str]) -> int:
+    def delete(self, ids: list[str]) -> int:
         """
         Remove specific stored items by entry id.
 
@@ -267,9 +266,9 @@ class MemoryService:
             return 0
         return self._provider.delete(ids)
 
-    def update(self, item_id: str, content: str,
-               topic: Optional[str] = None,
-               importance: Optional[float] = None) -> bool:
+    def update(
+        self, item_id: str, content: str, topic: str | None = None, importance: float | None = None
+    ) -> bool:
         """
         Edit a stored item's text (and optionally its topic/importance).
 
@@ -289,15 +288,15 @@ class MemoryService:
         """
         if not self.enabled:
             return False
-        return self._provider.update(item_id, content, topic=topic,
-                                     importance=importance)
+        return self._provider.update(item_id, content, topic=topic, importance=importance)
 
 
-_service: Optional[MemoryService] = None
+_service: MemoryService | None = None
 
 
-def get_memory_service(provider: Optional[MemoryProvider] = None,
-                       config: Optional[MemoryConfig] = None) -> MemoryService:
+def get_memory_service(
+    provider: MemoryProvider | None = None, config: MemoryConfig | None = None
+) -> MemoryService:
     """Return the process-wide MemoryService singleton.
 
     Created once with the production provider/config; later calls return the

@@ -15,16 +15,17 @@ Usage::
 
 from __future__ import annotations
 
-import time
 import threading
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Dict, Optional, List
+from enum import Enum, StrEnum
+from typing import Any
 
 
 class LogLevel(Enum):
     """Standard log levels, ordered by severity."""
+
     DEBUG = "debug"
     INFO = "info"
     WARNING = "warning"
@@ -58,7 +59,8 @@ class LogLevel(Enum):
 # Format: E_<DOMAIN>_<SPECIFIC>
 # Use with: logger.error("message", error_code="E_MODEL_LOAD_FAILED")
 
-class ErrorCode(str, Enum):
+
+class ErrorCode(StrEnum):
     """Structured error codes for programmatic error handling.
 
     Format: E_<DOMAIN>_<SPECIFIC>
@@ -70,61 +72,63 @@ class ErrorCode(str, Enum):
     """
 
     # ── Authentication ───────────────────────────────────────────────
-    E_AUTH_MISSING     = "E_AUTH_MISSING"      # No auth token provided
-    E_AUTH_EXPIRED     = "E_AUTH_EXPIRED"       # Token expired
-    E_AUTH_INVALID     = "E_AUTH_INVALID"       # Token malformed/invalid
-    E_AUTH_FORBIDDEN   = "E_AUTH_FORBIDDEN"     # Valid token, insufficient permissions
+    E_AUTH_MISSING = "E_AUTH_MISSING"  # No auth token provided
+    E_AUTH_EXPIRED = "E_AUTH_EXPIRED"  # Token expired
+    E_AUTH_INVALID = "E_AUTH_INVALID"  # Token malformed/invalid
+    E_AUTH_FORBIDDEN = "E_AUTH_FORBIDDEN"  # Valid token, insufficient permissions
 
     # ── Model ────────────────────────────────────────────────────────
-    E_MODEL_LOAD       = "E_MODEL_LOAD"        # Model failed to load
-    E_MODEL_OOM        = "E_MODEL_OOM"         # Out of memory during inference
-    E_MODEL_TIMEOUT    = "E_MODEL_TIMEOUT"     # Inference exceeded timeout
-    E_MODEL_CRASH      = "E_MODEL_CRASH"       # Model process crashed
-    E_MODEL_NOT_FOUND  = "E_MODEL_NOT_FOUND"   # Requested model not available
-    E_MODEL_WARMUP     = "E_MODEL_WARMUP"      # Warmup failed (non-fatal)
+    E_MODEL_LOAD = "E_MODEL_LOAD"  # Model failed to load
+    E_MODEL_OOM = "E_MODEL_OOM"  # Out of memory during inference
+    E_MODEL_TIMEOUT = "E_MODEL_TIMEOUT"  # Inference exceeded timeout
+    E_MODEL_CRASH = "E_MODEL_CRASH"  # Model process crashed
+    E_MODEL_NOT_FOUND = "E_MODEL_NOT_FOUND"  # Requested model not available
+    E_MODEL_WARMUP = "E_MODEL_WARMUP"  # Warmup failed (non-fatal)
 
     # ── Inference ────────────────────────────────────────────────────
-    E_INF_TOKENIZER    = "E_INF_TOKENIZER"     # Tokenization failed
-    E_INF_GENERATION   = "E_INF_GENERATION"    # Generation failed
-    E_INF_CACHE        = "E_INF_CACHE"         # KV cache error
+    E_INF_TOKENIZER = "E_INF_TOKENIZER"  # Tokenization failed
+    E_INF_GENERATION = "E_INF_GENERATION"  # Generation failed
+    E_INF_CACHE = "E_INF_CACHE"  # KV cache error
 
     # ── Infrastructure ───────────────────────────────────────────────
-    E_INFRA_STARTUP    = "E_INFRA_STARTUP"     # Server startup failure
-    E_INFRA_TIMEOUT    = "E_INFRA_TIMEOUT"     # Request timeout
-    E_INFRA_REGISTRY   = "E_INFRA_REGISTRY"    # Model registry error
-    E_INFRA_PROVIDER   = "E_INFRA_PROVIDER"    # Provider registration error
+    E_INFRA_STARTUP = "E_INFRA_STARTUP"  # Server startup failure
+    E_INFRA_TIMEOUT = "E_INFRA_TIMEOUT"  # Request timeout
+    E_INFRA_REGISTRY = "E_INFRA_REGISTRY"  # Model registry error
+    E_INFRA_PROVIDER = "E_INFRA_PROVIDER"  # Provider registration error
 
     # ── Validation ───────────────────────────────────────────────────
-    E_VAL_REQUEST      = "E_VAL_REQUEST"       # Request validation failed
-    E_VAL_FIELD        = "E_VAL_FIELD"         # Field validation failed
+    E_VAL_REQUEST = "E_VAL_REQUEST"  # Request validation failed
+    E_VAL_FIELD = "E_VAL_FIELD"  # Field validation failed
 
     # ── Training ─────────────────────────────────────────────────────
-    E_TRAIN_DATA       = "E_TRAIN_DATA"        # Training data error
-    E_TRAIN_CRASH      = "E_TRAIN_CRASH"       # Training process crashed
+    E_TRAIN_DATA = "E_TRAIN_DATA"  # Training data error
+    E_TRAIN_CRASH = "E_TRAIN_CRASH"  # Training process crashed
     E_TRAIN_CHECKPOINT = "E_TRAIN_CHECKPOINT"  # Checkpoint save/load failed
 
     # ── Domain ───────────────────────────────────────────────────────
-    E_DOMAIN           = "E_DOMAIN"            # Generic domain error
-    E_NOT_FOUND        = "E_NOT_FOUND"         # Resource not found
-    E_CONFLICT         = "E_CONFLICT"          # State conflict
+    E_DOMAIN = "E_DOMAIN"  # Generic domain error
+    E_NOT_FOUND = "E_NOT_FOUND"  # Resource not found
+    E_CONFLICT = "E_CONFLICT"  # State conflict
 
 
 # ── Log type tags ────────────────────────────────────────────────────────
 # Short labels that appear in colored output to identify event type.
 
-class LogTag(str, Enum):
+
+class LogTag(StrEnum):
     """Type tags for structured log output — shows WHAT kind of event."""
-    REQ    = "REQ"     # HTTP request
-    AUTH   = "AUTH"    # Authentication
-    MODEL  = "MODEL"   # Model loading/inference
-    SOUL   = "SOUL"    # Soul/personality
-    TRAIN  = "TRAIN"   # Training
-    INFRA  = "INFRA"   # Infrastructure
-    START  = "START"   # Server startup
-    SLOW   = "SLOW"    # Slow request
-    ERROR  = "ERROR"   # Error event
-    WARN   = "WARN"    # Warning event
-    OK     = "OK"      # Success confirmation
+
+    REQ = "REQ"  # HTTP request
+    AUTH = "AUTH"  # Authentication
+    MODEL = "MODEL"  # Model loading/inference
+    SOUL = "SOUL"  # Soul/personality
+    TRAIN = "TRAIN"  # Training
+    INFRA = "INFRA"  # Infrastructure
+    START = "START"  # Server startup
+    SLOW = "SLOW"  # Slow request
+    ERROR = "ERROR"  # Error event
+    WARN = "WARN"  # Warning event
+    OK = "OK"  # Success confirmation
 
 
 @dataclass(frozen=True)
@@ -141,14 +145,15 @@ class LogRecord:
         error_code: Optional error code from ``ErrorCode`` enum.
         tag:        Optional type tag from ``LogTag`` enum.
     """
+
     level: LogLevel
     message: str
     logger: str = "slo"
     timestamp: float = field(default_factory=time.time)
-    context: Dict[str, Any] = field(default_factory=dict)
-    exception: Optional[str] = None
-    error_code: Optional[str] = None
-    tag: Optional[str] = None
+    context: dict[str, Any] = field(default_factory=dict)
+    exception: str | None = None
+    error_code: str | None = None
+    tag: str | None = None
 
 
 class Logger(ABC):
@@ -171,7 +176,7 @@ class Logger(ABC):
         self,
         name: str = "slo",
         level: LogLevel = LogLevel.INFO,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         self._name = name
         self._level = level
@@ -193,7 +198,7 @@ class Logger(ABC):
         self._level = value
 
     @property
-    def context(self) -> Dict[str, Any]:
+    def context(self) -> dict[str, Any]:
         return self._context
 
     def set_context(self, **kwargs: Any) -> None:
@@ -219,13 +224,13 @@ class Logger(ABC):
         self,
         level: LogLevel,
         message: str,
-        context: Optional[Dict[str, Any]] = None,
-        exception: Optional[str] = None,
-        error_code: Optional[str] = None,
-        tag: Optional[str] = None,
+        context: dict[str, Any] | None = None,
+        exception: str | None = None,
+        error_code: str | None = None,
+        tag: str | None = None,
     ) -> LogRecord:
         # Merge: logger defaults → thread-local context → call-site context
-        from .config import get_request_id, get_log_context
+        from .config import get_log_context, get_request_id
 
         merged = {}
         merged.update(get_log_context())
@@ -248,30 +253,42 @@ class Logger(ABC):
     def _should_emit(self, level: LogLevel) -> bool:
         return level >= self._level
 
-    def debug(self, msg: str, error_code: Optional[str] = None, **ctx: Any) -> None:
+    def debug(self, msg: str, error_code: str | None = None, **ctx: Any) -> None:
         """Log at DEBUG level.  Accepts ``error_code`` and arbitrary keyword context."""
         if self._should_emit(LogLevel.DEBUG):
             self.emit(self._make_record(LogLevel.DEBUG, msg, ctx, error_code=error_code))
 
-    def info(self, msg: str, error_code: Optional[str] = None, **ctx: Any) -> None:
+    def info(self, msg: str, error_code: str | None = None, **ctx: Any) -> None:
         """Log at INFO level.  Accepts ``error_code`` and arbitrary keyword context."""
         if self._should_emit(LogLevel.INFO):
             self.emit(self._make_record(LogLevel.INFO, msg, ctx, error_code=error_code))
 
-    def warning(self, msg: str, error_code: Optional[str] = None, **ctx: Any) -> None:
+    def warning(self, msg: str, error_code: str | None = None, **ctx: Any) -> None:
         """Log at WARNING level.  Accepts ``error_code`` and arbitrary keyword context."""
         if self._should_emit(LogLevel.WARNING):
             self.emit(self._make_record(LogLevel.WARNING, msg, ctx, error_code=error_code))
 
-    def error(self, msg: str, exception: Optional[str] = None, error_code: Optional[str] = None, **ctx: Any) -> None:
+    def error(
+        self, msg: str, exception: str | None = None, error_code: str | None = None, **ctx: Any
+    ) -> None:
         """Log at ERROR level.  Accepts ``exception``, ``error_code``, and arbitrary keyword context."""
         if self._should_emit(LogLevel.ERROR):
-            self.emit(self._make_record(LogLevel.ERROR, msg, ctx, exception=exception, error_code=error_code))
+            self.emit(
+                self._make_record(
+                    LogLevel.ERROR, msg, ctx, exception=exception, error_code=error_code
+                )
+            )
 
-    def critical(self, msg: str, exception: Optional[str] = None, error_code: Optional[str] = None, **ctx: Any) -> None:
+    def critical(
+        self, msg: str, exception: str | None = None, error_code: str | None = None, **ctx: Any
+    ) -> None:
         """Log at CRITICAL level.  Accepts ``exception``, ``error_code``, and arbitrary keyword context."""
         if self._should_emit(LogLevel.CRITICAL):
-            self.emit(self._make_record(LogLevel.CRITICAL, msg, ctx, exception=exception, error_code=error_code))
+            self.emit(
+                self._make_record(
+                    LogLevel.CRITICAL, msg, ctx, exception=exception, error_code=error_code
+                )
+            )
 
     def exception(self, msg: str, exc: BaseException, **ctx: Any) -> None:
         """Log an error with the exception's string representation."""
@@ -294,7 +311,7 @@ class Logger(ABC):
 
     # ── Tagged convenience ──────────────────────────────────────────────
 
-    def tag(self, tag: str) -> "TaggedLogger":
+    def tag(self, tag: str) -> TaggedLogger:
         """Create a tagged logger that attaches a type tag to every record.
 
         Usage::
@@ -353,10 +370,10 @@ class TaggedLogger(Logger):
         self,
         level: LogLevel,
         message: str,
-        context: Optional[Dict[str, Any]] = None,
-        exception: Optional[str] = None,
-        error_code: Optional[str] = None,
-        tag: Optional[str] = None,
+        context: dict[str, Any] | None = None,
+        exception: str | None = None,
+        error_code: str | None = None,
+        tag: str | None = None,
     ) -> LogRecord:
         merged = {**self._context, **(context or {})}
         return LogRecord(
@@ -369,25 +386,37 @@ class TaggedLogger(Logger):
             tag=tag or self._tag,
         )
 
-    def debug(self, msg: str, error_code: Optional[str] = None, **ctx: Any) -> None:
+    def debug(self, msg: str, error_code: str | None = None, **ctx: Any) -> None:
         if self._should_emit(LogLevel.DEBUG):
             self.emit(self._make_record(LogLevel.DEBUG, msg, ctx, error_code=error_code))
 
-    def info(self, msg: str, error_code: Optional[str] = None, **ctx: Any) -> None:
+    def info(self, msg: str, error_code: str | None = None, **ctx: Any) -> None:
         if self._should_emit(LogLevel.INFO):
             self.emit(self._make_record(LogLevel.INFO, msg, ctx, error_code=error_code))
 
-    def warning(self, msg: str, error_code: Optional[str] = None, **ctx: Any) -> None:
+    def warning(self, msg: str, error_code: str | None = None, **ctx: Any) -> None:
         if self._should_emit(LogLevel.WARNING):
             self.emit(self._make_record(LogLevel.WARNING, msg, ctx, error_code=error_code))
 
-    def error(self, msg: str, exception: Optional[str] = None, error_code: Optional[str] = None, **ctx: Any) -> None:
+    def error(
+        self, msg: str, exception: str | None = None, error_code: str | None = None, **ctx: Any
+    ) -> None:
         if self._should_emit(LogLevel.ERROR):
-            self.emit(self._make_record(LogLevel.ERROR, msg, ctx, exception=exception, error_code=error_code))
+            self.emit(
+                self._make_record(
+                    LogLevel.ERROR, msg, ctx, exception=exception, error_code=error_code
+                )
+            )
 
-    def critical(self, msg: str, exception: Optional[str] = None, error_code: Optional[str] = None, **ctx: Any) -> None:
+    def critical(
+        self, msg: str, exception: str | None = None, error_code: str | None = None, **ctx: Any
+    ) -> None:
         if self._should_emit(LogLevel.CRITICAL):
-            self.emit(self._make_record(LogLevel.CRITICAL, msg, ctx, exception=exception, error_code=error_code))
+            self.emit(
+                self._make_record(
+                    LogLevel.CRITICAL, msg, ctx, exception=exception, error_code=error_code
+                )
+            )
 
     def emit(self, record: LogRecord) -> None:
         self._parent.emit(record)
@@ -404,7 +433,7 @@ class ChildLogger(Logger):
         self,
         name: str,
         parent: Logger,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(name=name, level=parent.level, context=context)
         self._parent = parent
@@ -438,14 +467,14 @@ class CompositeLogger(Logger):
     def __init__(
         self,
         name: str = "slo",
-        children: Optional[List[Logger]] = None,
+        children: list[Logger] | None = None,
         level: LogLevel = LogLevel.DEBUG,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(name=name, level=level, context=context)
-        self._children: List[Logger] = list(children) if children else []
+        self._children: list[Logger] = list(children) if children else []
 
-    def add(self, logger: Logger) -> "CompositeLogger":
+    def add(self, logger: Logger) -> CompositeLogger:
         """Add a child logger. Returns self for chaining."""
         self._children.append(logger)
         return self
@@ -455,7 +484,7 @@ class CompositeLogger(Logger):
         self._children.remove(logger)
 
     @property
-    def children(self) -> List[Logger]:
+    def children(self) -> list[Logger]:
         """List of child loggers."""
         return list(self._children)
 

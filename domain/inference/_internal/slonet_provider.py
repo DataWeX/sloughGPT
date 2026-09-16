@@ -21,14 +21,17 @@ Features:
 - Seed control for reproducible generation
 - Per-request metadata (timing, token count, model info)
 """
+
 import threading
 import time
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator, Optional, Dict, List, Tuple, Union, Any
+from typing import Any
+
 import numpy as np
 
-from domain.infrastructure._internal.structured_log import StructuredLogger
 from domain.infrastructure._internal.constants import DEFAULT_GENERATE_TIMEOUT
+from domain.infrastructure._internal.structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.inference.slonet_provider")
 
@@ -39,10 +42,12 @@ _STREAM_TOTAL_TIMEOUT_S = DEFAULT_GENERATE_TIMEOUT
 # Lazy import to avoid circular dependency
 _SloLayerNorm = None
 
+
 def _get_slo_layernorm():
     global _SloLayerNorm
     if _SloLayerNorm is None:
         from domain.training._internal.slonet import SloLayerNorm
+
         _SloLayerNorm = SloLayerNorm
     return _SloLayerNorm
 
@@ -54,7 +59,7 @@ class _CharTokenizer:
     that SloNetChatProvider expects from a HuggingFace tokenizer.
     """
 
-    def __init__(self, stoi: Dict[str, int], itos: Dict):
+    def __init__(self, stoi: dict[str, int], itos: dict):
         self._stoi = stoi
         # JSON serializes int keys as strings — normalize to int
         self._itos = {int(k): v for k, v in itos.items()}
@@ -66,7 +71,7 @@ class _CharTokenizer:
     def vocab_size(self) -> int:
         return self._vocab_size
 
-    def encode(self, text: str) -> List[int]:
+    def encode(self, text: str) -> list[int]:
         """Encode text to token IDs (one per character)."""
         return [int(self._stoi.get(c, 0)) for c in text]
 
@@ -74,7 +79,7 @@ class _CharTokenizer:
         """Decode token IDs back to text."""
         return "".join(self._itos.get(int(tid), "") for tid in token_ids)
 
-    def apply_chat_template(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    def apply_chat_template(self, messages: list[dict[str, str]], **kwargs) -> str:
         """Format messages as a simple chat string for char-level models."""
         parts = []
         for msg in messages:
@@ -102,7 +107,7 @@ class _TreeTokenizer:
     def vocab_size(self) -> int:
         return self._tree.vocab_size
 
-    def encode(self, text: str) -> List[int]:
+    def encode(self, text: str) -> list[int]:
         """Encode text to BPE token IDs via the token tree."""
         return self._tree.encode(text)
 
@@ -110,7 +115,7 @@ class _TreeTokenizer:
         """Decode token IDs back to text."""
         return self._tree.decode(token_ids)
 
-    def apply_chat_template(self, messages: List[Dict[str, str]], **kwargs) -> str:
+    def apply_chat_template(self, messages: list[dict[str, str]], **kwargs) -> str:
         """Format messages as a simple chat string for tree-tokenized models."""
         parts = []
         for msg in messages:
@@ -138,7 +143,7 @@ _ARCH_TO_SLONET_SHARED = {
     "layers.{i}.v.weight": "blocks.{i}.attn.v_proj.weight",
     "layers.{i}.v.bias": "blocks.{i}.attn.v_proj.bias",
     "layers.{i}.qkv.weight": None,  # fused — handled by _split_fused_qkv
-    "layers.{i}.qkv.bias": None,    # fused — handled by _split_fused_qkv
+    "layers.{i}.qkv.bias": None,  # fused — handled by _split_fused_qkv
     "layers.{i}.o_proj.weight": "blocks.{i}.attn.o_proj.weight",
     "layers.{i}.o_proj.bias": "blocks.{i}.attn.o_proj.bias",
     "layers.{i}.ff_norm.weight": "blocks.{i}.ff_norm.weight",
@@ -165,9 +170,8 @@ _ARCH_TO_SLONET_GELU = {
 
 
 def _split_fused_qkv(
-    hf_key: str, arr: np.ndarray, n_embed: int, n_layer: int,
-    hf_state_dict: Dict[str, np.ndarray]
-) -> Dict[str, np.ndarray]:
+    hf_key: str, arr: np.ndarray, n_embed: int, n_layer: int, hf_state_dict: dict[str, np.ndarray]
+) -> dict[str, np.ndarray]:
     """Split fused QKV weight/bias into separate Q, K, V.
 
     GPT-2 stores QKV as a single (n_embed, 3*n_embed) tensor.
@@ -207,11 +211,11 @@ def _split_fused_qkv(
 
 
 def convert_hf_to_slonet(
-    hf_state_dict: Dict[str, np.ndarray],
+    hf_state_dict: dict[str, np.ndarray],
     n_layer: int,
-    config: Optional[dict] = None,
-    param_map: Optional[Dict[str, Any]] = None,
-) -> Dict[str, np.ndarray]:
+    config: dict | None = None,
+    param_map: dict[str, Any] | None = None,
+) -> dict[str, np.ndarray]:
     """Universal HF → SloTransformer weight converter.
 
     Auto-detects any HuggingFace architecture via ArchConfig.build_arch(),
@@ -240,6 +244,7 @@ def convert_hf_to_slonet(
         Empty dict when param_map is provided (writes done in-place).
     """
     import time as _time
+
     from domain.infrastructure._internal.arch_config import build_arch
 
     _t0 = _time.monotonic()
@@ -277,7 +282,7 @@ def convert_hf_to_slonet(
 
     # Pre-compute reverse mapping: HF key → (slo_target, canonical, layer_idx|None)
     # Eliminates O(n_keys × n_mappings × n_layer) nested loop
-    hf_to_slo: Dict[str, Tuple[str, str, Optional[int]]] = {}
+    hf_to_slo: dict[str, tuple[str, str, int | None]] = {}
     for canonical, slo_target in arch_to_slonet.items():
         mapped_hf_key = W.get(canonical)
         if mapped_hf_key is None:
@@ -317,7 +322,7 @@ def convert_hf_to_slonet(
             if p.data.shape == w.shape:
                 p.data[:] = w
             elif p.data.ndim == 2 and w.ndim == 2 and p.data.shape[1] == w.shape[1]:
-                p.data[:w.shape[0]] = w[:p.data.shape[0]]
+                p.data[: w.shape[0]] = w[: p.data.shape[0]]
             elif p.data.ndim == 1 and w.ndim == 1:
                 min_d = min(p.data.shape[0], w.shape[0])
                 p.data[:min_d] = w[:min_d]
@@ -355,8 +360,14 @@ def convert_hf_to_slonet(
             w1_key = f"blocks.{i}.ff.w1.weight"
             w3_key = f"blocks.{i}.ff.w3.weight"
             w3_bias_key = f"blocks.{i}.ff.w3.bias"
-            w1_val = result[w1_key] if result is not None else (
-                param_map[w1_key].data if param_map is not None and w1_key in param_map else None
+            w1_val = (
+                result[w1_key]
+                if result is not None
+                else (
+                    param_map[w1_key].data
+                    if param_map is not None and w1_key in param_map
+                    else None
+                )
             )
             if w1_val is not None:
                 if result is not None:
@@ -383,10 +394,18 @@ def convert_hf_to_slonet(
     logger.info(
         "convert_hf_to_slonet: arch=%s norm=%s act=%s transpose=%s fused=%s "
         "mapped=%d keys wrote=%d params (arch=%.3fs precomp=%.3fs main=%.3fs synth=%.3fs total=%.3fs)",
-        arch.name, arch.norm, arch.activation, arch.transpose_weights,
-        param_map is not None, count, n_written,
-        _t_arch - _t0, _t_precomp - _t_arch, _t_main - _t_precomp,
-        _t_end - _t_main, _t_end - _t0,
+        arch.name,
+        arch.norm,
+        arch.activation,
+        arch.transpose_weights,
+        param_map is not None,
+        count,
+        n_written,
+        _t_arch - _t0,
+        _t_precomp - _t_arch,
+        _t_main - _t_precomp,
+        _t_end - _t_main,
+        _t_end - _t0,
         extra={"tag": "INF"},
     )
     return result if result is not None else {}
@@ -417,9 +436,9 @@ class SloNetChatProvider:
         """
         self._server = server
 
-    def get_server(self) -> Optional[Any]:
+    def get_server(self) -> Any | None:
         """Return the attached ``SloNetServer``, or None."""
-        return getattr(self, '_server', None)
+        return getattr(self, "_server", None)
 
     def to_server(self, process_guard: Any = None, **kwargs: Any) -> Any:
         """Build a ``SloNetServer`` wrapping this provider's model and tokenizer.
@@ -457,30 +476,35 @@ class SloNetChatProvider:
     @staticmethod
     def _load_safetensors_bf16(path) -> dict:
         """Load safetensors with bfloat16 support via raw byte reading."""
-        import struct as _struct
         import json as _json
+        import struct as _struct
+
         weights = {}
-        with open(str(path), 'rb') as f:
-            header_len = _struct.unpack('<Q', f.read(8))[0]
+        with open(str(path), "rb") as f:
+            header_len = _struct.unpack("<Q", f.read(8))[0]
             header = _json.loads(f.read(header_len))
             for key, info in header.items():
-                if key.startswith('__'):
+                if key.startswith("__"):
                     continue
-                dtype_str = info['dtype']
-                offsets = info['data_offsets']
+                dtype_str = info["dtype"]
+                offsets = info["data_offsets"]
                 f.seek(8 + header_len + offsets[0])
                 raw = f.read(offsets[1] - offsets[0])
-                if dtype_str == 'BF16':
+                if dtype_str == "BF16":
                     arr = np.frombuffer(raw, dtype=np.uint16)
                     f32 = np.zeros(len(arr), dtype=np.float32)
                     f32.view(np.uint32)[:] = arr.astype(np.uint32) << 16
-                    weights[key] = f32.reshape(info['shape'])
-                elif dtype_str == 'F32':
-                    weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info['shape'])
-                elif dtype_str == 'F16':
-                    weights[key] = np.frombuffer(raw, dtype=np.float16).reshape(info['shape']).astype(np.float32)
+                    weights[key] = f32.reshape(info["shape"])
+                elif dtype_str == "F32":
+                    weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
+                elif dtype_str == "F16":
+                    weights[key] = (
+                        np.frombuffer(raw, dtype=np.float16)
+                        .reshape(info["shape"])
+                        .astype(np.float32)
+                    )
                 else:
-                    weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info['shape'])
+                    weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
         return weights
 
     def __init__(self, *args, **kwargs):
@@ -532,6 +556,7 @@ class SloNetChatProvider:
         import time as _time
 
         from domains.infrastructure.slnc.parser import SLNCParser
+
         from domain.infrastructure._internal.weight_loader import build_model_from_config
 
         _t0 = _time.monotonic()
@@ -545,7 +570,11 @@ class SloNetChatProvider:
 
         # Unified loading path: DirectWeightLoader (single-pass mmap→parameter)
         try:
-            from domain.infrastructure._internal.weight_loader import DirectWeightLoader, build_load_plan
+            from domain.infrastructure._internal.weight_loader import (
+                DirectWeightLoader,
+                build_load_plan,
+            )
+
             weights_dict = parser.get_weights_dict_parallel()
             plan = build_load_plan(weights_dict, n_layer, config)
             loader = DirectWeightLoader._from_plan(parser, plan, weights_dict)
@@ -558,9 +587,17 @@ class SloNetChatProvider:
             _t_load = _t_convert + _t_synth
             del loader, weights_dict, plan
         except Exception as e:
-            logger.debug("DirectWeightLoader failed, falling back to load_into_model: %s", e, extra={"tag": "INF"})
+            logger.debug(
+                "DirectWeightLoader failed, falling back to load_into_model: %s",
+                e,
+                extra={"tag": "INF"},
+            )
             # Fallback: build plan + generic loader (same mapping, no mmap optimization)
-            from domain.infrastructure._internal.weight_loader import build_load_plan, load_into_model
+            from domain.infrastructure._internal.weight_loader import (
+                build_load_plan,
+                load_into_model,
+            )
+
             weights_dict = parser.get_weights_dict_parallel()
             _t_weights = _time.monotonic()
             plan = build_load_plan(weights_dict, n_layer, config)
@@ -571,8 +608,12 @@ class SloNetChatProvider:
 
         logger.info(
             "from_slnc timing: parse=%.2fs model=%.2fs weights=%.2fs convert=%.2fs load_state=%.2fs total=%.2fs",
-            _t_parse - _t0, _t_model - _t_parse, _t_weights - _t_model,
-            _t_convert - _t_weights, _t_load - _t_convert, _t_load - _t0,
+            _t_parse - _t0,
+            _t_model - _t_parse,
+            _t_weights - _t_model,
+            _t_convert - _t_weights,
+            _t_load - _t_convert,
+            _t_load - _t0,
             extra={"op": "model.load", "model": {"id": model_id}},
         )
 
@@ -594,9 +635,11 @@ class SloNetChatProvider:
         # which is ~12x SLOWER than the plain float32 matmul. In that case we
         # silently skip quantization — float32 BLAS is both faster and exact.
         if quantize:
-            from domains.infrastructure.quant_core.wrapper import HAS_AVX2 as _HAS_AVX2
-            from domain.infrastructure._internal.quantization import Quantine, walk_slo_linears
             from pathlib import Path as PathlibPath
+
+            from domains.infrastructure.quant_core.wrapper import HAS_AVX2 as _HAS_AVX2
+
+            from domain.infrastructure._internal.quantization import Quantine, walk_slo_linears
 
             if not bool(_HAS_AVX2):
                 logger.info(
@@ -639,8 +682,12 @@ class SloNetChatProvider:
                         quantized_count += 1
                 logger.info(
                     "SloNetChatProvider.from_slnc: loaded pre-quantized weights (%d tensors) from %s",
-                    quantized_count, quant_npz_path,
-                    extra={"op": "model.load", "model": {"id": model_id, "weights_count": quantized_count}},
+                    quantized_count,
+                    quant_npz_path,
+                    extra={
+                        "op": "model.load",
+                        "model": {"id": model_id, "weights_count": quantized_count},
+                    },
                 )
 
             # Priority 2: metadata-only (.json) — re-encode from float32
@@ -648,7 +695,8 @@ class SloNetChatProvider:
                 engine.load_metadata(str(quant_meta_path))
                 logger.info(
                     "SloNetChatProvider.from_slnc: loaded quant metadata (%d tensors) from %s",
-                    len(param_names), quant_meta_path,
+                    len(param_names),
+                    quant_meta_path,
                     extra={"tag": "INF"},
                 )
 
@@ -661,7 +709,10 @@ class SloNetChatProvider:
                     if meta is not None:
                         arr = param.data.copy()
                         info = engine.quantize_with_scale(
-                            pname, arr, meta.scale, meta.zero_point,
+                            pname,
+                            arr,
+                            meta.scale,
+                            meta.zero_point,
                         )
                         if info.is_quantized:
                             mod_name = param_to_module[pname]
@@ -696,7 +747,10 @@ class SloNetChatProvider:
             summary = engine.summary()
             logger.info(
                 "SloNetChatProvider.from_slnc: quantized %d/%d tensors (bits=%d, mode=%s, avg_cosine=%.4f)",
-                quantized_count, len(linear_map), quant_bits, quant_mode,
+                quantized_count,
+                len(linear_map),
+                quant_bits,
+                quant_mode,
                 summary.get("avg_cosine_sim", 0.0),
                 extra={
                     "op": "model.load",
@@ -725,7 +779,10 @@ class SloNetChatProvider:
                 logger.info(
                     "SloNetChatProvider.from_slnc: released .slnc mmap pages (%.1f MB file)",
                     parser.file_size / 1e6,
-                    extra={"op": "model.load", "model": {"id": model_id, "file_mb": parser.file_size / 1e6}},
+                    extra={
+                        "op": "model.load",
+                        "model": {"id": model_id, "file_mb": parser.file_size / 1e6},
+                    },
                 )
 
         # glibc keeps freed heap (peak allocations from weight conversion)
@@ -733,6 +790,7 @@ class SloNetChatProvider:
         if trim_allocator_after_load:
             try:
                 import ctypes
+
                 libc = ctypes.CDLL("libc.so.6")
                 libc.malloc_trim(0)
             except Exception as e:
@@ -741,26 +799,31 @@ class SloNetChatProvider:
         # Apply ResourceManager compute limits (BLAS threads, OMP_NUM_THREADS, etc.)
         try:
             from domain.infrastructure._internal.resource_manager import get_resource_manager
+
             rm = get_resource_manager()
             rm.apply_blas_env()
             rm.apply_compute_limits()
-        except Exception as e:  # pragma: no cover — defensive; real ResourceManager never raises here
+        except (
+            Exception
+        ) as e:  # pragma: no cover — defensive; real ResourceManager never raises here
             logger.warning("ResourceManager.apply_blas_env skipped: %s", e)
 
         # Load tokenizer
         _t_tok_start = _time.monotonic()
-        instance._tokenizer = instance._load_tokenizer(
-            Path(slnc_path).parent, config
-        )
+        instance._tokenizer = instance._load_tokenizer(Path(slnc_path).parent, config)
         _t_tok = _time.monotonic()
 
-        logger.info("SloNetChatProvider.from_slnc: %s, %d layers (tokenizer=%.2fs)",
-                     slnc_path, n_layer, _t_tok - _t_tok_start,
-                     extra={"op": "model.load", "model": {"id": model_id, "layers": n_layer}})
+        logger.info(
+            "SloNetChatProvider.from_slnc: %s, %d layers (tokenizer=%.2fs)",
+            slnc_path,
+            n_layer,
+            _t_tok - _t_tok_start,
+            extra={"op": "model.load", "model": {"id": model_id, "layers": n_layer}},
+        )
 
         # Cross-turn KV cache state per session (lazy NumpyKVState per session_id)
-        instance._kv_states: Dict[str, Any] = {}
-        instance._kv_last_access: Dict[str, float] = {}  # session_id → monotonic timestamp
+        instance._kv_states: dict[str, Any] = {}
+        instance._kv_last_access: dict[str, float] = {}  # session_id → monotonic timestamp
         instance._kv_ttl: float = 3600.0  # 1 hour default TTL for idle sessions
         instance._kv_max_sessions: int = kv_max_sessions  # LRU cap on concurrent sessions
         # Guard for the session KV map — mutated from to_thread workers and
@@ -770,6 +833,7 @@ class SloNetChatProvider:
         # Record dashboard event
         try:
             from domain.infrastructure._internal.event_buffer import get_event_buffer
+
             get_event_buffer().record("MODEL", f"loaded {model_id} ({n_layer} layers)")
         except Exception as exc:
             logger.debug("Failed to record model load event: %s", exc)
@@ -870,15 +934,17 @@ class SloNetChatProvider:
             "has_tokenizer": instance._tokenizer is not None,
             "lazy": True,
         }
-        instance._kv_states: Dict[str, Any] = {}
-        instance._kv_last_access: Dict[str, float] = {}
+        instance._kv_states: dict[str, Any] = {}
+        instance._kv_last_access: dict[str, float] = {}
         instance._kv_ttl: float = 3600.0
         instance._kv_max_sessions: int = kv_max_sessions
         instance._kv_lock = threading.Lock()
 
         logger.info(
             "SloNetChatProvider.lazy_from_slnc: %s (%.1f MB file, %d params) — weights deferred",
-            slnc_path, parser.file_size / 1e6, total_params,
+            slnc_path,
+            parser.file_size / 1e6,
+            total_params,
             extra={"tag": "INF"},
         )
         return instance
@@ -908,20 +974,26 @@ class SloNetChatProvider:
             FileNotFoundError: If soul_path does not exist
             ValueError: If the .soul file is invalid or missing model config
         """
-        from domain.infrastructure._internal.weight_loader import SoulWeightLoader, build_model_from_config
+        from domain.infrastructure._internal.weight_loader import (
+            SoulWeightLoader,
+            build_model_from_config,
+        )
 
         loader = SoulWeightLoader(soul_path)
         meta = loader.load_metadata()
         soul = meta.pop("soul")
 
         # Native .soul models don't use RoPE or RMSNorm — use simple config
-        model = build_model_from_config({
-            "vocab_size": meta["vocab_size"],
-            "hidden_size": meta["n_embed"],
-            "num_hidden_layers": meta["n_layer"],
-            "num_attention_heads": meta.get("n_head", 4),
-            "max_position_embeddings": meta.get("block_size", 128),
-        }, _lazy=True)
+        model = build_model_from_config(
+            {
+                "vocab_size": meta["vocab_size"],
+                "hidden_size": meta["n_embed"],
+                "num_hidden_layers": meta["n_layer"],
+                "num_attention_heads": meta.get("n_head", 4),
+                "max_position_embeddings": meta.get("block_size", 128),
+            },
+            _lazy=True,
+        )
 
         # Load weights — already in SloNet format from training
         loader.load(model)
@@ -938,6 +1010,7 @@ class SloNetChatProvider:
         # Apply ResourceManager compute limits
         try:
             from domain.infrastructure._internal.resource_manager import get_resource_manager
+
             rm = get_resource_manager()
             rm.apply_blas_env()
             rm.apply_compute_limits()
@@ -952,9 +1025,8 @@ class SloNetChatProvider:
             and isinstance(tokenizer_meta.get("tree"), dict)
         ):
             from domain.training._internal.token_tree import TokenTree
-            instance._tokenizer = _TreeTokenizer(
-                TokenTree.from_dict(tokenizer_meta["tree"])
-            )
+
+            instance._tokenizer = _TreeTokenizer(TokenTree.from_dict(tokenizer_meta["tree"]))
         else:
             stoi = soul.metadata.get("stoi")
             itos = soul.metadata.get("itos")
@@ -966,12 +1038,16 @@ class SloNetChatProvider:
 
         logger.info(
             "SloNetChatProvider.from_soul: %s, %d layers, vocab=%d, embed=%d",
-            soul_path, meta["n_layer"], meta["vocab_size"], meta["n_embed"], extra={"tag": "INF"},
+            soul_path,
+            meta["n_layer"],
+            meta["vocab_size"],
+            meta["n_embed"],
+            extra={"tag": "INF"},
         )
 
         # Cross-turn KV cache state
-        instance._kv_states: Dict[str, Any] = {}
-        instance._kv_last_access: Dict[str, float] = {}
+        instance._kv_states: dict[str, Any] = {}
+        instance._kv_last_access: dict[str, float] = {}
         instance._kv_ttl: float = 3600.0
         instance._kv_max_sessions: int = kv_max_sessions
         instance._kv_lock = threading.Lock()
@@ -992,8 +1068,9 @@ class SloNetChatProvider:
         Returns:
             Dict with adapter metadata: rank, alpha, n_params, merged
         """
-        import numpy as np
         from pathlib import Path as PathlibPath
+
+        import numpy as np
 
         adapter_file = PathlibPath(adapter_path)
         if not adapter_file.exists():
@@ -1003,11 +1080,17 @@ class SloNetChatProvider:
 
         # Read adapter config
         rank = int(adapter.get("_config/rank", [8])[0]) if "_config/rank" in adapter else 8
-        alpha = float(adapter.get("_config/alpha", [16.0])[0]) if "_config/alpha" in adapter else 16.0
+        alpha = (
+            float(adapter.get("_config/alpha", [16.0])[0]) if "_config/alpha" in adapter else 16.0
+        )
 
         # Decode target modules from _config/target_module_N keys
         target_modules = []
-        n_modules = int(adapter.get("_config/target_modules", [0])[0]) if "_config/target_modules" in adapter else 0
+        n_modules = (
+            int(adapter.get("_config/target_modules", [0])[0])
+            if "_config/target_modules" in adapter
+            else 0
+        )
         for i in range(n_modules):
             key = f"_config/target_module_{i}"
             if key in adapter:
@@ -1018,8 +1101,12 @@ class SloNetChatProvider:
             target_modules = ["W_q", "W_k", "W_v", "W_o"]
 
         # Apply LoRA layers
-        from domain.training._internal.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
         from domain.training._internal.hf_lora_finetune import load_lora_adapter
+        from domain.training._internal.lora import (
+            LoRAConfig,
+            apply_lora_to_model,
+            count_lora_parameters,
+        )
 
         lora_config = LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
         self._model = apply_lora_to_model(self._model, lora_config)
@@ -1030,7 +1117,11 @@ class SloNetChatProvider:
 
         logger.info(
             "SloNetChatProvider.apply_adapter: loaded %s (rank=%d, alpha=%.1f, %d params)",
-            adapter_path, rank, alpha, n_params, extra={"tag": "INF"},
+            adapter_path,
+            rank,
+            alpha,
+            n_params,
+            extra={"tag": "INF"},
         )
 
         result = {
@@ -1044,6 +1135,7 @@ class SloNetChatProvider:
         # Optionally merge for faster inference
         if merge:
             from domain.training._internal.hf_lora_finetune import merge_lora_adapter
+
             self._model = merge_lora_adapter(self._model)
             result["merged"] = True
             logger.info(
@@ -1091,8 +1183,10 @@ class SloNetChatProvider:
                 "max_sessions": self._kv_max_sessions,
                 "ttl_seconds": self._kv_ttl,
                 "cached_tokens": total_tokens,
-                "oldest_session_age": max(self._kv_last_access.values()) - min(self._kv_last_access.values())
-                if len(self._kv_last_access) > 1 else 0.0,
+                "oldest_session_age": max(self._kv_last_access.values())
+                - min(self._kv_last_access.values())
+                if len(self._kv_last_access) > 1
+                else 0.0,
             }
 
     def clear_session(self, session_id: str) -> bool:
@@ -1111,8 +1205,7 @@ class SloNetChatProvider:
             existed = self._kv_states.pop(session_id, None) is not None
             self._kv_last_access.pop(session_id, None)
         if existed:
-            logger.debug("Cleared KV state for session %s", session_id,
-                         extra={"tag": "MODEL"})
+            logger.debug("Cleared KV state for session %s", session_id, extra={"tag": "MODEL"})
         return existed
 
     def clear_all_sessions(self) -> int:
@@ -1129,8 +1222,7 @@ class SloNetChatProvider:
             self._kv_states.clear()
             self._kv_last_access.clear()
         if n:
-            logger.info("Cleared KV state for %d sessions", n,
-                        extra={"tag": "MODEL"})
+            logger.info("Cleared KV state for %d sessions", n, extra={"tag": "MODEL"})
         return n
 
     @property
@@ -1142,9 +1234,13 @@ class SloNetChatProvider:
     def capabilities(self):
         """What this model supports."""
         from domain.models._internal.provider import ModelCapabilities
+
         return ModelCapabilities(
-            chat=True, streaming=True, embedding=False,
-            vision=False, functions=False,
+            chat=True,
+            streaming=True,
+            embedding=False,
+            vision=False,
+            functions=False,
         )
 
     def _build_prompt(self, messages):
@@ -1165,7 +1261,7 @@ class SloNetChatProvider:
         if isinstance(messages, list) and messages and isinstance(messages[0], str):
             return messages[-1]
         # List of dicts — use chat template
-        if hasattr(self._tokenizer, 'apply_chat_template'):
+        if hasattr(self._tokenizer, "apply_chat_template"):
             return self._tokenizer.apply_chat_template(messages)
         # Fallback: last message content (dead with MorphTokenizer, which
         # always implements apply_chat_template)
@@ -1181,9 +1277,15 @@ class SloNetChatProvider:
         """
         try:
             from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
-            if model_dir and Path(model_dir).is_dir() and (Path(model_dir) / "tokenizer.json").exists():
-                logger.info("Using fine-tuned model tokenizer from %s", model_dir,
-                            extra={"tag": "INF"})
+
+            if (
+                model_dir
+                and Path(model_dir).is_dir()
+                and (Path(model_dir) / "tokenizer.json").exists()
+            ):
+                logger.info(
+                    "Using fine-tuned model tokenizer from %s", model_dir, extra={"tag": "INF"}
+                )
                 return MorphTokenizer.from_pretrained(str(model_dir))
             # from_pretrained reads tokenizer.json and parses vocab+merges correctly
             return MorphTokenizer.from_pretrained(self._hf_model_id)
@@ -1222,9 +1324,7 @@ class SloNetChatProvider:
             # Wait for background preload to finish (up to 300s).
             # Uses Event.wait() instead of busy loop for efficiency.
             if not mat.wait(timeout=300):
-                raise RuntimeError(
-                    f"Model materialization timed out for '{self._model_id}'"
-                )
+                raise RuntimeError(f"Model materialization timed out for '{self._model_id}'")
             model = self._model
             if model is not None:
                 return model
@@ -1232,9 +1332,7 @@ class SloNetChatProvider:
             model = self._model
             if model is not None:
                 return model
-            eager = self.from_slnc(
-                self._slnc_path, model_id=self._model_id, **self._load_kwargs
-            )
+            eager = self.from_slnc(self._slnc_path, model_id=self._model_id, **self._load_kwargs)
             self._model = eager._model
             self._parser = eager._parser
             self._quant_engine = eager._quant_engine
@@ -1249,7 +1347,8 @@ class SloNetChatProvider:
                 self._meta["lazy"] = True
             logger.info(
                 "SloNetChatProvider: %s weights now resident in parent (lazy load)",
-                self._model_id, extra={"tag": "INF"},
+                self._model_id,
+                extra={"tag": "INF"},
             )
             return self._model
 
@@ -1272,9 +1371,7 @@ class SloNetChatProvider:
         # Signal that materialization is in progress
         mat.clear()
         try:
-            eager = self.from_slnc(
-                self._slnc_path, model_id=self._model_id, **self._load_kwargs
-            )
+            eager = self.from_slnc(self._slnc_path, model_id=self._model_id, **self._load_kwargs)
             self._model = eager._model
             self._parser = eager._parser
             self._quant_engine = eager._quant_engine
@@ -1326,11 +1423,13 @@ class SloNetChatProvider:
             self._loaded = False
         try:
             import gc as _gc
+
             _gc.collect()
         except Exception as e:
             logger.debug("gc.collect failed: %s", e)
         try:
             import ctypes
+
             libc = ctypes.CDLL("libc.so.6")
             libc.malloc_trim(0)
         except Exception as e:
@@ -1343,6 +1442,7 @@ class SloNetChatProvider:
         # Record dashboard event
         try:
             from domain.infrastructure._internal.event_buffer import get_event_buffer
+
             get_event_buffer().record("MODEL", f"unloaded {self._model_id}")
         except Exception as exc:
             logger.debug("Failed to record model unload event: %s", exc)
@@ -1365,11 +1465,20 @@ class SloNetChatProvider:
             return int(sum(p.data.size for p in model.parameters()))
         return 0
 
-    def generate(self, prompt: str, max_tokens: int = 50, temperature: float = 1.0,
-                 top_k: int = None, top_p: float = None, repetition_penalty: float = 1.0,
-                 max_new_tokens: int = None, **kwargs) -> str:
+    def generate(
+        self,
+        prompt: str,
+        max_tokens: int = 50,
+        temperature: float = 1.0,
+        top_k: int = None,
+        top_p: float = None,
+        repetition_penalty: float = 1.0,
+        max_new_tokens: int = None,
+        **kwargs,
+    ) -> str:
         """Generate text using pure numpy inference (KV cache + inlined ops)."""
         import numpy as _np
+
         if max_new_tokens is not None:
             max_tokens = max_new_tokens
         tokens = self._tokenizer.encode(prompt)
@@ -1378,57 +1487,74 @@ class SloNetChatProvider:
             input_ids,
             max_new_tokens=max_tokens,
             temperature=temperature,
-            top_k=top_k, top_p=top_p,
+            top_k=top_k,
+            top_p=top_p,
             repetition_penalty=repetition_penalty,
             eos_token=self._tokenizer.eos_token_id or 0,
             extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
         )
         return self._tokenizer.decode(result[0].tolist())
 
-    async def chat(self, messages: List[Dict[str, str]], max_tokens: int = 512, temperature: float = 0.8, **kwargs) -> str:
+    async def chat(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int = 512,
+        temperature: float = 0.8,
+        **kwargs,
+    ) -> str:
         """Blocking chat — returns complete response.
 
         Delegates to ``SloNetServer.generate()`` if a server is attached,
         otherwise runs sync generation in a thread.
         """
         import asyncio
-        server = getattr(self, '_server', None)
+
+        server = getattr(self, "_server", None)
         if server is not None:
             prompt = self._build_prompt(messages)
             return await server.generate(
                 prompt,
                 max_new_tokens=max_tokens,
                 temperature=(temperature if temperature is not None else 0.7),
-                top_p=kwargs.get('top_p', 0.9),
-                top_k=kwargs.get('top_k', 50),
-                repetition_penalty=kwargs.get('repetition_penalty', 1.0),
-                cancel_event=kwargs.get('cancel_event'),
-                session_id=kwargs.get('session_id'),
+                top_p=kwargs.get("top_p", 0.9),
+                top_k=kwargs.get("top_k", 50),
+                repetition_penalty=kwargs.get("repetition_penalty", 1.0),
+                cancel_event=kwargs.get("cancel_event"),
+                session_id=kwargs.get("session_id"),
             )
         return await asyncio.to_thread(
-            self._generate_sync, messages, max_tokens, temperature if temperature is not None else 0.8,
-            kwargs.get('top_k'), kwargs.get('top_p'),
-            kwargs.get('repetition_penalty', 1.0),
-            session_id=kwargs.get('session_id'),
+            self._generate_sync,
+            messages,
+            max_tokens,
+            temperature if temperature is not None else 0.8,
+            kwargs.get("top_k"),
+            kwargs.get("top_p"),
+            kwargs.get("repetition_penalty", 1.0),
+            session_id=kwargs.get("session_id"),
         )
 
     def _evict_stale_sessions(self):
         """Remove KV states for sessions idle longer than _kv_ttl seconds."""
         import time as _time
+
         now = _time.monotonic()
         with self._kv_lock:
-            stale = [sid for sid, ts in self._kv_last_access.items()
-                     if now - ts > self._kv_ttl]
+            stale = [sid for sid, ts in self._kv_last_access.items() if now - ts > self._kv_ttl]
             for sid in stale:
                 self._kv_states.pop(sid, None)
                 self._kv_last_access.pop(sid, None)
         if stale:
-            logger.info("Evicted %d stale KV sessions (TTL=%.0fs)", len(stale), self._kv_ttl,
-                        extra={"tag": "INF"})
+            logger.info(
+                "Evicted %d stale KV sessions (TTL=%.0fs)",
+                len(stale),
+                self._kv_ttl,
+                extra={"tag": "INF"},
+            )
 
     def _resolve_session_kv(self, session_id):
         """Resolve KV state for a session, creating if needed, with TTL eviction."""
         import time as _time
+
         if session_id is None:
             return None
         self._evict_stale_sessions()
@@ -1453,21 +1579,32 @@ class SloNetChatProvider:
         """
         if len(self._kv_states) <= self._kv_max_sessions:
             return
-        evictable = {sid: ts for sid, ts in self._kv_last_access.items()
-                     if sid != keep_session_id}
+        evictable = {sid: ts for sid, ts in self._kv_last_access.items() if sid != keep_session_id}
         if not evictable:
             return
         lru_id = min(evictable, key=evictable.get)
         self._kv_states.pop(lru_id, None)
         self._kv_last_access.pop(lru_id, None)
-        logger.info("Evicted least-recently-used KV session %s (max=%d)",
-                    lru_id, self._kv_max_sessions, extra={"tag": "INF"})
+        logger.info(
+            "Evicted least-recently-used KV session %s (max=%d)",
+            lru_id,
+            self._kv_max_sessions,
+            extra={"tag": "INF"},
+        )
 
-    def _generate_sync(self, messages, max_tokens=512, temperature=0.8,
-                       top_k=None, top_p=None, repetition_penalty=1.0,
-                       session_id=None):
+    def _generate_sync(
+        self,
+        messages,
+        max_tokens=512,
+        temperature=0.8,
+        top_k=None,
+        top_p=None,
+        repetition_penalty=1.0,
+        session_id=None,
+    ):
         """Synchronous generate with KV cache — called from chat() via to_thread."""
         import numpy as _np
+
         prompt = self._build_prompt(messages)
         tokens = self._tokenizer.encode(prompt)
         input_ids = _np.array([tokens], dtype=_np.int64)
@@ -1479,7 +1616,8 @@ class SloNetChatProvider:
             input_ids,
             max_new_tokens=max_tokens,
             temperature=temperature,
-            top_k=top_k, top_p=top_p,
+            top_k=top_k,
+            top_p=top_p,
             repetition_penalty=repetition_penalty,
             eos_token=self._tokenizer.eos_token_id or 0,
             extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
@@ -1487,7 +1625,13 @@ class SloNetChatProvider:
         )
         return self._tokenizer.decode(result[0].tolist())
 
-    async def chat_stream(self, messages: List[Dict[str, str]], max_tokens: int = 512, temperature: float = 0.7, **kwargs) -> AsyncIterator[str]:
+    async def chat_stream(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+        **kwargs,
+    ) -> AsyncIterator[str]:
         """Streaming chat — yields token strings with KV cache.
 
         Pre-fills prompt in one forward pass, then generates one token at a time
@@ -1520,20 +1664,21 @@ class SloNetChatProvider:
             Each token string as it's generated.
         """
         import asyncio
+
         import numpy as _np
 
-        server = getattr(self, '_server', None)
+        server = getattr(self, "_server", None)
         if server is not None:
             prompt = self._build_prompt(messages)
             async for token in server.generate_stream(
                 prompt,
                 max_new_tokens=max_tokens,
                 temperature=(temperature if temperature is not None else 0.7),
-                top_p=kwargs.get('top_p', 0.9),
-                top_k=kwargs.get('top_k', 50),
-                repetition_penalty=kwargs.get('repetition_penalty', 1.0),
-                cancel_event=kwargs.get('cancel_event'),
-                session_id=kwargs.get('session_id'),
+                top_p=kwargs.get("top_p", 0.9),
+                top_k=kwargs.get("top_k", 50),
+                repetition_penalty=kwargs.get("repetition_penalty", 1.0),
+                cancel_event=kwargs.get("cancel_event"),
+                session_id=kwargs.get("session_id"),
             ):
                 yield token
             return
@@ -1541,12 +1686,12 @@ class SloNetChatProvider:
         prompt = self._build_prompt(messages)
         token_ids = self._tokenizer.encode(prompt)
         eos_id = self._tokenizer.eos_token_id or 0
-        top_k = kwargs.get('top_k')
-        top_p = kwargs.get('top_p')
-        repetition_penalty = kwargs.get('repetition_penalty', 1.0)
-        cancel_event = kwargs.get('cancel_event')
-        kwargs.get('priority', 1)  # default MEDIUM
-        session_id = kwargs.get('session_id')
+        top_k = kwargs.get("top_k")
+        top_p = kwargs.get("top_p")
+        repetition_penalty = kwargs.get("repetition_penalty", 1.0)
+        cancel_event = kwargs.get("cancel_event")
+        kwargs.get("priority", 1)  # default MEDIUM
+        session_id = kwargs.get("session_id")
 
         # Cross-turn KV cache: resolve or create state for this session
         kv_state = self._resolve_session_kv(session_id)
@@ -1579,6 +1724,7 @@ class SloNetChatProvider:
         # Producer thread feeds tokens into queue; consumer yields from queue.
         # Errors propagate via a separate _error queue.
         import queue
+
         q = queue.Queue()
         err_q = queue.Queue()
         sentinel = object()
@@ -1602,8 +1748,10 @@ class SloNetChatProvider:
             elapsed = time.monotonic() - gen_start
             if elapsed > _STREAM_TOTAL_TIMEOUT_S:
                 cancel_event.set() if cancel_event else None
-                logger.warning("Streaming generation timed out after %.0fs", elapsed, extra={"tag": "INF"})
-                yield "\n\n[Generation timed out after {:.0f}s]".format(elapsed)
+                logger.warning(
+                    "Streaming generation timed out after %.0fs", elapsed, extra={"tag": "INF"}
+                )
+                yield f"\n\n[Generation timed out after {elapsed:.0f}s]"
                 return
 
             try:
@@ -1612,7 +1760,7 @@ class SloNetChatProvider:
                     asyncio.to_thread(q.get),
                     timeout=_STREAM_GET_TIMEOUT_S,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Check if producer thread is still alive
                 if not producer_thread.is_alive():
                     # Thread died — drain remaining tokens
@@ -1625,7 +1773,7 @@ class SloNetChatProvider:
                 # Thread still alive but no token for 30s — check for errors
                 if not err_q.empty():
                     exc = err_q.get_nowait()
-                    yield "\n\n[Generation error: {}]".format(exc)
+                    yield f"\n\n[Generation error: {exc}]"
                     return
                 # Still generating — continue waiting
                 continue
@@ -1633,13 +1781,13 @@ class SloNetChatProvider:
             if token is sentinel:
                 if not err_q.empty():
                     exc = err_q.get_nowait()
-                    yield "\n\n[Generation error: {}]".format(exc)
+                    yield f"\n\n[Generation error: {exc}]"
                 break
 
             # Check for producer errors (may have been raised between queue reads)
             if not err_q.empty():
                 exc = err_q.get_nowait()
-                yield "\n\n[Generation error: {}]".format(exc)
+                yield f"\n\n[Generation error: {exc}]"
                 return
 
             yield token
@@ -1657,7 +1805,7 @@ class SloNetChatProvider:
         top_p: float = None,
         repetition_penalty: float = 1.0,
         seed: int = None,
-    ) -> Tuple[str, List[Dict]]:
+    ) -> tuple[str, list[dict]]:
         """Generate text with token-level log probabilities.
 
         Args:
@@ -1686,40 +1834,42 @@ class SloNetChatProvider:
         logprobs_list = []
 
         # Use the streaming path to capture logits for real logprobs
-        for step, tok_id in enumerate(m.generate_numpy_stream(
-            input_ids,
-            max_new_tokens=max_tokens,
-            eos_token=eos_id,
-            extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-            repetition_penalty=repetition_penalty,
-            return_logprobs=True,
-        )):
+        for step, tok_id in enumerate(
+            m.generate_numpy_stream(
+                input_ids,
+                max_new_tokens=max_tokens,
+                eos_token=eos_id,
+                extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
+                return_logprobs=True,
+            )
+        ):
             tok_id, logits = tok_id  # unpack (token_id, logits) tuple
             decoded = self._tokenizer.decode([tok_id])
             # Compute true log-probability from raw logits
             shifted = logits - np.max(logits)
             log_probs = shifted - np.log(np.sum(np.exp(shifted)))
             logprob = float(log_probs[int(tok_id)])
-            logprobs_list.append({
-                "token_id": int(tok_id),
-                "token": decoded,
-                "logprob": logprob,
-                "position": step,
-            })
+            logprobs_list.append(
+                {
+                    "token_id": int(tok_id),
+                    "token": decoded,
+                    "logprob": logprob,
+                    "position": step,
+                }
+            )
 
-        text = self._tokenizer.decode(
-            [e["token_id"] for e in logprobs_list]
-        )
+        text = self._tokenizer.decode([e["token_id"] for e in logprobs_list])
         return text, logprobs_list
 
     def generate_with_stop(
         self,
         prompt: str,
         max_tokens: int = 50,
-        stop: Union[str, List[str]] = None,
+        stop: str | list[str] = None,
         temperature: float = 1.0,
         top_k: int = None,
         top_p: float = None,
@@ -1786,13 +1936,13 @@ class SloNetChatProvider:
 
     def generate_batch(
         self,
-        prompts: List[str],
+        prompts: list[str],
         max_tokens: int = 50,
         temperature: float = 1.0,
         top_k: int = None,
         top_p: float = None,
         repetition_penalty: float = 1.0,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate text for multiple prompts sequentially.
 
         Note: SloNet runs on CPU with a single model instance, so batch
@@ -1852,8 +2002,8 @@ class SloNetChatProvider:
             x = x + m.pos_emb.forward_numpy(positions)
 
         # Pass through transformer blocks
-        for i, block in enumerate(m.layers[1:-2]):
-            if hasattr(block, 'forward_numpy'):
+        for _i, block in enumerate(m.layers[1:-2]):
+            if hasattr(block, "forward_numpy"):
                 out = block.forward_numpy(x)
                 x = out[0] if isinstance(out, tuple) else out
 
@@ -1864,7 +2014,7 @@ class SloNetChatProvider:
         # Take the last token's hidden state
         return x[0, -1, :]
 
-    def metadata(self) -> Dict:
+    def metadata(self) -> dict:
         """Get model metadata and runtime stats.
 
         Lazy providers return the header-only metadata captured at creation
@@ -1879,15 +2029,13 @@ class SloNetChatProvider:
             return dict(cached)
 
         m = self._get_model()
-        config = m._config if hasattr(m, '_config') else {}
+        config = m._config if hasattr(m, "_config") else {}
 
         # Count parameters
-        total_params = sum(
-            p.data.size for p in m.parameters()
-        )
+        total_params = sum(p.data.size for p in m.parameters())
 
         # Model architecture info
-        n_layer = len([l for l in m.layers if hasattr(l, 'forward_numpy')])
+        n_layer = len([l for l in m.layers if hasattr(l, "forward_numpy")])
         n_embed = config.get("n_embd", config.get("hidden_size", 0))
         n_head = config.get("n_head", config.get("num_attention_heads", 0))
 
@@ -1918,7 +2066,7 @@ class SloNetChatProvider:
         """
         return len(self._tokenizer.encode(text))
 
-    def tokenize(self, text: str) -> List[int]:
+    def tokenize(self, text: str) -> list[int]:
         """Tokenize text into token IDs.
 
         Args:
@@ -1929,7 +2077,7 @@ class SloNetChatProvider:
         """
         return self._tokenizer.encode(text)
 
-    def detokenize(self, token_ids: List[int]) -> str:
+    def detokenize(self, token_ids: list[int]) -> str:
         """Convert token IDs back to text.
 
         Args:

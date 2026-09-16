@@ -1,15 +1,23 @@
-from domain.collections._internal.sources import Record
 from domain.collections._internal.filters import (
-    LengthFilter, DedupFilter, KeywordFilter, RegexFilter,
-    LanguageFilter, FilterChain, SamplerFilter, TransformFilter,
-    TruncateFilter, PrefixFilter, MetadataFilter,
+    DedupFilter,
+    FilterChain,
+    KeywordFilter,
+    LanguageFilter,
+    LengthFilter,
+    MetadataFilter,
+    PrefixFilter,
+    RegexFilter,
+    SamplerFilter,
+    TransformFilter,
+    TruncateFilter,
 )
-from domain.collections._internal.stores import MemoryStore, FileStore
 from domain.collections._internal.pipeline import CollectionPipeline
 from domain.collections._internal.registry import CollectionRegistry, get_registry
-
+from domain.collections._internal.sources import Record
+from domain.collections._internal.stores import FileStore, MemoryStore
 
 # ── Record ─────────────────────────────────────────────────────────
+
 
 class TestRecord:
     def test_create(self):
@@ -29,6 +37,7 @@ class TestRecord:
 
 
 # ── Filters ────────────────────────────────────────────────────────
+
 
 class TestLengthFilter:
     def test_within_range(self):
@@ -158,7 +167,9 @@ class TestTransformFilter:
         assert f.accept(Record(content="x"))
 
     def test_transform(self):
-        f = TransformFilter(transform_fn=lambda r: Record(content=r.content.upper(), metadata=r.metadata))
+        f = TransformFilter(
+            transform_fn=lambda r: Record(content=r.content.upper(), metadata=r.metadata)
+        )
         r = f.transform(Record(content="hello"))
         assert r.content == "HELLO"
 
@@ -216,6 +227,7 @@ class TestMetadataFilter:
 
 # ── Stores ─────────────────────────────────────────────────────────
 
+
 class TestMemoryStore:
     def test_write_and_count(self):
         s = MemoryStore()
@@ -271,40 +283,71 @@ class TestFileStore:
 
 # ── Pipeline & Registry ────────────────────────────────────────────
 
+
 class TestCollectionPipeline:
     def test_name_default(self):
         class FakeSource:
             name = "src"
-            def read(self): return iter([])
+
+            def read(self):
+                return iter([])
+
         class FakeStore:
             name = "st"
-            def write(self, r): pass
-            def read_all(self): return iter([])
-            def count(self): return 0
+
+            def write(self, r):
+                pass
+
+            def read_all(self):
+                return iter([])
+
+            def count(self):
+                return 0
+
         p = CollectionPipeline(FakeSource(), FakeStore())
         assert p.name == "src->st"
 
     def test_name_custom(self):
         class FakeSource:
             name = "src"
-            def read(self): return iter([])
+
+            def read(self):
+                return iter([])
+
         class FakeStore:
             name = "st"
-            def write(self, r): pass
-            def read_all(self): return iter([])
-            def count(self): return 0
+
+            def write(self, r):
+                pass
+
+            def read_all(self):
+                return iter([])
+
+            def count(self):
+                return 0
+
         p = CollectionPipeline(FakeSource(), FakeStore(), name="my-pipeline")
         assert p.name == "my-pipeline"
 
     def test_stats(self):
         class FakeSource:
             name = "src"
-            def read(self): return iter([])
+
+            def read(self):
+                return iter([])
+
         class FakeStore:
             name = "st"
-            def write(self, r): pass
-            def read_all(self): return iter([])
-            def count(self): return 0
+
+            def write(self, r):
+                pass
+
+            def read_all(self):
+                return iter([])
+
+            def count(self):
+                return 0
+
         p = CollectionPipeline(FakeSource(), FakeStore())
         stats = p.stats
         assert stats["source"] == "src"
@@ -316,20 +359,32 @@ class TestCollectionPipeline:
 class TestCollectionRegistry:
     def test_register_and_get_source(self):
         reg = CollectionRegistry()
+
         class S:
             name = "s1"
-            def read(self): return iter([])
+
+            def read(self):
+                return iter([])
+
         reg.register_source("s1", S())
         assert reg.get_source("s1") is not None
         assert reg.get_source("nope") is None
 
     def test_register_and_get_store(self):
         reg = CollectionRegistry()
+
         class St:
             name = "st1"
-            def write(self, r): pass
-            def read_all(self): return iter([])
-            def count(self): return 0
+
+            def write(self, r):
+                pass
+
+            def read_all(self):
+                return iter([])
+
+            def count(self):
+                return 0
+
         reg.register_store("st1", St())
         assert reg.get_store("st1") is not None
         assert reg.get_store("nope") is None
@@ -343,14 +398,25 @@ class TestCollectionRegistry:
 
     def test_create_pipeline(self):
         reg = CollectionRegistry()
+
         class S:
             name = "s"
-            def read(self): return iter([])
+
+            def read(self):
+                return iter([])
+
         class St:
             name = "st"
-            def write(self, r): pass
-            def read_all(self): return iter([])
-            def count(self): return 0
+
+            def write(self, r):
+                pass
+
+            def read_all(self):
+                return iter([])
+
+            def count(self):
+                return 0
+
         reg.register_source("s", S())
         reg.register_store("st", St())
         p = reg.create_pipeline("p1", "s", "st")
@@ -359,19 +425,31 @@ class TestCollectionRegistry:
 
     def test_create_pipeline_missing_source(self):
         reg = CollectionRegistry()
+
         class St:
             name = "st"
-            def write(self, r): pass
-            def read_all(self): return iter([])
-            def count(self): return 0
+
+            def write(self, r):
+                pass
+
+            def read_all(self):
+                return iter([])
+
+            def count(self):
+                return 0
+
         reg.register_store("st", St())
         assert reg.create_pipeline("p1", "missing", "st") is None
 
     def test_list_methods(self):
         reg = CollectionRegistry()
+
         class S:
             name = "s"
-            def read(self): return iter([])
+
+            def read(self):
+                return iter([])
+
         reg.register_source("s1", S())
         assert "s1" in reg.list_sources()
         assert reg.list_stores() == []

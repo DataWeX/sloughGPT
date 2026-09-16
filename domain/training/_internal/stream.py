@@ -19,7 +19,11 @@ def process_training_completion(
     finish_cm_fn,
 ) -> None:
     status = "completed" if ev.get("status") == "complete" else "failed"
-    error = "" if ev.get("status") == "complete" else str(ev.get("message") or ev.get("data") or "training failed")
+    error = (
+        ""
+        if ev.get("status") == "complete"
+        else str(ev.get("message") or ev.get("data") or "training failed")
+    )
 
     try:
         soul_files = sorted(checkpoints_dir.glob("*.soul"))
@@ -34,7 +38,9 @@ def process_training_completion(
     if experiment_id and ev.get("status") == "complete" and job is not None:
         final_loss = job.get("train_loss") or job.get("loss")
         if final_loss is not None:
-            log_experiment_metric(experiment_id, "final_train_loss", float(final_loss), int(job.get("global_step", 0)))
+            log_experiment_metric(
+                experiment_id, "final_train_loss", float(final_loss), int(job.get("global_step", 0))
+            )
         log_experiment_param(experiment_id, "epochs", config.get("epochs", 0))
         log_experiment_param(experiment_id, "learning_rate", config.get("learning_rate", 0))
 
@@ -54,6 +60,11 @@ def cleanup_stream_state(
 ) -> None:
     state["running"] = False
     from .runtime_protocol import get_training_runtime
+
     job = get_training_runtime().get(task_id)
     if job is not None and job.get("status") not in ("completed", "failed", "cancelled"):
-        update_job(task_id, status=status, error=job.get("error") or error or "Training stream ended before completion")
+        update_job(
+            task_id,
+            status=status,
+            error=job.get("error") or error or "Training stream ended before completion",
+        )

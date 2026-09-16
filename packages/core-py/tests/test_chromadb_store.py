@@ -3,15 +3,15 @@
 Chromadb is not a dependency; ``connect()`` is exercised via import mocking.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
-from domain.inference._internal.vector_store import VectorEntry, QueryResult
+import pytest
+
+from domain.inference._internal.vector_store import QueryResult, VectorEntry
 from domain.inference._internal.vector_stores.chromadb_store import ChromaDBVectorStore
 
 
 class TestConstruction:
-
     def test_defaults(self):
         store = ChromaDBVectorStore()
         assert store.persist_directory == "data/vector_store"
@@ -47,7 +47,6 @@ class TestConstruction:
 
 
 class TestConnect:
-
     @pytest.mark.asyncio
     async def test_connect_success(self):
         store = ChromaDBVectorStore()
@@ -135,7 +134,6 @@ class TestConnect:
 
 
 class TestOperations:
-
     @pytest.mark.asyncio
     async def test_upsert_requires_connection(self):
         store = ChromaDBVectorStore()
@@ -196,7 +194,12 @@ class TestOperations:
     async def test_query_passes_filter(self):
         store = ChromaDBVectorStore()
         store.collection = MagicMock()
-        store.collection.query.return_value = {"ids": [], "distances": [], "documents": [], "metadatas": []}
+        store.collection.query.return_value = {
+            "ids": [],
+            "distances": [],
+            "documents": [],
+            "metadatas": [],
+        }
         await store.query([1.0], filter_metadata={"k": 1})
         assert store.collection.query.call_args.kwargs["where"] == {"k": 1}
 
@@ -204,7 +207,12 @@ class TestOperations:
     async def test_query_missing_optional_fields(self):
         store = ChromaDBVectorStore()
         store.collection = MagicMock()
-        store.collection.query.return_value = {"ids": [["a"]], "distances": [], "documents": [], "metadatas": []}
+        store.collection.query.return_value = {
+            "ids": [["a"]],
+            "distances": [],
+            "documents": [],
+            "metadatas": [],
+        }
         results = await store.query([1.0])
         assert len(results) == 1
         assert results[0].id == "a"
@@ -374,7 +382,7 @@ class TestOperations:
             "documents": [["a", "b", "c", "d", "e"]],
             "metadatas": [[{}, {}, {}, {}, {}]],
         }
-        results = await store.query([1.0], top_k=3)
+        await store.query([1.0], top_k=3)
         store.collection.query.assert_called_once_with(
             query_embeddings=[[1.0]], n_results=3, where=None
         )
@@ -423,7 +431,6 @@ class TestOperations:
 
 
 class TestEdgeCases:
-
     @pytest.mark.asyncio
     async def test_upsert_empty_list(self):
         store = ChromaDBVectorStore()
@@ -435,7 +442,9 @@ class TestEdgeCases:
     async def test_upsert_preserves_metadata_keys(self):
         store = ChromaDBVectorStore()
         store.collection = MagicMock()
-        entries = [VectorEntry(id="a", vector=[1.0], text="t", metadata={"source": "test", "page": 5})]
+        entries = [
+            VectorEntry(id="a", vector=[1.0], text="t", metadata={"source": "test", "page": 5})
+        ]
         await store.upsert(entries)
         kwargs = store.collection.upsert.call_args.kwargs
         assert kwargs["metadatas"] == [{"source": "test", "page": 5}]
@@ -451,7 +460,6 @@ class TestEdgeCases:
             "metadatas": [[{}]],
         }
         results = await store.query([1.0])
-        from domain.inference._internal.vector_store import QueryResult
         assert isinstance(results[0], QueryResult)
 
     @pytest.mark.asyncio
@@ -542,7 +550,10 @@ class TestEdgeCases:
         store = ChromaDBVectorStore()
         store.collection = MagicMock()
         store.collection.query.return_value = {
-            "ids": [[]], "distances": [[]], "documents": [[]], "metadatas": [[]]
+            "ids": [[]],
+            "distances": [[]],
+            "documents": [[]],
+            "metadatas": [[]],
         }
         filt = {"$and": [{"type": "doc"}, {"year": 2024}]}
         await store.query([1.0], filter_metadata=filt)
@@ -551,6 +562,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_store_inherits_vector_store_interface(self):
         from domain.inference._internal.vector_store import VectorStore
+
         store = ChromaDBVectorStore()
         assert isinstance(store, VectorStore)
 
@@ -562,7 +574,6 @@ class TestEdgeCases:
 
 
 class TestChromaDBExtended:
-
     @pytest.mark.asyncio
     async def test_upsert_returns_int(self):
         store = ChromaDBVectorStore()
@@ -575,8 +586,10 @@ class TestChromaDBExtended:
         store = ChromaDBVectorStore()
         store.collection = MagicMock()
         store.collection.query.return_value = {
-            "ids": [["a"]], "distances": [[0.1]],
-            "documents": [["text"]], "metadatas": [[{}]],
+            "ids": [["a"]],
+            "distances": [[0.1]],
+            "documents": [["text"]],
+            "metadatas": [[{}]],
         }
         results = await store.query([1.0])
         assert isinstance(results, list)
@@ -609,7 +622,9 @@ class TestChromaDBExtended:
     async def test_upsert_many_entries_performance(self):
         store = ChromaDBVectorStore()
         store.collection = MagicMock()
-        entries = [VectorEntry(id=f"e{i}", vector=[float(i)] * 10, text=f"text{i}") for i in range(100)]
+        entries = [
+            VectorEntry(id=f"e{i}", vector=[float(i)] * 10, text=f"text{i}") for i in range(100)
+        ]
         n = await store.upsert(entries)
         assert n == 100
 
@@ -634,8 +649,10 @@ class TestChromaDBExtended:
         store = ChromaDBVectorStore()
         store.collection = MagicMock()
         store.collection.query.return_value = {
-            "ids": [[]], "distances": [[]],
-            "documents": [[]], "metadatas": [[]],
+            "ids": [[]],
+            "distances": [[]],
+            "documents": [[]],
+            "metadatas": [[]],
         }
         await store.query([1.0])
         store.collection.query.assert_called_once_with(

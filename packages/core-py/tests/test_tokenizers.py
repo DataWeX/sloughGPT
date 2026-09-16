@@ -1,12 +1,13 @@
 """Meaningful tests for CharTokenizer and BPETokenizer — vocab building, encode/decode, save/load."""
 
-import pytest
-from pathlib import Path
-from domain.multimodal._internal.char_tokenizer import CharTokenizer
-from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
 
+import pytest
+
+from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
+from domain.multimodal._internal.char_tokenizer import CharTokenizer
 
 # ── CharTokenizer ──────────────────────────────────────────────────────
+
 
 class TestCharTokenizer:
     def test_build_vocab(self):
@@ -92,6 +93,7 @@ class TestCharTokenizer:
 
 
 # ── BPETokenizer ───────────────────────────────────────────────────────
+
 
 class TestBPETokenizer:
     def test_train(self):

@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 pytest.importorskip("torch")
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -36,7 +37,9 @@ def test_onnx_export():
 
     try:
         example_input = torch.zeros(1, 32, dtype=torch.long)
-        export_sloughgpt_to_onnx(model=model, output_path=output_path, example_input=example_input, seq_len=32)
+        export_sloughgpt_to_onnx(
+            model=model, output_path=output_path, example_input=example_input, seq_len=32
+        )
         file_size = Path(output_path).stat().st_size
         print(f"✓ ONNX export successful, file size: {file_size / 1024:.2f} KB")
         assert file_size > 0
@@ -57,19 +60,30 @@ def test_gguf_export():
     print("=" * 50)
 
     from domains.models import SloughGPTModel
-    from domains.training.gguf_export import export_to_gguf, GGUFExportConfig, estimate_memory_requirements
+    from domains.training.gguf_export import (
+        GGUFExportConfig,
+        estimate_memory_requirements,
+        export_to_gguf,
+    )
 
     model = SloughGPTModel(vocab_size=256, n_embed=128, n_layer=4, n_head=8)
     model.eval()
 
-    mem = estimate_memory_requirements(vocab_size=256, n_layer=4, n_embed=128, n_ctx=2048, quantization="Q4_K_M")
+    mem = estimate_memory_requirements(
+        vocab_size=256, n_layer=4, n_embed=128, n_ctx=2048, quantization="Q4_K_M"
+    )
     print(f"Estimated memory (Q4_K_M): {mem['total_mb']:.2f} MB")
 
     with tempfile.NamedTemporaryFile(suffix="-Q4_K_M.gguf", delete=False) as f:
         output_path = f.name
 
     try:
-        export_to_gguf(model=model, output_path=output_path, tokenizer=None, config=GGUFExportConfig(quantization="Q4_K_M"))
+        export_to_gguf(
+            model=model,
+            output_path=output_path,
+            tokenizer=None,
+            config=GGUFExportConfig(quantization="Q4_K_M"),
+        )
         file_size = Path(output_path).stat().st_size
         print(f"✓ GGUF export successful, file size: {file_size / 1024:.2f} KB")
         assert file_size > 0
@@ -101,7 +115,11 @@ def test_safetensors_export():
         output_path = f.name
 
     try:
-        export_to_safetensors(model=model, output_path=output_path, metadata={"format": "safetensors", "model_type": "sloughgpt"})
+        export_to_safetensors(
+            model=model,
+            output_path=output_path,
+            metadata={"format": "safetensors", "model_type": "sloughgpt"},
+        )
         file_size = Path(output_path).stat().st_size
         print(f"✓ SafeTensors export successful, file size: {file_size / 1024:.2f} KB")
         assert file_size > 0

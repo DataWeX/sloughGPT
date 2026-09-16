@@ -1,13 +1,16 @@
 """Tests for domain.agents._internal.tools — ToolParam, ToolResult, ToolSpec, ToolRegistry; domain.agents._internal.multi — TaskStatus, AgentTask."""
 
-import pytest
-import re
 import asyncio
-import time
-from dataclasses import FrozenInstanceError
+import re
 
-from domain.agents._internal.tools import ToolParam, ToolResult, ToolSpec, ToolRegistry, get_tool_registry
-from domain.agents._internal.multi import TaskStatus, AgentTask
+from domain.agents._internal.multi import AgentTask, TaskStatus
+from domain.agents._internal.tools import (
+    ToolParam,
+    ToolRegistry,
+    ToolResult,
+    ToolSpec,
+    get_tool_registry,
+)
 
 
 class TestToolParam:
@@ -97,6 +100,7 @@ class TestToolSpec:
     def test_creation(self):
         async def dummy(**kwargs):
             return {"output": "test"}
+
         spec = ToolSpec(name="t", description="desc", parameters=[], execute=dummy)
         assert spec.name == "t"
         assert spec.requires_approval is False
@@ -105,14 +109,23 @@ class TestToolSpec:
     def test_with_pattern(self):
         async def dummy(**kwargs):
             return {"output": ""}
+
         pat = re.compile(r"^test$")
-        spec = ToolSpec(name="t", description="d", parameters=[], execute=dummy, pattern=pat, requires_approval=True)
+        spec = ToolSpec(
+            name="t",
+            description="d",
+            parameters=[],
+            execute=dummy,
+            pattern=pat,
+            requires_approval=True,
+        )
         assert spec.pattern == pat
         assert spec.requires_approval is True
 
     def test_parameters_list(self):
         async def dummy(**kwargs):
             return {}
+
         params = [
             ToolParam(name="a", type="int", description="first"),
             ToolParam(name="b", type="str", description="second"),
@@ -220,9 +233,13 @@ class TestToolRegistry:
 
     def test_register_custom(self):
         reg = ToolRegistry()
+
         async def custom_exec(**kwargs):
             return {"output": "custom"}
-        spec = ToolSpec(name="custom", description="Custom tool", parameters=[], execute=custom_exec)
+
+        spec = ToolSpec(
+            name="custom", description="Custom tool", parameters=[], execute=custom_exec
+        )
         reg.register(spec)
         assert reg.get("custom") is not None
         tools = reg.list_tools()
@@ -320,17 +337,13 @@ class TestToolRegistry:
 
     def test_current_time_execute(self):
         reg = ToolRegistry()
-        result = asyncio.get_event_loop().run_until_complete(
-            reg.execute("current_time", {})
-        )
+        result = asyncio.get_event_loop().run_until_complete(reg.execute("current_time", {}))
         assert result.success is True
         assert len(result.output) > 10
 
     def test_execute_unknown_tool(self):
         reg = ToolRegistry()
-        result = asyncio.get_event_loop().run_until_complete(
-            reg.execute("nonexistent_tool", {})
-        )
+        result = asyncio.get_event_loop().run_until_complete(reg.execute("nonexistent_tool", {}))
         assert result.success is False
         assert "Unknown tool" in result.error
 
@@ -403,8 +416,10 @@ class TestToolRegistry:
 
     def test_registry_overwrite(self):
         reg = ToolRegistry()
+
         async def new_calc(**kwargs):
             return {"output": "overwritten"}
+
         spec = ToolSpec(name="calculator", description="Override", parameters=[], execute=new_calc)
         reg.register(spec)
         assert reg.get("calculator").description == "Override"

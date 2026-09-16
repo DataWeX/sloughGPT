@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -18,7 +17,7 @@ from domain.benchmark._internal.domain import (
 @pytest.fixture
 def bench(tmp_path, monkeypatch):
     """Create a BenchmarkDomain using a temp directory."""
-    monkeypatch.setattr("domain.benchmark.domain._RESPONSES_DIR", tmp_path)
+    monkeypatch.setattr("domain.benchmark._internal.domain._RESPONSES_DIR", tmp_path)
     reset_benchmark_domain()
     yield BenchmarkDomain()
     reset_benchmark_domain()
@@ -33,7 +32,6 @@ def _write_response(bench, filename, data):
 
 
 class TestBenchmarkDomainSingleton:
-
     def setup_method(self):
         reset_benchmark_domain()
 
@@ -56,7 +54,6 @@ class TestBenchmarkDomainSingleton:
 
 
 class TestBenchmarkResult:
-
     def test_dataclass_fields(self):
         r = BenchmarkResult(
             timestamp="2026-01-01T00:00:00Z",
@@ -78,7 +75,6 @@ class TestBenchmarkResult:
 
 
 class TestGetStats:
-
     def test_empty_returns_zero(self, bench):
         stats = bench.get_stats()
         assert stats["total_responses"] == 0
@@ -93,10 +89,14 @@ class TestGetStats:
         assert stats["avg_length"] == 11.0
 
     def test_multiple_responses(self, bench):
-        _write_response(bench, "r1.json", [
-            {"model": "gpt2", "text": "hello"},
-            {"model": "llama", "text": "hello world"},
-        ])
+        _write_response(
+            bench,
+            "r1.json",
+            [
+                {"model": "gpt2", "text": "hello"},
+                {"model": "llama", "text": "hello world"},
+            ],
+        )
         stats = bench.get_stats()
         assert stats["total_responses"] == 2
         assert len(stats["models"]) == 2
@@ -112,7 +112,6 @@ class TestGetStats:
 
 
 class TestEvaluateLatest:
-
     def test_empty_returns_zero(self, bench):
         result = bench.evaluate_latest()
         assert result["responses_analyzed"] == 0
@@ -144,10 +143,14 @@ class TestEvaluateLatest:
         assert result["responses_analyzed"] == 10
 
     def test_length_std_calculation(self, bench):
-        _write_response(bench, "r1.json", [
-            {"text": "short"},
-            {"text": "a longer response here"},
-        ])
+        _write_response(
+            bench,
+            "r1.json",
+            [
+                {"text": "short"},
+                {"text": "a longer response here"},
+            ],
+        )
         result = bench.evaluate_latest()
         assert result["metrics"]["length_std"] > 0
 
@@ -156,7 +159,6 @@ class TestEvaluateLatest:
 
 
 class TestClearHistory:
-
     def test_clears_all_files(self, bench):
         _write_response(bench, "r1.json", [{"text": "data"}])
         _write_response(bench, "r2.json", [{"text": "data2"}])

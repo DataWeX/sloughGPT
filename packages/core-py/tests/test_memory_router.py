@@ -4,13 +4,12 @@ Covers: stats, list, search, store, remember, config (GET/POST),
 clear, consolidate, archive, archive_stats, archive_prune, delete, update.
 MemoryService is mocked throughout.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -18,9 +17,12 @@ if _server_dir not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from routers.memory import (
-    MemoryRouter, StoreRequest, RememberRequest, ConfigRequest, UpdateRequest,
+    ConfigRequest,
+    MemoryRouter,
+    RememberRequest,
+    StoreRequest,
+    UpdateRequest,
 )
 
 
@@ -44,6 +46,7 @@ def _app():
     mr = MemoryRouter()
     app.include_router(mr.router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 
@@ -131,9 +134,9 @@ class TestRemember:
     def test_remember(self, mock_get):
         mock_get.return_value = _mock_svc()
         client = TestClient(_app())
-        resp = client.post("/memory/remember", json={
-            "user_message": "hi", "assistant_response": "hello"
-        })
+        resp = client.post(
+            "/memory/remember", json={"user_message": "hi", "assistant_response": "hello"}
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["stored"] is True
 

@@ -11,20 +11,23 @@ All implemented in pure NumPy - no external dependencies.
 
 from __future__ import annotations
 
-import re
-from typing import Tuple, Optional
-import numpy as np
 import logging
+import re
+
+import numpy as np
 
 logger = logging.getLogger("slo.multimodal.tts")
 
-from domain.voice._internal.phoneme_encoder import PhonemeEncoder, NUM_PHONEMES, SILENCE
-
+from domain.voice._internal.phoneme_encoder import NUM_PHONEMES, PhonemeEncoder
 
 # SSML tag patterns
 _SSML_BREAK_PATTERN = re.compile(r'<break\s+time=["\'](\d+)(ms|s)["\']\s*/?>')
-_SSMLProsody_PATTERN = re.compile(r'<prosody\s+rate=["\']([^"\']+)["\']\s+pitch=["\']([^"\']+)["\']\s*>(.*?)</prosody>', re.DOTALL)
-_SSML_EMPHASIS_PATTERN = re.compile(r'<emphasis\s+level=["\']([^"\']+)["\']\s*>(.*?)</emphasis>', re.DOTALL)
+_SSMLProsody_PATTERN = re.compile(
+    r'<prosody\s+rate=["\']([^"\']+)["\']\s+pitch=["\']([^"\']+)["\']\s*>(.*?)</prosody>', re.DOTALL
+)
+_SSML_EMPHASIS_PATTERN = re.compile(
+    r'<emphasis\s+level=["\']([^"\']+)["\']\s*>(.*?)</emphasis>', re.DOTALL
+)
 
 
 def parse_ssml(ssml: str) -> tuple[str, list[dict]]:
@@ -61,7 +64,7 @@ def parse_ssml(ssml: str) -> tuple[str, list[dict]]:
         events.append({"type": "emphasis", "level": level, "text": inner_text})
 
     # Remove SSML tags to get clean text
-    clean_text = re.sub(r'<[^>]+>', '', text).strip()
+    clean_text = re.sub(r"<[^>]+>", "", text).strip()
 
     return clean_text, events
 
@@ -69,8 +72,14 @@ def parse_ssml(ssml: str) -> tuple[str, list[dict]]:
 def _get_slonet():
     """Lazy import of slonet primitives."""
     from domain.training._internal.slonet import (
-        Tensor, SloEmbedding, SloLSTM, SloLinear, SloLayerNorm, SloAdam,
+        SloAdam,
+        SloEmbedding,
+        SloLayerNorm,
+        SloLinear,
+        SloLSTM,
+        Tensor,
     )
+
     return Tensor, SloEmbedding, SloLSTM, SloLinear, SloLayerNorm, SloAdam
 
 
@@ -81,8 +90,7 @@ class SpectrogramDecoder:
     - Text embedding -> LSTM -> Linear -> mel spectrogram frames
     """
 
-    def __init__(self, vocab_size=256, embed_dim=128, hidden_dim=256,
-                 n_mels=80, max_frames=200):
+    def __init__(self, vocab_size=256, embed_dim=128, hidden_dim=256, n_mels=80, max_frames=200):
         Tensor, SloEmbedding, SloLSTM, SloLinear, SloLayerNorm, SloAdam = _get_slonet()
 
         self.vocab_size = vocab_size
@@ -111,8 +119,9 @@ class SpectrogramDecoder:
 
         self.optimizer = SloAdam(lr=1e-3)
 
-    def train_step(self, phoneme_ids: np.ndarray, target_mel: np.ndarray,
-                   stop_targets: np.ndarray = None) -> float:
+    def train_step(
+        self, phoneme_ids: np.ndarray, target_mel: np.ndarray, stop_targets: np.ndarray = None
+    ) -> float:
         Tensor, _, _, _, _, _ = _get_slonet()
         target_frames = target_mel.shape[1]
         enc_out, h, c = self.encode_text(phoneme_ids)
@@ -121,17 +130,19 @@ class SpectrogramDecoder:
         prev_mel = None
 
         for t in range(target_frames):
-            context = Tensor(enc_out.data.mean(axis=1, keepdims=True),
-                           requires_grad=True, _children=(enc_out,))
-            target_frame = target_mel[:, t:t+1]
+            context = Tensor(
+                enc_out.data.mean(axis=1, keepdims=True), requires_grad=True, _children=(enc_out,)
+            )
+            target_frame = target_mel[:, t : t + 1]
             mel_pred, h, c, stop_pred = self.decode_step(context, prev_mel, h, c)
             mel_diff = mel_pred.data - target_frame.T
-            mel_loss += np.mean(mel_diff ** 2)
+            mel_loss += np.mean(mel_diff**2)
             if stop_targets is not None:
                 stop_target = stop_targets[0, t]
                 stop_pred_val = 1.0 / (1.0 + np.exp(-np.clip(stop_pred.data[0, 0], -500, 500)))
-                stop_loss += -stop_target * np.log(stop_pred_val + 1e-7) - \
-                           (1 - stop_target) * np.log(1 - stop_pred_val + 1e-7)
+                stop_loss += -stop_target * np.log(stop_pred_val + 1e-7) - (
+                    1 - stop_target
+                ) * np.log(1 - stop_pred_val + 1e-7)
             prev_mel = mel_pred.data
 
         mel_loss /= target_frames
@@ -160,15 +171,15 @@ class SpectrogramDecoder:
             return Tensor(np.zeros((1, 0, hd), dtype=np.float32), requires_grad=True), h, c
         hidden_states = []
         for t in range(seq_len):
-            xt = emb[:, t:t+1, :]
+            xt = emb[:, t : t + 1, :]
             igates = xt @ self.encoder_lstm.W_ih.weight.data.T
             hgates = h @ self.encoder_lstm.W_hh.weight.data.T
             gates = igates + hgates
             g = gates[0, 0] if gates.ndim > 2 else gates[0]
             gi = 1.0 / (1.0 + np.exp(np.clip(-g[:hd], -500.0, 500.0)))
-            gf = 1.0 / (1.0 + np.exp(np.clip(-g[hd:2*hd], -500.0, 500.0)))
-            gg = np.tanh(g[2*hd:3*hd])
-            go = 1.0 / (1.0 + np.exp(np.clip(-g[3*hd:], -500.0, 500.0)))
+            gf = 1.0 / (1.0 + np.exp(np.clip(-g[hd : 2 * hd], -500.0, 500.0)))
+            gg = np.tanh(g[2 * hd : 3 * hd])
+            go = 1.0 / (1.0 + np.exp(np.clip(-g[3 * hd :], -500.0, 500.0)))
             c = gf * c + gi * gg
             h_raw = go * np.tanh(c)
             rms = np.sqrt(np.mean(h_raw**2, axis=-1, keepdims=True) + 1e-5)
@@ -185,8 +196,9 @@ class SpectrogramDecoder:
         prev_mel = None
 
         for _ in range(max_frames):
-            context = Tensor(enc_out.data.mean(axis=1, keepdims=True),
-                           requires_grad=True, _children=(enc_out,))
+            context = Tensor(
+                enc_out.data.mean(axis=1, keepdims=True), requires_grad=True, _children=(enc_out,)
+            )
             mel_pred, h, c, stop_pred = self.decode_step(context, prev_mel, h, c)
             mel_frames.append(mel_pred.data[0])
             if stop_pred.data[0, 0] > 0.5:
@@ -197,8 +209,9 @@ class SpectrogramDecoder:
             return np.zeros((self.n_mels, 1), dtype=np.float32)
         return np.stack(mel_frames, axis=-1)
 
-    def generate_streaming(self, phoneme_ids: np.ndarray, max_frames: int = None,
-                          chunk_size: int = 8):
+    def generate_streaming(
+        self, phoneme_ids: np.ndarray, max_frames: int = None, chunk_size: int = 8
+    ):
         Tensor, _, _, _, _, _ = _get_slonet()
         max_frames = max_frames or self.max_frames
         if phoneme_ids.shape[1] == 0:
@@ -208,8 +221,9 @@ class SpectrogramDecoder:
         prev_mel = None
 
         for _ in range(max_frames):
-            context = Tensor(enc_out.data.mean(axis=1, keepdims=True),
-                           requires_grad=True, _children=(enc_out,))
+            context = Tensor(
+                enc_out.data.mean(axis=1, keepdims=True), requires_grad=True, _children=(enc_out,)
+            )
             mel_pred, h, c, stop_pred = self.decode_step(context, prev_mel, h, c)
             mel_frames.append(mel_pred.data[0])
             if len(mel_frames) >= chunk_size:
@@ -224,15 +238,16 @@ class SpectrogramDecoder:
             chunk = np.stack(mel_frames, axis=-1)
             yield chunk
 
-    def decode_step(self, context, prev_mel: np.ndarray, h: np.ndarray,
-                   c: np.ndarray):
+    def decode_step(self, context, prev_mel: np.ndarray, h: np.ndarray, c: np.ndarray):
         Tensor, _, _, _, _, _ = _get_slonet()
         if prev_mel is not None:
             if prev_mel.ndim == 2:
                 prev_mel = prev_mel[:, np.newaxis, :]
             dec_input = np.concatenate([context.data, prev_mel], axis=-1)
         else:
-            dec_input = np.concatenate([context.data, np.zeros((1, 1, self.n_mels), dtype=np.float32)], axis=-1)
+            dec_input = np.concatenate(
+                [context.data, np.zeros((1, 1, self.n_mels), dtype=np.float32)], axis=-1
+            )
 
         hd = self.hidden_dim
         igates = dec_input @ self.decoder_input_proj.weight.data.T
@@ -240,9 +255,9 @@ class SpectrogramDecoder:
         gates = igates + hgates
         g = gates[0, 0] if gates.ndim > 2 else (gates[0] if gates.ndim > 1 else gates)
         gi = 1.0 / (1.0 + np.exp(np.clip(-g[:hd], -500.0, 500.0)))
-        gf = 1.0 / (1.0 + np.exp(np.clip(-g[hd:2*hd], -500.0, 500.0)))
-        gg = np.tanh(g[2*hd:3*hd])
-        go = 1.0 / (1.0 + np.exp(np.clip(-g[3*hd:], -500.0, 500.0)))
+        gf = 1.0 / (1.0 + np.exp(np.clip(-g[hd : 2 * hd], -500.0, 500.0)))
+        gg = np.tanh(g[2 * hd : 3 * hd])
+        go = 1.0 / (1.0 + np.exp(np.clip(-g[3 * hd :], -500.0, 500.0)))
         c = gf * c + gi * gg
         h_raw = go * np.tanh(c)
         rms = np.sqrt(np.mean(h_raw**2, axis=-1, keepdims=True) + 1e-5)
@@ -304,8 +319,9 @@ class GriffinLimVocoder:
         linear = np.dot(np.linalg.pinv(self.mel_basis), mel_spectrogram)
         return np.maximum(linear, 1e-10)
 
-    def generate_waveform(self, mel_spectrogram: np.ndarray,
-                         num_iterations: int = 32) -> np.ndarray:
+    def generate_waveform(
+        self, mel_spectrogram: np.ndarray, num_iterations: int = 32
+    ) -> np.ndarray:
         linear_spec = self._mel_to_linear(mel_spectrogram)
         angles = np.exp(2j * np.pi * np.random.rand(*linear_spec.shape))
         for _ in range(num_iterations):
@@ -322,7 +338,7 @@ class GriffinLimVocoder:
         spec = np.zeros((self.n_fft // 2 + 1, num_frames), dtype=np.complex64)
         for i in range(num_frames):
             start = i * hop
-            frame = waveform[start:start + self.n_fft] * window
+            frame = waveform[start : start + self.n_fft] * window
             spec[:, i] = np.fft.rfft(frame)
         return spec
 
@@ -336,8 +352,8 @@ class GriffinLimVocoder:
         for i in range(num_frames):
             start = i * hop
             frame = np.fft.irfft(spec[:, i])
-            waveform[start:start + self.n_fft] += frame * window
-            window_sum[start:start + self.n_fft] += window ** 2
+            waveform[start : start + self.n_fft] += frame * window
+            window_sum[start : start + self.n_fft] += window**2
         window_sum = np.maximum(window_sum, 1e-8)
         waveform /= window_sum
         return waveform
@@ -346,8 +362,9 @@ class GriffinLimVocoder:
 class TTSEngine:
     """Complete text-to-speech pipeline."""
 
-    def __init__(self, vocab_size=NUM_PHONEMES, embed_dim=128, hidden_dim=256,
-                 n_mels=80, sample_rate=22050):
+    def __init__(
+        self, vocab_size=NUM_PHONEMES, embed_dim=128, hidden_dim=256, n_mels=80, sample_rate=22050
+    ):
         _, _, SloAdam, _, _, _ = _get_slonet()
         self.decoder = SpectrogramDecoder(vocab_size, embed_dim, hidden_dim, n_mels)
         self.vocoder = GriffinLimVocoder(n_mels=n_mels, sample_rate=sample_rate)
@@ -363,8 +380,9 @@ class TTSEngine:
             return np.zeros((self.decoder.n_mels, 1), dtype=np.float32)
         return self.decoder.generate(phoneme_ids, max_frames)
 
-    def text_to_waveform(self, text: str, max_frames: int = 200,
-                         speed: float = 1.0, pitch_shift: float = 0.0) -> np.ndarray:
+    def text_to_waveform(
+        self, text: str, max_frames: int = 200, speed: float = 1.0, pitch_shift: float = 0.0
+    ) -> np.ndarray:
         if not text or not text.strip():
             return np.zeros(self.sample_rate // 2, dtype=np.float32)
         phoneme_ids = self._phoneme_encoder.encode(text)
@@ -379,7 +397,8 @@ class TTSEngine:
 
     def _adjust_speed(self, mel_spec: np.ndarray, speed: float) -> np.ndarray:
         import scipy.ndimage
-        return scipy.ndimage.zoom(mel_spec, (1, 1/speed), order=1)
+
+        return scipy.ndimage.zoom(mel_spec, (1, 1 / speed), order=1)
 
     def _shift_pitch(self, mel_spec: np.ndarray, semitones: float) -> np.ndarray:
         shift_bins = int(semitones)
@@ -398,8 +417,7 @@ class TTSEngine:
             return np.zeros(self.sample_rate // 2, dtype=np.float32)
         return self.text_to_waveform(clean_text, max_frames)
 
-    def train_step(self, text: str, target_waveform: np.ndarray,
-                   max_frames: int = 200) -> float:
+    def train_step(self, text: str, target_waveform: np.ndarray, max_frames: int = 200) -> float:
         if not text or not text.strip():
             return 0.0
         phoneme_ids = self._phoneme_encoder.encode(text)
@@ -414,8 +432,9 @@ class TTSEngine:
         stop_targets[0, -1] = 1.0
         return self.decoder.train_step(phoneme_ids, target_mel, stop_targets)
 
-    def train_epoch(self, training_data: list[tuple[str, np.ndarray]],
-                    max_frames: int = 200) -> float:
+    def train_epoch(
+        self, training_data: list[tuple[str, np.ndarray]], max_frames: int = 200
+    ) -> float:
         total_loss = 0.0
         for text, waveform in training_data:
             loss = self.train_step(text, waveform, max_frames)

@@ -1,10 +1,14 @@
 """Tests for multimodal/portuguese_phoneme_encoder.py — PortuguesePhonemeEncoder."""
 
 import numpy as np
-import pytest
+
 from domain.multimodal._internal.portuguese_phoneme_encoder import (
-    PortuguesePhonemeEncoder, portuguese_text_to_phonemes,
-    PORTUGUESE_ID_TO_PHONEME, BOS, EOS, PAD, SPACE, NUM_PORTUGUESE_PHONEMES,
+    BOS,
+    EOS,
+    NUM_PORTUGUESE_PHONEMES,
+    PORTUGUESE_ID_TO_PHONEME,
+    PortuguesePhonemeEncoder,
+    portuguese_text_to_phonemes,
 )
 
 

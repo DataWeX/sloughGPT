@@ -46,7 +46,11 @@ async def start_from_sessions_unified(req: FromSessionsRequest):
         if req.n_head < 1:
             raise_error(422, "n_head must be >= 1", source="training.from_sessions")
         if req.n_embed % req.n_head != 0:
-            raise_error(422, f"n_embed ({req.n_embed}) must be divisible by n_head ({req.n_head})", source="training.from_sessions")
+            raise_error(
+                422,
+                f"n_embed ({req.n_embed}) must be divisible by n_head ({req.n_head})",
+                source="training.from_sessions",
+            )
         if req.block_size < 8:
             raise_error(422, "block_size must be >= 8", source="training.from_sessions")
 
@@ -109,7 +113,11 @@ async def start_turbo_training_unified(req: TurboStartRequest):
                     status_code=400,
                 )
             if ds_path.is_dir():
-                candidates = [ds_path / "input.txt", ds_path / "corpus.jsonl", ds_path / "train.txt"]
+                candidates = [
+                    ds_path / "input.txt",
+                    ds_path / "corpus.jsonl",
+                    ds_path / "train.txt",
+                ]
                 data_file = next((c for c in candidates if c.exists()), None)
                 if not data_file:
                     raise_error(
@@ -131,6 +139,7 @@ async def start_turbo_training_unified(req: TurboStartRequest):
         cancel_event = threading.Event()
         try:
             from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
+
             get_cancel_manager().register(
                 op_type=OpType.TRAINING,
                 label=f"turbo:{job_info['job_id']}",
@@ -140,17 +149,22 @@ async def start_turbo_training_unified(req: TurboStartRequest):
             )
             get_cancel_manager().start(job_info["job_id"])
         except Exception as exc:
-            logger.warning("CancelManager registration failed for turbo %s: %s", job_info["job_id"], exc)
+            logger.warning(
+                "CancelManager registration failed for turbo %s: %s", job_info["job_id"], exc
+            )
 
         # Run via executor pool for proper tracking
         from domain.training._internal.executor import get_training_executor
+
         executor = get_training_executor()
 
         def _run():
             try:
                 run_turbo_worker(config)
-            except Exception as e:
-                logger.exception("Turbo training job %s failed", job_info["job_id"], extra={"tag": "TRAIN"})
+            except Exception:
+                logger.exception(
+                    "Turbo training job %s failed", job_info["job_id"], extra={"tag": "TRAIN"}
+                )
 
         executor.submit(_run, job_info["job_id"])
 

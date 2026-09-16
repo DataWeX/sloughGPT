@@ -4,7 +4,6 @@ from io import BytesIO
 
 import pytest
 from routers.files import FilesRouter, _get_db
-
 from tests.test_support import get_test_client
 
 client = get_test_client()

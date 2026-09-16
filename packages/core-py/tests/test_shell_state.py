@@ -9,10 +9,14 @@ Covers:
   - history max length enforcement
 """
 
-import json
 import pytest
-from pathlib import Path
-from domain.shell._internal.state import ShellState, _MAX_HISTORY, set_shell_state_db, reset_shell_state_db
+
+from domain.shell._internal.state import (
+    _MAX_HISTORY,
+    ShellState,
+    reset_shell_state_db,
+    set_shell_state_db,
+)
 
 
 @pytest.fixture(autouse=True)

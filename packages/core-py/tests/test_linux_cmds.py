@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import os
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 from domain.shell._internal.cmds.linux import LinuxCommandsMixin
 
-
 # ── Fake host for mixin ───────────────────────────────────────────────────────
+
 
 class FakeHost(LinuxCommandsMixin):
     """Minimal host object satisfying LinuxCommandsMixin's self.* access."""
@@ -36,6 +37,7 @@ def host(tmp_path):
 
 # ── Static helpers ────────────────────────────────────────────────────────────
 
+
 class TestFormatSize:
     def test_exact_bytes(self):
         assert LinuxCommandsMixin._format_size(0) == "       0"
@@ -59,7 +61,7 @@ class TestFormatSize:
         assert "1.0T" in result
 
     def test_human_large(self):
-        result = LinuxCommandsMixin._format_size(1024 ** 5, human=True)
+        result = LinuxCommandsMixin._format_size(1024**5, human=True)
         assert "1.0P" in result
 
     def test_human_small(self):
@@ -101,6 +103,7 @@ class TestFmtError:
 
 # ── _cmd_cd ───────────────────────────────────────────────────────────────────
 
+
 class TestCd:
     def test_cd_home(self, host):
         host._cmd_cd("")
@@ -129,6 +132,7 @@ class TestCd:
 
 # ── _cmd_pwd ──────────────────────────────────────────────────────────────────
 
+
 class TestPwd:
     def test_pwd(self, host):
         host._cmd_pwd()
@@ -138,6 +142,7 @@ class TestPwd:
 
 
 # ── _cmd_echo ─────────────────────────────────────────────────────────────────
+
 
 class TestEcho:
     def test_echo(self, host):
@@ -153,6 +158,7 @@ class TestEcho:
 
 
 # ── _cmd_mkdir ────────────────────────────────────────────────────────────────
+
 
 class TestMkdir:
     def test_mkdir_basic(self, host):
@@ -188,6 +194,7 @@ class TestMkdir:
 
 # ── _cmd_touch ────────────────────────────────────────────────────────────────
 
+
 class TestTouch:
     def test_touch_creates(self, host):
         host._last_exit_code = 0
@@ -210,6 +217,7 @@ class TestTouch:
 
 
 # ── _cmd_cat ──────────────────────────────────────────────────────────────────
+
 
 class TestCat:
     def test_cat_file(self, host):
@@ -249,6 +257,7 @@ class TestCat:
 
 # ── _cmd_head ─────────────────────────────────────────────────────────────────
 
+
 class TestHead:
     def test_head_default(self, host):
         lines = "\n".join(f"line {i}" for i in range(20))
@@ -276,6 +285,7 @@ class TestHead:
 
 # ── _cmd_tail ─────────────────────────────────────────────────────────────────
 
+
 class TestTail:
     def test_tail_default(self, host):
         lines = "\n".join(f"line {i}" for i in range(20))
@@ -302,6 +312,7 @@ class TestTail:
 
 # ── _cmd_wc ───────────────────────────────────────────────────────────────────
 
+
 class TestWc:
     def test_wc_lines(self, host):
         host._last_exit_code = 0
@@ -324,6 +335,7 @@ class TestWc:
 
 
 # ── _cmd_grep ─────────────────────────────────────────────────────────────────
+
 
 class TestGrep:
     def test_grep_match(self, host):
@@ -361,6 +373,7 @@ class TestGrep:
 
 # ── _cmd_sort ─────────────────────────────────────────────────────────────────
 
+
 class TestSort:
     def test_sort_basic(self, host):
         host._last_exit_code = 0
@@ -389,6 +402,7 @@ class TestSort:
 
 # ── _cmd_find ─────────────────────────────────────────────────────────────────
 
+
 class TestFind:
     def test_find_files(self, host):
         Path("a.txt").write_text("x")
@@ -415,6 +429,7 @@ class TestFind:
 
 # ── _cmd_diff ─────────────────────────────────────────────────────────────────
 
+
 class TestDiff:
     def test_diff_identical(self, host):
         host._last_exit_code = 0
@@ -438,6 +453,7 @@ class TestDiff:
 
 # ── _cmd_cp ───────────────────────────────────────────────────────────────────
 
+
 class TestCp:
     def test_cp_basic(self, host):
         host._last_exit_code = 0
@@ -459,6 +475,7 @@ class TestCp:
 
 # ── _cmd_mv ───────────────────────────────────────────────────────────────────
 
+
 class TestMv:
     def test_mv_basic(self, host):
         host._last_exit_code = 0
@@ -475,6 +492,7 @@ class TestMv:
 
 
 # ── _cmd_rm ───────────────────────────────────────────────────────────────────
+
 
 class TestRm:
     def test_rm_file(self, host):
@@ -504,6 +522,7 @@ class TestRm:
 
 # ── _cmd_chmod ────────────────────────────────────────────────────────────────
 
+
 class TestChmod:
     def test_chmod_basic(self, host):
         host._last_exit_code = 0
@@ -518,6 +537,7 @@ class TestChmod:
 
 
 # ── _cmd_ln ───────────────────────────────────────────────────────────────────
+
 
 class TestLn:
     def test_ln_symlink(self, host):
@@ -534,6 +554,7 @@ class TestLn:
 
 
 # ── _cmd_du ───────────────────────────────────────────────────────────────────
+
 
 class TestDu:
     def test_du_file(self, host):
@@ -553,6 +574,7 @@ class TestDu:
 
 # ── _cmd_stat ─────────────────────────────────────────────────────────────────
 
+
 class TestStat:
     def test_stat_file(self, host):
         host._last_exit_code = 0
@@ -569,6 +591,7 @@ class TestStat:
 
 
 # ── _cmd_seq ──────────────────────────────────────────────────────────────────
+
 
 class TestSeq:
     def test_seq_basic(self, host):
@@ -593,6 +616,7 @@ class TestSeq:
 
 # ── _cmd_cut ──────────────────────────────────────────────────────────────────
 
+
 class TestCut:
     def test_cut_fields(self, host):
         host._last_exit_code = 0
@@ -609,6 +633,7 @@ class TestCut:
 
 
 # ── _cmd_tr ───────────────────────────────────────────────────────────────────
+
 
 class TestTr:
     def test_tr_lowercase(self, host):
@@ -627,6 +652,7 @@ class TestTr:
 
 # ── _cmd_nl ───────────────────────────────────────────────────────────────────
 
+
 class TestNl:
     def test_nl_numbers(self, host):
         host._last_exit_code = 0
@@ -643,6 +669,7 @@ class TestNl:
 
 
 # ── _cmd_uniq ─────────────────────────────────────────────────────────────────
+
 
 class TestUniq:
     def test_uniq_dedup(self, host):
@@ -664,6 +691,7 @@ class TestUniq:
 
 # ── _cmd_tac ──────────────────────────────────────────────────────────────────
 
+
 class TestTac:
     def test_tac_reverse(self, host):
         host._last_exit_code = 0
@@ -676,6 +704,7 @@ class TestTac:
 
 # ── _cmd_rev ──────────────────────────────────────────────────────────────────
 
+
 class TestRev:
     def test_rev_string(self, host):
         host._last_exit_code = 0
@@ -685,6 +714,7 @@ class TestRev:
 
 
 # ── _cmd_fold ─────────────────────────────────────────────────────────────────
+
 
 class TestFold:
     def test_fold_width(self, host):
@@ -697,6 +727,7 @@ class TestFold:
 
 # ── _cmd_date ─────────────────────────────────────────────────────────────────
 
+
 class TestDate:
     def test_date(self, host):
         host._last_exit_code = 0
@@ -707,9 +738,11 @@ class TestDate:
 
 # ── _cmd_sleep ────────────────────────────────────────────────────────────────
 
+
 class TestSleep:
     def test_sleep_short(self, host):
         import time
+
         host._last_exit_code = 0
         start = time.monotonic()
         host._cmd_sleep("0.01")
@@ -725,6 +758,7 @@ class TestSleep:
 
 # ── _cmd_clear ────────────────────────────────────────────────────────────────
 
+
 class TestClear:
     def test_clear(self, host):
         host._last_exit_code = 0
@@ -733,6 +767,7 @@ class TestClear:
 
 
 # ── _cmd_hostname ─────────────────────────────────────────────────────────────
+
 
 class TestHostname:
     def test_hostname(self, host):
@@ -744,6 +779,7 @@ class TestHostname:
 
 # ── _cmd_nproc ────────────────────────────────────────────────────────────────
 
+
 class TestNproc:
     def test_nproc(self, host):
         host._last_exit_code = 0
@@ -754,6 +790,7 @@ class TestNproc:
 
 
 # ── _cmd_uname ────────────────────────────────────────────────────────────────
+
 
 class TestUname:
     def test_uname(self, host):
@@ -771,6 +808,7 @@ class TestUname:
 
 # ── _cmd_id ───────────────────────────────────────────────────────────────────
 
+
 class TestId:
     def test_id(self, host):
         host._last_exit_code = 0
@@ -782,6 +820,7 @@ class TestId:
 
 # ── _cmd_logname ──────────────────────────────────────────────────────────────
 
+
 class TestLogname:
     def test_logname(self, host):
         host._last_exit_code = 0
@@ -792,6 +831,7 @@ class TestLogname:
 
 # ── _cmd_who ──────────────────────────────────────────────────────────────────
 
+
 class TestWho:
     def test_who(self, host):
         host._last_exit_code = 0
@@ -800,6 +840,7 @@ class TestWho:
 
 
 # ── _cmd_cal ──────────────────────────────────────────────────────────────────
+
 
 class TestCal:
     def test_cal(self, host):
@@ -816,6 +857,7 @@ class TestCal:
 
 
 # ── _cmd_yes ──────────────────────────────────────────────────────────────────
+
 
 class TestYes:
     def test_yes_default(self, host):
@@ -835,6 +877,7 @@ class TestYes:
 
 # ── _cmd_realpath ─────────────────────────────────────────────────────────────
 
+
 class TestRealpath:
     def test_realpath(self, host):
         host._last_exit_code = 0
@@ -843,6 +886,7 @@ class TestRealpath:
 
 
 # ── _cmd_dirname ──────────────────────────────────────────────────────────────
+
 
 class TestDirname:
     def test_dirname(self, host):
@@ -858,6 +902,7 @@ class TestDirname:
 
 # ── _cmd_basename ─────────────────────────────────────────────────────────────
 
+
 class TestBasename:
     def test_basename(self, host):
         host._last_exit_code = 0
@@ -872,6 +917,7 @@ class TestBasename:
 
 # ── _cmd_env ──────────────────────────────────────────────────────────────────
 
+
 class TestEnv:
     def test_env(self, host):
         host._last_exit_code = 0
@@ -882,6 +928,7 @@ class TestEnv:
 
 
 # ── _cmd_time ─────────────────────────────────────────────────────────────────
+
 
 class TestTime:
     def test_time_no_args(self, host):

@@ -1,4 +1,5 @@
 """Tests for SpacedRepetitionScheduler — spaced repetition learning."""
+
 from __future__ import annotations
 
 import time

@@ -6,16 +6,16 @@ Extracted from execution.py to keep each module focused.
 from __future__ import annotations
 
 import logging
-import random as _random
 import threading
 from pathlib import Path
 from typing import Any
 
-from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
+
+from domain.shared import find_repo_root
+from domain.training._internal.executor import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async
@@ -95,6 +95,7 @@ async def start_distillation(
             )
     except Exception as e:
         from schemas.common import AppError
+
         if isinstance(e, AppError):
             raise
         logger.debug("Distill quality gate check failed (proceeding): %s", e)
@@ -215,7 +216,11 @@ async def start_distillation(
 
             MIN_SAMPLES = 10
             if len(inputs_list) < MIN_SAMPLES:
-                _finish_job(job_id, "failed", f"Not enough training samples: {len(inputs_list)} (minimum {MIN_SAMPLES})")
+                _finish_job(
+                    job_id,
+                    "failed",
+                    f"Not enough training samples: {len(inputs_list)} (minimum {MIN_SAMPLES})",
+                )
                 return
 
             inputs_np = np.array(inputs_list, dtype=np.int64)
@@ -253,7 +258,10 @@ async def start_distillation(
                 teacher_model, teacher_tokenizer, slonet=slonet_provider is not None
             )
 
-            from domain.training._internal.distillation import DistillationConfig, DistillationTrainer
+            from domain.training._internal.distillation import (
+                DistillationConfig,
+                DistillationTrainer,
+            )
 
             distill_cfg = DistillationConfig(
                 temperature=request.temperature,
@@ -366,7 +374,9 @@ async def start_distillation(
 
                 get_notification_service().send_notification_sync(
                     title="Distillation Complete",
-                    body=f"Student model saved: {ckpt_path.name} (loss: {epoch_losses[-1]:.4f})" if epoch_losses else "Distillation complete",
+                    body=f"Student model saved: {ckpt_path.name} (loss: {epoch_losses[-1]:.4f})"
+                    if epoch_losses
+                    else "Distillation complete",
                 )
             except Exception as e:
                 logger.debug("Training completion push notification failed: %s", e)

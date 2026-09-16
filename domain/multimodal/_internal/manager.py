@@ -8,40 +8,44 @@ user-provided image data. No external downloads.
 
 from __future__ import annotations
 
-from typing import Optional
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
+
 import numpy as np
 
 logger = logging.getLogger("slo.multimodal.manager")
 
-from .speech import (
-    TranscriptionResult,
-    get_speech_recognizer,
-)
 from .audio_filter import (
     AudioFilterConfig,
     apply_audio_filter,
 )
+from .engine import (
+    MultimodalEngine,
+    ReplayBuffer,
+    contrastive_step,
+    get_multimodal_engine,
+    replay_train_step,
+)
+from .speech import (
+    TranscriptionResult,
+    get_speech_recognizer,
+)
 from .vision import (
     ImageCaption,
     VisualObject,
-)
-from .engine import (
-    MultimodalEngine, get_multimodal_engine,
-    ReplayBuffer, contrastive_step, replay_train_step,
 )
 
 
 @dataclass
 class MultimodalCapabilities:
     """Available multimodal capabilities."""
+
     speech_to_text: bool = False
     image_caption: bool = False
     object_detection: bool = False
     vqa: bool = False
-    speech_model: Optional[str] = None
-    vision_model: Optional[str] = None
+    speech_model: str | None = None
+    vision_model: str | None = None
 
 
 class MultimodalManager:
@@ -58,7 +62,7 @@ class MultimodalManager:
 
     def __init__(self):
         self._speech_recognizer = None
-        self._multimodal_engine: Optional[MultimodalEngine] = None
+        self._multimodal_engine: MultimodalEngine | None = None
         self._speech_server_mode = False
         self._initialized = False
         self._learning_count = 0
@@ -84,7 +88,12 @@ class MultimodalManager:
         """
         self._speech_server_mode = speech_server
 
-        logger.info("Initializing multimodal (speech_server=%s, vision=%s)", speech_server, vision_model, extra={"tag": "MODEL"})
+        logger.info(
+            "Initializing multimodal (speech_server=%s, vision=%s)",
+            speech_server,
+            vision_model,
+            extra={"tag": "MODEL"},
+        )
 
         if speech_server:
             self._speech_recognizer = get_speech_recognizer(use_server=True)
@@ -93,11 +102,16 @@ class MultimodalManager:
 
         if vision_model:
             import os as _os
+
             if _os.path.exists(MultimodalEngine.SAVE_PATH + ".json"):
                 try:
                     self._multimodal_engine = MultimodalEngine.load()
                     self._learning_count = self._count_trained_images()
-                    logger.info("Loaded saved multimodal engine (%d images)", self._learning_count, extra={"tag": "MODEL"})
+                    logger.info(
+                        "Loaded saved multimodal engine (%d images)",
+                        self._learning_count,
+                        extra={"tag": "MODEL"},
+                    )
                 except Exception as e:
                     logger.warning("Failed to load saved engine: %s", e, extra={"tag": "MODEL"})
                     self._multimodal_engine = None
@@ -109,15 +123,24 @@ class MultimodalManager:
             # Register as a model provider
             try:
                 from domain.models._internal.provider import register_provider
+
                 register_provider("multimodal", self._multimodal_engine)
             except Exception as exc:
-                logger.warning("Failed to register multimodal engine as provider: %s", exc,
-                    extra={"tag": "MODEL"})
+                logger.warning(
+                    "Failed to register multimodal engine as provider: %s",
+                    exc,
+                    extra={"tag": "MODEL"},
+                )
 
         # Pre-train on synthetic seed images in background (non-blocking)
-        if self._multimodal_engine is not None and not getattr(self._multimodal_engine, '_trained', False):
+        if self._multimodal_engine is not None and not getattr(
+            self._multimodal_engine, "_trained", False
+        ):
             import threading
-            t = threading.Thread(target=self._pretrain_engine, daemon=True, kwargs={"epochs": 10, "samples": 216})
+
+            t = threading.Thread(
+                target=self._pretrain_engine, daemon=True, kwargs={"epochs": 10, "samples": 216}
+            )
             t.start()
 
         self._initialized = True
@@ -127,6 +150,7 @@ class MultimodalManager:
         """Estimate training count from saved state."""
         try:
             import json
+
             meta_path = MultimodalEngine.SAVE_PATH + ".json"
             with open(meta_path) as f:
                 meta = json.load(f)
@@ -170,7 +194,9 @@ class MultimodalManager:
             filter_result = apply_audio_filter(audio_np, self._audio_filter_config)
             if not filter_result.speech_detected:
                 logger.debug("VAD: no speech detected, skipping recognition")
-                return TranscriptionResult(text="", confidence=0.0, language=language, is_valid=False)
+                return TranscriptionResult(
+                    text="", confidence=0.0, language=language, is_valid=False
+                )
             filtered_bytes = filter_result.audio.astype(np.int16).tobytes()
         except Exception as e:
             logger.warning("Audio filter failed, using raw audio: %s", e)
@@ -229,12 +255,24 @@ class MultimodalManager:
         Uses 6 colors × 3 shapes × 4 backgrounds × 3 templates = 216 combinations.
         """
         from PIL import Image, ImageDraw
+
         np.random.RandomState(42)
 
-        colors = {"red": (255,50,50), "green": (50,180,50), "blue": (50,50,255),
-                  "yellow": (255,255,50), "purple": (180,50,180), "orange": (255,150,50)}
+        colors = {
+            "red": (255, 50, 50),
+            "green": (50, 180, 50),
+            "blue": (50, 50, 255),
+            "yellow": (255, 255, 50),
+            "purple": (180, 50, 180),
+            "orange": (255, 150, 50),
+        }
         shapes = ["circle", "square", "triangle"]
-        backgrounds = {"black": (30,30,30), "gray": (100,100,100), "beige": (210,200,170), "white": (230,230,230)}
+        backgrounds = {
+            "black": (30, 30, 30),
+            "gray": (100, 100, 100),
+            "beige": (210, 200, 170),
+            "white": (230, 230, 230),
+        }
         templates = [
             "{color} {shape} on {bg} background",
             "{color} {shape} centered on {bg} background",
@@ -258,11 +296,11 @@ class MultimodalManager:
             color_rgb = colors[c]
             r = 40
             if s == "circle":
-                draw.ellipse([cx-r, cy-r, cx+r, cy+r], fill=color_rgb)
+                draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color_rgb)
             elif s == "square":
-                draw.rectangle([cx-r, cy-r, cx+r, cy+r], fill=color_rgb)
+                draw.rectangle([cx - r, cy - r, cx + r, cy + r], fill=color_rgb)
             elif s == "triangle":
-                draw.polygon([(cx, cy-r), (cx-r, cy+r), (cx+r, cy+r)], fill=color_rgb)
+                draw.polygon([(cx, cy - r), (cx - r, cy + r), (cx + r, cy + r)], fill=color_rgb)
 
             arr = np.array(img, dtype=np.float32) / 255.0
             images.append(arr)
@@ -292,8 +330,9 @@ class MultimodalManager:
         idx = int(abs(float(arr.mean()))) % len(self._SEED_CAPTIONS)
         return self._SEED_CAPTIONS[idx]
 
-    def _pretrain_engine(self, epochs: int = 10, samples: int = 216,
-                         batch_size: int = 8, lr: float = 5e-4) -> float:
+    def _pretrain_engine(
+        self, epochs: int = 10, samples: int = 216, batch_size: int = 8, lr: float = 5e-4
+    ) -> float:
         """Run multi-epoch batched synthetic training to initialize the engine.
 
         Generates shape-caption pairs and trains both vision encoder and
@@ -307,8 +346,13 @@ class MultimodalManager:
 
         images, captions = self._gen_synthetic_data(samples)
         n = len(images)
-        logger.info("Pretraining on %d synthetic image-caption pairs (%d epochs, batch_size=%d)",
-                     n, epochs, batch_size, extra={"tag": "MODEL"})
+        logger.info(
+            "Pretraining on %d synthetic image-caption pairs (%d epochs, batch_size=%d)",
+            n,
+            epochs,
+            batch_size,
+            extra={"tag": "MODEL"},
+        )
 
         # Build vocab from our captions
         engine.text.build_vocab(captions)
@@ -319,7 +363,7 @@ class MultimodalManager:
             epoch_loss = 0.0
             steps = 0
             for start in range(0, n, batch_size):
-                batch_idx = idx[start:start + batch_size]
+                batch_idx = idx[start : start + batch_size]
                 batch_imgs = images[batch_idx]
                 batch_caps = [captions[i] for i in batch_idx]
 
@@ -334,7 +378,7 @@ class MultimodalManager:
                 # Pad to max_len
                 batch_tokens = np.zeros((len(batch_caps), max_len), dtype=np.int64)
                 for i, ids in enumerate(token_ids):
-                    batch_tokens[i, :len(ids)] = ids
+                    batch_tokens[i, : len(ids)] = ids
 
                 # Train step — vision encoder + transformer decoder
                 loss = engine.train_step(batch_imgs, batch_tokens, lr=lr)
@@ -344,26 +388,39 @@ class MultimodalManager:
             avg_loss = epoch_loss / max(steps, 1)
             final_loss = avg_loss
             if (ep + 1) % 5 == 0 or ep == 0:
-                logger.info("  Pretrain epoch %d/%d — loss: %.4f", ep + 1, epochs, avg_loss, extra={"tag": "MODEL"})
+                logger.info(
+                    "  Pretrain epoch %d/%d — loss: %.4f",
+                    ep + 1,
+                    epochs,
+                    avg_loss,
+                    extra={"tag": "MODEL"},
+                )
 
                 sample_input = images[:1]
                 result = engine.generate(sample_input, max_len=16, temperature=0.5)
-                logger.info("    Sample: %s → %s", captions[0][:30], result.text.strip()[:40], extra={"tag": "MODEL"})
+                logger.info(
+                    "    Sample: %s → %s",
+                    captions[0][:30],
+                    result.text.strip()[:40],
+                    extra={"tag": "MODEL"},
+                )
 
         # Fill replay buffer with training data
         for i in range(min(samples, len(images))):
-            self._replay_buffer.add(images[i:i+1], captions[i])
+            self._replay_buffer.add(images[i : i + 1], captions[i])
 
         engine._trained = True
         engine.save(extra_meta={"images_learned": self._learning_count})
-        logger.info("Pretrain complete — final loss: %.4f, engine saved", final_loss, extra={"tag": "MODEL"})
+        logger.info(
+            "Pretrain complete — final loss: %.4f, engine saved", final_loss, extra={"tag": "MODEL"}
+        )
         return final_loss
 
     def caption_image(
         self,
         image,
         prompt: str = "",
-        ground_truth: Optional[str] = None,
+        ground_truth: str | None = None,
         generate_only: bool = False,
     ) -> ImageCaption:
         """
@@ -418,6 +475,7 @@ class MultimodalManager:
                 result = engine.generate(img_np, max_len=16, temperature=0.8)
                 generated_text = result.text.strip()
                 from domain.feedback._internal.lora_eval import BLEUScorer
+
                 accuracy = BLEUScorer.score(generated_text, raw_text)
                 self._accuracy_history.append(accuracy)
                 logger.debug("Supervised training: BLEU=%.2f", accuracy)
@@ -456,14 +514,18 @@ class MultimodalManager:
             # Async auto-save every 5 images (non-blocking)
             if self._learning_count % 5 == 0:
                 import threading
+
                 def _async_save():
                     try:
-                        engine.save(extra_meta={
-                            "images_learned": self._learning_count,
-                            "last_caption": raw_text,
-                        })
+                        engine.save(
+                            extra_meta={
+                                "images_learned": self._learning_count,
+                                "last_caption": raw_text,
+                            }
+                        )
                     except Exception as save_err:
                         logger.warning("Auto-save failed: %s", save_err, extra={"tag": "MODEL"})
+
                 threading.Thread(target=_async_save, daemon=True).start()
 
             confidence = min(float(np.mean(np.abs(embed.data))) * 2.0, 1.0)
@@ -484,6 +546,7 @@ class MultimodalManager:
         Convenience for batch/background training.
         """
         from PIL import Image
+
         img = Image.open(path).convert("RGB")
         return self.caption_image(img)
 
@@ -497,7 +560,6 @@ class MultimodalManager:
             self._multimodal_engine = get_multimodal_engine(embed_dim=256, hidden_dim=512)
 
         try:
-            from PIL import Image
             import numpy as np
 
             img_np = self._pil_to_np(image)
@@ -505,7 +567,7 @@ class MultimodalManager:
 
             # Get full image features
             full_embed = engine.vision.forward(img_np)
-            full_features = full_embed.data.flatten()
+            full_embed.data.flatten()
 
             # Analyze 3x3 grid regions
             h, w = img_np.shape[1], img_np.shape[2]
@@ -551,23 +613,31 @@ class MultimodalManager:
                     else:
                         label = "mid-tone area"
 
-                    objects.append(VisualObject(
-                        label=label,
-                        bbox=bbox,
-                        confidence=min(0.9, importance * 2),
-                    ))
+                    objects.append(
+                        VisualObject(
+                            label=label,
+                            bbox=bbox,
+                            confidence=min(0.9, importance * 2),
+                        )
+                    )
 
             # If no regions detected, fall back to full caption
             if not objects:
                 cap = self.caption_image(image, generate_only=True)
-                objects = [VisualObject(label=cap.text, bbox=[0.0, 0.0, 1.0, 1.0], confidence=cap.confidence)]
+                objects = [
+                    VisualObject(
+                        label=cap.text, bbox=[0.0, 0.0, 1.0, 1.0], confidence=cap.confidence
+                    )
+                ]
 
             return objects
 
         except Exception as e:
             logger.debug("Object detection failed, falling back to caption: %s", e)
             cap = self.caption_image(image, generate_only=True)
-            return [VisualObject(label=cap.text, bbox=[0.0, 0.0, 1.0, 1.0], confidence=cap.confidence)]
+            return [
+                VisualObject(label=cap.text, bbox=[0.0, 0.0, 1.0, 1.0], confidence=cap.confidence)
+            ]
 
     def ask_question(self, image, question: str) -> str:
         """Answer a question about an image (VQA).
@@ -584,7 +654,10 @@ class MultimodalManager:
         try:
             img_np = self._pil_to_np(image)
             result = self._multimodal_engine.generate_vqa(
-                img_np, question, max_len=32, temperature=0.8,
+                img_np,
+                question,
+                max_len=32,
+                temperature=0.8,
             )
             answer = result.text.strip()
             if not answer:
@@ -603,11 +676,8 @@ class MultimodalManager:
         return {"language": "en-US"}
 
 
-
-
-
 # Global singleton
-_multimodal_manager: Optional[MultimodalManager] = None
+_multimodal_manager: MultimodalManager | None = None
 
 
 def get_multimodal_manager() -> MultimodalManager:

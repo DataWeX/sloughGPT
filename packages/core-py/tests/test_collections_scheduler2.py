@@ -1,27 +1,24 @@
 from __future__ import annotations
 
 import json
-import threading
 import time
 from pathlib import Path
 
-import pytest
-
+from domain.collections._internal.collector import Collector
 from domain.collections._internal.scheduler import (
+    CollectorExporter,
+    CollectorMonitor,
     JobConfig,
     JobScheduler,
-    CollectorMonitor,
-    CollectorExporter,
 )
-from domain.collections._internal.collector import Collector
-from domain.collections._internal.sources import Record, Source
-from domain.collections._internal.stores import MemoryStore, FileStore
+from domain.collections._internal.sources import Record
+from domain.collections._internal.stores import MemoryStore
 from domain.collections._internal.validators import CollectorRunner
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class StubSource:
     def __init__(self, records: list[Record] | None = None, name: str = "stub"):
@@ -34,6 +31,7 @@ class StubSource:
 
 class CountingSource:
     """Yields incrementing records, tracks total reads."""
+
     def __init__(self, count_per_read: int = 1, name: str = "counting"):
         self.name = name
         self._count_per_read = count_per_read
@@ -63,6 +61,7 @@ def make_collector(records=None, store=None, name="stub"):
 # JobConfig
 # ===========================================================================
 
+
 class TestJobConfig:
     def test_defaults(self):
         cfg = JobConfig(name="j1")
@@ -74,10 +73,16 @@ class TestJobConfig:
         assert cfg.on_error is None
 
     def test_custom_values(self):
-        cb = lambda n, c: None
+        def cb(n, c):
+            return None
         cfg = JobConfig(
-            name="j2", interval=5.0, enabled=False, max_runs=10,
-            timeout=30.0, on_complete=cb, on_error=cb,
+            name="j2",
+            interval=5.0,
+            enabled=False,
+            max_runs=10,
+            timeout=30.0,
+            on_complete=cb,
+            on_error=cb,
         )
         assert cfg.interval == 5.0
         assert cfg.enabled is False
@@ -93,6 +98,7 @@ class TestJobConfig:
 # ===========================================================================
 # JobScheduler
 # ===========================================================================
+
 
 class TestJobSchedulerAddRemove:
     def test_add_job(self):
@@ -233,8 +239,9 @@ class TestJobSchedulerCallbacks:
         completed = []
         sched = JobScheduler()
         col = make_collector([Record(content="data")])
-        cfg = JobConfig(name="a", interval=0.0, max_runs=1,
-                        on_complete=lambda n, c: completed.append((n, c)))
+        cfg = JobConfig(
+            name="a", interval=0.0, max_runs=1, on_complete=lambda n, c: completed.append((n, c))
+        )
         sched.add_job(cfg, col)
         sched.start_job("a")
         time.sleep(0.3)
@@ -245,11 +252,12 @@ class TestJobSchedulerCallbacks:
     def test_on_error_called(self):
         errors = []
         sched = JobScheduler()
-        col = make_collector()  # empty source, no issue
+        make_collector()  # empty source, no issue
         # Make a source that always fails
         bad_col = Collector(FailingSource(), MemoryStore())
-        cfg = JobConfig(name="fail", interval=0.0, max_runs=1,
-                        on_error=lambda n, e: errors.append((n, str(e))))
+        cfg = JobConfig(
+            name="fail", interval=0.0, max_runs=1, on_error=lambda n, e: errors.append((n, str(e)))
+        )
         sched.add_job(cfg, bad_col)
         sched.start_job("fail")
         time.sleep(0.3)
@@ -330,6 +338,7 @@ class TestJobSchedulerIsRunning:
 # CollectorMonitor
 # ===========================================================================
 
+
 class TestCollectorMonitorHealth:
     def test_no_health_checks(self):
         mon = CollectorMonitor()
@@ -349,8 +358,10 @@ class TestCollectorMonitorHealth:
 
     def test_health_check_exception(self):
         mon = CollectorMonitor()
+
         def bad_check():
             raise RuntimeError("oops")
+
         mon.add_health_check("err", bad_check)
         result = mon.check_health()
         assert result["err"] is False
@@ -475,6 +486,7 @@ class TestCollectorMonitorReport:
 # ===========================================================================
 # CollectorExporter
 # ===========================================================================
+
 
 class TestCollectorExporterToMemory:
     def test_to_memory_empty_store(self):
@@ -629,6 +641,7 @@ class TestCollectorExporterSetStore:
 # ===========================================================================
 # Integration: Scheduler + Collector + Store
 # ===========================================================================
+
 
 class TestSchedulerIntegration:
     def test_full_cycle(self):

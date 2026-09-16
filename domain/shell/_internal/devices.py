@@ -9,12 +9,12 @@ Each device behaves like a Unix device file:
 
 from __future__ import annotations
 
-import os
-import re
-import random
-import string
 import logging
-from typing import Callable
+import os
+import random
+import re
+import string
+from collections.abc import Callable
 
 logger = logging.getLogger("slo.shell.devices")
 
@@ -89,7 +89,9 @@ class LLMDevice(AIDevice):
             return self._generate_fn(prompt)
         try:
             import requests
+
             from .config import get_api_base
+
             r = requests.post(
                 f"{get_api_base()}/inference/generate",
                 json={"prompt": prompt, "max_new_tokens": 128},
@@ -136,13 +138,17 @@ class EmbeddingDevice(AIDevice):
         # Use the project's real embedder (sentence-transformers or n-gram fallback)
         try:
             from domain.inference._internal.vector_store import simple_embed
+
             return simple_embed(text)
         except Exception as e:
             import logging
+
             logging.getLogger("slo.devices").warning(
-                "simple_embed failed, using hash fallback: %s", e)
+                "simple_embed failed, using hash fallback: %s", e
+            )
             # Absolute fallback — deterministic based on text content
             import hashlib
+
             h = hashlib.sha256(text.encode()).digest()
             return [b / 255.0 for b in h[:64]]
 
@@ -153,11 +159,13 @@ class KnowledgeDevice(AIDevice):
 
     def __init__(self, api_base: str | None = None):
         from .config import get_api_base
+
         self._api_base = api_base or get_api_base()
 
     def read(self, args: str = "") -> str:
         try:
             import requests
+
             r = requests.get(f"{self._api_base}/knowledge", timeout=10)
             if r.status_code == 200:
                 facts = r.json()
@@ -178,6 +186,7 @@ class KnowledgeDevice(AIDevice):
             return "  Usage: echo <fact> > /dev/knowledge"
         try:
             import requests
+
             r = requests.post(
                 f"{self._api_base}/knowledge",
                 json={"content": text},
@@ -206,13 +215,17 @@ class VisionDevice(AIDevice):
         # Delegate to VisionCNN if available
         try:
             from domain.multimodal._internal.vision import VisionCNN
+
             cnn = VisionCNN()
             from PIL import Image
+
             img = Image.open(path).convert("RGB")
             result = cnn.caption(img)
             return f"  Vision: {result.text}"
         except ImportError:
-            return f"  VisionCNN not available — file exists: {path} ({os.path.getsize(path)} bytes)"
+            return (
+                f"  VisionCNN not available — file exists: {path} ({os.path.getsize(path)} bytes)"
+            )
 
 
 class ProcDevice(AIDevice):
@@ -251,10 +264,7 @@ class ProcDevice(AIDevice):
             p = kernel.get_process(pid)
             if p:
                 return (
-                    f"Name:\t{p.name}\n"
-                    f"Pid:\t{p.pid}\n"
-                    f"State:\t{p.state}\n"
-                    f"Uptime:\t{p.uptime:.1f}s\n"
+                    f"Name:\t{p.name}\nPid:\t{p.pid}\nState:\t{p.state}\nUptime:\t{p.uptime:.1f}s\n"
                 )
             return f"  No such process: {pid}"
 
@@ -286,7 +296,10 @@ class DeviceManager:
         return sorted(self._devices.keys())
 
     def list_devices(self) -> str:
-        lines = [f"  {'/dev/' + n:<20} {self._devices[n].info().get('type', 'unknown')}" for n in self.names]
+        lines = [
+            f"  {'/dev/' + n:<20} {self._devices[n].info().get('type', 'unknown')}"
+            for n in self.names
+        ]
         return "\n".join(lines)
 
     def read(self, path: str, args: str = "") -> str:
@@ -323,13 +336,13 @@ class DeviceManager:
 
 def create_default_devices(get_kernel: Callable | None = None) -> DeviceManager:
     """Create and register all built-in device nodes."""
-    from .tensor_device import TensorDevice
-    from .npu_device import NPUDevice
-    from .storage_device import StorageDevice
-    from .network_device import NetworkDevice
     from .display_device import DisplayDevice
     from .input_device import InputDevice
     from .kernel_devices import DeviceManager as KernelDeviceManager
+    from .network_device import NetworkDevice
+    from .npu_device import NPUDevice
+    from .storage_device import StorageDevice
+    from .tensor_device import TensorDevice
 
     mgr = KernelDeviceManager()
     mgr.register(TensorDevice("tensor"))

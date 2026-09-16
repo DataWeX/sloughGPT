@@ -4,20 +4,22 @@ Tests for MeaningTags — semantic meaning reference vectors.
 MeaningTags define the coordinate system for embedding space.
 A text's meaning is determined by which meaning tag it's nearest to.
 """
-import json
+
 import os
 import tempfile
+
 import numpy as np
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_tags(dimension: int = 8) -> "MeaningTags":  # noqa: F821
     """Create a MeaningTags instance with test vectors."""
     from domain.infrastructure._internal.anchor_store import MeaningTags
+
     store = MeaningTags(dimension=dimension)
     # Add tags along orthogonal axes
     vec_a = np.zeros(dimension, dtype=np.float32)
@@ -38,6 +40,7 @@ def _make_tags(dimension: int = 8) -> "MeaningTags":  # noqa: F821
 # ---------------------------------------------------------------------------
 # Add / Get
 # ---------------------------------------------------------------------------
+
 
 class TestMeaningTagsAddGet:
     def test_add_returns_none(self):
@@ -65,6 +68,7 @@ class TestMeaningTagsAddGet:
 
     def test_add_wrong_dimension_raises(self):
         from domain.infrastructure._internal.anchor_store import MeaningTags
+
         store = MeaningTags(dimension=8)
         with pytest.raises(ValueError, match="dim 4"):
             store.add("bad", [1.0, 0.0, 0.0, 0.0])
@@ -80,6 +84,7 @@ class TestMeaningTagsAddGet:
 # ---------------------------------------------------------------------------
 # Distances / Classify / Similarity
 # ---------------------------------------------------------------------------
+
 
 class TestMeaningTagsClassify:
     def test_distances_computes_cosine_distance(self):
@@ -98,6 +103,7 @@ class TestMeaningTagsClassify:
 
     def test_classify_empty_returns_unknown(self):
         from domain.infrastructure._internal.anchor_store import MeaningTags
+
         store = MeaningTags(dimension=8)
         assert store.classify([0.0] * 8) == "unknown"
 
@@ -123,9 +129,11 @@ class TestMeaningTagsClassify:
 # Save / Load
 # ---------------------------------------------------------------------------
 
+
 class TestMeaningTagsSaveLoad:
     def test_save_load_roundtrip(self):
         from domain.infrastructure._internal.anchor_store import MeaningTags
+
         store = _make_tags()
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             path = f.name
@@ -141,6 +149,7 @@ class TestMeaningTagsSaveLoad:
 
     def test_load_nonexistent_returns_empty(self):
         from domain.infrastructure._internal.anchor_store import MeaningTags
+
         loaded = MeaningTags.load("/tmp/nonexistent_meaning_tags_123.json")
         assert loaded.dimension == 128
         assert loaded.names() == []
@@ -149,6 +158,7 @@ class TestMeaningTagsSaveLoad:
 # ---------------------------------------------------------------------------
 # Remove / Mutate
 # ---------------------------------------------------------------------------
+
 
 class TestMeaningTagsMutate:
     def test_remove_existing(self):
@@ -167,14 +177,17 @@ class TestMeaningTagsMutate:
 # Default Tags
 # ---------------------------------------------------------------------------
 
+
 class TestMeaningTagsDefaults:
     def test_default_tags_create_seven(self):
         from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
+
         store = get_default_meaning_tags(dimension=16)
         assert len(store.names()) == 7
 
     def test_default_tags_are_normalized(self):
         from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
+
         store = get_default_meaning_tags(dimension=16)
         for name in store.names():
             vec = store.get(name)
@@ -183,9 +196,17 @@ class TestMeaningTagsDefaults:
 
     def test_default_tags_include_expected_names(self):
         from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
+
         store = get_default_meaning_tags(dimension=16)
-        expected = {"factual", "conceptual", "procedural", "interrogative",
-                    "descriptive", "directive", "analytical"}
+        expected = {
+            "factual",
+            "conceptual",
+            "procedural",
+            "interrogative",
+            "descriptive",
+            "directive",
+            "analytical",
+        }
         assert set(store.names()) == expected
 
 
@@ -193,15 +214,18 @@ class TestMeaningTagsDefaults:
 # Seed Determinism
 # ---------------------------------------------------------------------------
 
+
 class TestMeaningTagsDeterminism:
     def test_seed_deterministic(self):
         from domain.infrastructure._internal.anchor_store import _seed_tag_from_text
+
         v1 = _seed_tag_from_text("test description", dimension=16)
         v2 = _seed_tag_from_text("test description", dimension=16)
         assert np.allclose(v1, v2, atol=1e-6)
 
     def test_different_descriptions_differ(self):
         from domain.infrastructure._internal.anchor_store import _seed_tag_from_text
+
         v1 = _seed_tag_from_text("factual assertion", dimension=16)
         v2 = _seed_tag_from_text("interrogative question", dimension=16)
         assert not np.allclose(v1, v2, atol=1e-3)
@@ -210,6 +234,7 @@ class TestMeaningTagsDeterminism:
 # ---------------------------------------------------------------------------
 # Edge Cases
 # ---------------------------------------------------------------------------
+
 
 class TestMeaningTagsEdgeCases:
     def test_distances_all_same_vector(self):
@@ -227,10 +252,12 @@ class TestMeaningTagsEdgeCases:
 # Integration: _label_by_meaning
 # ---------------------------------------------------------------------------
 
+
 class TestLabelByMeaning:
     def test_label_factual_statement(self):
         from domain.inference._internal.slo_embedder import _label_by_meaning
         from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
+
         store = get_default_meaning_tags(dimension=128)
         label = _label_by_meaning("The sky is blue today", store)
         assert label in store.names()
@@ -238,6 +265,7 @@ class TestLabelByMeaning:
     def test_label_question(self):
         from domain.inference._internal.slo_embedder import _label_by_meaning
         from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
+
         store = get_default_meaning_tags(dimension=128)
         label = _label_by_meaning("What is the meaning of life?", store)
         assert label in store.names()
@@ -245,6 +273,7 @@ class TestLabelByMeaning:
     def test_label_empty_text(self):
         from domain.inference._internal.slo_embedder import _label_by_meaning
         from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
+
         store = get_default_meaning_tags(dimension=128)
         label = _label_by_meaning("", store)
         # Empty text may return None or a default label
@@ -252,5 +281,6 @@ class TestLabelByMeaning:
 
     def test_label_none_store(self):
         from domain.inference._internal.slo_embedder import _label_by_meaning
+
         label = _label_by_meaning("Hello world", None)
         assert label is None

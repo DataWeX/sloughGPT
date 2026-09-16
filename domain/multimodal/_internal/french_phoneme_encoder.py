@@ -10,23 +10,23 @@ Phoneme set based on IPA/ARPAbet hybrid for French.
 from __future__ import annotations
 
 import re
-import numpy as np
 
+import numpy as np
 
 # ── French Phoneme inventory ──────────────────────────────────────────────
 
 # Vowels
 FRENCH_VOWELS = {
-    "AA": 0,   # pere (father)
-    "AE": 1,   # trap
-    "AH": 2,   # but
-    "AO": 3,   # dort (sleeps)
-    "AW": 4,   # poudre (powder)
-    "AY": 5,   # lit (bed)
-    "EH": 6,   # ete (summer)
-    "ER": 7,   # premier (first)
-    "EY": 8,   # les (the)
-    "IH": 9,   # vie (life)
+    "AA": 0,  # pere (father)
+    "AE": 1,  # trap
+    "AH": 2,  # but
+    "AO": 3,  # dort (sleeps)
+    "AW": 4,  # poudre (powder)
+    "AY": 5,  # lit (bed)
+    "EH": 6,  # ete (summer)
+    "ER": 7,  # premier (first)
+    "EY": 8,  # les (the)
+    "IH": 9,  # vie (life)
     "IY": 10,  # si (if)
     "OW": 11,  # eau (water)
     "OY": 12,  # boire (to drink)
@@ -39,29 +39,29 @@ FRENCH_VOWELS = {
 
 # Consonants
 FRENCH_CONSONANTS = {
-    "B": 18,   # bon (good)
+    "B": 18,  # bon (good)
     "CH": 19,  # chat (cat)
-    "D": 20,   # dire (to say)
+    "D": 20,  # dire (to say)
     "DH": 21,  # this (English loan)
-    "F": 22,   # femme (woman)
-    "G": 23,   # grand (big)
+    "F": 22,  # femme (woman)
+    "G": 23,  # grand (big)
     "HH": 24,  # house (English loan)
     "JH": 25,  # Joy (English loan)
-    "K": 26,   # courir (to run)
-    "L": 27,   # livre (book)
-    "M": 28,   # maison (house)
-    "N": 29,   # non (no)
+    "K": 26,  # courir (to run)
+    "L": 27,  # livre (book)
+    "M": 28,  # maison (house)
+    "N": 29,  # non (no)
     "NG": 30,  # singing (English loan)
-    "P": 31,   # pierre (stone)
-    "R": 32,   # rouge (red)
-    "S": 33,   # sac (bag)
+    "P": 31,  # pierre (stone)
+    "R": 32,  # rouge (red)
+    "S": 33,  # sac (bag)
     "SH": 34,  # shoe (English loan)
-    "T": 35,   # terre (earth)
+    "T": 35,  # terre (earth)
     "TH": 36,  # think (English loan)
-    "V": 37,   # vert (green)
+    "V": 37,  # vert (green)
     "W": 38,  # oui (yes)
-    "Y": 39,   # yard (English loan)
-    "Z": 40,   # zoo
+    "Y": 39,  # yard (English loan)
+    "Z": 40,  # zoo
     "ZH": 41,  # vision (English loan)
 }
 
@@ -85,18 +85,49 @@ FRENCH_ID_TO_PHONEME[SILENCE] = "-"
 # Phoneme-to-grapheme mapping for decode
 FRENCH_PHONEME_TO_GRAPHEME: dict[str, str] = {
     # Vowels
-    "AA": "e", "AE": "a", "AH": "u", "AO": "o",
-    "AW": "ou", "AY": "i", "EH": "e", "ER": "er",
-    "EY": "e", "IH": "i", "IY": "i", "OW": "eau",
-    "OY": "oi", "UH": "ou", "UW": "ou",
-    "OE": "eu", "UE": "eu", "YW": "u",
+    "AA": "e",
+    "AE": "a",
+    "AH": "u",
+    "AO": "o",
+    "AW": "ou",
+    "AY": "i",
+    "EH": "e",
+    "ER": "er",
+    "EY": "e",
+    "IH": "i",
+    "IY": "i",
+    "OW": "eau",
+    "OY": "oi",
+    "UH": "ou",
+    "UW": "ou",
+    "OE": "eu",
+    "UE": "eu",
+    "YW": "u",
     # Consonants
-    "B": "b", "CH": "ch", "D": "d", "DH": "th",
-    "F": "f", "G": "g", "HH": "h", "JH": "j",
-    "K": "c", "L": "l", "M": "m", "N": "n",
-    "NG": "ng", "P": "p", "R": "r", "S": "s",
-    "SH": "ch", "T": "t", "TH": "th", "V": "v",
-    "W": "ou", "Y": "y", "Z": "z", "ZH": "j",
+    "B": "b",
+    "CH": "ch",
+    "D": "d",
+    "DH": "th",
+    "F": "f",
+    "G": "g",
+    "HH": "h",
+    "JH": "j",
+    "K": "c",
+    "L": "l",
+    "M": "m",
+    "N": "n",
+    "NG": "ng",
+    "P": "p",
+    "R": "r",
+    "S": "s",
+    "SH": "ch",
+    "T": "t",
+    "TH": "th",
+    "V": "v",
+    "W": "ou",
+    "Y": "y",
+    "Z": "z",
+    "ZH": "j",
 }
 
 
@@ -266,7 +297,7 @@ def _french_apply_rules(word: str) -> list[str]:
 
         # Try longest match first (3, 2 chars)
         for length in (3, 2):
-            chunk = w[i:i + length]
+            chunk = w[i : i + length]
             for pattern, sounds in french_digraphs:
                 if chunk == pattern:
                     result.extend(sounds)
@@ -280,15 +311,32 @@ def _french_apply_rules(word: str) -> list[str]:
             ch = w[i]
             # French single letter rules
             french_letter_rules = {
-                "a": ["AA"], "b": ["B"], "c": ["S"],
-                "d": ["D"], "e": ["UH"], "f": ["F"],
-                "g": ["G"], "h": [], "i": ["I"],
-                "j": ["ZH"], "k": ["K"], "l": ["L"],
-                "m": ["M"], "n": ["N"], "o": ["OW"],
-                "p": ["P"], "q": ["K"], "r": ["R"],
-                "s": ["S"], "t": ["T"], "u": ["UW"],
-                "v": ["V"], "w": ["W"], "x": ["K", "S"],
-                "y": ["I"], "z": ["Z"],
+                "a": ["AA"],
+                "b": ["B"],
+                "c": ["S"],
+                "d": ["D"],
+                "e": ["UH"],
+                "f": ["F"],
+                "g": ["G"],
+                "h": [],
+                "i": ["I"],
+                "j": ["ZH"],
+                "k": ["K"],
+                "l": ["L"],
+                "m": ["M"],
+                "n": ["N"],
+                "o": ["OW"],
+                "p": ["P"],
+                "q": ["K"],
+                "r": ["R"],
+                "s": ["S"],
+                "t": ["T"],
+                "u": ["UW"],
+                "v": ["V"],
+                "w": ["W"],
+                "x": ["K", "S"],
+                "y": ["I"],
+                "z": ["Z"],
             }
             if ch in french_letter_rules:
                 result.extend(french_letter_rules[ch])
@@ -330,8 +378,13 @@ class FrenchPhonemeEncoder:
 
     def __init__(self):
         self.phoneme_to_id: dict[str, int] = {
-            **FRENCH_VOWELS, **FRENCH_CONSONANTS,
-            "_": PAD, "<": BOS, ">": EOS, " ": SPACE, "-": SILENCE,
+            **FRENCH_VOWELS,
+            **FRENCH_CONSONANTS,
+            "_": PAD,
+            "<": BOS,
+            ">": EOS,
+            " ": SPACE,
+            "-": SILENCE,
         }
 
     def encode(self, text: str) -> np.ndarray:
@@ -408,8 +461,12 @@ class FrenchPhonemeEncoder:
         target_ids = self.encode(target).flatten()
         spoken_ids = self.encode(spoken).flatten()
 
-        target_phonemes = [FRENCH_ID_TO_PHONEME.get(i, "?") for i in target_ids if i not in (BOS, EOS, PAD)]
-        spoken_phonemes = [FRENCH_ID_TO_PHONEME.get(i, "?") for i in spoken_ids if i not in (BOS, EOS, PAD)]
+        target_phonemes = [
+            FRENCH_ID_TO_PHONEME.get(i, "?") for i in target_ids if i not in (BOS, EOS, PAD)
+        ]
+        spoken_phonemes = [
+            FRENCH_ID_TO_PHONEME.get(i, "?") for i in spoken_ids if i not in (BOS, EOS, PAD)
+        ]
 
         lcs_len = self._lcs_length(target_phonemes, spoken_phonemes)
         target_len = len(target_phonemes)
@@ -439,10 +496,10 @@ class FrenchPhonemeEncoder:
         dp = [[0] * (n + 1) for _ in range(m + 1)]
         for i in range(1, m + 1):
             for j in range(1, n + 1):
-                if a[i-1] == b[j-1]:
-                    dp[i][j] = dp[i-1][j-1] + 1
+                if a[i - 1] == b[j - 1]:
+                    dp[i][j] = dp[i - 1][j - 1] + 1
                 else:
-                    dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+                    dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
         return dp[m][n]
 
     @property

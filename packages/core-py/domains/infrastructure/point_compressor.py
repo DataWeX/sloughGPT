@@ -1,37 +1,16 @@
-"""
-Point compressor — stores weights as functions, not raw values.
+"""Backward-compatibility shim."""
 
-Backward-compatible shim — all code lives in pugqeep/ package.
-"""
+from domain.infrastructure._internal.point_compressor import *  # noqa: F401,F403
 
-from __future__ import annotations
+try:
+    from domain.infrastructure._internal.point_compressor import __all__  # noqa: F401
+except ImportError:
+    pass
+import sys as _sys
 
-from domain.infrastructure._internal.pugqeep import (
-    Point,
-    PointCompressor,
-    PointLibrary,
-    ModelTree,
-    PointDeduplicator,
-    PointLibrarySync,
-    load_model_to_points,
-    PGQ,
-)
-
-# Backward compat aliases
-PointLib = PGQ
-save_library = lambda lib, path: lib.save(path)
-load_library = PGQ.load
-
-__all__ = [
-    "Point",
-    "PointCompressor",
-    "PointLibrary",
-    "ModelTree",
-    "PointDeduplicator",
-    "PointLibrarySync",
-    "load_model_to_points",
-    "save_library",
-    "load_library",
-    "PGQ",
-    "PointLib",
-]
+_mod = _sys.modules[__name__]
+_real = _sys.modules.get("domain.infrastructure._internal.point_compressor")
+if _real is not None:
+    for _k in dir(_real):
+        if not _k.startswith("__"):
+            setattr(_mod, _k, getattr(_real, _k))

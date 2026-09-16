@@ -1,11 +1,10 @@
 """Tests for domain.feedback._internal.hf_dpo — HFDPOTrainer pure logic."""
 
-import numpy as np
-import pytest
 from unittest.mock import MagicMock, patch
 
-from domain.feedback._internal.hf_dpo import HFDPOTrainer, DPO_BETA, DEFAULT_LR, DEFAULT_EPOCHS
+import numpy as np
 
+from domain.feedback._internal.hf_dpo import DEFAULT_EPOCHS, DEFAULT_LR, DPO_BETA, HFDPOTrainer
 
 # ── Constants ──────────────────────────────────────────────────────────
 

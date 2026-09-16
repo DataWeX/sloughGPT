@@ -10,7 +10,7 @@ import logging
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("slo.training.outcome_tracker")
 
@@ -54,15 +54,15 @@ class TrainingOutcome:
     quality_score: float = 0.0
 
     # User annotations
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     notes: str = ""
     bookmarked: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> TrainingOutcome:
+    def from_dict(cls, d: dict[str, Any]) -> TrainingOutcome:
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
@@ -73,7 +73,7 @@ class TrainingOutcomeTracker:
     be appended efficiently and read incrementally.
     """
 
-    def __init__(self, history_path: Optional[Path] = None):
+    def __init__(self, history_path: Path | None = None):
         self.history_path = history_path or DEFAULT_HISTORY_PATH
         self.history_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -92,10 +92,12 @@ class TrainingOutcomeTracker:
 
         logger.info(
             "Recorded training outcome: run=%s quality=%.3f loss=%.4f",
-            outcome.run_id, outcome.quality_score, outcome.final_loss,
+            outcome.run_id,
+            outcome.quality_score,
+            outcome.final_loss,
         )
 
-    def load_outcomes(self) -> List[TrainingOutcome]:
+    def load_outcomes(self) -> list[TrainingOutcome]:
         """Load all recorded outcomes."""
         if not self.history_path.exists():
             return []
@@ -111,21 +113,21 @@ class TrainingOutcomeTracker:
                     continue
         return outcomes
 
-    def get_best_outcomes(self, n: int = 10) -> List[TrainingOutcome]:
+    def get_best_outcomes(self, n: int = 10) -> list[TrainingOutcome]:
         """Get the top N outcomes by quality score."""
         outcomes = self.load_outcomes()
         outcomes.sort(key=lambda o: o.quality_score, reverse=True)
         return outcomes[:n]
 
-    def get_outcomes_for_dataset(self, dataset: str) -> List[TrainingOutcome]:
+    def get_outcomes_for_dataset(self, dataset: str) -> list[TrainingOutcome]:
         """Get all outcomes for a specific dataset."""
         return [o for o in self.load_outcomes() if o.dataset == dataset]
 
-    def get_outcomes_for_model(self, model: str) -> List[TrainingOutcome]:
+    def get_outcomes_for_model(self, model: str) -> list[TrainingOutcome]:
         """Get all outcomes for a specific model."""
         return [o for o in self.load_outcomes() if o.model == model]
 
-    def update_run(self, run_id: str, **kwargs) -> Optional[TrainingOutcome]:
+    def update_run(self, run_id: str, **kwargs) -> TrainingOutcome | None:
         """Update a training run's tags, notes, or other mutable fields."""
         outcomes = self.load_outcomes()
         target = None
@@ -145,7 +147,7 @@ class TrainingOutcomeTracker:
                 f.write(json.dumps(o.to_dict()) + "\n")
         return target
 
-    def add_tag(self, run_id: str, tag: str) -> Optional[TrainingOutcome]:
+    def add_tag(self, run_id: str, tag: str) -> TrainingOutcome | None:
         """Add a tag to a training run."""
         outcomes = self.load_outcomes()
         target = next((o for o in outcomes if o.run_id == run_id), None)
@@ -159,7 +161,7 @@ class TrainingOutcomeTracker:
                     f.write(json.dumps(o.to_dict()) + "\n")
         return target
 
-    def remove_tag(self, run_id: str, tag: str) -> Optional[TrainingOutcome]:
+    def remove_tag(self, run_id: str, tag: str) -> TrainingOutcome | None:
         """Remove a tag from a training run."""
         outcomes = self.load_outcomes()
         target = next((o for o in outcomes if o.run_id == run_id), None)
@@ -173,22 +175,22 @@ class TrainingOutcomeTracker:
                     f.write(json.dumps(o.to_dict()) + "\n")
         return target
 
-    def set_notes(self, run_id: str, notes: str) -> Optional[TrainingOutcome]:
+    def set_notes(self, run_id: str, notes: str) -> TrainingOutcome | None:
         """Set notes on a training run."""
         return self.update_run(run_id, notes=notes)
 
-    def get_outcomes_by_tag(self, tag: str) -> List[TrainingOutcome]:
+    def get_outcomes_by_tag(self, tag: str) -> list[TrainingOutcome]:
         """Get all outcomes with a specific tag."""
         return [o for o in self.load_outcomes() if tag in o.tags]
 
-    def get_all_tags(self) -> List[str]:
+    def get_all_tags(self) -> list[str]:
         """Get all unique tags across all runs."""
         tags = set()
         for o in self.load_outcomes():
             tags.update(o.tags)
         return sorted(tags)
 
-    def toggle_bookmark(self, run_id: str) -> Optional[TrainingOutcome]:
+    def toggle_bookmark(self, run_id: str) -> TrainingOutcome | None:
         """Toggle bookmark status on a training run."""
         outcomes = self.load_outcomes()
         target = next((o for o in outcomes if o.run_id == run_id), None)
@@ -201,11 +203,11 @@ class TrainingOutcomeTracker:
                 f.write(json.dumps(o.to_dict()) + "\n")
         return target
 
-    def get_bookmarked(self) -> List[TrainingOutcome]:
+    def get_bookmarked(self) -> list[TrainingOutcome]:
         """Get all bookmarked training runs."""
         return [o for o in self.load_outcomes() if o.bookmarked]
 
-    def duplicate_run(self, run_id: str, new_run_id: str = "") -> Optional[TrainingOutcome]:
+    def duplicate_run(self, run_id: str, new_run_id: str = "") -> TrainingOutcome | None:
         """Duplicate a training run with a new ID and timestamp."""
         outcomes = self.load_outcomes()
         source = next((o for o in outcomes if o.run_id == run_id), None)
@@ -222,7 +224,7 @@ class TrainingOutcomeTracker:
             f.write(json.dumps(new_run.to_dict()) + "\n")
         return new_run
 
-    def bulk_delete(self, run_ids: List[str]) -> int:
+    def bulk_delete(self, run_ids: list[str]) -> int:
         """Delete multiple training runs. Returns count of deleted runs."""
         outcomes = self.load_outcomes()
         ids_set = set(run_ids)
@@ -235,7 +237,7 @@ class TrainingOutcomeTracker:
                     f.write(json.dumps(o.to_dict()) + "\n")
         return deleted_count
 
-    def bulk_add_tag(self, run_ids: List[str], tag: str) -> int:
+    def bulk_add_tag(self, run_ids: list[str], tag: str) -> int:
         """Add a tag to multiple training runs. Returns count of updated runs."""
         outcomes = self.load_outcomes()
         ids_set = set(run_ids)
@@ -251,7 +253,7 @@ class TrainingOutcomeTracker:
                     f.write(json.dumps(o.to_dict()) + "\n")
         return updated_count
 
-    def bulk_bookmark(self, run_ids: List[str], bookmarked: bool = True) -> int:
+    def bulk_bookmark(self, run_ids: list[str], bookmarked: bool = True) -> int:
         """Set bookmark status on multiple training runs. Returns count of updated runs."""
         outcomes = self.load_outcomes()
         ids_set = set(run_ids)
@@ -267,7 +269,7 @@ class TrainingOutcomeTracker:
                     f.write(json.dumps(o.to_dict()) + "\n")
         return updated_count
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get summary statistics of all outcomes."""
         outcomes = self.load_outcomes()
         if not outcomes:
@@ -323,7 +325,7 @@ class TrainingOutcomeTracker:
 
         return max(0.0, min(1.0, score))
 
-    def export_json(self, limit: int = 0) -> List[Dict[str, Any]]:
+    def export_json(self, limit: int = 0) -> list[dict[str, Any]]:
         """Export outcomes as a list of dicts (JSON-serializable)."""
         outcomes = self.load_outcomes()
         if limit > 0:
@@ -344,7 +346,7 @@ class TrainingOutcomeTracker:
             lines.append(",".join(str(row.get(f, "")).replace(",", ";") for f in fields))
         return "\n".join(lines)
 
-    def compare(self, run_id_a: str, run_id_b: str) -> Optional[Dict[str, Any]]:
+    def compare(self, run_id_a: str, run_id_b: str) -> dict[str, Any] | None:
         """Compare two training runs side by side."""
         outcomes = self.load_outcomes()
         a = next((o for o in outcomes if o.run_id == run_id_a), None)
@@ -363,8 +365,20 @@ class TrainingOutcomeTracker:
             "run_a": a.to_dict(),
             "run_b": b.to_dict(),
             "differences": diff,
-            "a_wins": sum(1 for k, v in diff.items() if k in ("final_loss", "best_loss", "perplexity", "training_time_s") and v["run_a"] < v["run_b"]) + (1 if a.quality_score > b.quality_score else 0),
-            "b_wins": sum(1 for k, v in diff.items() if k in ("final_loss", "best_loss", "perplexity", "training_time_s") and v["run_a"] > v["run_b"]) + (1 if b.quality_score > a.quality_score else 0),
+            "a_wins": sum(
+                1
+                for k, v in diff.items()
+                if k in ("final_loss", "best_loss", "perplexity", "training_time_s")
+                and v["run_a"] < v["run_b"]
+            )
+            + (1 if a.quality_score > b.quality_score else 0),
+            "b_wins": sum(
+                1
+                for k, v in diff.items()
+                if k in ("final_loss", "best_loss", "perplexity", "training_time_s")
+                and v["run_a"] > v["run_b"]
+            )
+            + (1 if b.quality_score > a.quality_score else 0),
         }
 
 

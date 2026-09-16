@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-import time
 import threading
-from typing import Iterator
+import time
+from collections.abc import Iterator
 
 from .filters import Filter, FilterChain
 from .sources import Record, Source
@@ -62,8 +62,10 @@ class ParallelCollector:
 
     def collect_threaded(self) -> int:
         results = [0] * len(self._collectors)
+
         def run(i, c):
             results[i] = c.collect()
+
         threads = []
         for i, collector in enumerate(self._collectors):
             t = threading.Thread(target=run, args=(i, collector))
@@ -92,8 +94,15 @@ class ParallelCollector:
 
 
 class BatchCollector:
-    def __init__(self, source: Source, store: Store, filters: list[Filter] | None = None,
-                 batch_size: int = 100, max_retries: int = 3, retry_delay: float = 1.0):
+    def __init__(
+        self,
+        source: Source,
+        store: Store,
+        filters: list[Filter] | None = None,
+        batch_size: int = 100,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+    ):
         self.source = source
         self.store = store
         self.chain = FilterChain(filters or [])

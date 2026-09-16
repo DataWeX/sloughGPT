@@ -15,10 +15,9 @@ import logging
 import logging.handlers
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
-
+from typing import Any
 
 _DEFAULT_LOG_DIR = Path.home() / ".config" / "sloughgpt"
 _DEFAULT_LOG_FILE = "shell_audit.jsonl"
@@ -48,7 +47,7 @@ class ShellAuditLogger:
         self._log_dir = Path(log_dir) if log_dir else _DEFAULT_LOG_DIR
         self._log_dir.mkdir(parents=True, exist_ok=True)
         self._log_path = self._log_dir / log_file
-        self._handler: Optional[logging.handlers.RotatingFileHandler] = None
+        self._handler: logging.handlers.RotatingFileHandler | None = None
         self._session_id = f"{int(time.time() * 1000)}"
         self._cmd_count = 0
         self._setup()
@@ -67,16 +66,14 @@ class ShellAuditLogger:
 
     def _emit(self, event: str, **fields: Any) -> None:
         record: dict[str, Any] = {
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "session": self._session_id,
             "event": event,
         }
         record.update(fields)
         line = json.dumps(record, default=str, ensure_ascii=False)
         if self._handler:
-            self._handler.emit(
-                logging.LogRecord("audit", logging.INFO, "", 0, line, (), None)
-            )
+            self._handler.emit(logging.LogRecord("audit", logging.INFO, "", 0, line, (), None))
 
     def command(
         self,
@@ -143,7 +140,7 @@ class ShellAuditLogger:
 
 
 # Singleton
-_audit: Optional[ShellAuditLogger] = None
+_audit: ShellAuditLogger | None = None
 
 
 def get_shell_audit_logger(**kwargs: Any) -> ShellAuditLogger:

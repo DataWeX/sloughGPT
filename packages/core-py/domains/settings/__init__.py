@@ -1,13 +1,13 @@
 """Backward-compatibility shim — imports from the new ``domain.settings`` package."""
 
 from domain.settings import (
-    GenerationSettings,
-    TrainingSettings,
     AdaptiveSettings,
-    VoiceSettings,
-    UISettings,
     AppSettings,
+    GenerationSettings,
     PersistentSettings,
+    TrainingSettings,
+    UISettings,
+    VoiceSettings,
     get_settings,
 )
 

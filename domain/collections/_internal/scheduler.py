@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import json
-import time
 import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
-
-
-from .stores import Store, MemoryStore
 from .collector import Collector
+from .stores import MemoryStore, Store
 from .validators import CollectorRunner
 
 
@@ -39,8 +37,12 @@ class JobScheduler:
             self._collectors[config.name] = collector
             self._stop_events[config.name] = threading.Event()
             self._stats[config.name] = {
-                "runs": 0, "total_collected": 0, "errors": 0,
-                "last_run": None, "last_duration": None, "status": "idle"
+                "runs": 0,
+                "total_collected": 0,
+                "errors": 0,
+                "last_run": None,
+                "last_duration": None,
+                "status": "idle",
             }
         return self
 
@@ -144,7 +146,9 @@ class JobScheduler:
 
 
 class CollectorMonitor:
-    def __init__(self, runner: CollectorRunner | None = None, scheduler: JobScheduler | None = None):
+    def __init__(
+        self, runner: CollectorRunner | None = None, scheduler: JobScheduler | None = None
+    ):
         self._runner = runner
         self._scheduler = scheduler
         self._health_checks: dict[str, Callable[[], bool]] = {}
@@ -199,7 +203,14 @@ class CollectorMonitor:
             alerts.append({"type": "health", "message": "System unhealthy", "severity": "critical"})
         for name, healthy in overview.get("health", {}).items():
             if not healthy:
-                alerts.append({"type": "check", "name": name, "message": f"Check {name} failed", "severity": "warning"})
+                alerts.append(
+                    {
+                        "type": "check",
+                        "name": name,
+                        "message": f"Check {name} failed",
+                        "severity": "warning",
+                    }
+                )
         self._alerts = alerts
         return alerts
 

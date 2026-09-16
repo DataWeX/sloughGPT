@@ -1,17 +1,19 @@
 """Tests for domain.soul._internal.cognitive — CognitiveArchitecture and related classes."""
 
-import pytest
 from dataclasses import dataclass
+
+import pytest
+
 from domain.soul._internal.cognitive import (
     CognitiveArchitecture,
-    SessionMemory,
-    EpisodicMemoryStore,
-    NeuralPlasticityEngine,
-    MetaLearningEngine,
     DreamProcessingEngine,
-    SentimentAnalyzer,
     EmotionalResponseGenerator,
+    EpisodicMemoryStore,
+    MetaLearningEngine,
+    NeuralPlasticityEngine,
     RelationshipMemory,
+    SentimentAnalyzer,
+    SessionMemory,
 )
 
 
@@ -342,7 +344,13 @@ class TestEpisodicMemoryStore:
 
     def test_importance_cap_at_one(self):
         store = EpisodicMemoryStore()
-        conv = [{"role": "user", "content": "important remember critical key learn extra long conversation with many messages " + "x " * 20}]
+        conv = [
+            {
+                "role": "user",
+                "content": "important remember critical key learn extra long conversation with many messages "
+                + "x " * 20,
+            }
+        ]
         score = store._calculate_importance(conv)
         assert score <= 1.0
 
@@ -689,7 +697,7 @@ class TestNeuralPlasticityEngine:
         engine = NeuralPlasticityEngine(learning_rate=0.001)
         for i in range(10):
             engine.activate(f"n{i}", 0.01)
-            engine.hebbian_learn(f"n{i}", f"n{(i+1) % 10}")
+            engine.hebbian_learn(f"n{i}", f"n{(i + 1) % 10}")
         pruned = engine.prune_weak_connections(threshold=0.1)
         assert pruned >= 0
 
@@ -853,7 +861,9 @@ class TestDreamProcessingEngine:
         engine = DreamProcessingEngine()
         plasticity = NeuralPlasticityEngine()
         memories = [
-            FakeExperience(id=f"m{i}", data=f"d{i}", importance=float(i) / 20, timestamp=f"t{i}", context={})
+            FakeExperience(
+                id=f"m{i}", data=f"d{i}", importance=float(i) / 20, timestamp=f"t{i}", context={}
+            )
             for i in range(15)
         ]
         engine.dream(memories, plasticity)
@@ -901,7 +911,9 @@ class TestDreamProcessingEngine:
         engine = DreamProcessingEngine()
         plasticity = NeuralPlasticityEngine()
         memories = [
-            FakeExperience(id=f"m{i}", data=f"d{i}", importance=0.9 - i * 0.1, timestamp=f"t{i}", context={})
+            FakeExperience(
+                id=f"m{i}", data=f"d{i}", importance=0.9 - i * 0.1, timestamp=f"t{i}", context={}
+            )
             for i in range(5)
         ]
         insights = engine.dream(memories, plasticity)
@@ -1145,12 +1157,12 @@ class TestEmotionalResponseGenerator:
 
     def test_empathy_responses_all_nonempty(self):
         er = EmotionalResponseGenerator()
-        for emotion, responses in er.empathy_responses.items():
+        for _emotion, responses in er.empathy_responses.items():
             assert len(responses) > 0
 
     def test_qualifiers_all_nonempty(self):
         er = EmotionalResponseGenerator()
-        for level, words in er.qualifiers.items():
+        for _level, words in er.qualifiers.items():
             assert len(words) > 0
 
     def test_adapt_response_unknown_emotion(self):
@@ -1180,9 +1192,7 @@ class TestRelationshipMemory:
 
     def test_update_from_interaction(self):
         rm = RelationshipMemory()
-        rm.update_from_interaction(
-            "user1", "hello", "hi", 0.5, "neutral", None
-        )
+        rm.update_from_interaction("user1", "hello", "hi", 0.5, "neutral", None)
         profile = rm.get_user_profile("user1")
         assert profile["total_interactions"] == 1
         assert profile["last_interaction"] is not None
@@ -1208,14 +1218,14 @@ class TestRelationshipMemory:
 
     def test_update_mood_history_trimming(self):
         rm = RelationshipMemory()
-        for i in range(60):
+        for _i in range(60):
             rm.update_from_interaction("user1", "msg", "resp", 0.5, "neutral")
         profile = rm.get_user_profile("user1")
         assert len(profile["mood_history"]) <= 50
 
     def test_update_interaction_history_trimming(self):
         rm = RelationshipMemory()
-        for i in range(110):
+        for _i in range(110):
             rm.update_from_interaction("user1", "msg", "resp", 0.5, "neutral")
         assert len(rm.interaction_history["user1"]) <= 100
 
@@ -1239,7 +1249,7 @@ class TestRelationshipMemory:
 
     def test_get_relationship_context_frequent_user(self):
         rm = RelationshipMemory()
-        for i in range(6):
+        for _i in range(6):
             rm.update_from_interaction("user1", "hello world", "hi", 0.5, "happy")
         ctx = rm.get_relationship_context("user1", "neutral")
         assert len(ctx) > 0
@@ -1265,7 +1275,9 @@ class TestRelationshipMemory:
 
     def test_topics_extracted(self):
         rm = RelationshipMemory()
-        rm.update_from_interaction("user1", "programming javascript python", "response", 0.5, "neutral")
+        rm.update_from_interaction(
+            "user1", "programming javascript python", "response", 0.5, "neutral"
+        )
         profile = rm.get_user_profile("user1")
         assert len(profile["topics_of_interest"]) > 0
 

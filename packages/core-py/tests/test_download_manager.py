@@ -3,15 +3,9 @@
 import asyncio
 import sys
 import time
-import types
-from pathlib import Path
-from typing import List
 
-import pytest
-
-import domain.infrastructure.download_manager as dm
+import domain.infrastructure._internal.download_manager as dm
 from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
-
 
 # ---------------------------------------------------------------------------
 # Fake backend for testing
@@ -24,9 +18,9 @@ class FakeBackend(DownloadBackend):
     def __init__(self):
         self.cached: set = set()
         self.downloaded: dict = {}
-        self.incomplete: List[str] = []
-        self.cleaned: List[str] = []
-        self.cancelled: List[str] = []
+        self.incomplete: list[str] = []
+        self.cleaned: list[str] = []
+        self.cancelled: list[str] = []
         self._download_result = {"status": "complete", "cache_dir": "/tmp/cache"}
         self.download_calls: list = []
 
@@ -306,10 +300,10 @@ class TestDownloadManager:
         mgr = dm.DownloadManager()
         old = time.time() - 10_000
         mgr._set_progress("old_done", status=dm.DownloadStatus.COMPLETE, completed_at=old)
-        mgr._set_progress("recent_done", status=dm.DownloadStatus.COMPLETE,
-                          completed_at=time.time())
-        mgr._set_progress("running", status=dm.DownloadStatus.DOWNLOADING,
-                          started_at=old)
+        mgr._set_progress(
+            "recent_done", status=dm.DownloadStatus.COMPLETE, completed_at=time.time()
+        )
+        mgr._set_progress("running", status=dm.DownloadStatus.DOWNLOADING, started_at=old)
         mgr.cleanup_stale(max_age=3600)
         assert mgr.get_progress("old_done") is None
         assert mgr.get_progress("recent_done") is not None
@@ -352,10 +346,11 @@ class TestBackendManagement:
 
     def test_null_backend_fallback(self, monkeypatch):
         import threading
+
         monkeypatch.setattr(dm, "_backend", None)
         monkeypatch.setattr(dm, "_backend_lock", threading.Lock())
-        old_val = sys.modules.get("domain.infrastructure.hf_hub")
-        sys.modules["domain.infrastructure.hf_hub"] = None
+        old_val = sys.modules.get("domain.infrastructure._internal.hf_hub")
+        sys.modules["domain.infrastructure._internal.hf_hub"] = None
         try:
             backend = dm.get_backend()
             assert backend.is_cached("x") is False
@@ -363,9 +358,9 @@ class TestBackendManagement:
             assert backend.list_incomplete() == []
         finally:
             if old_val is not None:
-                sys.modules["domain.infrastructure.hf_hub"] = old_val
+                sys.modules["domain.infrastructure._internal.hf_hub"] = old_val
             else:
-                sys.modules.pop("domain.infrastructure.hf_hub", None)
+                sys.modules.pop("domain.infrastructure._internal.hf_hub", None)
             dm._backend = None
 
 
@@ -434,9 +429,7 @@ class TestCompressedDownload:
         def on_progress(mid, done, total, speed):
             progress.append(done)
 
-        backend.download_compressed(
-            "http://server/models/7B", on_progress, None
-        )
+        backend.download_compressed("http://server/models/7B", on_progress, None)
         assert progress == [500]
 
 
@@ -444,6 +437,7 @@ class TestDownloadManagerRouting:
     def test_uses_compressed_when_backend_supports(self, monkeypatch):
         """DownloadManager routes to download_compressed when supported."""
         import threading
+
         monkeypatch.setattr(dm, "_backend", None)
         monkeypatch.setattr(dm, "_backend_lock", threading.Lock())
 
@@ -670,7 +664,8 @@ class TestVerify:
     def test_verify_valid_model(self, tmp_path):
         """Verify returns valid when all files match."""
         import hashlib
-        from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
+
+        from domain.infrastructure._internal.download_backend import DownloadBackend
 
         class VerifyBackend(DownloadBackend):
             def __init__(self, cache_dir, files):
@@ -720,7 +715,7 @@ class TestVerify:
 
     def test_verify_missing_file(self, tmp_path):
         """Verify returns invalid when file is missing."""
-        from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
+        from domain.infrastructure._internal.download_backend import DownloadBackend
 
         class VerifyBackend(DownloadBackend):
             def __init__(self, cache_dir, files):
@@ -766,7 +761,7 @@ class TestVerify:
 
     def test_verify_size_mismatch(self, tmp_path):
         """Verify returns invalid when file size doesn't match."""
-        from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
+        from domain.infrastructure._internal.download_backend import DownloadBackend
 
         class VerifyBackend(DownloadBackend):
             def __init__(self, cache_dir, files):
@@ -810,8 +805,7 @@ class TestVerify:
 
     def test_verify_checksum_mismatch(self, tmp_path):
         """Verify returns invalid when checksum doesn't match."""
-        import hashlib
-        from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
+        from domain.infrastructure._internal.download_backend import DownloadBackend
 
         class VerifyBackend(DownloadBackend):
             def __init__(self, cache_dir, files):
@@ -855,7 +849,7 @@ class TestVerify:
 
     def test_verify_empty_files_list(self):
         """Verify returns invalid when no files found."""
-        from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
+        from domain.infrastructure._internal.download_backend import DownloadBackend
 
         class EmptyBackend(DownloadBackend):
             def is_cached(self, resource_id, deep_check=False):

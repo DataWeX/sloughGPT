@@ -15,7 +15,7 @@ def is_private_ip(hostname: str) -> bool:
     """
     try:
         addrinfos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
-        for family, _, _, _, sockaddr in addrinfos:
+        for _family, _, _, _, sockaddr in addrinfos:
             ip = ipaddress.ip_address(sockaddr[0])
             if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
                 return True

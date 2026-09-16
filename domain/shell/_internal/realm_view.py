@@ -54,14 +54,14 @@ _SYMBOLS: dict[int, str] = {
 
 # Material foreground colors (ANSI 256), keyed by the same constants.
 _COLORS: dict[int, str] = {
-    MATERIAL_AIR: "0",        # default — invisible, no background heat
-    MATERIAL_WATER: "81",     # sky blue
-    MATERIAL_STONE: "245",    # grey
+    MATERIAL_AIR: "0",  # default — invisible, no background heat
+    MATERIAL_WATER: "81",  # sky blue
+    MATERIAL_STONE: "245",  # grey
     MATERIAL_ORGANIC: "114",  # moss green
-    MATERIAL_METAL: "226",    # gold
-    MATERIAL_EMBER: "203",    # ember red
-    MATERIAL_LIVING: "120",   # bright green
-    MATERIAL_SIGNAL: "213",   # magenta
+    MATERIAL_METAL: "226",  # gold
+    MATERIAL_EMBER: "203",  # ember red
+    MATERIAL_LIVING: "120",  # bright green
+    MATERIAL_SIGNAL: "213",  # magenta
 }
 
 _CLEAR = "\033[2J\033[H"
@@ -75,10 +75,10 @@ _SEASONS = ("SUMMER", "AUTUMN", "WINTER", "SPRING")
 # Sun glyph colours by season — midsummer burns hot yellow, midwinter a pale
 # chill blue, autumn orange and spring green. Seasons off keeps the warm sun.
 _SUN_COLORS = {
-    0: "\033[93m",   # summer — hot yellow
+    0: "\033[93m",  # summer — hot yellow
     1: "\033[38;5;214m",  # autumn — orange
-    2: "\033[96m",   # winter — pale cyan
-    3: "\033[92m",   # spring — green
+    2: "\033[96m",  # winter — pale cyan
+    3: "\033[92m",  # spring — green
 }
 _SUMMER_SUN = "\033[93m"
 
@@ -97,9 +97,11 @@ def _season_of(scene: SimScene) -> tuple[int, float]:
 def _envelope_at(tick: int, season_ticks: int, seasonality: float) -> float:
     """Daylight envelope (0..1) at an arbitrary tick inside the year."""
     st = max(int(season_ticks), 1)
-    return (1.0 - float(seasonality)
-            + float(seasonality)
-            * (0.5 + 0.5 * np.cos(2.0 * np.pi * tick / st)))
+    return (
+        1.0
+        - float(seasonality)
+        + float(seasonality) * (0.5 + 0.5 * np.cos(2.0 * np.pi * tick / st))
+    )
 
 
 def _year_envelope_bar(scene: SimScene) -> str:
@@ -132,8 +134,10 @@ def _year_envelope_bar(scene: SimScene) -> str:
             ch = f"\033[93m{ch}\033[0m"
         cells.append(ch)
     season_idx, factor = _season_of(scene)
-    return (f"year {int(scene.solar_year)}  {_SEASONS[season_idx]:<6} "
-            f"env {factor * 100.0:>3.0f}%  [{''.join(cells)}]")
+    return (
+        f"year {int(scene.solar_year)}  {_SEASONS[season_idx]:<6} "
+        f"env {factor * 100.0:>3.0f}%  [{''.join(cells)}]"
+    )
 
 
 def _skyline(scene: SimScene) -> str:
@@ -151,11 +155,8 @@ def _skyline(scene: SimScene) -> str:
     noon = int(abs(np.sin(2.0 * np.pi * phase / day)) * 100)
     prefix = ""
     if int(p.solar_season_ticks) > 0:
-        prefix = (f"year {int(scene.solar_year)} "
-                  f"{_SEASONS[season_idx]:<6} ")
-    return (f"{prefix}day {phase:>2}/{day}  light {light:.2f}  "
-            f"noon {noon:>3}%  "
-            + "".join(cells))
+        prefix = f"year {int(scene.solar_year)} {_SEASONS[season_idx]:<6} "
+    return f"{prefix}day {phase:>2}/{day}  light {light:.2f}  noon {noon:>3}%  " + "".join(cells)
 
 
 def _heat_bg(energy: float, emax: float) -> str:
@@ -186,7 +187,7 @@ def render_frame(scene: SimScene, tick: int) -> list[str]:
     """
     w = scene.world
     nx, ny, nz = w.nx, w.ny, w.nz
-    alive = [b for b in scene.alive_babies]
+    alive = list(scene.alive_babies)
 
     # Pick the z-slice that holds the most babies so the view follows the
     # action; fall back to the middle slice when the world is empty.
@@ -256,8 +257,7 @@ def render_frame(scene: SimScene, tick: int) -> list[str]:
     return lines
 
 
-def live_view(scene: SimScene, ticks: int, fps: float = 8.0,
-              out=None) -> dict:
+def live_view(scene: SimScene, ticks: int, fps: float = 8.0, out=None) -> dict:
     """
     Step a live scene and redraw the frame after every tick.
 
@@ -299,8 +299,7 @@ def live_view(scene: SimScene, ticks: int, fps: float = 8.0,
         pass
     finally:
         out.write(_RESET)
-    energy_total = float(scene.world.energy.sum()) + sum(
-        b.energy for b in scene.babies)
+    energy_total = float(scene.world.energy.sum()) + sum(b.energy for b in scene.babies)
     return {
         "ticks": ticks,
         "energy_total": energy_total,
@@ -312,15 +311,18 @@ def live_view(scene: SimScene, ticks: int, fps: float = 8.0,
     }
 
 
-def make_live_scene(*, grid: tuple[int, int, int] = (24, 12, 24),
-                    population: int = 8,
-                    organic_pools: int = 3,
-                    day_ticks: int = 24,
-                    solar_deposit_rate: float = 0.4,
-                    seasons_per_year: int = 0,
-                    seasonality: float = 1.0,
-                    cells_input_dim: int = 6,
-                    seed: int = 7) -> SimScene:
+def make_live_scene(
+    *,
+    grid: tuple[int, int, int] = (24, 12, 24),
+    population: int = 8,
+    organic_pools: int = 3,
+    day_ticks: int = 24,
+    solar_deposit_rate: float = 0.4,
+    seasons_per_year: int = 0,
+    seasonality: float = 1.0,
+    cells_input_dim: int = 6,
+    seed: int = 7,
+) -> SimScene:
     """
     Build a solar-lit, populated scene ready for ``live_view``.
 
@@ -357,9 +359,13 @@ def make_live_scene(*, grid: tuple[int, int, int] = (24, 12, 24),
         learning_enabled=True,
     )
     scene = SimScene(params=params)
-    engine = EvolutionEngine(params=params, population_size=population,
-                             generations=1, ticks_per_generation=day_ticks,
-                             seed=seed)
+    engine = EvolutionEngine(
+        params=params,
+        population_size=population,
+        generations=1,
+        ticks_per_generation=day_ticks,
+        seed=seed,
+    )
     engine._place_food(scene, np.random.default_rng(seed))
     rng = np.random.default_rng(seed)
 
@@ -370,7 +376,7 @@ def make_live_scene(*, grid: tuple[int, int, int] = (24, 12, 24),
     top_y = ny - 1 - np.argmax(exposed[:, ::-1], axis=1)
     xs = np.random.randint(0, nx, population)
     zs = np.random.randint(0, nz, population)
-    for x, z in zip(xs, zs):
+    for x, z in zip(xs, zs, strict=False):
         y = min(int(top_y[x, z]) + 1, ny - 1)
         b = SimBaby(
             position=np.array([x, y, z], dtype=np.float64),

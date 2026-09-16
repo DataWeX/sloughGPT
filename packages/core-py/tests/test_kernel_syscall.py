@@ -1,9 +1,7 @@
 """Coverage tests for domain.shell.kernel_syscall.py."""
 
-import pytest
-
 import domain.shell._internal.kernel_syscall as ksc
-from domain.shell._internal.kernel_process import Process, ProcessState, Priority
+from domain.shell._internal.kernel_process import Priority, Process, ProcessState
 from domain.shell._internal.kernel_syscall import (
     SyscallNumber,
     SyscallResult,
@@ -64,8 +62,9 @@ def test_register_two_arg_form():
 
 def test_register_three_arg_form():
     t = SyscallTable()
-    t.register(SyscallNumber.NOP, "custom_nop", lambda caller, *a: True,
-               min_args=2, description="custom")
+    t.register(
+        SyscallNumber.NOP, "custom_nop", lambda caller, *a: True, min_args=2, description="custom"
+    )
     entry = t.get_entry(SyscallNumber.NOP)
     assert entry.name == "custom_nop"
     assert entry.min_args == 2
@@ -119,8 +118,7 @@ def test_dispatch_unknown_syscall():
 
 def test_dispatch_min_args_error():
     t = SyscallTable()
-    t.register(SyscallNumber.SET_PRIORITY, "set_priority", ksc._syscall_set_priority,
-               min_args=1)
+    t.register(SyscallNumber.SET_PRIORITY, "set_priority", ksc._syscall_set_priority, min_args=1)
     proc = _proc()
     result = t.dispatch(proc, SyscallNumber.SET_PRIORITY)
     assert result.success is False

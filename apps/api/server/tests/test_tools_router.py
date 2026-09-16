@@ -19,8 +19,18 @@ def patch_tools_engine():
                 name="Writing Assistant",
                 description="Help you write",
                 icon="document",
-                params=[MagicMock(id="text", label="Text", placeholder="Enter text", multiline=True, optional=False)],
-                options={"tone": [MagicMock(id="friendly", label="Friendly", description="Warm tone")]},
+                params=[
+                    MagicMock(
+                        id="text",
+                        label="Text",
+                        placeholder="Enter text",
+                        multiline=True,
+                        optional=False,
+                    )
+                ],
+                options={
+                    "tone": [MagicMock(id="friendly", label="Friendly", description="Warm tone")]
+                },
                 default_options={"tone": "friendly", "type": "write"},
                 system_prompt="You are a writing assistant.",
                 max_tokens=700,
@@ -30,7 +40,15 @@ def patch_tools_engine():
                 name="Translate",
                 description="Translate text",
                 icon="chat",
-                params=[MagicMock(id="text", label="Text", placeholder="Text to translate", multiline=False, optional=False)],
+                params=[
+                    MagicMock(
+                        id="text",
+                        label="Text",
+                        placeholder="Text to translate",
+                        multiline=False,
+                        optional=False,
+                    )
+                ],
                 options={},
                 default_options={},
                 system_prompt="You are a translator.",
@@ -46,8 +64,10 @@ def patch_tools_engine():
     ]
     engine.render_prompt.return_value = "Rendered prompt for testing."
 
-    with patch("apps.api.server.routers.tools._tools_engine", engine), \
-         patch("apps.api.server.routers.tools.require_auth_if_enabled", return_value=None):
+    with (
+        patch("apps.api.server.routers.tools._tools_engine", engine),
+        patch("apps.api.server.routers.tools.require_auth_if_enabled", return_value=None),
+    ):
         yield engine
 
 
@@ -76,8 +96,10 @@ def client(patch_tools_engine, mock_provider, mock_cancel_manager):
 
     from apps.api.server.routers.tools import ToolsRouter
 
-    with patch("apps.api.server.routers.tools.get_provider", return_value=mock_provider), \
-         patch("apps.api.server.routers.tools.get_cancel_manager", return_value=mock_cancel_manager):
+    with (
+        patch("apps.api.server.routers.tools.get_provider", return_value=mock_provider),
+        patch("apps.api.server.routers.tools.get_cancel_manager", return_value=mock_cancel_manager),
+    ):
         router_obj = ToolsRouter()
         app = FastAPI()
         register_app_error_handler(app)
@@ -146,7 +168,9 @@ class TestToolsGenerate:
         # (The mock provider always yields tokens, so a 200 means it ran.)
 
     def test_generate_respects_custom_max_tokens(self, client):
-        res = client.post("/tools/writing/generate", json={"payload": {"text": "hello"}, "max_tokens": 200})
+        res = client.post(
+            "/tools/writing/generate", json={"payload": {"text": "hello"}, "max_tokens": 200}
+        )
         assert res.status_code == 200
 
     def test_generate_default_temperature(self, client):
@@ -154,7 +178,9 @@ class TestToolsGenerate:
         assert res.status_code == 200
 
     def test_generate_respects_custom_temperature(self, client):
-        res = client.post("/tools/writing/generate", json={"payload": {"text": "hello"}, "temperature": 1.5})
+        res = client.post(
+            "/tools/writing/generate", json={"payload": {"text": "hello"}, "temperature": 1.5}
+        )
         assert res.status_code == 200
 
     def test_generate_with_empty_payload(self, client):
@@ -166,12 +192,15 @@ class TestToolsGenerate:
             from infrastructure.exception_handlers import register_app_error_handler
 
             from apps.api.server.routers.tools import ToolsRouter
+
             router_obj = ToolsRouter()
             app = FastAPI()
             register_app_error_handler(app)
             app.include_router(router_obj.router)
             no_provider_client = TestClient(app)
-            res = no_provider_client.post("/tools/writing/generate", json={"payload": {"text": "hi"}})
+            res = no_provider_client.post(
+                "/tools/writing/generate", json={"payload": {"text": "hi"}}
+            )
             body = res.text
             assert "E_INFRA_REGISTRY" in body
 

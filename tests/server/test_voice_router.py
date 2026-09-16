@@ -12,8 +12,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from apps.api.server.routers.voice import router
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
+from apps.api.server.routers.voice import router
 
 
 @pytest.fixture

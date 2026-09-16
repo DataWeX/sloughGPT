@@ -8,25 +8,22 @@ in ``addons.filesystem``. This module exists so that legacy imports like
 
 from __future__ import annotations
 
-from typing import Optional
-
 # Canonical implementations from the filesystem addon
 from .addons.filesystem import (  # noqa: F401
     VFS,
-    VFSEntry,
     VFSDirectory,
+    VFSEntry,
     VFSGeneratedFile,
     VFSWriteOnlyFile,
     _dir_stat,
     _file_stat,
 )
 
-
 # ---------------------------------------------------------------------------
 # Singleton accessors
 # ---------------------------------------------------------------------------
 
-_vfs_instance: Optional[VFS] = None
+_vfs_instance: VFS | None = None
 
 
 def get_vfs() -> VFS:

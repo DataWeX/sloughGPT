@@ -6,14 +6,13 @@ All domain calls are mocked; only HTTP-level behavior is tested.
 Note: the user_adapters router imports get_per_user_lora INSIDE each handler,
 so we must patch at 'domain.feedback._internal.per_user_lora.get_per_user_lora'.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -32,27 +31,28 @@ from routers.user_adapters import router  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_store(**overrides):
-    defaults = dict(
-        get_all_adapters=lambda: [
+    defaults = {
+        "get_all_adapters": lambda: [
             {"user_id": "u1", "feedback_count": 10},
             {"user_id": "u2", "feedback_count": 5},
         ],
-        get_stats=lambda: {"total_adapters": 2, "total_feedback": 15},
-        get_adapter=lambda uid: SimpleNamespace(feedback_count=10) if uid == "u1" else None,
-        update_adapter=lambda uid, rating: None,
-        reset_user_adapter=lambda uid: None,
-        merge_all=lambda: None,
-        aggregate_best_adapters=lambda **kw: {
+        "get_stats": lambda: {"total_adapters": 2, "total_feedback": 15},
+        "get_adapter": lambda uid: SimpleNamespace(feedback_count=10) if uid == "u1" else None,
+        "update_adapter": lambda uid, rating: None,
+        "reset_user_adapter": lambda uid: None,
+        "merge_all": lambda: None,
+        "aggregate_best_adapters": lambda **kw: {
             "user_count": 2,
             "total_feedback": 15,
             "output_path": "/tmp/best.npz",
             "eval": {"delta": {"verdict": "better", "perplexity_delta": -0.5}},
         },
-        get_quality_report=lambda **kw: {"avg_feedback": 7.5, "total": 15},
-        delete_adapter=lambda uid: None,
-        prune_low_quality=lambda min_feedback_count=1, max_age_days=30: ["u2"],
-    )
+        "get_quality_report": lambda **kw: {"avg_feedback": 7.5, "total": 15},
+        "delete_adapter": lambda uid: None,
+        "prune_low_quality": lambda min_feedback_count=1, max_age_days=30: ["u2"],
+    }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
 
@@ -144,11 +144,14 @@ class TestAggregateBest:
     def test_aggregate_with_eval(self, mock_get):
         mock_get.return_value = _make_store()
         client = TestClient(_app())
-        resp = client.post("/user-adapters/aggregate-best", json={
-            "top_k": 5,
-            "min_feedback_count": 3,
-            "output_name": "best_v2",
-        })
+        resp = client.post(
+            "/user-adapters/aggregate-best",
+            json={
+                "top_k": 5,
+                "min_feedback_count": 3,
+                "output_name": "best_v2",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "aggregated_with_eval"
@@ -196,10 +199,13 @@ class TestPruneAdapters:
     def test_prune(self, mock_get):
         mock_get.return_value = _make_store()
         client = TestClient(_app())
-        resp = client.post("/user-adapters/prune", json={
-            "min_feedback_count": 1,
-            "max_age_days": 30,
-        })
+        resp = client.post(
+            "/user-adapters/prune",
+            json={
+                "min_feedback_count": 1,
+                "max_age_days": 30,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "pruned"

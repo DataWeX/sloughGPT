@@ -2,22 +2,21 @@
 
 import json
 import struct
-import pytest
 
 from domain.infrastructure._internal.inference_protocol import (
     HEADER_FMT,
     HEADER_SIZE,
-    encode_message,
-    decode_header,
-    HealthRequest,
-    HealthResponse,
+    ErrorResponse,
     GenerateRequest,
     GenerateResult,
+    HealthRequest,
+    HealthResponse,
+    StreamDone,
     StreamStartRequest,
     StreamStopRequest,
     StreamToken,
-    StreamDone,
-    ErrorResponse,
+    decode_header,
+    encode_message,
 )
 
 
@@ -43,7 +42,7 @@ class TestWireFormat:
         msg = {"type": "token", "id": "t1", "token": "hi"}
         encoded = encode_message(msg)
         length = decode_header(encoded[:4])
-        payload_bytes = encoded[4:4 + length]
+        payload_bytes = encoded[4 : 4 + length]
         decoded = json.loads(payload_bytes)
         assert decoded == msg
 

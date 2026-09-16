@@ -1,13 +1,15 @@
 """Shared test fixtures and helpers for router tests."""
 
 import asyncio
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "live: marks tests that require running servers")
+
 
 _server_dir = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -44,6 +46,7 @@ def build_test_app(*routers):
         app.include_router(r)
 
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
 
     return app

@@ -8,19 +8,21 @@ Covers:
 """
 
 import time
+
 import pytest
+
 from domain.shared._internal.test_framework import (
+    BenchmarkRunner,
     TestFramework,
     TestResult,
     TestSuite,
-    BenchmarkRunner,
     mark_test,
 )
-
 
 # =============================================================================
 # TestResult
 # =============================================================================
+
 
 class TestTestResult:
     def test_dataclass_fields(self):
@@ -41,17 +43,21 @@ class TestTestResult:
 
     def test_with_metrics(self):
         r = TestResult(
-            name="t3", status="passed", execution_time=0.05,
-            metrics={"memory_mb": 12.5, "cpu_pct": 45.0}
+            name="t3",
+            status="passed",
+            execution_time=0.05,
+            metrics={"memory_mb": 12.5, "cpu_pct": 45.0},
         )
         assert r.metrics["memory_mb"] == 12.5
         assert r.metrics["cpu_pct"] == 45.0
 
     def test_with_details(self):
         r = TestResult(
-            name="t4", status="failed", execution_time=0.01,
+            name="t4",
+            status="failed",
+            execution_time=0.01,
             error_message="assertion error",
-            details={"line": 42, "file": "test.py"}
+            details={"line": 42, "file": "test.py"},
         )
         assert r.details["line"] == 42
         assert r.details["file"] == "test.py"
@@ -102,6 +108,7 @@ class TestTestResult:
 # TestSuite
 # =============================================================================
 
+
 class TestTestSuite:
     def test_dataclass_fields(self):
         s = TestSuite(
@@ -120,26 +127,39 @@ class TestTestSuite:
         r1 = TestResult(name="t1", status="passed", execution_time=0.1)
         r2 = TestResult(name="t2", status="failed", execution_time=0.2)
         s = TestSuite(
-            name="s", tests=[r1, r2],
-            total_tests=2, passed_tests=1, failed_tests=1,
-            skipped_tests=0, total_execution_time=0.3
+            name="s",
+            tests=[r1, r2],
+            total_tests=2,
+            passed_tests=1,
+            failed_tests=1,
+            skipped_tests=0,
+            total_execution_time=0.3,
         )
         assert len(s.tests) == 2
         assert s.total_tests == 2
 
     def test_coverage_percentage_default(self):
         s = TestSuite(
-            name="s", tests=[], total_tests=0,
-            passed_tests=0, failed_tests=0, skipped_tests=0,
-            total_execution_time=0.0
+            name="s",
+            tests=[],
+            total_tests=0,
+            passed_tests=0,
+            failed_tests=0,
+            skipped_tests=0,
+            total_execution_time=0.0,
         )
         assert s.coverage_percentage == 0.0
 
     def test_coverage_percentage_custom(self):
         s = TestSuite(
-            name="s", tests=[], total_tests=10,
-            passed_tests=10, failed_tests=0, skipped_tests=0,
-            total_execution_time=0.5, coverage_percentage=85.5
+            name="s",
+            tests=[],
+            total_tests=10,
+            passed_tests=10,
+            failed_tests=0,
+            skipped_tests=0,
+            total_execution_time=0.5,
+            coverage_percentage=85.5,
         )
         assert s.coverage_percentage == 85.5
 
@@ -148,26 +168,38 @@ class TestTestSuite:
 
     def test_skipped_tests(self):
         s = TestSuite(
-            name="s", tests=[], total_tests=5,
-            passed_tests=3, failed_tests=1, skipped_tests=1,
-            total_execution_time=0.1
+            name="s",
+            tests=[],
+            total_tests=5,
+            passed_tests=3,
+            failed_tests=1,
+            skipped_tests=1,
+            total_execution_time=0.1,
         )
         assert s.skipped_tests == 1
 
     def test_total_execution_time(self):
         s = TestSuite(
-            name="s", tests=[], total_tests=0,
-            passed_tests=0, failed_tests=0, skipped_tests=0,
-            total_execution_time=1.23
+            name="s",
+            tests=[],
+            total_tests=0,
+            passed_tests=0,
+            failed_tests=0,
+            skipped_tests=0,
+            total_execution_time=1.23,
         )
         assert s.total_execution_time == 1.23
 
     def test_tests_list_is_mutable(self):
         r = TestResult(name="t", status="passed", execution_time=0.0)
         s = TestSuite(
-            name="s", tests=[r], total_tests=1,
-            passed_tests=1, failed_tests=0, skipped_tests=0,
-            total_execution_time=0.0
+            name="s",
+            tests=[r],
+            total_tests=1,
+            passed_tests=1,
+            failed_tests=0,
+            skipped_tests=0,
+            total_execution_time=0.0,
         )
         r2 = TestResult(name="t2", status="failed", execution_time=0.0)
         s.tests.append(r2)
@@ -177,6 +209,7 @@ class TestTestSuite:
 # =============================================================================
 # TestFramework
 # =============================================================================
+
 
 class TestTestFramework:
     def test_register_and_run(self):
@@ -303,7 +336,7 @@ class TestTestFramework:
 
     def test_suite_total_matches_registered(self):
         fw = TestFramework()
-        for i in range(10):
+        for _i in range(10):
             fw.register(lambda: None)
         suite = fw.run()
         assert suite.total_tests == 10
@@ -313,6 +346,7 @@ class TestTestFramework:
 # =============================================================================
 # GetSummary
 # =============================================================================
+
 
 class TestGetSummary:
     def test_summary_keys(self):
@@ -373,7 +407,15 @@ class TestGetSummary:
         fw.register(lambda: None)
         suite = fw.run()
         summary = fw.get_summary(suite)
-        expected_keys = {"name", "total", "passed", "failed", "skipped", "execution_time", "pass_rate"}
+        expected_keys = {
+            "name",
+            "total",
+            "passed",
+            "failed",
+            "skipped",
+            "execution_time",
+            "pass_rate",
+        }
         assert set(summary.keys()) == expected_keys
 
     def test_summary_name_matches(self):
@@ -387,17 +429,20 @@ class TestGetSummary:
 # MarkTest
 # =============================================================================
 
+
 class TestMarkTest:
     def test_sets_flag(self):
         @mark_test
         def my_test():
             pass
+
         assert my_test._is_test is True
 
     def test_preserves_function(self):
         @mark_test
         def my_test():
             return 42
+
         assert my_test() == 42
 
     def test_preserves_docstring(self):
@@ -405,24 +450,28 @@ class TestMarkTest:
         def my_test():
             """My docstring."""
             pass
+
         assert my_test.__doc__ == "My docstring."
 
     def test_preserves_name(self):
         @mark_test
         def my_test():
             pass
+
         assert my_test.__name__ == "my_test"
 
     def test_mark_with_args(self):
         @mark_test
         def my_test(a, b):
             return a + b
+
         assert my_test(3, 4) == 7
 
     def test_mark_with_kwargs(self):
         @mark_test
         def my_test(x=10):
             return x * 2
+
         assert my_test() == 20
         assert my_test(x=5) == 10
 
@@ -430,6 +479,7 @@ class TestMarkTest:
         @mark_test
         def my_test():
             raise ValueError("test error")
+
         with pytest.raises(ValueError, match="test error"):
             my_test()
 
@@ -437,6 +487,7 @@ class TestMarkTest:
         @mark_test
         def f():
             pass
+
         assert callable(f)
         assert f._is_test is True
 
@@ -445,6 +496,7 @@ class TestMarkTest:
             @mark_test
             def my_method(self):
                 return 99
+
         obj = MyClass()
         assert obj.my_method() == 99
         assert obj.my_method._is_test is True
@@ -453,12 +505,14 @@ class TestMarkTest:
         @mark_test
         def my_test():
             return None
+
         assert my_test() is None
 
 
 # =============================================================================
 # BenchmarkRunner
 # =============================================================================
+
 
 class TestBenchmarkRunner:
     def test_run_benchmark(self):

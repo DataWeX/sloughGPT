@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 class TrainingSequence(Enum):
@@ -21,6 +21,7 @@ class TrainingSequence(Enum):
     Every training run follows these phases in order. Stages may be skipped
     depending on TrainingRunConfig.
     """
+
     IDLE = "idle"
     GENERATE_DATA = "generate_data"
     DISTILL = "distill"
@@ -32,7 +33,7 @@ class TrainingSequence(Enum):
     EARLY_STOP = "early_stop"
 
     @classmethod
-    def ordered_phases(cls) -> List[TrainingSequence]:
+    def ordered_phases(cls) -> list[TrainingSequence]:
         """Return phases in execution order."""
         return [
             cls.IDLE,
@@ -50,12 +51,13 @@ class TrainingSequence(Enum):
 @dataclass
 class PhaseResult:
     """Result of a single training phase."""
+
     phase: TrainingSequence
     status: str = "working"  # working | success | error | skipped
     message: str = ""
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "phase": self.phase.value,
             "status": self.status,
@@ -74,12 +76,13 @@ class TrainingSequenceState:
         # ... do work ...
         state.complete_phase(TrainingSequence.GENERATE_DATA, metrics={"samples": 1000})
     """
+
     current_phase: TrainingSequence = TrainingSequence.IDLE
-    phase_results: List[PhaseResult] = field(default_factory=list)
-    started_at: Optional[float] = None
-    completed_at: Optional[float] = None
-    error: Optional[str] = None
-    early_stop_reason: Optional[str] = None
+    phase_results: list[PhaseResult] = field(default_factory=list)
+    started_at: float | None = None
+    completed_at: float | None = None
+    error: str | None = None
+    early_stop_reason: str | None = None
 
     @property
     def is_running(self) -> bool:
@@ -103,7 +106,9 @@ class TrainingSequenceState:
         self.current_phase = phase
         self.phase_results.append(PhaseResult(phase=phase, status="working"))
 
-    def complete_phase(self, phase: TrainingSequence, metrics: Optional[Dict[str, Any]] = None) -> None:
+    def complete_phase(
+        self, phase: TrainingSequence, metrics: dict[str, Any] | None = None
+    ) -> None:
         """Mark a phase as completed successfully."""
         for pr in self.phase_results:
             if pr.phase == phase and pr.status == "working":
@@ -126,7 +131,7 @@ class TrainingSequenceState:
         """Mark a phase as skipped."""
         self.phase_results.append(PhaseResult(phase=phase, status="skipped", message=reason))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "current_phase": self.current_phase.value,
             "phase_results": [pr.to_dict() for pr in self.phase_results],
@@ -136,12 +141,14 @@ class TrainingSequenceState:
             "early_stop_reason": self.early_stop_reason,
         }
 
-    def to_sse_event(self, stream_name: str = "auto-train") -> Dict[str, Any]:
+    def to_sse_event(self, stream_name: str = "auto-train") -> dict[str, Any]:
         """Format as standard SSE envelope event."""
         return {
             "stream": stream_name,
             "phase": self.current_phase.value,
-            "status": "complete" if self.is_done else ("error" if self.current_phase == TrainingSequence.FAILED else "working"),
+            "status": "complete"
+            if self.is_done
+            else ("error" if self.current_phase == TrainingSequence.FAILED else "working"),
             "data": {
                 "phase_results": [pr.to_dict() for pr in self.phase_results],
             },
@@ -155,6 +162,7 @@ class TrainingSequenceState:
 @dataclass
 class TrainingRunConfig:
     """Configuration for a training run, controlling which phases execute."""
+
     skip_generate: bool = False
     skip_distill: bool = False
     skip_train: bool = False
@@ -170,11 +178,15 @@ class TrainingRunConfig:
     def defaults(cls) -> TrainingRunConfig:
         return cls()
 
-    def effective_phases(self) -> List[TrainingSequence]:
+    def effective_phases(self) -> list[TrainingSequence]:
         """Return the list of phases that will actually run."""
-        phases = [TrainingSequence.GENERATE_DATA, TrainingSequence.DISTILL,
-                  TrainingSequence.TRAIN, TrainingSequence.EVALUATE,
-                  TrainingSequence.DEPLOY]
+        phases = [
+            TrainingSequence.GENERATE_DATA,
+            TrainingSequence.DISTILL,
+            TrainingSequence.TRAIN,
+            TrainingSequence.EVALUATE,
+            TrainingSequence.DEPLOY,
+        ]
         skip_map = {
             TrainingSequence.GENERATE_DATA: self.skip_generate,
             TrainingSequence.DISTILL: self.skip_distill,
@@ -193,18 +205,17 @@ class TrainingRunConfig:
 @runtime_checkable
 class DataGenerator(Protocol):
     """Protocol for generating synthetic training data (teacher-driven)."""
-    def generate(self, prompt: str, num_samples: int, max_length: int) -> List[str]:
-        ...
+
+    def generate(self, prompt: str, num_samples: int, max_length: int) -> list[str]: ...
 
 
 @runtime_checkable
 class StudentModel(Protocol):
     """Protocol for a student model that can be trained via distillation."""
-    def train_step(self, inputs: Any, labels: Any) -> float:
-        ...
 
-    def evaluate(self, inputs: Any, labels: Any) -> Dict[str, float]:
-        ...
+    def train_step(self, inputs: Any, labels: Any) -> float: ...
+
+    def evaluate(self, inputs: Any, labels: Any) -> dict[str, float]: ...
 
 
 # =============================================================================
@@ -215,18 +226,19 @@ class StudentModel(Protocol):
 @dataclass
 class CheckpointFormat:
     """Standard checkpoint format with metadata."""
+
     name: str
     step: int
     loss: float
-    val_loss: Optional[float] = None
+    val_loss: float | None = None
     epoch: int = 0
-    stoi: Optional[Dict[str, int]] = None
-    itos: Optional[Dict[int, str]] = None
-    vocab: Optional[Dict[str, int]] = None
-    personality_traits: Optional[Dict[str, float]] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    stoi: dict[str, int] | None = None
+    itos: dict[int, str] | None = None
+    vocab: dict[str, int] | None = None
+    personality_traits: dict[str, float] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "step": self.step,

@@ -19,11 +19,11 @@ import json as _json
 import os
 import sys
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Dict, Generator, List, Optional, TextIO
+from typing import Any, TextIO
 
 from .base import Logger, LogLevel, LogRecord
-
 
 # ── TTY gate ────────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ def set_cli_terminal(enabled: bool) -> None:
 # ── ANSI codes ──────────────────────────────────────────────────────────
 
 
-def _color_enabled(stream: Optional[TextIO] = None) -> bool:
+def _color_enabled(stream: TextIO | None = None) -> bool:
     """Auto-detect color support. Respects NO_COLOR / FORCE_COLOR / TTY."""
     no_color = os.environ.get("NO_COLOR", "").strip() == "1"
     force_color = os.environ.get("FORCE_COLOR", "").strip() == "1"
@@ -62,35 +62,37 @@ def _color_enabled(stream: Optional[TextIO] = None) -> bool:
 
 class _A:
     """ANSI escape codes."""
-    RESET    = "\033[0m"
-    BOLD     = "\033[1m"
-    DIM      = "\033[2m"
-    ITALIC   = "\033[3m"
-    UNDER    = "\033[4m"
-    RED      = "\033[31m"
-    GREEN    = "\033[32m"
-    YELLOW   = "\033[33m"
-    BLUE     = "\033[34m"
-    MAGENTA  = "\033[35m"
-    CYAN     = "\033[36m"
-    WHITE    = "\033[37m"
-    GREY     = "\033[90m"
-    BG_RED   = "\033[41m"
+
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    ITALIC = "\033[3m"
+    UNDER = "\033[4m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
+    GREY = "\033[90m"
+    BG_RED = "\033[41m"
     BG_GREEN = "\033[42m"
 
 
 # ── Level → style mapping ──────────────────────────────────────────────
 
 _LEVEL_STYLE = {
-    LogLevel.DEBUG:    (_A.DIM + _A.CYAN,            "·",  "debug"),
-    LogLevel.INFO:     (_A.GREEN,                     "ℹ",  "info"),
-    LogLevel.WARNING:  (_A.BOLD + _A.YELLOW,          "!",  "warning"),
-    LogLevel.ERROR:    (_A.BOLD + _A.RED,             "✗",  "error"),
+    LogLevel.DEBUG: (_A.DIM + _A.CYAN, "·", "debug"),
+    LogLevel.INFO: (_A.GREEN, "ℹ", "info"),
+    LogLevel.WARNING: (_A.BOLD + _A.YELLOW, "!", "warning"),
+    LogLevel.ERROR: (_A.BOLD + _A.RED, "✗", "error"),
     LogLevel.CRITICAL: (_A.BG_RED + _A.BOLD + _A.WHITE, "✗", "critical"),
 }
 
 
 # ── Terminal width ──────────────────────────────────────────────────────
+
 
 def _term_width() -> int:
     """Get terminal width, fallback to 80."""
@@ -101,6 +103,7 @@ def _term_width() -> int:
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
+
 
 def _c(text: str, color: str, enabled: bool) -> str:
     """Wrap text in ANSI color if enabled."""
@@ -125,6 +128,7 @@ def _is_tty(stream: TextIO) -> bool:
 
 # ── CLILogger ───────────────────────────────────────────────────────────
 
+
 class CLILogger(Logger):
     """Native ANSI CLI logger — inherits from Logger, outputs via escape codes.
 
@@ -147,15 +151,16 @@ class CLILogger(Logger):
         self,
         name: str = "slo.cli",
         level: LogLevel = LogLevel.INFO,
-        stream: Optional[TextIO] = None,
-        colors: Optional[bool] = None,
-        context: Optional[Dict[str, Any]] = None,
+        stream: TextIO | None = None,
+        colors: bool | None = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(name=name, level=level, context=context)
         self._stream = stream or sys.stdout
         self._colors = _color_enabled(self._stream) if colors is None else colors
         self._cursor_hidden = False
         from .config import LogFormatter
+
         self._formatter = LogFormatter(fmt="human", colors=self._colors)
 
     # ── Cursor lifecycle ─────────────────────────────────────────────────
@@ -222,6 +227,7 @@ class CLILogger(Logger):
             return
         import time as _time
         from datetime import datetime as _dt
+
         ts = _dt.fromtimestamp(_time.time()).strftime("%H:%M:%S")
         c = self._colors
         primary = f"  {_c(ts, _A.DIM, c)} {_c('✓', _A.GREEN, c)} {msg}"
@@ -237,6 +243,7 @@ class CLILogger(Logger):
             return
         import time as _time
         from datetime import datetime as _dt
+
         ts = _dt.fromtimestamp(_time.time()).strftime("%H:%M:%S")
         c = self._colors
         primary = f"  {_c(ts, _A.DIM, c)} {_c('→', _A.CYAN, c)} {msg}"
@@ -270,9 +277,9 @@ class CLILogger(Logger):
 
     def table(
         self,
-        headers: List[str],
-        rows: List[List[str]],
-        align: Optional[List[str]] = None,
+        headers: list[str],
+        rows: list[list[str]],
+        align: list[str] | None = None,
     ) -> None:
         """Print an ASCII table with column alignment."""
         if not rows:

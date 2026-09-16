@@ -1,22 +1,30 @@
 """Tests for upgraded multimodal engine (ViT + cross-attention + char tokenizer)."""
 
 import math
+
 import numpy as np
 import pytest
+
 pytestmark = pytest.mark.slow
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Add core-py to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from domain.training._internal.slonet import Tensor, SloCrossAttention, SloLinear, SloLayerNorm, SloEmbedding
+from domain.multimodal._internal.char_tokenizer import CharTokenizer
 from domain.multimodal._internal.engine import (
-    VisionEncoder, AudioEncoder, MultimodalEngine, TextDecoder,
-    SloTransformerDecoder, SloTransformerDecoderBlock,
+    AudioEncoder,
+    MultimodalEngine,
+    SloTransformerDecoder,
+    TextDecoder,
+    VisionEncoder,
+)
+from domain.training._internal.slonet import (
+    SloCrossAttention,
+    Tensor,
 )
 from domain.training._internal.slonet import cross_entropy as _cross_entropy_slo
-from domain.multimodal._internal.char_tokenizer import CharTokenizer
 
 
 class TestSloCrossAttention:
@@ -98,7 +106,9 @@ class TestVisionEncoder:
         loss.backward()
 
         # At least some parameters should have gradients
-        params_with_grad = sum(1 for p in encoder.parameters() if p.requires_grad and p.grad is not None)
+        params_with_grad = sum(
+            1 for p in encoder.parameters() if p.requires_grad and p.grad is not None
+        )
         assert params_with_grad > 0, "No parameters received gradients"
 
 
@@ -152,10 +162,11 @@ class TestCharTokenizer:
     def test_save_load(self):
         """Tokenizer should save and load correctly."""
         import tempfile
+
         tokenizer = CharTokenizer()
         tokenizer.build_vocab(["a red circle on blue background", "hello world"])
 
-        with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             path = f.name
 
         tokenizer.save(path)
@@ -233,7 +244,9 @@ class TestSloTransformerDecoder:
 
         # Image patches: (1, num_patches+1, embed_dim)
         num_patches = 10
-        img_patches = Tensor(np.random.randn(1, num_patches + 1, embed_dim).astype(np.float32), requires_grad=True)
+        img_patches = Tensor(
+            np.random.randn(1, num_patches + 1, embed_dim).astype(np.float32), requires_grad=True
+        )
 
         # Token IDs: (1, seq_len)
         token_ids = Tensor(np.array([[0, 1, 2, 3]]), requires_grad=False)
@@ -273,12 +286,15 @@ class TestSloTransformerDecoder:
         hidden_dim = 128
         vocab_size = 50
         n_layers = 3
-        decoder = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim,
-                                        n_heads=4, n_layers=n_layers)
+        decoder = SloTransformerDecoder(
+            vocab_size, embed_dim, hidden_dim, n_heads=4, n_layers=n_layers
+        )
 
         img_embed = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32), requires_grad=True)
         num_patches = 10
-        img_patches = Tensor(np.random.randn(1, num_patches + 1, embed_dim).astype(np.float32), requires_grad=True)
+        img_patches = Tensor(
+            np.random.randn(1, num_patches + 1, embed_dim).astype(np.float32), requires_grad=True
+        )
         token_ids = Tensor(np.array([[0, 2, 4, 6, 8]]), requires_grad=False)
 
         logits, _, _ = decoder.forward(img_embed, token_ids, img_patches)
@@ -310,7 +326,7 @@ class TestMultimodalEngineIntegration:
         assert engine.vision.num_patches == 49  # 7*7
         assert engine.decoder.n_layers == 3  # default changed from 4 to 3
         assert engine.decoder.n_heads == 4
-        assert hasattr(engine, 'audio'), "Engine should have AudioEncoder"
+        assert hasattr(engine, "audio"), "Engine should have AudioEncoder"
         assert engine.audio.embed_dim == 128
 
     def test_engine_generate_with_cross_attention(self):
@@ -412,7 +428,7 @@ class TestMultimodalEngineIntegration:
         """Save/load should preserve audio encoder weights."""
         engine = MultimodalEngine(embed_dim=64, hidden_dim=128, n_vit_layers=2, n_heads=4)
         engine.build_vocab(["test save load audio"])
-        audio = np.sin(np.linspace(0, 50, 8000)).astype(np.float32)
+        np.sin(np.linspace(0, 50, 8000)).astype(np.float32)
         before = engine.audio.cls_token.data.copy()
 
         p = str(tmp_path / "test_audio_engine.npz")
@@ -442,8 +458,7 @@ class TestTemperatureAnnealing:
         embed_dim = 32
         hidden_dim = 64
         vocab_size = 30
-        decoder = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim,
-                                        n_heads=2, n_layers=1)
+        decoder = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim, n_heads=2, n_layers=1)
 
         img_embed = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32), requires_grad=False)
         token_ids = Tensor(np.array([[0, 2, 4, 6]]), requires_grad=False)
@@ -478,8 +493,9 @@ class TestTemperatureAnnealing:
 
     def test_temperature_annealing_in_train_step(self):
         """train_step should accept temperature parameter and produce a valid loss."""
-        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
-                                  n_decoder_layers=1)
+        engine = MultimodalEngine(
+            embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2, n_decoder_layers=1
+        )
         engine.build_vocab(["test temperature annealing in multimodal engine"])
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
         tokens = engine.text.char.encode("test temperature")
@@ -492,8 +508,9 @@ class TestTemperatureAnnealing:
 
     def test_temperature_annealing_lr_scaling(self):
         """Temperature annealing should not prevent loss from decreasing."""
-        engine = MultimodalEngine(embed_dim=16, hidden_dim=32, n_vit_layers=1, n_heads=2,
-                                  n_decoder_layers=1)
+        engine = MultimodalEngine(
+            embed_dim=16, hidden_dim=32, n_vit_layers=1, n_heads=2, n_decoder_layers=1
+        )
         engine.build_vocab(["test temperature annealing in multimodal"])
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
         tokens = engine.text.char.encode("test temperature annealing")
@@ -516,8 +533,9 @@ class TestBeamSearch:
 
     def test_beam_search_returns_string(self):
         """Beam search should return a MultimodalOutput with text."""
-        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
-                                  n_decoder_layers=1)
+        engine = MultimodalEngine(
+            embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2, n_decoder_layers=1
+        )
         engine.build_vocab(["red circle on white background"])
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
         result = engine.generate(img, max_len=5, temperature=0.0, beam_width=3)
@@ -526,8 +544,9 @@ class TestBeamSearch:
 
     def test_beam_search_greedy_deterministic(self):
         """Both greedy and beam=1 should be deterministic (same result twice)."""
-        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
-                                  n_decoder_layers=1)
+        engine = MultimodalEngine(
+            embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2, n_decoder_layers=1
+        )
         engine.build_vocab(["red circle on white background"])
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
 
@@ -541,8 +560,9 @@ class TestBeamSearch:
 
     def test_beam_search_wider_is_not_shorter(self):
         """Wider beam should not produce shorter text (at least same or better search)."""
-        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
-                                  n_decoder_layers=1)
+        engine = MultimodalEngine(
+            embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2, n_decoder_layers=1
+        )
         engine.build_vocab(["a" * 20])
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
 
@@ -555,8 +575,9 @@ class TestBeamSearch:
 
     def test_beam_search_with_audio(self):
         """Beam search should work with audio-only input."""
-        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
-                                  n_decoder_layers=1)
+        engine = MultimodalEngine(
+            embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2, n_decoder_layers=1
+        )
         engine.build_vocab(["beep boop"])
         audio = np.sin(np.linspace(0, 50, 8000)).astype(np.float32)
         result = engine.generate(audio_np=audio, max_len=5, temperature=0.0, beam_width=3)
@@ -564,12 +585,15 @@ class TestBeamSearch:
 
     def test_beam_search_with_combined(self):
         """Beam search should work with combined vision+audio input."""
-        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
-                                  n_decoder_layers=1)
+        engine = MultimodalEngine(
+            embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2, n_decoder_layers=1
+        )
         engine.build_vocab(["red circle beep"])
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
         audio = np.sin(np.linspace(0, 50, 8000)).astype(np.float32)
-        result = engine.generate(image_np=img, audio_np=audio, max_len=5, temperature=0.0, beam_width=3)
+        result = engine.generate(
+            image_np=img, audio_np=audio, max_len=5, temperature=0.0, beam_width=3
+        )
         assert isinstance(result.text, str)
 
 
@@ -579,28 +603,31 @@ class TestKVCache:
     def test_kv_cache_is_deterministic(self):
         """KV-cached generation must be deterministic given fixed seed."""
         import domain.training._internal.slonet as _slonet_mod
+
         _slonet_mod._ACCELERATOR = "none"
 
-        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
-                                  n_decoder_layers=1)
+        engine = MultimodalEngine(
+            embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2, n_decoder_layers=1
+        )
         engine.build_vocab(["red circle on white background"])
         engine.eval()
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
 
         out1 = engine.generate(img, max_len=10, temperature=0.0)
         out2 = engine.generate(img, max_len=10, temperature=0.0)
-        assert out1.text == out2.text, (
-            f"KV cache non-deterministic: {out1.text!r} != {out2.text!r}"
-        )
+        assert out1.text == out2.text, f"KV cache non-deterministic: {out1.text!r} != {out2.text!r}"
 
     def test_kv_cache_is_faster_for_long_sequences(self):
         """KV cache should be faster than full-length forward for each step."""
         import time
+
         import domain.training._internal.slonet as _slonet_mod
+
         _slonet_mod._ACCELERATOR = "none"
 
-        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
-                                  n_decoder_layers=1)
+        engine = MultimodalEngine(
+            embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2, n_decoder_layers=1
+        )
         engine.build_vocab(["red circle on white background"])
         engine.eval()
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
@@ -615,6 +642,7 @@ class TestKVCache:
 
         # No-KV path: build full sequence each step
         from domain.training._internal.slonet import tensor as _tensor
+
         embed, patches, _ = engine._concat_modalities(img, None, None)
         # Use the same image, re-embed
         tokens = [0]
@@ -635,11 +663,14 @@ class TestKVCache:
     def test_kv_cache_is_faster_for_long_sequences(self):
         """KV cache should reduce wall time for long greedy generations."""
         import time
+
         import domain.training._internal.slonet as _slonet_mod
+
         _slonet_mod._ACCELERATOR = "none"
 
-        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
-                                  n_decoder_layers=1)
+        engine = MultimodalEngine(
+            embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2, n_decoder_layers=1
+        )
         engine.build_vocab(["red circle on white background"])
         img = np.random.randn(1, 224, 224, 3).astype(np.float32)
         engine.eval()
@@ -656,6 +687,7 @@ class TestKVCache:
             kv_times.append(time.perf_counter() - t0)
 
             from domain.training._internal.slonet import tensor as _tensor
+
             embed, patches, _ = engine._concat_modalities(img, None, None)
             tokens = [0]
             t0 = time.perf_counter()
@@ -696,11 +728,11 @@ class TestZeroPatchGradientRegression:
         vocab_size = 50
 
         # Decoder WITHOUT cross-attention (baseline)
-        decoder_no_ca = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim,
-                                              n_heads=4, n_layers=2)
+        decoder_no_ca = SloTransformerDecoder(
+            vocab_size, embed_dim, hidden_dim, n_heads=4, n_layers=2
+        )
         # Decoder WITH cross-attention but zero patches
-        decoder_ca = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim,
-                                           n_heads=4, n_layers=2)
+        decoder_ca = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim, n_heads=4, n_layers=2)
 
         img_embed = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32), requires_grad=True)
         token_ids = Tensor(np.array([[0, 2, 4, 6, 8, 10]]), requires_grad=False)
@@ -714,7 +746,7 @@ class TestZeroPatchGradientRegression:
         norm_no = 0.0
         for p in decoder_no_ca.parameters():
             if p.grad is not None:
-                g_data = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                g_data = p.grad.data if hasattr(p.grad, "data") else p.grad
                 norm_no += float(np.sum(np.asarray(g_data, dtype=np.float64).ravel() ** 2))
         norm_no = np.sqrt(norm_no)
 
@@ -732,7 +764,7 @@ class TestZeroPatchGradientRegression:
         norm_ca = 0.0
         for p in decoder_ca.parameters():
             if p.grad is not None:
-                g_data = p.grad.data if hasattr(p.grad, 'data') else p.grad
+                g_data = p.grad.data if hasattr(p.grad, "data") else p.grad
                 norm_ca += float(np.sum(np.asarray(g_data, dtype=np.float64).ravel() ** 2))
         norm_ca = np.sqrt(norm_ca)
 
@@ -747,8 +779,9 @@ class TestZeroPatchGradientRegression:
 
     def test_zero_patches_train_step_loss_drops(self):
         """Training with zero patches should decrease loss (like no-patches training)."""
-        engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
-                                  n_decoder_layers=1)
+        engine = MultimodalEngine(
+            embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2, n_decoder_layers=1
+        )
         engine.build_vocab(["a red circle on blue background"])
 
         img_zeros = np.zeros((1, 224, 224, 3), dtype=np.float32)
@@ -775,11 +808,9 @@ class TestZeroPatchGradientRegression:
         vocab_size = 30
 
         # No cross-attention decoder
-        dec_no = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim,
-                                       n_heads=2, n_layers=1)
+        dec_no = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim, n_heads=2, n_layers=1)
         # Decoder with cross-attention
-        dec_ca = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim,
-                                       n_heads=2, n_layers=1)
+        dec_ca = SloTransformerDecoder(vocab_size, embed_dim, hidden_dim, n_heads=2, n_layers=1)
 
         img_embed = Tensor(np.random.randn(1, 1, embed_dim).astype(np.float32), requires_grad=False)
         token_ids = Tensor(np.array([[0, 2, 4, 6, 8, 10, 12]]), requires_grad=False)
@@ -789,6 +820,7 @@ class TestZeroPatchGradientRegression:
         logits_no, _, _ = dec_no.forward(img_embed, token_ids[:, :-1])
         targets = Tensor(np.array([2, 4, 6, 8, 10, 12]), requires_grad=False)
         from domain.training._internal.slonet import cross_entropy as _cross_entropy
+
         loss_no = _cross_entropy(logits_no, targets)
 
         # Forward with cross-attention (zero patches)
@@ -868,7 +900,9 @@ class TestEngineSensitivity:
 
         sens_history = []
         for _ in range(5):
-            _, sens = engine.train_step(images_np=img, text_tokens=tok_arr, lr=1e-3, compute_sens=True)
+            _, sens = engine.train_step(
+                images_np=img, text_tokens=tok_arr, lr=1e-3, compute_sens=True
+            )
             sens_history.append(sens["decoder"])
 
         assert sens_history[-1] <= sens_history[0] * 5, (

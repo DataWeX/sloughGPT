@@ -1,25 +1,61 @@
 """Tests for fused QKV projection optimization."""
+
 import numpy as np
 import pytest
-from domain.training._internal.slonet import (
-    Tensor, SloMultiHeadAttention, SloTransformer, SloAdamW, cross_entropy,
-    mse_loss, topk, SloLinear, SloEmbedding, SloRMSNorm, SloLayerNorm,
-    SloTransformerBlock, SloDropout, SloLayer,
-    sigmoid, tanh, relu, gelu, silu, softmax, log_softmax,
-    no_grad, zeros, randn, ones, tensor, exp, where, isfinite,
-    multinomial, stack, concatenate, randint,
-    flatten, _broadcast_back, _broadcast_forward,
-    _apply_temperature, _apply_top_k, _apply_top_p,
-    _apply_repetition_penalty, _apply_frequency_penalty, _apply_presence_penalty,
-    _sample_from_logits,
-    gelu_np, silu_np,
-    GenerationMetrics, GenerateResult,
-)
 
+from domain.training._internal.slonet import (
+    GenerateResult,
+    GenerationMetrics,
+    SloAdamW,
+    SloDropout,
+    SloEmbedding,
+    SloLayer,
+    SloLayerNorm,
+    SloLinear,
+    SloMultiHeadAttention,
+    SloRMSNorm,
+    SloTransformer,
+    SloTransformerBlock,
+    Tensor,
+    _apply_frequency_penalty,
+    _apply_presence_penalty,
+    _apply_repetition_penalty,
+    _apply_temperature,
+    _apply_top_k,
+    _apply_top_p,
+    _broadcast_back,
+    _sample_from_logits,
+    concatenate,
+    cross_entropy,
+    exp,
+    flatten,
+    gelu,
+    gelu_np,
+    isfinite,
+    log_softmax,
+    mse_loss,
+    multinomial,
+    no_grad,
+    ones,
+    randint,
+    randn,
+    relu,
+    sigmoid,
+    silu,
+    silu_np,
+    softmax,
+    stack,
+    tanh,
+    tensor,
+    topk,
+    where,
+    zeros,
+)
 
 # ---------------------------------------------------------------------------
 # Tensor basics
 # ---------------------------------------------------------------------------
+
 
 class TestTensor:
     def test_create_from_array(self):
@@ -86,7 +122,7 @@ class TestTensor:
 
     def test_pow(self):
         a = Tensor(np.array([2.0, 3.0]))
-        b = a ** 2
+        b = a**2
         np.testing.assert_allclose(b.data, [4.0, 9.0])
 
     def test_div(self):
@@ -394,6 +430,7 @@ class TestTensor:
 # Activation functions
 # ---------------------------------------------------------------------------
 
+
 class TestActivations:
     def test_sigmoid(self):
         t = Tensor(np.array([0.0]))
@@ -485,6 +522,7 @@ class TestActivations:
 # FusedQKV
 # ---------------------------------------------------------------------------
 
+
 class TestFusedQKV:
     """Verify fused QKV projection matches separate projections."""
 
@@ -507,12 +545,18 @@ class TestFusedQKV:
         x = Tensor(np.random.randn(2, 8, 64), requires_grad=True)
 
         Q_f, K_f, V_f = attn._fused_qkv_forward(x)
-        loss_f = (Q_f.sum() + K_f.sum() + V_f.sum())
+        loss_f = Q_f.sum() + K_f.sum() + V_f.sum()
         loss_f.backward()
 
-        W_q_grad_fused = attn.W_q.weight.grad.data.copy() if attn.W_q.weight.grad is not None else None
-        W_k_grad_fused = attn.W_k.weight.grad.data.copy() if attn.W_k.weight.grad is not None else None
-        W_v_grad_fused = attn.W_v.weight.grad.data.copy() if attn.W_v.weight.grad is not None else None
+        W_q_grad_fused = (
+            attn.W_q.weight.grad.data.copy() if attn.W_q.weight.grad is not None else None
+        )
+        W_k_grad_fused = (
+            attn.W_k.weight.grad.data.copy() if attn.W_k.weight.grad is not None else None
+        )
+        W_v_grad_fused = (
+            attn.W_v.weight.grad.data.copy() if attn.W_v.weight.grad is not None else None
+        )
         x_grad_fused = x.grad.data.copy()
 
         attn.W_q.weight.grad = None
@@ -523,7 +567,7 @@ class TestFusedQKV:
         Q_s = attn.W_q.forward(x)
         K_s = attn.W_k.forward(x)
         V_s = attn.W_v.forward(x)
-        loss_s = (Q_s.sum() + K_s.sum() + V_s.sum())
+        loss_s = Q_s.sum() + K_s.sum() + V_s.sum()
         loss_s.backward()
 
         np.testing.assert_allclose(W_q_grad_fused, attn.W_q.weight.grad.data, rtol=1e-4, atol=1e-4)
@@ -577,12 +621,14 @@ class TestFusedQKV:
 # FusedQKVTraining
 # ---------------------------------------------------------------------------
 
+
 class TestFusedQKVTraining:
     """Verify training works with fused QKV."""
 
     def test_transformer_trains_with_fused_qkv(self):
-        model = SloTransformer(vocab_size=256, n_embed=64, n_layer=2,
-                               n_head=2, block_size=32, dropout=0.0)
+        model = SloTransformer(
+            vocab_size=256, n_embed=64, n_layer=2, n_head=2, block_size=32, dropout=0.0
+        )
         optimizer = SloAdamW(lr=1e-3)
         params = model.parameters()
 
@@ -592,8 +638,7 @@ class TestFusedQKVTraining:
         losses = []
         for _ in range(50):
             logits, _ = model.forward(Tensor(x, _copy=False))
-            loss = cross_entropy(logits.reshape(-1, 256),
-                                 Tensor(y.reshape(-1).astype(np.int64)))
+            loss = cross_entropy(logits.reshape(-1, 256), Tensor(y.reshape(-1).astype(np.int64)))
             loss.backward()
             optimizer.step(params)
             losses.append(loss.data)
@@ -601,8 +646,9 @@ class TestFusedQKVTraining:
         assert losses[-1] < losses[0] * 0.5
 
     def test_loss_decreases_over_steps(self):
-        model = SloTransformer(vocab_size=128, n_embed=32, n_layer=1,
-                               n_head=2, block_size=16, dropout=0.0)
+        model = SloTransformer(
+            vocab_size=128, n_embed=32, n_layer=1, n_head=2, block_size=16, dropout=0.0
+        )
         optimizer = SloAdamW(lr=1e-3)
         params = model.parameters()
 
@@ -613,8 +659,7 @@ class TestFusedQKVTraining:
         last_loss = None
         for i in range(30):
             logits, _ = model.forward(Tensor(x, _copy=False))
-            loss = cross_entropy(logits.reshape(-1, 128),
-                                 Tensor(y.reshape(-1).astype(np.int64)))
+            loss = cross_entropy(logits.reshape(-1, 128), Tensor(y.reshape(-1).astype(np.int64)))
             loss.backward()
             optimizer.step(params)
             if i == 0:
@@ -624,12 +669,12 @@ class TestFusedQKVTraining:
         assert last_loss < first_loss
 
     def test_transformer_forward_backward(self):
-        model = SloTransformer(vocab_size=64, n_embed=32, n_layer=1,
-                               n_head=2, block_size=8, dropout=0.0)
+        model = SloTransformer(
+            vocab_size=64, n_embed=32, n_layer=1, n_head=2, block_size=8, dropout=0.0
+        )
         x = Tensor(np.random.randint(0, 64, (1, 8)))
         logits, _ = model.forward(x)
-        loss = cross_entropy(logits.reshape(-1, 64),
-                             Tensor(np.random.randint(0, 64, (8,))))
+        loss = cross_entropy(logits.reshape(-1, 64), Tensor(np.random.randint(0, 64, (8,))))
         loss.backward()
         for p in model.parameters():
             assert p.grad is not None
@@ -638,6 +683,7 @@ class TestFusedQKVTraining:
 # ---------------------------------------------------------------------------
 # FusedQKVPerformance
 # ---------------------------------------------------------------------------
+
 
 class TestFusedQKVPerformance:
     """Benchmark fused vs separate QKV projections."""
@@ -660,6 +706,7 @@ class TestFusedQKVPerformance:
 # ---------------------------------------------------------------------------
 # SloMultiHeadAttention additional
 # ---------------------------------------------------------------------------
+
 
 class TestSloMultiHeadAttention:
     def test_init(self):
@@ -722,7 +769,7 @@ class TestSloMultiHeadAttention:
     def test_rope_init(self):
         attn = SloMultiHeadAttention(64, 4, use_rope=True, max_seq_len=128)
         assert attn.use_rope is True
-        assert hasattr(attn, 'rope')
+        assert hasattr(attn, "rope")
 
     def test_single_head(self):
         attn = SloMultiHeadAttention(32, 1)
@@ -735,6 +782,7 @@ class TestSloMultiHeadAttention:
 # ---------------------------------------------------------------------------
 # SloTransformer
 # ---------------------------------------------------------------------------
+
 
 class TestSloTransformer:
     def test_init(self):
@@ -779,6 +827,7 @@ class TestSloTransformer:
 # ---------------------------------------------------------------------------
 # SloAdamW
 # ---------------------------------------------------------------------------
+
 
 class TestSloAdamW:
     def test_init(self):
@@ -832,6 +881,7 @@ class TestSloAdamW:
 # cross_entropy
 # ---------------------------------------------------------------------------
 
+
 class TestCrossEntropy:
     def test_basic(self):
         logits = Tensor(np.array([[1.0, 2.0, 3.0]]))
@@ -860,7 +910,7 @@ class TestCrossEntropy:
 
     def test_3d_logits(self):
         logits = Tensor(np.random.randn(2, 4, 10))
-        targets = Tensor(np.array([3, 5]))
+        Tensor(np.array([3, 5]))
         loss = cross_entropy(logits.reshape(-1, 10), Tensor(np.array([3])))
         assert loss.data > 0
 
@@ -876,6 +926,7 @@ class TestCrossEntropy:
 # ---------------------------------------------------------------------------
 # mse_loss
 # ---------------------------------------------------------------------------
+
 
 class TestMseLoss:
     def test_perfect(self):
@@ -902,6 +953,7 @@ class TestMseLoss:
 # topk
 # ---------------------------------------------------------------------------
 
+
 class TestTopk:
     def test_basic(self):
         t = Tensor(np.array([1.0, 5.0, 3.0, 2.0, 4.0]))
@@ -919,6 +971,7 @@ class TestTopk:
 # ---------------------------------------------------------------------------
 # Additional layers
 # ---------------------------------------------------------------------------
+
 
 class TestSloLinear:
     def test_forward(self):
@@ -1021,6 +1074,7 @@ class TestSloLayer:
 # no_grad
 # ---------------------------------------------------------------------------
 
+
 class TestNoGrad:
     def test_context_manager(self):
         with no_grad():
@@ -1031,6 +1085,7 @@ class TestNoGrad:
         @no_grad()
         def my_fn(x):
             return Tensor(np.array([1.0]), requires_grad=True)
+
         t = my_fn(None)
         assert t.requires_grad is False
 
@@ -1045,6 +1100,7 @@ class TestNoGrad:
 # ---------------------------------------------------------------------------
 # Logit processors
 # ---------------------------------------------------------------------------
+
 
 class TestLogitProcessors:
     def test_apply_temperature(self):
@@ -1094,7 +1150,9 @@ class TestLogitProcessors:
     def test_sample_with_penalties(self):
         logits = np.array([[1.0, 2.0, 3.0]])
         gen_ids = np.array([0])
-        tok = _sample_from_logits(logits, temperature=1.0, repetition_penalty=1.5, generated_ids=gen_ids)
+        tok = _sample_from_logits(
+            logits, temperature=1.0, repetition_penalty=1.5, generated_ids=gen_ids
+        )
         assert 0 <= tok < 3
 
     def test_sample_eos_masked(self):
@@ -1116,6 +1174,7 @@ class TestLogitProcessors:
 # ---------------------------------------------------------------------------
 # GenerationMetrics / GenerateResult
 # ---------------------------------------------------------------------------
+
 
 class TestGenerationMetrics:
     def test_defaults(self):
@@ -1177,6 +1236,7 @@ class TestGenerateResult:
 # Utility functions
 # ---------------------------------------------------------------------------
 
+
 class TestUtilityFunctions:
     def test_broadcast_back(self):
         g = np.ones((2, 3, 4))
@@ -1192,8 +1252,8 @@ class TestUtilityFunctions:
     def test_isfinite(self):
         t = Tensor(np.array([1.0, np.inf, np.nan]))
         result = isfinite(t)
-        assert result[0] is True or result[0] == True
-        assert result[1] is False or result[1] == False
+        assert result[0] is True or result[0]
+        assert result[1] is False or not result[1]
 
     def test_where(self):
         cond = Tensor(np.array([1.0, 0.0, 1.0]))

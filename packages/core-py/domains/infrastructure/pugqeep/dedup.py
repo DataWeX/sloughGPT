@@ -13,12 +13,11 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import numpy as np
 
-from .point import Point
 from .library import PointLibrary
+from .point import Point
 
 logger = logging.getLogger("slo.pdqeep")
 
@@ -28,8 +27,8 @@ class PointDeduplicator:
 
     def __init__(self, tolerance: float = 1e-6):
         self._tolerance = tolerance
-        self._libraries: List[PointLibrary] = []
-        self._fingerprints: Dict[str, List[str]] = {}
+        self._libraries: list[PointLibrary] = []
+        self._fingerprints: dict[str, list[str]] = {}
 
     def add_library(self, library: PointLibrary) -> None:
         self._libraries.append(library)
@@ -37,9 +36,9 @@ class PointDeduplicator:
             fp = self._fingerprint(point)
             self._fingerprints.setdefault(fp, []).append(point.identity)
 
-    def find_duplicates(self) -> List[List[str]]:
+    def find_duplicates(self) -> list[list[str]]:
         groups = []
-        for fp, identities in self._fingerprints.items():
+        for _fp, identities in self._fingerprints.items():
             if len(identities) > 1:
                 groups.append(identities)
         return groups
@@ -138,7 +137,7 @@ class PointLibrarySync:
         path = target_dir / f"{library.name}.points.json"
         return library.save(path)
 
-    def sync_from_directory(self, source_dir: Path, name: Optional[str] = None) -> Optional[PointLibrary]:
+    def sync_from_directory(self, source_dir: Path, name: str | None = None) -> PointLibrary | None:
         if name is not None:
             path = source_dir / f"{name}.points.json"
             if path.exists():
@@ -149,7 +148,7 @@ class PointLibrarySync:
             return PointLibrary.load(f)
         return None
 
-    def merge(self, libraries: List[PointLibrary]) -> PointLibrary:
+    def merge(self, libraries: list[PointLibrary]) -> PointLibrary:
         merged = PointLibrary(name="merged")
         for lib in libraries:
             for point in lib.list_all():

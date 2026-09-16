@@ -1,4 +1,5 @@
 """Tests for HealthWatchdog — server health monitoring."""
+
 from __future__ import annotations
 
 import time

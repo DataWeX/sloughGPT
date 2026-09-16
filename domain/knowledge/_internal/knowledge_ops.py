@@ -13,7 +13,7 @@ import logging
 import os
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════
 # 1. SEMANTIC FILE SEARCH
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class FileIndex:
     """Index code/documentation files for natural-language search.
@@ -37,34 +38,58 @@ class FileIndex:
     """
 
     IGNORE_DIRS = {
-        '.git', '__pycache__', 'node_modules', '.venv', 'venv', '.env',
-        'dist', 'build', '.next', '.cache', '.pytest_cache', 'site-packages',
+        ".git",
+        "__pycache__",
+        "node_modules",
+        ".venv",
+        "venv",
+        ".env",
+        "dist",
+        "build",
+        ".next",
+        ".cache",
+        ".pytest_cache",
+        "site-packages",
     }
     IGNORE_EXTS = {
-        '.pyc', '.pyo', '.so', '.dll', '.dylib', '.exe', '.bin',
-        '.min.js', '.min.css', '.map', '.lock', '.DS_Store',
+        ".pyc",
+        ".pyo",
+        ".so",
+        ".dll",
+        ".dylib",
+        ".exe",
+        ".bin",
+        ".min.js",
+        ".min.css",
+        ".map",
+        ".lock",
+        ".DS_Store",
     }
     MAX_FILE_SIZE = 500_000  # 500KB
 
     def __init__(self, embedder=None):
         from domain.inference._internal.vector_store import InMemoryVectorStore
+
         self._store = InMemoryVectorStore(dimension=384)
         self._embedder = embedder
-        self._file_meta: Dict[str, Dict] = {}  # entry_id → {path, line, chunk_idx}
+        self._file_meta: dict[str, dict] = {}  # entry_id → {path, line, chunk_idx}
 
-    def _embed(self, text: str) -> List[float]:
+    def _embed(self, text: str) -> list[float]:
         if self._embedder:
             return self._embedder.embed(text)
         from domain.inference._internal.vector_store import simple_embed
+
         return simple_embed(text)
 
-    def _chunk_code(self, content: str, filepath: str, max_lines: int = 20) -> List[Tuple[str, int]]:
+    def _chunk_code(
+        self, content: str, filepath: str, max_lines: int = 20
+    ) -> list[tuple[str, int]]:
         """Split code into overlapping line-window chunks."""
-        lines = content.split('\n')
+        lines = content.split("\n")
         chunks = []
         for i in range(0, len(lines), max_lines // 2):
-            window = lines[i:i + max_lines]
-            text = '\n'.join(window).strip()
+            window = lines[i : i + max_lines]
+            text = "\n".join(window).strip()
             if len(text) > 10:
                 chunks.append((text, i + 1))  # 1-indexed line number
         return chunks
@@ -75,12 +100,14 @@ class FileIndex:
             size = os.path.getsize(filepath)
             if size > self.MAX_FILE_SIZE or size == 0:
                 return 0
-            with open(filepath, 'r', errors='ignore') as f:
+            with open(filepath, errors="ignore") as f:
                 content = f.read()
         except Exception as e:
             import logging
+
             logging.getLogger("slo.knowledge.ops").warning(
-                "Failed to read file %s: %s", filepath, e, extra={"tag": "INF"})
+                "Failed to read file %s: %s", filepath, e, extra={"tag": "INF"}
+            )
             return 0
 
         chunks = self._chunk_code(content, filepath)
@@ -88,6 +115,7 @@ class FileIndex:
             return 0
 
         from domain.inference._internal.vector_store import VectorEntry
+
         entries = []
         for text, line_no in chunks:
             entry_id = f"file_{hashlib.md5(f'{filepath}:{line_no}'.encode()).hexdigest()[:12]}"
@@ -105,11 +133,11 @@ class FileIndex:
             entries.append(entry)
             self._file_meta[entry_id] = {"path": rel_path, "line": line_no}
 
-        if hasattr(self._store, 'upsert_sync'):
+        if hasattr(self._store, "upsert_sync"):
             self._store.upsert_sync(entries)
         return len(chunks)
 
-    def index_directory(self, root: str, extensions: Optional[set] = None) -> Dict[str, int]:
+    def index_directory(self, root: str, extensions: set | None = None) -> dict[str, int]:
         """Index all matching files in a directory tree.
 
         Args:
@@ -119,7 +147,7 @@ class FileIndex:
         Returns:
             dict with stats: {files_indexed, chunks_total, by_ext: {ext: count}}
         """
-        extensions = extensions or {'.py', '.md', '.txt', '.ts', '.tsx', '.json', '.yaml'}
+        extensions = extensions or {".py", ".md", ".txt", ".ts", ".tsx", ".json", ".yaml"}
         stats = {"files_indexed": 0, "chunks_total": 0, "by_ext": Counter()}
 
         for dirpath, dirnames, filenames in os.walk(root):
@@ -135,10 +163,15 @@ class FileIndex:
                     stats["chunks_total"] += n
                     stats["by_ext"][ext] += n
 
-        logger.info("Indexed %d files, %d chunks", stats["files_indexed"], stats["chunks_total"], extra={"tag": "LEARN"})
+        logger.info(
+            "Indexed %d files, %d chunks",
+            stats["files_indexed"],
+            stats["chunks_total"],
+            extra={"tag": "LEARN"},
+        )
         return stats
 
-    def search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
         """Search indexed files with a natural-language query.
 
         Returns list of {path, line, score, snippet}.
@@ -149,17 +182,19 @@ class FileIndex:
         out = []
         for r in results:
             meta = self._file_meta.get(r.id, r.metadata)
-            out.append({
-                "path": meta.get("path", "?"),
-                "line": meta.get("line", 0),
-                "score": r.score,
-                "snippet": r.text[:200],
-            })
+            out.append(
+                {
+                    "path": meta.get("path", "?"),
+                    "line": meta.get("line", 0),
+                    "score": r.score,
+                    "snippet": r.text[:200],
+                }
+            )
         return out
 
     @property
     def file_count(self) -> int:
-        return len(set(m["path"] for m in self._file_meta.values()))
+        return len({m["path"] for m in self._file_meta.values()})
 
     @property
     def chunk_count(self) -> int:
@@ -169,6 +204,7 @@ class FileIndex:
 # ═══════════════════════════════════════════════════════════════════════
 # 2. DUPLICATE / NEAR-DUPLICATE DETECTION
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class DuplicateDetector:
     """Find semantically similar facts before they pollute the knowledge base.
@@ -191,7 +227,9 @@ class DuplicateDetector:
     def load_from_store(self, store) -> None:
         self._store = store
 
-    def check(self, text: str, embed_fn=None, query_vector=None) -> Tuple[bool, Optional[str], float]:
+    def check(
+        self, text: str, embed_fn=None, query_vector=None
+    ) -> tuple[bool, str | None, float]:
         """Check if text is a near-duplicate of existing facts.
 
         Args:
@@ -212,6 +250,7 @@ class DuplicateDetector:
             q_vec = embed_fn(text)
         else:
             from domain.inference._internal.vector_store import simple_embed
+
             q_vec = simple_embed(text)
 
         results = self._store.query_sync(q_vec, top_k=1)
@@ -223,12 +262,12 @@ class DuplicateDetector:
             return True, best.text, best.score
         return False, best.text, best.score
 
-    def find_clusters(self, embed_fn=None, threshold: float = 0.80) -> List[List[Dict]]:
+    def find_clusters(self, embed_fn=None, threshold: float = 0.80) -> list[list[dict]]:
         """Find clusters of similar facts across the entire store.
 
         Returns list of clusters, each cluster is a list of {id, text, score}.
         """
-        if not self._store or not hasattr(self._store, '_entries'):
+        if not self._store or not hasattr(self._store, "_entries"):
             return []
 
         entries = list(self._store._entries.values())
@@ -265,6 +304,7 @@ class DuplicateDetector:
 # 3. AUTO-CATEGORIZATION
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class AutoCategorizer:
     """Auto-assign topics to incoming knowledge based on existing categories.
 
@@ -280,12 +320,12 @@ class AutoCategorizer:
     def __init__(self, min_score: float = 0.3):
         self._min_score = min_score
         self._store = None
-        self._topic_examples: Dict[str, List[str]] = defaultdict(list)
+        self._topic_examples: dict[str, list[str]] = defaultdict(list)
 
     def load_from_store(self, store) -> None:
         """Build topic centroids from existing vector store entries."""
         self._store = store
-        if not store or not hasattr(store, '_entries'):
+        if not store or not hasattr(store, "_entries"):
             return
 
         # Group texts by topic
@@ -296,13 +336,14 @@ class AutoCategorizer:
 
         self._topic_examples = topic_texts
 
-    def _compute_topic_centroid(self, topic: str) -> Optional[np.ndarray]:
+    def _compute_topic_centroid(self, topic: str) -> np.ndarray | None:
         """Compute average embedding for a topic."""
         texts = self._topic_examples.get(topic, [])
         if not texts:
             return None
 
         from domain.inference._internal.vector_store import simple_embed
+
         vecs = [simple_embed(t) for t in texts[:20]]  # cap at 20 examples
         return np.mean(vecs, axis=0)
 
@@ -318,6 +359,7 @@ class AutoCategorizer:
             q_vec = np.asarray(embed_fn(text), dtype=np.float64)
         else:
             from domain.inference._internal.vector_store import simple_embed
+
             q_vec = np.asarray(simple_embed(text), dtype=np.float64)
 
         best_topic = "general"
@@ -327,7 +369,9 @@ class AutoCategorizer:
             centroid = self._compute_topic_centroid(topic)
             if centroid is None:
                 continue
-            cos = float(np.dot(q_vec, centroid) / (np.linalg.norm(q_vec) * np.linalg.norm(centroid) + 1e-10))
+            cos = float(
+                np.dot(q_vec, centroid) / (np.linalg.norm(q_vec) * np.linalg.norm(centroid) + 1e-10)
+            )
             if cos > best_score:
                 best_score = cos
                 best_topic = topic
@@ -336,12 +380,13 @@ class AutoCategorizer:
             return best_topic
         return "general"
 
-    def suggest_topics(self, text: str, top_k: int = 3) -> List[Tuple[str, float]]:
+    def suggest_topics(self, text: str, top_k: int = 3) -> list[tuple[str, float]]:
         """Suggest top-k topics with scores for a text."""
         if not self._topic_examples:
             return []
 
         from domain.inference._internal.vector_store import simple_embed
+
         q_vec = np.asarray(simple_embed(text), dtype=np.float64)
 
         scored = []
@@ -349,7 +394,9 @@ class AutoCategorizer:
             centroid = self._compute_topic_centroid(topic)
             if centroid is None:
                 continue
-            cos = float(np.dot(q_vec, centroid) / (np.linalg.norm(q_vec) * np.linalg.norm(centroid) + 1e-10))
+            cos = float(
+                np.dot(q_vec, centroid) / (np.linalg.norm(q_vec) * np.linalg.norm(centroid) + 1e-10)
+            )
             scored.append((topic, cos))
 
         scored.sort(key=lambda x: x[1], reverse=True)
@@ -359,6 +406,7 @@ class AutoCategorizer:
 # ═══════════════════════════════════════════════════════════════════════
 # 4. KNOWLEDGE GAP DETECTOR
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class KnowledgeGapDetector:
     """Find what topics are under-represented in your knowledge base.
@@ -375,11 +423,11 @@ class KnowledgeGapDetector:
 
     def __init__(self):
         self._store = None
-        self._topic_counts: Dict[str, int] = {}
+        self._topic_counts: dict[str, int] = {}
 
     def load_from_store(self, store) -> None:
         self._store = store
-        if not store or not hasattr(store, '_entries'):
+        if not store or not hasattr(store, "_entries"):
             return
 
         counts = Counter()
@@ -390,9 +438,9 @@ class KnowledgeGapDetector:
 
     def find_gaps(
         self,
-        seed_topics: Optional[List[str]] = None,
-        expand_with: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
+        seed_topics: list[str] | None = None,
+        expand_with: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Find knowledge gaps.
 
         Args:
@@ -428,22 +476,24 @@ class KnowledgeGapDetector:
             else:
                 continue  # adequately covered
 
-            gaps.append({
-                "topic": topic,
-                "count": count,
-                "coverage_pct": round(coverage, 1),
-                "suggestion": suggestion,
-            })
+            gaps.append(
+                {
+                    "topic": topic,
+                    "count": count,
+                    "coverage_pct": round(coverage, 1),
+                    "suggestion": suggestion,
+                }
+            )
 
         gaps.sort(key=lambda g: g["count"])
         return gaps
 
-    def find_sparse_regions(self, embed_fn=None, n_regions: int = 5) -> List[Dict[str, Any]]:
+    def find_sparse_regions(self, embed_fn=None, n_regions: int = 5) -> list[dict[str, Any]]:
         """Find embedding-space regions with few facts (potential blind spots).
 
         Divides the 384-dim space into grid cells and counts facts per cell.
         """
-        if not self._store or not hasattr(self._store, '_entries'):
+        if not self._store or not hasattr(self._store, "_entries"):
             return []
 
         entries = list(self._store._entries.values())
@@ -470,12 +520,14 @@ class KnowledgeGapDetector:
                 if grid[(gx, gy)] == 0:
                     cx = min_vals[0] + (gx + 0.5) / 10 * range_vals[0]
                     cy = min_vals[1] + (gy + 0.5) / 10 * range_vals[1]
-                    sparse.append({
-                        "grid_cell": (gx, gy),
-                        "count": 0,
-                        "center": [float(cx), float(cy)],
-                        "suggestion": "Empty region — no knowledge indexed here",
-                    })
+                    sparse.append(
+                        {
+                            "grid_cell": (gx, gy),
+                            "count": 0,
+                            "center": [float(cx), float(cy)],
+                            "suggestion": "Empty region — no knowledge indexed here",
+                        }
+                    )
 
         return sparse[:n_regions]
 
@@ -483,6 +535,7 @@ class KnowledgeGapDetector:
 # ═══════════════════════════════════════════════════════════════════════
 # 5. SMART CONTEXT INJECTION
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class SmartContextInjector:
     """Automatically pull relevant knowledge into chat without manual injection.
@@ -533,7 +586,9 @@ class SmartContextInjector:
 
         return "Relevant knowledge:\n" + "\n".join(parts)
 
-    def get_context_for_system(self, user_message: str, system_prompt: str, max_chars: int = 300) -> str:
+    def get_context_for_system(
+        self, user_message: str, system_prompt: str, max_chars: int = 300
+    ) -> str:
         """Inject knowledge into system prompt if relevant facts exist."""
         context = self.get_context(user_message, max_chars=max_chars)
         if not context:
@@ -554,6 +609,7 @@ class SmartContextInjector:
 # BULK OPERATIONS
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class BulkProcessor:
     """Process large batches of text efficiently.
 
@@ -572,12 +628,12 @@ class BulkProcessor:
 
     def ingest_texts(
         self,
-        texts: List[str],
+        texts: list[str],
         topic: str = "imported",
         source: str = "bulk",
         dedup_threshold: float = 0.85,
         progress_callback=None,
-    ) -> Dict[str, int]:
+    ) -> dict[str, int]:
         """Ingest a batch of texts with deduplication.
 
         Args:
@@ -619,12 +675,14 @@ class BulkProcessor:
                     self._skipped += 1
                     continue
 
-                facts.append(KnowledgeFact(
-                    content=text.strip(),
-                    topic=topic,
-                    source=source,
-                    importance=min(1.0, len(text) / 2000),
-                ))
+                facts.append(
+                    KnowledgeFact(
+                        content=text.strip(),
+                        topic=topic,
+                        source=source,
+                        importance=min(1.0, len(text) / 2000),
+                    )
+                )
                 vectors.append(vec)
             except Exception as e:
                 logger.warning("Bulk ingest error at %d: %s", i, e, extra={"tag": "LEARN"})
@@ -636,5 +694,5 @@ class BulkProcessor:
 
         return self.get_report()
 
-    def get_report(self) -> Dict[str, int]:
+    def get_report(self) -> dict[str, int]:
         return {"added": self._added, "skipped": self._skipped, "errors": self._errors}

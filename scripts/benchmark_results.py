@@ -11,13 +11,13 @@ Usage:
     python scripts/benchmark_results.py history [--kind latency]
     python scripts/benchmark_results.py compare [--kind latency] [--vs previous|first]
 """
+
 import argparse
 import json
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import List, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = REPO_ROOT / "data" / "benchmark_results"
@@ -40,12 +40,15 @@ REGRESSION_THRESHOLDS = {
 }
 
 
-def git_commit() -> Optional[str]:
+def git_commit() -> str | None:
     """Return short git commit of repo root, or None."""
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=5,
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return out.stdout.strip() or None
     except Exception:
@@ -54,7 +57,7 @@ def git_commit() -> Optional[str]:
 
 def timestamp() -> str:
     """Return ISO timestamp with timezone."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def results_path(kind: str, model: str, stamp: str) -> Path:
@@ -63,7 +66,7 @@ def results_path(kind: str, model: str, stamp: str) -> Path:
     return RESULTS_DIR / kind / f"{safe_model}_{stamp}.json"
 
 
-def collect_records(kind: str) -> List[Path]:
+def collect_records(kind: str) -> list[Path]:
     """Return all stored result files for a kind, newest first."""
     d = RESULTS_DIR / kind
     if not d.exists():
@@ -90,9 +93,19 @@ def _extract_from_stability(raw: str) -> dict:
 def _run_stability(url: str, runs: int) -> dict:
     """Execute benchmark_stability.py and capture its JSON report."""
     out = subprocess.run(
-        [sys.executable, "scripts/benchmark_stability.py", "--runs", str(runs), "--json",
-         "--url", url],
-        cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=3600,
+        [
+            sys.executable,
+            "scripts/benchmark_stability.py",
+            "--runs",
+            str(runs),
+            "--json",
+            "--url",
+            url,
+        ],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=3600,
     )
     if out.returncode != 0 and "Error" in out.stdout:
         raise RuntimeError(f"stability benchmark failed: {out.stdout[-500:]}")
@@ -116,11 +129,19 @@ def _run_latency(url: str, runs: int, update_baseline: bool) -> dict:
                 key = key.replace(" ", "_").replace("ms", "ms")
             if key in ("mean", "min", "max", "p50", "p95", "sample_count"):
                 try:
-                    metrics["mean_ms" if key == "mean" else
-                            "min_ms" if key == "min" else
-                            "max_ms" if key == "max" else
-                            "p50_ms" if key == "p50" else
-                            "p95_ms" if key == "p95" else key] = float(val.strip())
+                    metrics[
+                        "mean_ms"
+                        if key == "mean"
+                        else "min_ms"
+                        if key == "min"
+                        else "max_ms"
+                        if key == "max"
+                        else "p50_ms"
+                        if key == "p50"
+                        else "p95_ms"
+                        if key == "p95"
+                        else key
+                    ] = float(val.strip())
                 except ValueError:
                     pass
     if not metrics:
@@ -266,7 +287,7 @@ def do_record(args) -> int:
 
 def do_history(args) -> int:
     """List stored runs."""
-    for kind in ([args.kind] if args.kind else ["stability", "latency"]):
+    for kind in [args.kind] if args.kind else ["stability", "latency"]:
         runs = collect_records(kind)
         print(f"── {kind}: {len(runs)} runs ──")
         for p in runs:
@@ -275,12 +296,16 @@ def do_history(args) -> int:
             model = r.get("model", "?")
             if kind == "stability":
                 sc = r.get("score", {})
-                print(f"  {stamp}  {model:<24} overall={sc.get('overall', '?'):<4} "
-                      f"passed={'✓' if r.get('passed') else '✗'}  {p.name}")
+                print(
+                    f"  {stamp}  {model:<24} overall={sc.get('overall', '?'):<4} "
+                    f"passed={'✓' if r.get('passed') else '✗'}  {p.name}"
+                )
             else:
                 m = r.get("metrics", {})
-                print(f"  {stamp}  {model:<24} mean={m.get('mean_ms', '?'):<7} "
-                      f"p95={m.get('p95_ms', '?'):<7}  {p.name}")
+                print(
+                    f"  {stamp}  {model:<24} mean={m.get('mean_ms', '?'):<7} "
+                    f"p95={m.get('p95_ms', '?'):<7}  {p.name}"
+                )
     return 0
 
 
@@ -288,8 +313,7 @@ def do_compare(args) -> int:
     """Compare newest run against a prior run and report regressions."""
     runs = collect_records(args.kind)
     if len(runs) < 2:
-        print(f"[INFO] need ≥2 runs of kind '{args.kind}' to compare "
-              f"(have {len(runs)})")
+        print(f"[INFO] need ≥2 runs of kind '{args.kind}' to compare (have {len(runs)})")
         return 0
 
     new = load_result(runs[0])
@@ -301,7 +325,9 @@ def do_compare(args) -> int:
     deltas = _regression_deltas(args.kind, new, old)
     regressed = is_regression(args.kind, new, old)
 
-    print(f"── compare {args.kind}: {old.get('timestamp','?')[:19]} → {new.get('timestamp','?')[:19]} ──")
+    print(
+        f"── compare {args.kind}: {old.get('timestamp', '?')[:19]} → {new.get('timestamp', '?')[:19]} ──"
+    )
     for metric, delta in deltas.items():
         nv = _dig(new, metric)
         ov = _dig(old, metric)
@@ -329,8 +355,7 @@ def main() -> int:
 
     p_rec = sub.add_parser("record", help="record a benchmark run")
     p_rec.add_argument("--kind", required=True, choices=["stability", "latency"])
-    p_rec.add_argument("--json-file", default=None,
-                       help="existing JSON output file to ingest")
+    p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
     p_rec.add_argument("--runs", type=int, default=20)
     p_rec.add_argument("--model", default=None, help="model name (latency only)")

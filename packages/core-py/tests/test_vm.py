@@ -2,24 +2,46 @@
 Tests for Shell Virtual Machine — CPU, assembler, syscall dispatch, sandbox.
 """
 
-import struct
 import os
-import time
+import struct
 import tempfile
-import pytest
+import time
+
 import numpy as np
+import pytest
+
 from domain.shell._internal.vm import (
-    ProgramLoader, VirtualCPU, VMRunner, VMFault, Halt, MemFault, InsFault,
-    HELLO_ASM, NUM_REGS, MEM_SIZE, STACK_BASE, F_ZERO, F_NEG,
-    X86VirtualSystem, X86CPU, X86Assembler,
-    ClockDevice, VGADevice, SerialDevice,
-    PS2KeyboardDevice, MouseDevice, CMOSDevice, DiskDevice, NICDevice,
-    DeviceBus, ProcessTable, ProcessState, Scheduler,
-    Memory, FlatFS, BlockDevice, DiskProgramLoader, X86Shell,
-    Device, DeviceFault,
+    HELLO_ASM,
+    NUM_REGS,
+    STACK_BASE,
+    X86CPU,
+    BlockDevice,
+    ClockDevice,
+    CMOSDevice,
+    Device,
+    DeviceBus,
+    DeviceFault,
+    DiskDevice,
+    DiskProgramLoader,
+    FlatFS,
+    InsFault,
+    Memory,
+    MouseDevice,
+    NICDevice,
+    ProcessState,
+    ProcessTable,
+    ProgramLoader,
+    PS2KeyboardDevice,
+    Scheduler,
+    SerialDevice,
+    VGADevice,
+    VirtualCPU,
+    VMRunner,
+    X86Assembler,
+    X86Shell,
+    X86VirtualSystem,
 )
 from domain.shell._internal.vm_permissions import X86RBAC, Permission, Role
-
 
 # ── ProgramLoader (Assembler) ──────────────────────────────────────────────
 
@@ -305,22 +327,22 @@ class TestVMRunner:
 
     def test_mov_immediate(self):
         runner = VMRunner()
-        output = runner.assemble_and_run("MOV R0, 42\nHALT")
+        runner.assemble_and_run("MOV R0, 42\nHALT")
         assert runner.cpu.regs[0] == 42
 
     def test_register_to_register(self):
         runner = VMRunner()
-        output = runner.assemble_and_run("MOV R0, 10\nMOV R1, R0\nHALT")
+        runner.assemble_and_run("MOV R0, 10\nMOV R1, R0\nHALT")
         assert runner.cpu.regs[1] == 10
 
     def test_infinite_loop_terminates(self):
         runner = VMRunner()
-        output = runner.assemble_and_run("loop: JMP loop")
+        runner.assemble_and_run("loop: JMP loop")
         assert runner.cpu._step_count > 0
 
     def test_memory_store_load(self):
         runner = VMRunner()
-        output = runner.assemble_and_run("""
+        runner.assemble_and_run("""
             MOV R0, 42
             STORE R0, 100
             MOV R1, 0
@@ -342,7 +364,7 @@ class TestVMRunner:
 
     def test_cpu_get_trace(self):
         runner = VMRunner()
-        output = runner.assemble_and_run("MOV R0, 42\nHALT", trace=True)
+        runner.assemble_and_run("MOV R0, 42\nHALT", trace=True)
         trace = runner.cpu.get_trace()
         assert len(trace) >= 2
         assert trace[0].pc == 0
@@ -468,7 +490,8 @@ class TestMemoryOpcodes:
 
 class TestConsoleIO:
     def test_out_writes(self):
-        from domain.shell._internal.vm import CPU as VMCPU, Assembler, DeviceBus
+        from domain.shell._internal.vm import CPU as VMCPU
+        from domain.shell._internal.vm import DeviceBus
 
         output = []
         bus = DeviceBus()
@@ -481,7 +504,8 @@ class TestConsoleIO:
         assert output == ["42", "99"]
 
     def test_in_reads(self):
-        from domain.shell._internal.vm import CPU as VMCPU, Assembler, DeviceBus
+        from domain.shell._internal.vm import CPU as VMCPU
+        from domain.shell._internal.vm import DeviceBus
 
         bus = DeviceBus()
         bus.register_console(stdin_fn=lambda: "7")
@@ -519,14 +543,12 @@ class TestBlockDevice:
 
 class TestVirtualSystem:
     def test_run_program(self):
-        from domain.shell._internal.vm import VirtualSystem
         vs = VirtualSystem()
         vs.load_program("LOAD_CONST R0, 42\nPRINT R0\nHALT")
         out = vs.run()
         assert out == ["42"]
 
     def test_carry_flag(self):
-        from domain.shell._internal.vm import VirtualSystem
         vs = VirtualSystem()
         vs.load_program("LOAD_CONST R0, 4294967295\nLOAD_CONST R1, 1\nIADD R2, R0, R1\nHALT")
         vs.run()
@@ -534,7 +556,6 @@ class TestVirtualSystem:
         assert vs.cpu.regs[2] == 0
 
     def test_status(self):
-        from domain.shell._internal.vm import VirtualSystem
         vs = VirtualSystem(enable_block=True)
         status = vs.status()
         assert "pc" in status
@@ -580,6 +601,7 @@ class TestFlatFS:
 class TestSyscall:
     def test_syscall_print(self):
         import time as _time
+
         from domain.shell._internal.kernel import Kernel
         output = []
         k = Kernel()
@@ -602,19 +624,17 @@ class TestSyscall:
 
 class TestIRQ:
     def test_irq_fires(self):
-        from domain.shell._internal.vm import CPU, Assembler, IRQDevice
         fired = []
         cpu = CPU()
         irq = IRQDevice()
         cpu.register_irq(0, lambda c: fired.append("timer"))
 
-        for i in range(15):
+        for _i in range(15):
             irq.tick(cpu)
         cpu._process_irqs()
         assert len(fired) == 1  # fires at tick 10
 
     def test_keyboard_irq(self):
-        from domain.shell._internal.vm import CPU, IRQDevice
         cpu = CPU()
         irq = IRQDevice()
         cpu.register_irq(1, lambda c: fired.append("key"))
@@ -630,6 +650,7 @@ class TestIRQ:
 class TestShellWrite:
     def test_write_file(self):
         import time as _time
+
         from domain.shell._internal.kernel import Kernel
         from domain.shell._internal.vm import BlockDevice, FlatFS
 
@@ -814,7 +835,7 @@ class TestX86Bootloader:
         assert "timer_handler" in X86_KERNEL_ASM
 
     def test_export_binary(self):
-        from domain.shell._internal.vm_programs import export_x86_binary, X86_BOOTLOADER_ASM
+        from domain.shell._internal.vm_programs import X86_BOOTLOADER_ASM, export_x86_binary
         binary = export_x86_binary(X86_BOOTLOADER_ASM)
         assert isinstance(binary, bytes)
         assert len(binary) > 0
@@ -943,7 +964,7 @@ class TestPS2Keyboard:
         kb.call("push_scancode", 0x39)  # Space
         assert kb.call("read_key") == ord(' ')
     def test_list_programs(self):
-        from domain.shell._internal.vm import BlockDevice, FlatFS, DiskProgramLoader
+        from domain.shell._internal.vm import BlockDevice, DiskProgramLoader, FlatFS
         blk = BlockDevice(num_sectors=16)
         fs = FlatFS(blk)
         fs.write('hello.asm', 'HALT')
@@ -952,7 +973,7 @@ class TestPS2Keyboard:
         assert loader.list_programs() == ['hello.asm']
 
     def test_load_and_run(self):
-        from domain.shell._internal.vm import BlockDevice, FlatFS, DiskProgramLoader
+        from domain.shell._internal.vm import BlockDevice, DiskProgramLoader, FlatFS
         blk = BlockDevice(num_sectors=16)
         fs = FlatFS(blk)
         fs.write('test.asm', 'LOAD_CONST R0, 42\nPRINT R0\nHALT')
@@ -962,7 +983,7 @@ class TestPS2Keyboard:
         assert result['steps'] == 3
 
     def test_save_and_load(self):
-        from domain.shell._internal.vm import BlockDevice, FlatFS, DiskProgramLoader
+        from domain.shell._internal.vm import BlockDevice, DiskProgramLoader, FlatFS
         blk = BlockDevice(num_sectors=16)
         fs = FlatFS(blk)
         loader = DiskProgramLoader(fs)
@@ -970,17 +991,17 @@ class TestPS2Keyboard:
         source = loader.load_source('mine.asm')
         assert 'NOP' in source
 from domain.shell._internal.vm import (
-    PageFrameAllocator, ProcessControlBlock, ProcessState,
-    ProcessTable, Scheduler, X86SyscallHandler, PITDevice,
-    X86VirtualSystem, X86CPU, X86Assembler, FlatFS, BlockDevice,
-    SerialDevice, MouseDevice, CMOSDevice, DiskDevice, NICDevice,
-    ClockDevice, CPU, Assembler, InsFault, Memory, DeviceBus,
-    NUM_REGS, FileDevice, VGADevice, PS2KeyboardDevice, ConsoleDevice, IRQDevice,
-    DiskProgramLoader, VirtualSystem, DeviceFault, X86Shell, FLAG_DF, FLAG_ZF,
+    CPU,
+    FLAG_ZF,
+    Assembler,
+    ConsoleDevice,
+    FileDevice,
+    IRQDevice,
+    PageFrameAllocator,
+    PITDevice,
+    VirtualSystem,
+    X86SyscallHandler,
 )
-from domain.shell._internal.vm_permissions import Role
-import struct
-
 
 # ============================================================
 # Syscall Dispatch (handle()) tests — L6500-6551
@@ -1765,17 +1786,6 @@ class TestAssemblerMiscCoverage:
 
 
 """High-impact branch coverage tests for vm.py uncovered lines."""
-from domain.shell._internal.vm import (
-    PageFrameAllocator, ProcessControlBlock, ProcessState,
-    ProcessTable, Scheduler, X86SyscallHandler, PITDevice,
-    X86VirtualSystem, X86CPU, X86Assembler, FlatFS, BlockDevice,
-    SerialDevice, MouseDevice, CMOSDevice, DiskDevice, NICDevice,
-    ClockDevice, CPU, Assembler, InsFault, Memory, DeviceBus,
-    NUM_REGS, FileDevice, VGADevice, PS2KeyboardDevice, ConsoleDevice, IRQDevice,
-    DiskProgramLoader, VirtualSystem, DeviceFault, X86Shell, FLAG_DF, FLAG_ZF,
-)
-from domain.shell._internal.vm_permissions import Role
-import struct
 
 
 def _make_handler(fs=None):
@@ -1935,7 +1945,7 @@ class TestSysKillEdge:
     def test_kill_other_process(self):
         h, cpu, s, pcb, m = _make_handler()
         h._rbac.assign(pcb.pid, Role.ADMIN)
-        child = m.alloc(1)
+        m.alloc(1)
         child_pcb = h._ptable.create("child")
         h._rbac.inherit(child_pcb.pid, pcb.pid)
         s.enqueue(child_pcb.pid)
@@ -2585,7 +2595,8 @@ class TestConsoleDevice:
 class TestFileDevice:
 
     def test_open_read(self):
-        import tempfile, os
+        import os
+        import tempfile
         fd_dev = FileDevice()
         with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as f:
             f.write(b"test content")
@@ -2596,7 +2607,6 @@ class TestFileDevice:
         finally:
             os.unlink(path)
 
-import struct
 
 def run_asm(source, max_cycles=5000):
     vs = X86VirtualSystem()
@@ -3628,7 +3638,7 @@ class TestX86MulDivIdiv8:
         cpu.step()
         try:
             cpu.step()  # DIV by zero
-            assert False, "Should have raised"
+            raise AssertionError("Should have raised")
         except Exception:
             pass
 
@@ -3729,7 +3739,13 @@ class TestSyscallCoverage:
 
 class TestX86SyscallHandler:
     def _make_handler(self):
-        from domain.shell._internal.vm import X86SyscallHandler, X86CPU, ProcessTable, Scheduler, PageFrameAllocator
+        from domain.shell._internal.vm import (
+            X86CPU,
+            PageFrameAllocator,
+            ProcessTable,
+            Scheduler,
+            X86SyscallHandler,
+        )
         cpu = X86CPU()
         pt = ProcessTable()
         sch = Scheduler(process_table=pt)
@@ -3944,7 +3960,7 @@ class TestVGADeviceCoverage:
 
 class TestFlatFSExtended:
     def test_flatfs_write_and_read(self):
-        from domain.shell._internal.vm import FlatFS, BlockDevice
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         bd = BlockDevice(num_sectors=64)
         fs = FlatFS(bd)
         fs.write("test.txt", b"Hello World")
@@ -3952,7 +3968,7 @@ class TestFlatFSExtended:
         assert data.startswith(b"Hello World")
 
     def test_flatfs_list_files(self):
-        from domain.shell._internal.vm import FlatFS, BlockDevice
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         bd = BlockDevice(num_sectors=64)
         fs = FlatFS(bd)
         fs.write("a.txt", b"aaa")
@@ -3961,7 +3977,7 @@ class TestFlatFSExtended:
         assert len(files) >= 2
 
     def test_flatfs_exists(self):
-        from domain.shell._internal.vm import FlatFS, BlockDevice
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         bd = BlockDevice(num_sectors=64)
         fs = FlatFS(bd)
         fs.write("exists.txt", b"yes")
@@ -3969,7 +3985,7 @@ class TestFlatFSExtended:
         assert fs.exists("no.txt") is False
 
     def test_flatfs_size(self):
-        from domain.shell._internal.vm import FlatFS, BlockDevice
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         bd = BlockDevice(num_sectors=64)
         fs = FlatFS(bd)
         fs.write("size.txt", b"12345")
@@ -3977,7 +3993,7 @@ class TestFlatFSExtended:
         assert size >= 5
 
     def test_flatfs_delete(self):
-        from domain.shell._internal.vm import FlatFS, BlockDevice
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         bd = BlockDevice(num_sectors=64)
         fs = FlatFS(bd)
         fs.write("del.txt", b"delete me")
@@ -3986,7 +4002,7 @@ class TestFlatFSExtended:
         assert not fs.exists("del.txt")
 
     def test_flatfs_delete_nonexistent(self):
-        from domain.shell._internal.vm import FlatFS, BlockDevice
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         bd = BlockDevice(num_sectors=64)
         fs = FlatFS(bd)
         result = fs.delete("no.txt")
@@ -4044,7 +4060,7 @@ class TestFileDevice:
         fd = FileDevice()
         try:
             fd.call("read", 999)
-            assert False, "Should have raised"
+            raise AssertionError("Should have raised")
         except Exception:
             pass
 
@@ -4052,7 +4068,7 @@ class TestFileDevice:
         fd = FileDevice()
         try:
             fd.call("write", 999, "data")
-            assert False, "Should have raised"
+            raise AssertionError("Should have raised")
         except Exception:
             pass
 
@@ -4079,7 +4095,7 @@ class TestFileDevice:
         with tempfile.NamedTemporaryFile(mode='r', delete=False, suffix='.txt') as f:
             path = f.name
         try:
-            file_fd = fd.call("open", path, "r")
+            fd.call("open", path, "r")
             info = fd.info()
             assert info["open_files"] >= 1
         finally:
@@ -4102,12 +4118,10 @@ class TestBlockDeviceExtended:
 
 class TestIRQDevice:
     def test_irq_device_init(self):
-        from domain.shell._internal.vm import IRQDevice
         irq = IRQDevice()
         assert irq is not None
 
     def test_irq_device_info(self):
-        from domain.shell._internal.vm import IRQDevice
         irq = IRQDevice()
         info = irq.info()
         assert isinstance(info, dict)
@@ -4674,7 +4688,6 @@ class TestX86ShellDirect:
     def test_start_and_stop(self):
         shell = X86Shell()
         shell.start(max_steps=100)
-        import time
         time.sleep(0.05)
         shell.stop()
         assert not shell.running
@@ -4682,7 +4695,6 @@ class TestX86ShellDirect:
     def test_read_screen_returns_string(self):
         shell = X86Shell()
         shell.start(max_steps=100)
-        import time
         time.sleep(0.05)
         screen = shell.read_screen()
         shell.stop()
@@ -4691,7 +4703,6 @@ class TestX86ShellDirect:
     def test_read_screen_custom_size(self):
         shell = X86Shell()
         shell.start(max_steps=100)
-        import time
         time.sleep(0.05)
         screen = shell.read_screen(width=40, height=10)
         shell.stop()
@@ -4701,7 +4712,6 @@ class TestX86ShellDirect:
     def test_type_keys(self):
         shell = X86Shell()
         shell.start(max_steps=100)
-        import time
         time.sleep(0.05)
         shell.type_keys("hello")
         time.sleep(0.05)
@@ -4710,7 +4720,6 @@ class TestX86ShellDirect:
     def test_custom_source(self):
         shell = X86Shell(source="HLT")
         shell.start(max_steps=10)
-        import time
         time.sleep(0.05)
         shell.stop()
 

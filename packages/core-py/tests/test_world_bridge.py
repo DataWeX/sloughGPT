@@ -5,26 +5,21 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
-import numpy as np
-import pytest
-
+from domain.collections._internal.sources import Record
 from domain.collections._internal.world_bridge import (
-    WorldFeedConfig,
+    MATERIAL_SIGNAL,
+    CollectionWorldPipeline,
     RecordToWorldMapper,
+    WorldFeedConfig,
     WorldGridBridge,
     WorldGridSource,
     WorldStoreAdapter,
-    CollectionWorldPipeline,
-    MATERIAL_SIGNAL,
 )
-from domain.collections._internal.sources import Record
-
 
 # ── WorldFeedConfig ───────────────────────────────────────────────────────
 
 
 class TestWorldFeedConfig:
-
     def test_defaults(self):
         cfg = WorldFeedConfig()
         assert cfg.grid_size == (64, 32, 64)
@@ -39,7 +34,6 @@ class TestWorldFeedConfig:
 
 
 class TestRecordToWorldMapper:
-
     def test_record_to_cell_signal(self):
         mapper = RecordToWorldMapper()
         record = Record(content="hello world")
@@ -51,7 +45,9 @@ class TestRecordToWorldMapper:
 
     def test_record_to_cell_signal_metadata_override(self):
         mapper = RecordToWorldMapper()
-        record = Record(content="test", metadata={"energy": 0.5, "temperature": 25.0, "signal": 0.8})
+        record = Record(
+            content="test", metadata={"energy": 0.5, "temperature": 25.0, "signal": 0.8}
+        )
         signal = mapper.record_to_cell_signal(record)
         assert signal["energy"] == 0.5
         assert signal["temperature"] == 25.0
@@ -100,7 +96,6 @@ class TestRecordToWorldMapper:
 
 
 class TestWorldGridBridge:
-
     def test_no_grid_returns_empty(self):
         bridge = WorldGridBridge()
         assert bridge.inject_records([Record(content="test")]) == 0
@@ -143,7 +138,7 @@ class TestWorldGridBridge:
         grid = MagicMock()
         grid.get_nearby_cells.return_value = {"count": 0}
         bridge = WorldGridBridge(grid)
-        records = bridge.read_grid_as_records(center=(10, 20, 30), radius=10)
+        bridge.read_grid_as_records(center=(10, 20, 30), radius=10)
         grid.get_nearby_cells.assert_called_with(10, 20, 30, 10)
 
     def test_set_grid(self):
@@ -164,7 +159,6 @@ class TestWorldGridBridge:
 
 
 class TestWorldGridSource:
-
     def test_read(self):
         grid = MagicMock()
         grid.get_nearby_cells.return_value = {"count": 0}
@@ -178,7 +172,6 @@ class TestWorldGridSource:
 
 
 class TestWorldStoreAdapter:
-
     def test_write(self):
         bridge = MagicMock()
         bridge.inject_records.return_value = 1
@@ -204,7 +197,6 @@ class TestWorldStoreAdapter:
 
 
 class TestCollectionWorldPipeline:
-
     def _make_source(self, records):
         src = MagicMock()
         src.read.return_value = iter(records)
@@ -221,10 +213,11 @@ class TestCollectionWorldPipeline:
 
     def test_run_filters(self):
         from domain.collections._internal.filters import LengthFilter
+
         grid = MagicMock()
         src = self._make_source([Record(content="hi"), Record(content="long enough text")])
         pipeline = CollectionWorldPipeline(src, grid, filters=[LengthFilter(min_length=10)])
-        count = pipeline.run()
+        pipeline.run()
         assert pipeline.stats["filtered"] == 1
         assert pipeline.stats["total_collected"] == 1
 

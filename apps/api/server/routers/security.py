@@ -24,6 +24,7 @@ class CreateKeyRequest(BaseModel):
 
 def _get_key_manager():
     from routers.api_keys import ApiKeyManager
+
     return ApiKeyManager()
 
 
@@ -38,10 +39,16 @@ class SecurityRouter:
         self.router.add_api_route(path="/audit", endpoint=self.get_audit_logs, methods=["GET"])
         self.router.add_api_route(path="/keys", endpoint=self.list_keys, methods=["GET"])
         self.router.add_api_route(path="/keys", endpoint=self.create_key, methods=["POST"])
-        self.router.add_api_route(path="/keys/validate", endpoint=self.validate_key, methods=["POST"])
+        self.router.add_api_route(
+            path="/keys/validate", endpoint=self.validate_key, methods=["POST"]
+        )
         self.router.add_api_route(path="/keys/{key_id}", endpoint=self.get_key, methods=["GET"])
-        self.router.add_api_route(path="/keys/{key_id}", endpoint=self.delete_key, methods=["DELETE"])
-        self.router.add_api_route(path="/keys/{key_id}/rotate", endpoint=self.rotate_key, methods=["POST"])
+        self.router.add_api_route(
+            path="/keys/{key_id}", endpoint=self.delete_key, methods=["DELETE"]
+        )
+        self.router.add_api_route(
+            path="/keys/{key_id}/rotate", endpoint=self.rotate_key, methods=["POST"]
+        )
 
     # ── Audit logs ──
 
@@ -87,7 +94,9 @@ class SecurityRouter:
 
     @staticmethod
     @endpoint("security.create_key")
-    async def create_key(req: CreateKeyRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def create_key(
+        req: CreateKeyRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         mgr = _get_key_manager()
         key = mgr.create(req.name, scopes=req.scopes, expires_at=req.expires_at)
         return success_response(data=key)
@@ -97,7 +106,9 @@ class SecurityRouter:
     async def list_keys(auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         mgr = _get_key_manager()
         keys = mgr.list()
-        return success_response(data={"keys": keys, "count": len(keys), "configured": len(keys) > 0})
+        return success_response(
+            data={"keys": keys, "count": len(keys), "configured": len(keys) > 0}
+        )
 
     @staticmethod
     @endpoint("security.get_key")

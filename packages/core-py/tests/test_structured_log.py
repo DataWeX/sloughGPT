@@ -24,8 +24,8 @@ from domain.infrastructure._internal.structured_log import (
     timed,
 )
 
-
 # ── Helpers ────────────────────────────────────────────────────────────
+
 
 def _make_handler(buf: StringIO, level: int = logging.DEBUG) -> logging.StreamHandler:
     h = logging.StreamHandler(buf)
@@ -108,9 +108,7 @@ class TestJSONFormatter:
         try:
             raise ValueError("boom")
         except ValueError:
-            record = logging.LogRecord(
-                "test", logging.ERROR, "", 0, "failed", (), sys.exc_info()
-            )
+            record = logging.LogRecord("test", logging.ERROR, "", 0, "failed", (), sys.exc_info())
         out = json.loads(fmt.format(record))
         assert "exception" in out
         assert "ValueError" in out["exception"]
@@ -195,8 +193,10 @@ class TestLogContext:
     def test_context_is_thread_local(self):
         results = []
         with LogContext(request_id="main"):
+
             def worker():
                 results.append(get_request_id())
+
             t = Thread(target=worker)
             t.start()
             t.join()
@@ -234,7 +234,7 @@ class TestLogContext:
     def test_log_context_returns_dict_copy(self):
         with LogContext(x=1):
             ctx1 = get_log_context()
-            ctx2 = get_log_context()
+            get_log_context()
             ctx1["extra"] = 999
             assert "extra" not in get_log_context()
 
@@ -288,12 +288,15 @@ class TestStructuredLogger:
         out = _read_json(buf)
         assert out["tag"] == "x"
 
-    @pytest.mark.parametrize("method,level,msg", [
-        ("debug", "DEBUG", "dbg"),
-        ("warning", "WARNING", "warn"),
-        ("error", "ERROR", "err"),
-        ("critical", "CRITICAL", "crit"),
-    ])
+    @pytest.mark.parametrize(
+        "method,level,msg",
+        [
+            ("debug", "DEBUG", "dbg"),
+            ("warning", "WARNING", "warn"),
+            ("error", "ERROR", "err"),
+            ("critical", "CRITICAL", "crit"),
+        ],
+    )
     def test_level_methods(self, method, level, msg):
         buf = StringIO()
         log = _make_logger("test.levels", buf)
@@ -684,7 +687,7 @@ class TestSetupStructuredLogging:
 
     def test_removes_old_handlers(self):
         root = logging.getLogger()
-        before = len(root.handlers)
+        len(root.handlers)
         setup_structured_logging()
         after = len(root.handlers)
         assert after >= 1

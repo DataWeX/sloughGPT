@@ -6,15 +6,16 @@ DO NOT DELETE. Core infrastructure for soul loading, trait weights, snapshots.
 
 from __future__ import annotations
 
-import os
 import glob
-import threading
 import json
-import struct
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, field
 import logging
+import os
+import struct
+import threading
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
 from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.soul_manager")
@@ -27,22 +28,22 @@ class SloInfo:
     name: str
     path: str
     description: str = ""
-    personality: Dict[str, float] = field(default_factory=dict)
-    traits: List[str] = field(default_factory=list)
-    loaded_at: Optional[float] = None
+    personality: dict[str, float] = field(default_factory=dict)
+    traits: list[str] = field(default_factory=list)
+    loaded_at: float | None = None
     born_at: str = ""
     training_dataset: str = ""
     epochs_trained: int = 0
-    final_train_loss: Optional[float] = None
-    final_val_loss: Optional[float] = None
+    final_train_loss: float | None = None
+    final_val_loss: float | None = None
     lineage: str = ""
     base_model: str = ""
     version: str = ""
     size_mb: float = 0.0
-    behavior: Dict[str, Any] = field(default_factory=dict)
-    cognition: Dict[str, float] = field(default_factory=dict)
-    emotion: Dict[str, float] = field(default_factory=dict)
-    generation_params: Dict[str, Any] = field(default_factory=dict)
+    behavior: dict[str, Any] = field(default_factory=dict)
+    cognition: dict[str, float] = field(default_factory=dict)
+    emotion: dict[str, float] = field(default_factory=dict)
+    generation_params: dict[str, Any] = field(default_factory=dict)
 
 
 class SloManager:
@@ -64,9 +65,11 @@ class SloManager:
 
     def __init__(self, souls_dir: str = "models"):
         self.slos_dir = Path(souls_dir)
-        self._current_soul: Optional[str] = None
-        self._souls_cache: Dict[str, SloInfo] = {}
-        self._preference_file = find_repo_root(Path(__file__).resolve()) / "data" / ".soul_preference"
+        self._current_soul: str | None = None
+        self._souls_cache: dict[str, SloInfo] = {}
+        self._preference_file = (
+            find_repo_root(Path(__file__).resolve()) / "data" / ".soul_preference"
+        )
 
         # Load cached souls
         self._scan_souls()
@@ -94,7 +97,9 @@ class SloManager:
                     soul_info = self._parse_soul_info(sou_path)
                     if soul_info:
                         self._souls_cache[soul_info.name] = soul_info
-                except Exception as e:  # pragma: no cover (unreachable — _parse_soul_info swallows all errors)
+                except (
+                    Exception
+                ) as e:  # pragma: no cover (unreachable — _parse_soul_info swallows all errors)
                     logger.debug("Failed to parse soul %s: %s", sou_path, e)  # pragma: no cover
 
         # Find text profile files in souls/ subdirectory (both .slo and .soul)
@@ -114,13 +119,15 @@ class SloManager:
                             if soul_info and soul_info.name not in self._souls_cache:
                                 self._souls_cache[soul_info.name] = soul_info
                         except Exception as e:  # pragma: no cover (unreachable — _parse_soul_info swallows all errors)
-                            logger.debug("Failed to parse soul profile %s: %s", soul_path, e)  # pragma: no cover
+                            logger.debug(
+                                "Failed to parse soul profile %s: %s", soul_path, e
+                            )  # pragma: no cover
 
-        if not hasattr(self, '_scanned'):
+        if not hasattr(self, "_scanned"):
             logger.info("Found %s souls", len(self._souls_cache), extra={"tag": "SOUL"})
             self._scanned = True
 
-    def _parse_soul_info(self, sou_path: str) -> Optional[SloInfo]:
+    def _parse_soul_info(self, sou_path: str) -> SloInfo | None:
         """Parse soul file for metadata.
 
         Handles both binary .soul files (SOUL magic + JSON config header + weights)
@@ -157,7 +164,8 @@ class SloManager:
                         personality_traits = config.get("personality", {})
                         if personality_traits:
                             traits.extend(
-                                k for k, v in personality_traits.items()
+                                k
+                                for k, v in personality_traits.items()
                                 if isinstance(v, (int, float)) and v > 0.6
                             )
                     personality = config.get("personality", config.get("personality_traits", {}))
@@ -191,10 +199,11 @@ class SloManager:
         # ── Plain-text .slo personality profile — parse via SouParser ──
         try:
             from .slo_format import SouParser
-            with open(sou_path, "r", encoding="utf-8") as f:
+
+            with open(sou_path, encoding="utf-8") as f:
                 content = f.read()
             soul = SouParser.parse(content)
-            personality = {k: v for k, v in soul.personality.to_dict().items()}
+            personality = dict(soul.personality.to_dict().items())
             traits = []
             behavior = getattr(soul, "behavior", None)
             if behavior:
@@ -233,12 +242,12 @@ class SloManager:
             except Exception as e:
                 logger.warning("Failed to save soul preference: %s", e)
 
-    def list_souls(self) -> List[SloInfo]:
+    def list_souls(self) -> list[SloInfo]:
         """List all available souls."""
         self._scan_souls()
         return list(self._souls_cache.values())
 
-    def rescan_souls(self) -> List[SloInfo]:
+    def rescan_souls(self) -> list[SloInfo]:
         """Force a full re-scan of the souls directory.
 
         Clears the cached results and re-globs the filesystem.  Call after
@@ -248,17 +257,17 @@ class SloManager:
         self._scan_souls()
         return list(self._souls_cache.values())
 
-    def get_soul(self, name: str) -> Optional[SloInfo]:
+    def get_soul(self, name: str) -> SloInfo | None:
         """Get soul by name."""
         return self._souls_cache.get(name)
 
-    def get_current_soul(self) -> Optional[SloInfo]:
+    def get_current_soul(self) -> SloInfo | None:
         """Get currently active soul."""
         if self._current_soul:
             return self._souls_cache.get(self._current_soul)
         return None
 
-    def switch_soul(self, name: str) -> Dict[str, Any]:
+    def switch_soul(self, name: str) -> dict[str, Any]:
         """
         Switch to a different soul/personality.
 
@@ -288,7 +297,7 @@ class SloManager:
             "traits": soul.traits,
         }
 
-    def register_soul(self, path: str, name: Optional[str] = None) -> SloInfo:
+    def register_soul(self, path: str, name: str | None = None) -> SloInfo:
         """
         Register a new soul file.
 
@@ -351,7 +360,7 @@ class SloManager:
                 soul = SloInfo(**soul_def, path="")
                 self._souls_cache[soul.name] = soul
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get soul manager statistics."""
         return {
             "total_souls": len(self._souls_cache),
@@ -360,7 +369,7 @@ class SloManager:
             "available_souls": [s.name for s in self._souls_cache.values()],
         }
 
-    def get_trait_weights(self) -> Dict[str, Any]:
+    def get_trait_weights(self) -> dict[str, Any]:
         """
         Read trait weight attributes from the currently active soul file,
         overlaid with live values from the context manager TraitWeightsConfig.
@@ -378,10 +387,7 @@ class SloManager:
         # Always start with canonical defaults from TRAIT_SCHEMA
         from domain.context._internal.managers import TRAIT_SCHEMA
 
-        result = {
-            group: {t: 0.5 for t in traits}
-            for group, traits in TRAIT_SCHEMA.items()
-        }
+        result = {group: dict.fromkeys(traits, 0.5) for group, traits in TRAIT_SCHEMA.items()}
 
         # Override with soul file's personality if loaded
         if soul:
@@ -408,6 +414,7 @@ class SloManager:
         # Overlay live values from TraitWeightsConfig (feedback-driven)
         try:
             from domain.context._internal.managers import get_trait_config
+
             config = get_trait_config()
             live = config.all()
             for group in ("personality", "cognition", "emotion"):
@@ -422,7 +429,7 @@ class SloManager:
 
 
 # Global manager instance
-_slo_manager: Optional[SloManager] = None
+_slo_manager: SloManager | None = None
 _slo_manager_lock = threading.Lock()
 
 
@@ -436,11 +443,11 @@ def get_slo_manager() -> SloManager:
     return _slo_manager
 
 
-def switch_soul(name: str) -> Dict[str, Any]:
+def switch_soul(name: str) -> dict[str, Any]:
     """Quick function to switch soul."""
     return get_slo_manager().switch_soul(name)
 
 
-def list_souls() -> List[SloInfo]:
+def list_souls() -> list[SloInfo]:
     """Quick function to list souls."""
     return get_slo_manager().list_souls()

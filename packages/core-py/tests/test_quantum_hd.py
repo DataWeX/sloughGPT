@@ -1,15 +1,19 @@
 """Meaningful tests for QuantumState, QuantumCognitiveEngine, QuantumParallelProcessor, HyperdimensionalProcessor, HDMemoryStore."""
 
 import random
-import pytest
-from domain.soul._internal.quantum import (
-    QuantumState, QuantumCognitiveEngine, QuantumParallelProcessor,
-    HyperdimensionalProcessor,
-)
-from domain.soul._internal.hd_memory import HDMemoryStore, HDMemoryItem
 
+import pytest
+
+from domain.soul._internal.hd_memory import HDMemoryStore
+from domain.soul._internal.quantum import (
+    HyperdimensionalProcessor,
+    QuantumCognitiveEngine,
+    QuantumParallelProcessor,
+    QuantumState,
+)
 
 # ── QuantumState ───────────────────────────────────────────────────────
+
 
 class TestQuantumState:
     def test_initial_state(self):
@@ -42,6 +46,7 @@ class TestQuantumState:
 
 
 # ── QuantumCognitiveEngine ─────────────────────────────────────────────
+
 
 class TestQuantumCognitiveEngine:
     def test_create_superposition(self):
@@ -108,6 +113,7 @@ class TestQuantumCognitiveEngine:
 
 # ── QuantumParallelProcessor ───────────────────────────────────────────
 
+
 class TestQuantumParallelProcessor:
     def test_parallel_process(self):
         qpp = QuantumParallelProcessor(num_streams=4)
@@ -132,6 +138,7 @@ class TestQuantumParallelProcessor:
 
 
 # ── HyperdimensionalProcessor ──────────────────────────────────────────
+
 
 class TestHyperdimensionalProcessor:
     def test_encode(self):
@@ -220,6 +227,7 @@ class TestHyperdimensionalProcessor:
 
 
 # ── HDMemoryStore ──────────────────────────────────────────────────────
+
 
 class TestHDMemoryStore:
     def test_add(self):

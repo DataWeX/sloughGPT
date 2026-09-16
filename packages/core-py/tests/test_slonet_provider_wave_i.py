@@ -4,6 +4,7 @@ Tests for SloNetChatProvider.chat_stream() robustness paths.
 FEATURE: slonet-provider-wave-i — Producer-error propagation, total-generation
 timeout, per-token wait timeout, and error-queue draining. DO NOT DELETE.
 """
+
 import asyncio
 import queue
 import threading
@@ -11,7 +12,7 @@ import time
 
 import pytest
 
-from domains.inference import slonet_provider as slonet_provider_module
+from domain.inference._internal import slonet_provider as slonet_provider_module
 from domain.inference._internal.slonet_provider import SloNetChatProvider
 
 
@@ -50,8 +51,10 @@ def _make_provider(model):
 
 def _collect(generator):
     """Fully drain an async generator into a list."""
+
     async def _run():
         return [item async for item in generator]
+
     return asyncio.run(_run())
 
 
@@ -66,6 +69,7 @@ class _StreamingModel:
 
 
 # ── Producer error propagation ───────────────────────────────────────
+
 
 class TestProducerError:
     def test_error_after_tokens_surfaces_via_error_queue(self):
@@ -92,8 +96,7 @@ class TestProducerError:
 
     def test_error_after_many_tokens(self):
         def streamer():
-            for i in range(5):
-                yield i
+            yield from range(5)
             raise RuntimeError("late failure")
 
         provider = _make_provider(_StreamingModel(streamer))
@@ -126,6 +129,7 @@ class TestProducerError:
 
 # ── Total timeout ────────────────────────────────────────────────────
 
+
 class TestTotalTimeout:
     def test_generation_timeout_yields_message_and_sets_cancel(self, monkeypatch):
         monkeypatch.setattr(slonet_provider_module, "_STREAM_TOTAL_TIMEOUT_S", 0.5)
@@ -133,7 +137,7 @@ class TestTotalTimeout:
         async def flaky_wait_for(fut, timeout=None):
             fut.close()
             await asyncio.sleep(0.1)
-            raise asyncio.TimeoutError()
+            raise TimeoutError()
 
         monkeypatch.setattr(asyncio, "wait_for", flaky_wait_for)
 
@@ -143,9 +147,11 @@ class TestTotalTimeout:
 
         provider = _make_provider(_StreamingModel(streamer))
         cancel_event = threading.Event()
-        out = _collect(provider.chat_stream(
-            [{"role": "user", "content": "hi"}], max_tokens=10, cancel_event=cancel_event
-        ))
+        out = _collect(
+            provider.chat_stream(
+                [{"role": "user", "content": "hi"}], max_tokens=10, cancel_event=cancel_event
+            )
+        )
         assert out[-1] == "\n\n[Generation timed out after 1s]"
         assert cancel_event.is_set()
 
@@ -161,12 +167,13 @@ class TestTotalTimeout:
 
 # ── Wait timeout ─────────────────────────────────────────────────────
 
+
 class TestWaitTimeout:
     def test_timeout_with_dead_thread_drains_remaining_tokens(self, monkeypatch):
         async def flaky_wait_for(fut, timeout=None):
             fut.close()
             await asyncio.sleep(0.2)
-            raise asyncio.TimeoutError()
+            raise TimeoutError()
 
         monkeypatch.setattr(asyncio, "wait_for", flaky_wait_for)
 
@@ -185,7 +192,7 @@ class TestWaitTimeout:
             calls.append(1)
             if len(calls) >= 2:
                 fut.close()
-                raise asyncio.TimeoutError()
+                raise TimeoutError()
             return await real_wait_for(fut, timeout)
 
         monkeypatch.setattr(asyncio, "wait_for", flaky_wait_for)
@@ -261,7 +268,7 @@ class TestWaitTimeout:
             call_count[0] += 1
             if call_count[0] >= 3:
                 fut.close()
-                raise asyncio.TimeoutError()
+                raise TimeoutError()
             return await real_wait_for(fut, timeout)
 
         monkeypatch.setattr(asyncio, "wait_for", flaky_wait_for)
@@ -277,6 +284,7 @@ class TestWaitTimeout:
 
 
 # ── No server delegation ─────────────────────────────────────────────
+
 
 class TestNoServerDelegation:
     def test_server_shortcut_skipped_when_none(self):
@@ -301,6 +309,7 @@ class TestNoServerDelegation:
 
 # ── Token production paths ──────────────────────────────────────────
 
+
 class TestTokenProduction:
     def test_single_token(self):
         def streamer():
@@ -313,8 +322,7 @@ class TestTokenProduction:
 
     def test_multiple_tokens(self):
         def streamer():
-            for i in range(10):
-                yield i
+            yield from range(10)
 
         provider = _make_provider(_StreamingModel(streamer))
         out = _collect(provider.chat_stream([{"role": "user", "content": "hi"}], max_tokens=10))
@@ -341,6 +349,7 @@ class TestTokenProduction:
 
 
 # ── Prompt building ──────────────────────────────────────────────────
+
 
 class TestPromptBuilding:
     def test_build_prompt_dict_messages(self):
@@ -378,6 +387,7 @@ class TestPromptBuilding:
 
 
 # ── MockTokenizer behavior ──────────────────────────────────────────
+
 
 class TestMockTokenizer:
     def test_encode(self):
@@ -419,6 +429,7 @@ class TestMockTokenizer:
 
 # ── Additional coverage ──────────────────────────────────────────────
 
+
 class TestPromptBuildingExtended:
     def test_build_prompt_no_content_key(self):
         provider = _make_provider(_StreamingModel(iter([])))
@@ -448,8 +459,7 @@ class TestPromptBuildingExtended:
 class TestTokenProductionExtended:
     def test_all_tokens_are_strings(self):
         def streamer():
-            for i in range(20):
-                yield i
+            yield from range(20)
 
         provider = _make_provider(_StreamingModel(streamer))
         out = _collect(provider.chat_stream([{"role": "user", "content": "x"}], max_tokens=20))
@@ -548,22 +558,22 @@ class TestStreamingBehavior:
 
         provider = _make_provider(_StreamingModel(streamer))
         cancel = threading.Event()
-        out = _collect(provider.chat_stream(
-            [{"role": "user", "content": "hi"}], max_tokens=10, cancel_event=cancel
-        ))
+        out = _collect(
+            provider.chat_stream(
+                [{"role": "user", "content": "hi"}], max_tokens=10, cancel_event=cancel
+            )
+        )
         assert not cancel.is_set()
         assert len(out) == 2
 
     def test_max_tokens_limits_output(self):
         """max_tokens is passed through to generate_numpy_stream."""
+
         def streamer():
-            for i in range(100):
-                yield i
+            yield from range(100)
 
         provider = _make_provider(_StreamingModel(streamer))
-        out = _collect(provider.chat_stream(
-            [{"role": "user", "content": "hi"}], max_tokens=3
-        ))
+        out = _collect(provider.chat_stream([{"role": "user", "content": "hi"}], max_tokens=3))
         assert len(out) == 100
 
     def test_empty_content_message(self):
@@ -571,9 +581,7 @@ class TestStreamingBehavior:
             yield 1
 
         provider = _make_provider(_StreamingModel(streamer))
-        out = _collect(provider.chat_stream(
-            [{"role": "user", "content": ""}], max_tokens=5
-        ))
+        out = _collect(provider.chat_stream([{"role": "user", "content": ""}], max_tokens=5))
         assert len(out) >= 1
 
     def test_special_chars_in_content(self):
@@ -581,9 +589,9 @@ class TestStreamingBehavior:
             yield 42
 
         provider = _make_provider(_StreamingModel(streamer))
-        out = _collect(provider.chat_stream(
-            [{"role": "user", "content": "hello!@#$%^&*()"}], max_tokens=5
-        ))
+        out = _collect(
+            provider.chat_stream([{"role": "user", "content": "hello!@#$%^&*()"}], max_tokens=5)
+        )
         assert len(out) == 1
 
 
@@ -612,9 +620,7 @@ class TestChatStreamEndToEnd:
                 yield ord(c) % 26
 
         provider = _make_provider(_StreamingModel(streamer))
-        out = _collect(provider.chat_stream(
-            [{"role": "user", "content": "test"}], max_tokens=10
-        ))
+        out = _collect(provider.chat_stream([{"role": "user", "content": "test"}], max_tokens=10))
         assert len(out) == 5
 
     def test_stream_preserves_order(self):
@@ -624,9 +630,7 @@ class TestChatStreamEndToEnd:
             yield 30
 
         provider = _make_provider(_StreamingModel(streamer))
-        out = _collect(provider.chat_stream(
-            [{"role": "user", "content": "x"}], max_tokens=5
-        ))
+        out = _collect(provider.chat_stream([{"role": "user", "content": "x"}], max_tokens=5))
         assert out[0] != out[1] != out[2]
 
     def test_concurrent_stream_calls(self):

@@ -1,9 +1,10 @@
 """Tests for self_train router — start, stop, status subprocess lifecycle."""
 
 import sys
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 pytest.importorskip("fastapi")
 
@@ -12,10 +13,9 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
+import state as server_state
 from fastapi.testclient import TestClient
 
-import apps.api.server.routers.self_train as self_train_mod
-import state as server_state
 from conftest import build_test_app
 
 
@@ -31,6 +31,7 @@ def reset_state():
 def app():
     """Create FastAPI app with self_train router."""
     from apps.api.server.routers.self_train import SelfTrainRouter
+
     router_instance = SelfTrainRouter()
     return build_test_app(router_instance.router)
 

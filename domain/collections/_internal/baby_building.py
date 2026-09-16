@@ -109,7 +109,9 @@ class BabyBuilding:
             return {"can_build": False, "reason": "insufficient_energy"}
         return {"can_build": True, "reason": "ok"}
 
-    def build(self, structure_type: StructureType, position: tuple[int, int, int]) -> Structure | None:
+    def build(
+        self, structure_type: StructureType, position: tuple[int, int, int]
+    ) -> Structure | None:
         check = self.can_build(structure_type)
         if not check["can_build"]:
             return None
@@ -232,18 +234,21 @@ class BuildingRegistry:
         for building in self._buildings.values():
             building.tick()
         self._global_structures = [
-            s for b in self._buildings.values()
-            for s in b._structures if s.is_alive()
+            s for b in self._buildings.values() for s in b._structures if s.is_alive()
         ]
 
-    def find_structures(self, structure_type: StructureType, radius: int = 10,
-                        center: tuple[int, int, int] | None = None) -> list[Structure]:
+    def find_structures(
+        self,
+        structure_type: StructureType,
+        radius: int = 10,
+        center: tuple[int, int, int] | None = None,
+    ) -> list[Structure]:
         results = []
         for structure in self._global_structures:
             if structure.structure_type != structure_type:
                 continue
             if center is not None:
-                dist = sum((a - b) ** 2 for a, b in zip(structure.position, center)) ** 0.5
+                dist = sum((a - b) ** 2 for a, b in zip(structure.position, center, strict=False)) ** 0.5
                 if dist > radius:
                     continue
             results.append(structure)

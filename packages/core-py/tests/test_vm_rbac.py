@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
-from domain.shell._internal.vm import X86VirtualSystem, X86Assembler, ProcessState
-from domain.shell._internal.vm_permissions import X86RBAC, Role, Permission
+from domain.shell._internal.vm import X86VirtualSystem
+from domain.shell._internal.vm_permissions import X86RBAC, Permission, Role
 
 
 class TestX86RBAC:
@@ -66,7 +64,7 @@ class TestX86VMIntegration:
         assert vs._syscall._rbac.role_of(pcb.pid) == Role.USER
 
     def _write_at(self, vs, addr: int, data: bytes):
-        vs.cpu._mem[addr:addr + len(data)] = data
+        vs.cpu._mem[addr : addr + len(data)] = data
 
     def _run_process(self, vs, source: str, role=Role.USER):
         pid = vs.spawn("test", source)
@@ -81,14 +79,18 @@ class TestX86VMIntegration:
 
     def test_serial_denied_for_user(self):
         vs = X86VirtualSystem()
-        result = self._run_process(vs, """
+        result = self._run_process(
+            vs,
+            """
             [BITS 32]
             mov eax, 19
             mov ebx, 65
             int 0x80
             mov [0x5000], eax
             hlt
-        """, role=Role.USER)
+        """,
+            role=Role.USER,
+        )
         assert result == 0xFFFFFFFE, f"expected -2 (denied), got {result}"
 
     def test_user_can_open_file(self):
@@ -96,7 +98,9 @@ class TestX86VMIntegration:
         vs.filesystem.write("readme.txt", b"hello world")
         fname_addr = 0x80000
         self._write_at(vs, fname_addr, b"readme.txt\x00")
-        result = self._run_process(vs, f"""
+        result = self._run_process(
+            vs,
+            f"""
             [BITS 32]
             mov eax, 4
             mov ebx, {hex(fname_addr)}
@@ -104,12 +108,16 @@ class TestX86VMIntegration:
             int 0x80
             mov [0x5000], eax
             hlt
-        """, role=Role.USER)
+        """,
+            role=Role.USER,
+        )
         assert result not in (0xFFFFFFFF, 0xFFFFFFFE), f"open should succeed, got {result}"
 
     def test_disk_denied_for_user(self):
         vs = X86VirtualSystem()
-        result = self._run_process(vs, """
+        result = self._run_process(
+            vs,
+            """
             [BITS 32]
             mov eax, 23
             mov ebx, 0
@@ -118,12 +126,16 @@ class TestX86VMIntegration:
             int 0x80
             mov [0x5000], eax
             hlt
-        """, role=Role.USER)
+        """,
+            role=Role.USER,
+        )
         assert result == 0xFFFFFFFE, f"expected -2 (denied), got {result}"
 
     def test_kernel_can_access_disk(self):
         vs = X86VirtualSystem()
-        result = self._run_process(vs, """
+        result = self._run_process(
+            vs,
+            """
             [BITS 32]
             mov eax, 23
             mov ebx, 0
@@ -132,7 +144,9 @@ class TestX86VMIntegration:
             int 0x80
             mov [0x5000], eax
             hlt
-        """, role=Role.KERNEL)
+        """,
+            role=Role.KERNEL,
+        )
         assert result != 0xFFFFFFFE, "kernel should be able to access disk"
 
     def test_escalate_thread_from_kernel(self):
@@ -153,24 +167,32 @@ class TestX86VMIntegration:
 
     def test_getrole_syscall_user(self):
         vs = X86VirtualSystem()
-        result = self._run_process(vs, """
+        result = self._run_process(
+            vs,
+            """
             [BITS 32]
             mov eax, 27
             int 0x80
             mov [0x5000], eax
             hlt
-        """, role=Role.USER)
+        """,
+            role=Role.USER,
+        )
         assert result == 0, f"expected 0 (USER), got {result}"
 
     def test_getrole_syscall_kernel(self):
         vs = X86VirtualSystem()
-        result = self._run_process(vs, """
+        result = self._run_process(
+            vs,
+            """
             [BITS 32]
             mov eax, 27
             int 0x80
             mov [0x5000], eax
             hlt
-        """, role=Role.KERNEL)
+        """,
+            role=Role.KERNEL,
+        )
         assert result == 2, f"expected 2 (KERNEL), got {result}"
 
     def _setup_scheduler_with_role(self, vs, role=Role.ADMIN):
@@ -205,7 +227,9 @@ class TestX86VMIntegration:
         vs = X86VirtualSystem()
         target = vs.spawn("victim", "[BITS 32]\nhlt")
         assert target is not None
-        result = self._run_process(vs, f"""
+        result = self._run_process(
+            vs,
+            f"""
             [BITS 32]
             mov eax, 24
             mov ebx, {target}
@@ -213,7 +237,9 @@ class TestX86VMIntegration:
             int 0x80
             mov [0x5000], eax
             hlt
-        """, role=Role.USER)
+        """,
+            role=Role.USER,
+        )
         assert result == 0xFFFFFFFE, f"expected -2 (denied), got {result}"
 
     def test_fork_inherits_rbac_role(self):
@@ -252,8 +278,9 @@ class TestX86VMIntegration:
         vs._syscall._build_perm_map()
         for perm_name in ("RAW_MEMORY", "RAW_CPU"):
             perm = getattr(vs._syscall._Permission, perm_name)
-            assert perm not in vs._syscall._perm_map.values(), \
+            assert perm not in vs._syscall._perm_map.values(), (
                 f"{perm_name} should not be mapped to any syscall"
+            )
 
     def test_kernel_can_kill_self(self):
         vs = X86VirtualSystem()
@@ -267,7 +294,9 @@ class TestX86VMIntegration:
         vs = X86VirtualSystem()
         hello_addr = 0x100000 + 40
         self._write_at(vs, hello_addr, b"Hello from x86!\n\x00")
-        pid = vs.spawn("test", f"""
+        pid = vs.spawn(
+            "test",
+            f"""
             [BITS 32]
             mov eax, 3
             mov ebx, 1
@@ -276,7 +305,8 @@ class TestX86VMIntegration:
             int 0x80
             mov [0x5000], eax
             hlt
-        """)
+        """,
+        )
         assert pid is not None
         vs._syscall._rbac.assign(pid, Role.USER)
         vs.scheduler.start(vs.cpu)
@@ -290,14 +320,18 @@ class TestX86VMIntegration:
     def _run_train_syscall(self, vs, role=Role.USER):
         """Run SYS_TRAIN_START (eax=28) and return EAX via [0x5000]."""
         self._write_at(vs, 0x80000, b'{"dataset":"shakespeare","epochs":1}\x00')
-        return self._run_process(vs, """
+        return self._run_process(
+            vs,
+            """
             [BITS 32]
             mov eax, 28
             mov ebx, 0x80000
             int 0x80
             mov [0x5000], eax
             hlt
-        """, role=role)
+        """,
+            role=role,
+        )
 
     def test_train_denied_for_user(self, monkeypatch):
         """USER calling SYS_TRAIN_START is denied with EAX=-2 and never hits the bridge."""
@@ -308,7 +342,9 @@ class TestX86VMIntegration:
                 calls.append(config_json)
                 return 1
 
-        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        monkeypatch.setattr(
+            "domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge()
+        )
         vs = X86VirtualSystem()
         result = self._run_train_syscall(vs, role=Role.USER)
         assert result == 0xFFFFFFFE, f"expected -2 (denied), got {result}"
@@ -323,7 +359,9 @@ class TestX86VMIntegration:
                 calls.append(config_json)
                 return 1
 
-        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        monkeypatch.setattr(
+            "domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge()
+        )
         vs = X86VirtualSystem()
         result = self._run_train_syscall(vs, role=Role.ADMIN)
         assert result == 1, f"expected job_id 1, got {result}"
@@ -332,20 +370,26 @@ class TestX86VMIntegration:
     def test_train_status_denied_for_user(self):
         """USER calling SYS_TRAIN_STATUS (eax=29) is denied with EAX=-2."""
         vs = X86VirtualSystem()
-        result = self._run_process(vs, """
+        result = self._run_process(
+            vs,
+            """
             [BITS 32]
             mov eax, 29
             mov ebx, 1
             int 0x80
             mov [0x5000], eax
             hlt
-        """, role=Role.USER)
+        """,
+            role=Role.USER,
+        )
         assert result == 0xFFFFFFFE, f"expected -2 (denied), got {result}"
 
     def test_train_get_result_denied_for_user(self):
         """USER calling SYS_TRAIN_GET_RESULT (eax=30) is denied with EAX=-2."""
         vs = X86VirtualSystem()
-        result = self._run_process(vs, """
+        result = self._run_process(
+            vs,
+            """
             [BITS 32]
             mov eax, 30
             mov ebx, 1
@@ -354,7 +398,9 @@ class TestX86VMIntegration:
             int 0x80
             mov [0x5000], eax
             hlt
-        """, role=Role.USER)
+        """,
+            role=Role.USER,
+        )
         assert result == 0xFFFFFFFE, f"expected -2 (denied), got {result}"
 
     def test_train_full_flow_start_status_result(self, monkeypatch):
@@ -372,11 +418,15 @@ class TestX86VMIntegration:
                 assert job_id == 1
                 return '{"loss": 1.5}'
 
-        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        monkeypatch.setattr(
+            "domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge()
+        )
         vs = X86VirtualSystem()
         self._write_at(vs, 0x80000, b'{"dataset":"shakespeare","epochs":1}\x00')
         self._write_at(vs, 0x90000, b"\x00" * 64)
-        pid = vs.spawn("test", """
+        pid = vs.spawn(
+            "test",
+            """
             [BITS 32]
             mov ebx, 0x80000
             mov eax, 28
@@ -393,7 +443,8 @@ class TestX86VMIntegration:
             int 0x80
             mov [0x5008], eax
             hlt
-        """)
+        """,
+        )
         assert pid is not None
         vs._syscall._rbac.assign(pid, Role.ADMIN)
         vs.scheduler.start(vs.cpu)

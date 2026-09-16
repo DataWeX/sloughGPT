@@ -25,7 +25,7 @@ import logging
 
 from .api_loader import HuggingFaceAPILoader as _APILoader
 from .local_loader import HuggingFaceLocalLoader as _LocalLoader
-from .model_map import get_model_requirements, HF_MODELS
+from .model_map import HF_MODELS, get_model_requirements
 
 logger = logging.getLogger("slo.hf_client")
 
@@ -99,7 +99,7 @@ def list_models(organization: str = None, size: str = None) -> list:
     Returns:
         List of model names
     """
-    from .model_map import search_models, ModelSize
+    from .model_map import ModelSize, search_models
 
     size_enum = None
     if size:

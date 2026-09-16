@@ -18,6 +18,7 @@ logger = logging.getLogger("slo.multimodal.audio_filter")
 
 class FilterMode(Enum):
     """Bitmask-style filter mode flags."""
+
     NONE = 0
     NOISE_GATE = 1 << 0
     AGC = 1 << 1
@@ -39,6 +40,7 @@ class FilterMode(Enum):
 @dataclass
 class AudioFilterConfig:
     """Configuration for audio filtering pipeline."""
+
     sample_rate: int = 16000
     mode: FilterMode = FilterMode.ALL
 
@@ -64,6 +66,7 @@ class AudioFilterConfig:
 @dataclass
 class FilterResult:
     """Result from audio filtering."""
+
     audio: np.ndarray
     speech_detected: bool = True
     gain_applied_db: float = 0.0
@@ -87,7 +90,7 @@ def _rms_db(audio: np.ndarray) -> float:
     work = audio.astype(np.float64)
     if np.max(np.abs(work)) > 1.0:
         work = work / 32768.0
-    rms = np.sqrt(np.mean(work ** 2))
+    rms = np.sqrt(np.mean(work**2))
     return _linear_to_db(rms)
 
 
@@ -96,11 +99,11 @@ def _frame_energy_db(audio: np.ndarray, frame_size: int) -> np.ndarray:
     n_frames = max(1, len(audio) // frame_size)
     padded_len = n_frames * frame_size
     padded = np.zeros(padded_len, dtype=np.float64)
-    padded[:len(audio)] = audio.astype(np.float64)
+    padded[: len(audio)] = audio.astype(np.float64)
     if np.max(np.abs(padded)) > 1.0:
         padded = padded / 32768.0
     frames = padded[:padded_len].reshape(n_frames, frame_size)
-    rms = np.sqrt(np.mean(frames ** 2, axis=1))
+    rms = np.sqrt(np.mean(frames**2, axis=1))
     rms = np.maximum(rms, 1e-10)
     return 20.0 * np.log10(rms)
 

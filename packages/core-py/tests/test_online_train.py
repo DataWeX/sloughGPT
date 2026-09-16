@@ -1,8 +1,10 @@
 """Tests for online_train — LoRA feedback buffer and weight updates."""
 
-import numpy as np
-import time
 import threading
+import time
+
+import numpy as np
+
 from domain.feedback._internal.online_train import (
     LoRAConfig,
     OnlineLoRAUpdater,
@@ -120,8 +122,10 @@ class TestOnlineLoRAUpdater:
     def test_apply_gradients_clips(self):
         u = OnlineLoRAUpdater()
         u.initialize(model_dim=16)
-        grads = {"W_a": np.ones((8, 16), dtype=np.float32) * 10.0,
-                 "W_b": np.ones((16, 8), dtype=np.float32) * -10.0}
+        grads = {
+            "W_a": np.ones((8, 16), dtype=np.float32) * 10.0,
+            "W_b": np.ones((16, 8), dtype=np.float32) * -10.0,
+        }
         u._apply_gradients(grads)
         assert u._lora_weights["W_a"].max() <= 1.0
         assert u._lora_weights["W_b"].min() >= -1.0
@@ -373,9 +377,11 @@ class TestThreadSafety:
     def test_concurrent_add_feedback(self):
         u = OnlineLoRAUpdater(update_interval=100)
         u.initialize(model_dim=16)
+
         def _add():
-            for i in range(10):
+            for _i in range(10):
                 u.add_feedback("q", "a", "thumbs_up")
+
         threads = [threading.Thread(target=_add) for _ in range(5)]
         for t in threads:
             t.start()
@@ -386,12 +392,15 @@ class TestThreadSafety:
     def test_concurrent_add_different_ratings(self):
         u = OnlineLoRAUpdater(update_interval=100)
         u.initialize(model_dim=16)
+
         def _add_up():
             for _ in range(5):
                 u.add_feedback("q", "a", "thumbs_up")
+
         def _add_down():
             for _ in range(5):
                 u.add_feedback("q", "a", "thumbs_down")
+
         threads = [
             threading.Thread(target=_add_up),
             threading.Thread(target=_add_down),

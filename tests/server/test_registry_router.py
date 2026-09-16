@@ -2,8 +2,9 @@
 Tests for the registry router — GET /registry/models, /registry/models/{id}, /registry/best, /registry/stats.
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -77,7 +78,10 @@ class TestListModels:
         assert client.patch("/registry/models/gpt2").status_code == 405
 
     def test_registry_error_returns_500(self, client):
-        with patch("domains.infrastructure.model_registry.get_model_registry", side_effect=RuntimeError("broken")):
+        with patch(
+            "domains.infrastructure.model_registry.get_model_registry",
+            side_effect=RuntimeError("broken"),
+        ):
             resp = client.get("/registry/models")
         assert resp.status_code == 500
 
@@ -146,7 +150,10 @@ class TestGetModel:
         assert resp.status_code == 405
 
     def test_model_lookup_error_returns_500(self, client):
-        with patch("domains.infrastructure.model_registry.get_model_registry", side_effect=RuntimeError("broken")):
+        with patch(
+            "domains.infrastructure.model_registry.get_model_registry",
+            side_effect=RuntimeError("broken"),
+        ):
             resp = client.get("/registry/models/gpt2")
         assert resp.status_code == 500
 
@@ -182,7 +189,10 @@ class TestBestModel:
         assert client.delete("/registry/best").status_code == 405
 
     def test_best_error_returns_500(self, client):
-        with patch("domains.infrastructure.model_registry.get_model_registry", side_effect=RuntimeError("broken")):
+        with patch(
+            "domains.infrastructure.model_registry.get_model_registry",
+            side_effect=RuntimeError("broken"),
+        ):
             resp = client.get("/registry/best")
         assert resp.status_code == 500
 
@@ -231,6 +241,9 @@ class TestRegistryStats:
         assert client.delete("/registry/stats").status_code == 405
 
     def test_stats_error_returns_500(self, client):
-        with patch("domains.infrastructure.model_registry.get_model_registry", side_effect=RuntimeError("broken")):
+        with patch(
+            "domains.infrastructure.model_registry.get_model_registry",
+            side_effect=RuntimeError("broken"),
+        ):
             resp = client.get("/registry/stats")
         assert resp.status_code == 500

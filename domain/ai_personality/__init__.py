@@ -6,12 +6,12 @@ Public API:
 """
 
 from domain.ai_personality._internal.personality import (
-    PersonalityType,
+    PERSONALITIES,
     Personality,
     PersonalityManager,
+    PersonalityType,
     get_personality_manager,
     list_personalities,
-    PERSONALITIES,
 )
 
 __all__ = [

@@ -2,27 +2,23 @@
 
 from __future__ import annotations
 
-import math
-import pytest
 import numpy as np
+
 from domain.training._internal.slonet import (
-    Tensor,
+    SloAdapterLayer,
+    SloEmbedding,
+    SloLinear,
     SloNet,
     SloTransformer,
-    SloLayer,
-    SloLinear,
-    SloEmbedding,
     SloTransformerBlock,
-    SloAdapterLayer,
+    Tensor,
     no_grad,
 )
-
 
 # ── SloNet ──────────────────────────────────────────────────────────────────
 
 
 class TestSloNet:
-
     def test_init(self):
         net = SloNet()
         assert net.soul_name == "Slo"
@@ -109,6 +105,7 @@ class TestSloNet:
 
     def test_fit(self):
         from domain.training._internal.slonet import SloAdam
+
         net = SloNet(layers=[SloLinear(2, 3)])
         X = Tensor(np.random.randn(20, 2).astype(np.float32))
         y = Tensor(np.random.randint(0, 3, (20,)))
@@ -135,7 +132,6 @@ class TestSloNet:
 
 
 class TestSloTransformer:
-
     def test_init(self):
         model = SloTransformer(vocab_size=100, n_embed=64, n_layer=2, n_head=4)
         assert model.vocab_size == 100
@@ -213,7 +209,9 @@ class TestSloTransformer:
         assert model.lm_head.weight.shape == (100, 64)
 
     def test_layer_norm_type(self):
-        model = SloTransformer(vocab_size=100, n_embed=64, n_layer=2, n_head=4, norm_type="layer_norm")
+        model = SloTransformer(
+            vocab_size=100, n_embed=64, n_layer=2, n_head=4, norm_type="layer_norm"
+        )
         x = Tensor(np.array([[1, 2, 3, 4]]))
         logits, loss = model(x)
         assert logits.shape == (1, 4, 100)
@@ -231,7 +229,9 @@ class TestSloTransformer:
         assert logits.shape == (1, 4, 100)
 
     def test_abs_pos_emb(self):
-        model = SloTransformer(vocab_size=100, n_embed=64, n_layer=2, n_head=4, use_abs_pos_emb=True)
+        model = SloTransformer(
+            vocab_size=100, n_embed=64, n_layer=2, n_head=4, use_abs_pos_emb=True
+        )
         assert model.pos_emb is not None
         x = Tensor(np.array([[1, 2, 3, 4]]))
         logits, loss = model(x)

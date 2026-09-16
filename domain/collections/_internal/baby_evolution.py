@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import numpy as np
-from dataclasses import dataclass
 import random
+from dataclasses import dataclass
+
+import numpy as np
 
 
 @dataclass
@@ -46,7 +47,7 @@ class Genome:
         noise = np.random.randn(mask.sum()).astype(np.float32) * strength
         self.genes[mask] += noise
 
-    def crossover(self, other: 'Genome') -> 'Genome':
+    def crossover(self, other: Genome) -> Genome:
         child_genes = self.genes.copy()
         mask = np.random.random(len(self.genes)) < 0.5
         child_genes[mask] = other.genes[mask]
@@ -54,7 +55,7 @@ class Genome:
         child.parent_ids = [id(self), id(other)]
         return child
 
-    def distance(self, other: 'Genome') -> float:
+    def distance(self, other: Genome) -> float:
         return float(np.linalg.norm(self.genes - other.genes))
 
     def to_dict(self) -> dict:
@@ -65,7 +66,7 @@ class Genome:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> 'Genome':
+    def from_dict(cls, d: dict) -> Genome:
         g = cls(np.array(d["genes"], dtype=np.float32))
         g.fitness = d.get("fitness", 0.0)
         g.generation = d.get("generation", 0)
@@ -85,13 +86,13 @@ class FitnessTracker:
             self._scores[baby_id] = []
         self._scores[baby_id].append(score)
         if len(self._scores[baby_id]) > self.window:
-            self._scores[baby_id] = self._scores[baby_id][-self.window:]
+            self._scores[baby_id] = self._scores[baby_id][-self.window :]
 
     def get_fitness(self, baby_id: int) -> float:
         scores = self._scores.get(baby_id, [])
         if not scores:
             return 0.0
-        return float(np.mean(scores[-self.window:]))
+        return float(np.mean(scores[-self.window :]))
 
     def get_all_fitness(self) -> dict[int, float]:
         return {bid: self.get_fitness(bid) for bid in self._scores}
@@ -170,10 +171,14 @@ class EvolutionEngine:
 
     def _calculate_fitness(self, baby) -> float:
         energy_score = baby.energy / 100.0
-        age_score = min(baby._total_ticks / 100.0, 1.0) if hasattr(baby, '_total_ticks') else 0.0
+        age_score = min(baby._total_ticks / 100.0, 1.0) if hasattr(baby, "_total_ticks") else 0.0
         memory_score = 0.0
-        if hasattr(baby, 'memory'):
-            memory_score = len(baby.memory._buffer) / baby.memory.capacity if hasattr(baby.memory, '_buffer') else 0.0
+        if hasattr(baby, "memory"):
+            memory_score = (
+                len(baby.memory._buffer) / baby.memory.capacity
+                if hasattr(baby.memory, "_buffer")
+                else 0.0
+            )
         return energy_score * 0.5 + age_score * 0.3 + memory_score * 0.2
 
     def step(self) -> list[Genome]:
@@ -203,7 +208,7 @@ class EvolutionEngine:
             child.fitness = 0.0
             new_population.append(child)
 
-        self._population = new_population[:self.config.population_size]
+        self._population = new_population[: self.config.population_size]
 
         stats = self._generation_stats()
         self._history.append(stats)

@@ -4,21 +4,24 @@ Tests for process-level isolation: ModelWorkerProcess, ProcessGuard, and ModelSe
 These tests use a fake model class loaded in a subprocess to verify crash
 isolation, auto-restart, and Queue-based RPC.
 """
+
 import multiprocessing as mp
-import time
 import os
-import signal
 import queue
+import signal
 import sys
 import threading
+import time
 import types
+
 import pytest
+
 pytestmark = pytest.mark.slow
-from typing import Any, Optional
+from typing import Any
 from unittest.mock import MagicMock
 
 # Path so spawned subprocess can import tests.helpers.fake_model
-import sys as _sys
+
 _test_helpers_dir = os.path.join(os.path.dirname(__file__), "helpers")
 _extra_paths = [_test_helpers_dir]
 
@@ -26,6 +29,7 @@ _extra_paths = [_test_helpers_dir]
 # ── Fake SloNet worker (no heavy imports) ───────────────────────────────
 # This module-level function is pickleable and can be spawned in a subprocess.
 # It follows the same Queue protocol as _worker_loop but with a trivial model.
+
 
 def _fake_slo_worker_main(
     req_q: mp.Queue,
@@ -38,9 +42,8 @@ def _fake_slo_worker_main(
     **kwargs: Any,
 ) -> None:
     """Fake SloNet worker for testing — no real model loaded."""
-    import queue as _queue
     import gc as _gc
-    import traceback as _tb
+    import queue as _queue
 
     hb_q.put_nowait(("ready", os.getpid()))
     requests_served = 0
@@ -58,11 +61,17 @@ def _fake_slo_worker_main(
         if cmd == "generate":
             try:
                 session_id, prompt, gen_kwargs = payload
-                resp_q.put_nowait(("result", session_id, {
-                    "text": f"slo({model_id}): {prompt}",
-                    "tokens_generated": len(prompt.split()),
-                    "elapsed_ms": 1.0,
-                }))
+                resp_q.put_nowait(
+                    (
+                        "result",
+                        session_id,
+                        {
+                            "text": f"slo({model_id}): {prompt}",
+                            "tokens_generated": len(prompt.split()),
+                            "elapsed_ms": 1.0,
+                        },
+                    )
+                )
                 requests_served += 1
             except Exception as e:
                 try:
@@ -76,11 +85,17 @@ def _fake_slo_worker_main(
                 text = f"slo({model_id}): {prompt}"
                 for word in text.split():
                     resp_q.put_nowait(("token", session_id, word + " "))
-                resp_q.put_nowait(("result", session_id, {
-                    "text": "",
-                    "tokens_generated": len(text.split()),
-                    "elapsed_ms": 1.0,
-                }))
+                resp_q.put_nowait(
+                    (
+                        "result",
+                        session_id,
+                        {
+                            "text": "",
+                            "tokens_generated": len(text.split()),
+                            "elapsed_ms": 1.0,
+                        },
+                    )
+                )
                 requests_served += 1
             except Exception as e:
                 try:
@@ -95,6 +110,7 @@ def _fake_slo_worker_main(
 # ── Spawned worker mains for start() failure paths ───────────────────────
 # Pickled by reference into the child process (same mechanism as the fake
 # SloNet worker above), so they never need a real model or torch.
+
 
 def _dead_worker_main(
     req_q: mp.Queue,
@@ -130,6 +146,7 @@ def _silent_alive_worker_main(
 
 
 # ── Fake process / queue objects for parent-side error paths ─────────────
+
 
 class _FakeProc:
     """Fake multiprocessing.Process: ``is_alive()`` returns a scripted sequence."""
@@ -353,7 +370,7 @@ class TestModelWorkerProcess:
         worker._cleanup_queues()  # close()/join_thread() failures are swallowed
 
     def test_start_fails_when_worker_reports_dead(self, monkeypatch):
-        import domain.infrastructure.model_worker as mw_mod
+        import domain.infrastructure._internal.model_worker as mw_mod
         from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         monkeypatch.setattr(mw_mod, "_hf_worker_main", _dead_worker_main)
@@ -365,7 +382,7 @@ class TestModelWorkerProcess:
             worker.stop()
 
     def test_start_fails_when_worker_dies_silently(self, monkeypatch):
-        import domain.infrastructure.model_worker as mw_mod
+        import domain.infrastructure._internal.model_worker as mw_mod
         from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         monkeypatch.setattr(mw_mod, "_hf_worker_main", _silent_worker_main)
@@ -377,7 +394,7 @@ class TestModelWorkerProcess:
             worker.stop()
 
     def test_start_retries_while_worker_alive_but_silent(self, monkeypatch):
-        import domain.infrastructure.model_worker as mw_mod
+        import domain.infrastructure._internal.model_worker as mw_mod
         from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         monkeypatch.setattr(mw_mod, "_hf_worker_main", _silent_alive_worker_main)
@@ -443,10 +460,12 @@ class TestModelWorkerProcess:
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True, True, True])
         worker._req_q = _OkQueue()
-        worker._resp_q = _ScriptedQueue([
-            ("weird", "x"),
-            ("result", {"text": "ok", "tokens_generated": 1, "elapsed_ms": 1.0}),
-        ])
+        worker._resp_q = _ScriptedQueue(
+            [
+                ("weird", "x"),
+                ("result", {"text": "ok", "tokens_generated": 1, "elapsed_ms": 1.0}),
+            ]
+        )
         result = worker.generate("hello")
         assert result["text"] == "ok"
 
@@ -456,16 +475,24 @@ class TestModelWorkerProcess:
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True, True, True])
         worker._req_q = _OkQueue()
-        worker._resp_q = _ScriptedQueue([
-            ("result", "req-stale-0", {"text": "old", "tokens_generated": 1, "elapsed_ms": 1.0}),
-            ("result", {"text": "ok", "tokens_generated": 1, "elapsed_ms": 1.0}),
-        ])
+        worker._resp_q = _ScriptedQueue(
+            [
+                (
+                    "result",
+                    "req-stale-0",
+                    {"text": "old", "tokens_generated": 1, "elapsed_ms": 1.0},
+                ),
+                ("result", {"text": "ok", "tokens_generated": 1, "elapsed_ms": 1.0}),
+            ]
+        )
         result = worker.generate("hello")
         assert result["text"] == "ok"
 
     def test_generate_stall_raises(self):
-        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
-        from domain.infrastructure._internal.model_worker import WorkerStreamStalledError
+        from domain.infrastructure._internal.model_worker import (
+            ModelWorkerProcess,
+            WorkerStreamStalledError,
+        )
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _AlwaysAliveProc()
@@ -481,19 +508,23 @@ class TestModelWorkerProcess:
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True, True, True, True])
         worker._req_q = _OkQueue()
-        worker._resp_q = _ScriptedQueue([
-            ("token", "req-stale-0", "junk "),
-            ("token", "req-stale-0", "junk "),
-            ("result", {"text": "ok", "tokens_generated": 0, "elapsed_ms": 1.0}),
-        ])
+        worker._resp_q = _ScriptedQueue(
+            [
+                ("token", "req-stale-0", "junk "),
+                ("token", "req-stale-0", "junk "),
+                ("result", {"text": "ok", "tokens_generated": 0, "elapsed_ms": 1.0}),
+            ]
+        )
         gen = worker.generate_stream("hello")
         with pytest.raises(StopIteration) as excinfo:
             next(gen)
         assert excinfo.value.value["tokens_generated"] == 0
 
     def test_generate_stream_stall_raises(self):
-        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
-        from domain.infrastructure._internal.model_worker import WorkerStreamStalledError
+        from domain.infrastructure._internal.model_worker import (
+            ModelWorkerProcess,
+            WorkerStreamStalledError,
+        )
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _AlwaysAliveProc()
@@ -547,10 +578,12 @@ class TestModelWorkerProcess:
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True, True, True])
         worker._req_q = _OkQueue()
-        worker._resp_q = _ScriptedQueue([
-            ("weird", "x"),
-            ("result", {"text": "ok", "tokens_generated": 0, "elapsed_ms": 1.0}),
-        ])
+        worker._resp_q = _ScriptedQueue(
+            [
+                ("weird", "x"),
+                ("result", {"text": "ok", "tokens_generated": 0, "elapsed_ms": 1.0}),
+            ]
+        )
         gen = worker.generate_stream("hello")
         with pytest.raises(StopIteration) as excinfo:
             next(gen)
@@ -596,22 +629,26 @@ class TestProcessGuard:
 
     def test_resolve_memory_limit_uses_explicit(self, tmp_path):
         from domain.infrastructure._internal.process_guard import resolve_memory_limit_mb
+
         assert resolve_memory_limit_mb(str(tmp_path / "model.slnc"), 12345.0) == 12345.0
 
     def test_resolve_memory_limit_auto_sizes_from_file(self, tmp_path):
         from domain.infrastructure._internal.process_guard import resolve_memory_limit_mb
+
         slnc = tmp_path / "model.slnc"
         slnc.write_bytes(b"\x00" * (1024 * 1024 * 100))  # 100 MB
         assert resolve_memory_limit_mb(str(slnc), 0) == 8192.0  # floor
 
     def test_resolve_memory_limit_auto_large_file(self, tmp_path):
         from domain.infrastructure._internal.process_guard import resolve_memory_limit_mb
+
         slnc = tmp_path / "model.slnc"
         slnc.write_bytes(b"\x00" * (1024 * 1024 * 4096))  # 4 GB
         assert resolve_memory_limit_mb(str(slnc), None) == 4096 * 8
 
     def test_resolve_memory_limit_missing_file(self, tmp_path):
         from domain.infrastructure._internal.process_guard import resolve_memory_limit_mb
+
         assert resolve_memory_limit_mb(str(tmp_path / "nope.slnc"), None) is None
         assert resolve_memory_limit_mb(None, 0) is None
 
@@ -719,14 +756,14 @@ class TestProcessGuard:
             next(guard.generate_stream("hello"))
 
     def test_stall_recovers_and_restarts(self):
-        from domain.infrastructure._internal.process_guard import ProcessGuard
         from domain.infrastructure._internal.model_worker import WorkerStreamStalledError
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         guard = ProcessGuard(**self.GUARD_KWARGS)
         guard.start()
         try:
-            guard._worker.generate = lambda *a, **k: (
-                (_ for _ in ()).throw(WorkerStreamStalledError("simulated wedge"))
+            guard._worker.generate = lambda *a, **k: (_ for _ in ()).throw(
+                WorkerStreamStalledError("simulated wedge")
             )
             with pytest.raises(WorkerStreamStalledError, match="simulated wedge"):
                 guard.generate("hello")
@@ -784,10 +821,11 @@ class TestModelServerWithGuard:
     @pytest.fixture
     def model_server_with_guard(self):
         pytest.importorskip("torch")
+        import torch
+
         from domain.infrastructure._internal.model_server import ModelServer
         from domain.infrastructure._internal.process_guard import ProcessGuard
 
-        import torch
         mock_model = MagicMock()
         mock_model.generate.return_value = torch.zeros(1, 10, dtype=torch.long)
         mock_model.device = "cpu"
@@ -867,7 +905,8 @@ class TestSloNetWorkerProcess:
     @pytest.fixture(autouse=True)
     def _patch_worker(self, monkeypatch):
         """Replace the real _slo_worker_main with our fake in the module namespace."""
-        import domain.infrastructure.model_worker as mw_mod
+        import domain.infrastructure._internal.model_worker as mw_mod
+
         monkeypatch.setattr(mw_mod, "_slo_worker_main", _fake_slo_worker_main)
 
     def test_backend_property(self):
@@ -999,7 +1038,8 @@ class TestProcessGuardSlo:
 
     @pytest.fixture(autouse=True)
     def _patch_worker(self, monkeypatch):
-        import domain.infrastructure.model_worker as mw_mod
+        import domain.infrastructure._internal.model_worker as mw_mod
+
         monkeypatch.setattr(mw_mod, "_slo_worker_main", _fake_slo_worker_main)
 
     def test_start_and_stop(self):
@@ -1201,8 +1241,9 @@ class TestCreateSloGuard:
         assert g.worker_id == "slo-guard-mymodel"
 
     def test_create_slo_guard_factory_signature(self):
-        from domain.infrastructure._internal.process_guard import create_slo_guard
         import inspect
+
+        from domain.infrastructure._internal.process_guard import create_slo_guard
 
         sig = inspect.signature(create_slo_guard)
         params = list(sig.parameters.keys())
@@ -1212,7 +1253,7 @@ class TestCreateSloGuard:
         assert "quant_bits" in params
 
     def test_create_slo_guard_started(self, monkeypatch):
-        import domain.infrastructure.process_guard as pg_mod
+        import domain.infrastructure._internal.process_guard as pg_mod
 
         monkeypatch.setattr(pg_mod.ProcessGuard, "start", lambda self: None)
         guard = pg_mod.create_slo_guard(
@@ -1232,7 +1273,7 @@ class TestCreateSloGuard:
 
 class TestCreateModelGuard:
     def test_create_model_guard_configured(self, monkeypatch):
-        import domain.infrastructure.process_guard as pg_mod
+        import domain.infrastructure._internal.process_guard as pg_mod
 
         monkeypatch.setattr(pg_mod.ProcessGuard, "start", lambda self: None)
         guard = pg_mod.create_model_guard(
@@ -1243,7 +1284,10 @@ class TestCreateModelGuard:
             generate_timeout=3.0,
             max_concurrent=2,
         )
-        assert guard.model_cls_path == "domain.infrastructure.hf_model_worker.hf_model_loader"
+        assert (
+            guard.model_cls_path
+            == "domain.infrastructure._internal.hf_model_worker.hf_model_loader"
+        )
         assert guard.model_kwargs == {"model_id": "my-org/model", "device": "cpu"}
         assert guard.worker_id == "guard-model"
         assert guard.max_restarts == 2

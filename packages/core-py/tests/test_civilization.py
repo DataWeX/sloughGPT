@@ -35,40 +35,38 @@ import pytest
 from domain.shell._internal.evolution import (
     Genome,
     _conservation_sweep,
-    benchmark_civilization,
-    _teach_rng,
     _predation_rng,
-    _territory_rng,
     _reproduce_rng,
     _role_rng,
+    _teach_rng,
+    _territory_rng,
+    benchmark_civilization,
 )
 from domain.shell._internal.simulation import WorldParams
 
 
 def _all_on_params(**kw) -> WorldParams:
-    base = dict(
-        grid_size=(16, 8, 16),
-        learning_enabled=True,
-        message_enabled=True,
-        structure_enabled=True,
-        teaching_enabled=True,
-        memory_enabled=True,
-        predation_enabled=True,
-        territoriality_enabled=True,
-        lifecycle_enabled=True,
-        specialization_enabled=True,
-        write_energy_scale=10.0,
-        max_entities=32,
-    )
+    base = {
+        "grid_size": (16, 8, 16),
+        "learning_enabled": True,
+        "message_enabled": True,
+        "structure_enabled": True,
+        "teaching_enabled": True,
+        "memory_enabled": True,
+        "predation_enabled": True,
+        "territoriality_enabled": True,
+        "lifecycle_enabled": True,
+        "specialization_enabled": True,
+        "write_energy_scale": 10.0,
+        "max_entities": 32,
+    }
     base.update(kw)
     return WorldParams(**base)
 
 
-def _sweep_genomes(params: WorldParams, n: int, seed: int,
-                   group_count: int = 2) -> list[Genome]:
+def _sweep_genomes(params: WorldParams, n: int, seed: int, group_count: int = 2) -> list[Genome]:
     rng = np.random.default_rng(seed)
-    return [Genome.random(params, rng, group_id=i % group_count)
-            for i in range(n)]
+    return [Genome.random(params, rng, group_id=i % group_count) for i in range(n)]
 
 
 class TestConservationSweep:
@@ -106,8 +104,7 @@ class TestConservationSweep:
                 b.entity.energy += 100.0
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr("domain.shell._internal.evolution.Simulation.step",
-                       _energy_injector)
+            mp.setattr("domain.shell._internal.evolution.Simulation.step", _energy_injector)
             result = _conservation_sweep(params, genomes, ticks=4)
         assert result["monotonic"] is False
         assert len(result["violations"]) >= 1
@@ -167,8 +164,7 @@ class TestConservationSweep:
                 b.entity.energy += 100.0
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr("domain.shell._internal.evolution.Simulation.step",
-                       _energy_injector)
+            mp.setattr("domain.shell._internal.evolution.Simulation.step", _energy_injector)
             result = _conservation_sweep(params, genomes, ticks=4)
         for v in result["violations"]:
             assert isinstance(v, tuple)
@@ -196,22 +192,20 @@ class TestRNGIsolationUnderTotalLoad:
             for name in ("cells", "body", "entity", "move"):
                 for suf in ("W", "b"):
                     assert np.allclose(
-                        g_off.tensors[f"{name}.{suf}"],
-                        g_on.tensors[f"{name}.{suf}"])
+                        g_off.tensors[f"{name}.{suf}"], g_on.tensors[f"{name}.{suf}"]
+                    )
 
     def test_all_channel_brains_present_when_on(self):
         on = _all_on_params(generate_world=True, world_seed=7)
         g = Genome.random(on, np.random.default_rng(7), group_id=0)
-        for name in ("message", "teach", "predation", "territory",
-                     "reproduce", "role"):
+        for name in ("message", "teach", "predation", "territory", "reproduce", "role"):
             assert f"{name}.W" in g.tensors
             assert f"{name}.b" in g.tensors
 
     def test_no_channel_brains_when_off(self):
         off = WorldParams(grid_size=(16, 8, 16))
         g = Genome.random(off, np.random.default_rng(7), group_id=0)
-        for name in ("message", "teach", "predation", "territory",
-                     "reproduce", "role"):
+        for name in ("message", "teach", "predation", "territory", "reproduce", "role"):
             assert f"{name}.W" not in g.tensors
 
     def test_brain_tensor_shapes(self):
@@ -225,8 +219,7 @@ class TestRNGIsolationUnderTotalLoad:
     def test_channel_brain_tensor_shapes(self):
         on = _all_on_params(generate_world=True, world_seed=7)
         g = Genome.random(on, np.random.default_rng(7), group_id=0)
-        for name in ("message", "teach", "predation", "territory",
-                     "reproduce", "role"):
+        for name in ("message", "teach", "predation", "territory", "reproduce", "role"):
             assert g.tensors[f"{name}.W"].ndim >= 1
             assert g.tensors[f"{name}.b"].ndim >= 1
 
@@ -309,26 +302,45 @@ class TestBenchmarkStructure:
 
     def test_structure_and_verdict_keys(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         assert set(result) >= {
-            "control", "civilization", "group_count", "group_weight",
-            "control_last_avg", "civilization_last_avg",
-            "conservation_monotonic", "conservation_violations",
-            "conservation_start_total", "conservation_end_total",
-            "brains_identical", "channels_live", "channels_live_all",
-            "births", "alive_count", "population_size",
+            "control",
+            "civilization",
+            "group_count",
+            "group_weight",
+            "control_last_avg",
+            "civilization_last_avg",
+            "conservation_monotonic",
+            "conservation_violations",
+            "conservation_start_total",
+            "conservation_end_total",
+            "brains_identical",
+            "channels_live",
+            "channels_live_all",
+            "births",
+            "alive_count",
+            "population_size",
             "civilization_emerged",
         }
         assert len(result["control"]["history"]) == 3
         assert len(result["civilization"]["history"]) == 3
-        assert result["births"] == \
-            result["civilization"]["history"][-1]["births"]
+        assert result["births"] == result["civilization"]["history"][-1]["births"]
         assert isinstance(result["channels_live"], dict)
         assert set(result["channels_live"]) >= {
-            "lessons", "predations", "defenses", "raids", "nests_built",
-            "births", "role_deposits", "role_raids", "memory",
+            "lessons",
+            "predations",
+            "defenses",
+            "raids",
+            "nests_built",
+            "births",
+            "role_deposits",
+            "role_raids",
+            "memory",
         }
         assert isinstance(result["civilization_emerged"], bool)
         assert isinstance(result["conservation_monotonic"], bool)
@@ -336,47 +348,67 @@ class TestBenchmarkStructure:
 
     def test_deterministic(self):
         a = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=2,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=2,
         )
         b = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=2,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=2,
         )
-        assert a["civilization"]["history"] == \
-            b["civilization"]["history"]
+        assert a["civilization"]["history"] == b["civilization"]["history"]
         assert a["control"]["history"] == b["control"]["history"]
         assert a["conservation_violations"] == b["conservation_violations"]
-        assert a["conservation_start_total"] == \
-            b["conservation_start_total"]
+        assert a["conservation_start_total"] == b["conservation_start_total"]
 
     def test_control_arm_produces_zero_channel_activity(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
-        quiet = ("lessons", "predations", "defenses", "raids",
-                 "nests_built", "births", "role_deposits",
-                 "role_raids", "memory_size")
+        quiet = (
+            "lessons",
+            "predations",
+            "defenses",
+            "raids",
+            "nests_built",
+            "births",
+            "role_deposits",
+            "role_raids",
+            "memory_size",
+        )
         for entry in result["control"]["history"]:
             for key in quiet:
                 assert entry.get(key, 0) == 0
 
     def test_both_arms_have_full_history(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         for arm in ("control", "civilization"):
             entry = result[arm]["history"][0]
-            for key in ("cooperations", "contests", "avg_fitness",
-                        "best_fitness"):
+            for key in ("cooperations", "contests", "avg_fitness", "best_fitness"):
                 assert key in entry
 
     def test_control_history_entry_keys(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         entry = result["control"]["history"][0]
         assert "cooperations" in entry
@@ -386,8 +418,11 @@ class TestBenchmarkStructure:
 
     def test_civilization_history_entry_keys(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         entry = result["civilization"]["history"][0]
         assert "cooperations" in entry
@@ -397,22 +432,31 @@ class TestBenchmarkStructure:
 
     def test_group_count_positive(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         assert result["group_count"] >= 1
 
     def test_population_size_preserved(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         assert result["population_size"] == 4
 
     def test_conservation_start_total_positive(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         assert result["conservation_start_total"] > 0.0
 
@@ -423,44 +467,59 @@ class TestIntegratedInvariants:
     def test_conservation_holds_across_seeds(self):
         for seed in (1, 3, 7):
             result = benchmark_civilization(
-                population_size=8, generations=6, ticks_per_generation=24,
-                organic_pools=3, seed=seed,
+                population_size=8,
+                generations=6,
+                ticks_per_generation=24,
+                organic_pools=3,
+                seed=seed,
             )
             assert result["conservation_monotonic"] is True, seed
             assert result["conservation_violations"] == [], seed
-            assert result["conservation_end_total"] <= \
-                result["conservation_start_total"] + 1e-6, seed
+            assert result["conservation_end_total"] <= result["conservation_start_total"] + 1e-6, (
+                seed
+            )
 
     def test_rng_isolation_holds_across_seeds(self):
         for seed in (1, 3, 7):
             result = benchmark_civilization(
-                population_size=8, generations=6, ticks_per_generation=24,
-                organic_pools=3, seed=seed,
+                population_size=8,
+                generations=6,
+                ticks_per_generation=24,
+                organic_pools=3,
+                seed=seed,
             )
             assert result["brains_identical"] is True, seed
 
     def test_conservation_and_rng_are_seed_independent(self):
         for seed in (1, 3, 7):
             result = benchmark_civilization(
-                population_size=8, generations=6, ticks_per_generation=24,
-                organic_pools=3, seed=seed,
+                population_size=8,
+                generations=6,
+                ticks_per_generation=24,
+                organic_pools=3,
+                seed=seed,
             )
-            assert result["conservation_monotonic"] == \
-                result["brains_identical"] is True, seed
+            assert result["conservation_monotonic"] == result["brains_identical"] is True, seed
 
     def test_conservation_end_not_exceed_start(self):
         for seed in [1, 5]:
             result = benchmark_civilization(
-                population_size=8, generations=6, ticks_per_generation=24,
-                organic_pools=3, seed=seed,
+                population_size=8,
+                generations=6,
+                ticks_per_generation=24,
+                organic_pools=3,
+                seed=seed,
             )
             assert result["conservation_end_total"] <= result["conservation_start_total"] + 1e-6
 
     def test_all_invariants_hold_for_each_seed(self):
         for seed in (2, 4, 6):
             result = benchmark_civilization(
-                population_size=8, generations=6, ticks_per_generation=24,
-                organic_pools=3, seed=seed,
+                population_size=8,
+                generations=6,
+                ticks_per_generation=24,
+                organic_pools=3,
+                seed=seed,
             )
             assert result["conservation_monotonic"] is True
             assert result["brains_identical"] is True
@@ -472,8 +531,11 @@ class TestFullProgram:
 
     def test_all_channels_fire(self):
         result = benchmark_civilization(
-            population_size=8, generations=6, ticks_per_generation=24,
-            organic_pools=3, seed=7,
+            population_size=8,
+            generations=6,
+            ticks_per_generation=24,
+            organic_pools=3,
+            seed=7,
         )
         assert result["channels_live_all"] is True
         for name, fired in result["channels_live"].items():
@@ -481,8 +543,11 @@ class TestFullProgram:
 
     def test_world_self_sustains(self):
         result = benchmark_civilization(
-            population_size=8, generations=6, ticks_per_generation=24,
-            organic_pools=3, seed=7,
+            population_size=8,
+            generations=6,
+            ticks_per_generation=24,
+            organic_pools=3,
+            seed=7,
         )
         assert result["births"] > 0
         assert result["alive_count"] > 0
@@ -490,8 +555,11 @@ class TestFullProgram:
 
     def test_liveness_matches_derived_conditions(self):
         result = benchmark_civilization(
-            population_size=8, generations=6, ticks_per_generation=24,
-            organic_pools=3, seed=7,
+            population_size=8,
+            generations=6,
+            ticks_per_generation=24,
+            organic_pools=3,
+            seed=7,
         )
         derived = (
             result["conservation_monotonic"]
@@ -503,49 +571,74 @@ class TestFullProgram:
 
     def test_channels_live_is_dict(self):
         result = benchmark_civilization(
-            population_size=8, generations=6, ticks_per_generation=24,
-            organic_pools=3, seed=7,
+            population_size=8,
+            generations=6,
+            ticks_per_generation=24,
+            organic_pools=3,
+            seed=7,
         )
         assert isinstance(result["channels_live"], dict)
         assert len(result["channels_live"]) > 0
 
     def test_channel_keys_complete(self):
         result = benchmark_civilization(
-            population_size=8, generations=6, ticks_per_generation=24,
-            organic_pools=3, seed=7,
+            population_size=8,
+            generations=6,
+            ticks_per_generation=24,
+            organic_pools=3,
+            seed=7,
         )
         expected_keys = {
-            "lessons", "predations", "defenses", "raids",
-            "nests_built", "births", "role_deposits", "role_raids", "memory",
+            "lessons",
+            "predations",
+            "defenses",
+            "raids",
+            "nests_built",
+            "births",
+            "role_deposits",
+            "role_raids",
+            "memory",
         }
         assert set(result["channels_live"].keys()) >= expected_keys
 
     def test_births_non_negative(self):
         result = benchmark_civilization(
-            population_size=8, generations=6, ticks_per_generation=24,
-            organic_pools=3, seed=7,
+            population_size=8,
+            generations=6,
+            ticks_per_generation=24,
+            organic_pools=3,
+            seed=7,
         )
         assert result["births"] >= 0
 
     def test_alive_count_non_negative(self):
         result = benchmark_civilization(
-            population_size=8, generations=6, ticks_per_generation=24,
-            organic_pools=3, seed=7,
+            population_size=8,
+            generations=6,
+            ticks_per_generation=24,
+            organic_pools=3,
+            seed=7,
         )
         assert result["alive_count"] >= 0
 
     def test_last_avg_fitness_positive(self):
         result = benchmark_civilization(
-            population_size=8, generations=6, ticks_per_generation=24,
-            organic_pools=3, seed=7,
+            population_size=8,
+            generations=6,
+            ticks_per_generation=24,
+            organic_pools=3,
+            seed=7,
         )
         assert result["civilization_last_avg"] >= 0.0
 
     def test_control_avg_different_from_civilization(self):
         """Control and civilization arms should differ in fitness trajectories."""
         result = benchmark_civilization(
-            population_size=8, generations=6, ticks_per_generation=24,
-            organic_pools=3, seed=7,
+            population_size=8,
+            generations=6,
+            ticks_per_generation=24,
+            organic_pools=3,
+            seed=7,
         )
         # At least the last history entries should differ
         ctrl_last = result["control"]["history"][-1]
@@ -556,38 +649,51 @@ class TestFullProgram:
 
     def test_small_population(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=7,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=7,
         )
         assert result["conservation_monotonic"] is True
         assert result["brains_identical"] is True
 
     def test_medium_population(self):
         result = benchmark_civilization(
-            population_size=16, generations=4, ticks_per_generation=16,
-            organic_pools=2, seed=7,
+            population_size=16,
+            generations=4,
+            ticks_per_generation=16,
+            organic_pools=2,
+            seed=7,
         )
         assert result["conservation_monotonic"] is True
         assert result["brains_identical"] is True
 
     def test_different_generations(self):
         result = benchmark_civilization(
-            population_size=8, generations=2, ticks_per_generation=8,
-            organic_pools=1, seed=7,
+            population_size=8,
+            generations=2,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=7,
         )
         assert len(result["control"]["history"]) == 2
         assert len(result["civilization"]["history"]) == 2
 
     def test_many_organic_pools(self):
         result = benchmark_civilization(
-            population_size=8, generations=3, ticks_per_generation=8,
-            organic_pools=5, seed=7,
+            population_size=8,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=5,
+            seed=7,
         )
         assert result["conservation_monotonic"] is True
         assert result["brains_identical"] is True
 
 
 # ── RNG Stream Isolation ─────────────────────────────────────────────────────
+
 
 class TestRNGStreams:
     def test_teach_rng_deterministic(self):
@@ -646,7 +752,7 @@ class TestRNGStreams:
 
     def test_all_rngs_independent(self):
         """Each dedicated stream produces different draws from each other."""
-        base = _all_on_params()
+        _all_on_params()
         rng = np.random.default_rng(42)
         shared_vals = rng.standard_normal(10)
         teach_vals = _teach_rng(0).standard_normal(10)
@@ -661,6 +767,7 @@ class TestRNGStreams:
 
 
 # ── Genome Crossover & Mutation ──────────────────────────────────────────────
+
 
 class TestGenomeCrossover:
     def test_crossover_preserves_keys(self):
@@ -744,7 +851,7 @@ class TestGenomeMutate:
         on = _all_on_params()
         rng = np.random.default_rng(7)
         g = Genome.random(on, rng, group_id=0)
-        original = g.tensors["cells.W"].copy()
+        g.tensors["cells.W"].copy()
         result = g.mutate(np.random.default_rng(99))
         assert result is g
 
@@ -810,6 +917,7 @@ class TestGenomeMutate:
 
 
 # ── Genome Structure Extended ────────────────────────────────────────────────
+
 
 class TestGenomeStructureExtended:
     def test_genome_tensor_dtype_preserved(self):
@@ -892,35 +1000,48 @@ class TestGenomeStructureExtended:
 
 # ── Benchmark Structure Extended ─────────────────────────────────────────────
 
+
 class TestBenchmarkStructureExtended:
     def test_group_weight_in_result(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         assert "group_weight" in result
         assert isinstance(result["group_weight"], float)
 
     def test_group_count_in_result(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         assert "group_count" in result
         assert result["group_count"] >= 1
 
     def test_control_and_civilization_last_avg(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         assert isinstance(result["control_last_avg"], float)
         assert isinstance(result["civilization_last_avg"], float)
 
     def test_control_arm_history_has_channel_zeros(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         for entry in result["control"]["history"]:
             # With all channels off, predations/defenses/raids should be 0
@@ -930,8 +1051,11 @@ class TestBenchmarkStructureExtended:
 
     def test_civilization_arm_has_births(self):
         result = benchmark_civilization(
-            population_size=8, generations=6, ticks_per_generation=24,
-            organic_pools=3, seed=7,
+            population_size=8,
+            generations=6,
+            ticks_per_generation=24,
+            organic_pools=3,
+            seed=7,
         )
         # Civilization arm with lifecycle should have births
         last = result["civilization"]["history"][-1]
@@ -939,24 +1063,33 @@ class TestBenchmarkStructureExtended:
 
     def test_civilization_arm_has_memory(self):
         result = benchmark_civilization(
-            population_size=8, generations=6, ticks_per_generation=24,
-            organic_pools=3, seed=7,
+            population_size=8,
+            generations=6,
+            ticks_per_generation=24,
+            organic_pools=3,
+            seed=7,
         )
         last = result["civilization"]["history"][-1]
         assert last.get("memory_size", 0) >= 0
 
     def test_result_has_alive_count(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         assert "alive_count" in result
         assert result["alive_count"] >= 0
 
     def test_civilization_history_has_social_stats(self):
         result = benchmark_civilization(
-            population_size=4, generations=3, ticks_per_generation=8,
-            organic_pools=1, seed=1,
+            population_size=4,
+            generations=3,
+            ticks_per_generation=8,
+            organic_pools=1,
+            seed=1,
         )
         entry = result["civilization"]["history"][0]
         assert "cooperations" in entry

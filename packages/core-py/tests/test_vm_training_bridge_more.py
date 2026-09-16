@@ -2,7 +2,7 @@
 
 import requests
 
-from domains.shell import vm_training_bridge
+from domain.shell._internal import vm_training_bridge
 from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
 
@@ -123,9 +123,19 @@ class TestStatus:
         assert out == {"status": "running", "progress": 0.0, "error": None}
 
     def test_transition_to_completed(self):
-        b = _bridge([
-            _FakeResp(200, {"status": "completed", "progress": 100, "loss": 0.5, "checkpoint": "models/c.ckpt"}),
-        ])
+        b = _bridge(
+            [
+                _FakeResp(
+                    200,
+                    {
+                        "status": "completed",
+                        "progress": 100,
+                        "loss": 0.5,
+                        "checkpoint": "models/c.ckpt",
+                    },
+                ),
+            ]
+        )
         b._jobs[1] = {"status": "running", "api_job_id": "api-1"}
         out = b.status(1)
         assert out["status"] == "completed"
@@ -133,9 +143,11 @@ class TestStatus:
         assert b._jobs[1]["status"] == "completed"
 
     def test_transition_to_failed(self):
-        b = _bridge([
-            _FakeResp(200, {"status": "failed", "error": "oom"}),
-        ])
+        b = _bridge(
+            [
+                _FakeResp(200, {"status": "failed", "error": "oom"}),
+            ]
+        )
         b._jobs[1] = {"status": "running", "api_job_id": "api-1"}
         out = b.status(1)
         assert out["status"] == "failed"
@@ -143,17 +155,21 @@ class TestStatus:
         assert b._jobs[1]["status"] == "failed"
 
     def test_transition_to_cancelled(self):
-        b = _bridge([
-            _FakeResp(200, {"status": "cancelled", "error": "stopped"}),
-        ])
+        b = _bridge(
+            [
+                _FakeResp(200, {"status": "cancelled", "error": "stopped"}),
+            ]
+        )
         b._jobs[1] = {"status": "running", "api_job_id": "api-1"}
         out = b.status(1)
         assert out["status"] == "cancelled"
 
     def test_still_running_with_progress(self):
-        b = _bridge([
-            _FakeResp(200, {"status": "running", "progress": 50}),
-        ])
+        b = _bridge(
+            [
+                _FakeResp(200, {"status": "running", "progress": 50}),
+            ]
+        )
         b._jobs[1] = {"status": "running", "api_job_id": "api-1"}
         out = b.status(1)
         assert out["status"] == "running"
@@ -239,6 +255,7 @@ class TestStop:
 
     def test_stop_api_error_returns_false(self):
         import requests
+
         b = _bridge([_FakeResp(raise_exc=requests.RequestException("boom"))])
         b._jobs[1] = {"api_job_id": "api-1", "status": "running"}
         assert b.stop(1) is False

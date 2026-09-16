@@ -1,30 +1,30 @@
 """Tests for domain.ops — pure NumPy operations (no external dependencies)."""
 
-import math
 import numpy as np
 import pytest
+
 from domain.ops import (
+    ChunkedOperation,
+    FusedAttentionBias,
+    FusedCrossEntropyLoss,
     FusedLayerNorm,
     FusedRMSNorm,
-    FusedCrossEntropyLoss,
-    FusedAttentionBias,
-    ChunkedOperation,
-    MemoryEfficientSoftmax,
     FusedScaleBias,
+    MemoryEfficientSoftmax,
     OptimizedEmbedding,
-    fused_swiglu,
-    efficient_cross_entropy,
     chunked_matmul,
-    ragged_to_padded,
+    efficient_cross_entropy,
     estimate_attention_memory,
-    silu,
+    fused_swiglu,
     gelu,
+    ragged_to_padded,
+    silu,
 )
-
 
 # =============================================================================
 # FusedLayerNorm
 # =============================================================================
+
 
 class TestFusedLayerNorm:
     def test_output_shape(self):
@@ -62,7 +62,7 @@ class TestFusedLayerNorm:
         assert np.allclose(y, 3.0, atol=1e-5)
 
     def test_no_bias(self):
-        x = np.ones((2, 8), dtype=np.float32)
+        np.ones((2, 8), dtype=np.float32)
         ln = FusedLayerNorm(8, bias=False)
         assert ln.bias is None
 
@@ -93,6 +93,7 @@ class TestFusedLayerNorm:
 # =============================================================================
 # FusedRMSNorm
 # =============================================================================
+
 
 class TestFusedRMSNorm:
     def test_output_shape(self):
@@ -135,6 +136,7 @@ class TestFusedRMSNorm:
 # =============================================================================
 # FusedCrossEntropyLoss
 # =============================================================================
+
 
 class TestFusedCrossEntropyLoss:
     def test_perfect_prediction_low_loss(self):
@@ -184,6 +186,7 @@ class TestFusedCrossEntropyLoss:
 # =============================================================================
 # FusedAttentionBias
 # =============================================================================
+
 
 class TestFusedAttentionBias:
     def test_output_shape(self):
@@ -237,6 +240,7 @@ class TestFusedAttentionBias:
 # ChunkedOperation
 # =============================================================================
 
+
 class TestChunkedOperation:
     def test_output_shape(self):
         B, S, H, E = 1, 8, 2, 4
@@ -280,6 +284,7 @@ class TestChunkedOperation:
 # MemoryEfficientSoftmax
 # =============================================================================
 
+
 class TestMemoryEfficientSoftmax:
     def test_sums_to_one(self):
         logits = np.random.randn(4, 10).astype(np.float32)
@@ -319,6 +324,7 @@ class TestMemoryEfficientSoftmax:
 # FusedScaleBias
 # =============================================================================
 
+
 class TestFusedScaleBias:
     def test_identity(self):
         x = np.random.randn(2, 8).astype(np.float32)
@@ -357,6 +363,7 @@ class TestFusedScaleBias:
 # =============================================================================
 # OptimizedEmbedding
 # =============================================================================
+
 
 class TestOptimizedEmbedding:
     def test_output_shape(self):
@@ -399,6 +406,7 @@ class TestOptimizedEmbedding:
 # fused_swiglu
 # =============================================================================
 
+
 class TestFusedSwiglu:
     def test_output_shape(self):
         x = np.random.randn(2, 8).astype(np.float32)
@@ -427,6 +435,7 @@ class TestFusedSwiglu:
 # efficient_cross_entropy
 # =============================================================================
 
+
 class TestEfficientCrossEntropy:
     def test_perfect_prediction_low_loss(self):
         logits = np.array([[10.0, 0.1], [0.1, 10.0]], dtype=np.float32)
@@ -450,6 +459,7 @@ class TestEfficientCrossEntropy:
 # =============================================================================
 # chunked_matmul
 # =============================================================================
+
 
 class TestChunkedMatmul:
     def test_small_matrices(self):
@@ -477,6 +487,7 @@ class TestChunkedMatmul:
 # ragged_to_padded
 # =============================================================================
 
+
 class TestRaggedToPadded:
     def test_basic(self):
         tokens = np.array([[1, 2, 3], [4, 5, 0]], dtype=np.int64)
@@ -500,10 +511,11 @@ class TestRaggedToPadded:
 # estimate_attention_memory
 # =============================================================================
 
+
 class TestEstimateAttentionMemory:
     def test_basic_estimate(self):
         mem = estimate_attention_memory(batch_size=2, seq_len=128, num_heads=8, head_dim=64)
-        expected = 2 * 8 * 128 * 128 * 2 / (1024 ** 2)
+        expected = 2 * 8 * 128 * 128 * 2 / (1024**2)
         assert mem == pytest.approx(expected)
 
     def test_zero_batch(self):
@@ -511,14 +523,19 @@ class TestEstimateAttentionMemory:
         assert mem == 0.0
 
     def test_precision_bytes(self):
-        mem2 = estimate_attention_memory(batch_size=1, seq_len=64, num_heads=4, head_dim=32, precision_bytes=2)
-        mem4 = estimate_attention_memory(batch_size=1, seq_len=64, num_heads=4, head_dim=32, precision_bytes=4)
+        mem2 = estimate_attention_memory(
+            batch_size=1, seq_len=64, num_heads=4, head_dim=32, precision_bytes=2
+        )
+        mem4 = estimate_attention_memory(
+            batch_size=1, seq_len=64, num_heads=4, head_dim=32, precision_bytes=4
+        )
         assert mem4 == pytest.approx(mem2 * 2)
 
 
 # =============================================================================
 # silu
 # =============================================================================
+
 
 class TestSiLU:
     def test_zero(self):
@@ -543,6 +560,7 @@ class TestSiLU:
 # =============================================================================
 # gelu
 # =============================================================================
+
 
 class TestGELU:
     def test_zero(self):

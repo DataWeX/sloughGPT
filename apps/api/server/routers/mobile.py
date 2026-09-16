@@ -15,12 +15,13 @@ import subprocess
 import time as _time
 from collections.abc import AsyncGenerator
 
-from domain.infrastructure._internal.errors import AppError
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+
+from domain.infrastructure._internal.errors import AppError
 
 logger = logging.getLogger(__name__)
 
@@ -1006,7 +1007,10 @@ class MobileRouter:
             Returns:
                 Send result with recipient count.
             """
-            from domain.mobile._internal.notifications import NotificationPayload, get_notification_service
+            from domain.mobile._internal.notifications import (
+                NotificationPayload,
+                get_notification_service,
+            )
 
             svc = get_notification_service()
             payload = NotificationPayload(
@@ -1059,7 +1063,10 @@ class MobileRouter:
     ) -> dict:
         try:
             """Send a training-complete notification to all registered devices."""
-            from domain.mobile._internal.notifications import NotificationPayload, get_notification_service
+            from domain.mobile._internal.notifications import (
+                NotificationPayload,
+                get_notification_service,
+            )
 
             svc = get_notification_service()
             training = self._get_training_status()
@@ -1094,8 +1101,10 @@ class MobileRouter:
         # Filter out pairs with too-short messages
         MIN_MSG_LEN = 5
         valid_pairs = [
-            p for p in body.pairs
-            if len(p.user_msg.strip()) >= MIN_MSG_LEN and len(p.assistant_msg.strip()) >= MIN_MSG_LEN
+            p
+            for p in body.pairs
+            if len(p.user_msg.strip()) >= MIN_MSG_LEN
+            and len(p.assistant_msg.strip()) >= MIN_MSG_LEN
         ]
         if len(valid_pairs) < 5:
             raise_error(
@@ -1732,7 +1741,7 @@ class MobileRouter:
                         asyncio.get_running_loop().run_in_executor(None, proc.stdout.readline),
                         timeout=disconnect_check_interval,
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # readline timed out — loop back to check deadline/disconnect
                     continue
 

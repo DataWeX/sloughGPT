@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from domain.inference._internal.vector_store import VectorEntry, VectorStore, QueryResult
+from domain.inference._internal.vector_store import QueryResult, VectorEntry, VectorStore
 
 logger = logging.getLogger("slo.inference.vector_stores.pinecone")
 
@@ -16,12 +16,12 @@ class PineconeVectorStore(VectorStore):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         index_name: str = "sloughgpt",
         environment: str = "us-east-1",
         dimension: int = 768,
         metric: str = "cosine",
-        host: Optional[str] = None,
+        host: str | None = None,
     ):
         self.api_key = api_key or os.getenv("PINECONE_API_KEY")
         self.index_name = index_name
@@ -35,7 +35,7 @@ class PineconeVectorStore(VectorStore):
 
     async def connect(self) -> bool:
         try:
-            from pinecone import Pinecone, ServerlessSpec, PodSpec
+            from pinecone import Pinecone, PodSpec, ServerlessSpec
 
             if not self.api_key:
                 raise ValueError("PINECONE_API_KEY is required")
@@ -78,34 +78,36 @@ class PineconeVectorStore(VectorStore):
     async def disconnect(self) -> None:
         self.index = None
 
-    async def upsert(self, entries: List[VectorEntry]) -> int:
+    async def upsert(self, entries: list[VectorEntry]) -> int:
         if not self.index:
             raise RuntimeError("Not connected to Pinecone")
 
         vectors = []
         for entry in entries:
-            vectors.append({
-                "id": entry.id,
-                "values": entry.vector,
-                "metadata": {
-                    "text": entry.text,
-                    **entry.metadata,
-                },
-            })
+            vectors.append(
+                {
+                    "id": entry.id,
+                    "values": entry.vector,
+                    "metadata": {
+                        "text": entry.text,
+                        **entry.metadata,
+                    },
+                }
+            )
 
         self.index.upsert(vectors=vectors)
         return len(entries)
 
     async def query(
         self,
-        vector: List[float],
+        vector: list[float],
         top_k: int = 5,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[QueryResult]:
+        filter_metadata: dict[str, Any] | None = None,
+    ) -> list[QueryResult]:
         if not self.index:
             raise RuntimeError("Not connected to Pinecone")
 
-        kwargs: Dict[str, Any] = {
+        kwargs: dict[str, Any] = {
             "vector": vector,
             "top_k": top_k,
             "include_metadata": True,
@@ -115,7 +117,7 @@ class PineconeVectorStore(VectorStore):
 
         response = self.index.query(**kwargs)
 
-        out: List[QueryResult] = []
+        out: list[QueryResult] = []
         if response and response.get("matches"):
             for match in response["matches"]:
                 metadata = match.get("metadata") or {}
@@ -129,7 +131,7 @@ class PineconeVectorStore(VectorStore):
                 )
         return out
 
-    async def delete(self, ids: List[str]) -> bool:
+    async def delete(self, ids: list[str]) -> bool:
         if not self.index:
             return False
         self.index.delete(ids=ids)

@@ -14,7 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.ssrf import validate_url_not_private as _validate_url_not_private
-from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 from schemas.datasets import (
     BatchImportRequest,
     CSVImportRequest,
@@ -51,6 +57,7 @@ class DatasetsRouter:
         self._import_locks_lock = asyncio.Lock()
         self._DATASET_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
         from mogdb.cache import QueryCache
+
         self._cache = QueryCache(ttl_seconds=5.0, max_entries=32)
         self._register_routes()
 
@@ -1084,7 +1091,11 @@ class DatasetsRouter:
 
             data_path = Path(info["path"])
             if data_path.is_dir():
-                candidates = [data_path / "input.txt", data_path / "corpus.jsonl", data_path / "train.txt"]
+                candidates = [
+                    data_path / "input.txt",
+                    data_path / "corpus.jsonl",
+                    data_path / "train.txt",
+                ]
                 input_file = next((c for c in candidates if c.exists()), None)
             else:
                 input_file = data_path

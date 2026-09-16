@@ -18,7 +18,7 @@ import zlib
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.slnc.spec import compute_header_size
+from domain.inference._internal.ct_provider import CTransformProvider
 from domain.inference._internal.native import bindings as B
 from domain.inference._internal.native.engine import (
     NativeEngine,
@@ -26,13 +26,12 @@ from domain.inference._internal.native.engine import (
     _detect_model_type,
     _format_chat_gpt2,
     _format_chat_llama,
-    _format_chat_qwen,
     format_chat,
     get_engine,
     sample_token,
 )
 from domain.inference._internal.native.weight_mapper import map_slnc_to_native
-from domain.inference._internal.ct_provider import CTransformProvider
+from domain.infrastructure._internal.slnc.spec import compute_header_size
 
 pytestmark = pytest.mark.filterwarnings("ignore::RuntimeWarning")
 
@@ -94,10 +93,12 @@ def _weights(seed: int = 7):
 def _build_slnc(path, weights, config):
     json_bytes = json.dumps(config, sort_keys=True).encode()
     header_size = compute_header_size(json_bytes)
-    prepared = [(name, np.ascontiguousarray(arr, dtype=np.float32))
-                for name, arr in weights.items()]
-    table_size = sum(4 + len(name.encode()) + 8 + 4 + 4 + arr.ndim * 4 + 4 + 4
-                     for name, arr in prepared)
+    prepared = [
+        (name, np.ascontiguousarray(arr, dtype=np.float32)) for name, arr in weights.items()
+    ]
+    table_size = sum(
+        4 + len(name.encode()) + 8 + 4 + 4 + arr.ndim * 4 + 4 + 4 for name, arr in prepared
+    )
     data_offset = header_size + table_size
     table = b""
     entries = []
@@ -114,11 +115,22 @@ def _build_slnc(path, weights, config):
         table += struct.pack("<I", zlib.crc32(arr.tobytes()) & 0xFFFFFFFF)
         cur += arr.nbytes
         entries.append(arr)
-    meta = struct.pack(
-        "<10I",
-        L, D, NH, FF, V, MAX_POS,
-        L, MAX_POS, len(weights), data_offset,
-    ) + b"\x00" * 24
+    meta = (
+        struct.pack(
+            "<10I",
+            L,
+            D,
+            NH,
+            FF,
+            V,
+            MAX_POS,
+            L,
+            MAX_POS,
+            len(weights),
+            data_offset,
+        )
+        + b"\x00" * 24
+    )
     with open(path, "wb") as f:
         f.write(b"SLNC")
         f.write(struct.pack("<I", 1))
@@ -174,8 +186,16 @@ class TestBindings:
     def test_lib_structs_have_expected_fields(self):
         lib = B.load_lib()
         assert [f[0] for f in lib._Config._fields_] == [
-            "n_layers", "hidden_dim", "n_heads", "n_kv_heads", "head_dim",
-            "ff_dim", "vocab_size", "block_size", "rope_base", "rope_theta",
+            "n_layers",
+            "hidden_dim",
+            "n_heads",
+            "n_kv_heads",
+            "head_dim",
+            "ff_dim",
+            "vocab_size",
+            "block_size",
+            "rope_base",
+            "rope_theta",
         ]
         assert "data" in [f[0] for f in lib._Weights._fields_]
         assert "k" in [f[0] for f in lib._KVCache._fields_]
@@ -201,21 +221,25 @@ class TestWeightMapper:
         w = _weights()
         flat, info = map_slnc_to_native(w, L, D, NH, NKV, HD, FF, V, is_qwen_style=True)
         np.testing.assert_allclose(
-            flat[0:V * D], w["model.embed_tokens.weight"].ravel(), rtol=1e-6, atol=0
+            flat[0 : V * D], w["model.embed_tokens.weight"].ravel(), rtol=1e-6, atol=0
         )
         l0 = info["layers"][0]["offset"]
         np.testing.assert_allclose(
-            flat[l0:l0 + D], w["model.layers.0.input_layernorm.weight"].ravel(),
-            rtol=1e-6, atol=0,
+            flat[l0 : l0 + D],
+            w["model.layers.0.input_layernorm.weight"].ravel(),
+            rtol=1e-6,
+            atol=0,
         )
         norm_off = V * D + info["layer_size"] * L
         np.testing.assert_allclose(
-            flat[norm_off:norm_off + D], w["model.norm.weight"].ravel(), rtol=1e-6, atol=0
+            flat[norm_off : norm_off + D], w["model.norm.weight"].ravel(), rtol=1e-6, atol=0
         )
         head_off = norm_off + D
         np.testing.assert_allclose(
-            flat[head_off:head_off + V * D], w["model.lm_head.weight"].ravel(),
-            rtol=1e-6, atol=0,
+            flat[head_off : head_off + V * D],
+            w["model.lm_head.weight"].ravel(),
+            rtol=1e-6,
+            atol=0,
         )
 
     def test_gpt2_style_naming(self):
@@ -232,15 +256,27 @@ class TestWeightMapper:
         assert info["total_floats"] == V * D + info["layer_size"] * L + D + V * D
         l0 = info["layers"][0]["offset"]
         np.testing.assert_allclose(
-            flat[l0:l0 + D], w["h.0.input_layernorm.weight"].ravel(), rtol=1e-6, atol=0
+            flat[l0 : l0 + D], w["h.0.input_layernorm.weight"].ravel(), rtol=1e-6, atol=0
         )
-        ff_off = l0 + D + D*(NH*HD) + NH*HD + D*(NKV*HD) + NKV*HD + D*(NKV*HD) + NKV*HD + NH*HD*D + D + D
+        ff_off = (
+            l0
+            + D
+            + D * (NH * HD)
+            + NH * HD
+            + D * (NKV * HD)
+            + NKV * HD
+            + D * (NKV * HD)
+            + NKV * HD
+            + NH * HD * D
+            + D
+            + D
+        )
         np.testing.assert_allclose(
-            flat[ff_off:ff_off + D * FF], w["h.0.mlp.gate_proj.weight"].ravel(), rtol=1e-6, atol=0
+            flat[ff_off : ff_off + D * FF], w["h.0.mlp.gate_proj.weight"].ravel(), rtol=1e-6, atol=0
         )
         head_off = V * D + info["layer_size"] * L + D
         np.testing.assert_allclose(
-            flat[head_off:head_off + V * D], w["wte.weight"].ravel(), rtol=1e-6, atol=0
+            flat[head_off : head_off + V * D], w["wte.weight"].ravel(), rtol=1e-6, atol=0
         )
 
     def test_missing_biases_default_to_zeros(self):
@@ -248,8 +284,8 @@ class TestWeightMapper:
         flat, info = map_slnc_to_native(w, L, D, NH, NKV, HD, FF, V, is_qwen_style=True)
         assert info["total_floats"] == V * D + info["layer_size"] * L + D + V * D
         layers_end = V * D + info["layer_size"] * L + D
-        assert np.allclose(flat[V * D:layers_end], 0.0)
-        np.testing.assert_allclose(flat[layers_end:], flat[:V * D], rtol=1e-6, atol=0)
+        assert np.allclose(flat[V * D : layers_end], 0.0)
+        np.testing.assert_allclose(flat[layers_end:], flat[: V * D], rtol=1e-6, atol=0)
 
     def test_empty_tensors_default_to_zeros(self):
         flat, info = map_slnc_to_native({}, L, D, NH, NKV, HD, FF, V, is_qwen_style=True)
@@ -271,15 +307,49 @@ class TestWeightMapper:
         w["model.norm.weight"] = rng.randn(D).astype(np.float32)
         flat, info = map_slnc_to_native(w, L, D, NH, NKV, HD, FF, V, is_qwen_style=True)
         l0 = info["layers"][0]["offset"]
-        gate_b_off = l0 + D + D*(NH*HD) + NH*HD + D*(NKV*HD) + NKV*HD + D*(NKV*HD) + NKV*HD + NH*HD*D + D + D + D*FF
-        np.testing.assert_allclose(
-            flat[gate_b_off:gate_b_off + FF],
-            w["model.layers.0.mlp.gate_proj.bias"].ravel(), rtol=1e-6, atol=0,
+        gate_b_off = (
+            l0
+            + D
+            + D * (NH * HD)
+            + NH * HD
+            + D * (NKV * HD)
+            + NKV * HD
+            + D * (NKV * HD)
+            + NKV * HD
+            + NH * HD * D
+            + D
+            + D
+            + D * FF
         )
-        down_b_off = l0 + D + D*(NH*HD) + NH*HD + D*(NKV*HD) + NKV*HD + D*(NKV*HD) + NKV*HD + NH*HD*D + D + D + D*FF + FF + D*FF + FF + FF*D
         np.testing.assert_allclose(
-            flat[down_b_off:down_b_off + D],
-            w["model.layers.0.mlp.down_proj.bias"].ravel(), rtol=1e-6, atol=0,
+            flat[gate_b_off : gate_b_off + FF],
+            w["model.layers.0.mlp.gate_proj.bias"].ravel(),
+            rtol=1e-6,
+            atol=0,
+        )
+        down_b_off = (
+            l0
+            + D
+            + D * (NH * HD)
+            + NH * HD
+            + D * (NKV * HD)
+            + NKV * HD
+            + D * (NKV * HD)
+            + NKV * HD
+            + NH * HD * D
+            + D
+            + D
+            + D * FF
+            + FF
+            + D * FF
+            + FF
+            + FF * D
+        )
+        np.testing.assert_allclose(
+            flat[down_b_off : down_b_off + D],
+            w["model.layers.0.mlp.down_proj.bias"].ravel(),
+            rtol=1e-6,
+            atol=0,
         )
 
 
@@ -295,15 +365,17 @@ class TestSamplingAndFormatting:
     def test_sample_token_top_k_restricts_support(self):
         logits = np.array([0.0, 100.0, 99.0, -100.0, -100.0], dtype=np.float32)
         rng = np.random.default_rng(0)
-        drawn = {sample_token(logits, temperature=1.0, top_p=1.0, top_k=2, rng=rng)
-                 for _ in range(200)}
+        drawn = {
+            sample_token(logits, temperature=1.0, top_p=1.0, top_k=2, rng=rng) for _ in range(200)
+        }
         assert drawn <= {1, 2}
 
     def test_sample_token_top_p_restricts_support(self):
         logits = np.array([0.0, 100.0, 99.0, -100.0, -100.0], dtype=np.float32)
         rng = np.random.default_rng(0)
-        drawn = {sample_token(logits, temperature=1.0, top_p=0.5, top_k=0, rng=rng)
-                 for _ in range(200)}
+        drawn = {
+            sample_token(logits, temperature=1.0, top_p=0.5, top_k=0, rng=rng) for _ in range(200)
+        }
         assert drawn <= {1, 2}
 
     def test_sample_token_survives_non_finite_logits(self):
@@ -322,7 +394,10 @@ class TestSamplingAndFormatting:
 
     def test_format_chat_qwen_with_system(self):
         out = format_chat([{"role": "user", "content": "hi"}], "qwen2", system="be brief")
-        assert out == "<|im_start|>system\nbe brief<|im_end|><|im_start|>user\nhi<|im_end|><|im_start|>assistant\n"
+        assert (
+            out
+            == "<|im_start|>system\nbe brief<|im_end|><|im_start|>user\nhi<|im_end|><|im_start|>assistant\n"
+        )
 
     def test_format_chat_llama_first_user_with_system(self):
         out = _format_chat_llama([{"role": "user", "content": "hello"}], system="S")
@@ -357,26 +432,35 @@ class TestNativeEngine:
     def test_load_and_generate_greedy(self):
         engine = _loaded_engine()
         assert engine.loaded
-        text = engine.generate([{"role": "user", "content": "hi there"}], max_tokens=8, temperature=0)
+        text = engine.generate(
+            [{"role": "user", "content": "hi there"}], max_tokens=8, temperature=0
+        )
         assert isinstance(text, str) and len(text) > 0
 
     def test_load_and_generate_sampled(self):
         engine = _loaded_engine()
-        text = engine.generate([{"role": "user", "content": "hi"}], max_tokens=8,
-                               temperature=0.7, top_p=0.9, top_k=10)
+        text = engine.generate(
+            [{"role": "user", "content": "hi"}], max_tokens=8, temperature=0.7, top_p=0.9, top_k=10
+        )
         assert isinstance(text, str) and len(text) > 0
 
     def test_generate_stream_yields_pieces(self):
         engine = _loaded_engine()
-        pieces = list(engine.generate_stream([{"role": "user", "content": "hi"}], max_tokens=8,
-                                             temperature=0.0))
+        pieces = list(
+            engine.generate_stream(
+                [{"role": "user", "content": "hi"}], max_tokens=8, temperature=0.0
+            )
+        )
         assert len(pieces) > 0
         assert all(isinstance(p, str) and len(p) >= 0 for p in pieces)
 
     def test_generate_stream_respects_eos(self):
         engine = _loaded_engine()
-        pieces = list(engine.generate_stream([{"role": "user", "content": "hi"}], max_tokens=32,
-                                             temperature=0.0))
+        pieces = list(
+            engine.generate_stream(
+                [{"role": "user", "content": "hi"}], max_tokens=32, temperature=0.0
+            )
+        )
         assert len(pieces) <= 32
 
     def test_unloaded_engine_generate_raises(self):
@@ -404,8 +488,10 @@ class TestNativeEngine:
 
     def test_detokenize_maps_non_ascii_to_placeholder(self, monkeypatch):
         import domain.inference._internal.tokenizer as T
-        monkeypatch.setattr(T, "get_tokenizer",
-                            lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer")))
+
+        monkeypatch.setattr(
+            T, "get_tokenizer", lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer"))
+        )
         engine = _loaded_engine()
         assert engine._detokenize_simple([0, 255]) == "??"
 
@@ -419,14 +505,12 @@ class TestNativeEngine:
 
     def test_load_weights_failure_raises(self, monkeypatch):
         engine = NativeEngine()
-        monkeypatch.setattr(engine._lib, "transformer_load_weights",
-                            lambda *a, **k: 1)
+        monkeypatch.setattr(engine._lib, "transformer_load_weights", lambda *a, **k: 1)
         with pytest.raises(RuntimeError, match="transformer_load_weights"):
             engine.load_from_slnc(_weights(), _config(), seq_capacity=16)
 
     def test_generate_stops_at_eos(self, monkeypatch):
         engine = _loaded_engine()
-        real_step = engine._lib.transformer_forward_step
 
         def _step_picks_eos(weights, cache, tok, pos, logits_ptr):
             buf = np.ctypeslib.as_array(
@@ -437,8 +521,10 @@ class TestNativeEngine:
             buf[_config()["eos_token_id"]] = 10.0
 
         monkeypatch.setattr(engine._lib, "transformer_forward_step", _step_picks_eos)
-        assert engine.generate([{"role": "user", "content": "hi"}],
-                               max_tokens=8, temperature=0.0) == ""
+        assert (
+            engine.generate([{"role": "user", "content": "hi"}], max_tokens=8, temperature=0.0)
+            == ""
+        )
 
     def test_generate_stream_stops_at_eos(self, monkeypatch):
         engine = _loaded_engine()
@@ -452,32 +538,41 @@ class TestNativeEngine:
             buf[_config()["eos_token_id"]] = 10.0
 
         monkeypatch.setattr(engine._lib, "transformer_forward_step", _step_picks_eos)
-        pieces = list(engine.generate_stream([{"role": "user", "content": "hi"}],
-                                             max_tokens=8, temperature=0.0))
+        pieces = list(
+            engine.generate_stream(
+                [{"role": "user", "content": "hi"}], max_tokens=8, temperature=0.0
+            )
+        )
         assert pieces == []
 
     def test_tokenize_uses_real_tokenizer(self):
         from domain.inference._internal.tokenizer import get_tokenizer
+
         engine = _loaded_engine()
         assert engine._tokenize_simple("hi") == get_tokenizer().encode("hi")
 
     def test_detokenize_uses_real_tokenizer(self):
         from domain.inference._internal.tokenizer import get_tokenizer
+
         engine = _loaded_engine()
         ids = engine._tokenize_simple("hi")
         assert engine._detokenize_simple(ids) == get_tokenizer().decode(ids)
 
     def test_tokenize_fallback_when_tokenizer_missing(self, monkeypatch):
         import domain.inference._internal.tokenizer as T
-        monkeypatch.setattr(T, "get_tokenizer",
-                            lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer")))
+
+        monkeypatch.setattr(
+            T, "get_tokenizer", lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer"))
+        )
         engine = _loaded_engine()
-        assert engine._tokenize_simple("hi") == list("hi".encode("utf-8"))
+        assert engine._tokenize_simple("hi") == list(b"hi")
 
     def test_detokenize_fallback_when_tokenizer_missing(self, monkeypatch):
         import domain.inference._internal.tokenizer as T
-        monkeypatch.setattr(T, "get_tokenizer",
-                            lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer")))
+
+        monkeypatch.setattr(
+            T, "get_tokenizer", lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer"))
+        )
         engine = _loaded_engine()
         assert engine._detokenize_simple([0, 255]) == "??"
 
@@ -492,6 +587,7 @@ class TestTokenizerWiring:
 
     def test_set_tokenizer_none_restores_fallback(self):
         from domain.inference._internal.tokenizer import get_tokenizer
+
         engine = _loaded_engine()
         engine.set_tokenizer(_FakeTokenizer())
         engine.set_tokenizer(None)
@@ -499,15 +595,17 @@ class TestTokenizerWiring:
 
     def test_load_from_slnc_with_tokenizer_sets_stop_ids(self):
         engine = NativeEngine()
-        engine.load_from_slnc(_weights(), _config(eos_token_id=999),
-                              tokenizer=_FakeTokenizer(stop_ids=(2,)))
+        engine.load_from_slnc(
+            _weights(), _config(eos_token_id=999), tokenizer=_FakeTokenizer(stop_ids=(2,))
+        )
         assert engine._tokenizer is not None
         assert engine._stop_ids() == {2}
 
     def test_generate_stops_at_tokenizer_stop_id(self, monkeypatch):
         engine = NativeEngine()
-        engine.load_from_slnc(_weights(), _config(eos_token_id=999),
-                              tokenizer=_FakeTokenizer(stop_ids=(2,)))
+        engine.load_from_slnc(
+            _weights(), _config(eos_token_id=999), tokenizer=_FakeTokenizer(stop_ids=(2,))
+        )
 
         def _step_picks_stop(weights, cache, tok, pos, logits_ptr):
             buf = np.ctypeslib.as_array(
@@ -518,8 +616,10 @@ class TestTokenizerWiring:
             buf[2] = 10.0
 
         monkeypatch.setattr(engine._lib, "transformer_forward_step", _step_picks_stop)
-        assert engine.generate([{"role": "user", "content": "hi"}],
-                               max_tokens=8, temperature=0.0) == ""
+        assert (
+            engine.generate([{"role": "user", "content": "hi"}], max_tokens=8, temperature=0.0)
+            == ""
+        )
 
     def test_build_prompt_prefers_apply_chat_template(self):
         engine = _loaded_engine()
@@ -529,8 +629,9 @@ class TestTokenizerWiring:
 
     def test_build_prompt_falls_back_to_format_chat(self):
         engine = _loaded_engine()
-        assert engine._build_prompt([{"role": "user", "content": "hi"}], system="sys") == \
-            format_chat([{"role": "user", "content": "hi"}], "qwen2", "sys")
+        assert engine._build_prompt(
+            [{"role": "user", "content": "hi"}], system="sys"
+        ) == format_chat([{"role": "user", "content": "hi"}], "qwen2", "sys")
 
     def test_sample_masks_beyond_tokenizer_vocab(self):
         engine = _loaded_engine()
@@ -543,6 +644,7 @@ class TestTokenizerWiring:
 
     def test_load_from_slnc_hf_model_id_uses_real_tokenizer(self):
         from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
+
         try:
             real = MorphTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
         except FileNotFoundError:
@@ -559,20 +661,23 @@ class TestTokenizerWiring:
         engine = NativeEngine.from_slnc_file(slnc_path, seq_capacity=16)
         assert engine.loaded
         assert engine._model_type == "qwen2"
-        out = engine.generate([{"role": "user", "content": "hi"}], max_tokens=8,
-                              temperature=0.0)
+        out = engine.generate([{"role": "user", "content": "hi"}], max_tokens=8, temperature=0.0)
         assert isinstance(out, str)
 
     def test_hf_id_from_slnc_path(self):
         from domain.inference._internal.native.engine import _hf_id_from_slnc_path
-        assert _hf_id_from_slnc_path(
-            "/x/hf-cache/hub/models--Qwen--Qwen2.5-0.5B-Instruct/snapshots/a/model.slnc"
-        ) == "Qwen/Qwen2.5-0.5B-Instruct"
+
+        assert (
+            _hf_id_from_slnc_path(
+                "/x/hf-cache/hub/models--Qwen--Qwen2.5-0.5B-Instruct/snapshots/a/model.slnc"
+            )
+            == "Qwen/Qwen2.5-0.5B-Instruct"
+        )
         assert _hf_id_from_slnc_path("/tmp/model.slnc") is None
 
 
 class TestRealModelEndToEnd:
-    SLNC = ("models/hf-cache/hub/models--Qwen--Qwen2.5-0.5B-Instruct/model.slnc")
+    SLNC = "models/hf-cache/hub/models--Qwen--Qwen2.5-0.5B-Instruct/model.slnc"
 
     def _available_mem_kb(self) -> int:
         try:
@@ -588,6 +693,7 @@ class TestRealModelEndToEnd:
     @pytest.mark.integration
     def test_real_qwen_slnc_native_generation(self, tmp_path):
         from pathlib import Path
+
         repo_root = Path(__file__).resolve().parents[3]
         slnc = repo_root / self.SLNC
         if not slnc.exists():
@@ -601,8 +707,9 @@ class TestRealModelEndToEnd:
         assert engine._tokenizer is not None
         assert 151643 in engine._stop_ids()
 
-        out = engine.generate([{"role": "user", "content": "Hello"}],
-                              max_tokens=16, temperature=0.0)
+        out = engine.generate(
+            [{"role": "user", "content": "Hello"}], max_tokens=16, temperature=0.0
+        )
         assert isinstance(out, str) and len(out) > 0
         assert "?" not in out
 
@@ -611,6 +718,7 @@ class TestNativeProviderWiring:
     @pytest.fixture(autouse=True)
     def _clean_registries(self):
         import domain.models._internal.provider as mod
+
         mod._providers.clear()
         mod._processors.clear()
         yield
@@ -618,7 +726,8 @@ class TestNativeProviderWiring:
         mod._processors.clear()
 
     def test_setup_providers_native_slnc_path(self, tmp_path):
-        from domain.models._internal.provider import setup_providers, get_provider
+        from domain.models._internal.provider import get_provider, setup_providers
+
         slnc_path = str(tmp_path / "tiny.slnc")
         _build_slnc(slnc_path, _weights(), _config())
         setup_providers(native_slnc_path=slnc_path)
@@ -630,7 +739,8 @@ class TestNativeProviderWiring:
         assert provider.metadata["loaded"] is True
 
     def test_setup_providers_missing_slnc_degrades_gracefully(self):
-        from domain.models._internal.provider import setup_providers, get_provider
+        from domain.models._internal.provider import get_provider, setup_providers
+
         setup_providers(native_slnc_path="/nonexistent/model.slnc")
         default = get_provider("default")
         assert default.metadata["text_provider"] is None
@@ -663,8 +773,12 @@ class TestNativeTransformerProvider:
         provider = NativeTransformerProvider(engine)
 
         async def _collect():
-            return [p async for p in provider.chat_stream(
-                [{"role": "user", "content": "hi"}], max_tokens=8)]
+            return [
+                p
+                async for p in provider.chat_stream(
+                    [{"role": "user", "content": "hi"}], max_tokens=8
+                )
+            ]
 
         pieces = asyncio.run(_collect())
         assert len(pieces) > 0
@@ -678,8 +792,12 @@ class TestNativeTransformerProvider:
         event.set()
 
         async def _collect():
-            return [p async for p in provider.chat_stream(
-                [{"role": "user", "content": "hi"}], max_tokens=8, cancel_event=event)]
+            return [
+                p
+                async for p in provider.chat_stream(
+                    [{"role": "user", "content": "hi"}], max_tokens=8, cancel_event=event
+                )
+            ]
 
         assert asyncio.run(_collect()) == []
 
@@ -688,8 +806,12 @@ class TestNativeTransformerProvider:
         provider = NativeTransformerProvider(engine)
 
         async def _collect():
-            return [p async for p in provider.chat_stream(
-                [{"role": "user", "content": "hi"}], max_tokens=8)]
+            return [
+                p
+                async for p in provider.chat_stream(
+                    [{"role": "user", "content": "hi"}], max_tokens=8
+                )
+            ]
 
         assert asyncio.run(_collect()) == []
 
@@ -711,6 +833,7 @@ class TestCTransformProvider:
 
     def test_from_slnc_roundtrip_slnc_parser(self, tmp_path):
         from domain.infrastructure._internal.slnc.parser import SLNCParser
+
         slnc_path = str(tmp_path / "tiny.slnc")
         w = _weights()
         _build_slnc(slnc_path, w, _config())
@@ -720,11 +843,14 @@ class TestCTransformProvider:
         assert set(w.keys()) == set(loaded.keys())
         np.testing.assert_allclose(
             loaded["model.embed_tokens.weight"],
-            w["model.embed_tokens.weight"], rtol=1e-6, atol=0,
+            w["model.embed_tokens.weight"],
+            rtol=1e-6,
+            atol=0,
         )
 
     def test_tokenize_detokenize_uses_real_tokenizer(self):
         from domain.inference._internal.tokenizer import get_tokenizer
+
         engine = _loaded_engine()
         provider = CTransformProvider(engine)
         assert provider._tokenizer is not None
@@ -734,8 +860,10 @@ class TestCTransformProvider:
 
     def test_init_tolerates_missing_tokenizer(self, monkeypatch):
         import domain.inference._internal.tokenizer as T
-        monkeypatch.setattr(T, "get_tokenizer",
-                            lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer")))
+
+        monkeypatch.setattr(
+            T, "get_tokenizer", lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer"))
+        )
         provider = CTransformProvider(_loaded_engine())
         assert provider._tokenizer is None
         assert provider.metadata()["has_tokenizer"] is False

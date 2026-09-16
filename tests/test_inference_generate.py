@@ -3,14 +3,16 @@ Tests for /inference/generate and /inference/generate/stream endpoints.
 """
 
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
 def client():
     from fastapi import FastAPI
+
     from apps.api.server.routers.inference import router
 
     _app = FastAPI()
@@ -20,6 +22,7 @@ def client():
 
 class AsyncIteratorMock:
     """Async iterator that yields tokens."""
+
     def __init__(self, tokens):
         self._tokens = tokens
 
@@ -36,11 +39,14 @@ class AsyncIteratorMock:
 def mock_provider():
     """Mock the provider pipeline to avoid model loading."""
     import startup_progress
+
     startup_progress.STARTUP_PHASE.update(phase="ready", message="Test ready")
 
     provider = MagicMock()
     provider.chat = AsyncMock(return_value="Hello! How are you today?")
-    provider.chat_stream = MagicMock(return_value=AsyncIteratorMock(["Hello!", " How", " are", " you?"]))
+    provider.chat_stream = MagicMock(
+        return_value=AsyncIteratorMock(["Hello!", " How", " are", " you?"])
+    )
     provider.model_id = "test-model"
     with (
         patch("domains.models.provider.get_provider", return_value=provider),
@@ -55,8 +61,7 @@ class TestGenerateEndpoint:
     def test_generate_returns_text(self, client, mock_provider):
         """Should return generated text with model info."""
         response = client.post(
-            "/inference/generate",
-            json={"prompt": "Hello", "max_new_tokens": 10}
+            "/inference/generate", json={"prompt": "Hello", "max_new_tokens": 10}
         )
         assert response.status_code == 200
         data = response.json()
@@ -75,7 +80,7 @@ class TestGenerateEndpoint:
                 "top_p": 0.8,
                 "top_k": 20,
                 "repetition_penalty": 1.1,
-            }
+            },
         )
         mock_provider.chat.assert_called_once()
         kwargs = mock_provider.chat.call_args[1]
@@ -88,20 +93,17 @@ class TestGenerateEndpoint:
     def test_generate_no_provider_returns_503(self, client):
         """Should return 503 when no provider is available."""
         with patch("domains.models.provider.get_provider", return_value=None):
-            response = client.post(
-                "/inference/generate",
-                json={"prompt": "Hello"}
-            )
+            response = client.post("/inference/generate", json={"prompt": "Hello"})
         assert response.status_code == 503
 
     def test_generate_reports_actual_loaded_model(self, client, mock_provider):
         """Should report the loaded model type, not the request default echo."""
         import state as _st
+
         _st.model_type = "Qwen/Qwen2.5-0.5B-Instruct"
         try:
             response = client.post(
-                "/inference/generate",
-                json={"prompt": "Hello", "max_new_tokens": 10}
+                "/inference/generate", json={"prompt": "Hello", "max_new_tokens": 10}
             )
         finally:
             _st.model_type = None
@@ -116,8 +118,7 @@ class TestGenerateStreamEndpoint:
     def test_generate_stream_returns_sse(self, client, mock_provider):
         """Should return SSE tokens from provider."""
         response = client.post(
-            "/inference/generate/stream",
-            json={"prompt": "Hello", "max_new_tokens": 10}
+            "/inference/generate/stream", json={"prompt": "Hello", "max_new_tokens": 10}
         )
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/event-stream")
@@ -138,8 +139,7 @@ class TestGenerateStreamEndpoint:
     def test_generate_stream_tokens_ordered(self, client, mock_provider):
         """Should yield tokens in correct order (may be batched)."""
         response = client.post(
-            "/inference/generate/stream",
-            json={"prompt": "Hi", "max_new_tokens": 5}
+            "/inference/generate/stream", json={"prompt": "Hi", "max_new_tokens": 5}
         )
         tokens = []
         for line in response.text.split("\n"):
@@ -153,8 +153,7 @@ class TestGenerateStreamEndpoint:
     def test_generate_stream_complete_meta(self, client, mock_provider):
         """Should include token count and elapsed time in final event."""
         response = client.post(
-            "/inference/generate/stream",
-            json={"prompt": "Hi", "max_new_tokens": 10}
+            "/inference/generate/stream", json={"prompt": "Hi", "max_new_tokens": 10}
         )
         for line in response.text.split("\n"):
             if line.startswith("data: "):

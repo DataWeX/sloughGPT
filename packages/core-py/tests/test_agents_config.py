@@ -1,10 +1,14 @@
 """Tests for domain.agents — SecurityConfig, SecurityBoundary, ToolDefinition, ToolExecutionContext, AgentConfig."""
 
 import time
-import pytest
+
 from domain.agents import (
-    SecurityConfig, SecurityBoundary, ToolCapability, ToolDefinition,
-    ToolExecutionContext, AgentConfig,
+    AgentConfig,
+    SecurityBoundary,
+    SecurityConfig,
+    ToolCapability,
+    ToolDefinition,
+    ToolExecutionContext,
 )
 
 
@@ -18,10 +22,7 @@ class TestSecurityConfig:
 
     def test_custom_values(self):
         sc = SecurityConfig(
-            max_execution_time=60,
-            max_memory_mb=1024,
-            allow_network=True,
-            rate_limit_per_minute=120
+            max_execution_time=60, max_memory_mb=1024, allow_network=True, rate_limit_per_minute=120
         )
         assert sc.max_execution_time == 60
         assert sc.max_memory_mb == 1024
@@ -280,6 +281,7 @@ class TestToolCapability:
 
     def test_is_enum(self):
         from enum import Enum
+
         assert issubclass(ToolCapability, Enum)
 
     def test_unique_values(self):
@@ -288,7 +290,7 @@ class TestToolCapability:
 
     def test_iteration(self):
         count = 0
-        for cap in ToolCapability:
+        for _cap in ToolCapability:
             count += 1
         assert count == 8
 
@@ -302,7 +304,9 @@ class TestToolCapability:
 class TestToolDefinition:
     def test_fields(self):
         td = ToolDefinition(
-            name="calc", description="calc", parameters={},
+            name="calc",
+            description="calc",
+            parameters={},
             capability=ToolCapability.CODE_EXECUTION,
         )
         assert td.name == "calc"
@@ -348,14 +352,18 @@ class TestToolDefinition:
 
     def test_description_preserved(self):
         td = ToolDefinition(
-            name="t", description="A long description",
-            parameters={}, capability=ToolCapability.FILE_READ,
+            name="t",
+            description="A long description",
+            parameters={},
+            capability=ToolCapability.FILE_READ,
         )
         assert td.description == "A long description"
 
     def test_default_requires_approval(self):
         td = ToolDefinition(
-            name="t", description="d", parameters={},
+            name="t",
+            description="d",
+            parameters={},
             capability=ToolCapability.FILE_READ,
         )
         assert td.requires_approval is False
@@ -368,20 +376,25 @@ class TestToolDefinition:
             "nested": {"a": [1, 2]},
         }
         td = ToolDefinition(
-            name="search", description="d", parameters=params,
+            name="search",
+            description="d",
+            parameters=params,
             capability=ToolCapability.FILE_SEARCH,
         )
         assert td.parameters["nested"]["a"] == [1, 2]
 
     def test_name_preserved(self):
         td = ToolDefinition(
-            name="my_tool", description="d", parameters={},
+            name="my_tool",
+            description="d",
+            parameters={},
             capability=ToolCapability.CODE_EXECUTION,
         )
         assert td.name == "my_tool"
 
     def test_dataclass_fields(self):
         from dataclasses import fields
+
         field_names = [f.name for f in fields(ToolDefinition)]
         assert "name" in field_names
         assert "description" in field_names
@@ -435,7 +448,9 @@ class TestToolExecutionContext:
 
     def test_metadata_nested(self):
         tec = ToolExecutionContext(
-            session_id="s", user_id="u", timestamp=0.0,
+            session_id="s",
+            user_id="u",
+            timestamp=0.0,
             metadata={"outer": {"inner": [1, 2]}},
         )
         assert tec.metadata["outer"]["inner"] == [1, 2]
@@ -446,14 +461,18 @@ class TestToolExecutionContext:
 
     def test_metadata_keys(self):
         tec = ToolExecutionContext(
-            session_id="s", user_id="u", timestamp=0.0,
+            session_id="s",
+            user_id="u",
+            timestamp=0.0,
             metadata={"a": 1, "b": 2},
         )
         assert set(tec.metadata.keys()) == {"a", "b"}
 
     def test_metadata_update(self):
         tec = ToolExecutionContext(
-            session_id="s", user_id="u", timestamp=0.0,
+            session_id="s",
+            user_id="u",
+            timestamp=0.0,
             metadata={"a": 1},
         )
         tec.metadata.update({"b": 2, "c": 3})
@@ -462,7 +481,9 @@ class TestToolExecutionContext:
 
     def test_metadata_delete(self):
         tec = ToolExecutionContext(
-            session_id="s", user_id="u", timestamp=0.0,
+            session_id="s",
+            user_id="u",
+            timestamp=0.0,
             metadata={"key": "val"},
         )
         del tec.metadata["key"]
@@ -470,6 +491,7 @@ class TestToolExecutionContext:
 
     def test_dataclass_fields(self):
         from dataclasses import fields
+
         field_names = [f.name for f in fields(ToolExecutionContext)]
         assert "session_id" in field_names
         assert "user_id" in field_names
@@ -546,6 +568,7 @@ class TestAgentConfig:
 
     def test_dataclass_fields(self):
         from dataclasses import fields
+
         field_names = [f.name for f in fields(AgentConfig)]
         assert "tools" in field_names
         assert "security" in field_names

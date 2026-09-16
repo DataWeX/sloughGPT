@@ -9,10 +9,10 @@ Integrates HD computing into SloEngine for fast semantic memory:
 
 from __future__ import annotations
 
-import time
-from typing import Any, Dict, List, Optional, Tuple
-from dataclasses import dataclass
 import logging
+import time
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("slo.hd_memory")
 
@@ -23,8 +23,8 @@ class HDMemoryItem:
 
     id: str
     content: str
-    hypervector: List[float]
-    metadata: Dict[str, Any]
+    hypervector: list[float]
+    metadata: dict[str, Any]
     timestamp: float
     role: str  # 'user', 'assistant', 'system'
 
@@ -42,8 +42,8 @@ class HDMemoryStore:
     def __init__(self, dim: int = 10000, max_items: int = 1000):
         self.dim = dim
         self.max_items = max_items
-        self.items: List[HDMemoryItem] = []
-        self.role_vectors: Dict[str, List[float]] = {}
+        self.items: list[HDMemoryItem] = []
+        self.role_vectors: dict[str, list[float]] = {}
 
         # Lazy import to avoid circular deps
         self._hyperdim = None
@@ -59,7 +59,9 @@ class HDMemoryStore:
                 self._initialize_role_vectors()
                 self._initialized = True
             except Exception as e:
-                logger.error("Failed to initialize HyperdimensionalProcessor: %s", e, extra={"tag": "MODEL"})
+                logger.error(
+                    "Failed to initialize HyperdimensionalProcessor: %s", e, extra={"tag": "MODEL"}
+                )
                 raise
         return self._hyperdim
 
@@ -72,12 +74,12 @@ class HDMemoryStore:
             "system": hd.encode("ROLE_SYSTEM"),
         }
 
-    def encode_content(self, content: str) -> List[float]:
+    def encode_content(self, content: str) -> list[float]:
         """Encode content as hypervector."""
         hd = self._get_hyperdim()
         return hd.encode_text(content)
 
-    def encode_with_role(self, content: str, role: str) -> List[float]:
+    def encode_with_role(self, content: str, role: str) -> list[float]:
         """Encode content with role binding for context awareness."""
         hd = self._get_hyperdim()
         content_vec = hd.encode_text(content)
@@ -85,7 +87,7 @@ class HDMemoryStore:
         return hd.bind(content_vec, role_vec)
 
     def add(
-        self, content: str, role: str = "user", metadata: Optional[Dict[str, Any]] = None
+        self, content: str, role: str = "user", metadata: dict[str, Any] | None = None
     ) -> str:
         """
         Add a memory item.
@@ -121,8 +123,8 @@ class HDMemoryStore:
         return item_id
 
     def search(
-        self, query: str, top_k: int = 5, role_filter: Optional[str] = None
-    ) -> List[Tuple[str, str, float]]:
+        self, query: str, top_k: int = 5, role_filter: str | None = None
+    ) -> list[tuple[str, str, float]]:
         """
         Search memory using hypervector similarity.
 
@@ -201,7 +203,7 @@ class HDMemoryStore:
 
         return "\n".join(context_parts)
 
-    def bundle_recent(self, n: int = 10) -> List[float]:
+    def bundle_recent(self, n: int = 10) -> list[float]:
         """
         Bundle recent memories into single hypervector.
         Useful for representing conversation state.
@@ -211,7 +213,7 @@ class HDMemoryStore:
         vectors = [item.hypervector for item in recent]
         return hd.bundle(vectors) if vectors else [0] * self.dim
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get memory statistics."""
         return {
             "total_items": len(self.items),
@@ -220,7 +222,7 @@ class HDMemoryStore:
             "initialized": self._initialized,
             "roles": {
                 role: sum(1 for item in self.items if item.role == role)
-                for role in set(item.role for item in self.items)
+                for role in {item.role for item in self.items}
             },
         }
 
@@ -250,7 +252,7 @@ class HDMemoryStore:
             if item1.id in to_remove:
                 continue
 
-            for j, item2 in enumerate(self.items[i + 1 :], i + 1):
+            for _j, item2 in enumerate(self.items[i + 1 :], i + 1):
                 if item2.id in to_remove:
                     continue
 

@@ -3,6 +3,7 @@
 Extracted from monolithic REPL; follows the cmds/ protocol:
     def run(argv, out, api, env) -> int
 """
+
 from __future__ import annotations
 
 help = "Manage datasets, knowledge, checkpoints, and more"
@@ -12,6 +13,7 @@ names = ["datasets", "checkpoints", "finetuned", "knowledge", "remember", "recal
 def _format_error(e: Exception, cmd: str = "") -> str:
     """Format an exception into a user-friendly error message."""
     from domain.shell._internal.error import format_error
+
     return format_error(e, cmd, color=False)
 
 

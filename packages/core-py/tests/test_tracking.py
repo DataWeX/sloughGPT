@@ -6,8 +6,8 @@ import pytest
 
 from domain.training._internal.tracking import (
     ExperimentTracker,
-    TrackingConfig,
     TrackerBackend,
+    TrackingConfig,
     create_tracker,
     log_eval_metrics,
     log_training_metrics,
@@ -31,12 +31,8 @@ def fake_config(monkeypatch):
         (),
         {"tracking": FakeTracking()},
     )
-    monkeypatch.setattr(
-        "domain.infrastructure.config.get_config", lambda: cfg
-    )
-    monkeypatch.setattr(
-        "domain.training._internal.tracking.get_config", lambda: cfg
-    )
+    monkeypatch.setattr("domain.infrastructure._internal.config.get_config", lambda: cfg)
+    monkeypatch.setattr("domain.training._internal.tracking.get_config", lambda: cfg)
 
 
 class TestTrackerBackend:
@@ -138,9 +134,7 @@ class TestMLflowBackend:
 
     def test_metrics_and_params(self, monkeypatch):
         calls = self._fake_mlflow(monkeypatch)
-        tracker = ExperimentTracker(
-            TrackingConfig(backend=TrackerBackend.MLFLOW)
-        )
+        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.MLFLOW))
         tracker.start_run(run_name="r")
         assert ("start", "r") in calls
         tracker.log_metric("loss", 0.5, step=2)
@@ -150,9 +144,7 @@ class TestMLflowBackend:
 
     def test_end_run(self, monkeypatch):
         calls = self._fake_mlflow(monkeypatch)
-        tracker = ExperimentTracker(
-            TrackingConfig(backend=TrackerBackend.MLFLOW)
-        )
+        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.MLFLOW))
         tracker.start_run()
         tracker.end_run()
         assert ("end",) in calls
@@ -267,9 +259,7 @@ class TestCometBackend:
             def end(self):
                 pass
 
-        monkeypatch.setitem(
-            sys.modules, "comet_ml", type("C", (), {"Experiment": FakeExperiment})
-        )
+        monkeypatch.setitem(sys.modules, "comet_ml", type("C", (), {"Experiment": FakeExperiment}))
         tracker = ExperimentTracker(
             TrackingConfig(
                 backend=TrackerBackend.COMET,
@@ -291,9 +281,7 @@ class TestMissingBackendDeps:
             return __import__(name, *a, **k)
 
         monkeypatch.setattr("builtins.__import__", no_mlflow)
-        tracker = ExperimentTracker(
-            TrackingConfig(backend=TrackerBackend.MLFLOW)
-        )
+        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.MLFLOW))
         assert tracker._client is None
 
     def test_wandb_missing(self, monkeypatch):
@@ -303,9 +291,7 @@ class TestMissingBackendDeps:
             return __import__(name, *a, **k)
 
         monkeypatch.setattr("builtins.__import__", no_wandb)
-        tracker = ExperimentTracker(
-            TrackingConfig(backend=TrackerBackend.WANDB)
-        )
+        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.WANDB))
         assert tracker._client is None
 
 

@@ -7,12 +7,14 @@ Usage:
 """
 
 import sys
+
 sys.path.insert(0, "packages/core-py")
 
 import time
-import numpy as np
 from collections import defaultdict
 from functools import wraps
+
+import numpy as np
 
 # ---------------------------------------------------------------------------
 # Instrumentation
@@ -31,20 +33,24 @@ def clear_stats():
 def print_stats(top_n=50):
     sorted_items = sorted(TIMINGS.items(), key=lambda x: -x[1])
     total_time = sum(TIMINGS.values())
-    print(f"\n{'='*70}")
-    print(f"  Operation Profile  (total: {total_time*1000:.1f} ms)")
-    print(f"{'='*70}")
+    print(f"\n{'=' * 70}")
+    print(f"  Operation Profile  (total: {total_time * 1000:.1f} ms)")
+    print(f"{'=' * 70}")
     print(f"  {'#':>3}  {'Op':<40} {'Calls':>6} {'Total ms':>9} {'Avg ms':>9} {'%':>6}")
-    print(f"  {'-'*69}")
+    print(f"  {'-' * 69}")
     for i, (name, t) in enumerate(sorted_items[:top_n]):
         cnt = COUNTS[name]
         pct = t / total_time * 100 if total_time > 0 else 0
-        print(f"  {i+1:>3}  {name:<40} {cnt:>6} {t*1000:>9.2f} {t*1000/cnt if cnt else 0:>9.3f} {pct:>5.1f}%")
-    print(f"  {'-'*69}")
+        print(
+            f"  {i + 1:>3}  {name:<40} {cnt:>6} {t * 1000:>9.2f} {t * 1000 / cnt if cnt else 0:>9.3f} {pct:>5.1f}%"
+        )
+    print(f"  {'-' * 69}")
     rest = sum(t for n, t in sorted_items[top_n:])
     if rest > 0:
         rest_pct = rest / total_time * 100
-        print(f"  {'':>3}  {'<rest>':<40} {sum(COUNTS[n] for n, _ in sorted_items[top_n:]):>6} {rest*1000:>9.2f} {'':>9} {rest_pct:>5.1f}%")
+        print(
+            f"  {'':>3}  {'<rest>':<40} {sum(COUNTS[n] for n, _ in sorted_items[top_n:]):>6} {rest * 1000:>9.2f} {'':>9} {rest_pct:>5.1f}%"
+        )
     print()
 
 
@@ -52,23 +58,39 @@ def print_stats(top_n=50):
 # Main
 # ---------------------------------------------------------------------------
 def main():
-    import numpy as np
     from domain.training import slonet as sn
 
     # Manually instrument all core ops by patching the module dict
     # We need to handle static/class methods properly, so we patch module-level
     # functions directly (they don't get 'self' injected).
     ops_single = [
-        "_add", "_mul", "_neg", "_pow", "_sum", "_mean", "_max",
-        "_matmul", "_transpose", "_reshape", "_slice",
-        "sigmoid", "tanh", "relu", "gelu", "silu", "softmax",
-        "_layernorm", "_rmsnorm", "cross_entropy",
+        "_add",
+        "_mul",
+        "_neg",
+        "_pow",
+        "_sum",
+        "_mean",
+        "_max",
+        "_matmul",
+        "_transpose",
+        "_reshape",
+        "_slice",
+        "sigmoid",
+        "tanh",
+        "relu",
+        "gelu",
+        "silu",
+        "softmax",
+        "_layernorm",
+        "_rmsnorm",
+        "cross_entropy",
     ]
 
     originals = {}
     for op in ops_single:
         if hasattr(sn, op):
             orig = getattr(sn, op)
+
             @wraps(orig)
             def make_wrapper(fn=orig, name=op):
                 def wrapper(*args, **kwargs):
@@ -78,7 +100,9 @@ def main():
                     TIMINGS[name] += dt
                     COUNTS[name] += 1
                     return result
+
                 return wrapper
+
             originals[op] = orig
             setattr(sn, op, make_wrapper())
 
@@ -89,7 +113,7 @@ def main():
         ("SloMultiHeadAttention", "forward"),
         ("SloMultiHeadAttention", "_attention_4d"),  # staticmethod — handled separately
         ("SloFeedForward", "forward"),
-        ("SloRMSNorm", "forward") if hasattr(sn, 'SloRMSNorm') else None,
+        ("SloRMSNorm", "forward") if hasattr(sn, "SloRMSNorm") else None,
         ("SloTransformerBlock", "forward"),
         ("SloTransformer", "forward"),
         ("SloTransformer", "generate"),
@@ -107,6 +131,7 @@ def main():
         is_static = isinstance(cls_dict_entry, staticmethod)
         orig_fn = cls_dict_entry.__func__ if is_static else getattr(cls, method_name)
         if is_static:
+
             @wraps(orig_fn)
             def make_static_wrapper(f=orig_fn, name=f"{cls_name}.{method_name}"):
                 def wrapper(*args, **kwargs):
@@ -116,9 +141,12 @@ def main():
                     TIMINGS[name] += dt
                     COUNTS[name] += 1
                     return result
+
                 return wrapper
+
             setattr(cls, method_name, staticmethod(make_static_wrapper()))
         else:
+
             @wraps(orig_fn)
             def make_method_wrapper(f=orig_fn, name=f"{cls_name}.{method_name}"):
                 def wrapper(self, *args, **kwargs):
@@ -128,7 +156,9 @@ def main():
                     TIMINGS[name] += dt
                     COUNTS[name] += 1
                     return result
+
                 return wrapper
+
             setattr(cls, method_name, make_method_wrapper())
 
     # =============================================
@@ -145,8 +175,13 @@ def main():
     block_size = 128
 
     tfm = sn.SloTransformer(
-        vocab_size=vocab, n_embed=n_embed, n_layer=n_layer,
-        n_head=n_head, block_size=block_size, dropout=0.0, tie_weights=False,
+        vocab_size=vocab,
+        n_embed=n_embed,
+        n_layer=n_layer,
+        n_head=n_head,
+        block_size=block_size,
+        dropout=0.0,
+        tie_weights=False,
     )
 
     input_ids = np.random.randint(0, min(vocab, 50), size=(1, block_size)).astype(np.int64)
@@ -165,7 +200,7 @@ def main():
         logits, _ = tfm.forward(input_ids, use_cache=False)
     elapsed = time.perf_counter() - t0
 
-    print(f"\n  Forward time: {elapsed*1000/n_runs:.2f} ms/run (avg of {n_runs})")
+    print(f"\n  Forward time: {elapsed * 1000 / n_runs:.2f} ms/run (avg of {n_runs})")
     print_stats(50)
 
     # =============================================
@@ -176,8 +211,13 @@ def main():
     print("=" * 60)
 
     tfm2 = sn.SloTransformer(
-        vocab_size=vocab, n_embed=n_embed, n_layer=n_layer,
-        n_head=n_head, block_size=block_size, dropout=0.0, tie_weights=False,
+        vocab_size=vocab,
+        n_embed=n_embed,
+        n_layer=n_layer,
+        n_head=n_head,
+        block_size=block_size,
+        dropout=0.0,
+        tie_weights=False,
     )
     adam = sn.SloAdam(lr=0.001)
     input_ids2 = np.random.randint(0, min(vocab, 50), size=(1, 32)).astype(np.int64)
@@ -210,7 +250,7 @@ def main():
                 p.grad = None
     elapsed = time.perf_counter() - t0
 
-    print(f"\n  Forward+Backward time: {elapsed*1000/n_runs:.2f} ms/run (avg of {n_runs})")
+    print(f"\n  Forward+Backward time: {elapsed * 1000 / n_runs:.2f} ms/run (avg of {n_runs})")
     print_stats(50)
 
     # =============================================
@@ -256,7 +296,7 @@ def main():
         net.layers[1].zero_grad()
     elapsed = time.perf_counter() - t0
 
-    print(f"\n  LSTM time: {elapsed*1000/n_runs:.2f} ms/run (avg of {n_runs})")
+    print(f"\n  LSTM time: {elapsed * 1000 / n_runs:.2f} ms/run (avg of {n_runs})")
     print_stats(50)
 
 

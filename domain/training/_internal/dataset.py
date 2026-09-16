@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 logger = logging.getLogger("slo.training.dataset")
 
@@ -40,7 +40,7 @@ class TrainingDataset:
         self.source_text = source_text
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.chunks: List[str] = []
+        self.chunks: list[str] = []
         self.store: Any = None
 
         self._build()
@@ -127,7 +127,7 @@ class TrainingDataset:
         """
         return self.source_text
 
-    def get_student_pairs(self) -> List[Dict[str, str]]:
+    def get_student_pairs(self) -> list[dict[str, str]]:
         """Return chunks formatted as user/assistant pairs for chat training.
 
         Each chunk becomes a pair where user_msg is the first sentence
@@ -152,7 +152,9 @@ class TrainingDataset:
         return pairs
 
     @classmethod
-    def from_file(cls, path: str, chunk_size: int = 400, chunk_overlap: int = 50) -> "TrainingDataset":
+    def from_file(
+        cls, path: str, chunk_size: int = 400, chunk_overlap: int = 50
+    ) -> TrainingDataset:
         """Load a TrainingDataset from a text file.
 
         Args:
@@ -169,11 +171,15 @@ class TrainingDataset:
         """
         text = Path(path).read_text(encoding="utf-8")
         if len(text.strip()) < 200:
-            raise ValueError(f"Source text too short for training (need >=200 chars, got {len(text.strip())})")
+            raise ValueError(
+                f"Source text too short for training (need >=200 chars, got {len(text.strip())})"
+            )
         return cls(source_text=text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
     @classmethod
-    def from_text(cls, text: str, chunk_size: int = 400, chunk_overlap: int = 50) -> "TrainingDataset":
+    def from_text(
+        cls, text: str, chunk_size: int = 400, chunk_overlap: int = 50
+    ) -> TrainingDataset:
         """Create a TrainingDataset from raw text.
 
         Args:
@@ -188,7 +194,9 @@ class TrainingDataset:
             ValueError: If text is too short.
         """
         if len(text.strip()) < 50:
-            raise ValueError(f"Source text too short for training (need >50 chars, got {len(text.strip())})")
+            raise ValueError(
+                f"Source text too short for training (need >50 chars, got {len(text.strip())})"
+            )
         return cls(source_text=text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
     @property

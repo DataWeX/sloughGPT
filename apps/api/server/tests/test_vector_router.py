@@ -8,8 +8,9 @@ Covers all 5 endpoints:
   GET  /vector/ingest/status — ingest_status
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
 from test_support import get_test_client
 
 
@@ -114,9 +115,7 @@ class TestUpsertVectors:
     @patch("domains.inference.vector_store.create_vector_store", new_callable=AsyncMock)
     def test_upsert_without_store(self, mock_create):
         mock_create.return_value = _mock_vector_store()
-        resp = self.client.post(
-            "/vector/upsert", json={"texts": ["hello"]}
-        )
+        resp = self.client.post("/vector/upsert", json={"texts": ["hello"]})
         assert resp.status_code == 200
 
 
@@ -133,9 +132,7 @@ class TestSearchVectors:
         store = _mock_vector_store()
         mock_create.return_value = store
         self.client.post("/vector/init", json={"provider": "in_memory"})
-        resp = self.client.post(
-            "/vector/search", json={"query": "hello world", "top_k": 3}
-        )
+        resp = self.client.post("/vector/search", json={"query": "hello world", "top_k": 3})
         assert resp.status_code == 200
         data = _d(resp)
         assert "results" in data
@@ -176,9 +173,7 @@ class TestVectorLifecycle:
         assert resp.status_code == 200
 
         # Upsert
-        resp = self.client.post(
-            "/vector/upsert", json={"texts": ["hello", "world"]}
-        )
+        resp = self.client.post("/vector/upsert", json={"texts": ["hello", "world"]})
         assert resp.status_code == 200
 
         # Search

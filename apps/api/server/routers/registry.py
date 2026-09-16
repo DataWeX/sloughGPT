@@ -9,7 +9,12 @@ registry operations reflect the real state of loaded models.
 import time as _time
 
 from fastapi import APIRouter
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 
 class RegistryRouter:
@@ -66,9 +71,7 @@ class RegistryRouter:
         reg = self._get_registry()
         health = reg.health_summary()
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log(
-            "registry.best", resource="health", detail=f"elapsed={_elapsed_ms:.0f}ms"
-        )
+        safe_audit_log("registry.best", resource="health", detail=f"elapsed={_elapsed_ms:.0f}ms")
         return success_response(data=health)
 
     @endpoint("registry.stats")
@@ -78,9 +81,7 @@ class RegistryRouter:
         reg = self._get_registry()
         health = reg.health_summary()
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log(
-            "registry.stats", resource="health", detail=f"elapsed={_elapsed_ms:.0f}ms"
-        )
+        safe_audit_log("registry.stats", resource="health", detail=f"elapsed={_elapsed_ms:.0f}ms")
         return success_response(data=health)
 
 

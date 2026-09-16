@@ -4,31 +4,30 @@ Covers: LengthFilter, DedupFilter, KeywordFilter, RegexFilter, LanguageFilter,
 SamplerFilter, TransformFilter, TruncateFilter, PrefixFilter, MetadataFilter,
 FilterChain.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-import pytest
-
 _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domain.collections._internal.sources import Record
 from domain.collections._internal.filters import (
-    LengthFilter,
     DedupFilter,
+    FilterChain,
     KeywordFilter,
-    RegexFilter,
     LanguageFilter,
+    LengthFilter,
+    MetadataFilter,
+    PrefixFilter,
+    RegexFilter,
     SamplerFilter,
     TransformFilter,
     TruncateFilter,
-    PrefixFilter,
-    MetadataFilter,
-    FilterChain,
 )
+from domain.collections._internal.sources import Record
 
 
 class TestLengthFilter:

@@ -11,9 +11,8 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
-from typing import List, Dict, Optional
 from dataclasses import dataclass
+from pathlib import Path
 
 from mogdb import MogDB
 
@@ -25,7 +24,7 @@ class TrainingExample:
     prompt: str
     response: str
     rating: str
-    quality_score: Optional[float] = None
+    quality_score: float | None = None
 
 
 @dataclass
@@ -57,7 +56,7 @@ class FeedbackTrainer:
         self._messages = self._db.collection("messages")
         self._feedback = self._db.collection("feedback")
 
-    def _message_by_id(self, message_id: str) -> Optional[Dict]:
+    def _message_by_id(self, message_id: str) -> dict | None:
         """Return the message document with ``message_id``, or ``None``."""
         return self._messages.find_one({"_id": message_id})
 
@@ -78,7 +77,7 @@ class FeedbackTrainer:
         )
         return docs[0]["content"] if docs else ""
 
-    def _prompt_for(self, message: Dict) -> str:
+    def _prompt_for(self, message: dict) -> str:
         """Prompt (latest prior user message) for an assistant message."""
         return self._latest_prior_user_message(
             message.get("conversation_id", ""), message.get("created_at", "")
@@ -86,7 +85,7 @@ class FeedbackTrainer:
 
     def get_training_examples(
         self, min_quality: float = 0.0, limit: int = 10000
-    ) -> List[TrainingExample]:
+    ) -> list[TrainingExample]:
         """Get training examples from the feedback database.
 
         Joins feedback rows against their assistant messages (in Python —
@@ -103,7 +102,7 @@ class FeedbackTrainer:
         Side effects:
             - none (read-only)
         """
-        dated: List[tuple] = []
+        dated: list[tuple] = []
         for fb in self._feedback.find():
             if fb.get("rating") is None:
                 continue
@@ -128,7 +127,7 @@ class FeedbackTrainer:
         dated.sort(key=lambda item: item[0], reverse=True)
         return [ex for _, ex in dated[:limit]]
 
-    def prepare_dpo_pairs(self, min_pairs: int = 10) -> List[DPOPair]:
+    def prepare_dpo_pairs(self, min_pairs: int = 10) -> list[DPOPair]:
         """
         Prepare DPO (Direct Preference Optimization) training pairs.
 
@@ -139,8 +138,8 @@ class FeedbackTrainer:
         # Group assistant messages-with-feedback by conversation, in
         # feedback order, to keep the first thumbs_up/thumbs_down semantics
         # of the legacy query.
-        conv_groups: Dict[str, List[Dict]] = {}
-        fb_by_message: Dict[str, Dict] = {}
+        conv_groups: dict[str, list[dict]] = {}
+        fb_by_message: dict[str, dict] = {}
         for fb in self._feedback.find():
             fb_by_message[fb.get("message_id") or ""] = fb
 
@@ -154,7 +153,7 @@ class FeedbackTrainer:
                 {"message": message, "feedback": fb}
             )
 
-        pairs: List[DPOPair] = []
+        pairs: list[DPOPair] = []
         for conv_id in sorted(conv_groups)[:1000]:
             entries = conv_groups[conv_id]
             ratings = {e["feedback"].get("rating") for e in entries if e["feedback"].get("rating")}
@@ -177,7 +176,7 @@ class FeedbackTrainer:
 
         return pairs
 
-    def prepare_sft_data(self, min_quality: float = 0.5) -> List[Dict]:
+    def prepare_sft_data(self, min_quality: float = 0.5) -> list[dict]:
         """
         Prepare Supervised Fine-Tuning data from positive feedback.
 
@@ -199,8 +198,8 @@ class FeedbackTrainer:
         return sft_data
 
     def export_for_alignment(
-        self, output_dir: str = "data/training", formats: List[str] = ["dpo", "sft"]
-    ) -> Dict[str, str]:
+        self, output_dir: str = "data/training", formats: list[str] = None
+    ) -> dict[str, str]:
         """
         Export training data in various formats.
 
@@ -211,6 +210,8 @@ class FeedbackTrainer:
         Returns:
             Dict mapping format name to output file path
         """
+        if formats is None:
+            formats = ["dpo", "sft"]
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
@@ -241,7 +242,9 @@ class FeedbackTrainer:
                 for item in sft_data:
                     f.write(json.dumps(item) + "\n")
             results["sft"] = str(sft_path)
-            logger.info("Exported %d SFT examples to %s", len(sft_data), sft_path, extra={"tag": "INFRA"})
+            logger.info(
+                "Exported %d SFT examples to %s", len(sft_data), sft_path, extra={"tag": "INFRA"}
+            )
 
         if "reward" in formats:
             reward_path = output_path / "reward_training.jsonl"
@@ -260,13 +263,18 @@ class FeedbackTrainer:
                             + "\n"
                         )
             results["reward"] = str(reward_path)
-            logger.info("Exported %d reward examples to %s", len(examples), reward_path, extra={"tag": "INFRA"})
+            logger.info(
+                "Exported %d reward examples to %s",
+                len(examples),
+                reward_path,
+                extra={"tag": "INFRA"},
+            )
 
         return results
 
-    def get_training_stats(self) -> Dict:
+    def get_training_stats(self) -> dict:
         """Get statistics about available training data."""
-        rating_counts: Dict[str, int] = {}
+        rating_counts: dict[str, int] = {}
         conversations: set = set()
         total_responses = 0
 
@@ -338,12 +346,12 @@ if __name__ == "__main__":
 
     stats = trainer.get_training_stats()
     logger.info("Available Training Data:")
-    logger.info("  Total conversations: %d", stats['total_conversations'])
-    logger.info("  Total responses: %d", stats['total_responses'])
-    logger.info("  Thumbs up: %d", stats['thumbs_up'])
-    logger.info("  Thumbs down: %d", stats['thumbs_down'])
-    logger.info("  DPO pairs available: %d", stats['available_dpo_pairs'])
-    logger.info("  SFT examples available: %d", stats['available_sft_examples'])
+    logger.info("  Total conversations: %d", stats["total_conversations"])
+    logger.info("  Total responses: %d", stats["total_responses"])
+    logger.info("  Thumbs up: %d", stats["thumbs_up"])
+    logger.info("  Thumbs down: %d", stats["thumbs_down"])
+    logger.info("  DPO pairs available: %d", stats["available_dpo_pairs"])
+    logger.info("  SFT examples available: %d", stats["available_sft_examples"])
 
     if stats["available_dpo_pairs"] >= 10:
         logger.info("Exporting training data...")

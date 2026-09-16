@@ -3,8 +3,16 @@
 import numpy as np
 
 from domain.training._internal.slonet import (
-    Tensor, _conv2d, _batchnorm2d, _maxpool2d, _im2col, flatten,
-    SloConv2D, SloBatchNorm2D, SloMaxPool2D, SloCrossAttention,
+    SloBatchNorm2D,
+    SloConv2D,
+    SloCrossAttention,
+    SloMaxPool2D,
+    Tensor,
+    _batchnorm2d,
+    _conv2d,
+    _im2col,
+    _maxpool2d,
+    flatten,
 )
 
 
@@ -23,7 +31,9 @@ def _naive_conv(x: np.ndarray, wt: np.ndarray, bt: np.ndarray, stride=1, padding
                 for owi in range(ow):
                     ih = ohi * stride
                     iw = owi * stride
-                    out[ni, oci, ohi, owi] = (x[ni, :, ih:ih + kh, iw:iw + kw] * wt[oci]).sum() + bt[oci]
+                    out[ni, oci, ohi, owi] = (
+                        x[ni, :, ih : ih + kh, iw : iw + kw] * wt[oci]
+                    ).sum() + bt[oci]
     return out
 
 
@@ -32,13 +42,16 @@ def _fd_grad_x(x_np, w_np, b_np, stride=1, padding=0, eps=1e-6):
     xf = x_np.astype(np.float64)
     wf = w_np.astype(np.float64)
     bf = b_np.astype(np.float64)
-    loss = lambda xx: (_naive_conv(xx, wf, bf, stride, padding) ** 2).sum()
+    def loss(xx):
+        return (_naive_conv(xx, wf, bf, stride, padding) ** 2).sum()
     g = np.zeros_like(xf)
     it = np.nditer(xf, flags=["multi_index"])
     while not it.finished:
         i = it.multi_index
-        xp = xf.copy(); xm = xf.copy()
-        xp[i] += eps; xm[i] -= eps
+        xp = xf.copy()
+        xm = xf.copy()
+        xp[i] += eps
+        xm[i] -= eps
         g[i] = (loss(xp) - loss(xm)) / (2 * eps)
         it.iternext()
     return g
@@ -49,13 +62,16 @@ def _fd_grad_w(x_np, w_np, b_np, stride=1, padding=0, eps=1e-6):
     xf = x_np.astype(np.float64)
     wf = w_np.astype(np.float64)
     bf = b_np.astype(np.float64)
-    loss = lambda ww: (_naive_conv(xf, ww, bf, stride, padding) ** 2).sum()
+    def loss(ww):
+        return (_naive_conv(xf, ww, bf, stride, padding) ** 2).sum()
     g = np.zeros_like(wf)
     it = np.nditer(wf, flags=["multi_index"])
     while not it.finished:
         i = it.multi_index
-        wp = wf.copy(); wm = wf.copy()
-        wp[i] += eps; wm[i] -= eps
+        wp = wf.copy()
+        wm = wf.copy()
+        wp[i] += eps
+        wm[i] -= eps
         g[i] = (loss(wp) - loss(wm)) / (2 * eps)
         it.iternext()
     return g
@@ -66,13 +82,16 @@ def _fd_grad_b(x_np, w_np, b_np, stride=1, padding=0, eps=1e-6):
     xf = x_np.astype(np.float64)
     wf = w_np.astype(np.float64)
     bf = b_np.astype(np.float64)
-    loss = lambda bb: (_naive_conv(xf, wf, bb, stride, padding) ** 2).sum()
+    def loss(bb):
+        return (_naive_conv(xf, wf, bb, stride, padding) ** 2).sum()
     g = np.zeros_like(bf)
     it = np.nditer(bf, flags=["multi_index"])
     while not it.finished:
         i = it.multi_index
-        bp = bf.copy(); bm = bf.copy()
-        bp[i] += eps; bm[i] -= eps
+        bp = bf.copy()
+        bm = bf.copy()
+        bp[i] += eps
+        bm[i] -= eps
         g[i] = (loss(bp) - loss(bm)) / (2 * eps)
         it.iternext()
     return g
@@ -116,7 +135,7 @@ class TestConv2D:
         b = Tensor(np.zeros(3, dtype=np.float32))
         try:
             _conv2d(x, w, b)
-            assert False, "expected ValueError"
+            raise AssertionError("expected ValueError")
         except ValueError:
             pass
 
@@ -126,14 +145,14 @@ class TestConv2D:
         b = Tensor(np.zeros(3, dtype=np.float32))
         try:
             _conv2d(x, w, b)
-            assert False, "expected ValueError"
+            raise AssertionError("expected ValueError")
         except ValueError:
             pass
 
     def test_backward_matches_finite_difference(self):
         np.random.seed(7)
         x_np = np.random.randn(2, 2, 4, 4).astype(np.float32)
-        w_np = (np.random.randn(2, 2, 2, 2).astype(np.float32) * 0.5)
+        w_np = np.random.randn(2, 2, 2, 2).astype(np.float32) * 0.5
         b_np = np.random.randn(2).astype(np.float32) * 0.1
         x = Tensor(x_np.copy(), requires_grad=True)
         w = Tensor(w_np.copy(), requires_grad=True)
@@ -143,8 +162,12 @@ class TestConv2D:
         loss.backward()
         fd = _fd_grad_x(x_np, w_np, b_np, stride=1, padding=0)
         assert np.allclose(x.grad.data, fd, atol=1e-3)
-        assert np.allclose(w.grad.data, _fd_grad_w(x_np, w_np, b_np, stride=1, padding=0), atol=1e-3)
-        assert np.allclose(b.grad.data, _fd_grad_b(x_np, w_np, b_np, stride=1, padding=0), atol=1e-3)
+        assert np.allclose(
+            w.grad.data, _fd_grad_w(x_np, w_np, b_np, stride=1, padding=0), atol=1e-3
+        )
+        assert np.allclose(
+            b.grad.data, _fd_grad_b(x_np, w_np, b_np, stride=1, padding=0), atol=1e-3
+        )
 
     def test_backward_zero_grad_edges(self):
         x = Tensor(np.ones((1, 1, 4, 4), dtype=np.float32), requires_grad=True)
@@ -209,7 +232,9 @@ class TestBatchNorm2D:
         running_mean = np.array([0.0, 1.0], dtype=np.float32)
         running_var = np.array([1.0, 4.0], dtype=np.float32)
         out = _batchnorm2d(x, g, b, running_mean, running_var, 1e-5, training=False)
-        expected = (x.data - running_mean.reshape(1, 2, 1, 1)) / np.sqrt(running_var.reshape(1, 2, 1, 1) + 1e-5)
+        expected = (x.data - running_mean.reshape(1, 2, 1, 1)) / np.sqrt(
+            running_var.reshape(1, 2, 1, 1) + 1e-5
+        )
         assert np.allclose(out.data, expected, atol=1e-5)
 
     def test_backward_flow(self):
@@ -262,7 +287,7 @@ class TestMaxPool2D:
         assert out.data.shape == (1, 1, 2, 2)
         for oi in range(2):
             for oj in range(2):
-                patch = x.data[0, 0, oi * 2:oi * 2 + 2, oj * 2:oj * 2 + 2]
+                patch = x.data[0, 0, oi * 2 : oi * 2 + 2, oj * 2 : oj * 2 + 2]
                 assert out.data[0, 0, oi, oj] == patch.max()
 
     def test_backward_scatters_to_argmax(self):

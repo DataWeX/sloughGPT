@@ -12,11 +12,18 @@ import time
 from pathlib import Path
 from threading import Lock
 
-from domain.multimodal import get_multimodal_manager
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
+
+from domain.multimodal import get_multimodal_manager
 
 logger = logging.getLogger("slo.routers.multimodal")
 
@@ -123,10 +130,16 @@ class MultimodalRouter:
         self.router.add_api_route("/checkpoints/{name}", self.delete_checkpoint, methods=["DELETE"])
         self.router.add_api_route("/encode-phonemes", self.encode_phonemes, methods=["POST"])
         self.router.add_api_route("/decode-phonemes", self.decode_phonemes, methods=["POST"])
-        self.router.add_api_route("/score-pronunciation", self.score_pronunciation, methods=["POST"])
-        self.router.add_api_route("/batch-encode-phonemes", self.batch_encode_phonemes, methods=["POST"])
+        self.router.add_api_route(
+            "/score-pronunciation", self.score_pronunciation, methods=["POST"]
+        )
+        self.router.add_api_route(
+            "/batch-encode-phonemes", self.batch_encode_phonemes, methods=["POST"]
+        )
         self.router.add_api_route("/detect-language", self.detect_language, methods=["POST"])
-        self.router.add_api_route("/batch-score-pronunciation", self.batch_score_pronunciation, methods=["POST"])
+        self.router.add_api_route(
+            "/batch-score-pronunciation", self.batch_score_pronunciation, methods=["POST"]
+        )
         self.router.add_api_route("/reset", self.reset, methods=["POST"])
 
     # ── Helpers ──────────────────────────────────────────────────────
@@ -213,9 +226,7 @@ class MultimodalRouter:
                     "vqa": caps.vqa,
                     "speech_model": caps.speech_model,
                     "vision_model": caps.vision_model,
-                    "status": "trained"
-                    if trained
-                    else ("learning" if learning > 0 else "ready"),
+                    "status": "trained" if trained else ("learning" if learning > 0 else "ready"),
                 },
                 "learning": {
                     "images_learned": learning,
@@ -230,9 +241,7 @@ class MultimodalRouter:
                     "mean_accuracy": round(
                         sum(accuracy_history) / max(len(accuracy_history), 1), 2
                     ),
-                    "last_accuracy": round(accuracy_history[-1], 2)
-                    if accuracy_history
-                    else 0.0,
+                    "last_accuracy": round(accuracy_history[-1], 2) if accuracy_history else 0.0,
                 },
                 "batch": {
                     "running": bg["running"],
@@ -484,7 +493,10 @@ class MultimodalRouter:
         self, req: VideoInferRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """video_infer."""
-        from domain.training._internal.video_trainer import VideoCaptionTrainer, list_video_checkpoints
+        from domain.training._internal.video_trainer import (
+            VideoCaptionTrainer,
+            list_video_checkpoints,
+        )
 
         checkpoints = list_video_checkpoints()
         if not checkpoints:
@@ -531,9 +543,7 @@ class MultimodalRouter:
             self._dpo_state["result"] = None
         from domain.feedback._internal.hf_dpo import HFDPOTrainer
 
-        trainer = HFDPOTrainer(
-            model=model, tokenizer=tokenizer, learning_rate=req.learning_rate
-        )
+        trainer = HFDPOTrainer(model=model, tokenizer=tokenizer, learning_rate=req.learning_rate)
         t0 = time.time()
         result = trainer.train(max_pairs=req.max_pairs)
         elapsed = time.time() - t0
@@ -601,9 +611,7 @@ class MultimodalRouter:
                 "images_learned": learning,
                 "trained": getattr(engine, "_trained", False) if engine else False,
                 "replay_buffer_size": buf.size if buf else 0,
-                "mean_accuracy": round(
-                    sum(accuracy_history) / max(len(accuracy_history), 1), 2
-                ),
+                "mean_accuracy": round(sum(accuracy_history) / max(len(accuracy_history), 1), 2),
                 "elapsed_ms": round(_elapsed_ms, 1),
             }
         )
@@ -728,9 +736,7 @@ class MultimodalRouter:
             engine = getattr(mgr, "_multimodal_engine", None)
             if engine is None:
                 raise_error("Multimodal engine not initialized", "E_INTERNAL", status_code=500)
-            video_embedding = await asyncio.to_thread(
-                processor.encode_video, frames, engine.vision
-            )
+            video_embedding = await asyncio.to_thread(processor.encode_video, frames, engine.vision)
             first_frame = frames[0].reshape(1, 224, 224, 3)
             caption = await asyncio.to_thread(
                 engine.generate, first_frame, max_len=20, temperature=0.8
@@ -789,6 +795,7 @@ class MultimodalRouter:
         import wave
 
         import numpy as np
+
         from domain.multimodal._internal.tts import TTSEngine
 
         if self._tts is None:
@@ -832,10 +839,11 @@ class MultimodalRouter:
         import io
 
         import numpy as np
+        from PIL import Image
+
         from domain.multimodal._internal.diffusion import LatentDiffusionModel
         from domain.multimodal._internal.text_encoder import TextEncoder
         from domain.multimodal._internal.vae import SloVAE
-        from PIL import Image
 
         if self._vae is None:
             self._vae = SloVAE(latent_dim=64)
@@ -946,6 +954,7 @@ class MultimodalRouter:
     async def list_checkpoints(self):
         """list_checkpoints."""
         import math
+
         from domain.training._internal.video_trainer import list_video_checkpoints
 
         def _sanitize(obj):
@@ -972,7 +981,10 @@ class MultimodalRouter:
         self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """load_checkpoint."""
-        from domain.training._internal.video_trainer import VideoCaptionTrainer, list_video_checkpoints
+        from domain.training._internal.video_trainer import (
+            VideoCaptionTrainer,
+            list_video_checkpoints,
+        )
 
         def _find_checkpoint():
             ckpts = list_video_checkpoints()
@@ -1039,13 +1051,15 @@ class MultimodalRouter:
         phonemes = encoder.decode_phonemes(ids, language=encoder.current_language)
         decoded = encoder.decode(ids, language=encoder.current_language)
 
-        return success_response(data={
-            "text": text,
-            "language": encoder.current_language,
-            "phonemes": phonemes,
-            "ids": ids.flatten().tolist(),
-            "decoded": decoded,
-        })
+        return success_response(
+            data={
+                "text": text,
+                "language": encoder.current_language,
+                "phonemes": phonemes,
+                "ids": ids.flatten().tolist(),
+                "decoded": decoded,
+            }
+        )
 
     @endpoint("multimodal.decode_phonemes")
     async def decode_phonemes(self, request: dict) -> dict:
@@ -1053,8 +1067,9 @@ class MultimodalRouter:
 
         Takes an array of phoneme IDs and returns the decoded text.
         """
-        from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
         import numpy as np
+
+        from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
 
         ids = request.get("ids", [])
         language = request.get("language", "en")
@@ -1067,12 +1082,14 @@ class MultimodalRouter:
         decoded = encoder.decode(ids_array, language=language)
         phonemes = encoder.decode_phonemes(ids_array, language=language)
 
-        return success_response(data={
-            "ids": ids,
-            "language": language,
-            "phonemes": phonemes,
-            "decoded": decoded,
-        })
+        return success_response(
+            data={
+                "ids": ids,
+                "language": language,
+                "phonemes": phonemes,
+                "decoded": decoded,
+            }
+        )
 
     @endpoint("multimodal.batch_encode_phonemes")
     async def batch_encode_phonemes(self, request: dict) -> dict:
@@ -1103,18 +1120,22 @@ class MultimodalRouter:
                 phonemes = encoder.decode_phonemes(ids, language=lang)
                 decoded = encoder.decode(ids, language=lang)
 
-                results.append({
-                    "text": text,
-                    "language": lang,
-                    "phonemes": phonemes,
-                    "ids": ids.flatten().tolist(),
-                    "decoded": decoded,
-                })
+                results.append(
+                    {
+                        "text": text,
+                        "language": lang,
+                        "phonemes": phonemes,
+                        "ids": ids.flatten().tolist(),
+                        "decoded": decoded,
+                    }
+                )
 
-            return success_response(data={
-                "count": len(results),
-                "results": results,
-            })
+            return success_response(
+                data={
+                    "count": len(results),
+                    "results": results,
+                }
+            )
         except ValueError as e:
             raise_error(str(e), "E_UNSUPPORTED_LANGUAGE")
         except Exception as e:
@@ -1138,11 +1159,13 @@ class MultimodalRouter:
             encoder = UnifiedPhonemeEncoder()
             language = encoder.detect_language(text)
 
-            return success_response(data={
-                "text": text,
-                "language": language,
-                "supported_languages": encoder.supported_languages,
-            })
+            return success_response(
+                data={
+                    "text": text,
+                    "language": language,
+                    "supported_languages": encoder.supported_languages,
+                }
+            )
         except Exception as e:
             logger.warning("Language detection failed: %s", e)
             classify_and_raise(e, source="multimodal.detect_language")
@@ -1165,16 +1188,18 @@ class MultimodalRouter:
         encoder = UnifiedPhonemeEncoder()
         result = encoder.score_pronunciation(target, spoken, language=language)
 
-        return success_response(data={
-            "target": target,
-            "spoken": spoken,
-            "language": encoder.current_language,
-            "score": result["score"],
-            "precision": result["precision"],
-            "recall": result["recall"],
-            "target_phonemes": result["target_phonemes"],
-            "spoken_phonemes": result["spoken_phonemes"],
-        })
+        return success_response(
+            data={
+                "target": target,
+                "spoken": spoken,
+                "language": encoder.current_language,
+                "score": result["score"],
+                "precision": result["precision"],
+                "recall": result["recall"],
+                "target_phonemes": result["target_phonemes"],
+                "spoken_phonemes": result["spoken_phonemes"],
+            }
+        )
 
     @endpoint("multimodal.batch_score_pronunciation")
     async def batch_score_pronunciation(self, request: dict) -> dict:
@@ -1202,21 +1227,25 @@ class MultimodalRouter:
                     continue
 
                 result = encoder.score_pronunciation(target, spoken, language=language)
-                results.append({
-                    "target": target,
-                    "spoken": spoken,
-                    "language": encoder.current_language,
-                    "score": result["score"],
-                    "precision": result["precision"],
-                    "recall": result["recall"],
-                    "target_phonemes": result["target_phonemes"],
-                    "spoken_phonemes": result["spoken_phonemes"],
-                })
+                results.append(
+                    {
+                        "target": target,
+                        "spoken": spoken,
+                        "language": encoder.current_language,
+                        "score": result["score"],
+                        "precision": result["precision"],
+                        "recall": result["recall"],
+                        "target_phonemes": result["target_phonemes"],
+                        "spoken_phonemes": result["spoken_phonemes"],
+                    }
+                )
 
-            return success_response(data={
-                "count": len(results),
-                "results": results,
-            })
+            return success_response(
+                data={
+                    "count": len(results),
+                    "results": results,
+                }
+            )
         except Exception as e:
             logger.warning("Batch pronunciation scoring failed: %s", e)
             classify_and_raise(e, source="multimodal.batch_score_pronunciation")
@@ -1232,6 +1261,7 @@ class MultimodalRouter:
         mgr._accuracy_history = []
         if getattr(mgr, "_replay_buffer", None):
             from domain.multimodal._internal.engine import ReplayBuffer
+
             mgr._replay_buffer = ReplayBuffer()
         mgr._multimodal_engine = None
         logger.info("Multimodal engine reset: all state cleared")

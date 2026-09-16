@@ -1,16 +1,35 @@
 """Tests for domain.infrastructure._internal.pugqeep — EvictionPolicy, Tier, ProcessStatus, StemStatus, TreeStatus, TaskStatus, TaskPriority, Task, CacheEntry, Process, etc."""
 
-from domain.infrastructure._internal.pugqeep.cache import EvictionPolicy, Tier, CacheEntry, CacheStats, MemoryStore, HotStore, DiskStore, TieredCache
-from domain.infrastructure._internal.pugqeep.engine import (
-    ProcessStatus, StemStatus, TreeStatus, Process, Stem, Tree,
-    EngineMetrics, ResultCache, SchedulingPolicy,
-)
-from domain.infrastructure._internal.pugqeep.task_queue import TaskStatus, TaskPriority, Task, TaskQueue
 import time
+
 import numpy as np
 import pytest
-import threading
 
+from domain.infrastructure._internal.pugqeep.cache import (
+    CacheEntry,
+    CacheStats,
+    DiskStore,
+    EvictionPolicy,
+    HotStore,
+    MemoryStore,
+    Tier,
+)
+from domain.infrastructure._internal.pugqeep.engine import (
+    EngineMetrics,
+    Process,
+    ProcessStatus,
+    ResultCache,
+    Stem,
+    StemStatus,
+    Tree,
+    TreeStatus,
+)
+from domain.infrastructure._internal.pugqeep.task_queue import (
+    Task,
+    TaskPriority,
+    TaskQueue,
+    TaskStatus,
+)
 
 # ── EvictionPolicy ─────────────────────────────────────────────────────
 
@@ -29,6 +48,7 @@ class TestEvictionPolicy:
 
     def test_is_enum(self):
         from enum import Enum
+
         assert issubclass(EvictionPolicy, Enum)
 
     def test_invalid_value(self):
@@ -198,7 +218,12 @@ class TestTaskPriority:
         assert TaskPriority.HIGH.value == 2
 
     def test_ordering(self):
-        assert TaskPriority.LOW.value < TaskPriority.NORMAL.value < TaskPriority.HIGH.value < TaskPriority.URGENT.value
+        assert (
+            TaskPriority.LOW.value
+            < TaskPriority.NORMAL.value
+            < TaskPriority.HIGH.value
+            < TaskPriority.URGENT.value
+        )
 
     def test_from_value(self):
         assert TaskPriority(0) is TaskPriority.LOW
@@ -284,9 +309,22 @@ class TestTask:
     def test_to_dict_has_all_keys(self):
         t = Task()
         d = t.to_dict()
-        expected_keys = {"id", "name", "data", "status", "priority", "tree_id",
-                         "result", "error", "created_at", "started_at",
-                         "completed_at", "retries", "max_retries", "metadata"}
+        expected_keys = {
+            "id",
+            "name",
+            "data",
+            "status",
+            "priority",
+            "tree_id",
+            "result",
+            "error",
+            "created_at",
+            "started_at",
+            "completed_at",
+            "retries",
+            "max_retries",
+            "metadata",
+        }
         assert expected_keys == set(d.keys())
 
     def test_to_dict_status_value(self):
@@ -311,8 +349,13 @@ class TestTask:
         assert t.error == "oops"
 
     def test_from_dict_with_timestamps(self):
-        d = {"id": "x", "status": "completed", "priority": 1,
-             "started_at": 1.0, "completed_at": 2.0}
+        d = {
+            "id": "x",
+            "status": "completed",
+            "priority": 1,
+            "started_at": 1.0,
+            "completed_at": 2.0,
+        }
         t = Task.from_dict(d)
         assert t.started_at == 1.0
         assert t.completed_at == 2.0
@@ -823,7 +866,8 @@ class TestEngineMetrics:
 class TestResultCache:
     def test_put_and_get(self):
         cache = ResultCache(maxsize=10)
-        fn = lambda: None
+        def fn():
+            return None
         fn.__name__ = "test_fn"
         cache.put(fn, (1, 2), {"a": 1}, "result")
         hit, val = cache.get(fn, (1, 2), {"a": 1})
@@ -832,7 +876,8 @@ class TestResultCache:
 
     def test_miss(self):
         cache = ResultCache(maxsize=10)
-        fn = lambda: None
+        def fn():
+            return None
         fn.__name__ = "test_fn"
         hit, val = cache.get(fn, (1,), {})
         assert hit is False
@@ -840,7 +885,8 @@ class TestResultCache:
 
     def test_maxsize_eviction(self):
         cache = ResultCache(maxsize=2)
-        fn = lambda: None
+        def fn():
+            return None
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v1")
         cache.put(fn, (2,), {}, "v2")
@@ -849,7 +895,8 @@ class TestResultCache:
 
     def test_clear(self):
         cache = ResultCache(maxsize=10)
-        fn = lambda: None
+        def fn():
+            return None
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v")
         count = cache.clear()
@@ -858,7 +905,8 @@ class TestResultCache:
 
     def test_invalidate_specific(self):
         cache = ResultCache(maxsize=10)
-        fn = lambda: None
+        def fn():
+            return None
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v")
         assert cache.invalidate(fn, (1,), {}) is True
@@ -866,22 +914,26 @@ class TestResultCache:
 
     def test_invalidate_not_found(self):
         cache = ResultCache(maxsize=10)
-        fn = lambda: None
+        def fn():
+            return None
         fn.__name__ = "fn"
         assert cache.invalidate(fn, (1,), {}) is False
 
     def test_invalidate_all(self):
         cache = ResultCache(maxsize=10)
-        fn = lambda: None
+        def fn():
+            return None
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v")
         assert cache.invalidate() is True
 
     def test_invalidate_by_fn(self):
         cache = ResultCache(maxsize=10)
-        fn1 = lambda: None
+        def fn1():
+            return None
         fn1.__name__ = "fn1"
-        fn2 = lambda: None
+        def fn2():
+            return None
         fn2.__name__ = "fn2"
         cache.put(fn1, (1,), {}, "v1")
         cache.put(fn2, (2,), {}, "v2")
@@ -890,7 +942,8 @@ class TestResultCache:
 
     def test_stats(self):
         cache = ResultCache(maxsize=10)
-        fn = lambda: None
+        def fn():
+            return None
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v")
         cache.get(fn, (1,), {})
@@ -901,7 +954,8 @@ class TestResultCache:
 
     def test_ttl_expired(self):
         cache = ResultCache(maxsize=10, ttl=0.01)
-        fn = lambda: None
+        def fn():
+            return None
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v")
         time.sleep(0.02)
@@ -911,7 +965,8 @@ class TestResultCache:
     def test_size_property(self):
         cache = ResultCache(maxsize=10)
         assert cache.size == 0
-        fn = lambda: None
+        def fn():
+            return None
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v")
         assert cache.size == 1
@@ -922,7 +977,8 @@ class TestResultCache:
 
     def test_invalidate_fn_not_found(self):
         cache = ResultCache(maxsize=10)
-        fn = lambda: None
+        def fn():
+            return None
         fn.__name__ = "fn"
         assert cache.invalidate(fn) is False
 
@@ -1312,10 +1368,12 @@ class TestTaskQueue:
 
     def test_submit_batch(self):
         q = TaskQueue()
-        tasks = q.submit_batch([
-            {"name": "a"},
-            {"name": "b"},
-        ])
+        tasks = q.submit_batch(
+            [
+                {"name": "a"},
+                {"name": "b"},
+            ]
+        )
         assert len(tasks) == 2
 
     def test_pause_resume(self):
@@ -1362,10 +1420,13 @@ class TestTaskQueue:
 
     def test_submit_batch_with_priority(self):
         q = TaskQueue()
-        tasks = q.submit_batch([
-            {"name": "a", "priority": 3},
-            {"name": "b"},
-        ], priority=TaskPriority.LOW)
+        tasks = q.submit_batch(
+            [
+                {"name": "a", "priority": 3},
+                {"name": "b"},
+            ],
+            priority=TaskPriority.LOW,
+        )
         assert tasks[0].priority.value == 3
 
     def test_register_handler(self):
@@ -1526,16 +1587,20 @@ class TestTaskQueue:
 
     def test_submit_batch_with_data(self):
         q = TaskQueue()
-        tasks = q.submit_batch([
-            {"name": "a", "data": {"key": "val"}},
-            {"name": "b", "tree_id": "tree1"},
-        ])
+        tasks = q.submit_batch(
+            [
+                {"name": "a", "data": {"key": "val"}},
+                {"name": "b", "tree_id": "tree1"},
+            ]
+        )
         assert tasks[0].data == {"key": "val"}
         assert tasks[1].tree_id == "tree1"
 
     def test_submit_batch_with_metadata(self):
         q = TaskQueue()
-        tasks = q.submit_batch([
-            {"name": "a", "metadata": {"tag": "test"}},
-        ])
+        tasks = q.submit_batch(
+            [
+                {"name": "a", "metadata": {"tag": "test"}},
+            ]
+        )
         assert tasks[0].metadata == {"tag": "test"}

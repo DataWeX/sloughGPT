@@ -3,12 +3,15 @@ Fake model for testing process-level isolation in worker subprocesses.
 
 Uses numpy arrays instead of torch to avoid subprocess import hangs.
 """
+
 import time
+
 import numpy as np
 
 
 class FakeTokenizer:
     """Replaces a HuggingFace tokenizer in worker subprocess tests."""
+
     pad_token_id = 0
     eos_token_id = 0
 

@@ -7,6 +7,7 @@ Requires running API (localhost:8000) and web (localhost:3000) servers.
 Usage:
     .venv/bin/python -m pytest tests/test_e2e_training_trigger.py -x -v -s
 """
+
 import json
 import time
 import urllib.request
@@ -54,6 +55,7 @@ def ok(name: str, passed: bool, detail: str = ""):
 
 # ── E2E Training Trigger Tests ──────────────────────────────────────
 
+
 class TestE2ETrainingTrigger:
     """Tests triggering training through the web UI using computer-use agent."""
 
@@ -98,7 +100,11 @@ class TestE2ETrainingTrigger:
             "has_batch": any(w in body.lower() for w in ["batch"]),
         }
 
-        ok("e2e_training_config_elements", all(config_elements.values()), f"elements={config_elements}")
+        ok(
+            "e2e_training_config_elements",
+            all(config_elements.values()),
+            f"elements={config_elements}",
+        )
         assert all(config_elements.values())
 
     async def test_training_start_button_clickable(self, agent):
@@ -158,8 +164,11 @@ class TestE2ETrainingTrigger:
         json_report = report.to_json()
         parsed = json.loads(json_report)
 
-        ok("e2e_full_flow_devtools", has_ui and parsed["totals"]["steps"] >= 2,
-           f"steps={parsed['totals']['steps']}, ui={has_ui}")
+        ok(
+            "e2e_full_flow_devtools",
+            has_ui and parsed["totals"]["steps"] >= 2,
+            f"steps={parsed['totals']['steps']}, ui={has_ui}",
+        )
         assert has_ui
 
     async def test_cross_page_navigation_no_errors(self, follower):
@@ -170,9 +179,11 @@ class TestE2ETrainingTrigger:
             time.sleep(0.5)
 
         report = follower.report()
-        ok("e2e_cross_page_navigation",
-           report.total_steps >= 5 and report.total_failed_requests == 0,
-           f"steps={report.total_steps}, failed={report.total_failed_requests}")
+        ok(
+            "e2e_cross_page_navigation",
+            report.total_steps >= 5 and report.total_failed_requests == 0,
+            f"steps={report.total_steps}, failed={report.total_failed_requests}",
+        )
         assert report.total_failed_requests == 0
 
     async def test_api_health_endpoint_reachable(self, agent):
@@ -201,6 +212,7 @@ class TestE2ETrainingTrigger:
 
 # ── Results ─────────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="session", autouse=True)
 def save_results():
     yield
@@ -211,9 +223,9 @@ def save_results():
     total = len(RESULTS)
     passed = sum(1 for r in RESULTS if r["passed"])
     failed = total - passed
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"E2E Training Trigger Results: {passed}/{total} passed, {failed} failed")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     if failed:
         for r in RESULTS:
             if not r["passed"]:

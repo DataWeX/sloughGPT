@@ -12,14 +12,16 @@ Industry-standard implementation with:
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from collections import deque
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 
 class RelationType(Enum):
     """Standard relation types (Schema.org compatible)."""
+
     IS_A = "rdf:type"
     PART_OF = "part_of"
     CAUSES = "causes"
@@ -34,11 +36,12 @@ class RelationType(Enum):
 @dataclass
 class Entity:
     """An entity node in the knowledge graph."""
+
     id: str
     label: str
     entity_type: str
-    properties: Dict[str, Any] = field(default_factory=dict)
-    aliases: Set[str] = field(default_factory=set)
+    properties: dict[str, Any] = field(default_factory=dict)
+    aliases: set[str] = field(default_factory=set)
     confidence: float = 1.0
 
     def __hash__(self):
@@ -53,12 +56,13 @@ class Entity:
 @dataclass
 class Fact:
     """A fact (triple) in the knowledge graph."""
+
     subject: str
     predicate: str
     object: str
     confidence: float = 1.0
     source: str = "unknown"
-    timestamp: Optional[float] = None
+    timestamp: float | None = None
     verified: bool = False
 
     def __repr__(self):
@@ -79,16 +83,16 @@ class KnowledgeGraph:
 
     def __init__(self):
         # Entity storage
-        self.entities: Dict[str, Entity] = {}
+        self.entities: dict[str, Entity] = {}
 
         # Triple storage (subject -> predicate -> [objects])
-        self.subject_index: Dict[str, Dict[str, List[str]]] = {}
+        self.subject_index: dict[str, dict[str, list[str]]] = {}
 
         # Reverse index (object -> predicate -> [subjects])
-        self.object_index: Dict[str, Dict[str, List[str]]] = {}
+        self.object_index: dict[str, dict[str, list[str]]] = {}
 
         # All facts with metadata
-        self.facts: Dict[Tuple[str, str, str], Fact] = {}
+        self.facts: dict[tuple[str, str, str], Fact] = {}
 
         # Graph statistics
         self.stats = {
@@ -119,8 +123,8 @@ class KnowledgeGraph:
         id: str,
         label: str,
         entity_type: str,
-        properties: Optional[Dict[str, Any]] = None,
-        aliases: Optional[List[str]] = None,
+        properties: dict[str, Any] | None = None,
+        aliases: list[str] | None = None,
     ) -> Entity:
         """Add an entity to the graph.
 
@@ -162,7 +166,7 @@ class KnowledgeGraph:
         obj: str,
         confidence: float = 1.0,
         source: str = "unknown",
-    ) -> Optional[Fact]:
+    ) -> Fact | None:
         """Add a fact (triple) to the graph.
 
         Deduplicates by (subject, predicate, object) tuple. If the same triple
@@ -231,8 +235,8 @@ class KnowledgeGraph:
     def get_outgoing(
         self,
         entity_id: str,
-        predicate: Optional[str] = None,
-    ) -> List[Tuple[str, str]]:
+        predicate: str | None = None,
+    ) -> list[tuple[str, str]]:
         """Get outgoing edges from entity. Returns [(predicate, target), ...].
 
         Args:
@@ -259,8 +263,8 @@ class KnowledgeGraph:
     def get_incoming(
         self,
         entity_id: str,
-        predicate: Optional[str] = None,
-    ) -> List[Tuple[str, str]]:
+        predicate: str | None = None,
+    ) -> list[tuple[str, str]]:
         """Get incoming edges to entity. Returns [(predicate, source), ...].
 
         Args:
@@ -286,10 +290,10 @@ class KnowledgeGraph:
 
     def query(
         self,
-        subject: Optional[str] = None,
-        predicate: Optional[str] = None,
-        obj: Optional[str] = None,
-    ) -> List[Fact]:
+        subject: str | None = None,
+        predicate: str | None = None,
+        obj: str | None = None,
+    ) -> list[Fact]:
         """Query facts matching pattern.
 
         All string parameters are resolved via case-insensitive entity lookup
@@ -346,9 +350,9 @@ class KnowledgeGraph:
     def bfs(
         self,
         start: str,
-        predicate_filter: Optional[Callable[[str], bool]] = None,
+        predicate_filter: Callable[[str], bool] | None = None,
         max_depth: int = 3,
-    ) -> Dict[str, List[Tuple[str, str]]]:
+    ) -> dict[str, list[tuple[str, str]]]:
         """
         Breadth-first search from start entity.
 
@@ -379,9 +383,9 @@ class KnowledgeGraph:
     def dfs(
         self,
         start: str,
-        predicate_filter: Optional[Callable[[str], bool]] = None,
+        predicate_filter: Callable[[str], bool] | None = None,
         max_depth: int = 3,
-    ) -> List[List[Tuple[str, str]]]:
+    ) -> list[list[tuple[str, str]]]:
         """
         Depth-first search from start entity.
 
@@ -390,7 +394,7 @@ class KnowledgeGraph:
         """
         paths = []
 
-        def dfs_recursive(current: str, path: List[Tuple[str, str]], depth: int):
+        def dfs_recursive(current: str, path: list[tuple[str, str]], depth: int):
             paths.append(path.copy())
 
             if depth >= max_depth:
@@ -411,8 +415,8 @@ class KnowledgeGraph:
         start: str,
         end: str,
         max_length: int = 5,
-        predicate_filter: Optional[Callable[[str], bool]] = None,
-    ) -> List[List[str]]:
+        predicate_filter: Callable[[str], bool] | None = None,
+    ) -> list[list[str]]:
         """
         Find paths between start and end entities using BFS.
 
@@ -444,7 +448,7 @@ class KnowledgeGraph:
 
         return []
 
-    def shortest_path(self, start: str, end: str) -> Optional[List[str]]:
+    def shortest_path(self, start: str, end: str) -> list[str] | None:
         """Find shortest path between entities."""
         paths = self.find_paths(start, end, max_length=10)
         if paths:
@@ -460,7 +464,7 @@ class KnowledgeGraph:
         start: str,
         predicate: str,
         max_depth: int = 5,
-    ) -> Set[str]:
+    ) -> set[str]:
         """
         Infer all entities reachable via transitive relation.
         E.g., infer all mammals given "Human is_a Mammal" and "Mammal is_a Animal"
@@ -485,7 +489,7 @@ class KnowledgeGraph:
 
         return reachable
 
-    def verify_statement(self, statement: str) -> Dict[str, Any]:
+    def verify_statement(self, statement: str) -> dict[str, Any]:
         """
         Verify a statement against the knowledge graph.
         """
@@ -542,7 +546,7 @@ class KnowledgeGraph:
     # CONSISTENCY CHECKING
     # =========================================================================
 
-    def check_consistency(self) -> List[Dict[str, Any]]:
+    def check_consistency(self) -> list[dict[str, Any]]:
         """
         Check graph for logical inconsistencies.
         """
@@ -555,27 +559,31 @@ class KnowledgeGraph:
             paths = self.dfs(entity, lambda p: p in hierarchical, max_depth=5)
             for path in paths:
                 if len(path) > 3:  # Suspiciously deep
-                    issues.append({
-                        "type": "deep_hierarchy",
-                        "entity": entity,
-                        "path": path,
-                        "severity": "warning",
-                    })
+                    issues.append(
+                        {
+                            "type": "deep_hierarchy",
+                            "entity": entity,
+                            "path": path,
+                            "severity": "warning",
+                        }
+                    )
 
         # Check for conflicting facts
         for entity in self.entities:
             outgoing = self.get_outgoing(entity)
-            for pred, obj in outgoing:
+            for pred, _obj in outgoing:
                 if pred in [RelationType.IS_A.value]:
                     # Check for multiple direct types
                     types = [o for p, o in outgoing if p == RelationType.IS_A.value]
                     if len(set(types)) > 1:
-                        issues.append({
-                            "type": "multiple_types",
-                            "entity": entity,
-                            "types": types,
-                            "severity": "error",
-                        })
+                        issues.append(
+                            {
+                                "type": "multiple_types",
+                                "entity": entity,
+                                "types": types,
+                                "severity": "error",
+                            }
+                        )
 
         return issues
 
@@ -592,7 +600,7 @@ class KnowledgeGraph:
             total_degree = sum(len(v) for v in self.subject_index.values())
             self.stats["avg_degree"] = total_degree / self.stats["entities"]
 
-    def export(self) -> Dict[str, Any]:
+    def export(self) -> dict[str, Any]:
         """Export graph to dictionary."""
         return {
             "entities": {
@@ -616,7 +624,7 @@ class KnowledgeGraph:
             "stats": self.stats,
         }
 
-    def export_triples(self) -> List[Dict[str, Any]]:
+    def export_triples(self) -> list[dict[str, Any]]:
         """Export all facts as (subject, predicate, object) triples for training.
 
         Returns:

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 logger = logging.getLogger("slo.lr_schedulers")
 
@@ -67,7 +66,7 @@ class CyclicConfig(SchedulerConfig):
     base_lr: float = 1e-5
     max_lr: float = 1e-3
     step_size_up: int = 1000
-    step_size_down: Optional[int] = None
+    step_size_down: int | None = None
     mode: str = "triangular2"
 
 
@@ -78,16 +77,19 @@ class CyclicConfig(SchedulerConfig):
 
 class WarmupCosineScheduler(SloWarmupCosine):
     """Cosine annealing with linear warmup."""
+
     pass
 
 
 class PolynomialDecayScheduler(SloPolynomial):
     """Polynomial learning rate decay."""
+
     pass
 
 
 class LinearWarmupScheduler(SloLinearWarmup):
     """Linear warmup then hold or decay."""
+
     pass
 
 
@@ -96,8 +98,15 @@ class LinearWarmupScheduler(SloLinearWarmup):
 # =============================================================================
 
 
-def create_scheduler(optimizer, scheduler_type: str, total_steps=None,
-                     warmup_steps=0, min_lr=1e-6, max_lr=3e-4, **kwargs):
+def create_scheduler(
+    optimizer,
+    scheduler_type: str,
+    total_steps=None,
+    warmup_steps=0,
+    min_lr=1e-6,
+    max_lr=3e-4,
+    **kwargs,
+):
     """
     Create an LR scheduler.
 
@@ -120,9 +129,15 @@ def create_scheduler(optimizer, scheduler_type: str, total_steps=None,
         warmup_steps = max(100, int(total_steps * 0.05))
         logger.info(f"Auto warmup_steps={warmup_steps} (5% of total_steps={total_steps})")
 
-    return soul_create_scheduler(optimizer, scheduler_type,
-                                 total_steps=total_steps, warmup_steps=warmup_steps,
-                                 min_lr=min_lr, max_lr=max_lr, **kwargs)
+    return soul_create_scheduler(
+        optimizer,
+        scheduler_type,
+        total_steps=total_steps,
+        warmup_steps=warmup_steps,
+        min_lr=min_lr,
+        max_lr=max_lr,
+        **kwargs,
+    )
 
 
 BEST_PRACTICES = """

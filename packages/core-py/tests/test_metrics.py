@@ -3,8 +3,12 @@ Tests for the Prometheus metrics collector.
 """
 
 import time
-import pytest
-from domain.infrastructure._internal.metrics import MetricsCollector, get_metrics_collector, reset_metrics_collector
+
+from domain.infrastructure._internal.metrics import (
+    MetricsCollector,
+    get_metrics_collector,
+    reset_metrics_collector,
+)
 
 
 class TestMetricsCollector:
@@ -72,13 +76,18 @@ class TestMetricsCollector:
         out1 = c.render()
         time.sleep(0.05)
         out2 = c.render()
-        t1 = float([l for l in out1.split("\n") if "uptime" in l and not l.startswith("#")][0].split()[-1])
-        t2 = float([l for l in out2.split("\n") if "uptime" in l and not l.startswith("#")][0].split()[-1])
+        t1 = float(
+            [l for l in out1.split("\n") if "uptime" in l and not l.startswith("#")][0].split()[-1]
+        )
+        t2 = float(
+            [l for l in out2.split("\n") if "uptime" in l and not l.startswith("#")][0].split()[-1]
+        )
         assert t2 >= t1
 
     def test_thread_safety(self):
         """Record 1000 requests from multiple threads."""
         import threading
+
         c = MetricsCollector()
         errors = []
 
@@ -201,9 +210,12 @@ class TestMetricsCollector:
         c = MetricsCollector()
         c.set_active_requests(10)
         import threading
+
         results = []
+
         def _read():
             results.append(c.get_active_requests())
+
         threads = [threading.Thread(target=_read) for _ in range(10)]
         for t in threads:
             t.start()
@@ -234,15 +246,20 @@ class TestMetricsCollector:
     def test_uptime_starts_near_zero(self):
         c = MetricsCollector()
         out = c.render()
-        uptime = float([l for l in out.split("\n") if "uptime" in l and not l.startswith("#")][0].split()[-1])
+        uptime = float(
+            [l for l in out.split("\n") if "uptime" in l and not l.startswith("#")][0].split()[-1]
+        )
         assert uptime < 1.0
 
     def test_concurrent_increments(self):
         import threading
+
         c = MetricsCollector()
+
         def _inc():
             for _ in range(100):
                 c.record_request("/conc", 200, 0.01)
+
         threads = [threading.Thread(target=_inc) for _ in range(4)]
         for t in threads:
             t.start()

@@ -9,7 +9,7 @@ task-queue-backed persistence layer for option 3 - means implementing
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -20,29 +20,30 @@ class MemoryProvider(Protocol):
     def store_turn(self, user_message: str, assistant_response: str) -> bool:
         """Persist one turn as durable memory. True when new facts stored."""
 
-    def store_turn_facts(self, user_message: str, assistant_response: str) -> List[str]:
+    def store_turn_facts(self, user_message: str, assistant_response: str) -> list[str]:
         """Persist one turn; return the newly stored fact texts."""
 
     def store(self, content: str, topic: str, source: str) -> bool:
         """Persist a single raw fact. True when newly stored."""
 
-    def retrieve(self, query: str, limit: int) -> List[Dict[str, Any]]:
+    def retrieve(self, query: str, limit: int) -> list[dict[str, Any]]:
         """Return up to ``limit`` memory items relevant to ``query``."""
 
-    def list_all(self, limit: int) -> List[Dict[str, Any]]:
+    def list_all(self, limit: int) -> list[dict[str, Any]]:
         """Return stored items (most recent first), up to ``limit``."""
 
     def clear(self) -> int:
         """Remove every stored item; return the number removed."""
 
-    def delete(self, ids: List[str]) -> int:
+    def delete(self, ids: list[str]) -> int:
         """Remove the stored items with the given entry ids; return the count removed."""
 
-    def update(self, item_id: str, content: str, topic: Optional[str] = None,
-               importance: Optional[float] = None) -> bool:
+    def update(
+        self, item_id: str, content: str, topic: str | None = None, importance: float | None = None
+    ) -> bool:
         """Edit an existing item's text (and optionally its topic/importance)."""
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Return provider-level statistics."""
 
 
@@ -57,7 +58,7 @@ class KnowledgeMemoryProvider:
     production callers use the module-level ``get_knowledge_memory()``.
     """
 
-    def __init__(self, store: Optional[Any] = None):
+    def __init__(self, store: Any | None = None):
         self._store = store
 
     def _get_store(self):
@@ -65,6 +66,7 @@ class KnowledgeMemoryProvider:
         if self._store is not None:
             return self._store
         from domain.knowledge import get_knowledge_memory
+
         return get_knowledge_memory()
 
     def store_turn(self, user_message: str, assistant_response: str) -> bool:
@@ -90,7 +92,7 @@ class KnowledgeMemoryProvider:
             logger.debug("Memory store_turn failed: %s", e)
             return False
 
-    def store_turn_facts(self, user_message: str, assistant_response: str) -> List[str]:
+    def store_turn_facts(self, user_message: str, assistant_response: str) -> list[str]:
         """
         Extract and persist facts from one completed turn, returning them.
 
@@ -129,6 +131,7 @@ class KnowledgeMemoryProvider:
             return False
         try:
             from domain.learner._internal.knowledge import KnowledgeFact
+
             return self._get_store().add_fact(
                 KnowledgeFact(content=content, topic=topic, source=source)
             )
@@ -136,7 +139,7 @@ class KnowledgeMemoryProvider:
             logger.debug("Memory store failed: %s", e)
             return False
 
-    def retrieve(self, query: str, limit: int) -> List[Dict[str, Any]]:
+    def retrieve(self, query: str, limit: int) -> list[dict[str, Any]]:
         """
         Semantic search for memory items relevant to ``query``.
 
@@ -156,7 +159,7 @@ class KnowledgeMemoryProvider:
             logger.debug("Memory retrieve failed: %s", e)
             return []
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Return provider statistics (total facts, topics)."""
         try:
             return self._get_store().stats()
@@ -164,7 +167,7 @@ class KnowledgeMemoryProvider:
             logger.warning("Memory stats failed: %s", e, extra={"tag": "INF"})
             return {"error": str(e), "total_facts": 0}
 
-    def list_all(self, limit: int) -> List[Dict[str, Any]]:
+    def list_all(self, limit: int) -> list[dict[str, Any]]:
         """
         Return stored memory items (most recent first).
 
@@ -199,7 +202,7 @@ class KnowledgeMemoryProvider:
             logger.debug("Memory clear failed: %s", e)
             return 0
 
-    def delete(self, ids: List[str]) -> int:
+    def delete(self, ids: list[str]) -> int:
         """
         Remove specific stored items by entry id.
 
@@ -224,9 +227,9 @@ class KnowledgeMemoryProvider:
                 logger.debug("Memory delete %s failed: %s", item_id, e)
         return removed
 
-    def update(self, item_id: str, content: str,
-               topic: Optional[str] = None,
-               importance: Optional[float] = None) -> bool:
+    def update(
+        self, item_id: str, content: str, topic: str | None = None, importance: float | None = None
+    ) -> bool:
         """
         Edit an existing item's text (and optionally its topic/importance).
 
@@ -248,7 +251,8 @@ class KnowledgeMemoryProvider:
             return False
         try:
             return self._get_store().update_fact(
-                item_id, content.strip(), topic=topic, importance=importance)
+                item_id, content.strip(), topic=topic, importance=importance
+            )
         except Exception as e:
             logger.debug("Memory update %s failed: %s", item_id, e)
             return False

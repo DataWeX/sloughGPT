@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from domain.inference._internal.ops.layernorm import layernorm
 from domain.inference._internal.ops.rmsnorm import rmsnorm
@@ -70,7 +69,7 @@ class TestRMSNorm:
         x = np.array([[2.0, 4.0, 6.0]])
         w = np.ones(3)
         result = rmsnorm(x, w)
-        rms = np.sqrt(np.mean(result ** 2, axis=-1))
+        rms = np.sqrt(np.mean(result**2, axis=-1))
         assert np.allclose(rms, 1.0, atol=1e-5)
 
     def test_eps_stability(self):

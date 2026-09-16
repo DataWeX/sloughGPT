@@ -1,4 +1,5 @@
 """Tests for ParallelExecutor — batch parallel processing."""
+
 from __future__ import annotations
 
 import threading

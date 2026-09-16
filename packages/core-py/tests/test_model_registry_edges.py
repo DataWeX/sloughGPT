@@ -24,6 +24,7 @@ class _FakeProvider:
 # Basic access
 # ---------------------------------------------------------------------------
 
+
 class TestRegistryEdges:
     def test_get_empty_returns_none(self):
         reg = ModelRegistry()
@@ -63,7 +64,7 @@ class TestRegistryEdges:
     def test_emit_event_exception_swallowed(self):
         reg = ModelRegistry()
         with patch(
-            "domain.infrastructure.event_bus.get_event_bus",
+            "domain.infrastructure._internal.event_bus.get_event_bus",
             side_effect=RuntimeError("bus down"),
         ):
             reg._emit_event("model.registered", "m")
@@ -77,7 +78,7 @@ class TestRegistryEdges:
                 raise RuntimeError("emit failed")
 
         with patch(
-            "domain.infrastructure.event_bus.get_event_bus",
+            "domain.infrastructure._internal.event_bus.get_event_bus",
             return_value=BadBus(),
         ):
             reg._emit_event("model.registered", "m")
@@ -100,6 +101,7 @@ class TestRegistryEdges:
 # ---------------------------------------------------------------------------
 # Multiple engines
 # ---------------------------------------------------------------------------
+
 
 class TestRegistryMultipleEngines:
     def test_register_multiple(self):
@@ -185,6 +187,7 @@ class TestRegistryMultipleEngines:
 # Default ID management
 # ---------------------------------------------------------------------------
 
+
 class TestDefaultIdManagement:
     def test_default_id_none_initially(self):
         reg = ModelRegistry()
@@ -225,6 +228,7 @@ class TestDefaultIdManagement:
 # Event emission
 # ---------------------------------------------------------------------------
 
+
 class TestEventEmission:
     def test_emit_registered_event(self):
         reg = ModelRegistry()
@@ -234,7 +238,9 @@ class TestEventEmission:
             def emit_sync(self, event, data, **kw):
                 emitted.append((event, data))
 
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=FakeBus()):
+        with patch(
+            "domain.infrastructure._internal.event_bus.get_event_bus", return_value=FakeBus()
+        ):
             reg.register_engine("eng1", _FakeProvider())
         assert any(e[0] == "model.registered" for e in emitted)
 
@@ -247,7 +253,9 @@ class TestEventEmission:
             def emit_sync(self, event, data, **kw):
                 emitted.append((event, data))
 
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=FakeBus()):
+        with patch(
+            "domain.infrastructure._internal.event_bus.get_event_bus", return_value=FakeBus()
+        ):
             reg.unregister("eng1")
         assert any(e[0] == "model.unregistered" for e in emitted)
 
@@ -255,6 +263,7 @@ class TestEventEmission:
 # ---------------------------------------------------------------------------
 # Health summary
 # ---------------------------------------------------------------------------
+
 
 class TestHealthSummary:
     def test_health_no_models(self):
@@ -307,6 +316,7 @@ class TestHealthSummary:
 # get_model_registry singleton
 # ---------------------------------------------------------------------------
 
+
 class TestGetModelRegistry:
     def test_singleton(self):
         r1 = get_model_registry()
@@ -321,6 +331,7 @@ class TestGetModelRegistry:
 # ---------------------------------------------------------------------------
 # register() — full ModelServer path (not register_engine)
 # ---------------------------------------------------------------------------
+
 
 class TestRegisterMethod:
     def test_register_creates_server(self):
@@ -384,6 +395,7 @@ class TestRegisterMethod:
 # reset_metrics
 # ---------------------------------------------------------------------------
 
+
 class _FakeProviderWithMetrics:
     def __init__(self, name="fake"):
         self.metadata = {"name": name}
@@ -409,6 +421,7 @@ class TestResetMetrics:
 
     def test_reset_metrics_restores_status(self):
         from domain.infrastructure._internal.model_server import ModelStatus
+
         reg = ModelRegistry()
         p = _FakeProviderWithMetrics()
         p.status = "degraded"
@@ -421,9 +434,11 @@ class TestResetMetrics:
 # Thread safety
 # ---------------------------------------------------------------------------
 
+
 class TestThreadSafety:
     def test_concurrent_register_unregister(self):
         import threading
+
         reg = ModelRegistry()
         errors = []
 
@@ -443,6 +458,7 @@ class TestThreadSafety:
 
     def test_concurrent_get_default(self):
         import threading
+
         reg = ModelRegistry()
         reg.register_engine("e1", _FakeProvider())
         results = []
@@ -460,6 +476,7 @@ class TestThreadSafety:
 
     def test_concurrent_health_summary(self):
         import threading
+
         reg = ModelRegistry()
         reg.register_engine("e1", _FakeProvider())
         errors = []
@@ -482,6 +499,7 @@ class TestThreadSafety:
 # ---------------------------------------------------------------------------
 # list_models — additional edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestListModelsExtra:
     def test_list_models_after_unregister_all(self):
@@ -509,6 +527,7 @@ class TestListModelsExtra:
 # ---------------------------------------------------------------------------
 # health_summary — additional edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestHealthSummaryExtra:
     def test_health_mixed_statuses(self):
@@ -547,6 +566,7 @@ class TestHealthSummaryExtra:
 # generate — additional cases
 # ---------------------------------------------------------------------------
 
+
 class TestGenerateExtra:
     def test_generate_no_default_no_model_id(self):
         reg = ModelRegistry()
@@ -562,6 +582,7 @@ class TestGenerateExtra:
 # ---------------------------------------------------------------------------
 # unregister — additional edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestUnregisterExtra:
     def test_unregister_then_re_register(self):
@@ -595,6 +616,7 @@ class TestUnregisterExtra:
 # ---------------------------------------------------------------------------
 # default_id — additional edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestDefaultIdExtra:
     def test_setter_to_self_is_noop(self):

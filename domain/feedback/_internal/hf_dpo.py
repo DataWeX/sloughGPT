@@ -10,7 +10,6 @@ trainer reports an honest ``rejected`` result instead of fabricating metrics.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
 import logging
 import time
 
@@ -59,7 +58,7 @@ class HFDPOTrainer:
         self.beta = beta
 
     # ── pair building ────────────────────────────────────────────────
-    def prepare_dpo_pairs(self, max_pairs: Optional[int] = None) -> List[Dict]:
+    def prepare_dpo_pairs(self, max_pairs: int | None = None) -> list[dict]:
         """
         Pair each thumbs-down message with a thumbs-up message.
 
@@ -78,7 +77,7 @@ class HFDPOTrainer:
         db = get_feedback_db()
         chosen = db.get_all_feedback(rating="thumbs_up", limit=200)
         rejected = db.get_all_feedback(rating="thumbs_down", limit=200)
-        pairs: List[Dict] = []
+        pairs: list[dict] = []
         for rej in rejected:
             content_rej = (rej.get("content") or "").strip()
             if not content_rej:
@@ -95,9 +94,7 @@ class HFDPOTrainer:
                         match = c
             if match is None:
                 continue
-            pairs.append(
-                {"chosen": (match["content"] or "").strip(), "rejected": content_rej}
-            )
+            pairs.append({"chosen": (match["content"] or "").strip(), "rejected": content_rej})
         if max_pairs is not None and max_pairs > 0:
             pairs = pairs[:max_pairs]
         return pairs
@@ -157,9 +154,9 @@ class HFDPOTrainer:
     # ── training ─────────────────────────────────────────────────────
     def train(
         self,
-        pairs: Optional[List[Dict]] = None,
-        max_pairs: Optional[int] = None,
-    ) -> Dict:
+        pairs: list[dict] | None = None,
+        max_pairs: int | None = None,
+    ) -> dict:
         """
         Run DPO over the preference pairs.
 
@@ -199,7 +196,7 @@ class HFDPOTrainer:
 
         return self._train_slonet(pairs, t0)
 
-    def _reject(self, reason: str, elapsed: float) -> Dict:
+    def _reject(self, reason: str, elapsed: float) -> dict:
         """Honest rejection result (no fabricated metrics)."""
         return {
             "status": "rejected",
@@ -213,9 +210,9 @@ class HFDPOTrainer:
             "elapsed_seconds": elapsed,
         }
 
-    def _train_slonet(self, pairs: List[Dict], t0: float) -> Dict:
+    def _train_slonet(self, pairs: list[dict], t0: float) -> dict:
         """Real DPO preference gradient updates on the SloNet model."""
-        from domain.training._internal.slonet import Tensor, SloSGD, cross_entropy
+        from domain.training._internal.slonet import SloSGD, Tensor, cross_entropy
 
         model = self.model
         vocab_size = getattr(model, "vocab_size", None)
@@ -246,12 +243,12 @@ class HFDPOTrainer:
         ppl_before = float(np.exp(-np.mean(ref_logp_chosen)))
 
         optimizer = SloSGD(lr=self.learning_rate)
-        losses: List[float] = []
+        losses: list[float] = []
 
-        for epoch in range(DEFAULT_EPOCHS):
-            epoch_losses: List[float] = []
+        for _epoch in range(DEFAULT_EPOCHS):
+            epoch_losses: list[float] = []
             for (chosen_ids, rejected_ids), rc, rr in zip(
-                encoded, ref_logp_chosen, ref_logp_rejected
+                encoded, ref_logp_chosen, ref_logp_rejected, strict=False
             ):
                 chosen = self._forward_logprobs(chosen_ids)
                 rejected = self._forward_logprobs(rejected_ids)

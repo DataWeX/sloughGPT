@@ -28,9 +28,10 @@ import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from domain.shared import find_repo_root
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from domain.shared import find_repo_root
 
 # ── Path bootstrapping (must happen before any domain imports) ────────
 _REPO_ROOT = find_repo_root(Path(__file__).resolve())
@@ -248,7 +249,9 @@ app = FastAPI(
 async def export_openapi_spec():
     """Export the OpenAPI spec as JSON."""
     from fastapi.responses import JSONResponse
+
     return JSONResponse(content=app.openapi())
+
 
 # Selective GZip compression — skips SSE streaming (text/event-stream) and
 # small responses (<500 bytes). Large JSON payloads (/datasets/export,
@@ -296,9 +299,9 @@ app.add_middleware(
 # real responses from /health, /health/startup-progress, /health/summary
 # instead of connection errors.  These lightweight routers have zero
 # heavy imports.
+from routers.consciousness import router as _consciousness_router
 from routers.dashboard import router as _dashboard_router
 from routers.health import router as _health_router
-from routers.consciousness import router as _consciousness_router
 from routers.status import router as _status_router
 
 app.include_router(_health_router)
@@ -688,12 +691,12 @@ if __name__ == "__main__":
             lambda p=web_proc: (p.terminate(), p.wait(timeout=5)) if p.poll() is None else None
         )
 
-    uvicorn_kw: dict = dict(
-        app=app,
-        host=cfg.host,
-        port=bind_port,
-        log_level=cfg.log_level.lower(),
-    )
+    uvicorn_kw: dict = {
+        "app": app,
+        "host": cfg.host,
+        "port": bind_port,
+        "log_level": cfg.log_level.lower(),
+    }
     if args.reload:
         uvicorn_kw["reload"] = True
         uvicorn_kw["app"] = "main:app"

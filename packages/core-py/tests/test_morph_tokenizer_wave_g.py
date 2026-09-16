@@ -10,20 +10,28 @@ from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
 
 
 def _make_tok(vocab=None, merges=(), **kw):
-    defaults = dict(eos_token_id=99)
+    defaults = {"eos_token_id": 99}
     defaults.update(kw)
     return MorphTokenizer(vocab=vocab or {}, merges=list(merges), **defaults)
 
 
-def _write_tokenizer_json(snap_dir, vocab, merges=(), eos=0, pre=None, dec=None,
-                          post=None, added=(), chat_template=None,
-                          vocab_as_list=False):
+def _write_tokenizer_json(
+    snap_dir,
+    vocab,
+    merges=(),
+    eos=0,
+    pre=None,
+    dec=None,
+    post=None,
+    added=(),
+    chat_template=None,
+    vocab_as_list=False,
+):
     if vocab_as_list:
         raw_vocab = [[t, i] for i, t in enumerate(vocab)]
     else:
         raw_vocab = {t: i for i, t in enumerate(vocab)}
-    data = {"model": {"vocab": raw_vocab, "merges": list(merges),
-                      "eos_token_id": eos}}
+    data = {"model": {"vocab": raw_vocab, "merges": list(merges), "eos_token_id": eos}}
     if pre is not None:
         data["pre_tokenizer"] = pre
     if dec is not None:
@@ -131,7 +139,8 @@ class TestFromPretrainedLayouts:
         nested = tmp_path / "hub" / "models--wavetest" / "snapshots" / "snapshots" / "snap2"
         nested.mkdir(parents=True)
         (nested / "tokenizer_config.json").write_text(
-            json.dumps({"chat_template": "<|im_start|>nested-tpl"}))
+            json.dumps({"chat_template": "<|im_start|>nested-tpl"})
+        )
         monkeypatch.setenv("HF_HOME", str(tmp_path))
         tok = MorphTokenizer.from_pretrained("wavetest")
         assert tok._chat_template == "<|im_start|>nested-tpl"
@@ -152,11 +161,16 @@ class TestFromPretrainedLayouts:
         assert tok.byte_level is True
 
     def test_project_local_cache_candidate(self, tmp_path, monkeypatch):
-        from pathlib import Path
         import shutil
+        from pathlib import Path
 
-        project_dir = (Path(__file__).resolve().parents[3]
-                       / "models" / "hf-cache" / "hub" / "models--wavetestproj")
+        project_dir = (
+            Path(__file__).resolve().parents[3]
+            / "models"
+            / "hf-cache"
+            / "hub"
+            / "models--wavetestproj"
+        )
         project_dir.mkdir(parents=True, exist_ok=True)
         try:
             _write_tokenizer_json(project_dir / "snapshots" / "snap1", ["a"])
@@ -185,8 +199,7 @@ class TestSyntheticBpeModes:
         assert tok.decode([1, 7]) == "a<|im_start|>"
 
     def test_encode_byte_level_in_vocab(self):
-        tok = _make_tok(vocab={"a": 1, "b": 2, "ab": 3}, merges=[("a", "b")],
-                        byte_level=True)
+        tok = _make_tok(vocab={"a": 1, "b": 2, "ab": 3}, merges=[("a", "b")], byte_level=True)
         assert tok.encode("ab") == [3]
 
     def test_encode_byte_level_fallback(self):
@@ -204,21 +217,24 @@ class TestSyntheticBpeModes:
     def test_encode_byte_fallback_normalize_and_hex(self):
         tok = _make_tok(
             vocab={"\u2581": 10, "h": 11, "i": 12, "<0x68>": 20, "<0x69>": 21},
-            merges=[("h", "i")], byte_fallback=True)
+            merges=[("h", "i")],
+            byte_fallback=True,
+        )
         ids = tok.encode("hi")
         assert 20 in ids and 21 in ids
         assert 10 in ids
 
     def test_encode_byte_fallback_unknown_hex_eos(self):
-        tok = _make_tok(vocab={"\u2581": 10, "h": 11, "i": 12},
-                        merges=[("h", "i")], byte_fallback=True)
+        tok = _make_tok(
+            vocab={"\u2581": 10, "h": 11, "i": 12}, merges=[("h", "i")], byte_fallback=True
+        )
         ids = tok.encode("hi")
         assert ids == [10, 99, 99]
 
     def test_decode_byte_fallback_mixed(self):
         tok = _make_tok(
-            vocab={"<0x48>": 1, "<0xGG>": 2, "\u2581word": 3, "word": 4},
-            byte_fallback=True)
+            vocab={"<0x48>": 1, "<0xGG>": 2, "\u2581word": 3, "word": 4}, byte_fallback=True
+        )
         assert tok.decode([1, 2, 3, 4, 3]) == "H<0xGG>wordword word"
 
     def test_decode_char_level(self):
@@ -240,11 +256,13 @@ class TestChatTemplate:
 
     def test_fallback_without_template(self):
         tok = _make_tok()
-        out = tok.apply_chat_template([
-            {"role": "system", "content": "S"},
-            {"role": "user", "content": "U"},
-            {"role": "assistant", "content": "A"},
-        ])
+        out = tok.apply_chat_template(
+            [
+                {"role": "system", "content": "S"},
+                {"role": "user", "content": "U"},
+                {"role": "assistant", "content": "A"},
+            ]
+        )
         assert out == "System: S\nUser: U\nAssistant: A\nAssistant:"
 
     def test_fallback_defaults_role_and_content(self):
@@ -255,20 +273,23 @@ class TestChatTemplate:
     def test_render_im_start_with_system(self):
         tok = _make_tok()
         tok._chat_template = "<|im_start|>{role}{content}<|im_end|>"
-        out = tok.apply_chat_template([
-            {"role": "system", "content": "S"},
-            {"role": "user", "content": "U"},
-        ])
-        assert out == ("<|im_start|>system\nS<|im_end|>\n"
-                       "<|im_start|>user\nU<|im_end|>\n"
-                       "<|im_start|>assistant\n")
+        out = tok.apply_chat_template(
+            [
+                {"role": "system", "content": "S"},
+                {"role": "user", "content": "U"},
+            ]
+        )
+        assert out == (
+            "<|im_start|>system\nS<|im_end|>\n"
+            "<|im_start|>user\nU<|im_end|>\n"
+            "<|im_start|>assistant\n"
+        )
 
     def test_render_im_start_without_system(self):
         tok = _make_tok()
         tok._chat_template = "<|im_start|>{role}{content}<|im_end|>"
         out = tok.apply_chat_template([{"role": "user", "content": "U"}])
-        assert out == ("<|im_start|>user\nU<|im_end|>\n"
-                       "<|im_start|>assistant\n")
+        assert out == ("<|im_start|>user\nU<|im_end|>\n<|im_start|>assistant\n")
 
     def test_render_generic_loop(self):
         tok = _make_tok()
@@ -279,10 +300,12 @@ class TestChatTemplate:
     def test_render_generic_loop_with_system(self):
         tok = _make_tok()
         tok._chat_template = "{% for message in messages %}{% endfor %}"
-        out = tok.apply_chat_template([
-            {"role": "system", "content": "S"},
-            {"role": "user", "content": "U"},
-        ])
+        out = tok.apply_chat_template(
+            [
+                {"role": "system", "content": "S"},
+                {"role": "user", "content": "U"},
+            ]
+        )
         assert out == "system\nS\n\nuser\nU\nassistant\n"
 
     def test_render_default_chatml(self):
@@ -294,13 +317,17 @@ class TestChatTemplate:
     def test_render_default_chatml_with_system(self):
         tok = _make_tok()
         tok._chat_template = "plain template"
-        out = tok.apply_chat_template([
-            {"role": "system", "content": "S"},
-            {"role": "user", "content": "U"},
-        ])
-        assert out == ("<|im_start|>system\nS<|im_end|>\n"
-                       "<|im_start|>user\nU<|im_end|>\n"
-                       "<|im_start|>assistant\n")
+        out = tok.apply_chat_template(
+            [
+                {"role": "system", "content": "S"},
+                {"role": "user", "content": "U"},
+            ]
+        )
+        assert out == (
+            "<|im_start|>system\nS<|im_end|>\n"
+            "<|im_start|>user\nU<|im_end|>\n"
+            "<|im_start|>assistant\n"
+        )
 
 
 class TestMorphologyEdges:

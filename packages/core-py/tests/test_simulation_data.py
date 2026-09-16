@@ -2,15 +2,31 @@
 
 import numpy as np
 import pytest
+
 from domain.shell._internal.simulation import (
-    EntityType, WorldParams, Perception, CellWrite, BabyAction, Perceptron,
-    WorldCell, WorldGrid, Entity, Nest, MATERIAL_AIR, MATERIAL_WATER,
-    MATERIAL_STONE, MATERIAL_ORGANIC, MATERIAL_METAL, MATERIAL_EMBER,
-    MATERIAL_LIVING, MATERIAL_SIGNAL, NUM_MATERIALS,
+    MATERIAL_AIR,
+    MATERIAL_EMBER,
+    MATERIAL_LIVING,
+    MATERIAL_METAL,
+    MATERIAL_ORGANIC,
+    MATERIAL_SIGNAL,
+    MATERIAL_STONE,
+    MATERIAL_WATER,
+    NUM_MATERIALS,
+    BabyAction,
+    CellWrite,
+    Entity,
+    EntityType,
+    Nest,
+    Perception,
+    Perceptron,
+    WorldCell,
+    WorldGrid,
+    WorldParams,
 )
 
-
 # ── EntityType ────────────────────────────────────────────────────────────────
+
 
 class TestEntityType:
     def test_all_members(self):
@@ -49,13 +65,22 @@ class TestEntityType:
 
 # ── Material Constants ────────────────────────────────────────────────────────
 
+
 class TestMaterialConstants:
     def test_num_materials(self):
         assert NUM_MATERIALS == 8
 
     def test_material_values_distinct(self):
-        vals = [MATERIAL_AIR, MATERIAL_WATER, MATERIAL_STONE, MATERIAL_ORGANIC,
-                MATERIAL_METAL, MATERIAL_EMBER, MATERIAL_LIVING, MATERIAL_SIGNAL]
+        vals = [
+            MATERIAL_AIR,
+            MATERIAL_WATER,
+            MATERIAL_STONE,
+            MATERIAL_ORGANIC,
+            MATERIAL_METAL,
+            MATERIAL_EMBER,
+            MATERIAL_LIVING,
+            MATERIAL_SIGNAL,
+        ]
         assert len(vals) == len(set(vals))
 
     def test_material_air_is_zero(self):
@@ -67,6 +92,7 @@ class TestMaterialConstants:
 
 
 # ── WorldParams ───────────────────────────────────────────────────────────────
+
 
 class TestWorldParams:
     def test_defaults(self):
@@ -159,6 +185,7 @@ class TestWorldParams:
 
 # ── WorldCell ─────────────────────────────────────────────────────────────────
 
+
 class TestWorldCell:
     def test_defaults(self):
         c = WorldCell()
@@ -182,6 +209,7 @@ class TestWorldCell:
 
 
 # ── WorldGrid ─────────────────────────────────────────────────────────────────
+
 
 class TestWorldGrid:
     def test_init_default(self):
@@ -314,6 +342,7 @@ class TestWorldGrid:
 
 # ── Entity ────────────────────────────────────────────────────────────────────
 
+
 class TestEntity:
     def test_defaults(self):
         e = Entity()
@@ -333,8 +362,13 @@ class TestEntity:
         assert d == pytest.approx(5.0)
 
     def test_to_dict_roundtrip(self):
-        e = Entity(id=7, position=np.array([1.0, 2.0, 3.0]),
-                    energy=55.0, entity_type=EntityType.AGENT, alive=False)
+        e = Entity(
+            id=7,
+            position=np.array([1.0, 2.0, 3.0]),
+            energy=55.0,
+            entity_type=EntityType.AGENT,
+            alive=False,
+        )
         d = e.to_dict()
         e2 = Entity.from_dict(d)
         assert e2.id == 7
@@ -367,24 +401,28 @@ class TestEntity:
 
 # ── Nest ──────────────────────────────────────────────────────────────────────
 
+
 class TestNest:
     def test_init(self):
-        n = Nest(id=1, position=np.array([1.0, 2.0, 3.0]),
-                 stored_energy=50.0, owner_group_id=0)
+        n = Nest(id=1, position=np.array([1.0, 2.0, 3.0]), stored_energy=50.0, owner_group_id=0)
         assert n.id == 1
         assert n.stored_energy == 50.0
         assert n.owner_group_id == 0
         assert n.alive is True
 
     def test_distance_to_point(self):
-        n = Nest(id=1, position=np.array([0.0, 0.0, 0.0]),
-                 stored_energy=10.0, owner_group_id=0)
+        n = Nest(id=1, position=np.array([0.0, 0.0, 0.0]), stored_energy=10.0, owner_group_id=0)
         d = n.distance_to_point(np.array([3.0, 4.0, 0.0]))
         assert d == pytest.approx(5.0)
 
     def test_to_dict_roundtrip(self):
-        n = Nest(id=5, position=np.array([2.0, 3.0, 4.0]),
-                 stored_energy=75.0, owner_group_id=1, alive=False)
+        n = Nest(
+            id=5,
+            position=np.array([2.0, 3.0, 4.0]),
+            stored_energy=75.0,
+            owner_group_id=1,
+            alive=False,
+        )
         d = n.to_dict()
         n2 = Nest.from_dict(d)
         assert n2.id == 5
@@ -394,8 +432,7 @@ class TestNest:
         assert n2.alive is False
 
     def test_to_dict_types(self):
-        n = Nest(id=1, position=np.array([0.0, 0.0, 0.0]),
-                 stored_energy=0.0, owner_group_id=0)
+        n = Nest(id=1, position=np.array([0.0, 0.0, 0.0]), stored_energy=0.0, owner_group_id=0)
         d = n.to_dict()
         assert isinstance(d["id"], int)
         assert isinstance(d["position"], list)
@@ -405,6 +442,7 @@ class TestNest:
 
 
 # ── Perception ────────────────────────────────────────────────────────────────
+
 
 class TestPerception:
     def test_defaults(self):
@@ -428,6 +466,7 @@ class TestPerception:
 
 
 # ── CellWrite ─────────────────────────────────────────────────────────────────
+
 
 class TestCellWrite:
     def test_defaults(self):
@@ -463,6 +502,7 @@ class TestCellWrite:
 
 # ── BabyAction ────────────────────────────────────────────────────────────────
 
+
 class TestBabyAction:
     def test_defaults(self):
         ba = BabyAction()
@@ -477,15 +517,18 @@ class TestBabyAction:
         assert len(ba.writes) == 3
 
     def test_write_materials(self):
-        ba = BabyAction(writes=[
-            CellWrite(x=0, material=MATERIAL_WATER),
-            CellWrite(x=1, material=MATERIAL_STONE),
-        ])
+        ba = BabyAction(
+            writes=[
+                CellWrite(x=0, material=MATERIAL_WATER),
+                CellWrite(x=1, material=MATERIAL_STONE),
+            ]
+        )
         assert ba.writes[0].material == MATERIAL_WATER
         assert ba.writes[1].material == MATERIAL_STONE
 
 
 # ── Perceptron ────────────────────────────────────────────────────────────────
+
 
 class TestPerceptron:
     def test_init(self):

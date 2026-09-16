@@ -1,9 +1,10 @@
 """Tests for experiments router — DB CRUD, metric/param logging, validation."""
 
 import sys
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 pytest.importorskip("fastapi")
 
@@ -25,6 +26,7 @@ def mock_db():
         class FakeDeleteResult:
             def __init__(self, n):
                 self.deleted_count = n
+
             def __bool__(self):
                 return self.deleted_count > 0
 
@@ -41,8 +43,15 @@ def mock_db():
             col.insert_one.side_effect = lambda doc: store.append(doc)
             col.delete_many.side_effect = lambda q: (
                 FakeDeleteResult(
-                    len([store.remove(d) for d in list(store) if d.get("experiment_id") == q.get("experiment_id")])
-                ) if any(d.get("experiment_id") == q.get("experiment_id") for d in store)
+                    len(
+                        [
+                            store.remove(d)
+                            for d in list(store)
+                            if d.get("experiment_id") == q.get("experiment_id")
+                        ]
+                    )
+                )
+                if any(d.get("experiment_id") == q.get("experiment_id") for d in store)
                 else FakeDeleteResult(0)
             )
             return col
@@ -59,6 +68,7 @@ def app():
     app = FastAPI()
     app.include_router(ExperimentsRouter().router)
     from infrastructure.exception_handlers import register_all_handlers
+
     register_all_handlers(app)
     return app
 
@@ -115,7 +125,9 @@ class TestGetExperiment:
 
 class TestDeleteExperiment:
     def test_delete(self, client, mock_db):
-        mock_db.setdefault("experiments", []).append({"experiment_id": "to_delete", "name": "to_delete"})
+        mock_db.setdefault("experiments", []).append(
+            {"experiment_id": "to_delete", "name": "to_delete"}
+        )
         resp = client.delete("/experiments/to_delete")
         assert resp.status_code == 200
         assert resp.json()["data"]["deleted"] is True

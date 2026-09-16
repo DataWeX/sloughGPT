@@ -9,21 +9,16 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
-from domain.agents._internal.system import get_agent_system
-from domain.agents._internal.tools import get_tool_registry
-from domain.cognitive._internal.rag_service import get_rag_service
-from domain.feedback._internal.response_tracker import get_response_tracker
-from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
-from domain.infrastructure.conversation_log import capture
-from domain.infrastructure._internal.errors import AppError
-from domain.infrastructure.request_coalescer import get_coalescer
-from domain.infrastructure.server_state import get_server_state
-from domain.learner import get_learner
-from domain.learner._internal.entity_extractor import extract_and_store
-from domain.learner._internal.knowledge import KnowledgeFact, get_knowledge_memory
-from domain.memory._internal.service import get_memory_service
-from domain.models._internal.provider import KnowledgeProcessor, apply_processors, get_provider
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.sse_fallback import sse_error, sse_token
@@ -33,6 +28,20 @@ from schemas.common import classify_and_raise, raise_error, safe_audit_log, succ
 
 from config import ServerConfig
 from config import gen_config as _gen_config
+from domain.agents._internal.system import get_agent_system
+from domain.agents._internal.tools import get_tool_registry
+from domain.cognitive._internal.rag_service import get_rag_service
+from domain.feedback._internal.response_tracker import get_response_tracker
+from domain.infrastructure._internal.errors import AppError
+from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
+from domain.infrastructure.conversation_log import capture
+from domain.infrastructure.request_coalescer import get_coalescer
+from domain.infrastructure.server_state import get_server_state
+from domain.learner import get_learner
+from domain.learner._internal.entity_extractor import extract_and_store
+from domain.learner._internal.knowledge import KnowledgeFact, get_knowledge_memory
+from domain.memory._internal.service import get_memory_service
+from domain.models._internal.provider import KnowledgeProcessor, apply_processors, get_provider
 
 logger = logging.getLogger("slo.inference")
 
@@ -74,6 +83,54 @@ def _model_ready() -> bool:
 
     core_model = get_server_state().model.get()
     return core_model is not None
+
+
+def _get_model_status() -> dict:
+    """Return a structured model status with ready flag, reason, and error code.
+
+    Returns one of:
+      {"ready": True}
+      {"ready": False, "reason": "...", "code": "...", "status": 503}
+    """
+    if _model_ready():
+        return {"ready": True}
+
+    from startup_progress import STARTUP_PHASE
+
+    from config import ServerConfig
+
+    cfg = ServerConfig.from_env()
+    phase = STARTUP_PHASE.get("phase", "unknown")
+    raw = getattr(cfg, "autoload_model", "") or ""
+    autoload_disabled = not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable")
+
+    if autoload_disabled:
+        model_name = getattr(cfg, "default_model", "") or "none"
+        return {
+            "ready": False,
+            "reason": f"No model loaded. Autoload is disabled. Set SLO_AUTOLOAD_MODEL={model_name} to enable.",
+            "code": "E_NO_MODEL",
+            "status": 503,
+        }
+
+    if phase != "ready":
+        msg = STARTUP_PHASE.get("message", "Starting...")
+        step = STARTUP_PHASE.get("step", 0)
+        total = STARTUP_PHASE.get("total", 9)
+        return {
+            "ready": False,
+            "reason": f"Server starting — {msg} (step {step}/{total})",
+            "code": "E_STARTING",
+            "status": 503,
+        }
+
+    # Phase is ready but model isn't materialized — still loading in background
+    return {
+        "ready": False,
+        "reason": "Model still loading — please wait.",
+        "code": "E_MODEL_LOADING",
+        "status": 503,
+    }
 
 
 def _estimate_tokens(text: str) -> int:
@@ -242,13 +299,18 @@ def get_chat_control(session_id: str) -> dict | None:
 def set_chat_control(session_id: str, control: dict) -> None:
     """Set pending control for a session."""
     import time as _time
+
     with _chat_control_lock:
         control["_ts"] = _time.time()
         _chat_control_store[session_id] = control
         # Evict expired entries
         if len(_chat_control_store) > 100:
             now = _time.time()
-            expired = [k for k, v in _chat_control_store.items() if now - v.get("_ts", 0) > _CHAT_CONTROL_TTL]
+            expired = [
+                k
+                for k, v in _chat_control_store.items()
+                if now - v.get("_ts", 0) > _CHAT_CONTROL_TTL
+            ]
             for k in expired:
                 del _chat_control_store[k]
 
@@ -625,7 +687,7 @@ async def _build_context_frame(
                 ),
                 timeout=5.0,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD timeout=5.0s",
                 corr_id,
@@ -656,6 +718,7 @@ def _run_post_gen_tasks(
 ) -> None:
     """Launch fire-and-forget background tasks after chat generation completes."""
     import state as _pgs_state
+
     from domain.cognitive._internal.rag_service import get_rag_service as _pgs_rag
 
     duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
@@ -667,6 +730,7 @@ def _run_post_gen_tasks(
                 fut.result()
             except Exception as e:
                 logger.debug("Post-gen task %s failed: %s", task_name, e)
+
         return _cb
 
     # RAG verification
@@ -893,8 +957,10 @@ class InferenceRouter:
             self._session_dirty.discard(session_id)
         except Exception as exc:
             logger.warning(
-                "Disk write failed for session %s: %s — will retry on next flush", session_id, exc,
-                extra={"tag": "REQ"}
+                "Disk write failed for session %s: %s — will retry on next flush",
+                session_id,
+                exc,
+                extra={"tag": "REQ"},
             )
 
     async def flush_dirty_sessions(self) -> int:
@@ -926,8 +992,7 @@ class InferenceRouter:
         try:
             self._background_flush_task = asyncio.create_task(_flush_loop())
         except RuntimeError as e:
-            logger.warning("Failed to start background session flush: %s", e,
-                extra={"tag": "REQ"})
+            logger.warning("Failed to start background session flush: %s", e, extra={"tag": "REQ"})
 
     def _build_session_metadata_index(self) -> list:
         """Build a lightweight metadata index without loading full message content.
@@ -1018,18 +1083,13 @@ class InferenceRouter:
         """generate."""
 
         import state as _gen_state
-        from startup_progress import STARTUP_PHASE
 
-        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
-            phase = STARTUP_PHASE.get("phase", "unknown")
-            step = STARTUP_PHASE.get("step", 0)
-            total = STARTUP_PHASE.get("total", 9)
-            msg = STARTUP_PHASE.get("message", "Starting...")
+        ms = _get_model_status()
+        if not ms["ready"]:
             raise_error(
-                f"Model still loading — {msg} (step {step}/{total})",
-                "E_MODEL_LOADING",
-                status_code=503,
-                details={"phase": phase, "step": step, "total": total, "message": msg},
+                ms["reason"],
+                ms["code"],
+                status_code=ms["status"],
             )
 
         mem_err = _check_memory_pressure()
@@ -1038,7 +1098,9 @@ class InferenceRouter:
 
         provider = get_provider("default")
         if provider is None:
-            raise_error("No provider available — load a model first", "E_INFRA_REGISTRY", status_code=500)
+            raise_error(
+                "No provider available — load a model first", "E_INFRA_REGISTRY", status_code=500
+            )
 
         prompt_text = req.prompt
         if req.response_format == "json":
@@ -1128,18 +1190,18 @@ class InferenceRouter:
     ) -> StreamingResponse:
         """generate_stream."""
         import state as _stream_state
-        from startup_progress import STARTUP_PHASE
 
-        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
+        ms = _get_model_status()
+        if not ms["ready"]:
 
             async def error_stream() -> AsyncIterator[str]:
                 """error_stream."""
                 yield sse_error(
                     "generate",
                     "IDLE",
-                    "Model still loading — please wait.",
-                    code="MODEL_LOADING",
-                    http_status=503,
+                    ms["reason"],
+                    code=ms["code"],
+                    http_status=ms["status"],
                 )
 
             return StreamingResponse(error_stream(), media_type="text/event-stream")
@@ -1369,9 +1431,11 @@ class InferenceRouter:
         try:
             raw = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
             msg = json.loads(raw)
-        except (asyncio.TimeoutError, json.JSONDecodeError) as e:
+        except (TimeoutError, json.JSONDecodeError) as e:
             try:
-                await websocket.send_json({"status": "error", "error": f"Invalid auth message: {e}"})
+                await websocket.send_json(
+                    {"status": "error", "error": f"Invalid auth message: {e}"}
+                )
             except Exception:
                 pass
             await websocket.close()
@@ -1387,10 +1451,16 @@ class InferenceRouter:
             return
 
         import os as _ws_os
-        auth_required = _ws_os.environ.get("SLO_AUTH_REQUIRED", "false").lower() in ("true", "1", "yes")
+
+        auth_required = _ws_os.environ.get("SLO_AUTH_REQUIRED", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
 
         if auth_required:
             from infrastructure.auth import get_jwt_auth
+
             jwt_auth = get_jwt_auth()
             try:
                 jwt_auth.verify_token(api_key)
@@ -1403,6 +1473,7 @@ class InferenceRouter:
                 return
         else:
             from routers.api_keys import ApiKeyManager
+
             try:
                 _key_mgr = ApiKeyManager()
                 if not _key_mgr.validate(api_key):
@@ -1458,14 +1529,17 @@ class InferenceRouter:
             repetition_penalty = msg.get("repetition_penalty", 1.15)
 
             import state as _ws_gen_state
-            from startup_progress import STARTUP_PHASE
 
-            if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
+            ms = _get_model_status()
+            if not ms["ready"]:
                 try:
-                    await websocket.send_json({
-                        "status": "error",
-                        "error": "Model still loading — please wait.",
-                    })
+                    await websocket.send_json(
+                        {
+                            "status": "error",
+                            "error": ms["reason"],
+                            "code": ms["code"],
+                        }
+                    )
                 except Exception:
                     return
                 continue
@@ -1481,10 +1555,12 @@ class InferenceRouter:
             provider = get_provider("default")
             if provider is None:
                 try:
-                    await websocket.send_json({
-                        "status": "error",
-                        "error": "No provider available — load a model first",
-                    })
+                    await websocket.send_json(
+                        {
+                            "status": "error",
+                            "error": "No provider available — load a model first",
+                        }
+                    )
                 except Exception:
                     return
                 continue
@@ -1510,16 +1586,20 @@ class InferenceRouter:
                         try:
                             await websocket.send_json({"token": token})
                         except Exception:
-                            logger.info("WebSocket client disconnected during stream", extra={"tag": "INF"})
+                            logger.info(
+                                "WebSocket client disconnected during stream", extra={"tag": "INF"}
+                            )
                             return
 
                 full_text = "".join(collected)
                 try:
-                    await websocket.send_json({
-                        "done": True,
-                        "status": "done",
-                        "text": full_text,
-                    })
+                    await websocket.send_json(
+                        {
+                            "done": True,
+                            "status": "done",
+                            "text": full_text,
+                        }
+                    )
                 except Exception:
                     return
 
@@ -1694,19 +1774,15 @@ class InferenceRouter:
                 },
             },
         )
-        import state as _check_state
-        from startup_progress import STARTUP_PHASE
 
-        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
-            phase = STARTUP_PHASE.get("phase", "unknown")
-            if phase == "ready":
-                msg = "Model still loading — please wait."
-            else:
-                msg = f"Server starting (phase: {phase}). Please wait."
+        ms = _get_model_status()
+        if not ms["ready"]:
 
             async def error_stream() -> AsyncIterator[str]:
                 """error_stream."""
-                yield sse_error("chat", "IDLE", msg, code="MODEL_LOADING", http_status=503)
+                yield sse_error(
+                    "chat", "IDLE", ms["reason"], code=ms["code"], http_status=ms["status"]
+                )
 
             return StreamingResponse(error_stream(), media_type="text/event-stream")
 
@@ -1818,20 +1894,23 @@ class InferenceRouter:
             frame = None
             if ctx_core and req.use_context_core:
                 frame, context_info = await _build_context_frame(
-                    ctx_core, session_id, user_msg, corr_id,
+                    ctx_core,
+                    session_id,
+                    user_msg,
+                    corr_id,
                 )
                 if frame is not None and frame.system_prompt:
-                        for i, m in enumerate(provider_messages):
-                            if m["role"] == "system":
-                                provider_messages[i] = {
-                                    "role": "system",
-                                    "content": frame.system_prompt,
-                                }
-                                break
-                        else:
-                            provider_messages.insert(
-                                0, {"role": "system", "content": frame.system_prompt}
-                            )
+                    for i, m in enumerate(provider_messages):
+                        if m["role"] == "system":
+                            provider_messages[i] = {
+                                "role": "system",
+                                "content": frame.system_prompt,
+                            }
+                            break
+                    else:
+                        provider_messages.insert(
+                            0, {"role": "system", "content": frame.system_prompt}
+                        )
 
             # Production RAG: query for relevant context from ingested documents
             rag_context = ""
@@ -2513,9 +2592,16 @@ class InferenceRouter:
                     )
 
                 _run_post_gen_tasks(
-                    full_response, user_msg or "", session_id, start_time,
-                    req, ctx_core, self._bg_tasks_lock, self._BG_TASKS,
-                    self._bg_tasks_lock_discard, corr_id,
+                    full_response,
+                    user_msg or "",
+                    session_id,
+                    start_time,
+                    req,
+                    ctx_core,
+                    self._bg_tasks_lock,
+                    self._BG_TASKS,
+                    self._bg_tasks_lock_discard,
+                    corr_id,
                 )
 
                 _memory_stored = False
@@ -2553,9 +2639,10 @@ class InferenceRouter:
                 _mgr.finish(_op_id, str(e))
                 logger.warning("Chat stream outer failed: %s", e, extra={"tag": "INF"})
                 from domain.infrastructure._internal.errors import classify_exception
+
                 classified = classify_exception(e)
                 err_code = classified.code or "E_INFRA_GENERATION"
-                http_status = getattr(classified, 'http_status', None) or 500
+                http_status = getattr(classified, "http_status", None) or 500
                 yield sse_error("chat", "ERROR", str(e), code=err_code, http_status=http_status)
 
         return StreamingResponse(generate(), media_type="text/event-stream")
@@ -2629,18 +2716,13 @@ class InferenceRouter:
         _chat_t0 = time.monotonic()
         import state as _chat_state
         from domains import get_chat_domain
-        from startup_progress import STARTUP_PHASE
 
-        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
-            phase = STARTUP_PHASE.get("phase", "unknown")
-            step = STARTUP_PHASE.get("step", 0)
-            total = STARTUP_PHASE.get("total", 9)
-            msg = STARTUP_PHASE.get("message", "Starting...")
+        ms = _get_model_status()
+        if not ms["ready"]:
             raise_error(
-                f"Model still loading — {msg} (step {step}/{total})",
-                "E_MODEL_LOADING",
-                status_code=503,
-                details={"phase": phase, "step": step, "total": total, "message": msg},
+                ms["reason"],
+                ms["code"],
+                status_code=ms["status"],
             )
 
         mem_err = _check_memory_pressure()
@@ -2746,7 +2828,7 @@ class InferenceRouter:
                 ),
                 timeout=60.0,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ChatResponse(
                 message="Generation timed out. Try a shorter prompt or fewer tokens.",
                 session_id=req.session_id or "default",
@@ -2893,9 +2975,7 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.search_sessions")
 
-    async def get_current_session(
-        self, auth_user: dict = Depends(require_auth_if_enabled)
-    ) -> dict:
+    async def get_current_session(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """get_current_session."""
             sessions = await asyncio.to_thread(self._build_session_cache)
@@ -3009,9 +3089,7 @@ class InferenceRouter:
                 "Failed to clear KV state for session %s: %s", session_id, exc, extra={"tag": "KV"}
             )
 
-    async def chat_suggestions(
-        self, auth_user: dict = Depends(require_auth_if_enabled)
-    ) -> dict:
+    async def chat_suggestions(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """chat_suggestions."""
             return success_response(
@@ -3050,8 +3128,12 @@ class InferenceRouter:
                             "metadata": provider.metadata,
                         }
                     except Exception as exc:
-                        logger.warning("Provider '%s' capability query failed: %s", name, exc,
-                            extra={"tag": "INF"})
+                        logger.warning(
+                            "Provider '%s' capability query failed: %s",
+                            name,
+                            exc,
+                            extra={"tag": "INF"},
+                        )
                         result[name] = {"model_id": str(provider), "error": str(exc)}
                 else:
                     result[name] = {"error": "provider not found"}

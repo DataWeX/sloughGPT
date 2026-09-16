@@ -15,65 +15,174 @@ Patterns matched:
 
 from __future__ import annotations
 
-import re
 import logging
-from typing import List, Set, Tuple
+import re
 
 logger = logging.getLogger("slo.learner.entity_extractor")
 
 # Relationship patterns: (regex, relationship_type)
 _RELATION_PATTERNS = [
-    (re.compile(r'(\w+(?:\s+\w+){0,3})\s+is\s+(?:a|an|the)\s+(\w+(?:\s+\w+){0,3})', re.I), "is_a"),
-    (re.compile(r'(\w+(?:\s+\w+){0,3})\s+likes\s+(\w+(?:\s+\w+){0,3})', re.I), "likes"),
-    (re.compile(r'(\w+(?:\s+\w+){0,3})\s+has\s+(\w+(?:\s+\w+){0,3})', re.I), "has"),
-    (re.compile(r'(\w+(?:\s+\w+){0,3})\s+wants\s+(\w+(?:\s+\w+){0,3})', re.I), "wants"),
-    (re.compile(r'(\w+(?:\s+\w+){0,3})\s+uses\s+(\w+(?:\s+\w+){0,3})', re.I), "uses"),
-    (re.compile(r'(\w+(?:\s+\w+){0,3})\s+works\s+at\s+(\w+(?:\s+\w+){0,3})', re.I), "works_at"),
-    (re.compile(r'(\w+(?:\s+\w+){0,3})\s+lives\s+in\s+(\w+(?:\s+\w+){0,3})', re.I), "lives_in"),
-    (re.compile(r'(\w+(?:\s+\w+){0,3})\s+created\s+(\w+(?:\s+\w+){0,3})', re.I), "created"),
-    (re.compile(r'(\w+(?:\s+\w+){0,3})\s+called\s+(\w+(?:\s+\w+){0,3})', re.I), "called"),
+    (re.compile(r"(\w+(?:\s+\w+){0,3})\s+is\s+(?:a|an|the)\s+(\w+(?:\s+\w+){0,3})", re.I), "is_a"),
+    (re.compile(r"(\w+(?:\s+\w+){0,3})\s+likes\s+(\w+(?:\s+\w+){0,3})", re.I), "likes"),
+    (re.compile(r"(\w+(?:\s+\w+){0,3})\s+has\s+(\w+(?:\s+\w+){0,3})", re.I), "has"),
+    (re.compile(r"(\w+(?:\s+\w+){0,3})\s+wants\s+(\w+(?:\s+\w+){0,3})", re.I), "wants"),
+    (re.compile(r"(\w+(?:\s+\w+){0,3})\s+uses\s+(\w+(?:\s+\w+){0,3})", re.I), "uses"),
+    (re.compile(r"(\w+(?:\s+\w+){0,3})\s+works\s+at\s+(\w+(?:\s+\w+){0,3})", re.I), "works_at"),
+    (re.compile(r"(\w+(?:\s+\w+){0,3})\s+lives\s+in\s+(\w+(?:\s+\w+){0,3})", re.I), "lives_in"),
+    (re.compile(r"(\w+(?:\s+\w+){0,3})\s+created\s+(\w+(?:\s+\w+){0,3})", re.I), "created"),
+    (re.compile(r"(\w+(?:\s+\w+){0,3})\s+called\s+(\w+(?:\s+\w+){0,3})", re.I), "called"),
     (re.compile(r"(\w+)'s\s+(\w+(?:\s+\w+){0,3})", re.I), "possesses"),
 ]
 
 _STOP_WORDS = {
-    "the", "a", "an", "this", "that", "these", "those", "it", "its",
-    "and", "or", "but", "in", "on", "at", "to", "for", "of", "with",
-    "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would",
-    "can", "could", "shall", "should", "may", "might",
-    "i", "you", "he", "she", "we", "they", "me", "him", "her", "us", "them",
-    "my", "your", "his", "its", "our", "their", "mine", "yours", "theirs",
-    "not", "no", "nor", "so", "if", "then", "than", "too", "very",
-    "just", "about", "up", "out", "also", "well", "here", "there",
-    "what", "which", "who", "whom", "when", "where", "why", "how",
-    "get", "got", "make", "made", "take", "took", "know", "think",
-    "see", "want", "give", "tell", "come", "go", "look", "use", "find",
+    "the",
+    "a",
+    "an",
+    "this",
+    "that",
+    "these",
+    "those",
+    "it",
+    "its",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "can",
+    "could",
+    "shall",
+    "should",
+    "may",
+    "might",
+    "i",
+    "you",
+    "he",
+    "she",
+    "we",
+    "they",
+    "me",
+    "him",
+    "her",
+    "us",
+    "them",
+    "my",
+    "your",
+    "his",
+    "our",
+    "their",
+    "mine",
+    "yours",
+    "theirs",
+    "not",
+    "no",
+    "nor",
+    "so",
+    "if",
+    "then",
+    "than",
+    "too",
+    "very",
+    "just",
+    "about",
+    "up",
+    "out",
+    "also",
+    "well",
+    "here",
+    "there",
+    "what",
+    "which",
+    "who",
+    "whom",
+    "when",
+    "where",
+    "why",
+    "how",
+    "get",
+    "got",
+    "make",
+    "made",
+    "take",
+    "took",
+    "know",
+    "think",
+    "see",
+    "want",
+    "give",
+    "tell",
+    "come",
+    "go",
+    "look",
+    "use",
+    "find",
 }
 
 
 def _is_valid_entity(word: str) -> bool:
     """Check if a word is a plausible entity (not a stop word, not punctuation)."""
-    return bool(re.match(r'^[A-Za-z][a-zA-Z\']{1,}$', word)) and word.lower() not in _STOP_WORDS
+    return bool(re.match(r"^[A-Za-z][a-zA-Z\']{1,}$", word)) and word.lower() not in _STOP_WORDS
 
 
-_COMMON_FALSE_ENTITIES = {"Nice", "Hello", "Hi", "Hey", "Thanks", "Please", "Sure",
-                          "Yes", "No", "Okay", "Ok", "Great", "Good", "Right", "Well",
-                          "So", "Also", "Here", "There", "Really", "Actually", "Just"}
+_COMMON_FALSE_ENTITIES = {
+    "Nice",
+    "Hello",
+    "Hi",
+    "Hey",
+    "Thanks",
+    "Please",
+    "Sure",
+    "Yes",
+    "No",
+    "Okay",
+    "Ok",
+    "Great",
+    "Good",
+    "Right",
+    "Well",
+    "So",
+    "Also",
+    "Here",
+    "There",
+    "Really",
+    "Actually",
+    "Just",
+}
 
 
-def extract_entities(text: str) -> List[str]:
+def extract_entities(text: str) -> list[str]:
     """Extract named entities from text using heuristics.
 
     Captures capitalized multi-word sequences and repeated significant nouns.
     Returns deduplicated list. Single words that are part of a multi-word entity
     are excluded to avoid duplicates.
     """
-    sentences = re.split(r'[.!?]+', text)
-    entities: List[str] = []
-    multi_word: Set[str] = set()
+    sentences = re.split(r"[.!?]+", text)
+    entities: list[str] = []
+    multi_word: set[str] = set()
 
     for sentence in sentences:
-        caps_matches = re.findall(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)', sentence)
+        caps_matches = re.findall(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)", sentence)
         for m in caps_matches:
             clean = m.strip()
             if clean and clean not in multi_word and clean not in _COMMON_FALSE_ENTITIES:
@@ -82,7 +191,7 @@ def extract_entities(text: str) -> List[str]:
                 for part in clean.split():
                     multi_word.add(part)
 
-        for match in re.finditer(r'\b([A-Z][a-z]{2,})\b', sentence):
+        for match in re.finditer(r"\b([A-Z][a-z]{2,})\b", sentence):
             w = match.group(1)
             if w not in multi_word and w not in _COMMON_FALSE_ENTITIES and _is_valid_entity(w):
                 entities.append(w)
@@ -91,16 +200,16 @@ def extract_entities(text: str) -> List[str]:
     return entities
 
 
-def extract_relationships(text: str) -> List[Tuple[str, str, str]]:
+def extract_relationships(text: str) -> list[tuple[str, str, str]]:
     """Extract (subject, relationship, object) triples from text."""
-    relationships: List[Tuple[str, str, str]] = []
-    seen: Set[Tuple[str, str, str]] = set()
+    relationships: list[tuple[str, str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
 
     for pattern, rel_type in _RELATION_PATTERNS:
         for match in pattern.finditer(text):
             subj = match.group(1).strip()
             obj = match.group(2).strip()
-            obj = re.sub(r'^(a|an|the)\s+', '', obj, flags=re.I)
+            obj = re.sub(r"^(a|an|the)\s+", "", obj, flags=re.I)
             triple = (subj, rel_type, obj)
             if triple not in seen and subj.lower() not in _STOP_WORDS and len(obj) > 1:
                 relationships.append(triple)
@@ -109,13 +218,13 @@ def extract_relationships(text: str) -> List[Tuple[str, str, str]]:
     return relationships
 
 
-def extract_facts_from_conversation(user_msg: str, assistant_msg: str) -> List[str]:
+def extract_facts_from_conversation(user_msg: str, assistant_msg: str) -> list[str]:
     """Extract knowledge facts from a chat exchange.
 
     Returns natural-language fact strings ready for storage in KnowledgeMemory.
     """
-    facts: List[str] = []
-    seen_facts: Set[str] = set()
+    facts: list[str] = []
+    seen_facts: set[str] = set()
 
     combined = f"{user_msg} {assistant_msg}"
 
@@ -149,13 +258,14 @@ def extract_facts_from_conversation(user_msg: str, assistant_msg: str) -> List[s
     return facts
 
 
-async def extract_facts_neural(user_msg: str, assistant_msg: str) -> List[str]:
+async def extract_facts_neural(user_msg: str, assistant_msg: str) -> list[str]:
     """Use the current LLM to extract nuanced facts from a conversation.
 
     Returns a list of natural-language facts.
     """
     try:
         from domain.infrastructure._internal.model_registry import get_model_registry
+
         registry = get_model_registry()
         if not registry or not registry.list_models():
             return []
@@ -211,8 +321,10 @@ async def extract_and_store(user_msg: str, assistant_msg: str, knowledge_memory=
             return 0
 
         from domain.learner._internal.knowledge import KnowledgeFact
+
         if knowledge_memory is None:
             from domain.learner._internal.knowledge import get_knowledge_memory
+
             knowledge_memory = get_knowledge_memory()
 
         stored = 0

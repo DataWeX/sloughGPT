@@ -17,7 +17,7 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -37,7 +37,7 @@ _RAG_DB_PATH = str(find_repo_root(Path(__file__).resolve()) / "data" / "rag_mogd
 class ProductionRAGWithRealEmbeddings(ProductionRAG):
     """ProductionRAG subclass that uses the project's real embedder."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         super().__init__(config)
         self.retriever._embedding_fn = self._real_embed
 
@@ -66,7 +66,7 @@ class RAGService:
     def __init__(self) -> None:
         _DATA_DIR.mkdir(parents=True, exist_ok=True)
         self.rag = ProductionRAGWithRealEmbeddings()
-        self._documents: List[Dict[str, Any]] = []
+        self._documents: list[dict[str, Any]] = []
         self._kg = None
         self._lock = threading.Lock()
         self._mogdb = None
@@ -78,6 +78,7 @@ class RAGService:
         """Initialize MogDB for document persistence."""
         try:
             from mogdb import MogDB
+
             self._mogdb = MogDB(_RAG_DB_PATH)
             self._coll = self._mogdb.collection("documents")
             logger.debug("Initialized MogDB for RAG at %s", _RAG_DB_PATH)
@@ -113,7 +114,7 @@ class RAGService:
         if not _DOCUMENTS_FILE.exists():
             return
         try:
-            with open(_DOCUMENTS_FILE, "r", encoding="utf-8") as f:
+            with open(_DOCUMENTS_FILE, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -134,7 +135,7 @@ class RAGService:
         except (OSError, json.JSONDecodeError) as e:
             logger.warning("Failed to load RAG documents: %s", e)
 
-    def _save_document(self, doc: Dict[str, Any]) -> None:
+    def _save_document(self, doc: dict[str, Any]) -> None:
         """Persist a document to MogDB (and legacy JSONL for backward compat)."""
         # Save to MogDB
         if self._coll is not None:
@@ -154,9 +155,10 @@ class RAGService:
         """Lazily initialize the knowledge graph on first access."""
         if self._kg is None:
             from domain.cognitive._internal.knowledge_graph_v2 import KnowledgeGraph
+
             self._kg = KnowledgeGraph()
 
-    def _extract_kg_claims(self, content: str, metadata: Dict[str, Any]) -> None:
+    def _extract_kg_claims(self, content: str, metadata: dict[str, Any]) -> None:
         """Extract entity claims from text and add them to the knowledge graph."""
         self._ensure_kg()
         try:
@@ -167,7 +169,7 @@ class RAGService:
             return
         source = metadata.get("source", "rag")
         for claim in claims:
-            obj_text = content[claim["start"]:claim["end"]][:200]
+            obj_text = content[claim["start"] : claim["end"]][:200]
             self._kg.add_fact(
                 subject=claim["subject"],
                 predicate=claim["predicate"],
@@ -179,10 +181,10 @@ class RAGService:
     def add_document(
         self,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
         chunk_size: int = 512,
         overlap: int = 50,
-    ) -> List[str]:
+    ) -> list[str]:
         """Ingest a document into the RAG index, persist it, and extract KG facts.
 
         Args:
@@ -230,7 +232,7 @@ class RAGService:
         self,
         question: str,
         top_k: int = 5,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Query the RAG index for relevant context.
 
         Args:
@@ -244,25 +246,34 @@ class RAGService:
         try:
             result = self.rag.query(question, top_k=top_k, return_context=True)
             elapsed_ms = (time.monotonic() - t0) * 1000
-            logger.debug("rag_service: query complete", extra={
-                "question_len": len(question), "top_k": top_k,
-                "num_results": result.get("num_results", 0),
-                "elapsed_ms": round(elapsed_ms, 1),
-            })
+            logger.debug(
+                "rag_service: query complete",
+                extra={
+                    "question_len": len(question),
+                    "top_k": top_k,
+                    "num_results": result.get("num_results", 0),
+                    "elapsed_ms": round(elapsed_ms, 1),
+                },
+            )
             return result
         except Exception as e:
             elapsed_ms = (time.monotonic() - t0) * 1000
-            logger.error("rag_service: query failed", extra={
-                "question_len": len(question), "top_k": top_k,
-                "error": str(e), "elapsed_ms": round(elapsed_ms, 1),
-            })
+            logger.error(
+                "rag_service: query failed",
+                extra={
+                    "question_len": len(question),
+                    "top_k": top_k,
+                    "error": str(e),
+                    "elapsed_ms": round(elapsed_ms, 1),
+                },
+            )
             raise
 
     def verify_and_ground(
         self,
         generated_text: str,
         question: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Verify generated text against the RAG index and add citations.
 
         Args:
@@ -276,21 +287,28 @@ class RAGService:
         try:
             result = self.rag.verify_and_ground(generated_text, question)
             elapsed_ms = (time.monotonic() - t0) * 1000
-            logger.info("rag_service: verify_and_ground complete", extra={
-                "is_verified": result.get("is_verified", False),
-                "confidence": result.get("confidence", 0),
-                "num_citations": len(result.get("citations", [])),
-                "elapsed_ms": round(elapsed_ms, 1),
-            })
+            logger.info(
+                "rag_service: verify_and_ground complete",
+                extra={
+                    "is_verified": result.get("is_verified", False),
+                    "confidence": result.get("confidence", 0),
+                    "num_citations": len(result.get("citations", [])),
+                    "elapsed_ms": round(elapsed_ms, 1),
+                },
+            )
             return result
         except Exception as e:
             elapsed_ms = (time.monotonic() - t0) * 1000
-            logger.error("rag_service: verify_and_ground failed", extra={
-                "error": str(e), "elapsed_ms": round(elapsed_ms, 1),
-            })
+            logger.error(
+                "rag_service: verify_and_ground failed",
+                extra={
+                    "error": str(e),
+                    "elapsed_ms": round(elapsed_ms, 1),
+                },
+            )
             raise
 
-    def list_documents(self) -> List[Dict[str, Any]]:
+    def list_documents(self) -> list[dict[str, Any]]:
         """List all ingested documents (metadata only, no content)."""
         with self._lock:
             return [
@@ -328,7 +346,7 @@ class RAGService:
         logger.debug("Cleared RAG index (%d documents removed)", count)
         return count
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Return RAG index statistics."""
         return {
             "total_documents": len(self._documents),
@@ -374,7 +392,7 @@ class RAGService:
             logger.debug("Auto-ingested %d files into RAG from %s", ingested, root_path)
         return ingested
 
-    def kg_stats(self) -> Dict[str, Any]:
+    def kg_stats(self) -> dict[str, Any]:
         """Return knowledge graph statistics."""
         if self._kg is None:
             return {"entities": 0, "facts": 0, "avg_degree": 0.0}
@@ -389,7 +407,7 @@ class RAGService:
         subject: str = "",
         predicate: str = "",
         obj: str = "",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Query the knowledge graph for facts matching the given pattern."""
         if self._kg is None:
             return []
@@ -401,19 +419,22 @@ class RAGService:
                 continue
             if obj and obj.lower() not in fact.object.lower():
                 continue
-            results.append({
-                "subject": fact.subject,
-                "predicate": fact.predicate,
-                "object": fact.object,
-                "confidence": fact.confidence,
-                "source": fact.source,
-            })
+            results.append(
+                {
+                    "subject": fact.subject,
+                    "predicate": fact.predicate,
+                    "object": fact.object,
+                    "confidence": fact.confidence,
+                    "source": fact.source,
+                }
+            )
         return results
 
 
 # ---------------------------------------------------------------------------
 # KG → Training Data Pipeline (via Pugqeep TaskQueue)
 # ---------------------------------------------------------------------------
+
 
 class KGTrainingPipeline:
     """Pipeline that exports KG triples → embeds → stores in RAG index.
@@ -428,7 +449,7 @@ class KGTrainingPipeline:
 
     _REQUIRED_TRIPLE_KEYS = {"subject", "predicate", "object"}
 
-    def __init__(self, rag_service: Optional[RAGService] = None) -> None:
+    def __init__(self, rag_service: RAGService | None = None) -> None:
         self._rag = rag_service or get_rag_service()
         self._queue = None
 
@@ -440,6 +461,7 @@ class KGTrainingPipeline:
         """
         if self._queue is None:
             from domains.infrastructure.pugqeep.task_queue import TaskQueue
+
             storage = Path("data/kg_pipeline")
             try:
                 self._queue = TaskQueue(name="kg-training", storage_dir=storage)
@@ -447,7 +469,7 @@ class KGTrainingPipeline:
                 self._queue = TaskQueue(name="kg-training")
         return self._queue
 
-    def _validate_triple(self, triple: Dict[str, Any]) -> bool:
+    def _validate_triple(self, triple: dict[str, Any]) -> bool:
         """Check a triple dict has required keys with non-empty string values.
 
         Args:
@@ -464,7 +486,7 @@ class KGTrainingPipeline:
                 return False
         return True
 
-    def submit_triples(self, triples: List[Dict[str, Any]]) -> int:
+    def submit_triples(self, triples: list[dict[str, Any]]) -> int:
         """Submit KG triples as batch tasks to the queue.
 
         Args:
@@ -508,7 +530,7 @@ class KGTrainingPipeline:
         logger.debug("KG pipeline: submitted %d/%d triples", submitted, len(triples))
         return submitted
 
-    def process_batch(self, max_tasks: int = 50) -> Dict[str, Any]:
+    def process_batch(self, max_tasks: int = 50) -> dict[str, Any]:
         """Process pending tasks from the queue — embed and index into RAG.
 
         Args:
@@ -552,7 +574,9 @@ class KGTrainingPipeline:
         remaining = queue.stats()["pending"]
         logger.debug(
             "KG pipeline batch: processed=%d failed=%d remaining=%d",
-            processed, failed, remaining,
+            processed,
+            failed,
+            remaining,
         )
         return {
             "processed": processed,
@@ -560,7 +584,7 @@ class KGTrainingPipeline:
             "remaining": remaining,
         }
 
-    def sync_kg_to_rag(self, kg=None) -> Dict[str, Any]:
+    def sync_kg_to_rag(self, kg=None) -> dict[str, Any]:
         """Full pipeline: export all KG triples → submit → process → RAG index.
 
         Args:
@@ -571,7 +595,7 @@ class KGTrainingPipeline:
             Dict with keys: total_triples, processed, failed.
         """
         if kg is None:
-            if not hasattr(self._rag, '_kg') or self._rag._kg is None:
+            if not hasattr(self._rag, "_kg") or self._rag._kg is None:
                 logger.debug("KG pipeline: no knowledge graph available")
                 return {"total_triples": 0, "processed": 0, "failed": 0}
             kg = self._rag._kg
@@ -585,7 +609,7 @@ class KGTrainingPipeline:
         result["total_triples"] = len(triples)
         return result
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Return pipeline queue stats.
 
         Returns:
@@ -604,7 +628,7 @@ class KGTrainingPipeline:
 # Singleton
 # ---------------------------------------------------------------------------
 
-_rag_service: Optional[RAGService] = None
+_rag_service: RAGService | None = None
 _rag_service_lock = threading.Lock()
 
 

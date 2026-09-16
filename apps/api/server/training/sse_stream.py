@@ -185,7 +185,7 @@ def build_training_sse_response(
                         remaining = heartbeat_interval
                     try:
                         event = await asyncio.wait_for(queue.get(), timeout=remaining)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         yield ": heartbeat\n\n"
                         last_yield = time.time()
                         continue
@@ -281,6 +281,7 @@ def stop_all_training() -> dict:
         logger.warning("cancel_all_training failed: %s", e)
         try:
             from domain.training._internal.service import get_state
+
             get_state().running = False
         except Exception:
             logger.debug("Failed to reset training state after cancel_all failure")
@@ -308,6 +309,7 @@ def cancel_from_sessions() -> dict:
         logger.warning("cancel_from_sessions state reset failed: %s", e)
         try:
             from domain.training._internal.service import get_state
+
             get_state().running = False
         except Exception:
             logger.debug("Failed to reset training state after cancel_from_sessions failure")

@@ -6,10 +6,10 @@ to handle OOV words and produce more natural captions.
 """
 
 from __future__ import annotations
+
+import json
 import re
 from collections import Counter
-from typing import List, Dict, Tuple, Optional
-import json
 from pathlib import Path
 
 
@@ -22,27 +22,27 @@ class BPETokenizer:
 
     SAVE_PATH = "data/multimodal/bpe_tokenizer.json"
 
-    def __init__(self, vocab_size: int = 4096, special_tokens: Optional[List[str]] = None):
+    def __init__(self, vocab_size: int = 4096, special_tokens: list[str] | None = None):
         self.vocab_size = vocab_size
         self.special_tokens = special_tokens or ["<BOS>", "<EOS>", "<PAD>", "<UNK>"]
-        self.vocab: Dict[str, int] = {}
-        self.itos: Dict[int, str] = {}
-        self.merges: List[Tuple[str, str]] = []
+        self.vocab: dict[str, int] = {}
+        self.itos: dict[int, str] = {}
+        self.merges: list[tuple[str, str]] = []
         self._built = False
 
-    def _preprocess(self, text: str) -> List[str]:
+    def _preprocess(self, text: str) -> list[str]:
         """Split text into initial character/word tokens."""
         text = text.lower().strip()
         # Add word boundary markers
-        words = re.findall(r'\b\w+\b|[^\w\s]', text)
+        words = re.findall(r"\b\w+\b|[^\w\s]", text)
         # Split each word into characters with end-of-word marker
         tokens = []
         for w in words:
             tokens.extend(list(w[:-1]))
-            tokens.append(w[-1] + '</w>')
+            tokens.append(w[-1] + "</w>")
         return tokens
 
-    def _get_stats(self, vocab: Counter) -> Dict[Tuple[str, str], int]:
+    def _get_stats(self, vocab: Counter) -> dict[tuple[str, str], int]:
         """Count adjacent token pairs."""
         pairs = Counter()
         for word, count in vocab.items():
@@ -51,17 +51,17 @@ class BPETokenizer:
                 pairs[(symbols[i], symbols[i + 1])] += count
         return pairs
 
-    def _merge_vocab(self, pair: Tuple[str, str], vocab: Counter) -> Counter:
+    def _merge_vocab(self, pair: tuple[str, str], vocab: Counter) -> Counter:
         """Merge the most frequent pair in vocabulary."""
         new_vocab = Counter()
-        bigram = ' '.join(pair)
-        replacement = ''.join(pair)
+        bigram = " ".join(pair)
+        replacement = "".join(pair)
         for word, count in vocab.items():
             new_word = word.replace(bigram, replacement)
             new_vocab[new_word] = count
         return new_vocab
 
-    def train(self, texts: List[str]):
+    def train(self, texts: list[str]):
         """Train BPE tokenizer on caption corpus.
 
         Args:
@@ -71,7 +71,7 @@ class BPETokenizer:
         word_vocab = Counter()
         for text in texts:
             tokens = self._preprocess(text)
-            word_str = ' '.join(tokens)
+            word_str = " ".join(tokens)
             word_vocab[word_str] += 1
 
         # Build initial vocab (unique characters)
@@ -98,7 +98,7 @@ class BPETokenizer:
                 break  # Stop if no pair appears more than once
 
             self.merges.append(best_pair)
-            merged = ''.join(best_pair)
+            merged = "".join(best_pair)
             self.vocab[merged] = len(self.vocab)
             word_vocab = self._merge_vocab(best_pair, word_vocab)
 
@@ -106,18 +106,18 @@ class BPETokenizer:
         self.itos = {i: tok for tok, i in self.vocab.items()}
         self._built = True
 
-    def encode(self, text: str) -> List[int]:
+    def encode(self, text: str) -> list[int]:
         """Encode text to token IDs using learned merges."""
         if not self._built:
             raise RuntimeError("Tokenizer not trained. Call train() first.")
 
         tokens = self._preprocess(text)
-        token_str = ' '.join(tokens)
+        token_str = " ".join(tokens)
 
         # Apply merges
         for pair in self.merges:
-            bigram = ' '.join(pair)
-            replacement = ''.join(pair)
+            bigram = " ".join(pair)
+            replacement = "".join(pair)
             token_str = token_str.replace(bigram, replacement)
 
         # Convert to IDs
@@ -126,7 +126,7 @@ class BPETokenizer:
             ids.append(self.vocab.get(tok, self.vocab.get("<UNK>", 3)))
         return ids
 
-    def decode(self, token_ids: List[int]) -> str:
+    def decode(self, token_ids: list[int]) -> str:
         """Decode token IDs back to text."""
         tokens = []
         for tid in token_ids:
@@ -135,11 +135,11 @@ class BPETokenizer:
                 continue
             tokens.append(tok)
         # Join and clean up word boundary markers
-        text = ''.join(tokens)
-        text = text.replace('</w>', ' ').strip()
+        text = "".join(tokens)
+        text = text.replace("</w>", " ").strip()
         return text
 
-    def save(self, path: Optional[str] = None):
+    def save(self, path: str | None = None):
         """Save tokenizer state to JSON."""
         path = path or self.SAVE_PATH
         Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -149,15 +149,15 @@ class BPETokenizer:
             "vocab": self.vocab,
             "merges": self.merges,
         }
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(data, f)
 
-    def load(self, path: Optional[str] = None):
+    def load(self, path: str | None = None):
         """Load tokenizer state from JSON."""
         path = path or self.SAVE_PATH
         if not Path(path).exists():
             return False
-        with open(path, 'r') as f:
+        with open(path) as f:
             data = json.load(f)
         self.vocab_size = data["vocab_size"]
         self.special_tokens = data["special_tokens"]

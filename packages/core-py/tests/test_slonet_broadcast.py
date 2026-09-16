@@ -7,14 +7,18 @@ or incorrect gradients.
 
 import numpy as np
 import pytest
+
 from domain.training._internal.slonet import (
-    Tensor, cross_entropy, _broadcast_back, _broadcast_forward,
-    _add, _sub, _mul, _neg, _pow, _sum, _mean, _reshape, _transpose,
-    _ensure, tensor,
+    Tensor,
+    _broadcast_back,
+    _broadcast_forward,
+    _ensure,
+    cross_entropy,
+    tensor,
 )
 
-
 # ── _broadcast_back ───────────────────────────────────────────────────────────
+
 
 class TestBroadcastBackFunction:
     def test_no_op_same_shape(self):
@@ -46,6 +50,7 @@ class TestBroadcastBackFunction:
 
 # ── _broadcast_forward ────────────────────────────────────────────────────────
 
+
 class TestBroadcastForwardFunction:
     def test_same_shape(self):
         t = np.ones((3, 4))
@@ -64,6 +69,7 @@ class TestBroadcastForwardFunction:
 
 
 # ── Mul Broadcast Backward ───────────────────────────────────────────────────
+
 
 class TestMulBroadcastBackward:
     def test_mul_1d_times_2d(self):
@@ -143,8 +149,7 @@ class TestMulBroadcastBackward:
 
     def test_mul_chain_through_cross_entropy(self):
         a = Tensor(np.ones(3), requires_grad=True)
-        b = Tensor(np.array([[1.0, 2.0, 3.0],
-                              [4.0, 5.0, 6.0]]), requires_grad=True)
+        b = Tensor(np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), requires_grad=True)
         logits = a * b
         target = Tensor(np.array([0, 1]))
         loss = cross_entropy(logits, target)
@@ -170,6 +175,7 @@ class TestMulBroadcastBackward:
 
 
 # ── Add Broadcast Backward ───────────────────────────────────────────────────
+
 
 class TestAddBroadcastBackward:
     def test_add_1d_plus_2d(self):
@@ -212,6 +218,7 @@ class TestAddBroadcastBackward:
 
 # ── Sub Broadcast Backward ───────────────────────────────────────────────────
 
+
 class TestSubBroadcastBackward:
     def test_sub_basic(self):
         a = Tensor(np.array([5.0, 6.0]), requires_grad=True)
@@ -241,6 +248,7 @@ class TestSubBroadcastBackward:
 
 
 # ── MatMul Broadcast Backward ────────────────────────────────────────────────
+
 
 class TestMatMulBroadcastBackward:
     def test_matmul_1d_2d(self):
@@ -279,6 +287,7 @@ class TestMatMulBroadcastBackward:
 
 # ── Neg Backward ──────────────────────────────────────────────────────────────
 
+
 class TestNegBackward:
     def test_neg_basic(self):
         a = Tensor(np.array([1.0, -2.0, 3.0]), requires_grad=True)
@@ -295,22 +304,24 @@ class TestNegBackward:
 
 # ── Pow Backward ─────────────────────────────────────────────────────────────
 
+
 class TestPowBackward:
     def test_pow_2(self):
         a = Tensor(np.array([2.0, 3.0]), requires_grad=True)
-        out = a ** 2
+        out = a**2
         out.backward()
         assert np.allclose(out.data, [4.0, 9.0])
         assert np.allclose(a.grad.data, [4.0, 6.0])
 
     def test_pow_1(self):
         a = Tensor(np.array([5.0, 10.0]), requires_grad=True)
-        out = a ** 1
+        out = a**1
         out.backward()
         assert np.allclose(a.grad.data, 1.0)
 
 
 # ── Sum/Mean/Max Backward ────────────────────────────────────────────────────
+
 
 class TestReductionBackward:
     def test_sum_backward(self):
@@ -338,6 +349,7 @@ class TestReductionBackward:
 
 # ── Reshape / Transpose ──────────────────────────────────────────────────────
 
+
 class TestReshapeTranspose:
     def test_reshape(self):
         a = Tensor(np.arange(6.0), requires_grad=True)
@@ -361,6 +373,7 @@ class TestReshapeTranspose:
 
 # ── _ensure ───────────────────────────────────────────────────────────────────
 
+
 class TestEnsure:
     def test_ensure_tensor(self):
         t = Tensor([1.0, 2.0])
@@ -377,6 +390,7 @@ class TestEnsure:
 
 # ── tensor helper ─────────────────────────────────────────────────────────────
 
+
 class TestTensorHelper:
     def test_tensor_no_copy(self):
         a = np.array([1.0, 2.0])
@@ -390,9 +404,11 @@ class TestTensorHelper:
 
 # ── _slice ────────────────────────────────────────────────────────────────────
 
+
 class TestSliceBackward:
     def test_slice_basic_index_helper(self):
         from domain.training._internal.slonet import _basic_index
+
         assert _basic_index((slice(None), 0, slice(None)))
         assert _basic_index((slice(1, 3),))
         assert _basic_index((Ellipsis, slice(None)))
@@ -404,6 +420,7 @@ class TestSliceBackward:
 
 # ── Chain through backward ───────────────────────────────────────────────────
 
+
 class TestChainBackward:
     def test_chain_mul_add(self):
         a = Tensor(np.array([1.0, 2.0]), requires_grad=True)
@@ -414,8 +431,7 @@ class TestChainBackward:
         assert b.grad is not None
 
     def test_chain_through_cross_entropy(self):
-        logits = Tensor(np.array([[1.0, 2.0, 3.0],
-                                   [4.0, 5.0, 6.0]]), requires_grad=True)
+        logits = Tensor(np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), requires_grad=True)
         target = Tensor(np.array([0, 2]))
         loss = cross_entropy(logits, target)
         loss.backward()
@@ -431,6 +447,7 @@ class TestChainBackward:
 
 
 # ── Eq / Ne / Comparison ────────────────────────────────────────────────────
+
 
 class TestComparisonOps:
     def test_ge(self):
@@ -471,6 +488,7 @@ class TestComparisonOps:
 
 
 # ── Tensor utility methods ──────────────────────────────────────────────────
+
 
 class TestTensorUtils:
     def test_bool_scalar(self):

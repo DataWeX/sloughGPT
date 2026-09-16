@@ -4,20 +4,21 @@ import os
 import sys
 import tempfile
 import types
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-import pytest
 import numpy as np
+import pytest
+
 import domain.inference._internal.vector_store as vs
 from domain.inference._internal.slo_embedder import SloTextEmbedder
 from domain.inference._internal.vector_store import (
     InMemoryVectorStore,
     MogDBVectorStore,
     VectorEntry,
-    create_vector_store,
-    simple_embed,
-    sanitize_input,
     _cosine_similarity,
+    create_vector_store,
+    sanitize_input,
+    simple_embed,
 )
 
 
@@ -28,7 +29,9 @@ def store():
 
 @pytest.mark.asyncio
 async def test_upsert_and_count(store):
-    entries = [VectorEntry(id="a", vector=[1.0] * 384, text="hello", metadata={"topic": "greeting"})]
+    entries = [
+        VectorEntry(id="a", vector=[1.0] * 384, text="hello", metadata={"topic": "greeting"})
+    ]
     n = await store.upsert(entries)
     assert n == 1
     assert await store.count() == 1
@@ -45,10 +48,12 @@ async def test_upsert_overwrite(store):
 
 @pytest.mark.asyncio
 async def test_query_returns_results(store):
-    await store.upsert([
-        VectorEntry(id="a", vector=[1.0] * 384, text="alpha"),
-        VectorEntry(id="b", vector=[0.0] * 384, text="beta"),
-    ])
+    await store.upsert(
+        [
+            VectorEntry(id="a", vector=[1.0] * 384, text="alpha"),
+            VectorEntry(id="b", vector=[0.0] * 384, text="beta"),
+        ]
+    )
     results = await store.query(vector=[1.0] * 384, top_k=5)
     assert len(results) == 2
     assert results[0].id == "a"
@@ -57,10 +62,12 @@ async def test_query_returns_results(store):
 
 @pytest.mark.asyncio
 async def test_query_with_filter(store):
-    await store.upsert([
-        VectorEntry(id="a", vector=[1.0] * 384, text="doc a", metadata={"lang": "en"}),
-        VectorEntry(id="b", vector=[1.0] * 384, text="doc b", metadata={"lang": "fr"}),
-    ])
+    await store.upsert(
+        [
+            VectorEntry(id="a", vector=[1.0] * 384, text="doc a", metadata={"lang": "en"}),
+            VectorEntry(id="b", vector=[1.0] * 384, text="doc b", metadata={"lang": "fr"}),
+        ]
+    )
     results = await store.query(vector=[1.0] * 384, top_k=5, filter_metadata={"lang": "en"})
     assert len(results) == 1
     assert results[0].id == "a"
@@ -86,10 +93,12 @@ async def test_delete_nonexistent(store):
 
 @pytest.mark.asyncio
 async def test_delete_partial(store):
-    await store.upsert([
-        VectorEntry(id="a", vector=[1.0] * 384, text="a"),
-        VectorEntry(id="b", vector=[1.0] * 384, text="b"),
-    ])
+    await store.upsert(
+        [
+            VectorEntry(id="a", vector=[1.0] * 384, text="a"),
+            VectorEntry(id="b", vector=[1.0] * 384, text="b"),
+        ]
+    )
     assert await store.delete(["a", "nonexistent"]) is True
     assert await store.count() == 1
 
@@ -105,13 +114,16 @@ class TestMogDBVectorStore:
         with tempfile.TemporaryDirectory() as tmp:
             s = MogDBVectorStore(dimension=384, path=os.path.join(tmp, "vectors"))
             import asyncio
+
             asyncio.run(s.connect())
             yield s
             asyncio.run(s.disconnect())
 
     @pytest.mark.asyncio
     async def test_upsert_and_count(self, store):
-        entries = [VectorEntry(id="a", vector=[1.0] * 384, text="hello", metadata={"topic": "greeting"})]
+        entries = [
+            VectorEntry(id="a", vector=[1.0] * 384, text="hello", metadata={"topic": "greeting"})
+        ]
         n = await store.upsert(entries)
         assert n == 1
         assert await store.count() == 1
@@ -126,10 +138,12 @@ class TestMogDBVectorStore:
 
     @pytest.mark.asyncio
     async def test_query_returns_results(self, store):
-        await store.upsert([
-            VectorEntry(id="a", vector=[1.0] * 384, text="alpha"),
-            VectorEntry(id="b", vector=[0.0] * 384, text="beta"),
-        ])
+        await store.upsert(
+            [
+                VectorEntry(id="a", vector=[1.0] * 384, text="alpha"),
+                VectorEntry(id="b", vector=[0.0] * 384, text="beta"),
+            ]
+        )
         results = await store.query(vector=[1.0] * 384, top_k=5)
         assert len(results) == 2
         assert results[0].id == "a"
@@ -137,10 +151,12 @@ class TestMogDBVectorStore:
 
     @pytest.mark.asyncio
     async def test_query_with_filter(self, store):
-        await store.upsert([
-            VectorEntry(id="a", vector=[1.0] * 384, text="doc a", metadata={"lang": "en"}),
-            VectorEntry(id="b", vector=[1.0] * 384, text="doc b", metadata={"lang": "fr"}),
-        ])
+        await store.upsert(
+            [
+                VectorEntry(id="a", vector=[1.0] * 384, text="doc a", metadata={"lang": "en"}),
+                VectorEntry(id="b", vector=[1.0] * 384, text="doc b", metadata={"lang": "fr"}),
+            ]
+        )
         results = await store.query(vector=[1.0] * 384, top_k=5, filter_metadata={"lang": "en"})
         assert len(results) == 1
         assert results[0].id == "a"
@@ -162,10 +178,12 @@ class TestMogDBVectorStore:
 
     @pytest.mark.asyncio
     async def test_delete_partial(self, store):
-        await store.upsert([
-            VectorEntry(id="a", vector=[1.0] * 384, text="a"),
-            VectorEntry(id="b", vector=[1.0] * 384, text="b"),
-        ])
+        await store.upsert(
+            [
+                VectorEntry(id="a", vector=[1.0] * 384, text="a"),
+                VectorEntry(id="b", vector=[1.0] * 384, text="b"),
+            ]
+        )
         assert await store.delete(["a", "nonexistent"]) is True
         assert await store.count() == 1
 
@@ -176,10 +194,12 @@ class TestMogDBVectorStore:
             path = os.path.join(tmp, "vec")
             s1 = MogDBVectorStore(dimension=384, path=path)
             await s1.connect()
-            await s1.upsert([
-                VectorEntry(id="p1", vector=[1.0] * 384, text="persistent"),
-                VectorEntry(id="p2", vector=[0.5] * 384, text="also here"),
-            ])
+            await s1.upsert(
+                [
+                    VectorEntry(id="p1", vector=[1.0] * 384, text="persistent"),
+                    VectorEntry(id="p2", vector=[0.5] * 384, text="also here"),
+                ]
+            )
             assert await s1.count() == 2
             await s1.disconnect()
 
@@ -199,10 +219,12 @@ class TestMogDBVectorStore:
             path = os.path.join(tmp, "vec")
             s1 = MogDBVectorStore(dimension=384, path=path)
             await s1.connect()
-            await s1.upsert([
-                VectorEntry(id="keep", vector=[1.0] * 384, text="keep me"),
-                VectorEntry(id="gone", vector=[0.0] * 384, text="delete me"),
-            ])
+            await s1.upsert(
+                [
+                    VectorEntry(id="keep", vector=[1.0] * 384, text="keep me"),
+                    VectorEntry(id="gone", vector=[0.0] * 384, text="delete me"),
+                ]
+            )
             await s1.delete(["gone"])
             await s1.disconnect()
 
@@ -253,8 +275,14 @@ class TestQuerySyncVectorized:
         entries = []
         for i in range(200):
             vec = rng.normal(size=8).tolist()
-            entries.append(VectorEntry(id=f"e{i}", vector=vec, text=f"fact {i}",
-                                       metadata={"topic": "a" if i % 2 else "b"}))
+            entries.append(
+                VectorEntry(
+                    id=f"e{i}",
+                    vector=vec,
+                    text=f"fact {i}",
+                    metadata={"topic": "a" if i % 2 else "b"},
+                )
+            )
         store.upsert_sync(entries)
         q = rng.normal(size=8).tolist()
         for top_k in (1, 5, 50):
@@ -266,11 +294,17 @@ class TestQuerySyncVectorized:
     def test_matches_brute_force_with_filter(self):
         rng = np.random.default_rng(7)
         store = InMemoryVectorStore(dimension=8)
-        store.upsert_sync([
-            VectorEntry(id=f"e{i}", vector=rng.normal(size=8).tolist(), text=f"fact {i}",
-                        metadata={"topic": "a" if i % 3 == 0 else "b"})
-            for i in range(60)
-        ])
+        store.upsert_sync(
+            [
+                VectorEntry(
+                    id=f"e{i}",
+                    vector=rng.normal(size=8).tolist(),
+                    text=f"fact {i}",
+                    metadata={"topic": "a" if i % 3 == 0 else "b"},
+                )
+                for i in range(60)
+            ]
+        )
         q = rng.normal(size=8).tolist()
         got = store.query_sync(q, top_k=10, filter_metadata={"topic": "a"})
         want = _brute_force_query(store._entries, q, 10, {"topic": "a"})
@@ -280,47 +314,59 @@ class TestQuerySyncVectorized:
     def test_ties_keep_insertion_order(self):
         vec = [0.5, 0.5, 0.0]
         store = InMemoryVectorStore(dimension=3)
-        store.upsert_sync([
-            VectorEntry(id="first", vector=vec, text="a"),
-            VectorEntry(id="second", vector=vec, text="b"),
-            VectorEntry(id="third", vector=vec, text="c"),
-        ])
+        store.upsert_sync(
+            [
+                VectorEntry(id="first", vector=vec, text="a"),
+                VectorEntry(id="second", vector=vec, text="b"),
+                VectorEntry(id="third", vector=vec, text="c"),
+            ]
+        )
         got = store.query_sync([0.5, 0.5, 0.0], top_k=3)
         assert [r.id for r in got] == ["first", "second", "third"]
         assert all(abs(r.score - 1.0) < 1e-9 for r in got)
 
     def test_zero_query_vector_scores_zero(self):
         store = InMemoryVectorStore(dimension=3)
-        store.upsert_sync([
-            VectorEntry(id="e1", vector=[1.0, 0.0, 0.0], text="x"),
-            VectorEntry(id="e2", vector=[0.0, 1.0, 0.0], text="y"),
-        ])
+        store.upsert_sync(
+            [
+                VectorEntry(id="e1", vector=[1.0, 0.0, 0.0], text="x"),
+                VectorEntry(id="e2", vector=[0.0, 1.0, 0.0], text="y"),
+            ]
+        )
         got = store.query_sync([0.0, 0.0, 0.0], top_k=2)
         assert len(got) == 2
         assert all(r.score == 0.0 for r in got)
 
     def test_filter_skips_entries_without_metadata(self):
         store = InMemoryVectorStore(dimension=3)
-        store.upsert_sync([
-            VectorEntry(id="with-meta", vector=[1.0, 0.0, 0.0], text="x", metadata={"topic": "a"}),
-            VectorEntry(id="no-meta", vector=[0.0, 1.0, 0.0], text="y"),
-        ])
+        store.upsert_sync(
+            [
+                VectorEntry(
+                    id="with-meta", vector=[1.0, 0.0, 0.0], text="x", metadata={"topic": "a"}
+                ),
+                VectorEntry(id="no-meta", vector=[0.0, 1.0, 0.0], text="y"),
+            ]
+        )
         got = store.query_sync([1.0, 0.0, 0.0], top_k=5, filter_metadata={"topic": "a"})
         assert [r.id for r in got] == ["with-meta"]
 
     def test_filter_no_match_returns_empty(self):
         store = InMemoryVectorStore(dimension=3)
-        store.upsert_sync([VectorEntry(id="e1", vector=[1.0, 0.0, 0.0], text="x", metadata={"topic": "a"})])
+        store.upsert_sync(
+            [VectorEntry(id="e1", vector=[1.0, 0.0, 0.0], text="x", metadata={"topic": "a"})]
+        )
         assert store.query_sync([1.0, 0.0, 0.0], top_k=5, filter_metadata={"topic": "z"}) == []
         assert store.query_sync([1.0, 0.0, 0.0], top_k=5) != []
 
     def test_cached_query_matches_brute_force(self):
         rng = np.random.default_rng(11)
         store = InMemoryVectorStore(dimension=8)
-        store.upsert_sync([
-            VectorEntry(id=f"e{i}", vector=rng.normal(size=8).tolist(), text=f"fact {i}")
-            for i in range(80)
-        ])
+        store.upsert_sync(
+            [
+                VectorEntry(id=f"e{i}", vector=rng.normal(size=8).tolist(), text=f"fact {i}")
+                for i in range(80)
+            ]
+        )
         q = rng.normal(size=8).tolist()
         first = store.query_sync(q, top_k=7)
         second = store.query_sync(q, top_k=7)
@@ -331,8 +377,12 @@ class TestQuerySyncVectorized:
 
     def test_upsert_sync_invalidates_cache(self):
         store = InMemoryVectorStore(dimension=3)
-        store.upsert_sync([VectorEntry(id="a", vector=[1.0, 0.0, 0.0], text="a"),
-                           VectorEntry(id="b", vector=[0.0, 1.0, 0.0], text="b")])
+        store.upsert_sync(
+            [
+                VectorEntry(id="a", vector=[1.0, 0.0, 0.0], text="a"),
+                VectorEntry(id="b", vector=[0.0, 1.0, 0.0], text="b"),
+            ]
+        )
         store.query_sync([1.0, 0.0, 0.0], top_k=5)
         assert store._matrix_cache is not None
         store.upsert_sync([VectorEntry(id="c", vector=[0.99, 0.01, 0.0], text="c")])
@@ -526,14 +576,23 @@ class TestSimpleEmbedRealDeployment:
 
     def test_real_trained_embedder_is_adopted_and_used(self):
         from domain.inference._internal.slo_embedder import train_embedder
+
         rng_state = np.random.get_state()
         np.random.seed(0)  # collapse degree varies with init; seed for determinism
         try:
             texts = [f"this is sentence number {i} about topic {i % 5}" for i in range(30)]
             with tempfile.TemporaryDirectory() as tmpdir:
                 path = os.path.join(tmpdir, "deploy-embed.sou")
-                train_embedder(texts, vocab_size=256, embed_dim=64, max_seq_len=32,
-                                n_heads=4, n_layers=2, epochs=2, save_path=path)
+                train_embedder(
+                    texts,
+                    vocab_size=256,
+                    embed_dim=64,
+                    max_seq_len=32,
+                    n_heads=4,
+                    n_layers=2,
+                    epochs=2,
+                    save_path=path,
+                )
                 real = SloTextEmbedder.load(path)
                 assert real is not None and real.acceptable(), "trained model must pass the gate"
                 with patch.object(SloTextEmbedder, "load", return_value=real):
@@ -542,10 +601,14 @@ class TestSimpleEmbedRealDeployment:
                 expected = real.embed("neural network training")
                 assert len(expected) == 64
                 assert len(vec) == 384, "simple_embed must pad to the store dimension"
-                assert np.allclose(vec[:64], expected, atol=1e-6), "trained vector must be returned verbatim"
+                assert np.allclose(vec[:64], expected, atol=1e-6), (
+                    "trained vector must be returned verbatim"
+                )
                 assert all(v == 0.0 for v in vec[64:])
                 ngram = vs._ngram_embed("neural network training", 384)
-                assert not np.allclose(vec[:64], ngram[:64], atol=1e-3), "must differ from n-gram fallback"
+                assert not np.allclose(vec[:64], ngram[:64], atol=1e-3), (
+                    "must differ from n-gram fallback"
+                )
                 assert vs._slo_embedder is real
                 assert vs._slo_embedder_rejected is False
         finally:
@@ -877,9 +940,10 @@ class TestCreateVectorStore:
                 return True
 
         monkeypatch.setattr(
-            "domain.inference._internal.vector_stores.chromadb_store.ChromaDBVectorStore", FakeChroma
+            "domain.inference._internal.vector_stores.chromadb_store.ChromaDBVectorStore",
+            FakeChroma,
         )
-        store = await create_vector_store("chromadb", persist_directory="/tmp/x")
+        await create_vector_store("chromadb", persist_directory="/tmp/x")
         assert calls["kwargs"] == {"persist_directory": "/tmp/x"}
 
     async def test_pinecone_backend(self, monkeypatch):
@@ -893,9 +957,10 @@ class TestCreateVectorStore:
                 return True
 
         monkeypatch.setattr(
-            "domain.inference._internal.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
+            "domain.inference._internal.vector_stores.pinecone_store.PineconeVectorStore",
+            FakePinecone,
         )
-        store = await create_vector_store(
+        await create_vector_store(
             "pinecone", api_key="k", index="idx", environment="us-west-2", dimension=16
         )
         assert calls["kwargs"]["api_key"] == "k"
@@ -914,7 +979,8 @@ class TestCreateVectorStore:
                 return True
 
         monkeypatch.setattr(
-            "domain.inference._internal.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
+            "domain.inference._internal.vector_stores.pinecone_store.PineconeVectorStore",
+            FakePinecone,
         )
         await create_vector_store("pinecone", api_key="k", index_name="named")
         assert calls["kwargs"]["index_name"] == "named"
@@ -930,7 +996,8 @@ class TestCreateVectorStore:
                 return True
 
         monkeypatch.setattr(
-            "domain.inference._internal.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
+            "domain.inference._internal.vector_stores.pinecone_store.PineconeVectorStore",
+            FakePinecone,
         )
         await create_vector_store("pinecone", api_key="k")
         assert calls["kwargs"]["index_name"] == "sloughgpt"
@@ -945,7 +1012,8 @@ class TestCreateVectorStore:
                 return False
 
         monkeypatch.setattr(
-            "domain.inference._internal.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
+            "domain.inference._internal.vector_stores.pinecone_store.PineconeVectorStore",
+            FakePinecone,
         )
         with pytest.raises(RuntimeError, match="Pinecone connection failed"):
             await create_vector_store("pinecone")

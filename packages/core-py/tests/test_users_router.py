@@ -1,12 +1,13 @@
 """
 Users Router Tests
 """
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
@@ -47,12 +48,14 @@ def app_with_repo():
     app = FastAPI()
 
     from infrastructure.exception_handlers import register_app_error_handler
+
     register_app_error_handler(app)
 
     mock_repo = MagicMock()
 
     with patch("routers.users.UserRepository", return_value=mock_repo):
         from routers.users import UsersRouter
+
         router_obj = UsersRouter()
         app.include_router(router_obj.router)
 
@@ -68,7 +71,10 @@ def _make_client(app):
 class TestListUsers:
     def test_admin_can_list(self, app_with_repo, admin_user):
         app, repo = app_with_repo
-        app.dependency_overrides[require_auth_if_enabled] = lambda: {"sub": "admin1", "tenant_id": "t1"}
+        app.dependency_overrides[require_auth_if_enabled] = lambda: {
+            "sub": "admin1",
+            "tenant_id": "t1",
+        }
         repo.get.return_value = admin_user
         repo.list_by_tenant.return_value = [admin_user, _make_user("u2", "bob")]
 
@@ -92,7 +98,10 @@ class TestListUsers:
 class TestGetUser:
     def test_admin_can_get_any(self, app_with_repo, admin_user):
         app, repo = app_with_repo
-        app.dependency_overrides[require_auth_if_enabled] = lambda: {"sub": "admin1", "tenant_id": "t1"}
+        app.dependency_overrides[require_auth_if_enabled] = lambda: {
+            "sub": "admin1",
+            "tenant_id": "t1",
+        }
         target = _make_user("u2", "bob")
         repo.get.side_effect = lambda uid: admin_user if uid == "admin1" else target
 
@@ -122,7 +131,10 @@ class TestGetUser:
 
     def test_not_found(self, app_with_repo, admin_user):
         app, repo = app_with_repo
-        app.dependency_overrides[require_auth_if_enabled] = lambda: {"sub": "admin1", "tenant_id": "t1"}
+        app.dependency_overrides[require_auth_if_enabled] = lambda: {
+            "sub": "admin1",
+            "tenant_id": "t1",
+        }
         repo.get.side_effect = lambda uid: admin_user if uid == "admin1" else None
 
         client = _make_client(app)
@@ -133,40 +145,55 @@ class TestGetUser:
 class TestCreateUser:
     def test_admin_creates_user(self, app_with_repo, admin_user):
         app, repo = app_with_repo
-        app.dependency_overrides[require_auth_if_enabled] = lambda: {"sub": "admin1", "tenant_id": "t1"}
+        app.dependency_overrides[require_auth_if_enabled] = lambda: {
+            "sub": "admin1",
+            "tenant_id": "t1",
+        }
         repo.get.return_value = admin_user
         repo.get_by_username.return_value = None
         repo.get_by_email.return_value = None
 
         client = _make_client(app)
-        resp = client.post("/users", json={
-            "username": "newuser",
-            "email": "new@test.com",
-            "password": "securepass123",
-        })
+        resp = client.post(
+            "/users",
+            json={
+                "username": "newuser",
+                "email": "new@test.com",
+                "password": "securepass123",
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["username"] == "newuser"
         repo.create.assert_called_once()
 
     def test_duplicate_username(self, app_with_repo, admin_user):
         app, repo = app_with_repo
-        app.dependency_overrides[require_auth_if_enabled] = lambda: {"sub": "admin1", "tenant_id": "t1"}
+        app.dependency_overrides[require_auth_if_enabled] = lambda: {
+            "sub": "admin1",
+            "tenant_id": "t1",
+        }
         repo.get.return_value = admin_user
         repo.get_by_username.return_value = _make_user("u2", "existing")
 
         client = _make_client(app)
-        resp = client.post("/users", json={
-            "username": "existing",
-            "email": "new@test.com",
-            "password": "securepass123",
-        })
+        resp = client.post(
+            "/users",
+            json={
+                "username": "existing",
+                "email": "new@test.com",
+                "password": "securepass123",
+            },
+        )
         assert resp.status_code == 409
 
 
 class TestDeleteUser:
     def test_admin_deletes_user(self, app_with_repo, admin_user):
         app, repo = app_with_repo
-        app.dependency_overrides[require_auth_if_enabled] = lambda: {"sub": "admin1", "tenant_id": "t1"}
+        app.dependency_overrides[require_auth_if_enabled] = lambda: {
+            "sub": "admin1",
+            "tenant_id": "t1",
+        }
         target = _make_user("u2", "bob")
         repo.get.side_effect = lambda uid: admin_user if uid == "admin1" else target
 
@@ -178,7 +205,10 @@ class TestDeleteUser:
 
     def test_admin_cannot_delete_self(self, app_with_repo, admin_user):
         app, repo = app_with_repo
-        app.dependency_overrides[require_auth_if_enabled] = lambda: {"sub": "admin1", "tenant_id": "t1"}
+        app.dependency_overrides[require_auth_if_enabled] = lambda: {
+            "sub": "admin1",
+            "tenant_id": "t1",
+        }
         repo.get.return_value = admin_user
 
         client = _make_client(app)
@@ -198,10 +228,13 @@ class TestChangePassword:
             mock_auth_cls._hash_password.return_value = "new_hash"
 
             client = _make_client(app)
-            resp = client.post("/users/me/password", json={
-                "current_password": "oldpass123",
-                "new_password": "newpass456",
-            })
+            resp = client.post(
+                "/users/me/password",
+                json={
+                    "current_password": "oldpass123",
+                    "new_password": "newpass456",
+                },
+            )
             assert resp.status_code == 200
             assert resp.json()["data"]["changed"] is True
             assert user.password_hash == "new_hash"
@@ -216,10 +249,13 @@ class TestChangePassword:
             mock_auth_cls._verify_password.return_value = False
 
             client = _make_client(app)
-            resp = client.post("/users/me/password", json={
-                "current_password": "wrongpass",
-                "new_password": "newpass456",
-            })
+            resp = client.post(
+                "/users/me/password",
+                json={
+                    "current_password": "wrongpass",
+                    "new_password": "newpass456",
+                },
+            )
             assert resp.status_code == 401
 
 

@@ -71,6 +71,7 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
         if meta is None and fp.suffix == ".slo":
             try:
                 from domain.inference._internal.slo_format import SouParser
+
                 profile = SouParser.parse(fp.read_text(encoding="utf-8"))
                 meta = {
                     "soul_name": profile.name,
@@ -84,7 +85,7 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
                     "system_prompt": profile.system_prompt,
                     "tags": profile.tags,
                     "epochs_trained": profile.epochs_trained,
-                    "personality_traits": {k: v for k, v in profile.personality.to_dict().items()},
+                    "personality_traits": dict(profile.personality.to_dict().items()),
                     "metadata": dict(profile.metadata),
                 }
             except Exception:
@@ -92,7 +93,7 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
 
         if meta:
             m = meta.get("metadata", {})
-            raw_soul = (meta.get("soul_name") or meta.get("soul") or meta.get("name") or "unknown")
+            raw_soul = meta.get("soul_name") or meta.get("soul") or meta.get("name") or "unknown"
             soul = raw_soul.replace("-soul", "")
             if fp.suffix == ".soul" and (soul == fp.stem or soul == fp.name):
                 soul = "unknown"
@@ -112,11 +113,24 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
                 "created_at": meta.get("created_at", ""),
                 "model_path": str(fp),
                 "source": "auto-train",
-                **{k: meta[k] for k in ("tagline", "description", "born_at", "epochs_trained",
-                   "final_train_loss", "final_val_loss", "system_prompt",
-                   "tags", "base_model", "training_dataset", "personality",
-                   "training_duration_s")
-                   if k in meta and meta[k]},
+                **{
+                    k: meta[k]
+                    for k in (
+                        "tagline",
+                        "description",
+                        "born_at",
+                        "epochs_trained",
+                        "final_train_loss",
+                        "final_val_loss",
+                        "system_prompt",
+                        "tags",
+                        "base_model",
+                        "training_dataset",
+                        "personality",
+                        "training_duration_s",
+                    )
+                    if k in meta and meta[k]
+                },
             }
 
         return {"name": fp.name, "soul": "unknown", "size_mb": size_mb}
@@ -199,7 +213,7 @@ async def list_checkpoints() -> list[dict]:
 
 
 async def delete_checkpoint(name: str) -> list[str]:
-    if not re.match(r'^[\w\-]+(\.\w+)*$', name):
+    if not re.match(r"^[\w\-]+(\.\w+)*$", name):
         raise ValueError(f"Invalid checkpoint name: {name!r}")
 
     deleted = []
@@ -258,7 +272,9 @@ async def load_checkpoint(name: str) -> dict:
     register_provider("slonet", provider)
     register_provider("default", provider)
 
-    logger.info("Loaded checkpoint %s (vocab=%d, params=%d)", cp.name, len(stoi), soul_net.num_parameters())
+    logger.info(
+        "Loaded checkpoint %s (vocab=%d, params=%d)", cp.name, len(stoi), soul_net.num_parameters()
+    )
 
     return {
         "name": cp.name,
@@ -274,13 +290,17 @@ async def load_checkpoint(name: str) -> dict:
 
 
 async def download_checkpoint_path(name: str) -> str | None:
-    if not VALID_CKPT_NAME.match(name) or '..' in name:
+    if not VALID_CKPT_NAME.match(name) or ".." in name:
         raise ValueError("Invalid checkpoint name")
 
     def _find():
         for d in (CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR):
             fp = (d / name).resolve()
-            if fp.exists() and fp.suffix in (".soul", ".slo") and str(fp).startswith(str(d.resolve())):
+            if (
+                fp.exists()
+                and fp.suffix in (".soul", ".slo")
+                and str(fp).startswith(str(d.resolve()))
+            ):
                 return str(fp)
         return None
 
@@ -288,7 +308,7 @@ async def download_checkpoint_path(name: str) -> str | None:
 
 
 async def checkpoint_info(name: str) -> dict:
-    if not VALID_CKPT_NAME.match(name) or '..' in name:
+    if not VALID_CKPT_NAME.match(name) or ".." in name:
         raise ValueError("Invalid checkpoint name")
     info = await asyncio.to_thread(load_soul, name)
     if not info or info.get("soul") == "unknown":
@@ -313,6 +333,7 @@ async def export_checkpoint_mobile(name: str) -> dict:
     import base64
 
     import numpy as np
+
     from domain.training._internal.slonet import import_from_sou
 
     def _find_ckpt():
@@ -333,9 +354,10 @@ async def export_checkpoint_mobile(name: str) -> dict:
     n_layer = net.n_layer
     n_head = net.n_head
     vocab_size = net.vocab_size
-    block_size = getattr(net, 'block_size', 64)
+    block_size = getattr(net, "block_size", 64)
 
     weights = []
+
     def _push(n):
         arr = sd.get(n)
         if arr is not None:

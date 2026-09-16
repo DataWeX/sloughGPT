@@ -6,20 +6,19 @@ training-bridge syscalls, and the X86Shell wrapper lifecycle.
 
 import importlib
 import sys
-import time
 import types
 
 import pytest
 
 import domain.shell._internal.vm as vm
 from domain.shell._internal.vm import (
+    X86CPU,
     BlockDevice,
     FlatFS,
     PageFrameAllocator,
     ProcessState,
     ProcessTable,
     Scheduler,
-    X86CPU,
     X86Shell,
     X86SyscallHandler,
     X86VirtualSystem,
@@ -34,8 +33,7 @@ def _standalone_handler(memory_size=0x100000, filesystem=None):
     ptable = ProcessTable()
     scheduler = Scheduler(ptable, quantum=10)
     allocator = PageFrameAllocator(total_memory=memory_size)
-    handler = X86SyscallHandler(cpu, ptable, scheduler, allocator,
-                                filesystem=filesystem)
+    handler = X86SyscallHandler(cpu, ptable, scheduler, allocator, filesystem=filesystem)
     return cpu, ptable, scheduler, allocator, handler
 
 
@@ -50,6 +48,7 @@ def _install_fake_bridge(monkeypatch, bridge):
 # ══════════════════════════════════════════════════════════════════════════════
 # Scheduler edge cases
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestSchedulerEdgeCases:
     def setup_method(self):
@@ -93,6 +92,7 @@ class TestSchedulerEdgeCases:
 # X86SyscallHandler edge cases
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestSyscallHandlerTick:
     def test_tick_increments_counter(self):
         vs = X86VirtualSystem(memory_size=4 * 1024 * 1024)
@@ -109,11 +109,11 @@ class TestSyscallHandlerReadWrite:
 
     def test_read_stdin_with_and_without_key(self):
         vs = X86VirtualSystem(memory_size=4 * 1024 * 1024)
-        vs.cpu.push_key('a')
+        vs.cpu.push_key("a")
         vs.cpu.transfer_key()
         n = vs._syscall._sys_read(0, 0x30000, 10)
         assert n == 1
-        assert vs.cpu._mem[0x30000] == ord('a')
+        assert vs.cpu._mem[0x30000] == ord("a")
         assert vs._syscall._sys_read(0, 0x30000, 10) == 0
 
     def test_read_file_full_and_partial(self):
@@ -137,8 +137,8 @@ class TestSyscallHandlerReadWrite:
 
     def test_write_to_stdout(self, capsys):
         vs = X86VirtualSystem(memory_size=4 * 1024 * 1024)
-        vs.cpu._write8(0x40000, ord('h'))
-        vs.cpu._write8(0x40001, ord('i'))
+        vs.cpu._write8(0x40000, ord("h"))
+        vs.cpu._write8(0x40001, ord("i"))
         assert vs._syscall._sys_write(1, 0x40000, 2) == 2
         assert capsys.readouterr().out == "hi"
 
@@ -146,12 +146,12 @@ class TestSyscallHandlerReadWrite:
         vs = X86VirtualSystem(memory_size=4 * 1024 * 1024)
         vs._syscall._write_string(0x20000, "out.txt")
         fd = vs._syscall._sys_open(0x20000, 2)
-        vs.cpu._write8(0x40000, ord('z'))
+        vs.cpu._write8(0x40000, ord("z"))
         assert vs._syscall._sys_write(fd, 0x40000, 1) == 1
 
     def test_write_unknown_fd_returns_minus_one(self):
         vs = X86VirtualSystem(memory_size=4 * 1024 * 1024)
-        vs.cpu._write8(0x40000, ord('z'))
+        vs.cpu._write8(0x40000, ord("z"))
         assert vs._syscall._sys_write(77, 0x40000, 1) == -1
 
 
@@ -245,8 +245,7 @@ class TestSyscallHandlerExec:
         vs = X86VirtualSystem(memory_size=4 * 1024 * 1024)
         vs.filesystem.write("empty.asm", b"[BITS 32]\nmov\n")
         vs._syscall._write_string(0x10000, "empty.asm")
-        monkeypatch.setattr(vm.X86Assembler, "assemble",
-                            lambda self, source, org=0: b"")
+        monkeypatch.setattr(vm.X86Assembler, "assemble", lambda self, source, org=0: b"")
         assert vs._syscall._sys_exec(0x10000) == -1
 
     def test_exec_allocation_failure_returns_minus_one(self):
@@ -425,13 +424,16 @@ class TestSyscallHandlerTraining:
         def get_result_json(self, job_id):
             return None
 
-    @pytest.mark.parametrize(("status", "expected"), [
-        ("running", 0),
-        ("completed", 1),
-        ("failed", 2),
-        ("not_found", -1),
-        ("bogus", -1),
-    ])
+    @pytest.mark.parametrize(
+        ("status", "expected"),
+        [
+            ("running", 0),
+            ("completed", 1),
+            ("failed", 2),
+            ("not_found", -1),
+            ("bogus", -1),
+        ],
+    )
     def test_train_status_mapping(self, monkeypatch, status, expected):
         vs = X86VirtualSystem(memory_size=4 * 1024 * 1024)
         _install_fake_bridge(monkeypatch, self._FakeBridge({"status": status}))
@@ -470,6 +472,7 @@ class TestSyscallHandlerTraining:
 # X86Shell wrapper
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestX86Shell:
     def test_init_defaults(self):
         sh = X86Shell()
@@ -502,7 +505,7 @@ class TestX86Shell:
 
     def test_read_screen_reads_vga_text(self):
         sh = X86Shell(memory_size=1024 * 1024)
-        sh._cpu._mem[0xB8000] = ord('A')
+        sh._cpu._mem[0xB8000] = ord("A")
         assert sh.read_screen(width=10, height=1) == "A"
         sh._cpu._mem[0xB8000] = 8
         assert sh.read_screen(width=10, height=1) == ""

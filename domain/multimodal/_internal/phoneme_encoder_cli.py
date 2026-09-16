@@ -10,13 +10,16 @@ Usage:
     python -m domains.multimodal.phoneme_encoder_cli --detect "hello world"
 """
 
-import sys
 import os
+import sys
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder, detect_language
+from domain.multimodal._internal.unified_phoneme_encoder import (
+    UnifiedPhonemeEncoder,
+    detect_language,
+)
 
 
 def main():

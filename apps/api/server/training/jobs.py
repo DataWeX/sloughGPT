@@ -6,8 +6,6 @@ Completed jobs may expose a ``checkpoint`` path; native trainer ``*.soul`` embed
 
 from __future__ import annotations
 
-from typing import Any
-
 from .job_store import PersistentTrainingJobs
 
 training_jobs: PersistentTrainingJobs = PersistentTrainingJobs()

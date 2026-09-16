@@ -8,17 +8,20 @@ All operations use SloNet Tensor / SloLayer.
 
 from __future__ import annotations
 
-import math
 import logging
+import math
 from dataclasses import dataclass
-from typing import Optional, List
 from enum import Enum
 
 import numpy as np
 
 from domain.training._internal.slonet import (
-    Tensor, SloLayer, SloEmbedding, SloDropout,
-    randn, _matmul,
+    SloDropout,
+    SloEmbedding,
+    SloLayer,
+    Tensor,
+    _matmul,
+    randn,
 )
 
 logger = logging.getLogger("slo.lora")
@@ -27,7 +30,7 @@ logger = logging.getLogger("slo.lora")
 def _to_np(x):
     if isinstance(x, Tensor):
         return x.data
-    if hasattr(x, 'cpu'):
+    if hasattr(x, "cpu"):
         return x.detach().cpu().numpy()
     if isinstance(x, np.ndarray):
         return x
@@ -58,7 +61,7 @@ class LoRAConfig:
     rank: int = 8
     alpha: float = 16.0
     dropout: float = 0.05
-    target_modules: Optional[List[str]] = None
+    target_modules: list[str] | None = None
     lora_type: LoRAType = LoRAType.LORA
     bias: str = "none"
     task_type: str = "CAUSAL_LM"
@@ -113,9 +116,11 @@ class LoRALinear(SloLayer):
             self.lora_s = Tensor(np.ones(out_features, dtype=np.float32), requires_grad=True)
         else:
             self.lora_A = Tensor(
-                (np.random.randn(rank, in_features) * 0.01).astype(np.float32), requires_grad=True)
+                (np.random.randn(rank, in_features) * 0.01).astype(np.float32), requires_grad=True
+            )
             self.lora_B = Tensor(
-                np.zeros((out_features, rank), dtype=np.float32), requires_grad=True)
+                np.zeros((out_features, rank), dtype=np.float32), requires_grad=True
+            )
 
         self.dropout = SloDropout(p=dropout) if dropout > 0 else None
         self.training = True
@@ -207,7 +212,9 @@ class LoRALinear(SloLayer):
         else:
             names[id(self.lora_A)] = f"{prefix}lora_A"
             names[id(self.lora_B)] = f"{prefix}lora_B"
-        return [(names.get(id(p), f"{prefix}p{i}"), p) for i, p in enumerate(params) if names.get(id(p))]
+        return [
+            (names.get(id(p), f"{prefix}p{i}"), p) for i, p in enumerate(params) if names.get(id(p))
+        ]
 
 
 # =============================================================================
@@ -218,8 +225,14 @@ class LoRALinear(SloLayer):
 class LoRAEmbedding(SloLayer):
     """LoRA for embedding layers — SloNet native."""
 
-    def __init__(self, num_embeddings: int, embedding_dim: int, rank: int = 8,
-                 alpha: float = 16.0, original_weight=None):
+    def __init__(
+        self,
+        num_embeddings: int,
+        embedding_dim: int,
+        rank: int = 8,
+        alpha: float = 16.0,
+        original_weight=None,
+    ):
         name = f"LoRAEmb_{num_embeddings}x{embedding_dim}_r{rank}"
         super().__init__(name)
         self.num_embeddings = num_embeddings
@@ -236,13 +249,17 @@ class LoRAEmbedding(SloLayer):
             self.weight.weight.requires_grad = False
 
         self.lora_A = Tensor(
-            (np.random.randn(rank, embedding_dim) * 0.01).astype(np.float32), requires_grad=True)
-        self.lora_B = Tensor(
-            np.zeros((embedding_dim, rank), dtype=np.float32), requires_grad=True)
+            (np.random.randn(rank, embedding_dim) * 0.01).astype(np.float32), requires_grad=True
+        )
+        self.lora_B = Tensor(np.zeros((embedding_dim, rank), dtype=np.float32), requires_grad=True)
 
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
         """Numpy forward pass — LoRA-augmented embedding lookup."""
-        original = self.weight.weight.data[x] if isinstance(x, (list, np.ndarray)) else self.weight.weight.data[x]
+        original = (
+            self.weight.weight.data[x]
+            if isinstance(x, (list, np.ndarray))
+            else self.weight.weight.data[x]
+        )
         lora_w = self.lora_B.data @ self.lora_A.data * (self.alpha / self.rank)
         return original + original @ lora_w.T
 
@@ -283,8 +300,11 @@ def _walk_slo_tree(node, path_parts):
         (dotted_path, module) for every leaf module
     """
     from domain.training._internal.slonet import (
-        SloTransformerBlock, SloMultiHeadAttention,
-        SloFeedForward, SloLinear, SloEmbedding,
+        SloEmbedding,
+        SloFeedForward,
+        SloLinear,
+        SloMultiHeadAttention,
+        SloTransformerBlock,
     )
 
     if isinstance(node, (SloLinear, SloEmbedding, LoRALinear, LoRAEmbedding)):
@@ -292,27 +312,27 @@ def _walk_slo_tree(node, path_parts):
         return
 
     # SloNet / SloTransformer — walk layers list by index
-    if hasattr(node, 'layers') and isinstance(node.layers, list):
+    if hasattr(node, "layers") and isinstance(node.layers, list):
         for i, layer in enumerate(node.layers):
             yield from _walk_slo_tree(layer, path_parts + [f"layers[{i}]"])
 
     # SloTransformerBlock — walk attention, feed-forward, norms
     if isinstance(node, SloTransformerBlock):
-        for child_name in ('attn', 'ff', 'attn_norm', 'ff_norm'):
+        for child_name in ("attn", "ff", "attn_norm", "ff_norm"):
             child = getattr(node, child_name, None)
             if child is not None:
                 yield from _walk_slo_tree(child, path_parts + [child_name])
 
     # SloMultiHeadAttention — walk projection layers
     if isinstance(node, SloMultiHeadAttention):
-        for child_name in ('W_q', 'W_k', 'W_v', 'W_o'):
+        for child_name in ("W_q", "W_k", "W_v", "W_o"):
             child = getattr(node, child_name, None)
             if child is not None:
                 yield from _walk_slo_tree(child, path_parts + [child_name])
 
     # SloFeedForward — walk projection layers
     if isinstance(node, SloFeedForward):
-        for child_name in ('w1', 'w2', 'w3'):
+        for child_name in ("w1", "w2", "w3"):
             child = getattr(node, child_name, None)
             if child is not None:
                 yield from _walk_slo_tree(child, path_parts + [child_name])
@@ -328,7 +348,7 @@ def _set_nested(obj, path_parts, value):
     if len(path_parts) <= 1:
         last = path_parts[-1]
         if last.endswith("]") and "[" in last:
-            attr = last[:last.index("[")]
+            attr = last[: last.index("[")]
             idx = int(last[last.index("[") + 1 : last.index("]")])
             getattr(obj, attr)[idx] = value
         else:
@@ -339,7 +359,7 @@ def _set_nested(obj, path_parts, value):
     current = obj
     for part in path_parts[:-1]:
         if part.endswith("]") and "[" in part:
-            attr = part[:part.index("[")]
+            attr = part[: part.index("[")]
             idx = int(part[part.index("[") + 1 : part.index("]")])
             current = getattr(current, attr)[idx]
         else:
@@ -348,16 +368,20 @@ def _set_nested(obj, path_parts, value):
     # Set on the parent
     last = path_parts[-1]
     if last.endswith("]") and "[" in last:
-        attr = last[:last.index("[")]
+        attr = last[: last.index("[")]
         idx = int(last[last.index("[") + 1 : last.index("]")])
         getattr(current, attr)[idx] = value
     else:
         setattr(current, last, value)
 
 
-def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
-                         rank: int = 8, alpha: float = 16.0,
-                         target_modules: Optional[List[str]] = None):
+def apply_lora_to_model(
+    model,
+    config: LoRAConfig | None = None,
+    rank: int = 8,
+    alpha: float = 16.0,
+    target_modules: list[str] | None = None,
+):
     """
     Apply LoRA to a model.
 
@@ -381,7 +405,7 @@ def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
     target_modules = config.target_modules or []
 
     applied = 0
-    is_slonet = hasattr(model, 'layers') and isinstance(model.layers, list)
+    is_slonet = hasattr(model, "layers") and isinstance(model.layers, list)
 
     if is_slonet:
         for path, module in _walk_slo_tree(model, []):
@@ -389,8 +413,8 @@ def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
             if leaf_name not in target_modules and not any(t in path for t in target_modules):
                 continue
 
-            in_f = getattr(module, 'in_features', getattr(module, 'in_f', None))
-            out_f = getattr(module, 'out_features', getattr(module, 'out_f', None))
+            in_f = getattr(module, "in_features", getattr(module, "in_f", None))
+            out_f = getattr(module, "out_features", getattr(module, "out_f", None))
             if in_f is None or out_f is None:
                 continue
 
@@ -398,43 +422,52 @@ def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
                 new_lora = LoRAEmbedding(
                     num_embeddings=in_f,
                     embedding_dim=out_f,
-                    rank=config.rank, alpha=config.alpha,
+                    rank=config.rank,
+                    alpha=config.alpha,
                     original_weight=module.weight,
                 )
             else:
-                module_bias = getattr(module, 'bias', None) is not None
+                module_bias = getattr(module, "bias", None) is not None
                 new_lora = LoRALinear(
-                    in_features=in_f, out_features=out_f,
+                    in_features=in_f,
+                    out_features=out_f,
                     bias=module_bias,
-                    rank=config.rank, alpha=config.alpha, dropout=config.dropout,
+                    rank=config.rank,
+                    alpha=config.alpha,
+                    dropout=config.dropout,
                     lora_type=config.lora_type,
-                    original_weight=getattr(module, 'weight', None),
-                    original_bias=getattr(module, 'bias', None),
+                    original_weight=getattr(module, "weight", None),
+                    original_bias=getattr(module, "bias", None),
                 )
 
             _set_nested(model, path.split("."), new_lora)
             applied += 1
             logger.info("Applied LoRA to %s", path, extra={"tag": "TRAIN"})
     else:
-        named_items = model.named_modules() if hasattr(model, 'named_modules') else model.named_children()
+        named_items = (
+            model.named_modules() if hasattr(model, "named_modules") else model.named_children()
+        )
         for name, module in named_items:
             module_name = name.split(".")[-1]
             if module_name not in target_modules and not any(t in name for t in target_modules):
                 continue
 
-            in_f = getattr(module, 'in_features', getattr(module, 'in_f', None))
-            out_f = getattr(module, 'out_features', getattr(module, 'out_f', None))
+            in_f = getattr(module, "in_features", getattr(module, "in_f", None))
+            out_f = getattr(module, "out_features", getattr(module, "out_f", None))
             if in_f is None or out_f is None:
                 continue
 
-            module_bias = getattr(module, 'bias', None) is not None
+            module_bias = getattr(module, "bias", None) is not None
             new_lora = LoRALinear(
-                in_features=in_f, out_features=out_f,
+                in_features=in_f,
+                out_features=out_f,
                 bias=module_bias,
-                rank=config.rank, alpha=config.alpha, dropout=config.dropout,
+                rank=config.rank,
+                alpha=config.alpha,
+                dropout=config.dropout,
                 lora_type=config.lora_type,
-                original_weight=getattr(module, 'weight', None),
-                original_bias=getattr(module, 'bias', None),
+                original_weight=getattr(module, "weight", None),
+                original_bias=getattr(module, "bias", None),
             )
 
             parts = name.split(".")
@@ -453,20 +486,20 @@ def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
 def get_lora_parameters(model):
     """Get only LoRA parameters from a model."""
     params = {}
-    if hasattr(model, 'layers'):
+    if hasattr(model, "layers"):
         for path, module in _walk_slo_tree(model, []):
             if isinstance(module, LoRALinear):
-                for attr in ('lora_A', 'lora_B', 'lora_s'):
+                for attr in ("lora_A", "lora_B", "lora_s"):
                     t = getattr(module, attr, None)
-                    if t is not None and hasattr(t, 'data'):
+                    if t is not None and hasattr(t, "data"):
                         params[f"{path}.{attr}"] = t
             elif isinstance(module, LoRAEmbedding):
-                for attr in ('lora_A', 'lora_B'):
+                for attr in ("lora_A", "lora_B"):
                     t = getattr(module, attr, None)
-                    if t is not None and hasattr(t, 'data'):
+                    if t is not None and hasattr(t, "data"):
                         params[f"{path}.{attr}"] = t
     else:
-        named = model.named_parameters() if hasattr(model, 'named_parameters') else []
+        named = model.named_parameters() if hasattr(model, "named_parameters") else []
         for name, param in named:
             if "lora_" in name:
                 params[name] = param
@@ -477,25 +510,33 @@ def count_lora_parameters(model) -> int:
     """Count trainable LoRA parameters."""
     total = 0
     for p in model.parameters():
-        if hasattr(p, 'requires_grad') and p.requires_grad:
-            total += p.data.size if hasattr(p, 'data') else 1
+        if hasattr(p, "requires_grad") and p.requires_grad:
+            total += p.data.size if hasattr(p, "data") else 1
     return total
 
 
 def print_lora_summary(model):
     """Print LoRA parameter summary."""
     lora_params = get_lora_parameters(model)
-    total = sum(p.data.size if hasattr(p, 'data') else 1 for p in lora_params.values())
-    logger.info("LoRA parameters: %d tensors, %d total parameters", len(lora_params), total,
-        extra={"tag": "TRAIN"},)
+    total = sum(p.data.size if hasattr(p, "data") else 1 for p in lora_params.values())
+    logger.info(
+        "LoRA parameters: %d tensors, %d total parameters",
+        len(lora_params),
+        total,
+        extra={"tag": "TRAIN"},
+    )
     param_counts = {}
     for name, p in lora_params.items():
         key = name.split(".")[-1].split("_")[0]
-        sz = p.data.size if hasattr(p, 'data') else 1
+        sz = p.data.size if hasattr(p, "data") else 1
         param_counts[key] = param_counts.get(key, 0) + sz
     for k, v in param_counts.items():
-        logger.info("  %s: %d parameters", k, v,
-            extra={"tag": "TRAIN"},)
+        logger.info(
+            "  %s: %d parameters",
+            k,
+            v,
+            extra={"tag": "TRAIN"},
+        )
 
 
 # =============================================================================

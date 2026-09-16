@@ -2,7 +2,11 @@
 
 import numpy as np
 import pytest
-from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder, detect_language
+
+from domain.multimodal._internal.unified_phoneme_encoder import (
+    UnifiedPhonemeEncoder,
+    detect_language,
+)
 
 
 class TestLanguageDetection:

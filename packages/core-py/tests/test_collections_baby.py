@@ -2,29 +2,51 @@ import numpy as np
 import pytest
 
 from domain.collections._internal.baby_building import (
-    StructureType, ToolType, BuildingConfig, Structure, Tool,
-    BabyBuilding, BuildingRegistry,
+    BabyBuilding,
+    BuildingConfig,
+    BuildingRegistry,
+    Structure,
+    StructureType,
+    Tool,
+    ToolType,
 )
 from domain.collections._internal.baby_community import (
-    CommunityRole, RelationType, CommunityConfig, Relation, Member,
-    BabyCommunity, BabyCommunitySystem,
+    BabyCommunity,
+    BabyCommunitySystem,
+    CommunityConfig,
+    CommunityRole,
+    Member,
+    Relation,
+    RelationType,
 )
 from domain.collections._internal.baby_economy import (
-    ResourceType, TradeStatus, EconomyConfig, Resource, TradeOffer,
-    BabyEconomy, MarketSystem,
+    BabyEconomy,
+    EconomyConfig,
+    MarketSystem,
+    Resource,
+    ResourceType,
+    TradeOffer,
+    TradeStatus,
 )
 from domain.collections._internal.baby_evolution import (
-    EvolutionConfig, Genome, FitnessTracker, SelectionOperator,
+    EvolutionConfig,
     EvolutionEngine,
+    FitnessTracker,
+    Genome,
+    SelectionOperator,
 )
 from domain.collections._internal.baby_social import (
-    SocialConfig, Message, BabySocial, BabyCultural, BabySocialSystem,
+    BabyCultural,
+    BabySocial,
+    BabySocialSystem,
+    Message,
+    SocialConfig,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class FakeEntity:
     def __init__(self, eid: int = 1):
@@ -33,12 +55,10 @@ class FakeEntity:
 
 
 class FakeBaby:
-    def __init__(self, eid: int = 1, energy: float = 50.0,
-                 position=None, alive: bool = True):
+    def __init__(self, eid: int = 1, energy: float = 50.0, position=None, alive: bool = True):
         self.entity = FakeEntity(eid)
         self.energy = energy
-        self.position = np.array(position if position else [32, 0, 32],
-                                 dtype=np.float64)
+        self.position = np.array(position if position else [32, 0, 32], dtype=np.float64)
         self.alive = alive
 
 
@@ -57,6 +77,7 @@ class FakeWorldGrid:
 # ===========================================================================
 # 1. baby_building.py
 # ===========================================================================
+
 
 class TestStructureType:
     def test_enum_values(self):
@@ -452,6 +473,7 @@ class TestBuildingRegistry:
 # 2. baby_community.py
 # ===========================================================================
 
+
 class TestCommunityRole:
     def test_enum(self):
         assert CommunityRole.LEADER == 1
@@ -485,8 +507,7 @@ class TestRelation:
         assert r.interactions == 1
 
     def test_strengthen_caps_at_1(self):
-        r = Relation(baby_a=1, baby_b=2, relation_type=RelationType.FRIEND,
-                     strength=0.9)
+        r = Relation(baby_a=1, baby_b=2, relation_type=RelationType.FRIEND, strength=0.9)
         r.strengthen(0.5)
         assert r.strength == pytest.approx(1.0)
 
@@ -497,8 +518,7 @@ class TestRelation:
         assert r.interactions == 1
 
     def test_weaken_floors_at_0(self):
-        r = Relation(baby_a=1, baby_b=2, relation_type=RelationType.FRIEND,
-                     strength=0.1)
+        r = Relation(baby_a=1, baby_b=2, relation_type=RelationType.FRIEND, strength=0.1)
         r.weaken(0.5)
         assert r.strength == pytest.approx(0.0)
 
@@ -701,7 +721,7 @@ class TestBabyCommunitySystem:
 
     def test_disband_community(self):
         sys = self._make()
-        c = sys.create_community()
+        sys.create_community()
         sys.add_baby_to_community(1, 0)
         assert sys.disband_community(0) is True
         assert sys._communities.get(0) is None
@@ -773,6 +793,7 @@ class TestBabyCommunitySystem:
 # 3. baby_economy.py
 # ===========================================================================
 
+
 class TestResourceType:
     def test_enum(self):
         assert ResourceType.FOOD == 1
@@ -840,7 +861,9 @@ class TestResource:
 class TestTradeOffer:
     def _make_offer(self, status=TradeStatus.PENDING):
         offer = TradeOffer(
-            offer_id=0, seller_id=1, buyer_id=2,
+            offer_id=0,
+            seller_id=1,
+            buyer_id=2,
             offer_resource=Resource(ResourceType.WOOD, amount=5.0),
             want_resource=Resource(ResourceType.STONE, amount=3.0),
             status=status,
@@ -1034,7 +1057,9 @@ class TestBabyEconomy:
         buyer.add_resource(Resource(ResourceType.STONE, amount=10.0))
 
         offer = TradeOffer(
-            offer_id=0, seller_id=1, buyer_id=2,
+            offer_id=0,
+            seller_id=1,
+            buyer_id=2,
             offer_resource=Resource(ResourceType.WOOD, amount=5.0),
             want_resource=Resource(ResourceType.STONE, amount=3.0),
         )
@@ -1053,7 +1078,9 @@ class TestBabyEconomy:
         buyer.add_resource(Resource(ResourceType.STONE, amount=10.0))
 
         offer = TradeOffer(
-            offer_id=0, seller_id=1, buyer_id=2,
+            offer_id=0,
+            seller_id=1,
+            buyer_id=2,
             offer_resource=Resource(ResourceType.WOOD, amount=5.0),
             want_resource=Resource(ResourceType.STONE, amount=3.0),
         )
@@ -1067,7 +1094,9 @@ class TestBabyEconomy:
         seller.add_resource(Resource(ResourceType.WOOD, amount=10.0))
 
         offer = TradeOffer(
-            offer_id=0, seller_id=1, buyer_id=2,
+            offer_id=0,
+            seller_id=1,
+            buyer_id=2,
             offer_resource=Resource(ResourceType.WOOD, amount=5.0),
             want_resource=Resource(ResourceType.STONE, amount=3.0),
         )
@@ -1197,7 +1226,9 @@ class TestMarketSystem:
         buyer = BabyEconomy(baby_id=2)
         m.register(2, buyer)
         offer = TradeOffer(
-            offer_id=0, seller_id=1, buyer_id=2,
+            offer_id=0,
+            seller_id=1,
+            buyer_id=2,
             offer_resource=Resource(ResourceType.WOOD, amount=5.0),
             want_resource=Resource(ResourceType.STONE, amount=3.0),
         )
@@ -1233,6 +1264,7 @@ class TestMarketSystem:
 # ===========================================================================
 # 4. baby_evolution.py
 # ===========================================================================
+
 
 class TestEvolutionConfig:
     def test_defaults(self):
@@ -1502,6 +1534,7 @@ class TestEvolutionEngine:
 # 5. baby_social.py
 # ===========================================================================
 
+
 class TestSocialConfig:
     def test_defaults(self):
         cfg = SocialConfig()
@@ -1516,8 +1549,7 @@ class TestSocialConfig:
 
 class TestMessage:
     def test_message(self):
-        msg = Message(sender_id=1, receiver_id=2, content={"text": "hi"},
-                      timestamp=1.0)
+        msg = Message(sender_id=1, receiver_id=2, content={"text": "hi"}, timestamp=1.0)
         assert msg.sender_id == 1
         assert msg.message_type == "info"
 
@@ -1545,14 +1577,12 @@ class TestBabySocial:
         baby = FakeBaby()
         social = BabySocial(baby, config=cfg)
         for i in range(5):
-            social.receive_message(Message(sender_id=i, receiver_id=1,
-                                           content={}, timestamp=0.0))
+            social.receive_message(Message(sender_id=i, receiver_id=1, content={}, timestamp=0.0))
         assert len(social._inbox) == 3
 
     def test_get_messages_clears_inbox(self):
         social, _ = self._make()
-        social.receive_message(Message(sender_id=2, receiver_id=1,
-                                       content={}, timestamp=0.0))
+        social.receive_message(Message(sender_id=2, receiver_id=1, content={}, timestamp=0.0))
         msgs = social.get_messages()
         assert len(msgs) == 1
         assert len(social._inbox) == 0

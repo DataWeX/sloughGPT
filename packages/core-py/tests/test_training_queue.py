@@ -7,27 +7,23 @@ monkeypatch to avoid real training runs.
 
 import asyncio
 import json
-import math
 import os
-import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
 
+from domain.infrastructure._internal.task_queue import Task
 from domain.infrastructure._internal.training_queue import (
     _json_safe_payload,
     _resolve_checkpoint,
     training_handler,
     training_sessions_handler,
 )
-from domain.infrastructure._internal.task_queue import Task
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_task(payload=None, enqueue=None, task_type="training") -> Task:
     task = Task(
@@ -63,8 +59,14 @@ def _make_fake_trainer_class(monkeypatch):
             captured["data_path"] = data_path
             captured["config"] = config
 
-        def train(self, on_progress=None, cancel_event=None, pause_event=None,
-                  resume=False, resume_path=""):
+        def train(
+            self,
+            on_progress=None,
+            cancel_event=None,
+            pause_event=None,
+            resume=False,
+            resume_path="",
+        ):
             captured["train_kwargs"] = {
                 "on_progress": on_progress,
                 "cancel_event": cancel_event,
@@ -73,38 +75,42 @@ def _make_fake_trainer_class(monkeypatch):
                 "resume_path": resume_path,
             }
             if on_progress:
-                on_progress({
-                    "progress_percent": 50.0,
-                    "train_loss": 0.5,
-                    "eval_loss": 0.4,
-                    "global_step": 10,
-                    "total_steps": 20,
-                    "steps_per_sec": 1.0,
-                    "eta_s": 10.0,
-                    "elapsed_s": 10.0,
-                    "learning_rate": 3e-4,
-                    "done": False,
-                    "done_reason": None,
-                    "avg_quality": None,
-                    "epoch": 1,
-                    "epochs": 1,
-                })
-                on_progress({
-                    "progress_percent": 100.0,
-                    "train_loss": 0.1,
-                    "eval_loss": 0.2,
-                    "global_step": 20,
-                    "total_steps": 20,
-                    "steps_per_sec": 1.0,
-                    "eta_s": 0.0,
-                    "elapsed_s": 20.0,
-                    "learning_rate": 3e-4,
-                    "done": True,
-                    "done_reason": "completed",
-                    "avg_quality": 0.9,
-                    "epoch": 1,
-                    "epochs": 1,
-                })
+                on_progress(
+                    {
+                        "progress_percent": 50.0,
+                        "train_loss": 0.5,
+                        "eval_loss": 0.4,
+                        "global_step": 10,
+                        "total_steps": 20,
+                        "steps_per_sec": 1.0,
+                        "eta_s": 10.0,
+                        "elapsed_s": 10.0,
+                        "learning_rate": 3e-4,
+                        "done": False,
+                        "done_reason": None,
+                        "avg_quality": None,
+                        "epoch": 1,
+                        "epochs": 1,
+                    }
+                )
+                on_progress(
+                    {
+                        "progress_percent": 100.0,
+                        "train_loss": 0.1,
+                        "eval_loss": 0.2,
+                        "global_step": 20,
+                        "total_steps": 20,
+                        "steps_per_sec": 1.0,
+                        "eta_s": 0.0,
+                        "elapsed_s": 20.0,
+                        "learning_rate": 3e-4,
+                        "done": True,
+                        "done_reason": "completed",
+                        "avg_quality": 0.9,
+                        "epoch": 1,
+                        "epochs": 1,
+                    }
+                )
             return {"success": True, "final_loss": 0.1}
 
     return captured, FakeConfig, FakeTrainer
@@ -112,8 +118,8 @@ def _make_fake_trainer_class(monkeypatch):
 
 # ── _json_safe_payload ──────────────────────────────────────────────────────
 
-class TestJsonSafePayload:
 
+class TestJsonSafePayload:
     def test_int_passthrough(self):
         assert _json_safe_payload(42) == 42
 
@@ -195,11 +201,13 @@ class TestJsonSafePayload:
         assert _json_safe_payload(-1.5) == -1.5
 
     def test_complex_nested_structure(self):
-        result = _json_safe_payload({
-            "metrics": {"loss": 0.5, "ppl": float("inf")},
-            "history": [0.8, 0.6, float("nan")],
-            "done": True,
-        })
+        result = _json_safe_payload(
+            {
+                "metrics": {"loss": 0.5, "ppl": float("inf")},
+                "history": [0.8, 0.6, float("nan")],
+                "done": True,
+            }
+        )
         assert result == {
             "metrics": {"loss": 0.5, "ppl": None},
             "history": [0.8, 0.6, None],
@@ -225,8 +233,8 @@ class TestJsonSafePayload:
 
 # ── _resolve_checkpoint ─────────────────────────────────────────────────────
 
-class TestResolveCheckpoint:
 
+class TestResolveCheckpoint:
     def test_none_name(self):
         assert _resolve_checkpoint(None, "/tmp") is None
 
@@ -282,8 +290,8 @@ class TestResolveCheckpoint:
 
 # ── training_handler ────────────────────────────────────────────────────────
 
-class TestTrainingHandler:
 
+class TestTrainingHandler:
     def test_missing_enqueue_returns_failed(self):
         task = _make_task({"data_path": "/nonexistent"}, enqueue=None)
         result = asyncio.run(training_handler(task))
@@ -299,15 +307,21 @@ class TestTrainingHandler:
     def test_cancel_immediately_returns_cancelled(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"data_path": str(tmp_path / "dummy.txt"),
-             "checkpoint_dir": str(tmp_path / "ckpts"),
-             "n_embed": 16, "n_layer": 1, "n_head": 2,
-             "block_size": 16, "epochs": 1},
+            {
+                "data_path": str(tmp_path / "dummy.txt"),
+                "checkpoint_dir": str(tmp_path / "ckpts"),
+                "n_embed": 16,
+                "n_layer": 1,
+                "n_head": 2,
+                "block_size": 16,
+                "epochs": 1,
+            },
             enqueue=enqueue,
         )
         task.cancel_event.set()
@@ -318,17 +332,17 @@ class TestTrainingHandler:
     def test_emits_train_sse_events(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"data_path": str(tmp_path / "dummy.txt"),
-             "checkpoint_dir": str(tmp_path / "ckpts")},
+            {"data_path": str(tmp_path / "dummy.txt"), "checkpoint_dir": str(tmp_path / "ckpts")},
             enqueue=enqueue,
         )
 
-        result = asyncio.run(training_handler(task))
+        asyncio.run(training_handler(task))
 
         train_events = [e for e in events if e.get("phase") == "TRAIN"]
         assert len(train_events) >= 1
@@ -340,17 +354,17 @@ class TestTrainingHandler:
     def test_emits_complete_event(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"data_path": str(tmp_path / "dummy.txt"),
-             "checkpoint_dir": str(tmp_path / "ckpts")},
+            {"data_path": str(tmp_path / "dummy.txt"), "checkpoint_dir": str(tmp_path / "ckpts")},
             enqueue=enqueue,
         )
 
-        result = asyncio.run(training_handler(task))
+        asyncio.run(training_handler(task))
 
         completes = [e for e in events if e.get("status") == "complete"]
         assert completes
@@ -359,13 +373,13 @@ class TestTrainingHandler:
     def test_defaults_applied(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"data_path": str(tmp_path / "dummy.txt"),
-             "checkpoint_dir": str(tmp_path / "ckpts")},
+            {"data_path": str(tmp_path / "dummy.txt"), "checkpoint_dir": str(tmp_path / "ckpts")},
             enqueue=enqueue,
         )
 
@@ -385,17 +399,25 @@ class TestTrainingHandler:
     def test_custom_config_passed_through(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"data_path": str(tmp_path / "dummy.txt"),
-             "checkpoint_dir": str(tmp_path / "ckpts"),
-             "n_embed": 64, "n_layer": 2, "n_head": 8,
-             "block_size": 64, "dropout": 0.2, "batch_size": 8,
-             "epochs": 5, "learning_rate": 1e-3,
-             "early_stopping_patience": 3},
+            {
+                "data_path": str(tmp_path / "dummy.txt"),
+                "checkpoint_dir": str(tmp_path / "ckpts"),
+                "n_embed": 64,
+                "n_layer": 2,
+                "n_head": 8,
+                "block_size": 64,
+                "dropout": 0.2,
+                "batch_size": 8,
+                "epochs": 5,
+                "learning_rate": 1e-3,
+                "early_stopping_patience": 3,
+            },
             enqueue=enqueue,
         )
 
@@ -415,13 +437,13 @@ class TestTrainingHandler:
     def test_resume_defaults_false(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"data_path": str(tmp_path / "dummy.txt"),
-             "checkpoint_dir": str(tmp_path / "ckpts")},
+            {"data_path": str(tmp_path / "dummy.txt"), "checkpoint_dir": str(tmp_path / "ckpts")},
             enqueue=enqueue,
         )
 
@@ -432,14 +454,18 @@ class TestTrainingHandler:
     def test_resume_true_passed(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"data_path": str(tmp_path / "dummy.txt"),
-             "checkpoint_dir": str(tmp_path / "ckpts"),
-             "resume": True, "resume_path": "/some/path.soul"},
+            {
+                "data_path": str(tmp_path / "dummy.txt"),
+                "checkpoint_dir": str(tmp_path / "ckpts"),
+                "resume": True,
+                "resume_path": "/some/path.soul",
+            },
             enqueue=enqueue,
         )
 
@@ -450,13 +476,13 @@ class TestTrainingHandler:
     def test_cancel_event_passed_to_trainer(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"data_path": str(tmp_path / "dummy.txt"),
-             "checkpoint_dir": str(tmp_path / "ckpts")},
+            {"data_path": str(tmp_path / "dummy.txt"), "checkpoint_dir": str(tmp_path / "ckpts")},
             enqueue=enqueue,
         )
 
@@ -467,13 +493,13 @@ class TestTrainingHandler:
     def test_pause_event_passed_to_trainer(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"data_path": str(tmp_path / "dummy.txt"),
-             "checkpoint_dir": str(tmp_path / "ckpts")},
+            {"data_path": str(tmp_path / "dummy.txt"), "checkpoint_dir": str(tmp_path / "ckpts")},
             enqueue=enqueue,
         )
 
@@ -484,13 +510,13 @@ class TestTrainingHandler:
     def test_on_progress_callback_called(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"data_path": str(tmp_path / "dummy.txt"),
-             "checkpoint_dir": str(tmp_path / "ckpts")},
+            {"data_path": str(tmp_path / "dummy.txt"), "checkpoint_dir": str(tmp_path / "ckpts")},
             enqueue=enqueue,
         )
 
@@ -510,13 +536,13 @@ class TestTrainingHandler:
                 raise RuntimeError("Simulated training failure")
 
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", RaisingConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", RaisingTrainer)
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"data_path": str(tmp_path / "dummy.txt"),
-             "checkpoint_dir": str(tmp_path / "ckpts")},
+            {"data_path": str(tmp_path / "dummy.txt"), "checkpoint_dir": str(tmp_path / "ckpts")},
             enqueue=enqueue,
         )
 
@@ -537,13 +563,13 @@ class TestTrainingHandler:
                 raise ValueError("Bad data")
 
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", RaisingConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", RaisingTrainer)
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"data_path": str(tmp_path / "dummy.txt"),
-             "checkpoint_dir": str(tmp_path / "ckpts")},
+            {"data_path": str(tmp_path / "dummy.txt"), "checkpoint_dir": str(tmp_path / "ckpts")},
             enqueue=enqueue,
         )
 
@@ -555,14 +581,14 @@ class TestTrainingHandler:
     def test_output_dir_created(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
         events, enqueue = _collect_events(None)
         ckpt_dir = tmp_path / "new_dir" / "ckpts"
         task = _make_task(
-            {"data_path": str(tmp_path / "dummy.txt"),
-             "checkpoint_dir": str(ckpt_dir)},
+            {"data_path": str(tmp_path / "dummy.txt"), "checkpoint_dir": str(ckpt_dir)},
             enqueue=enqueue,
         )
 
@@ -572,6 +598,7 @@ class TestTrainingHandler:
     def test_default_checkpoint_dir(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -588,8 +615,8 @@ class TestTrainingHandler:
 
 # ── training_sessions_handler ───────────────────────────────────────────────
 
-class TestTrainingSessionsHandler:
 
+class TestTrainingSessionsHandler:
     def test_missing_enqueue_returns_failed(self):
         task = _make_task({"session_ids": ["s1"]}, enqueue=None, task_type="training-sessions")
         result = asyncio.run(training_sessions_handler(task))
@@ -606,9 +633,7 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
@@ -635,9 +660,7 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 5, "perplexity": 1.2}
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
@@ -665,9 +688,7 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 3}
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
@@ -698,9 +719,7 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, expected_meta
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
@@ -729,9 +748,7 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
@@ -767,9 +784,7 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
@@ -777,12 +792,18 @@ class TestTrainingSessionsHandler:
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"session_ids": ["s1"],
-             "checkpoint_dir": str(Path("/tmp/ckpts")),
-             "n_embed": 64, "n_layer": 2, "n_head": 8,
-             "block_size": 64, "epochs": 10,
-             "learning_rate": 5e-4, "batch_size": 4,
-             "soul_name": "custom-soul"},
+            {
+                "session_ids": ["s1"],
+                "checkpoint_dir": str(Path("/tmp/ckpts")),
+                "n_embed": 64,
+                "n_layer": 2,
+                "n_head": 8,
+                "block_size": 64,
+                "epochs": 10,
+                "learning_rate": 5e-4,
+                "batch_size": 4,
+                "soul_name": "custom-soul",
+            },
             enqueue=enqueue,
             task_type="training-sessions",
         )
@@ -806,9 +827,7 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
@@ -816,8 +835,7 @@ class TestTrainingSessionsHandler:
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"session_ids": ["s1", "s2", "s3"],
-             "checkpoint_dir": str(Path("/tmp/ckpts"))},
+            {"session_ids": ["s1", "s2", "s3"], "checkpoint_dir": str(Path("/tmp/ckpts"))},
             enqueue=enqueue,
             task_type="training-sessions",
         )
@@ -833,9 +851,7 @@ class TestTrainingSessionsHandler:
         def raising_train(*args, **kwargs):
             raise RuntimeError("Session training crashed")
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             raising_train,
@@ -860,9 +876,7 @@ class TestTrainingSessionsHandler:
         def raising_train(*args, **kwargs):
             raise ValueError("Bad sessions")
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             raising_train,
@@ -895,9 +909,7 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
@@ -905,9 +917,7 @@ class TestTrainingSessionsHandler:
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"session_ids": ["s1"],
-             "checkpoint_dir": str(tmp_path),
-             "checkpoint_name": "existing"},
+            {"session_ids": ["s1"], "checkpoint_dir": str(tmp_path), "checkpoint_name": "existing"},
             enqueue=enqueue,
             task_type="training-sessions",
         )
@@ -927,9 +937,7 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
@@ -937,9 +945,11 @@ class TestTrainingSessionsHandler:
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"session_ids": ["s1"],
-             "checkpoint_dir": str(Path("/tmp/nonexistent")),
-             "checkpoint_name": "ghost"},
+            {
+                "session_ids": ["s1"],
+                "checkpoint_dir": str(Path("/tmp/nonexistent")),
+                "checkpoint_name": "ghost",
+            },
             enqueue=enqueue,
             task_type="training-sessions",
         )
@@ -960,9 +970,7 @@ class TestTrainingSessionsHandler:
                     on_step(5, 0.5, 0, total_steps=10)
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
@@ -995,9 +1003,7 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
@@ -1025,9 +1031,7 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
@@ -1056,9 +1060,7 @@ class TestTrainingSessionsHandler:
                     on_step(1, 1.0, 0, total_steps=5)
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr(
-            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
-        )
+        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
             "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
@@ -1079,6 +1081,7 @@ class TestTrainingSessionsHandler:
 
 
 # ── Training Pipeline Integration Tests ───────────────────────────────
+
 
 class TestTrainingDataPathValidation:
     """Tests for data_path validation in training_handler."""
@@ -1112,6 +1115,7 @@ class TestTrainingDataPathValidation:
         """training_handler proceeds when data_path is valid."""
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
         import domain.training._internal.train_pipeline as tp
+
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -1120,9 +1124,15 @@ class TestTrainingDataPathValidation:
 
         events, enqueue = _collect_events(None)
         task = _make_task(
-            {"data_path": str(dummy), "checkpoint_dir": str(tmp_path / "ckpts"),
-             "n_embed": 16, "n_layer": 1, "n_head": 2,
-             "block_size": 16, "epochs": 1},
+            {
+                "data_path": str(dummy),
+                "checkpoint_dir": str(tmp_path / "ckpts"),
+                "n_embed": 16,
+                "n_layer": 1,
+                "n_head": 2,
+                "block_size": 16,
+                "epochs": 1,
+            },
             enqueue=enqueue,
         )
         result = asyncio.run(training_handler(task))

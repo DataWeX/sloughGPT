@@ -10,28 +10,24 @@ from __future__ import annotations
 
 import json
 import os
-import threading
-import time
+
 import pytest
 
 os.environ["NO_COLOR"] = "1"
 
-from domain.shell._internal.io import MemoryIO
 from domain.shell._internal.console import (
-    Console,
+    SPINNER_FRAMES,
     Block,
+    Console,
     _color,
     _human_size,
     _render_inline,
-    SPINNER_FRAMES,
-    _Capture,
-    _Indent,
-    _Live,
     _Spinner,
 )
-
+from domain.shell._internal.io import MemoryIO
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_console(has_readline=False) -> tuple[Console, MemoryIO]:
     io = MemoryIO()
@@ -47,9 +43,11 @@ def _output(io: MemoryIO) -> str:
 # Utility functions
 # =============================================================================
 
+
 class TestColor:
     def test_color_disabled_returns_plain_text(self, monkeypatch):
         import domain.shell._internal.console as _mod
+
         monkeypatch.setattr(_mod, "_COLOR_ENABLED", False)
         result = _color("hello", "\033[36m")
         assert result == "hello"
@@ -76,13 +74,13 @@ class TestHumanSize:
         assert _human_size(1024 * 1024) == "1.0 MB"
 
     def test_gigabytes(self):
-        assert _human_size(1024 ** 3) == "1.0 GB"
+        assert _human_size(1024**3) == "1.0 GB"
 
     def test_terabytes(self):
-        assert _human_size(1024 ** 4) == "1.0 TB"
+        assert _human_size(1024**4) == "1.0 TB"
 
     def test_petabytes(self):
-        assert _human_size(1024 ** 5) == "1.0 PB"
+        assert _human_size(1024**5) == "1.0 PB"
 
     def test_exact_boundary(self):
         assert _human_size(1023) == "1023.0 B"
@@ -130,6 +128,7 @@ class TestSpinnerFrames:
 # Block dataclass
 # =============================================================================
 
+
 class TestBlock:
     def test_creation(self):
         b = Block(type="test", data={"key": "value"})
@@ -145,6 +144,7 @@ class TestBlock:
 # =============================================================================
 # Console — Block recording
 # =============================================================================
+
 
 class TestConsoleBlocks:
     def test_emit_records_block(self):
@@ -198,6 +198,7 @@ class TestConsoleBlocks:
 # =============================================================================
 # Console — write / print
 # =============================================================================
+
 
 class TestConsoleWrite:
     def test_write_basic(self):
@@ -264,6 +265,7 @@ class TestConsolePrint:
 # Console — rule / separator / section
 # =============================================================================
 
+
 class TestConsoleRule:
     def test_rule_no_label(self):
         c, io = _make_console()
@@ -307,6 +309,7 @@ class TestConsoleSection:
 # =============================================================================
 # Console — panel / box
 # =============================================================================
+
 
 class TestConsolePanel:
     def test_panel_basic(self):
@@ -356,6 +359,7 @@ class TestConsoleBox:
 # Console — status
 # =============================================================================
 
+
 class TestConsoleStatus:
     @pytest.mark.parametrize("kind", ["ok", "warn", "error", "info", "step"])
     def test_status_kinds(self, kind):
@@ -386,6 +390,7 @@ class TestConsoleStatus:
 # =============================================================================
 # Console — table
 # =============================================================================
+
 
 class TestConsoleTable:
     def test_empty_table(self):
@@ -451,6 +456,7 @@ class TestConsoleTableFromDicts:
 # Console — kvlist
 # =============================================================================
 
+
 class TestConsoleKvlist:
     def test_empty(self):
         c, io = _make_console()
@@ -475,6 +481,7 @@ class TestConsoleKvlist:
 # =============================================================================
 # Console — progress
 # =============================================================================
+
 
 class TestConsoleProgress:
     def test_progress_zero(self):
@@ -501,6 +508,7 @@ class TestConsoleProgress:
 # Console — json
 # =============================================================================
 
+
 class TestConsoleJson:
     def test_json_dict(self):
         c, io = _make_console()
@@ -524,6 +532,7 @@ class TestConsoleJson:
 # =============================================================================
 # Console — error / success / info / warn / note
 # =============================================================================
+
 
 class TestConsoleStatusMethods:
     def test_error(self):
@@ -588,6 +597,7 @@ class TestConsoleStatusMethods:
 # Console — columns
 # =============================================================================
 
+
 class TestConsoleColumns:
     def test_empty(self):
         c, io = _make_console()
@@ -619,6 +629,7 @@ class TestConsoleColumns:
 # Console — tree
 # =============================================================================
 
+
 class TestConsoleTree:
     def test_flat(self):
         c, io = _make_console()
@@ -645,6 +656,7 @@ class TestConsoleTree:
 # Console — log
 # =============================================================================
 
+
 class TestConsoleLog:
     @pytest.mark.parametrize("level", ["info", "warn", "error", "debug"])
     def test_log_levels(self, level):
@@ -663,6 +675,7 @@ class TestConsoleLog:
 # =============================================================================
 # Console — markdown
 # =============================================================================
+
 
 class TestConsoleMarkdown:
     def test_heading(self):
@@ -719,6 +732,7 @@ class TestConsoleMarkdown:
 # Console — badge
 # =============================================================================
 
+
 class TestConsoleBadge:
     @pytest.mark.parametrize("color", ["info", "ok", "warn", "error"])
     def test_badge_colors(self, color):
@@ -735,6 +749,7 @@ class TestConsoleBadge:
 # =============================================================================
 # Console — summary / header
 # =============================================================================
+
 
 class TestConsoleSummary:
     def test_summary(self):
@@ -764,6 +779,7 @@ class TestConsoleHeader:
 # Console — styled
 # =============================================================================
 
+
 class TestConsoleStyled:
     def test_styled_bold(self):
         c, _ = _make_console()
@@ -779,6 +795,7 @@ class TestConsoleStyled:
 # =============================================================================
 # Console — cursor control / clear
 # =============================================================================
+
 
 class TestConsoleCursorClear:
     def test_hide_cursor(self):
@@ -801,6 +818,7 @@ class TestConsoleCursorClear:
 # Console — download_bar
 # =============================================================================
 
+
 class TestConsoleDownloadBar:
     def test_download_bar_basic(self):
         c, io = _make_console()
@@ -818,6 +836,7 @@ class TestConsoleDownloadBar:
 # =============================================================================
 # _Capture
 # =============================================================================
+
 
 class TestCapture:
     def test_capture_writes(self):
@@ -848,6 +867,7 @@ class TestCapture:
 # _Indent
 # =============================================================================
 
+
 class TestIndent:
     def test_indent_adds_prefix(self):
         c, io = _make_console()
@@ -877,6 +897,7 @@ class TestIndent:
 # _Live
 # =============================================================================
 
+
 class TestLive:
     def test_live_context(self):
         c, io = _make_console()
@@ -897,6 +918,7 @@ class TestLive:
 # =============================================================================
 # _Spinner
 # =============================================================================
+
 
 class TestSpinner:
     def test_spinner_enter_exit(self):
@@ -927,6 +949,7 @@ class TestSpinner:
 # Console — paginate
 # =============================================================================
 
+
 class TestConsolePaginate:
     def test_paginate_single_page(self):
         c, io = _make_console()
@@ -947,6 +970,7 @@ class TestConsolePaginate:
 # Console — dispatch delegate methods (emit only, delegate to InteractivePrompt)
 # =============================================================================
 
+
 class TestConsoleDelegates:
     def test_confirm_emits_block(self):
         c, _ = _make_console()
@@ -959,7 +983,7 @@ class TestConsoleDelegates:
         c, io = _make_console()
         io.feed("answer")
         c._tui_repl = None
-        result = c.ask("question?")
+        c.ask("question?")
         assert c.last_block()["type"] == "ask"
 
     def test_select_emits_block(self):
@@ -973,6 +997,7 @@ class TestConsoleDelegates:
 # =============================================================================
 # Console — constructor
 # =============================================================================
+
 
 class TestConsoleInit:
     def test_init_default(self):

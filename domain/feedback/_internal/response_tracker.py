@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +22,7 @@ logger = logging.getLogger("slo.response_tracker")
 @dataclass
 class ResponseLog:
     """Single response log entry."""
+
     timestamp: str
     user_message: str
     assistant_response: str
@@ -68,7 +69,7 @@ class ResponseTracker:
         repo_root = find_repo_root(Path(__file__).resolve())
         self.log_dir = repo_root / log_dir
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.current_file = self.log_dir / f"responses_{datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
+        self.current_file = self.log_dir / f"responses_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
         self._buffer: list[ResponseLog] = []
         self._buffer_size = 1
         # MogDB persistence
@@ -80,6 +81,7 @@ class ResponseTracker:
         """Initialize MogDB for response log persistence with TTL index."""
         try:
             from mogdb import MogDB
+
             db_path = str(repo_root / "data" / "response_mogdb")
             self._mogdb = MogDB(db_path)
             self._coll = self._mogdb.collection("responses")
@@ -103,7 +105,7 @@ class ResponseTracker:
     ) -> ResponseLog:
         """Log a response."""
         entry = ResponseLog(
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             user_message=user_message,
             assistant_response=assistant_response,
             model=model,
@@ -133,42 +135,50 @@ class ResponseTracker:
         # Write to JSONL file
         with open(self.current_file, "a") as f:
             for entry in self._buffer:
-                f.write(json.dumps({
-                    "timestamp": entry.timestamp,
-                    "user_message": entry.user_message,
-                    "assistant_response": entry.assistant_response,
-                    "model": entry.model,
-                    "temperature": entry.temperature,
-                    "max_tokens": entry.max_tokens,
-                    "session_id": entry.session_id,
-                    "user_id": entry.user_id,
-                    "tokens_generated": entry.tokens_generated,
-                    "duration_ms": entry.duration_ms,
-                    "has_images": entry.has_images,
-                    "context_tokens": entry.context_tokens,
-                }) + "\n")
+                f.write(
+                    json.dumps(
+                        {
+                            "timestamp": entry.timestamp,
+                            "user_message": entry.user_message,
+                            "assistant_response": entry.assistant_response,
+                            "model": entry.model,
+                            "temperature": entry.temperature,
+                            "max_tokens": entry.max_tokens,
+                            "session_id": entry.session_id,
+                            "user_id": entry.user_id,
+                            "tokens_generated": entry.tokens_generated,
+                            "duration_ms": entry.duration_ms,
+                            "has_images": entry.has_images,
+                            "context_tokens": entry.context_tokens,
+                        }
+                    )
+                    + "\n"
+                )
 
         # Write to MogDB
         if self._coll is not None:
             try:
                 import time
+
                 now = time.time()
                 for entry in self._buffer:
-                    self._coll.insert_one({
-                        "timestamp": entry.timestamp,
-                        "expires_at": now,  # Numeric epoch for TTL
-                        "user_message": entry.user_message,
-                        "assistant_response": entry.assistant_response,
-                        "model": entry.model,
-                        "temperature": entry.temperature,
-                        "max_tokens": entry.max_tokens,
-                        "session_id": entry.session_id,
-                        "user_id": entry.user_id,
-                        "tokens_generated": entry.tokens_generated,
-                        "duration_ms": entry.duration_ms,
-                        "has_images": entry.has_images,
-                        "context_tokens": entry.context_tokens,
-                    })
+                    self._coll.insert_one(
+                        {
+                            "timestamp": entry.timestamp,
+                            "expires_at": now,  # Numeric epoch for TTL
+                            "user_message": entry.user_message,
+                            "assistant_response": entry.assistant_response,
+                            "model": entry.model,
+                            "temperature": entry.temperature,
+                            "max_tokens": entry.max_tokens,
+                            "session_id": entry.session_id,
+                            "user_id": entry.user_id,
+                            "tokens_generated": entry.tokens_generated,
+                            "duration_ms": entry.duration_ms,
+                            "has_images": entry.has_images,
+                            "context_tokens": entry.context_tokens,
+                        }
+                    )
             except Exception as e:
                 logger.warning("Failed to write to MogDB: %s", e)
 
@@ -211,13 +221,18 @@ class ResponseTracker:
 
         with open(output_path, "w") as f:
             for entry in self.get_responses(limit=10000):
-                f.write(json.dumps({
-                    "timestamp": entry.timestamp,
-                    "user_message": entry.user_message,
-                    "assistant_response": entry.assistant_response,
-                    "model": entry.model,
-                    "session_id": entry.session_id,
-                }) + "\n")
+                f.write(
+                    json.dumps(
+                        {
+                            "timestamp": entry.timestamp,
+                            "user_message": entry.user_message,
+                            "assistant_response": entry.assistant_response,
+                            "model": entry.model,
+                            "session_id": entry.session_id,
+                        }
+                    )
+                    + "\n"
+                )
 
         logger.info("Exported to %s", output_path, extra={"tag": "INFRA"})
         return str(output_path)

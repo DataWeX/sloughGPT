@@ -3,24 +3,22 @@
 from __future__ import annotations
 
 import threading
-import pytest
+
 from domain.training._internal.state import (
     TrainingState,
+    get_cancel_event,
     get_state,
-    get_turbo_state,
+    get_turbo_cancel_event,
     get_turbo_lock,
     get_turbo_pause_event,
-    get_turbo_cancel_event,
+    get_turbo_state,
     set_cancel_event,
-    get_cancel_event,
 )
-
 
 # ── TrainingState ───────────────────────────────────────────────────────────
 
 
 class TestTrainingState:
-
     def test_default(self):
         state = TrainingState()
         assert state.running is False
@@ -37,7 +35,6 @@ class TestTrainingState:
 
 
 class TestGetState:
-
     def test_returns_state(self):
         state = get_state()
         assert isinstance(state, TrainingState)
@@ -52,7 +49,6 @@ class TestGetState:
 
 
 class TestGetTurboState:
-
     def test_returns_dict(self):
         state = get_turbo_state()
         assert isinstance(state, dict)
@@ -64,18 +60,16 @@ class TestGetTurboState:
 
 
 class TestGetTurboLock:
-
     def test_returns_lock(self):
         lock = get_turbo_lock()
-        assert hasattr(lock, 'acquire')
-        assert hasattr(lock, 'release')
+        assert hasattr(lock, "acquire")
+        assert hasattr(lock, "release")
 
 
 # ── get_turbo_pause_event ──────────────────────────────────────────────────
 
 
 class TestGetTurboPauseEvent:
-
     def test_returns_event(self):
         event = get_turbo_pause_event()
         assert isinstance(event, threading.Event)
@@ -85,7 +79,6 @@ class TestGetTurboPauseEvent:
 
 
 class TestGetTurboCancelEvent:
-
     def test_returns_event(self):
         event = get_turbo_cancel_event()
         assert isinstance(event, threading.Event)
@@ -95,7 +88,6 @@ class TestGetTurboCancelEvent:
 
 
 class TestCancelEvent:
-
     def test_set_get(self):
         event = threading.Event()
         set_cancel_event(event)

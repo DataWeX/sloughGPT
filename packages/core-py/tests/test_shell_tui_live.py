@@ -128,7 +128,7 @@ class _Screen:
         elif final == "J":
             n = num(0, 0)
             if n == 0:
-                self.lines[self.r][self.c:] = [" "] * (self.cols - self.c)
+                self.lines[self.r][self.c :] = [" "] * (self.cols - self.c)
                 for r in range(self.r + 1, self.rows):
                     self.lines[r] = [" "] * self.cols
             elif n == 1:
@@ -140,7 +140,7 @@ class _Screen:
         elif final == "K":
             n = num(0, 0)
             if n == 0:
-                self.lines[self.r][self.c:] = [" "] * (self.cols - self.c)
+                self.lines[self.r][self.c :] = [" "] * (self.cols - self.c)
             elif n == 1:
                 self.lines[self.r][: self.c + 1] = [" "] * (self.c + 1)
             else:
@@ -450,6 +450,7 @@ def _assert(s: _TuiSession, cond: bool, msg: str) -> None:
 
 # ── layout ────────────────────────────────────────────────────────────────
 
+
 def test_boots_to_three_pane_layout(session):
     assert session.wait_until(lambda sc: _ready(session) and "80x24" in sc.text()), (
         f"TUI never reached ready state.\n{session.screen.text()}"
@@ -476,6 +477,7 @@ def test_help_command_renders_output_pane(session):
 
 # ── command execution ─────────────────────────────────────────────────────
 
+
 def test_echo_roundtrip(session):
     assert session.wait_until(lambda sc: _ready(session))
     session.write("echo alpha\r")
@@ -487,6 +489,7 @@ def test_echo_roundtrip(session):
 
 
 # ── terminal key input ────────────────────────────────────────────────────
+
 
 def test_arrow_keys_fold_and_recall_history(session):
     """Application-mode arrow bytes (``ESC O A``) must fold to KEY_UP inside
@@ -553,6 +556,7 @@ def test_escape_ctrl_right_stays_manual_path(session):
 
 # ── scrollback ───────────────────────────────────────────────────────────
 
+
 def test_page_up_page_down_scroll_output_pane(session):
     """PgUp (``ESC [ 5 ~``) must fold to KEY_PPAGE and push the output pane
     back 10 capture lines (status shows ``SCROLL``); PgDn returns to live."""
@@ -589,6 +593,7 @@ def test_ctrl_o_toggles_scroll_target(session):
 
 
 # ── incremental search ───────────────────────────────────────────────────
+
 
 def test_reverse_history_search(session):
     """Ctrl+R enters reverse incremental search; typed characters refine the
@@ -666,6 +671,7 @@ def test_n_repeats_last_output_search(session):
 
 
 # ── line editing helpers ─────────────────────────────────────────────────
+
 
 def test_tab_completion_completes_command(session):
     assert session.wait_until(lambda sc: _ready(session))
@@ -1022,9 +1028,7 @@ def test_reverse_search_direction_switch_and_backspace(session):
     assert "echo beta" in session.screen.row(ROWS - 1)
 
     session.keys(b"\x7f")  # Backspace — query "bet" -> "be"
-    ok = session.wait_until(
-        lambda sc: "be" in sc.row(ROWS - 2) and "bet" not in sc.row(ROWS - 2)
-    )
+    ok = session.wait_until(lambda sc: "be" in sc.row(ROWS - 2) and "bet" not in sc.row(ROWS - 2))
     _assert(session, ok, "Backspace did not shorten the search query")
     assert "echo beta" in session.screen.row(ROWS - 1), (
         f"refined forward search lost the match.\n{session.screen.text()}"
@@ -1045,7 +1049,9 @@ def test_output_search_failed_label_and_esc_cancel(session):
     assert session.wait_until(lambda sc: "line17" in sc.text())
 
     session.keys(b"\x1b[5~")  # PgUp — scrolled back
-    ok = session.wait_until(lambda sc: "[OUTPUT]" in sc.row(ROWS - 2) and "SCROLL" in sc.row(ROWS - 2))
+    ok = session.wait_until(
+        lambda sc: "[OUTPUT]" in sc.row(ROWS - 2) and "SCROLL" in sc.row(ROWS - 2)
+    )
     _assert(session, ok, "PgUp did not enter output scrollback mode")
 
     session.keys(b"/")

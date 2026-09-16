@@ -3,29 +3,46 @@
 import asyncio
 import threading
 import time
-from datetime import datetime
 
 import pytest
 
 from domain.models._internal.provider import (
-    ModelCapabilities, ToolDef,
-    VisionProcessor, KnowledgeProcessor, ToolUseProcessor,
-    PersonalityProcessor, StyleProcessor,
+    KnowledgeProcessor,
+    ModelCapabilities,
+    PersonalityProcessor,
     ProviderRouter,
-    register_provider, get_provider, list_providers, clear_providers,
-    register_processor, get_processor, list_processors, apply_processors,
+    StyleProcessor,
+    ToolDef,
+    ToolUseProcessor,
     _processors,
+    apply_processors,
+    clear_providers,
+    get_processor,
+    get_provider,
+    list_processors,
+    list_providers,
+    register_processor,
+    register_provider,
 )
 from domain.multimodal._internal.vision import ImageCaption, VisualObject
-from domain.shell._internal.surface import (
-    RenderLine, TextSurface, strip_ansi, clip,
-    LogSurface, Surface, STYLE_INFO, STYLE_WARN, STYLE_ERROR,
-    STYLE_DEBUG, STYLE_CRITICAL, _display_width,
-)
 from domain.shell._internal.log_buffer import LogBuffer, LogEntry
-
+from domain.shell._internal.surface import (
+    STYLE_CRITICAL,
+    STYLE_DEBUG,
+    STYLE_ERROR,
+    STYLE_INFO,
+    STYLE_WARN,
+    LogSurface,
+    RenderLine,
+    Surface,
+    TextSurface,
+    _display_width,
+    clip,
+    strip_ansi,
+)
 
 # ── ModelCapabilities ────────────────────────────────────────────────
+
 
 class TestModelCapabilities:
     def test_defaults(self):
@@ -43,7 +60,9 @@ class TestModelCapabilities:
         assert mc.streaming is False
 
     def test_all_true(self):
-        mc = ModelCapabilities(chat=True, streaming=True, embedding=True, vision=True, functions=True)
+        mc = ModelCapabilities(
+            chat=True, streaming=True, embedding=True, vision=True, functions=True
+        )
         assert mc.chat is True
         assert mc.streaming is True
         assert mc.embedding is True
@@ -84,7 +103,9 @@ class TestModelCapabilities:
 
     def test_all_false(self):
         mc = ModelCapabilities()
-        assert all([not mc.chat, not mc.streaming, not mc.embedding, not mc.vision, not mc.functions])
+        assert all(
+            [not mc.chat, not mc.streaming, not mc.embedding, not mc.vision, not mc.functions]
+        )
 
     def test_hashable(self):
         """ModelCapabilities is a mutable dataclass — not hashable by default."""
@@ -99,6 +120,7 @@ class TestModelCapabilities:
 
 
 # ── ToolDef ──────────────────────────────────────────────────────────
+
 
 class TestToolDef:
     def test_fields(self):
@@ -136,6 +158,7 @@ class TestToolDef:
 
 
 # ── ImageCaption ─────────────────────────────────────────────────────
+
 
 class TestImageCaption:
     def test_fields(self):
@@ -178,6 +201,7 @@ class TestImageCaption:
 
 # ── VisualObject ─────────────────────────────────────────────────────
 
+
 class TestVisualObject:
     def test_fields(self):
         vo = VisualObject(label="cat", bbox=[0, 0, 100, 100], confidence=0.9)
@@ -211,6 +235,7 @@ class TestVisualObject:
 
 
 # ── RenderLine ───────────────────────────────────────────────────────
+
 
 class TestRenderLine:
     def test_fields(self):
@@ -251,6 +276,7 @@ class TestRenderLine:
 
 
 # ── strip_ansi ───────────────────────────────────────────────────────
+
 
 class TestStripAnsi:
     def test_strip_codes(self):
@@ -302,6 +328,7 @@ class TestStripAnsi:
 
 
 # ── clip ─────────────────────────────────────────────────────────────
+
 
 class TestClip:
     def test_shorter_than_width(self):
@@ -373,6 +400,7 @@ class TestClip:
 
 # ── _display_width ──────────────────────────────────────────────────
 
+
 class TestDisplayWidth:
     def test_ascii(self):
         assert _display_width("hello") == 5
@@ -392,6 +420,7 @@ class TestDisplayWidth:
 
 
 # ── TextSurface ──────────────────────────────────────────────────────
+
 
 class TestTextSurface:
     def test_write_and_capture(self):
@@ -603,6 +632,7 @@ class TestTextSurface:
 
 # ── LogSurface ───────────────────────────────────────────────────────
 
+
 class TestLogSurface:
     def test_render_empty_buffer(self):
         buf = LogBuffer()
@@ -612,7 +642,9 @@ class TestLogSurface:
 
     def test_render_with_entries(self):
         buf = LogBuffer()
-        buf.append(LogEntry(timestamp=time.time(), level="INFO", source="slo.test", message="hello"))
+        buf.append(
+            LogEntry(timestamp=time.time(), level="INFO", source="slo.test", message="hello")
+        )
         surf = LogSurface(buf)
         lines = surf.render(10)
         assert len(lines) == 1
@@ -734,6 +766,7 @@ class TestLogSurface:
 
 # ── Provider Registries ──────────────────────────────────────────────
 
+
 class TestProviderRegistries:
     def setup_method(self):
         clear_providers()
@@ -829,6 +862,7 @@ class TestApplyProcessors:
         class PassThrough:
             async def process(self, messages):
                 return messages
+
         msgs = [{"role": "user", "content": "hi"}]
         result = asyncio.run(apply_processors(msgs, [PassThrough()]))
         assert result == msgs
@@ -837,9 +871,11 @@ class TestApplyProcessors:
         class BadProcessor:
             async def process(self, messages):
                 raise RuntimeError("boom")
+
         class GoodProcessor:
             async def process(self, messages):
                 return messages + [{"role": "system", "content": "added"}]
+
         msgs = [{"role": "user", "content": "hi"}]
         result = asyncio.run(apply_processors(msgs, [BadProcessor(), GoodProcessor()]))
         assert len(result) == 2
@@ -848,6 +884,7 @@ class TestApplyProcessors:
         class AddOne:
             async def process(self, messages):
                 return messages + [{"role": "system", "content": "one"}]
+
         msgs = [{"role": "user", "content": "hi"}]
         result = asyncio.run(apply_processors(msgs, [AddOne(), AddOne()]))
         assert len(result) == 3
@@ -858,6 +895,7 @@ class TestApplyProcessors:
                 for m in messages:
                     m["content"] = m["content"].upper()
                 return messages
+
         msgs = [{"role": "user", "content": "hello"}]
         result = asyncio.run(apply_processors(msgs, [Modifier()]))
         assert result[0]["content"] == "HELLO"
@@ -866,12 +904,14 @@ class TestApplyProcessors:
         class PassThrough:
             async def process(self, messages):
                 return messages
+
         msgs = [{"role": "user", "content": "hi"}]
         result = asyncio.run(apply_processors(msgs, [PassThrough()]))
         assert result is msgs
 
 
 # ── KnowledgeProcessor ───────────────────────────────────────────────
+
 
 class TestKnowledgeProcessor:
     def test_no_knowledge_passthrough(self):
@@ -920,6 +960,7 @@ class TestKnowledgeProcessor:
 
 # ── ToolUseProcessor ─────────────────────────────────────────────────
 
+
 class TestToolUseProcessor:
     def test_no_image_passthrough(self):
         proc = ToolUseProcessor()
@@ -929,7 +970,14 @@ class TestToolUseProcessor:
 
     def test_has_image_injects_tools(self):
         proc = ToolUseProcessor()
-        msgs = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}
+                ],
+            }
+        ]
         result = asyncio.run(proc.process(msgs))
         assert any("tool" in m.get("content", "").lower() for m in result)
 
@@ -958,10 +1006,15 @@ class TestToolUseProcessor:
 
     def test_has_image_list_content(self):
         proc = ToolUseProcessor()
-        msgs = [{"role": "user", "content": [
-            {"type": "text", "text": "hello"},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
-        ]}]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "hello"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                ],
+            }
+        ]
         result = asyncio.run(proc.process(msgs))
         assert len(result) >= 2  # system prompt + user msg
 
@@ -994,15 +1047,21 @@ class TestToolUseProcessor:
 
     def test_multiple_images(self):
         proc = ToolUseProcessor()
-        msgs = [{"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,def"}},
-        ]}]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,def"}},
+                ],
+            }
+        ]
         result = asyncio.run(proc.process(msgs))
         assert any("tool" in m.get("content", "").lower() for m in result)
 
 
 # ── PersonalityProcessor ─────────────────────────────────────────────
+
 
 class TestPersonalityProcessor:
     def test_no_traits_passthrough(self):
@@ -1055,9 +1114,15 @@ class TestPersonalityProcessor:
 
     def test_all_traits_described(self):
         traits = {
-            "warmth": 0.9, "creativity": 0.9, "empathy": 0.9,
-            "formality": 0.9, "humor": 0.9, "patience": 0.9,
-            "confidence": 0.9, "curiosity": 0.9, "directness": 0.9,
+            "warmth": 0.9,
+            "creativity": 0.9,
+            "empathy": 0.9,
+            "formality": 0.9,
+            "humor": 0.9,
+            "patience": 0.9,
+            "confidence": 0.9,
+            "curiosity": 0.9,
+            "directness": 0.9,
             "optimism": 0.9,
         }
         proc = PersonalityProcessor(traits=traits)
@@ -1075,7 +1140,9 @@ class TestPersonalityProcessor:
         proc = PersonalityProcessor(traits={"humor": 0.9})
         msgs = [{"role": "user", "content": "hi"}]
         result = asyncio.run(proc.process(msgs))
-        assert "humorous" in result[0]["content"].lower() or "playful" in result[0]["content"].lower()
+        assert (
+            "humorous" in result[0]["content"].lower() or "playful" in result[0]["content"].lower()
+        )
 
     def test_confidence_low(self):
         proc = PersonalityProcessor(traits={"confidence": 0.0})
@@ -1093,6 +1160,7 @@ class TestPersonalityProcessor:
 
 
 # ── StyleProcessor ───────────────────────────────────────────────────
+
 
 class TestStyleProcessor:
     def test_default_no_injection(self):
@@ -1161,7 +1229,9 @@ class TestStyleProcessor:
         proc = StyleProcessor(directness=0.1)
         msgs = [{"role": "user", "content": "hi"}]
         result = asyncio.run(proc.process(msgs))
-        assert "thorough" in result[0]["content"].lower() or "context" in result[0]["content"].lower()
+        assert (
+            "thorough" in result[0]["content"].lower() or "context" in result[0]["content"].lower()
+        )
 
     def test_set_style_replaces(self):
         proc = StyleProcessor(formality=0.9)
@@ -1179,6 +1249,7 @@ class TestStyleProcessor:
 
 
 # ── ProviderRouter (pure logic) ──────────────────────────────────────
+
 
 class TestProviderRouter:
     def test_add_processor_returns_self(self):
@@ -1270,43 +1341,54 @@ class TestProviderRouter:
 
 # ── attach_process_guard_to_provider ─────────────────────────────────
 
+
 class TestAttachProcessGuard:
     def setup_method(self):
         clear_providers()
 
     def test_no_provider_returns_false(self):
         from domain.models._internal.provider import attach_process_guard_to_provider
+
         assert attach_process_guard_to_provider(None) is False
 
     def test_provider_no_server_returns_false(self):
         from domain.models._internal.provider import attach_process_guard_to_provider
+
         class FakeProvider:
             def get_server(self):
                 return None
+
         register_provider("slonet-native", FakeProvider())
         assert attach_process_guard_to_provider(None) is False
         clear_providers()
 
     def test_provider_no_setter_returns_false(self):
         from domain.models._internal.provider import attach_process_guard_to_provider
+
         class FakeServer:
             pass
+
         class FakeProvider:
             def get_server(self):
                 return FakeServer()
+
         register_provider("slonet-native", FakeProvider())
         assert attach_process_guard_to_provider(None) is False
         clear_providers()
 
     def test_provider_with_setter_calls_it(self):
         from domain.models._internal.provider import attach_process_guard_to_provider
+
         called_with = []
+
         class FakeServer:
             def set_process_guard(self, guard):
                 called_with.append(guard)
+
         class FakeProvider:
             def get_server(self):
                 return FakeServer()
+
         register_provider("slonet-native", FakeProvider())
         result = attach_process_guard_to_provider("guard_instance")
         assert result is True

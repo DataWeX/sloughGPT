@@ -1,27 +1,27 @@
 """Comprehensive tests for domain.billing.token_service — pure logic only."""
 
-import pytest
-import time
-import sys
 import os
-from unittest.mock import patch
+import sys
+import time
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from domain.billing._internal.token_service import (
-    TokenBillingService,
-    TokenAccount,
-    UsageRecord,
-    Tier,
-    TIER_LIMITS,
     MODEL_PRICING,
+    TIER_LIMITS,
+    Tier,
+    TokenAccount,
+    TokenBillingService,
+    UsageRecord,
     get_token_billing_service,
 )
-
 
 # ---------------------------------------------------------------------------
 # Tier enum
 # ---------------------------------------------------------------------------
+
 
 class TestTier:
     def test_tier_values(self):
@@ -64,6 +64,7 @@ class TestTier:
 # MODEL_PRICING
 # ---------------------------------------------------------------------------
 
+
 class TestModelPricing:
     def test_default_pricing_exists(self):
         assert "default" in MODEL_PRICING
@@ -86,6 +87,7 @@ class TestModelPricing:
 # TokenAccount — dataclass and pure logic
 # ---------------------------------------------------------------------------
 
+
 class TestTokenAccount:
     def test_creation_defaults(self):
         account = TokenAccount(user_id="u1")
@@ -99,9 +101,13 @@ class TestTokenAccount:
 
     def test_creation_with_custom_values(self):
         account = TokenAccount(
-            user_id="u2", balance=5000, tier=Tier.PRO,
-            daily_used=100, monthly_used=500,
-            daily_limit=999, monthly_limit=9999,
+            user_id="u2",
+            balance=5000,
+            tier=Tier.PRO,
+            daily_used=100,
+            monthly_used=500,
+            daily_limit=999,
+            monthly_limit=9999,
         )
         assert account.balance == 5000
         assert account.tier == Tier.PRO
@@ -115,8 +121,11 @@ class TestTokenAccount:
 
     def test_post_init_preserves_custom_limits(self):
         account = TokenAccount(
-            user_id="u4", tier=Tier.PRO, balance=100,
-            daily_limit=5000, monthly_limit=50000,
+            user_id="u4",
+            tier=Tier.PRO,
+            balance=100,
+            daily_limit=5000,
+            monthly_limit=50000,
         )
         assert account.daily_limit == 5000
         assert account.monthly_limit == 50000
@@ -135,15 +144,19 @@ class TestTokenAccount:
 
     def test_cannot_afford_exceeds_daily_limit(self):
         account = TokenAccount(
-            user_id="u8", balance=100_000,
-            daily_limit=100, monthly_limit=100_000,
+            user_id="u8",
+            balance=100_000,
+            daily_limit=100,
+            monthly_limit=100_000,
         )
         assert account.can_afford(101) is False
 
     def test_cannot_afford_exceeds_monthly_limit(self):
         account = TokenAccount(
-            user_id="u9", balance=100_000,
-            daily_limit=100_000, monthly_limit=50,
+            user_id="u9",
+            balance=100_000,
+            daily_limit=100_000,
+            monthly_limit=50,
         )
         assert account.can_afford(51) is False
 
@@ -168,8 +181,10 @@ class TestTokenAccount:
 
     def test_deduct_failure_exceeds_daily(self):
         account = TokenAccount(
-            user_id="u13", balance=100_000,
-            daily_limit=100, monthly_limit=100_000,
+            user_id="u13",
+            balance=100_000,
+            daily_limit=100,
+            monthly_limit=100_000,
             daily_used=90,
         )
         account.last_daily_reset = time.time()
@@ -179,8 +194,10 @@ class TestTokenAccount:
 
     def test_deduct_failure_exceeds_monthly(self):
         account = TokenAccount(
-            user_id="u14", balance=100_000,
-            daily_limit=100_000, monthly_limit=100,
+            user_id="u14",
+            balance=100_000,
+            daily_limit=100_000,
+            monthly_limit=100,
             monthly_used=90,
         )
         account.last_daily_reset = time.time()
@@ -259,12 +276,16 @@ class TestTokenAccount:
 # TokenAccount — daily/monthly reset logic
 # ---------------------------------------------------------------------------
 
+
 class TestTokenAccountResets:
     def test_daily_reset_on_new_day(self):
         account = TokenAccount(
-            user_id="r1", balance=10_000,
-            daily_used=400, daily_limit=500,
-            monthly_used=400, monthly_limit=50_000,
+            user_id="r1",
+            balance=10_000,
+            daily_used=400,
+            daily_limit=500,
+            monthly_used=400,
+            monthly_limit=50_000,
         )
         # Simulate last reset was yesterday
         yesterday = time.time() - 86400
@@ -277,15 +298,18 @@ class TestTokenAccountResets:
 
     def test_monthly_reset_on_new_month(self):
         account = TokenAccount(
-            user_id="r2", balance=10_000,
-            daily_used=100, daily_limit=500,
-            monthly_used=49_000, monthly_limit=50_000,
+            user_id="r2",
+            balance=10_000,
+            daily_used=100,
+            daily_limit=500,
+            monthly_used=49_000,
+            monthly_limit=50_000,
         )
         # _maybe_reset uses last_daily_reset for BOTH day and month comparisons,
         # so set it to a time in a different month to trigger monthly reset.
         # Use day=1 so that even after monthly reset the daily check passes.
-        import calendar
         from datetime import datetime
+
         now = time.time()
         now_dt = datetime.fromtimestamp(now)
         target_month = now_dt.month - 2
@@ -294,8 +318,10 @@ class TestTokenAccountResets:
             target_month += 12
             target_year -= 1
         import datetime as dt_mod
-        target = dt_mod.datetime(target_year, target_month, 1,
-                                 now_dt.hour, now_dt.minute, now_dt.second).timestamp()
+
+        target = dt_mod.datetime(
+            target_year, target_month, 1, now_dt.hour, now_dt.minute, now_dt.second
+        ).timestamp()
         account.last_daily_reset = target
 
         # daily_used resets (different day), monthly_used resets (different month)
@@ -305,9 +331,12 @@ class TestTokenAccountResets:
 
     def test_no_reset_same_day(self):
         account = TokenAccount(
-            user_id="r3", balance=10_000,
-            daily_used=400, daily_limit=500,
-            monthly_used=400, monthly_limit=50_000,
+            user_id="r3",
+            balance=10_000,
+            daily_used=400,
+            daily_limit=500,
+            monthly_used=400,
+            monthly_limit=50_000,
         )
         account.last_daily_reset = time.time()
         account.last_monthly_reset = time.time()
@@ -317,9 +346,12 @@ class TestTokenAccountResets:
 
     def test_deduct_triggers_daily_reset(self):
         account = TokenAccount(
-            user_id="r4", balance=10_000,
-            daily_used=490, daily_limit=500,
-            monthly_used=490, monthly_limit=50_000,
+            user_id="r4",
+            balance=10_000,
+            daily_used=490,
+            daily_limit=500,
+            monthly_used=490,
+            monthly_limit=50_000,
         )
         yesterday = time.time() - 86400
         account.last_daily_reset = yesterday
@@ -335,12 +367,17 @@ class TestTokenAccountResets:
 # UsageRecord
 # ---------------------------------------------------------------------------
 
+
 class TestUsageRecord:
     def test_creation(self):
         record = UsageRecord(
-            id="r1", user_id="u1", model="gpt-4",
-            input_tokens=10, output_tokens=20,
-            total_tokens=30, cost=0.001,
+            id="r1",
+            user_id="u1",
+            model="gpt-4",
+            input_tokens=10,
+            output_tokens=20,
+            total_tokens=30,
+            cost=0.001,
             timestamp=1000.0,
         )
         assert record.id == "r1"
@@ -355,19 +392,29 @@ class TestUsageRecord:
 
     def test_creation_with_request_id(self):
         record = UsageRecord(
-            id="r2", user_id="u2", model="gpt-3.5-turbo",
-            input_tokens=5, output_tokens=15,
-            total_tokens=20, cost=0.0001,
-            timestamp=2000.0, request_id="req-abc",
+            id="r2",
+            user_id="u2",
+            model="gpt-3.5-turbo",
+            input_tokens=5,
+            output_tokens=15,
+            total_tokens=20,
+            cost=0.0001,
+            timestamp=2000.0,
+            request_id="req-abc",
         )
         assert record.request_id == "req-abc"
 
     def test_to_dict(self):
         record = UsageRecord(
-            id="r3", user_id="u3", model="claude-3-opus",
-            input_tokens=100, output_tokens=200,
-            total_tokens=300, cost=0.05,
-            timestamp=3000.0, request_id="req-xyz",
+            id="r3",
+            user_id="u3",
+            model="claude-3-opus",
+            input_tokens=100,
+            output_tokens=200,
+            total_tokens=300,
+            cost=0.05,
+            timestamp=3000.0,
+            request_id="req-xyz",
         )
         d = record.to_dict()
         assert d["id"] == "r3"
@@ -382,9 +429,13 @@ class TestUsageRecord:
 
     def test_to_dict_empty_request_id(self):
         record = UsageRecord(
-            id="r4", user_id="u4", model="default",
-            input_tokens=0, output_tokens=0,
-            total_tokens=0, cost=0.0,
+            id="r4",
+            user_id="u4",
+            model="default",
+            input_tokens=0,
+            output_tokens=0,
+            total_tokens=0,
+            cost=0.0,
             timestamp=0.0,
         )
         d = record.to_dict()
@@ -394,6 +445,7 @@ class TestUsageRecord:
 # ---------------------------------------------------------------------------
 # TokenBillingService — uses in-memory DB, no external APIs
 # ---------------------------------------------------------------------------
+
 
 class TestTokenBillingServiceAccounts:
     def test_get_or_create_new_account(self):
@@ -621,14 +673,14 @@ class TestTokenBillingServiceUsageHistory:
 
     def test_history_limit(self):
         service = TokenBillingService()
-        for i in range(10):
+        for _i in range(10):
             service.check_and_deduct("limit-user", "gpt-4", 1, 1)
         history = service.get_usage_history("limit-user", limit=3)
         assert len(history) == 3
 
     def test_history_offset(self):
         service = TokenBillingService()
-        for i in range(5):
+        for _i in range(5):
             service.check_and_deduct("offset-user", "gpt-4", 1, 1)
         all_history = service.get_usage_history("offset-user")
         paginated = service.get_usage_history("offset-user", offset=2)
@@ -637,7 +689,7 @@ class TestTokenBillingServiceUsageHistory:
 
     def test_history_limit_and_offset(self):
         service = TokenBillingService()
-        for i in range(10):
+        for _i in range(10):
             service.check_and_deduct("page-user", "gpt-4", 1, 1)
         page = service.get_usage_history("page-user", limit=2, offset=4)
         assert len(page) == 2
@@ -684,6 +736,7 @@ class TestTokenBillingServicePersistence:
 # Singleton
 # ---------------------------------------------------------------------------
 
+
 class TestSingleton:
     def test_get_token_billing_service_returns_same_instance(self):
         s1 = get_token_billing_service()
@@ -699,11 +752,14 @@ class TestSingleton:
 # Edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestEdgeCases:
     def test_deduct_at_exact_daily_limit(self):
         account = TokenAccount(
-            user_id="edge1", balance=100_000,
-            daily_limit=100, monthly_limit=100_000,
+            user_id="edge1",
+            balance=100_000,
+            daily_limit=100,
+            monthly_limit=100_000,
         )
         assert account.deduct(100) is True
         assert account.daily_used == 100
@@ -711,8 +767,10 @@ class TestEdgeCases:
 
     def test_deduct_at_exact_monthly_limit(self):
         account = TokenAccount(
-            user_id="edge2", balance=100_000,
-            daily_limit=100_000, monthly_limit=100,
+            user_id="edge2",
+            balance=100_000,
+            daily_limit=100_000,
+            monthly_limit=100,
         )
         assert account.deduct(100) is True
         assert account.monthly_used == 100
@@ -720,8 +778,10 @@ class TestEdgeCases:
 
     def test_large_token_deduction(self):
         account = TokenAccount(
-            user_id="edge3", balance=10_000_000,
-            daily_limit=10_000_000, monthly_limit=100_000_000,
+            user_id="edge3",
+            balance=10_000_000,
+            daily_limit=10_000_000,
+            monthly_limit=100_000_000,
         )
         assert account.deduct(9_999_999) is True
         assert account.balance == 1

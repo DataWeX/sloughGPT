@@ -25,7 +25,13 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, Path, Query
 from infrastructure.auth import require_auth_if_enabled
 from mogdb import MogDB
-from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
 logger = logging.getLogger("slo.docstore")
 

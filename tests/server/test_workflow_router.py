@@ -4,8 +4,8 @@ Tests for the workflow router — status, start, stop, triggers.
 Uses a standalone FastAPI app with only the router under test.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

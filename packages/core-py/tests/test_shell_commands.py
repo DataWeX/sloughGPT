@@ -9,9 +9,8 @@ import types
 
 import pytest
 
+from domain.shell._internal import commands as mod
 from domain.shell._internal.commands import ShellCommands
-
-from domains.shell import commands as mod
 
 
 class _FakeResponse:
@@ -57,10 +56,13 @@ class _FakeRequests(types.ModuleType):
 
     def set_get(self, resp):
         self._get_resp = resp
+
     def set_post(self, resp):
         self._post_resp = resp
+
     def set_delete(self, resp):
         self._delete_resp = resp
+
     def set_exception(self, exc):
         self._exc = exc
 
@@ -79,9 +81,11 @@ def _stub_api(monkeypatch, get_res=None, post_res=None, delete_res=None):
     def fake_get(path):
         calls["get"].append(path)
         return get_res
+
     def fake_post(path, data=None):
         calls["post"].append((path, data))
         return post_res
+
     def fake_delete(path):
         calls["delete"].append(path)
         return delete_res
@@ -153,7 +157,7 @@ class TestShellCommands:
         assert calls["post"][0][0] == "/training/jobs/j1/stop"
 
     def test_models_list(self, monkeypatch):
-        calls = _stub_api(monkeypatch, get_res=[{"id": "gpt2"}])
+        _stub_api(monkeypatch, get_res=[{"id": "gpt2"}])
         assert ShellCommands.models() == [{"id": "gpt2"}]
 
     def test_models_data_dict(self, monkeypatch):

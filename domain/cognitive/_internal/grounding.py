@@ -15,25 +15,27 @@ from __future__ import annotations
 
 import asyncio
 import re
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
 from collections import defaultdict
-import numpy as np
+from dataclasses import dataclass, field
+from typing import Any
 
+import numpy as np
 
 # =============================================================================
 # 1. RETRIEVAL-AUGMENTED GENERATION (RAG)
 # Solves: Hallucination, Lack of Grounding
 # =============================================================================
 
+
 @dataclass
 class Document:
     """A document for grounding."""
+
     id: str
     content: str
     source: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    embedding: Optional[np.ndarray] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    embedding: np.ndarray | None = None
 
 
 class RAGGrounder:
@@ -44,8 +46,8 @@ class RAGGrounder:
 
     def __init__(self, vector_store=None):
         self.vector_store = vector_store
-        self.documents: Dict[str, Document] = {}
-        self.chunks: List[Document] = []
+        self.documents: dict[str, Document] = {}
+        self.chunks: list[Document] = []
 
     def add_document(self, doc: Document, chunk_size: int = 512):
         """Add document and chunk it for retrieval."""
@@ -54,22 +56,18 @@ class RAGGrounder:
         # Chunk the document
         words = doc.content.split()
         for i in range(0, len(words), chunk_size):
-            chunk_text = ' '.join(words[i:i + chunk_size])
+            chunk_text = " ".join(words[i : i + chunk_size])
             chunk = Document(
                 id=f"{doc.id}_chunk_{i // chunk_size}",
                 content=chunk_text,
                 source=doc.source,
-                metadata={**doc.metadata, "parent_id": doc.id}
+                metadata={**doc.metadata, "parent_id": doc.id},
             )
             self.chunks.append(chunk)
 
     def add_text(self, text: str, source: str = "user"):
         """Quick add text."""
-        doc = Document(
-            id=f"doc_{len(self.documents)}",
-            content=text,
-            source=source
-        )
+        doc = Document(id=f"doc_{len(self.documents)}", content=text, source=source)
         self.add_document(doc)
         return doc.id
 
@@ -78,7 +76,7 @@ class RAGGrounder:
         query: str,
         top_k: int = 5,
         min_relevance: float = 0.5,
-    ) -> List[Document]:
+    ) -> list[Document]:
         """Retrieve relevant documents for grounding."""
         results = []
 
@@ -102,7 +100,7 @@ class RAGGrounder:
         response: str,
         query: str,
         include_sources: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Ground a response in retrieved documents.
         Returns response with citations and confidence.
@@ -127,8 +125,7 @@ class RAGGrounder:
         if supporting:
             grounding["grounded"] = True
             grounding["supporting_docs"] = [
-                {"content": d.content[:200], "source": d.source}
-                for d in supporting
+                {"content": d.content[:200], "source": d.source} for d in supporting
             ]
 
             # Calculate confidence based on retrieval
@@ -142,9 +139,11 @@ class RAGGrounder:
 # Solves: Catastrophic Forgetting
 # =============================================================================
 
+
 @dataclass
 class FisherInformation:
     """Fisher information for EWC."""
+
     param_name: str
     importance: float
     old_value: float
@@ -158,8 +157,8 @@ class ElasticWeightConsolidation:
 
     def __init__(self, model):
         self.model = model
-        self.fisher: Dict[str, float] = {}
-        self.optimal_params: Dict[str, float] = {}
+        self.fisher: dict[str, float] = {}
+        self.optimal_params: dict[str, float] = {}
         self.lambda_ewc: float = 1000  # Regularization strength
 
     def compute_fisher(self, data_loader, num_samples: int = 100):
@@ -187,7 +186,7 @@ class ElasticWeightConsolidation:
             for name, param in self.model.named_parameters():
                 if param.grad is not None:
                     grad = np.asarray(param.grad, dtype=np.float64)
-                    fisher_accum[name] += grad ** 2
+                    fisher_accum[name] += grad**2
 
             num_batches += 1
 
@@ -220,6 +219,7 @@ class ElasticWeightConsolidation:
 # 3. HIERARCHICAL CONTEXT (Solves: Context Limits)
 # =============================================================================
 
+
 class HierarchicalContext:
     """
     Handles long contexts efficiently.
@@ -229,8 +229,8 @@ class HierarchicalContext:
     def __init__(self, max_context: int = 4096, chunk_size: int = 512):
         self.max_context = max_context
         self.chunk_size = chunk_size
-        self.hierarchy: List[List[str]] = []  # [level] -> [chunks]
-        self.summary_cache: Dict[int, str] = {}
+        self.hierarchy: list[list[str]] = []  # [level] -> [chunks]
+        self.summary_cache: dict[int, str] = {}
 
     def build_hierarchy(self, text: str):
         """Build hierarchical representation."""
@@ -240,7 +240,7 @@ class HierarchicalContext:
         # Level 0: chunks
         chunks = []
         for i in range(0, len(tokens), self.chunk_size):
-            chunk = ' '.join(tokens[i:i + self.chunk_size])
+            chunk = " ".join(tokens[i : i + self.chunk_size])
             chunks.append(chunk)
 
         self.hierarchy = [chunks]
@@ -264,7 +264,7 @@ class HierarchicalContext:
         # In production, use LLM for better summarization
         combined = chunk1 + " " + chunk2
         words = combined.split()
-        summary = ' '.join(words[:self.chunk_size])
+        summary = " ".join(words[: self.chunk_size])
         return summary
 
     def get_relevant_context(self, query: str) -> str:
@@ -281,16 +281,16 @@ class HierarchicalContext:
             current_level -= 1
 
         # Combine relevant chunks
-        context = ' '.join(relevant_chunks)
-        return context[:self.max_context]
+        context = " ".join(relevant_chunks)
+        return context[: self.max_context]
 
     def attention_mask(self, seq_len: int) -> np.ndarray:
         """Create hierarchical attention mask."""
         mask = np.ones((seq_len, seq_len))
 
         # Allow attention within chunks
-        for level_idx, level in enumerate(self.hierarchy):
-            chunk_size = self.chunk_size * (2 ** level_idx)
+        for level_idx, _level in enumerate(self.hierarchy):
+            chunk_size = self.chunk_size * (2**level_idx)
 
             for i in range(seq_len):
                 chunk_start = (i // chunk_size) * chunk_size
@@ -308,18 +308,21 @@ class HierarchicalContext:
 # Solves: Understanding relationships, grounding facts
 # =============================================================================
 
+
 @dataclass
 class KnowledgeNode:
     """A node in the knowledge graph."""
+
     id: str
     label: str
     node_type: str  # entity, concept, event
-    properties: Dict[str, Any] = field(default_factory=dict)
+    properties: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class KnowledgeEdge:
     """An edge in the knowledge graph."""
+
     source: str
     target: str
     relation: str  # is_a, part_of, causes, related_to
@@ -333,9 +336,9 @@ class KnowledgeGrounding:
     """
 
     def __init__(self):
-        self.nodes: Dict[str, KnowledgeNode] = {}
-        self.edges: List[KnowledgeEdge] = []
-        self.adjacency: Dict[str, List[Tuple[str, KnowledgeEdge]]] = defaultdict(list)
+        self.nodes: dict[str, KnowledgeNode] = {}
+        self.edges: list[KnowledgeEdge] = []
+        self.adjacency: dict[str, list[tuple[str, KnowledgeEdge]]] = defaultdict(list)
 
     def add_fact(
         self,
@@ -348,25 +351,16 @@ class KnowledgeGrounding:
         # Ensure nodes exist
         for entity in [subject, object]:
             if entity not in self.nodes:
-                self.nodes[entity] = KnowledgeNode(
-                    id=entity,
-                    label=entity,
-                    node_type="entity"
-                )
+                self.nodes[entity] = KnowledgeNode(id=entity, label=entity, node_type="entity")
 
         # Add edge
-        edge = KnowledgeEdge(
-            source=subject,
-            target=object,
-            relation=predicate,
-            weight=confidence
-        )
+        edge = KnowledgeEdge(source=subject, target=object, relation=predicate, weight=confidence)
         self.edges.append(edge)
 
         # Update adjacency
         self.adjacency[subject].append((object, edge))
 
-    def query(self, subject: str, relation: Optional[str] = None) -> List[str]:
+    def query(self, subject: str, relation: str | None = None) -> list[str]:
         """Query knowledge graph."""
         results = []
 
@@ -376,15 +370,15 @@ class KnowledgeGrounding:
 
         return results
 
-    def verify_statement(self, statement: str) -> Dict[str, Any]:
+    def verify_statement(self, statement: str) -> dict[str, Any]:
         """Verify if a statement is grounded in knowledge."""
         # Parse statement
-        parts = statement.replace('.', '').split()
+        parts = statement.replace(".", "").split()
 
         if len(parts) >= 3:
             subject = parts[0]
             predicate = parts[1]
-            obj = ' '.join(parts[2:])
+            obj = " ".join(parts[2:])
 
             known_objects = self.query(subject, predicate)
             is_verified = obj in known_objects
@@ -404,7 +398,7 @@ class KnowledgeGrounding:
 
         # Find relevant nodes
         relevant_nodes = []
-        for node_id, node in self.nodes.items():
+        for node_id, _node in self.nodes.items():
             if any(term in node_id.lower() for term in query_terms):
                 relevant_nodes.append(node_id)
 
@@ -416,12 +410,13 @@ class KnowledgeGrounding:
                 for fact in facts[:2]:
                     context_parts.append(f"{node_id} is related to {fact}")
 
-        return '; '.join(context_parts)
+        return "; ".join(context_parts)
 
 
 # =============================================================================
 # 5. CURRICULUM LEARNING (Solves: Data Efficiency)
 # =============================================================================
+
 
 class CurriculumLearner:
     """
@@ -430,7 +425,7 @@ class CurriculumLearner:
     """
 
     def __init__(self):
-        self.difficulty_levels: Dict[str, List[Any]] = defaultdict(list)
+        self.difficulty_levels: dict[str, list[Any]] = defaultdict(list)
         self.current_level: int = 0
         self.stage: str = "bootstrapping"
 
@@ -439,7 +434,7 @@ class CurriculumLearner:
         level = int(difficulty * 10)  # 0-10 scale
         self.difficulty_levels[level].append(example)
 
-    def get_batch(self, batch_size: int) -> List[Any]:
+    def get_batch(self, batch_size: int) -> list[Any]:
         """Get next training batch based on curriculum."""
         if self.stage == "bootstrapping":
             # Start with easiest
@@ -456,6 +451,7 @@ class CurriculumLearner:
 
         # Sample
         import random
+
         return random.sample(examples, min(batch_size, len(examples)))
 
     def update_stage(self, performance: float):
@@ -474,6 +470,7 @@ class CurriculumLearner:
 # 6. GROUNDING ORCHESTRATOR
 # =============================================================================
 
+
 class GroundingOrchestrator:
     """
     Orchestrates all grounding mechanisms.
@@ -484,7 +481,7 @@ class GroundingOrchestrator:
         self.rag = RAGGrounder()
         self.kg = KnowledgeGrounding()
         self.curriculum = CurriculumLearner()
-        self.ewc: Optional[ElasticWeightConsolidation] = None
+        self.ewc: ElasticWeightConsolidation | None = None
 
     def add_data(self, text: str, source: str = "user"):
         """Add data for grounding."""
@@ -495,7 +492,7 @@ class GroundingOrchestrator:
         for s, p, o in triples:
             self.kg.add_fact(s, p, o)
 
-    def _extract_triples(self, text: str) -> List[Tuple[str, str, str]]:
+    def _extract_triples(self, text: str) -> list[tuple[str, str, str]]:
         """Extract knowledge triples from text."""
         triples = []
 
@@ -518,7 +515,7 @@ class GroundingOrchestrator:
         self,
         response: str,
         query: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Ground an LLM output."""
         result = {
             "response": response,
@@ -554,7 +551,7 @@ class GroundingOrchestrator:
         """Get relevant knowledge context for query."""
         return self.kg.get_context_for_prompt(query)
 
-    def get_curriculum_batch(self, batch_size: int) -> List[Any]:
+    def get_curriculum_batch(self, batch_size: int) -> list[Any]:
         """Get next curriculum batch."""
         return self.curriculum.get_batch(batch_size)
 

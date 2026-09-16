@@ -3,7 +3,6 @@
 import base64
 import json
 import time
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -14,15 +13,16 @@ from domain.infrastructure._internal.pugqeep.cache import (
     DiskStore,
     EvictionPolicy,
     HotStore,
-    MemoryStore as CacheMemoryStore,
     Tier,
     TieredCache,
+)
+from domain.infrastructure._internal.pugqeep.cache import (
+    MemoryStore as CacheMemoryStore,
 )
 from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
 from domain.infrastructure._internal.pugqeep.config import (
     CompressorConfig,
     LibraryConfig,
-    PointConfig,
 )
 from domain.infrastructure._internal.pugqeep.facade import PGQ
 from domain.infrastructure._internal.pugqeep.library import PointLibrary
@@ -31,6 +31,8 @@ from domain.infrastructure._internal.pugqeep.point_weight import PointWeight
 from domain.infrastructure._internal.pugqeep.store import (
     DirectoryStore,
     JSONStore,
+)
+from domain.infrastructure._internal.pugqeep.store import (
     MemoryStore as FunctionMemoryStore,
 )
 from domain.infrastructure._internal.pugqeep.task_queue import (
@@ -39,7 +41,6 @@ from domain.infrastructure._internal.pugqeep.task_queue import (
     TaskQueue,
     TaskStatus,
 )
-
 
 # ---- PointWeight ---------------------------------------------------------
 
@@ -63,9 +64,14 @@ class TestPointWeight:
         assert pw.generate() is out
 
     def test_data_property_lazy(self):
-        p = Point(identity="w", function_type="cluster",
-                  params={"centroids": np.array([1.0, 5.0], dtype=np.float32),
-                          "assignments": np.array([0, 1, 0, 1], dtype=np.uint8)})
+        p = Point(
+            identity="w",
+            function_type="cluster",
+            params={
+                "centroids": np.array([1.0, 5.0], dtype=np.float32),
+                "assignments": np.array([0, 1, 0, 1], dtype=np.uint8),
+            },
+        )
         pw = PointWeight(p, shape=(2, 2))
         np.testing.assert_array_equal(pw.data, np.array([[1, 5], [1, 5]]))
 
@@ -100,28 +106,44 @@ class TestPointWeight:
         assert pw.accuracy() > 0.5
 
     def test_from_point(self):
-        p = Point(identity="w", function_type="raw",
-                  params={"data_b64": base64.b64encode(np.arange(4, dtype=np.float32).tobytes()).decode(),
-                          "dtype": "float32"},
-                  dtype="float32", shape=(2, 2))
+        p = Point(
+            identity="w",
+            function_type="raw",
+            params={
+                "data_b64": base64.b64encode(np.arange(4, dtype=np.float32).tobytes()).decode(),
+                "dtype": "float32",
+            },
+            dtype="float32",
+            shape=(2, 2),
+        )
         pw = PointWeight.from_point(p, shape=(2, 2))
         assert pw.shape == (2, 2)
         np.testing.assert_array_equal(pw.generate(), np.arange(4).reshape(2, 2))
 
     def test_nbytes_and_accuracy(self):
-        p = Point(identity="w", function_type="cluster",
-                  params={"centroids": np.zeros(4, dtype=np.float32),
-                          "assignments": np.zeros(16, dtype=np.uint8)},
-                  accuracy=0.9)
+        p = Point(
+            identity="w",
+            function_type="cluster",
+            params={
+                "centroids": np.zeros(4, dtype=np.float32),
+                "assignments": np.zeros(16, dtype=np.uint8),
+            },
+            accuracy=0.9,
+        )
         pw = PointWeight(p, shape=(4, 4))
         assert pw.nbytes() == 4 * 4 + 16
         assert pw.accuracy() == 0.9
 
     def test_repr(self):
-        p = Point(identity="w", function_type="cluster",
-                  params={"centroids": np.zeros(4, dtype=np.float32),
-                          "assignments": np.zeros(4, dtype=np.uint8)},
-                  accuracy=0.95)
+        p = Point(
+            identity="w",
+            function_type="cluster",
+            params={
+                "centroids": np.zeros(4, dtype=np.float32),
+                "assignments": np.zeros(4, dtype=np.uint8),
+            },
+            accuracy=0.95,
+        )
         pw = PointWeight(p, shape=(2, 2))
         assert "cluster" in repr(pw)
         assert "0.950" in repr(pw)
@@ -141,8 +163,12 @@ class _FakeModule:
 
 class _FakeModel:
     def __init__(self):
-        self.modules = {"": self, "blocks.0": _FakeModule(
-            np.zeros((4, 4), dtype=np.float32), np.zeros(4, dtype=np.float32))}
+        self.modules = {
+            "": self,
+            "blocks.0": _FakeModule(
+                np.zeros((4, 4), dtype=np.float32), np.zeros(4, dtype=np.float32)
+            ),
+        }
         self._params = [
             _FakeParam("weight", np.zeros((4, 4), dtype=np.float32)),
             _FakeParam("bias", np.zeros(4, dtype=np.float32)),
@@ -159,6 +185,7 @@ class _FakeModel:
 class TestCompressSlonetToPoints:
     def test_compresses_all_weights(self):
         from domain.infrastructure._internal.pugqeep.point_weight import compress_slonet_to_points
+
         points = compress_slonet_to_points(_FakeModel(), method="cluster", n_clusters=4)
         assert len(points) == 5
         for pw in points.values():
@@ -166,6 +193,7 @@ class TestCompressSlonetToPoints:
 
     def test_tiny_arrays_stored_raw(self):
         from domain.infrastructure._internal.pugqeep.point_weight import compress_slonet_to_points
+
         points = compress_slonet_to_points(_FakeModel(), method="cluster", n_clusters=4)
         assert points["tiny"].point.function_type == "raw"
 
@@ -264,7 +292,9 @@ class TestCacheMemoryStore:
             store.put(f"k{i}", i, 40)
         store.get("k3")
         store.get("k3")
-        evicted = store.evict_lfu(target_bytes=10, access_counts={"k0": 0, "k1": 1, "k2": 2, "k3": 5})
+        evicted = store.evict_lfu(
+            target_bytes=10, access_counts={"k0": 0, "k1": 1, "k2": 2, "k3": 5}
+        )
         evicted_keys = [k for k, _ in evicted]
         assert "k0" in evicted_keys
         assert "k3" not in evicted_keys
@@ -520,8 +550,9 @@ class TestTask:
         assert task.id
 
     def test_to_dict_roundtrip(self):
-        task = Task(name="t", data={"x": 1}, priority=TaskPriority.HIGH,
-                    tree_id="tree", metadata={"a": 1})
+        task = Task(
+            name="t", data={"x": 1}, priority=TaskPriority.HIGH, tree_id="tree", metadata={"a": 1}
+        )
         d = task.to_dict()
         assert d["status"] == "pending"
         assert d["priority"] == 2
@@ -764,10 +795,15 @@ class TestFunctionMemoryStore:
 class TestJSONStore:
     def test_roundtrip(self, tmp_path):
         store = JSONStore(tmp_path / "points.json")
-        p = Point(identity="w", function_type="cluster",
-                  params={"centroids": np.array([1.0, 2.0], dtype=np.float32),
-                          "assignments": np.array([0, 1, 0, 1], dtype=np.uint8)},
-                  accuracy=0.9)
+        p = Point(
+            identity="w",
+            function_type="cluster",
+            params={
+                "centroids": np.array([1.0, 2.0], dtype=np.float32),
+                "assignments": np.array([0, 1, 0, 1], dtype=np.uint8),
+            },
+            accuracy=0.9,
+        )
         store.save(p)
         loaded = store.load("w")
         np.testing.assert_array_equal(loaded.params["centroids"], p.params["centroids"])
@@ -799,8 +835,7 @@ class TestJSONStore:
 class TestDirectoryStore:
     def test_roundtrip(self, tmp_path):
         store = DirectoryStore(tmp_path)
-        p = Point(identity="a/b", function_type="periodic",
-                  params={"a": 1.0, "b": 2.0, "w": 0.5})
+        p = Point(identity="a/b", function_type="periodic", params={"a": 1.0, "b": 2.0, "w": 0.5})
         store.save(p)
         loaded = store.load("a/b")
         assert loaded.function_type == "periodic"
@@ -812,9 +847,16 @@ class TestDirectoryStore:
 
     def test_crud_and_path_safety(self, tmp_path):
         store = DirectoryStore(tmp_path)
-        store.save(Point(identity="x/y", function_type="raw",
-                         params={"data_b64": base64.b64encode(np.ones(4, dtype=np.float32).tobytes()).decode(),
-                                 "dtype": "float32"}))
+        store.save(
+            Point(
+                identity="x/y",
+                function_type="raw",
+                params={
+                    "data_b64": base64.b64encode(np.ones(4, dtype=np.float32).tobytes()).decode(),
+                    "dtype": "float32",
+                },
+            )
+        )
         store.save(Point(identity="z", function_type="linear", params={"a": 1, "b": 0}))
         assert store.count() == 2
         assert len(store.list_all()) == 2
@@ -829,48 +871,57 @@ class TestDirectoryStore:
 
 class TestPointSerialization:
     def test_cluster_bytes_roundtrip(self):
-        p = Point(identity="w", function_type="cluster",
-                  params={"centroids": np.array([0.1, 0.5, 0.9], dtype=np.float32),
-                          "assignments": np.array([0, 1, 2, 0], dtype=np.uint8)})
+        p = Point(
+            identity="w",
+            function_type="cluster",
+            params={
+                "centroids": np.array([0.1, 0.5, 0.9], dtype=np.float32),
+                "assignments": np.array([0, 1, 2, 0], dtype=np.uint8),
+            },
+        )
         restored = Point.from_bytes(p.to_bytes())
         assert restored.function_type == "cluster"
         np.testing.assert_array_equal(restored.params["centroids"], p.params["centroids"])
         np.testing.assert_array_equal(restored.params["assignments"], p.params["assignments"])
 
     def test_cluster_bytes_with_residual_roundtrip(self):
-        p = Point(identity="w", function_type="cluster",
-                  params={"centroids": np.array([0.1, 0.5], dtype=np.float32),
-                          "assignments": np.array([0, 1, 0, 1], dtype=np.uint8)},
-                  residual=np.array([0.01, -0.02, 0.03, -0.04], dtype=np.float32))
+        p = Point(
+            identity="w",
+            function_type="cluster",
+            params={
+                "centroids": np.array([0.1, 0.5], dtype=np.float32),
+                "assignments": np.array([0, 1, 0, 1], dtype=np.uint8),
+            },
+            residual=np.array([0.01, -0.02, 0.03, -0.04], dtype=np.float32),
+        )
         restored = Point.from_bytes(p.to_bytes())
         np.testing.assert_allclose(restored.residual, p.residual, atol=1e-6)
 
     def test_periodic_bytes_roundtrip(self):
-        p = Point(identity="w", function_type="periodic",
-                  params={"a": 1.5, "b": -2.0, "w": 0.25})
+        p = Point(identity="w", function_type="periodic", params={"a": 1.5, "b": -2.0, "w": 0.25})
         restored = Point.from_bytes(p.to_bytes())
         assert restored.function_type == "periodic"
         assert restored.params["a"] == pytest.approx(1.5)
 
     def test_linear_bytes_roundtrip(self):
-        p = Point(identity="w", function_type="linear",
-                  params={"a": 2.0, "b": 1.0})
+        p = Point(identity="w", function_type="linear", params={"a": 2.0, "b": 1.0})
         restored = Point.from_bytes(p.to_bytes())
         assert restored.function_type == "linear"
         assert restored.params["a"] == pytest.approx(2.0)
 
     def test_polynomial_bytes_roundtrip(self):
-        p = Point(identity="w", function_type="polynomial",
-                  params={"a": 1.0, "b": 2.0, "c": 3.0})
+        p = Point(identity="w", function_type="polynomial", params={"a": 1.0, "b": 2.0, "c": 3.0})
         restored = Point.from_bytes(p.to_bytes())
         assert restored.function_type == "polynomial"
         assert restored.params["c"] == pytest.approx(3.0)
 
     def test_raw_bytes_roundtrip(self):
         arr = np.arange(8, dtype=np.float32)
-        p = Point(identity="w", function_type="raw",
-                  params={"data_b64": base64.b64encode(arr.tobytes()).decode(),
-                          "dtype": "float32"})
+        p = Point(
+            identity="w",
+            function_type="raw",
+            params={"data_b64": base64.b64encode(arr.tobytes()).decode(), "dtype": "float32"},
+        )
         restored = Point.from_bytes(p.to_bytes())
         np.testing.assert_array_equal(restored.generate(8), arr)
 
@@ -885,9 +936,11 @@ class TestPointSerialization:
 
     def test_nbytes_raw(self):
         arr = np.arange(8, dtype=np.float32)
-        p = Point(identity="w", function_type="raw",
-                  params={"data_b64": base64.b64encode(arr.tobytes()).decode(),
-                          "dtype": "float32"})
+        p = Point(
+            identity="w",
+            function_type="raw",
+            params={"data_b64": base64.b64encode(arr.tobytes()).decode(), "dtype": "float32"},
+        )
         assert p.nbytes() == 32
 
     def test_nbytes_function(self):
@@ -895,10 +948,16 @@ class TestPointSerialization:
         assert p.nbytes() == 4 + 2 * 4
 
     def test_to_dict_from_dict_cluster(self):
-        p = Point(identity="w", function_type="cluster",
-                  params={"centroids": np.array([1.0, 2.0], dtype=np.float32),
-                          "assignments": np.array([0, 1], dtype=np.uint8)},
-                  accuracy=0.95, shape=(2, 2))
+        p = Point(
+            identity="w",
+            function_type="cluster",
+            params={
+                "centroids": np.array([1.0, 2.0], dtype=np.float32),
+                "assignments": np.array([0, 1], dtype=np.uint8),
+            },
+            accuracy=0.95,
+            shape=(2, 2),
+        )
         d = p.to_dict()
         restored = Point.from_dict(d)
         np.testing.assert_array_equal(restored.params["centroids"], p.params["centroids"])
@@ -906,15 +965,17 @@ class TestPointSerialization:
         assert restored.shape == (2, 2)
 
     def test_to_dict_from_dict_with_residual(self):
-        p = Point(identity="w", function_type="linear",
-                  params={"a": 1.0, "b": 0.0},
-                  residual=np.array([0.1, 0.2], dtype=np.float32))
+        p = Point(
+            identity="w",
+            function_type="linear",
+            params={"a": 1.0, "b": 0.0},
+            residual=np.array([0.1, 0.2], dtype=np.float32),
+        )
         restored = Point.from_dict(p.to_dict())
         np.testing.assert_allclose(restored.residual, p.residual, atol=1e-6)
 
     def test_to_dict_raw(self):
-        p = Point(identity="w", function_type="raw",
-                  params={"data_b64": "x", "dtype": "float32"})
+        p = Point(identity="w", function_type="raw", params={"data_b64": "x", "dtype": "float32"})
         assert Point.from_dict(p.to_dict()).params["dtype"] == "float32"
 
 
@@ -926,8 +987,9 @@ class TestCompressorMeasure:
         return PointCompressor()
 
     def test_compress_with_config(self):
-        config = CompressorConfig(n_clusters=8, lloyd_iterations=2,
-                                   gap_fill_iterations=0, method="cluster")
+        config = CompressorConfig(
+            n_clusters=8, lloyd_iterations=2, gap_fill_iterations=0, method="cluster"
+        )
         c = PointCompressor(config)
         assert c.n_clusters == 8
         assert c.lloyd_iterations == 2
@@ -938,9 +1000,14 @@ class TestCompressorMeasure:
             self._compressor().compress(np.zeros(16), "w", method="bogus")
 
     def test_decompress_delegates(self):
-        p = Point(identity="w", function_type="cluster",
-                  params={"centroids": np.array([1.0, 2.0], dtype=np.float32),
-                          "assignments": np.array([0, 1, 0], dtype=np.uint8)})
+        p = Point(
+            identity="w",
+            function_type="cluster",
+            params={
+                "centroids": np.array([1.0, 2.0], dtype=np.float32),
+                "assignments": np.array([0, 1, 0], dtype=np.uint8),
+            },
+        )
         out = self._compressor().decompress(p, 3)
         np.testing.assert_array_equal(out, np.array([1, 2, 1]))
 
@@ -964,9 +1031,11 @@ class TestCompressorMeasure:
 
     def test_measure_raw(self):
         weights = np.zeros(8, dtype=np.float32)
-        point = Point(identity="w", function_type="raw",
-                      params={"data_b64": base64.b64encode(weights.tobytes()).decode(),
-                              "dtype": "float32"})
+        point = Point(
+            identity="w",
+            function_type="raw",
+            params={"data_b64": base64.b64encode(weights.tobytes()).decode(), "dtype": "float32"},
+        )
         m = self._compressor().measure_compression(weights, point)
         assert m["compressed_bytes"] == weights.nbytes
 
@@ -1010,12 +1079,26 @@ class TestPointLibrary:
 
     def test_list_by_type(self):
         lib = self._library()
-        lib.add(Point(identity="a", function_type="cluster",
-                      params={"centroids": np.zeros(2, dtype=np.float32),
-                              "assignments": np.zeros(2, dtype=np.uint8)}))
-        lib.add(Point(identity="b", function_type="cluster",
-                      params={"centroids": np.zeros(2, dtype=np.float32),
-                              "assignments": np.zeros(2, dtype=np.uint8)}))
+        lib.add(
+            Point(
+                identity="a",
+                function_type="cluster",
+                params={
+                    "centroids": np.zeros(2, dtype=np.float32),
+                    "assignments": np.zeros(2, dtype=np.uint8),
+                },
+            )
+        )
+        lib.add(
+            Point(
+                identity="b",
+                function_type="cluster",
+                params={
+                    "centroids": np.zeros(2, dtype=np.float32),
+                    "assignments": np.zeros(2, dtype=np.uint8),
+                },
+            )
+        )
         lib.add(Point(identity="c", function_type="linear", params={"a": 1.0, "b": 0.0}))
         assert len(lib.list_by_type("cluster")) == 2
         assert len(lib.list_by_type("linear")) == 1
@@ -1044,8 +1127,9 @@ class TestPointLibrary:
 
     def test_decompress_to_cluster(self):
         lib = self._library()
-        point = lib.compress_and_store(
-            np.arange(16, dtype=np.float32), "w", method="cluster", n_clusters=8)
+        lib.compress_and_store(
+            np.arange(16, dtype=np.float32), "w", method="cluster", n_clusters=8
+        )
         out = lib.decompress_to("w", shape=(4, 4))
         assert out.shape == (4, 4)
 
@@ -1062,17 +1146,30 @@ class TestPointLibrary:
 
     def test_best_points(self):
         lib = self._library()
-        lib.add(Point(identity="low", function_type="linear", params={"a": 1, "b": 0}, accuracy=0.5))
-        lib.add(Point(identity="high", function_type="linear", params={"a": 1, "b": 0}, accuracy=0.99))
-        lib.add(Point(identity="mid", function_type="linear", params={"a": 1, "b": 0}, accuracy=0.8))
+        lib.add(
+            Point(identity="low", function_type="linear", params={"a": 1, "b": 0}, accuracy=0.5)
+        )
+        lib.add(
+            Point(identity="high", function_type="linear", params={"a": 1, "b": 0}, accuracy=0.99)
+        )
+        lib.add(
+            Point(identity="mid", function_type="linear", params={"a": 1, "b": 0}, accuracy=0.8)
+        )
         assert [p.identity for p in lib.best_points(2)] == ["high", "mid"]
 
     def test_stats_with_points(self):
         lib = self._library()
-        lib.add(Point(identity="w", function_type="cluster",
-                      params={"centroids": np.zeros(4, dtype=np.float32),
-                              "assignments": np.zeros(16, dtype=np.uint8)},
-                      accuracy=0.9))
+        lib.add(
+            Point(
+                identity="w",
+                function_type="cluster",
+                params={
+                    "centroids": np.zeros(4, dtype=np.float32),
+                    "assignments": np.zeros(16, dtype=np.uint8),
+                },
+                accuracy=0.9,
+            )
+        )
         stats = lib.stats()
         assert stats["total_points"] == 1
         assert stats["types"] == {"cluster": 1}
@@ -1085,10 +1182,17 @@ class TestPointLibrary:
 
     def test_save_load_roundtrip(self, tmp_path):
         lib = self._library()
-        lib.add(Point(identity="w", function_type="cluster",
-                      params={"centroids": np.array([1.0, 2.0], dtype=np.float32),
-                              "assignments": np.array([0, 1, 0, 1], dtype=np.uint8)},
-                      accuracy=0.9))
+        lib.add(
+            Point(
+                identity="w",
+                function_type="cluster",
+                params={
+                    "centroids": np.array([1.0, 2.0], dtype=np.float32),
+                    "assignments": np.array([0, 1, 0, 1], dtype=np.uint8),
+                },
+                accuracy=0.9,
+            )
+        )
         path = lib.save(tmp_path / "lib.json")
         loaded = PointLibrary.load(path)
         assert loaded.name == "test_lib"
@@ -1256,9 +1360,9 @@ class TestPGQ:
 
         def _train(job_id, tree_id, point_library, is_cancelled):
             assert not is_cancelled()
-            point_library.add(Point(identity=f"{tree_id}.w",
-                                    function_type="linear",
-                                    params={"a": 1.0, "b": 0.0}))
+            point_library.add(
+                Point(identity=f"{tree_id}.w", function_type="linear", params={"a": 1.0, "b": 0.0})
+            )
             return {"weights": np.zeros(32, dtype=np.float32)}
 
         job_id = pgq.submit_training(_train, "job1")
