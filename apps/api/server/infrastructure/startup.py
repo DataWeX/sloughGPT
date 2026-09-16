@@ -541,7 +541,7 @@ class StartupOrchestrator:
             if _try_lazy_guard_autoload(cfg):
                 _sync_soul_traits()
                 logger.info(
-                    "Lazy-guard autoload ready: %s (parent weights deferred, background preload starting)",
+                    "Lazy-guard autoload ready: %s (loaded in PGQ thread)",
                     cfg.autoload_model,
                     extra={"tag": "START"},
                 )
@@ -1216,54 +1216,28 @@ def _try_lazy_guard_autoload(cfg) -> bool:
     try:
         from domain.inference._internal.slonet_provider import SloNetChatProvider
 
-        provider = SloNetChatProvider.lazy_from_slnc(
+        provider = SloNetChatProvider.from_slnc(
             slnc_path,
             model_id=model_type,
             quantize=cfg.quantize_slonet,
             quant_bits=cfg.quant_bits,
             quant_mode=cfg.quant_mode,
             quant_clip=cfg.quant_clip,
+            free_quantized_originals=True,
         )
     except Exception as e:
         logger.warning(
-            "Lazy-guard autoload: lazy provider creation failed (%s)", e, extra={"tag": "START"}
-        )
-        return False
-
-    try:
-        from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
-
-        process_guard = ProcessGuard(
-            slnc_path=slnc_path,
-            model_id=model_type,
-            worker_id=f"slo-{model_type.split('/')[-1]}",
-            max_restarts=3,
-            restart_delay=2.0,
-            generate_timeout=cfg.generate_timeout,
-            memory_limit_mb=resolve_memory_limit_mb(slnc_path, cfg.process_guard_memory_limit_mb),
-            quantize=cfg.quantize_slonet,
-            quant_bits=cfg.quant_bits,
-            quant_mode=cfg.quant_mode,
-            quant_clip=cfg.quant_clip,
-        )
-        process_guard.start()
-    except Exception as e:
-        logger.warning(
-            "Lazy-guard autoload: guard start failed (%s) — falling back to eager load",
+            "Lazy-guard autoload: model load failed (%s) — falling back to eager load",
             e,
             extra={"tag": "START"},
         )
         return False
 
     server_state.model_type = model_type
-    server_state.model = None
+    server_state.model = provider._model
     server_state.provider = provider
     server_state.tokenizer = getattr(provider, "_tokenizer", None)
 
-    # Mirror to the core ServerState singleton — the source for
-    # get_health_score() — so /health/detailed health_score reports a
-    # loaded model (provider-backed) instead of "No model loaded".
-    # Mirrors the manual-load path in controllers/models.py.
     try:
         from domain.infrastructure.server_state import get_server_state
 
@@ -1273,12 +1247,38 @@ def _try_lazy_guard_autoload(cfg) -> bool:
     except Exception as e:
         logger.debug("Core ServerState mirror failed: %s", e, extra={"tag": "START"})
 
-    # Track the guard so /models/process-guard status and the runtime toggle
-    # can manage it (autoload path bypasses the controller).
+    try:
+        from config import get_process_guard_enabled
+
+        process_guard = None
+        if get_process_guard_enabled():
+            from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
+
+            process_guard = ProcessGuard(
+                slnc_path=slnc_path,
+                model_id=model_type,
+                worker_id=f"slo-{model_type.split('/')[-1]}",
+                max_restarts=3,
+                restart_delay=2.0,
+                generate_timeout=cfg.generate_timeout,
+                memory_limit_mb=resolve_memory_limit_mb(
+                    slnc_path, cfg.process_guard_memory_limit_mb
+                ),
+                quantize=cfg.quantize_slonet,
+                quant_bits=cfg.quant_bits,
+                quant_mode=cfg.quant_mode,
+                quant_clip=cfg.quant_clip,
+            )
+            process_guard.start()
+    except Exception as e:
+        logger.debug("ProcessGuard creation failed (non-fatal): %s", e, extra={"tag": "START"})
+        process_guard = None
+
     try:
         from controllers.models import get_models_controller
 
-        get_models_controller().adopt_process_guard(process_guard, model_type)
+        if process_guard is not None:
+            get_models_controller().adopt_process_guard(process_guard, model_type)
     except Exception as e:
         logger.debug("ProcessGuard adoption into controller failed: %s", e, extra={"tag": "START"})
 
@@ -1304,9 +1304,8 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         return False
 
     logger.info(
-        "Lazy-guard autoload active for %s (worker: %s) — parent weights deferred",
+        "Lazy-guard autoload active for %s (loaded in PGQ thread)",
         model_type,
-        process_guard.worker_id,
         extra={"tag": "START"},
     )
     return True

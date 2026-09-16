@@ -731,6 +731,8 @@ class TestTryLazyGuardAutoload:
 
     def test_provider_creation_failure_returns_false(self):
         mod = self._import()
+        mock_slonet = MagicMock()
+        mock_slonet.SloNetChatProvider.from_slnc.side_effect = RuntimeError("boom")
         with (
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
@@ -739,15 +741,14 @@ class TestTryLazyGuardAutoload:
                 return_value=Path("/fake"),
             ),
             patch("os.path.exists", return_value=True),
-            patch(
-                "domain.inference._internal.slonet_provider.SloNetChatProvider",
-                side_effect=RuntimeError("boom"),
-            ),
+            patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
         ):
             assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is False
 
-    def test_guard_creation_failure_returns_false(self):
+    def test_guard_creation_failure_still_succeeds(self):
         mod = self._import()
+        mock_slonet = MagicMock()
+        mock_slonet.from_slnc.return_value = MagicMock(_model=MagicMock(), _tokenizer=MagicMock())
         with (
             patch.dict("sys.modules", {"state": MagicMock(model=None)}),
             patch("config.get_process_guard_enabled", return_value=True),
@@ -756,20 +757,29 @@ class TestTryLazyGuardAutoload:
                 return_value=Path("/fake"),
             ),
             patch("os.path.exists", return_value=True),
-            patch("domain.inference._internal.slonet_provider.SloNetChatProvider") as mock_provider,
+            patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
             patch(
                 "domain.infrastructure._internal.process_guard.ProcessGuard",
                 side_effect=RuntimeError("boom"),
             ),
+            patch(
+                "domain.infrastructure._internal.model_registry.get_model_registry",
+                return_value=MagicMock(),
+            ),
+            patch("domain.models._internal.provider.setup_providers"),
+            patch("controllers.models.get_models_controller"),
+            patch("domain.infrastructure._internal.server_state.get_server_state"),
         ):
-            mock_provider.lazy_from_slnc.return_value = MagicMock()
-            assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is False
+            assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is True
 
     def test_success_returns_true(self):
         mod = self._import()
         state = MagicMock(model=None)
         guard = MagicMock()
-        provider = MagicMock()
+        provider = MagicMock(_model=MagicMock(), _tokenizer=MagicMock())
+        mock_slonet = MagicMock()
+        mock_slonet.SloNetChatProvider.from_slnc.return_value = provider
+        mock_models = MagicMock()
         with (
             patch.dict("sys.modules", {"state": state}),
             patch("config.get_process_guard_enabled", return_value=True),
@@ -778,10 +788,7 @@ class TestTryLazyGuardAutoload:
                 return_value=Path("/fake"),
             ),
             patch("os.path.exists", return_value=True),
-            patch(
-                "domain.inference._internal.slonet_provider.SloNetChatProvider",
-                lazy_from_slnc=MagicMock(return_value=provider),
-            ),
+            patch.dict("sys.modules", {"domain.inference._internal.slonet_provider": mock_slonet}),
             patch(
                 "domain.infrastructure._internal.process_guard.ProcessGuard", return_value=guard
             ) as mock_pg,
@@ -793,7 +800,7 @@ class TestTryLazyGuardAutoload:
                 "domain.infrastructure._internal.model_registry.get_model_registry",
                 return_value=MagicMock(),
             ),
-            patch("domain.models._internal.provider.setup_providers") as mock_setup,
+            patch.dict("sys.modules", {"domain.models._internal.provider": mock_models}),
             patch("controllers.models.get_models_controller") as mock_ctrl,
             patch("domain.infrastructure._internal.server_state.get_server_state"),
         ):
@@ -801,7 +808,7 @@ class TestTryLazyGuardAutoload:
         assert result is True
         assert mock_pg.return_value is guard
         guard.start.assert_called_once()
-        mock_setup.assert_called_once()
+        mock_models.setup_providers.assert_called_once()
         mock_ctrl.return_value.adopt_process_guard.assert_called_once_with(guard, "gpt2")
 
 
