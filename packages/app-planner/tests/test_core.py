@@ -8,8 +8,10 @@ import datetime as _dt
 import re
 
 import pytest
-from planner import core as core_module
-from planner.core import cli_main, reset_note_store
+
+from app_planner import core as core_module
+from app_planner.core import reset_note_store
+from app_planner.cli import cli_main
 
 BACKENDS = ["file", "mogdb"]
 
@@ -23,8 +25,8 @@ def _isolate_store():
 @pytest.fixture(params=BACKENDS)
 def cli_env(tmp_path, monkeypatch, request):
     notes_dir = tmp_path / "notes"
-    monkeypatch.setenv("PLANNER_NOTES_DIR", str(notes_dir))
-    monkeypatch.setenv("PLANNER_BACKEND", request.param)
+    monkeypatch.setenv("APP_PLANNER_NOTES_DIR", str(notes_dir))
+    monkeypatch.setenv("APP_PLANNER_BACKEND", request.param)
     return notes_dir, request.param
 
 
@@ -58,9 +60,7 @@ def _find_id(cli_env, capsys, title):
 
 
 def test_new_creates_note(cli_env, capsys):
-    code, out = _run(
-        cli_env, capsys, "new", "Fix boot order", "--tags", "kernel,os", "--status", "wip"
-    )
+    code, out = _run(cli_env, capsys, "new", "Fix boot order", "--tags", "kernel,os", "--status", "wip")
     assert code == 0
     assert "Created:" in out
     code, out = _run(cli_env, capsys, "show", out.split()[1])
@@ -117,9 +117,7 @@ def test_list_filters_by_tag_and_status(cli_env, capsys):
 
 
 def test_show_displays_note_fields(cli_env, capsys):
-    note_id = _new(
-        cli_env, capsys, "Visible", "--tags", "t1", "--status", "wip", "--body", "hello body"
-    )
+    note_id = _new(cli_env, capsys, "Visible", "--tags", "t1", "--status", "wip", "--body", "hello body")
     code, out = _run(cli_env, capsys, "show", note_id)
     assert code == 0
     assert "Visible" in out
@@ -168,18 +166,8 @@ def _full_id(cli_env, capsys, short_id):
 def test_edit_updates_fields(cli_env, capsys):
     note_id = _new(cli_env, capsys, "Old title", "--tags", "a", "--status", "open")
     old_full = _full_id(cli_env, capsys, note_id)
-    code, out = _run(
-        cli_env,
-        capsys,
-        "edit",
-        note_id,
-        "--title",
-        "New title",
-        "--status",
-        "done",
-        "--body",
-        "wrapped up",
-    )
+    code, out = _run(cli_env, capsys, "edit", note_id,
+                      "--title", "New title", "--status", "done", "--body", "wrapped up")
     assert code == 0
     assert "Updated:" in out
     new_id = _find_id(cli_env, capsys, "New title")
@@ -228,7 +216,8 @@ def test_today_shows_created_note(cli_env, capsys, monkeypatch):
     note_id = _new(cli_env, capsys, "Today item")
     code, out = _run(cli_env, capsys, "show", note_id)
     assert code == 0
-    date_str = re.search(r"id: (\d{8})", out).group(1)
+    compact = re.search(r"id: (\d{8})", out).group(1)
+    date_str = f"{compact[:4]}-{compact[4:6]}-{compact[6:8]}"
 
     class _FakeDate:
         @classmethod
@@ -260,16 +249,13 @@ def test_list_today_flag_filters_to_today(cli_env, capsys, monkeypatch):
             return cls._fixed.astimezone(tz)
 
     _FakeDT._fixed = _dt.datetime.combine(
-        today - _dt.timedelta(days=1),
-        _dt.time(10, 0),
-        tzinfo=_dt.UTC,
+        today - _dt.timedelta(days=1), _dt.time(10, 0),
+        tzinfo=_dt.timezone.utc,
     )
     monkeypatch.setattr(core_module, "datetime", _FakeDT)
     _new(cli_env, capsys, "Yesterday item")
     _FakeDT._fixed = _dt.datetime.combine(
-        today,
-        _dt.time(10, 0),
-        tzinfo=_dt.UTC,
+        today, _dt.time(10, 0), tzinfo=_dt.timezone.utc,
     )
     _new(cli_env, capsys, "Today item")
     code, out = _run(cli_env, capsys, "list", "--today")
@@ -312,7 +298,8 @@ def test_timeline_groups_by_day(cli_env, capsys, monkeypatch):
     note_id = _new(cli_env, capsys, "Timeline note", "--tags", "t")
     code, out = _run(cli_env, capsys, "show", note_id)
     assert code == 0
-    date_str = re.search(r"id: (\d{8})", out).group(1)
+    compact = re.search(r"id: (\d{8})", out).group(1)
+    date_str = f"{compact[:4]}-{compact[4:6]}-{compact[6:8]}"
 
     class _FakeDate:
         @classmethod
@@ -331,17 +318,7 @@ def test_timeline_groups_by_day(cli_env, capsys, monkeypatch):
 
 
 def test_sprint_list_and_report(cli_env, capsys):
-    _new(
-        cli_env,
-        capsys,
-        "Sprint task",
-        "--sprint",
-        "S1",
-        "--status",
-        "done",
-        "--gh",
-        "DataWeX/sloughGPT#42",
-    )
+    _new(cli_env, capsys, "Sprint task", "--sprint", "S1", "--status", "done", "--gh", "DataWeX/sloughGPT#42")
     code, out = _run(cli_env, capsys, "sprint", "S1")
     assert code == 0
     assert "Sprint task" in out
@@ -352,9 +329,8 @@ def test_sprint_list_and_report(cli_env, capsys):
     assert "DataWeX/sloughGPT#42" in out
 
 
-def test_sync_dispatch(cli_env):
-    try:
-        code = cli_main(["sync", "--help"])
-        assert code == 0
-    except SystemExit as exc:
-        assert exc.code == 0
+def test_kanban_and_sync_dispatch(cli_env):
+    for cmd in ("sync", "gui", "board"):
+        with pytest.raises(SystemExit) as exc:
+            cli_main([cmd, "--help"])
+        assert exc.value.code == 0

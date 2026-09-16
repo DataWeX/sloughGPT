@@ -1,3 +1,4 @@
+/** @jsx React.createElement */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react'
 import React from 'react'
@@ -21,9 +22,9 @@ vi.mock('@sloughgpt/strui', () => {
     Select: ({ value, onValueChange, disabled, children }: any) => (
       <select value={value} disabled={disabled} onChange={(e) => onValueChange?.(e.target.value)}>{children}</select>
     ),
-    SelectTrigger: ({ children }: any) => <>{children}</>,
+    SelectTrigger: ({ children }: any) => <div>{children}</div>,
     SelectValue: () => null,
-    SelectContent: ({ children }: any) => <>{children}</>,
+    SelectContent: ({ children }: any) => <div>{children}</div>,
     SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
     Dialog: ({ children }: any) => <div data-testid="dialog">{children}</div>,
     DialogContent: ({ children }: any) => <div data-testid="dialog-content">{children}</div>,
@@ -69,7 +70,7 @@ const mockCheckpoints = vi.hoisted(() => ({
   handleLoadCheckpoint: vi.fn(), handleDeleteCheckpoint: vi.fn(),
 }))
 const mockForm = vi.hoisted(() => ({
-  canStart: true, inputMode: 'dataset', allJobs: [] as any[], startTraining: vi.fn(),
+  canStart: true, inputMode: 'dataset', allJobs: [] as any[], startTraining: vi.fn(), setInputMode: vi.fn(),
 }))
 const mockTest = vi.hoisted(() => ({
   testDialogOpen: false, testPrompt: '', testResult: null, testLoading: false,
@@ -150,6 +151,17 @@ describe('TrainingPage', () => {
     expect(screen.getByTestId('stat-Running').textContent).toContain('0')
     expect(screen.getByTestId('stat-Completed').textContent).toContain('0')
     expect(screen.getByTestId('stat-Saved versions').textContent).toContain('0')
+  })
+
+  it('shows welcome banner for first-time users with no jobs or checkpoints', async () => {
+    render(<Page />)
+    await waitFor(() => { expect(screen.getByText('Welcome to training')).toBeTruthy() })
+    expect(screen.getByText('1. Choose data')).toBeTruthy()
+    expect(screen.getByText('2. Configure')).toBeTruthy()
+    expect(screen.getByText('3. Train')).toBeTruthy()
+    expect(screen.getByText('4. Results')).toBeTruthy()
+    const buttons = screen.getAllByText('Start training')
+    expect(buttons.length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows stat counts derived from jobs and checkpoints', async () => {

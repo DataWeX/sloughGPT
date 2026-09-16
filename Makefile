@@ -144,3 +144,6 @@ clean:
 	cd apps/web && rm -rf .next node_modules/.vitest-cache
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
+
+test-planner:
+	PYTHONPATH=packages/app-planner/src:packages/mogdb/src python3 -m pytest packages/app-planner/tests/ -x -q $(ARGS)

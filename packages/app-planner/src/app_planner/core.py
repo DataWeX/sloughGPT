@@ -1,32 +1,34 @@
 #!/usr/bin/env python3
 """
-notes — standalone development journal.
+notes — standalone development journal, part of the app-planner CLI.
 
 File-backed note-taking with YAML frontmatter. Each note is an individual
 markdown file in ``~/.config/dev-notes/``.
 
 Usage as a module::
 
-    from notes import NoteStore
+    from app_planner.core import NoteStore
     store = NoteStore()
     note = store.create("Fix kernel boot", tags=["kernel", "bugfix"])
     store.search("kernel")
 
 Usage as a CLI::
 
-    notes new "Fix kernel boot" --tags kernel,bugfix --status done
-    notes list
-    notes search kernel
+    app-planner new "Fix kernel boot" --tags kernel,bugfix --status done
+    app-planner list
+    app-planner search kernel
 """
 
 from __future__ import annotations
 
-import logging
+import os
 import re
 import sys
-from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+import json
+import logging
+from datetime import datetime, timezone, date
 from pathlib import Path
+from dataclasses import dataclass, field, asdict
 from typing import Any
 
 from . import config
@@ -35,20 +37,10 @@ logger = logging.getLogger("dev-notes")
 
 _MAX_TITLE_SLUG = 60
 
-STATUS_ICONS = {
-    "open": "\u25cb",
-    "wip": "\u25d0",
-    "done": "\u25cf",
-    "blocked": "\u2715",
-    "review": "\u25c8",
-    "todo": "\u25cb",
-}
-
 
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
-
 
 @dataclass
 class Note:
@@ -60,10 +52,11 @@ class Note:
     updated_at: str = ""
     tags: list[str] = field(default_factory=list)
     status: str = "open"
+    author: str = ""
     sprint: str = ""
     gh: str = ""
+    assignee: str = ""
     body: str = ""
-    note_hash: str = ""
 
     @property
     def date_str(self) -> str:
@@ -98,12 +91,14 @@ class Note:
             f"tags: {tags_str}",
             f"status: {self.status}",
         ]
+        if self.author:
+            lines.append(f"author: {self.author}")
         if self.sprint:
             lines.append(f"sprint: {self.sprint}")
         if self.gh:
             lines.append(f"gh: {self.gh}")
-        if self.note_hash:
-            lines.append(f"note_hash: {self.note_hash}")
+        if self.assignee:
+            lines.append(f"assignee: {self.assignee}")
         lines.extend(["---", "", self.body.rstrip(), ""])
         return "\n".join(lines)
 
@@ -130,17 +125,17 @@ class Note:
             updated_at=meta.get("updated", ""),
             tags=tags,
             status=meta.get("status", "open"),
+            author=meta.get("author", ""),
             sprint=meta.get("sprint", ""),
             gh=meta.get("gh", ""),
+            assignee=meta.get("assignee", ""),
             body=body,
-            note_hash=meta.get("note_hash", ""),
         )
 
 
 # ---------------------------------------------------------------------------
 # Storage backends
 # ---------------------------------------------------------------------------
-
 
 class _FileBackend:
     def __init__(self, notes_dir: Path):
@@ -167,7 +162,8 @@ class _FileBackend:
 
     def find_by_prefix(self, prefix: str) -> list[str]:
         prefix_lower = prefix.lower()
-        return [p.stem for p in self._dir.glob("*.md") if p.stem.lower().startswith(prefix_lower)]
+        return [p.stem for p in self._dir.glob("*.md")
+                if p.stem.lower().startswith(prefix_lower)]
 
     def rename_id(self, old_id: str, new_id: str) -> None:
         old_path = self._dir / f"{old_id}.md"
@@ -208,7 +204,6 @@ class _MogDBBackend:
     def _ensure(self):
         if self._db is None:
             from mogdb import MogDB
-
             self._db = MogDB(str(self._dir / "store"))
             self._col = self._db.collection("notes")
         return self._col
@@ -293,7 +288,6 @@ class _MogDBBackend:
 # Store
 # ---------------------------------------------------------------------------
 
-
 class NoteStore:
     """Note store with pluggable backends (``file`` or ``mogdb``)."""
 
@@ -305,16 +299,10 @@ class NoteStore:
         else:
             self._bk = _FileBackend(self._dir)
 
-    def create(
-        self,
-        title: str,
-        tags: list[str] | None = None,
-        status: str = "open",
-        sprint: str = "",
-        gh: str = "",
-        body: str = "",
-    ) -> Note:
-        now = datetime.now(UTC)
+    def create(self, title: str, tags: list[str] | None = None,
+               status: str = "open", author: str = "", sprint: str = "", gh: str = "",
+               assignee: str = "", body: str = "") -> Note:
+        now = datetime.now(timezone.utc)
         slug = self._title_to_slug(title)
         ts = now.strftime("%Y%m%d_%H%M%S")
         note_id = f"{ts}_{slug}"
@@ -325,8 +313,10 @@ class NoteStore:
             updated_at=now.isoformat(),
             tags=tags or [],
             status=status,
+            author=author,
             sprint=sprint,
             gh=gh,
+            assignee=assignee,
             body=body,
         )
         self._bk.put(note)
@@ -366,9 +356,7 @@ class NoteStore:
                 chosen = candidates[0]
                 logger.warning(
                     "Ambiguous id '%s' (%d matches); using most recently updated: %s",
-                    note_id,
-                    len(candidates),
-                    chosen.id,
+                    note_id, len(candidates), chosen.id,
                 )
                 return chosen
         return None
@@ -378,10 +366,10 @@ class NoteStore:
         if note is None:
             return None
         old_id = note.id
-        for key in ("title", "tags", "status", "sprint", "gh", "body"):
+        for key in ("title", "tags", "status", "author", "sprint", "gh", "assignee", "body"):
             if key in kwargs and kwargs[key] is not None:
                 setattr(note, key, kwargs[key])
-        note.updated_at = datetime.now(UTC).isoformat()
+        note.updated_at = datetime.now(timezone.utc).isoformat()
         new_slug = self._title_to_slug(note.title)
         new_id = f"{note.created_at[:10].replace('-', '')}_{note.created_at[11:19].replace(':', '')}_{new_slug}"
         if new_id != old_id:
@@ -398,14 +386,9 @@ class NoteStore:
         logger.info("Deleted note: %s", matches[0])
         return True
 
-    def list_notes(
-        self,
-        tag: str | None = None,
-        status: str | None = None,
-        sprint: str | None = None,
-        limit: int = 50,
-        today: bool = False,
-    ) -> list[Note]:
+    def list_notes(self, tag: str | None = None, status: str | None = None,
+                   author: str | None = None, sprint: str | None = None, limit: int = 50,
+                   today: bool = False) -> list[Note]:
         notes: list[Note] = []
         today_str = date.today().isoformat() if today else ""
         for note in self._bk.all_notes():
@@ -414,6 +397,8 @@ class NoteStore:
             if tag and tag not in note.tags:
                 continue
             if status and note.status != status:
+                continue
+            if author and note.author != author:
                 continue
             if sprint and note.sprint != sprint:
                 continue
@@ -426,11 +411,10 @@ class NoteStore:
         q = query.lower()
         results: list[Note] = []
         for note in self._bk.all_notes():
-            if (
-                q in note.title.lower()
-                or q in " ".join(note.tags).lower()
-                or q in note.body.lower()
-            ):
+            if (q in note.title.lower()
+                    or q in " ".join(note.tags).lower()
+                    or q in note.body.lower()
+                    or q in (note.author or "").lower()):
                 results.append(note)
                 if len(results) >= limit:
                     break
@@ -471,7 +455,7 @@ class NoteStore:
 
         lines: list[str] = [
             f"# Sprint Report: {sprint_name}",
-            f"**Generated:** {datetime.now(UTC).isoformat()}",
+            f"**Generated:** {datetime.now(timezone.utc).isoformat()}",
             f"**Notes:** {len(notes)}",
             "",
             "---",
@@ -499,9 +483,8 @@ class NoteStore:
 
         return "\n".join(lines)
 
-    def timeline(
-        self, days: int = 7, tag: str | None = None, status: str | None = None
-    ) -> list[tuple[str, list[Note]]]:
+    def timeline(self, days: int = 7, tag: str | None = None,
+                 status: str | None = None) -> list[tuple[str, list[Note]]]:
         """Return notes grouped by day for the last *days* days.
 
         Returns a list of ``(date_str, [notes])`` tuples, newest day first.
@@ -546,10 +529,13 @@ class NoteStore:
 _store: NoteStore | None = None
 
 
-def get_note_store(backend: str = "file") -> NoteStore:
+def get_note_store(backend: str = "file", notes_dir=None) -> NoteStore:
+    """Return the singleton NoteStore, recreating if backend or dir changes."""
     global _store
-    if _store is None or _store._backend != backend:
-        _store = NoteStore(backend=backend)
+    if _store is None or _store._backend != backend or (
+        notes_dir is not None and _store._dir != notes_dir
+    ):
+        _store = NoteStore(notes_dir=notes_dir, backend=backend)
     return _store
 
 
@@ -562,295 +548,10 @@ def reset_note_store() -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
-
 def cli_main(argv: list[str] | None = None) -> int:
-    """CLI entry point.  Return exit code."""
-    if argv is None:
-        argv = sys.argv[1:]
-    if argv and argv[0] == "kanban":
-        from .kanban import cli_main as kcli
-
-        return kcli(argv[1:])
-    if argv and argv[0] == "gui":
-        from .gui import main as gmain
-
-        return gmain(argv[1:])
-    if argv and argv[0] == "sync":
-        from .sync import cli_main as scli
-
-        return scli(argv[1:])
-    if argv and argv[0] == "notes":
-        argv = argv[1:]
-    import argparse
-
-    parser = argparse.ArgumentParser(prog="planner")
-    parser.add_argument(
-        "--backend",
-        default=None,
-        choices=config.BACKENDS,
-        help="Storage backend (default: config/env)",
-    )
-    sub = parser.add_subparsers(dest="cmd")
-
-    p_new = sub.add_parser("new", help="Create a new note")
-    p_new.add_argument("title", help="Note title")
-    p_new.add_argument("--tags", default="", help="Comma-separated tags")
-    p_new.add_argument("--status", default="open", choices=config.STATUSES)
-    p_new.add_argument("--sprint", default="", help="Sprint identifier (e.g. S1, 2026-Q3)")
-    p_new.add_argument("--gh", default="", help="GitHub issue reference (e.g. owner/repo#123)")
-    p_new.add_argument("--body", default="", help="Body text")
-
-    p_list = sub.add_parser("list", help="List notes")
-    p_list.add_argument("--tag", default=None, help="Filter by tag")
-    p_list.add_argument("--status", default=None, choices=config.STATUSES + [None])
-    p_list.add_argument("--sprint", default=None, help="Filter by sprint")
-    p_list.add_argument("--limit", type=int, default=20, help="Max results")
-    p_list.add_argument("--today", action="store_true", help="Only today's notes")
-
-    p_show = sub.add_parser("show", help="Show a note")
-    p_show.add_argument("note_id", help="Note id or prefix")
-
-    p_edit = sub.add_parser("edit", help="Edit a note")
-    p_edit.add_argument("note_id", help="Note id or prefix")
-    p_edit.add_argument("--title", default=None, help="New title")
-    p_edit.add_argument("--tags", default=None, help="Comma-separated tags")
-    p_edit.add_argument("--status", default=None, choices=config.STATUSES)
-    p_edit.add_argument("--sprint", default=None, help="Sprint identifier")
-    p_edit.add_argument("--gh", default=None, help="GitHub issue reference")
-    p_edit.add_argument("--body", default=None, help="New body text")
-
-    p_del = sub.add_parser("delete", aliases=["rm"], help="Delete a note")
-    p_del.add_argument("note_id", help="Note id or prefix")
-
-    p_search = sub.add_parser("search", help="Search notes")
-    p_search.add_argument("query", help="Search string")
-    p_search.add_argument("--limit", type=int, default=20)
-
-    sub.add_parser("today", help="Show today's notes")
-
-    p_export = sub.add_parser("export", help="Export all notes")
-    p_export.add_argument("output", nargs="?", default=None, help="Output file")
-
-    sub.add_parser("tags", help="List all tags")
-    sub.add_parser("status", help="Status summary")
-
-    p_timeline = sub.add_parser("timeline", help="Show notes grouped by day")
-    p_timeline.add_argument(
-        "--days", type=int, default=7, help="Number of days to show (default 7)"
-    )
-    p_timeline.add_argument("--tag", default=None, help="Filter by tag")
-    p_timeline.add_argument("--status", default=None, choices=config.STATUSES)
-
-    p_sprint = sub.add_parser("sprint", help="Sprint operations")
-    p_sprint.add_argument("sprint_name", help="Sprint identifier (e.g. S1)")
-    p_sprint.add_argument(
-        "action",
-        nargs="?",
-        default="list",
-        choices=["list", "report"],
-        help="list: show notes (default). report: full markdown report.",
-    )
-
-    args = parser.parse_args(argv)
-
-    if args.cmd is None:
-        parser.print_help()
-        return 1
-
-    store = get_note_store(backend=args.backend or config.default_backend())
-
-    if args.cmd == "new":
-        tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else []
-        note = store.create(
-            args.title,
-            tags=tags,
-            status=args.status,
-            sprint=args.sprint,
-            gh=args.gh,
-            body=args.body,
-        )
-        sprint_tag = f" [{args.sprint}]" if args.sprint else ""
-        print(f"Created: {note.short_id}  {note.title}{sprint_tag}")
-        return 0
-
-    if args.cmd == "list":
-        notes = store.list_notes(
-            tag=args.tag, status=args.status, sprint=args.sprint, limit=args.limit, today=args.today
-        )
-        if not notes:
-            print("No notes found.")
-            return 0
-        by_date: dict[str, list[Note]] = {}
-        for n in notes:
-            by_date.setdefault(n.date_str, []).append(n)
-        for date_str, day_notes in by_date.items():
-            print(f"\n  {date_str}")
-            for n in day_notes:
-                tags_str = f"  [{', '.join(n.tags)}]" if n.tags else ""
-                icons = STATUS_ICONS
-                icon = icons.get(n.status, "?")
-                print(f"    {icon} {n.short_id}  {n.title}{tags_str}")
-        print(f"\n  {len(notes)} note(s)")
-        return 0
-
-    if args.cmd == "show":
-        note = store.get(args.note_id)
-        if note is None:
-            print(f"Note not found: {args.note_id}")
-            return 1
-        if note.id != args.note_id:
-            print(f"  (matched {note.id})")
-        tags_str = ", ".join(note.tags) if note.tags else "none"
-        sprint_str = f"\n  sprint: {note.sprint}" if note.sprint else ""
-        gh_str = f"\n  gh: {note.gh}" if note.gh else ""
-        if note.gh_url:
-            gh_str += f"\n  gh_url: {note.gh_url}"
-        print(f"  {note.title}")
-        print(f"  id: {note.id}")
-        print(f"  created: {note.created_at}")
-        print(f"  updated: {note.updated_at}")
-        print(f"  status: {note.status}")
-        print(f"  tags: {tags_str}{sprint_str}{gh_str}")
-        print("")
-        for line in note.body.split("\n"):
-            print(f"  {line}")
-        return 0
-
-    if args.cmd == "edit":
-        kwargs: dict[str, Any] = {}
-        if args.title is not None:
-            kwargs["title"] = args.title
-        if args.tags is not None:
-            kwargs["tags"] = [t.strip() for t in args.tags.split(",") if t.strip()]
-        if args.status is not None:
-            kwargs["status"] = args.status
-        if args.sprint is not None:
-            kwargs["sprint"] = args.sprint
-        if args.gh is not None:
-            kwargs["gh"] = args.gh
-        if args.body is not None:
-            kwargs["body"] = args.body
-        if not kwargs:
-            print("No changes specified.")
-            return 1
-        updated = store.update(args.note_id, **kwargs)
-        if updated is None:
-            print(f"Note not found: {args.note_id}")
-            return 1
-        print(f"Updated: {updated.short_id}  {updated.title}")
-        return 0
-
-    if args.cmd in ("delete", "rm"):
-        if store.delete(args.note_id):
-            print(f"Deleted: {args.note_id}")
-            return 0
-        print(f"Note not found: {args.note_id}")
-        return 1
-
-    if args.cmd == "search":
-        results = store.search(args.query, limit=args.limit)
-        if not results:
-            print(f"No notes matching '{args.query}'")
-            return 0
-        for n in results:
-            tags_str = f"  [{', '.join(n.tags)}]" if n.tags else ""
-            print(f"    {n.short_id}  {n.title}{tags_str}")
-        print(f"\n  {len(results)} result(s)")
-        return 0
-
-    if args.cmd == "sprint":
-        notes = store.list_notes(sprint=args.sprint_name, limit=9999)
-        if not notes:
-            print(f"No notes for sprint '{args.sprint_name}'.")
-            return 0
-
-        if args.action == "report":
-            report = store.sprint_report(args.sprint_name)
-            print(report)
-        else:
-            by_status: dict[str, list[Note]] = {}
-            for n in notes:
-                by_status.setdefault(n.status, []).append(n)
-            for status in config.STATUSES:
-                items = by_status.get(status, [])
-                if not items:
-                    continue
-                icons = STATUS_ICONS
-                icon = icons.get(status, "?")
-                print(f"\n  {icon} {status.upper()} ({len(items)})")
-                for n in items:
-                    gh_tag = f"  #{n.gh}" if n.gh else ""
-                    print(f"    {n.short_id}  {n.title}{gh_tag}")
-            print(f"\n  {len(notes)} note(s) in sprint '{args.sprint_name}'")
-        return 0
-
-    if args.cmd == "today":
-        notes = store.today()
-        if not notes:
-            print("No notes today.")
-            return 0
-        for n in notes:
-            tags_str = f"  [{', '.join(n.tags)}]" if n.tags else ""
-            icons = STATUS_ICONS
-            icon = icons.get(n.status, "?")
-            print(f"    {icon} {n.short_id}  {n.title}{tags_str}")
-        print(f"\n  {len(notes)} note(s) today")
-        return 0
-
-    if args.cmd == "export":
-        content = store.export_all(output_path=args.output)
-        if args.output:
-            print(f"Exported {store.count()} notes to {args.output}")
-        else:
-            print(content)
-        return 0
-
-    if args.cmd == "tags":
-        tag_counts: dict[str, int] = {}
-        for n in store.list_notes(limit=9999):
-            for tag in n.tags:
-                tag_counts[tag] = tag_counts.get(tag, 0) + 1
-        if not tag_counts:
-            print("No tags found.")
-            return 0
-        for tag, count in sorted(tag_counts.items()):
-            print(f"    {tag:20s}  {count} note(s)")
-        return 0
-
-    if args.cmd == "status":
-        status_counts: dict[str, int] = {}
-        for n in store.list_notes(limit=9999):
-            status_counts[n.status] = status_counts.get(n.status, 0) + 1
-        if not status_counts:
-            print("No notes.")
-            return 0
-        icons = STATUS_ICONS
-        for s in config.STATUSES:
-            count = status_counts.get(s, 0)
-            if count:
-                icon = icons.get(s, "?")
-                print(f"    {icon} {s:10s}  {count}")
-        return 0
-
-    if args.cmd == "timeline":
-        groups = store.timeline(days=args.days, tag=args.tag, status=args.status)
-        if not groups:
-            print("No notes in the specified range.")
-            return 0
-        total = 0
-        icons = STATUS_ICONS
-        for date_str, day_notes in groups:
-            print(f"\n  ══ {date_str} ══")
-            for n in day_notes:
-                icon = icons.get(n.status, "?")
-                tags_s = f"  [{', '.join(n.tags)}]" if n.tags else ""
-                sprint_s = f"  [{n.sprint}]" if n.sprint else ""
-                print(f"    {icon} {n.short_id}  {n.title}{tags_s}{sprint_s}")
-            total += len(day_notes)
-        print(f"\n  {total} note(s) across {len(groups)} day(s)")
-        return 0
-
-    return 0
+    """Backward-compatible entry point delegating to the unified CLI."""
+    from app_planner.cli import cli_main as unified_cli_main
+    return unified_cli_main(argv)
 
 
 if __name__ == "__main__":
