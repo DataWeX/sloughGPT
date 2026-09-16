@@ -19,7 +19,7 @@ torch = pytest.importorskip("torch")
 @pytest.fixture
 def inference_config():
     """Test config."""
-    from domains.inference.optimizer import InferenceConfig
+    from domain.inference._internal.optimizer import InferenceConfig
 
     return InferenceConfig(
         use_kv_cache=True,
@@ -56,7 +56,7 @@ class TestKVCache:
 
     def test_cache_initialization(self):
         """Test cache initialization."""
-        from domains.inference.optimizer import KVCache
+        from domain.inference._internal.optimizer import KVCache
 
         cache = KVCache(
             num_layers=12,
@@ -72,7 +72,7 @@ class TestKVCache:
 
     def test_cache_update_and_get(self):
         """Test cache update and retrieval."""
-        from domains.inference.optimizer import KVCache
+        from domain.inference._internal.optimizer import KVCache
 
         cache = KVCache(
             num_layers=1,
@@ -100,7 +100,7 @@ class TestKVCache:
 
     def test_cache_clear(self):
         """Test cache clearing."""
-        from domains.inference.optimizer import KVCache
+        from domain.inference._internal.optimizer import KVCache
 
         cache = KVCache(
             num_layers=1,
@@ -132,7 +132,7 @@ class TestContinuousBatcher:
 
     def test_batcher_initialization(self, inference_config):
         """Test batcher initialization."""
-        from domains.inference.optimizer import ContinuousBatcher
+        from domain.inference._internal.optimizer import ContinuousBatcher
 
         batcher = ContinuousBatcher(inference_config)
 
@@ -141,7 +141,7 @@ class TestContinuousBatcher:
 
     def test_add_request(self, inference_config):
         """Test adding requests."""
-        from domains.inference.optimizer import ContinuousBatcher
+        from domain.inference._internal.optimizer import ContinuousBatcher
 
         batcher = ContinuousBatcher(inference_config)
 
@@ -153,7 +153,7 @@ class TestContinuousBatcher:
 
     def test_get_next_batch(self, inference_config):
         """Test batch creation."""
-        from domains.inference.optimizer import ContinuousBatcher
+        from domain.inference._internal.optimizer import ContinuousBatcher
 
         batcher = ContinuousBatcher(inference_config)
 
@@ -181,7 +181,7 @@ class TestInferenceOptimizer:
 
     def test_optimizer_initialization(self, dummy_model, inference_config):
         """Test optimizer initialization."""
-        from domains.inference.optimizer import InferenceOptimizer
+        from domain.inference._internal.optimizer import InferenceOptimizer
 
         optimizer = InferenceOptimizer(
             model=dummy_model,
@@ -198,7 +198,7 @@ class TestInferenceOptimizer:
 
         if not os.environ.get("MAN_USE_TORCH_SHIM"):
             pytest.skip("compat torch not loaded; optimizer uses compat but test uses real torch")
-        from domains.inference.optimizer import InferenceOptimizer
+        from domain.inference._internal.optimizer import InferenceOptimizer
 
         optimizer = InferenceOptimizer(
             model=dummy_model,
@@ -228,7 +228,7 @@ class TestInferenceConfig:
 
     def test_default_config(self):
         """Test default configuration."""
-        from domains.inference.optimizer import InferenceConfig
+        from domain.inference._internal.optimizer import InferenceConfig
 
         config = InferenceConfig()
 
@@ -240,7 +240,7 @@ class TestInferenceConfig:
 
     def test_custom_config(self):
         """Test custom configuration."""
-        from domains.inference.optimizer import InferenceConfig
+        from domain.inference._internal.optimizer import InferenceConfig
 
         config = InferenceConfig(
             max_batch_size=64,
@@ -265,7 +265,7 @@ class TestInferenceBenchmark:
 
     def test_benchmark_initialization(self, dummy_model, inference_config):
         """Test benchmark initialization."""
-        from domains.inference.optimizer import InferenceBenchmark, InferenceOptimizer
+        from domain.inference._internal.optimizer import InferenceBenchmark, InferenceOptimizer
 
         optimizer = InferenceOptimizer(dummy_model, inference_config, device="cpu")
         benchmark = InferenceBenchmark(optimizer)
@@ -277,7 +277,7 @@ class TestInferenceBenchmark:
         """Test benchmark execution."""
         if not os.environ.get("MAN_USE_TORCH_SHIM"):
             pytest.skip("compat torch not loaded; optimizer uses compat but test uses real torch")
-        from domains.inference.optimizer import InferenceBenchmark, InferenceOptimizer
+        from domain.inference._internal.optimizer import InferenceBenchmark, InferenceOptimizer
 
         optimizer = InferenceOptimizer(dummy_model, inference_config, device="cpu")
         benchmark = InferenceBenchmark(optimizer)
@@ -296,7 +296,7 @@ class TestInferenceBenchmark:
 
     def test_print_results(self, dummy_model, inference_config):
         """Test results printing."""
-        from domains.inference.optimizer import InferenceBenchmark, InferenceOptimizer
+        from domain.inference._internal.optimizer import InferenceBenchmark, InferenceOptimizer
 
         optimizer = InferenceOptimizer(dummy_model, inference_config, device="cpu")
         benchmark = InferenceBenchmark(optimizer)

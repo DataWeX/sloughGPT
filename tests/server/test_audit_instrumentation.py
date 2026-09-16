@@ -110,8 +110,8 @@ class TestModelAudit:
         resp = models_client.post("/models/load", json={"model_id": "gpt2", "device": "cpu"})
         assert resp.status_code == 200
 
-    @patch("domains.infrastructure.quantization.walk_slo_linears", return_value={})
-    @patch("domains.models.provider.get_provider")
+    @patch("domain.infrastructure._internal.quantization.walk_slo_linears", return_value={})
+    @patch("domain.models._internal.provider.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
     def test_quantize_model_logs_event(self, mock_logger, mock_provider, mock_walk, models_client):
         provider = MagicMock()
@@ -135,8 +135,8 @@ class TestModelAudit:
             "model_type": "slonet",
         }
 
-    @patch("domains.infrastructure.quantization.walk_slo_linears", return_value={})
-    @patch("domains.models.provider.get_provider")
+    @patch("domain.infrastructure._internal.quantization.walk_slo_linears", return_value={})
+    @patch("domain.models._internal.provider.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
     def test_dequantize_model_logs_event(
         self, mock_logger, mock_provider, mock_walk, models_client
@@ -156,8 +156,8 @@ class TestModelAudit:
         assert kwargs["detail"] == "model_type=slonet"
         assert kwargs["extra"] == {"layers_reset": 0}
 
-    @patch("domains.models.provider.get_provider", return_value=None)
-    @patch("domains.slolib.gpu.get_accelerator")
+    @patch("domain.models._internal.provider.get_provider", return_value=None)
+    @patch("domain.slolib._internal.gpu.get_accelerator")
     @patch("infrastructure.auth.get_audit_logger")
     def test_set_precision_logs_event(self, mock_logger, mock_acc, mock_provider, models_client):
         acc = MagicMock()
@@ -175,7 +175,7 @@ class TestModelAudit:
         assert kwargs["extra"] == {"mode": "auto"}
         assert kwargs["detail"] == resp.json()["data"]["precision"]
 
-    @patch("domains.infrastructure.download_manager.get_download_manager")
+    @patch("domain.infrastructure._internal.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_start_download_logs_event(self, mock_logger, mock_mgr, models_client):
         mgr = MagicMock()
@@ -196,7 +196,7 @@ class TestModelAudit:
         assert first_call_kwargs["detail"] == "started"
         assert first_call_kwargs["extra"] == {"total_bytes_hint": 1000}
 
-    @patch("domains.infrastructure.download_manager.get_download_manager")
+    @patch("domain.infrastructure._internal.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_cancel_download_logs_event(self, mock_logger, mock_mgr, models_client):
         mgr = MagicMock()
@@ -211,7 +211,7 @@ class TestModelAudit:
         assert kwargs["resource"] == "gpt2"
         assert kwargs["detail"] == "cancelled"
 
-    @patch("domains.infrastructure.download_manager.get_download_manager")
+    @patch("domain.infrastructure._internal.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_cancel_missing_download_no_audit(self, mock_logger, mock_mgr, models_client):
         mgr = MagicMock()
@@ -227,7 +227,7 @@ class TestModelAudit:
 class TestSoulAudit:
     """Soul switch and weight-snapshot operations emit audit events."""
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_switch_soul_logs_event(self, mock_logger, mock_manager, souls_client):
         manager = MagicMock()
@@ -243,7 +243,7 @@ class TestSoulAudit:
         assert kwargs["resource"] == "friendly"
         assert kwargs["extra"] == {"checkpoint_name": ""}
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context._internal.managers.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_save_weight_snapshot_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -257,7 +257,7 @@ class TestSoulAudit:
         assert args[0] == "weights.snapshot.save"
         assert kwargs["resource"] == "my-snap"
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context._internal.managers.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_load_weight_snapshot_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -272,7 +272,7 @@ class TestSoulAudit:
         assert kwargs["resource"] == "my-snap"
         assert kwargs["detail"] == "traits_loaded=5"
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context._internal.managers.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_delete_weight_snapshot_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -287,7 +287,7 @@ class TestSoulAudit:
         assert kwargs["resource"] == "my-snap"
         assert kwargs["detail"] == "deleted=True"
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context._internal.managers.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_save_trait_weights_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -511,7 +511,7 @@ def kb_client():
     app = FastAPI()
     register_all_handlers(app)
     app.include_router(KBRouter().router)
-    with patch("domains.cognitive.rag_service.get_rag_service", return_value=MagicMock()):
+    with patch("domain.cognitive._internal.rag_service.get_rag_service", return_value=MagicMock()):
         yield TestClient(app, raise_server_exceptions=False)
 
 
@@ -638,7 +638,7 @@ def agents_client():
 class TestAgentsAudit:
     """Agent CRUD + execution emit audit events."""
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_create_logs_event(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
@@ -662,7 +662,7 @@ class TestAgentsAudit:
         assert kwargs["resource"] == "researcher"
         assert kwargs["detail"] == "Researcher"
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_update_logs_event(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
@@ -683,7 +683,7 @@ class TestAgentsAudit:
         assert args[0] == "agent.update"
         assert kwargs["resource"] == "researcher"
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_delete_logs_event(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
@@ -695,7 +695,7 @@ class TestAgentsAudit:
         assert args[0] == "agent.delete"
         assert kwargs["resource"] == "researcher"
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_execute_logs_event(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
@@ -707,7 +707,7 @@ class TestAgentsAudit:
         assert args[0] == "agent.execute"
         assert kwargs["resource"] == "researcher"
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_execute_error_no_audit(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
@@ -732,8 +732,8 @@ def multimodal_client():
 class TestMultimodalAudit:
     """Multimodal checkpoint load, delete and reset emit audit events."""
 
-    @patch("domains.training.video_trainer.VideoCaptionTrainer")
-    @patch("domains.training.video_trainer.list_video_checkpoints")
+    @patch("domain.training._internal.video_trainer.VideoCaptionTrainer")
+    @patch("domain.training._internal.video_trainer.list_video_checkpoints")
     @patch("infrastructure.auth.get_audit_logger")
     def test_load_checkpoint_logs_event(
         self, mock_logger, mock_list, mock_trainer, multimodal_client
@@ -747,7 +747,7 @@ class TestMultimodalAudit:
         assert args[0] == "multimodal.checkpoint.load"
         assert kwargs["resource"] == "video1"
 
-    @patch("domains.training.video_trainer.list_video_checkpoints")
+    @patch("domain.training._internal.video_trainer.list_video_checkpoints")
     @patch("infrastructure.auth.get_audit_logger")
     def test_load_missing_checkpoint_no_audit(self, mock_logger, mock_list, multimodal_client):
         mock_list.return_value = []
@@ -870,7 +870,7 @@ def user_adapters_client():
 class TestUserAdaptersAudit:
     """Per-user LoRA adapter mutations emit audit events."""
 
-    @patch("domains.feedback.get_per_user_lora")
+    @patch("domain.feedback._internal.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_update_logs_event(self, mock_logger, mock_store, user_adapters_client):
         resp = user_adapters_client.post(
@@ -884,7 +884,7 @@ class TestUserAdaptersAudit:
         assert kwargs["resource"] == "user1"
         assert kwargs["detail"] == "rating=thumbs_up"
 
-    @patch("domains.feedback.get_per_user_lora")
+    @patch("domain.feedback._internal.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_reset_logs_event(self, mock_logger, mock_store, user_adapters_client):
         resp = user_adapters_client.post("/user-adapters/user1/reset")
@@ -894,7 +894,7 @@ class TestUserAdaptersAudit:
         assert args[0] == "adapter.reset"
         assert kwargs["resource"] == "user1"
 
-    @patch("domains.feedback.get_per_user_lora")
+    @patch("domain.feedback._internal.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_merge_logs_event(self, mock_logger, mock_store, user_adapters_client):
         resp = user_adapters_client.post("/user-adapters/merge")
@@ -904,7 +904,7 @@ class TestUserAdaptersAudit:
         assert args[0] == "adapter.merge"
         assert kwargs["resource"] == "all"
 
-    @patch("domains.feedback.get_per_user_lora")
+    @patch("domain.feedback._internal.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_aggregate_best_logs_event(self, mock_logger, mock_store, user_adapters_client):
         store = mock_store.return_value
@@ -924,7 +924,7 @@ class TestUserAdaptersAudit:
         assert kwargs["resource"] == "best"
         assert kwargs["extra"] == {"user_count": 3, "total_feedback": 10}
 
-    @patch("domains.feedback.get_per_user_lora")
+    @patch("domain.feedback._internal.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_delete_logs_event(self, mock_logger, mock_store, user_adapters_client):
         resp = user_adapters_client.delete("/user-adapters/user1")
@@ -934,7 +934,7 @@ class TestUserAdaptersAudit:
         assert args[0] == "adapter.delete"
         assert kwargs["resource"] == "user1"
 
-    @patch("domains.feedback.get_per_user_lora")
+    @patch("domain.feedback._internal.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_prune_logs_event(self, mock_logger, mock_store, user_adapters_client):
         store = mock_store.return_value
@@ -963,7 +963,7 @@ def lora_eval_client():
 class TestLoraEvalAudit:
     """POST /lora-eval/aggregate emits an audit event."""
 
-    @patch("domains.feedback.per_user_lora.get_per_user_lora")
+    @patch("domain.feedback._internal.per_user_lora.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_aggregate_logs_event(self, mock_logger, mock_store, lora_eval_client):
         store = mock_store.return_value
@@ -1030,7 +1030,7 @@ def system_client():
 class TestSystemAudit:
     """Executor purge/cancel emit audit events with the acting user."""
 
-    @patch("domains.training.executor._instance")
+    @patch("domain.training._internal.executor._instance")
     @patch("infrastructure.auth.get_audit_logger")
     def test_purge_executor_logs_event(self, mock_logger, mock_instance, system_client):
         mock_instance.purge_completed.return_value = 3
@@ -1044,7 +1044,7 @@ class TestSystemAudit:
         assert kwargs["detail"] == "purged=3 max_age_s=3600.0"
         assert kwargs["user"] == "anonymous"
 
-    @patch("domains.training.executor._instance")
+    @patch("domain.training._internal.executor._instance")
     @patch("infrastructure.auth.get_audit_logger")
     def test_cancel_executor_logs_event(self, mock_logger, mock_instance, system_client):
         mock_instance.cancel.return_value = True

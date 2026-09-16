@@ -136,7 +136,7 @@ class TestSingleton:
 
 
 class TestRecordFeedback:
-    @patch("domains.training.executor.get_training_executor")
+    @patch("domain.training._internal.executor.get_training_executor")
     def test_record_feedback_basic(self, mock_executor, ctrl):
         mock_exec = MagicMock()
         mock_executor.return_value = mock_exec
@@ -150,7 +150,7 @@ class TestRecordFeedback:
         assert result["message_id"] == "m1"
         assert result["rating"] == "thumbs_up"
 
-    @patch("domains.training.executor.get_training_executor")
+    @patch("domain.training._internal.executor.get_training_executor")
     def test_record_feedback_writes_to_file(self, mock_executor, ctrl):
         mock_exec = MagicMock()
         mock_executor.return_value = mock_exec
@@ -161,7 +161,7 @@ class TestRecordFeedback:
 
 
 class TestRecordFeedbackPipeline:
-    @patch("domains.training.executor.get_training_executor")
+    @patch("domain.training._internal.executor.get_training_executor")
     def test_workflow_and_lora_called(self, mock_executor, ctrl):
         mock_exec = MagicMock()
         mock_executor.return_value = mock_exec
@@ -186,7 +186,7 @@ class TestRecordFeedbackPipeline:
         assert kwargs["conversation_id"] == "s1"
         lora.add_feedback.assert_called_once()
 
-    @patch("domains.training.executor.get_training_executor")
+    @patch("domain.training._internal.executor.get_training_executor")
     def test_no_pipeline_components_no_crash(self, mock_executor, ctrl):
         mock_exec = MagicMock()
         mock_executor.return_value = mock_exec
@@ -202,7 +202,7 @@ class TestRecordFeedbackPipeline:
             )
         assert result["status"] == "recorded"
 
-    @patch("domains.training.executor.get_training_executor")
+    @patch("domain.training._internal.executor.get_training_executor")
     def test_no_conversation_text_skips_pipeline(self, mock_executor, ctrl):
         mock_exec = MagicMock()
         mock_executor.return_value = mock_exec
@@ -214,7 +214,7 @@ class TestRecordFeedbackPipeline:
         mock_wf.assert_not_called()
         mock_lora.assert_not_called()
 
-    @patch("domains.training.executor.get_training_executor")
+    @patch("domain.training._internal.executor.get_training_executor")
     def test_thumbs_down_submits_dpo(self, mock_executor, ctrl):
         mock_exec = MagicMock()
         mock_executor.return_value = mock_exec
@@ -224,7 +224,7 @@ class TestRecordFeedbackPipeline:
         assert fn.__name__ == "_trigger_hf_dpo"
         assert job_id.startswith("dpo_")
 
-    @patch("domains.training.executor.get_training_executor")
+    @patch("domain.training._internal.executor.get_training_executor")
     def test_thumbs_up_no_dpo(self, mock_executor, ctrl):
         mock_exec = MagicMock()
         mock_executor.return_value = mock_exec
@@ -233,25 +233,26 @@ class TestRecordFeedbackPipeline:
 
     def test_get_workflow_failure_returns_none(self, ctrl):
         with patch(
-            "domains.feedback.workflow.get_feedback_workflow", side_effect=RuntimeError("down")
+            "domain.feedback._internal.workflow.get_feedback_workflow",
+            side_effect=RuntimeError("down"),
         ):
             assert ctrl._get_workflow() is None
 
     def test_get_lora_failure_returns_none(self, ctrl):
         with patch(
-            "domains.feedback.online_train.get_online_lora_updater",
+            "domain.feedback._internal.online_train.get_online_lora_updater",
             side_effect=RuntimeError("down"),
         ):
             assert ctrl._get_lora_updater() is None
 
-    @patch("domains.feedback.workflow.get_feedback_workflow")
+    @patch("domain.feedback._internal.workflow.get_feedback_workflow")
     def test_workflow_wired_with_model(self, mock_get_wf, ctrl):
         workflow = MagicMock()
         mock_get_wf.return_value = workflow
         student = object()
         tokenizer = object()
         ctrl._workflow = None
-        with patch("domains.training.service.get_state") as mock_get_state:
+        with patch("domain.training._internal.service.get_state") as mock_get_state:
             mock_state = MagicMock()
             mock_state.student_net = student
             mock_state.student_tokenizer = tokenizer
@@ -262,12 +263,12 @@ class TestRecordFeedbackPipeline:
 
 
 class TestTriggerHFDpo:
-    @patch("domains.feedback.hf_dpo.HFDPOTrainer")
+    @patch("domain.feedback._internal.hf_dpo.HFDPOTrainer")
     def test_no_model_returns(self, mock_trainer, ctrl):
         with patch("state.model", None), patch("state.tokenizer", None):
             feedback_module._trigger_hf_dpo()  # should not raise
 
-    @patch("domains.feedback.hf_dpo.HFDPOTrainer")
+    @patch("domain.feedback._internal.hf_dpo.HFDPOTrainer")
     def test_fewer_than_two_pairs_skips_train(self, mock_trainer, ctrl):
         trainer = MagicMock()
         trainer.prepare_dpo_pairs.return_value = [{"a": 1}]
@@ -276,7 +277,7 @@ class TestTriggerHFDpo:
             feedback_module._trigger_hf_dpo()
         trainer.train.assert_not_called()
 
-    @patch("domains.feedback.hf_dpo.HFDPOTrainer")
+    @patch("domain.feedback._internal.hf_dpo.HFDPOTrainer")
     def test_full_dpo_run(self, mock_trainer, ctrl):
         trainer = MagicMock()
         trainer.prepare_dpo_pairs.return_value = [{"a": 1}, {"b": 2}]
@@ -286,7 +287,7 @@ class TestTriggerHFDpo:
             feedback_module._trigger_hf_dpo()
         trainer.train.assert_called_once()
 
-    @patch("domains.feedback.hf_dpo.HFDPOTrainer")
+    @patch("domain.feedback._internal.hf_dpo.HFDPOTrainer")
     def test_exception_suppressed(self, mock_trainer, ctrl):
         trainer = MagicMock()
         trainer.prepare_dpo_pairs.side_effect = RuntimeError("boom")

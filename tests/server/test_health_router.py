@@ -225,7 +225,7 @@ class TestDebugInfo:
 class TestModelHealth:
     """GET /health/model"""
 
-    @patch("domains.feedback.model_health.get_health_monitor")
+    @patch("domain.feedback._internal.model_health.get_health_monitor")
     def test_model_health_no_model(self, mock_get_mon, client):
         mon = MagicMock()
         mon._model = None
@@ -235,7 +235,7 @@ class TestModelHealth:
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
 
-    @patch("domains.feedback.model_health.get_health_monitor")
+    @patch("domain.feedback._internal.model_health.get_health_monitor")
     def test_model_health_with_model(self, mock_get_mon, client):
         import state as _state
 
@@ -252,13 +252,13 @@ class TestModelHealth:
             _state.model = None
             _state.tokenizer = None
 
-    @patch("domains.feedback.model_health.get_health_monitor")
+    @patch("domain.feedback._internal.model_health.get_health_monitor")
     def test_model_health_error(self, mock_get_mon, client):
         mock_get_mon.side_effect = RuntimeError("monitor down")
         resp = client.get("/health/model")
         assert resp.status_code == 500
 
-    @patch("domains.feedback.model_health.get_health_monitor")
+    @patch("domain.feedback._internal.model_health.get_health_monitor")
     def test_model_health_ok_with_stats(self, mock_get_mon, client):
         mon = MagicMock()
         mon._model = None
@@ -274,7 +274,7 @@ class TestModelHealth:
         assert body["inference_count"] == 42
         assert body["latency_ms"] == 5
 
-    @patch("domains.feedback.model_health.get_health_monitor")
+    @patch("domain.feedback._internal.model_health.get_health_monitor")
     def test_model_health_registers_state_model(self, mock_get_mon, client):
         mon = MagicMock()
         mon._model = None

@@ -59,22 +59,22 @@ class TestResolveDevice:
     def test_explicit_cuda_unavailable_falls_back_to_cpu(self, ctrl):
         """Regression: requesting cuda on a GPU-less machine must not report
         cuda as the active device — resolve to cpu instead."""
-        with patch("domains.infrastructure.ml_types._cuda_available", return_value=False):
+        with patch("domain.infrastructure._internal.ml_types._cuda_available", return_value=False):
             result = ctrl._resolve_device("cuda")
         assert result == "cpu"
 
     def test_explicit_cuda_available_stays_cuda(self, ctrl):
-        with patch("domains.infrastructure.ml_types._cuda_available", return_value=True):
+        with patch("domain.infrastructure._internal.ml_types._cuda_available", return_value=True):
             result = ctrl._resolve_device("cuda")
         assert result == "cuda"
 
     def test_explicit_mps_unavailable_falls_back_to_cpu(self, ctrl):
-        with patch("domains.infrastructure.ml_types._mps_available", return_value=False):
+        with patch("domain.infrastructure._internal.ml_types._mps_available", return_value=False):
             result = ctrl._resolve_device("mps")
         assert result == "cpu"
 
     def test_explicit_mps_available_stays_mps(self, ctrl):
-        with patch("domains.infrastructure.ml_types._mps_available", return_value=True):
+        with patch("domain.infrastructure._internal.ml_types._mps_available", return_value=True):
             result = ctrl._resolve_device("mps")
         assert result == "mps"
 
@@ -165,7 +165,7 @@ class TestProcessGuard:
         guard = MagicMock()
         guard.device = "cpu"
         guard.worker_id = "w1"
-        with patch("domains.models.provider.attach_process_guard_to_provider"):
+        with patch("domain.models._internal.provider.attach_process_guard_to_provider"):
             ctrl.adopt_process_guard(guard, model_id="gpt2")
         assert ctrl._process_guard is guard
         assert ctrl._current_model == "gpt2"
@@ -282,7 +282,8 @@ class TestResolveActiveModelId:
         registry = MagicMock()
         registry.default_id = "reg-model"
         with patch(
-            "domains.infrastructure.model_registry.get_model_registry", return_value=registry
+            "domain.infrastructure._internal.model_registry.get_model_registry",
+            return_value=registry,
         ):
             assert ctrl._resolve_active_model_id() == "reg-model"
 
@@ -291,7 +292,8 @@ class TestResolveActiveModelId:
         registry.default_id = None
         with (
             patch(
-                "domains.infrastructure.model_registry.get_model_registry", return_value=registry
+                "domain.infrastructure._internal.model_registry.get_model_registry",
+                return_value=registry,
             ),
             patch("state.model_type", "state-model", create=True),
         ):
@@ -302,7 +304,8 @@ class TestResolveActiveModelId:
         registry.default_id = None
         with (
             patch(
-                "domains.infrastructure.model_registry.get_model_registry", return_value=registry
+                "domain.infrastructure._internal.model_registry.get_model_registry",
+                return_value=registry,
             ),
             patch("state.model_type", None, create=True),
         ):

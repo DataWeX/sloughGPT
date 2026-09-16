@@ -13,7 +13,7 @@ def test_sloughgpt_trainer_runs_short_cpu_session(
     corpus = tmp_path / "corpus.txt"
     corpus.write_text("abcdefgh" * 80, encoding="utf-8")
 
-    from domains.training.train_pipeline import SloughGPTTrainer
+    from domain.training._internal.train_pipeline import SloughGPTTrainer
 
     trainer = SloughGPTTrainer(
         data_path=str(corpus),

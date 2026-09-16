@@ -157,7 +157,7 @@ class TestPatchPersonality:
 class TestResetCompanion:
     """DELETE /companion/"""
 
-    @patch("domains.companion.create_companion")
+    @patch("domain.companion._internal.create_companion")
     @patch(COMPANION_TARGET)
     def test_reset_companion(self, mock_get, mock_create):
         new_comp = _mock_companion()
@@ -173,7 +173,7 @@ class TestResetCompanion:
 class TestPreset:
     """POST /companion/preset"""
 
-    @patch("domains.companion.create_companion")
+    @patch("domain.companion._internal.create_companion")
     @patch(COMPANION_TARGET)
     def test_use_preset(self, mock_get, mock_create):
         new_comp = _mock_companion()
@@ -186,7 +186,7 @@ class TestPreset:
             body = resp.json()
             assert "traits" in body["data"]
 
-    @patch("domains.companion.create_companion")
+    @patch("domain.companion._internal.create_companion")
     @patch(COMPANION_TARGET)
     def test_use_preset_warm(self, mock_get, mock_create):
         new_comp = _mock_companion()

@@ -32,7 +32,7 @@ def client(app):
 
 
 class TestListAgents:
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_returns_empty_list(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.list.return_value = []
@@ -40,7 +40,7 @@ class TestListAgents:
         assert resp.status_code == 200
         assert resp.json()["data"] == []
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_returns_passthrough_entries(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.list.return_value = [
@@ -70,7 +70,7 @@ class TestListAgents:
 
 
 class TestCreateAgent:
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_creates_agent(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.get.return_value = None
@@ -86,14 +86,14 @@ class TestCreateAgent:
         assert resp.status_code == 201
         assert resp.json()["data"]["id"] == "helper"
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_rejects_duplicate(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.get.return_value = {"id": "helper"}
         resp = client.post("/agents", json={"name": "Helper"})
         assert resp.status_code == 409
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_name_with_spaces_and_underscores_slugged(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.get.return_value = None
@@ -109,7 +109,7 @@ class TestCreateAgent:
         args, kwargs = sys.create.call_args
         assert kwargs["agent_id"] == "risk-analyst-writer"
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_explicit_id_used(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.get.return_value = None
@@ -125,7 +125,7 @@ class TestCreateAgent:
         args, kwargs = sys.create.call_args
         assert kwargs["agent_id"] == "my-agent"
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_tools_and_avatar_and_instructions_passthrough(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.get.return_value = None
@@ -162,7 +162,7 @@ class TestCreateAgent:
 
 
 class TestGetAgent:
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_returns_agent(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.get.return_value = {
@@ -176,7 +176,7 @@ class TestGetAgent:
         resp = client.get("/agents/helper")
         assert resp.status_code == 200
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_returns_404_for_missing(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.get.return_value = None
@@ -185,7 +185,7 @@ class TestGetAgent:
 
 
 class TestUpdateAgent:
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_updates_agent(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.update.return_value = {
@@ -199,14 +199,14 @@ class TestUpdateAgent:
         resp = client.put("/agents/helper", json={"name": "Updated"})
         assert resp.status_code == 200
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_returns_404_for_missing(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.update.return_value = None
         resp = client.put("/agents/nonexistent", json={"name": "X"})
         assert resp.status_code == 404
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_update_passthrough_all_fields(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.update.return_value = {
@@ -233,7 +233,7 @@ class TestUpdateAgent:
         assert kwargs["tools"] == ["web"]
         assert kwargs["avatar"] == "a"
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_update_empty_body_keeps_all_none(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.update.return_value = {
@@ -251,21 +251,21 @@ class TestUpdateAgent:
 
 
 class TestDeleteAgent:
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_deletes_agent(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.delete.return_value = True
         resp = client.delete("/agents/helper")
         assert resp.status_code == 200
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_returns_404_for_missing(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.delete.return_value = False
         resp = client.delete("/agents/nonexistent")
         assert resp.status_code == 404
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_delete_returns_status(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.delete.return_value = True
@@ -274,21 +274,21 @@ class TestDeleteAgent:
 
 
 class TestExecuteAgent:
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_executes_agent(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.execute = AsyncMock(return_value={"response": "hello"})
         resp = client.post("/agents/helper/execute", json={"request": "say hi"})
         assert resp.status_code == 200
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_returns_404_on_error(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.execute = AsyncMock(return_value={"error": "Agent not found"})
         resp = client.post("/agents/nonexistent/execute", json={"request": "hi"})
         assert resp.status_code == 404
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_execute_passes_session_and_user(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.execute = AsyncMock(return_value={"response": "ok"})
@@ -311,7 +311,7 @@ class TestExecuteAgent:
 
 
 class TestListRuns:
-    @patch("domains.agents.run_history.get_agent_run_store")
+    @patch("domain.agents._internal.run_history.get_agent_run_store")
     def test_lists_runs(self, mock_get_store, client):
         store = mock_get_store.return_value
         store.list_runs.return_value = [{"id": "run_1", "goal": "Research", "status": "completed"}]
@@ -321,7 +321,7 @@ class TestListRuns:
         assert body["count"] == 1
         assert body["runs"][0]["id"] == "run_1"
 
-    @patch("domains.agents.run_history.get_agent_run_store")
+    @patch("domain.agents._internal.run_history.get_agent_run_store")
     def test_lists_empty_runs(self, mock_get_store, client):
         store = mock_get_store.return_value
         store.list_runs.return_value = []
@@ -329,7 +329,7 @@ class TestListRuns:
         assert resp.status_code == 200
         assert resp.json() == {"status": "success", "data": {"runs": [], "count": 0}}
 
-    @patch("domains.agents.run_history.get_agent_run_store")
+    @patch("domain.agents._internal.run_history.get_agent_run_store")
     def test_limit_clamped_rooted_at_one(self, mock_get_store, client):
         store = mock_get_store.return_value
         store.list_runs.return_value = []
@@ -338,7 +338,7 @@ class TestListRuns:
         args, kwargs = store.list_runs.call_args
         assert kwargs.get("limit") == 1
 
-    @patch("domains.agents.run_history.get_agent_run_store")
+    @patch("domain.agents._internal.run_history.get_agent_run_store")
     def test_limit_capped_at_200(self, mock_get_store, client):
         store = mock_get_store.return_value
         store.list_runs.return_value = []
@@ -347,7 +347,7 @@ class TestListRuns:
         args, kwargs = store.list_runs.call_args
         assert kwargs.get("limit") == 200
 
-    @patch("domains.agents.run_history.get_agent_run_store")
+    @patch("domain.agents._internal.run_history.get_agent_run_store")
     def test_custom_valid_limit_passthrough(self, mock_get_store, client):
         store = mock_get_store.return_value
         store.list_runs.return_value = []
@@ -358,7 +358,7 @@ class TestListRuns:
 
 
 class TestGetRun:
-    @patch("domains.agents.run_history.get_agent_run_store")
+    @patch("domain.agents._internal.run_history.get_agent_run_store")
     def test_returns_run(self, mock_get_store, client):
         store = mock_get_store.return_value
         store.get.return_value = {"id": "run_1", "goal": "Research", "status": "completed"}
@@ -366,7 +366,7 @@ class TestGetRun:
         assert resp.status_code == 200
         assert resp.json()["data"]["id"] == "run_1"
 
-    @patch("domains.agents.run_history.get_agent_run_store")
+    @patch("domain.agents._internal.run_history.get_agent_run_store")
     def test_returns_404_for_missing(self, mock_get_store, client):
         store = mock_get_store.return_value
         store.get.return_value = None
@@ -377,14 +377,14 @@ class TestGetRun:
 class TestOrchestrate:
     """POST /agents/orchestrate — SSE planning pipeline."""
 
-    @patch("domains.agents.run_history.get_agent_run_store")
-    @patch("domains.agents.multi.MultiAgentOrchestrator")
+    @patch("domain.agents._internal.run_history.get_agent_run_store")
+    @patch("domain.agents._internal.multi.MultiAgentOrchestrator")
     def test_empty_goal_is_422(self, mock_orch, mock_store, client):
         resp = client.post("/agents/orchestrate", json={"goal": ""})
         assert resp.status_code == 422
 
-    @patch("domains.agents.run_history.get_agent_run_store")
-    @patch("domains.agents.multi.MultiAgentOrchestrator")
+    @patch("domain.agents._internal.run_history.get_agent_run_store")
+    @patch("domain.agents._internal.multi.MultiAgentOrchestrator")
     def test_plan_failure_streams_error(self, mock_orch, mock_store, client):
         store = mock_store.return_value
         store.start.return_value = "run-x"
@@ -396,8 +396,8 @@ class TestOrchestrate:
         assert "Could not plan this goal" in resp.text
         store.fail.assert_called_once_with("run-x", "Could not plan this goal")
 
-    @patch("domains.agents.run_history.get_agent_run_store")
-    @patch("domains.agents.multi.MultiAgentOrchestrator")
+    @patch("domain.agents._internal.run_history.get_agent_run_store")
+    @patch("domain.agents._internal.multi.MultiAgentOrchestrator")
     def test_full_pipeline_completes(self, mock_orch, mock_store, client):
         from types import SimpleNamespace
 
@@ -428,8 +428,8 @@ class TestOrchestrate:
         assert task.status == "completed"
         store.complete.assert_called_once()
 
-    @patch("domains.agents.run_history.get_agent_run_store")
-    @patch("domains.agents.multi.MultiAgentOrchestrator")
+    @patch("domain.agents._internal.run_history.get_agent_run_store")
+    @patch("domain.agents._internal.multi.MultiAgentOrchestrator")
     def test_task_failure_streams_error_event(self, mock_orch, mock_store, client):
         from types import SimpleNamespace
 
@@ -473,7 +473,7 @@ class TestAgentMethodCoverage:
         resp = client.get("/agents/helper/execute")
         assert resp.status_code == 405
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents._internal.system.get_agent_system")
     def test_orchestrate_wrong_method_shadowed_by_agent_lookup(self, mock_get_sys, client):
         sys = mock_get_sys.return_value
         sys.get.return_value = None

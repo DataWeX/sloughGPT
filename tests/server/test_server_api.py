@@ -59,7 +59,7 @@ class TestInferenceEndpoints:
     def test_inference_generate_503_when_no_provider(self):
         """Should error gracefully when no provider is available."""
         with (
-            patch("domains.models.provider.get_provider", return_value=None),
+            patch("domain.models._internal.provider.get_provider", return_value=None),
             patch("apps.api.server.state.model", "gpt2", create=True),
         ):
             response = client.post("/inference/generate", json={"prompt": "Hi"})
@@ -156,7 +156,7 @@ class TestSystemEndpoints:
         assert isinstance(data.get("active_jobs", 0), int)
 
     def test_executor_uninitialized_reports_zero_jobs(self):
-        from domains.training.executor import _instance as executor_instance
+        from domain.training._internal.executor import _instance as executor_instance
 
         if executor_instance is None:
             response = client.get("/system/executor")

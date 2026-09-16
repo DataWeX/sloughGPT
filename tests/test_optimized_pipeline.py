@@ -43,7 +43,7 @@ def dummy_batch():
 @pytest.fixture
 def optimizer_config():
     """Test optimization config."""
-    from domains.training.optimized_pipeline import LoRAMode, OptimizationConfig, Precision
+    from domain.training._internal.optimized_pipeline import LoRAMode, OptimizationConfig, Precision
 
     return OptimizationConfig(
         precision=Precision.BF16,
@@ -67,7 +67,7 @@ class TestMemoryOptimizer:
 
     def test_memory_profile(self):
         """Test memory profiling."""
-        from domains.training.optimized_pipeline import MemoryOptimizer
+        from domain.training._internal.optimized_pipeline import MemoryOptimizer
 
         optimizer = MemoryOptimizer()
 
@@ -83,7 +83,7 @@ class TestMemoryOptimizer:
 
     def test_suggest_batch_size(self):
         """Test adaptive batch sizing."""
-        from domains.training.optimized_pipeline import MemoryOptimizer
+        from domain.training._internal.optimized_pipeline import MemoryOptimizer
 
         optimizer = MemoryOptimizer()
 
@@ -94,7 +94,7 @@ class TestMemoryOptimizer:
 
     def test_peak_memory_tracking(self):
         """Test peak memory tracking."""
-        from domains.training.optimized_pipeline import MemoryOptimizer
+        from domain.training._internal.optimized_pipeline import MemoryOptimizer
 
         optimizer = MemoryOptimizer()
         optimizer.reset_peak_stats()
@@ -117,7 +117,7 @@ class TestLoRAWrapper:
 
     def test_lora_initialization(self, dummy_model):
         """Test LoRA wrapper initialization."""
-        from domains.training.optimized_pipeline import LoRAWrapper
+        from domain.training._internal.optimized_pipeline import LoRAWrapper
 
         linear = dummy_model[0]  # First linear layer
         lora = LoRAWrapper(linear, rank=8, alpha=16)
@@ -130,7 +130,7 @@ class TestLoRAWrapper:
 
     def test_lora_forward(self, dummy_model):
         """Test LoRA forward pass."""
-        from domains.training.optimized_pipeline import LoRAWrapper
+        from domain.training._internal.optimized_pipeline import LoRAWrapper
 
         linear = dummy_model[0]  # nn.Linear(128, 256)
         lora = LoRAWrapper(linear, rank=8, alpha=16)
@@ -144,7 +144,7 @@ class TestLoRAWrapper:
 
     def test_lora_trainable_params(self, dummy_model):
         """Test that only LoRA params are trainable."""
-        from domains.training.optimized_pipeline import LoRAWrapper
+        from domain.training._internal.optimized_pipeline import LoRAWrapper
 
         linear = dummy_model[0]
         lora = LoRAWrapper(linear, rank=8, alpha=16)
@@ -161,7 +161,7 @@ class TestLoRAWrapper:
 
     def test_lora_weight_merge(self, dummy_model):
         """Test LoRA weight merging."""
-        from domains.training.optimized_pipeline import LoRAWrapper
+        from domain.training._internal.optimized_pipeline import LoRAWrapper
 
         linear = dummy_model[0]
         lora = LoRAWrapper(linear, rank=8, alpha=16)
@@ -183,7 +183,7 @@ class TestLoRAModelWrapper:
 
     def test_lora_model_init(self, dummy_model):
         """Test LoRA model wrapper initialization."""
-        from domains.training.optimized_pipeline import LoRAModelWrapper
+        from domain.training._internal.optimized_pipeline import LoRAModelWrapper
 
         wrapper = LoRAModelWrapper(
             dummy_model,
@@ -197,7 +197,7 @@ class TestLoRAModelWrapper:
 
     def test_lora_model_forward(self, dummy_model):
         """Test LoRA model forward pass."""
-        from domains.training.optimized_pipeline import LoRAModelWrapper
+        from domain.training._internal.optimized_pipeline import LoRAModelWrapper
 
         wrapper = LoRAModelWrapper(
             dummy_model,
@@ -228,7 +228,7 @@ class TestOptimizedFederatedTrainer:
 
     def test_gradient_compression(self):
         """Test gradient compression."""
-        from domains.training.optimized_pipeline import OptimizedFederatedTrainer
+        from domain.training._internal.optimized_pipeline import OptimizedFederatedTrainer
 
         trainer = OptimizedFederatedTrainer(
             model=nn.Linear(128, 128),
@@ -253,7 +253,7 @@ class TestOptimizedFederatedTrainer:
 
     def test_adaptive_aggregation(self):
         """Test adaptive client aggregation."""
-        from domains.training.optimized_pipeline import OptimizedFederatedTrainer
+        from domain.training._internal.optimized_pipeline import OptimizedFederatedTrainer
 
         trainer = OptimizedFederatedTrainer(
             model=nn.Linear(128, 128),
@@ -283,7 +283,7 @@ class TestUnifiedPipeline:
 
     def test_pipeline_initialization(self, dummy_model):
         """Test pipeline initialization."""
-        from domains.training.optimized_pipeline import (
+        from domain.training._internal.optimized_pipeline import (
             MemoryOptimizer,
             UnifiedConfig,
         )
@@ -312,7 +312,7 @@ class TestDeepReasoning:
     @pytest.mark.asyncio
     async def test_deep_reasoning_basic(self):
         """Test basic deep reasoning."""
-        from domains.cognitive.reasoning.deep import DeepReasoning
+        from domain.cognitive._internal.reasoning.deep import DeepReasoning
 
         reasoning = DeepReasoning()
 
@@ -324,7 +324,7 @@ class TestDeepReasoning:
 
     def test_formal_logic_engine(self):
         """Test formal logic engine."""
-        from domains.cognitive.reasoning.deep import FormalLogicEngine
+        from domain.cognitive._internal.reasoning.deep import FormalLogicEngine
 
         engine = FormalLogicEngine()
 
@@ -340,7 +340,7 @@ class TestDeepReasoning:
 
     def test_working_memory(self):
         """Test working memory."""
-        from domains.cognitive.reasoning.deep import WorkingMemory
+        from domain.cognitive._internal.reasoning.deep import WorkingMemory
 
         wm = WorkingMemory(capacity=3)
 
@@ -358,7 +358,7 @@ class TestDeepReasoning:
 
     def test_unification(self):
         """Test unification algorithm."""
-        from domains.cognitive.reasoning.deep import FormalLogicEngine, Predicate, Term
+        from domain.cognitive._internal.reasoning.deep import FormalLogicEngine, Predicate, Term
 
         engine = FormalLogicEngine()
 
@@ -382,8 +382,8 @@ class TestSoulEngineIntegration:
 
     def test_soul_engine_reasoning(self):
         """Test SloEngine reasoning integration."""
-        from domains.core.soul import SloEngine
-        from domains.inference.slo_format import SloProfile
+        from domain.core._internal.soul import SloEngine
+        from domain.inference._internal.slo_format import SloProfile
 
         soul = SloProfile(name="TestSoul")
         engine = SloEngine(soul=soul)
@@ -397,8 +397,8 @@ class TestSoulEngineIntegration:
 
     def test_soul_syllogism(self):
         """Test SloEngine syllogism."""
-        from domains.core.soul import SloEngine
-        from domains.inference.slo_format import SloProfile
+        from domain.core._internal.soul import SloEngine
+        from domain.inference._internal.slo_format import SloProfile
 
         soul = SloProfile(name="TestSoul")
         engine = SloEngine(soul=soul)
@@ -413,8 +413,8 @@ class TestSoulEngineIntegration:
 
     def test_soul_knowledge_base(self):
         """Test SloEngine knowledge base."""
-        from domains.core.soul import SloEngine
-        from domains.inference.slo_format import SloProfile
+        from domain.core._internal.soul import SloEngine
+        from domain.inference._internal.slo_format import SloProfile
 
         soul = SloProfile(name="TestSoul")
         engine = SloEngine(soul=soul)
@@ -428,8 +428,8 @@ class TestSoulEngineIntegration:
 
     def test_soul_working_memory(self):
         """Test SloEngine working memory."""
-        from domains.core.soul import SloEngine
-        from domains.inference.slo_format import SloProfile
+        from domain.core._internal.soul import SloEngine
+        from domain.inference._internal.slo_format import SloProfile
 
         soul = SloProfile(name="TestSoul")
         engine = SloEngine(soul=soul)

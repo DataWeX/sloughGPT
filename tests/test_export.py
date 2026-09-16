@@ -12,7 +12,7 @@ pytest.importorskip("torch")
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    from domains.models import SloughGPTModel  # noqa: F401
+    from domain.models._internal import SloughGPTModel  # noqa: F401
 except (ImportError, ModuleNotFoundError):
     pytest.skip("domains.models not available", allow_module_level=True)
 
@@ -24,8 +24,9 @@ def test_onnx_export():
     print("=" * 50)
 
     import torch
-    from domains.models import SloughGPTModel
-    from domains.training.onnx_export import export_sloughgpt_to_onnx
+    from domain.training._internal.onnx_export import export_sloughgpt_to_onnx
+
+    from domain.models._internal import SloughGPTModel
 
     model = SloughGPTModel(vocab_size=256, n_embed=128, n_layer=4, n_head=8)
     model.eval()
@@ -59,8 +60,8 @@ def test_gguf_export():
     print("Testing GGUF Export")
     print("=" * 50)
 
-    from domains.models import SloughGPTModel
-    from domains.training.gguf_export import (
+    from domain.models._internal import SloughGPTModel
+    from domain.training._internal.gguf_export import (
         GGUFExportConfig,
         estimate_memory_requirements,
         export_to_gguf,
@@ -105,8 +106,8 @@ def test_safetensors_export():
     print("Testing SafeTensors Export")
     print("=" * 50)
 
-    from domains.models import SloughGPTModel
-    from domains.training.export import export_to_safetensors
+    from domain.models._internal import SloughGPTModel
+    from domain.training._internal.export import export_to_safetensors
 
     model = SloughGPTModel(vocab_size=256, n_embed=128, n_layer=4, n_head=8)
     model.eval()
@@ -142,8 +143,9 @@ def test_onnx_model_conversion():
     print("=" * 50)
 
     import torch
-    from domains.models import SloughGPTModel
-    from domains.training.onnx_export import SloughGPTONNXExport
+    from domain.training._internal.onnx_export import SloughGPTONNXExport
+
+    from domain.models._internal import SloughGPTModel
 
     model = SloughGPTModel(vocab_size=256, n_embed=128, n_layer=4, n_head=8)
     model.eval()

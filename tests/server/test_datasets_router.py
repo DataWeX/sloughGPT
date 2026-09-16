@@ -400,7 +400,7 @@ class TestCreateDatasetValidation:
 class TestImportGithub:
     """POST /datasets/import/github"""
 
-    @patch("domains.training.data_import.RepoImporter")
+    @patch("domain.training._internal.data_import.RepoImporter")
     def test_success(self, mock_cls, client):
         result = MagicMock()
         result.success = True
@@ -423,7 +423,7 @@ class TestImportGithub:
         assert body["dataset_id"] == "repo"
         assert "4 files" in body["message"]
 
-    @patch("domains.training.data_import.RepoImporter")
+    @patch("domain.training._internal.data_import.RepoImporter")
     def test_failure_400(self, mock_cls, client):
         result = MagicMock()
         result.success = False
@@ -454,7 +454,7 @@ class TestImportGithub:
 class TestImportHuggingface:
     """POST /datasets/import/huggingface"""
 
-    @patch("domains.training.data_import.HuggingFaceImporter")
+    @patch("domain.training._internal.data_import.HuggingFaceImporter")
     def test_success_default_name(self, mock_cls, client):
         result = MagicMock()
         result.success = True
@@ -469,7 +469,7 @@ class TestImportHuggingface:
         assert body["dataset_id"] == "myds"
         assert "2 splits" in body["message"]
 
-    @patch("domains.training.data_import.HuggingFaceImporter")
+    @patch("domain.training._internal.data_import.HuggingFaceImporter")
     def test_failure_400(self, mock_cls, client):
         result = MagicMock()
         result.success = False
@@ -489,7 +489,7 @@ class TestImportHuggingface:
 class TestImportUrl:
     """POST /datasets/import/url"""
 
-    @patch("domains.training.data_import.URLImporter")
+    @patch("domain.training._internal.data_import.URLImporter")
     def test_success(self, mock_cls, client):
         result = MagicMock()
         result.success = True
@@ -509,7 +509,7 @@ class TestImportUrl:
         assert resp.json()["success"] is True
         assert "Downloaded 50 chars" in resp.json()["message"]
 
-    @patch("domains.training.data_import.URLImporter")
+    @patch("domain.training._internal.data_import.URLImporter")
     def test_failure_400(self, mock_cls, client):
         result = MagicMock()
         result.success = False
@@ -535,7 +535,7 @@ class TestImportUrl:
 class TestImportISBN:
     """POST /datasets/import/isbn"""
 
-    @patch("domains.training.data_import.ISBNImporter")
+    @patch("domain.training._internal.data_import.ISBNImporter")
     def test_success_unnamed(self, mock_cls, client):
         result = MagicMock()
         result.success = True
@@ -549,7 +549,7 @@ class TestImportISBN:
         assert resp.status_code == 200
         assert resp.json()["dataset_id"] == "book_1234567890123"
 
-    @patch("domains.training.data_import.ISBNImporter")
+    @patch("domain.training._internal.data_import.ISBNImporter")
     def test_metadata_only_when_no_files(self, mock_cls, client):
         result = MagicMock()
         result.success = True
@@ -591,7 +591,7 @@ class TestImportMiscValidation:
 class TestBatchImport:
     """POST /datasets/import/batch"""
 
-    @patch("domains.training.data_import.URLImporter")
+    @patch("domain.training._internal.data_import.URLImporter")
     def test_mixed_sources_reports_errors(self, mock_url, client):
         ok = MagicMock()
         ok.success = True
@@ -628,7 +628,7 @@ class TestBatchImport:
         )
         assert resp.json()["data"]["imported"] == 1
 
-    @patch("domains.training.data_import.RepoImporter")
+    @patch("domain.training._internal.data_import.RepoImporter")
     def test_source_failure_recorded(self, mock_repo, client):
         bad = MagicMock()
         bad.success = False

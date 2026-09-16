@@ -290,7 +290,7 @@ class TestMobileSyncStatus:
 class TestMobileNotificationsRegister:
     """POST /mobile/notifications/register"""
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile._internal.notifications.get_notification_service")
     def test_registers_device(self, mock_get_svc, client):
         svc = MagicMock()
         svc.register_device.return_value = {"status": "registered"}
@@ -312,7 +312,7 @@ class TestMobileNotificationsRegister:
 class TestMobileNotificationsUnregister:
     """POST /mobile/notifications/unregister"""
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile._internal.notifications.get_notification_service")
     def test_unregisters_device(self, mock_get_svc, client):
         svc = MagicMock()
         svc.unregister_device.return_value = True
@@ -329,7 +329,7 @@ class TestMobileNotificationsUnregister:
 class TestMobileNotificationsDevices:
     """GET /mobile/notifications/devices"""
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile._internal.notifications.get_notification_service")
     def test_returns_device_list(self, mock_get_svc, client):
         svc = MagicMock()
         svc.get_devices.return_value = [{"token": "t1", "platform": "ios"}]
@@ -346,7 +346,7 @@ class TestMobileNotificationsDevices:
 class TestMobileTrainStats:
     """GET /mobile/train/stats"""
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_returns_stats(self, mock_get_store, client):
         store = MagicMock()
         store.stats.return_value = {"total": 100, "pending": 10, "synced": 50, "used": 40}
@@ -365,7 +365,7 @@ class TestMobileTrainStats:
 class TestMobileTrainPairs:
     """GET /mobile/train/pairs"""
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_returns_pairs_list(self, mock_get_store, client):
         store = MagicMock()
         store.list_pairs.return_value = [
@@ -386,7 +386,7 @@ class TestMobileTrainPairs:
 class TestMobileTrainExport:
     """GET /mobile/train/export"""
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_returns_export_data(self, mock_get_store, client):
         store = MagicMock()
         store.list_pairs.return_value = [
@@ -404,7 +404,7 @@ class TestMobileTrainExport:
 class TestMobileTrainCompact:
     """POST /mobile/train/compact"""
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_compacts_store(self, mock_get_store, client):
         store = MagicMock()
         store.compact.return_value = 42
@@ -433,7 +433,7 @@ class TestMobileTrainFromSessions:
 class TestMobileTrainAutoStatus:
     """GET /mobile/train/auto-status"""
 
-    @patch("domains.training.auto_trainer.get_auto_trainer")
+    @patch("domain.training._internal.auto_trainer.get_auto_trainer")
     def test_returns_status(self, mock_get_trainer, client):
         trainer = MagicMock()
         trainer.status.return_value = {"enabled": False, "threshold": 10, "pending_count": 0}
@@ -776,7 +776,7 @@ class TestMobileSyncOffline:
 class TestMobileNotificationsSend:
     """POST /mobile/notifications/send"""
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile._internal.notifications.get_notification_service")
     def test_sends_notification(self, mock_get_svc, client):
         svc = MagicMock()
         svc.send_notification_async = AsyncMock(return_value={"sent": 3})
@@ -786,7 +786,7 @@ class TestMobileNotificationsSend:
         assert resp.json()["data"]["sent"] == 3
         assert svc.send_notification_async.call_args.kwargs["topic"] is None
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile._internal.notifications.get_notification_service")
     def test_sends_with_topic_and_tokens(self, mock_get_svc, client):
         svc = MagicMock()
         svc.send_notification_async = AsyncMock(return_value={"sent": 1})
@@ -808,7 +808,7 @@ class TestMobileNotificationsSend:
 class TestMobileNotificationsHistory:
     """GET /mobile/notifications/history"""
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile._internal.notifications.get_notification_service")
     def test_returns_history(self, mock_get_svc, client):
         svc = MagicMock()
         svc.get_history.return_value = [{"title": "Hi", "sent_at": 1}]
@@ -817,7 +817,7 @@ class TestMobileNotificationsHistory:
         assert resp.status_code == 200
         assert len(resp.json()["data"]["history"]) == 1
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile._internal.notifications.get_notification_service")
     def test_history_limit_validation(self, mock_get_svc, client):
         resp = client.get("/mobile/notifications/history", params={"limit": 500})
         assert resp.status_code == 422
@@ -826,7 +826,7 @@ class TestMobileNotificationsHistory:
 class TestMobileNotificationsCleanup:
     """POST /mobile/notifications/cleanup"""
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile._internal.notifications.get_notification_service")
     def test_cleans_stale_devices(self, mock_get_svc, client):
         svc = MagicMock()
         svc.cleanup_stale.return_value = 4
@@ -839,7 +839,7 @@ class TestMobileNotificationsCleanup:
 class TestMobileNotifyTrainingComplete:
     """POST /mobile/notify/training-complete"""
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile._internal.notifications.get_notification_service")
     def test_notifies_with_loss(self, mock_get_svc, client):
         svc = MagicMock()
         svc.send_notification.return_value = {"sent": 1}
@@ -855,7 +855,7 @@ class TestMobileNotifyTrainingComplete:
         assert payload.topic == "training"
         assert "1.5000" in payload.body
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile._internal.notifications.get_notification_service")
     def test_notifies_without_loss(self, mock_get_svc, client):
         svc = MagicMock()
         svc.send_notification.return_value = {"sent": 0}
@@ -873,7 +873,7 @@ class TestMobileNotifyTrainingComplete:
 class TestMobileTrainPending:
     """GET /mobile/train/pending"""
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_returns_pending(self, mock_get_store, client):
         store = MagicMock()
         store.get_pending_pairs.return_value = [
@@ -886,7 +886,7 @@ class TestMobileTrainPending:
         assert body["count"] == 1
         assert body["pairs"][0]["id"] == "p1"
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_limit_validation(self, mock_get_store, client):
         resp = client.get("/mobile/train/pending", params={"limit": 1000})
         assert resp.status_code == 422
@@ -895,7 +895,7 @@ class TestMobileTrainPending:
 class TestMobileSessionPairs:
     """GET /mobile/train/session/{session_id}"""
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_returns_session_pairs(self, mock_get_store, client):
         store = MagicMock()
         store.get_pairs_by_session.return_value = [
@@ -913,7 +913,7 @@ class TestMobileSessionPairs:
 class TestMobileUpdatePairQuality:
     """PATCH /mobile/train/pair/{pair_id}"""
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_updates_quality(self, mock_get_store, client):
         store = MagicMock()
         store.update_quality.return_value = True
@@ -924,7 +924,7 @@ class TestMobileUpdatePairQuality:
         assert body["status"] == "updated"
         assert body["quality"] == 0.9
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_missing_pair_returns_404(self, mock_get_store, client):
         store = MagicMock()
         store.update_quality.return_value = False
@@ -932,7 +932,7 @@ class TestMobileUpdatePairQuality:
         resp = client.patch("/mobile/train/pair/p1", json={"quality": 0.9})
         assert resp.status_code == 404
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_quality_validation(self, mock_get_store, client):
         resp = client.patch("/mobile/train/pair/p1", json={"quality": "high"})
         assert resp.status_code == 422
@@ -941,7 +941,7 @@ class TestMobileUpdatePairQuality:
 class TestMobileDeletePair:
     """DELETE /mobile/train/pair/{pair_id}"""
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_deletes_pair(self, mock_get_store, client):
         store = MagicMock()
         store.delete_pair.return_value = True
@@ -950,7 +950,7 @@ class TestMobileDeletePair:
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "deleted"
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_missing_pair_returns_404(self, mock_get_store, client):
         store = MagicMock()
         store.delete_pair.return_value = False
@@ -962,7 +962,7 @@ class TestMobileDeletePair:
 class TestMobileDeleteSynced:
     """DELETE /mobile/train/synced"""
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_deletes_synced(self, mock_get_store, client):
         store = MagicMock()
         store.delete_synced.return_value = 7
@@ -977,7 +977,7 @@ class TestMobileDeleteSynced:
 class TestMobileDeletePairsBulk:
     """DELETE /mobile/train/pairs/bulk"""
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_deletes_bulk(self, mock_get_store, client):
         store = MagicMock()
         store.delete_pair.side_effect = [True, True, False]
@@ -986,7 +986,7 @@ class TestMobileDeletePairsBulk:
         assert resp.status_code == 200
         assert resp.json()["data"]["count"] == 2
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training._internal.mobile_training_store.get_training_store")
     def test_requires_ids(self, mock_get_store, client):
         resp = client.delete("/mobile/train/pairs/bulk")
         assert resp.status_code == 422
@@ -1016,7 +1016,7 @@ class TestMobileTrain:
 class TestMobileAutoTrainConfig:
     """PATCH /mobile/train/auto-config"""
 
-    @patch("domains.training.auto_trainer.get_auto_trainer")
+    @patch("domain.training._internal.auto_trainer.get_auto_trainer")
     def test_updates_threshold(self, mock_get_trainer, client):
         trainer = MagicMock()
         trainer.status.return_value = {"enabled": True, "threshold": 5, "interval_s": 60}
@@ -1026,7 +1026,7 @@ class TestMobileAutoTrainConfig:
         assert trainer.threshold == 5
         assert resp.json()["data"]["threshold"] == 5
 
-    @patch("domains.training.auto_trainer.get_auto_trainer")
+    @patch("domain.training._internal.auto_trainer.get_auto_trainer")
     def test_updates_interval_only(self, mock_get_trainer, client):
         trainer = MagicMock()
         trainer.status.return_value = {"enabled": True, "threshold": 10, "interval_s": 120}
@@ -1034,7 +1034,7 @@ class TestMobileAutoTrainConfig:
         client.patch("/mobile/train/auto-config", params={"interval_s": 120})
         assert trainer.interval_s == 120
 
-    @patch("domains.training.auto_trainer.get_auto_trainer")
+    @patch("domain.training._internal.auto_trainer.get_auto_trainer")
     def test_threshold_bounds_422(self, mock_get_trainer, client):
         assert client.patch("/mobile/train/auto-config", params={"threshold": 0}).status_code == 422
         assert (

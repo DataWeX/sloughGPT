@@ -2,7 +2,19 @@
 
 from __future__ import annotations
 
-from domains.infrastructure.errors import (
+from infrastructure.error_handler import (
+    APIErrorHandler,
+    AuthErrorHandler,
+    DefaultErrorHandler,
+    DomainErrorHandler,
+    InferenceErrorHandler,
+    ResourceErrorHandler,
+    TrainingErrorHandler,
+    ValidationErrorHandler,
+    create_default_error_handler,
+)
+
+from domain.infrastructure._internal.errors import (
     ERROR_REGISTRY,
     AppError,
     AuthError,
@@ -18,17 +30,6 @@ from domains.infrastructure.errors import (
     ValidationError,
     classify_exception,
     get_error_info,
-)
-from infrastructure.error_handler import (
-    APIErrorHandler,
-    AuthErrorHandler,
-    DefaultErrorHandler,
-    DomainErrorHandler,
-    InferenceErrorHandler,
-    ResourceErrorHandler,
-    TrainingErrorHandler,
-    ValidationErrorHandler,
-    create_default_error_handler,
 )
 
 # ── ErrorCode Registry Tests ──

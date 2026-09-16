@@ -18,7 +18,7 @@ class TestKVCache:
 
     def test_kv_cache_init(self):
         """Test KVCache initialization."""
-        from domains.inference.engine import KVCache
+        from domain.inference._internal.engine import KVCache
 
         cache = KVCache(num_layers=4, dtype=torch.float32)
         assert cache.num_layers == 4
@@ -27,7 +27,7 @@ class TestKVCache:
 
     def test_kv_cache_update(self):
         """Test updating cache."""
-        from domains.inference.engine import KVCache
+        from domain.inference._internal.engine import KVCache
 
         cache = KVCache(num_layers=2, dtype=torch.float32)
         key = torch.randn(1, 2, 5, 8)
@@ -41,7 +41,7 @@ class TestKVCache:
 
     def test_kv_cache_reset(self):
         """Test cache reset."""
-        from domains.inference.engine import KVCache
+        from domain.inference._internal.engine import KVCache
 
         cache = KVCache(num_layers=2)
         cache.key_cache[0] = torch.randn(1, 2, 10, 8)
@@ -57,7 +57,7 @@ class TestGenerationRequest:
 
     def test_request_creation(self):
         """Test request creation."""
-        from domains.inference.engine import GenerationRequest
+        from domain.inference._internal.engine import GenerationRequest
 
         request = GenerationRequest(id="test-1", prompt="Hello world", max_new_tokens=100)
 
@@ -94,7 +94,7 @@ class TestInferenceEngine:
 
     def test_engine_init(self, mock_model, mock_tokenizer):
         """Test engine initialization."""
-        from domains.inference.engine import InferenceEngine
+        from domain.inference._internal.engine import InferenceEngine
 
         engine = InferenceEngine(model=mock_model, tokenizer=mock_tokenizer, device="cpu")
 
@@ -103,7 +103,7 @@ class TestInferenceEngine:
 
     def test_encode(self, mock_model, mock_tokenizer):
         """Test text encoding."""
-        from domains.inference.engine import InferenceEngine
+        from domain.inference._internal.engine import InferenceEngine
 
         engine = InferenceEngine(mock_model, mock_tokenizer, device="cpu")
         engine.encode("test")
@@ -112,7 +112,7 @@ class TestInferenceEngine:
 
     def test_decode(self, mock_model, mock_tokenizer):
         """Test token decoding."""
-        from domains.inference.engine import InferenceEngine
+        from domain.inference._internal.engine import InferenceEngine
 
         engine = InferenceEngine(mock_model, mock_tokenizer, device="cpu")
         engine.decode([1, 2, 3])
@@ -121,7 +121,7 @@ class TestInferenceEngine:
 
     def test_sample_token_greedy(self, mock_model, mock_tokenizer):
         """Test greedy token sampling."""
-        from domains.inference.engine import InferenceEngine
+        from domain.inference._internal.engine import InferenceEngine
 
         engine = InferenceEngine(mock_model, mock_tokenizer, device="cpu")
 
@@ -133,7 +133,7 @@ class TestInferenceEngine:
 
     def test_sample_token_with_temperature(self, mock_model, mock_tokenizer):
         """Test sampling with temperature."""
-        from domains.inference.engine import InferenceEngine
+        from domain.inference._internal.engine import InferenceEngine
 
         engine = InferenceEngine(mock_model, mock_tokenizer, device="cpu")
 
@@ -144,7 +144,7 @@ class TestInferenceEngine:
 
     def test_sample_token_with_top_k(self, mock_model, mock_tokenizer):
         """Test top-k sampling."""
-        from domains.inference.engine import InferenceEngine
+        from domain.inference._internal.engine import InferenceEngine
 
         engine = InferenceEngine(mock_model, mock_tokenizer, device="cpu")
 
@@ -155,7 +155,7 @@ class TestInferenceEngine:
 
     def test_apply_repetition_penalty_positive(self, mock_model, mock_tokenizer):
         """Test repetition penalty with positive logits."""
-        from domains.inference.engine import InferenceEngine
+        from domain.inference._internal.engine import InferenceEngine
 
         engine = InferenceEngine(mock_model, mock_tokenizer, device="cpu")
 
@@ -168,7 +168,7 @@ class TestInferenceEngine:
 
     def test_apply_repetition_penalty_negative(self, mock_model, mock_tokenizer):
         """Test repetition penalty with negative logits."""
-        from domains.inference.engine import InferenceEngine
+        from domain.inference._internal.engine import InferenceEngine
 
         engine = InferenceEngine(mock_model, mock_tokenizer, device="cpu")
 
@@ -181,7 +181,7 @@ class TestInferenceEngine:
 
     def test_apply_repetition_penalty_no_op(self, mock_model, mock_tokenizer):
         """Test repetition penalty no-op when penalty is 1.0."""
-        from domains.inference.engine import InferenceEngine
+        from domain.inference._internal.engine import InferenceEngine
 
         engine = InferenceEngine(mock_model, mock_tokenizer, device="cpu")
 
@@ -194,7 +194,7 @@ class TestInferenceEngine:
 
     def test_get_stats(self, mock_model, mock_tokenizer):
         """Test statistics retrieval."""
-        from domains.inference.engine import InferenceEngine
+        from domain.inference._internal.engine import InferenceEngine
 
         engine = InferenceEngine(mock_model, mock_tokenizer, device="cpu")
         stats = engine.get_stats()
@@ -205,7 +205,7 @@ class TestInferenceEngine:
 
     def test_reset_stats(self, mock_model, mock_tokenizer):
         """Test statistics reset."""
-        from domains.inference.engine import InferenceEngine
+        from domain.inference._internal.engine import InferenceEngine
 
         engine = InferenceEngine(mock_model, mock_tokenizer, device="cpu")
         engine._stats["requests_processed"] = 10
@@ -259,7 +259,7 @@ class TestInferenceEngineGeneration:
 
     def test_generate_single_basic(self, simple_tokenizer):
         """Test basic single prompt generation."""
-        from domains.inference.engine import InferenceEngine
+        from domain.inference._internal.engine import InferenceEngine
 
         model = Mock()
         model.eval = Mock()
@@ -285,6 +285,6 @@ class TestCreateEngine:
 
     def test_create_engine_import(self):
         """Test that create_engine is importable."""
-        from domains.inference.engine import create_engine
+        from domain.inference._internal.engine import create_engine
 
         assert callable(create_engine)

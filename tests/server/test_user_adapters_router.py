@@ -17,7 +17,7 @@ register_all_handlers(app)
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
 
-STORE_TARGET = "domains.feedback.get_per_user_lora"
+STORE_TARGET = "domain.feedback._internal.get_per_user_lora"
 
 
 def _make_store():

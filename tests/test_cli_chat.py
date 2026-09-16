@@ -14,7 +14,7 @@ def _cli_logger(monkeypatch):
     directly, so install the same logger (wired to an explicit buffer, since
     pytest's global capture wraps ``sys.stdout`` after construction) and point
     the chat module at it."""
-    from domains.logging import CLILogger, set_global
+    from domain.logging._internal import CLILogger, set_global
 
     buf = io.StringIO()
     logger = CLILogger("slo", stream=buf)

@@ -45,7 +45,7 @@ class TestVmRun:
         real_import = builtins.__import__
 
         def block_vm(name, *a, **kw):
-            if name.startswith("domains.shell.vm"):
+            if name.startswith("domain.shell._internal.vm"):
                 raise ImportError("no vm")
             return real_import(name, *a, **kw)
 
@@ -204,7 +204,7 @@ class TestVmRun:
         assert "keyboard_buffer" in body
         assert "memory_dump" in body
 
-    @patch("domains.shell.vm.X86VirtualSystem")
+    @patch("domain.shell._internal.vm.X86VirtualSystem")
     def test_spawn_failed_path(self, mock_vs_cls, client):
         vs = mock_vs_cls.return_value
         vs.spawn.return_value = None
@@ -215,7 +215,7 @@ class TestVmRun:
         assert body["status"] == "spawn_failed"
         assert "Failed to spawn" in body["error"]
 
-    @patch("domains.shell.vm.X86VirtualSystem")
+    @patch("domain.shell._internal.vm.X86VirtualSystem")
     def test_no_process_path(self, mock_vs_cls, client):
         vs = mock_vs_cls.return_value
         vs.spawn.return_value = 1
@@ -226,7 +226,7 @@ class TestVmRun:
         assert body["success"] is False
         assert body["status"] == "no_process"
 
-    @patch("domains.shell.vm.X86VirtualSystem")
+    @patch("domain.shell._internal.vm.X86VirtualSystem")
     def test_run_error_path(self, mock_vs_cls, client):
         mock_vs_cls.side_effect = RuntimeError("vm crashed")
         resp = client.post("/vm/run", json={"source": "hlt"})

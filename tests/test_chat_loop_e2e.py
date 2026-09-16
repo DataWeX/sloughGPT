@@ -73,22 +73,22 @@ def mock_chat_deps():
     model_ctrl._tokenizer = MagicMock()
 
     with (
-        patch("domains.models.provider.get_provider", return_value=provider),
+        patch("domain.models._internal.provider.get_provider", return_value=provider),
         patch(
             "routers.inference._enrich_knowledge",
             return_value={"source": "none", "facts": [], "topics": []},
         ),
         patch(
-            "domains.infrastructure.session_core.SessionCore.store_context",
+            "domain.infrastructure._internal.session_core.SessionCore.store_context",
             side_effect=fake_store_context,
         ),
         patch(
-            "domains.infrastructure.session_core.SessionCore.get_messages",
+            "domain.infrastructure._internal.session_core.SessionCore.get_messages",
             side_effect=fake_get_messages,
         ),
         patch("controllers.feedback.get_feedback_controller") as mock_fb_ctrl,
         patch("controllers.models.get_models_controller", return_value=model_ctrl),
-        patch("domains.learner.get_learner"),
+        patch("domain.learner._internal.get_learner"),
         patch("state.model", new_callable=MagicMock),
     ):
         mock_fb = MagicMock()

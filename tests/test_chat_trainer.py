@@ -34,7 +34,7 @@ def _pairs():
 
 class TestChatTrainConfig:
     def test_defaults(self):
-        from domains.training.chat_trainer import ChatTrainConfig
+        from domain.training._internal.chat_trainer import ChatTrainConfig
 
         c = ChatTrainConfig()
         assert c.n_embed == 128
@@ -44,7 +44,7 @@ class TestChatTrainConfig:
         assert c.soul_name == "chat-trained"
 
     def test_custom(self):
-        from domains.training.chat_trainer import ChatTrainConfig
+        from domain.training._internal.chat_trainer import ChatTrainConfig
 
         c = ChatTrainConfig(n_embed=64, epochs=3, min_pair_quality=1.0)
         assert c.n_embed == 64
@@ -54,14 +54,14 @@ class TestChatTrainConfig:
 
 class TestChatTextDataset:
     def test_length(self):
-        from domains.training.chat_trainer import ChatTextDataset
+        from domain.training._internal.chat_trainer import ChatTextDataset
 
         ds = ChatTextDataset("abcdef", block_size=3, stoi={c: i for i, c in enumerate("abcdef")})
         assert len(ds) > 0
         assert len(ds) == 6 - 3 - 1
 
     def test_get_batch_shape(self):
-        from domains.training.chat_trainer import ChatTextDataset
+        from domain.training._internal.chat_trainer import ChatTextDataset
 
         stoi = {c: i + 1 for i, c in enumerate("abcdef")}
         ds = ChatTextDataset("abcdef", block_size=3, stoi=stoi)
@@ -71,7 +71,7 @@ class TestChatTextDataset:
         assert y.shape == (2, 3)
 
     def test_batch_values_are_valid(self):
-        from domains.training.chat_trainer import ChatTextDataset
+        from domain.training._internal.chat_trainer import ChatTextDataset
 
         stoi = {c: i + 1 for i, c in enumerate("abcdef")}
         ds = ChatTextDataset("abcdefabcdef", block_size=4, stoi=stoi)
@@ -83,7 +83,7 @@ class TestChatTextDataset:
 
 class TestVocab:
     def test_build_vocab(self):
-        from domains.training.chat_trainer import _build_vocab
+        from domain.training._internal.chat_trainer import _build_vocab
 
         pairs = _pairs()
         stoi, itos = _build_vocab(pairs)
@@ -93,7 +93,7 @@ class TestVocab:
         assert stoi["\x00"] == 0
 
     def test_format_pairs_text(self):
-        from domains.training.chat_trainer import _format_pairs_text
+        from domain.training._internal.chat_trainer import _format_pairs_text
 
         text = _format_pairs_text(_pairs()[:2])
         assert "User: Hello" in text
@@ -102,7 +102,7 @@ class TestVocab:
 
 class TestCrossEntropyLoss:
     def test_perfect_prediction(self):
-        from domains.training.distill_gpt2 import _cross_entropy_loss
+        from domain.training._internal.distill_gpt2 import _cross_entropy_loss
 
         logits = np.array([[0.0, 100.0, 0.0], [0.0, 0.0, 100.0]])
         targets = np.array([1, 2])
@@ -110,7 +110,7 @@ class TestCrossEntropyLoss:
         assert loss < 0.01
 
     def test_worse_prediction(self):
-        from domains.training.distill_gpt2 import _cross_entropy_loss
+        from domain.training._internal.distill_gpt2 import _cross_entropy_loss
 
         logits = np.array([[100.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
         targets = np.array([1, 2])
@@ -120,7 +120,7 @@ class TestCrossEntropyLoss:
 
 class TestTrainChatModel:
     def test_basic_training(self):
-        from domains.training.chat_trainer import ChatTrainConfig, train_chat_model
+        from domain.training._internal.chat_trainer import ChatTrainConfig, train_chat_model
 
         pairs = _pairs()
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -145,7 +145,7 @@ class TestTrainChatModel:
             assert meta["vocab_size"] > 0
 
     def test_training_loss_decreases(self):
-        from domains.training.chat_trainer import ChatTrainConfig, train_chat_model
+        from domain.training._internal.chat_trainer import ChatTrainConfig, train_chat_model
 
         pairs = _pairs()
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -169,7 +169,7 @@ class TestTrainChatModel:
             assert losses[-1] < 10.0
 
     def test_empty_pairs_raises(self):
-        from domains.training.chat_trainer import ChatTrainConfig, train_chat_model
+        from domain.training._internal.chat_trainer import ChatTrainConfig, train_chat_model
 
         config = ChatTrainConfig()
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -178,7 +178,7 @@ class TestTrainChatModel:
                 train_chat_model([], config)
 
     def test_quality_filter(self):
-        from domains.training.chat_trainer import ChatTrainConfig, train_chat_model
+        from domain.training._internal.chat_trainer import ChatTrainConfig, train_chat_model
 
         pairs = _pairs()
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -196,7 +196,7 @@ class TestTrainChatModel:
             assert meta["num_pairs"] >= 5
 
     def test_checkpoint_soul_format(self):
-        from domains.training.chat_trainer import ChatTrainConfig, train_chat_model
+        from domain.training._internal.chat_trainer import ChatTrainConfig, train_chat_model
 
         pairs = _pairs()
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -217,7 +217,7 @@ class TestTrainChatModel:
             assert header == b"SOUL"
 
     def test_resume(self):
-        from domains.training.chat_trainer import ChatTrainConfig, train_chat_model
+        from domain.training._internal.chat_trainer import ChatTrainConfig, train_chat_model
 
         pairs = _pairs()
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -250,7 +250,7 @@ class TestTrainChatModel:
 
 class TestGenerateFromChatModel:
     def test_generate(self):
-        from domains.training.chat_trainer import (
+        from domain.training._internal.chat_trainer import (
             ChatTrainConfig,
             _build_vocab,
             generate_from_chat_model,
@@ -277,8 +277,8 @@ class TestGenerateFromChatModel:
 
 class TestEvalLoss:
     def test_eval_loss_is_finite(self):
-        from domains.training.chat_trainer import ChatTextDataset, _eval_loss
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.chat_trainer import ChatTextDataset, _eval_loss
+        from domain.training._internal.slonet import SloTransformer
 
         stoi = {"\x00": 0, **{c: i + 1 for i, c in enumerate("abcdef")}}
         ds = ChatTextDataset("abcdef" * 10, block_size=4, stoi=stoi)
@@ -299,7 +299,7 @@ class TestEvalLoss:
 
 class TestEvaluateChatModel:
     def test_evaluate_returns_samples(self):
-        from domains.training.chat_trainer import (
+        from domain.training._internal.chat_trainer import (
             ChatTrainConfig,
             evaluate_chat_model,
             train_chat_model,
@@ -327,7 +327,7 @@ class TestEvaluateChatModel:
             assert result["perplexity"] > 0
 
     def test_evaluate_max_samples(self):
-        from domains.training.chat_trainer import (
+        from domain.training._internal.chat_trainer import (
             ChatTrainConfig,
             evaluate_chat_model,
             train_chat_model,

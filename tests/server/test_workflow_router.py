@@ -58,7 +58,7 @@ class TestWorkflowStatus:
         resp = client.get("/workflow/status")
         assert resp.status_code == 500
 
-    @patch("domains.feedback.get_feedback_workflow", side_effect=ImportError("no module"))
+    @patch("domain.feedback._internal.get_feedback_workflow", side_effect=ImportError("no module"))
     def test_get_status_import_error(self, _):
         resp = client.get("/workflow/status")
         assert resp.status_code == 503
@@ -117,7 +117,7 @@ class TestWorkflowStart:
         resp = client.post("/workflow/start", json={})
         assert resp.status_code == 500
 
-    @patch("domains.feedback.get_feedback_workflow", side_effect=ImportError("no module"))
+    @patch("domain.feedback._internal.get_feedback_workflow", side_effect=ImportError("no module"))
     def test_start_import_error(self, _):
         resp = client.post("/workflow/start", json={})
         assert resp.status_code == 503
@@ -216,7 +216,7 @@ class TestWorkflowTrigger:
         resp = client.post("/workflow/trigger/prune")
         assert resp.status_code == 500
 
-    @patch("domains.feedback.get_feedback_workflow", side_effect=ImportError("no module"))
+    @patch("domain.feedback._internal.get_feedback_workflow", side_effect=ImportError("no module"))
     def test_trigger_import_error(self, _):
         resp = client.post("/workflow/trigger/aggregate")
         assert resp.status_code == 503

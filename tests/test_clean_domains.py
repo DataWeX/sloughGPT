@@ -8,10 +8,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from domains.chat.domain import ChatDomain, ChatRequest, ChatResponse, get_chat_domain
+
+from domain.chat._internal.domain import ChatDomain, ChatRequest, ChatResponse, get_chat_domain
 
 # companion.py (top-level, single file)
-from domains.companion import (
+from domain.companion._internal import (
     CompanionSystem,
     CompanionTraits,
     ConversationContext,
@@ -46,7 +47,7 @@ class TestChatDomain:
     def _isolate_response_tracker(self, monkeypatch, tmp_path):
         """Point the global ResponseTracker at a scratch dir so assertions never
         see chat logs from prior server runs in the repo ``data/`` dir."""
-        from domains.feedback import response_tracker as _rt
+        from domain.feedback._internal import response_tracker as _rt
 
         monkeypatch.setattr(_rt, "_response_tracker", _rt.ResponseTracker(log_dir=str(tmp_path)))
 
@@ -57,7 +58,7 @@ class TestChatDomain:
             assert log_dir.is_dir()
 
     @pytest.mark.asyncio
-    @patch("domains.chat.domain.ChatDomain._generate", return_value="mock")
+    @patch("domain.chat._internal.domain.ChatDomain._generate", return_value="mock")
     async def test_respond_no_user_message_returns_placeholder(self, mock_gen):
         chat = ChatDomain(log_dir=tempfile.mkdtemp())
         resp = await chat.respond(messages=[{"role": "assistant", "content": "Hey"}])
@@ -65,7 +66,7 @@ class TestChatDomain:
         assert resp.text != ""
 
     @pytest.mark.asyncio
-    @patch("domains.chat.domain.ChatDomain._generate", return_value="mock")
+    @patch("domain.chat._internal.domain.ChatDomain._generate", return_value="mock")
     async def test_respond_empty_messages(self, mock_gen):
         chat = ChatDomain(log_dir=tempfile.mkdtemp())
         resp = await chat.respond(messages=[])
@@ -102,7 +103,7 @@ class TestChatDomain:
         assert entry["assistant_response"] == "hello"
 
     @pytest.mark.asyncio
-    @patch("domains.chat.domain.ChatDomain._generate", return_value="mock response")
+    @patch("domain.chat._internal.domain.ChatDomain._generate", return_value="mock response")
     async def test_respond_delegates_to_generate(self, mock_gen):
         chat = ChatDomain(log_dir=tempfile.mkdtemp())
         resp = await chat.respond(messages=[{"role": "user", "content": "hello"}])

@@ -20,7 +20,7 @@ client = TestClient(app, raise_server_exceptions=False)
 @pytest.fixture(autouse=True)
 def mock_store():
     """Mock MobileTrainingStore for all tests."""
-    with patch("domains.training.mobile_training_store.get_training_store") as mock:
+    with patch("domain.training._internal.mobile_training_store.get_training_store") as mock:
         store = MagicMock()
         store.add_pair.return_value = "pair_001"
         store.add_batch.return_value = ["pair_001", "pair_002"]
@@ -218,8 +218,13 @@ class TestTrainFromSessions:
     def test_insufficient_pairs(self):
         """Yields SSE error event when server logs have < 5 pairs."""
         with (
-            patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[]),
-            patch("domains.training.pair_extractor.extract_pairs_from_logs", return_value=[]),
+            patch(
+                "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
+                return_value=[],
+            ),
+            patch(
+                "domain.training._internal.pair_extractor.extract_pairs_from_logs", return_value=[]
+            ),
         ):
             resp = client.post("/mobile/train/from-sessions", json={"limit": 10})
             assert resp.status_code == 200
@@ -244,14 +249,14 @@ class TestTrainFromSessions:
         )
         with (
             patch(
-                "domains.training.pair_extractor.extract_pairs_from_sessions",
+                "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
                 return_value=sessions_pairs,
             ) as mock_s,
             patch(
-                "domains.training.pair_extractor.extract_pairs_from_logs", return_value=[]
+                "domain.training._internal.pair_extractor.extract_pairs_from_logs", return_value=[]
             ) as mock_l,
-            patch("domains.training.pair_extractor.write_training_text") as mock_w,
-            patch("domains.training.mobile_training_store.get_training_store"),
+            patch("domain.training._internal.pair_extractor.write_training_text") as mock_w,
+            patch("domain.training._internal.mobile_training_store.get_training_store"),
             patch("routers.mobile.subprocess.Popen", return_value=mock_proc),
         ):
             mock_w.return_value = Path("/tmp/test.txt")
@@ -278,12 +283,16 @@ class TestTrainFromSessions:
             returncode=0,
         )
         with (
-            patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[]),
             patch(
-                "domains.training.pair_extractor.extract_pairs_from_logs", return_value=log_pairs
+                "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
+                return_value=[],
             ),
-            patch("domains.training.pair_extractor.write_training_text") as mock_w,
-            patch("domains.training.mobile_training_store.get_training_store"),
+            patch(
+                "domain.training._internal.pair_extractor.extract_pairs_from_logs",
+                return_value=log_pairs,
+            ),
+            patch("domain.training._internal.pair_extractor.write_training_text") as mock_w,
+            patch("domain.training._internal.mobile_training_store.get_training_store"),
             patch("routers.mobile.subprocess.Popen", return_value=mock_proc),
         ):
             mock_w.return_value = Path("/tmp/test.txt")
@@ -301,10 +310,11 @@ class TestTrainFromSessions:
         mock_proc = _make_mock_popen([], returncode=1, stderr="RuntimeError: CUDA out of memory")
         with (
             patch(
-                "domains.training.pair_extractor.extract_pairs_from_sessions", return_value=pairs
+                "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
+                return_value=pairs,
             ),
-            patch("domains.training.pair_extractor.write_training_text") as mock_w,
-            patch("domains.training.mobile_training_store.get_training_store"),
+            patch("domain.training._internal.pair_extractor.write_training_text") as mock_w,
+            patch("domain.training._internal.mobile_training_store.get_training_store"),
             patch("routers.mobile.subprocess.Popen", return_value=mock_proc),
         ):
             mock_w.return_value = Path("/tmp/test.txt")
@@ -420,7 +430,7 @@ class TestMobileTrain:
 
 class TestUpdateAutoConfig:
     def test_updates_threshold(self, mock_store):
-        with patch("domains.training.auto_trainer.get_auto_trainer") as mock_get:
+        with patch("domain.training._internal.auto_trainer.get_auto_trainer") as mock_get:
             trainer = MagicMock()
             trainer.status.return_value = {"threshold": 42, "interval_s": 60}
             mock_get.return_value = trainer
@@ -430,7 +440,7 @@ class TestUpdateAutoConfig:
             assert resp.json()["data"]["threshold"] == 42
 
     def test_updates_interval(self, mock_store):
-        with patch("domains.training.auto_trainer.get_auto_trainer") as mock_get:
+        with patch("domain.training._internal.auto_trainer.get_auto_trainer") as mock_get:
             trainer = MagicMock()
             trainer.status.return_value = {"threshold": 10, "interval_s": 300}
             mock_get.return_value = trainer

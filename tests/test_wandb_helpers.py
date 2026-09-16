@@ -1,11 +1,10 @@
 """Tests for W&B helper flattening and env flags."""
 
-from domains.training.wandb_helpers import (
+from config_loader import Config, load_config
+from domain.training._internal.wandb_helpers import (
     flatten_for_wandb_config,
     wandb_training_enabled_from_env,
 )
-
-from config_loader import Config, load_config
 
 
 def test_flatten_for_wandb_config_nested_dataclass():

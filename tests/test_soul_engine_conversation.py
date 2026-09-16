@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from domains.core.soul import SloEngine
+from domain.core._internal.soul import SloEngine
 
 
 class TestSoulEngineConversation(unittest.TestCase):

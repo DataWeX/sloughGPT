@@ -45,8 +45,8 @@ def mock_tokenizer():
 
 @pytest.fixture
 def wf(mock_net, mock_tokenizer, tmp_path):
-    from domains.feedback.database import FeedbackDB
-    from domains.feedback.workflow import FeedbackWorkflowManager, WorkflowConfig
+    from domain.feedback._internal.database import FeedbackDB
+    from domain.feedback._internal.workflow import FeedbackWorkflowManager, WorkflowConfig
 
     class MockMetaManager:
         def get_weights(self):

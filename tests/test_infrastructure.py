@@ -9,6 +9,8 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
+import domain.feedback._internal.database as db_mod
+
 torch = pytest.importorskip("torch")
 
 
@@ -19,23 +21,23 @@ torch = pytest.importorskip("torch")
 
 class TestModelLoaderPlatformDetection:
     def test_mps_available_returns_bool(self):
-        from domains.infrastructure.ml_types import _mps_available
+        from domain.infrastructure._internal.ml_types import _mps_available
 
         assert isinstance(_mps_available(), bool)
 
     def test_cuda_available_returns_bool(self):
-        from domains.infrastructure.ml_types import _cuda_available
+        from domain.infrastructure._internal.ml_types import _cuda_available
 
         assert isinstance(_cuda_available(), bool)
 
     def test_mps_available_handles_exception(self):
-        from domains.infrastructure.ml_types import _mps_available
+        from domain.infrastructure._internal.ml_types import _mps_available
 
         with patch("torch.backends.mps.is_available", side_effect=AttributeError("no mps")):
             assert _mps_available() is False
 
     def test_cuda_available_handles_exception(self):
-        from domains.infrastructure.ml_types import _cuda_available
+        from domain.infrastructure._internal.ml_types import _cuda_available
 
         with patch("torch.cuda.is_available", side_effect=AttributeError("no cuda")):
             assert _cuda_available() is False
@@ -49,7 +51,6 @@ class TestModelLoaderPlatformDetection:
 @pytest.fixture(autouse=True)
 def _reset_feedback_db_global():
     """Reset FeedbackDB singleton before each test to avoid path pollution."""
-    import domains.feedback.database as db_mod
 
     db_mod._feedback_db = None
     yield
@@ -58,7 +59,7 @@ def _reset_feedback_db_global():
 
 class TestMetaWeights:
     def test_defaults(self):
-        from domains.feedback.meta_weights import MetaWeights
+        from domain.feedback._internal.meta_weights import MetaWeights
 
         mw = MetaWeights()
         assert mw.temperature == 0.8
@@ -68,7 +69,7 @@ class TestMetaWeights:
         assert mw.style_bias == 0.0
 
     def test_custom(self):
-        from domains.feedback.meta_weights import MetaWeights
+        from domain.feedback._internal.meta_weights import MetaWeights
 
         mw = MetaWeights(temperature=1.2, style_bias=0.5)
         assert mw.temperature == 1.2
@@ -79,7 +80,7 @@ class TestMetaWeightManagerSimple:
     def test_init(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = str(Path(tmp) / "feedback.db")
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=db_path)
             assert mwm.embedding_dim == 384
@@ -87,7 +88,7 @@ class TestMetaWeightManagerSimple:
 
     def test_simple_embed_shape(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             emb = mwm._simple_embed("hello world")
@@ -95,7 +96,7 @@ class TestMetaWeightManagerSimple:
 
     def test_simple_embed_normalized(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             emb = mwm._simple_embed("this is a test message")
@@ -104,7 +105,7 @@ class TestMetaWeightManagerSimple:
 
     def test_simple_embed_empty(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             emb = mwm._simple_embed("")
@@ -112,7 +113,7 @@ class TestMetaWeightManagerSimple:
 
     def test_simple_embed_deterministic(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             emb1 = mwm._simple_embed("hello world")
@@ -121,15 +122,15 @@ class TestMetaWeightManagerSimple:
 
     def test_aggregate_patterns_empty(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             assert mwm._aggregate_patterns([]) == {}
 
     def test_aggregate_patterns_thumbs_up(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.database import SimilarPattern
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.database import SimilarPattern
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             patterns = [
@@ -142,8 +143,8 @@ class TestMetaWeightManagerSimple:
 
     def test_aggregate_patterns_thumbs_down(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.database import SimilarPattern
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.database import SimilarPattern
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             patterns = [
@@ -156,7 +157,7 @@ class TestMetaWeightManagerSimple:
 
     def test_get_adjustment_no_data(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             weights = mwm.get_adjustment("hello", k=5)
@@ -165,8 +166,8 @@ class TestMetaWeightManagerSimple:
 
     def test_get_adjustment_clamps_values(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.database import SimilarPattern
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.database import SimilarPattern
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             patterns = [
@@ -183,7 +184,7 @@ class TestMetaWeightManagerSimple:
 
     def test_record_feedback_creates_feedback(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             fb_id = mwm.record_feedback("hello", "hi there", "thumbs_up", user_id="user1")
@@ -194,7 +195,7 @@ class TestMetaWeightManagerSimple:
 
     def test_record_feedback_creates_conversation(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             mwm.record_feedback("hello", "world", "thumbs_up")
@@ -202,7 +203,7 @@ class TestMetaWeightManagerSimple:
 
     def test_record_feedback_updates_user_meta_weights(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             mwm.record_feedback("hi", "hello", "thumbs_up", user_id="user1")
@@ -212,7 +213,7 @@ class TestMetaWeightManagerSimple:
 
     def test_get_quality_trend_empty(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             trend = mwm.get_quality_trend(window=10)
@@ -221,7 +222,7 @@ class TestMetaWeightManagerSimple:
 
     def test_get_quality_trend_with_data(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             for i in range(3):
@@ -232,7 +233,7 @@ class TestMetaWeightManagerSimple:
 
     def test_get_stats(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             mwm.record_feedback("hi", "hello", "thumbs_up")
@@ -245,7 +246,7 @@ class TestMetaWeightManagerSimple:
 
     def test_export_training_data_jsonl(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             mwm.record_feedback("hi", "hello", "thumbs_up")
@@ -255,7 +256,7 @@ class TestMetaWeightManagerSimple:
 
     def test_get_adjustment_with_user_weights(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             mwm.record_feedback("hi", "hello", "thumbs_up", user_id="user1")
@@ -264,7 +265,7 @@ class TestMetaWeightManagerSimple:
 
     def test_get_adjustment_fallback_to_simple_search(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             conv_id = mwm.db.create_conversation()
@@ -276,7 +277,7 @@ class TestMetaWeightManagerSimple:
 
     def test_get_adjustment_history_trimming(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             for _i in range(150):
@@ -290,7 +291,7 @@ class TestMetaWeightManagerSimple:
 class TestMetaWeightManagerEmbed:
     def test_embed_uses_simple_fallback(self):
         with tempfile.TemporaryDirectory() as tmp:
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             mwm._embed_model = None

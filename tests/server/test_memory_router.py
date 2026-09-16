@@ -169,7 +169,7 @@ class TestConsolidate:
             {"id": "b", "content": "Machine learning learns patterns from data very effectively."},
         ]
         fake_service.delete.return_value = 1
-        with patch("domains.memory.consolidation.plan_consolidation") as plan:
+        with patch("domain.memory._internal.consolidation.plan_consolidation") as plan:
             plan.return_value = {"remove_ids": ["a"], "keep_ids": ["b"]}
             resp = client.post("/memory/consolidate")
         assert resp.status_code == 200
@@ -180,14 +180,14 @@ class TestConsolidate:
 
     def test_consolidate_passes_threshold(self, fake_service):
         fake_service.list_all.return_value = []
-        with patch("domains.memory.consolidation.plan_consolidation") as plan:
+        with patch("domain.memory._internal.consolidation.plan_consolidation") as plan:
             plan.return_value = {"remove_ids": [], "keep_ids": []}
             client.post("/memory/consolidate?threshold=0.5")
         plan.assert_called_with([], threshold=0.5)
 
     def test_consolidate_empty_store(self, fake_service):
         fake_service.list_all.return_value = []
-        with patch("domains.memory.consolidation.plan_consolidation") as plan:
+        with patch("domain.memory._internal.consolidation.plan_consolidation") as plan:
             plan.return_value = {"remove_ids": [], "keep_ids": []}
             resp = client.post("/memory/consolidate")
         assert resp.status_code == 200
@@ -196,7 +196,7 @@ class TestConsolidate:
 
 class TestArchive:
     def test_archive_lists_records(self, fake_service):
-        with patch("domains.memory.task_memory.list_archive") as la:
+        with patch("domain.memory._internal.task_memory.list_archive") as la:
             la.return_value = [{"ts": 1, "task_type": "memory.store"}]
             resp = client.get("/memory/archive")
         assert resp.status_code == 200
@@ -206,20 +206,20 @@ class TestArchive:
         la.assert_called_with(limit=20)
 
     def test_archive_passes_limit(self, fake_service):
-        with patch("domains.memory.task_memory.list_archive") as la:
+        with patch("domain.memory._internal.task_memory.list_archive") as la:
             la.return_value = []
             client.get("/memory/archive?limit=5")
         la.assert_called_with(limit=5)
 
     def test_archive_stats(self, fake_service):
-        with patch("domains.memory.task_memory.archive_stats") as st:
+        with patch("domain.memory._internal.task_memory.archive_stats") as st:
             st.return_value = {"records": 3, "path": "/tmp/facts.jsonl"}
             resp = client.get("/memory/archive/stats")
         assert resp.status_code == 200
         assert resp.json()["data"]["records"] == 3
 
     def test_archive_prune_defaults_to_config(self, fake_service):
-        with patch("domains.memory.task_memory.prune_archive") as pr:
+        with patch("domain.memory._internal.task_memory.prune_archive") as pr:
             pr.return_value = 2
             resp = client.post("/memory/archive/prune")
         assert resp.status_code == 200
@@ -227,7 +227,7 @@ class TestArchive:
         pr.assert_called_with(retain_days=None)
 
     def test_archive_prune_passes_retention(self, fake_service):
-        with patch("domains.memory.task_memory.prune_archive") as pr:
+        with patch("domain.memory._internal.task_memory.prune_archive") as pr:
             pr.return_value = 0
             client.post("/memory/archive/prune?retain_days=7")
         pr.assert_called_with(retain_days=7.0)

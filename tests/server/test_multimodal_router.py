@@ -308,9 +308,9 @@ class TestDPO:
                     "pairs_trained": max_pairs,
                 }
 
-        fake_mod = types.ModuleType("domains.feedback.hf_dpo")
+        fake_mod = types.ModuleType("domain.feedback._internal.hf_dpo")
         fake_mod.HFDPOTrainer = _FakeTrainer
-        with patch.dict(sys.modules, {"domains.feedback.hf_dpo": fake_mod}):
+        with patch.dict(sys.modules, {"domain.feedback._internal.hf_dpo": fake_mod}):
             with patch(
                 "apps.api.server.routers.multimodal.MultimodalRouter._get_active_model_and_tokenizer",
                 return_value=(object(), object()),
@@ -359,7 +359,7 @@ class TestTrainVideo:
         finally:
             self._reset_video_job()
 
-    @patch("domains.training.executor.get_training_executor")
+    @patch("domain.training._internal.executor.get_training_executor")
     def test_starts_training_job(self, mock_get_exec):
         mock_get_exec.return_value = MagicMock()
         self._reset_video_job()
@@ -383,7 +383,7 @@ class TestTrainVideo:
         finally:
             self._reset_video_job()
 
-    @patch("domains.training.executor.get_training_executor")
+    @patch("domain.training._internal.executor.get_training_executor")
     def test_rejects_missing_data_path(self, mock_get_exec):
         mock_get_exec.return_value = MagicMock()
         self._reset_video_job()
@@ -395,15 +395,15 @@ class TestTrainVideo:
 class TestVideoInfer:
     """POST /multimodal/video-infer"""
 
-    @patch("domains.training.video_trainer.list_video_checkpoints")
+    @patch("domain.training._internal.video_trainer.list_video_checkpoints")
     def test_no_checkpoint_returns_400(self, mock_list):
         mock_list.return_value = []
         resp = client.post("/multimodal/video-infer", json={"video_path": "/tmp/a.mp4"})
         assert resp.status_code == 400
         assert "no trained video model" in resp.json()["error"].lower()
 
-    @patch("domains.training.video_trainer.VideoCaptionTrainer")
-    @patch("domains.training.video_trainer.list_video_checkpoints")
+    @patch("domain.training._internal.video_trainer.VideoCaptionTrainer")
+    @patch("domain.training._internal.video_trainer.list_video_checkpoints")
     def test_generates_caption_from_latest_checkpoint(self, mock_list, mock_trainer_cls):
         mock_list.return_value = [{"name": "ck1", "path": "/tmp/ck1.slnc"}]
         trainer = mock_trainer_cls.return_value
@@ -448,7 +448,7 @@ class TestAnalyze:
 class TestSynthesizeSpeech:
     """POST /multimodal/synthesize-speech"""
 
-    @patch("domains.multimodal.tts.TTSEngine")
+    @patch("domain.multimodal._internal.tts.TTSEngine")
     def test_synthesizes_waveform(self, mock_tts_cls):
         import numpy as np
 
@@ -468,7 +468,7 @@ class TestAnalyzePdf:
     def _fake_pdf_bytes(self):
         return b"%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF"
 
-    @patch("domains.inference.pdf_vlm.PDFVLMProcessor")
+    @patch("domain.inference._internal.pdf_vlm.PDFVLMProcessor")
     def test_analyzes_pdf_text_extract(self, mock_processor_cls):
         processor = mock_processor_cls.return_value
         processor.analyze.return_value = "extracted summary"
@@ -484,7 +484,7 @@ class TestAnalyzePdf:
         assert data["method"] == "text_extract"
         processor.analyze.assert_called_once()
 
-    @patch("domains.inference.pdf_vlm.PDFVLMProcessor")
+    @patch("domain.inference._internal.pdf_vlm.PDFVLMProcessor")
     def test_analyzes_pdf_with_vlm(self, mock_processor_cls):
         processor = mock_processor_cls.return_value
         processor.analyze.return_value = "vlm summary"
@@ -497,7 +497,7 @@ class TestAnalyzePdf:
         assert resp.status_code == 200
         assert resp.json()["data"]["method"] == "vlm"
 
-    @patch("domains.inference.pdf_vlm.PDFVLMProcessor")
+    @patch("domain.inference._internal.pdf_vlm.PDFVLMProcessor")
     def test_analyzes_pdf_per_page(self, mock_processor_cls):
         processor = mock_processor_cls.return_value
         processor.analyze_pages.return_value = [
@@ -530,7 +530,7 @@ class TestProcessVideo:
         return engine
 
     @patch(MGR_TARGET)
-    @patch("domains.multimodal.video.VideoProcessor")
+    @patch("domain.multimodal._internal.video.VideoProcessor")
     def test_processes_video(self, mock_processor_cls, mock_get):
         import numpy as np
 
@@ -553,7 +553,7 @@ class TestProcessVideo:
         assert data["num_frames"] == 2
 
     @patch(MGR_TARGET)
-    @patch("domains.multimodal.video.VideoProcessor")
+    @patch("domain.multimodal._internal.video.VideoProcessor")
     def test_returns_500_when_engine_missing(self, mock_processor_cls, mock_get):
         import numpy as np
 
@@ -635,34 +635,34 @@ class TestVisualDataset:
 class TestCheckpoints:
     """GET/DELETE /multimodal/checkpoints"""
 
-    @patch("domains.training.video_trainer.list_video_checkpoints")
+    @patch("domain.training._internal.video_trainer.list_video_checkpoints")
     def test_list_checkpoints_empty(self, mock_list):
         mock_list.return_value = []
         resp = client.get("/multimodal/checkpoints")
         assert resp.status_code == 200
         assert resp.json() == []
 
-    @patch("domains.training.video_trainer.list_video_checkpoints")
+    @patch("domain.training._internal.video_trainer.list_video_checkpoints")
     def test_load_missing_returns_404(self, mock_list):
         mock_list.return_value = []
         resp = client.post("/multimodal/checkpoints/nope/load")
         assert resp.status_code == 404
 
-    @patch("domains.training.video_trainer.VideoCaptionTrainer")
-    @patch("domains.training.video_trainer.list_video_checkpoints")
+    @patch("domain.training._internal.video_trainer.VideoCaptionTrainer")
+    @patch("domain.training._internal.video_trainer.list_video_checkpoints")
     def test_load_existing(self, mock_list, mock_trainer):
         mock_list.return_value = [{"name": "ck1", "path": "/tmp/ck1.slnc"}]
         resp = client.post("/multimodal/checkpoints/ck1/load")
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "loaded"
 
-    @patch("domains.training.video_trainer.list_video_checkpoints")
+    @patch("domain.training._internal.video_trainer.list_video_checkpoints")
     def test_delete_missing_returns_404(self, mock_list):
         mock_list.return_value = []
         resp = client.delete("/multimodal/checkpoints/nope")
         assert resp.status_code == 404
 
-    @patch("domains.training.video_trainer.list_video_checkpoints")
+    @patch("domain.training._internal.video_trainer.list_video_checkpoints")
     def test_delete_existing(self, mock_list, tmp_path):
         ck = tmp_path / "ck1.slnc"
         ck.write_bytes(b"data")

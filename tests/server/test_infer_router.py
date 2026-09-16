@@ -27,7 +27,7 @@ def client(app):
 
 class TestInfer:
     @patch("state.model")
-    @patch("domains.models.provider.get_provider")
+    @patch("domain.models._internal.provider.get_provider")
     def test_generates_text(self, mock_get_prov, mock_model, client):
         provider = AsyncMock()
         provider.chat.return_value = "Hello world"
@@ -43,13 +43,13 @@ class TestInfer:
         assert resp.status_code == 503
 
     @patch("state.model")
-    @patch("domains.models.provider.get_provider", return_value=None)
+    @patch("domain.models._internal.provider.get_provider", return_value=None)
     def test_returns_503_when_no_provider(self, mock_prov, mock_model, client):
         resp = client.post("/infer", json={"prompt": "Hi"})
         assert resp.status_code == 503
 
     @patch("state.model")
-    @patch("domains.models.provider.get_provider")
+    @patch("domain.models._internal.provider.get_provider")
     def test_passes_temperature(self, mock_get_prov, mock_model, client):
         provider = AsyncMock()
         provider.chat.return_value = "ok"
@@ -60,7 +60,7 @@ class TestInfer:
         assert kwargs.get("temperature") == 0.1
 
     @patch("state.model")
-    @patch("domains.models.provider.get_provider")
+    @patch("domain.models._internal.provider.get_provider")
     def test_passes_top_p(self, mock_get_prov, mock_model, client):
         provider = AsyncMock()
         provider.chat.return_value = "ok"
@@ -71,7 +71,7 @@ class TestInfer:
         assert kwargs.get("top_p") == 0.5
 
     @patch("state.model")
-    @patch("domains.models.provider.get_provider")
+    @patch("domain.models._internal.provider.get_provider")
     def test_passes_max_new_tokens(self, mock_get_prov, mock_model, client):
         provider = AsyncMock()
         provider.chat.return_value = "ok"
@@ -82,7 +82,7 @@ class TestInfer:
         assert kwargs.get("max_tokens") == 100
 
     @patch("state.model")
-    @patch("domains.models.provider.get_provider")
+    @patch("domain.models._internal.provider.get_provider")
     def test_provider_exception_returns_500(self, mock_get_prov, mock_model, client):
         provider = AsyncMock()
         provider.chat.side_effect = RuntimeError("OOM")
@@ -92,7 +92,7 @@ class TestInfer:
         assert resp.status_code == 500
 
     @patch("state.model")
-    @patch("domains.models.provider.get_provider")
+    @patch("domain.models._internal.provider.get_provider")
     def test_response_has_model_field(self, mock_get_prov, mock_model, client):
         provider = AsyncMock()
         provider.chat.return_value = "test"
@@ -283,7 +283,7 @@ class TestInferStream:
         assert resp.status_code == 422
 
     @patch("state.model")
-    @patch("domains.models.provider.get_provider", return_value=None)
+    @patch("domain.models._internal.provider.get_provider", return_value=None)
     def test_stream_no_provider_errors(self, mock_prov, mock_model, client):
         mock_model.model_id = "m"
         resp = client.post("/infer/stream", json={"prompt": "Hi"})

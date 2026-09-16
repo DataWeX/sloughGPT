@@ -526,7 +526,7 @@ class TestLoRAEvaluatorCompare:
 
     def test_available_false_without_model_or_generator(self):
         evaluator = LoRAEvaluator()
-        with patch("domains.models.provider.get_provider", return_value=None):
+        with patch("domain.models._internal.provider.get_provider", return_value=None):
             assert evaluator.available() is False
 
     def test_available_true_with_injected_generator(self):
@@ -576,14 +576,14 @@ class TestLoRAEvaluatorLiveGenerator:
                 return "real provider text"
 
         evaluator = LoRAEvaluator()
-        with patch("domains.models.provider.get_provider", return_value=FakeProvider()):
+        with patch("domain.models._internal.provider.get_provider", return_value=FakeProvider()):
             gen = evaluator._resolve_live_generator()
         assert gen is not None
         assert gen("hi") == "real provider text"
 
     def test_resolve_live_generator_none_without_provider(self):
         evaluator = LoRAEvaluator()
-        with patch("domains.models.provider.get_provider", return_value=None):
+        with patch("domain.models._internal.provider.get_provider", return_value=None):
             assert evaluator._resolve_live_generator() is None
 
     def test_default_soul(self):
@@ -1052,10 +1052,10 @@ class TestFeedbackWorkflowManager:
                 store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4
             )
             db_path = str(Path(tmp) / "feedback.db")
-            from domains.feedback.database import FeedbackDB
+            from domain.feedback._internal.database import FeedbackDB
 
             feedback_db = FeedbackDB(db_path=db_path)
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             meta = MetaWeightManager()
             updater = OnlineLoRAUpdater()
@@ -1078,10 +1078,10 @@ class TestFeedbackWorkflowManager:
                 auto_aggregate_threshold=999,
             )
             db_path = str(Path(tmp) / "feedback.db")
-            from domains.feedback.database import FeedbackDB
+            from domain.feedback._internal.database import FeedbackDB
 
             feedback_db = FeedbackDB(db_path=db_path)
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             meta = MetaWeightManager()
             updater = OnlineLoRAUpdater()
@@ -1110,10 +1110,10 @@ class TestFeedbackWorkflowManager:
                 auto_aggregate_threshold=999,
             )
             db_path = str(Path(tmp) / "feedback.db")
-            from domains.feedback.database import FeedbackDB
+            from domain.feedback._internal.database import FeedbackDB
 
             feedback_db = FeedbackDB(db_path=db_path)
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             meta = MetaWeightManager()
             updater = OnlineLoRAUpdater()
@@ -1133,10 +1133,10 @@ class TestFeedbackWorkflowManager:
                 store_path=str(Path(tmp) / "adapters"), model_dim=64, adapter_rank=4
             )
             db_path = str(Path(tmp) / "feedback.db")
-            from domains.feedback.database import FeedbackDB
+            from domain.feedback._internal.database import FeedbackDB
 
             feedback_db = FeedbackDB(db_path=db_path)
-            from domains.feedback.meta_weights import MetaWeightManager
+            from domain.feedback._internal.meta_weights import MetaWeightManager
 
             meta = MetaWeightManager()
             updater = OnlineLoRAUpdater()
@@ -1228,7 +1228,7 @@ class TestFeedbackWorkflowManager:
     def test_trigger_export(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = str(Path(tmp) / "feedback.db")
-            from domains.feedback.database import FeedbackDB
+            from domain.feedback._internal.database import FeedbackDB
 
             feedback_db = FeedbackDB(db_path=db_path)
             wfm = FeedbackWorkflowManager(

@@ -12,7 +12,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 try:
-    from domains.models import SloughGPTModel  # noqa: F401
+    from domain.models._internal import SloughGPTModel  # noqa: F401
 except (ImportError, ModuleNotFoundError):
     pytest.skip("domains.models not available", allow_module_level=True)
 
@@ -22,7 +22,7 @@ class TestSloughGPTModel:
 
     def test_model_creation(self):
         """Test SloughGPTModel can be created."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
         model = SloughGPTModel(vocab_size=100, n_embed=64, n_layer=2, n_head=2, block_size=32)
 
@@ -31,7 +31,7 @@ class TestSloughGPTModel:
 
     def test_forward_pass(self):
         """Test forward pass."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
         model = SloughGPTModel(vocab_size=100, n_embed=64, n_layer=2, n_head=2, block_size=32)
 
@@ -42,7 +42,7 @@ class TestSloughGPTModel:
 
     def test_generation(self):
         """Test text generation."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
         model = SloughGPTModel(vocab_size=100, n_embed=64, n_layer=2, n_head=2, block_size=32)
 
@@ -57,7 +57,7 @@ class TestSloughGPTModel:
 
     def test_model_creation(self):
         """Test SloughGPTModel can be created."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
         model = SloughGPTModel(
             vocab_size=100,
@@ -74,7 +74,7 @@ class TestSloughGPTModel:
 
     def test_forward_pass(self):
         """Test forward pass."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
         model = SloughGPTModel(
             vocab_size=100,
@@ -93,7 +93,7 @@ class TestSloughGPTModel:
 
     def test_generation(self):
         """Test text generation."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
         model = SloughGPTModel(
             vocab_size=100,
@@ -113,7 +113,7 @@ class TestSloughGPTModel:
 
     def test_gradient_checkpointing(self):
         """Test gradient checkpointing."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
         model = SloughGPTModel(
             vocab_size=50,
@@ -133,8 +133,8 @@ class TestLoRA:
 
     def test_apply_lora(self):
         """Test LoRA can be applied."""
-        from domains.models import SloughGPTModel
-        from domains.training.lora import LoRAConfig, apply_lora_to_model
+        from domain.models._internal import SloughGPTModel
+        from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
 
         model = SloughGPTModel(vocab_size=100, n_embed=64, n_layer=2, n_head=2, block_size=32)
 
@@ -149,8 +149,9 @@ class TestQuantization:
 
     def test_dynamic_quantization(self):
         """Test dynamic quantization (SloNet skips — PyTorch-specific)."""
-        from domains.models import SloughGPTModel
-        from domains.training.efficient_inference import Quantizer
+        from domain.training._internal.efficient_inference import Quantizer
+
+        from domain.models._internal import SloughGPTModel
 
         model = SloughGPTModel(vocab_size=50, n_embed=32, n_layer=2, n_head=2, block_size=16)
 
@@ -169,7 +170,7 @@ class TestPersonality:
 
     def test_list_personalities(self):
         """Test listing personalities."""
-        from domains.ai_personality import list_personalities
+        from domain.ai_personality._internal import list_personalities
 
         personalities = list_personalities()
 
@@ -178,7 +179,7 @@ class TestPersonality:
 
     def test_personality_manager(self):
         """Test personality manager."""
-        from domains.ai_personality import PersonalityManager, PersonalityType
+        from domain.ai_personality._internal import PersonalityManager, PersonalityType
 
         manager = PersonalityManager()
 

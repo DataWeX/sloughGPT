@@ -39,7 +39,7 @@ class TestEnrichWithKnowledge:
             return mock_memory
 
         monkeypatch.setattr(
-            "domains.learner.knowledge_augmenter.get_knowledge_memory",
+            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory",
             mock_get_memory,
         )
 
@@ -56,7 +56,7 @@ class TestEnrichWithKnowledge:
             return mock_memory
 
         monkeypatch.setattr(
-            "domains.learner.knowledge_augmenter.get_knowledge_memory",
+            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory",
             mock_get_memory,
         )
 
@@ -72,7 +72,7 @@ class TestEnrichWithKnowledge:
             return mock_memory
 
         monkeypatch.setattr(
-            "domains.learner.knowledge_augmenter.get_knowledge_memory",
+            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory",
             mock_get_memory,
         )
 
@@ -93,7 +93,7 @@ class TestEnrichWithKnowledge:
             return mock_memory
 
         monkeypatch.setattr(
-            "domains.learner.knowledge_augmenter.get_knowledge_memory",
+            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory",
             mock_get_memory,
         )
 

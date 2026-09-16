@@ -26,7 +26,7 @@ def client(app):
 
 
 class TestListModels:
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_returns_model_list(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.list_models.return_value = [{"model_id": "gpt2"}, {"model_id": "qwen"}]
@@ -36,7 +36,7 @@ class TestListModels:
         assert data["count"] == 2
         assert data["models"][0]["model_id"] == "gpt2"
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_empty_registry(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.list_models.return_value = []
@@ -46,21 +46,21 @@ class TestListModels:
         assert data["count"] == 0
         assert data["models"] == []
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_single_model(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.list_models.return_value = [{"model_id": "only-one"}]
         resp = client.get("/registry/models")
         assert resp.json()["data"]["count"] == 1
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_success_status(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.list_models.return_value = []
         resp = client.get("/registry/models")
         assert resp.json()["status"] == "success"
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_many_models(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         models = [{"model_id": f"model-{i}"} for i in range(50)]
@@ -79,13 +79,13 @@ class TestListModels:
 
     def test_registry_error_returns_500(self, client):
         with patch(
-            "domains.infrastructure.model_registry.get_model_registry",
+            "domain.infrastructure._internal.model_registry.get_model_registry",
             side_effect=RuntimeError("broken"),
         ):
             resp = client.get("/registry/models")
         assert resp.status_code == 500
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_models_data_keys(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.list_models.return_value = []
@@ -94,28 +94,28 @@ class TestListModels:
 
 
 class TestGetModel:
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_finds_model(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.list_models.return_value = [{"model_id": "gpt2"}]
         resp = client.get("/registry/models/gpt2")
         assert resp.status_code == 200
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_returns_404_for_missing(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.list_models.return_value = []
         resp = client.get("/registry/models/nonexistent")
         assert resp.status_code == 404
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_404_detail_message(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.list_models.return_value = []
         resp = client.get("/registry/models/missing-model")
         assert "not found" in resp.json()["error"].lower()
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_returns_correct_model(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.list_models.return_value = [
@@ -126,14 +126,14 @@ class TestGetModel:
         assert resp.status_code == 200
         assert resp.json()["data"]["model_id"] == "qwen"
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_id_with_special_chars(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.list_models.return_value = []
         resp = client.get("/registry/models/some%20model")
         assert resp.status_code == 404
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_preserves_extra_fields(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.list_models.return_value = [
@@ -151,7 +151,7 @@ class TestGetModel:
 
     def test_model_lookup_error_returns_500(self, client):
         with patch(
-            "domains.infrastructure.model_registry.get_model_registry",
+            "domain.infrastructure._internal.model_registry.get_model_registry",
             side_effect=RuntimeError("broken"),
         ):
             resp = client.get("/registry/models/gpt2")
@@ -159,21 +159,21 @@ class TestGetModel:
 
 
 class TestBestModel:
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_returns_health(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.health_summary.return_value = {"status": "healthy"}
         resp = client.get("/registry/best")
         assert resp.json()["data"]["status"] == "healthy"
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_success_status(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.health_summary.return_value = {"status": "ok"}
         resp = client.get("/registry/best")
         assert resp.json()["status"] == "success"
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_empty_health(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.health_summary.return_value = {}
@@ -190,7 +190,7 @@ class TestBestModel:
 
     def test_best_error_returns_500(self, client):
         with patch(
-            "domains.infrastructure.model_registry.get_model_registry",
+            "domain.infrastructure._internal.model_registry.get_model_registry",
             side_effect=RuntimeError("broken"),
         ):
             resp = client.get("/registry/best")
@@ -198,21 +198,21 @@ class TestBestModel:
 
 
 class TestRegistryStats:
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_returns_stats(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.health_summary.return_value = {"models": [], "status": "ok"}
         resp = client.get("/registry/stats")
         assert resp.json()["data"]["status"] == "ok"
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_success_status(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.health_summary.return_value = {"status": "ok"}
         resp = client.get("/registry/stats")
         assert resp.json()["status"] == "success"
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_stats_with_models(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.health_summary.return_value = {
@@ -224,7 +224,7 @@ class TestRegistryStats:
         data = resp.json()["data"]
         assert data["total_models"] == 3
 
-    @patch("domains.infrastructure.model_registry.get_model_registry")
+    @patch("domain.infrastructure._internal.model_registry.get_model_registry")
     def test_best_and_stats_use_same_endpoint(self, mock_get_reg, client):
         reg = mock_get_reg.return_value
         reg.health_summary.return_value = {"status": "ok"}
@@ -242,7 +242,7 @@ class TestRegistryStats:
 
     def test_stats_error_returns_500(self, client):
         with patch(
-            "domains.infrastructure.model_registry.get_model_registry",
+            "domain.infrastructure._internal.model_registry.get_model_registry",
             side_effect=RuntimeError("broken"),
         ):
             resp = client.get("/registry/stats")

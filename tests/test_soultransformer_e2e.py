@@ -15,7 +15,7 @@ sys.path.insert(0, "packages/core-py")
 
 @pytest.fixture
 def tiny_transformer():
-    from domains.training.slonet import SloTransformer
+    from domain.training._internal.slonet import SloTransformer
 
     vocab = 50
     model = SloTransformer(
@@ -33,7 +33,7 @@ def tiny_transformer():
 
 def test_soultransformer_forward_backward():
     """Verify forward + backward + optimizer step produce finite gradients."""
-    from domains.training.slonet import SloAdam, SloTransformer, tensor
+    from domain.training._internal.slonet import SloAdam, SloTransformer, tensor
 
     model = SloTransformer(
         vocab_size=50,
@@ -69,7 +69,7 @@ def test_soultransformer_forward_backward():
 
 def test_soultransformer_train_export_load_generate():
     """Full pipeline: train, export .soul, load via provider, generate."""
-    from domains.training.slonet import SloAdam, SloTransformer, tensor
+    from domain.training._internal.slonet import SloAdam, SloTransformer, tensor
 
     vocab = 50
     model = SloTransformer(
@@ -115,8 +115,8 @@ def test_soultransformer_train_export_load_generate():
     assert np.isfinite(final_loss), "Loss went NaN"
 
     # Export to .soul
-    from domains.inference.slo_format import PersonalityCore, SloProfile
-    from domains.training.export import export_to_sou
+    from domain.inference._internal.slo_format import PersonalityCore, SloProfile
+    from domain.training._internal.export import export_to_sou
 
     with tempfile.TemporaryDirectory() as tmpdir:
         sou_path = os.path.join(tmpdir, "test_e2e.soul")
@@ -139,7 +139,7 @@ def test_soultransformer_train_export_load_generate():
         assert os.path.exists(sou_path), f".soul not created: {sou_path}"
 
         # Load via SloTransformerProvider
-        from domains.models.provider import SloTransformerProvider
+        from domain.models._internal.provider import SloTransformerProvider
 
         provider = SloTransformerProvider.load_from_sou(sou_path, model_id_str="e2e-test")
         assert provider is not None
@@ -166,8 +166,8 @@ def test_soultransformer_train_export_load_generate():
 
 def test_soultransformer_provider_streaming():
     """Verify SloTransformerProvider streaming yields multiple tokens."""
-    from domains.models.provider import SloTransformerProvider
-    from domains.training.slonet import SloTransformer
+    from domain.models._internal.provider import SloTransformerProvider
+    from domain.training._internal.slonet import SloTransformer
 
     model = SloTransformer(
         vocab_size=50,

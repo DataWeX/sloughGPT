@@ -167,9 +167,11 @@ class TestKnowledgeAugmenter:
             )
         )
 
-        with patch("domains.learner.knowledge_augmenter.get_knowledge_memory", return_value=memory):
+        with patch(
+            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory", return_value=memory
+        ):
             with patch(
-                "domains.learner.knowledge_augmenter.get_knowledge_ingestor"
+                "domain.learner._internal.knowledge_augmenter.get_knowledge_ingestor"
             ) as mock_ingestor:
                 mock_ingestor.return_value.search_and_ingest.return_value = {
                     "new_facts": 0,
@@ -187,9 +189,11 @@ class TestKnowledgeAugmenter:
         )
         memory._visited.clear()
 
-        with patch("domains.learner.knowledge_augmenter.get_knowledge_memory", return_value=memory):
+        with patch(
+            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory", return_value=memory
+        ):
             with patch(
-                "domains.learner.knowledge_augmenter.get_knowledge_ingestor"
+                "domain.learner._internal.knowledge_augmenter.get_knowledge_ingestor"
             ) as mock_ingestor:
                 mock_ingestor.return_value.search_and_ingest.return_value = {
                     "new_facts": 0,
@@ -211,7 +215,7 @@ class TestLearnerPipeline:
         with (
             patch.object(ContinualLearner, "_background_loop", lambda self: None),
             patch.object(ContinualLearner, "_save_checkpoint", lambda self: None),
-            patch("domains.learner.continual.STATE_PATH", tmp_path / "continual.soul"),
+            patch("domain.learner._internal.continual.STATE_PATH", tmp_path / "continual.soul"),
         ):
             l = ContinualLearner()
             l._running = False
@@ -339,7 +343,8 @@ class TestFullPipeline:
             patch.object(ContinualLearner, "_background_loop", lambda self: None),
             patch.object(ContinualLearner, "_save_checkpoint", lambda self: None),
             patch(
-                "domains.learner.continual.STATE_PATH", Path(tempfile.mkdtemp()) / "continual.soul"
+                "domain.learner._internal.continual.STATE_PATH",
+                Path(tempfile.mkdtemp()) / "continual.soul",
             ),
         ):
             learner = ContinualLearner()
@@ -360,7 +365,8 @@ class TestFullPipeline:
             patch.object(ContinualLearner, "_background_loop", lambda self: None),
             patch.object(ContinualLearner, "_save_checkpoint", lambda self: None),
             patch(
-                "domains.learner.continual.STATE_PATH", Path(tempfile.mkdtemp()) / "continual.soul"
+                "domain.learner._internal.continual.STATE_PATH",
+                Path(tempfile.mkdtemp()) / "continual.soul",
             ),
         ):
             learner = ContinualLearner()
