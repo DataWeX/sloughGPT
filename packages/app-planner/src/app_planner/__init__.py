@@ -1,4 +1,5 @@
-from .cli import main as cli_main
+from .cli import cli_main
+from .kanban import KanbanStore, get_kanban_store
 from .core import Note, NoteStore, get_note_store, reset_note_store
 from .hashtree import (
     CardSlotHash,
