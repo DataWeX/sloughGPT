@@ -459,6 +459,7 @@ class TuiRepl:
             pass
 
     def _render_all(self, stdscr, regions, win_console, win_output, win_status, win_input) -> None:
+        stdscr.erase()
         self._draw_borders(stdscr, regions)
         # Compute content offsets from borders.
         for pane in self._layout.panes:
@@ -1122,15 +1123,7 @@ class TuiRepl:
                     self._active_thread = None
                 if _detect_resize(stdscr):
                     _resize(self._rows, self._cols)
-                self._blit(
-                    win_output,
-                    self._output_surface.render(regions["output"].rows, self._out_scroll),
-                )
-                self._blit(
-                    win_console, self._log_surface.render(regions["console"].rows, self._log_scroll)
-                )
-                self._render_status(win_status, regions["status"].cols)
-                self._render_input(win_input, regions["input"].cols)
+                _redraw()
                 continue
 
             # ── Interactive select mode ──────────────────────────────────
