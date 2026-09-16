@@ -459,7 +459,6 @@ class TuiRepl:
             pass
 
     def _render_all(self, stdscr, regions, win_console, win_output, win_status, win_input) -> None:
-        stdscr.erase()
         self._draw_borders(stdscr, regions)
         # Compute content offsets from borders.
         for pane in self._layout.panes:
@@ -1077,6 +1076,7 @@ class TuiRepl:
                 regions["input"].top,
                 regions["input"].left,
             )
+            stdscr.erase()
             _redraw()
 
         def _detect_resize(stdscr) -> bool:
@@ -1106,6 +1106,7 @@ class TuiRepl:
             self._cols = ncols
             return True
 
+        stdscr.erase()
         _redraw()
 
         while self._running:

@@ -314,7 +314,7 @@ cli.add_command(_ClickCommandWrapper(_monitor_cmd), "monitor")
 @click.pass_context
 def tui(ctx):
     """Launch the split-pane curses TUI."""
-    ctx.invoke(shell, command=None, tui=True)
+    ctx.invoke(shell, command=None, tui=True, line=False)
 
 
 @cli.command(help="Launch interactive shell REPL")
