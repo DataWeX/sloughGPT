@@ -367,6 +367,47 @@ class Collection:
         self._cap_if_needed()
         return ids
 
+    def _try_index_lookup(self, query: dict[str, Any]) -> set[str] | None:
+        """Try to resolve a query using available indexes.
+
+        Returns a set of candidate doc IDs if an index can handle the query,
+        or None if a full scan is needed.
+        """
+        if not query:
+            return None
+
+        # Simple equality: {"field": value}
+        if len(query) == 1 and not any(isinstance(v, dict) for v in query.values()):
+            field, value = next(iter(query.items()))
+            if field in self._indexes:
+                return set(self._indexes[field].lookup(value))
+            return None
+
+        # Single-field range: {"field": {"$gte": x, "$lte": y, ...}}
+        if len(query) == 1:
+            field, cond = next(iter(query.items()))
+            if isinstance(cond, dict) and field in self._sorted_indexes:
+                return set(self._sorted_indexes[field].range(
+                    gte=cond.get("$gte", cond.get("$gt")),
+                    lte=cond.get("$lte", cond.get("$lt")),
+                ))
+
+        # $or with indexable sub-queries
+        if "$or" in query and len(query) == 1:
+            or_clauses = query["$or"]
+            if isinstance(or_clauses, list):
+                union_ids: set[str] | None = None
+                for clause in or_clauses:
+                    if not isinstance(clause, dict):
+                        return None
+                    ids = self._try_index_lookup(clause)
+                    if ids is None:
+                        return None
+                    union_ids = ids if union_ids is None else union_ids | ids
+                return union_ids
+
+        return None
+
     def find(
         self,
         query: dict[str, Any] | None = None,
@@ -396,10 +437,22 @@ class Collection:
         """
         self._expire_documents()
 
+        # Try index-assisted lookup first
+        candidate_ids = self._try_index_lookup(query) if query else None
+
         with self._lock:
-            results = [
-                dict(d) for d in self._docs.values() if not query or match_document(d, query)
-            ]
+            if candidate_ids is not None:
+                if query:
+                    results = [
+                        dict(d) for d_id, d in self._docs.items()
+                        if d_id in candidate_ids and match_document(d, query)
+                    ]
+                else:
+                    results = [dict(d) for d_id, d in self._docs.items() if d_id in candidate_ids]
+            else:
+                results = [
+                    dict(d) for d in self._docs.values() if not query or match_document(d, query)
+                ]
 
         if sort:
             for field, direction in reversed(sort):

@@ -71,7 +71,12 @@ class SortedIndex:
         self._entries.insert(idx, pair)
 
     def remove(self, doc_id: str, field_value: Any) -> None:
-        self._entries = [(v, i) for v, i in self._entries if not (v == field_value and i == doc_id)]
+        import bisect
+
+        pair = (field_value, doc_id)
+        idx = bisect.bisect_left(self._entries, pair)
+        if idx < len(self._entries) and self._entries[idx] == pair:
+            self._entries.pop(idx)
 
     def update(self, doc_id: str, old_value: Any, new_value: Any) -> None:
         """Update an entry: remove old, add new."""

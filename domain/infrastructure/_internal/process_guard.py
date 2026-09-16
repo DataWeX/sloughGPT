@@ -66,6 +66,9 @@ class _ThreadWorker:
 
     Uses threading.Queue (not mp.Queue) so it works reliably when called
     from a PGQ ThreadPoolExecutor thread.
+
+    When ``provider`` is passed, skips model loading entirely and wraps the
+    existing provider (used by autoload to avoid double-loading).
     """
 
     def __init__(
@@ -74,11 +77,13 @@ class _ThreadWorker:
         worker_id: str = "worker",
         generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
         startup_timeout: float = DEFAULT_STARTUP_TIMEOUT,
+        provider: Any = None,
     ):
         self._config = model_config
         self.worker_id = worker_id
         self._generate_timeout = generate_timeout
         self._startup_timeout = startup_timeout
+        self._injected_provider = provider
 
         self._req_q: queue.Queue = queue.Queue()
         self._resp_q: queue.Queue = queue.Queue()
@@ -215,7 +220,13 @@ class _ThreadWorker:
     def _run(self) -> None:
         """Worker thread entry point — loads model then processes requests."""
         try:
-            if self._config.is_slo:
+            if self._injected_provider is not None:
+                self._provider = self._injected_provider
+                self._hf_model = None
+                self._hf_tokenizer = None
+                self._hb_q.put_nowait(("ready", None))
+                self._request_loop()
+            elif self._config.is_slo:
                 self._run_slo()
             else:
                 self._run_hf()
@@ -365,6 +376,7 @@ class ProcessGuard:
         max_concurrent: int | None = None,
         memory_limit_mb: float | None = 4096.0,
         extra_sys_paths: list | None = None,
+        provider: Any = None,
         # Legacy params (backward compat — used when model_config is None)
         slnc_path: str | None = None,
         model_id: str | None = None,
@@ -398,6 +410,7 @@ class ProcessGuard:
         self.health_check_interval = health_check_interval
         self.memory_limit_mb = memory_limit_mb
         self._extra_sys_paths = extra_sys_paths or []
+        self._injected_provider = provider
 
         self._worker: Any | None = None
         self._restart_count = 0
@@ -552,6 +565,7 @@ class ProcessGuard:
                 model_config=self._config,
                 worker_id=self.worker_id,
                 generate_timeout=self.generate_timeout,
+                provider=self._injected_provider,
             )
         else:
             from .model_worker import ModelWorkerProcess

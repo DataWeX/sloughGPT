@@ -314,7 +314,11 @@ class ModelsController:
         try:
             from config import ServerConfig
             from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
-            from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
+            from domain.infrastructure.process_guard import (
+                ExecutionMode,
+                ProcessGuard,
+                resolve_memory_limit_mb,
+            )
             from domain.models._internal.provider import attach_process_guard_to_provider
 
             cfg = ServerConfig.from_env()
@@ -327,6 +331,7 @@ class ModelsController:
                 return None
 
             guard = ProcessGuard(
+                mode=ExecutionMode.SUBPROCESS,
                 slnc_path=slnc_path,
                 model_id=model_id,
                 worker_id=f"slo-{model_id.split('/')[-1]}",
@@ -722,10 +727,15 @@ class ModelsController:
             return None
         try:
             from config import ServerConfig
-            from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
+            from domain.infrastructure.process_guard import (
+                ExecutionMode,
+                ProcessGuard,
+                resolve_memory_limit_mb,
+            )
 
             cfg = ServerConfig.from_env()
             guard = ProcessGuard(
+                mode=ExecutionMode.SUBPROCESS,
                 slnc_path=str(slnc_path),
                 model_id=model_id,
                 worker_id=f"slo-{Path(model_id).name}-finetuned",

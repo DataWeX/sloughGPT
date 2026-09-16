@@ -1252,11 +1252,15 @@ def _try_lazy_guard_autoload(cfg) -> bool:
 
         process_guard = None
         if get_process_guard_enabled():
-            from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
+            from domain.infrastructure.process_guard import (
+                ExecutionMode,
+                ProcessGuard,
+                resolve_memory_limit_mb,
+            )
 
             process_guard = ProcessGuard(
-                slnc_path=slnc_path,
-                model_id=model_type,
+                model_config=None,
+                mode=ExecutionMode.THREAD,
                 worker_id=f"slo-{model_type.split('/')[-1]}",
                 max_restarts=3,
                 restart_delay=2.0,
@@ -1264,12 +1268,19 @@ def _try_lazy_guard_autoload(cfg) -> bool:
                 memory_limit_mb=resolve_memory_limit_mb(
                     slnc_path, cfg.process_guard_memory_limit_mb
                 ),
+                provider=provider,
+                slnc_path=slnc_path,
+                model_id=model_type,
                 quantize=cfg.quantize_slonet,
                 quant_bits=cfg.quant_bits,
                 quant_mode=cfg.quant_mode,
                 quant_clip=cfg.quant_clip,
             )
             process_guard.start()
+            logger.info(
+                "Lazy-guard autoload: ProcessGuard started (THREAD mode, pre-loaded provider)",
+                extra={"tag": "START"},
+            )
     except Exception as e:
         logger.debug("ProcessGuard creation failed (non-fatal): %s", e, extra={"tag": "START"})
         process_guard = None

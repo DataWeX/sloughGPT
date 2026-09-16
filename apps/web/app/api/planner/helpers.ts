@@ -90,6 +90,34 @@ export interface Note {
 // ── Read / Write Board ────────────────────────────────────────────────
 
 export function readBoard(workspaceId?: string): Board {
+  const board = loadCanonicalBoard(workspaceId)
+  overlayAppPlannerFeed(board, workspaceId)
+  return board
+}
+
+function overlayAppPlannerFeed(board: Board, workspaceId?: string): void {
+  const feedDir = join(kanbanDir(workspaceId), 'app-planner-feed')
+  if (!existsSync(feedDir)) return
+  const feedFile = join(feedDir, 'board.json')
+  if (!existsSync(feedFile)) return
+  let cards: BoardCard[] = []
+  try {
+    const raw = readFileSync(feedFile, 'utf-8')
+    const parsed = JSON.parse(raw)
+    cards = Array.isArray(parsed.cards) ? parsed.cards : []
+  } catch {
+    return
+  }
+  const known = new Map(board.cards.map((c) => [c.id, c]))
+  for (const card of cards) {
+    if (!card?.id || !card?.title) continue
+    if (known.has(card.id)) continue
+    known.set(card.id, card)
+    board.cards.push(card)
+  }
+}
+
+function loadCanonicalBoard(workspaceId?: string): Board {
   const bp = boardPath(workspaceId)
   if (!existsSync(bp)) {
     return {
