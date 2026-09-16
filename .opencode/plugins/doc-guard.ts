@@ -14,14 +14,14 @@ interface AreaDoc {
 const AREAS: AreaDoc[] = [
   { area: "frontend", docs: ["docs/UI_INTEGRATION_README.md", "docs/API.md"], paths: ["apps/web/"] },
   { area: "backend", docs: ["docs/routers.md", "docs/API.md", "docs/DATA_STRUCTURE.md"], paths: ["apps/api/"] },
-  { area: "core", docs: ["docs/DEVELOPER_GUIDE.md", "docs/AI_SOFTWARE_ENGINEERING.md", "docs/RAG_ARCHITECTURE.md"], paths: ["packages/core-py/domains/inference/", "packages/core-py/domains/feedback/", "packages/core-py/domains/context/", "packages/core-py/domains/core/"] },
-  { area: "training", docs: ["docs/DEVELOPER_GUIDE.md"], paths: ["packages/core-py/domains/training/"] },
+  { area: "core", docs: ["docs/DEVELOPER_GUIDE.md", "docs/AI_SOFTWARE_ENGINEERING.md", "docs/RAG_ARCHITECTURE.md"], paths: ["domain/inference/_internal/", "domain/feedback/_internal/", "domain/context/_internal/", "domain/core/_internal/"] },
+  { area: "training", docs: ["docs/DEVELOPER_GUIDE.md"], paths: ["domain/training/_internal/"] },
   { area: "sdk", docs: ["docs/API.md"], paths: ["packages/sdk-py/", "packages/sdk-ts/"] },
   { area: "infra", docs: ["docs/DEPLOYMENT.md", "docs/DEPLOYMENT_CHECKLIST.md"], paths: ["infra/", "docker-compose", "Dockerfile"] },
   { area: "config", docs: ["docs/ENVIRONMENT.md"], paths: ["config/"] },
   { area: "cli", docs: ["docs/integration/CLI_README.md"], paths: ["apps/cli/"] },
   { area: "testing", docs: ["docs/DEVELOPER_GUIDE.md"], paths: ["tests/", "apps/web/cypress/"] },
-  { area: "systems", docs: ["docs/SHELL.md", "docs/VM_CONSOLE.md", "docs/DEVELOPER_GUIDE.md"], paths: ["packages/core-py/domains/shell/"] },
+  { area: "systems", docs: ["docs/SHELL.md", "docs/VM_CONSOLE.md", "docs/DEVELOPER_GUIDE.md"], paths: ["domain/shell/_internal/"] },
   { area: "docs", docs: [], paths: ["docs/"] },
 ]
 

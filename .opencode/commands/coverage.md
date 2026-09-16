@@ -18,9 +18,9 @@ Systematic test coverage improvement for Python modules.
 ## Examples
 
 ```
-/coverage packages/core-py/domains/training/export.py
-/coverage packages/core-py/domains/infrastructure/task_queue.py
-/coverage packages/core-py/domains/inference/slonet_provider.py
+/coverage domain/training/_internal/export.py
+/coverage domain/infrastructure/_internal/task_queue.py
+/coverage domain/inference/_internal/slonet_provider.py
 ```
 
 ## What It Does

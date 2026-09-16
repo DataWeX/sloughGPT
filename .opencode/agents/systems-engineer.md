@@ -32,25 +32,25 @@ and the Python backend.
 
 | Area | Location | What |
 |------|----------|------|
-| Dait Kernel | `packages/core-py/domains/shell/kernel.py` | Process scheduler, memory, syscalls, addons |
-| Init System | `packages/core-py/domains/shell/init.py` | Runlevels, service lifecycle, dependency ordering |
-| Devices | `packages/core-py/domains/shell/devices.py`, `device_system.py` | Device drivers, DeviceBus, fd-based I/O |
-| VM Devices | `packages/core-py/domains/shell/tensor_device.py`, `npu_device.py`, `storage_device.py`, `network_device.py` | Standalone hardware devices with ioctl |
-| Kernel Devices | `packages/core-py/domains/shell/kernel_devices.py` | DeviceTable, DeviceDriver, bit-based fds |
-| VFS | `packages/core-py/domains/shell/addons/filesystem.py` | Virtual filesystem, mount points |
-| x86 VM | `packages/core-py/domains/shell/vm.py` | CPU emulation, ISA, assembler, memory |
-| VM Engine | `packages/core-py/domains/shell/vm_engine.py` | Breakpoints, tracing, event hooks |
-| VM Syscalls | `packages/core-py/domains/shell/vm.py` (INT 0x80) | Linux-style syscall interface |
-| VM RBAC | `packages/core-py/domains/shell/vm_permissions.py` | USER / ADMIN / KERNEL roles |
-| VM Training | `packages/core-py/domains/shell/vm_training_bridge.py` | Guest syscall → REST API bridge |
-| VM Programs | `packages/core-py/domains/shell/vm_programs.py` | Built-in assembly programs |
-| Shell TUI | `packages/core-py/domains/shell/tui_repl.py` | Display layer, rendering, input |
-| Pane Engine | `packages/core-py/domains/shell/pane.py` | Layout, borders, split, focus |
-| Surfaces | `packages/core-py/domains/shell/surface.py` | TextSurface, LogSurface, clip, CJK |
-| Console | `packages/core-py/domains/shell/console.py` | ANSI, spinner, progress, pagination |
-| Kernel Addons | `packages/core-py/domains/shell/addons/` | neural, filesystem, shell_ui |
+| Dait Kernel | `domain/shell/_internal/kernel.py` | Process scheduler, memory, syscalls, addons |
+| Init System | `domain/shell/_internal/init.py` | Runlevels, service lifecycle, dependency ordering |
+| Devices | `domain/shell/_internal/devices.py`, `device_system.py` | Device drivers, DeviceBus, fd-based I/O |
+| VM Devices | `domain/shell/_internal/tensor_device.py`, `npu_device.py`, `storage_device.py`, `network_device.py` | Standalone hardware devices with ioctl |
+| Kernel Devices | `domain/shell/_internal/kernel_devices.py` | DeviceTable, DeviceDriver, bit-based fds |
+| VFS | `domain/shell/_internal/addons/filesystem.py` | Virtual filesystem, mount points |
+| x86 VM | `domain/shell/_internal/vm.py` | CPU emulation, ISA, assembler, memory |
+| VM Engine | `domain/shell/_internal/vm_engine.py` | Breakpoints, tracing, event hooks |
+| VM Syscalls | `domain/shell/_internal/vm.py` (INT 0x80) | Linux-style syscall interface |
+| VM RBAC | `domain/shell/_internal/vm_permissions.py` | USER / ADMIN / KERNEL roles |
+| VM Training | `domain/shell/_internal/vm_training_bridge.py` | Guest syscall → REST API bridge |
+| VM Programs | `domain/shell/_internal/vm_programs.py` | Built-in assembly programs |
+| Shell TUI | `domain/shell/_internal/tui_repl.py` | Display layer, rendering, input |
+| Pane Engine | `domain/shell/_internal/pane.py` | Layout, borders, split, focus |
+| Surfaces | `domain/shell/_internal/surface.py` | TextSurface, LogSurface, clip, CJK |
+| Console | `domain/shell/_internal/console.py` | ANSI, spinner, progress, pagination |
+| Kernel Addons | `domain/shell/_internal/addons/` | neural, filesystem, shell_ui |
 | Python Backend | `apps/api/server/` | FastAPI endpoints, routers |
-| Inference | `packages/core-py/domains/inference/` | Model loading, SLN/SLNC parsers |
+| Inference | `domain/inference/_internal/` | Model loading, SLN/SLNC parsers |
 | VM API | `apps/api/server/routers/vm.py` | REST endpoints for VM operations |
 | v86 Browser | `apps/web/lib/v86-controller.ts` | V86Controller, state persistence |
 | v86 Hook | `apps/web/hooks/useV86.ts` | React hook for v86 lifecycle |

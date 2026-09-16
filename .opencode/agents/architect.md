@@ -21,7 +21,7 @@ to reduce memory usage, improve performance, and enhance maintainability.
 
 ## Scope
 
-- `packages/core-py/domains/` — Python backend
+- `domain/` — Python backend
 - `apps/web/` — TypeScript frontend
 - Any file with structural improvements needed
 

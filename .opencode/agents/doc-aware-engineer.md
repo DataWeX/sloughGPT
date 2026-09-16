@@ -18,12 +18,12 @@ Given a task, identify which area(s) it touches:
 |------|-------------|---------------|
 | **Frontend** | `apps/web/` | `docs/UI_INTEGRATION_README.md`, `docs/API.md`, `docs/OPENWEBUI_INTEGRATION.md` |
 | **Backend API** | `apps/api/` | `docs/routers.md`, `docs/API.md`, `docs/DATA_STRUCTURE.md`, `docs/DEPLOYMENT.md` |
-| **Core Python** | `packages/core-py/domains/` | `docs/DEVELOPER_GUIDE.md`, `docs/AI_SOFTWARE_ENGINEERING.md`, `docs/RAG_ARCHITECTURE.md`, `docs/RAG_PATTERNS.md`, `AGENTS.md` |
-| **Training** | `packages/core-py/domains/training/` | `docs/DEVELOPER_GUIDE.md`, `AGENTS.md` (Training Architecture section) |
+| **Core Python** | `domain/` | `docs/DEVELOPER_GUIDE.md`, `docs/AI_SOFTWARE_ENGINEERING.md`, `docs/RAG_ARCHITECTURE.md`, `docs/RAG_PATTERNS.md`, `AGENTS.md` |
+| **Training** | `domain/training/_internal/` | `docs/DEVELOPER_GUIDE.md`, `AGENTS.md` (Training Architecture section) |
 | **Infrastructure** | `infra/`, `docker-compose*`, `Dockerfile*` | `docs/DEPLOYMENT.md`, `docs/DEPLOYMENT_CHECKLIST.md`, `docs/ENVIRONMENT.md` |
 | **Config** | `config/` | `docs/ENVIRONMENT.md`, `docs/INSTALL.md` |
 | **SDK** | `packages/sdk-py/`, `packages/sdk-ts/` | `docs/API.md` |
-| **Soul Engine** | `packages/core-py/domains/core/soul.py`, `packages/core-py/domains/inference/sou_format.py` | `docs/AI_SOFTWARE_ENGINEERING.md`, `AGENTS.md` (Soul section) |
+| **Soul Engine** | `domain/core/_internal/soul.py`, `domain/inference/_internal/slo_format.py` | `docs/AI_SOFTWARE_ENGINEERING.md`, `AGENTS.md` (Soul section) |
 | **Docs themselves** | `docs/` | `docs/README.md` (doc index) |
 | **CLI** | `apps/cli/` | `docs/integration/CLI_README.md`, `docs/INSTALL.md` |
 | **Testing** | `tests/`, `apps/web/cypress/` | `docs/DEVELOPER_GUIDE.md` |

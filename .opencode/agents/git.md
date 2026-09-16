@@ -49,7 +49,7 @@ For each file, check:
 ### Step 3: Check Project Boundaries
 
 The project has strict layer boundaries:
-- `packages/core-py/domains/` — Core logic, no HTTP deps
+- `domain/` — Core logic, no HTTP deps
 - `apps/api/server/` — FastAPI routes, thin adapters
 - `apps/web/` — Next.js frontend, uses @sloughgpt/strui
 - `packages/strui/` — Shared component library
