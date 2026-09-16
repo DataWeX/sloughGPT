@@ -12,7 +12,7 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from domains import (
     BaseComponent as BaseComponent,
@@ -147,7 +147,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             self.logger.error(
                 "Failed to initialize Metacognitive Monitor: %s", e, extra={"tag": "COG"}
             )
-            raise ComponentException(f"Metacognitive Monitor initialization failed: {e}")
+            raise ComponentException(f"Metacognitive Monitor initialization failed: {e}") from e
 
     async def shutdown(self) -> None:
         """Shutdown the metacognitive monitor"""
@@ -180,7 +180,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             self.logger.error(
                 "Failed to shutdown Metacognitive Monitor: %s", e, extra={"tag": "COG"}
             )
-            raise ComponentException(f"Metacognitive Monitor shutdown failed: {e}")
+            raise ComponentException(f"Metacognitive Monitor shutdown failed: {e}") from e
 
     async def monitor_thought_process(self, thoughts: list[Thought]) -> dict[str, Any]:
         """Monitor and analyze thought processes"""
@@ -235,7 +235,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
 
         except Exception as e:
             self.logger.error("Thought process monitoring failed: %s", e, extra={"tag": "COG"})
-            raise ComponentException(f"Thought process monitoring failed: {e}")
+            raise ComponentException(f"Thought process monitoring failed: {e}") from e
 
     async def assess_confidence(self, thought: Thought) -> float:
         """Assess confidence in a thought"""
@@ -302,7 +302,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
 
         except Exception as e:
             self.logger.error("Reflection process failed: %s", e, extra={"tag": "COG"})
-            raise ComponentException(f"Reflection process failed: {e}")
+            raise ComponentException(f"Reflection process failed: {e}") from e
 
     async def get_cognitive_state_snapshot(self) -> dict[str, Any]:
         """Get current cognitive state snapshot"""
@@ -336,7 +336,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             self.logger.info("Monitoring level set to: %s", level, extra={"tag": "COG"})
 
         except ValueError:
-            raise ComponentException(f"Invalid monitoring level: {level}")
+            raise ComponentException(f"Invalid monitoring level: {level}") from None
 
     async def get_metacognitive_report(self, time_range: str = "1h") -> dict[str, Any]:
         """Generate metacognitive monitoring report"""
@@ -406,7 +406,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             self.logger.error(
                 "Failed to generate metacognitive report: %s", e, extra={"tag": "COG"}
             )
-            raise ComponentException(f"Report generation failed: {e}")
+            raise ComponentException(f"Report generation failed: {e}") from e
 
     # Private helper methods
 

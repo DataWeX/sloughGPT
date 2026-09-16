@@ -1,12 +1,9 @@
 """
 VM commands - x86 Virtual Machine console and management.
 """
-import sys
-import os
-import json
+
 import time
 from pathlib import Path
-from typing import Optional
 
 from domain.logging import get_global
 
@@ -18,9 +15,9 @@ def cmd_vm(args):
     log.header("x86 Virtual Machine")
 
     try:
-        from domain.shell._internal.vm import X86CPU, X86Assembler
-        from domain.shell._internal.vm_engine import VMEngine
-        from domain.shell._internal.vm_permissions import X86RBAC, Role
+        from domain.shell._internal.vm import X86CPU, X86Assembler  # noqa: F401
+        from domain.shell._internal.vm_engine import VMEngine  # noqa: F401
+        from domain.shell._internal.vm_permissions import X86RBAC, Role  # noqa: F401
 
         log.section("Status")
         log.key_value("Engine", "Available")
@@ -84,9 +81,12 @@ def cmd_vm_run(args):
             return
 
     # Check if source is a built-in program name
-    if not file_path and not source.strip().startswith(('[', 'mov', 'push', 'pop', 'jmp', 'call', 'ret', 'int', 'nop')):
+    if not file_path and not source.strip().startswith(
+        ("[", "mov", "push", "pop", "jmp", "call", "ret", "int", "nop")
+    ):
         try:
             from domain.shell._internal.vm_programs import PROGRAMS
+
             if source.strip().lower() in PROGRAMS:
                 source = PROGRAMS[source.strip().lower()]
                 log.info(f"Running built-in program: {source.strip().lower()}")
@@ -94,7 +94,6 @@ def cmd_vm_run(args):
             pass
 
     try:
-        from domain.shell._internal.vm import X86CPU, X86Assembler
         from domain.shell._internal.vm_engine import VMEngine
 
         engine = VMEngine()
@@ -142,7 +141,7 @@ def cmd_vm_info(args):
     log.header("VM Details")
 
     try:
-        from domain.shell._internal.vm import X86CPU, MEM_SIZE, NUM_REGS
+        from domain.shell._internal.vm import MEM_SIZE, NUM_REGS, X86CPU  # noqa: F401
         from domain.shell._internal.vm_permissions import X86RBAC, Role
 
         log.section("Memory")
@@ -289,7 +288,7 @@ def cmd_vm_debug(args):
         # Interactive loop
         while True:
             try:
-                cmd = input(f"dbg> ").strip()
+                cmd = input("dbg> ").strip()
                 if not cmd:
                     continue
 
@@ -376,6 +375,6 @@ COMMANDS = {
             "list": cmd_vm_list,
             "info": cmd_vm_info,
             "debug": cmd_vm_debug,
-        }
+        },
     }
 }

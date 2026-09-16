@@ -3,8 +3,10 @@ Companion command group — AI companion management and chat.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, api_get, api_post, output_json
+from core.helpers import api_get, api_post, output_json
+
 from domain.logging import get_global
+
 log = get_global()
 
 

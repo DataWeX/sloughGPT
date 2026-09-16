@@ -113,7 +113,7 @@ class VideoProcessor:
         except ImportError:
             raise ImportError(
                 "Video processing requires opencv-python (cv2). Install with: pip install opencv-python"
-            )
+            ) from None
 
         num_frames = num_frames or self.max_frames
         cap = cv2.VideoCapture(video_path)

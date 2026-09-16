@@ -37,7 +37,7 @@ class FunctionType(StrEnum):
         except ValueError:
             raise ValueError(
                 f"Unknown function type: {s!r}. Must be one of: {[ft.value for ft in cls]}"
-            )
+            ) from None
 
 
 class PointProtocol(ABC):

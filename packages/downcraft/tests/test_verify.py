@@ -6,11 +6,9 @@ Model-level ``list_missing_files`` moved to
 
 import hashlib
 import os
-import tempfile
 from pathlib import Path
 
 import pytest
-
 from downcraft.download.verify import _sha256_of, verify_file
 
 

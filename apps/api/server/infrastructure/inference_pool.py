@@ -105,7 +105,7 @@ class InferencePool:
                 getattr(fn, "__name__", str(fn)),
                 extra={"tag": "INFRA"},
             )
-            raise TimeoutError("Inference task timed out")
+            raise TimeoutError("Inference task timed out") from None
         finally:
             self._semaphore.release()
 

@@ -3,8 +3,10 @@ Experiment command group — ML experiment tracking.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, api_get, api_post, api_delete, output_json, confirm
+from core.helpers import api_delete, api_get, api_post, confirm, output_json
+
 from domain.logging import get_global
+
 log = get_global()
 
 

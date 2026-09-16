@@ -466,7 +466,7 @@ def load_model_to_points(
         raise ImportError(
             "load_model_to_points requires numpy_engine._load_weights. "
             "Ensure safetensors and huggingface_hub are installed."
-        )
+        ) from None
 
     config, weights = _load_weights(model_id)
 

@@ -54,6 +54,7 @@ logger = logging.getLogger("downcraft")
 # Shared progress renderer
 # ---------------------------------------------------------------------------
 
+
 def _render_progress_bar(pct: int, width: int = 30) -> str:
     filled = int(pct / 100 * width)
     bar = "█" * filled + "░" * (width - filled)
@@ -80,6 +81,7 @@ def _progress(label: str, downloaded: int, total: int, speed: float):
 # Generic URL download
 # ---------------------------------------------------------------------------
 
+
 def cmd_url(args: argparse.Namespace):
     """Download any URL with resume."""
     url = args.url
@@ -89,7 +91,7 @@ def cmd_url(args: argparse.Namespace):
     print(f"Downloading {url}")
     print(f"  → {dest}")
     if compressed:
-        print(f"  → Decompressing LZ4")
+        print("  → Decompressing LZ4")
 
     t0 = time.time()
     try:
@@ -111,6 +113,7 @@ def cmd_url(args: argparse.Namespace):
 # ---------------------------------------------------------------------------
 # Status / List
 # ---------------------------------------------------------------------------
+
 
 def cmd_status(args: argparse.Namespace):
     """Show download status for a URL."""
@@ -150,6 +153,7 @@ def cmd_list(args: argparse.Namespace):
 # Resolve — extract real download URL from a page
 # ---------------------------------------------------------------------------
 
+
 def cmd_resolve(args: argparse.Namespace):
     """Resolve a page and show ranked download links."""
     url = args.url
@@ -177,6 +181,7 @@ def cmd_resolve(args: argparse.Namespace):
 # Capture — local server for browser extension
 # ---------------------------------------------------------------------------
 
+
 def cmd_capture(args: argparse.Namespace):
     """Start capture server for browser extension."""
     from .server import start_capture_server
@@ -184,7 +189,7 @@ def cmd_capture(args: argparse.Namespace):
     port = args.port
 
     print(f"Starting capture server on http://127.0.0.1:{port}")
-    print(f"Extension: load extension/ folder in chrome://extensions")
+    print("Extension: load extension/ folder in chrome://extensions")
     print("Press Ctrl+C to stop.\n")
 
     def on_capture(entry):
@@ -206,6 +211,7 @@ def cmd_capture(args: argparse.Namespace):
 # Compress / Decompress
 # ---------------------------------------------------------------------------
 
+
 def cmd_compress(args: argparse.Namespace):
     """Compress a file using LZ4."""
     from .download.compress import compress_file
@@ -221,7 +227,9 @@ def cmd_compress(args: argparse.Namespace):
         elapsed = time.time() - t0
         src_mb = result.bytes_uncompressed / (1024 * 1024)
         dst_mb = result.bytes_compressed / (1024 * 1024)
-        print(f"✓ Done — {src_mb:.1f} MB → {dst_mb:.1f} MB ({result.savings_pct:.1f}% saved) in {elapsed:.1f}s")
+        print(
+            f"✓ Done — {src_mb:.1f} MB → {dst_mb:.1f} MB ({result.savings_pct:.1f}% saved) in {elapsed:.1f}s"
+        )
     except Exception as e:
         print(f"✗ Error: {e}")
         sys.exit(1)
@@ -261,7 +269,7 @@ def cmd_peek(args: argparse.Namespace):
 
     if info:
         print(f"File:     {fpath}")
-        print(f"Format:   SLZ4 (LZ4)")
+        print("Format:   SLZ4 (LZ4)")
         print(f"Size:     {info['uncompressed_size'] / (1024 * 1024):.1f} MB uncompressed")
         print(f"SHA-256:  {info['sha256']}")
     else:
@@ -272,6 +280,7 @@ def cmd_peek(args: argparse.Namespace):
 # ---------------------------------------------------------------------------
 # Estimate — check download size before downloading
 # ---------------------------------------------------------------------------
+
 
 def cmd_estimate(args: argparse.Namespace):
     """Estimate download size and compression savings."""
@@ -298,12 +307,13 @@ def cmd_estimate(args: argparse.Namespace):
     if savings_mb > 0:
         print(f"Est. savings: {savings_mb:.1f} MB with LZ4 compression")
     elif info["is_compressed"]:
-        print(f"Est. savings: Already compressed, no additional savings")
+        print("Est. savings: Already compressed, no additional savings")
 
 
 # ---------------------------------------------------------------------------
 # Verify — check file integrity
 # ---------------------------------------------------------------------------
+
 
 def cmd_verify(args: argparse.Namespace):
     """Verify file integrity using SHA-256 checksum."""
@@ -326,7 +336,7 @@ def cmd_verify(args: argparse.Namespace):
         if actual == expected:
             print(f"✓ Checksum matches: {actual}")
         else:
-            print(f"✗ Checksum mismatch!")
+            print("✗ Checksum mismatch!")
             print(f"  Expected: {expected}")
             print(f"  Actual:   {actual}")
             sys.exit(1)
@@ -338,11 +348,12 @@ def cmd_verify(args: argparse.Namespace):
 # Main dispatcher
 # ---------------------------------------------------------------------------
 
+
 def main(argv: list = None):
     parser = argparse.ArgumentParser(
         prog="downcraft",
         description="Generic HTTP downloader with cross-session resume. "
-                    "Supports any URL with Range headers.",
+        "Supports any URL with Range headers.",
     )
 
     sub = parser.add_subparsers(dest="command", required=True)
@@ -351,7 +362,9 @@ def main(argv: list = None):
     p_url = sub.add_parser("url", help="Download any URL")
     p_url.add_argument("url", help="HTTP/HTTPS URL")
     p_url.add_argument("dest", help="Local destination path")
-    p_url.add_argument("-c", "--compressed", action="store_true", help="Expect LZ4 compression and decompress")
+    p_url.add_argument(
+        "-c", "--compressed", action="store_true", help="Expect LZ4 compression and decompress"
+    )
     p_url.set_defaults(func=cmd_url)
 
     # status <key>
@@ -384,7 +397,9 @@ def main(argv: list = None):
     p_compress = sub.add_parser("compress", help="Compress a file using LZ4")
     p_compress.add_argument("source", help="Source file path")
     p_compress.add_argument("dest", help="Destination file path (.lz4)")
-    p_compress.add_argument("-l", "--level", type=int, default=6, help="Compression level (1-16, default: 6)")
+    p_compress.add_argument(
+        "-l", "--level", type=int, default=6, help="Compression level (1-16, default: 6)"
+    )
     p_compress.set_defaults(func=cmd_compress)
 
     # decompress <source> <dest>

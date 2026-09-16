@@ -10,7 +10,6 @@ Usage:
 """
 
 import sys
-from typing import Optional
 
 
 def entry() -> int:
@@ -90,10 +89,20 @@ def entry() -> int:
                 include.append(rest[j + 1])
             if a == "--exclude" and j + 1 < len(rest):
                 exclude.append(rest[j + 1])
-        return _crawl(url, depth=depth, max_pages=mp, out=out,
-                      rate=rate, timeout=timeout, workers=workers, fmt=fmt,
-                      dedup=dedup, include=include, exclude=exclude,
-                      progress=progress)
+        return _crawl(
+            url,
+            depth=depth,
+            max_pages=mp,
+            out=out,
+            rate=rate,
+            timeout=timeout,
+            workers=workers,
+            fmt=fmt,
+            dedup=dedup,
+            include=include,
+            exclude=exclude,
+            progress=progress,
+        )
 
     if cmd == "gui":
         return _gui()
@@ -117,8 +126,9 @@ def entry() -> int:
     return 1
 
 
-def _page(url: str, fmt: str = "jsonl", out: str = "-",
-          rate: float = 0.5, timeout: int = 15) -> int:
+def _page(
+    url: str, fmt: str = "jsonl", out: str = "-", rate: float = 0.5, timeout: int = 15
+) -> int:
     from .parse import parse
     from .store import save, save_json_array
 
@@ -128,8 +138,13 @@ def _page(url: str, fmt: str = "jsonl", out: str = "-",
         return 1
     if fmt == "text":
         import json
-        data = json.dumps({"text": page.text, "url": page.url, "title": page.title},
-                          ensure_ascii=False) + "\n"
+
+        data = (
+            json.dumps(
+                {"text": page.text, "url": page.url, "title": page.title}, ensure_ascii=False
+            )
+            + "\n"
+        )
         _write(data, out)
     elif fmt == "json":
         save_json_array([page], path=out)
@@ -138,13 +153,21 @@ def _page(url: str, fmt: str = "jsonl", out: str = "-",
     return 0
 
 
-def _crawl(url_or_file: str, depth: int = 1, max_pages: int = 50,
-           out: str = "-", rate: float = 0.5, timeout: int = 15,
-           workers: int = 5, fmt: str = "jsonl", dedup: bool = False,
-           include: Optional[list[str]] = None,
-           exclude: Optional[list[str]] = None,
-           progress: bool = False) -> int:
-    from .crawl import crawl, crawl_urls, ProgressTracker
+def _crawl(
+    url_or_file: str,
+    depth: int = 1,
+    max_pages: int = 50,
+    out: str = "-",
+    rate: float = 0.5,
+    timeout: int = 15,
+    workers: int = 5,
+    fmt: str = "jsonl",
+    dedup: bool = False,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+    progress: bool = False,
+) -> int:
+    from .crawl import ProgressTracker, crawl, crawl_urls
     from .store import save, save_json_array
 
     tracker = ProgressTracker(total_depth=depth) if progress else None
@@ -164,14 +187,30 @@ def _crawl(url_or_file: str, depth: int = 1, max_pages: int = 50,
         except OSError as e:
             print(f"bawl: can't read {path}: {e}", file=sys.stderr)
             return 1
-        pages = crawl_urls(urls, rate=rate, timeout=timeout, workers=workers, dedup=dedup,
-                          include=include, exclude=exclude,
-                          on_page=_on_page if progress else None)
+        pages = crawl_urls(
+            urls,
+            rate=rate,
+            timeout=timeout,
+            workers=workers,
+            dedup=dedup,
+            include=include,
+            exclude=exclude,
+            on_page=_on_page if progress else None,
+        )
     else:
-        pages = crawl(url_or_file, depth=depth, max_pages=max_pages,
-                      rate=rate, timeout=timeout, same_domain=True, workers=workers,
-                      dedup=dedup, include=include, exclude=exclude,
-                      on_page=_on_page if progress else None)
+        pages = crawl(
+            url_or_file,
+            depth=depth,
+            max_pages=max_pages,
+            rate=rate,
+            timeout=timeout,
+            same_domain=True,
+            workers=workers,
+            dedup=dedup,
+            include=include,
+            exclude=exclude,
+            on_page=_on_page if progress else None,
+        )
 
     if fmt == "json":
         save_json_array(pages, path=out)
@@ -182,13 +221,14 @@ def _crawl(url_or_file: str, depth: int = 1, max_pages: int = 50,
         sys.stderr.write("\r" + tracker.status() + "\n")
         sys.stderr.flush()
     if out != "-":
-        label = url_or_file.replace("://", "/").replace("/", "_")[:40]
+        url_or_file.replace("://", "/").replace("/", "_")[:40]
         print(f"bawl: {len(pages)} pages → {out}", file=sys.stderr)
     return 0
 
 
-def _sitemap(url: str, max_pages: int = 500, out: str = "-",
-             rate: float = 0.5, timeout: int = 15) -> int:
+def _sitemap(
+    url: str, max_pages: int = 500, out: str = "-", rate: float = 0.5, timeout: int = 15
+) -> int:
     from .sitemap import parse as parse_sitemap
     from .store import save
 
@@ -197,6 +237,7 @@ def _sitemap(url: str, max_pages: int = 500, out: str = "-",
     count = 0
     for u in urls[:max_pages]:
         from .parse import parse as _parse
+
         page = _parse(u, timeout=timeout, rate=rate)
         if page:
             save(page, path=out)
@@ -235,14 +276,16 @@ compdef _bawl bawl""")
 
 
 def _gui() -> int:
-    import tkinter
+
     from .gui import App
+
     app = App()
     return app.run()
 
 
 def _cat() -> int:
     from .store import load
+
     for page in load("-"):
         print(page.text[:2000])
         print("---")

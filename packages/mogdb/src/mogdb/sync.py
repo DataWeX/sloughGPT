@@ -23,9 +23,8 @@ import csv
 import hashlib
 import json
 import logging
-import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("mogdb.sync")
 
@@ -40,9 +39,9 @@ class SyncResult:
         self.updated: int = 0
         self.deleted: int = 0
         self.unchanged: int = 0
-        self.errors: List[str] = []
+        self.errors: list[str] = []
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "inserted": self.inserted,
             "updated": self.updated,
@@ -59,7 +58,7 @@ class SyncResult:
         )
 
 
-def _content_hash(doc: Dict[str, Any]) -> str:
+def _content_hash(doc: dict[str, Any]) -> str:
     """SHA-256 of document content excluding metadata fields."""
     clean = {k: v for k, v in doc.items() if not k.startswith("_")}
     raw = json.dumps(clean, sort_keys=True, default=str)
@@ -85,7 +84,7 @@ def _cast_csv_value(v: str) -> Any:
             return v
 
 
-def _load_json(path: str) -> List[Dict[str, Any]]:
+def _load_json(path: str) -> list[dict[str, Any]]:
     """Load documents from a JSON file."""
     with open(path) as f:
         data = json.load(f)
@@ -101,7 +100,7 @@ def _load_json(path: str) -> List[Dict[str, Any]]:
     return data
 
 
-def _load_jsonl(path: str) -> List[Dict[str, Any]]:
+def _load_jsonl(path: str) -> list[dict[str, Any]]:
     """Load documents from a JSONL file."""
     docs = []
     with open(path) as f:
@@ -113,7 +112,7 @@ def _load_jsonl(path: str) -> List[Dict[str, Any]]:
     return docs
 
 
-def _load_csv(path: str) -> List[Dict[str, Any]]:
+def _load_csv(path: str) -> list[dict[str, Any]]:
     """Load documents from a CSV file."""
     docs = []
     with open(path, newline="") as f:
@@ -123,7 +122,7 @@ def _load_csv(path: str) -> List[Dict[str, Any]]:
     return docs
 
 
-def _load_with_format(file_path: str, file_format: Optional[str]) -> tuple:
+def _load_with_format(file_path: str, file_format: str | None) -> tuple:
     """Validate the source file and load documents, resolving the format."""
     path = Path(file_path)
     if not path.exists():
@@ -134,13 +133,15 @@ def _load_with_format(file_path: str, file_format: Optional[str]) -> tuple:
         format_map = {".json": "json", ".jsonl": "jsonl", ".csv": "csv"}
         file_format = format_map.get(ext)
         if file_format is None:
-            raise ValueError(f"Cannot detect format from extension '{ext}'. Pass file_format explicitly.")
+            raise ValueError(
+                f"Cannot detect format from extension '{ext}'. Pass file_format explicitly."
+            )
 
     loaders = {"json": _load_json, "jsonl": _load_jsonl, "csv": _load_csv}
     return path, loaders[file_format](str(path))
 
 
-def _index_by_key(docs: List[Dict[str, Any]], key_field: str) -> Dict[Any, Dict[str, Any]]:
+def _index_by_key(docs: list[dict[str, Any]], key_field: str) -> dict[Any, dict[str, Any]]:
     """Index documents by a key field, skipping docs missing that field."""
     return {doc[key_field]: doc for doc in docs if key_field in doc}
 
@@ -169,7 +170,7 @@ def sync_from_files(
     key_field: str,
     *,
     delete_missing: bool = False,
-    file_format: Optional[str] = None,
+    file_format: str | None = None,
 ) -> SyncResult:
     """Sync a collection from an external file.
 
@@ -220,7 +221,10 @@ def sync_from_files(
 
     logger.info(
         "sync complete: +%d ~%d -%d =%d (%d errors)",
-        result.inserted, result.updated, result.deleted, result.unchanged,
+        result.inserted,
+        result.updated,
+        result.deleted,
+        result.unchanged,
         len(result.errors),
     )
     return result
@@ -232,7 +236,7 @@ def preview_from_files(
     key_field: str,
     *,
     delete_missing: bool = False,
-    file_format: Optional[str] = None,
+    file_format: str | None = None,
 ) -> SyncResult:
     """Compute what ``sync_from_files`` would do without mutating the collection.
 

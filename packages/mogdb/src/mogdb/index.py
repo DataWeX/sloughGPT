@@ -4,7 +4,7 @@ Provides hash-based indexes for fast equality lookups and sorted indexes
 for range queries.
 """
 
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 
 class Index:
@@ -24,15 +24,13 @@ class Index:
     def __init__(self, field: str, unique: bool = False):
         self.field = field
         self.unique = unique
-        self._map: Dict[Any, Set[str]] = {}
+        self._map: dict[Any, set[str]] = {}
 
     def add(self, doc_id: str, field_value: Any) -> None:
         if self.unique and field_value in self._map:
             existing = self._map[field_value]
             if existing and doc_id not in existing:
-                raise ValueError(
-                    f"Unique index violation on {self.field!r}: {field_value!r}"
-                )
+                raise ValueError(f"Unique index violation on {self.field!r}: {field_value!r}")
         self._map.setdefault(field_value, set()).add(doc_id)
 
     def remove(self, doc_id: str, field_value: Any) -> None:
@@ -46,7 +44,7 @@ class Index:
         self.remove(doc_id, old_value)
         self.add(doc_id, new_value)
 
-    def lookup(self, field_value: Any) -> List[str]:
+    def lookup(self, field_value: Any) -> list[str]:
         """Return all document IDs matching *field_value*."""
         return list(self._map.get(field_value, set()))
 
@@ -63,7 +61,7 @@ class SortedIndex:
 
     def __init__(self, field: str):
         self.field = field
-        self._entries: List[Any] = []
+        self._entries: list[Any] = []
 
     def add(self, doc_id: str, field_value: Any) -> None:
         import bisect
@@ -73,9 +71,7 @@ class SortedIndex:
         self._entries.insert(idx, pair)
 
     def remove(self, doc_id: str, field_value: Any) -> None:
-        self._entries = [
-            (v, i) for v, i in self._entries if not (v == field_value and i == doc_id)
-        ]
+        self._entries = [(v, i) for v, i in self._entries if not (v == field_value and i == doc_id)]
 
     def update(self, doc_id: str, old_value: Any, new_value: Any) -> None:
         """Update an entry: remove old, add new."""
@@ -86,18 +82,14 @@ class SortedIndex:
         """Remove all entries."""
         self._entries.clear()
 
-    def range(self, gte: Any = None, lte: Any = None) -> List[str]:
+    def range(self, gte: Any = None, lte: Any = None) -> list[str]:
         """Return doc IDs where field is in [gte, lte]."""
         if gte is None and lte is None:
             return [i for _, i in self._entries]
 
         import bisect
 
-        start = (
-            bisect.bisect_left(self._entries, (gte, ""))
-            if gte is not None
-            else 0
-        )
+        start = bisect.bisect_left(self._entries, (gte, "")) if gte is not None else 0
         end = (
             bisect.bisect_right(self._entries, (lte, "\uffff"))
             if lte is not None

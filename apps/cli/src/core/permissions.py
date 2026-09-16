@@ -14,11 +14,10 @@ Usage::
         # proceed with download
 """
 
+import logging
 import os
 import sys
-import logging
 from dataclasses import dataclass
-from typing import Optional
 
 import click
 
@@ -77,11 +76,12 @@ class PermissionsManager:
         else:
             try:
                 from domain.infrastructure._internal.config import get_config
+
                 self.auto_yes = get_config().features.auto_download
             except (ImportError, AttributeError):
                 self.auto_yes = False
 
-    def estimate_model_size(self, model_id: str) -> Optional[ModelSizeEstimate]:
+    def estimate_model_size(self, model_id: str) -> ModelSizeEstimate | None:
         """Query HuggingFace Hub API for model file list and total size.
 
         Args:
@@ -208,8 +208,8 @@ class PermissionsManager:
         try:
             from domain.infrastructure.download_manager import (
                 _cache_dir,
-                _has_weight_files,
                 _has_complete_snapshot,
+                _has_weight_files,
             )
 
             cache = _cache_dir(model_id)
@@ -237,11 +237,12 @@ class PermissionsManager:
 
     def _show_download_panel(self, estimate: ModelSizeEstimate, *, context: str = ""):
         """Display download details with ANSI formatting."""
-        import sys
 
         _tty = sys.stdout.isatty()
+
         def _c(text, code):
             return f"{code}{text}\033[0m" if _tty else text
+
         _BOLD = "\033[1m"
         _DIM = "\033[2m"
         _YELLOW = "\033[33m"
@@ -268,7 +269,6 @@ class PermissionsManager:
         if estimate.files:
             sorted_files = sorted(estimate.files, key=lambda x: x["size"], reverse=True)[:5]
             top_files = ", ".join(
-                f"{f['name'].split('/')[-1]} ({format_size(f['size'])})"
-                for f in sorted_files
+                f"{f['name'].split('/')[-1]} ({format_size(f['size'])})" for f in sorted_files
             )
             _line(f"    {_c('Largest:', _DIM)} {top_files}")

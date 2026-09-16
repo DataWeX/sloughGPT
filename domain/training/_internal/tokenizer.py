@@ -696,7 +696,7 @@ class SloBPE:
                 tok_id = int(token)
                 token = self.itos.get(tok_id, "")
             except (ValueError, TypeError):
-                raise ValueError(f"Token {token!r} not found in vocabulary")
+                raise ValueError(f"Token {token!r} not found in vocabulary") from None
         if not token or token not in self.stoi:
             raise ValueError(f"Token {token!r} not found in vocabulary")
 
@@ -1415,7 +1415,7 @@ class SloUnigram:
                 tok_id = int(token)
                 token = self.itos.get(tok_id, "")
             except (ValueError, TypeError):
-                raise ValueError(f"Token {token!r} not found in vocabulary")
+                raise ValueError(f"Token {token!r} not found in vocabulary") from None
         if not token or token not in self.stoi:
             raise ValueError(f"Token {token!r} not found in vocabulary")
 

@@ -12,16 +12,17 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
-from .store import Store, Card as _BaseCard, Board as _BaseBoard
-
+from .store import Store
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_id(title: str) -> str:
     slug = title.lower().strip()
@@ -42,9 +43,11 @@ def _abbrev(text: str, maxlen: int) -> str:
 # Data model
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Note:
     """A lightweight note attached to a card."""
+
     id: str = ""
     text: str = ""
     author: str = ""
@@ -66,6 +69,7 @@ class Note:
 @dataclass
 class ColumnDef:
     """Column definition with optional WIP limit."""
+
     name: str = ""
     wip_limit: int = 0
     order: int = 0
@@ -74,6 +78,7 @@ class ColumnDef:
 @dataclass
 class Card:
     """A kanban card with notes."""
+
     id: str = ""
     title: str = ""
     description: str = ""
@@ -122,13 +127,16 @@ class Card:
 @dataclass
 class Board:
     """The kanban board state."""
+
     name: str = "board"
-    columns: list[ColumnDef] = field(default_factory=lambda: [
-        ColumnDef(name="todo", wip_limit=0, order=0),
-        ColumnDef(name="in_progress", wip_limit=0, order=1),
-        ColumnDef(name="review", wip_limit=0, order=2),
-        ColumnDef(name="done", wip_limit=0, order=3),
-    ])
+    columns: list[ColumnDef] = field(
+        default_factory=lambda: [
+            ColumnDef(name="todo", wip_limit=0, order=0),
+            ColumnDef(name="in_progress", wip_limit=0, order=1),
+            ColumnDef(name="review", wip_limit=0, order=2),
+            ColumnDef(name="done", wip_limit=0, order=3),
+        ]
+    )
     cards: list[Card] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -144,11 +152,14 @@ class Board:
         if cols_raw and isinstance(cols_raw[0], str):
             columns = [ColumnDef(name=c, order=i) for i, c in enumerate(cols_raw)]
         elif cols_raw:
-            columns = [ColumnDef(
-                name=c.get("name", ""),
-                wip_limit=c.get("wip_limit", c.get("wipLimit", 0)),
-                order=c.get("order", i),
-            ) for i, c in enumerate(cols_raw)]
+            columns = [
+                ColumnDef(
+                    name=c.get("name", ""),
+                    wip_limit=c.get("wip_limit", c.get("wipLimit", 0)),
+                    order=c.get("order", i),
+                )
+                for i, c in enumerate(cols_raw)
+            ]
         else:
             columns = [
                 ColumnDef(name="todo", order=0),
@@ -194,6 +205,7 @@ def _render_board(board: Board) -> str:
 # Store
 # ---------------------------------------------------------------------------
 
+
 class KanbanStore:
     """High-level kanban store backed by JSONL."""
 
@@ -204,6 +216,7 @@ class KanbanStore:
 
     def _load_meta(self) -> dict[str, Any]:
         import json
+
         if self._meta_file.exists():
             try:
                 return json.loads(self._meta_file.read_text())
@@ -213,6 +226,7 @@ class KanbanStore:
 
     def _save_meta(self, board: Board) -> None:
         import json
+
         meta = {"name": board.name, "columns": [asdict(c) for c in board.columns]}
         self._meta_file.write_text(json.dumps(meta, indent=2) + "\n")
 
@@ -225,17 +239,22 @@ class KanbanStore:
             if meta.get("name"):
                 self._board.name = meta["name"]
             if meta.get("columns"):
-                self._board.columns = [ColumnDef(
-                    name=col.get("name", ""),
-                    wip_limit=col.get("wip_limit", col.get("wipLimit", 0)),
-                    order=col.get("order", i),
-                ) for i, col in enumerate(meta["columns"])]
+                self._board.columns = [
+                    ColumnDef(
+                        name=col.get("name", ""),
+                        wip_limit=col.get("wip_limit", col.get("wipLimit", 0)),
+                        order=col.get("order", i),
+                    )
+                    for i, col in enumerate(meta["columns"])
+                ]
         return self._board
 
     def _save(self) -> None:
         if self._board is not None:
             self._save_meta(self._board)
-            from .store import Board as RawBoard, Card as RawCard
+            from .store import Board as RawBoard
+            from .store import Card as RawCard
+
             raw_cards = []
             for c in self._board.cards:
                 d = c.to_dict()
@@ -258,11 +277,19 @@ class KanbanStore:
     def load_board(self) -> Board:
         return self._load()
 
-    def add_card(self, title: str, column: str = "todo", priority: str = "medium",
-                 description: str = "", tags: list[str] | None = None,
-                 assignee: str = "", due_date: str = "") -> Card:
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc).isoformat()
+    def add_card(
+        self,
+        title: str,
+        column: str = "todo",
+        priority: str = "medium",
+        description: str = "",
+        tags: list[str] | None = None,
+        assignee: str = "",
+        due_date: str = "",
+    ) -> Card:
+        from datetime import datetime
+
+        now = datetime.now(UTC).isoformat()
         card = Card(
             id=_make_id(title) or f"card-{int(datetime.now().timestamp())}",
             title=title,
@@ -323,9 +350,14 @@ class KanbanStore:
                 return card
         return None
 
-    def list_cards(self, column: str | None = None, priority: str | None = None,
-                   tag: str | None = None, assignee: str | None = None,
-                   limit: int | None = None) -> list[Card]:
+    def list_cards(
+        self,
+        column: str | None = None,
+        priority: str | None = None,
+        tag: str | None = None,
+        assignee: str | None = None,
+        limit: int | None = None,
+    ) -> list[Card]:
         board = self._load()
         result = board.cards
         if column:
@@ -345,16 +377,19 @@ class KanbanStore:
         board = self._load()
         results: list[Card] = []
         for card in board.cards:
-            if (q in card.title.lower()
-                    or q in card.description.lower()
-                    or any(q in t.lower() for t in card.tags)):
+            if (
+                q in card.title.lower()
+                or q in card.description.lower()
+                or any(q in t.lower() for t in card.tags)
+            ):
                 results.append(card)
                 if len(results) >= limit:
                     break
         return results
 
     def add_note(self, card_id: str, text: str, author: str = "") -> Note | None:
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         board = self._load()
         for card in board.cards:
             if card.id == card_id:
@@ -362,7 +397,7 @@ class KanbanStore:
                     id=f"note-{int(datetime.now().timestamp())}",
                     text=text,
                     author=author,
-                    created_at=datetime.now(timezone.utc).isoformat(),
+                    created_at=datetime.now(UTC).isoformat(),
                 )
                 card.notes.append(note)
                 self._save()

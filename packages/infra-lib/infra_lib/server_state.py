@@ -8,10 +8,11 @@ which ensures atomic access from any thread.
 
 from __future__ import annotations
 
-from threading import Lock, RLock
-from typing import Any, Optional, Callable, TypeVar
-import time
 import logging
+import time
+from collections.abc import Callable
+from threading import Lock, RLock
+from typing import TypeVar
 
 logger = logging.getLogger("slo.infrastructure.server_state")
 
@@ -41,7 +42,9 @@ class AtomicRef:
             try:
                 listener(old, value)
             except Exception as e:
-                logger.warning("AtomicRef[%s] listener failed: %s", self._name, e, extra={"tag": "INFRA"})
+                logger.warning(
+                    "AtomicRef[%s] listener failed: %s", self._name, e, extra={"tag": "INFRA"}
+                )
 
     def swap(self, fn: Callable[[T], T]) -> T:
         """Atomically apply a function to the current value and return the new value."""
@@ -54,7 +57,9 @@ class AtomicRef:
             try:
                 listener(old, new)
             except Exception as e:
-                logger.warning("AtomicRef[%s] listener failed: %s", self._name, e, extra={"tag": "INFRA"})
+                logger.warning(
+                    "AtomicRef[%s] listener failed: %s", self._name, e, extra={"tag": "INFRA"}
+                )
         return new
 
     @property
@@ -158,19 +163,25 @@ class ServerState:
             self._error_count += 1
 
     def record_request_latency(
-        self, path: str, method: str, status: int, elapsed_ms: float,
+        self,
+        path: str,
+        method: str,
+        status: int,
+        elapsed_ms: float,
     ) -> None:
         """Append a request entry to the history ring buffer."""
         with self._lock:
-            self._request_history.append({
-                "path": path,
-                "method": method,
-                "status": status,
-                "elapsed_ms": round(elapsed_ms, 1),
-                "ts": time.time(),
-            })
+            self._request_history.append(
+                {
+                    "path": path,
+                    "method": method,
+                    "status": status,
+                    "elapsed_ms": round(elapsed_ms, 1),
+                    "ts": time.time(),
+                }
+            )
             if len(self._request_history) > self._request_history_max:
-                self._request_history = self._request_history[-self._request_history_max:]
+                self._request_history = self._request_history[-self._request_history_max :]
 
     def get_request_history(self, limit: int = 20) -> list[dict]:
         """Return the most recent requests (newest first)."""
@@ -196,21 +207,28 @@ class ServerState:
             return round(sorted_lat[min(idx, len(sorted_lat) - 1)], 1)
 
     def record_error_detail(
-        self, path: str, method: str, status: int, message: str, error_type: str = "",
+        self,
+        path: str,
+        method: str,
+        status: int,
+        message: str,
+        error_type: str = "",
     ) -> None:
         """Append an error entry to the history ring buffer."""
         with self._lock:
             self._error_count += 1
-            self._error_history.append({
-                "path": path,
-                "method": method,
-                "status": status,
-                "message": message[:200],
-                "error_type": error_type,
-                "ts": time.time(),
-            })
+            self._error_history.append(
+                {
+                    "path": path,
+                    "method": method,
+                    "status": status,
+                    "message": message[:200],
+                    "error_type": error_type,
+                    "ts": time.time(),
+                }
+            )
             if len(self._error_history) > self._error_history_max:
-                self._error_history = self._error_history[-self._error_history_max:]
+                self._error_history = self._error_history[-self._error_history_max :]
 
     def get_error_history(self, limit: int = 10) -> list[dict]:
         """Return the most recent errors (newest first)."""
@@ -224,7 +242,7 @@ class ServerState:
                 self._path_latencies[path] = []
             self._path_latencies[path].append(elapsed_ms)
             if len(self._path_latencies[path]) > self._path_latencies_max:
-                self._path_latencies[path] = self._path_latencies[path][-self._path_latencies_max:]
+                self._path_latencies[path] = self._path_latencies[path][-self._path_latencies_max :]
 
     def get_path_latencies(self, top_n: int = 5) -> list[dict]:
         """Return per-path average latency for the top N busiest paths."""
@@ -234,12 +252,16 @@ class ServerState:
                 if not latencies:
                     continue
                 avg = sum(latencies) / len(latencies)
-                result.append({
-                    "path": path,
-                    "avg_ms": round(avg, 1),
-                    "count": len(latencies),
-                    "p95_ms": round(sorted(latencies)[int(len(latencies) * 0.95)], 1) if len(latencies) >= 2 else round(avg, 1),
-                })
+                result.append(
+                    {
+                        "path": path,
+                        "avg_ms": round(avg, 1),
+                        "count": len(latencies),
+                        "p95_ms": round(sorted(latencies)[int(len(latencies) * 0.95)], 1)
+                        if len(latencies) >= 2
+                        else round(avg, 1),
+                    }
+                )
             result.sort(key=lambda x: x["count"], reverse=True)
             return result[:top_n]
 
@@ -257,15 +279,17 @@ class ServerState:
             self._total_inference_ms += elapsed_ms
             self._tokens_per_request.append(tokens)
             if len(self._tokens_per_request) > self._tokens_per_request_max:
-                self._tokens_per_request = self._tokens_per_request[-self._tokens_per_request_max:]
+                self._tokens_per_request = self._tokens_per_request[-self._tokens_per_request_max :]
             # Sliding window for recent tokens/s
-            self._recent_inferences.append({
-                "tokens": tokens,
-                "elapsed_ms": elapsed_ms,
-                "ts": time.time(),
-            })
+            self._recent_inferences.append(
+                {
+                    "tokens": tokens,
+                    "elapsed_ms": elapsed_ms,
+                    "ts": time.time(),
+                }
+            )
             if len(self._recent_inferences) > self._recent_inferences_max:
-                self._recent_inferences = self._recent_inferences[-self._recent_inferences_max:]
+                self._recent_inferences = self._recent_inferences[-self._recent_inferences_max :]
             if model:
                 if model not in self._model_metrics:
                     self._model_metrics[model] = {"tokens": 0, "time_ms": 0.0, "count": 0}
@@ -315,13 +339,15 @@ class ServerState:
             result = []
             for model, m in self._model_metrics.items():
                 tps = round(m["tokens"] / (m["time_ms"] / 1000), 1) if m["time_ms"] > 0 else 0.0
-                result.append({
-                    "model": model,
-                    "count": m["count"],
-                    "total_tokens": m["tokens"],
-                    "tokens_per_sec": tps,
-                    "avg_tokens": round(m["tokens"] / m["count"], 0) if m["count"] > 0 else 0,
-                })
+                result.append(
+                    {
+                        "model": model,
+                        "count": m["count"],
+                        "total_tokens": m["tokens"],
+                        "tokens_per_sec": tps,
+                        "avg_tokens": round(m["tokens"] / m["count"], 0) if m["count"] > 0 else 0,
+                    }
+                )
             result.sort(key=lambda x: x["count"], reverse=True)
             return result
 
@@ -364,7 +390,12 @@ class ServerState:
             "status": result.status,
             "summary": result.summary,
             "diagnoses": [
-                {"check": d.check, "severity": d.severity.value, "score": round(d.score), "message": d.message}
+                {
+                    "check": d.check,
+                    "severity": d.severity.value,
+                    "score": round(d.score),
+                    "message": d.message,
+                }
                 for d in result.diagnoses
             ],
         }
@@ -406,14 +437,16 @@ class ServerState:
     def record_model_event(self, event_type: str, model: str, detail: str = "") -> None:
         """Record a model lifecycle event: load, unload, error, swap."""
         with self._lock:
-            self._model_events.append({
-                "type": event_type,
-                "model": model,
-                "detail": detail[:200],
-                "ts": time.time(),
-            })
+            self._model_events.append(
+                {
+                    "type": event_type,
+                    "model": model,
+                    "detail": detail[:200],
+                    "ts": time.time(),
+                }
+            )
             if len(self._model_events) > self._model_events_max:
-                self._model_events = self._model_events[-self._model_events_max:]
+                self._model_events = self._model_events[-self._model_events_max :]
 
     def get_model_events(self, limit: int = 10) -> list[dict]:
         """Return the most recent model events (newest first)."""
@@ -424,13 +457,15 @@ class ServerState:
         """Snapshot the current health score into history for trend analysis."""
         score_data = self.get_health_score()
         with self._lock:
-            self._health_history.append({
-                "score": score_data["score"],
-                "status": score_data["status"],
-                "ts": time.time(),
-            })
+            self._health_history.append(
+                {
+                    "score": score_data["score"],
+                    "status": score_data["status"],
+                    "ts": time.time(),
+                }
+            )
             if len(self._health_history) > self._health_history_max:
-                self._health_history = self._health_history[-self._health_history_max:]
+                self._health_history = self._health_history[-self._health_history_max :]
 
     def record_trend_snapshots(self, interval_s: float = 5.0) -> None:
         """Record health + memory trend snapshots if interval_s has elapsed.
@@ -464,6 +499,7 @@ class ServerState:
         """Snapshot current memory usage (RSS + virtual) for trend tracking."""
         try:
             import psutil
+
             mem = psutil.virtual_memory()
             process = psutil.Process()
             proc_mem = process.memory_info()
@@ -475,14 +511,16 @@ class ServerState:
             virtual_mb = 0.0
             system_percent = 0.0
         with self._lock:
-            self._memory_history.append({
-                "rss_mb": round(rss_mb, 1),
-                "virtual_mb": round(virtual_mb, 1),
-                "system_percent": round(system_percent, 1),
-                "ts": time.time(),
-            })
+            self._memory_history.append(
+                {
+                    "rss_mb": round(rss_mb, 1),
+                    "virtual_mb": round(virtual_mb, 1),
+                    "system_percent": round(system_percent, 1),
+                    "ts": time.time(),
+                }
+            )
             if len(self._memory_history) > self._memory_history_max:
-                self._memory_history = self._memory_history[-self._memory_history_max:]
+                self._memory_history = self._memory_history[-self._memory_history_max :]
 
     def get_memory_history(self, limit: int = 20) -> list[dict]:
         """Return memory usage history (oldest first, for charting)."""
@@ -501,14 +539,18 @@ class ServerState:
                 entry["count"] = 0
             entry["count"] += 1
             if entry["count"] > max_per_second:
-                self._rate_limit_violations.append({
-                    "path": path,
-                    "count": entry["count"],
-                    "limit": max_per_second,
-                    "ts": now,
-                })
+                self._rate_limit_violations.append(
+                    {
+                        "path": path,
+                        "count": entry["count"],
+                        "limit": max_per_second,
+                        "ts": now,
+                    }
+                )
                 if len(self._rate_limit_violations) > self._rate_limit_violations_max:
-                    self._rate_limit_violations = self._rate_limit_violations[-self._rate_limit_violations_max:]
+                    self._rate_limit_violations = self._rate_limit_violations[
+                        -self._rate_limit_violations_max :
+                    ]
                 return False
             return True
 
@@ -546,7 +588,7 @@ class ServerState:
             return self._error_count
 
 
-_server_state: Optional[ServerState] = None
+_server_state: ServerState | None = None
 _server_state_lock = Lock()
 
 

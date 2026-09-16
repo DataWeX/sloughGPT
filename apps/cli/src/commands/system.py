@@ -1,20 +1,20 @@
 """
 System commands - System info, status, optimization, and configuration.
 """
-import sys
-import os
+
 import json
+import os
 import platform
-import time
 import secrets
+import sys
+import time
 from pathlib import Path
-from typing import Optional
 
 from domain.logging import get_global
 
 log = get_global()
 from core.validator import Doctor
-from utils.formatting import format_size, format_time, format_number
+from utils.formatting import format_size
 
 
 def cmd_system(args):
@@ -35,6 +35,7 @@ def cmd_system(args):
         log.section("CPU")
         try:
             from domain.infrastructure.resource_manager import get_resource_manager
+
             rm = get_resource_manager()
             cores = f"{rm.topology.logical_cores} logical / {rm.topology.physical_cores} physical"
         except (ImportError, AttributeError):
@@ -67,7 +68,11 @@ def cmd_status(args):
 
         try:
             r = requests.get("http://localhost:8000/health", timeout=2)
-            log.status("API", "Online" if r.status_code == 200 else "Offline", "ok" if r.status_code == 200 else "error")
+            log.status(
+                "API",
+                "Online" if r.status_code == 200 else "Offline",
+                "ok" if r.status_code == 200 else "error",
+            )
         except (requests.RequestException, ConnectionError):
             log.status("API", "Not running", "error")
 
@@ -105,6 +110,7 @@ def cmd_optimize(args):
     log.section("Accelerator (SloNet)")
     try:
         from domain.training._internal.slonet import _ACCEL_THRESHOLD, _get_accelerator
+
         acc = _get_accelerator()
         if acc is not None:
             log.key_value("Backend", acc.name)
@@ -137,11 +143,14 @@ def cmd_optimize(args):
         log.step("Applying optimizations...")
         try:
             from domain.infrastructure.resource_manager import get_resource_manager
+
             rm = get_resource_manager()
             rm.apply_blas_env()
             rm.apply_compute_limits()
             log.success(f"Thread count optimized: compute={rm.compute_threads} io={rm.io_threads}")
-            log.info(f"OMP={rm.omp_num_threads} MKL={rm.mkl_num_threads} NUMEXPR={rm.numexpr_num_threads}")
+            log.info(
+                f"OMP={rm.omp_num_threads} MKL={rm.mkl_num_threads} NUMEXPR={rm.numexpr_num_threads}"
+            )
         except Exception as e:
             log.warning(f"Thread optimization failed: {e}")
         log.info("Accelerator dispatch is threshold-gated (no runtime change needed)")
@@ -181,7 +190,7 @@ def cmd_config_validate(args):
         log.warning(f"{env_file} not found")
         return
 
-    with open(env_file, "r") as f:
+    with open(env_file) as f:
         content = f.read()
 
     required_vars = ["SLO_API_KEY", "SLO_JWT_SECRET"]
@@ -266,6 +275,7 @@ def cmd_setup(args):
 
     try:
         from domain.training._internal.slonet import _get_accelerator
+
         acc = _get_accelerator()
         backend = acc.name if acc is not None else "cpu"
         log.key_value("SloNet Accelerator", backend)

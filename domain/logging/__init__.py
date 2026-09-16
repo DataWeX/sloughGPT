@@ -9,8 +9,6 @@ Public API:
 
 from __future__ import annotations
 
-from typing import Optional
-
 from domain.logging._internal.base import (
     ChildLogger,
     CompositeLogger,

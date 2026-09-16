@@ -4,24 +4,25 @@ Data models for API requests and responses.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any, Iterator, Union
+from typing import Any
 
 
 @dataclass
 class GenerateRequest:
     """Request model for text generation."""
+
     prompt: str
-    max_new_tokens: Optional[int] = 100
-    temperature: Optional[float] = 0.8
-    top_k: Optional[int] = 50
-    top_p: Optional[float] = 0.9
+    max_new_tokens: int | None = 100
+    temperature: float | None = 0.8
+    top_k: int | None = 50
+    top_p: float | None = 0.9
     do_sample: bool = True
-    repetition_penalty: Optional[float] = 1.0
+    repetition_penalty: float | None = 1.0
     num_beams: int = 1
     early_stopping: bool = False
-    personality: Optional[str] = None
+    personality: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API request."""
         data = {"prompt": self.prompt}
         if self.max_new_tokens is not None:
@@ -48,11 +49,12 @@ class GenerateRequest:
 @dataclass
 class ChatMessage:
     """A single message in a chat conversation."""
+
     role: str
     content: str
-    name: Optional[str] = None
+    name: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         data = {"role": self.role, "content": self.content}
         if self.name:
@@ -78,15 +80,16 @@ class ChatMessage:
 @dataclass
 class ChatRequest:
     """Request model for chat completions (``POST /chat`` and ``POST /chat/stream``)."""
-    messages: List[ChatMessage]
-    model: Optional[str] = "gpt2"
-    temperature: Optional[float] = 0.8
-    max_new_tokens: Optional[int] = 100
-    top_p: Optional[float] = 0.9
-    top_k: Optional[int] = 50
+
+    messages: list[ChatMessage]
+    model: str | None = "gpt2"
+    temperature: float | None = 0.8
+    max_new_tokens: int | None = 100
+    top_p: float | None = 0.9
+    top_k: int | None = 50
     stream: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API request."""
         data = {
             "messages": [m.to_dict() if isinstance(m, ChatMessage) else m for m in self.messages],
@@ -107,11 +110,12 @@ class ChatRequest:
 @dataclass
 class BatchRequest:
     """Request model for batch text generation."""
-    prompts: List[str]
-    max_new_tokens: Optional[int] = 100
-    temperature: Optional[float] = 0.8
 
-    def to_dict(self) -> Dict[str, Any]:
+    prompts: list[str]
+    max_new_tokens: int | None = 100
+    temperature: float | None = 0.8
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API request."""
         return {
             "prompts": self.prompts,
@@ -123,17 +127,20 @@ class BatchRequest:
 @dataclass
 class GenerationResult:
     """Result from text generation."""
+
     generated_text: str
     prompt: str
-    model: Optional[str] = None
-    tokens_generated: Optional[int] = None
-    inference_time_ms: Optional[float] = None
-    raw_response: Optional[Dict[str, Any]] = None
+    model: str | None = None
+    tokens_generated: int | None = None
+    inference_time_ms: float | None = None
+    raw_response: dict[str, Any] | None = None
 
     @classmethod
-    def from_response(cls, response: Dict[str, Any], prompt: str) -> "GenerationResult":
+    def from_response(cls, response: dict[str, Any], prompt: str) -> "GenerationResult":
         """Create from API response."""
-        text = response.get("generated_text") or response.get("text") or response.get("response", "")
+        text = (
+            response.get("generated_text") or response.get("text") or response.get("response", "")
+        )
         return cls(
             generated_text=text,
             prompt=prompt,
@@ -147,13 +154,14 @@ class GenerationResult:
 @dataclass
 class ChatResult:
     """Result from chat completion."""
+
     message: ChatMessage
-    model: Optional[str] = None
-    tokens_generated: Optional[int] = None
-    raw_response: Optional[Dict[str, Any]] = None
+    model: str | None = None
+    tokens_generated: int | None = None
+    raw_response: dict[str, Any] | None = None
 
     @classmethod
-    def from_response(cls, response: Dict[str, Any]) -> "ChatResult":
+    def from_response(cls, response: dict[str, Any]) -> "ChatResult":
         """Create from API response (SloughGPT ``POST /chat`` or OpenAI-style ``choices``)."""
         content = ""
         if response.get("choices"):
@@ -177,14 +185,15 @@ class ChatResult:
 @dataclass
 class BatchResult:
     """Result from batch generation."""
-    results: List[GenerationResult]
+
+    results: list[GenerationResult]
     total_prompts: int
     successful: int
     failed: int
-    total_time_ms: Optional[float] = None
+    total_time_ms: float | None = None
 
     @classmethod
-    def from_response(cls, response: Dict[str, Any], prompts: List[str]) -> "BatchResult":
+    def from_response(cls, response: dict[str, Any], prompts: list[str]) -> "BatchResult":
         """Create from API response."""
         raw_results = response.get("results", response.get("responses", []))
         results = []
@@ -204,17 +213,18 @@ class BatchResult:
 @dataclass
 class ModelInfo:
     """Information about an available model."""
+
     id: str
-    name: Optional[str] = None
-    source: Optional[str] = None
-    description: Optional[str] = None
-    size_mb: Optional[float] = None
-    parameters: Optional[int] = None
-    tags: List[str] = field(default_factory=list)
-    raw: Optional[Dict[str, Any]] = None
+    name: str | None = None
+    source: str | None = None
+    description: str | None = None
+    size_mb: float | None = None
+    parameters: int | None = None
+    tags: list[str] = field(default_factory=list)
+    raw: dict[str, Any] | None = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ModelInfo":
+    def from_dict(cls, data: dict[str, Any]) -> "ModelInfo":
         """Create from dictionary."""
         return cls(
             id=data.get("id", data.get("name", "")),
@@ -231,16 +241,17 @@ class ModelInfo:
 @dataclass
 class DatasetInfo:
     """Information about an available dataset."""
+
     id: str
-    name: Optional[str] = None
-    source: Optional[str] = None
-    size_mb: Optional[float] = None
-    num_samples: Optional[int] = None
-    description: Optional[str] = None
-    raw: Optional[Dict[str, Any]] = None
+    name: str | None = None
+    source: str | None = None
+    size_mb: float | None = None
+    num_samples: int | None = None
+    description: str | None = None
+    raw: dict[str, Any] | None = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "DatasetInfo":
+    def from_dict(cls, data: dict[str, Any]) -> "DatasetInfo":
         """Create from dictionary."""
         return cls(
             id=data.get("id", data.get("name", "")),
@@ -256,12 +267,13 @@ class DatasetInfo:
 @dataclass
 class HealthStatus:
     """Health check status."""
+
     status: str
-    version: Optional[str] = None
+    version: str | None = None
     model_loaded: bool = False
-    model_name: Optional[str] = None
-    device: Optional[str] = None
-    raw: Optional[Dict[str, Any]] = None
+    model_name: str | None = None
+    device: str | None = None
+    raw: dict[str, Any] | None = None
 
     @property
     def is_healthy(self) -> bool:
@@ -269,7 +281,7 @@ class HealthStatus:
         return self.status in ("ok", "healthy", "alive")
 
     @classmethod
-    def from_response(cls, response: Dict[str, Any]) -> "HealthStatus":
+    def from_response(cls, response: dict[str, Any]) -> "HealthStatus":
         """Create from API response."""
         return cls(
             status=response.get("status", "unknown"),
@@ -284,20 +296,21 @@ class HealthStatus:
 @dataclass
 class SystemInfo:
     """System information."""
-    version: Optional[str] = None
-    model_type: Optional[str] = None
+
+    version: str | None = None
+    model_type: str | None = None
     model_loaded: bool = False
-    pytorch_version: Optional[str] = None
+    pytorch_version: str | None = None
     cuda_available: bool = False
-    cuda: Optional[Dict[str, Any]] = None
-    platform: Optional[str] = None
-    python_version: Optional[str] = None
-    cpu_count: Optional[int] = None
-    memory_total: Optional[int] = None
-    raw: Optional[Dict[str, Any]] = None
+    cuda: dict[str, Any] | None = None
+    platform: str | None = None
+    python_version: str | None = None
+    cpu_count: int | None = None
+    memory_total: int | None = None
+    raw: dict[str, Any] | None = None
 
     @classmethod
-    def from_response(cls, response: Dict[str, Any]) -> "SystemInfo":
+    def from_response(cls, response: dict[str, Any]) -> "SystemInfo":
         """Create from API response (backend ``/info`` nested ``model``/``host``)."""
         model = response.get("model") or {}
         return cls(
@@ -318,6 +331,7 @@ class SystemInfo:
 @dataclass
 class MetricsData:
     """API metrics."""
+
     requests_total: int = 0
     requests_success: int = 0
     requests_failed: int = 0
@@ -325,10 +339,10 @@ class MetricsData:
     cache_hits: int = 0
     cache_misses: int = 0
     active_connections: int = 0
-    raw: Optional[Dict[str, Any]] = None
+    raw: dict[str, Any] | None = None
 
     @classmethod
-    def from_response(cls, response: Dict[str, Any]) -> "MetricsData":
+    def from_response(cls, response: dict[str, Any]) -> "MetricsData":
         """Create from API response."""
         return cls(
             requests_total=response.get("requests_total", 0),

@@ -21,13 +21,13 @@ With JSON sync (MogDB engine + JSON backup)::
     # -> data/mogdb_json/users.json (human-readable sync)
 """
 
+from .cache import QueryCache, get_query_cache
+from .collection import ASCENDING, DESCENDING, Collection
 from .database import MogDB
-from .collection import Collection, ASCENDING, DESCENDING
 from .document import Document, ObjectId
-from .query import match_document
 from .index import Index, SortedIndex
 from .json_sync import SyncableCollection
-from .cache import QueryCache, get_query_cache
+from .query import match_document
 
 __all__ = [
     "MogDB",

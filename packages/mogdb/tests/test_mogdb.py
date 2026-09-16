@@ -8,15 +8,14 @@ import time
 from pathlib import Path
 
 import pytest
-
-from mogdb import MogDB, Collection, Document, ObjectId, match_document
-from mogdb.index import Index, SortedIndex
+from mogdb import Collection, Document, MogDB, ObjectId, match_document
 from mogdb.collection import ASCENDING, DESCENDING
-
+from mogdb.index import Index, SortedIndex
 
 # =========================================================================
 # Document & ObjectId
 # =========================================================================
+
 
 class TestObjectId:
     def test_generates_24_char_hex(self):
@@ -74,6 +73,7 @@ class TestDocument:
 # =========================================================================
 # Query engine
 # =========================================================================
+
 
 class TestQuery:
     def test_exact_match(self):
@@ -150,6 +150,7 @@ class TestQuery:
 # =========================================================================
 # Collection CRUD
 # =========================================================================
+
 
 @pytest.fixture
 def coll():
@@ -354,6 +355,7 @@ class TestCollectionDrop:
 # Persistence
 # =========================================================================
 
+
 class TestPersistence:
     def test_survives_collection_reopen(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -511,6 +513,7 @@ class TestPersistence:
 # MogDB
 # =========================================================================
 
+
 class TestMogDB:
     def test_create_and_get_collection(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -580,6 +583,7 @@ class TestMogDB:
 # =========================================================================
 # Index
 # =========================================================================
+
 
 class TestIndex:
     def test_add_and_lookup(self):
@@ -654,6 +658,7 @@ class TestSortedIndex:
 # Concurrency
 # =========================================================================
 
+
 class TestConcurrency:
     def test_concurrent_inserts(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -711,6 +716,7 @@ class TestConcurrency:
 # =========================================================================
 # Edge cases
 # =========================================================================
+
 
 class TestEdgeCases:
     def test_large_document(self, coll):
@@ -779,10 +785,14 @@ class TestEdgeCases:
 class TestQueryOperators:
     def test_regex_with_options(self):
         """$regex + $options should work together (was CRITICAL bug)."""
-        assert match_document({"name": "Hello World"}, {"name": {"$regex": "hello", "$options": "i"}})
+        assert match_document(
+            {"name": "Hello World"}, {"name": {"$regex": "hello", "$options": "i"}}
+        )
         assert not match_document({"name": "Hello World"}, {"name": {"$regex": "hello"}})
         assert match_document({"name": "Hello World"}, {"name": {"$regex": "^Hello"}})
-        assert match_document({"name": "Hello World"}, {"name": {"$regex": "world$", "$options": "i"}})
+        assert match_document(
+            {"name": "Hello World"}, {"name": {"$regex": "world$", "$options": "i"}}
+        )
 
     def test_string_comparison_gt(self):
         """$gt should work on strings."""
@@ -948,6 +958,7 @@ class TestIndexIntegration:
             c.create_index("code", unique=True)
             c.insert_one({"code": "A"})
             import pytest
+
             with pytest.raises(ValueError):
                 c.insert_one({"code": "A"})
             c.drop()
@@ -1023,6 +1034,7 @@ class TestDocumentTimestamp:
 # =========================================================================
 # Atomic find-and-modify
 # =========================================================================
+
 
 class TestFindOneAndUpdate:
     def test_returns_old_document(self):
@@ -1126,6 +1138,7 @@ class TestFindOneAndDelete:
 # Projection
 # =========================================================================
 
+
 class TestProjection:
     def test_inclusion(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1169,6 +1182,7 @@ class TestProjection:
 # =========================================================================
 # TTL indexes
 # =========================================================================
+
 
 class TestTTLIndex:
     def test_create_ttl_index(self):
@@ -1242,6 +1256,7 @@ class TestTTLIndex:
 # Capped collections
 # =========================================================================
 
+
 class TestCappedCollection:
     def test_max_count_enforced(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1284,6 +1299,7 @@ class TestCappedCollection:
 # =========================================================================
 # SortedIndex integration
 # =========================================================================
+
 
 class TestSortedIndexIntegration:
     def test_create_sorted_index(self):
@@ -1328,6 +1344,7 @@ class TestSortedIndexIntegration:
 # Aggregation pipeline
 # =========================================================================
 
+
 class TestAggregate:
     def test_match_stage(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1371,14 +1388,14 @@ class TestAggregate:
     def test_group_sum(self):
         with tempfile.TemporaryDirectory() as tmp:
             c = Collection("agg", Path(tmp))
-            c.insert_many([
-                {"dept": "eng", "salary": 100},
-                {"dept": "eng", "salary": 200},
-                {"dept": "sales", "salary": 150},
-            ])
-            result = c.aggregate([
-                {"$group": {"_id": "$dept", "total": {"$sum": "$salary"}}}
-            ])
+            c.insert_many(
+                [
+                    {"dept": "eng", "salary": 100},
+                    {"dept": "eng", "salary": 200},
+                    {"dept": "sales", "salary": 150},
+                ]
+            )
+            result = c.aggregate([{"$group": {"_id": "$dept", "total": {"$sum": "$salary"}}}])
             by_dept = {d["_id"]: d["total"] for d in result}
             assert by_dept["eng"] == 300
             assert by_dept["sales"] == 150
@@ -1387,18 +1404,16 @@ class TestAggregate:
         with tempfile.TemporaryDirectory() as tmp:
             c = Collection("agg", Path(tmp))
             c.insert_many([{"x": 10}, {"x": 20}, {"x": 30}])
-            result = c.aggregate([
-                {"$group": {"_id": None, "avg_x": {"$avg": "$x"}}}
-            ])
+            result = c.aggregate([{"$group": {"_id": None, "avg_x": {"$avg": "$x"}}}])
             assert result[0]["avg_x"] == 20.0
 
     def test_group_min_max(self):
         with tempfile.TemporaryDirectory() as tmp:
             c = Collection("agg", Path(tmp))
             c.insert_many([{"x": 5}, {"x": 1}, {"x": 9}])
-            result = c.aggregate([
-                {"$group": {"_id": None, "mn": {"$min": "$x"}, "mx": {"$max": "$x"}}}
-            ])
+            result = c.aggregate(
+                [{"$group": {"_id": None, "mn": {"$min": "$x"}, "mx": {"$max": "$x"}}}]
+            )
             assert result[0]["mn"] == 1
             assert result[0]["mx"] == 9
 
@@ -1406,9 +1421,7 @@ class TestAggregate:
         with tempfile.TemporaryDirectory() as tmp:
             c = Collection("agg", Path(tmp))
             c.insert_many([{"a": 1}, {"a": 1}, {"a": 2}])
-            result = c.aggregate([
-                {"$group": {"_id": "$a", "count": {"$sum": 1}}}
-            ])
+            result = c.aggregate([{"$group": {"_id": "$a", "count": {"$sum": 1}}}])
             by_a = {d["_id"]: d["count"] for d in result}
             assert by_a[1] == 2
             assert by_a[2] == 1
@@ -1417,9 +1430,9 @@ class TestAggregate:
         with tempfile.TemporaryDirectory() as tmp:
             c = Collection("agg", Path(tmp))
             c.insert_many([{"g": "a", "v": 1}, {"g": "a", "v": 2}, {"g": "a", "v": 3}])
-            result = c.aggregate([
-                {"$group": {"_id": "$g", "first": {"$first": "$v"}, "last": {"$last": "$v"}}}
-            ])
+            result = c.aggregate(
+                [{"$group": {"_id": "$g", "first": {"$first": "$v"}, "last": {"$last": "$v"}}}]
+            )
             assert result[0]["first"] == 1
             assert result[0]["last"] == 3
 
@@ -1427,18 +1440,14 @@ class TestAggregate:
         with tempfile.TemporaryDirectory() as tmp:
             c = Collection("agg", Path(tmp))
             c.insert_many([{"g": "a", "v": 1}, {"g": "a", "v": 2}])
-            result = c.aggregate([
-                {"$group": {"_id": "$g", "vals": {"$push": "$v"}}}
-            ])
+            result = c.aggregate([{"$group": {"_id": "$g", "vals": {"$push": "$v"}}}])
             assert sorted(result[0]["vals"]) == [1, 2]
 
     def test_group_add_to_set(self):
         with tempfile.TemporaryDirectory() as tmp:
             c = Collection("agg", Path(tmp))
             c.insert_many([{"g": "a", "v": 1}, {"g": "a", "v": 1}, {"g": "a", "v": 2}])
-            result = c.aggregate([
-                {"$group": {"_id": "$g", "unique": {"$addToSet": "$v"}}}
-            ])
+            result = c.aggregate([{"$group": {"_id": "$g", "unique": {"$addToSet": "$v"}}}])
             assert sorted(result[0]["unique"]) == [1, 2]
 
     def test_unwind_stage(self):
@@ -1456,17 +1465,21 @@ class TestAggregate:
     def test_multi_stage_pipeline(self):
         with tempfile.TemporaryDirectory() as tmp:
             c = Collection("agg", Path(tmp))
-            c.insert_many([
-                {"dept": "eng", "salary": 100},
-                {"dept": "eng", "salary": 200},
-                {"dept": "sales", "salary": 150},
-                {"dept": "sales", "salary": 50},
-            ])
-            result = c.aggregate([
-                {"$match": {"salary": {"$gt": 80}}},
-                {"$group": {"_id": "$dept", "avg": {"$avg": "$salary"}}},
-                {"$sort": {"avg": -1}},
-            ])
+            c.insert_many(
+                [
+                    {"dept": "eng", "salary": 100},
+                    {"dept": "eng", "salary": 200},
+                    {"dept": "sales", "salary": 150},
+                    {"dept": "sales", "salary": 50},
+                ]
+            )
+            result = c.aggregate(
+                [
+                    {"$match": {"salary": {"$gt": 80}}},
+                    {"$group": {"_id": "$dept", "avg": {"$avg": "$salary"}}},
+                    {"$sort": {"avg": -1}},
+                ]
+            )
             assert result[0]["_id"] == "eng"
             assert result[0]["avg"] == 150.0
             assert result[1]["_id"] == "sales"
@@ -1476,6 +1489,7 @@ class TestAggregate:
 # =========================================================================
 # ASCENDING / DESCENDING constants
 # =========================================================================
+
 
 class TestSortConstants:
     def test_constants(self):

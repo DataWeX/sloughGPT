@@ -25,7 +25,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("slo.agents")
 
@@ -560,9 +560,7 @@ class Agent:
     reasoning to plan tool usage. Falls back to keyword matching otherwise.
     """
 
-    def __init__(
-        self, config: AgentConfig | None = None, inference_fn: Callable | None = None
-    ):
+    def __init__(self, config: AgentConfig | None = None, inference_fn: Callable | None = None):
         self.config = config or AgentConfig()
         security = SecurityBoundary(self.config.security)
         self._runner = ToolRunner(security)

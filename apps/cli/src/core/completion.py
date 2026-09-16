@@ -9,7 +9,7 @@ and the interactive REPL readline completer.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
 
 
 class CompletionCache:
@@ -22,9 +22,9 @@ class CompletionCache:
 
     def __init__(self, ttl_sec: float = 30.0):
         self._ttl = ttl_sec
-        self._store: Dict[str, tuple[float, List[str]]] = {}
+        self._store: dict[str, tuple[float, list[str]]] = {}
 
-    def get(self, key: str, fetcher: Callable[[], List[str]]) -> List[str]:
+    def get(self, key: str, fetcher: Callable[[], list[str]]) -> list[str]:
         """Return cached values for *key*, fetching if stale or missing."""
         now = time.monotonic()
         entry = self._store.get(key)
@@ -42,7 +42,7 @@ class CompletionCache:
         self._store[key] = (now, values)
         return values
 
-    def invalidate(self, key: Optional[str] = None) -> None:
+    def invalidate(self, key: str | None = None) -> None:
         """Invalidate one key or all cached values."""
         if key is None:
             self._store.clear()
@@ -62,9 +62,11 @@ def get_cache() -> CompletionCache:
 
 # ── Fetchers (API-backed) ─────────────────────────────────────────────
 
-def _fetch_models(host: str = "localhost", port: int = 8000) -> List[str]:
+
+def _fetch_models(host: str = "localhost", port: int = 8000) -> list[str]:
     """Fetch available model names from the API."""
     import requests
+
     base = f"http://{host}:{port}"
     try:
         r = requests.get(f"{base}/models", timeout=3)
@@ -77,9 +79,10 @@ def _fetch_models(host: str = "localhost", port: int = 8000) -> List[str]:
     return []
 
 
-def _fetch_hf_models(host: str = "localhost", port: int = 8000) -> List[str]:
+def _fetch_hf_models(host: str = "localhost", port: int = 8000) -> list[str]:
     """Fetch HuggingFace model names from the API."""
     import requests
+
     base = f"http://{host}:{port}"
     try:
         r = requests.get(f"{base}/models/hf", timeout=5)
@@ -92,9 +95,10 @@ def _fetch_hf_models(host: str = "localhost", port: int = 8000) -> List[str]:
     return []
 
 
-def _fetch_souls(host: str = "localhost", port: int = 8000) -> List[str]:
+def _fetch_souls(host: str = "localhost", port: int = 8000) -> list[str]:
     """Fetch soul/personality names from the API."""
     import requests
+
     base = f"http://{host}:{port}"
     try:
         r = requests.get(f"{base}/souls", timeout=3)
@@ -107,9 +111,10 @@ def _fetch_souls(host: str = "localhost", port: int = 8000) -> List[str]:
     return []
 
 
-def _fetch_datasets(host: str = "localhost", port: int = 8000) -> List[str]:
+def _fetch_datasets(host: str = "localhost", port: int = 8000) -> list[str]:
     """Fetch dataset names from the API."""
     import requests
+
     base = f"http://{host}:{port}"
     try:
         r = requests.get(f"{base}/datasets", timeout=3)
@@ -122,9 +127,10 @@ def _fetch_datasets(host: str = "localhost", port: int = 8000) -> List[str]:
     return []
 
 
-def _fetch_checkpoints(host: str = "localhost", port: int = 8000) -> List[str]:
+def _fetch_checkpoints(host: str = "localhost", port: int = 8000) -> list[str]:
     """Fetch checkpoint names from the API."""
     import requests
+
     base = f"http://{host}:{port}"
     try:
         r = requests.get(f"{base}/training/checkpoints", timeout=3)
@@ -139,34 +145,36 @@ def _fetch_checkpoints(host: str = "localhost", port: int = 8000) -> List[str]:
 
 # ── Public API ─────────────────────────────────────────────────────────
 
-def complete_models(host: str = "localhost", port: int = 8000) -> List[str]:
+
+def complete_models(host: str = "localhost", port: int = 8000) -> list[str]:
     """Complete model names (cached)."""
     return _cache.get("models", lambda: _fetch_models(host, port))
 
 
-def complete_hf_models(host: str = "localhost", port: int = 8000) -> List[str]:
+def complete_hf_models(host: str = "localhost", port: int = 8000) -> list[str]:
     """Complete HuggingFace model names (cached)."""
     return _cache.get("hf_models", lambda: _fetch_hf_models(host, port))
 
 
-def complete_souls(host: str = "localhost", port: int = 8000) -> List[str]:
+def complete_souls(host: str = "localhost", port: int = 8000) -> list[str]:
     """Complete soul names (cached)."""
     return _cache.get("souls", lambda: _fetch_souls(host, port))
 
 
-def complete_datasets(host: str = "localhost", port: int = 8000) -> List[str]:
+def complete_datasets(host: str = "localhost", port: int = 8000) -> list[str]:
     """Complete dataset names (cached)."""
     return _cache.get("datasets", lambda: _fetch_datasets(host, port))
 
 
-def complete_checkpoints(host: str = "localhost", port: int = 8000) -> List[str]:
+def complete_checkpoints(host: str = "localhost", port: int = 8000) -> list[str]:
     """Complete checkpoint names (cached)."""
     return _cache.get("checkpoints", lambda: _fetch_checkpoints(host, port))
 
 
-def complete_paths(prefix: str) -> List[str]:
+def complete_paths(prefix: str) -> list[str]:
     """Complete file system paths (no cache needed)."""
     from pathlib import Path
+
     if not prefix or prefix in (".", ".."):
         search_dir = Path(".")
         partial = prefix
@@ -196,7 +204,7 @@ def complete_paths(prefix: str) -> List[str]:
 
 # ── Command → completer mapping ───────────────────────────────────────
 
-COMMAND_COMPLETERS: Dict[str, Callable[[], List[str]]] = {
+COMMAND_COMPLETERS: dict[str, Callable[[], list[str]]] = {
     "load": lambda: complete_models(),
     "unload": lambda: complete_models(),
     "gen": lambda: complete_models(),
@@ -211,7 +219,7 @@ COMMAND_COMPLETERS: Dict[str, Callable[[], List[str]]] = {
 }
 
 
-def get_completions_for_command(cmd: str, host: str = "localhost", port: int = 8000) -> List[str]:
+def get_completions_for_command(cmd: str, host: str = "localhost", port: int = 8000) -> list[str]:
     """Return dynamic completion candidates for a command's arguments."""
     fetcher = COMMAND_COMPLETERS.get(cmd)
     if fetcher:

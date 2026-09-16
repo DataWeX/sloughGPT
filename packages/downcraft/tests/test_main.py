@@ -15,6 +15,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 from downcraft import __main__ as cli
+
 from conftest import RangeHandler, _range_url
 
 
@@ -37,25 +38,27 @@ class TestStatus:
         assert "not found in state" in capsys.readouterr().out
 
     def test_tracked_key_shows_status(self, capsys):
-        from downcraft.download.state import PersistentState
         import tempfile
+
+        from downcraft.download.state import PersistentState
+
         with tempfile.TemporaryDirectory() as td:
-                with patch("downcraft.__main__.state.get_state") as mock_state:
-                    st = PersistentState(state_dir=Path(td) / "state")
-                    key = "https://example.com/f.bin"
-                    st.create(key, dest_dir="")
-                    st.update_file_progress(
-                        key,
-                        file_path="f.bin",
-                        url=key,
-                        bytes_downloaded=5 * 1024 * 1024,
-                        total_bytes=10 * 1024 * 1024,
-                    )
-                    mock_state.return_value = st
-                    cli.cmd_status(type("A", (), {"key": key}))
-                out = capsys.readouterr().out
-                assert "downloading" in out
-                assert "5 / 10 MB (50.0%)" in out
+            with patch("downcraft.__main__.state.get_state") as mock_state:
+                st = PersistentState(state_dir=Path(td) / "state")
+                key = "https://example.com/f.bin"
+                st.create(key, dest_dir="")
+                st.update_file_progress(
+                    key,
+                    file_path="f.bin",
+                    url=key,
+                    bytes_downloaded=5 * 1024 * 1024,
+                    total_bytes=10 * 1024 * 1024,
+                )
+                mock_state.return_value = st
+                cli.cmd_status(type("A", (), {"key": key}))
+            out = capsys.readouterr().out
+            assert "downloading" in out
+            assert "5 / 10 MB (50.0%)" in out
 
 
 class TestList:
@@ -64,8 +67,10 @@ class TestList:
         assert "No downloads tracked" in capsys.readouterr().out
 
     def test_lists_tracked_downloads(self, capsys):
-        from downcraft.download.state import PersistentState
         import tempfile
+
+        from downcraft.download.state import PersistentState
+
         with tempfile.TemporaryDirectory() as td:
             with patch("downcraft.__main__.state.get_state") as mock_state:
                 st = PersistentState(state_dir=Path(td) / "state")
@@ -84,17 +89,28 @@ class TestUrl:
         RangeHandler.payloads["/cli.bin"] = content
         dest = tmp_path / "cli.bin"
         cli.cmd_url(
-            type("A", (), {"url": _range_url(range_server, "/cli.bin"), "dest": str(dest), "compressed": False})
+            type(
+                "A",
+                (),
+                {
+                    "url": _range_url(range_server, "/cli.bin"),
+                    "dest": str(dest),
+                    "compressed": False,
+                },
+            )
         )
         out = capsys.readouterr().out
         assert "Done" in out
         assert dest.read_bytes() == content
 
     def test_bad_url_exits(self, range_server):
-        import io
         dest = str(Path("/tmp/nonexistent_cli_out.bin"))
         with pytest.raises(SystemExit) as exc:
             cli.cmd_url(
-                type("A", (), {"url": "http://127.0.0.1:1/missing", "dest": dest, "compressed": False})
+                type(
+                    "A",
+                    (),
+                    {"url": "http://127.0.0.1:1/missing", "dest": dest, "compressed": False},
+                )
             )
         assert exc.value.code == 1

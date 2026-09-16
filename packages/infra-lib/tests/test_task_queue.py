@@ -3,10 +3,15 @@ Tests for the task queue infrastructure (task_queue.py).
 """
 
 import asyncio
+
 import pytest
 from infra_lib.task_queue import (
-    Task, TaskStatus, Priority,
-    InProcessTaskQueue, get_task_queue, set_task_queue,
+    InProcessTaskQueue,
+    Priority,
+    Task,
+    TaskStatus,
+    get_task_queue,
+    set_task_queue,
 )
 
 
@@ -32,12 +37,14 @@ class TestTask:
 
     def test_elapsed_when_running(self):
         import time
+
         t = Task(started_at=time.time() - 5)
         assert t.elapsed is not None
         assert t.elapsed >= 5.0
 
     def test_elapsed_when_completed(self):
         import time
+
         now = time.time()
         t = Task(started_at=now - 10, completed_at=now)
         assert t.elapsed == pytest.approx(10.0, rel=0.1)
@@ -237,6 +244,7 @@ class TestInProcessTaskQueue:
         event = await t.metadata["sse_queue"].get()
         assert event.startswith("data: ")
         import json
+
         payload = json.loads(event[6:])
         assert payload["status"] == "error"
         assert payload["stream"] == "auto-train"
@@ -254,6 +262,7 @@ class TestInProcessTaskQueue:
         await queue.stop()
         assert t.status == TaskStatus.FAILED
         import json
+
         payload = json.loads((await t.metadata["sse_queue"].get())[6:])
         assert payload["status"] == "error"
         assert payload["data"]["error"] == "kaboom"
@@ -270,6 +279,7 @@ class TestInProcessTaskQueue:
         await queue.stop()
         assert t.status == TaskStatus.FAILED
         import json
+
         payload = json.loads((await t.metadata["sse_queue"].get())[6:])
         assert payload["status"] == "error"
         assert "Timeout" in payload["data"]["error"]
@@ -286,6 +296,7 @@ class TestInProcessTaskQueue:
         await queue.cancel(t.id)
         await queue.stop(timeout=1.0)
         import json
+
         payload = json.loads((await t.metadata["sse_queue"].get())[6:])
         assert payload["status"] == "error"
         assert payload["phase"] == "CANCELLED"
@@ -482,6 +493,7 @@ class TestInProcessTaskQueue:
 class TestWorkerPool:
     async def test_start_stop(self):
         from infra_lib.task_queue import WorkerPool
+
         pool = WorkerPool(num_workers=2)
         await pool.start()
         assert pool.active_workers == 2
@@ -489,7 +501,8 @@ class TestWorkerPool:
         assert pool.active_workers == 0
 
     async def test_handler_called(self):
-        from infra_lib.task_queue import WorkerPool, Task
+        from infra_lib.task_queue import Task, WorkerPool
+
         results = []
 
         async def handler(task: Task):
@@ -506,6 +519,7 @@ class TestWorkerPool:
 
     async def test_start_twice_is_noop(self):
         from infra_lib.task_queue import WorkerPool
+
         pool = WorkerPool(num_workers=1)
         await pool.start()
         await pool.start()
@@ -513,7 +527,7 @@ class TestWorkerPool:
         assert pool.active_workers == 0
 
     async def test_handler_exception_is_logged(self):
-        from infra_lib.task_queue import WorkerPool, Task
+        from infra_lib.task_queue import Task, WorkerPool
 
         async def boom(task: Task):
             raise RuntimeError("boom")

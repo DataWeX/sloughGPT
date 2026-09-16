@@ -5,7 +5,6 @@ so that ``.aml`` files are recognized system-wide.
 """
 
 import mimetypes
-import os
 from pathlib import Path
 
 _MIME = "application/aml"

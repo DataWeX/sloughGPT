@@ -1,8 +1,8 @@
 """
 Voice commands - Text-to-speech and speech-to-text via the API.
 """
+
 import sys
-import os
 from pathlib import Path
 
 from domain.logging import get_global
@@ -13,6 +13,7 @@ log = get_global()
 def cmd_voice_tts(args):
     """Convert text to speech and save/play the audio."""
     import requests
+
     base_url = f"http://{args.host}:{args.port}"
     try:
         resp = requests.post(
@@ -26,6 +27,7 @@ def cmd_voice_tts(args):
             log.warning("TTS returned empty audio")
             return
         import base64
+
         audio_bytes = base64.b64decode(data["audio"])
         out_path = args.output or "tts_output.wav"
         Path(out_path).write_bytes(audio_bytes)
@@ -43,6 +45,7 @@ def cmd_voice_tts(args):
 def cmd_voice_stt(args):
     """Transcribe an audio file to text."""
     import requests
+
     base_url = f"http://{args.host}:{args.port}"
     audio_path = Path(args.file)
     if not audio_path.is_file():
@@ -78,6 +81,7 @@ def cmd_voice_stt(args):
 def _play_audio(path: str):
     """Best-effort audio playback."""
     import subprocess
+
     for cmd in (["aplay", path], ["ffplay", "-nodisp", "-autoexit", path], ["afplay", path]):
         try:
             subprocess.run(cmd, capture_output=True, timeout=30)

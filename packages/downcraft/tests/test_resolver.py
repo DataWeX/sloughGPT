@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 from downcraft.resolve.scraper import (
+    ResolvedLink,
     _collect_urls_from_dict,
     _decode_obfuscated_urls,
     _extract_candidates,
@@ -23,21 +24,21 @@ from downcraft.resolve.scraper import (
     _get_extension,
     _is_in_main_content,
     _is_same_domain,
+    _LinkExtractor,
     _resolve_relative,
     _score_and_deduplicate,
     _score_link,
     _verify_content_type,
-    _LinkExtractor,
     resolve_and_download,
     resolve_page,
-    ResolvedLink,
 )
-from conftest import _range_url
 
+from conftest import _range_url
 
 # ---------------------------------------------------------------------------
 # Utility function tests
 # ---------------------------------------------------------------------------
+
 
 class TestGetExtension:
     def test_simple_zip(self):
@@ -78,7 +79,10 @@ class TestIsSameDomain:
 
 class TestResolveRelative:
     def test_absolute_url_unchanged(self):
-        assert _resolve_relative("https://example.com/file.zip", "https://other.com") == "https://example.com/file.zip"
+        assert (
+            _resolve_relative("https://example.com/file.zip", "https://other.com")
+            == "https://example.com/file.zip"
+        )
 
     def test_relative_path(self):
         result = _resolve_relative("files/archive.zip", "https://example.com/page.html")
@@ -116,7 +120,7 @@ class TestExtractJsRedirects:
         assert "https://example.com/popup.zip" in urls
 
     def test_no_redirects(self):
-        html = '<html><body>No JS here</body></html>'
+        html = "<html><body>No JS here</body></html>"
         urls = _extract_js_redirects(html)
         assert urls == []
 
@@ -143,16 +147,14 @@ class TestExtractMetaUrls:
         assert "https://example.com/canonical" in urls
 
     def test_no_meta(self):
-        html = '<html><body>Nothing</body></html>'
+        html = "<html><body>Nothing</body></html>"
         urls = _extract_meta_urls(html)
         assert urls == []
 
 
 class TestScoreLink:
     def test_download_extension_high(self):
-        score = _score_link(
-            "https://example.com/file.zip", "Download", {}, "https://example.com"
-        )
+        score = _score_link("https://example.com/file.zip", "Download", {}, "https://example.com")
         assert score > 0.3
 
     def test_ad_signal_penalized(self):
@@ -163,13 +165,19 @@ class TestScoreLink:
 
     def test_download_class_bonus(self):
         score = _score_link(
-            "https://example.com/file.zip", "Get it", {"class": "btn-download"}, "https://example.com"
+            "https://example.com/file.zip",
+            "Get it",
+            {"class": "btn-download"},
+            "https://example.com",
         )
         assert score > 0.4
 
     def test_sponsor_class_penalized(self):
         score = _score_link(
-            "https://example.com/file.zip", "Sponsor", {"class": "sponsor-link"}, "https://example.com"
+            "https://example.com/file.zip",
+            "Sponsor",
+            {"class": "sponsor-link"},
+            "https://example.com",
         )
         assert score < 0.3
 
@@ -215,17 +223,19 @@ class TestLinkExtractor:
 # Integration tests with local server
 # ---------------------------------------------------------------------------
 
+
 class TestResolvePage:
     """Tests for resolve_page using a local HTTP server."""
 
     def test_finds_download_link(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html>
         <a href="/files/app.zip" class="btn-download">Download App</a>
         <a href="/ads/sponsor">Sponsor</a>
         </html>
-        '''
+        """
         url = _range_url(range_server, "/page")
         links = resolve_page(url)
         assert len(links) >= 1
@@ -235,12 +245,13 @@ class TestResolvePage:
 
     def test_ranks_extension_above_non_extension(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html>
         <a href="/about">About</a>
         <a href="/download/file.tar.gz">Download</a>
         </html>
-        '''
+        """
         url = _range_url(range_server, "/page")
         links = resolve_page(url)
         best = links[0]
@@ -248,12 +259,13 @@ class TestResolvePage:
 
     def test_follows_js_redirect(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html>
         <script>window.location = "/real-download/setup.exe";</script>
         <a href="/ad/tracking">Ad</a>
         </html>
-        '''
+        """
         url = _range_url(range_server, "/page")
         links = resolve_page(url)
         exe_links = [l for l in links if ".exe" in l.url]
@@ -262,6 +274,7 @@ class TestResolvePage:
 
     def test_empty_page(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.payloads["/page"] = b"<html><body></body></html>"
         url = _range_url(range_server, "/page")
         links = resolve_page(url)
@@ -269,9 +282,10 @@ class TestResolvePage:
 
     def test_on_progress_called(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <a href="/file.zip">Download</a>
-        '''
+        """
         messages = []
         url = _range_url(range_server, "/page")
         resolve_page(url, on_progress=lambda m: messages.append(m))
@@ -279,13 +293,14 @@ class TestResolvePage:
 
     def test_deduplicates_same_url(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html>
         <a href="/file.zip">Download 1</a>
         <a href="/file.zip">Download 2</a>
         <a href="/file.zip">Download 3</a>
         </html>
-        '''
+        """
         url = _range_url(range_server, "/page")
         links = resolve_page(url)
         zip_links = [l for l in links if "file.zip" in l.url]
@@ -293,12 +308,13 @@ class TestResolvePage:
 
     def test_penalizes_ad_signals(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html>
         <a href="/ad/sponsor-click.html" class="sponsor">Sponsor</a>
         <a href="/real/model.safetensors" class="download-btn">Download Model</a>
         </html>
-        '''
+        """
         url = _range_url(range_server, "/page")
         links = resolve_page(url)
         # Ad link (.html) filtered out as HTML page; .safetensors should be top result
@@ -309,20 +325,22 @@ class TestResolvePage:
 
     def test_follows_js_redirect_to_download(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html>
         <script>window.location = "/target.zip";</script>
         </html>
-        '''
+        """
         url = _range_url(range_server, "/page")
         links = resolve_page(url)
         assert len(links) >= 1
 
     def test_resolves_relative_urls(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/downloads/page"] = b'''
+
+        RangeHandler.payloads["/downloads/page"] = b"""
         <a href="file.zip">Download</a>
-        '''
+        """
         url = _range_url(range_server, "/downloads/page")
         links = resolve_page(url)
         zip_links = [l for l in links if "file.zip" in l.url]
@@ -331,9 +349,8 @@ class TestResolvePage:
 
     def test_max_links_limit(self, range_server):
         from conftest import RangeHandler
-        many_links = "".join(
-            f'<a href="/file{i}.zip">Link {i}</a>' for i in range(200)
-        )
+
+        many_links = "".join(f'<a href="/file{i}.zip">Link {i}</a>' for i in range(200))
         RangeHandler.payloads["/page"] = f"<html>{many_links}</html>".encode()
         url = _range_url(range_server, "/page")
         links = resolve_page(url, max_links=50)
@@ -343,6 +360,7 @@ class TestResolvePage:
 # ---------------------------------------------------------------------------
 # Obfuscated URL decoding
 # ---------------------------------------------------------------------------
+
 
 class TestDecodeObfuscatedUrls:
     def test_atob_base64(self):
@@ -375,7 +393,7 @@ class TestDecodeObfuscatedUrls:
     def test_string_from_char_code(self):
         # "https://example.com/file.zip"
         codes = ",".join(str(ord(c)) for c in "https://example.com/file.zip")
-        html = f'var url = String.fromCharCode({codes})'
+        html = f"var url = String.fromCharCode({codes})"
         urls = _decode_obfuscated_urls(html)
         assert "https://example.com/file.zip" in urls
 
@@ -398,7 +416,7 @@ class TestDecodeObfuscatedUrls:
         assert '"' not in urls[0]
 
     def test_no_urls_in_plain_html(self):
-        html = '<html><body>Hello world</body></html>'
+        html = "<html><body>Hello world</body></html>"
         urls = _decode_obfuscated_urls(html)
         assert urls == []
 
@@ -413,36 +431,37 @@ class TestDecodeObfuscatedUrls:
 # JSON-LD extraction
 # ---------------------------------------------------------------------------
 
+
 class TestExtractJsonLdUrls:
     def test_software_application(self):
-        html = '''
+        html = """
         <script type="application/ld+json">
         {"@type": "SoftwareApplication", "downloadUrl": "https://example.com/app.zip"}
         </script>
-        '''
+        """
         urls = _extract_json_ld_urls(html)
         assert "https://example.com/app.zip" in urls
 
     def test_content_url(self):
-        html = '''
+        html = """
         <script type="application/ld+json">
         {"@type": "VideoObject", "contentUrl": "https://example.com/video.mp4"}
         </script>
-        '''
+        """
         urls = _extract_json_ld_urls(html)
         assert "https://example.com/video.mp4" in urls
 
     def test_nested_structure(self):
-        html = '''
+        html = """
         <script type="application/ld+json">
         {"@type": "Dataset", "distribution": {"@type": "DataDownload", "contentUrl": "https://example.com/data.csv"}}
         </script>
-        '''
+        """
         urls = _extract_json_ld_urls(html)
         assert "https://example.com/data.csv" in urls
 
     def test_no_json_ld(self):
-        html = '<html><body>No structured data</body></html>'
+        html = "<html><body>No structured data</body></html>"
         urls = _extract_json_ld_urls(html)
         assert urls == []
 
@@ -456,29 +475,30 @@ class TestExtractJsonLdUrls:
 # Position-aware scoring
 # ---------------------------------------------------------------------------
 
+
 class TestIsInMainContent:
     def test_link_in_main_content(self):
-        html = '''
+        html = """
         <header>Nav</header>
         <main>
         <a href="/file.zip">Download</a>
         </main>
         <footer>Footer</footer>
-        '''
+        """
         assert _is_in_main_content("/file.zip", html)
 
     def test_link_in_footer(self):
-        html = '''
+        html = """
         <main>Content</main>
         <footer><a href="/ad.zip">Ad</a></footer>
-        '''
+        """
         assert not _is_in_main_content("/ad.zip", html)
 
     def test_link_in_nav(self):
-        html = '''
+        html = """
         <nav><a href="/page.zip">Page</a></nav>
         <main>Content</main>
-        '''
+        """
         assert not _is_in_main_content("/page.zip", html)
 
 
@@ -486,19 +506,26 @@ class TestIsInMainContent:
 # Score link with context
 # ---------------------------------------------------------------------------
 
+
 class TestScoreLinkWithContext:
     def test_json_ld_source_bonus(self):
         score = _score_link(
-            "https://example.com/file.zip", "[json-ld]", {},
-            "https://example.com", source="json_ld",
+            "https://example.com/file.zip",
+            "[json-ld]",
+            {},
+            "https://example.com",
+            source="json_ld",
         )
         # json_ld source adds +0.2, extension adds +0.4, total ~0.6
         assert score > 0.5
 
     def test_obfuscated_source_bonus(self):
         score = _score_link(
-            "https://example.com/file.zip", "[decoded]", {},
-            "https://example.com", source="obfuscated",
+            "https://example.com/file.zip",
+            "[decoded]",
+            {},
+            "https://example.com",
+            source="obfuscated",
         )
         # obfuscated source adds +0.15, extension adds +0.4, total ~0.55
         assert score > 0.4
@@ -506,8 +533,11 @@ class TestScoreLinkWithContext:
     def test_position_in_main_content_bonus(self):
         html = '<main><a href="/file.zip">Download</a></main>'
         score = _score_link(
-            "https://example.com/file.zip", "Download", {},
-            "https://example.com", html=html,
+            "https://example.com/file.zip",
+            "Download",
+            {},
+            "https://example.com",
+            html=html,
         )
         # extension +0.4, "download" in text +0.15, same domain +0.05, main content +0.1
         assert score > 0.5
@@ -517,9 +547,11 @@ class TestScoreLinkWithContext:
 # Integration: resolve_page with obfuscated content
 # ---------------------------------------------------------------------------
 
+
 class TestResolveObfuscatedPage:
     def test_finds_base64_hidden_link(self, range_server):
         from conftest import RangeHandler
+
         real_url = f"http://127.0.0.1:{range_server.server_port}/files/secret.zip"
         encoded = base64.b64encode(real_url.encode()).decode()
         html = f'''
@@ -538,14 +570,15 @@ class TestResolveObfuscatedPage:
 
     def test_finds_json_ld_link(self, range_server):
         from conftest import RangeHandler
-        html = '''
+
+        html = """
         <html>
         <script type="application/ld+json">
         {"@type": "SoftwareApplication", "downloadUrl": "/files/app.tar.gz"}
         </script>
         <a href="/ad/sponsor">Sponsor</a>
         </html>
-        '''
+        """
         RangeHandler.payloads["/page"] = html.encode()
         url = _range_url(range_server, "/page")
         links = resolve_page(url, max_depth=0)
@@ -558,9 +591,10 @@ class TestResolveObfuscatedPage:
 # _find_main_content — direct tests
 # ---------------------------------------------------------------------------
 
+
 class TestFindMainContent:
     def test_main_tag_detected(self):
-        html = '<html><body><header>Nav</header><main><p>Content</p></main><footer>Footer</footer></body></html>'
+        html = "<html><body><header>Nav</header><main><p>Content</p></main><footer>Footer</footer></body></html>"
         start, end = _find_main_content(html)
         assert "<p>Content</p>" in html[start:end]
         assert "<header>" not in html[start:end]
@@ -569,20 +603,20 @@ class TestFindMainContent:
     def test_skip_tag_heuristic_no_main(self):
         # Without <main>, the exclusion-zone algorithm finds the largest gap
         # between skip tags (header, footer) — the actual content.
-        html = '<html><header>Nav</header><p>Main content here</p><footer>Footer</footer></html>'
+        html = "<html><header>Nav</header><p>Main content here</p><footer>Footer</footer></html>"
         start, end = _find_main_content(html)
         assert start >= 0
         assert end > start
-        assert '<p>Main content here</p>' in html[start:end]
+        assert "<p>Main content here</p>" in html[start:end]
 
     def test_multiple_skip_tags(self):
         # Exclusion zones: header, nav, aside at start; footer at end.
         # Largest gap is between aside-end and footer-start.
-        html = '<header>a</header><nav>b</nav><aside>c</aside><p>content</p><footer>d</footer>'
+        html = "<header>a</header><nav>b</nav><aside>c</aside><p>content</p><footer>d</footer>"
         start, end = _find_main_content(html)
         assert start >= 0
         assert end > start
-        assert '<p>content</p>' in html[start:end]
+        assert "<p>content</p>" in html[start:end]
 
     def test_fence_before_content(self):
         # nav is a skip tag; content comes after → largest gap includes <p>Content</p>
@@ -590,7 +624,7 @@ class TestFindMainContent:
         start, end = _find_main_content(html)
         assert start >= 0
         assert end > start
-        assert '<p>Content</p>' in html[start:end]
+        assert "<p>Content</p>" in html[start:end]
 
     def test_empty_html(self):
         start, end = _find_main_content("")
@@ -598,31 +632,32 @@ class TestFindMainContent:
         assert end == 0
 
     def test_no_skip_tags(self):
-        html = '<html><body><p>Just content</p></body></html>'
+        html = "<html><body><p>Just content</p></body></html>"
         start, end = _find_main_content(html)
         assert start == 0
         assert end == len(html)
 
     def test_main_only_open(self):
-        html = '<main>Content without close'
+        html = "<main>Content without close"
         start, end = _find_main_content(html)
         assert end == len(html)
 
     def test_content_after_skip_tags(self):
         # Only header is a skip tag, content comes after → start past </header>
-        html = '<header>Nav</header><p>Real content</p>'
+        html = "<header>Nav</header><p>Real content</p>"
         start, end = _find_main_content(html)
         assert start > 0
-        assert html[start:end] == '<p>Real content</p>'
+        assert html[start:end] == "<p>Real content</p>"
 
 
 # ---------------------------------------------------------------------------
 # _is_in_main_content — additional edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestIsInMainContentAdditional:
     def test_custom_main_range(self):
-        html = '<header>Nav</header><p>Target</p><footer>Footer</footer>'
+        html = "<header>Nav</header><p>Target</p><footer>Footer</footer>"
         assert _is_in_main_content("Target", html, main_range=(20, 50))
         assert not _is_in_main_content("Nav", html, main_range=(20, 50))
 
@@ -633,13 +668,14 @@ class TestIsInMainContentAdditional:
         assert not _is_in_main_content("/file.zip", html)
 
     def test_href_not_in_html(self):
-        html = '<main><p>No links</p></main>'
+        html = "<main><p>No links</p></main>"
         assert not _is_in_main_content("/missing.zip", html)
 
 
 # ---------------------------------------------------------------------------
 # _collect_urls_from_dict — direct tests
 # ---------------------------------------------------------------------------
+
 
 class TestCollectUrlsFromDict:
     def test_flat_dict(self):
@@ -649,9 +685,7 @@ class TestCollectUrlsFromDict:
 
     def test_nested_dict(self):
         out = []
-        _collect_urls_from_dict(
-            {"distribution": {"contentUrl": "https://example.com/b.csv"}}, out
-        )
+        _collect_urls_from_dict({"distribution": {"contentUrl": "https://example.com/b.csv"}}, out)
         assert "https://example.com/b.csv" in out
 
     def test_list_of_dicts(self):
@@ -700,45 +734,66 @@ class TestCollectUrlsFromDict:
 # _follow_intermediate — tests with local server
 # ---------------------------------------------------------------------------
 
+
 class TestFollowIntermediate:
     def test_follows_to_download(self, range_server):
         from conftest import RangeHandler
+
         # Intermediate page has a low-confidence link (no extension, no download signal)
         RangeHandler.content_types["/intermediate"] = "text/html"
         RangeHandler.content_types["/landing"] = "text/html"
-        RangeHandler.payloads["/intermediate"] = b'''
+        RangeHandler.payloads["/intermediate"] = b"""
         <html><a href="/landing">Continue</a></html>
-        '''
-        RangeHandler.payloads["/landing"] = b'''
+        """
+        RangeHandler.payloads["/landing"] = b"""
         <html><a href="/files/app.zip">Download App</a></html>
-        '''
+        """
         url = _range_url(range_server, "/intermediate")
         import requests
+
         sess = requests.Session()
         hdrs = {"User-Agent": "test"}
         results = _follow_intermediate(
-            url, sess, hdrs, 5, url, depth=2,
+            url,
+            sess,
+            hdrs,
+            5,
+            url,
+            depth=2,
         )
         assert any("app.zip" in r.url for r in results)
 
     def test_depth_zero_returns_empty(self, range_server):
         import requests
+
         sess = requests.Session()
         results = _follow_intermediate(
-            "http://127.0.0.1:1", sess, {}, 5, "http://example.com", depth=0,
+            "http://127.0.0.1:1",
+            sess,
+            {},
+            5,
+            "http://example.com",
+            depth=0,
         )
         assert results == []
 
     def test_network_error_returns_empty(self, range_server):
         import requests
+
         sess = requests.Session()
         results = _follow_intermediate(
-            "http://127.0.0.1:1/nonexistent", sess, {}, 1, "http://example.com", depth=1,
+            "http://127.0.0.1:1/nonexistent",
+            sess,
+            {},
+            1,
+            "http://example.com",
+            depth=1,
         )
         assert results == []
 
     def test_non_html_response(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.head_responses["/file.bin"] = {
             "status": 200,
             "headers": {"Content-Type": "application/octet-stream", "Content-Length": "999"},
@@ -746,10 +801,16 @@ class TestFollowIntermediate:
         RangeHandler.payloads["/file.bin"] = b"\x00" * 999
         url = _range_url(range_server, "/file.bin")
         import requests
+
         sess = requests.Session()
         hdrs = {"User-Agent": "test"}
         results = _follow_intermediate(
-            url, sess, hdrs, 5, "http://example.com", depth=1,
+            url,
+            sess,
+            hdrs,
+            5,
+            "http://example.com",
+            depth=1,
         )
         assert len(results) == 1
         assert results[0].source == "intermediate_direct"
@@ -757,35 +818,49 @@ class TestFollowIntermediate:
 
     def test_recursive_follow(self, range_server):
         from conftest import RangeHandler
+
         # Page1 has a low-confidence link → follow to page2
         RangeHandler.content_types["/page1"] = "text/html"
         RangeHandler.content_types["/page2"] = "text/html"
-        RangeHandler.payloads["/page1"] = b'''
+        RangeHandler.payloads["/page1"] = b"""
         <html><a href="/page2">Next</a></html>
-        '''
-        RangeHandler.payloads["/page2"] = b'''
+        """
+        RangeHandler.payloads["/page2"] = b"""
         <html><a href="/files/model.safetensors">Download Model</a></html>
-        '''
+        """
         url1 = _range_url(range_server, "/page1")
         import requests
+
         sess = requests.Session()
         hdrs = {"User-Agent": "test"}
         results = _follow_intermediate(
-            url1, sess, hdrs, 5, url1, depth=2,
+            url1,
+            sess,
+            hdrs,
+            5,
+            url1,
+            depth=2,
         )
         assert any("safetensors" in r.url for r in results)
 
     def test_preserves_source_prefix(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html><a href="/files/data.zip">Download</a></html>
-        '''
+        """
         url = _range_url(range_server, "/page")
         import requests
+
         sess = requests.Session()
         hdrs = {"User-Agent": "test"}
         results = _follow_intermediate(
-            url, sess, hdrs, 5, url, depth=1,
+            url,
+            sess,
+            hdrs,
+            5,
+            url,
+            depth=1,
         )
         for r in results:
             assert r.source.startswith("intermediate_")
@@ -795,9 +870,11 @@ class TestFollowIntermediate:
 # _verify_content_type — tests with local server
 # ---------------------------------------------------------------------------
 
+
 class TestVerifyContentType:
     def test_binary_content_type(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.head_responses["/file.bin"] = {
             "status": 200,
             "headers": {"Content-Type": "application/octet-stream"},
@@ -807,6 +884,7 @@ class TestVerifyContentType:
 
     def test_html_content_type(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.head_responses["/page"] = {
             "status": 200,
             "headers": {"Content-Type": "text/html; charset=utf-8"},
@@ -816,6 +894,7 @@ class TestVerifyContentType:
 
     def test_ambiguous_content_type(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.head_responses["/file"] = {
             "status": 200,
             "headers": {"Content-Type": "application/unknown", "Content-Length": "100"},
@@ -825,6 +904,7 @@ class TestVerifyContentType:
 
     def test_large_non_text_is_binary(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.head_responses["/big.bin"] = {
             "status": 200,
             "headers": {"Content-Type": "application/x-custom", "Content-Length": "5000"},
@@ -837,6 +917,7 @@ class TestVerifyContentType:
 
     def test_zip_content_type(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.head_responses["/archive.zip"] = {
             "status": 200,
             "headers": {"Content-Type": "application/zip"},
@@ -849,6 +930,7 @@ class TestVerifyContentType:
 # _score_link edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestScoreLinkEdgeCases:
     def test_clamped_at_zero(self):
         score = _score_link("", "", {}, "https://example.com")
@@ -856,7 +938,8 @@ class TestScoreLinkEdgeCases:
 
     def test_clamped_at_one(self):
         score = _score_link(
-            "https://example.com/model.safetensors", "Download",
+            "https://example.com/model.safetensors",
+            "Download",
             {"class": "btn-download", "data-href": "https://example.com/model.safetensors"},
             "https://example.com",
             source="json_ld",
@@ -876,9 +959,7 @@ class TestScoreLinkEdgeCases:
         assert score <= 0.0
 
     def test_short_text_penalty(self):
-        score = _score_link(
-            "https://example.com/file.zip", "x", {}, "https://example.com"
-        )
+        score = _score_link("https://example.com/file.zip", "x", {}, "https://example.com")
         # Gets extension bonus but text penalty
         assert score > 0
 
@@ -918,9 +999,7 @@ class TestScoreLinkEdgeCases:
 
     def test_download_text_in_href(self):
         # "download" in href gives +0.1 only (not extension bonus)
-        score = _score_link(
-            "https://example.com/download/file", "File", {}, "https://example.com"
-        )
+        score = _score_link("https://example.com/download/file", "File", {}, "https://example.com")
         assert score > 0.1
         assert score < 0.3
 
@@ -932,9 +1011,7 @@ class TestScoreLinkEdgeCases:
         assert score <= 0.35
 
     def test_no_html_context(self):
-        score = _score_link(
-            "https://example.com/file.zip", "Download", {}, "https://example.com"
-        )
+        score = _score_link("https://example.com/file.zip", "Download", {}, "https://example.com")
         assert score > 0.3
 
 
@@ -942,13 +1019,14 @@ class TestScoreLinkEdgeCases:
 # _extract_candidates — direct tests
 # ---------------------------------------------------------------------------
 
+
 class TestExtractCandidates:
     def test_all_source_types(self):
-        html = '''
+        html = """
         <a href="/file.zip">Download</a>
         <script>window.location = "/redirect.exe";</script>
         <meta property="og:url" content="https://example.com/page">
-        '''
+        """
         candidates = _extract_candidates(html, "https://example.com/page", 100)
         sources = {c[3] for c in candidates}
         assert "html_link" in sources
@@ -981,11 +1059,11 @@ class TestExtractCandidates:
         assert len(obfuscated) >= 1
 
     def test_json_ld_included(self):
-        html = '''
+        html = """
         <script type="application/ld+json">
         {"@type": "SoftwareApplication", "downloadUrl": "/files/app.zip"}
         </script>
-        '''
+        """
         candidates = _extract_candidates(html, "https://example.com", 100)
         json_ld = [c for c in candidates if c[3] == "json_ld"]
         assert len(json_ld) >= 1
@@ -994,6 +1072,7 @@ class TestExtractCandidates:
 # ---------------------------------------------------------------------------
 # _score_and_deduplicate — direct tests
 # ---------------------------------------------------------------------------
+
 
 class TestScoreAndDeduplicate:
     def test_deduplicates_same_url(self):
@@ -1057,22 +1136,24 @@ class TestScoreAndDeduplicate:
 # resolve_page — intermediate follow integration
 # ---------------------------------------------------------------------------
 
+
 class TestResolvePageIntermediate:
     def test_follows_intermediate_page(self, range_server):
         from conftest import RangeHandler
+
         # Page has a low-confidence link (no extension) → triggers intermediate follow
         RangeHandler.content_types["/page"] = "text/html"
         RangeHandler.content_types["/landing"] = "text/html"
-        RangeHandler.payloads["/page"] = b'''
+        RangeHandler.payloads["/page"] = b"""
         <html>
         <a href="/landing">Go to download</a>
         </html>
-        '''
-        RangeHandler.payloads["/landing"] = b'''
+        """
+        RangeHandler.payloads["/landing"] = b"""
         <html>
         <a href="/files/model.gguf">Download Model</a>
         </html>
-        '''
+        """
         url = _range_url(range_server, "/page")
         links = resolve_page(url, max_depth=1)
         gguf = [l for l in links if "model.gguf" in l.url]
@@ -1080,9 +1161,10 @@ class TestResolvePageIntermediate:
 
     def test_max_depth_zero_skips_follow(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html><a href="/other">Link</a></html>
-        '''
+        """
         url = _range_url(range_server, "/page")
         links = resolve_page(url, max_depth=0)
         followed = [l for l in links if l.source.startswith("intermediate")]
@@ -1090,11 +1172,12 @@ class TestResolvePageIntermediate:
 
     def test_high_confidence_skips_follow(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html>
         <a href="/files/app.zip" class="btn-download">Download App</a>
         </html>
-        '''
+        """
         url = _range_url(range_server, "/page")
         links = resolve_page(url, max_depth=2)
         followed = [l for l in links if l.source.startswith("intermediate")]
@@ -1102,6 +1185,7 @@ class TestResolvePageIntermediate:
 
     def test_no_results_no_follow(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.payloads["/page"] = b"<html><body></body></html>"
         url = _range_url(range_server, "/page")
         links = resolve_page(url, max_depth=2)
@@ -1116,12 +1200,14 @@ class TestResolvePageIntermediate:
 # resolve_page — verify_content_type integration
 # ---------------------------------------------------------------------------
 
+
 class TestResolvePageVerifyContentType:
     def test_html_content_reduces_confidence(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html><a href="/files/model.bin">Download</a></html>
-        '''
+        """
         RangeHandler.head_responses["/files/model.bin"] = {
             "status": 200,
             "headers": {"Content-Type": "text/html; charset=utf-8"},
@@ -1135,9 +1221,10 @@ class TestResolvePageVerifyContentType:
 
     def test_binary_content_boosts_confidence(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html><a href="/files/model.bin">Download</a></html>
-        '''
+        """
         RangeHandler.head_responses["/files/model.bin"] = {
             "status": 200,
             "headers": {"Content-Type": "application/octet-stream"},
@@ -1153,6 +1240,7 @@ class TestResolvePageVerifyContentType:
 
     def test_no_results_skips_verify(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.payloads["/page"] = b"<html></html>"
         url = _range_url(range_server, "/page")
         links = resolve_page(url, verify_content_type=True, max_depth=0)
@@ -1163,9 +1251,11 @@ class TestResolvePageVerifyContentType:
 # resolve_page — extra edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestResolvePageEdgeCases:
     def test_custom_headers(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.payloads["/page"] = b'<a href="/file.zip">Dl</a>'
         url = _range_url(range_server, "/page")
         links = resolve_page(url, headers={"X-Custom": "test"}, max_depth=0)
@@ -1173,6 +1263,7 @@ class TestResolvePageEdgeCases:
 
     def test_redirect_chain_preserved(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.payloads["/page"] = b'<a href="/file.zip">Dl</a>'
         url = _range_url(range_server, "/page")
         links = resolve_page(url, max_depth=0)
@@ -1180,6 +1271,7 @@ class TestResolvePageEdgeCases:
 
     def test_progress_callback(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.payloads["/page"] = b'<a href="/file.zip">Dl</a>'
         url = _range_url(range_server, "/page")
         messages = []
@@ -1190,6 +1282,7 @@ class TestResolvePageEdgeCases:
 
     def test_empty_page_progress(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.payloads["/page"] = b"<html><body></body></html>"
         url = _range_url(range_server, "/page")
         messages = []
@@ -1198,6 +1291,7 @@ class TestResolvePageEdgeCases:
 
     def test_many_links_capped(self, range_server):
         from conftest import RangeHandler
+
         html = "".join(f'<a href="/f{i}.zip">L{i}</a>' for i in range(300))
         RangeHandler.payloads["/page"] = html.encode()
         url = _range_url(range_server, "/page")
@@ -1209,9 +1303,11 @@ class TestResolvePageEdgeCases:
 # resolve_and_download — tests
 # ---------------------------------------------------------------------------
 
+
 class TestResolveAndDownload:
     def test_raises_on_no_links(self, range_server):
         from conftest import RangeHandler
+
         RangeHandler.payloads["/page"] = b"<html></html>"
         url = _range_url(range_server, "/page")
         with pytest.raises(ValueError, match="No download links found"):
@@ -1219,18 +1315,20 @@ class TestResolveAndDownload:
 
     def test_raises_on_low_confidence(self, range_server):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html><a href="/files/model.zip" class="sponsor">Sponsor</a></html>
-        '''
+        """
         url = _range_url(range_server, "/page")
         with pytest.raises(ValueError, match="confidence too low"):
             resolve_and_download(url, "/tmp/dest.zip", min_confidence=0.9)
 
     def test_success_path(self, range_server, tmp_path):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html><a href="/files/app.zip">Download App</a></html>
-        '''
+        """
         RangeHandler.payloads["/files/app.zip"] = b"PK\x03\x04fake-zip-content"
         url = _range_url(range_server, "/page")
         dest = str(tmp_path / "downloaded.zip")
@@ -1240,15 +1338,19 @@ class TestResolveAndDownload:
 
     def test_progress_callback_called(self, range_server, tmp_path):
         from conftest import RangeHandler
-        RangeHandler.payloads["/page"] = b'''
+
+        RangeHandler.payloads["/page"] = b"""
         <html><a href="/files/data.bin">Download</a></html>
-        '''
+        """
         RangeHandler.payloads["/files/data.bin"] = b"binary-data-here"
         url = _range_url(range_server, "/page")
         dest = str(tmp_path / "out.bin")
         messages = []
         resolve_and_download(
-            url, dest, min_confidence=0.1, max_depth=0,
+            url,
+            dest,
+            min_confidence=0.1,
+            max_depth=0,
             on_progress=lambda m: messages.append(m),
         )
         assert any("Downloading" in m for m in messages)
@@ -1257,6 +1359,7 @@ class TestResolveAndDownload:
 # ---------------------------------------------------------------------------
 # _extract_js_redirects — additional patterns
 # ---------------------------------------------------------------------------
+
 
 class TestExtractJsRedirectsAdditional:
     def test_location_assign(self):
@@ -1280,19 +1383,19 @@ class TestExtractJsRedirectsAdditional:
         assert "https://example.com/refresh.zip" in urls
 
     def test_multiple_redirects(self):
-        html = '''
+        html = """
         <script>window.location = "https://a.com/1.zip";</script>
         <script>window.location.href = "https://b.com/2.zip";</script>
-        '''
+        """
         urls = _extract_js_redirects(html)
         assert len(urls) == 2
 
     def test_mixed_valid_and_invalid(self):
-        html = '''
+        html = """
         window.location = "https://valid.com/file.zip";
         window.location = "javascript:void(0)";
         window.location = "#section";
-        '''
+        """
         urls = _extract_js_redirects(html)
         assert len(urls) == 1
         assert "valid.com" in urls[0]
@@ -1307,6 +1410,7 @@ class TestExtractJsRedirectsAdditional:
 # _extract_meta_urls — additional patterns
 # ---------------------------------------------------------------------------
 
+
 class TestExtractMetaUrlsAdditional:
     def test_twitter_url(self):
         html = '<meta name="twitter:url" content="https://example.com/tweet">'
@@ -1319,10 +1423,10 @@ class TestExtractMetaUrlsAdditional:
         assert "https://example.com/og" in urls
 
     def test_multiple_meta_urls(self):
-        html = '''
+        html = """
         <meta property="og:url" content="https://example.com/og">
         <link rel="canonical" href="https://example.com/canonical">
-        '''
+        """
         urls = _extract_meta_urls(html)
         assert len(urls) == 2
 
@@ -1330,6 +1434,7 @@ class TestExtractMetaUrlsAdditional:
 # ---------------------------------------------------------------------------
 # _decode_obfuscated_urls — additional edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestDecodeObfuscatedUrlsAdditional:
     def test_relative_atob_url(self):
@@ -1376,57 +1481,58 @@ class TestDecodeObfuscatedUrlsAdditional:
 # _extract_json_ld_urls — additional patterns
 # ---------------------------------------------------------------------------
 
+
 class TestExtractJsonLdUrlsAdditional:
     def test_array_of_items(self):
-        html = '''
+        html = """
         <script type="application/ld+json">
         [
             {"@type": "SoftwareApplication", "downloadUrl": "https://a.com/1.zip"},
             {"@type": "SoftwareApplication", "downloadUrl": "https://b.com/2.zip"}
         ]
         </script>
-        '''
+        """
         urls = _extract_json_ld_urls(html)
         assert len(urls) == 2
 
     def test_same_as_url(self):
-        html = '''
+        html = """
         <script type="application/ld+json">
         {"@type": "Organization", "sameAs": "https://example.com/org"}
         </script>
-        '''
+        """
         urls = _extract_json_ld_urls(html)
         assert "https://example.com/org" in urls
 
     def test_install_url(self):
-        html = '''
+        html = """
         <script type="application/ld+json">
         {"@type": "SoftwareApplication", "installUrl": "https://example.com/install"}
         </script>
-        '''
+        """
         urls = _extract_json_ld_urls(html)
         assert "https://example.com/install" in urls
 
     def test_file_url(self):
-        html = '''
+        html = """
         <script type="application/ld+json">
         {"@type": "DataDownload", "fileUrl": "https://example.com/data.csv"}
         </script>
-        '''
+        """
         urls = _extract_json_ld_urls(html)
         assert "https://example.com/data.csv" in urls
 
     def test_action_url(self):
-        html = '''
+        html = """
         <script type="application/ld+json">
         {"@type": "DownloadAction", "actionUrl": "https://example.com/action"}
         </script>
-        '''
+        """
         urls = _extract_json_ld_urls(html)
         assert "https://example.com/action" in urls
 
     def test_mixed_valid_and_invalid_blocks(self):
-        html = '''
+        html = """
         <script type="application/ld+json">
         {"@type": "SoftwareApplication", "downloadUrl": "https://valid.com/app.zip"}
         </script>
@@ -1434,7 +1540,7 @@ class TestExtractJsonLdUrlsAdditional:
         <script type="application/ld+json">
         {"@type": "SoftwareApplication", "downloadUrl": "https://valid2.com/app.zip"}
         </script>
-        '''
+        """
         urls = _extract_json_ld_urls(html)
         assert len(urls) == 2
 
@@ -1442,6 +1548,7 @@ class TestExtractJsonLdUrlsAdditional:
 # ---------------------------------------------------------------------------
 # ResolvedLink dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestResolvedLinkDataclass:
     def test_defaults(self):
@@ -1477,10 +1584,11 @@ class TestResolvedLinkDataclass:
 # _LinkExtractor — additional edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestLinkExtractorAdditional:
     def test_no_href_on_a(self):
         parser = _LinkExtractor()
-        parser.feed('<a>No href</a>')
+        parser.feed("<a>No href</a>")
         assert parser.links == []
 
     def test_whitespace_in_text(self):
@@ -1523,6 +1631,7 @@ class TestLinkExtractorAdditional:
 # _get_extension — additional cases
 # ---------------------------------------------------------------------------
 
+
 class TestGetExtensionAdditional:
     def test_safetensors(self):
         assert _get_extension("https://example.com/model.safetensors") == ".safetensors"
@@ -1544,6 +1653,7 @@ class TestGetExtensionAdditional:
 # _is_same_domain — additional cases
 # ---------------------------------------------------------------------------
 
+
 class TestIsSameDomainAdditional:
     def test_deep_subdomain(self):
         assert _is_same_domain("https://a.b.c.example.com/f", "https://example.com")
@@ -1562,6 +1672,7 @@ class TestIsSameDomainAdditional:
 # ---------------------------------------------------------------------------
 # _resolve_relative — additional cases
 # ---------------------------------------------------------------------------
+
 
 class TestResolveRelativeAdditional:
     def test_dot_slash(self):
@@ -1585,6 +1696,7 @@ class TestResolveRelativeAdditional:
 # _extract_js_redirects — onclick pattern
 # ---------------------------------------------------------------------------
 
+
 class TestExtractJsRedirectsOnclick:
     def test_onclick_window_open(self):
         html = "onclick=\"window.open('https://example.com/popup.zip')\""
@@ -1606,6 +1718,7 @@ class TestExtractJsRedirectsOnclick:
 # ---------------------------------------------------------------------------
 # Bug fix: _is_in_main_content root path false positive
 # ---------------------------------------------------------------------------
+
 
 class TestIsInMainContentRootPath:
     def test_root_path_not_false_positive(self):
@@ -1629,6 +1742,7 @@ class TestIsInMainContentRootPath:
 # Bug fix: _score_link no redundant parse
 # ---------------------------------------------------------------------------
 
+
 class TestScoreLinkNoRedundantParse:
     def test_long_query_string_penalty(self):
         long_q = "a" * 200
@@ -1647,6 +1761,7 @@ class TestScoreLinkNoRedundantParse:
 # ---------------------------------------------------------------------------
 # _extract_js_variable_urls
 # ---------------------------------------------------------------------------
+
 
 class TestExtractJsVariableUrls:
     def test_var_download_url(self):
@@ -1675,11 +1790,11 @@ class TestExtractJsVariableUrls:
         assert urls == ["https://window.com/real.bin"]
 
     def test_multiple_variables(self):
-        html = '''
+        html = """
         var url1 = "https://a.com/1.zip";
         let url2 = "https://b.com/2.bin";
         window.url3 = "https://c.com/3.tar";
-        '''
+        """
         urls = _extract_js_variable_urls(html)
         assert len(urls) == 3
         assert "https://a.com/1.zip" in urls
@@ -1721,45 +1836,46 @@ class TestExtractJsVariableUrls:
 # _extract_json_blob_urls
 # ---------------------------------------------------------------------------
 
+
 class TestExtractJsonBlobUrls:
     def test_initial_state(self):
-        html = '''
+        html = """
         <script>
         window.__INITIAL_STATE__ = {"download": {"url": "https://state.com/file.bin"}};
         </script>
-        '''
+        """
         urls = _extract_json_blob_urls(html)
         assert urls == ["https://state.com/file.bin"]
 
     def test_nuxt(self):
-        html = '''
+        html = """
         <script>
         window.__NUXT__ = {"config": {"downloadUrl": "https://nuxt.com/data.zip"}};
         </script>
-        '''
+        """
         urls = _extract_json_blob_urls(html)
         assert urls == ["https://nuxt.com/data.zip"]
 
     def test_next_data(self):
-        html = '''
+        html = """
         <script>
         window.__NEXT_DATA__ = {"props": {"contentUrl": "https://next.com/file.tar"}};
         </script>
-        '''
+        """
         urls = _extract_json_blob_urls(html)
         assert urls == ["https://next.com/file.tar"]
 
     def test_config_variable(self):
-        html = '''
+        html = """
         <script>
         var config = {"downloadUrl": "https://cfg.com/model.onnx"};
         </script>
-        '''
+        """
         urls = _extract_json_blob_urls(html)
         assert urls == ["https://cfg.com/model.onnx"]
 
     def test_nested_urls(self):
-        html = '''
+        html = """
         <script>
         window.__INITIAL_STATE__ = {
             "files": [
@@ -1768,32 +1884,32 @@ class TestExtractJsonBlobUrls:
             ]
         };
         </script>
-        '''
+        """
         urls = _extract_json_blob_urls(html)
         assert len(urls) == 2
         assert "https://a.com/1.zip" in urls
         assert "https://b.com/2.bin" in urls
 
     def test_invalid_json_ignored(self):
-        html = '''
+        html = """
         <script>
         window.__INITIAL_STATE__ = {invalid json};
         </script>
-        '''
+        """
         urls = _extract_json_blob_urls(html)
         assert urls == []
 
     def test_no_blob_returns_empty(self):
-        html = '<p>No script tags here</p>'
+        html = "<p>No script tags here</p>"
         urls = _extract_json_blob_urls(html)
         assert urls == []
 
     def test_relative_urls_in_blob(self):
-        html = '''
+        html = """
         <script>
         window.__INITIAL_STATE__ = {"fileUrl": "/files/model.bin"};
         </script>
-        '''
+        """
         urls = _extract_json_blob_urls(html)
         assert urls == ["/files/model.bin"]
 
@@ -1801,6 +1917,7 @@ class TestExtractJsonBlobUrls:
 # ---------------------------------------------------------------------------
 # Integration: _extract_candidates picks up all layers
 # ---------------------------------------------------------------------------
+
 
 class TestExtractCandidatesCountdownPopunder:
     def test_picks_up_js_variables(self):
@@ -1816,21 +1933,21 @@ class TestExtractCandidatesCountdownPopunder:
         assert "https://hidden.com/after.zip" in urls
 
     def test_picks_up_json_blob(self):
-        html = '''
+        html = """
         <script>
         window.__INITIAL_STATE__ = {"downloadUrl": "https://state.com/f.bin"};
         </script>
-        '''
+        """
         candidates = _extract_candidates(html, "https://example.com", 100)
         urls = [c[0] for c in candidates]
         assert "https://state.com/f.bin" in urls
 
     def test_all_layers_combined(self):
-        html = '''
+        html = """
         <a href="https://example.com/file.zip">Download</a>
         <script>var realUrl = "https://real.com/model.bin";</script>
         <div data-real-url="https://actual.com/data.tar"></div>
-        '''
+        """
         candidates = _extract_candidates(html, "https://example.com", 100)
         urls = [c[0] for c in candidates]
         assert "https://example.com/file.zip" in urls

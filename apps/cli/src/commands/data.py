@@ -1,16 +1,14 @@
 """
 Data commands - Dataset management, import, and validation.
 """
-import sys
-import os
+
 import json
 from pathlib import Path
-from typing import Optional
 
 from domain.logging import get_global
 
 log = get_global()
-from utils.formatting import format_size, format_number
+from utils.formatting import format_number, format_size
 
 
 def cmd_datasets(args):
@@ -67,7 +65,9 @@ def cmd_dataset_import(args, source: str):
             )
 
             if result.success:
-                log.success(f"Imported {result.files_imported} files ({format_number(result.total_chars)} chars)")
+                log.success(
+                    f"Imported {result.files_imported} files ({format_number(result.total_chars)} chars)"
+                )
                 log.key_value("Location", result.output_path)
             else:
                 log.error(f"Failed: {result.error}")
@@ -140,6 +140,7 @@ def cmd_dataset_search(args):
     if source == "hf":
         try:
             from domain.training._internal.data_import import HuggingFaceImporter
+
             results = HuggingFaceImporter().search_datasets(query=query, limit=args.limit)
             if results:
                 log.success(f"Found {len(results)} datasets")
@@ -157,6 +158,7 @@ def cmd_dataset_search(args):
     else:
         try:
             from domain.training._internal.data_import import GitHubSearch
+
             results = GitHubSearch().search_repos(query=query, limit=args.limit)
             if results:
                 log.success(f"Found {len(results)} repositories")
@@ -184,7 +186,7 @@ def cmd_data_tool(args, subcmd: str):
         total_chars = 0
 
         if path.is_file():
-            with open(path, "r") as f:
+            with open(path) as f:
                 for line in f:
                     line = line.strip()
                     if line:
@@ -208,7 +210,7 @@ def cmd_data_tool(args, subcmd: str):
     elif subcmd == "validate":
         issues = []
         if path.is_file():
-            with open(path, "r") as f:
+            with open(path) as f:
                 for i, line in enumerate(f, 1):
                     if not line.strip():
                         issues.append(f"Line {i}: Empty")

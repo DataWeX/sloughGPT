@@ -11,19 +11,17 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from downcraft.download.compress import (
     MAGIC,
-    HEADER_SIZE,
+    CompressionResult,
+    auto_decompress,
     compress_bytes,
     compress_file,
     compress_stream,
     decompress_bytes,
     decompress_file,
     decompress_stream,
-    peek_compressed_header,
     is_compressed_file,
-    auto_decompress,
-    CompressionResult,
+    peek_compressed_header,
 )
-
 
 # ---------------------------------------------------------------------------
 # compress_bytes / decompress_bytes
@@ -50,6 +48,7 @@ class TestCompressDecompressBytes:
 
     def test_roundtrip_random(self):
         import os
+
         data = os.urandom(10_000)
         compressed, _ = compress_bytes(data)
         decompressed, _ = decompress_bytes(compressed)
@@ -87,7 +86,7 @@ class TestCompressDecompressFile:
         assert compressed.exists()
         assert c_result.bytes_uncompressed == len(data)
 
-        d_result = decompress_file(compressed, decompressed)
+        decompress_file(compressed, decompressed)
         assert decompressed.exists()
         assert decompressed.read_bytes() == data
 
@@ -135,7 +134,7 @@ class TestCompressDecompressStream:
 
         src2 = io.BytesIO(compressed_data)
         dst2 = io.BytesIO()
-        d_result = decompress_stream(src2, dst2, verify_header=True)
+        decompress_stream(src2, dst2, verify_header=True)
         assert dst2.getvalue() == data
 
     def test_roundtrip_without_header(self):

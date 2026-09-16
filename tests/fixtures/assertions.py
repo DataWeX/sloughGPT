@@ -61,7 +61,7 @@ def assert_json_structure(data: Any, paths: list[str], msg: str = "") -> None:
             except (KeyError, IndexError, ValueError) as e:
                 raise AssertionError(
                     f"Missing path {path!r} at '{part}': {e}" + (f"\n  {msg}" if msg else "")
-                )
+                ) from e
 
 
 def assert_importable(module_name: str, msg: str = "") -> None:
@@ -69,7 +69,9 @@ def assert_importable(module_name: str, msg: str = "") -> None:
     try:
         importlib.import_module(module_name)
     except ImportError as e:
-        raise AssertionError(f"Cannot import {module_name!r}: {e}" + (f"\n  {msg}" if msg else ""))
+        raise AssertionError(
+            f"Cannot import {module_name!r}: {e}" + (f"\n  {msg}" if msg else "")
+        ) from e
 
 
 def assert_no_exceptions(func, *args, _msg: str = "", **kwargs) -> Any:
@@ -79,7 +81,7 @@ def assert_no_exceptions(func, *args, _msg: str = "", **kwargs) -> Any:
     except Exception as e:
         raise AssertionError(
             f"Expected no exception, got {type(e).__name__}: {e}" + (f"\n  {_msg}" if _msg else "")
-        )
+        ) from e
 
 
 def assert_changed(file_path: str, expect_diff: bool = True) -> None:

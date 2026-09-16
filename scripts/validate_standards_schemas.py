@@ -30,7 +30,7 @@ _EXAMPLES: list[tuple[str, str]] = [
 
 def main() -> int:
     try:
-        import jsonschema
+        import jsonschema  # noqa: F401
         from jsonschema import validators
     except ImportError:
         print(

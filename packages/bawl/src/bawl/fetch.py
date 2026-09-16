@@ -8,12 +8,12 @@ Usage:
 
 import threading
 import time
-from typing import Optional
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 try:
     from importlib.metadata import version as _v
+
     _VER = _v("bawl")
 except Exception:
     _VER = "0.0"
@@ -22,9 +22,7 @@ _hits: dict[str, float] = {}
 _lock = threading.Lock()
 
 
-def fetch(
-    url: str, *, timeout: int = 15, rate: float = 0.5
-) -> Optional[str]:
+def fetch(url: str, *, timeout: int = 15, rate: float = 0.5) -> str | None:
     """Fetch HTML from a URL. Thread-safe per-domain rate limiting.
 
     Args:

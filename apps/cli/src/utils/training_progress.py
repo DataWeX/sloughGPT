@@ -13,9 +13,9 @@ Render behaviour:
 The loss sparkline draws recent train loss as bars; lower loss is better, so
 bars shrinking toward the left (``▇▆▄▁``) indicate improvement.
 """
+
 import sys
 import time
-from typing import Dict, Optional
 
 from utils.progress import ProgressBar, _is_terminal
 
@@ -40,7 +40,7 @@ class TrainingProgressBar:
         self,
         desc: str = "Training",
         width: int = 36,
-        total_steps: Optional[int] = None,
+        total_steps: int | None = None,
         sparkline_len: int = 12,
     ):
         self.desc = desc
@@ -55,16 +55,16 @@ class TrainingProgressBar:
         self._done = False
 
         self._losses: list = []
-        self._eval_loss: Optional[float] = None
-        self._best_eval: Optional[float] = None
-        self._last_lr: Optional[float] = None
+        self._eval_loss: float | None = None
+        self._best_eval: float | None = None
+        self._last_lr: float | None = None
 
         self.last_line = ""
-        self.stats: Dict[str, object] = {}
+        self.stats: dict[str, object] = {}
 
     # -- public API -----------------------------------------------------
 
-    def update(self, info: Dict[str, object]) -> None:
+    def update(self, info: dict[str, object]) -> None:
         """Absorb one ``on_progress`` dict and (re)render the line.
 
         Args:
@@ -118,7 +118,7 @@ class TrainingProgressBar:
             pct = 100
         self._render(step=step, pct=pct, epoch=epoch, epochs=epochs, done=done)
 
-    def finish(self, info: Optional[Dict[str, object]] = None) -> None:
+    def finish(self, info: dict[str, object] | None = None) -> None:
         """Finalise the bar: render at 100% and move to a fresh line.
 
         Args:
@@ -144,7 +144,7 @@ class TrainingProgressBar:
 
     # -- internals ------------------------------------------------------
 
-    def _infer_total(self, info: Dict[str, object], step: int, pct: int) -> None:
+    def _infer_total(self, info: dict[str, object], step: int, pct: int) -> None:
         epochs = info.get("epochs")
         spe = info.get("steps_per_epoch")
         candidate = None
@@ -178,7 +178,7 @@ class TrainingProgressBar:
     def _sparkline(self) -> str:
         if len(self._losses) < 2:
             return ""
-        vals = self._losses[-self.sparkline_len:]
+        vals = self._losses[-self.sparkline_len :]
         lo, hi = min(vals), max(vals)
         rng = hi - lo
         out = []

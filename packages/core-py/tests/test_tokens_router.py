@@ -12,7 +12,7 @@ try:
     from fastapi.testclient import TestClient
 
     from apps.api.server.routers.tokens import router
-    from domain.billing._internal.token_service import Tier, get_token_billing_service
+    from domain.billing._internal.token_service import Tier, get_token_billing_service  # noqa: F401
 
     HAS_FASTAPI = True
 except ImportError:

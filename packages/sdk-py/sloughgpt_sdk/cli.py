@@ -13,14 +13,13 @@ Usage:
 
 import argparse
 import json
-import sys
 import os
-from typing import Optional
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
-    from sloughgpt_sdk import SloughGPTClient, ChatMessage
+    from sloughgpt_sdk import ChatMessage, SloughGPTClient
 except ImportError:
     print("Error: sloughgpt-sdk not found. Install with: pip install sloughgpt-sdk")
     sys.exit(1)
@@ -38,47 +37,26 @@ def main():
     )
 
     parser.add_argument(
-        "--url", "-u",
+        "--url",
+        "-u",
         default=os.environ.get("SLO_API_URL", "http://localhost:8000"),
-        help="API base URL"
+        help="API base URL",
     )
     parser.add_argument(
-        "--api-key", "-k",
-        default=os.environ.get("SLO_API_KEY"),
-        help="API key for authentication"
+        "--api-key", "-k", default=os.environ.get("SLO_API_KEY"), help="API key for authentication"
     )
+    parser.add_argument("--model", "-m", default="gpt2", help="Default model to use")
     parser.add_argument(
-        "--model", "-m",
-        default="gpt2",
-        help="Default model to use"
+        "--max-tokens", "-t", type=int, default=100, help="Maximum tokens to generate"
     )
-    parser.add_argument(
-        "--max-tokens", "-t",
-        type=int,
-        default=100,
-        help="Maximum tokens to generate"
-    )
-    parser.add_argument(
-        "--temperature", "-T",
-        type=float,
-        default=0.8,
-        help="Sampling temperature"
-    )
-    parser.add_argument(
-        "--json", "-j",
-        action="store_true",
-        help="Output as JSON"
-    )
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Verbose output"
-    )
+    parser.add_argument("--temperature", "-T", type=float, default=0.8, help="Sampling temperature")
+    parser.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
-    health = subparsers.add_parser("health", help="Check API health")
-    info = subparsers.add_parser("info", help="Get system info")
+    subparsers.add_parser("health", help="Check API health")
+    subparsers.add_parser("info", help="Get system info")
 
     gen = subparsers.add_parser(
         "generate",
@@ -95,7 +73,7 @@ def main():
     models = subparsers.add_parser("models", help="List available models")
     models.add_argument("--hf", action="store_true", help="Include HuggingFace models")
 
-    datasets = subparsers.add_parser("datasets", help="List available datasets")
+    subparsers.add_parser("datasets", help="List available datasets")
 
     metrics = subparsers.add_parser("metrics", help="Get API metrics")
     metrics.add_argument("--prometheus", action="store_true", help="Prometheus format")
@@ -103,14 +81,14 @@ def main():
     registry = subparsers.add_parser("registry", help="Model registry (live server)")
     reg_subparsers = registry.add_subparsers(dest="reg_action", help="Registry actions")
 
-    reg_list = reg_subparsers.add_parser("list", help="List registered models")
+    reg_subparsers.add_parser("list", help="List registered models")
 
     reg_info = reg_subparsers.add_parser("info", help="Get model info")
     reg_info.add_argument("model_id", help="Model ID")
 
-    reg_best = reg_subparsers.add_parser("best", help="Get best model")
+    reg_subparsers.add_parser("best", help="Get best model")
 
-    reg_stats = reg_subparsers.add_parser("stats", help="Get registry statistics")
+    reg_subparsers.add_parser("stats", help="Get registry statistics")
 
     args = parser.parse_args()
 
@@ -245,7 +223,11 @@ def main():
             elif args.reg_action == "info":
                 model = client.get_registry_model(args.model_id)
                 if model:
-                    print(format_json(model) if args.json else f"{model.get('model_id', args.model_id)}")
+                    print(
+                        format_json(model)
+                        if args.json
+                        else f"{model.get('model_id', args.model_id)}"
+                    )
                     if not args.json:
                         for k, v in model.items():
                             if k in ("model_id",):
@@ -274,6 +256,7 @@ def main():
         print(f"Error: {e}", file=sys.stderr)
         if args.verbose:
             import traceback
+
             traceback.print_exc()
         return 1
 

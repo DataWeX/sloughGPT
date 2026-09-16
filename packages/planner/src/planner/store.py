@@ -9,10 +9,9 @@ Each line is a JSON object representing a card with fields:
 from __future__ import annotations
 
 import json
-import os
 import uuid
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +21,7 @@ from . import config
 @dataclass
 class Card:
     """A single kanban card."""
+
     id: str = ""
     title: str = ""
     description: str = ""
@@ -59,6 +59,7 @@ class Card:
 @dataclass
 class Board:
     """The kanban board state."""
+
     cards: list[Card] = field(default_factory=list)
     columns: list[str] = field(default_factory=lambda: ["todo", "in_progress", "review", "done"])
 
@@ -102,10 +103,17 @@ class Store:
                 return card
         return None
 
-    def create_card(self, title: str, column: str = "todo", priority: str = "medium",
-                    description: str = "", tags: list[str] | None = None,
-                    assignee: str = "", dueDate: str = "") -> Card:
-        now = datetime.now(timezone.utc).isoformat()
+    def create_card(
+        self,
+        title: str,
+        column: str = "todo",
+        priority: str = "medium",
+        description: str = "",
+        tags: list[str] | None = None,
+        assignee: str = "",
+        dueDate: str = "",
+    ) -> Card:
+        now = datetime.now(UTC).isoformat()
         card = Card(
             id=str(uuid.uuid4()),
             title=title,
@@ -130,7 +138,7 @@ class Store:
                 for key, value in kwargs.items():
                     if hasattr(card, key):
                         setattr(card, key, value)
-                card.updatedAt = datetime.now(timezone.utc).isoformat()
+                card.updatedAt = datetime.now(UTC).isoformat()
                 cards[i] = card
                 self._write_cards(cards)
                 return card
@@ -155,7 +163,7 @@ class Store:
             return False
         cards = [c for c in cards if c.id != card_id]
         card.column = to_column
-        card.updatedAt = datetime.now(timezone.utc).isoformat()
+        card.updatedAt = datetime.now(UTC).isoformat()
         if to_index is not None and 0 <= to_index <= len(cards):
             cards.insert(to_index, card)
         else:

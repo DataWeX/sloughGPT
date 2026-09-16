@@ -24,8 +24,6 @@ import numpy as np
 
 from domain.infrastructure._internal.arch_config import ArchConfig, build_arch
 from domain.infrastructure._internal.numpy_forward import forward_fast, pre_extract_weights
-from domain.infrastructure._internal.numpy_ops import softmax as _softmax
-from domain.training._internal.helpers import cross_entropy_loss as _cross_entropy_loss
 from domain.training._internal.slonet import (
     SloAdam,
     SloTransformer,
@@ -273,7 +271,9 @@ class DistillEvalResult:
                     "teacher": t,
                     "student": s,
                 }
-                for p, t, s in zip(self.eval_prompts, self.teacher_samples, self.student_samples, strict=False)
+                for p, t, s in zip(
+                    self.eval_prompts, self.teacher_samples, self.student_samples, strict=False
+                )
             ],
         }
 
@@ -706,14 +706,14 @@ def distill_gpt2_to_slo(
             _n = s_data.shape[0]
             _t_softmax = t_softmax.copy()
 
-            def _soft_bk(g):
-                if s_logits_trunc.requires_grad:
+            def _soft_bk(g, _slg=s_logits_trunc, _ts=_t_softmax, _T=T, _n_div=_n):
+                if _slg.requires_grad:
                     # d(soft_loss)/d(s_logits) = -(1/T) * t_softmax (for KL w.r.t. student logits)
-                    grad_val = -(_t_softmax / T) * g / _n
-                    if s_logits_trunc.grad is None:
-                        s_logits_trunc.grad = _Tensor(grad_val, _copy=False)
+                    grad_val = -(_ts / _T) * g / _n_div
+                    if _slg.grad is None:
+                        _slg.grad = _Tensor(grad_val, _copy=False)
                     else:
-                        s_logits_trunc.grad.data += grad_val
+                        _slg.grad.data += grad_val
 
             soft_loss._backward_fn = _soft_bk
 

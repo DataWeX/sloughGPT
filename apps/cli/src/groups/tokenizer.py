@@ -3,8 +3,10 @@ Tokenizer command group — tokenizer management and text analysis.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, api_get, api_post, output_json
+from core.helpers import api_get, api_post, output_json
+
 from domain.logging import get_global
+
 log = get_global()
 
 
@@ -97,8 +99,7 @@ def register(cli):
     @click.pass_context
     def tokenizer_train(ctx, vocab_size, texts):
         text_list = [t.strip() for t in texts.split(",") if t.strip()] if texts else []
-        r = api_post(ctx, "/tokenizer/train",
-                     json={"vocab_size": vocab_size, "texts": text_list})
+        r = api_post(ctx, "/tokenizer/train", json={"vocab_size": vocab_size, "texts": text_list})
         if r.status_code != 200:
             log.error(f"Train failed: {r.text}")
             return

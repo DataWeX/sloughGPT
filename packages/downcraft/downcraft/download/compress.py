@@ -22,10 +22,10 @@ import io
 import logging
 import os
 import struct
-import time
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, BinaryIO, Callable, Generator, Optional
+from typing import Any, BinaryIO
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ DEFAULT_CHUNK_SIZE = 64 * 1024  # 64 KB
 @dataclass
 class CompressionResult:
     """Result of a compression/decompression operation."""
+
     bytes_uncompressed: int = 0
     bytes_compressed: int = 0
     sha256: str = ""
@@ -62,13 +63,13 @@ class CompressionResult:
 def _get_lz4():
     """Lazy import lz4, raising ImportError with helpful message if missing."""
     try:
-        import lz4.frame
         import lz4.block
+        import lz4.frame
+
         return lz4
     except ImportError:
         raise ImportError(
-            "lz4 is required for compression support. "
-            "Install it with: pip install lz4"
+            "lz4 is required for compression support. Install it with: pip install lz4"
         )
 
 
@@ -81,7 +82,7 @@ def compress_stream(
     *,
     compression_level: int = 6,
     include_header: bool = True,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> CompressionResult:
     """Compress a binary stream on-the-fly using LZ4.
 
@@ -161,7 +162,7 @@ def decompress_stream(
     dest: BinaryIO,
     *,
     verify_header: bool = True,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> CompressionResult:
     """Decompress an LZ4 stream on-the-fly.
 
@@ -208,9 +209,7 @@ def decompress_stream(
     actual_sha256 = sha256.hexdigest()
 
     if verify_header and expected_sha256 and actual_sha256 != expected_sha256:
-        raise ValueError(
-            f"SHA-256 mismatch: expected {expected_sha256}, got {actual_sha256}"
-        )
+        raise ValueError(f"SHA-256 mismatch: expected {expected_sha256}, got {actual_sha256}")
 
     return CompressionResult(
         bytes_uncompressed=uncompressed_size,
@@ -227,7 +226,7 @@ def compress_file(
     dest_path: str | Path,
     *,
     compression_level: int = 6,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> CompressionResult:
     """Compress a file on disk to a .lz4 file with header."""
     source_path = Path(source_path)
@@ -235,7 +234,9 @@ def compress_file(
     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(source_path, "rb") as src, open(dest_path, "wb") as dst:
-        return compress_stream(src, dst, compression_level=compression_level, on_progress=on_progress)
+        return compress_stream(
+            src, dst, compression_level=compression_level, on_progress=on_progress
+        )
 
 
 def decompress_file(
@@ -243,7 +244,7 @@ def decompress_file(
     dest_path: str | Path,
     *,
     verify_header: bool = True,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> CompressionResult:
     """Decompress a .lz4 file to disk."""
     source_path = Path(source_path)
@@ -273,7 +274,7 @@ def decompress_bytes(data: bytes) -> tuple[bytes, CompressionResult]:
 # ── Auto-detect and decompress ──
 
 
-def peek_compressed_header(source: BinaryIO) -> Optional[dict[str, Any]]:
+def peek_compressed_header(source: BinaryIO) -> dict[str, Any] | None:
     """Read SLZ4 header without decompressing.
 
     Returns dict with uncompressed_size, sha256, magic, or None if not SLZ4.
@@ -315,7 +316,7 @@ def auto_decompress(
     source_path: str | Path,
     dest_path: str | Path,
     *,
-    on_progress: Optional[Callable[[int, int], None]] = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> CompressionResult:
     """Auto-detect compression and decompress if needed.
 
@@ -331,6 +332,7 @@ def auto_decompress(
     else:
         # Not compressed, just copy
         import shutil
+
         shutil.copy2(source_path, dest_path)
         return CompressionResult(
             bytes_uncompressed=source_path.stat().st_size,
@@ -429,9 +431,7 @@ class CompressedFileServer:
             ),
         }
 
-    def serve_range(
-        self, file_path: str | Path, start: int, end: int
-    ) -> dict[str, Any]:
+    def serve_range(self, file_path: str | Path, start: int, end: int) -> dict[str, Any]:
         """Serve a byte range of a compressed file.
 
         For range requests, we decompress the full file and extract the range.

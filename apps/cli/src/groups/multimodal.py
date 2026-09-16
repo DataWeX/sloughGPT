@@ -3,8 +3,10 @@ Multimodal command group — vision, speech, and video capabilities.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, api_get, api_post, output_json
+from core.helpers import api_get, api_post, output_json
+
 from domain.logging import get_global
+
 log = get_global()
 
 
@@ -35,8 +37,9 @@ def register(cli):
     @click.option("--lr", type=float, default=5e-6, help="Learning rate")
     @click.pass_context
     def multimodal_dpo(ctx, max_pairs, lr):
-        r = api_post(ctx, "/multimodal/dpo/trigger",
-                     json={"max_pairs": max_pairs, "learning_rate": lr})
+        r = api_post(
+            ctx, "/multimodal/dpo/trigger", json={"max_pairs": max_pairs, "learning_rate": lr}
+        )
         if r.status_code != 200:
             log.error(f"DPO failed: {r.text}")
             return
@@ -48,8 +51,11 @@ def register(cli):
     @click.option("--batch-size", type=int, default=2)
     @click.pass_context
     def multimodal_video_train(ctx, data_path, epochs, batch_size):
-        r = api_post(ctx, "/multimodal/video/train",
-                     json={"data_path": data_path, "epochs": epochs, "batch_size": batch_size})
+        r = api_post(
+            ctx,
+            "/multimodal/video/train",
+            json={"data_path": data_path, "epochs": epochs, "batch_size": batch_size},
+        )
         if r.status_code != 200:
             log.error(f"Video train failed: {r.text}")
             return

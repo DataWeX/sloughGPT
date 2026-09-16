@@ -3,16 +3,16 @@ Validator (Doctor) - Environment and project validation.
 
 Checks for common issues before running commands.
 """
-import os
+
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
 class CheckResult:
     """Result of a single validation check."""
+
     name: str
     passed: bool
     message: str = ""
@@ -26,6 +26,7 @@ class CheckResult:
 @dataclass
 class ValidationResult:
     """Overall validation result."""
+
     checks: list[CheckResult] = field(default_factory=list)
 
     @property
@@ -53,14 +54,16 @@ class ValidationResult:
 
     def add_warn(self, name: str, message: str, suggestion: str = ""):
         self.checks.append(
-            CheckResult(name=name, passed=True, message=f"Warning: {message}", suggestion=suggestion)
+            CheckResult(
+                name=name, passed=True, message=f"Warning: {message}", suggestion=suggestion
+            )
         )
 
 
 class Doctor:
     """Environment and project validator."""
 
-    def __init__(self, root_dir: Optional[Path] = None):
+    def __init__(self, root_dir: Path | None = None):
         self.root = root_dir or Path.cwd()
         self.result = ValidationResult()
 
@@ -131,8 +134,9 @@ class Doctor:
         """Check available disk space."""
         try:
             import shutil
+
             usage = shutil.disk_usage(str(self.root))
-            free_gb = usage.free / (1024 ** 3)
+            free_gb = usage.free / (1024**3)
             if free_gb >= 5:
                 self.result.add_pass("Disk", f"{free_gb:.1f} GB free")
             elif free_gb >= 1:
@@ -150,6 +154,7 @@ class Doctor:
         """Check SloNet accelerator availability."""
         try:
             from domain.training._internal.slonet import _get_accelerator
+
             acc = _get_accelerator()
             if acc is not None:
                 self.result.add_pass("Accelerator", f"{acc.name}")

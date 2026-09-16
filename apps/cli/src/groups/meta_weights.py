@@ -3,8 +3,10 @@ Meta-weights command group — feedback-driven meta-weight adaptation.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, api_get, api_post, output_json
+from core.helpers import api_get, api_post, output_json
+
 from domain.logging import get_global
+
 log = get_global()
 
 
@@ -20,8 +22,7 @@ def register(cli):
     @click.option("--k", type=int, default=5, help="Number of similar samples")
     @click.pass_context
     def meta_weights_get(ctx, message, k):
-        r = api_post(ctx, "/meta-weights/get",
-                     json={"user_message": message, "k": k})
+        r = api_post(ctx, "/meta-weights/get", json={"user_message": message, "k": k})
         if r.status_code != 200:
             log.error(f"Failed: {r.text}")
             return

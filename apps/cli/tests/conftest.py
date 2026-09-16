@@ -1,18 +1,22 @@
 """Shared fixtures for CLI tests."""
-import sys
+
 import os
-import pytest
+import sys
 from unittest.mock import MagicMock
 
+import pytest
+
 # Add CLI src to path once for all tests in this directory
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 @pytest.fixture
 def fake_args():
     """Factory for creating mock CLI argument namespaces."""
+
     def _factory(**kwargs):
         return MagicMock(**kwargs)
+
     return _factory
 
 
@@ -20,18 +24,23 @@ def fake_args():
 def mock_requests(monkeypatch):
     """Mock requests.get/post for API-dependent commands."""
     import requests as req
-    mock_get = MagicMock(return_value=MagicMock(
-        status_code=200,
-        json=lambda: {"status": "ok"},
-        ok=True,
-        text="ok",
-    ))
-    mock_post = MagicMock(return_value=MagicMock(
-        status_code=200,
-        json=lambda: {"status": "ok"},
-        ok=True,
-        text="ok",
-    ))
+
+    mock_get = MagicMock(
+        return_value=MagicMock(
+            status_code=200,
+            json=lambda: {"status": "ok"},
+            ok=True,
+            text="ok",
+        )
+    )
+    mock_post = MagicMock(
+        return_value=MagicMock(
+            status_code=200,
+            json=lambda: {"status": "ok"},
+            ok=True,
+            text="ok",
+        )
+    )
     monkeypatch.setattr(req, "get", mock_get)
     monkeypatch.setattr(req, "post", mock_post)
     return mock_get, mock_post
@@ -41,6 +50,7 @@ def mock_requests(monkeypatch):
 def fake_logger(monkeypatch):
     """Capture log output for assertion."""
     from types import SimpleNamespace
+
     captured = SimpleNamespace(
         headers=[], sections=[], infos=[], warnings=[], errors=[], successes=[], steps=[], kvs=[]
     )

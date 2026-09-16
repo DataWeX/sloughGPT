@@ -61,14 +61,12 @@ if _server_parent not in _sys.path:
 def _model_ready() -> bool:
     """True when a model is actually materialized and ready for inference.
 
-    Checks three sources because the lazy-guard autoload path stores the
-    provider in the core ``ServerState`` singleton but leaves
-    ``state.__dict__["model"]`` as ``None`` (module ``__setattr__`` is a
-    no-op in CPython — writes go to ``__dict__`` directly).
-
+    Checks multiple sources because different load paths store the model
+    in different locations:
     1. ``state.model`` — set by eager-load paths.
     2. ``state.provider._model`` — set when eager load materializes weights.
     3. Core ``ServerState.model.get()`` — set by the lazy-guard path.
+    4. ``state.provider`` with ``info()`` — lazy-guard provider that can serve.
     """
     import state as server_state
 
@@ -82,7 +80,17 @@ def _model_ready() -> bool:
     from domain.infrastructure.server_state import get_server_state
 
     core_model = get_server_state().model.get()
-    return core_model is not None
+    if core_model is not None:
+        return True
+    # Lazy-guard provider that delegates to subprocess — check if it can serve
+    if provider is not None and hasattr(provider, "info"):
+        try:
+            info = provider.info()
+            if info is not None and getattr(info, "model_id", None):
+                return True
+        except Exception:
+            pass
+    return False
 
 
 def _get_model_status() -> dict:

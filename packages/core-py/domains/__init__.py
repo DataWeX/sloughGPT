@@ -10,7 +10,7 @@ Subdomains:
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 try:
     from domain.benchmark._internal.domain import BenchmarkDomain, get_benchmark_domain

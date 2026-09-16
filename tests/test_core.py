@@ -12,7 +12,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 try:
-    from domains.models import SloughGPTModel
+    from domains.models import SloughGPTModel  # noqa: F401
 except (ImportError, ModuleNotFoundError):
     pytest.skip("domains.models not available", allow_module_level=True)
 

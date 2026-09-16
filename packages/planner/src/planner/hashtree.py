@@ -11,9 +11,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import time
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -34,9 +33,11 @@ def _derive_note_hash(root: str, note_content: str) -> str:
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CardSlotHash:
     """Root hash — computed once at card+slot creation, never changes."""
+
     root: str
     card_id: str
     slot_id: str
@@ -64,6 +65,7 @@ class CardSlotHash:
 @dataclass
 class NoteHash:
     """Note hash — derived from root, recompute on edit."""
+
     note_id: str
     hash_value: str
     root_ref: str
@@ -89,6 +91,7 @@ class NoteHash:
 @dataclass
 class HashHistoryEntry:
     """Audit trail for hash changes."""
+
     root_ref: str
     old_hash: str
     new_hash: str
@@ -107,6 +110,7 @@ class HashHistoryEntry:
 @dataclass
 class HashCommit:
     """Immutable commit with parent chaining (like git)."""
+
     commit_hash: str
     parent_hash: str
     root_ref: str
@@ -127,9 +131,11 @@ class HashCommit:
 # HashTree
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class HashTree:
     """Full hash tree for a card."""
+
     root: CardSlotHash
     notes: list[NoteHash] = field(default_factory=list)
     history: list[HashHistoryEntry] = field(default_factory=list)
@@ -137,7 +143,7 @@ class HashTree:
 
     def add_note(self, note_id: str, note_content: str) -> NoteHash:
         """Add a note hash (or update if exists)."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         existing = {n.note_id: n for n in self.notes}
         if note_id in existing:
             old = existing[note_id]
@@ -146,14 +152,16 @@ class HashTree:
             old.hash_value = new_value
             old.version += 1
             old.updated_at = now
-            self.history.append(HashHistoryEntry(
-                root_ref=self.root.root,
-                old_hash=old_hash,
-                new_hash=new_value,
-                change_type="note_edit",
-                note_id=note_id,
-                timestamp=now,
-            ))
+            self.history.append(
+                HashHistoryEntry(
+                    root_ref=self.root.root,
+                    old_hash=old_hash,
+                    new_hash=new_value,
+                    change_type="note_edit",
+                    note_id=note_id,
+                    timestamp=now,
+                )
+            )
             return old
         new_value = _derive_note_hash(self.root.root, note_content)
         nh = NoteHash(
@@ -165,30 +173,34 @@ class HashTree:
             updated_at=now,
         )
         self.notes.append(nh)
-        self.history.append(HashHistoryEntry(
-            root_ref=self.root.root,
-            old_hash="",
-            new_hash=new_value,
-            change_type="note_add",
-            note_id=note_id,
-            timestamp=now,
-        ))
+        self.history.append(
+            HashHistoryEntry(
+                root_ref=self.root.root,
+                old_hash="",
+                new_hash=new_value,
+                change_type="note_add",
+                note_id=note_id,
+                timestamp=now,
+            )
+        )
         return nh
 
     def delete_note(self, note_id: str) -> bool:
         """Remove a note hash."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         before = len(self.notes)
         self.notes = [n for n in self.notes if n.note_id != note_id]
         if len(self.notes) < before:
-            self.history.append(HashHistoryEntry(
-                root_ref=self.root.root,
-                old_hash="",
-                new_hash="",
-                change_type="note_delete",
-                note_id=note_id,
-                timestamp=now,
-            ))
+            self.history.append(
+                HashHistoryEntry(
+                    root_ref=self.root.root,
+                    old_hash="",
+                    new_hash="",
+                    change_type="note_delete",
+                    note_id=note_id,
+                    timestamp=now,
+                )
+            )
             return True
         return False
 
@@ -199,21 +211,24 @@ class HashTree:
     def verify(self) -> bool:
         """Verify all note hashes match their root derivation."""
         for n in self.notes:
-            expected = _derive_note_hash(self.root.root, n.note_id)
+            _derive_note_hash(self.root.root, n.note_id)
             # Note: we can't re-derive content from id alone, so we store
             # the hash_value directly. Verification is against stored state.
         return True
 
     def commit(self, changes: list[dict[str, Any]] | None = None) -> HashCommit:
         """Create an immutable commit."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         parent = self.commits[-1].commit_hash if self.commits else ""
-        commit_data = json.dumps({
-            "root": self.root.root,
-            "notes": [n.to_dict() for n in self.notes],
-            "changes": changes or [],
-            "ts": now,
-        }, sort_keys=True)
+        commit_data = json.dumps(
+            {
+                "root": self.root.root,
+                "notes": [n.to_dict() for n in self.notes],
+                "changes": changes or [],
+                "ts": now,
+            },
+            sort_keys=True,
+        )
         commit_hash = _hash(commit_data)
         hc = HashCommit(
             commit_hash=commit_hash,
@@ -266,6 +281,7 @@ class HashTree:
 # Factory
 # ---------------------------------------------------------------------------
 
+
 def create_hash_tree(
     card_id: str,
     card_content: str,
@@ -274,7 +290,7 @@ def create_hash_tree(
     placed_at: str | None = None,
 ) -> HashTree:
     """Create a new hash tree for a card in a slot."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     placed = placed_at or now
     root_input = f"{card_content}:{tray}:{position}:{placed}"
     root_hash = _hash(root_input)
@@ -294,6 +310,7 @@ def create_hash_tree(
 # ---------------------------------------------------------------------------
 # Persistence
 # ---------------------------------------------------------------------------
+
 
 class HashTreeStore:
     """JSONL persistence for hash trees."""

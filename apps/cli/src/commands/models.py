@@ -1,16 +1,14 @@
 """
 Model commands - Model listing, export, and soul management.
 """
-import sys
-import os
+
 import json
 from pathlib import Path
-from typing import Optional
 
 from domain.logging import get_global
 
 log = get_global()
-from utils.formatting import format_size, format_number, truncate
+from utils.formatting import format_number, format_size
 
 
 def _fmt_model_option(model_id: str, display: str) -> str:
@@ -82,6 +80,7 @@ def cmd_models(args):
 def _cmd_models_info(args):
     """Show .soul checkpoint info."""
     import numpy as np
+
     from domain.training._internal.slonet import import_from_sou
 
     model_path = Path(args.model)
@@ -155,7 +154,7 @@ def _interactive_download_select():
         if not mid:
             continue
         downloads = m.get("downloads", 0)
-        tags = m.get("tags", [])
+        m.get("tags", [])
         # Short display: model name + download count
         dl_str = f"{downloads:,}" if downloads else "?"
         model_list.append((f"{mid}  ({dl_str} downloads)", mid, downloads))
@@ -218,8 +217,9 @@ def _cmd_models_download(args):
     log.blank()
 
     try:
-        from domain.infrastructure.download_manager import get_download_manager
         import asyncio
+
+        from domain.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
 
@@ -284,7 +284,6 @@ def _cmd_models_status(args):
     their sizes, and indicates whether each has been converted to .slnc
     format. Useful for managing disk space and verifying downloads.
     """
-    import sys
 
     hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
     if not hf_cache.exists():
@@ -297,7 +296,7 @@ def _cmd_models_status(args):
     for entry in sorted(hf_cache.iterdir()):
         if not entry.name.startswith("models--") or not entry.is_dir():
             continue
-        model_id = entry.name[len("models--"):].replace("--", "/")
+        model_id = entry.name[len("models--") :].replace("--", "/")
 
         # Calculate total size of weight files
         total_bytes = 0
@@ -333,12 +332,14 @@ def _cmd_models_status(args):
         else:
             status = "other"
 
-        models.append({
-            "id": model_id,
-            "size": total_bytes,
-            "files": file_count,
-            "status": status,
-        })
+        models.append(
+            {
+                "id": model_id,
+                "size": total_bytes,
+                "files": file_count,
+                "status": status,
+            }
+        )
 
     if not models:
         log.info("No cached models found")
@@ -376,13 +377,19 @@ def _cmd_models_compare(args):
             for bf in sorted(benchmarks)[:5]:
                 with open(bf) as f:
                     data = json.load(f)
-                rows.append([
-                    data.get("model", "unknown")[:18],
-                    f'{data.get("tokens_per_second", 0):.2f}',
-                    f'{data.get("latency_ms", 0):.1f}',
-                    f'{data.get("memory_mb", 0):.1f}',
-                ])
-            log.table(["Model", "Tokens/s", "Latency (ms)", "Memory (MB)"], rows, align=["l", "r", "r", "r"])
+                rows.append(
+                    [
+                        data.get("model", "unknown")[:18],
+                        f"{data.get('tokens_per_second', 0):.2f}",
+                        f"{data.get('latency_ms', 0):.1f}",
+                        f"{data.get('memory_mb', 0):.1f}",
+                    ]
+                )
+            log.table(
+                ["Model", "Tokens/s", "Latency (ms)", "Memory (MB)"],
+                rows,
+                align=["l", "r", "r", "r"],
+            )
 
     # Compare models
     log.section("Model Specifications")
@@ -411,14 +418,22 @@ def _cmd_models_personalities(args):
     log.header("Available Personalities")
     rows = []
     for ptype, personality in PERSONALITIES.items():
-        rows.append([ptype.value.upper(), personality.name, personality.description[:50], ", ".join(personality.traits)])
+        rows.append(
+            [
+                ptype.value.upper(),
+                personality.name,
+                personality.description[:50],
+                ", ".join(personality.traits),
+            ]
+        )
     log.table(["Type", "Name", "Description", "Traits"], rows)
 
 
 def cmd_export_cli(args):
     """Export a .soul model to different formats."""
     import numpy as np
-    from domain.training._internal.export import export_model, list_export_formats, ExportConfig
+
+    from domain.training._internal.export import ExportConfig, export_model, list_export_formats
 
     log.header("Model Export")
 
@@ -436,6 +451,7 @@ def cmd_export_cli(args):
     log.blank()
     log.step(f"Loading: {args.model}")
     from domain.training._internal.slonet import import_from_sou
+
     net = import_from_sou(str(model_path))
     metadata = dict(getattr(net, "metadata", None) or {})
     metadata.setdefault("name", getattr(net, "soul_name", "SloughGPT"))
@@ -462,8 +478,6 @@ def cmd_export_cli(args):
     meta_with_name = {**metadata, **cli_metadata}
     if args.soul_name:
         meta_with_name["name"] = args.soul_name
-
-    from domain.training._internal.export import ExportConfig
 
     config = ExportConfig(
         input_path=args.model,
@@ -552,7 +566,7 @@ def cmd_soul(args):
         return
 
     if args.create:
-        from domain.inference._internal.slo_format import create_soul_profile, SouParser
+        from domain.inference._internal.slo_format import SouParser, create_soul_profile
         from domain.training._internal.slonet import export_to_sou, import_from_sou
 
         soul = create_soul_profile(
@@ -582,11 +596,13 @@ def cmd_soul(args):
 
 def cmd_benchmark(args):
     """Benchmark a .soul checkpoint using pure-numpy SloNet inference."""
-    import time
     import statistics
+    import time
+
     import numpy as np
-    from domain.training._internal.slonet import _get_accelerator
+
     from domain.inference._internal.slonet_provider import SloNetChatProvider
+    from domain.training._internal.slonet import _get_accelerator
 
     acc = _get_accelerator()
     backend = acc.name if acc is not None else "cpu"
@@ -647,7 +663,7 @@ def cmd_benchmark(args):
 
 def _cmd_models_select(args):
     """Interactive model selector with fuzzy search."""
-    import curses
+
     import requests
 
     base_url = f"http://{args.host}:{args.port}"
@@ -696,7 +712,10 @@ def _cmd_models_select(args):
     io = ConsoleIO()
     prompt = InteractivePrompt(io)
 
-    options = [_fmt_model_option(mid, f"{name} [{'HF' if src == 'hf' else 'LOCAL'}]") for name, mid, src in model_list]
+    options = [
+        _fmt_model_option(mid, f"{name} [{'HF' if src == 'hf' else 'LOCAL'}]")
+        for name, mid, src in model_list
+    ]
     result = prompt.select("SloughGPT Model Selector", options)
 
     if not result:
@@ -728,7 +747,9 @@ def register(subparsers):
     models_sub = models_parser.add_subparsers(dest="models_cmd", metavar="SUBCOMMAND")
 
     # Select (interactive)
-    models_select = models_sub.add_parser("select", help="Interactive model selector with fuzzy search")
+    models_select = models_sub.add_parser(
+        "select", help="Interactive model selector with fuzzy search"
+    )
     models_select.add_argument("--host", default="localhost", help="API host")
     models_select.add_argument("--port", type=int, default=8000, help="API port")
     models_select.set_defaults(func=_cmd_models_select)
@@ -743,9 +764,21 @@ def register(subparsers):
     info_parser.set_defaults(func=_cmd_models_info)
 
     # Download
-    download_parser = models_sub.add_parser("download", help="Download model from HuggingFace (interactive if no model given)")
-    download_parser.add_argument("model_id", nargs="?", default=None, help="HuggingFace model ID (e.g., gpt2) — omit for interactive selection")
-    download_parser.add_argument("--yes", "-y", action="store_true", help="Override: skip confirmation for this download (default from config: confirm on/off)")
+    download_parser = models_sub.add_parser(
+        "download", help="Download model from HuggingFace (interactive if no model given)"
+    )
+    download_parser.add_argument(
+        "model_id",
+        nargs="?",
+        default=None,
+        help="HuggingFace model ID (e.g., gpt2) — omit for interactive selection",
+    )
+    download_parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Override: skip confirmation for this download (default from config: confirm on/off)",
+    )
     download_parser.set_defaults(func=_cmd_models_download)
 
     # Status
@@ -768,20 +801,39 @@ def register(subparsers):
         "export",
         help="Export model to different formats",
     )
-    export_parser.add_argument("model", nargs="?", default="models/sloughgpt.soul", help="Input model (.soul)")
+    export_parser.add_argument(
+        "model", nargs="?", default="models/sloughgpt.soul", help="Input model (.soul)"
+    )
     export_parser.add_argument("--output", "-o", help="Output path")
     export_parser.add_argument(
-        "--format", "-f",
+        "--format",
+        "-f",
         default="safetensors",
-        choices=["safetensors", "safetensors_bf16", "onnx", "gguf_q4_k_m", "gguf_fp16", "gguf_q5_k_m", "gguf_q8_0", "sou", "all"],
+        choices=[
+            "safetensors",
+            "safetensors_bf16",
+            "onnx",
+            "gguf_q4_k_m",
+            "gguf_fp16",
+            "gguf_q5_k_m",
+            "gguf_q8_0",
+            "sou",
+            "all",
+        ],
         help="Export format",
     )
-    export_parser.add_argument("--quantize", dest="quantization", choices=["Q4_K_M", "Q5_K_M", "Q8_0", "F16", "F32"])
+    export_parser.add_argument(
+        "--quantize", dest="quantization", choices=["Q4_K_M", "Q5_K_M", "Q8_0", "F16", "F32"]
+    )
     export_parser.add_argument("--seq-len", type=int, default=128, help="Sequence length for ONNX")
     export_parser.add_argument("--opset", type=int, default=17, help="ONNX opset")
-    export_parser.add_argument("--ctx", type=int, dest="n_ctx", default=2048, help="Context length for GGUF")
+    export_parser.add_argument(
+        "--ctx", type=int, dest="n_ctx", default=2048, help="Context length for GGUF"
+    )
     export_parser.add_argument("--soul-name", type=str, default=None, help="Slo name")
-    export_parser.add_argument("--metadata", type=str, nargs="+", default=None, help="Metadata KEY=VALUE")
+    export_parser.add_argument(
+        "--metadata", type=str, nargs="+", default=None, help="Metadata KEY=VALUE"
+    )
     export_parser.set_defaults(func=cmd_export_cli)
 
     # Slo
@@ -801,25 +853,44 @@ def register(subparsers):
     soul_parser.set_defaults(func=cmd_soul)
 
     # Benchmark
-    bench_parser = subparsers.add_parser("benchmark", help="Run performance benchmarks on a .soul checkpoint")
-    bench_parser.add_argument("--model", "-m", default="models/sloughgpt.soul", help="Path to .soul checkpoint")
-    bench_parser.add_argument("--test", "-t", default="all", choices=["all", "latency", "throughput"], help="Test type")
+    bench_parser = subparsers.add_parser(
+        "benchmark", help="Run performance benchmarks on a .soul checkpoint"
+    )
+    bench_parser.add_argument(
+        "--model", "-m", default="models/sloughgpt.soul", help="Path to .soul checkpoint"
+    )
+    bench_parser.add_argument(
+        "--test", "-t", default="all", choices=["all", "latency", "throughput"], help="Test type"
+    )
     bench_parser.add_argument("--runs", "-r", type=int, default=10, help="Number of runs")
     bench_parser.add_argument("--tokens", "-k", type=int, default=50, help="Max new tokens")
-    bench_parser.add_argument("--prompt", "-p", default="The quick brown fox jumps over the lazy dog", help="Test prompt")
+    bench_parser.add_argument(
+        "--prompt", "-p", default="The quick brown fox jumps over the lazy dog", help="Test prompt"
+    )
     bench_parser.set_defaults(func=cmd_benchmark)
 
     # Standalone aliases for backward compat (forward to models subcommands)
-    hf_download_parser = subparsers.add_parser("hf-download", help="Download model from HuggingFace")
+    hf_download_parser = subparsers.add_parser(
+        "hf-download", help="Download model from HuggingFace"
+    )
     hf_download_parser.add_argument("model_id", help="HuggingFace model ID")
-    hf_download_parser.add_argument("--yes", "-y", action="store_true", help="Override: skip confirmation for this download (default from config: confirm on/off)")
+    hf_download_parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Override: skip confirmation for this download (default from config: confirm on/off)",
+    )
     hf_download_parser.set_defaults(func=_cmd_models_download)
 
     info_parser = subparsers.add_parser("info", help="Show model checkpoint info")
-    info_parser.add_argument("model", nargs="?", default="models/sloughgpt.soul", help="Checkpoint path")
+    info_parser.add_argument(
+        "model", nargs="?", default="models/sloughgpt.soul", help="Checkpoint path"
+    )
     info_parser.set_defaults(func=_cmd_models_info)
 
-    personalities_parser = subparsers.add_parser("personalities", help="List built-in personalities")
+    personalities_parser = subparsers.add_parser(
+        "personalities", help="List built-in personalities"
+    )
     personalities_parser.set_defaults(func=_cmd_models_personalities)
 
     compare_parser = subparsers.add_parser("compare", help="Compare models or benchmarks")

@@ -3,8 +3,10 @@ Agent command group — manage and execute AI agents.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, api_get, api_post, api_delete, output_json, confirm
+from core.helpers import api_delete, api_get, api_post, confirm, output_json
+
 from domain.logging import get_global
+
 log = get_global()
 
 
@@ -43,8 +45,11 @@ def register(cli):
     @click.option("--instructions", "-i", default="", help="System instructions")
     @click.pass_context
     def agent_create(ctx, name, description, instructions):
-        r = api_post(ctx, "/agents",
-                     json={"name": name, "description": description, "instructions": instructions})
+        r = api_post(
+            ctx,
+            "/agents",
+            json={"name": name, "description": description, "instructions": instructions},
+        )
         if r.status_code != 200:
             log.error(f"Failed to create agent: {r.text}")
             return
@@ -72,8 +77,11 @@ def register(cli):
     @click.pass_context
     def agent_orchestrate(ctx, goal, context, agents):
         agent_ids = [a.strip() for a in agents.split(",") if a.strip()] if agents else []
-        r = api_post(ctx, "/agents/orchestrate",
-                     json={"goal": goal, "context": context, "agent_ids": agent_ids})
+        r = api_post(
+            ctx,
+            "/agents/orchestrate",
+            json={"goal": goal, "context": context, "agent_ids": agent_ids},
+        )
         if r.status_code != 200:
             log.error(f"Orchestration failed: {r.text}")
             return

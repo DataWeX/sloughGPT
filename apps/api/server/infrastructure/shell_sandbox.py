@@ -169,7 +169,7 @@ def validate_command(command: str) -> None:
     except ValueError:
         # shlex.split failed (e.g., unclosed quotes) — block to prevent bypass
         logger.warning("Blocked command with malformed syntax: %s", command[:80])
-        raise ShellSecurityError("Command has invalid syntax")
+        raise ShellSecurityError("Command has invalid syntax") from None
 
     if not tokens:
         return

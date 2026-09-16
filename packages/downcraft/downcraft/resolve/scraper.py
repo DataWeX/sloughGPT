@@ -14,10 +14,10 @@ import logging
 import os
 import re
 import urllib.parse
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Callable, Dict, FrozenSet, List, Optional, Set, Tuple
 
 import requests
 
@@ -27,106 +27,198 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-DOWNLOAD_EXTENSIONS: Set[str] = {
-    ".zip", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2",
-    ".tar.xz", ".txz", ".7z", ".rar", ".deb", ".rpm",
-    ".exe", ".msi", ".dmg", ".pkg", ".app", ".apk",
-    ".iso", ".img", ".pdf", ".epub",
-    ".whl", ".gem", ".bin",
-    ".safetensors", ".gguf", ".ggml", ".npz", ".onnx",
-    ".pt", ".pth", ".ckpt",
+DOWNLOAD_EXTENSIONS: set[str] = {
+    ".zip",
+    ".tar",
+    ".tar.gz",
+    ".tgz",
+    ".tar.bz2",
+    ".tbz2",
+    ".tar.xz",
+    ".txz",
+    ".7z",
+    ".rar",
+    ".deb",
+    ".rpm",
+    ".exe",
+    ".msi",
+    ".dmg",
+    ".pkg",
+    ".app",
+    ".apk",
+    ".iso",
+    ".img",
+    ".pdf",
+    ".epub",
+    ".whl",
+    ".gem",
+    ".bin",
+    ".safetensors",
+    ".gguf",
+    ".ggml",
+    ".npz",
+    ".onnx",
+    ".pt",
+    ".pth",
+    ".ckpt",
 }
 
-_HTML_EXTENSIONS: FrozenSet[str] = frozenset({
-    ".html", ".htm", ".php", ".asp", ".aspx", ".jsp",
-})
-
-DOWNLOAD_SIGNALS: Set[str] = {
-    "download", "dl", "fetch", "get", "save", "grab", "acquire",
-    "install", "setup", "release", "latest", "stable",
-}
-
-AD_SIGNALS: Set[str] = {
-    "ad", "ads", "advert", "sponsor", "promo", "tracking",
-    "click", "redirect", "ref", "affiliate", "camp",
-    "popup", "interstitial", "survey", "captcha", "verify",
-    "human", "bot", "security", "cloudflare", "challenge",
-    "short", "bit.ly", "tinyurl", "t.co", "goo.gl",
-    "analytics", "pixel", "beacon", "track",
-}
-
-_AD_RES: Dict[str, re.Pattern] = {
-    w: re.compile(r"\b" + re.escape(w) + r"\b", re.IGNORECASE)
-    for w in AD_SIGNALS
-}
-
-_DOWNLOAD_RES: Dict[str, re.Pattern] = {
-    w: re.compile(r"\b" + re.escape(w) + r"\b", re.IGNORECASE)
-    for w in DOWNLOAD_SIGNALS
-}
-
-_JSON_LD_URL_KEYS: Set[str] = {
-    "downloadUrl", "contentUrl", "url", "sameAs",
-    "installUrl", "fileUrl", "actionUrl",
-}
-
-_DOWNLOAD_CLASS_TOKENS: Tuple[str, ...] = ("download", "dl", "btn-download")
-_AD_CLASS_TOKENS: Tuple[str, ...] = ("ad", "sponsor", "promo", "popup")
-
-_DATA_URL_ATTRS: Tuple[str, ...] = ("data-href", "data-url", "data-download", "data-link")
-
-_DATA_ATTR_TAGS: Set[str] = {"a", "button", "div", "span"}
-
-_OBFUSCATED_DATA_ATTRS: Tuple[str, ...] = (
-    "data-download-url", "data-real-url", "data-file", "data-link-url",
-    "data-countdown-url", "data-timer-url", "data-final-url",
-    "data-popunder", "data-pop", "data-href-real",
-    "data-action-url", "data-redirect", "data-target",
+_HTML_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".html",
+        ".htm",
+        ".php",
+        ".asp",
+        ".aspx",
+        ".jsp",
+    }
 )
 
-_BINARY_CONTENT_TYPES: Set[str] = {
-    "application/octet-stream", "application/zip", "application/x-tar",
-    "application/gzip", "application/pdf", "application/x-safetensors",
-    "application/macbinary", "application/x-bittorrent",
+DOWNLOAD_SIGNALS: set[str] = {
+    "download",
+    "dl",
+    "fetch",
+    "get",
+    "save",
+    "grab",
+    "acquire",
+    "install",
+    "setup",
+    "release",
+    "latest",
+    "stable",
 }
 
-_SKIP_TAGS: FrozenSet[str] = frozenset({
-    "header", "nav", "aside", "footer", "script", "style",
-})
+AD_SIGNALS: set[str] = {
+    "ad",
+    "ads",
+    "advert",
+    "sponsor",
+    "promo",
+    "tracking",
+    "click",
+    "redirect",
+    "ref",
+    "affiliate",
+    "camp",
+    "popup",
+    "interstitial",
+    "survey",
+    "captcha",
+    "verify",
+    "human",
+    "bot",
+    "security",
+    "cloudflare",
+    "challenge",
+    "short",
+    "bit.ly",
+    "tinyurl",
+    "t.co",
+    "goo.gl",
+    "analytics",
+    "pixel",
+    "beacon",
+    "track",
+}
 
-_SKIP_TAG_START_RES: Dict[str, re.Pattern] = {
+_AD_RES: dict[str, re.Pattern] = {
+    w: re.compile(r"\b" + re.escape(w) + r"\b", re.IGNORECASE) for w in AD_SIGNALS
+}
+
+_DOWNLOAD_RES: dict[str, re.Pattern] = {
+    w: re.compile(r"\b" + re.escape(w) + r"\b", re.IGNORECASE) for w in DOWNLOAD_SIGNALS
+}
+
+_JSON_LD_URL_KEYS: set[str] = {
+    "downloadUrl",
+    "contentUrl",
+    "url",
+    "sameAs",
+    "installUrl",
+    "fileUrl",
+    "actionUrl",
+}
+
+_DOWNLOAD_CLASS_TOKENS: tuple[str, ...] = ("download", "dl", "btn-download")
+_AD_CLASS_TOKENS: tuple[str, ...] = ("ad", "sponsor", "promo", "popup")
+
+_DATA_URL_ATTRS: tuple[str, ...] = ("data-href", "data-url", "data-download", "data-link")
+
+_DATA_ATTR_TAGS: set[str] = {"a", "button", "div", "span"}
+
+_OBFUSCATED_DATA_ATTRS: tuple[str, ...] = (
+    "data-download-url",
+    "data-real-url",
+    "data-file",
+    "data-link-url",
+    "data-countdown-url",
+    "data-timer-url",
+    "data-final-url",
+    "data-popunder",
+    "data-pop",
+    "data-href-real",
+    "data-action-url",
+    "data-redirect",
+    "data-target",
+)
+
+_BINARY_CONTENT_TYPES: set[str] = {
+    "application/octet-stream",
+    "application/zip",
+    "application/x-tar",
+    "application/gzip",
+    "application/pdf",
+    "application/x-safetensors",
+    "application/macbinary",
+    "application/x-bittorrent",
+}
+
+_SKIP_TAGS: frozenset[str] = frozenset(
+    {
+        "header",
+        "nav",
+        "aside",
+        "footer",
+        "script",
+        "style",
+    }
+)
+
+_SKIP_TAG_START_RES: dict[str, re.Pattern] = {
     t: re.compile(rf"<{t}[\s>]", re.IGNORECASE) for t in _SKIP_TAGS
 }
-_SKIP_TAG_END_RES: Dict[str, re.Pattern] = {
+_SKIP_TAG_END_RES: dict[str, re.Pattern] = {
     t: re.compile(rf"</{t}>", re.IGNORECASE) for t in _SKIP_TAGS
 }
 _MAIN_START_RE = re.compile(r"<main[\s>]", re.IGNORECASE)
 _MAIN_END_RE = re.compile(r"</main>", re.IGNORECASE)
 
-_HEX_DATA_ATTR_RE = re.compile(
-    r"(?:data-[\w-]+)\s*=\s*\"((?:\\x[0-9a-fA-F]{2}){8,})\""
-)
+_HEX_DATA_ATTR_RE = re.compile(r"(?:data-[\w-]+)\s*=\s*\"((?:\\x[0-9a-fA-F]{2}){8,})\"")
 
 
 # ---------------------------------------------------------------------------
 # Data class
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ResolvedLink:
     """A resolved download link with metadata."""
+
     url: str
     title: str = ""
     extension: str = ""
     size_hint: int = 0
     confidence: float = 0.0
     source: str = ""
-    redirects: List[str] = field(default_factory=list)
+    redirects: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
 # URL utilities
 # ---------------------------------------------------------------------------
+
 
 def _get_extension(url: str) -> str:
     """Extract file extension from URL, handling compound extensions."""
@@ -158,17 +250,18 @@ def _resolve_relative(url: str, base: str) -> str:
 # HTML link extractor
 # ---------------------------------------------------------------------------
 
+
 class _LinkExtractor(HTMLParser):
     """Extract <a href> links and data-* URLs from HTML."""
 
     def __init__(self) -> None:
         super().__init__()
-        self.links: List[Tuple[str, str, Dict[str, str]]] = []
-        self._current_href: Optional[str] = None
-        self._current_text: List[str] = []
-        self._current_attrs: Dict[str, str] = {}
+        self.links: list[tuple[str, str, dict[str, str]]] = []
+        self._current_href: str | None = None
+        self._current_text: list[str] = []
+        self._current_attrs: dict[str, str] = {}
 
-    def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]) -> None:
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attr_dict = dict(attrs)
         if tag == "a":
             self._current_href = attr_dict.get("href", "")
@@ -196,9 +289,10 @@ class _LinkExtractor(HTMLParser):
 # Extraction helpers
 # ---------------------------------------------------------------------------
 
-def _extract_js_redirects(html: str) -> List[str]:
+
+def _extract_js_redirects(html: str) -> list[str]:
     """Find URLs hidden in JavaScript redirects and meta refresh tags."""
-    urls: List[str] = []
+    urls: list[str] = []
     patterns = (
         r'window\.location(?:\.href)?\s*=\s*["\']([^"\']+)["\']',
         r'window\.location\.assign\s*\(\s*["\']([^"\']+)["\']',
@@ -218,9 +312,9 @@ def _extract_js_redirects(html: str) -> List[str]:
     return urls
 
 
-def _extract_meta_urls(html: str) -> List[str]:
+def _extract_meta_urls(html: str) -> list[str]:
     """Find URLs in meta tags (og:url, twitter:url, canonical)."""
-    urls: List[str] = []
+    urls: list[str] = []
     patterns = (
         r'<meta[^>]+property\s*=\s*["\']og:url["\'][^>]+content\s*=\s*["\']([^"\']+)["\']',
         r'<meta[^>]+content\s*=\s*["\']([^"\']+)["\'][^>]+property\s*=\s*["\']og:url["\']',
@@ -233,7 +327,7 @@ def _extract_meta_urls(html: str) -> List[str]:
     return urls
 
 
-def _decode_obfuscated_urls(html: str) -> List[str]:
+def _decode_obfuscated_urls(html: str) -> list[str]:
     """Extract URLs hidden via base64, hex, or other obfuscation.
 
     Handles:
@@ -243,11 +337,9 @@ def _decode_obfuscated_urls(html: str) -> List[str]:
       - ``String.fromCharCode(72, 116, ...)``
       - ``data-*="\\x68\\x74\\x74\\x70..."`` (hex-escaped)
     """
-    urls: List[str] = []
+    urls: list[str] = []
 
-    for m in re.finditer(
-        r'atob\s*\(\s*["\']([A-Za-z0-9+/=_-]{20,})["\']', html
-    ):
+    for m in re.finditer(r'atob\s*\(\s*["\']([A-Za-z0-9+/=_-]{20,})["\']', html):
         try:
             decoded = base64.b64decode(m.group(1)).decode("utf-8", errors="ignore")
             if "://" in decoded or decoded.startswith("/"):
@@ -255,9 +347,7 @@ def _decode_obfuscated_urls(html: str) -> List[str]:
         except Exception:
             pass
 
-    for m in re.finditer(
-        r'decodeURIComponent\s*\(\s*["\']([^"\']{10,})["\']', html
-    ):
+    for m in re.finditer(r'decodeURIComponent\s*\(\s*["\']([^"\']{10,})["\']', html):
         try:
             decoded = urllib.parse.unquote(m.group(1))
             if "://" in decoded or decoded.startswith("/"):
@@ -266,9 +356,7 @@ def _decode_obfuscated_urls(html: str) -> List[str]:
             pass
 
     for attr in _OBFUSCATED_DATA_ATTRS:
-        for m in re.finditer(
-            rf'{attr}\s*=\s*["\']([^"\']+)["\']', html, re.IGNORECASE
-        ):
+        for m in re.finditer(rf'{attr}\s*=\s*["\']([^"\']+)["\']', html, re.IGNORECASE):
             val = m.group(1).strip()
             try:
                 decoded = base64.b64decode(val).decode("utf-8", errors="ignore")
@@ -280,9 +368,7 @@ def _decode_obfuscated_urls(html: str) -> List[str]:
             if "://" in val or val.startswith("/"):
                 urls.append(val)
 
-    for m in re.finditer(
-        r'String\.fromCharCode\s*\(\s*([\d,\s]+)\s*\)', html
-    ):
+    for m in re.finditer(r"String\.fromCharCode\s*\(\s*([\d,\s]+)\s*\)", html):
         try:
             codes = [int(c.strip()) for c in m.group(1).split(",") if c.strip()]
             decoded = "".join(chr(c) for c in codes)
@@ -302,7 +388,7 @@ def _decode_obfuscated_urls(html: str) -> List[str]:
     return urls
 
 
-def _extract_js_variable_urls(html: str) -> List[str]:
+def _extract_js_variable_urls(html: str) -> list[str]:
     """Extract URLs from JS variable assignments.
 
     Catches countdown/download page patterns:
@@ -310,7 +396,7 @@ def _extract_js_variable_urls(html: str) -> List[str]:
       - ``let realUrl = 'https://...'``
       - ``window.finalUrl = "https://..."``
     """
-    urls: List[str] = []
+    urls: list[str] = []
     for pat in (
         r'(?:var|let|const)\s+\w*(?:url|link|download|href|file|src|target)\w*\s*=\s*["\']([^"\']+)["\']',
         r'window\.\w*(?:url|link|download|href|file|src|target)\w*\s*=\s*["\']([^"\']+)["\']',
@@ -322,12 +408,12 @@ def _extract_js_variable_urls(html: str) -> List[str]:
     return urls
 
 
-def _extract_json_blob_urls(html: str) -> List[str]:
+def _extract_json_blob_urls(html: str) -> list[str]:
     """Extract URLs from embedded JSON blobs (framework state, config)."""
-    urls: List[str] = []
+    urls: list[str] = []
     for pat in (
-        r'window\.__(?:INITIAL_STATE|NUXT|NEXT_DATA|APP_DATA)__\s*=\s*(\{.+?\});',
-        r'(?:var|let|const)\s+config\s*=\s*(\{.+?\});',
+        r"window\.__(?:INITIAL_STATE|NUXT|NEXT_DATA|APP_DATA)__\s*=\s*(\{.+?\});",
+        r"(?:var|let|const)\s+config\s*=\s*(\{.+?\});",
     ):
         for m in re.finditer(pat, html, re.IGNORECASE | re.DOTALL):
             try:
@@ -338,12 +424,13 @@ def _extract_json_blob_urls(html: str) -> List[str]:
     return urls
 
 
-def _extract_json_ld_urls(html: str) -> List[str]:
+def _extract_json_ld_urls(html: str) -> list[str]:
     """Extract download URLs from JSON-LD structured data."""
-    urls: List[str] = []
+    urls: list[str] = []
     for m in re.finditer(
         r'<script[^>]+type\s*=\s*["\']application/ld\+json["\'][^>]*>(.*?)</script>',
-        html, re.IGNORECASE | re.DOTALL,
+        html,
+        re.IGNORECASE | re.DOTALL,
     ):
         try:
             data = json.loads(m.group(1))
@@ -356,7 +443,7 @@ def _extract_json_ld_urls(html: str) -> List[str]:
     return urls
 
 
-def _collect_urls_from_dict(d: dict, out: List[str], depth: int = 0) -> None:
+def _collect_urls_from_dict(d: dict, out: list[str], depth: int = 0) -> None:
     """Recursively collect URL values from a JSON-LD dict."""
     if depth > 5:
         return
@@ -378,7 +465,8 @@ def _collect_urls_from_dict(d: dict, out: List[str], depth: int = 0) -> None:
 # Position-aware content detection
 # ---------------------------------------------------------------------------
 
-def _find_main_content(html: str) -> Tuple[int, int]:
+
+def _find_main_content(html: str) -> tuple[int, int]:
     """Find the byte offset range of the main content area.
 
     Prefers an explicit ``<main>`` tag; otherwise computes exclusion zones
@@ -392,10 +480,10 @@ def _find_main_content(html: str) -> Tuple[int, int]:
 
     html_len = len(html)
 
-    skip_regions: List[Tuple[int, int]] = []
+    skip_regions: list[tuple[int, int]] = []
     for tag in _SKIP_TAGS:
         for m in _SKIP_TAG_START_RES[tag].finditer(html):
-            end_m = _SKIP_TAG_END_RES[tag].search(html[m.end():])
+            end_m = _SKIP_TAG_END_RES[tag].search(html[m.end() :])
             if end_m:
                 skip_regions.append((m.start(), m.end() + end_m.end()))
 
@@ -403,14 +491,14 @@ def _find_main_content(html: str) -> Tuple[int, int]:
         return 0, html_len
 
     skip_regions.sort()
-    merged: List[Tuple[int, int]] = [skip_regions[0]]
+    merged: list[tuple[int, int]] = [skip_regions[0]]
     for start, end in skip_regions[1:]:
         if start <= merged[-1][1]:
             merged[-1] = (merged[-1][0], max(merged[-1][1], end))
         else:
             merged.append((start, end))
 
-    gaps: List[Tuple[int, int]] = []
+    gaps: list[tuple[int, int]] = []
     prev_end = 0
     for start, end in merged:
         if start > prev_end:
@@ -427,7 +515,9 @@ def _find_main_content(html: str) -> Tuple[int, int]:
 
 
 def _is_in_main_content(
-    href: str, html: str, main_range: Optional[Tuple[int, int]] = None,
+    href: str,
+    html: str,
+    main_range: tuple[int, int] | None = None,
 ) -> bool:
     """Check if *href* appears in the main content area.
 
@@ -452,6 +542,7 @@ def _is_in_main_content(
 # HTML page filter
 # ---------------------------------------------------------------------------
 
+
 def _is_html_link(link: ResolvedLink) -> bool:
     """Return True if a link points to an HTML page, not a downloadable file."""
     return not link.extension or link.extension in _HTML_EXTENSIONS
@@ -461,15 +552,16 @@ def _is_html_link(link: ResolvedLink) -> bool:
 # Scoring
 # ---------------------------------------------------------------------------
 
+
 def _score_link(
     href: str,
     text: str,
-    attrs: Dict[str, str],
+    attrs: dict[str, str],
     page_url: str,
     *,
     html: str = "",
     source: str = "",
-    main_range: Optional[Tuple[int, int]] = None,
+    main_range: tuple[int, int] | None = None,
 ) -> float:
     """Score a link 0.0–1.0 for download likelihood."""
     score = 0.0
@@ -536,6 +628,7 @@ def _score_link(
 # Content-Type verification
 # ---------------------------------------------------------------------------
 
+
 def _verify_content_type(url: str) -> int:
     """HEAD request to verify Content-Type.
 
@@ -543,7 +636,9 @@ def _verify_content_type(url: str) -> int:
     """
     try:
         resp = requests.head(
-            url, timeout=5, allow_redirects=True,
+            url,
+            timeout=5,
+            allow_redirects=True,
             headers={"User-Agent": "Mozilla/5.0"},
         )
         ct = resp.headers.get("Content-Type", "").lower()
@@ -563,16 +658,19 @@ def _verify_content_type(url: str) -> int:
 # Candidate extraction
 # ---------------------------------------------------------------------------
 
+
 def _extract_candidates(
-    html: str, final_url: str, max_links: int,
-) -> List[Tuple[str, str, Dict[str, str], str]]:
+    html: str,
+    final_url: str,
+    max_links: int,
+) -> list[tuple[str, str, dict[str, str], str]]:
     """Extract all link candidates from HTML.
 
     Returns list of (resolved_url, text, attrs, source_label) tuples.
     """
     from .patterns import extract_all
 
-    candidates: List[Tuple[str, str, Dict[str, str], str]] = []
+    candidates: list[tuple[str, str, dict[str, str], str]] = []
 
     parser = _LinkExtractor()
     try:
@@ -589,13 +687,15 @@ def _extract_candidates(
 
 
 def _score_and_deduplicate(
-    candidates: List[Tuple[str, str, Dict[str, str], str]],
-    page_url: str, html: str, page_redirects: List[str],
-) -> List[ResolvedLink]:
+    candidates: list[tuple[str, str, dict[str, str], str]],
+    page_url: str,
+    html: str,
+    page_redirects: list[str],
+) -> list[ResolvedLink]:
     """Score, deduplicate, and return sorted ResolvedLink list."""
     main_range = _find_main_content(html) if html else None
-    seen: Set[str] = set()
-    results: List[ResolvedLink] = []
+    seen: set[str] = set()
+    results: list[ResolvedLink] = []
 
     for href, text, attrs, source in candidates:
         if href.startswith(("mailto:", "javascript:", "#", "tel:")):
@@ -605,14 +705,24 @@ def _score_and_deduplicate(
         seen.add(href)
 
         score = _score_link(
-            href, text, attrs, page_url,
-            html=html, source=source, main_range=main_range,
+            href,
+            text,
+            attrs,
+            page_url,
+            html=html,
+            source=source,
+            main_range=main_range,
         )
-        results.append(ResolvedLink(
-            url=href, title=text, extension=_get_extension(href),
-            confidence=round(score, 3), source=source,
-            redirects=page_redirects,
-        ))
+        results.append(
+            ResolvedLink(
+                url=href,
+                title=text,
+                extension=_get_extension(href),
+                confidence=round(score, 3),
+                source=source,
+                redirects=page_redirects,
+            )
+        )
 
     results.sort(key=lambda r: r.confidence, reverse=True)
     return results
@@ -622,15 +732,16 @@ def _score_and_deduplicate(
 # Intermediate page follow
 # ---------------------------------------------------------------------------
 
+
 def _follow_intermediate(
     url: str,
     session: requests.Session,
-    headers: Dict[str, str],
+    headers: dict[str, str],
     timeout: int,
     original_page_url: str,
     depth: int,
-    on_progress: Optional[Callable[[str], None]] = None,
-) -> List[ResolvedLink]:
+    on_progress: Callable[[str], None] | None = None,
+) -> list[ResolvedLink]:
     """Follow an intermediate redirect page to find the real download."""
     if depth <= 0:
         return []
@@ -649,11 +760,15 @@ def _follow_intermediate(
 
     ct = resp.headers.get("Content-Type", "").lower()
     if "text/html" not in ct and "text/plain" not in ct:
-        return [ResolvedLink(
-            url=final_url, title="[direct file]",
-            extension=_get_extension(final_url),
-            confidence=0.6, source="intermediate_direct",
-        )]
+        return [
+            ResolvedLink(
+                url=final_url,
+                title="[direct file]",
+                extension=_get_extension(final_url),
+                confidence=0.6,
+                source="intermediate_direct",
+            )
+        ]
 
     candidates = _extract_candidates(html, final_url, max_links=50)
     candidates = [(h, t, a, f"intermediate_{s}") for h, t, a, s in candidates]
@@ -661,8 +776,13 @@ def _follow_intermediate(
 
     if results and results[0].confidence < 0.4 and not results[0].extension:
         deeper = _follow_intermediate(
-            results[0].url, session, headers, timeout,
-            original_page_url, depth - 1, on_progress,
+            results[0].url,
+            session,
+            headers,
+            timeout,
+            original_page_url,
+            depth - 1,
+            on_progress,
         )
         if deeper:
             existing_urls = {r.url for r in results}
@@ -678,17 +798,18 @@ def _follow_intermediate(
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def resolve_page(
     page_url: str,
     *,
-    session: Optional[requests.Session] = None,
-    headers: Optional[Dict[str, str]] = None,
+    session: requests.Session | None = None,
+    headers: dict[str, str] | None = None,
     timeout: int = 15,
     max_links: int = 100,
     max_depth: int = 2,
     verify_content_type: bool = False,
-    on_progress: Optional[Callable[[str], None]] = None,
-) -> List[ResolvedLink]:
+    on_progress: Callable[[str], None] | None = None,
+) -> list[ResolvedLink]:
     """Fetch a page and extract ranked download links.
 
     Args:
@@ -741,7 +862,13 @@ def resolve_page(
         top = results[0]
         if top.confidence < 0.5 and not top.extension:
             followed = _follow_intermediate(
-                top.url, sess, hdrs, timeout, page_url, max_depth, on_progress,
+                top.url,
+                sess,
+                hdrs,
+                timeout,
+                page_url,
+                max_depth,
+                on_progress,
             )
             if followed:
                 existing_urls = {r.url for r in results}
@@ -784,11 +911,11 @@ def resolve_and_download(
     page_url: str,
     dest: str,
     *,
-    session: Optional[requests.Session] = None,
-    headers: Optional[Dict[str, str]] = None,
+    session: requests.Session | None = None,
+    headers: dict[str, str] | None = None,
     min_confidence: float = 0.3,
     max_depth: int = 2,
-    on_progress: Optional[Callable[[str], None]] = None,
+    on_progress: Callable[[str], None] | None = None,
 ) -> Path:
     """Resolve a page, then download the best candidate.
 
@@ -811,8 +938,11 @@ def resolve_and_download(
     from downcraft.download import http as downloader
 
     links = resolve_page(
-        page_url, session=session, headers=headers,
-        max_depth=max_depth, on_progress=on_progress,
+        page_url,
+        session=session,
+        headers=headers,
+        max_depth=max_depth,
+        on_progress=on_progress,
     )
     if not links:
         raise ValueError(f"No download links found on {page_url}")
@@ -830,7 +960,7 @@ def resolve_and_download(
     return downloader.download_file(
         best.url,
         Path(dest),
-        on_chunk=lambda done, total: on_progress(
-            f"Downloaded {done}/{total} bytes"
-        ) if on_progress else None,
+        on_chunk=lambda done, total: (
+            on_progress(f"Downloaded {done}/{total} bytes") if on_progress else None
+        ),
     )

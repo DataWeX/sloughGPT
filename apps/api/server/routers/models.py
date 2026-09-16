@@ -1174,7 +1174,7 @@ class ModelsRouter:
             },
         }
         try:
-            from domain.infrastructure.hf_hub import HFDownloadBackend
+            from domain.infrastructure.hf_hub import HFDownloadBackend  # noqa: F401
 
             hf_info["available"] = True
         except ImportError:
@@ -1193,7 +1193,9 @@ class ModelsRouter:
             },
         }
         try:
-            from domain.infrastructure.external_download import ExternalDownloadBackend
+            from domain.infrastructure.external_download import (
+                ExternalDownloadBackend,  # noqa: F401
+            )
 
             ext_info["available"] = True
         except ImportError:
@@ -1212,7 +1214,7 @@ class ModelsRouter:
             },
         }
         try:
-            from domain.infrastructure.git_download import GitBackend
+            from domain.infrastructure.git_download import GitBackend  # noqa: F401
 
             git_info["available"] = True
         except ImportError:
@@ -1231,7 +1233,7 @@ class ModelsRouter:
             },
         }
         try:
-            from domain.infrastructure.local_download import LocalFileBackend
+            from domain.infrastructure.local_download import LocalFileBackend  # noqa: F401
 
             local_info["available"] = True
         except ImportError:
@@ -1249,7 +1251,9 @@ class ModelsRouter:
         backend_type = "hf"
 
         try:
-            from domain.infrastructure.external_download import ExternalDownloadBackend
+            from domain.infrastructure.external_download import (
+                ExternalDownloadBackend,  # noqa: F401
+            )
 
             # If external backend is configured, prefer it
             backend_type = "external"

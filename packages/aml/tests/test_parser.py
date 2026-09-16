@@ -3,8 +3,7 @@
 import os
 import tempfile
 
-from aml.parser import parse, parse_file, _parse_value, _split_csv
-from aml.schema import AmlBlock, AmlDocument
+from aml.parser import _parse_value, _split_csv, parse, parse_file
 
 
 class TestParseValue:
@@ -71,7 +70,9 @@ class TestParse:
         assert doc.version == "2.0"
 
     def test_simple_block(self):
-        doc = parse('@aml 1.0\n\n@knowledge mitochondria {\n    content = "The powerhouse"\n    topic = "biology"\n}')
+        doc = parse(
+            '@aml 1.0\n\n@knowledge mitochondria {\n    content = "The powerhouse"\n    topic = "biology"\n}'
+        )
         assert len(doc.blocks) == 1
         b = doc.blocks[0]
         assert b.tag == "knowledge"
@@ -80,7 +81,7 @@ class TestParse:
         assert b.metadata["topic"] == "biology"
 
     def test_block_no_name(self):
-        doc = parse('@config {\n    debug = true\n    port = 8000\n}')
+        doc = parse("@config {\n    debug = true\n    port = 8000\n}")
         assert len(doc.blocks) == 1
         b = doc.blocks[0]
         assert b.tag == "config"
@@ -159,13 +160,13 @@ class TestParse:
         assert b.body == "hello"
 
     def test_bool_metadata(self):
-        doc = parse('@config {\n    debug = true\n    verbose = false\n}')
+        doc = parse("@config {\n    debug = true\n    verbose = false\n}")
         b = doc.blocks[0]
         assert b.metadata["debug"] is True
         assert b.metadata["verbose"] is False
 
     def test_int_float_metadata(self):
-        doc = parse('@config {\n    port = 8000\n    ratio = 3.14\n}')
+        doc = parse("@config {\n    port = 8000\n    ratio = 3.14\n}")
         b = doc.blocks[0]
         assert b.metadata["port"] == 8000
         assert b.metadata["ratio"] == 3.14
@@ -187,7 +188,7 @@ class TestParseFile:
 
 class TestDocument:
     def test_by_tag(self):
-        doc = parse('@aml 1.0\n\n@a { x = 1 }\n@b { y = 2 }\n@a { z = 3 }')
+        doc = parse("@aml 1.0\n\n@a { x = 1 }\n@b { y = 2 }\n@a { z = 3 }")
         assert len(doc.by_tag("a")) == 2
         assert len(doc.by_tag("b")) == 1
 

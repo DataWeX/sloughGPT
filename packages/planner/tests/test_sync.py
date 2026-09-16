@@ -1,12 +1,9 @@
 """Tests for planner.sync — reconcile notes and board cards."""
 
-from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
-
-from planner.sync import sync_notes_to_board
 from planner.store import Store
+from planner.sync import sync_notes_to_board
 
 
 def _make_note(id: str, title: str, status: str, body: str = "", tags: list[str] | None = None):
@@ -92,6 +89,7 @@ class TestSyncNotesToBoard:
     def test_status_mapping(self, tmp_path):
         """Test that note statuses map to correct columns."""
         from planner import config
+
         notes = []
         for status, expected_col in config.STATUS_TO_COLUMN.items():
             if status is None:

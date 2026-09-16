@@ -3,8 +3,9 @@ World command group — render and simulate the programmable world.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns
+
 from domain.logging import get_global
+
 log = get_global()
 
 
@@ -22,9 +23,14 @@ def register(cli):
     @click.option("--output", "-o", default=None, help="Output file (PPM)")
     @click.option("--neural", is_flag=True, help="Run neural processing on render")
     def world_render(width, height, samples, output, neural):
-        from domain.shell._internal.world_render import RenderBridge, NeuralRenderBridge, RenderConfig
-        from domain.shell._internal.simulation import WorldGrid
         import numpy as np
+
+        from domain.shell._internal.simulation import WorldGrid
+        from domain.shell._internal.world_render import (
+            NeuralRenderBridge,
+            RenderBridge,
+            RenderConfig,
+        )
 
         cfg = RenderConfig(width=width, height=height, samples=samples)
 
@@ -45,7 +51,9 @@ def register(cli):
         log.header("Rendering world...")
         bridge.build_scene(world_grid)
         image = bridge.render()
-        log.success(f"Rendered {image.shape[1]}x{image.shape[0]} image ({bridge.stats['total_time_ms']:.0f}ms)")
+        log.success(
+            f"Rendered {image.shape[1]}x{image.shape[0]} image ({bridge.stats['total_time_ms']:.0f}ms)"
+        )
 
         if output:
             img_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
@@ -71,14 +79,19 @@ def register(cli):
     @click.option("--verbose", is_flag=True, help="Verbose output")
     def world_tick(ticks, babies, render, neural, verbose):
         from domain.shell._internal.simulation import SimScene, Simulation, WorldParams
-        from domain.shell._internal.world_render import RenderBridge, NeuralRenderBridge, RenderConfig
+        from domain.shell._internal.world_render import (
+            NeuralRenderBridge,
+            RenderBridge,
+        )
 
         params = WorldParams()
         scene = SimScene(params)
 
         for _ in range(babies):
             import numpy as np
-            from domain.shell._internal.simulation import SimBaby, Entity, EntityType
+
+            from domain.shell._internal.simulation import SimBaby
+
             baby = SimBaby()
             baby.entity.position[0] = 32 + np.random.randint(-10, 10)
             baby.entity.position[2] = 32 + np.random.randint(-10, 10)
@@ -111,7 +124,7 @@ def register(cli):
     @click.option("--threshold", default=0.1, type=float, help="Change detection threshold")
     def world_analyze(ticks, babies, threshold):
         from domain.shell._internal.simulation import SimScene, Simulation, WorldParams
-        from domain.shell._internal.world_render import RenderBridge, RenderAnalyzer, RenderConfig
+        from domain.shell._internal.world_render import RenderAnalyzer, RenderBridge, RenderConfig
 
         config = RenderConfig(width=64, height=48, samples=1)
         bridge = RenderBridge(config)
@@ -121,18 +134,20 @@ def register(cli):
 
         for _ in range(babies):
             import numpy as np
+
             from domain.shell._internal.simulation import SimBaby
+
             baby = SimBaby()
             baby.entity.position[0] = 32 + np.random.randint(-10, 10)
             baby.entity.position[2] = 32 + np.random.randint(-10, 10)
             scene.add_baby(baby)
 
         sim = Simulation(scene, max_ticks=ticks, render_bridge=bridge)
-        analyzer = RenderAnalyzer(bridge._history if hasattr(bridge, '_history') else None)
+        analyzer = RenderAnalyzer(bridge._history if hasattr(bridge, "_history") else None)
 
         sim.run()
 
-        for i, entry in enumerate(bridge._history._entries if hasattr(bridge, '_history') else []):
+        for i, entry in enumerate(bridge._history._entries if hasattr(bridge, "_history") else []):
             analyzer.history.add(entry["image"], tick=entry["tick"])
 
         summary = analyzer.summary()
@@ -140,7 +155,9 @@ def register(cli):
         log.key_value("Total renders", str(summary.get("count", 0)))
         log.key_value("Significant changes", str(summary.get("significant_changes", 0)))
         if summary.get("mean_range"):
-            log.key_value("Mean range", f"{summary['mean_range'][0]:.4f} - {summary['mean_range'][1]:.4f}")
+            log.key_value(
+                "Mean range", f"{summary['mean_range'][0]:.4f} - {summary['mean_range'][1]:.4f}"
+            )
         if summary.get("mean_trend") is not None:
             log.key_value("Mean trend", f"{summary['mean_trend']:+.4f}")
 
@@ -148,16 +165,19 @@ def register(cli):
         if changes:
             log.header("Significant Changes")
             for c in changes:
-                log.info(f"  Tick {c['tick_from']} -> {c['tick_to']}: "
-                         f"{c['change_ratio']:.1%} changed, MSE={c['mse']:.6f}")
+                log.info(
+                    f"  Tick {c['tick_from']} -> {c['tick_to']}: "
+                    f"{c['change_ratio']:.1%} changed, MSE={c['mse']:.6f}"
+                )
 
     @world.command("diff", help="Compare two render images")
     @click.argument("image_a", type=click.Path(exists=True))
     @click.argument("image_b", type=click.Path(exists=True))
     def world_diff(image_a, image_b):
         import numpy as np
-        from domain.shell._internal.world_render import RenderDiff
         from PIL import Image as PILImage
+
+        from domain.shell._internal.world_render import RenderDiff
 
         a = np.array(PILImage.open(image_a)).astype(np.float32) / 255.0
         b = np.array(PILImage.open(image_b)).astype(np.float32) / 255.0
@@ -169,7 +189,9 @@ def register(cli):
         log.key_value("MSE", f"{s['mse']:.6f}")
         log.key_value("MAE", f"{s['mae']:.6f}")
         log.key_value("Max diff", f"{s['max_diff']:.4f}")
-        log.key_value("Changed pixels", f"{s['changed_pixels']}/{s['total_pixels']} ({s['change_ratio']:.1%})")
+        log.key_value(
+            "Changed pixels", f"{s['changed_pixels']}/{s['total_pixels']} ({s['change_ratio']:.1%})"
+        )
         log.key_value("Mean A", f"{s['mean_a']:.4f}")
         log.key_value("Mean B", f"{s['mean_b']:.4f}")
 
@@ -181,8 +203,13 @@ def register(cli):
     @click.option("--verbose", is_flag=True, help="Verbose output")
     def world_ingest(source_type, source_value, radius, decay, verbose):
         import numpy as np
-        from domain.collections._internal.perception import WorldPerception, PerceptionConfig
-        from domain.collections._internal.sources import FileSource, UrlSource, RssSource, GeneratorSource, Record
+
+        from domain.collections._internal.perception import PerceptionConfig, WorldPerception
+        from domain.collections._internal.sources import (
+            Record,
+            RssSource,
+            UrlSource,
+        )
         from domain.shell._internal.simulation import WorldGrid
 
         config = PerceptionConfig(radius=radius, decay_rate=decay)
@@ -191,7 +218,7 @@ def register(cli):
 
         if source_type == "file":
             records = []
-            with open(source_value, "r") as f:
+            with open(source_value) as f:
                 for line in f:
                     line = line.strip()
                     if line:
@@ -199,10 +226,12 @@ def register(cli):
             events = perception.ingest_records(records)
         elif source_type == "url":
             from domain.collections._internal.sources import UrlSource
+
             source = UrlSource(source_value)
             events = perception.ingest_source(source)
         elif source_type == "rss":
             from domain.collections._internal.sources import RssSource
+
             source = RssSource(source_value)
             events = perception.ingest_source(source)
         else:
@@ -214,7 +243,12 @@ def register(cli):
         log.header("World Ingestion")
         log.key_value("Records ingested", str(len(events)))
         log.key_value("Grid cells filled", str(np.sum(world_grid.material != 0)))
-        log.key_value("Avg energy", f"{np.mean(world_grid.energy[world_grid.material != 0]):.2f}" if np.any(world_grid.material != 0) else "0.00")
+        log.key_value(
+            "Avg energy",
+            f"{np.mean(world_grid.energy[world_grid.material != 0]):.2f}"
+            if np.any(world_grid.material != 0)
+            else "0.00",
+        )
 
         if verbose:
             summary = perception.summary()

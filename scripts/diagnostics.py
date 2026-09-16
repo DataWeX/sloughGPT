@@ -72,7 +72,7 @@ def check_gpu():
         print(f"  MPS available: {mps}")
         if hasattr(torch.backends.mps, "is_built"):
             print(f"  MPS built: {torch.backends.mps.is_built()}")
-    except:
+    except Exception:
         pass
 
     # ROCm
@@ -80,7 +80,7 @@ def check_gpu():
         code, out, _ = run_command("rocm-smi --version")
         if code == 0:
             print(f"  ROCm: {out}")
-    except:
+    except Exception:
         pass
 
 
@@ -185,7 +185,7 @@ def check_api_server():
             data = json.loads(out)
             print(f"  Status: healthy={data.get('model_loaded', False)}")
             print(f"  Model type: {data.get('model_type', 'none')}")
-        except:
+        except Exception:
             print(f"  Response: {out}")
     else:
         print("  API Server: NOT RUNNING (start with: python3 apps/api/server/main.py)")

@@ -10,9 +10,8 @@ import logging
 import os
 import threading
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +36,9 @@ class FileProgress:
 class ModelState:
     key: str
     status: str = "queued"  # queued | downloading | complete | failed
-    files: Dict[str, FileProgress] = field(default_factory=dict)
+    files: dict[str, FileProgress] = field(default_factory=dict)
     started_at: float = 0.0
-    completed_at: Optional[float] = None
+    completed_at: float | None = None
     error: str = ""
     dest_dir: str = ""
 
@@ -75,12 +74,12 @@ class PersistentState:
     partial progress.
     """
 
-    def __init__(self, state_dir: Union[str, Path] = STATE_DIR):
+    def __init__(self, state_dir: str | Path = STATE_DIR):
         self._state_dir = Path(state_dir)
         self._state_file = self._state_dir / "state.json"
         self._lock_file = self._state_dir / "state.lock"
         self._mutex = threading.Lock()
-        self._models: Dict[str, ModelState] = {}
+        self._models: dict[str, ModelState] = {}
         self._dirty = False
         self._last_flush = 0.0
         self._load()
@@ -89,11 +88,11 @@ class PersistentState:
     # Public API
     # ------------------------------------------------------------------
 
-    def get(self, key: str) -> Optional[ModelState]:
+    def get(self, key: str) -> ModelState | None:
         with self._mutex:
             return self._models.get(key)
 
-    def list(self) -> List[ModelState]:
+    def list(self) -> list[ModelState]:
         with self._mutex:
             return list(self._models.values())
 
@@ -240,7 +239,7 @@ class PersistentState:
 
 
 # Module-level singleton
-_state: Optional[PersistentState] = None
+_state: PersistentState | None = None
 
 
 def get_state() -> PersistentState:

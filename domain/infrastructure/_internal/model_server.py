@@ -1866,7 +1866,7 @@ class ModelServer:
                 )
                 acquired = True
             except TimeoutError:
-                raise TimeoutError("Tokenize queued too long")
+                raise TimeoutError("Tokenize queued too long") from None
         try:
             with self._lock:
                 tok = self._tokenizer
@@ -2044,7 +2044,7 @@ class ModelServer:
                 )
                 raise TimeoutError(
                     f"Generation timed out after {self._generate_timeout}s for {self.model_id}"
-                )
+                ) from None
             except Exception as e:
                 error_msg = f"{type(e).__name__}: {e}"
                 with self._metrics_lock:

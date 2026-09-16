@@ -3,8 +3,10 @@ Security command group — audit logs and API key management.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, api_get, output_json
+from core.helpers import api_get, output_json
+
 from domain.logging import get_global
+
 log = get_global()
 
 

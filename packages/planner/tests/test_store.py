@@ -1,12 +1,6 @@
 """Tests for planner.store — JSONL board operations."""
 
-import json
-from pathlib import Path
-
-import pytest
-
-from planner.store import Card, Board, Store, get_store, reset_store
-
+from planner.store import Card, Store, get_store, reset_store
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Card dataclass
@@ -110,7 +104,7 @@ class TestStoreMoveCard:
 
     def test_move_card_with_index(self, tmp_path):
         store = Store(tmp_path / "board")
-        c1 = store.create_card("Task 1", column="todo")
+        store.create_card("Task 1", column="todo")
         c2 = store.create_card("Task 2", column="todo")
         store.move_card(c2.id, "todo", to_index=0)
         board = store.load_board()
@@ -174,7 +168,7 @@ class TestStorePersistence:
     def test_corrupted_file_skips_bad_lines(self, tmp_path):
         store = Store(tmp_path / "board")
         board_file = tmp_path / "board" / "board.jsonl"
-        board_file.write_text("NOT JSON\n{\"id\":\"ok\",\"title\":\"Good\"}\n")
+        board_file.write_text('NOT JSON\n{"id":"ok","title":"Good"}\n')
         board = store.load_board()
         assert len(board.cards) == 1
         assert board.cards[0].title == "Good"

@@ -1,6 +1,6 @@
 """Tests for bawl.parse — edge cases, nesting, malformed HTML, br, img."""
 
-from bawl.parse import parse_html, Page
+from bawl.parse import Page, parse_html
 
 
 def test_title():
@@ -232,9 +232,21 @@ def test_complex_real_world_html():
 
 
 def test_classes():
-    from bawl import (fetch, parse, parse_html, save, load, dumps, loads,
-                         dumps_json_array, save_json_array, crawl, crawl_urls,
-                         parse_sitemap)
+    from bawl import (
+        crawl,
+        crawl_urls,
+        dumps,
+        dumps_json_array,
+        fetch,
+        load,
+        loads,
+        parse,
+        parse_html,
+        parse_sitemap,
+        save,
+        save_json_array,
+    )
+
     assert callable(fetch)
     assert callable(parse)
     assert callable(parse_html)

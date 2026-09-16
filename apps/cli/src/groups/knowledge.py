@@ -3,8 +3,10 @@ Knowledge command group — semantic knowledge operations.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, api_get, api_post, output_json
+from core.helpers import api_get, api_post
+
 from domain.logging import get_global
+
 log = get_global()
 
 
@@ -24,8 +26,11 @@ def register(cli):
     def knowledge_search(ctx, query, path, top_k, extensions):
         """Search your codebase using natural language."""
         exts = extensions.split(",") if extensions else None
-        r = api_post(ctx, "/knowledge/search-files",
-                     json={"query": query, "path": path, "top_k": top_k, "extensions": exts})
+        r = api_post(
+            ctx,
+            "/knowledge/search-files",
+            json={"query": query, "path": path, "top_k": top_k, "extensions": exts},
+        )
         if r.status_code != 200:
             log.error(f"Search failed: {r.text}")
             return
@@ -33,7 +38,7 @@ def register(cli):
         log.header(f"Found {len(data['results'])} results (indexed {data['indexed_files']} files)")
         for i, res in enumerate(data["results"], 1):
             log.info(f"[{res['score']:.3f}] {res['path']}:{res['line']}")
-            snippet = res['snippet'].replace('\n', ' ')[:100]
+            snippet = res["snippet"].replace("\n", " ")[:100]
             log.info(f"  {snippet}")
             log.blank()
 
@@ -43,8 +48,9 @@ def register(cli):
     @click.pass_context
     def knowledge_dedup(ctx, content, threshold):
         """Check if content already exists in the knowledge base."""
-        r = api_post(ctx, "/knowledge/check-duplicate",
-                     json={"content": content, "threshold": threshold})
+        r = api_post(
+            ctx, "/knowledge/check-duplicate", json={"content": content, "threshold": threshold}
+        )
         if r.status_code != 200:
             log.error(f"Check failed: {r.text}")
             return
@@ -101,12 +107,13 @@ def register(cli):
         if not items:
             log.error("No texts to ingest")
             return
-        r = api_post(ctx, "/knowledge/bulk-ingest",
-                     json={"items": items, "topic": topic})
+        r = api_post(ctx, "/knowledge/bulk-ingest", json={"items": items, "topic": topic})
         if r.status_code != 200:
             log.error(f"Ingest failed: {r.text}")
             return
         data = r.json()
-        log.success(f"Bulk ingest: {data['added']} added, {data['skipped']} skipped, {data['errors']} errors")
+        log.success(
+            f"Bulk ingest: {data['added']} added, {data['skipped']} skipped, {data['errors']} errors"
+        )
 
     return knowledge

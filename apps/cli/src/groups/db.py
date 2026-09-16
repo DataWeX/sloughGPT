@@ -7,8 +7,9 @@ import sys
 from pathlib import Path
 
 from core.framework import click, echo
-from core.helpers import ns as _ns
+
 from domain.logging import get_global
+
 log = get_global()
 
 
@@ -22,7 +23,8 @@ def _import_mogdb():
     if str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
     from mogdb import MogDB
-    from mogdb.sync import sync_from_files, preview_from_files
+    from mogdb.sync import preview_from_files, sync_from_files
+
     return MogDB, sync_from_files, preview_from_files
 
 
@@ -38,8 +40,14 @@ def register(cli):
     @click.option("--collection", help="Target collection name (default: from filename)")
     @click.option("--db", default=None, help="MogDB data directory (default: repo data/mogdb)")
     @click.option("--key", required=True, help="Identity/key field used for dedupe")
-    @click.option("--format", type=click.Choice(["json", "jsonl", "csv"]), help="Source format (default: auto-detect)")
-    @click.option("--delete-missing", is_flag=True, help="Delete collection docs missing from the file")
+    @click.option(
+        "--format",
+        type=click.Choice(["json", "jsonl", "csv"]),
+        help="Source format (default: auto-detect)",
+    )
+    @click.option(
+        "--delete-missing", is_flag=True, help="Delete collection docs missing from the file"
+    )
     @click.option("--sync-dir", help="Write human-readable JSON sync files to this directory")
     @click.option("--dry-run", is_flag=True, help="Report what would change without writing")
     def db_migrate(file, collection, db, key, format, delete_missing, sync_dir, dry_run):
@@ -56,8 +64,11 @@ def register(cli):
         try:
             _col = _database.collection(collection)
             result = (_preview if dry_run else _sync)(
-                _col, str(path), key_field=key,
-                delete_missing=delete_missing, file_format=format,
+                _col,
+                str(path),
+                key_field=key,
+                delete_missing=delete_missing,
+                file_format=format,
             )
         finally:
             _database.close()

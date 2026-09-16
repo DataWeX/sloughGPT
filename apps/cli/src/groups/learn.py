@@ -3,8 +3,10 @@ Learn command group — continual learning from web, feeds, and knowledge.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, api_get, api_post, output_json
+from core.helpers import api_get, api_post, output_json
+
 from domain.logging import get_global
+
 log = get_global()
 
 
@@ -20,8 +22,7 @@ def register(cli):
     @click.option("--max-results", type=int, default=5, help="Max results")
     @click.pass_context
     def learn_search(ctx, query, max_results):
-        r = api_post(ctx, "/learn/search",
-                     json={"query": query, "max_results": max_results})
+        r = api_post(ctx, "/learn/search", json={"query": query, "max_results": max_results})
         if r.status_code != 200:
             log.error(f"Search failed: {r.text}")
             return
@@ -85,8 +86,7 @@ def register(cli):
     @click.argument("text")
     @click.pass_context
     def learn_ingest(ctx, text):
-        r = api_post(ctx, "/learn/ingest",
-                     json={"text": text})
+        r = api_post(ctx, "/learn/ingest", json={"text": text})
         if r.status_code != 200:
             log.error(f"Ingest failed: {r.text}")
             return

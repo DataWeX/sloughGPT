@@ -883,7 +883,7 @@ def export_to_gguf(
     try:
         from gguf import GGUFWriter
     except ImportError:
-        raise ImportError("gguf not installed. Run: pip install gguf")
+        raise ImportError("gguf not installed. Run: pip install gguf") from None
 
     model.eval()
     state_dict = model.state_dict()

@@ -597,6 +597,41 @@ class StartupOrchestrator:
             loader.set_model_progress(0.0, f"Model load failed: {proc.error}")
             return
 
+        # Ensure server_state.model is set — the PGQ thread may have set it,
+        # but verify and sync to core ServerState singleton if needed.
+        try:
+            import state as server_state
+
+            from domain.infrastructure.server_state import get_server_state
+
+            core = get_server_state()
+
+            # If the eager load set server_state.model, mirror to core singleton
+            if server_state.model is not None and core.model.get() is None:
+                core.model.set(server_state.model)
+                logger.debug(
+                    "Synced server_state.model to core ServerState", extra={"tag": "START"}
+                )
+
+            # If core singleton has the model but server_state doesn't, sync back
+            if server_state.model is None and core.model.get() is not None:
+                server_state.model = core.model.get()
+                logger.debug(
+                    "Synced core ServerState to server_state.model", extra={"tag": "START"}
+                )
+
+            # If provider is set but model isn't, check provider has loaded model
+            if server_state.model is None and server_state.provider is not None:
+                prov_model = getattr(server_state.provider, "_model", None)
+                if prov_model is not None:
+                    server_state.model = prov_model
+                    core.model.set(prov_model)
+                    logger.debug(
+                        "Synced provider._model to server_state.model", extra={"tag": "START"}
+                    )
+        except Exception as e:
+            logger.debug("State sync in model load callback failed: %s", e, extra={"tag": "START"})
+
         # Sync to persistent model catalog
         try:
             import state as server_state

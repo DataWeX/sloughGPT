@@ -1,6 +1,5 @@
 """Backward-compatibility shim — imports from the new ``domain.shell`` package."""
 
-import domain.shell as _domain_shell
 from domain.shell import (
     ConsoleIO,
     DaitRuntime,

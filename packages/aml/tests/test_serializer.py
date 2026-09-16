@@ -3,8 +3,8 @@
 import json
 
 from aml.parser import parse
-from aml.serializer import serialize, dict_to_aml
 from aml.schema import AmlBlock, AmlDocument
+from aml.serializer import dict_to_aml, serialize
 
 
 class TestSerialize:
@@ -14,78 +14,108 @@ class TestSerialize:
         assert out.startswith("@aml 1.0\n")
 
     def test_simple_block(self):
-        doc = AmlDocument(version="1.0", blocks=[
-            AmlBlock(tag="knowledge", name="mito", metadata={
-                "content": "The powerhouse",
-                "topic": "biology",
-            }),
-        ])
+        doc = AmlDocument(
+            version="1.0",
+            blocks=[
+                AmlBlock(
+                    tag="knowledge",
+                    name="mito",
+                    metadata={
+                        "content": "The powerhouse",
+                        "topic": "biology",
+                    },
+                ),
+            ],
+        )
         out = serialize(doc)
         assert "@knowledge mito" in out
         assert 'content = "The powerhouse"' in out
         assert "topic = biology" in out
 
     def test_list_body(self):
-        doc = AmlDocument(version="1.0", blocks=[
-            AmlBlock(tag="knowledge", name="photosynthesis", body=[
-                "Light-dependent reactions",
-                "Calvin cycle",
-            ]),
-        ])
+        doc = AmlDocument(
+            version="1.0",
+            blocks=[
+                AmlBlock(
+                    tag="knowledge",
+                    name="photosynthesis",
+                    body=[
+                        "Light-dependent reactions",
+                        "Calvin cycle",
+                    ],
+                ),
+            ],
+        )
         out = serialize(doc)
         assert "- Light-dependent reactions" in out
         assert "- Calvin cycle" in out
 
     def test_bool_values(self):
-        doc = AmlDocument(version="1.0", blocks=[
-            AmlBlock(tag="config", metadata={"debug": True, "verbose": False}),
-        ])
+        doc = AmlDocument(
+            version="1.0",
+            blocks=[
+                AmlBlock(tag="config", metadata={"debug": True, "verbose": False}),
+            ],
+        )
         out = serialize(doc)
         assert "debug = true" in out
         assert "verbose = false" in out
 
     def test_int_float_values(self):
-        doc = AmlDocument(version="1.0", blocks=[
-            AmlBlock(tag="config", metadata={"port": 8000, "ratio": 3.14}),
-        ])
+        doc = AmlDocument(
+            version="1.0",
+            blocks=[
+                AmlBlock(tag="config", metadata={"port": 8000, "ratio": 3.14}),
+            ],
+        )
         out = serialize(doc)
         assert "port = 8000" in out
         assert "ratio = 3.14" in out
 
     def test_null_value(self):
-        doc = AmlDocument(version="1.0", blocks=[
-            AmlBlock(tag="config", metadata={"val": None}),
-        ])
+        doc = AmlDocument(
+            version="1.0",
+            blocks=[
+                AmlBlock(tag="config", metadata={"val": None}),
+            ],
+        )
         out = serialize(doc)
         assert "val = null" in out
 
     def test_inline_list(self):
-        doc = AmlDocument(version="1.0", blocks=[
-            AmlBlock(tag="knowledge", metadata={"tags": ["a", "b"]}),
-        ])
+        doc = AmlDocument(
+            version="1.0",
+            blocks=[
+                AmlBlock(tag="knowledge", metadata={"tags": ["a", "b"]}),
+            ],
+        )
         out = serialize(doc)
         assert "tags = [a, b]" in out
 
 
 class TestDictToAml:
     def test_simple(self):
-        out = dict_to_aml({
-            "knowledge:mito": {
-                "content": "The powerhouse",
-                "topic": "biology",
+        out = dict_to_aml(
+            {
+                "knowledge:mito": {
+                    "content": "The powerhouse",
+                    "topic": "biology",
+                }
             }
-        })
+        )
         assert "@aml 1.0" in out
         assert "@knowledge mito" in out
         assert "The powerhouse" in out
 
     def test_list_value(self):
-        out = dict_to_aml({
-            "knowledge:photo": {
-                "body": ["stage 1", "stage 2"],
-                "topic": "biology",
+        out = dict_to_aml(
+            {
+                "knowledge:photo": {
+                    "body": ["stage 1", "stage 2"],
+                    "topic": "biology",
+                }
             }
-        })
+        )
         assert "- stage 1" in out
         assert "- stage 2" in out
 

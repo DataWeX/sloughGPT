@@ -8,7 +8,6 @@ import datetime as _dt
 import re
 
 import pytest
-
 from planner import core as core_module
 from planner.core import cli_main, reset_note_store
 
@@ -59,7 +58,9 @@ def _find_id(cli_env, capsys, title):
 
 
 def test_new_creates_note(cli_env, capsys):
-    code, out = _run(cli_env, capsys, "new", "Fix boot order", "--tags", "kernel,os", "--status", "wip")
+    code, out = _run(
+        cli_env, capsys, "new", "Fix boot order", "--tags", "kernel,os", "--status", "wip"
+    )
     assert code == 0
     assert "Created:" in out
     code, out = _run(cli_env, capsys, "show", out.split()[1])
@@ -116,7 +117,9 @@ def test_list_filters_by_tag_and_status(cli_env, capsys):
 
 
 def test_show_displays_note_fields(cli_env, capsys):
-    note_id = _new(cli_env, capsys, "Visible", "--tags", "t1", "--status", "wip", "--body", "hello body")
+    note_id = _new(
+        cli_env, capsys, "Visible", "--tags", "t1", "--status", "wip", "--body", "hello body"
+    )
     code, out = _run(cli_env, capsys, "show", note_id)
     assert code == 0
     assert "Visible" in out
@@ -165,8 +168,18 @@ def _full_id(cli_env, capsys, short_id):
 def test_edit_updates_fields(cli_env, capsys):
     note_id = _new(cli_env, capsys, "Old title", "--tags", "a", "--status", "open")
     old_full = _full_id(cli_env, capsys, note_id)
-    code, out = _run(cli_env, capsys, "edit", note_id,
-                      "--title", "New title", "--status", "done", "--body", "wrapped up")
+    code, out = _run(
+        cli_env,
+        capsys,
+        "edit",
+        note_id,
+        "--title",
+        "New title",
+        "--status",
+        "done",
+        "--body",
+        "wrapped up",
+    )
     assert code == 0
     assert "Updated:" in out
     new_id = _find_id(cli_env, capsys, "New title")
@@ -247,13 +260,16 @@ def test_list_today_flag_filters_to_today(cli_env, capsys, monkeypatch):
             return cls._fixed.astimezone(tz)
 
     _FakeDT._fixed = _dt.datetime.combine(
-        today - _dt.timedelta(days=1), _dt.time(10, 0),
-        tzinfo=_dt.timezone.utc,
+        today - _dt.timedelta(days=1),
+        _dt.time(10, 0),
+        tzinfo=_dt.UTC,
     )
     monkeypatch.setattr(core_module, "datetime", _FakeDT)
     _new(cli_env, capsys, "Yesterday item")
     _FakeDT._fixed = _dt.datetime.combine(
-        today, _dt.time(10, 0), tzinfo=_dt.timezone.utc,
+        today,
+        _dt.time(10, 0),
+        tzinfo=_dt.UTC,
     )
     _new(cli_env, capsys, "Today item")
     code, out = _run(cli_env, capsys, "list", "--today")
@@ -315,7 +331,17 @@ def test_timeline_groups_by_day(cli_env, capsys, monkeypatch):
 
 
 def test_sprint_list_and_report(cli_env, capsys):
-    _new(cli_env, capsys, "Sprint task", "--sprint", "S1", "--status", "done", "--gh", "DataWeX/sloughGPT#42")
+    _new(
+        cli_env,
+        capsys,
+        "Sprint task",
+        "--sprint",
+        "S1",
+        "--status",
+        "done",
+        "--gh",
+        "DataWeX/sloughGPT#42",
+    )
     code, out = _run(cli_env, capsys, "sprint", "S1")
     assert code == 0
     assert "Sprint task" in out

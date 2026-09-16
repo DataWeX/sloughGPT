@@ -12,9 +12,10 @@ import asyncio
 import logging
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class Priority(int, Enum):
 @dataclass
 class Task:
     """A unit of work for the queue."""
+
     id: str = field(default_factory=lambda: f"task_{uuid.uuid4().hex[:12]}")
     name: str = ""
     task_type: str = "generic"
@@ -105,10 +107,7 @@ class WorkerPool:
         self._running = True
         self._loop = loop
         self._queue = asyncio.Queue()
-        self._workers = [
-            asyncio.create_task(self._worker_loop(i))
-            for i in range(self.num_workers)
-        ]
+        self._workers = [asyncio.create_task(self._worker_loop(i)) for i in range(self.num_workers)]
         logger.info("Worker pool started with %d workers", self.num_workers)
 
     async def stop(self, timeout: float = 5.0):
@@ -188,9 +187,7 @@ class TaskQueue:
             if extra:
                 data.update(extra)
             try:
-                asyncio.ensure_future(
-                    self._event_bus.emit(event_name, data, source="task_queue")
-                )
+                asyncio.ensure_future(self._event_bus.emit(event_name, data, source="task_queue"))
             except Exception:
                 pass
 
@@ -249,13 +246,16 @@ class TaskQueue:
         stream_name = task.metadata.get("sse_stream", "auto-train")
         try:
             import json
+
             phase = status.value.upper()
-            payload = json.dumps({
-                "status": "error",
-                "stream": stream_name,
-                "phase": phase,
-                "data": {"error": task.error or f"Task {phase}"},
-            })
+            payload = json.dumps(
+                {
+                    "status": "error",
+                    "stream": stream_name,
+                    "phase": phase,
+                    "data": {"error": task.error or f"Task {phase}"},
+                }
+            )
             sse_queue.put_nowait(f"data: {payload}")
         except Exception:
             pass
@@ -369,9 +369,8 @@ class TaskQueue:
                     if t.status == TaskStatus.CANCELLED:
                         continue
                     deps_met = all(
-                        dep in self._completed or (
-                            dep in self._tasks and self._tasks[dep].status == TaskStatus.COMPLETED
-                        )
+                        dep in self._completed
+                        or (dep in self._tasks and self._tasks[dep].status == TaskStatus.COMPLETED)
                         for dep in t.dependencies
                     )
                     if deps_met:
@@ -397,7 +396,7 @@ class TaskQueue:
                     self._run_with_controls(task),
                     timeout=task.timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 async with self._lock:
                     task.status = TaskStatus.FAILED
                     task.error = f"Timeout after {task.timeout}s"
@@ -483,7 +482,9 @@ class InProcessTaskQueue(TaskQueue):
                 if attempt < task.max_retries:
                     logger.warning(
                         "Task %s attempt %d failed: %s — retrying",
-                        task.id, attempt + 1, e,
+                        task.id,
+                        attempt + 1,
+                        e,
                     )
                     await asyncio.sleep(0.2 * (attempt + 1))
                 else:

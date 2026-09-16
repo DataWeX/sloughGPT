@@ -10,7 +10,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ...__init__ import BaseComponent, ComponentException
 
@@ -82,7 +82,7 @@ class CacheManager(BaseComponent, ICacheManager):
 
         except Exception as e:
             self.logger.error("Failed to initialize Cache Manager: %s", e, extra={"tag": "INFRA"})
-            raise ComponentException(f"Cache Manager initialization failed: {e}")
+            raise ComponentException(f"Cache Manager initialization failed: {e}") from e
 
     async def shutdown(self) -> None:
         """Shutdown cache manager"""
@@ -102,7 +102,7 @@ class CacheManager(BaseComponent, ICacheManager):
 
         except Exception as e:
             self.logger.error("Failed to shutdown Cache Manager: %s", e, extra={"tag": "INFRA"})
-            raise ComponentException(f"Cache Manager shutdown failed: {e}")
+            raise ComponentException(f"Cache Manager shutdown failed: {e}") from e
 
     async def get(self, key: str) -> Any | None:
         """Get value from cache"""

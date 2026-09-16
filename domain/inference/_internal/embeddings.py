@@ -121,7 +121,7 @@ class OpenAIEmbedder(BaseEmbedder):
 
             self.client = OpenAI(api_key=self.api_key)
         except ImportError:
-            raise ImportError("pip install openai")
+            raise ImportError("pip install openai") from None
 
     def embed(self, texts: str | list[str]) -> list[list[float]]:
         if isinstance(texts, str):

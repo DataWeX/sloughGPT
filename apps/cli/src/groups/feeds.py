@@ -3,8 +3,10 @@ Feeds command group — RSS and JSON feed generation from dev notes.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, api_get
+from core.helpers import api_get
+
 from domain.logging import get_global
+
 log = get_global()
 
 

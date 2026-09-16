@@ -1,16 +1,21 @@
 """Tests for apps/cli/src/commands/chat.py — chat and generate commands."""
-import sys
-import os
-import pytest
-from unittest.mock import MagicMock, patch, call
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+import os
+import sys
+from unittest.mock import MagicMock
+
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+import domain.core._internal.soul as _soul_mod
 
 
 @pytest.fixture(autouse=True)
 def mock_log(monkeypatch):
     fake_log = MagicMock()
     import commands.chat as mod
+
     monkeypatch.setattr(mod, "log", fake_log)
     return fake_log
 
@@ -19,6 +24,7 @@ def mock_log(monkeypatch):
 def mock_soul_paths(monkeypatch):
     """Mock local_soul_candidate_paths."""
     import utils.helpers
+
     paths = MagicMock(return_value=[])
     monkeypatch.setattr(utils.helpers, "local_soul_candidate_paths", paths)
     return paths
@@ -27,6 +33,7 @@ def mock_soul_paths(monkeypatch):
 class TestCmdGenerate:
     def test_creates_engine_and_generates(self, monkeypatch, mock_soul_paths):
         from commands.chat import cmd_generate
+
         args = MagicMock()
         args.prompt = "Hello"
         args.max_tokens = 50
@@ -35,17 +42,15 @@ class TestCmdGenerate:
         mock_engine = MagicMock()
         mock_engine.generate.return_value = "Generated text"
 
-        import domain.core.soul
-        monkeypatch.setattr(domains.core.soul, "SloEngine", lambda **kw: mock_engine)
+        monkeypatch.setattr(_soul_mod, "SloEngine", lambda **kw: mock_engine)
 
         cmd_generate(args)
 
-        mock_engine.generate.assert_called_once_with(
-            "Hello", max_new_tokens=50, temperature=0.8
-        )
+        mock_engine.generate.assert_called_once_with("Hello", max_new_tokens=50, temperature=0.8)
 
     def test_header_shows_prompt_info(self, mock_log, monkeypatch, mock_soul_paths):
         from commands.chat import cmd_generate
+
         args = MagicMock()
         args.prompt = "Test prompt"
         args.max_tokens = 100
@@ -54,8 +59,7 @@ class TestCmdGenerate:
         mock_engine = MagicMock()
         mock_engine.generate.return_value = "ok"
 
-        import domain.core.soul
-        monkeypatch.setattr(domains.core.soul, "SloEngine", lambda **kw: mock_engine)
+        monkeypatch.setattr(_soul_mod, "SloEngine", lambda **kw: mock_engine)
 
         cmd_generate(args)
 
@@ -66,6 +70,7 @@ class TestCmdGenerate:
 
     def test_no_soul_files_warns_demo_mode(self, mock_log, monkeypatch, mock_soul_paths):
         from commands.chat import cmd_generate
+
         args = MagicMock()
         args.prompt = "Hi"
         args.max_tokens = 10
@@ -75,16 +80,17 @@ class TestCmdGenerate:
         mock_engine = MagicMock()
         mock_engine.generate.return_value = "Demo"
 
-        import domain.core.soul
-        monkeypatch.setattr(domains.core.soul, "SloEngine", lambda **kw: mock_engine)
+        monkeypatch.setattr(_soul_mod, "SloEngine", lambda **kw: mock_engine)
 
         cmd_generate(args)
 
         mock_log.warning.assert_called_with("No model found, using demo mode")
 
     def test_soul_file_loaded(self, mock_log, monkeypatch):
-        from commands.chat import cmd_generate
         from pathlib import Path
+
+        from commands.chat import cmd_generate
+
         args = MagicMock()
         args.prompt = "Hi"
         args.max_tokens = 10
@@ -96,12 +102,11 @@ class TestCmdGenerate:
         mock_engine.load_soul.return_value = mock_soul
         mock_engine.generate.return_value = "ok"
 
-        import domain.core.soul
-        monkeypatch.setattr(domains.core.soul, "SloEngine", lambda **kw: mock_engine)
+        monkeypatch.setattr(_soul_mod, "SloEngine", lambda **kw: mock_engine)
         import utils.helpers
+
         monkeypatch.setattr(
-            utils.helpers, "local_soul_candidate_paths",
-            lambda x: [Path("/fake/model.soul")]
+            utils.helpers, "local_soul_candidate_paths", lambda x: [Path("/fake/model.soul")]
         )
 
         cmd_generate(args)
@@ -114,6 +119,7 @@ class TestCmdGenerate:
 class TestCmdChat:
     def test_no_serve_flag_returns_when_api_down(self, monkeypatch, mock_log):
         from commands.chat import cmd_chat
+
         args = MagicMock()
         args.host = "localhost"
         args.port = 8000
@@ -122,6 +128,7 @@ class TestCmdChat:
         args.model = None
 
         import requests
+
         monkeypatch.setattr(requests, "get", MagicMock(side_effect=requests.ConnectionError))
 
         cmd_chat(args)
@@ -130,6 +137,7 @@ class TestCmdChat:
 
     def test_quit_exits_loop(self, monkeypatch, mock_log):
         from commands.chat import cmd_chat
+
         args = MagicMock()
         args.host = "localhost"
         args.port = 8000
@@ -140,6 +148,7 @@ class TestCmdChat:
         args.temperature = 0.8
 
         import requests
+
         monkeypatch.setattr(requests, "get", MagicMock(return_value=MagicMock(status_code=200)))
         monkeypatch.setattr("builtins.input", lambda _: "quit")
 
@@ -149,6 +158,7 @@ class TestCmdChat:
 
     def test_auto_model_triggers_load(self, monkeypatch, mock_log):
         from commands.chat import cmd_chat
+
         args = MagicMock()
         args.host = "localhost"
         args.port = 8000
@@ -159,8 +169,11 @@ class TestCmdChat:
         args.temperature = 0.8
 
         import requests
+
         mock_get = MagicMock(return_value=MagicMock(status_code=200))
-        mock_post = MagicMock(return_value=MagicMock(status_code=200, json=MagicMock(return_value={})))
+        mock_post = MagicMock(
+            return_value=MagicMock(status_code=200, json=MagicMock(return_value={}))
+        )
         monkeypatch.setattr(requests, "get", mock_get)
         monkeypatch.setattr(requests, "post", mock_post)
         monkeypatch.setattr("builtins.input", lambda _: "quit")
@@ -173,6 +186,7 @@ class TestCmdChat:
 
     def test_user_input_sent_to_api(self, monkeypatch, mock_log):
         from commands.chat import cmd_chat
+
         args = MagicMock()
         args.host = "localhost"
         args.port = 8000
@@ -183,6 +197,7 @@ class TestCmdChat:
         args.temperature = 0.8
 
         call_count = [0]
+
         def mock_input(prompt):
             call_count[0] += 1
             if call_count[0] == 1:
@@ -190,6 +205,7 @@ class TestCmdChat:
             return "quit"
 
         import requests
+
         mock_get = MagicMock(return_value=MagicMock(status_code=200))
         mock_resp = MagicMock()
         mock_resp.status_code = 200

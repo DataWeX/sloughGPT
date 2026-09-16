@@ -14,6 +14,7 @@ from domain.tools._internal.profiles import (
 from domain.tools._internal.tools import ToolsEngine, get_tools_engine
 
 __all__ = [
+    "TOOL_PROFILES",
     "ToolsEngine",
     "ToolOption",
     "ToolParam",

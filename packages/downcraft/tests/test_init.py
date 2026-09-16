@@ -3,7 +3,7 @@
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -11,6 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 from downcraft import download
+
 from conftest import RangeHandler, _range_url
 
 
@@ -53,6 +54,7 @@ class TestDownload:
 
     def test_download_with_checksum(self, range_server):
         import hashlib
+
         content = b"checksum test data"
         checksum = hashlib.sha256(content).hexdigest()
         RangeHandler.payloads["/checksum.bin"] = content
@@ -64,6 +66,7 @@ class TestDownload:
 
     def test_download_with_checksum_mismatch(self, range_server):
         from downcraft.download.http import DownloadError
+
         content = b"data"
         RangeHandler.payloads["/badchecksum.bin"] = content
 

@@ -4,6 +4,7 @@ Thin wrappers over ``domains.memory.memory_service`` (infrastructure before
 endpoints): the chat loop writes facts automatically, and these commands give
 operators visibility and manual control over that store.
 """
+
 import sys
 import time
 
@@ -11,8 +12,8 @@ from domain.logging import get_global
 
 log = get_global()
 
-from domain.memory._internal.consolidation import plan_consolidation
 from domain.memory._internal.config import MemoryConfig
+from domain.memory._internal.consolidation import plan_consolidation
 from domain.memory._internal.service import get_memory_service
 from domain.memory._internal.task_memory import (
     TASK_CONSOLIDATE,
@@ -43,7 +44,8 @@ def cmd_memory_stats(args) -> None:
     stats = svc.stats() or {}
     log.header("Memory")
     log.status(
-        "enabled", "on" if svc.enabled else "off",
+        "enabled",
+        "on" if svc.enabled else "off",
         "ok" if svc.enabled else "warn",
     )
     log.key_value("Facts", str(stats.get("total_facts", 0)))
@@ -176,6 +178,7 @@ def cmd_memory_clear(args) -> None:
     svc = _service()
     if not getattr(args, "yes", False):
         import click
+
         if not click.confirm("Delete all stored memory?", abort=True):
             return
     removed = svc.clear()
@@ -211,8 +214,7 @@ def cmd_memory_consolidate(args) -> None:
     if removed:
         log.success(f"Consolidated {removed} duplicate fact(s), kept {kept}")
     else:
-        log.info(f"No near-duplicates found at threshold {threshold:.3f} "
-                     f"({kept} facts kept)")
+        log.info(f"No near-duplicates found at threshold {threshold:.3f} ({kept} facts kept)")
 
 
 def _archive_summary(record) -> str:
@@ -223,8 +225,7 @@ def _archive_summary(record) -> str:
     if task_type == TASK_STORE:
         return (record.get("content") or "")[:60]
     if task_type == TASK_CONSOLIDATE:
-        return (f"removed {record.get('removed', 0)}, "
-                f"kept {record.get('kept', 0)}")
+        return f"removed {record.get('removed', 0)}, kept {record.get('kept', 0)}"
     return (record.get("content") or "")[:60]
 
 
@@ -244,9 +245,11 @@ def cmd_memory_archive(args) -> None:
           records inside the retention window.
     """
     from domain.memory._internal.task_memory import archive_stats, list_archive, prune_archive
+
     prune_days = getattr(args, "prune_days", None)
     if prune_days is not None:
         import click
+
         if not click.confirm(
             f"Delete archive records older than {float(prune_days):g} days?",
             abort=True,
@@ -265,9 +268,7 @@ def cmd_memory_archive(args) -> None:
     log.key_value("Size", f"{stats.get('bytes', 0)} bytes")
     task_types = stats.get("task_types") or {}
     if task_types:
-        log.key_value("Task types", ", ".join(
-            f"{k} ({v})" for k, v in sorted(task_types.items())
-        ))
+        log.key_value("Task types", ", ".join(f"{k} ({v})" for k, v in sorted(task_types.items())))
     limit = int(getattr(args, "limit", 10))
     if limit > 0:
         records = list_archive(limit=limit)
@@ -277,6 +278,7 @@ def cmd_memory_archive(args) -> None:
             for r in records:
                 ts = r.get("ts")
                 when = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts)) if ts else "-"
-                rows.append([when, r.get("task_type") or "-",
-                             r.get("task_id") or "-", _archive_summary(r)])
+                rows.append(
+                    [when, r.get("task_type") or "-", r.get("task_id") or "-", _archive_summary(r)]
+                )
             log.table(["when", "task", "task_id", "summary"], rows)

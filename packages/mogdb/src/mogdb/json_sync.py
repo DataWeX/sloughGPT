@@ -23,7 +23,7 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any
 
 from .collection import Collection
 
@@ -54,7 +54,7 @@ class SyncableCollection:
     def __init__(
         self,
         collection: Collection,
-        json_path: Union[str, Path],
+        json_path: str | Path,
         sync_mode: str = "full",
         lazy_sync_interval: float = 5.0,
     ):
@@ -68,7 +68,7 @@ class SyncableCollection:
         self._dirty = False
         self._lazy_interval = lazy_sync_interval
         self._last_sync = 0.0
-        self._lazy_timer: Optional[threading.Timer] = None
+        self._lazy_timer: threading.Timer | None = None
         self._shutdown = False
         self._batch_depth = 0  # Track nested batch() context depth
         self._batch_had_writes = False  # Track if batch had any writes
@@ -90,6 +90,7 @@ class SyncableCollection:
             # Try gzip first, then plain JSON
             if self._json_path.suffix == ".gz":
                 import gzip
+
                 with gzip.open(self._json_path, "rt", encoding="utf-8") as f:
                     data = json.load(f)
             else:
@@ -109,6 +110,7 @@ class SyncableCollection:
             tmp_path = self._json_path.with_suffix(".json.gz.tmp")
             try:
                 import gzip
+
                 with gzip.open(tmp_path, "wt", encoding="utf-8") as f:
                     json.dump(docs, f, indent=2, default=str)
                 tmp_path.replace(self._json_path)
@@ -175,57 +177,57 @@ class SyncableCollection:
     # Proxied CRUD — all writes trigger JSON sync
     # ------------------------------------------------------------------
 
-    def insert_one(self, doc: Dict[str, Any]) -> str:
+    def insert_one(self, doc: dict[str, Any]) -> str:
         doc_id = self._col.insert_one(doc)
         self._on_write()
         return doc_id
 
-    def insert_many(self, docs: List[Dict[str, Any]]) -> List[str]:
+    def insert_many(self, docs: list[dict[str, Any]]) -> list[str]:
         ids = self._col.insert_many(docs)
         self._on_write()
         return ids
 
-    def update_one(self, query: Dict[str, Any], update: Dict[str, Any]) -> int:
+    def update_one(self, query: dict[str, Any], update: dict[str, Any]) -> int:
         count = self._col.update_one(query, update)
         if count:
             self._on_write()
         return count
 
-    def update_many(self, query: Dict[str, Any], update: Dict[str, Any]) -> int:
+    def update_many(self, query: dict[str, Any], update: dict[str, Any]) -> int:
         count = self._col.update_many(query, update)
         if count:
             self._on_write()
         return count
 
-    def delete_one(self, query: Dict[str, Any]) -> int:
+    def delete_one(self, query: dict[str, Any]) -> int:
         count = self._col.delete_one(query)
         if count:
             self._on_write()
         return count
 
-    def delete_many(self, query: Dict[str, Any]) -> int:
+    def delete_many(self, query: dict[str, Any]) -> int:
         count = self._col.delete_many(query)
         if count:
             self._on_write()
         return count
 
     def find_one_and_update(
-        self, query: Dict[str, Any], update: Dict[str, Any], return_document: str = "before"
-    ) -> Optional[Dict[str, Any]]:
+        self, query: dict[str, Any], update: dict[str, Any], return_document: str = "before"
+    ) -> dict[str, Any] | None:
         result = self._col.find_one_and_update(query, update, return_document)
         if result is not None:
             self._on_write()
         return result
 
     def find_one_and_replace(
-        self, query: Dict[str, Any], replacement: Dict[str, Any], return_document: str = "before"
-    ) -> Optional[Dict[str, Any]]:
+        self, query: dict[str, Any], replacement: dict[str, Any], return_document: str = "before"
+    ) -> dict[str, Any] | None:
         result = self._col.find_one_and_replace(query, replacement, return_document)
         if result is not None:
             self._on_write()
         return result
 
-    def find_one_and_delete(self, query: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def find_one_and_delete(self, query: dict[str, Any]) -> dict[str, Any] | None:
         result = self._col.find_one_and_delete(query)
         if result is not None:
             self._on_write()
@@ -257,16 +259,18 @@ class SyncableCollection:
     # Read-only proxied methods — no sync needed
     # ------------------------------------------------------------------
 
-    def find(self, query=None, sort=None, limit=None, skip=0, projection=None) -> List[Dict[str, Any]]:
+    def find(
+        self, query=None, sort=None, limit=None, skip=0, projection=None
+    ) -> list[dict[str, Any]]:
         return self._col.find(query, sort=sort, limit=limit, skip=skip, projection=projection)
 
-    def find_one(self, query=None, projection=None) -> Optional[Dict[str, Any]]:
+    def find_one(self, query=None, projection=None) -> dict[str, Any] | None:
         return self._col.find_one(query, projection=projection)
 
     def count(self, query=None) -> int:
         return self._col.count(query)
 
-    def aggregate(self, pipeline: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def aggregate(self, pipeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return self._col.aggregate(pipeline)
 
     # ------------------------------------------------------------------

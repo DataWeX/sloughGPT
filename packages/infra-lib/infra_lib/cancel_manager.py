@@ -36,8 +36,9 @@ import logging
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +47,10 @@ _lock = threading.Lock()
 
 # ── Operation types ────────────────────────────────────────────────────
 
+
 class OpType(enum.Enum):
     """Categories of cancellable operations."""
+
     TRAINING = "training"
     INFERENCE = "inference"
     DOWNLOAD = "download"
@@ -58,6 +61,7 @@ class OpType(enum.Enum):
 
 class OpStatus(enum.Enum):
     """Lifecycle states of a registered operation."""
+
     REGISTERED = "registered"
     RUNNING = "running"
     CANCELLING = "cancelling"
@@ -68,21 +72,23 @@ class OpStatus(enum.Enum):
 
 # ── Operation record ──────────────────────────────────────────────────
 
+
 @dataclass
 class Operation:
     """A single cancellable operation tracked by the manager."""
+
     id: str
     op_type: OpType
     label: str
     status: OpStatus
     cancel_fn: Callable[[], Any]
     created_at: float
-    started_at: Optional[float] = None
-    finished_at: Optional[float] = None
-    error: Optional[str] = None
-    meta: Dict[str, Any] = field(default_factory=dict)
+    started_at: float | None = None
+    finished_at: float | None = None
+    error: str | None = None
+    meta: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "type": self.op_type.value,
@@ -101,6 +107,7 @@ class Operation:
 
 # ── CancelManager ─────────────────────────────────────────────────────
 
+
 class CancelManager:
     """Thread-safe registry of cancellable operations.
 
@@ -109,7 +116,7 @@ class CancelManager:
     """
 
     def __init__(self) -> None:
-        self._ops: Dict[str, Operation] = {}
+        self._ops: dict[str, Operation] = {}
         self._lock = threading.Lock()
 
     # ── Register ──────────────────────────────────────────────────────
@@ -119,8 +126,8 @@ class CancelManager:
         op_type: OpType,
         label: str,
         cancel_fn: Callable[[], Any],
-        meta: Optional[Dict[str, Any]] = None,
-        op_id: Optional[str] = None,
+        meta: dict[str, Any] | None = None,
+        op_id: str | None = None,
     ) -> str:
         """Register a new cancellable operation. Returns its ID."""
         oid = op_id or uuid.uuid4().hex[:12]
@@ -145,7 +152,7 @@ class CancelManager:
                 op.status = OpStatus.RUNNING
                 op.started_at = time.time()
 
-    def finish(self, op_id: str, error: Optional[str] = None) -> None:
+    def finish(self, op_id: str, error: str | None = None) -> None:
         """Mark an operation as completed or failed."""
         with self._lock:
             op = self._ops.get(op_id)
@@ -181,14 +188,15 @@ class CancelManager:
         logger.info("Cancelled %s operation: %s (%s)", op.op_type.value, op.label, op_id)
         return True
 
-    def cancel_all(self, op_type: Optional[OpType] = None) -> List[str]:
+    def cancel_all(self, op_type: OpType | None = None) -> list[str]:
         """Cancel all active operations, optionally filtered by type.
 
         Returns list of cancelled operation IDs.
         """
         with self._lock:
             targets = [
-                oid for oid, op in self._ops.items()
+                oid
+                for oid, op in self._ops.items()
                 if op.status in (OpStatus.REGISTERED, OpStatus.RUNNING)
                 and (op_type is None or op.op_type == op_type)
             ]
@@ -200,32 +208,31 @@ class CancelManager:
 
     # ── Query ─────────────────────────────────────────────────────────
 
-    def get(self, op_id: str) -> Optional[Operation]:
+    def get(self, op_id: str) -> Operation | None:
         with self._lock:
             return self._ops.get(op_id)
 
-    def list_active(self, op_type: Optional[OpType] = None) -> List[Operation]:
+    def list_active(self, op_type: OpType | None = None) -> list[Operation]:
         """Return all non-terminal operations."""
         with self._lock:
             return [
-                op for op in self._ops.values()
+                op
+                for op in self._ops.values()
                 if op.status in (OpStatus.REGISTERED, OpStatus.RUNNING, OpStatus.CANCELLING)
                 and (op_type is None or op.op_type == op_type)
             ]
 
-    def list_all(self, op_type: Optional[OpType] = None) -> List[Operation]:
+    def list_all(self, op_type: OpType | None = None) -> list[Operation]:
         with self._lock:
-            return [
-                op for op in self._ops.values()
-                if op_type is None or op.op_type == op_type
-            ]
+            return [op for op in self._ops.values() if op_type is None or op.op_type == op_type]
 
     def purge(self, max_age_s: float = 3600.0) -> int:
         """Remove finished operations older than max_age_s. Returns count removed."""
         cutoff = time.time() - max_age_s
         with self._lock:
             to_remove = [
-                oid for oid, op in self._ops.items()
+                oid
+                for oid, op in self._ops.items()
                 if op.status in (OpStatus.COMPLETED, OpStatus.CANCELLED, OpStatus.FAILED)
                 and (op.finished_at or 0) < cutoff
             ]
@@ -233,10 +240,10 @@ class CancelManager:
                 del self._ops[oid]
         return len(to_remove)
 
-    def count(self, op_type: Optional[OpType] = None) -> Dict[str, int]:
+    def count(self, op_type: OpType | None = None) -> dict[str, int]:
         """Count operations by status."""
         with self._lock:
-            result: Dict[str, int] = {}
+            result: dict[str, int] = {}
             for op in self._ops.values():
                 if op_type and op.op_type != op_type:
                     continue
@@ -247,7 +254,7 @@ class CancelManager:
 
 # ── Singleton ──────────────────────────────────────────────────────────
 
-_manager: Optional[CancelManager] = None
+_manager: CancelManager | None = None
 _manager_lock = threading.Lock()
 
 

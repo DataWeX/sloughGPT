@@ -1033,7 +1033,7 @@ class ModelWorkerProcess:
             self._req_q.put_nowait(("generate", (session_id, prompt, payload)))
         except Exception as e:
             self._health.errors += 1
-            raise RuntimeError(f"Failed to send request to worker: {e}")
+            raise RuntimeError(f"Failed to send request to worker: {e}") from e
 
         # Wait for response
         deadline = time.time() + self._generate_timeout
@@ -1060,7 +1060,7 @@ class ModelWorkerProcess:
                     raise WorkerStreamStalledError(
                         f"Worker[{self.worker_id}] stalled for {self._stall_timeout}s "
                         f"during generation"
-                    )
+                    ) from None
                 continue
             last_activity = time.time()
 
@@ -1143,7 +1143,7 @@ class ModelWorkerProcess:
             self._req_q.put_nowait(("generate_stream", (session_id, prompt, payload)))
         except Exception as e:
             self._health.errors += 1
-            raise RuntimeError(f"Failed to send stream request to worker: {e}")
+            raise RuntimeError(f"Failed to send stream request to worker: {e}") from e
 
         # Read tokens from response queue until result or error
         deadline = time.time() + self._generate_timeout
@@ -1168,7 +1168,7 @@ class ModelWorkerProcess:
                     raise WorkerStreamStalledError(
                         f"Worker[{self.worker_id}] stalled for {self._stall_timeout}s "
                         f"during streaming generation"
-                    )
+                    ) from None
                 continue
             last_activity = time.time()
 
@@ -1225,7 +1225,7 @@ class ModelWorkerProcess:
             self._req_q.put_nowait(("load_adapter", (session_id, adapter_path, merge)))
         except Exception as e:
             self._health.errors += 1
-            raise RuntimeError(f"Failed to send load_adapter request: {e}")
+            raise RuntimeError(f"Failed to send load_adapter request: {e}") from e
 
         deadline = time.time() + timeout
         while time.time() < deadline:
@@ -1269,7 +1269,7 @@ class ModelWorkerProcess:
             self._req_q.put_nowait(("unload_adapter", (session_id,)))
         except Exception as e:
             self._health.errors += 1
-            raise RuntimeError(f"Failed to send unload_adapter request: {e}")
+            raise RuntimeError(f"Failed to send unload_adapter request: {e}") from e
 
         deadline = time.time() + timeout
         while time.time() < deadline:

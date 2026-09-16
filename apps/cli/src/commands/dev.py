@@ -1,20 +1,21 @@
 """
 Dev commands - Development server, health checks, and API status.
 """
-import re
-import subprocess
-import sys
+
 import os
-import time
+import re
 import signal
+import subprocess
 import threading
+import time
 import webbrowser
-from pathlib import Path
 from collections import deque
+from pathlib import Path
+
+from utils.formatting import format_time
 
 from domain.logging import get_global
 from domain.shared import find_server_python
-from utils.formatting import format_time
 
 log = get_global()
 
@@ -39,12 +40,12 @@ class StatusBlock:
         self._log = logger
         self._lines: list[str] = []
         # Check if logger has cursor methods AND the stream is actually a TTY
-        stream = getattr(logger, '_stream', None)
+        stream = getattr(logger, "_stream", None)
         self._is_tty = (
-            hasattr(logger, 'cursor_up')
-            and hasattr(logger, 'clear_line')
+            hasattr(logger, "cursor_up")
+            and hasattr(logger, "clear_line")
             and stream is not None
-            and hasattr(stream, 'isatty')
+            and hasattr(stream, "isatty")
             and stream.isatty()
         )
         self._printed = False
@@ -72,9 +73,11 @@ class StatusBlock:
 def _kill_port(port: int):
     """Kill process running on port."""
     import shlex
+
     result = subprocess.run(
         shlex.split(f"lsof -ti:{port}"),
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     for pid in result.stdout.strip().split():
         if pid.isdigit():
@@ -85,6 +88,7 @@ def _check_port(port: int) -> bool:
     """Check if a port is responding."""
     try:
         import urllib.request
+
         urllib.request.urlopen(f"http://localhost:{port}/", timeout=1)
         return True
     except (urllib.error.URLError, OSError):
@@ -106,16 +110,18 @@ def _handle_eaddrinuse(port: int, service: str = "web"):
 
     # Find what's using the port
     import shlex
+
     result = subprocess.run(
         shlex.split(f"lsof -ti:{port}"),
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     pids = [pid for pid in result.stdout.strip().split() if pid.isdigit()]
 
     if pids:
         for pid in pids:
             try:
-                with open(f"/proc/{pid}/comm", "r") as f:
+                with open(f"/proc/{pid}/comm") as f:
                     proc_name = f.read().strip()
             except (FileNotFoundError, PermissionError):
                 proc_name = "unknown"
@@ -123,7 +129,7 @@ def _handle_eaddrinuse(port: int, service: str = "web"):
         log.blank()
 
     log.command(f"lsof -ti:{port} | xargs kill -9", "kill")
-    log.command(f"PORT=3001 slo dev --web-port 3001", "or use another port")
+    log.command("PORT=3001 slo dev --web-port 3001", "or use another port")
 
 
 def _extract_error_lines(lines: deque, max_lines: int = 40) -> list[str]:
@@ -204,6 +210,7 @@ def _check_api_ready(port: int) -> bool:
     """Check if API health endpoint responds."""
     try:
         import urllib.request
+
         urllib.request.urlopen(f"http://localhost:{port}/health", timeout=3)
         return True
     except (urllib.error.URLError, OSError):
@@ -214,6 +221,7 @@ def _check_web_ready(port: int) -> bool:
     """Check if web frontend is responding."""
     try:
         import urllib.request
+
         urllib.request.urlopen(f"http://localhost:{port}/", timeout=3)
         return True
     except (urllib.error.URLError, OSError):
@@ -223,6 +231,7 @@ def _check_web_ready(port: int) -> bool:
 def _is_port_bound(port: int) -> bool:
     """Check if a port is bound (in use) by any process."""
     import socket
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(("localhost", port)) == 0
 
@@ -239,8 +248,9 @@ def _find_free_port(start: int) -> int:
 def _get_startup_progress(port: int) -> dict | None:
     """Fetch startup progress from /health/startup-progress."""
     try:
-        import urllib.request
         import json
+        import urllib.request
+
         resp = urllib.request.urlopen(f"http://localhost:{port}/health/startup-progress", timeout=2)
         data = json.loads(resp.read())
         return data.get("data", data)
@@ -288,7 +298,13 @@ def _wait_for_api_with_progress(port: int, timeout: int = 90) -> bool:
     return False
 
 
-def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True, echo_event: threading.Event = None):
+def _read_stream(
+    stream,
+    lines: deque,
+    stop: threading.Event,
+    echo: bool = True,
+    echo_event: threading.Event = None,
+):
     """Read lines from a subprocess stream into a deque until stop is set.
 
     Args:
@@ -323,6 +339,7 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True,
 def _repo_root() -> Path:
     """Get the repository root from this file's location."""
     from domain.shared import find_repo_root
+
     return find_repo_root(str(Path(__file__).resolve()))
 
 
@@ -338,7 +355,9 @@ def cmd_dev(args):
     watch_web = getattr(args, "watch_web", False)
 
     # ── In-place status block during startup ──────────────
-    from domain.logging._internal.cli_logger import _c as ansi_c, _A
+    from domain.logging._internal.cli_logger import _A
+    from domain.logging._internal.cli_logger import _c as ansi_c
+
     status_block = StatusBlock(log)
     api_status = "starting"
     web_status = "starting"
@@ -366,8 +385,17 @@ def cmd_dev(args):
 
     python = Path(find_server_python(root))
     api_proc = subprocess.Popen(
-        [str(python), "-m", "uvicorn", "apps.api.server.main:app",
-         "--host", "0.0.0.0", "--port", str(api_port), "--reload"],
+        [
+            str(python),
+            "-m",
+            "uvicorn",
+            "apps.api.server.main:app",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            str(api_port),
+            "--reload",
+        ],
         cwd=str(root),
         env=env,
         stdout=subprocess.PIPE,
@@ -386,9 +414,23 @@ def cmd_dev(args):
 
     if watch_web:
         web_proc = subprocess.Popen(
-            ["npx", "nodemon", "--watch", "app", "--watch", "components",
-             "--watch", "lib", "--watch", "hooks", "-e", "ts,tsx,js,jsx",
-             "npm", "run", "dev"],
+            [
+                "npx",
+                "nodemon",
+                "--watch",
+                "app",
+                "--watch",
+                "components",
+                "--watch",
+                "lib",
+                "--watch",
+                "hooks",
+                "-e",
+                "ts,tsx,js,jsx",
+                "npm",
+                "run",
+                "dev",
+            ],
             cwd=str(web_cwd),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
@@ -416,21 +458,17 @@ def cmd_dev(args):
             if not status["api_ready"] and _check_api_ready(api_port):
                 status["api_ready"] = True
                 status["api"] = "ready"
-                api_status = "ready"
                 _update_startup_status()
             if not status["web_ready"] and _check_port(web_port):
                 status["web_ready"] = True
                 status["web"] = "ready"
-                web_status = "ready"
                 _update_startup_status()
             # Check if web process died
             if not status["web_ready"] and web_proc.poll() is not None:
                 if _is_eaddrinuse(web_lines):
                     status["web"] = "eaddrinuse"
-                    web_status = "eaddrinuse"
                 else:
                     status["web"] = "error"
-                    web_status = "error"
                 _update_startup_status()
                 break
             time.sleep(0.5)
@@ -590,7 +628,9 @@ def _cmd_api_only(args):
         api_port = _find_free_port(api_port + 1)
 
     # ── In-place status block ───────────────────────────────────
-    from domain.logging._internal.cli_logger import _c as ansi_c, _A
+    from domain.logging._internal.cli_logger import _A
+    from domain.logging._internal.cli_logger import _c as ansi_c
+
     status = StatusBlock(log)
     api_status = "ok (reusing)" if api_reused else "starting"
 
@@ -619,8 +659,16 @@ def _cmd_api_only(args):
     if not api_reused:
         python = Path(find_server_python(root))
         api_proc = subprocess.Popen(
-            [str(python), "-m", "uvicorn", "apps.api.server.main:app",
-             "--host", args.host, "--port", str(api_port)],
+            [
+                str(python),
+                "-m",
+                "uvicorn",
+                "apps.api.server.main:app",
+                "--host",
+                args.host,
+                "--port",
+                str(api_port),
+            ],
             cwd=str(root),
             env=env,
             stdout=subprocess.PIPE,
@@ -657,7 +705,7 @@ def _cmd_api_only(args):
         "",
         f"  {ansi_c('ok', _A.GREEN, log._colors)} Ready",
         "",
-        f"  Press Ctrl+C to stop",
+        "  Press Ctrl+C to stop",
     )
 
     shutdown = [False]
@@ -670,7 +718,7 @@ def _cmd_api_only(args):
             ansi_c("  SloughGPT API", _A.BOLD, log._colors),
             f"  API: http://{args.host}:{api_port}",
             "",
-            f"  Shutting down...",
+            "  Shutting down...",
         )
         stop_event.set()
         if api_proc is not None and api_proc.poll() is None:
@@ -731,7 +779,9 @@ def _cmd_api_and_mobile(args):
         api_port = _find_free_port(api_port + 1)
 
     # ── In-place status block ───────────────────────────────────
-    from domain.logging._internal.cli_logger import _c as ansi_c, _A
+    from domain.logging._internal.cli_logger import _A
+    from domain.logging._internal.cli_logger import _c as ansi_c
+
     status = StatusBlock(log)
     api_status = "ok (reusing)" if api_reused else "starting"
     mobile_status = "starting"
@@ -778,8 +828,16 @@ def _cmd_api_and_mobile(args):
     if not api_reused:
         python = Path(find_server_python(root))
         api_proc = subprocess.Popen(
-            [str(python), "-m", "uvicorn", "apps.api.server.main:app",
-             "--host", args.host, "--port", str(api_port)],
+            [
+                str(python),
+                "-m",
+                "uvicorn",
+                "apps.api.server.main:app",
+                "--host",
+                args.host,
+                "--port",
+                str(api_port),
+            ],
             cwd=str(root),
             env=env,
             stdout=subprocess.PIPE,
@@ -857,11 +915,11 @@ def _cmd_api_and_mobile(args):
     status.update(
         ansi_c("  SloughGPT", _A.BOLD, log._colors),
         f"  API:    {api_url}",
-        f"  Mobile: metro bundler (8081)",
+        "  Mobile: metro bundler (8081)",
         "",
         f"  {ansi_c('ok', _A.GREEN, log._colors)} All services ready",
         "",
-        f"  Press Ctrl+C to stop",
+        "  Press Ctrl+C to stop",
     )
 
     # ── Signal handlers ───────────────────────────────────
@@ -874,16 +932,16 @@ def _cmd_api_and_mobile(args):
         status.update(
             ansi_c("  SloughGPT", _A.BOLD, log._colors),
             f"  API:    {api_url}",
-            f"  Mobile: metro bundler (8081)",
+            "  Mobile: metro bundler (8081)",
             "",
-            f"  Shutting down...",
+            "  Shutting down...",
         )
         stop_event.set()
         _cleanup(api_proc, mobile_proc, api_port, 8081)
         status.update(
             ansi_c("  SloughGPT", _A.BOLD, log._colors),
             f"  API:    {api_url}",
-            f"  Mobile: metro bundler (8081)",
+            "  Mobile: metro bundler (8081)",
             "",
             f"  {ansi_c('ok', _A.GREEN, log._colors)} Stopped",
         )
@@ -911,7 +969,9 @@ def _cmd_api_and_mobile(args):
                     text=True,
                 )
                 mobile_thread = threading.Thread(
-                    target=_read_stream, args=(mobile_proc.stderr, mobile_lines, stop_event), daemon=True
+                    target=_read_stream,
+                    args=(mobile_proc.stderr, mobile_lines, stop_event),
+                    daemon=True,
                 )
                 mobile_thread.start()
                 mobile_status = "ok"
@@ -944,7 +1004,9 @@ def _cmd_api_and_web(args):
         web_port = _find_free_port(web_port + 1)
 
     # ── In-place status block ───────────────────────────────────
-    from domain.logging._internal.cli_logger import _c as ansi_c, _A
+    from domain.logging._internal.cli_logger import _A
+    from domain.logging._internal.cli_logger import _c as ansi_c
+
     status = StatusBlock(log)
     api_status = "ok (reusing)" if api_reused else "starting"
     web_status = "ok (reusing)" if web_reused else "starting"
@@ -999,8 +1061,16 @@ def _cmd_api_and_web(args):
     api_proc = None
     if not api_reused:
         api_proc = subprocess.Popen(
-            [str(python), "-m", "uvicorn", "apps.api.server.main:app",
-             "--host", args.host, "--port", str(api_port)],
+            [
+                str(python),
+                "-m",
+                "uvicorn",
+                "apps.api.server.main:app",
+                "--host",
+                args.host,
+                "--port",
+                str(api_port),
+            ],
             cwd=str(root),
             env=env,
             stdout=subprocess.PIPE,
@@ -1008,8 +1078,10 @@ def _cmd_api_and_web(args):
             text=True,
         )
         api_thread = threading.Thread(
-            target=_read_stream, args=(api_proc.stdout, api_lines, stop_event),
-            kwargs={"echo_event": api_ready_event}, daemon=True,
+            target=_read_stream,
+            args=(api_proc.stdout, api_lines, stop_event),
+            kwargs={"echo_event": api_ready_event},
+            daemon=True,
         )
         api_thread.start()
 
@@ -1058,6 +1130,7 @@ def _cmd_api_and_web(args):
     static_dst = standalone_root / ".next" / "static"
     if static_src.is_dir() and not static_dst.is_dir():
         import shutil
+
         static_dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(static_src, static_dst)
 
@@ -1065,6 +1138,7 @@ def _cmd_api_and_web(args):
     public_dst = standalone_root / "public"
     if public_src.is_dir() and not public_dst.is_dir():
         import shutil
+
         for dirpath, dirnames, filenames in os.walk(public_src, followlinks=False):
             rel = os.path.relpath(dirpath, public_src)
             dst_dir = public_dst / rel
@@ -1080,7 +1154,9 @@ def _cmd_api_and_web(args):
         **env,
         "PORT": str(web_port),
         "HOSTNAME": "0.0.0.0",
-        "NEXT_PUBLIC_API_URL": os.environ.get("NEXT_PUBLIC_API_URL", f"http://{args.host}:{api_port}"),
+        "NEXT_PUBLIC_API_URL": os.environ.get(
+            "NEXT_PUBLIC_API_URL", f"http://{args.host}:{api_port}"
+        ),
     }
 
     web_proc = None
@@ -1105,8 +1181,10 @@ def _cmd_api_and_web(args):
             )
 
         web_thread = threading.Thread(
-            target=_read_stream, args=(web_proc.stderr, web_lines, stop_event),
-            kwargs={"echo_event": api_ready_event}, daemon=True,
+            target=_read_stream,
+            args=(web_proc.stderr, web_lines, stop_event),
+            kwargs={"echo_event": api_ready_event},
+            daemon=True,
         )
         web_thread.start()
 
@@ -1163,7 +1241,6 @@ def _cmd_api_and_web(args):
 
     # ── Ready ────────────────────────────────────────────────────
     web_url = f"http://localhost:{web_port}"
-    api_url = f"http://{args.host}:{api_port}"
     api_status = "ok"
     web_status = "ok"
     _update_status()
@@ -1209,7 +1286,11 @@ def _cmd_api_and_web(args):
                     _handle_eaddrinuse(web_port, "web")
                     break
                 log.warning(f"Web server exited (code {web_proc.returncode}), restarting...")
-                web_cwd = str(server_js.parent.resolve()) if server_js.is_file() else str(web_root.resolve())
+                web_cwd = (
+                    str(server_js.parent.resolve())
+                    if server_js.is_file()
+                    else str(web_root.resolve())
+                )
                 web_proc = subprocess.Popen(
                     ["node", "server.js"] if server_js.is_file() else ["npm", "run", "dev"],
                     cwd=web_cwd,
@@ -1243,6 +1324,7 @@ def cmd_health(args):
 
     try:
         import time
+
         start = time.time()
         response = requests.get(f"{base_url}/health", timeout=5)
         elapsed = time.time() - start
@@ -1307,8 +1389,9 @@ def cmd_api_status(args):
 
 def cmd_api_test(args):
     """Test API endpoints."""
-    import requests
     import time
+
+    import requests
 
     base_url = f"http://{args.host}:{args.port}"
 
@@ -1353,7 +1436,9 @@ def cmd_api_auth(args):
 
     log.step("Testing generate without auth...")
     try:
-        r = requests.post(f"{base_url}/generate", json={"prompt": "Hello", "max_new_tokens": 5}, timeout=10)
+        r = requests.post(
+            f"{base_url}/generate", json={"prompt": "Hello", "max_new_tokens": 5}, timeout=10
+        )
         if r.status_code == 200:
             log.status("No Auth", "Open (200)", "ok")
         else:
@@ -1375,8 +1460,12 @@ def cmd_api_auth(args):
 
     log.step("Testing verify endpoint...")
     try:
-        r = requests.post(f"{base_url}/auth/verify", headers={"Authorization": "Bearer invalid"}, timeout=10)
-        log.status("Verify", f"HTTP {r.status_code}", "ok" if r.status_code in (401, 403) else "warn")
+        r = requests.post(
+            f"{base_url}/auth/verify", headers={"Authorization": "Bearer invalid"}, timeout=10
+        )
+        log.status(
+            "Verify", f"HTTP {r.status_code}", "ok" if r.status_code in (401, 403) else "warn"
+        )
     except Exception as e:
         log.info(f"No verify endpoint: {e}")
 
@@ -1404,4 +1493,3 @@ def cmd_hf_serve(args):
     except Exception as e:
         log.error(f"API error: {e}")
         log.info("Make sure the API server is running: python3 cli.py dev")
-

@@ -1,22 +1,16 @@
 """Tests for planner.hashtree — cryptographic hash tree for kanban cards."""
 
-import json
-from pathlib import Path
-
-import pytest
-
 from planner.hashtree import (
-    _hash,
-    _derive_note_hash,
     CardSlotHash,
-    NoteHash,
-    HashHistoryEntry,
     HashCommit,
+    HashHistoryEntry,
     HashTree,
     HashTreeStore,
+    NoteHash,
+    _derive_note_hash,
+    _hash,
     create_hash_tree,
 )
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Hash functions
@@ -62,8 +56,13 @@ class TestHashFunctions:
 class TestCardSlotHash:
     def test_to_dict_and_back(self):
         csh = CardSlotHash(
-            root="abc123", card_id="c1", slot_id="s1",
-            tray="todo", position=0, placed_at="2024-01-01", created_at="2024-01-01",
+            root="abc123",
+            card_id="c1",
+            slot_id="s1",
+            tray="todo",
+            position=0,
+            placed_at="2024-01-01",
+            created_at="2024-01-01",
         )
         d = csh.to_dict()
         restored = CardSlotHash.from_dict(d)
@@ -89,8 +88,12 @@ class TestNoteHash:
 class TestHashHistoryEntry:
     def test_to_dict_and_back(self):
         hhe = HashHistoryEntry(
-            root_ref="r1", old_hash="old", new_hash="new",
-            change_type="note_edit", note_id="n1", timestamp="t1",
+            root_ref="r1",
+            old_hash="old",
+            new_hash="new",
+            change_type="note_edit",
+            note_id="n1",
+            timestamp="t1",
         )
         d = hhe.to_dict()
         restored = HashHistoryEntry.from_dict(d)
@@ -100,8 +103,12 @@ class TestHashHistoryEntry:
 class TestHashCommit:
     def test_to_dict_and_back(self):
         hc = HashCommit(
-            commit_hash="ch1", parent_hash="ph1", root_ref="r1",
-            changes=[{"type": "add"}], color="#abc123", pixel="deadbeef",
+            commit_hash="ch1",
+            parent_hash="ph1",
+            root_ref="r1",
+            changes=[{"type": "add"}],
+            color="#abc123",
+            pixel="deadbeef",
         )
         d = hc.to_dict()
         restored = HashCommit.from_dict(d)
@@ -116,8 +123,13 @@ class TestHashCommit:
 
 def _make_tree():
     root = CardSlotHash(
-        root="test_root", card_id="c1", slot_id="s1",
-        tray="todo", position=0, placed_at="2024-01-01", created_at="2024-01-01",
+        root="test_root",
+        card_id="c1",
+        slot_id="s1",
+        tray="todo",
+        position=0,
+        placed_at="2024-01-01",
+        created_at="2024-01-01",
     )
     return HashTree(root=root)
 

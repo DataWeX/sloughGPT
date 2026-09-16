@@ -11,11 +11,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 from downcraft.download.http import (
+    DownloadError,
     _part_path,
     _resolve_range_start,
     download_file,
-    DownloadError,
 )
+
 from conftest import RangeHandler, _range_url
 
 
@@ -42,6 +43,7 @@ class TestUtilityFunctions:
             part = Path(td) / "empty.sgpart"
             part.write_text("")
             assert _resolve_range_start(part) == 0
+
 
 class TestDownloadFile:
     """Tests for download_file using a local HTTP server."""
@@ -87,6 +89,7 @@ class TestDownloadFile:
 
     def test_download_checksum_match(self, range_server):
         import hashlib
+
         content = b"verify me please"
         checksum = hashlib.sha256(content).hexdigest()
         RangeHandler.payloads["/test.bin"] = content

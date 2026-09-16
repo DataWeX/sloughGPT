@@ -1401,7 +1401,7 @@ class TestQuantizedLinear:
 
     def test_from_linear_extraction(self):
         try:
-            import torch
+            import torch  # noqa: F401
             import torch.nn as nn
         except ImportError:
             pytest.skip("torch not installed")
@@ -1418,7 +1418,7 @@ class TestQuantizedLinear:
 
     def test_from_linear_no_bias(self):
         try:
-            import torch
+            import torch  # noqa: F401
             import torch.nn as nn
         except ImportError:
             pytest.skip("torch not installed")

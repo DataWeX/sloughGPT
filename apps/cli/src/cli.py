@@ -6,12 +6,9 @@ cmd_* functions in commands/ modules.
 """
 
 import logging
-import sys
 import os
+import sys
 from pathlib import Path
-from types import SimpleNamespace
-import json
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # Ensure both CLI core and core-py domains are on the path
 _CLI_DIR = Path(__file__).resolve().parent
@@ -21,8 +18,8 @@ for _sys_path in [_CLI_DIR, str(_CORE_PY_DIR)]:
         sys.path.insert(0, str(_sys_path))
 
 # ── Structured logging (centralized, CLI uses CLILogger via BridgeHandler)
+from domain.logging import BridgeHandler, CLILogger, set_global  # noqa: E402
 from domain.logging._internal.config import setup_logging  # noqa: E402
-from domain.logging import CLILogger, BridgeHandler, set_global  # noqa: E402
 
 setup_logging(enable_console=False, enable_output_buffer=False)
 log = CLILogger("slo")
@@ -30,39 +27,34 @@ set_global(log)
 _bridge = BridgeHandler(log)
 logging.root.addHandler(_bridge)
 
-from core.version import format_version_display  # noqa: E402
+from core.framework import (
+    # constants
+    BOLD as _BOLD,
+)
+from core.framework import (
+    CYAN as _CYAN,
+)
+from core.framework import (
+    DIM as _DIM,
+)
 
 # ── CLI framework (replaces Click) ───────────────────────────────────
 from core.framework import (
-    # types
-    Option, Argument, Context, Command, Group,
-    Choice, CliPath, IntRange, UsageError, BadParameter,
-    # decorators
-    group, command, option, argument, pass_context,
-    version_option, confirmation_option, password_option,
-    # output
-    echo, confirm, p as _p, c as _c,
-    # constants
-    BOLD as _BOLD, DIM as _DIM, CYAN as _CYAN,
-    GREEN as _GREEN, YELLOW as _YELLOW, RED as _RED,
-    # dispatch
-    run, record_usage as _record_usage,
-    parse_args as _parse_args, run_command as _run_command,
-    resolve_and_run as _resolve_and_run, run_group as _run_group,
-    format_help as _format_help, format_group_help as _format_group_help,
-    format_command_help as _format_command_help,
-    # click namespace
+    Option,
     click,
+    echo,
 )
-
-# ── CLI helpers (Docker, banner, output) ─────────────────────────────
+from core.framework import (
+    c as _c,
+)
+from core.framework import (
+    p as _p,
+)
 from core.helpers import (
-    show_welcome_banner as _show_welcome_banner,
-    show_server_status as _show_server_status,
-    ns as _ns, output as _output, confirm as _confirm, verbose as _verbose,
+    ns as _ns,
 )
-
 from core.slo_cli import _SUGGESTIONS
+from core.version import format_version_display  # noqa: E402
 
 _TTY = sys.stdout.isatty()  # re-export for backward compat
 
@@ -80,7 +72,16 @@ _TTY = sys.stdout.isatty()  # re-export for backward compat
 @click.option("--quiet", "-q", is_flag=True, help="Suppress non-essential output")
 @click.option("--timeout", default=10, type=int, help="HTTP timeout in seconds", show_default=True)
 @click.pass_context
-def cli(ctx, host: str, port: int, config: str, output_json: bool, no_color: bool, quiet: bool, timeout: int):
+def cli(
+    ctx,
+    host: str,
+    port: int,
+    config: str,
+    output_json: bool,
+    no_color: bool,
+    quiet: bool,
+    timeout: int,
+):
     """SloughGPT CLI — train, chat, serve, and manage models."""
     ctx.ensure_object(dict)
     ctx.obj["host"] = host
@@ -133,14 +134,30 @@ def _show_welcome_banner():
     # ── ASCII art header ──────────────────────────────────
     _line()
     _line(f"  {_c('  ┌──────────────────────────────────────┐', _DIM)}")
-    _line(f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
-    _line(f"  {_c('  │', _DIM)}{_c('   ████████╗██╗     ██████╗            ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
-    _line(f"  {_c('  │', _DIM)}{_c('   ╚══██╔══╝██║     ██╔═══██╗           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
-    _line(f"  {_c('  │', _DIM)}{_c('      ██║   ██║     ██║   ██║           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
-    _line(f"  {_c('  │', _DIM)}{_c('      ██║   ██║     ██║   ██║           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
-    _line(f"  {_c('  │', _DIM)}{_c('      ██║   ███████╗╚██████╔╝           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
-    _line(f"  {_c('  │', _DIM)}{_c('      ╚═╝   ╚══════╝ ╚═════╝            ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
-    _line(f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(
+        f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('   ████████╗██╗     ██████╗            ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('   ╚══██╔══╝██║     ██╔═══██╗           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('      ██║   ██║     ██║   ██║           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('      ██║   ██║     ██║   ██║           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('      ██║   ███████╗╚██████╔╝           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('      ╚═╝   ╚══════╝ ╚═════╝            ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
+    _line(
+        f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}"
+    )
     _line(f"  {_c('  └──────────────────────────────────────┘', _DIM)}")
     _line()
     _line(f"  {_c('  sloughGPT', _BOLD + _CYAN)}  {_c(version, _DIM)}")
@@ -159,13 +176,14 @@ def _show_welcome_banner():
     _show_server_status()
 
     _line()
-    _line(f"  {_c('Run \'sloughgpt --help\' to see all commands', _DIM)}")
+    _line(f"  {_c("Run 'sloughgpt --help' to see all commands", _DIM)}")
     _line()
 
 
 def _show_server_status():
     """Check and display server status."""
     import sys
+
     import requests
 
     def _c(text, code):
@@ -214,8 +232,7 @@ def _show_server_status():
 
 @cli.command(help="Welcome guide with next steps")
 def start():
-    from commands import dev
-    root = _chat_repository_root()
+    root = os.getcwd()
     echo(f"""
 SloughGPT — getting started
 ===========================
@@ -249,9 +266,11 @@ Version: {format_version_display()}
 from commands.logs import logs as _logs_cmd
 from commands.monitor import monitor as _monitor_cmd
 
+
 # Wrap Click commands so our framework can dispatch to them
 class _ClickCommandWrapper:
     """Wraps a Click command to work with our inline framework."""
+
     def __init__(self, click_cmd):
         self.click_cmd = click_cmd
         self.name = click_cmd.name
@@ -261,15 +280,17 @@ class _ClickCommandWrapper:
         self.hidden = False
         # Extract params from Click command for display
         for param in click_cmd.params:
-            if hasattr(param, 'opts'):
+            if hasattr(param, "opts"):
                 names = param.opts
-                self.options.append(Option(
-                    names,
-                    help=param.help or "",
-                    default=param.default,
-                    is_flag=param.is_flag if hasattr(param, 'is_flag') else False,
-                    type=type(param.type).__name__ if hasattr(param.type, '__name__') else str,
-                ))
+                self.options.append(
+                    Option(
+                        names,
+                        help=param.help or "",
+                        default=param.default,
+                        is_flag=param.is_flag if hasattr(param, "is_flag") else False,
+                        type=type(param.type).__name__ if hasattr(param.type, "__name__") else str,
+                    )
+                )
 
     def __call__(self, **kwargs):
         # Build args list from kwargs
@@ -284,8 +305,9 @@ class _ClickCommandWrapper:
                 args.append(f"--{k.replace('_', '-')}={v}")
         self.click_cmd.main(args=args, standalone_mode=False)
 
-cli.add_command(_ClickCommandWrapper(_logs_cmd), 'logs')
-cli.add_command(_ClickCommandWrapper(_monitor_cmd), 'monitor')
+
+cli.add_command(_ClickCommandWrapper(_logs_cmd), "logs")
+cli.add_command(_ClickCommandWrapper(_monitor_cmd), "monitor")
 
 
 @cli.command(help="Launch interactive terminal UI (split-pane curses)")
@@ -303,9 +325,10 @@ def tui(ctx):
 def shell(ctx, command, tui, line):
     """Launch the SloughGPT interactive shell REPL."""
     from utils.helpers import ensure_server
+
     actual_url, _server_proc = ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
-    from domain.shell._internal.repl import ShellREPL
     from domain.shell import DaitRuntime
+    from domain.shell._internal.repl import ShellREPL
 
     os = DaitRuntime(api_url=actual_url)
     # Default to TUI when TTY, line mode when piped or --line
@@ -345,9 +368,17 @@ def completion(shell):
     """
     _shell = shell.lower()
     if _shell == "bash":
-        echo(f'eval "$(_{{COMPLETE}}={_shell}_complete {{prog}})"'.replace("{{COMPLETE}}", "_COMPLETE").replace("{{prog}}", "sloughgpt"))
+        echo(
+            f'eval "$(_{{COMPLETE}}={_shell}_complete {{prog}})"'.replace(
+                "{{COMPLETE}}", "_COMPLETE"
+            ).replace("{{prog}}", "sloughgpt")
+        )
     elif _shell == "zsh":
-        echo(f'eval "$(_{{COMPLETE}}={_shell}_complete {{prog}})"'.replace("{{COMPLETE}}", "_COMPLETE").replace("{{prog}}", "sloughgpt"))
+        echo(
+            f'eval "$(_{{COMPLETE}}={_shell}_complete {{prog}})"'.replace(
+                "{{COMPLETE}}", "_COMPLETE"
+            ).replace("{{prog}}", "sloughgpt")
+        )
     elif _shell == "fish":
         echo(f"source (_{{COMPLETE}}={_shell}_complete sloughgpt | psub)")
 
@@ -362,10 +393,16 @@ def completion(shell):
 @click.pass_context
 def chat(ctx, no_serve):
     from commands.chat import cmd_chat
+
     args = _ns(
-        no_serve=no_serve, auto_model=None,
-        load_mode="local", device="auto", max_tokens=64,
-        temperature=0.7, host=ctx.obj["host"], port=ctx.obj["port"],
+        no_serve=no_serve,
+        auto_model=None,
+        load_mode="local",
+        device="auto",
+        max_tokens=64,
+        temperature=0.7,
+        host=ctx.obj["host"],
+        port=ctx.obj["port"],
     )
     cmd_chat(args)
 
@@ -378,9 +415,14 @@ def chat(ctx, no_serve):
 @click.pass_context
 def generate(ctx, prompt, model, max_tokens, temperature):
     from commands.chat import cmd_generate
+
     args = _ns(
-        prompt=prompt, model=model, max_tokens=max_tokens,
-        temperature=temperature, host=ctx.obj["host"], port=ctx.obj["port"],
+        prompt=prompt,
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        host=ctx.obj["host"],
+        port=ctx.obj["port"],
     )
     cmd_generate(args)
 
@@ -393,24 +435,42 @@ def generate(ctx, prompt, model, max_tokens, temperature):
 @click.pass_context
 def dev(ctx, model, web_port, watch_web, auto_download):
     from commands.dev import cmd_dev
+
     args = _ns(
-        model=model, web_port=web_port, watch_web=watch_web,
-        port=ctx.obj["port"], host=ctx.obj["host"], auto_download=auto_download,
+        model=model,
+        web_port=web_port,
+        watch_web=watch_web,
+        port=ctx.obj["port"],
+        host=ctx.obj["host"],
+        auto_download=auto_download,
     )
     cmd_dev(args)
 
 
-@cli.command(help="Start HTTP inference server (with --web: full FastAPI + frontend, --mobile: API + React Native)")
+@cli.command(
+    help="Start HTTP inference server (with --web: full FastAPI + frontend, --mobile: API + React Native)"
+)
 @click.option("--host", default="localhost", help="Bind address", show_default=True)
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
 @click.option("--model", metavar="PATH", help="Model to preload")
-@click.option("--web", is_flag=True, help="Start full FastAPI server + Next.js web UI and opens browser")
+@click.option(
+    "--web", is_flag=True, help="Start full FastAPI server + Next.js web UI and opens browser"
+)
 @click.option("--web-port", default=3000, type=int, help="Web UI port", show_default=True)
 @click.option("--mobile", is_flag=True, help="Start FastAPI server + React Native metro bundler")
 @click.option("--auto-download", is_flag=True, help="Skip download confirmation on startup")
 def serve(host, port, model, web, mobile, web_port, auto_download):
     from commands.dev import cmd_serve
-    args = _ns(host=host, port=port, model=model, web=web, mobile=mobile, web_port=web_port, auto_download=auto_download)
+
+    args = _ns(
+        host=host,
+        port=port,
+        model=model,
+        web=web,
+        mobile=mobile,
+        web_port=web_port,
+        auto_download=auto_download,
+    )
     cmd_serve(args)
 
 
@@ -421,9 +481,13 @@ def serve(host, port, model, web, mobile, web_port, auto_download):
 @click.pass_context
 def hf_serve(ctx, model_name, mode, device):
     from commands.dev import cmd_hf_serve
+
     args = _ns(
-        model=model_name, mode=mode, device=device,
-        host=ctx.obj["host"], port=ctx.obj["port"],
+        model=model_name,
+        mode=mode,
+        device=device,
+        host=ctx.obj["host"],
+        port=ctx.obj["port"],
     )
     cmd_hf_serve(args)
 
@@ -433,6 +497,7 @@ def hf_serve(ctx, model_name, mode, device):
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.model import register as _register_model
+
 _register_model(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -440,6 +505,7 @@ _register_model(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.dataset import register as _register_dataset
+
 _register_dataset(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -447,6 +513,7 @@ _register_dataset(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.train import register as _register_train
+
 _register_train(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -454,6 +521,7 @@ _register_train(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.token_tree import register as _register_token_tree
+
 _register_token_tree(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -466,6 +534,7 @@ _register_token_tree(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.checkpoint import register as _register_checkpoint
+
 _register_checkpoint(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -473,6 +542,7 @@ _register_checkpoint(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.knowledge import register as _register_knowledge
+
 _register_knowledge(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -480,6 +550,7 @@ _register_knowledge(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.experiment import register as _register_experiment
+
 _register_experiment(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -487,6 +558,7 @@ _register_experiment(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.error import register as _register_error
+
 _register_error(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -494,6 +566,7 @@ _register_error(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.memory import register as _register_memory
+
 _register_memory(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -501,6 +574,7 @@ _register_memory(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.personality import register as _register_personality
+
 _register_personality(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -508,6 +582,7 @@ _register_personality(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.adapter import register as _register_adapter
+
 _register_adapter(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -515,6 +590,7 @@ _register_adapter(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.feedback import register as _register_feedback
+
 _register_feedback(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -522,6 +598,7 @@ _register_feedback(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.agent import register as _register_agent
+
 _register_agent(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -529,6 +606,7 @@ _register_agent(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.session import register as _register_session
+
 _register_session(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -536,6 +614,7 @@ _register_session(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.tokenizer import register as _register_tokenizer
+
 _register_tokenizer(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -543,6 +622,7 @@ _register_tokenizer(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.vector import register as _register_vector
+
 _register_vector(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -550,6 +630,7 @@ _register_vector(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.system import register as _register_system
+
 _register_system(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -557,6 +638,7 @@ _register_system(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.docker import register as _register_docker
+
 _register_docker(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -573,21 +655,36 @@ _register_docker(cli)
 @click.option("--d-model", default=64, type=int, help="Model dimension (mock model)")
 @click.option("--vocab-size", default=256, type=int, help="Vocabulary size (mock model)")
 @click.option("--profile", is_flag=True, help="Show detailed timing profile")
-@click.option("--run-asm", "asm_source", default=None, help="Run VM assembly program instead of inference")
+@click.option(
+    "--run-asm", "asm_source", default=None, help="Run VM assembly program instead of inference"
+)
 @click.option("--self-test", "do_self_test", is_flag=True, help="Run built-in VM self-test")
 @click.pass_context
-def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
-             layers: int, d_model: int, vocab_size: int, profile: bool,
-             asm_source: str | None, do_self_test: bool):
+def simulate(
+    ctx,
+    model: str,
+    prompt: str,
+    max_tokens: int,
+    iterations: int,
+    layers: int,
+    d_model: int,
+    vocab_size: int,
+    profile: bool,
+    asm_source: str | None,
+    do_self_test: bool,
+):
     """Boot the kernel, load a model, run inference, and print metrics."""
-    import time
     import sys
+    import time
+
     import numpy as np
 
     # ANSI helpers
     _tty = sys.stdout.isatty()
+
     def _c(text, code):
         return f"{code}{text}\033[0m" if _tty else text
+
     _BOLD = "\033[1m"
     _DIM = "\033[2m"
     _CYAN = "\033[36m"
@@ -621,6 +718,7 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
     # ── Self-test mode ──
     if do_self_test:
         from domain.shell._internal.vm import self_test
+
         _p(f"{_c('Running VM self-test...', _BOLD)}\n")
         results = self_test()
         for line in results:
@@ -631,6 +729,7 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
     # ── Run assembly mode ──
     if asm_source:
         from domain.shell._internal.vm import VMRunner
+
         _p(f"{_c('Running VM assembly...', _BOLD)}\n")
         runner = VMRunner()
         t0 = time.perf_counter()
@@ -638,7 +737,9 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
         elapsed = time.perf_counter() - t0
         for line in output:
             _p(f"  {line}")
-        _p(f"\n  {_c(f'Completed in {elapsed*1000:.2f}ms, {runner.cpu._step_count} steps', _DIM)}")
+        _p(
+            f"\n  {_c(f'Completed in {elapsed * 1000:.2f}ms, {runner.cpu._step_count} steps', _DIM)}"
+        )
         if profile:
             trace = runner.cpu.get_trace()
             if trace:
@@ -646,23 +747,28 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
                 _table(
                     ["Step", "PC", "Instruction", "Registers"],
                     [
-                        [str(e.cycle), str(e.pc), e.instruction,
-                         ", ".join(f"{k}={v}" for k, v in e.registers.items())]
+                        [
+                            str(e.cycle),
+                            str(e.pc),
+                            e.instruction,
+                            ", ".join(f"{k}={v}" for k, v in e.registers.items()),
+                        ]
                         for e in trace[:50]
                     ],
                 )
                 if len(trace) > 50:
-                    _p(f"  ... ({len(trace)-50} more)")
+                    _p(f"  ... ({len(trace) - 50} more)")
         _p()
         return
 
     # ── Boot ──
     t0 = time.perf_counter()
     from domain.shell._internal.kernel import Kernel
+
     k = Kernel()
     boot_msg = k.boot()
     t_boot = time.perf_counter() - t0
-    _p(f"  {_c('ok', _GREEN)} Booted in {t_boot*1000:.1f}ms — {boot_msg}")
+    _p(f"  {_c('ok', _GREEN)} Booted in {t_boot * 1000:.1f}ms — {boot_msg}")
 
     try:
         # ── Register devices ──
@@ -672,65 +778,93 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
         # ── Load model ──
         t1 = time.perf_counter()
         if model == "mock":
+
             class MockModel:
                 def __init__(self):
                     self.call_count = 0
                     self.total_tokens = 0
+
                 def __call__(self, input_ids):
                     self.call_count += 1
                     self.total_tokens += input_ids.size
-                    return np.random.randn(input_ids.shape[0], input_ids.shape[1], vocab_size).astype(np.float32)
+                    return np.random.randn(
+                        input_ids.shape[0], input_ids.shape[1], vocab_size
+                    ).astype(np.float32)
+
                 def generate_numpy(self, prompt, max_tokens=10, temperature=1.0, **kw):
                     self.call_count += 1
                     self.total_tokens += max_tokens
                     return list(range(10, 10 + max_tokens))
+
                 def forward(self, inputs):
                     self.call_count += 1
                     ids = inputs.get("input_ids", np.zeros((1, 10), dtype=np.int64))
                     self.total_tokens += ids.size
-                    return {"logits": np.random.randn(ids.shape[0], ids.shape[1], vocab_size).astype(np.float32)}
+                    return {
+                        "logits": np.random.randn(ids.shape[0], ids.shape[1], vocab_size).astype(
+                            np.float32
+                        )
+                    }
+
             mock = MockModel()
             k.engine.load_model(model, mock)
         else:
             from domain.shell._internal.kernel_npu import NPUDevice
+
             npu = NPUDevice(name="npu")
             npu.open()
             result = npu.load_model(model, f"huggingface:{model}")
             if not result.success:
-                _p(f"  {_c(f'⚠ Could not load \'{model}\': {result.error}', _YELLOW)}")
-                _p(f"  {_c('Falling back to mock model. Install transformers for real models.', _DIM)}")
+                _p(f"  {_c(f"⚠ Could not load '{model}': {result.error}", _YELLOW)}")
+                _p(
+                    f"  {_c('Falling back to mock model. Install transformers for real models.', _DIM)}"
+                )
+
                 class FallbackModel:
                     def __init__(self):
                         self.call_count = 0
                         self.total_tokens = 0
+
                     def __call__(self, input_ids):
                         self.call_count += 1
                         self.total_tokens += input_ids.size
-                        return np.random.randn(input_ids.shape[0], input_ids.shape[1], vocab_size).astype(np.float32)
+                        return np.random.randn(
+                            input_ids.shape[0], input_ids.shape[1], vocab_size
+                        ).astype(np.float32)
+
                     def generate_numpy(self, prompt, max_tokens=10, temperature=1.0, **kw):
                         self.call_count += 1
                         self.total_tokens += max_tokens
                         return list(range(10, 10 + max_tokens))
+
                     def forward(self, inputs):
                         self.call_count += 1
                         ids = inputs.get("input_ids", np.zeros((1, 10), dtype=np.int64))
                         self.total_tokens += ids.size
-                        return {"logits": np.random.randn(ids.shape[0], ids.shape[1], vocab_size).astype(np.float32)}
+                        return {
+                            "logits": np.random.randn(
+                                ids.shape[0], ids.shape[1], vocab_size
+                            ).astype(np.float32)
+                        }
+
                 k.engine.load_model(model, FallbackModel())
             else:
                 provider = npu._models[model].provider
                 k.engine.load_model(model, provider)
         t_load = time.perf_counter() - t1
-        _p(f"  {_c('ok', _GREEN)} Model '{model}' loaded in {t_load*1000:.1f}ms")
+        _p(f"  {_c('ok', _GREEN)} Model '{model}' loaded in {t_load * 1000:.1f}ms")
 
         # ── Tokenize ──
         t2 = time.perf_counter()
         tokens = k.tokenize(prompt)
         t_tok = time.perf_counter() - t2
-        _p(f"  {_c('ok', _GREEN)} Tokenized '{prompt[:40]}...' -> {len(tokens)} tokens in {t_tok*1000:.2f}ms")
+        _p(
+            f"  {_c('ok', _GREEN)} Tokenized '{prompt[:40]}...' -> {len(tokens)} tokens in {t_tok * 1000:.2f}ms"
+        )
 
         # ── Create inference process ──
         from domain.shell._internal.kernel_neural import NeuralProcessType
+
         proc = k.create_neural_process("sim-infer", NeuralProcessType.INFERENCE, model_name=model)
 
         # ── Warmup ──
@@ -772,12 +906,12 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
         _table(
             ["Metric", "Value"],
             [
-                ["Boot time", f"{t_boot*1000:.1f}ms"],
-                ["Model load", f"{t_load*1000:.1f}ms"],
-                ["Tokenize", f"{t_tok*1000:.2f}ms"],
+                ["Boot time", f"{t_boot * 1000:.1f}ms"],
+                ["Model load", f"{t_load * 1000:.1f}ms"],
+                ["Tokenize", f"{t_tok * 1000:.2f}ms"],
                 ["Tokens in prompt", str(len(tokens))],
                 ["Iterations", str(iterations)],
-                ["Avg latency", f"{avg_latency*1000:.1f}ms"],
+                ["Avg latency", f"{avg_latency * 1000:.1f}ms"],
                 ["Total tokens generated", str(total_tokens)],
                 ["Throughput", f"{throughput:.1f} tok/s"],
                 ["Processes", str(ks["process_count"])],
@@ -792,8 +926,12 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
             _table(
                 ["Iter", "Latency", "Tokens", "tok/s"],
                 [
-                    [str(i + 1), f"{lat*1000:.1f}ms", str(tok),
-                     f"{tok / lat:.1f}" if lat > 0 else "0.0"]
+                    [
+                        str(i + 1),
+                        f"{lat * 1000:.1f}ms",
+                        str(tok),
+                        f"{tok / lat:.1f}" if lat > 0 else "0.0",
+                    ]
                     for i, (lat, tok) in enumerate(zip(latencies, tokens_generated))
                 ],
             )
@@ -812,6 +950,7 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.collect import register as _register_collect
+
 _register_collect(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -819,6 +958,7 @@ _register_collect(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.companion import register as _register_companion
+
 _register_companion(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -826,6 +966,7 @@ _register_companion(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.images import register as _register_images
+
 _register_images(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -833,6 +974,7 @@ _register_images(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.multimodal import register as _register_multimodal
+
 _register_multimodal(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -840,6 +982,7 @@ _register_multimodal(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.meta_weights import register as _register_meta_weights
+
 _register_meta_weights(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -847,6 +990,7 @@ _register_meta_weights(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.learn import register as _register_learn
+
 _register_learn(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -854,6 +998,7 @@ _register_learn(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.world import register as _register_world
+
 _register_world(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -861,6 +1006,7 @@ _register_world(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.vm import register as _register_vm
+
 _register_vm(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -868,6 +1014,7 @@ _register_vm(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.build import register as _register_build
+
 _register_build(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -875,6 +1022,7 @@ _register_build(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.voice import register as _register_voice
+
 _register_voice(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -882,6 +1030,7 @@ _register_voice(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.security import register as _register_security
+
 _register_security(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -889,6 +1038,7 @@ _register_security(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.docstore import register as _register_docstore
+
 _register_docstore(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -896,6 +1046,7 @@ _register_docstore(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.db import register as _register_db
+
 _register_db(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -903,6 +1054,7 @@ _register_db(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.feeds import register as _register_feeds
+
 _register_feeds(cli)
 
 # ═══════════════════════════════════════════════════════════════════════

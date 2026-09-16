@@ -1,6 +1,5 @@
 """Tests for domain.models — ModelInterface, ModelLoader, SloughGPTModel."""
 
-
 import numpy as np
 import pytest
 
@@ -39,7 +38,7 @@ class TestModelLoader:
         from domain.models import ModelLoader
 
         try:
-            import llama_cpp
+            import llama_cpp  # noqa: F401
 
             pytest.skip("llama-cpp-python installed, can't test ImportError")
         except ImportError:
@@ -97,7 +96,8 @@ class TestSloughGPTModel:
         # Verify params match
         for (k1, p1), (k2, p2) in zip(
             small_model.state_dict().items(),
-            new_model.state_dict().items(), strict=False,
+            new_model.state_dict().items(),
+            strict=False,
         ):
             if k1 == "config":
                 continue

@@ -5,7 +5,6 @@ Tests keyboard-driven search/filter behavior without curses
 by testing the underlying filter logic.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 
@@ -14,8 +13,11 @@ class TestModelFilter:
 
     def _filter(self, query, model_list):
         """Simulate the selector's filter logic."""
-        return [(n, i, s) for n, i, s in model_list
-                if query.lower() in n.lower() or query.lower() in i.lower()]
+        return [
+            (n, i, s)
+            for n, i, s in model_list
+            if query.lower() in n.lower() or query.lower() in i.lower()
+        ]
 
     def test_empty_query_returns_all(self):
         models = [("GPT-2", "gpt2", "hf"), ("LLaMA", "llama", "hf")]
@@ -50,21 +52,29 @@ class TestModelFetch:
 
     @patch("requests.get")
     def test_fetches_hf_models(self, mock_get):
-        mock_get.return_value = MagicMock(status_code=200, json=lambda: [
-            {"id": "gpt2", "name": "GPT-2"},
-            {"id": "llama", "name": "LLaMA"},
-        ])
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            json=lambda: [
+                {"id": "gpt2", "name": "GPT-2"},
+                {"id": "llama", "name": "LLaMA"},
+            ],
+        )
         import requests
+
         resp = requests.get("http://localhost:8000/models/hf")
         models = resp.json()
         assert len(models) == 2
 
     @patch("requests.get")
     def test_fetches_local_models(self, mock_get):
-        mock_get.return_value = MagicMock(status_code=200, json=lambda: [
-            {"id": "gpt2", "name": "GPT-2", "source": "local"},
-        ])
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            json=lambda: [
+                {"id": "gpt2", "name": "GPT-2", "source": "local"},
+            ],
+        )
         import requests
+
         resp = requests.get("http://localhost:8000/models")
         models = resp.json()
         assert len(models) == 1

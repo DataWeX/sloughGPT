@@ -70,7 +70,7 @@ class PineconeVectorStore(VectorStore):
             self.index = self.client.Index(self.index_name)
             return True
         except ImportError:
-            raise ImportError("pip install pinecone-client")
+            raise ImportError("pip install pinecone-client") from None
         except Exception as e:
             logger.error("Pinecone connection failed: %s", e, extra={"tag": "INF"})
             return False

@@ -10,9 +10,9 @@ Modules:
 
 from .cancel_manager import (
     CancelManager,
+    Operation,
     OpStatus,
     OpType,
-    Operation,
     get_cancel_manager,
     reset_cancel_manager,
 )

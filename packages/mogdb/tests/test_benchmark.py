@@ -6,14 +6,12 @@ Measures read/write performance for:
 3. Compressed JSON files (gzip)
 """
 
-import json
 import gzip
+import json
 import time
-import tempfile
 from pathlib import Path
 
 import pytest
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -54,6 +52,7 @@ def mogdb_path(tmp_path):
 
 # ── JSON benchmarks ──────────────────────────────────────────────────────────
 
+
 class TestJSONBenchmark:
     def test_write_json(self, sample_docs, json_path):
         """Benchmark: write docs to plain JSON."""
@@ -75,7 +74,7 @@ class TestJSONBenchmark:
             data = json.load(f)
         elapsed = time.perf_counter() - start
         assert len(data) == len(sample_docs)
-        print(f"\n  JSON read: {elapsed:.4f}s ({len(data)/elapsed:.0f} docs/sec)")
+        print(f"\n  JSON read: {elapsed:.4f}s ({len(data) / elapsed:.0f} docs/sec)")
 
     def test_write_gzip(self, sample_docs, gz_path):
         """Benchmark: write docs to gzipped JSON."""
@@ -97,7 +96,7 @@ class TestJSONBenchmark:
             data = json.load(f)
         elapsed = time.perf_counter() - start
         assert len(data) == len(sample_docs)
-        print(f"\n  Gzip read: {elapsed:.4f}s ({len(data)/elapsed:.0f} docs/sec)")
+        print(f"\n  Gzip read: {elapsed:.4f}s ({len(data) / elapsed:.0f} docs/sec)")
 
     def test_file_size_comparison(self, sample_docs, json_path, gz_path):
         """Compare file sizes: plain JSON vs gzipped."""
@@ -117,10 +116,12 @@ class TestJSONBenchmark:
 
 # ── MogDB benchmarks ─────────────────────────────────────────────────────────
 
+
 class TestMogDBBenchmark:
     def test_insert_many(self, sample_docs, mogdb_path):
         """Benchmark: bulk insert into MogDB."""
         from mogdb import MogDB
+
         db = MogDB(str(mogdb_path))
         col = db.collection("bench")
 
@@ -134,6 +135,7 @@ class TestMogDBBenchmark:
     def test_find_all(self, sample_docs, mogdb_path):
         """Benchmark: find all docs in MogDB."""
         from mogdb import MogDB
+
         db = MogDB(str(mogdb_path))
         col = db.collection("bench")
         col.insert_many(sample_docs)
@@ -141,12 +143,13 @@ class TestMogDBBenchmark:
         start = time.perf_counter()
         results = col.find()
         elapsed = time.perf_counter() - start
-        print(f"\n  MogDB find all: {elapsed:.4f}s ({len(results)/elapsed:.0f} docs/sec)")
+        print(f"\n  MogDB find all: {elapsed:.4f}s ({len(results) / elapsed:.0f} docs/sec)")
         assert len(results) == len(sample_docs)
 
     def test_find_one(self, sample_docs, mogdb_path):
         """Benchmark: find single doc by field."""
         from mogdb import MogDB
+
         db = MogDB(str(mogdb_path))
         col = db.collection("bench")
         col.insert_many(sample_docs)
@@ -158,11 +161,12 @@ class TestMogDBBenchmark:
         for i in range(NUM_OPS):
             col.find_one({"id": i % NUM_DOCS})
         elapsed = time.perf_counter() - start
-        print(f"\n  MogDB find_one: {elapsed:.4f}s ({NUM_OPS/elapsed:.0f} ops/sec)")
+        print(f"\n  MogDB find_one: {elapsed:.4f}s ({NUM_OPS / elapsed:.0f} ops/sec)")
 
     def test_find_with_filter(self, sample_docs, mogdb_path):
         """Benchmark: find docs with filter."""
         from mogdb import MogDB
+
         db = MogDB(str(mogdb_path))
         col = db.collection("bench")
         col.insert_many(sample_docs)
@@ -170,11 +174,12 @@ class TestMogDBBenchmark:
         start = time.perf_counter()
         results = col.find({"status": "loaded"})
         elapsed = time.perf_counter() - start
-        print(f"\n  MogDB filtered find: {elapsed:.4f}s ({len(results)/elapsed:.0f} docs/sec)")
+        print(f"\n  MogDB filtered find: {elapsed:.4f}s ({len(results) / elapsed:.0f} docs/sec)")
 
     def test_update_one(self, sample_docs, mogdb_path):
         """Benchmark: update single doc."""
         from mogdb import MogDB
+
         db = MogDB(str(mogdb_path))
         col = db.collection("bench")
         col.insert_many(sample_docs)
@@ -183,25 +188,29 @@ class TestMogDBBenchmark:
         for i in range(NUM_OPS):
             col.update_one({"id": i % NUM_DOCS}, {"$set": {"status": "updated"}})
         elapsed = time.perf_counter() - start
-        print(f"\n  MogDB update_one: {elapsed:.4f}s ({NUM_OPS/elapsed:.0f} ops/sec)")
+        print(f"\n  MogDB update_one: {elapsed:.4f}s ({NUM_OPS / elapsed:.0f} ops/sec)")
 
     def test_aggregate(self, sample_docs, mogdb_path):
         """Benchmark: aggregation pipeline."""
         from mogdb import MogDB
+
         db = MogDB(str(mogdb_path))
         col = db.collection("bench")
         col.insert_many(sample_docs)
 
         start = time.perf_counter()
-        results = col.aggregate([
-            {"$group": {"_id": "$status", "count": {"$sum": 1}}},
-        ])
+        results = col.aggregate(
+            [
+                {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+            ]
+        )
         elapsed = time.perf_counter() - start
         print(f"\n  MogDB aggregate: {elapsed:.4f}s ({len(results)} groups in {elapsed:.4f}s)")
 
     def test_json_sync(self, sample_docs, mogdb_path):
         """Benchmark: MogDB with JSON sync."""
         from mogdb import MogDB
+
         sync_dir = str(mogdb_path.parent / "sync")
         db = MogDB(str(mogdb_path), sync_dir=sync_dir)
         col = db.collection("bench")
@@ -209,7 +218,9 @@ class TestMogDBBenchmark:
         start = time.perf_counter()
         col.insert_many(sample_docs)
         elapsed = time.perf_counter() - start
-        print(f"\n  MogDB + sync insert: {elapsed:.4f}s ({len(sample_docs)/elapsed:.0f} docs/sec)")
+        print(
+            f"\n  MogDB + sync insert: {elapsed:.4f}s ({len(sample_docs) / elapsed:.0f} docs/sec)"
+        )
 
         # Check sync file exists
         sync_file = Path(sync_dir) / "bench.json"
@@ -217,6 +228,7 @@ class TestMogDBBenchmark:
 
 
 # ── Summary ──────────────────────────────────────────────────────────────────
+
 
 class TestSummary:
     def test_summary(self):

@@ -3,7 +3,8 @@ Docker command group — container management workflows.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, docker_action
+from core.helpers import docker_action
+from core.helpers import ns as _ns
 
 
 def register(cli):

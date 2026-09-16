@@ -17,8 +17,8 @@ from __future__ import annotations
 import json
 import sys
 import time
-from datetime import datetime, timezone
-from typing import Optional
+import urllib.error
+from datetime import UTC, datetime
 
 import click
 
@@ -31,8 +31,10 @@ log = get_global()
 
 _TTY = sys.stdout.isatty()
 
+
 def _c(text: str, code: str) -> str:
     return f"{code}{text}\033[0m" if _TTY else text
+
 
 _BOLD = "\033[1m"
 _DIM = "\033[2m"
@@ -64,7 +66,7 @@ def _format_uptime(seconds: int) -> str:
 
 
 def _format_ts(ts: float) -> str:
-    dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+    dt = datetime.fromtimestamp(ts, tz=UTC)
     return dt.strftime("%H:%M:%S")
 
 
@@ -131,11 +133,15 @@ def _render_dashboard(snapshot: dict, clear: bool = True) -> None:
 
     loaded = health.get("model_loaded", False)
     status_str = _c("online", _GREEN) if loaded else _c("no model", _YELLOW)
-    _line(f"  {_c('SERVER', _BOLD)} {status_str}  {_c(model_str, _CYAN)}  uptime {_format_uptime(uptime)}")
+    _line(
+        f"  {_c('SERVER', _BOLD)} {status_str}  {_c(model_str, _CYAN)}  uptime {_format_uptime(uptime)}"
+    )
 
     cpu_bar = f"{cpu:.0f}%"
     mem_bar = f"{mem:.0f}% ({mem_mb}MB)"
-    _line(f"  {_c('SYS', _BOLD)}   cpu {cpu_bar}  mem {mem_bar}  reqs {reqs}  errs {errs}  rpm {rpm:.0f}")
+    _line(
+        f"  {_c('SYS', _BOLD)}   cpu {cpu_bar}  mem {mem_bar}  reqs {reqs}  errs {errs}  rpm {rpm:.0f}"
+    )
 
     if tps > 0:
         _line(f"  {_c('GEN', _BOLD)}   {tps:.1f} tok/s")
@@ -181,7 +187,7 @@ def _render_dashboard(snapshot: dict, clear: bool = True) -> None:
             cat_str = _c(cat.ljust(9), _category_color(cat))
             max_msg = 44
             if len(msg) > max_msg:
-                msg = msg[:max_msg - 1] + "…"
+                msg = msg[: max_msg - 1] + "…"
             msg_str = _c(msg, "")
 
             _line(f"  {ts_str} {cat_str} {msg_str}")
@@ -193,8 +199,8 @@ def _render_dashboard(snapshot: dict, clear: bool = True) -> None:
 
 def _consume_sse(host: str, port: int, interval: float, output_json: bool, clear: bool) -> None:
     """Consume /dashboard/stream SSE and render the dashboard."""
-    import urllib.request
     import urllib.error
+    import urllib.request
 
     url = f"http://{host}:{port}/dashboard/stream"
     error_count = 0
@@ -294,10 +300,19 @@ def _poll_fallback(host: str, port: int, interval: float, output_json: bool, cle
 
 
 @click.command(help="Live dashboard for all server processes")
-@click.option("--interval", "-i", default=2.0, type=float, help="Refresh interval in seconds", show_default=True)
+@click.option(
+    "--interval",
+    "-i",
+    default=2.0,
+    type=float,
+    help="Refresh interval in seconds",
+    show_default=True,
+)
 @click.option("--host", default="localhost", help="API hostname", show_default=True)
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
-@click.option("--json", "output_json", is_flag=True, help="Output raw JSON lines instead of dashboard")
+@click.option(
+    "--json", "output_json", is_flag=True, help="Output raw JSON lines instead of dashboard"
+)
 @click.option("--no-clear", is_flag=True, help="Append mode — don't clear screen between refreshes")
 def monitor(interval: float, host: str, port: int, output_json: bool, no_clear: bool):
     """Live dashboard — server health, processes, and event feed."""

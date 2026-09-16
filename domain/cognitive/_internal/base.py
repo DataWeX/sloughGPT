@@ -69,7 +69,7 @@ class CognitiveDomain(BaseDomain):
 
         except Exception as e:
             self.logger.error("Failed to initialize Cognitive Domain: %s", e, extra={"tag": "COG"})
-            raise CognitiveException(f"Initialization failed: {e}")
+            raise CognitiveException(f"Initialization failed: {e}") from e
 
     async def _on_shutdown(self) -> None:
         """Shutdown cognitive domain components"""
@@ -94,7 +94,7 @@ class CognitiveDomain(BaseDomain):
 
         except Exception as e:
             self.logger.error("Failed to shutdown Cognitive Domain: %s", e, extra={"tag": "COG"})
-            raise CognitiveException(f"Shutdown failed: {e}")
+            raise CognitiveException(f"Shutdown failed: {e}") from e
 
     async def _initialize_memory_manager(self) -> None:
         """Initialize memory manager (disabled — memory submodule removed)"""

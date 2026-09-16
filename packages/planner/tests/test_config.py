@@ -3,11 +3,7 @@ Tests for planner.config — repo-aware path resolution, backend inference,
 and the shared status <-> column maps.
 """
 
-import json
-import os
 from pathlib import Path
-
-import pytest
 
 from planner import config
 
@@ -43,7 +39,8 @@ def test_find_project_root_ignores_board_without_file(tmp_path):
 def test_find_project_root_falls_back_to_package_location(tmp_path, monkeypatch):
     root = _write_board(tmp_path / "proj")
     monkeypatch.setattr(
-        config, "__file__",
+        config,
+        "__file__",
         str(root / "packages" / "planner" / "src" / "planner" / "config.py"),
     )
     (tmp_path / "elsewhere").mkdir(parents=True)

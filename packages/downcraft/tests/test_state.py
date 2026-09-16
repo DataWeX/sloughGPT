@@ -1,13 +1,10 @@
 """Tests for downcraft.download.state — persistent download state."""
 
 import json
-import os
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from downcraft.download.state import PersistentState, ModelState, FileProgress, get_state
+from downcraft.download.state import FileProgress, ModelState, PersistentState
 
 
 class TestPersistentState:
@@ -153,6 +150,7 @@ class TestPersistentState:
 
     def test_thread_safety_no_crash(self):
         import threading
+
         with tempfile.TemporaryDirectory() as td:
             st = PersistentState(Path(td))
             errors = []

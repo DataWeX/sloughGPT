@@ -4,9 +4,8 @@ import json
 import tempfile
 from pathlib import Path
 
-from bawl.store import save, load, dumps_json_array, save_json_array
-from bawl.parse import parse
-from bawl.parse import Page
+from bawl.parse import Page, parse
+from bawl.store import dumps_json_array, load, save, save_json_array
 
 
 def test_save_load_roundtrip():

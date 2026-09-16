@@ -1,12 +1,14 @@
 """Tests for CLI train commands."""
-import sys
+
 import os
-import pytest
+import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Add cli src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 @pytest.fixture(autouse=True)
@@ -14,6 +16,7 @@ def mock_log(monkeypatch):
     """Patch commands.train.log with a MagicMock."""
     fake_log = MagicMock()
     import commands.train as mod
+
     monkeypatch.setattr(mod, "log", fake_log)
     return fake_log
 
@@ -22,6 +25,7 @@ def mock_log(monkeypatch):
 def mock_log(monkeypatch):
     fake_log = MagicMock()
     import commands.train as mod
+
     monkeypatch.setattr(mod, "log", fake_log)
     return fake_log
 
@@ -29,6 +33,7 @@ def mock_log(monkeypatch):
 class TestDistillConfig:
     def test_config_defaults(self):
         from domain.training._internal.distill_gpt2 import DistillConfig
+
         c = DistillConfig()
         assert c.n_embed == 128
         assert c.n_layer == 4
@@ -41,12 +46,14 @@ class TestDistillConfig:
 
     def test_config_resume(self):
         from domain.training._internal.distill_gpt2 import DistillConfig
+
         c = DistillConfig(resume_checkpoint="test.soul", resume_epoch=5)
         assert c.resume_checkpoint == "test.soul"
         assert c.resume_epoch == 5
 
     def test_config_custom_values(self):
         from domain.training._internal.distill_gpt2 import DistillConfig
+
         c = DistillConfig(n_embed=64, n_layer=2, n_head=2, epochs=3, lr=1e-3)
         assert c.n_embed == 64
         assert c.n_layer == 2
@@ -55,6 +62,7 @@ class TestDistillConfig:
 
     def test_config_temperature(self):
         from domain.training._internal.distill_gpt2 import DistillConfig
+
         c = DistillConfig(temperature=2.0)
         assert c.temperature == 2.0
 
@@ -62,6 +70,7 @@ class TestDistillConfig:
 class TestCmdDistill:
     def test_missing_text_returns_early(self, mock_log):
         from commands.train import cmd_distill
+
         args = MagicMock()
         args.text_source = None
         args.file = None
@@ -71,6 +80,7 @@ class TestCmdDistill:
 
     def test_file_not_found_returns_early(self, mock_log):
         from commands.train import cmd_distill
+
         args = MagicMock()
         args.text_source = None
         args.file = "/nonexistent/file.txt"
@@ -80,6 +90,7 @@ class TestCmdDistill:
 
     def test_empty_text_returns_early(self, mock_log):
         from commands.train import cmd_distill
+
         args = MagicMock()
         args.text_source = ""
         args.file = None
@@ -129,6 +140,7 @@ class TestCmdTrainNative:
     @patch("commands.train._resolve_corpus_file")
     def test_missing_dataset_exits(self, mock_resolve):
         from commands.train import cmd_train_native
+
         with pytest.raises(SystemExit) as exc:
             cmd_train_native(self._args(dataset=None))
         assert exc.value.code == 2
@@ -136,6 +148,7 @@ class TestCmdTrainNative:
     @patch("commands.train._resolve_corpus_file")
     def test_resume_and_resume_latest_conflict(self, mock_resolve):
         from commands.train import cmd_train_native
+
         args = self._args(resume="/x.soul", resume_latest=True)
         with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
             mock_trainer.return_value.training_model.num_parameters.return_value = 1000
@@ -146,6 +159,7 @@ class TestCmdTrainNative:
     @patch("commands.train._resolve_corpus_file")
     def test_save_format_option_is_ignored(self, mock_resolve):
         from commands.train import cmd_train_native
+
         mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         args = self._args(save_format="pt")
         with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
@@ -159,6 +173,7 @@ class TestCmdTrainNative:
     @patch("commands.train._resolve_corpus_file")
     def test_full_native_train_pipeline(self, mock_resolve):
         from commands.train import cmd_train_native
+
         mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
             instance = mock_trainer.return_value
@@ -171,6 +186,7 @@ class TestCmdTrainNative:
     @patch("commands.train._resolve_corpus_file")
     def test_save_stem_overrides_soul_name(self, mock_resolve):
         from commands.train import cmd_train_native
+
         mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         args = self._args(save_stem="my_model")
         with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
@@ -185,12 +201,18 @@ class TestCmdTrainNative:
     @patch("commands.train._resolve_corpus_file")
     def test_completed_run_leaves_single_model_file(self, mock_resolve, tmp_path):
         from commands.train import cmd_train_native
+
         mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         ckpt_dir = tmp_path / "ckpts"
         ckpt_dir.mkdir()
-        for name in ("tinyshakespeare_1.soul", "tinyshakespeare_1.soul.meta.json",
-                     "tinyshakespeare_2.soul", "tinyshakespeare_2.soul.meta.json",
-                     "test-native.soul", "test-native.soul.meta.json"):
+        for name in (
+            "tinyshakespeare_1.soul",
+            "tinyshakespeare_1.soul.meta.json",
+            "tinyshakespeare_2.soul",
+            "tinyshakespeare_2.soul.meta.json",
+            "test-native.soul",
+            "test-native.soul.meta.json",
+        ):
             (ckpt_dir / name).write_text("x", encoding="utf-8")
         args = self._args(checkpoint_dir=str(ckpt_dir))
         with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
@@ -203,6 +225,7 @@ class TestCmdTrainNative:
     @patch("commands.train._resolve_corpus_file")
     def test_default_tokenizer_passes_none(self, mock_resolve):
         from commands.train import cmd_train_native
+
         mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
             instance = mock_trainer.return_value
@@ -212,7 +235,9 @@ class TestCmdTrainNative:
 
     def test_token_tree_tokenizer_trains_and_passes_tree(self, tmp_path):
         from commands.train import cmd_train_native
+
         from domain.training._internal.token_tree import TokenTree
+
         corpus = tmp_path / "corpus.txt"
         corpus.write_text(
             "the quick brown fox jumps over the lazy dog. " * 40,
@@ -232,6 +257,7 @@ class TestCmdTrainNative:
     @patch("commands.train._resolve_corpus_file")
     def test_token_tree_unknown_option_is_none(self, mock_resolve, tmp_path):
         from commands.train import cmd_train_native
+
         mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         args = self._args(tokenizer="token-tree")
         # When the tokenizer kind is not recognized the CLI falls back to char.
@@ -267,12 +293,14 @@ class _FakeEmbedder:
 class TestSplitCorpusText:
     def test_paragraphs(self):
         from commands.train import _split_corpus_text
+
         text = "first paragraph has enough words.\n\nsecond paragraph has words too.\n\nthird one has plenty of words as well."
         chunks = _split_corpus_text(text, min_len=20)
         assert len(chunks) >= 3
 
     def test_single_block_windows(self):
         from commands.train import _split_corpus_text
+
         blob = "word " * 500
         chunks = _split_corpus_text(blob, min_len=40)
         assert len(chunks) >= 2
@@ -280,6 +308,7 @@ class TestSplitCorpusText:
 
     def test_word_fallback_tiny(self):
         from commands.train import _split_corpus_text
+
         text = "short text that is not enough for paragraphs at all."
         chunks = _split_corpus_text(text, min_len=20)
         assert len(chunks) >= 1
@@ -301,8 +330,8 @@ class TestCmdTrainEmbed:
         return MagicMock(**base)
 
     def test_single_file_corpus_is_chunked(self, tmp_path):
-        import numpy as np
         from commands.train import cmd_train_embed
+
         corpus = tmp_path / "corpus.txt"
         corpus.write_text(
             "neural networks learn from examples by adjusting weights.\n\n"
@@ -313,10 +342,17 @@ class TestCmdTrainEmbed:
         )
         args = self._args(tmp_path, corpus=str(corpus))
         fake = _FakeEmbedder()
-        with patch("domains.inference.slo_embedder.train_embedder") as mock_train, \
-             patch("domains.inference.slo_embedder.SloTextEmbedder.load", return_value=fake) as mock_load:
+        with (
+            patch("domains.inference.slo_embedder.train_embedder") as mock_train,
+            patch(
+                "domains.inference.slo_embedder.SloTextEmbedder.load", return_value=fake
+            ) as mock_load,
+        ):
             mock_train.return_value = {
-                "save_path": "/tmp/x.sou", "final_loss": 0.5, "vocab_size": 10, "n_params": 100,
+                "save_path": "/tmp/x.sou",
+                "final_loss": 0.5,
+                "vocab_size": 10,
+                "n_params": 100,
             }
             cmd_train_embed(args)
         assert mock_train.called
@@ -326,6 +362,7 @@ class TestCmdTrainEmbed:
 
     def test_post_train_runs_retrieval_check(self, tmp_path):
         from commands.train import cmd_train_embed
+
         corpus = tmp_path / "corpus.txt"
         corpus.write_text(
             "neural networks learn from examples by adjusting weights.\n\n"
@@ -336,11 +373,18 @@ class TestCmdTrainEmbed:
         )
         args = self._args(tmp_path, corpus=str(corpus))
         fake = _FakeEmbedder()
-        with patch("domains.inference.slo_embedder.train_embedder") as mock_train, \
-             patch("domains.inference.slo_embedder.SloTextEmbedder.load", return_value=fake) as mock_load, \
-             patch("commands.train._embedder_retrieval_check") as mock_check:
+        with (
+            patch("domains.inference.slo_embedder.train_embedder") as mock_train,
+            patch(
+                "domains.inference.slo_embedder.SloTextEmbedder.load", return_value=fake
+            ) as mock_load,
+            patch("commands.train._embedder_retrieval_check") as mock_check,
+        ):
             mock_train.return_value = {
-                "save_path": "/tmp/x.sou", "final_loss": 0.5, "vocab_size": 10, "n_params": 100,
+                "save_path": "/tmp/x.sou",
+                "final_loss": 0.5,
+                "vocab_size": 10,
+                "n_params": 100,
             }
             cmd_train_embed(args)
         assert mock_check.called
@@ -349,6 +393,7 @@ class TestCmdTrainEmbed:
 
     def test_test_mode_retrieves_top_matches(self, tmp_path):
         from commands.train import cmd_train_embed
+
         corpus = tmp_path / "corpus.txt"
         corpus.write_text(
             "neural networks learn from examples by adjusting weights.\n\n"
@@ -358,8 +403,12 @@ class TestCmdTrainEmbed:
         )
         args = self._args(tmp_path, corpus=str(corpus), test="recurrent networks")
         fake = _FakeEmbedder()
-        with patch("domains.inference.slo_embedder.SloTextEmbedder.load", return_value=fake) as mock_load, \
-             patch("commands.train._embedder_retrieval_check") as mock_check:
+        with (
+            patch(
+                "domains.inference.slo_embedder.SloTextEmbedder.load", return_value=fake
+            ) as mock_load,
+            patch("commands.train._embedder_retrieval_check") as mock_check,
+        ):
             cmd_train_embed(args)
         assert mock_load.called
         assert mock_check.called
@@ -367,6 +416,7 @@ class TestCmdTrainEmbed:
 
     def test_retrieval_check_self_rank(self):
         from commands.train import _embedder_retrieval_check
+
         texts = ["alpha bravo charlie delta", "echo foxtrot golf hotel", "india juliet kilo lima"]
         # Should not crash — verifies _FakeEmbedder works with retrieval check
         _embedder_retrieval_check(_FakeEmbedder(), texts)

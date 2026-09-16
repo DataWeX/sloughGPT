@@ -10,6 +10,7 @@ import argparse
 import time
 import urllib.request
 from pathlib import Path
+
 from playwright.sync_api import sync_playwright
 
 BASE_URL = "http://localhost:3010"
@@ -91,9 +92,14 @@ def setup_mock_routes(page, server_alive=False):
     if server_alive:
         return
     for pattern, body in MOCK_ROUTES:
-        page.route(pattern, lambda route, b=body: route.fulfill(
-            status=200, content_type="application/json", body=b,
-        ))
+        page.route(
+            pattern,
+            lambda route, b=body: route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=b,
+            ),
+        )
 
 
 def wait_for_app(page, timeout_s=10):
@@ -148,7 +154,9 @@ def screenshot_headers(output_dir: Path):
 
     server_alive = is_server_running()
     if not server_alive:
-        print("Server not detected at :3010 — run `make web` first, or use --output for mock-only mode")
+        print(
+            "Server not detected at :3010 — run `make web` first, or use --output for mock-only mode"
+        )
     else:
         print("Server detected at :3010 — using live API responses")
 

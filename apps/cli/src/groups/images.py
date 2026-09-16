@@ -3,8 +3,10 @@ Images command group — image generation and gallery.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, api_get, api_post, output_json
+from core.helpers import api_get, api_post, output_json
+
 from domain.logging import get_global
+
 log = get_global()
 
 
@@ -17,13 +19,16 @@ def register(cli):
 
     @images.command("generate", help="Generate an image from text")
     @click.argument("prompt")
-    @click.option("--style", type=click.Choice(["realistic", "cartoon", "watercolor", "sketch", "fantasy"]),
-                  default="realistic", help="Image style")
+    @click.option(
+        "--style",
+        type=click.Choice(["realistic", "cartoon", "watercolor", "sketch", "fantasy"]),
+        default="realistic",
+        help="Image style",
+    )
     @click.option("--output", "-o", help="Save to file path")
     @click.pass_context
     def images_generate(ctx, prompt, style, output):
-        r = api_post(ctx, "/images/generate",
-                     json={"prompt": prompt, "style": style})
+        r = api_post(ctx, "/images/generate", json={"prompt": prompt, "style": style})
         if r.status_code != 200:
             log.error(f"Generate failed: {r.text}")
             return
@@ -35,6 +40,7 @@ def register(cli):
         log.success(f"Generated image: {img_id} (style={style})")
         if output:
             import base64
+
             b64 = img_data.get("image", "")
             if b64 and "," in b64:
                 b64 = b64.split(",", 1)[1]

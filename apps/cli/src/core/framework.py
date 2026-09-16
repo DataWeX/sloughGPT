@@ -7,10 +7,11 @@ using pure Python. The rest of the CLI uses this as if it were Click.
 
 import json
 import sys
+from collections.abc import Callable
+from difflib import get_close_matches
 from pathlib import Path
 from types import SimpleNamespace
-from difflib import get_close_matches
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 _TTY = sys.stdout.isatty()
 
@@ -23,13 +24,16 @@ GREEN = "\033[32m"
 YELLOW = "\033[33m"
 RED = "\033[31m"
 
+
 def c(text: str, code: str) -> str:
     """Wrap text in ANSI color codes (no-op if not TTY)."""
     return f"{code}{text}\033[0m" if _TTY else text
 
+
 # ── Usage tracking ───────────────────────────────────────────────────
 
 _USAGE_PATH = Path.home() / ".config" / "sloughgpt" / "usage_stats.json"
+
 
 def record_usage(cmd_name: str) -> None:
     try:
@@ -42,7 +46,9 @@ def record_usage(cmd_name: str) -> None:
     except Exception:
         pass
 
+
 # ── Output helpers ───────────────────────────────────────────────────
+
 
 def echo(message: str = "", nl: bool = True, err: bool = False):
     stream = sys.stderr if err else sys.stdout
@@ -52,10 +58,12 @@ def echo(message: str = "", nl: bool = True, err: bool = False):
         stream.write("\n")
     stream.flush()
 
+
 def p(text: str = "") -> None:
     """Print a line to stdout."""
     sys.stdout.write(text + "\n")
     sys.stdout.flush()
+
 
 def confirm(message: str, abort: bool = False) -> bool:
     try:
@@ -70,12 +78,15 @@ def confirm(message: str, abort: bool = False) -> bool:
         return False
     return True
 
+
 # ── Type validators ──────────────────────────────────────────────────
 
+
 class Choice:
-    def __init__(self, choices: List[str], case_sensitive: bool = False):
+    def __init__(self, choices: list[str], case_sensitive: bool = False):
         self.choices = choices
         self.case_sensitive = case_sensitive
+
     def convert(self, value: str, param_name: str) -> str:
         if self.case_sensitive:
             if value in self.choices:
@@ -87,15 +98,24 @@ class Choice:
         valid = ", ".join(self.choices)
         raise BadParameter(f"Invalid value '{value}' for {param_name}. Choose from: {valid}")
 
+
 class CliPath:
-    def __init__(self, exists=False, file_okay=True, dir_okay=True,
-                 writable=False, readable=True, resolve_path=False):
+    def __init__(
+        self,
+        exists=False,
+        file_okay=True,
+        dir_okay=True,
+        writable=False,
+        readable=True,
+        resolve_path=False,
+    ):
         self.exists = exists
         self.file_okay = file_okay
         self.dir_okay = dir_okay
         self.writable = writable
         self.readable = readable
         self.resolve_path = resolve_path
+
     def convert(self, value: str, param_name: str) -> str:
         p_ = Path(value)
         if self.resolve_path:
@@ -105,10 +125,12 @@ class CliPath:
             raise BadParameter(f"Path '{value}' does not exist")
         return value
 
+
 class IntRange:
     def __init__(self, min=None, max=None):
         self.min = min
         self.max = max
+
     def convert(self, value: str, param_name: str) -> int:
         try:
             iv = int(value)
@@ -120,23 +142,38 @@ class IntRange:
             raise BadParameter(f"{iv} is greater than maximum {self.max}")
         return iv
 
+
 # ── Exceptions ───────────────────────────────────────────────────────
+
 
 class UsageError(Exception):
     def __init__(self, message: str):
         self.message = message
         super().__init__(message)
 
+
 class BadParameter(UsageError):
     pass
 
+
 # ── Core types ───────────────────────────────────────────────────────
 
+
 class Option:
-    def __init__(self, names: List[str], help: str = "", default: Any = None,
-                 type: type = str, is_flag: bool = False, required: bool = False,
-                 multiple: bool = False, metavar: str = "", show_default: bool = False,
-                 choice: Optional[Choice] = None, flag_value: Optional[str] = None):
+    def __init__(
+        self,
+        names: list[str],
+        help: str = "",
+        default: Any = None,
+        type: type = str,
+        is_flag: bool = False,
+        required: bool = False,
+        multiple: bool = False,
+        metavar: str = "",
+        show_default: bool = False,
+        choice: Choice | None = None,
+        flag_value: str | None = None,
+    ):
         expanded = []
         for n in names:
             if "/" in n:
@@ -172,43 +209,56 @@ class Option:
                 if not n.startswith("--no-"):
                     self.dest = n.lstrip("-").replace("-", "_")
                     break
+
     @property
     def primary(self) -> str:
         return self.names[0]
+
     @property
-    def short(self) -> Optional[str]:
+    def short(self) -> str | None:
         for n in self.names:
             if len(n) == 2 and n.startswith("-"):
                 return n
         return None
 
+
 class Argument:
-    def __init__(self, name: str, required: bool = True, default: Any = None,
-                 nargs: int = 1, type=None):
+    def __init__(
+        self, name: str, required: bool = True, default: Any = None, nargs: int = 1, type=None
+    ):
         self.name = name
         self.required = required
         self.default = default
         self.nargs = nargs
         self.type = type
 
+
 class Context:
-    def __init__(self, obj: Optional[dict] = None):
+    def __init__(self, obj: dict | None = None):
         self.obj = obj or {}
-        self.invoked_subcommand: Optional[str] = None
+        self.invoked_subcommand: str | None = None
+
     def ensure_object(self, factory: Callable = dict):
         if not self.obj:
             self.obj = factory()
+
     def invoke(self, cmd, **kwargs):
         if isinstance(cmd, Command):
             cmd.func(**kwargs)
         elif callable(cmd):
             cmd(**kwargs)
 
+
 class Command:
-    def __init__(self, name: str, func: Callable, help: str = "",
-                 options: Optional[List[Option]] = None,
-                 arguments: Optional[List[Argument]] = None,
-                 hidden: bool = False):
+    def __init__(
+        self,
+        name: str,
+        func: Callable,
+        help: str = "",
+        options: list[Option] | None = None,
+        arguments: list[Argument] | None = None,
+        hidden: bool = False,
+    ):
         self.name = name
         self.func = func
         self.help = help
@@ -216,15 +266,18 @@ class Command:
         self.arguments = arguments or []
         self.hidden = hidden
 
+
 class Group:
-    def __init__(self, name: str = "", help: str = "",
-                 invoke_without_command: bool = False, cls=None):
+    def __init__(
+        self, name: str = "", help: str = "", invoke_without_command: bool = False, cls=None
+    ):
         self.name = name
         self.help = help
-        self.commands: Dict[str, Command] = {}
-        self.groups: Dict[str, "Group"] = {}
-        self.parent: Optional["Group"] = None
+        self.commands: dict[str, Command] = {}
+        self.groups: dict[str, Group] = {}
+        self.parent: Group | None = None
         self.invoke_without_command = invoke_without_command
+
     def command(self, name: str = "", help: str = "", hidden: bool = False):
         def decorator(func):
             cmd_name = name or func.__name__
@@ -233,7 +286,9 @@ class Group:
             cmd.arguments = getattr(func, "_arguments", [])
             self.commands[cmd_name] = cmd
             return func
+
         return decorator
+
     def group(self, name: str = "", help: str = ""):
         def decorator(func):
             grp_name = name or func.__name__
@@ -243,12 +298,16 @@ class Group:
             grp._options = getattr(func, "_options", [])
             self.groups[grp_name] = grp
             return grp
+
         return decorator
+
     def add_command(self, cmd: Command, name: str = ""):
         self.commands[name or cmd.name] = cmd
+
     def add_group(self, grp: "Group", name: str = ""):
         self.groups[name or grp.name] = grp
-    def _fuzzy_match(self, cmd_name: str) -> List[str]:
+
+    def _fuzzy_match(self, cmd_name: str) -> list[str]:
         all_names = list(self.commands.keys()) + list(self.groups.keys())
         prefix = [ch for ch in all_names if ch.startswith(cmd_name.lower())]
         if prefix:
@@ -258,10 +317,13 @@ class Group:
             return substring
         cutoff = 0.4 if len(cmd_name) <= 3 else 0.6
         return get_close_matches(cmd_name, all_names, n=3, cutoff=cutoff)
+
     def __call__(self, *args, **kwargs):
         run(self)
 
+
 # ── Decorators ───────────────────────────────────────────────────────
+
 
 def group(name=None, help="", invoke_without_command=False, cls=None, **kwargs):
     def decorator(func):
@@ -275,7 +337,9 @@ def group(name=None, help="", invoke_without_command=False, cls=None, **kwargs):
             grp._version_prog = getattr(func, "_version_prog", "")
             grp._version_value = getattr(func, "_version_value", None)
         return grp
+
     return decorator
+
 
 def command(name=None, help="", hidden=False, cls=None, **kwargs):
     def decorator(func):
@@ -284,33 +348,61 @@ def command(name=None, help="", hidden=False, cls=None, **kwargs):
         cmd.options = getattr(func, "_options", [])
         cmd.arguments = getattr(func, "_arguments", [])
         return cmd
+
     return decorator
 
-def option(*names, help="", default=None, type=str, is_flag=False,
-           required=False, multiple=False, metavar="", show_default=False,
-           choice=None, flag_value=None):
-    opt = Option(list(names), help=help, default=default, type=type,
-                 is_flag=is_flag, required=required, multiple=multiple,
-                 metavar=metavar, show_default=show_default, choice=choice,
-                 flag_value=flag_value)
+
+def option(
+    *names,
+    help="",
+    default=None,
+    type=str,
+    is_flag=False,
+    required=False,
+    multiple=False,
+    metavar="",
+    show_default=False,
+    choice=None,
+    flag_value=None,
+):
+    opt = Option(
+        list(names),
+        help=help,
+        default=default,
+        type=type,
+        is_flag=is_flag,
+        required=required,
+        multiple=multiple,
+        metavar=metavar,
+        show_default=show_default,
+        choice=choice,
+        flag_value=flag_value,
+    )
+
     def decorator(func):
         if not hasattr(func, "_options"):
             func._options = []
         func._options.append(opt)
         return func
+
     return decorator
+
 
 def argument(name, required=True, default=None, nargs=1, type=None):
     arg = Argument(name, required=required, default=default, nargs=nargs, type=type)
+
     def decorator(func):
         if not hasattr(func, "_arguments"):
             func._arguments = []
         func._arguments.append(arg)
         return func
+
     return decorator
+
 
 def pass_context(func):
     return func
+
 
 def version_option(package_name="", prog_name="", version=None, **kwargs):
     def decorator(func):
@@ -319,26 +411,32 @@ def version_option(package_name="", prog_name="", version=None, **kwargs):
         func._version_prog = prog_name
         func._version_value = version
         return func
+
     return decorator
+
 
 def confirmation_option(**kwargs):
     def decorator(func):
         if not hasattr(func, "_options"):
             func._options = []
-        func._options.append(Option(
-            ["--yes", "-y"], help="Skip confirmation prompt",
-            is_flag=True, default=False
-        ))
+        func._options.append(
+            Option(["--yes", "-y"], help="Skip confirmation prompt", is_flag=True, default=False)
+        )
         return func
+
     return decorator
+
 
 def password_option(**kwargs):
     return option("--password", help="Password", **kwargs)
 
+
 # ── Argument parsing ─────────────────────────────────────────────────
 
-def parse_args(args: List[str], options: List[Option], arguments: List[Argument]
-               ) -> Tuple[dict, List[str]]:
+
+def parse_args(
+    args: list[str], options: list[Option], arguments: list[Argument]
+) -> tuple[dict, list[str]]:
     kwargs = {}
     positional = []
     i = 0
@@ -428,12 +526,17 @@ def parse_args(args: List[str], options: List[Option], arguments: List[Argument]
             kwargs[arg_def.name] = arg_def.default
     return kwargs, positional[pos_idx:]
 
+
 # ── Help formatting ──────────────────────────────────────────────────
 
-def format_help(group: Group, ctx: Context,
-                categories: Optional[Dict] = None,
-                suggestions: Optional[Dict] = None,
-                version_fn: Optional[Callable] = None) -> None:
+
+def format_help(
+    group: Group,
+    ctx: Context,
+    categories: dict | None = None,
+    suggestions: dict | None = None,
+    version_fn: Callable | None = None,
+) -> None:
     try:
         version = version_fn() if version_fn else "dev"
     except Exception:
@@ -488,18 +591,23 @@ def format_help(group: Group, ctx: Context,
     p(f"    {c('--help', CYAN)}         Show this help message")
     p()
     p(f"  {c('Examples:', BOLD)}")
-    p(f"    sloughgpt chat                     Start chatting")
-    p(f"    sloughgpt model download gpt2     Download a model")
-    p(f"    sloughgpt model status             Check model cache")
-    p(f"    sloughgpt train dataset shakespeare Train on dataset")
-    p(f"    sloughgpt shell                    Interactive shell")
+    p("    sloughgpt chat                     Start chatting")
+    p("    sloughgpt model download gpt2     Download a model")
+    p("    sloughgpt model status             Check model cache")
+    p("    sloughgpt train dataset shakespeare Train on dataset")
+    p("    sloughgpt shell                    Interactive shell")
     p()
     p(f"  {c('Tips:', BOLD)}")
-    p(f"    {c('•', GREEN)} Use fuzzy matching — {c("'sloughgpt md'", CYAN)} finds {c('model', CYAN)}")
-    p(f"    {c('•', GREEN)} Run {c("'sloughgpt shell'", CYAN)} then {c("'confirm on'", CYAN)} to skip all download prompts")
+    p(
+        f"    {c('•', GREEN)} Use fuzzy matching — {c("'sloughgpt md'", CYAN)} finds {c('model', CYAN)}"
+    )
+    p(
+        f"    {c('•', GREEN)} Run {c("'sloughgpt shell'", CYAN)} then {c("'confirm on'", CYAN)} to skip all download prompts"
+    )
     p(f"    {c('•', GREEN)} Run {c("'sloughgpt shell'", CYAN)} for 40+ built-in commands")
     p(f"    {c('•', GREEN)} Add {c('--yes/-y', CYAN)} to skip confirmations for a single command")
     p()
+
 
 def format_group_help(group: Group, ctx: Context) -> None:
     p()
@@ -520,6 +628,7 @@ def format_group_help(group: Group, ctx: Context) -> None:
     p(f"  {c('--help', CYAN)}   Show this help message")
     p()
 
+
 def format_command_help(cmd: Command, ctx: Context, cmd_path: str = "") -> None:
     p()
     name = cmd_path or cmd.name
@@ -539,9 +648,11 @@ def format_command_help(cmd: Command, ctx: Context, cmd_path: str = "") -> None:
             p(f"    {names:<20} {opt.help}{default_str}{required_str}")
     p()
 
+
 # ── Command dispatch ─────────────────────────────────────────────────
 
-def run_command(cmd: Command, ctx: Context, args: List[str], cmd_path: str = "") -> None:
+
+def run_command(cmd: Command, ctx: Context, args: list[str], cmd_path: str = "") -> None:
     if "--help" in args or "-h" in args:
         format_command_help(cmd, ctx, cmd_path)
         return
@@ -551,6 +662,7 @@ def run_command(cmd: Command, ctx: Context, args: List[str], cmd_path: str = "")
         p(f"  {c('Error:', RED)} {e}")
         sys.exit(1)
     import inspect
+
     sig = inspect.signature(cmd.func)
     if "ctx" in sig.parameters:
         kwargs["ctx"] = ctx
@@ -569,6 +681,7 @@ def run_command(cmd: Command, ctx: Context, args: List[str], cmd_path: str = "")
             p(f"  {c('Error:', RED)} {e}")
         sys.exit(1)
 
+
 def _show_error(group: Group, cmd_name: str) -> None:
     p()
     p(f"  {c('err', RED)} {c('Unknown command: ', BOLD)}{c(cmd_name, CYAN)}")
@@ -579,15 +692,19 @@ def _show_error(group: Group, cmd_name: str) -> None:
         for name in all_names:
             p(f"    {c(name, CYAN)}")
         p()
-        p(f"  {c('Tip: Use \'sloughgpt --help\' to see all commands', DIM)}")
+        p(f"  {c("Tip: Use 'sloughgpt --help' to see all commands", DIM)}")
         p()
 
-def resolve_and_run(group: Group, ctx: Context, cmd_name: str, cmd_args: List[str],
-                    full_path: str = "") -> Optional[Tuple[str, List[str]]]:
+
+def resolve_and_run(
+    group: Group, ctx: Context, cmd_name: str, cmd_args: list[str], full_path: str = ""
+) -> tuple[str, list[str]] | None:
     if cmd_name in group.groups:
         sub = group.groups[cmd_name]
         record_usage(cmd_name)
-        return run_group(sub, ctx, cmd_args, full_path=f"{full_path} {cmd_name}" if full_path else cmd_name)
+        return run_group(
+            sub, ctx, cmd_args, full_path=f"{full_path} {cmd_name}" if full_path else cmd_name
+        )
     if cmd_name in group.commands:
         cmd = group.commands[cmd_name]
         record_usage(cmd_name)
@@ -614,12 +731,15 @@ def resolve_and_run(group: Group, ctx: Context, cmd_name: str, cmd_args: List[st
     _show_error(group, cmd_name)
     return None
 
-def run_group(group: Group, ctx: Context, args: List[str],
-              full_path: str = "") -> Optional[Tuple[str, List[str]]]:
+
+def run_group(
+    group: Group, ctx: Context, args: list[str], full_path: str = ""
+) -> tuple[str, list[str]] | None:
     if group.invoke_without_command:
-        cb = group.callback if hasattr(group, 'callback') else None
+        cb = group.callback if hasattr(group, "callback") else None
         if cb:
             import inspect
+
             sig = inspect.signature(cb)
             grp_opts = getattr(group, "_options", [])
             try:
@@ -637,13 +757,16 @@ def run_group(group: Group, ctx: Context, args: List[str],
         return None
     cmd_name = args[0]
     cmd_args = args[1:]
-    path = f"{full_path} {cmd_name}" if full_path else cmd_name
     return resolve_and_run(group, ctx, cmd_name, cmd_args, full_path=full_path)
 
-def run(group: Group, args: Optional[List[str]] = None,
-        categories: Optional[Dict] = None,
-        suggestions: Optional[Dict] = None,
-        version_fn: Optional[Callable] = None):
+
+def run(
+    group: Group,
+    args: list[str] | None = None,
+    categories: dict | None = None,
+    suggestions: dict | None = None,
+    version_fn: Callable | None = None,
+):
     """Single entry-point for CLI dispatch."""
     if args is None:
         args = sys.argv[1:]
@@ -652,8 +775,8 @@ def run(group: Group, args: Optional[List[str]] = None,
     ctx.ensure_object()
 
     grp_opts = list(getattr(group, "_options", [])) + [
-        Option(["--help", "-h"],  help="Show this message and exit", is_flag=True),
-        Option(["--version"],     help="Show version and exit",      is_flag=True),
+        Option(["--help", "-h"], help="Show this message and exit", is_flag=True),
+        Option(["--version"], help="Show version and exit", is_flag=True),
     ]
     try:
         kwargs, positional = parse_args(args, grp_opts, [])
@@ -673,6 +796,7 @@ def run(group: Group, args: Optional[List[str]] = None,
 
     if hasattr(group, "callback") and group.callback:
         import inspect
+
         sig = inspect.signature(group.callback)
         cb_kwargs = dict(kwargs)
         if "ctx" in sig.parameters:
@@ -680,7 +804,9 @@ def run(group: Group, args: Optional[List[str]] = None,
         group.callback(**cb_kwargs)
 
     if show_help:
-        format_help(group, ctx, categories=categories, suggestions=suggestions, version_fn=version_fn)
+        format_help(
+            group, ctx, categories=categories, suggestions=suggestions, version_fn=version_fn
+        )
         return
     if show_version:
         try:
@@ -690,7 +816,9 @@ def run(group: Group, args: Optional[List[str]] = None,
         return
 
     if cmd_name is None:
-        format_help(group, ctx, categories=categories, suggestions=suggestions, version_fn=version_fn)
+        format_help(
+            group, ctx, categories=categories, suggestions=suggestions, version_fn=version_fn
+        )
         return
 
     result = resolve_and_run(group, ctx, cmd_name, cmd_args)
@@ -699,12 +827,22 @@ def run(group: Group, args: Optional[List[str]] = None,
         if suggestion:
             p(f"\n  {c(suggestion, DIM)}")
 
+
 # ── Click-compatible namespace ───────────────────────────────────────
 
 click = SimpleNamespace(
-    group=group, command=command, option=option, argument=argument,
-    pass_context=pass_context, version_option=version_option,
-    confirmation_option=confirmation_option, echo=echo, confirm=confirm,
-    Choice=Choice, Path=CliPath, UsageError=UsageError, BadParameter=BadParameter,
+    group=group,
+    command=command,
+    option=option,
+    argument=argument,
+    pass_context=pass_context,
+    version_option=version_option,
+    confirmation_option=confirmation_option,
+    echo=echo,
+    confirm=confirm,
+    Choice=Choice,
+    Path=CliPath,
+    UsageError=UsageError,
+    BadParameter=BadParameter,
     run=run,
 )

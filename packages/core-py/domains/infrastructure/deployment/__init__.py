@@ -12,7 +12,7 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ...__init__ import BaseComponent, ComponentException
 
@@ -116,7 +116,7 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             self.logger.error(
                 "Failed to initialize Deployment Manager: %s", e, extra={"tag": "INFRA"}
             )
-            raise ComponentException(f"Deployment Manager initialization failed: {e}")
+            raise ComponentException(f"Deployment Manager initialization failed: {e}") from e
 
     async def shutdown(self) -> None:
         """Shutdown deployment manager"""
@@ -138,7 +138,7 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             self.logger.error(
                 "Failed to shutdown Deployment Manager: %s", e, extra={"tag": "INFRA"}
             )
-            raise ComponentException(f"Deployment Manager shutdown failed: {e}")
+            raise ComponentException(f"Deployment Manager shutdown failed: {e}") from e
 
     async def scale(self, service_id: str, replicas: int) -> bool:
         """Scale a service to the given number of replicas."""
@@ -190,7 +190,7 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
 
         except Exception as e:
             self.logger.error("Failed to start deployment: %s", e, extra={"tag": "INFRA"})
-            raise ComponentException(f"Deployment start failed: {e}")
+            raise ComponentException(f"Deployment start failed: {e}") from e
 
     async def get_deployment_status(self, deployment_id: str) -> dict[str, Any]:
         """Get deployment status"""
@@ -241,7 +241,7 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             self.logger.error(
                 "Failed to rollback deployment %s: %s", deployment_id, e, extra={"tag": "INFRA"}
             )
-            raise ComponentException(f"Rollback failed: {e}")
+            raise ComponentException(f"Rollback failed: {e}") from e
 
     async def get_deployment_history(
         self, environment: str | None = None, limit: int = 50
@@ -340,7 +340,7 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
         except TimeoutError:
             raise ComponentException(
                 f"Deployment {deployment.deployment_id} approval timed out after {timeout}s"
-            )
+            ) from None
         finally:
             self._approval_events.pop(deployment.deployment_id, None)
 

@@ -52,31 +52,31 @@ Use cases:
 
 import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, Optional, Union
+from typing import Dict, Optional, Union
 
-from .download import download_file, DownloadError
-from .download import state
-from .resolve import resolve_page, resolve_and_download
-from .resolve import patterns
-from .server import start_capture_server, CaptureEntry
+from .download import DownloadError, download_file, state
+from .resolve import patterns, resolve_and_download, resolve_page
+from .server import CaptureEntry, start_capture_server
 
 # Compression APIs (optional dependency)
 try:
     from .download.compress import (
-        compress_file,
-        decompress_file,
-        compress_bytes,
-        decompress_bytes,
-        compress_stream,
-        decompress_stream,
-        auto_decompress,
-        is_compressed_file,
-        peek_compressed_header,
-        compressed_file_iterator,
         CompressedFileServer,
         CompressionResult,
+        auto_decompress,
+        compress_bytes,
+        compress_file,
+        compress_stream,
+        compressed_file_iterator,
+        decompress_bytes,
+        decompress_file,
+        decompress_stream,
+        is_compressed_file,
+        peek_compressed_header,
     )
+
     _HAS_COMPRESSION = True
 except ImportError:
     _HAS_COMPRESSION = False
@@ -116,16 +116,17 @@ __all__ = [
 # Generic download — any URL
 # ---------------------------------------------------------------------------
 
+
 def download(
     url: str,
-    dest: Union[str, Path],
+    dest: str | Path,
     expected_size: int = 0,
     checksum: str = "",
     label: str = "",
-    on_progress: Optional[Callable[[int, int, float], None]] = None,
+    on_progress: Callable[[int, int, float], None] | None = None,
     compressed: bool = False,
     skip_if_exists: bool = True,
-) -> Dict:
+) -> dict:
     """Download a single file from any URL with cross-session resume.
 
     Uses ``~/.downcraft/state.json`` to track progress so that
@@ -150,7 +151,7 @@ def download(
     Returns:
         Dict with keys: ``status``, ``dest``, ``elapsed``, ``total_bytes``.
     """
-    from .download.http import download_file, _verify_checksum
+    from .download.http import _verify_checksum, download_file
 
     dest = Path(dest)
     label = label or dest.name

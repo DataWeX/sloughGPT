@@ -329,8 +329,8 @@ class PerformanceMonitor:
         self._step_times.clear()
 
 
-class OptimizedBatchCache:
-    """LRU cache for pre-batched training data."""
+class _LRUBatchCache:
+    """Legacy LRU cache for pre-batched training data (superseded by OptimizedBatchCache)."""
 
     def __init__(self, max_size: int = 64):
         self._cache = {}

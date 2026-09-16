@@ -17,8 +17,8 @@ import logging
 import os
 import re
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 import requests
 
@@ -30,13 +30,44 @@ RETRY_DELAY = 2.0
 
 # File extensions that are already compressed (skip double compression)
 COMPRESSED_EXTENSIONS = {
-    ".zip", ".gz", ".bz2", ".xz", ".lz4", ".zst", ".lz", ".br", ".tgz",
-    ".tar.gz", ".tar.bz2", ".tar.xz", ".7z", ".rar", ".cab",
-    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif",  # image formats
-    ".mp3", ".mp4", ".avi", ".mkv", ".mov", ".webm",  # media formats
-    ".woff", ".woff2", ".ttf", ".otf",  # font formats
-    ".pyc", ".pyo", ".class",  # compiled
-    ".exe", ".dll", ".so", ".dylib",  # binaries
+    ".zip",
+    ".gz",
+    ".bz2",
+    ".xz",
+    ".lz4",
+    ".zst",
+    ".lz",
+    ".br",
+    ".tgz",
+    ".tar.gz",
+    ".tar.bz2",
+    ".tar.xz",
+    ".7z",
+    ".rar",
+    ".cab",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".webp",
+    ".avif",  # image formats
+    ".mp3",
+    ".mp4",
+    ".avi",
+    ".mkv",
+    ".mov",
+    ".webm",  # media formats
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".otf",  # font formats
+    ".pyc",
+    ".pyo",
+    ".class",  # compiled
+    ".exe",
+    ".dll",
+    ".so",
+    ".dylib",  # binaries
 }
 
 
@@ -65,11 +96,21 @@ def _is_already_compressed(url: str, headers: dict) -> bool:
     # Check Content-Type header
     content_type = headers.get("Content-Type", "").lower()
     compressed_types = {
-        "application/zip", "application/gzip", "application/x-bzip2",
-        "application/x-xz", "application/x-lz4", "application/zstd",
-        "image/jpeg", "image/png", "image/gif", "image/webp",
-        "audio/mpeg", "video/mp4", "video/webm",
-        "font/woff", "font/woff2",
+        "application/zip",
+        "application/gzip",
+        "application/x-bzip2",
+        "application/x-xz",
+        "application/x-lz4",
+        "application/zstd",
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "audio/mpeg",
+        "video/mp4",
+        "video/webm",
+        "font/woff",
+        "font/woff2",
     }
     for ct in compressed_types:
         if ct in content_type:
@@ -85,7 +126,9 @@ def _is_already_compressed(url: str, headers: dict) -> bool:
 
 
 def _validate_content_range(
-    headers: dict, expected_start: int, total_size: int,
+    headers: dict,
+    expected_start: int,
+    total_size: int,
 ) -> bool:
     """Validate that the Content-Range header matches the requested range.
 
@@ -125,7 +168,7 @@ def _verify_checksum(file_path: Path, expected: str) -> bool:
     return hasher.hexdigest() == expected
 
 
-def get_file_size(url: str) -> Optional[int]:
+def get_file_size(url: str) -> int | None:
     """Get file size from server without downloading.
 
     Returns file size in bytes, or None if unknown.
@@ -186,8 +229,8 @@ def download_file(
     dest: Path,
     expected_size: int = 0,
     checksum: str = "",
-    on_chunk: Optional[Callable[[int, int], None]] = None,
-    on_complete: Optional[Callable[[Path], None]] = None,
+    on_chunk: Callable[[int, int], None] | None = None,
+    on_complete: Callable[[Path], None] | None = None,
     compressed: bool = False,
     skip_if_exists: bool = True,
 ) -> Path:
@@ -252,7 +295,9 @@ def download_file(
                     cl = resp.headers.get("Content-Length", "0")
                     full_size = int(cl) + resume_at if cl.isdigit() else 0
                 if full_size > 0 and not _validate_content_range(
-                    resp.headers, resume_at, full_size,
+                    resp.headers,
+                    resume_at,
+                    full_size,
                 ):
                     logger.warning(
                         "Content-Range mismatch on %s, restarting from 0",
@@ -282,7 +327,9 @@ def download_file(
             elif content_is_compressed:
                 # Content is already compressed (gzip, zstd, etc.) - don't decompress
                 should_decompress = False
-                logger.info("Content already compressed, skipping LZ4 decompression for %s", dest.name)
+                logger.info(
+                    "Content already compressed, skipping LZ4 decompression for %s", dest.name
+                )
 
             if should_decompress:
                 _download_compressed(resp, part, mode, total, on_chunk)
@@ -303,9 +350,7 @@ def download_file(
                         actual,
                     )
                     part.unlink(missing_ok=True)
-                    raise DownloadError(
-                        f"Checksum mismatch for {dest.name}"
-                    )
+                    raise DownloadError(f"Checksum mismatch for {dest.name}")
 
             os.replace(str(part), str(dest))
             logger.info("Downloaded %s (%.2f MB)", dest.name, dest.stat().st_size / 1e6)
@@ -326,7 +371,9 @@ def download_file(
             if attempt < MAX_RETRIES:
                 time.sleep(RETRY_DELAY * attempt)
             else:
-                raise DownloadError(f"Failed to download {dest.name} after {MAX_RETRIES} attempts: {e}") from e
+                raise DownloadError(
+                    f"Failed to download {dest.name} after {MAX_RETRIES} attempts: {e}"
+                ) from e
 
     raise DownloadError(f"Failed to download {dest.name}")
 
@@ -336,7 +383,7 @@ def _download_raw(
     part: Path,
     mode: str,
     total: int,
-    on_chunk: Optional[Callable[[int, int], None]],
+    on_chunk: Callable[[int, int], None] | None,
 ) -> None:
     """Download raw (uncompressed) data."""
     with open(part, mode) as f:
@@ -354,7 +401,7 @@ def _download_compressed(
     part: Path,
     mode: str,
     total: int,
-    on_chunk: Optional[Callable[[int, int], None]],
+    on_chunk: Callable[[int, int], None] | None,
 ) -> None:
     """Download LZ4-compressed data and decompress on-the-fly."""
     from downcraft.download.compress import decompress_stream
@@ -377,8 +424,8 @@ def download_compressed(
     dest: Path,
     expected_size: int = 0,
     checksum: str = "",
-    on_chunk: Optional[Callable[[int, int], None]] = None,
-    on_complete: Optional[Callable[[Path], None]] = None,
+    on_chunk: Callable[[int, int], None] | None = None,
+    on_complete: Callable[[Path], None] | None = None,
 ) -> Path:
     """Download a compressed file with resume support.
 

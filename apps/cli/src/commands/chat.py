@@ -1,11 +1,10 @@
 """
 Chat commands - Interactive chat and one-shot generation.
 """
-import sys
+
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 from domain.logging import get_global
 
@@ -16,10 +15,15 @@ from utils.formatting import truncate
 def cmd_chat(args):
     """Interactive chat against the API."""
     import subprocess
+
     import requests
     from requests.exceptions import ConnectionError as RequestsConnectionError
-
-    from utils.helpers import chat_repository_root, chat_uvicorn_bind_host, chat_find_available_port, chat_wait_for_health
+    from utils.helpers import (
+        chat_find_available_port,
+        chat_repository_root,
+        chat_uvicorn_bind_host,
+        chat_wait_for_health,
+    )
 
     base_url = f"http://{args.host}:{args.port}".rstrip("/")
     server_proc = None
@@ -85,6 +89,7 @@ def cmd_chat(args):
 
         server_dir = repo / "apps" / "api" / "server"
         from domain.shared import find_server_python
+
         cmd = [
             find_server_python(repo),
             "-m",
@@ -157,6 +162,7 @@ def cmd_chat(args):
 
     try:
         from domain.shell._internal.io import ConsoleIO
+
         io = ConsoleIO()
         while True:
             user_input = io.read("You: ")
@@ -178,7 +184,11 @@ def cmd_chat(args):
                     data = response.json()
                     text = data.get("text", data)
                     print(f"\nSloughGPT: {text}\n")
-                    if isinstance(text, str) and "No model loaded" in text and not printed_no_model_hint:
+                    if (
+                        isinstance(text, str)
+                        and "No model loaded" in text
+                        and not printed_no_model_hint
+                    ):
                         log.info("Load a model first: --auto-model gpt2")
                         printed_no_model_hint = True
                 else:
@@ -206,9 +216,10 @@ def cmd_chat(args):
 
 def cmd_generate(args):
     """One-shot text generation."""
-    from pathlib import Path
-    from domain.core._internal.soul import SloEngine
+
     from utils.helpers import local_soul_candidate_paths
+
+    from domain.core._internal.soul import SloEngine
 
     models_dir = Path("models")
 
@@ -228,7 +239,7 @@ def cmd_generate(args):
             log.success(f"Loaded soul: {soul.name} from {path.name}")
             loaded = True
             return True
-        except Exception as e:
+        except Exception:
             return False
 
     for sou_path in local_soul_candidate_paths(models_dir):

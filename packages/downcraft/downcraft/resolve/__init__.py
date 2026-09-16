@@ -6,8 +6,8 @@ to find actual download links hidden behind ads, popups, JS redirects,
 and obfuscation.
 """
 
-from .scraper import ResolvedLink, resolve_and_download, resolve_page
 from .patterns import Extraction, extract_all
+from .scraper import ResolvedLink, resolve_and_download, resolve_page
 
 __all__ = [
     "ResolvedLink",

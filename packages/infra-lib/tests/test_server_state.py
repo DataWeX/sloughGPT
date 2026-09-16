@@ -9,17 +9,20 @@ import pytest
 class TestAtomicRef:
     def test_get_initial(self):
         from infra_lib.server_state import AtomicRef
+
         ref = AtomicRef(42, name="test")
         assert ref.get() == 42
 
     def test_set_and_get(self):
         from infra_lib.server_state import AtomicRef
+
         ref = AtomicRef(0, name="test")
         ref.set(99)
         assert ref.get() == 99
 
     def test_swap(self):
         from infra_lib.server_state import AtomicRef
+
         ref = AtomicRef(10, name="test")
         result = ref.swap(lambda x: x * 3)
         assert result == 30
@@ -27,6 +30,7 @@ class TestAtomicRef:
 
     def test_version_increments(self):
         from infra_lib.server_state import AtomicRef
+
         ref = AtomicRef("a")
         assert ref.version == 0
         ref.set("b")
@@ -36,12 +40,14 @@ class TestAtomicRef:
 
     def test_swap_increments_version(self):
         from infra_lib.server_state import AtomicRef
+
         ref = AtomicRef(1)
         ref.swap(lambda x: x + 1)
         assert ref.version == 1
 
     def test_on_change_listener(self):
         from infra_lib.server_state import AtomicRef
+
         ref = AtomicRef(1)
         changes = []
         ref.on_change(lambda old, new: changes.append((old, new)))
@@ -51,6 +57,7 @@ class TestAtomicRef:
 
     def test_swap_triggers_listener(self):
         from infra_lib.server_state import AtomicRef
+
         ref = AtomicRef("x")
         changes = []
         ref.on_change(lambda old, new: changes.append((old, new)))
@@ -59,6 +66,7 @@ class TestAtomicRef:
 
     def test_listener_exception_does_not_crash(self):
         from infra_lib.server_state import AtomicRef
+
         ref = AtomicRef(0)
         ref.on_change(lambda old, new: 1 / 0)
         ref.set(1)  # should not raise
@@ -66,6 +74,7 @@ class TestAtomicRef:
 
     def test_thread_safety(self):
         from infra_lib.server_state import AtomicRef
+
         ref = AtomicRef(0)
         errors = []
 
@@ -88,6 +97,7 @@ class TestAtomicRef:
 class TestServerState:
     def _fresh_state(self):
         from infra_lib.server_state import ServerState
+
         return ServerState()
 
     def test_initial_values(self):
@@ -245,8 +255,9 @@ class TestServerState:
         assert s.check_rate_limit("/api", max_per_second=30) is True
 
     def test_singleton_get_server_state(self):
-        from infra_lib.server_state import get_server_state, _server_state_lock
         import domains.infrastructure.server_state as mod
+        from infra_lib.server_state import _server_state_lock, get_server_state
+
         with _server_state_lock:
             old = mod._server_state
             mod._server_state = None

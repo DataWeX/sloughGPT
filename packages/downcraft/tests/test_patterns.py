@@ -1,8 +1,8 @@
 """Tests for downcraft.patterns — pattern matching for download page structures."""
 
 import base64
-import pytest
 
+import pytest
 from downcraft.resolve.patterns import (
     DataAttributeMatcher,
     EmbeddedPlayerMatcher,
@@ -11,15 +11,15 @@ from downcraft.resolve.patterns import (
     JsonLdMatcher,
     JsRedirectMatcher,
     JsVariableMatcher,
-    OEmbedMatcher,
     ObfuscationMatcher,
+    OEmbedMatcher,
     extract_all,
 )
-
 
 # ---------------------------------------------------------------------------
 # Extraction dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestExtraction:
     def test_fields(self):
@@ -41,6 +41,7 @@ class TestExtraction:
 # ---------------------------------------------------------------------------
 # JsVariableMatcher
 # ---------------------------------------------------------------------------
+
 
 class TestJsVariableMatcher:
     def setup_method(self):
@@ -69,11 +70,11 @@ class TestJsVariableMatcher:
         assert results[0].url == "https://window.com/file.zip"
 
     def test_multiple_variables(self):
-        html = '''
+        html = """
         var url1 = "https://a.com/1.zip";
         let url2 = "https://b.com/2.bin";
         window.url3 = "https://c.com/3.tar";
-        '''
+        """
         results = self.m.extract(html)
         assert len(results) == 3
         urls = [r.url for r in results]
@@ -118,6 +119,7 @@ class TestJsVariableMatcher:
 # ---------------------------------------------------------------------------
 # JsRedirectMatcher
 # ---------------------------------------------------------------------------
+
 
 class TestJsRedirectMatcher:
     def setup_method(self):
@@ -176,6 +178,7 @@ class TestJsRedirectMatcher:
 # DataAttributeMatcher
 # ---------------------------------------------------------------------------
 
+
 class TestDataAttributeMatcher:
     def setup_method(self):
         self.m = DataAttributeMatcher()
@@ -221,10 +224,10 @@ class TestDataAttributeMatcher:
         assert any(r.url == "/files/model.bin" for r in results)
 
     def test_multiple_attributes(self):
-        html = '''
+        html = """
         <div data-countdown-url="https://a.com/1.zip"></div>
         <div data-real-url="https://b.com/2.zip"></div>
-        '''
+        """
         results = self.m.extract(html)
         urls = [r.url for r in results]
         assert "https://a.com/1.zip" in urls
@@ -243,6 +246,7 @@ class TestDataAttributeMatcher:
 # ObfuscationMatcher
 # ---------------------------------------------------------------------------
 
+
 class TestObfuscationMatcher:
     def setup_method(self):
         self.m = ObfuscationMatcher()
@@ -259,6 +263,7 @@ class TestObfuscationMatcher:
 
     def test_decode_uri_component(self):
         import urllib.parse
+
         encoded = urllib.parse.quote("https://decoded.com/file.zip")
         html = f'var x = decodeURIComponent("{encoded}");'
         results = self.m.extract(html)
@@ -267,7 +272,7 @@ class TestObfuscationMatcher:
     def test_from_char_code(self):
         url = "https://char.com/file.zip"
         codes = ",".join(str(ord(c)) for c in url)
-        html = f'var x = String.fromCharCode({codes});'
+        html = f"var x = String.fromCharCode({codes});"
         results = self.m.extract(html)
         assert any(r.url == url for r in results)
 
@@ -284,13 +289,14 @@ class TestObfuscationMatcher:
         assert self.m.extract(html) == []
 
     def test_from_char_code_empty(self):
-        html = 'var x = String.fromCharCode();'
+        html = "var x = String.fromCharCode();"
         assert self.m.extract(html) == []
 
 
 # ---------------------------------------------------------------------------
 # JsonBlobMatcher
 # ---------------------------------------------------------------------------
+
 
 class TestJsonBlobMatcher:
     def setup_method(self):
@@ -300,43 +306,43 @@ class TestJsonBlobMatcher:
         assert self.m.name == "json_blob"
 
     def test_initial_state(self):
-        html = '''
+        html = """
         <script>
         window.__INITIAL_STATE__ = {"download": {"url": "https://state.com/file.bin"}};
         </script>
-        '''
+        """
         results = self.m.extract(html)
         assert any(r.url == "https://state.com/file.bin" for r in results)
 
     def test_nuxt(self):
-        html = '''
+        html = """
         <script>
         window.__NUXT__ = {"config": {"downloadUrl": "https://nuxt.com/data.zip"}};
         </script>
-        '''
+        """
         results = self.m.extract(html)
         assert any(r.url == "https://nuxt.com/data.zip" for r in results)
 
     def test_next_data(self):
-        html = '''
+        html = """
         <script>
         window.__NEXT_DATA__ = {"props": {"contentUrl": "https://next.com/file.tar"}};
         </script>
-        '''
+        """
         results = self.m.extract(html)
         assert any(r.url == "https://next.com/file.tar" for r in results)
 
     def test_config_variable(self):
-        html = '''
+        html = """
         <script>
         var config = {"downloadUrl": "https://cfg.com/model.onnx"};
         </script>
-        '''
+        """
         results = self.m.extract(html)
         assert any(r.url == "https://cfg.com/model.onnx" for r in results)
 
     def test_nested_urls(self):
-        html = '''
+        html = """
         <script>
         window.__INITIAL_STATE__ = {
             "files": [
@@ -345,30 +351,30 @@ class TestJsonBlobMatcher:
             ]
         };
         </script>
-        '''
+        """
         results = self.m.extract(html)
         urls = [r.url for r in results]
         assert "https://a.com/1.zip" in urls
         assert "https://b.com/2.bin" in urls
 
     def test_invalid_json_ignored(self):
-        html = '''
+        html = """
         <script>
         window.__INITIAL_STATE__ = {invalid json};
         </script>
-        '''
+        """
         assert self.m.extract(html) == []
 
     def test_no_blob_returns_empty(self):
-        html = '<p>No script tags here</p>'
+        html = "<p>No script tags here</p>"
         assert self.m.extract(html) == []
 
     def test_relative_urls(self):
-        html = '''
+        html = """
         <script>
         window.__INITIAL_STATE__ = {"fileUrl": "/files/model.bin"};
         </script>
-        '''
+        """
         results = self.m.extract(html)
         assert any(r.url == "/files/model.bin" for r in results)
 
@@ -376,6 +382,7 @@ class TestJsonBlobMatcher:
 # ---------------------------------------------------------------------------
 # JsonLdMatcher
 # ---------------------------------------------------------------------------
+
 
 class TestJsonLdMatcher:
     def setup_method(self):
@@ -385,33 +392,33 @@ class TestJsonLdMatcher:
         assert self.m.name == "json_ld"
 
     def test_download_url(self):
-        html = '''
+        html = """
         <script type="application/ld+json">
         {"@type": "SoftwareApplication", "downloadUrl": "https://ld.com/app.zip"}
         </script>
-        '''
+        """
         results = self.m.extract(html)
         assert any(r.url == "https://ld.com/app.zip" for r in results)
 
     def test_content_url(self):
-        html = '''
+        html = """
         <script type="application/ld+json">
         {"@type": "MediaObject", "contentUrl": "https://ld.com/video.mp4"}
         </script>
-        '''
+        """
         results = self.m.extract(html)
         assert any(r.url == "https://ld.com/video.mp4" for r in results)
 
     def test_invalid_json_ignored(self):
-        html = '''
+        html = """
         <script type="application/ld+json">
         {invalid json}
         </script>
-        '''
+        """
         assert self.m.extract(html) == []
 
     def test_no_json_ld(self):
-        html = '<p>No structured data</p>'
+        html = "<p>No structured data</p>"
         assert self.m.extract(html) == []
 
 
@@ -419,12 +426,13 @@ class TestJsonLdMatcher:
 # extract_all
 # ---------------------------------------------------------------------------
 
+
 class TestExtractAll:
     def test_deduplicates_urls(self):
-        html = '''
+        html = """
         <script>var url = "https://example.com/file.zip";</script>
         <div data-download-url="https://example.com/file.zip"></div>
-        '''
+        """
         results = extract_all(html)
         urls = [r.url for r in results]
         assert urls.count("https://example.com/file.zip") == 1
@@ -433,37 +441,37 @@ class TestExtractAll:
         assert extract_all("") == []
 
     def test_no_matches(self):
-        html = '<p>Hello world</p>'
+        html = "<p>Hello world</p>"
         assert extract_all(html) == []
 
     def test_multiple_matchers(self):
-        html = '''
+        html = """
         <script>var url1 = "https://a.com/1.zip";</script>
         <div data-real-url="https://b.com/2.zip"></div>
-        '''
+        """
         results = extract_all(html)
         urls = [r.url for r in results]
         assert "https://a.com/1.zip" in urls
         assert "https://b.com/2.zip" in urls
 
     def test_custom_matchers(self):
-        html = '''
+        html = """
         <script>var url1 = "https://a.com/1.zip";</script>
         <div data-real-url="https://b.com/2.zip"></div>
-        '''
+        """
         results = extract_all(html, matchers=[JsVariableMatcher()])
         urls = [r.url for r in results]
         assert "https://a.com/1.zip" in urls
         assert "https://b.com/2.zip" not in urls
 
     def test_all_layers_combined(self):
-        html = '''
+        html = """
         <script>var realUrl = "https://real.com/model.bin";</script>
         <div data-real-url="https://actual.com/data.tar"></div>
         <script>
         window.__INITIAL_STATE__ = {"downloadUrl": "https://state.com/file.zip"};
         </script>
-        '''
+        """
         results = extract_all(html)
         urls = [r.url for r in results]
         assert "https://real.com/model.bin" in urls
@@ -474,6 +482,7 @@ class TestExtractAll:
 # ---------------------------------------------------------------------------
 # OEmbedMatcher
 # ---------------------------------------------------------------------------
+
 
 class TestOEmbedMatcher:
     def setup_method(self):
@@ -500,10 +509,10 @@ class TestOEmbedMatcher:
         assert self.m.extract(html) == []
 
     def test_multiple_oembed_ignored(self):
-        html = '''
+        html = """
         <link rel="alternate" type="application/json+oembed" href="https://a.com/oembed?url=1">
         <link rel="alternate" type="application/json+oembed" href="https://b.com/oembed?url=2">
-        '''
+        """
         results = self.m.extract(html)
         assert len(results) == 2
 
@@ -511,6 +520,7 @@ class TestOEmbedMatcher:
 # ---------------------------------------------------------------------------
 # EmbeddedPlayerMatcher
 # ---------------------------------------------------------------------------
+
 
 class TestEmbeddedPlayerMatcher:
     def setup_method(self):
@@ -552,14 +562,14 @@ class TestEmbeddedPlayerMatcher:
         assert self.m.extract(html) == []
 
     def test_no_iframe_returns_empty(self):
-        html = '<p>No iframes here</p>'
+        html = "<p>No iframes here</p>"
         assert self.m.extract(html) == []
 
     def test_multiple_iframes(self):
-        html = '''
+        html = """
         <iframe src="https://a.com/embed/1"></iframe>
         <iframe src="https://b.com/embed/2"></iframe>
-        '''
+        """
         results = self.m.extract(html)
         assert len(results) == 2
         urls = [r.url for r in results]

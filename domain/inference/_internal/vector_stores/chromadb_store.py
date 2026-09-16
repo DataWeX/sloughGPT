@@ -31,7 +31,7 @@ class ChromaDBVectorStore(VectorStore):
             self.collection = self.client.get_or_create_collection(name=self.collection_name)
             return True
         except ImportError:
-            raise ImportError("pip install chromadb")
+            raise ImportError("pip install chromadb") from None
         except Exception as e:
             logger.error("ChromaDB connection failed: %s", e, extra={"tag": "INF"})
             return False

@@ -5,8 +5,6 @@ no pytest-httpserver dependency) plus per-test isolation of the
 persistent download state and retry settings.
 """
 
-import json
-import os
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -14,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Real local HTTP server with Range support
 # ---------------------------------------------------------------------------
+
 
 class RangeHandler(BaseHTTPRequestHandler):
     """Serves per-path payloads with HTTP Range + HEAD support.
@@ -48,7 +46,7 @@ class RangeHandler(BaseHTTPRequestHandler):
         start = 0
         rng = self.headers.get("Range")
         if rng and rng.startswith("bytes="):
-            spec = rng[len("bytes="):].split("-")[0]
+            spec = rng[len("bytes=") :].split("-")[0]
             if spec.isdigit():
                 start = int(spec)
         data = payload[start:]
@@ -65,7 +63,7 @@ class RangeHandler(BaseHTTPRequestHandler):
         self.send_header("ETag", '"static"')
         self.end_headers()
         for i in range(0, len(data), 2048):
-            self.wfile.write(data[i:i + 2048])
+            self.wfile.write(data[i : i + 2048])
 
     def do_HEAD(self):
         head = self.head_responses.get(self.path.split("?")[0])
@@ -119,10 +117,12 @@ def range_server():
 # Per-test isolation of state + retry settings
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _isolate_state(monkeypatch, tmp_path):
     """Give each test a private download state so tests never share/collide."""
     from downcraft.download import state as state_mod
+
     monkeypatch.setattr(
         state_mod,
         "get_state",
@@ -134,6 +134,7 @@ def _isolate_state(monkeypatch, tmp_path):
 def _fast_retries(monkeypatch):
     """Keep failure-path tests fast: never wait real backoff."""
     from downcraft.download import http as http_mod
+
     monkeypatch.setattr(http_mod, "MAX_RETRIES", 1)
 
 
@@ -141,11 +142,12 @@ def _fast_retries(monkeypatch):
 # Legacy fixtures (kept for compatibility)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def tmp_state_dir():
     """Create a temporary state directory and set up a clean PersistentState."""
     with tempfile.TemporaryDirectory() as td:
-        old_home = Path.home()
+        Path.home()
         # Trick: we can't easily change Path.home(), so we'll just pass state_dir
         # directly in tests
         yield Path(td)

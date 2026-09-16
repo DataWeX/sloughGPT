@@ -13,8 +13,8 @@ import sys
 from pathlib import Path
 
 from planner import config
-from planner.store import Store
 from planner.hashtree import HashTreeStore, create_hash_tree
+from planner.store import Store
 
 
 def sync_notes_to_board(note_store, board_store: Store) -> tuple[int, int, int]:

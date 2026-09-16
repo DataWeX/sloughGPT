@@ -80,7 +80,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
             self.logger.error(
                 "Failed to initialize Cognitive Processor: %s", e, extra={"tag": "COG"}
             )
-            raise ComponentException(f"Cognitive Processor initialization failed: {e}")
+            raise ComponentException(f"Cognitive Processor initialization failed: {e}") from e
 
     async def shutdown(self) -> None:
         """Shutdown the cognitive processor"""
@@ -113,7 +113,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
 
         except Exception as e:
             self.logger.error("Failed to shutdown Cognitive Processor: %s", e, extra={"tag": "COG"})
-            raise ComponentException(f"Cognitive Processor shutdown failed: {e}")
+            raise ComponentException(f"Cognitive Processor shutdown failed: {e}") from e
 
     async def process_thought(self, thought: Thought) -> Thought:
         """Process a thought through the cognitive pipeline"""
@@ -158,7 +158,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
         except Exception as e:
             self.logger.error("Failed to process thought: %s", e, extra={"tag": "COG"})
             self._update_processing_stats(0, False)
-            raise ComponentException(f"Thought processing failed: {e}")
+            raise ComponentException(f"Thought processing failed: {e}") from e
 
     async def get_cognitive_state(self) -> str:
         """Get current cognitive state"""
@@ -191,7 +191,7 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
 
         except Exception as e:
             self.logger.error("Failed to set cognitive state: %s", e, extra={"tag": "COG"})
-            raise ComponentException(f"Cognitive state setting failed: {e}")
+            raise ComponentException(f"Cognitive state setting failed: {e}") from e
 
     # Private methods
 

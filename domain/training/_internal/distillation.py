@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Union
 
 import numpy as np
 
@@ -28,7 +27,7 @@ from domain.training._internal.slonet import (
 logger = logging.getLogger("slo.distillation")
 
 
-ArrayLike = Union[Tensor, np.ndarray]
+ArrayLike = Tensor | np.ndarray
 
 
 def _to_np(x):

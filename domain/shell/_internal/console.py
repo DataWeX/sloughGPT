@@ -734,11 +734,11 @@ class Console:
         return self._interactive.confirm_multi(title, items, default)
 
     def select_with_preview(
-        self, title: str, options: list[str], preview_fn: Callable[[str], str]
+        self, message: str, options: list[str], preview_fn: Callable[[str], str], default: str = ""
     ) -> str:
-        """Show an interactive selector with a live preview panel."""
-        self._emit("select_with_preview", {"title": title, "options": options})
-        return self._interactive.select_with_preview(title, options, preview_fn)
+        """Select from options with a live preview panel."""
+        self._emit("select_with_preview", {"message": message})
+        return self._interactive.select_with_preview(message, options, preview_fn)
 
     def edit(
         self, message: str, default: str = "", validator: Callable[[str], str | None] | None = None
@@ -1069,13 +1069,6 @@ class Console:
         """Confirm with a preview of what will happen."""
         self._emit("confirm_with_preview", {"message": message})
         return self._interactive.confirm_with_preview(message, preview, default)
-
-    def select_with_preview(
-        self, message: str, options: list[str], preview_fn: Callable[[str], str], default: str = ""
-    ) -> str:
-        """Select from options with a live preview panel."""
-        self._emit("select_with_preview", {"message": message})
-        return self._interactive.select_with_preview(message, options, preview_fn)
 
     def progress_bar(self, label: str, current: int, total: int, width: int = 30) -> None:
         """Display a progress bar with percentage."""

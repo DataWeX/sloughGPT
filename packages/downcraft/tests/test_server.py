@@ -3,10 +3,10 @@ Tests for downcraft.server — minimal capture server.
 """
 
 import json
-import urllib.request
 import urllib.error
-import pytest
+import urllib.request
 
+import pytest
 from downcraft.server import CaptureEntry, CaptureQueue, start_capture_server
 
 
@@ -78,6 +78,7 @@ class TestCaptureServer:
     @pytest.fixture(autouse=True)
     def _clear(self):
         import downcraft.server as mod
+
         mod._capture_queue.clear()
         mod._entry_counter = 0
         yield
@@ -98,8 +99,11 @@ class TestCaptureServer:
 
     def _post(self, port, path, data):
         body = json.dumps(data).encode()
-        req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=body,
-                                     headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}{path}",
+            data=body,
+            headers={"Content-Type": "application/json"},
+        )
         return json.loads(urllib.request.urlopen(req).read())
 
     def test_health(self, port):

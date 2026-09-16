@@ -3,8 +3,10 @@ Vector command group — vector store for semantic search.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, api_get, api_post, output_json
+from core.helpers import api_get, api_post, output_json
+
 from domain.logging import get_global
+
 log = get_global()
 
 
@@ -56,7 +58,7 @@ def register(cli):
         for i, res in enumerate(results):
             text = res.get("text", res.get("content", ""))[:80]
             score = res.get("score", 0)
-            log.info(f"  {i+1}. [{score:.3f}] {text}")
+            log.info(f"  {i + 1}. [{score:.3f}] {text}")
 
     @vector.command("stats", help="Show vector store stats")
     @click.pass_context

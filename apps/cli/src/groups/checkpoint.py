@@ -3,8 +3,10 @@ Checkpoint command group — training checkpoint management.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns, api_get, api_post, api_delete, output_json, confirm
+from core.helpers import api_delete, api_get, api_post, confirm, output_json
+
 from domain.logging import get_global
+
 log = get_global()
 
 
@@ -16,7 +18,9 @@ def register(cli):
         pass
 
     @checkpoint.command("list", help="List all training checkpoints")
-    @click.option("--sort", type=click.Choice(["date", "size", "name"]), default="date", help="Sort order")
+    @click.option(
+        "--sort", type=click.Choice(["date", "size", "name"]), default="date", help="Sort order"
+    )
     @click.option("--json", "json_output", is_flag=True, help="JSON output")
     @click.pass_context
     def checkpoint_list(ctx, sort, json_output):
@@ -46,7 +50,9 @@ def register(cli):
             name = cp.get("name", "unknown")
             size = cp.get("size_mb", 0)
             traits = cp.get("traits", {})
-            trait_str = ", ".join(f"{k}={v:.2f}" for k, v in traits.items() if v != 0.5) if traits else ""
+            trait_str = (
+                ", ".join(f"{k}={v:.2f}" for k, v in traits.items() if v != 0.5) if traits else ""
+            )
             rows.append([name, f"{size:.1f} MB", trait_str or "-"])
         log.table(["Name", "Size", "Traits"], rows)
 

@@ -11,10 +11,8 @@ indexes, TTL) with JSON as a human-readable sync/backup.
 """
 
 import logging
-import os
 import threading
 from pathlib import Path
-from typing import Dict, List, Optional, Union
 
 from .collection import Collection
 
@@ -46,7 +44,7 @@ class MogDB:
         self,
         path: str,
         compact_on_close: bool = True,
-        sync_dir: Optional[Union[str, Path]] = None,
+        sync_dir: str | Path | None = None,
     ):
         self._root = Path(path)
         self._root.mkdir(parents=True, exist_ok=True)
@@ -54,11 +52,11 @@ class MogDB:
         self._sync_dir = Path(sync_dir) if sync_dir else None
         if self._sync_dir:
             self._sync_dir.mkdir(parents=True, exist_ok=True)
-        self._collections: Dict[str, Collection] = {}
-        self._synced_collections: Dict[str, object] = {}
+        self._collections: dict[str, Collection] = {}
+        self._synced_collections: dict[str, object] = {}
         self._lock = threading.Lock()
 
-    def _discover_collections(self) -> List[str]:
+    def _discover_collections(self) -> list[str]:
         """Find collection names from journal/compacted files on disk."""
         names = set()
         for f in self._root.iterdir():
@@ -71,8 +69,8 @@ class MogDB:
     def collection(
         self,
         name: str,
-        max_size_bytes: Optional[int] = None,
-        max_count: Optional[int] = None,
+        max_size_bytes: int | None = None,
+        max_count: int | None = None,
     ):
         """Get or create a named collection.
 
@@ -92,18 +90,21 @@ class MogDB:
             if self._sync_dir:
                 if name not in self._synced_collections:
                     raw = Collection(
-                        name, self._root,
+                        name,
+                        self._root,
                         max_size_bytes=max_size_bytes,
                         max_count=max_count,
                     )
                     from .json_sync import SyncableCollection
+
                     json_path = self._sync_dir / f"{name}.json"
                     self._synced_collections[name] = SyncableCollection(raw, json_path)
                 return self._synced_collections[name]
             else:
                 if name not in self._collections:
                     self._collections[name] = Collection(
-                        name, self._root,
+                        name,
+                        self._root,
                         max_size_bytes=max_size_bytes,
                         max_count=max_count,
                     )
@@ -127,7 +128,7 @@ class MogDB:
                     if p.exists():
                         p.unlink()
 
-    def list_collections(self) -> List[str]:
+    def list_collections(self) -> list[str]:
         """Return list of collection names (including disk-only)."""
         with self._lock:
             in_memory = set(self._collections.keys()) | set(self._synced_collections.keys())

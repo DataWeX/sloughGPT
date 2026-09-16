@@ -958,8 +958,9 @@ async def training_monitor_status():
     Useful for detecting training issues like loss divergence,
     gradient explosion, or resource exhaustion.
     """
-    from domain.training._internal.monitor import get_training_monitor
     from schemas.common import success_response
+
+    from domain.training._internal.monitor import get_training_monitor
 
     monitor = get_training_monitor()
     return success_response(data=monitor.get_status())
@@ -973,8 +974,9 @@ async def training_monitor_alerts(severity: str | None = None, limit: int = 50):
         severity: Filter by severity (info, warning, error, critical)
         limit: Maximum number of alerts to return
     """
-    from domain.training._internal.monitor import AlertSeverity, get_training_monitor
     from schemas.common import success_response
+
+    from domain.training._internal.monitor import AlertSeverity, get_training_monitor
 
     monitor = get_training_monitor()
     severity_filter = AlertSeverity(severity) if severity else None
@@ -994,8 +996,9 @@ async def training_monitor_metrics(limit: int = 100):
     Args:
         limit: Maximum number of metrics snapshots to return
     """
-    from domain.training._internal.monitor import get_training_monitor
     from schemas.common import success_response
+
+    from domain.training._internal.monitor import get_training_monitor
 
     monitor = get_training_monitor()
     metrics = monitor.get_metrics_history(limit=limit)
@@ -1010,8 +1013,9 @@ async def training_monitor_metrics(limit: int = 100):
 @router.post("/monitor/reset")
 async def training_monitor_reset():
     """Reset training monitor state."""
-    from domain.training._internal.monitor import get_training_monitor
     from schemas.common import success_response
+
+    from domain.training._internal.monitor import get_training_monitor
 
     monitor = get_training_monitor()
     monitor.reset()
@@ -1024,8 +1028,9 @@ async def training_monitor_resources():
 
     Returns CPU, memory, and GPU usage with alerts if thresholds exceeded.
     """
-    from domain.training._internal.monitor import get_training_monitor
     from schemas.common import success_response
+
+    from domain.training._internal.monitor import get_training_monitor
 
     monitor = get_training_monitor()
     resources = monitor.check_resources()

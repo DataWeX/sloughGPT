@@ -178,7 +178,7 @@ class ModelLoader:
         except ImportError:
             raise NotImplementedError(
                 "GGUF loading requires llama-cpp-python. Install: pip install llama-cpp-python"
-            )
+            ) from None
 
     @classmethod
     def _load_external_model(cls, model_type: str, config: dict[str, Any]) -> ModelInterface:

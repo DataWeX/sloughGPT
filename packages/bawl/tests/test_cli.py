@@ -6,7 +6,6 @@ import tempfile
 from pathlib import Path
 
 from bawl.cli import entry
-from bawl.fetch import _hits
 
 
 def _run(*args: str, stdin: str = "") -> tuple[int, str, str]:

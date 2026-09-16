@@ -8,8 +8,6 @@ Usage:
 """
 
 import xml.etree.ElementTree as ET
-from typing import Optional
-from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from .fetch import AGENT
@@ -58,7 +56,7 @@ def _parse_one(url: str, acc: list[str], *, timeout: int) -> None:
         return
 
     tag = root.tag.split("}")[-1] if "}" in root.tag else root.tag
-    ns = root.tag[:root.tag.index("}") + 1] if "}" in root.tag else ""
+    ns = root.tag[: root.tag.index("}") + 1] if "}" in root.tag else ""
 
     if tag == "sitemapindex":
         for child in root:

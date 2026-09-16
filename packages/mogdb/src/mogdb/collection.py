@@ -8,11 +8,10 @@ $addToSet, $mul) with dot-notation for nested fields.
 
 import json
 import logging
-import os
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any
 
 from .document import Document
 from .index import Index, SortedIndex
@@ -43,20 +42,20 @@ class Collection:
         self,
         name: str,
         db_path: Path,
-        max_size_bytes: Optional[int] = None,
-        max_count: Optional[int] = None,
+        max_size_bytes: int | None = None,
+        max_count: int | None = None,
     ):
         self.name = name
         self._db_path = db_path
-        self._docs: Dict[str, Document] = {}
+        self._docs: dict[str, Document] = {}
         self._lock = threading.Lock()
         self._journal_path = db_path / f"{name}.journal.jsonl"
         self._compacted_path = db_path / f"{name}.mogdb"
         self._dirty: bool = False
-        self._indexes: Dict[str, Index] = {}
-        self._sorted_indexes: Dict[str, SortedIndex] = {}
-        self._ttl_index: Optional[str] = None
-        self._ttl_seconds: Optional[int] = None
+        self._indexes: dict[str, Index] = {}
+        self._sorted_indexes: dict[str, SortedIndex] = {}
+        self._ttl_index: str | None = None
+        self._ttl_seconds: int | None = None
         self._max_size_bytes = max_size_bytes
         self._max_count = max_count
         self._last_expire_check: float = 0
@@ -123,14 +122,12 @@ class Collection:
                     self._docs.pop(data.get("_id"), None)
                 elif op == "delete_many":
                     query = data.get("query") or {}
-                    for doc_id in [
-                        d.id for d in self._docs.values() if match_document(d, query)
-                    ]:
+                    for doc_id in [d.id for d in self._docs.values() if match_document(d, query)]:
                         self._docs.pop(doc_id, None)
         if count:
             logger.debug("loaded %d docs from %s", count, data_path.name)
 
-    def _journal(self, op: str, data: Dict[str, Any]) -> None:
+    def _journal(self, op: str, data: dict[str, Any]) -> None:
         """Append an operation to the journal."""
         self._journal_path.parent.mkdir(parents=True, exist_ok=True)
         entry = {"op": op, "data": data}
@@ -222,7 +219,7 @@ class Collection:
             if val is not None:
                 idx.add(doc.id, val)
 
-    def _index_update(self, doc: Document, old_vals: Dict[str, Any]) -> None:
+    def _index_update(self, doc: Document, old_vals: dict[str, Any]) -> None:
         """Update all indexes after an update."""
         for field, idx in self._indexes.items():
             old_val = old_vals.get(field)
@@ -261,7 +258,7 @@ class Collection:
         if now - self._last_expire_check < 60:
             return
         self._last_expire_check = now
-        expired_ids: List[str] = []
+        expired_ids: list[str] = []
         with self._lock:
             for doc in self._docs.values():
                 ts = _get_field(doc, self._ttl_index)
@@ -291,7 +288,9 @@ class Collection:
         if self._max_size_bytes is not None:
             try:
                 size = self._journal_path.stat().st_size if self._journal_path.exists() else 0
-                compacted_size = self._compacted_path.stat().st_size if self._compacted_path.exists() else 0
+                compacted_size = (
+                    self._compacted_path.stat().st_size if self._compacted_path.exists() else 0
+                )
                 total = size + compacted_size
                 while total > self._max_size_bytes and len(self._docs) > 1:
                     oldest_id = min(self._docs, key=lambda k: self._docs[k].get("_created", 0))
@@ -299,7 +298,9 @@ class Collection:
                     self._index_remove(doc)
                     self._journal("delete", {"_id": oldest_id})
                     size = self._journal_path.stat().st_size if self._journal_path.exists() else 0
-                    compacted_size = self._compacted_path.stat().st_size if self._compacted_path.exists() else 0
+                    compacted_size = (
+                        self._compacted_path.stat().st_size if self._compacted_path.exists() else 0
+                    )
                     total = size + compacted_size
             except OSError:
                 pass
@@ -309,7 +310,7 @@ class Collection:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _apply_projection(doc: Dict[str, Any], projection: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _apply_projection(doc: dict[str, Any], projection: dict[str, Any] | None) -> dict[str, Any]:
         """Apply projection to a document.
 
         Projection modes:
@@ -343,7 +344,7 @@ class Collection:
     # CRUD
     # ------------------------------------------------------------------
 
-    def insert_one(self, doc: Dict[str, Any]) -> str:
+    def insert_one(self, doc: dict[str, Any]) -> str:
         """Insert a single document. Returns its ``_id``."""
         d = Document(doc)
         with self._lock:
@@ -353,9 +354,9 @@ class Collection:
         self._cap_if_needed()
         return d.id
 
-    def insert_many(self, docs: List[Dict[str, Any]]) -> List[str]:
+    def insert_many(self, docs: list[dict[str, Any]]) -> list[str]:
         """Insert multiple documents. Returns their ``_id``s."""
-        ids: List[str] = []
+        ids: list[str] = []
         with self._lock:
             for doc in docs:
                 d = Document(doc)
@@ -368,12 +369,12 @@ class Collection:
 
     def find(
         self,
-        query: Optional[Dict[str, Any]] = None,
-        sort: Optional[List[tuple]] = None,
-        limit: Optional[int] = None,
+        query: dict[str, Any] | None = None,
+        sort: list[tuple] | None = None,
+        limit: int | None = None,
         skip: int = 0,
-        projection: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        projection: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """Find documents matching *query*.
 
         Parameters
@@ -397,9 +398,7 @@ class Collection:
 
         with self._lock:
             results = [
-                dict(d)
-                for d in self._docs.values()
-                if not query or match_document(d, query)
+                dict(d) for d in self._docs.values() if not query or match_document(d, query)
             ]
 
         if sort:
@@ -421,18 +420,18 @@ class Collection:
 
     def find_one(
         self,
-        query: Optional[Dict[str, Any]] = None,
-        projection: Optional[Dict[str, Any]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        query: dict[str, Any] | None = None,
+        projection: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
         """Return the first document matching *query*, or ``None``."""
         results = self.find(query, limit=1, projection=projection)
         return results[0] if results else None
 
     def find_by_ids(
         self,
-        ids: List[str],
-        projection: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        ids: list[str],
+        projection: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """Batch-fetch documents by their ``_id`` values.
 
         More efficient than N individual ``find_one`` calls — acquires
@@ -448,7 +447,7 @@ class Collection:
             results = [self._apply_projection(r, projection) for r in results]
         return results
 
-    def count(self, query: Optional[Dict[str, Any]] = None) -> int:
+    def count(self, query: dict[str, Any] | None = None) -> int:
         """Count documents matching *query*."""
         if not query:
             with self._lock:
@@ -457,8 +456,8 @@ class Collection:
 
     def update_one(
         self,
-        query: Dict[str, Any],
-        update: Dict[str, Any],
+        query: dict[str, Any],
+        update: dict[str, Any],
     ) -> int:
         """Update the first document matching *query*.
 
@@ -480,8 +479,8 @@ class Collection:
 
     def update_many(
         self,
-        query: Dict[str, Any],
-        update: Dict[str, Any],
+        query: dict[str, Any],
+        update: dict[str, Any],
     ) -> int:
         """Update all documents matching *query*."""
         count = 0
@@ -498,7 +497,7 @@ class Collection:
                 self._journal("update_many", {"query": query, "update": update})
         return count
 
-    def delete_one(self, query: Dict[str, Any]) -> int:
+    def delete_one(self, query: dict[str, Any]) -> int:
         """Delete the first document matching *query*."""
         with self._lock:
             for doc_id, doc in list(self._docs.items()):
@@ -509,7 +508,7 @@ class Collection:
                     return 1
         return 0
 
-    def delete_many(self, query: Dict[str, Any]) -> int:
+    def delete_many(self, query: dict[str, Any]) -> int:
         """Delete all documents matching *query*."""
         count = 0
         with self._lock:
@@ -541,10 +540,10 @@ class Collection:
 
     def find_one_and_update(
         self,
-        query: Dict[str, Any],
-        update: Dict[str, Any],
+        query: dict[str, Any],
+        update: dict[str, Any],
         return_document: str = "before",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Find the first matching document, apply update, return it.
 
         Parameters
@@ -576,10 +575,10 @@ class Collection:
 
     def find_one_and_replace(
         self,
-        query: Dict[str, Any],
-        replacement: Dict[str, Any],
+        query: dict[str, Any],
+        replacement: dict[str, Any],
         return_document: str = "before",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Find the first matching document, replace it entirely, return it.
 
         Parameters
@@ -616,8 +615,8 @@ class Collection:
 
     def find_one_and_delete(
         self,
-        query: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
+        query: dict[str, Any],
+    ) -> dict[str, Any] | None:
         """Find the first matching document, delete it, return the deleted doc.
 
         Returns the deleted document or None if no match.
@@ -636,7 +635,7 @@ class Collection:
     # aggregation pipeline
     # ------------------------------------------------------------------
 
-    def aggregate(self, pipeline: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def aggregate(self, pipeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Run an aggregation pipeline.
 
         Supported stages:
@@ -691,7 +690,7 @@ class Collection:
                 field = stage["$unwind"]
                 if isinstance(field, str):
                     field = field.lstrip("$")
-                expanded: List[Dict[str, Any]] = []
+                expanded: list[dict[str, Any]] = []
                 for d in docs:
                     arr = d.get(field)
                     if isinstance(arr, list):
@@ -713,7 +712,7 @@ class Collection:
                 group_spec = stage["$group"]
                 group_id = group_spec.get("_id")
                 # Group documents
-                groups: Dict[Any, List[Dict[str, Any]]] = {}
+                groups: dict[Any, list[dict[str, Any]]] = {}
                 for d in docs:
                     if group_id is None:
                         key = None
@@ -723,9 +722,9 @@ class Collection:
                         key = group_id
                     groups.setdefault(key, []).append(d)
 
-                result: List[Dict[str, Any]] = []
+                result: list[dict[str, Any]] = []
                 for key, group_docs in groups.items():
-                    out: Dict[str, Any] = {"_id": key}
+                    out: dict[str, Any] = {"_id": key}
                     for accum_field, accum_spec in group_spec.items():
                         if accum_field == "_id":
                             continue
@@ -738,7 +737,8 @@ class Collection:
                             if isinstance(val_field, str) and val_field.startswith("$"):
                                 field_name = val_field[1:]
                                 out[accum_field] = sum(
-                                    (d.get(field_name, 0) or 0) for d in group_docs
+                                    (d.get(field_name, 0) or 0)
+                                    for d in group_docs
                                     if isinstance(d.get(field_name), (int, float))
                                 )
                             else:
@@ -758,29 +758,45 @@ class Collection:
                         elif op == "$min":
                             if isinstance(val_field, str) and val_field.startswith("$"):
                                 field_name = val_field[1:]
-                                vals = [d.get(field_name) for d in group_docs if d.get(field_name) is not None]
+                                vals = [
+                                    d.get(field_name)
+                                    for d in group_docs
+                                    if d.get(field_name) is not None
+                                ]
                                 out[accum_field] = min(vals) if vals else None
                             else:
                                 out[accum_field] = None
                         elif op == "$max":
                             if isinstance(val_field, str) and val_field.startswith("$"):
                                 field_name = val_field[1:]
-                                vals = [d.get(field_name) for d in group_docs if d.get(field_name) is not None]
+                                vals = [
+                                    d.get(field_name)
+                                    for d in group_docs
+                                    if d.get(field_name) is not None
+                                ]
                                 out[accum_field] = max(vals) if vals else None
                             else:
                                 out[accum_field] = None
                         elif op == "$first":
                             if isinstance(val_field, str) and val_field.startswith("$"):
                                 field_name = val_field[1:]
-                                out[accum_field] = group_docs[0].get(field_name) if group_docs else None
+                                out[accum_field] = (
+                                    group_docs[0].get(field_name) if group_docs else None
+                                )
                             else:
-                                out[accum_field] = group_docs[0].get(val_field) if group_docs else None
+                                out[accum_field] = (
+                                    group_docs[0].get(val_field) if group_docs else None
+                                )
                         elif op == "$last":
                             if isinstance(val_field, str) and val_field.startswith("$"):
                                 field_name = val_field[1:]
-                                out[accum_field] = group_docs[-1].get(field_name) if group_docs else None
+                                out[accum_field] = (
+                                    group_docs[-1].get(field_name) if group_docs else None
+                                )
                             else:
-                                out[accum_field] = group_docs[-1].get(val_field) if group_docs else None
+                                out[accum_field] = (
+                                    group_docs[-1].get(val_field) if group_docs else None
+                                )
                         elif op == "$push":
                             if isinstance(val_field, str) and val_field.startswith("$"):
                                 field_name = val_field[1:]
@@ -831,7 +847,7 @@ class Collection:
             current.pop(parts[-1], None)
 
     @classmethod
-    def _apply_update(cls, doc: Document, update: Dict[str, Any]) -> None:
+    def _apply_update(cls, doc: Document, update: dict[str, Any]) -> None:
         """Apply MongoDB-style update operators to a document.
 
         Supports: $set, $unset, $inc, $push, $pull, $addToSet, $mul.

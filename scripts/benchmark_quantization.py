@@ -1158,7 +1158,7 @@ def _parse_bits(value: str) -> list[int]:
     except ValueError:
         raise argparse.ArgumentTypeError(
             f"Invalid bits value: {value!r}. Use single int (8) or comma-separated (8,4)."
-        )
+        ) from None
 
 
 def _comparison_table(runs: list[dict[str, Any]]) -> str:

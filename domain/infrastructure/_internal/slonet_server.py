@@ -157,7 +157,7 @@ class SloNetServer:
                 raise RuntimeError(
                     f"SloNet worker pool exhausted ({self._max_workers} workers, "
                     f"all busy after {timeout}s)"
-                )
+                ) from None
 
     def _release_model(self, model: Any) -> None:
         if self._pool_mode:
@@ -491,7 +491,9 @@ class SloNetServer:
                 self._metrics.record_timeout()
             if self._circuit_breaker:
                 self._circuit_breaker.record_failure()
-            raise TimeoutError(f"SloNet generation timed out after {self._generate_timeout}s")
+            raise TimeoutError(
+                f"SloNet generation timed out after {self._generate_timeout}s"
+            ) from None
         except Exception as e:
             with self._metrics_lock:
                 self._metrics.record_failure(str(e))
@@ -568,7 +570,9 @@ class SloNetServer:
                     if not pump_thread.is_alive():  # pragma: no cover
                         if not err_q.empty():  # pragma: no cover
                             exc = err_q.get_nowait()  # pragma: no cover
-                            raise RuntimeError(f"SloNet stream error: {exc}")  # pragma: no cover
+                            raise RuntimeError(
+                                f"SloNet stream error: {exc}"
+                            ) from None  # pragma: no cover
                         while not q_buf.empty():  # pragma: no cover
                             t = q_buf.get_nowait()  # pragma: no cover
                             if t is sentinel:  # pragma: no cover
@@ -577,7 +581,9 @@ class SloNetServer:
                         break  # pragma: no cover
                     if not err_q.empty():  # pragma: no cover
                         exc = err_q.get_nowait()  # pragma: no cover
-                        raise RuntimeError(f"SloNet stream error: {exc}")  # pragma: no cover
+                        raise RuntimeError(
+                            f"SloNet stream error: {exc}"
+                        ) from None  # pragma: no cover
                     continue  # pragma: no cover
 
                 if token is sentinel:

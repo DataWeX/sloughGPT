@@ -1,12 +1,10 @@
 """
 Build commands - Buildroot image building and management.
 """
-import sys
-import os
-import subprocess
+
 import shutil
+import subprocess
 from pathlib import Path
-from typing import Optional
 
 from domain.logging import get_global
 
@@ -168,21 +166,24 @@ def _init_buildroot():
     """Initialize Buildroot by cloning the repository."""
     log.info(f"Cloning Buildroot {BUILDROOT_BRANCH}...")
     subprocess.run(
-        ["git", "clone", "--depth", "1", "--branch", BUILDROOT_BRANCH,
-         BUILDROOT_REPO, str(BUILDROOT_DIR)],
-        check=True
+        [
+            "git",
+            "clone",
+            "--depth",
+            "1",
+            "--branch",
+            BUILDROOT_BRANCH,
+            BUILDROOT_REPO,
+            str(BUILDROOT_DIR),
+        ],
+        check=True,
     )
     log.success("Buildroot cloned")
 
 
 def _run_buildroot_cmd(cmd):
     """Run a command in the Buildroot directory."""
-    result = subprocess.run(
-        cmd,
-        cwd=BUILDROOT_DIR,
-        capture_output=True,
-        text=True
-    )
+    result = subprocess.run(cmd, cwd=BUILDROOT_DIR, capture_output=True, text=True)
     if result.returncode != 0:
         log.error(f"Command failed: {' '.join(cmd)}")
         log.error(result.stderr)
@@ -192,7 +193,7 @@ def _run_buildroot_cmd(cmd):
 
 def _format_size(size_bytes):
     """Format bytes to human readable size."""
-    for unit in ['B', 'KB', 'MB', 'GB']:
+    for unit in ["B", "KB", "MB", "GB"]:
         if size_bytes < 1024.0:
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024.0
@@ -209,6 +210,6 @@ COMMANDS = {
             "clean": cmd_build_clean,
             "status": cmd_build_status,
             "install": cmd_build_install,
-        }
+        },
     }
 }

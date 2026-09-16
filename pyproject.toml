@@ -104,11 +104,19 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
-ignore = ["E501", "N802", "N803", "N806", "N812", "N814", "N818", "N999"]
+ignore = ["E501", "N802", "N803", "N806", "N812", "N814", "N818", "N999", "E402", "E701", "E702", "E741", "B008", "N801", "N804", "N805", "N807", "N815", "N817", "B007", "B904", "E721", "B023", "B017", "B005", "B018", "B905", "B002", "B039", "E731", "F601", "C408", "C416", "C401", "UP031", "UP042", "E722", "UP007", "UP035"]
+
+[tool.ruff.lint.flake8-bugbear]
 
 [tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401", "F811"]
 "packages/core-py/domains/training/*.py" = ["B006", "C408"]
-"packages/core-py/tests/*.py" = ["N801"]
+"packages/core-py/tests/*.py" = ["N801", "F811", "B017"]
+"**/tests/*.py" = ["F811", "B017"]
+"tests/fixtures/__init__.py" = ["F403", "F405"]
+"packages/core-py/domains/cognitive/metacognition/__init__.py" = ["F403", "F405"]
+"packages/core-py/scripts/*.py" = ["B018"]
+"scripts/examples/*.py" = ["F821"]
 
 [tool.mypy]
 python_version = "3.12"

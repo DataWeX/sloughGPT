@@ -5,8 +5,9 @@ WebSocket client for real-time streaming (matches server ``/ws/generate``).
 
 import json
 import threading
-from typing import Optional, Callable, Dict, Any, List, TYPE_CHECKING
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     pass
@@ -18,10 +19,10 @@ class WebSocketMessage:
 
     type: str
     data: Any
-    raw: Optional[Dict[str, Any]] = None
+    raw: dict[str, Any] | None = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "WebSocketMessage":
+    def from_dict(cls, data: dict[str, Any]) -> "WebSocketMessage":
         """Create from dictionary."""
         return cls(
             type=data.get("type", "unknown"),
@@ -52,16 +53,18 @@ class WebSocketClient:
     def __init__(
         self,
         base_url: str = "http://localhost:8000",
-        api_key: Optional[str] = None,
-        jwt_token: Optional[str] = None,
+        api_key: str | None = None,
+        jwt_token: str | None = None,
     ):
-        self.base_url = base_url.rstrip("/").replace("http://", "ws://").replace("https://", "wss://")
+        self.base_url = (
+            base_url.rstrip("/").replace("http://", "ws://").replace("https://", "wss://")
+        )
         self.api_key = api_key
         self.jwt_token = jwt_token
         self._ws: Any = None
         self._connected = False
-        self._handlers: Dict[str, List[Callable]] = {}
-        self._recv_thread: Optional[threading.Thread] = None
+        self._handlers: dict[str, list[Callable]] = {}
+        self._recv_thread: threading.Thread | None = None
         self._recv_stop = threading.Event()
 
     def connect(self, timeout: int = 30) -> bool:
@@ -69,7 +72,9 @@ class WebSocketClient:
         try:
             import websocket
         except ImportError:
-            raise ImportError("websocket-client package required: pip install websocket-client") from None
+            raise ImportError(
+                "websocket-client package required: pip install websocket-client"
+            ) from None
 
         if not self.api_key and not self.jwt_token:
             raise ValueError("/ws/generate requires api_key or jwt_token")
@@ -77,7 +82,7 @@ class WebSocketClient:
         url = f"{self.base_url}/ws/generate"
         self._ws = websocket.create_connection(url, timeout=timeout)
 
-        auth: Dict[str, str] = (
+        auth: dict[str, str] = (
             {"api_key": self.api_key} if self.api_key else {"token": self.jwt_token or ""}
         )
         self._ws.send(json.dumps(auth))
@@ -109,7 +114,7 @@ class WebSocketClient:
                 self._connected = False
                 break
 
-    def _dispatch(self, data: Dict[str, Any]) -> None:
+    def _dispatch(self, data: dict[str, Any]) -> None:
         if data.get("status") == "error" and "token" not in data:
             msg = WebSocketMessage(type="error", data=data.get("error", ""), raw=data)
             for h in self._handlers.get("error", []) + self._handlers.get("*", []):
@@ -136,7 +141,7 @@ class WebSocketClient:
         prompt: str,
         max_new_tokens: int = 100,
         temperature: float = 0.8,
-        model: Optional[str] = None,
+        model: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Send a generation request (server field: ``max_tokens``)."""
@@ -144,7 +149,7 @@ class WebSocketClient:
             raise ConnectionError("Not connected. Call connect() first.")
 
         max_tokens = int(kwargs.pop("max_tokens", max_new_tokens))
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "prompt": prompt,
             "max_tokens": max_tokens,
             "temperature": temperature,
@@ -154,7 +159,7 @@ class WebSocketClient:
         payload.update(kwargs)
         self._ws.send(json.dumps(payload))
 
-    def send_chat(self, messages: List[Dict[str, str]], **kwargs: Any) -> None:
+    def send_chat(self, messages: list[dict[str, str]], **kwargs: Any) -> None:
         """Not supported by ``/ws/generate``; formats messages as a single prompt."""
         lines = []
         for m in messages:
@@ -234,11 +239,11 @@ class StreamGenerator:
     def __init__(
         self,
         base_url: str = "http://localhost:8000",
-        api_key: Optional[str] = None,
-        jwt_token: Optional[str] = None,
+        api_key: str | None = None,
+        jwt_token: str | None = None,
     ):
         self.client = WebSocketClient(base_url, api_key=api_key, jwt_token=jwt_token)
-        self._buffer: List[str] = []
+        self._buffer: list[str] = []
         self._complete = False
 
     def __enter__(self) -> "StreamGenerator":

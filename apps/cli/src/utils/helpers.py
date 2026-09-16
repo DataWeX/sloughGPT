@@ -1,10 +1,10 @@
 """Shared CLI helper functions — used by commands/ modules."""
-import re
-import sys
-import os
-import time
+
 import logging
+import os
+import re
 import threading
+import time
 from pathlib import Path
 
 logger = logging.getLogger("slo.cli.helpers")
@@ -13,6 +13,7 @@ logger = logging.getLogger("slo.cli.helpers")
 def chat_repository_root() -> Path:
     """Repository root (delegates to shared utility)."""
     from domain.shared import find_repo_root
+
     return find_repo_root(Path(__file__).resolve())
 
 
@@ -24,11 +25,13 @@ def chat_uvicorn_bind_host(client_host: str) -> str:
 
 def chat_find_available_port(bind_host: str, start_port: int, max_attempts: int = 10) -> int:
     from domain.shared import find_available_port
+
     return find_available_port(host=bind_host, start_port=start_port, max_attempts=max_attempts)
 
 
 def chat_wait_for_health(base_url: str, timeout_sec: float = 45.0) -> bool:
     import requests
+
     deadline = time.monotonic() + timeout_sec
     url = f"{base_url.rstrip('/')}/health"
     while time.monotonic() < deadline:
@@ -49,11 +52,14 @@ def train_export_stem_slug(part: str, fallback: str) -> str:
 
 def train_export_default_stem(model_name: str, dataset_label: str) -> str:
     from datetime import datetime
+
     stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     return f"{train_export_stem_slug(model_name, 'model')}-{train_export_stem_slug(dataset_label, 'data')}-{stamp}"
 
 
-def local_soul_candidate_paths(models_dir: Path, *, default_name: str = "sloughgpt.soul") -> list[Path]:
+def local_soul_candidate_paths(
+    models_dir: Path, *, default_name: str = "sloughgpt.soul"
+) -> list[Path]:
     default = models_dir / default_name
     out: list[Path] = []
     if default.exists():
@@ -68,7 +74,9 @@ def local_soul_candidate_paths(models_dir: Path, *, default_name: str = "sloughg
     return out
 
 
-def ensure_server(host: str = "127.0.0.1", port: int = 8000, auto_start: bool = True) -> tuple[str, object | None]:
+def ensure_server(
+    host: str = "127.0.0.1", port: int = 8000, auto_start: bool = True
+) -> tuple[str, object | None]:
     """Check if the API server is running; optionally auto-start it.
 
     Singleton pattern: if a server is already running on *port*, reuse it.
@@ -85,6 +93,7 @@ def ensure_server(host: str = "127.0.0.1", port: int = 8000, auto_start: bool = 
     """
     import socket
     import subprocess
+
     import requests
 
     base_url = f"http://{host}:{port}"
@@ -121,6 +130,7 @@ def ensure_server(host: str = "127.0.0.1", port: int = 8000, auto_start: bool = 
         return base_url, None
 
     from domain.shared import find_server_python
+
     server_python = find_server_python(repo)
     cmd = [server_python, "-m", "apps.api.server.main"]
 
@@ -141,7 +151,8 @@ def ensure_server(host: str = "127.0.0.1", port: int = 8000, auto_start: bool = 
     def _log_stderr():
         if proc.stderr:
             try:
-                from domain.shell._internal.log_buffer import get_log_buffer, LogEntry
+                from domain.shell._internal.log_buffer import LogEntry, get_log_buffer
+
                 buf = get_log_buffer()
                 for line in proc.stderr:
                     line = line.rstrip()
@@ -156,15 +167,18 @@ def ensure_server(host: str = "127.0.0.1", port: int = 8000, auto_start: bool = 
                         level = "ERROR"
                     elif "DBG" in upper or "DEBUG" in upper:
                         level = "DEBUG"
-                    buf.append(LogEntry(
-                        timestamp=time.time(),
-                        level=level,
-                        source="api.server",
-                        message=line,
-                    ))
+                    buf.append(
+                        LogEntry(
+                            timestamp=time.time(),
+                            level=level,
+                            source="api.server",
+                            message=line,
+                        )
+                    )
             except (AttributeError, OSError):
                 # LogBuffer unavailable — discard silently
                 pass
+
     threading.Thread(target=_log_stderr, daemon=True).start()
 
     # Wait for health -- generous timeout covers model loading

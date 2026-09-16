@@ -7,17 +7,16 @@ and ANSI escape codes. No Rich, no curses, no external packages.
 
 from __future__ import annotations
 
-import os
-import sys
-import time
-import signal
-import threading
 import re
 import select
+import signal
 import subprocess
+import sys
+import threading
+import time
 from collections import deque
-from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from dataclasses import dataclass
 
 # ── ANSI helpers ──────────────────────────────────────────────────
 
@@ -27,6 +26,7 @@ _STDOUT = sys.stdout
 def _scrn() -> tuple[int, int]:
     try:
         import shutil
+
         return shutil.get_terminal_size()
     except Exception:
         return 80, 24
@@ -73,20 +73,20 @@ class FG(metaclass=_FGMeta):
     MAGENTA = 13
     CYAN = 14
     WHITE = 15
-    PRIMARY = 45       # cyan
-    PRIMARY_DIM = 31   # dark cyan
-    SUCCESS = 83       # bright green
-    SUCCESS_DIM = 35   # dark green
-    WARNING = 221      # warm gold
-    ERROR = 203        # soft red
-    MUTED = 248        # light grey
-    HIGHLIGHT = 75     # light blue
-    DIM = 242          # dark grey
-    INFO = 45          # cyan
-    BORDER = 238       # subtle grey
+    PRIMARY = 45  # cyan
+    PRIMARY_DIM = 31  # dark cyan
+    SUCCESS = 83  # bright green
+    SUCCESS_DIM = 35  # dark green
+    WARNING = 221  # warm gold
+    ERROR = 203  # soft red
+    MUTED = 248  # light grey
+    HIGHLIGHT = 75  # light blue
+    DIM = 242  # dark grey
+    INFO = 45  # cyan
+    BORDER = 238  # subtle grey
     BORDER_BRIGHT = 244
-    GRADIENT_A = 39    # bright cyan start
-    GRADIENT_B = 27    # blue end
+    GRADIENT_A = 39  # bright cyan start
+    GRADIENT_B = 27  # blue end
 
 
 # ── theme engine ──────────────────────────────────────────────────
@@ -97,22 +97,41 @@ _THEME_IDX: int = 0
 _BUILTIN_THEMES: dict[str, dict[str, int]] = {
     "default": {},
     "retro": {
-        "PRIMARY": 214, "SUCCESS": 118, "WARNING": 226, "ERROR": 196,
-        "GRADIENT_A": 214, "GRADIENT_B": 130,
-        "DIM": 240, "MUTED": 246, "BORDER": 239,
+        "PRIMARY": 214,
+        "SUCCESS": 118,
+        "WARNING": 226,
+        "ERROR": 196,
+        "GRADIENT_A": 214,
+        "GRADIENT_B": 130,
+        "DIM": 240,
+        "MUTED": 246,
+        "BORDER": 239,
         "INFO": 214,
     },
     "mono": {
-        "PRIMARY": 255, "SUCCESS": 255, "WARNING": 248, "ERROR": 244,
-        "GRADIENT_A": 255, "GRADIENT_B": 244,
-        "DIM": 240, "MUTED": 242, "BORDER": 238,
+        "PRIMARY": 255,
+        "SUCCESS": 255,
+        "WARNING": 248,
+        "ERROR": 244,
+        "GRADIENT_A": 255,
+        "GRADIENT_B": 244,
+        "DIM": 240,
+        "MUTED": 242,
+        "BORDER": 238,
         "INFO": 255,
-        "BLACK": 255, "WHITE": 248,
+        "BLACK": 255,
+        "WHITE": 248,
     },
     "ocean": {
-        "PRIMARY": 81, "SUCCESS": 85, "WARNING": 221, "ERROR": 203,
-        "GRADIENT_A": 81, "GRADIENT_B": 26,
-        "DIM": 243, "MUTED": 249, "BORDER": 240,
+        "PRIMARY": 81,
+        "SUCCESS": 85,
+        "WARNING": 221,
+        "ERROR": 203,
+        "GRADIENT_A": 81,
+        "GRADIENT_B": 26,
+        "DIM": 243,
+        "MUTED": 249,
+        "BORDER": 240,
         "INFO": 81,
     },
 }
@@ -272,7 +291,8 @@ def _read_key(timeout: float = 0.01) -> str | None:
     """
     fd = sys.stdin.fileno()
     try:
-        import termios, tty
+        import termios
+        import tty
     except ImportError:
         return None
     old = termios.tcgetattr(fd)
@@ -305,9 +325,7 @@ def _read_key(timeout: float = 0.01) -> str | None:
 # ── word-wrap ANSI-safe ──────────────────────────────────────────
 
 
-def _word_wrap_lines(
-    colourised_lines: list[str], max_vis: int
-) -> list[str]:
+def _word_wrap_lines(colourised_lines: list[str], max_vis: int) -> list[str]:
     """
     Word-wrap a list of colourised log lines so each visual line fits *max_vis* chars.
 
@@ -340,9 +358,16 @@ def _word_wrap_lines(
     return out
 
 
-def styled(text: str, fg: int = FG.WHITE, bold: bool = False, dim: bool = False,
-           italic: bool = False, underline: bool = False, reverse: bool = False,
-           bg: int | None = None) -> str:
+def styled(
+    text: str,
+    fg: int = FG.WHITE,
+    bold: bool = False,
+    dim: bool = False,
+    italic: bool = False,
+    underline: bool = False,
+    reverse: bool = False,
+    bg: int | None = None,
+) -> str:
     codes = []
     if bold:
         codes.append(1)
@@ -501,9 +526,7 @@ def render_gradient_header(
     right_v = f"{_fg(FG.GRADIENT_B)}{Box.V2}{_RESET}"
     remaining = inner - len(_strip_ansi(styled_title))
     if remaining >= 0:
-        lines.append(
-            f"{left_v}{styled_title}{' ' * remaining}{right_v}"
-        )
+        lines.append(f"{left_v}{styled_title}{' ' * remaining}{right_v}")
     else:
         lines.append(f"{left_v}{' ' * inner}{right_v}")
 
@@ -657,10 +680,7 @@ def render_tab_bar(
                 f"{_RESET}"
             )
         else:
-            entry = (
-                f"  {_fg(dot_fg_code)}{dot_glyph}{_RESET}  {label}  "
-                f"{badge_str}"
-            )
+            entry = f"  {_fg(dot_fg_code)}{dot_glyph}{_RESET}  {label}  {badge_str}"
         parts.append(entry)
 
     bar = f"  {_fg(FG.DIM)}{Box.V_DASH}{_RESET}  ".join(parts)
@@ -765,7 +785,10 @@ def _colourise(line: str) -> str:
         return f"{_fg(FG.WARNING)}{line}{_RESET}"
     if "200" in line or "3xx" in line.lower() or "success" in line.lower():
         return f"{_fg(FG.SUCCESS)}{line}{_RESET}"
-    if any(kw in line.lower() for kw in ("ready", "started", "listening", "running on", "complete", "compiled")):
+    if any(
+        kw in line.lower()
+        for kw in ("ready", "started", "listening", "running on", "complete", "compiled")
+    ):
         return f"{_fg(FG.SUCCESS)}{line}{_RESET}"
     if "INFO" in line:
         return f"{_fg(FG.INFO)}{line}{_RESET}"
@@ -799,7 +822,7 @@ def _highlight_search(lines: list[str], term: str) -> list[str]:
             matches.append((idx, idx + len(term)))
             start = idx + len(term)
         # Extract ANSI prefix (everything before visible text)
-        prefix = coloured[:len(coloured) - len(stripped) - len(_RESET)]
+        prefix = coloured[: len(coloured) - len(stripped) - len(_RESET)]
         suffix = _RESET
         result = prefix
         pos = 0
@@ -856,7 +879,7 @@ class DevDashboard:
         title: str = "SloughGPT Dev Server",
         tabs: list[TabConfig] | None = None,
         info: dict | None = None,
-        on_restart: Optional[Callable[[], bool]] = None,
+        on_restart: Callable[[], bool] | None = None,
     ):
         self._title = title
         self._tabs: list[TabConfig] = tabs or []
@@ -927,6 +950,7 @@ class DevDashboard:
         m: dict[str, float] = {"cpu": 0.0, "memory": 0.0, "disk": 0.0}
 
         import platform
+
         is_linux = platform.system() == "Linux"
 
         if is_linux:
@@ -970,7 +994,9 @@ class DevDashboard:
             try:
                 out = subprocess.check_output(
                     ["top", "-l", "1", "-n", "0"],
-                    timeout=3, stderr=subprocess.DEVNULL, text=True,
+                    timeout=3,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
                 )
                 user = sys_v = 0.0
                 for line in out.split("\n"):
@@ -990,7 +1016,9 @@ class DevDashboard:
             try:
                 out = subprocess.check_output(
                     ["vm_stat"],
-                    timeout=3, stderr=subprocess.DEVNULL, text=True,
+                    timeout=3,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
                 )
                 pages = {}
                 for line in out.split("\n"):
@@ -1016,7 +1044,9 @@ class DevDashboard:
         try:
             out = subprocess.check_output(
                 ["df", "-k", "."],
-                timeout=3, stderr=subprocess.DEVNULL, text=True,
+                timeout=3,
+                stderr=subprocess.DEVNULL,
+                text=True,
             )
             lines = out.strip().split("\n")
             if len(lines) >= 2:
@@ -1101,7 +1131,7 @@ class DevDashboard:
         if new == 0:
             self._scroll_follow[self._active_tab] = True
 
-    def serve(self, stop_check: Optional[Callable[[], bool]] = None):
+    def serve(self, stop_check: Callable[[], bool] | None = None):
         """Render the dashboard live until stop_check or Ctrl+C.
 
         Keyboard controls:
@@ -1140,7 +1170,6 @@ class DevDashboard:
                         self._shutdown = True
                         break
                     if key:
-
                         # ── search mode handling ─────────────────
                         if self._search_mode:
                             if key == "esc" or key == "\r" or key == "\n":
@@ -1203,6 +1232,7 @@ class DevDashboard:
                             self._restarting = True
                             rendered = self._render()
                             display.update(rendered)
+
                             # Run restart in a thread so the UI stays responsive
                             def _do_restart():
                                 try:
@@ -1216,6 +1246,7 @@ class DevDashboard:
                                         self._states[tid] = "starting"
                                     self._startup_phase = True
                                     self._start_time = time.monotonic()
+
                             threading.Thread(target=_do_restart, daemon=True).start()
                             self._frame += 1
                             continue
@@ -1240,31 +1271,44 @@ class DevDashboard:
             pass
         except Exception as e:
             import logging
+
             logging.getLogger("slo.tui").debug("Dashboard error: %s", e, exc_info=True)
             print(f"\n  Dashboard error: {e}")
 
     def _render_help_overlay(self, w: int) -> str:
         """Render keyboard help as a centered panel replacing the log panel."""
         help_lines = [
-            ("Navigation", [
-                ("← / →", "Switch tabs"),
-                ("1-9", "Jump to tab"),
-                ("↑ / ↓", "Scroll log history"),
-                ("Space", "Toggle auto-scroll"),
-            ]),
-            ("Search & Filter", [
-                ("/", "Search/filter logs"),
-                ("Esc / Enter", "Exit search"),
-                ("C", "Clear log buffer"),
-            ]),
-            ("Display", [
-                ("t", "Cycle colour theme"),
-                ("?", "Toggle this help"),
-            ]),
-            ("General", [
-                ("r", "Restart servers"),
-                ("q / Ctrl+C", "Quit dashboard"),
-            ]),
+            (
+                "Navigation",
+                [
+                    ("← / →", "Switch tabs"),
+                    ("1-9", "Jump to tab"),
+                    ("↑ / ↓", "Scroll log history"),
+                    ("Space", "Toggle auto-scroll"),
+                ],
+            ),
+            (
+                "Search & Filter",
+                [
+                    ("/", "Search/filter logs"),
+                    ("Esc / Enter", "Exit search"),
+                    ("C", "Clear log buffer"),
+                ],
+            ),
+            (
+                "Display",
+                [
+                    ("t", "Cycle colour theme"),
+                    ("?", "Toggle this help"),
+                ],
+            ),
+            (
+                "General",
+                [
+                    ("r", "Restart servers"),
+                    ("q / Ctrl+C", "Quit dashboard"),
+                ],
+            ),
         ]
         inner = w - 4
         lines: list[str] = []
@@ -1334,7 +1378,9 @@ class DevDashboard:
                 f"{_fg(FG.WARNING)}{bar}{_RESET}"
                 f"{_fg(FG.GRADIENT_B)}{Box.TRB}{_RESET}"
             )
-            msg = f"  {Box.DOT}  Booting servers  {Box.DOT_SM}  {_spinner_frame(self._frame // 2)}  "
+            msg = (
+                f"  {Box.DOT}  Booting servers  {Box.DOT_SM}  {_spinner_frame(self._frame // 2)}  "
+            )
             pad_w = max(0, w - len(msg) - 6)
             parts.append(
                 f"{_fg(FG.GRADIENT_B)}{Box.V2}{_RESET}  "
@@ -1352,21 +1398,25 @@ class DevDashboard:
                 parts.append("")
 
         # ── gradient header ───────────────────────────────────
-        parts.append(render_gradient_header(
-            self._title,
-            info=self._info,
-            width=w,
-            step=self._frame,
-        ))
+        parts.append(
+            render_gradient_header(
+                self._title,
+                info=self._info,
+                width=w,
+                step=self._frame,
+            )
+        )
 
         # ── resource metrics bar ──────────────────────────────
         self._collect_metrics()
-        parts.append(render_metrics_row(
-            self._metrics["cpu"],
-            self._metrics["memory"],
-            self._metrics["disk"],
-            width=w,
-        ))
+        parts.append(
+            render_metrics_row(
+                self._metrics["cpu"],
+                self._metrics["memory"],
+                self._metrics["disk"],
+                width=w,
+            )
+        )
 
         # ── tab bar with animated spinners + error badges ──────
         tab_data = [(t.id, t.title, self._states.get(t.id, "starting")) for t in self._tabs]
@@ -1375,10 +1425,15 @@ class DevDashboard:
             errs = sum(1 for line in t.lines if "ERROR" in line)
             warns = sum(1 for line in t.lines if "WARNING" in line or "WARN" in line)
             badge_counts[t.id] = (errs, warns)
-        parts.append(render_tab_bar(
-            tab_data, self._active_tab, width=w, step=self._frame,
-            badges=badge_counts,
-        ))
+        parts.append(
+            render_tab_bar(
+                tab_data,
+                self._active_tab,
+                width=w,
+                step=self._frame,
+                badges=badge_counts,
+            )
+        )
 
         # ── log content panel (or help overlay) ───────────────
         if self._show_help:
@@ -1387,11 +1442,13 @@ class DevDashboard:
             parts.append("")
             elapsed_sec = time.monotonic() - self._start_time
             elapsed_str = f"uptime {int(elapsed_sec // 60)}m {int(elapsed_sec % 60)}s"
-            parts.append(render_footer(
-                f"  ? / Esc to close  {Box.DOT}  q to quit",
-                width=w,
-                elapsed=elapsed_str,
-            ))
+            parts.append(
+                render_footer(
+                    f"  ? / Esc to close  {Box.DOT}  q to quit",
+                    width=w,
+                    elapsed=elapsed_str,
+                )
+            )
             return "\n".join(parts)
 
         active_tab = self._tab_map.get(self._active_tab)
@@ -1426,7 +1483,9 @@ class DevDashboard:
                         f"  {_fg(FG.DIM)}(searching...){_RESET}"
                     )
                 else:
-                    search_bar = f"{_fg(FG.INFO)}  / {_fg(FG.DIM)}(type to search, Esc to cancel){_RESET}"
+                    search_bar = (
+                        f"{_fg(FG.INFO)}  / {_fg(FG.DIM)}(type to search, Esc to cancel){_RESET}"
+                    )
                 search_bar = search_bar.ljust(max(0, w - 4))
 
             if visible_lines:

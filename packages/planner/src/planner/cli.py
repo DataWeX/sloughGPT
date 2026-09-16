@@ -27,8 +27,12 @@ def main(argv: list[str] | None = None) -> int:
         prog="planner",
         description="Planner — notes + kanban board management",
     )
-    parser.add_argument("--backend", default=None, choices=config.BACKENDS,
-                        help="Storage backend (default: config/env)")
+    parser.add_argument(
+        "--backend",
+        default=None,
+        choices=config.BACKENDS,
+        help="Storage backend (default: config/env)",
+    )
     parser.add_argument("--notes-dir", default=None, help="Notes directory")
     parser.add_argument("--board-dir", default=None, help="Board directory")
 
@@ -132,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _handle_notes(args, notes_dir: Path, backend: str) -> int:
-    from planner.core import NoteStore, STATUS_ICONS
+    from planner.core import STATUS_ICONS, NoteStore
 
     store = NoteStore(notes_dir=notes_dir, backend=backend)
 
@@ -142,16 +146,22 @@ def _handle_notes(args, notes_dir: Path, backend: str) -> int:
 
     if args.notes_cmd == "new":
         tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else []
-        note = store.create(args.title, tags=tags, status=args.status,
-                            sprint=args.sprint, gh=args.gh, body=args.body)
+        note = store.create(
+            args.title,
+            tags=tags,
+            status=args.status,
+            sprint=args.sprint,
+            gh=args.gh,
+            body=args.body,
+        )
         sprint_tag = f" [{args.sprint}]" if args.sprint else ""
         print(f"Created: {note.short_id}  {note.title}{sprint_tag}")
         return 0
 
     if args.notes_cmd == "list":
-        notes = store.list_notes(tag=args.tag, status=args.status,
-                                 sprint=args.sprint, limit=args.limit,
-                                 today=args.today)
+        notes = store.list_notes(
+            tag=args.tag, status=args.status, sprint=args.sprint, limit=args.limit, today=args.today
+        )
         if not notes:
             print("No notes found.")
             return 0
@@ -257,7 +267,12 @@ def _handle_board(args, board_dir: Path) -> int:
             label = config.COLUMN_LABELS.get(col, col)
             print(f"\n  {label} ({len(cards)})")
             for card in cards:
-                priority_icon = {"low": "\u2193", "medium": "\u2192", "high": "\u2191", "urgent": "\u2191\u2191"}.get(card.priority, "?")
+                priority_icon = {
+                    "low": "\u2193",
+                    "medium": "\u2192",
+                    "high": "\u2191",
+                    "urgent": "\u2191\u2191",
+                }.get(card.priority, "?")
                 print(f"    {priority_icon} {card.id[:8]}  {card.title}")
         print(f"\n  {len(board.cards)} card(s) total")
         return 0
