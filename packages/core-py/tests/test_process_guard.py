@@ -189,8 +189,8 @@ class TestCreateModelGuardFactory:
     def test_factory_sets_params(self):
         with patch.object(ProcessGuard, "start"):
             guard = create_model_guard("gpt2", device="cpu", max_restarts=5)
-            assert guard.model_kwargs["model_id"] == "gpt2"
-            assert guard.model_kwargs["device"] == "cpu"
+            assert guard._config.hf_model_kwargs["model_id"] == "gpt2"
+            assert guard._config.hf_model_kwargs["device"] == "cpu"
             assert guard.max_restarts == 5
             assert guard.worker_id == "guard-gpt2"
 
@@ -204,8 +204,8 @@ class TestCreateSloGuardFactory:
     def test_factory_sets_params(self):
         with patch.object(ProcessGuard, "start"):
             guard = create_slo_guard("/path/model.slnc", model_id="my-model")
-            assert guard._slnc_path == "/path/model.slnc"
-            assert guard._model_id == "my-model"
+            assert guard._config.slnc_path == "/path/model.slnc"
+            assert guard._config.model_id == "my-model"
             assert guard.worker_id == "slo-guard-my-model"
 
     def test_factory_quantize_params(self):
@@ -213,9 +213,9 @@ class TestCreateSloGuardFactory:
             guard = create_slo_guard(
                 "/m.slnc", quantize=True, quant_bits=4, quant_mode="asymmetric"
             )
-            assert guard._quantize is True
-            assert guard._quant_bits == 4
-            assert guard._quant_mode == "asymmetric"
+            assert guard._config.quantize is True
+            assert guard._config.quant_bits == 4
+            assert guard._config.quant_mode == "asymmetric"
 
 
 # ── Lifecycle tests (mocked worker) ────────────────────────────────────

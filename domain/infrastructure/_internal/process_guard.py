@@ -449,7 +449,12 @@ class ProcessGuard:
         if not self.alive:
             raise RuntimeError(f"Guard worker [{self.worker_id}] is not alive")
         with self._semaphore:
-            result = self._worker.generate(prompt, **kwargs)
+            try:
+                result = self._worker.generate(prompt, **kwargs)
+            except (TimeoutError, Exception) as e:
+                if "stall" in str(e).lower() or "timeout" in str(e).lower():
+                    self._recover_from_stall()
+                raise
         with self._requests_served_lock:
             self._requests_served += 1
         return result
@@ -466,6 +471,24 @@ class ProcessGuard:
                     token = next(gen)
             except StopIteration as e:
                 return e.value if hasattr(e, "value") else {}
+            except (TimeoutError, Exception) as e:
+                if "stall" in str(e).lower() or "timeout" in str(e).lower():
+                    self._recover_from_stall()
+                raise
+
+    def _recover_from_stall(self) -> None:
+        """Restart a wedged worker (stalled queue writes / no messages)."""
+        with self._restart_lock:
+            if self._restart_count >= self.max_restarts:
+                logger.error(
+                    "ProcessGuard[%s]: worker stalled and restart budget exhausted",
+                    self.worker_id,
+                )
+                raise RuntimeError(
+                    f"ProcessGuard[{self.worker_id}]: worker restart budget exhausted "
+                    f"({self.max_restarts} restarts)"
+                )
+            self._restart_worker_locked("stalled")
 
     def health(self) -> dict:
         return {
@@ -487,6 +510,36 @@ class ProcessGuard:
     def on_restart(self, cb: Callable[[str], None]) -> None:
         with self._restart_lock:
             self._restart_callbacks.append(cb)
+
+    def load_adapter(self, adapter_path: str, merge: bool = False, timeout: float = 120.0) -> dict:
+        if self._worker is None or not self.alive:
+            raise RuntimeError("Worker is not alive — cannot load adapter.")
+        if hasattr(self._worker, "load_adapter"):
+            return self._worker.load_adapter(adapter_path, merge=merge, timeout=timeout)
+        raise RuntimeError("Adapter loading not supported in this mode")
+
+    def unload_adapter(self, timeout: float = 60.0) -> dict:
+        if self._worker is None or not self.alive:
+            raise RuntimeError("Worker is not alive — cannot unload adapter.")
+        if hasattr(self._worker, "unload_adapter"):
+            return self._worker.unload_adapter(timeout=timeout)
+        raise RuntimeError("Adapter unloading not supported in this mode")
+
+    def _memory_mb(self) -> float | None:
+        if self._worker is None:
+            return None
+        try:
+            import psutil
+        except ImportError:
+            return None
+        proc_ref = getattr(self._worker, "_process", None)
+        if proc_ref is None:
+            return None
+        try:
+            proc = psutil.Process(proc_ref.pid)
+            return proc.memory_info().rss / (1024 * 1024)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError):
+            return None
 
     # ── Private ──────────────────────────────────────────────────────
 
