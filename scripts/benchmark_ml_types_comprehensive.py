@@ -223,7 +223,7 @@ def run():
     ml_import_us = ((time.perf_counter() - start) / 100) * 1e6
 
     # Memory footprint of the module itself
-    import domains.infrastructure.ml_types as ml_mod
+    import domain.infrastructure._internal.ml_types as ml_mod
 
     module_size = sys.getsizeof(ml_mod)
 

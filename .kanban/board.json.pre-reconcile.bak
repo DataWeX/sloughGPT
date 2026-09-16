@@ -8437,7 +8437,7 @@
     {
       "id": "20260902_120100-mogdb-remaining-migrations",
       "title": "Migrate remaining data stores to MogDB + JSON sync",
-      "description": "Migrate: (1) data/knowledge/entries.json \u2014 DONE (MogDB entries collection, JSON fallback), (2) data/knowledge/visited.json \u2014 DONE (MogDB visited collection, JSON fallback), (3) data/rag_store/documents.jsonl \u2014 pending, (4) data/response_logs/*.jsonl \u2014 pending, (5) data/model_catalog/ \u2014 already MogDB. DONE: notifications, agent runs, knowledge entries/visited.",
+      "description": "Migrate: (1) data/knowledge/entries.json — DONE (MogDB entries collection, JSON fallback), (2) data/knowledge/visited.json — DONE (MogDB visited collection, JSON fallback), (3) data/rag_store/documents.jsonl — pending, (4) data/response_logs/*.jsonl — pending, (5) data/model_catalog/ — already MogDB. DONE: notifications, agent runs, knowledge entries/visited.",
       "column": "done",
       "priority": "medium",
       "tags": [
@@ -8451,6 +8451,24 @@
       "updatedAt": "2026-09-02T12:01:00.000000+00:00",
       "root_hash": "",
       "notes": "These are smaller stores, lower priority than main routers"
+    },
+    {
+      "id": "20260902_120200-mogdb-performance-opt",
+      "title": "MogDB performance optimization",
+      "description": "Optimize SyncableCollection: (1) Add batch write support for high-throughput scenarios, (2) Implement lazy JSON sync (async background thread), (3) Add compression for JSON sync files, (4) Benchmark MogDB vs file-based performance",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "mogdb",
+        "performance",
+        "optimization"
+      ],
+      "assignee": "",
+      "dueDate": "",
+      "createdAt": "2026-09-02T12:02:00.000000+00:00",
+      "updatedAt": "2026-09-02T12:02:00.000000+00:00",
+      "root_hash": "",
+      "notes": "Current implementation is simple and safe; optimize only if profiling shows bottleneck"
     },
     {
       "id": "20260902_120300-mogdb-data-migration-tools",
@@ -8909,185 +8927,6 @@
       "dueDate": "",
       "createdAt": "2026-09-03T16:23:00Z",
       "updatedAt": "2026-09-03T16:23:00Z",
-      "root_hash": "",
-      "notes": []
-    },
-    {
-      "id": "20260916_100000_add-self-train-to-nav",
-      "title": "Add /self-train to sidebar navigation",
-      "description": "Self-train page exists at /self-train/page.tsx with components (SelfTrainControls, SelfTrainHistory, SelfTrainStatusCards) but is NOT in NAV_SECTIONS. Add it to the navigation under Core section.",
-      "column": "todo",
-      "priority": "high",
-      "tags": [
-        "training",
-        "frontend",
-        "navigation"
-      ],
-      "assignee": "",
-      "dueDate": "",
-      "createdAt": "2026-09-16T21:42:13.553739+00:00",
-      "updatedAt": "2026-09-16T21:42:13.553739+00:00",
-      "root_hash": "",
-      "notes": []
-    },
-    {
-      "id": "20260916_100001_wire-self-train-components",
-      "title": "Wire self-train components into page",
-      "description": "The /self-train/page.tsx builds inline UI instead of using existing SelfTrainControls, SelfTrainHistory, SelfTrainStatusCards components. Refactor to use the component library.",
-      "column": "todo",
-      "priority": "high",
-      "tags": [
-        "training",
-        "frontend",
-        "components"
-      ],
-      "assignee": "",
-      "dueDate": "",
-      "createdAt": "2026-09-16T21:42:13.553739+00:00",
-      "updatedAt": "2026-09-16T21:42:13.553739+00:00",
-      "root_hash": "",
-      "notes": []
-    },
-    {
-      "id": "20260916_100002_clean-dead-training-components",
-      "title": "Audit and clean dead training components",
-      "description": "Some training components may be dead code (e.g. SelfTrain* components not used by self-train page). Audit all training/* and self-train/* components for usage, remove dead code.",
-      "column": "todo",
-      "priority": "medium",
-      "tags": [
-        "training",
-        "cleanup",
-        "code-quality"
-      ],
-      "assignee": "",
-      "dueDate": "",
-      "createdAt": "2026-09-16T21:42:13.553739+00:00",
-      "updatedAt": "2026-09-16T21:42:13.553739+00:00",
-      "root_hash": "",
-      "notes": []
-    },
-    {
-      "id": "20260916_100003_fix-training-navigation-flow",
-      "title": "Fix training page navigation flow",
-      "description": "TrainingPipeline wizard (data->configure->train->results) duplicates standalone sub-pages (presets, runs). Decide: keep wizard or remove duplicates? Ensure consistent UX.",
-      "column": "todo",
-      "priority": "high",
-      "tags": [
-        "training",
-        "frontend",
-        "ux"
-      ],
-      "assignee": "",
-      "dueDate": "",
-      "createdAt": "2026-09-16T21:42:13.553739+00:00",
-      "updatedAt": "2026-09-16T21:42:13.553739+00:00",
-      "root_hash": "",
-      "notes": []
-    },
-    {
-      "id": "20260916_100004_consciousness-pages-cleanup",
-      "title": "Clean up consciousness pages (22+ pages)",
-      "description": "consciousness/ has 22+ sub-pages. Many may be stubs or redundant. Audit which are real vs placeholder, consolidate, ensure they all use consistent patterns.",
-      "column": "todo",
-      "priority": "medium",
-      "tags": [
-        "frontend",
-        "cleanup"
-      ],
-      "assignee": "",
-      "dueDate": "",
-      "createdAt": "2026-09-16T21:42:13.553739+00:00",
-      "updatedAt": "2026-09-16T21:42:13.553739+00:00",
-      "root_hash": "",
-      "notes": []
-    },
-    {
-      "id": "20260916_100005_orphan-routes-cleanup",
-      "title": "Clean orphan routes not in NAV_SECTIONS",
-      "description": "Many routes exist on disk but not in navigation: /self-train, /infer, /shell, /images, /multimodal, /vector, /tokenizer, /voice, /world, /experiments, /collections, etc. Decide: add to nav or remove.",
-      "column": "todo",
-      "priority": "medium",
-      "tags": [
-        "frontend",
-        "navigation",
-        "cleanup"
-      ],
-      "assignee": "",
-      "dueDate": "",
-      "createdAt": "2026-09-16T21:42:13.553739+00:00",
-      "updatedAt": "2026-09-16T21:42:13.553739+00:00",
-      "root_hash": "",
-      "notes": []
-    },
-    {
-      "id": "20260916_100006_remove-old-domain-shims",
-      "title": "Remove backward-compat shims in packages/core-py/domains/",
-      "description": "All internal code now uses domain.X._internal.Y. The ~131 shim files in packages/core-py/domains/ are unused internally. Remove them (keep only for external consumers if needed).",
-      "column": "todo",
-      "priority": "high",
-      "tags": [
-        "infra",
-        "cleanup",
-        "domain-restructuring"
-      ],
-      "assignee": "",
-      "dueDate": "",
-      "createdAt": "2026-09-16T21:42:13.553739+00:00",
-      "updatedAt": "2026-09-16T21:42:13.553739+00:00",
-      "root_hash": "",
-      "notes": []
-    },
-    {
-      "id": "20260916_100007_mogdb-performance",
-      "title": "MogDB performance optimization",
-      "description": "Existing todo: Optimize MogDB database performance.",
-      "column": "todo",
-      "priority": "medium",
-      "tags": [
-        "mogdb",
-        "performance",
-        "optimization"
-      ],
-      "assignee": "",
-      "dueDate": "",
-      "createdAt": "2026-09-16T21:42:13.553739+00:00",
-      "updatedAt": "2026-09-16T21:42:13.553739+00:00",
-      "root_hash": "",
-      "notes": []
-    },
-    {
-      "id": "20260916_100008_dpo-training-ui",
-      "title": "Add DPO training UI",
-      "description": "verify_dpo.py exists at repo root but no DPO training route or UI component. Add DPO as a training method option in the training wizard and API.",
-      "column": "todo",
-      "priority": "medium",
-      "tags": [
-        "training",
-        "feature",
-        "dpo"
-      ],
-      "assignee": "",
-      "dueDate": "",
-      "createdAt": "2026-09-16T21:42:13.553739+00:00",
-      "updatedAt": "2026-09-16T21:42:13.553739+00:00",
-      "root_hash": "",
-      "notes": []
-    },
-    {
-      "id": "20260916_100009_cloud-training-stub",
-      "title": "Implement cloud training provider",
-      "description": "cloud_training.py router exists but delegates to get_provider('local') \u2014 stub. Implement real cloud training (e.g. HuggingFace, AWS, GCP).",
-      "column": "todo",
-      "priority": "low",
-      "tags": [
-        "training",
-        "cloud",
-        "feature"
-      ],
-      "assignee": "",
-      "dueDate": "",
-      "createdAt": "2026-09-16T21:42:13.553739+00:00",
-      "updatedAt": "2026-09-16T21:42:13.553739+00:00",
       "root_hash": "",
       "notes": []
     }
