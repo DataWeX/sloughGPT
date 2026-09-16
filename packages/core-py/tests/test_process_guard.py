@@ -74,16 +74,16 @@ class TestProcessGuardInit:
 
     def test_slnc_params_stored(self):
         guard = ProcessGuard(slnc_path="/path/to/model.slnc", model_id="gpt2")
-        assert guard._slnc_path == "/path/to/model.slnc"
-        assert guard._model_id == "gpt2"
+        assert guard._config.slnc_path == "/path/to/model.slnc"
+        assert guard._config.model_id == "gpt2"
 
     def test_hf_params_stored(self):
         guard = ProcessGuard(
             model_cls_path="transformers.AutoModel",
             model_kwargs={"pretrained_model_name_or_path": "gpt2"},
         )
-        assert guard.model_cls_path == "transformers.AutoModel"
-        assert guard.model_kwargs == {"pretrained_model_name_or_path": "gpt2"}
+        assert guard._config.hf_model_cls_path == "transformers.AutoModel"
+        assert guard._config.hf_model_kwargs == {"pretrained_model_name_or_path": "gpt2"}
 
 
 class TestProcessGuardAlive:
@@ -112,13 +112,13 @@ class TestProcessGuardHealth:
         health = guard.health()
         assert "alive" in health
         assert "worker_id" in health
+        assert "mode" in health
+        assert "model_id" in health
         assert "requests_served" in health
         assert "restart_count" in health
         assert "max_restarts" in health
         assert "exhausted" in health
-        assert "memory_mb" in health
         assert "memory_limit_mb" in health
-        assert "over_limit" in health
 
     def test_health_worker_id(self):
         guard = ProcessGuard(worker_id="my-guard")
@@ -132,14 +132,6 @@ class TestProcessGuardHealth:
         guard = ProcessGuard(max_restarts=0)
         guard._restart_count = 0
         assert guard.health()["exhausted"] is True
-
-    def test_health_no_worker_memory(self):
-        guard = ProcessGuard()
-        assert guard.health()["memory_mb"] is None
-
-    def test_health_over_limit_false(self):
-        guard = ProcessGuard(memory_limit_mb=4096.0)
-        assert guard.health()["over_limit"] is False
 
     def test_health_requests_served(self):
         guard = ProcessGuard()

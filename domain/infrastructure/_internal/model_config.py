@@ -30,17 +30,6 @@ class ModelConfig:
     ModelWorkerProcess.__init__.
     """
 
-    __slots__ = (
-        "slnc_path",
-        "model_id",
-        "quantize",
-        "quant_bits",
-        "quant_mode",
-        "quant_clip",
-        "hf_model_cls_path",
-        "hf_model_kwargs",
-    )
-
     slnc_path: str | None = None
     model_id: str = "default"
     quantize: bool = False
