@@ -3,17 +3,7 @@
 import { useMemo, useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
 import { trainingJobsController } from '@/lib/training-controller'
-
-export interface TrainingJobInfo {
-  id: string
-  name: string
-  status: 'running' | 'completed' | 'failed' | 'pending'
-  progress: number
-  created_at: string
-  method?: string
-  loss?: number
-  error?: string
-}
+import type { TrainingJob } from '@/lib/training-controller'
 
 export interface TrainingAnalyticsCardProps {
   addToast?: (msg: string, type?: 'success' | 'error' | 'info') => void
@@ -21,13 +11,13 @@ export interface TrainingAnalyticsCardProps {
 }
 
 export function TrainingAnalyticsCard({ addToast, onTrainMore }: TrainingAnalyticsCardProps) {
-  const [jobs, setJobs] = useState<TrainingJobInfo[]>([])
+  const [jobs, setJobs] = useState<TrainingJob[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     trainingJobsController.list()
-      .then((data: TrainingJobInfo[]) => {
+      .then((data: TrainingJob[]) => {
         if (!cancelled) {
           setJobs(data)
           setLoading(false)

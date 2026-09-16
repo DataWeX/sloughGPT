@@ -24,6 +24,50 @@
   ],
   "cards": [
     {
+      "id": "20260916_124835_fix-training-tests-traininganalyticscard-datastep-clsx",
+      "title": "Fix training tests: TrainingAnalyticsCard, DataStep, clsx",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "card_type": "task",
+      "effort": 0.0,
+      "tags": [
+        "training",
+        "features",
+        "testing"
+      ],
+      "created_at": "2026-09-16T12:48:35.465511+00:00",
+      "updated_at": "2026-09-16T12:48:35.465511+00:00",
+      "due_date": "",
+      "assignee": "",
+      "sprint": "",
+      "blocked_by": [],
+      "notes": [],
+      "history": []
+    },
+    {
+      "id": "20260916_123702_continue-training-ui-work",
+      "title": "Continue training UI work",
+      "description": "",
+      "column": "in_progress",
+      "priority": "medium",
+      "card_type": "task",
+      "effort": 0.0,
+      "tags": [
+        "training",
+        "web-ui",
+        "continue"
+      ],
+      "created_at": "2026-09-16T12:37:02.148193+00:00",
+      "updated_at": "2026-09-16T12:37:02.148193+00:00",
+      "due_date": "",
+      "assignee": "",
+      "sprint": "",
+      "blocked_by": [],
+      "notes": [],
+      "history": []
+    },
+    {
       "id": "20260916_111008_session-complete-unified-app-planner-cli-tests-pass-sync-ver",
       "title": "Session: Complete unified app-planner CLI \u2014 tests pass, sync verified",
       "description": "",
@@ -531,7 +575,7 @@
       "effort": 0.0,
       "tags": [],
       "created_at": "2026-09-06T06:25:59.955759+00:00",
-      "updated_at": "2026-09-16T11:09:05.997552+00:00",
+      "updated_at": "2026-09-16T12:38:57.237904+00:00",
       "due_date": "",
       "assignee": "",
       "sprint": "",
