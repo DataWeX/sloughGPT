@@ -1170,6 +1170,19 @@ class InferenceRouter:
                 "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
             )
         provider_messages = [{"role": "user", "content": prompt_text}]
+
+        # Cognitive reasoning context injection from SloEngine
+        try:
+            import state as _gen_state2
+
+            soul_engine = _gen_state2.soul_engine
+            if soul_engine and soul_engine._soul:
+                reasoning_text = soul_engine._build_reasoning_chain_text(req.prompt)
+                if reasoning_text.strip():
+                    provider_messages.insert(0, {"role": "system", "content": reasoning_text})
+        except Exception:
+            pass
+
         try:
             _t0 = time.monotonic()
             gen_params = _apply_meta_weights(
@@ -1308,6 +1321,17 @@ class InferenceRouter:
                     "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
                 )
             provider_messages = [{"role": "user", "content": prompt_text}]
+
+            # Cognitive reasoning context injection from SloEngine
+            try:
+                soul_engine = _stream_state.soul_engine
+                if soul_engine and soul_engine._soul:
+                    reasoning_text = soul_engine._build_reasoning_chain_text(req.prompt)
+                    if reasoning_text.strip():
+                        provider_messages.insert(0, {"role": "system", "content": reasoning_text})
+            except Exception:
+                pass
+
             start = datetime.datetime.now()
             token_count = 0
             collected = []
@@ -2034,6 +2058,32 @@ class InferenceRouter:
                         data={"error": str(exc)},
                         message=f"Agent instruction injection failed: {exc}",
                     )
+
+            # Cognitive reasoning context injection from SloEngine
+            try:
+                import state as _cs_state
+
+                soul_engine = _cs_state.soul_engine
+                if soul_engine and soul_engine._soul:
+                    reasoning_text = soul_engine._build_reasoning_chain_text(user_msg or "")
+                    if reasoning_text.strip():
+                        cognitive_msg = {
+                            "role": "system",
+                            "content": reasoning_text,
+                        }
+                        # Insert after system prompt but before user messages
+                        insert_idx = 0
+                        for i, m in enumerate(provider_messages):
+                            if m["role"] == "system":
+                                insert_idx = i + 1
+                                break
+                        provider_messages.insert(insert_idx, cognitive_msg)
+                        logger.debug(
+                            "Cognitive reasoning context injected into chat (idx=%d)",
+                            insert_idx,
+                        )
+            except Exception as _cog_err:
+                logger.debug("Cognitive context injection skipped: %s", _cog_err)
 
             tool_result_data = None
             try:
