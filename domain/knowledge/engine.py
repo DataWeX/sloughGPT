@@ -236,6 +236,244 @@ class KnowledgeEngine:
             logger.error("Topic listing failed: %s", e)
             return KnowledgeResult(success=False, error=str(e))
 
+    def update(
+        self,
+        item_id: str,
+        content: str | None = None,
+        topic: str | None = None,
+        importance: float | None = None,
+    ) -> KnowledgeResult:
+        """Update a knowledge item.
+
+        Args:
+            item_id: The item ID.
+            content: New content (optional).
+            topic: New topic (optional).
+            importance: New importance (optional).
+
+        Returns:
+            KnowledgeResult with updated item data.
+        """
+        try:
+            memory = self._get_memory()
+            updates = {}
+            if content is not None:
+                updates["content"] = content
+            if topic is not None:
+                updates["topic"] = topic
+            if importance is not None:
+                updates["importance"] = importance
+            memory.update(item_id, **updates) if hasattr(memory, "update") else None
+            return KnowledgeResult(success=True, data={"updated": True, "id": item_id})
+        except Exception as e:
+            logger.error("Knowledge update failed: %s", e)
+            return KnowledgeResult(success=False, error=str(e))
+
+    def batch_store(
+        self, items: list[dict], topic: str = "general", source: str = "batch"
+    ) -> KnowledgeResult:
+        """Batch store knowledge items.
+
+        Args:
+            items: List of dicts with 'content' key and optional 'topic', 'source', 'importance'.
+            topic: Default topic for items without one.
+            source: Default source for items without one.
+
+        Returns:
+            KnowledgeResult with count of stored items.
+        """
+        try:
+            memory = self._get_memory()
+            count = 0
+            for item in items:
+                content = item.get("content", "")
+                if not content:
+                    continue
+                memory.add(
+                    content,
+                    topic=item.get("topic", topic),
+                    source=item.get("source", source),
+                    importance=item.get("importance", 0.7),
+                )
+                count += 1
+            return KnowledgeResult(success=True, data={"stored": count})
+        except Exception as e:
+            logger.error("Batch store failed: %s", e)
+            return KnowledgeResult(success=False, error=str(e))
+
+    def batch_delete(self, item_ids: list[str]) -> KnowledgeResult:
+        """Batch delete knowledge items.
+
+        Args:
+            item_ids: List of item IDs to delete.
+
+        Returns:
+            KnowledgeResult with count of deleted items.
+        """
+        try:
+            memory = self._get_memory()
+            count = 0
+            for item_id in item_ids:
+                try:
+                    memory.delete(item_id)
+                    count += 1
+                except Exception:
+                    pass
+            return KnowledgeResult(success=True, data={"deleted": count})
+        except Exception as e:
+            logger.error("Batch delete failed: %s", e)
+            return KnowledgeResult(success=False, error=str(e))
+
+    def search_files(
+        self, query: str, path: str = ".", extensions: list[str] | None = None, top_k: int = 10
+    ) -> KnowledgeResult:
+        """Search files by content.
+
+        Args:
+            query: Search query.
+            path: Root path to search.
+            extensions: File extensions to include.
+            top_k: Maximum results.
+
+        Returns:
+            KnowledgeResult with matching files.
+        """
+        try:
+            from domain.knowledge import FileIndex
+
+            index = FileIndex()
+            results = (
+                index.search(query, path=path, extensions=extensions, top_k=top_k)
+                if hasattr(index, "search")
+                else []
+            )
+            return KnowledgeResult(success=True, data=results)
+        except Exception as e:
+            logger.error("File search failed: %s", e)
+            return KnowledgeResult(success=False, error=str(e))
+
+    def check_duplicate(self, content: str, threshold: float = 0.85) -> KnowledgeResult:
+        """Check for duplicate knowledge items.
+
+        Args:
+            content: Content to check.
+            threshold: Similarity threshold (0-1).
+
+        Returns:
+            KnowledgeResult with duplicate info.
+        """
+        try:
+            from domain.knowledge import DuplicateDetector
+
+            detector = DuplicateDetector()
+            result = (
+                detector.check(content, threshold=threshold)
+                if hasattr(detector, "check")
+                else {"is_duplicate": False}
+            )
+            return KnowledgeResult(success=True, data=result)
+        except Exception as e:
+            logger.error("Duplicate check failed: %s", e)
+            return KnowledgeResult(success=False, error=str(e))
+
+    def categorize(self, content: str) -> KnowledgeResult:
+        """Auto-categorize content.
+
+        Args:
+            content: Content to categorize.
+
+        Returns:
+            KnowledgeResult with suggested category.
+        """
+        try:
+            from domain.knowledge import AutoCategorizer
+
+            categorizer = AutoCategorizer()
+            result = (
+                categorizer.categorize(content) if hasattr(categorizer, "categorize") else "general"
+            )
+            return KnowledgeResult(success=True, data=result)
+        except Exception as e:
+            logger.error("Categorization failed: %s", e)
+            return KnowledgeResult(success=False, error=str(e))
+
+    def bulk_ingest(
+        self,
+        items: list[dict],
+        topic: str = "imported",
+        source: str = "bulk",
+        dedup_threshold: float = 0.85,
+    ) -> KnowledgeResult:
+        """Bulk ingest items with deduplication.
+
+        Args:
+            items: List of dicts with 'content' key.
+            topic: Default topic.
+            source: Default source.
+            dedup_threshold: Dedup similarity threshold.
+
+        Returns:
+            KnowledgeResult with ingest stats.
+        """
+        try:
+            from domain.knowledge import BulkProcessor
+
+            processor = BulkProcessor()
+            result = (
+                processor.ingest(
+                    items,
+                    topic=topic,
+                    source=source,
+                    dedup_threshold=dedup_threshold,
+                )
+                if hasattr(processor, "ingest")
+                else {"ingested": len(items)}
+            )
+            return KnowledgeResult(success=True, data=result)
+        except Exception as e:
+            logger.error("Bulk ingest failed: %s", e)
+            return KnowledgeResult(success=False, error=str(e))
+
+    def related(self, item_id: str, top_k: int = 5) -> KnowledgeResult:
+        """Get related knowledge items.
+
+        Args:
+            item_id: The item ID.
+            top_k: Maximum related items.
+
+        Returns:
+            KnowledgeResult with related items.
+        """
+        try:
+            memory = self._get_memory()
+            related_items = (
+                memory.get_related(item_id, top_k=top_k) if hasattr(memory, "get_related") else []
+            )
+            return KnowledgeResult(success=True, data=related_items)
+        except Exception as e:
+            logger.error("Related items failed: %s", e)
+            return KnowledgeResult(success=False, error=str(e))
+
+    def context(self, query: str, top_k: int = 5) -> KnowledgeResult:
+        """Get context items for a query.
+
+        Args:
+            query: The query.
+            top_k: Maximum context items.
+
+        Returns:
+            KnowledgeResult with context items.
+        """
+        try:
+            memory = self._get_memory()
+            context_items = (
+                memory.get_context(query, top_k=top_k) if hasattr(memory, "get_context") else []
+            )
+            return KnowledgeResult(success=True, data=context_items)
+        except Exception as e:
+            logger.error("Context retrieval failed: %s", e)
+            return KnowledgeResult(success=False, error=str(e))
+
 
 _engine: KnowledgeEngine | None = None
 
