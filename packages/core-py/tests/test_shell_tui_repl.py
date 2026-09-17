@@ -1606,16 +1606,34 @@ def test_draw_borders_horizontal():
     layout = PaneLayout()
     layout.panes.append(Pane("console", 0.5, border=Border("all")))
     layout.panes.append(Pane("output", 0.5, border=Border("all")))
+    layout.panes.append(Pane("status", fixed=1))
+    layout.panes.append(Pane("input", fixed=1))
     tui._layout = layout
     regions = layout.compute(24, 80)
+
+    # Set up engine and layers
+    from domain.shell._internal.graphics import GraphicsEngine, Layer
+
+    tui._engine = GraphicsEngine()
+    tui._engine._rows = 24
+    tui._engine._cols = 80
+    tui._layer_console_bg = Layer(
+        "console_bg", regions["console"].rows, regions["console"].cols, z=0
+    )
+    tui._layer_console = Layer("console", regions["console"].rows, regions["console"].cols, z=1)
+    tui._layer_output_bg = Layer("output_bg", regions["output"].rows, regions["output"].cols, z=2)
+    tui._layer_output = Layer("output", regions["output"].rows, regions["output"].cols, z=3)
+    tui._layer_status = Layer("status", regions["status"].rows, regions["status"].cols, z=4)
+    tui._layer_input = Layer("input", regions["input"].rows, regions["input"].cols, z=5)
+
     scr = _FakeStdscr()
-    with (
-        patch.object(curses, "color_pair", side_effect=lambda n: n),
-        patch.object(curses, "has_colors", return_value=True),
-    ):
-        tui._draw_borders(scr, regions)
-    horiz = [c for c in scr.addnstr_calls if c[2] and "\u2500" in c[2]]
-    assert len(horiz) >= 2
+    tui._draw_borders(scr, regions)
+
+    # Check that borders were drawn on engine layers
+    console_ch = tui._layer_console.framebuffer.get(0, 0).char
+    output_ch = tui._layer_output.framebuffer.get(0, 0).char
+    # Vertical borders overwrite horizontal at corners (correct box-drawing)
+    assert console_ch in ("─", "│") or output_ch in ("─", "│")
 
 
 def test_draw_borders_vertical():
@@ -1623,17 +1641,38 @@ def test_draw_borders_vertical():
 
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
-    layout.panes.append(Pane("console", 1.0, border=Border("all")))
+    layout.panes.append(Pane("console", 0.5, border=Border("all")))
+    layout.panes.append(Pane("output", 0.5, border=Border("all")))
+    layout.panes.append(Pane("status", fixed=1))
+    layout.panes.append(Pane("input", fixed=1))
     tui._layout = layout
     regions = layout.compute(24, 80)
+
+    # Set up engine and layers
+    from domain.shell._internal.graphics import GraphicsEngine, Layer
+
+    tui._engine = GraphicsEngine()
+    tui._engine._rows = 24
+    tui._engine._cols = 80
+    tui._layer_console_bg = Layer(
+        "console_bg", regions["console"].rows, regions["console"].cols, z=0
+    )
+    tui._layer_console = Layer("console", regions["console"].rows, regions["console"].cols, z=1)
+    tui._layer_output_bg = Layer("output_bg", regions["output"].rows, regions["output"].cols, z=2)
+    tui._layer_output = Layer("output", regions["output"].rows, regions["output"].cols, z=3)
+    tui._layer_status = Layer("status", regions["status"].rows, regions["status"].cols, z=4)
+    tui._layer_input = Layer("input", regions["input"].rows, regions["input"].cols, z=5)
+
     scr = _FakeStdscr()
-    with (
-        patch.object(curses, "color_pair", side_effect=lambda n: n),
-        patch.object(curses, "has_colors", return_value=True),
-    ):
-        tui._draw_borders(scr, regions)
-    vert = [c for c in scr.addch_calls if c[2] == "\u2502"]
-    assert len(vert) >= 2
+    tui._draw_borders(scr, regions)
+
+    # Check that vertical borders were drawn on engine layers
+    vert_count = 0
+    for r in range(regions["console"].rows):
+        ch = tui._layer_console.framebuffer.get(r, 0).char
+        if ch == "│":
+            vert_count += 1
+    assert vert_count >= 2
 
 
 def test_draw_borders_skips_empty_border():
@@ -1676,17 +1715,34 @@ def test_draw_borders_custom_char():
 
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
-    layout.panes.append(Pane("console", 1.0, border=Border("horizontal", ch="#")))
+    layout.panes.append(Pane("console", 0.5, border=Border("horizontal", ch="#")))
+    layout.panes.append(Pane("output", 0.5, border=Border("none")))
+    layout.panes.append(Pane("status", fixed=1))
+    layout.panes.append(Pane("input", fixed=1))
     tui._layout = layout
     regions = layout.compute(24, 80)
+
+    # Set up engine and layers
+    from domain.shell._internal.graphics import GraphicsEngine, Layer
+
+    tui._engine = GraphicsEngine()
+    tui._engine._rows = 24
+    tui._engine._cols = 80
+    tui._layer_console_bg = Layer(
+        "console_bg", regions["console"].rows, regions["console"].cols, z=0
+    )
+    tui._layer_console = Layer("console", regions["console"].rows, regions["console"].cols, z=1)
+    tui._layer_output_bg = Layer("output_bg", regions["output"].rows, regions["output"].cols, z=2)
+    tui._layer_output = Layer("output", regions["output"].rows, regions["output"].cols, z=3)
+    tui._layer_status = Layer("status", regions["status"].rows, regions["status"].cols, z=4)
+    tui._layer_input = Layer("input", regions["input"].rows, regions["input"].cols, z=5)
+
     scr = _FakeStdscr()
-    with (
-        patch.object(curses, "color_pair", side_effect=lambda n: n),
-        patch.object(curses, "has_colors", return_value=True),
-    ):
-        tui._draw_borders(scr, regions)
-    top_row = [c for c in scr.addnstr_calls if "#" in (c[2] or "")]
-    assert len(top_row) >= 1
+    tui._draw_borders(scr, regions)
+
+    # Check that custom char was used on engine layer
+    top_ch = tui._layer_console.framebuffer.get(0, 0).char
+    assert top_ch == "#"
 
 
 def test_draw_borders_handles_curses_error():
@@ -1946,14 +2002,34 @@ def test_render_all_draws_borders_and_content():
     tui._output_surface.write("output line")
     regions = layout.compute(24, 80)
 
+    # Set up engine and layers
+    from domain.shell._internal.graphics import GraphicsEngine, Layer
+
+    tui._engine = GraphicsEngine()
+    tui._engine._rows = 24
+    tui._engine._cols = 80
+    tui._layer_console_bg = Layer(
+        "console_bg", regions["console"].rows, regions["console"].cols, z=0
+    )
+    tui._layer_console = Layer("console", regions["console"].rows, regions["console"].cols, z=1)
+    tui._layer_output_bg = Layer("output_bg", regions["output"].rows, regions["output"].cols, z=2)
+    tui._layer_output = Layer("output", regions["output"].rows, regions["output"].cols, z=3)
+    tui._layer_status = Layer("status", regions["status"].rows, regions["status"].cols, z=4)
+    tui._layer_input = Layer("input", regions["input"].rows, regions["input"].cols, z=5)
+
     scr = _FakeStdscr()
     win_console = _FakeWin(10, 40)
     win_output = _FakeWin(10, 40)
     win_status = _FakeWin(1, 80)
     win_input = _FakeWin(1, 80)
-    with (
-        patch.object(curses, "color_pair", side_effect=lambda n: n),
-        patch.object(curses, "has_colors", return_value=True),
-    ):
-        tui._render_all(scr, regions, win_console, win_output, win_status, win_input)
-    assert scr.refreshed
+
+    # Mock engine.render to verify it's called
+    render_called = [False]
+
+    def mock_render():
+        render_called[0] = True
+
+    tui._engine.render = mock_render
+
+    tui._render_all(scr, regions, win_console, win_output, win_status, win_input)
+    assert render_called[0]

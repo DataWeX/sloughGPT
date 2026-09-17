@@ -438,7 +438,7 @@ class StartupOrchestrator:
             from domain.infrastructure._internal.pugqeep.engine import Process as PgqProcess
 
             def _rag_sync():
-                from domain.cognitive._internal.rag_service import get_rag_service
+                from domain.cognition._internal.rag_service import get_rag_service
 
                 rag = get_rag_service()
                 if hasattr(rag, "auto_ingest_repo_docs"):

@@ -1,5 +1,5 @@
 """
-TuiRepl — split-panel curses shell with three fixed regions.
+TuiRepl — split-panel shell with three fixed regions using GraphicsEngine.
 
 Layout:
   ┌─ Console Panel (infra logs) ─────────────────── top 30% ─┐
@@ -13,10 +13,8 @@ Layout:
   │ λ _                                           (fixed line) │
   └───────────────────────────────────────────────────────────┘
 
-Follows the split-window model: ``pane.PaneLayout`` (pure geometry) is the
-arranger, ``surface`` objects draw their own content into the assigned
-regions, and this module is only the *display layer* — it blits surfaces
-onto the curses screen and forwards keys.  Command dispatch runs on a
+Uses the GraphicsEngine for rendering (compositing framebuffer model) and
+curses for input only (getch, keypad).  Command dispatch runs on a
 background thread so the UI stays responsive.
 """
 
@@ -34,7 +32,15 @@ try:
 except (ImportError, AttributeError):
     _SET_ASYNC_EXC = None
 
-from .pane import Pane, PaneLayout, Rect
+from .graphics import (
+    Attr,
+    Color,
+    GraphicsEngine,
+    Layer,
+    Pattern,
+    TabManager,
+)
+from .pane import Border, Pane, PaneLayout, Rect
 from .surface import (
     STYLE_CRITICAL,
     STYLE_DEBUG,
@@ -168,9 +174,12 @@ class TuiIo:
 
     def __init__(self, surface: TextSurface) -> None:
         self._surface = surface
+        self._tui_ref: TuiRepl | None = None
 
     def write(self, text: str, end: str = "\n") -> None:
         self._surface.write(text, end)
+        if self._tui_ref is not None:
+            self._tui_ref._dirty = True
 
     def flush(self) -> None:
         pass
@@ -212,6 +221,8 @@ class TuiRepl:
         self._output_surface = TextSurface()
         self._input_surface = TextSurface()
         self._tui_io = TuiIo(self._output_surface)
+        self._tui_io._tui_ref = self
+        self._dirty = True  # Track when redraw is needed
 
         # Wire interactive prompts into Console
         self._repl.console._tui_repl = self
@@ -243,11 +254,36 @@ class TuiRepl:
         self._old_console_io = None
         self._log_surface = LogSurface(log_buffer)
 
+        # Graphics engine (replaces curses rendering)
+        self._engine: GraphicsEngine | None = None
+        self._layer_console: Layer | None = None
+        self._layer_console_bg: Layer | None = None
+        self._layer_output: Layer | None = None
+        self._layer_output_bg: Layer | None = None
+        self._layer_status: Layer | None = None
+        self._layer_input: Layer | None = None
+        self._layer_console_bg = None
+        self._layer_output_bg = None
+
+        # Tab/focus manager
+        self._tab_manager = TabManager()
+        self._focused_pane: str = "output"  # default focus
+
         # Panes (arranger) — pure geometry, no rendering knowledge.
         self._layout = PaneLayout(
             [
-                Pane("console", ratio=self.CONSOLE_RATIO, min_rows=self.CONSOLE_MIN),
-                Pane("output", ratio=1.0 - self.CONSOLE_RATIO, min_rows=self.OUTPUT_MIN),
+                Pane(
+                    "console",
+                    ratio=self.CONSOLE_RATIO,
+                    min_rows=self.CONSOLE_MIN,
+                    border=Border("horizontal"),
+                ),
+                Pane(
+                    "output",
+                    ratio=1.0 - self.CONSOLE_RATIO,
+                    min_rows=self.OUTPUT_MIN,
+                    border=Border("top"),
+                ),
                 Pane("status", fixed=1),
                 Pane("input", fixed=1),
             ]
@@ -372,57 +408,50 @@ class TuiRepl:
             if set_cli_terminal is not None:
                 set_cli_terminal(True)
 
-    # ── Rendering ─────────────────────────────────────────────────────────
+    # ── Rendering (GraphicsEngine) ─────────────────────────────────────
 
     def _draw_borders(self, stdscr: curses._CursesWindow, regions: dict[str, Rect]) -> None:
-        """Draw border characters for all panes that have borders configured.
-
-        Borders are drawn directly on the stdscr (the full terminal), not on
-        the pane's curses window.  This avoids overlapping content areas.
-        """
-        attr = curses.color_pair(_P_BORDER) if curses.has_colors() else 0
+        """Draw border characters for all panes using the engine."""
+        if self._engine is None:
+            return
         for pane in self._layout.panes:
             if not pane.visible or pane.border.is_empty:
                 continue
             r = regions.get(pane.name)
             if not r:
                 continue
-            h_attr = attr
-            if pane.border.ch:
-                # Use custom character if provided.
-                pass
-            # Horizontal borders (top / bottom edges).
+            # Draw borders on the engine's front buffer
+            layer = self._get_layer(pane.name)
+            if layer is None:
+                continue
+            # Highlight focused pane border
+            is_focused = pane.name == self._focused_pane
+            border_fg = Color.CYAN if is_focused else Color.WHITE
+            border_attr = Attr.BOLD if is_focused else Attr.NONE
+            h_char = pane.border.ch or "─"
+            v_char = pane.border.ch or "│"
             if pane.border.top and r.rows > 0:
-                ch = pane.border.ch or "\u2500"
-                try:
-                    stdscr.addnstr(r.top, r.left, ch * r.cols, r.cols, h_attr)
-                except curses.error:
-                    pass
+                layer.write(0, 0, h_char * r.cols, fg=border_fg, attr=border_attr)
             if pane.border.bottom and r.rows > 1:
-                ch = pane.border.ch or "\u2500"
-                try:
-                    stdscr.addnstr(r.top + r.rows - 1, r.left, ch * r.cols, r.cols, h_attr)
-                except curses.error:
-                    pass
-            # Vertical borders (left / right edges).
+                layer.write(r.rows - 1, 0, h_char * r.cols, fg=border_fg, attr=border_attr)
             if pane.border.left and r.cols > 0:
-                ch = pane.border.ch or "\u2502"
-                for y in range(r.top, r.top + r.rows):
-                    try:
-                        stdscr.addch(y, r.left, ch, attr)
-                    except curses.error:
-                        pass
+                for y in range(r.rows):
+                    layer.write(y, 0, v_char, fg=border_fg, attr=border_attr)
             if pane.border.right and r.cols > 1:
-                ch = pane.border.ch or "\u2502"
-                for y in range(r.top, r.top + r.rows):
-                    try:
-                        stdscr.addch(y, r.left + r.cols - 1, ch, attr)
-                    except curses.error:
-                        pass
-        try:
-            stdscr.refresh()
-        except curses.error:
-            pass
+                for y in range(r.rows):
+                    layer.write(y, r.cols - 1, v_char, fg=border_fg, attr=border_attr)
+
+    def _get_layer(self, pane_name: str) -> Layer | None:
+        """Get the engine layer for a pane name."""
+        if pane_name == "console":
+            return self._layer_console
+        elif pane_name == "output":
+            return self._layer_output
+        elif pane_name == "status":
+            return self._layer_status
+        elif pane_name == "input":
+            return self._layer_input
+        return None
 
     def _draw_pane_borders(
         self,
@@ -430,42 +459,27 @@ class TuiRepl:
         pane: Pane,
         region: Rect,
     ) -> None:
-        """Draw border characters for *pane* on its curses window *win*.
-
-        Borders are drawn on the content window itself (not on stdscr) so
-        that ``win.erase()`` + ``_draw_pane_borders`` + content produces a
-        flicker-free frame.
-        """
-        attr = curses.color_pair(_P_BORDER) if curses.has_colors() else 0
-        h, w = win.getmaxyx()
+        """Draw border characters for *pane* using the engine layer."""
+        if self._engine is None:
+            return
+        layer = self._get_layer(pane.name)
+        if layer is None:
+            return
         if not pane.visible or pane.border.is_empty:
             return
+        h, w = layer.framebuffer.rows, layer.framebuffer.cols
+        h_char = pane.border.ch or "─"
+        v_char = pane.border.ch or "│"
         if pane.border.top and h > 0:
-            ch = pane.border.ch or "\u2500"
-            try:
-                win.addnstr(0, 0, ch * w, w, attr)
-            except curses.error:
-                pass
+            layer.write(0, 0, h_char * w, fg=Color.WHITE)
         if pane.border.bottom and h > 1:
-            ch = pane.border.ch or "\u2500"
-            try:
-                win.addnstr(h - 1, 0, ch * w, w, attr)
-            except curses.error:
-                pass
+            layer.write(h - 1, 0, h_char * w, fg=Color.WHITE)
         if pane.border.left and w > 0:
-            ch = pane.border.ch or "\u2502"
             for y in range(h):
-                try:
-                    win.addch(y, 0, ch, attr)
-                except curses.error:
-                    pass
+                layer.write(y, 0, v_char, fg=Color.WHITE)
         if pane.border.right and w > 1:
-            ch = pane.border.ch or "\u2502"
             for y in range(h):
-                try:
-                    win.addch(y, w - 1, ch, attr)
-                except curses.error:
-                    pass
+                layer.write(y, w - 1, v_char, fg=Color.WHITE)
 
     def _blit(
         self,
@@ -475,39 +489,64 @@ class TuiRepl:
         offset_x: int = 0,
         pane: Pane | None = None,
     ) -> None:
-        """Write *lines* into *win*, starting at (offset_y, offset_x).
+        """Write *lines* into the engine layer for the given pane.
 
-        Offsets are used when the pane has borders or padding so content
-        is drawn inside the border/padding area, not on top of it.
-        If *pane* is given, its borders are drawn on *win* after erase.
+        If *pane* is given, its borders are drawn on the layer after clear.
         """
-        try:
-            win.erase()
-        except curses.error:
+        if self._engine is None:
             return
+        # Determine which layer to draw on
+        layer: Layer | None = None
         if pane is not None:
+            layer = self._get_layer(pane.name)
+        if layer is None and win is not None:
+            # Fallback: try to infer layer from win size
+            h, w = win.getmaxyx()
+            if h == 1 and self._layer_input is not None:
+                layer = self._layer_input
+            elif h == 1 and self._layer_status is not None:
+                layer = self._layer_status
+            elif self._layer_output is not None:
+                layer = self._layer_output
+        if layer is None:
+            return
+
+        # Clear the layer area
+        layer.clear()
+
+        # Draw borders if pane has them
+        if pane is not None and not pane.border.is_empty:
             self._draw_pane_borders(win, pane, None)
-        h, w = win.getmaxyx()
+
+        h, w = layer.framebuffer.rows, layer.framebuffer.cols
         for y, ln in enumerate(lines):
             wy = offset_y + y
             if wy >= h:
                 break
-            pair = _STYLE_PAIRS.get(ln.style)
-            attr = curses.color_pair(pair) if pair else 0
+            # Map surface style to engine colors and display modes
+            fg = Color.DEFAULT
+            attr = Attr.NONE
+            if ln.style == STYLE_INFO:
+                fg = Color.GREEN
+            elif ln.style == STYLE_WARN:
+                fg = Color.YELLOW
+                attr = Attr.BOLD
+            elif ln.style == STYLE_ERROR:
+                fg = Color.RED
+                attr = Attr.BOLD
+            elif ln.style == STYLE_DEBUG:
+                fg = Color.CYAN
+            elif ln.style == STYLE_CRITICAL:
+                fg = Color.MAGENTA
+                attr = Attr.REVERSE | Attr.BOLD
             text = ln.text[: w - offset_x - 1] if offset_x < w else ""
-            try:
-                if text:
-                    win.addstr(wy, offset_x, text, attr)
-            except curses.error:
-                pass
-        try:
-            win.refresh()
-        except curses.error:
-            pass
+            if text:
+                layer.write(wy, offset_x, text, fg=fg, attr=attr)
 
     def _render_all(self, stdscr, regions, win_console, win_output, win_status, win_input) -> None:
-        # Draw borders on content windows, not stdscr — this avoids the
-        # flicker caused by win.erase() erasing stdscr's border pixels.
+        if self._engine is None:
+            return
+        # Draw borders on content layers
         _panes = {p.name: p for p in self._layout.panes}
         # Compute content offsets from borders.
         for pane in self._layout.panes:
@@ -539,6 +578,8 @@ class TuiRepl:
                 )
         self._render_status(win_status, regions["status"].cols)
         self._render_input(win_input, regions["input"].cols)
+        # Composite and render to terminal
+        self._engine.render()
 
     def _input_view(self, cols: int, buf: str, caret: int) -> tuple[str, int]:
         """Compute the visible input line and its caret column.
@@ -558,74 +599,89 @@ class TuiRepl:
         return buf[start : start + max_w], len(prompt) + (caret - start)
 
     def _render_input(self, win: curses._CursesWindow, cols: int) -> None:
-        """Draw the command line: prompt plus the buffered input, with the
-        terminal cursor parked on the caret."""
-        try:
-            win.erase()
-            prompt = "\u03bb "
-            buf = "".join(self._input_buf)
-            line, caret_col = self._input_view(cols, buf, self._input_cursor)
-            win.addstr(0, 0, prompt, curses.color_pair(_P_PROMPT))
-            if line:
-                win.addstr(0, len(prompt), line)
-            try:
-                win.move(0, min(max(caret_col, 0), max(cols - 1, 0)))
-            except curses.error:
-                pass
-            win.refresh()
-        except curses.error:
-            pass
+        """Draw the command line using the engine with display modes."""
+        if self._engine is None or self._layer_input is None:
+            return
+        layer = self._layer_input
+        layer.clear()
+        prompt = "\u03bb "
+        buf = "".join(self._input_buf)
+        line, caret_col = self._input_view(cols, buf, self._input_cursor)
+        layer.write(0, 0, prompt, fg=Color.CYAN, attr=Attr.BOLD)
+        if line:
+            layer.write(0, len(prompt), line)
 
     def _render_status(self, win: curses._CursesWindow, cols: int) -> None:
-        """Draw the chrome bar: scroll focus, live/scroll state, active
-        command, terminal size, or the incremental-search prompt while
-        active (``reverse-i-search`` for Ctrl+R, ``forward-i-search`` for
-        Ctrl+S)."""
-        try:
-            win.erase()
-        except curses.error:
+        """Draw the chrome bar using the engine with display modes."""
+        if self._engine is None or self._layer_status is None:
             return
+        layer = self._layer_status
+        layer.clear()
         if cols <= 0:
             return
-        try:
-            if self._searching:
-                label = "forward-i-search" if self._search_fwd else "reverse-i-search"
-                if self._search_failed:
-                    label = f"failed {label}"
-                prompt = f"({label})\u0060{self._search_q}\u0060:"
-                win.addstr(0, 0, prompt[: cols - 2], curses.color_pair(_P_PROMPT))
-                win.refresh()
-                return
-            if self._out_searching:
-                label = "output-search"
-                if self._out_search_failed:
-                    label = f"failed {label}"
-                prompt = f"({label})\u0060{self._out_search_q}\u0060:"
-                win.addstr(0, 0, prompt[: cols - 2], curses.color_pair(_P_PROMPT))
-                win.refresh()
-                return
-            target = "OUTPUT" if self._scroll_target == 0 else "LOG"
-            scroll = self._out_scroll if self._scroll_target == 0 else self._log_scroll
-            scroll_txt = f"SCROLL \u2191{scroll}" if scroll > 0 else "LIVE"
-            head = f"[{target}]"
-            win.addstr(0, 0, head, curses.color_pair(_P_PROMPT))
-            col = len(head) + 1
-            if col < cols:
-                attr = (
-                    curses.color_pair(_P_LOG_WARN) if scroll > 0 else curses.color_pair(_P_LOG_INFO)
-                )
-                win.addstr(0, col, scroll_txt, attr)
-                col += len(scroll_txt) + 1
-            if col < cols and self._active_cmd:
-                cmd = self._active_cmd[: cols - col - 4]
-                win.addstr(0, col, cmd)
-                col += len(cmd) + 1
-            suffix = f"{cols}x{self._rows}"
-            if cols - len(suffix) - 1 >= col:
-                win.addstr(0, cols - len(suffix) - 1, suffix, curses.color_pair(_P_BORDER))
-            win.refresh()
-        except curses.error:
-            pass
+        if self._searching:
+            label = "forward-i-search" if self._search_fwd else "reverse-i-search"
+            if self._search_failed:
+                label = f"failed {label}"
+            prompt = f"({label})\u0060{self._search_q}\u0060:"
+            layer.write(0, 0, prompt[: cols - 2], fg=Color.CYAN, attr=Attr.BOLD)
+            return
+        if self._out_searching:
+            label = "output-search"
+            if self._out_search_failed:
+                label = f"failed {label}"
+            prompt = f"({label})\u0060{self._out_search_q}\u0060:"
+            layer.write(0, 0, prompt[: cols - 2], fg=Color.CYAN, attr=Attr.BOLD)
+            return
+
+        # ── Normal status bar ──
+        scroll = self._out_scroll if self._scroll_target == 0 else self._log_scroll
+
+        # [OUTPUT] or [LOG] with highlight
+        if self._scroll_target == 0:
+            # Output focused — highlight OUTPUT, dim LOG
+            layer.write(0, 0, "[", fg=Color.WHITE, attr=Attr.DIM)
+            layer.write(0, 1, "OUTPUT", fg=Color.CYAN, attr=Attr.BOLD)
+            col = 7
+            layer.write(0, col, "]", fg=Color.WHITE, attr=Attr.DIM)
+            col += 1
+        else:
+            # Log focused — dim OUTPUT, highlight LOG
+            layer.write(0, 0, "[", fg=Color.WHITE, attr=Attr.DIM)
+            layer.write(0, 1, "OUTPUT", fg=Color.WHITE, attr=Attr.DIM)
+            col = 7
+            layer.write(0, col, "]", fg=Color.WHITE, attr=Attr.DIM)
+            col += 1
+
+        # Separator
+        layer.write(0, col, " ", fg=Color.WHITE)
+        col += 1
+
+        # Scroll indicator
+        if scroll > 0:
+            # Show scroll position with arrow and count
+            scroll_txt = f"↑{scroll}"
+            layer.write(0, col, scroll_txt, fg=Color.YELLOW, attr=Attr.BOLD)
+            col += len(scroll_txt) + 1
+        else:
+            # LIVE indicator
+            layer.write(0, col, "●", fg=Color.GREEN, attr=Attr.BOLD)
+            col += 2
+            layer.write(0, col, "LIVE", fg=Color.GREEN)
+            col += 4 + 1
+
+        # Active command (dimmed)
+        if col < cols and self._active_cmd:
+            cmd = self._active_cmd[: cols - col - 4]
+            layer.write(0, col, "│", fg=Color.WHITE, attr=Attr.DIM)
+            col += 2
+            layer.write(0, col, cmd, fg=Color.WHITE, attr=Attr.DIM)
+            col += len(cmd) + 1
+
+        # Right-aligned size
+        suffix = f"{cols}x{self._rows}"
+        if cols - len(suffix) - 1 >= col:
+            layer.write(0, cols - len(suffix) - 1, suffix, fg=Color.WHITE, attr=Attr.DIM)
 
     # ── Completion ──────────────────────────────────────────────────────
 
@@ -1035,7 +1091,7 @@ class TuiRepl:
         self._history_pos = len(self._cmd_history)
         self._out_scroll = 0
         self._log_scroll = 0
-        self._scroll_target = 0  # 0 = output pane, 1 = log pane
+        self._scroll_target = 0  # kept for compat, but _tab_manager is the source of truth
         self._active_cmd: str | None = None
         self._active_thread: threading.Thread | None = None
         self._searching = False
@@ -1059,9 +1115,58 @@ class TuiRepl:
         if self._old_console_io is not None:
             self._repl.console._io = self._tui_io
 
+        # Initialize GraphicsEngine
+        self._engine = GraphicsEngine()
+        self._engine.open()
+
         regions = self._layout.compute(rows, cols)
         self._log_surface.set_width(regions["console"].cols)
         self._output_surface.set_width(regions["output"].cols)
+
+        # Create engine layers for each pane (bg layers at z=0, content at z=1)
+        self._layer_console_bg = self._engine.create_layer("console_bg", z=0)
+        self._layer_console = self._engine.create_layer("console", z=1)
+        self._layer_output_bg = self._engine.create_layer("output_bg", z=2)
+        self._layer_output = self._engine.create_layer("output", z=3)
+        self._layer_status = self._engine.create_layer("status", z=4)
+        self._layer_input = self._engine.create_layer("input", z=5)
+
+        # Resize layers to match pane regions
+        self._layer_console_bg.resize(regions["console"].rows, regions["console"].cols)
+        self._layer_console.resize(regions["console"].rows, regions["console"].cols)
+        self._layer_output_bg.resize(regions["output"].rows, regions["output"].cols)
+        self._layer_output.resize(regions["output"].rows, regions["output"].cols)
+        self._layer_status.resize(regions["status"].rows, regions["status"].cols)
+        self._layer_input.resize(regions["input"].rows, regions["input"].cols)
+
+        # Fill background patterns on bg layers
+        self._layer_console_bg.fill_pattern(Pattern.DOTS, fg=Color.BRIGHT_BLACK)
+        self._layer_output_bg.fill_pattern(Pattern.SHADE_LIGHT, fg=Color.BRIGHT_BLACK)
+
+        # Register focus regions in TabManager
+        self._tab_manager = TabManager()
+        self._tab_manager.add_region(
+            "output",
+            regions["output"].top,
+            regions["output"].left,
+            regions["output"].cols,
+            regions["output"].rows,
+            tab_order=0,
+            on_focus=lambda: setattr(self, "_focused_pane", "output"),
+        )
+        self._tab_manager.add_region(
+            "console",
+            regions["console"].top,
+            regions["console"].left,
+            regions["console"].cols,
+            regions["console"].rows,
+            tab_order=1,
+            on_focus=lambda: setattr(self, "_focused_pane", "console"),
+        )
+        # Focus the default pane
+        self._tab_manager.focus(self._focused_pane)
+
+        # Keep curses windows for input handling and compat
         win_console = curses.newwin(
             regions["console"].rows,
             regions["console"].cols,
@@ -1091,18 +1196,32 @@ class TuiRepl:
             self._render_all(stdscr, regions, win_console, win_output, win_status, win_input)
 
         def _resize(nrows: int, ncols: int) -> None:
-            """Rebuild the layout and windows at ``nrows`` x ``ncols``.
-
-            The terminal size changed (ncurses KEY_RESIZE or a poll-detected
-            ``SIGWINCH`` that readline claimed); recompute pane regions, size
-            the surfaces, recreate the curses windows and redraw everything.
-            """
+            """Rebuild the layout and layers at ``nrows`` x ``ncols``."""
             nonlocal regions, win_console, win_output, win_status, win_input
             self._rows = nrows
             self._cols = ncols
             regions = self._layout.compute(nrows, ncols)
             self._log_surface.set_width(regions["console"].cols)
             self._output_surface.set_width(regions["output"].cols)
+            # Resize engine layers
+            if self._engine is not None:
+                self._engine.handle_resize()
+            if self._layer_console_bg is not None:
+                self._layer_console_bg.resize(regions["console"].rows, regions["console"].cols)
+                self._layer_console_bg.clear()
+                self._layer_console_bg.fill_pattern(Pattern.DOTS, fg=Color.BRIGHT_BLACK)
+            if self._layer_console is not None:
+                self._layer_console.resize(regions["console"].rows, regions["console"].cols)
+            if self._layer_output_bg is not None:
+                self._layer_output_bg.resize(regions["output"].rows, regions["output"].cols)
+                self._layer_output_bg.clear()
+                self._layer_output_bg.fill_pattern(Pattern.SHADE_LIGHT, fg=Color.BRIGHT_BLACK)
+            if self._layer_output is not None:
+                self._layer_output.resize(regions["output"].rows, regions["output"].cols)
+            if self._layer_status is not None:
+                self._layer_status.resize(regions["status"].rows, regions["status"].cols)
+            if self._layer_input is not None:
+                self._layer_input.resize(regions["input"].rows, regions["input"].cols)
             win_console = curses.newwin(
                 regions["console"].rows,
                 regions["console"].cols,
@@ -1425,8 +1544,9 @@ class TuiRepl:
                 self._out_scroll = 0
                 _redraw()
 
-            elif ch == 15:  # Ctrl+O — toggle log/output focus for scrollback
-                self._scroll_target = 1 - self._scroll_target
+            elif ch == 15:  # Ctrl+O — cycle focus between output and log panes
+                self._tab_manager.focus_next()
+                self._scroll_target = 0 if self._focused_pane == "output" else 1
                 _redraw()
 
             elif ch in (18, 19):  # Ctrl+R / Ctrl+S — enter reverse / forward history search
@@ -1535,6 +1655,9 @@ class TuiRepl:
             self._repl.io = self._old_io
         if self._old_console_io is not None:
             self._repl.console._io = self._old_console_io
+        if self._engine is not None:
+            self._engine.close()
+            self._engine = None
         if rows > 0:
             stdscr.move(rows - 1, 0)
         stdscr.refresh()

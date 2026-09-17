@@ -157,7 +157,7 @@ class SloEngine:
     def _init_cognitive(self):
         """Lazy-load cognitive components."""
         try:
-            from domain.cognitive._internal.reasoning import (
+            from domain.cognition._internal.reasoning import (
                 DeepReasoning,
                 FormalLogicEngine,
                 ReasoningEngine,
@@ -963,7 +963,7 @@ class SloEngine:
         """Query the soul's knowledge base."""
         if not self._logic_engine:
             return False
-        from domain.cognitive._internal.reasoning import Predicate, Term
+        from domain.cognition._internal.reasoning import Predicate, Term
 
         return self._logic_engine.query(
             Predicate(name=predicate_name, terms=[Term(name=t) for t in terms])
@@ -1051,7 +1051,7 @@ class SloEngine:
         - Curriculum Learning: Efficient training
         """
         try:
-            from domain.cognitive._internal.grounding import GroundingOrchestrator
+            from domain.cognition._internal.grounding import GroundingOrchestrator
 
             self._grounding = GroundingOrchestrator()
 

@@ -129,7 +129,7 @@ async def lifespan(app_inst: FastAPI):
 
         def _rag_init_and_ingest():
             try:
-                from domain.cognitive._internal.rag_service import get_rag_service
+                from domain.cognition._internal.rag_service import get_rag_service
 
                 _rag = get_rag_service()
                 if _rag.stats().get("total_chunks", 0) == 0:

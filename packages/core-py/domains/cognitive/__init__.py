@@ -1,6 +1,6 @@
-"""Backward-compatibility shim — imports from the new ``domain.cognitive`` package."""
+"""Backward-compatibility shim — imports from the new ``domain.cognition`` package."""
 
-from domain.cognitive import (
+from domain.cognition import (
     CognitiveCore,
     CognitiveDomain,
     CognitiveException,
@@ -11,7 +11,7 @@ from domain.cognitive import (
     ThinkingMode,
     ThoughtProcess,
 )
-from domain.cognitive._internal import rag_service  # noqa: F401
+from domain.cognition._internal import rag_service  # noqa: F401
 
 __all__ = [
     "CognitiveDomain",

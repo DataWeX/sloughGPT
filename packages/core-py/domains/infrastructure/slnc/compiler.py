@@ -248,11 +248,11 @@ class SLNCCompiler:
         config_json = json.dumps(config, sort_keys=True).encode()
         header_size = compute_header_size(config_json)
 
-        # Build tensor entries for size computation
+        # Compute tensor entries
         entries_for_size = []
         for name, tensor in tensor_list:
             ndim = len(tensor.shape)
-            entries_for_size.append((name, 0, None, ndim, tensor.dtype, 0))
+            entries_for_size.append((name, 0, tensor.tobytes(), ndim, tensor.dtype, 0))
 
         tensor_table_size = compute_tensor_table_size(entries_for_size)
 
@@ -283,8 +283,6 @@ class SLNCCompiler:
             )
             current_offset += len(tensor_bytes)
 
-        total_size = current_offset
-
         # Compute flags
         flags = self._config.to_flags()
 
@@ -303,9 +301,7 @@ class SLNCCompiler:
             vocab_size = config.get("vocab_size", 0)
             n_positions = config.get("n_positions", config.get("max_position_embeddings", 1024))
             block_count = n_layer
-            block_size = self._compute_block_size(config)
             tensor_count = len(tensor_list)
-            data_offset = data_start
 
             f.write(struct.pack("<I", n_layer))
             f.write(struct.pack("<I", n_embd))
@@ -314,12 +310,12 @@ class SLNCCompiler:
             f.write(struct.pack("<I", vocab_size))
             f.write(struct.pack("<I", n_positions))
             f.write(struct.pack("<I", block_count))
-            f.write(struct.pack("<I", block_size))
+            f.write(struct.pack("<I", self._compute_block_size(config)))
             f.write(struct.pack("<I", tensor_count))
-            f.write(struct.pack("<I", data_offset))
+            f.write(struct.pack("<I", data_start))
 
             # Reserved region (24 bytes): header_crc + unused
-            reserved_start = f.tell()
+            reserved_start_pos = f.tell()
             f.write(b"\x00" * 24)  # placeholder for header CRC
 
             # Config JSON
@@ -333,14 +329,13 @@ class SLNCCompiler:
 
             # Write header CRC into reserved region
             if self._config.write_header_crc:
-                # Read back header data to compute CRC
                 f_pos = f.tell()
                 f.seek(0)
                 header_data = f.read(header_size)
                 f.seek(f_pos)
 
                 header_crc = _crc32(header_data)
-                f.seek(reserved_start)
+                f.seek(reserved_start_pos)
                 f.write(struct.pack("<I", header_crc))
                 f.seek(f_pos)
 
@@ -375,16 +370,6 @@ class SLNCCompiler:
                 if current_pos < offset:
                     f.write(b"\x00" * (offset - current_pos))
                 f.write(data_bytes)
-
-        logger.info(
-            "Compiled %s: %d tensors, %.1f MB, %d blocks",
-            output,
-            len(tensor_list),
-            total_size / 1e6,
-            block_count,
-            extra={"tag": "INFRA"},
-        )
-        return output
 
     def _order_tensors(
         self, config: dict, weights: dict[str, np.ndarray]

@@ -1,6 +1,6 @@
-"""Backward-compatibility shim — imports from the new ``domain.cognitive._internal.reasoning`` package."""
+"""Backward-compatibility shim — imports from the new ``domain.cognition._internal.reasoning`` package."""
 
-from domain.cognitive._internal.reasoning import (
+from domain.cognition._internal.reasoning import (
     CausalReasoning,
     ChainOfThought,
     ConstitutionalAI,
@@ -24,7 +24,7 @@ from domain.cognitive._internal.reasoning import (
     WorkingMemory,
     advanced_reasoning,
 )
-from domain.cognitive._internal.reasoning.advanced import (
+from domain.cognition._internal.reasoning.advanced import (
     CausalReasoning,
     ChainOfThought,
     ConstitutionalAI,
@@ -37,7 +37,7 @@ from domain.cognitive._internal.reasoning.advanced import (
     TreeOfThoughts,
     advanced_reasoning,
 )
-from domain.cognitive._internal.reasoning.deep import (
+from domain.cognition._internal.reasoning.deep import (
     DeepReasoning,
     DeepReasoningContext,
     FormalLogicEngine,

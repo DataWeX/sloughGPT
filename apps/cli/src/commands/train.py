@@ -1094,8 +1094,8 @@ def cmd_demo(args):
 
     log.header("SloughGPT Demo")
 
-    from domain.cognitive._internal.knowledge_graph_v2 import KnowledgeGraph
-    from domain.cognitive._internal.rag import ProductionRAG
+    from domain.cognition._internal.knowledge_graph_v2 import KnowledgeGraph
+    from domain.cognition._internal.rag import ProductionRAG
     from domain.training._internal.ewc import EwcContinualLearner
 
     if args.component in ("all", "rag"):
