@@ -67,12 +67,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
         description: 'Train models',
       },
       {
-        path: '/training/presets',
-        labelKey: 'nav.training_presets',
-        icon: 'zap',
-        description: 'Quick-start training templates',
-      },
-      {
         path: '/training/runs',
         labelKey: 'nav.training_runs',
         icon: 'clock',
