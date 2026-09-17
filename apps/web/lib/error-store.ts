@@ -3,6 +3,10 @@
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { inferStateKind, type StateEventKind } from '@/lib/event-kinds'
+
+export type { StateEventKind }
+export { inferStateKind, isStateEventKind } from '@/lib/event-kinds'
 
 export type ErrorSeverity = 'error' | 'warning' | 'info'
 
@@ -27,8 +31,6 @@ export interface ActivityEntry {
   timestamp: number
 }
 
-export type StateEventKind = 'connection' | 'startup' | 'sse' | 'health' | 'overlay' | 'api'
-
 export interface StateEvent {
   id: string
   kind: StateEventKind
@@ -43,7 +45,7 @@ export interface StateEvent {
 const DEDUP_WINDOW_MS = 30_000
 const MAX_ERRORS = 20
 const MAX_ACTIVITY = 50
-const MAX_STATE_EVENTS = 100
+const MAX_STATE_EVENTS = 200
 const STATE_EVENT_DEDUP_MS = 5_000
 
 function fingerprint(message: string): string {
@@ -129,16 +131,6 @@ interface ErrorStore {
   ) => string
   clearStateEvents: () => void
   getStateEvents: () => StateEvent[]
-}
-
-function inferStateKind(event: string): StateEventKind {
-  if (event.startsWith('api_')) return 'api'
-  if (event.startsWith('connection_')) return 'connection'
-  if (event.startsWith('startup_')) return 'startup'
-  if (event.startsWith('overlay_')) return 'overlay'
-  if (event.startsWith('sse_')) return 'sse'
-  if (event.startsWith('health_')) return 'health'
-  return 'health'
 }
 
 const errorStore = createStore<ErrorStore>((set, get) => ({

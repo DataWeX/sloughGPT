@@ -19,6 +19,7 @@
  */
 
 import { PUBLIC_API_URL } from '@/lib/config'
+import { inferStateKind, isStateEventKind } from '@/lib/event-kinds'
 
 export type LogTag =
   | 'REQ'
@@ -290,6 +291,39 @@ export class WebLogger {
       context: { ...data, tag },
     }
     this._transport.enqueue(record)
+
+    // Structured-across-the-board: mirror every event into the error-store
+    // state-event buffer (transitions deduped there). Lazily imported so this
+    // module never breaks collection when test files partially mock
+    // `@/lib/error-store` — missing exports are skipped via optional
+    // chaining. Callers going through `logStateEvent` (lib/state-events.ts)
+    // write the buffer first with an explicit kind; this echo then dedups to
+    // the same entry.
+    try {
+      const from = typeof data?.from === 'string' ? data.from : undefined
+      const to = typeof data?.to === 'string' ? data.to : undefined
+      const kind = isStateEventKind(data?.kind) ? data.kind : inferStateKind(event)
+      const message = record.message
+      void import('@/lib/error-store').then(
+        (m) => {
+          try {
+            m.useErrorStore?.getState?.()?.logStateEvent?.(event, {
+              kind,
+              ...(from !== undefined ? { from } : {}),
+              ...(to !== undefined ? { to } : {}),
+              message,
+            })
+          } catch {
+            /* store unavailable — backend ingest already queued */
+          }
+        },
+        () => {
+          /* store module unavailable — backend ingest already queued */
+        },
+      )
+    } catch {
+      /* never let logging break the caller */
+    }
 
     if (IS_DEV) {
       console.debug(`[${this._name}]`, event, data)

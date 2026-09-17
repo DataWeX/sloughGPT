@@ -367,6 +367,12 @@ const KIND_STYLES: Record<string, string> = {
   health: 'bg-muted text-muted-foreground',
   overlay: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
   api: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+  auth: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+  chat: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+  training: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  model: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
+  system: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+  ui: 'bg-muted text-muted-foreground',
 }
 
 function StateEventsSection({ events, onClear }: { events: StateEvent[]; onClear?: () => void }) {

@@ -1,15 +1,26 @@
 import { render, cleanup, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-vi.hoisted(() => { (process.env as Record<string, string>).NODE_ENV = 'development' })
+vi.hoisted(() => {
+  ;(process.env as Record<string, string>).NODE_ENV = 'development'
+})
 
 // Mock error-store
 const mockAddError = vi.fn()
-vi.mock('@/lib/error-store', () => ({
-  useErrorStore: Object.assign(
-    vi.fn((selector: any) => selector({ addError: mockAddError })),
-    { getState: vi.fn(() => ({ addError: mockAddError })) },
-  ),
+vi.mock('@/lib/error-store', async (importOriginal) => {
+  const actual = await (importOriginal as unknown as () => Promise<Record<string, unknown>>)()
+  return {
+    ...actual,
+    useErrorStore: Object.assign(
+      vi.fn((selector: any) => selector({ addError: mockAddError })),
+      { getState: vi.fn(() => ({ addError: mockAddError })) },
+    ),
+  }
+})
+
+// Mock state-events (structured logging bridge)
+vi.mock('@/lib/state-events', () => ({
+  logStateEvent: vi.fn(),
 }))
 
 // Mock toast-store
@@ -52,7 +63,7 @@ describe('ErrorLifecycle', () => {
     const spy = vi.spyOn(window, 'addEventListener')
     render(<ErrorLifecycle />)
     expect(spy).toHaveBeenCalledWith('error', expect.any(Function), true) // capture phase
-    expect(spy).toHaveBeenCalledWith('error', expect.any(Function))      // bubble phase
+    expect(spy).toHaveBeenCalledWith('error', expect.any(Function)) // bubble phase
     expect(spy).toHaveBeenCalledWith('unhandledrejection', expect.any(Function))
   })
 
@@ -70,21 +81,21 @@ describe('ErrorLifecycle', () => {
     const { rerender } = render(<ErrorLifecycle />)
     rerender(<ErrorLifecycle />)
     // Should only have 3 addEventListener calls (error capture, error bubble, rejection)
-    const errorCalls = spy.mock.calls.filter(c => c[0] === 'error')
+    const errorCalls = spy.mock.calls.filter((c) => c[0] === 'error')
     expect(errorCalls.length).toBe(2)
   })
 
   it('captures unhandled rejection events', () => {
     const spy = vi.spyOn(window, 'addEventListener')
     render(<ErrorLifecycle />)
-    const rejectionCalls = spy.mock.calls.filter(c => c[0] === 'unhandledrejection')
+    const rejectionCalls = spy.mock.calls.filter((c) => c[0] === 'unhandledrejection')
     expect(rejectionCalls.length).toBeGreaterThanOrEqual(1)
   })
 
   it('installs listeners in capture and bubble phases', () => {
     const spy = vi.spyOn(window, 'addEventListener')
     render(<ErrorLifecycle />)
-    const errorCalls = spy.mock.calls.filter(c => c[0] === 'error')
+    const errorCalls = spy.mock.calls.filter((c) => c[0] === 'error')
     expect(errorCalls.length).toBe(2)
     expect(errorCalls[0][2]).toBe(true)
     expect(errorCalls[1][2]).toBeUndefined()

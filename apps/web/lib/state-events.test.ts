@@ -25,10 +25,13 @@ describe('state-events', () => {
   it('forwards to trackEvent (backend ingest)', async () => {
     const { trackEvent } = await import('./dev-log')
     logStateEvent('startup_stage_changed', { kind: 'startup', from: 'init', to: 'ready' })
-    expect(trackEvent).toHaveBeenCalledWith(
-      'startup_stage_changed',
-      expect.objectContaining({ from: 'init', to: 'ready' }),
-    )
+    // bridge forwards via lazy dev-log import — wait a tick for it to land
+    await vi.waitFor(() => {
+      expect(trackEvent).toHaveBeenCalledWith(
+        'startup_stage_changed',
+        expect.objectContaining({ from: 'init', to: 'ready' }),
+      )
+    })
   })
 
   it('never throws when the store fails', () => {

@@ -164,12 +164,12 @@ describe('error-store', () => {
     expect(useErrorStore.getState().getStateEvents().length).toBe(1)
   })
 
-  it('caps state events at 100', () => {
-    for (let i = 0; i < 120; i++) {
+  it('caps state events at 200', () => {
+    for (let i = 0; i < 220; i++) {
       useErrorStore.getState().logStateEvent(`health_ping_${i}`, { kind: 'health' })
     }
-    expect(useErrorStore.getState().getStateEvents().length).toBe(100)
-    expect(useErrorStore.getState().getStateEvents()[0].event).toBe('health_ping_119')
+    expect(useErrorStore.getState().getStateEvents().length).toBe(200)
+    expect(useErrorStore.getState().getStateEvents()[0].event).toBe('health_ping_219')
   })
 
   it('clearStateEvents empties buffer but keeps errors', () => {
@@ -178,5 +178,45 @@ describe('error-store', () => {
     useErrorStore.getState().clearStateEvents()
     expect(useErrorStore.getState().getStateEvents()).toEqual([])
     expect(useErrorStore.getState().errors.length).toBe(1)
+  })
+
+  it.each([
+    ['training_started', 'training'],
+    ['checkpoint_loaded', 'training'],
+    ['dataset_imported', 'training'],
+    ['knowledge_added', 'training'],
+    ['auth_login', 'auth'],
+    ['workspace_switch', 'auth'],
+    ['session_created', 'chat'],
+    ['stream_started', 'chat'],
+    ['chat_mode_changed', 'chat'],
+    ['conversion_stage_changed', 'chat'],
+    ['soul_changed', 'chat'],
+    ['model_loaded', 'model'],
+    ['vm_booted', 'system'],
+    ['shell_command_started', 'system'],
+    ['webhook_created', 'system'],
+    ['operation_cancelled', 'system'],
+    ['error_lifecycle_initialized', 'system'],
+    ['route_changed', 'ui'],
+    ['locale_changed', 'ui'],
+    ['theme_changed', 'ui'],
+    ['settings_changed', 'ui'],
+    ['feedback_recorded', 'ui'],
+    ['startup_stage_changed', 'startup'],
+    ['overlay_shown', 'overlay'],
+    ['sse_open', 'sse'],
+    ['health_fallback_error', 'health'],
+    ['api_connection_changed', 'api'],
+    ['connection_status_changed', 'connection'],
+    ['something_totally_new', 'system'],
+  ] as const)('infers kind %s → %s', (event, kind) => {
+    useErrorStore.getState().logStateEvent(event)
+    expect(useErrorStore.getState().getStateEvents()[0].kind).toBe(kind)
+  })
+
+  it('explicit kind wins over inference', () => {
+    useErrorStore.getState().logStateEvent('training_started', { kind: 'ui' })
+    expect(useErrorStore.getState().getStateEvents()[0].kind).toBe('ui')
   })
 })
