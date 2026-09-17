@@ -1,4 +1,7 @@
-"""Voice Router - text-to-speech endpoint using native numpy TTS engine."""
+"""Voice Router — TTS and voice status via VoiceEngine.
+
+All voice operations delegate to domain.voice.VoiceEngine.
+"""
 
 from __future__ import annotations
 
@@ -24,65 +27,6 @@ from schemas.common import (
 logger = logging.getLogger("slo.routers.voice")
 
 
-# ── TTS backend state (lazy-loaded) ─────────────────────────────────────
-
-
-class _TTSBackend:
-    """Native TTS engine using phoneme encoder + spectrogram decoder + Griffin-Lim vocoder.
-
-    All pure numpy — no torch or transformers dependency.
-    """
-
-    def __init__(self):
-        self._engine = None
-        self._loaded = False
-        self._error = None
-
-    def load(self) -> bool:
-        """Load the native TTS engine."""
-        if self._loaded:
-            return True
-        try:
-            from domain.multimodal._internal.tts import TTSEngine
-
-            self._engine = TTSEngine()
-            self._loaded = True
-            self._error = None
-            logger.info("Native TTS engine loaded (phoneme + Griffin-Lim)", extra={"tag": "MODEL"})
-            return True
-        except Exception as e:
-            self._error = f"TTS engine load failed: {e}"
-            logger.warning("TTS: engine load failed: %s", e, extra={"tag": "MODEL"})
-            return False
-
-    def generate(self, text: str) -> tuple[bytes, int]:
-        """Generate WAV audio bytes from text.
-
-        Returns:
-            (wav_bytes, sample_rate) tuple
-        """
-        if not self._loaded:
-            if not self.load():
-                raise RuntimeError(f"TTS unavailable: {self._error}")
-        try:
-            waveform = self._engine.text_to_waveform(text)
-            sample_rate = self._engine.sample_rate
-
-            audio_int16 = (np.clip(waveform, -1.0, 1.0) * 32767).astype(np.int16)
-
-            buf = io.BytesIO()
-            with wave.open(buf, "wb") as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(sample_rate)
-                wf.writeframes(audio_int16.tobytes())
-            buf.seek(0)
-            return buf.read(), sample_rate
-
-        except Exception as e:
-            classify_and_raise(e, source="voice.generate")
-
-
 # ── Schema ──────────────────────────────────────────────────────────────
 
 
@@ -103,9 +47,16 @@ class TTSResponse(BaseModel):
 
 class VoiceRouter:
     def __init__(self):
-        self._tts_backend = _TTSBackend()
+        self._engine = None
         self.router = APIRouter(prefix="/voice", tags=["voice"])
         self._register_routes()
+
+    def _get_engine(self):
+        if self._engine is None:
+            from domain.voice import get_voice_engine
+
+            self._engine = get_voice_engine()
+        return self._engine
 
     def _register_routes(self):
         self.router.add_api_route(
@@ -122,30 +73,42 @@ class VoiceRouter:
             if not request.text.strip():
                 raise_error("No text provided", "E_BAD_REQUEST", status_code=400)
 
+            engine = self._get_engine()
             _t0 = _time.monotonic()
             try:
-                if self._tts_backend.load():
-                    audio_bytes, sr = await asyncio.to_thread(
-                        self._tts_backend.generate, request.text
-                    )
+                result = await asyncio.to_thread(engine.synthesize, request.text, request.voice)
+                if not result.success:
+                    raise RuntimeError(result.error)
 
-                    with wave.open(io.BytesIO(audio_bytes)) as wf:
-                        frames = wf.getnframes()
-                        duration_ms = int(frames / sr * 1000) if sr > 0 else 0
+                waveform = result.data
+                sample_rate = 22050
 
-                    _elapsed_ms = (_time.monotonic() - _t0) * 1000
-                    logger.info("TTS generated in %.1fms (duration=%dms)", _elapsed_ms, duration_ms)
-                    safe_audit_log(
-                        "voice.tts",
-                        resource=request.text[:80],
-                        detail=f"duration={duration_ms}ms elapsed={_elapsed_ms:.0f}ms",
-                    )
-                    return TTSResponse(
-                        audio=base64.b64encode(audio_bytes).decode("utf-8"),
-                        sample_rate=sr,
-                        duration_ms=duration_ms,
-                        backend="native-numpy",
-                    )
+                audio_int16 = (np.clip(waveform, -1.0, 1.0) * 32767).astype(np.int16)
+                buf = io.BytesIO()
+                with wave.open(buf, "wb") as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)
+                    wf.setframerate(sample_rate)
+                    wf.writeframes(audio_int16.tobytes())
+                audio_bytes = buf.getvalue()
+
+                with wave.open(io.BytesIO(audio_bytes)) as wf:
+                    frames = wf.getnframes()
+                    duration_ms = int(frames / sample_rate * 1000) if sample_rate > 0 else 0
+
+                _elapsed_ms = (_time.monotonic() - _t0) * 1000
+                logger.info("TTS generated in %.1fms (duration=%dms)", _elapsed_ms, duration_ms)
+                safe_audit_log(
+                    "voice.tts",
+                    resource=request.text[:80],
+                    detail=f"duration={duration_ms}ms elapsed={_elapsed_ms:.0f}ms",
+                )
+                return TTSResponse(
+                    audio=base64.b64encode(audio_bytes).decode("utf-8"),
+                    sample_rate=sample_rate,
+                    duration_ms=duration_ms,
+                    backend="voice-engine",
+                )
             except Exception as e:
                 logger.warning(
                     "TTS generation failed, falling back to browser: %s", e, extra={"tag": "MODEL"}
@@ -163,14 +126,15 @@ class VoiceRouter:
 
     @endpoint("voice.status")
     async def voice_status(self) -> dict:
-        """Check if server-side TTS model is available."""
+        """Check voice engine status and capabilities."""
         try:
-            available = self._tts_backend.load()
+            engine = self._get_engine()
+            status = engine.status()
             return success_response(
                 data={
-                    "server_tts": available,
-                    "model": "native-numpy" if available else None,
-                    "error": self._tts_backend._error,
+                    "server_tts": True,
+                    "capabilities": status.get("capabilities", []),
+                    "loaded": status,
                 }
             )
         except Exception as e:

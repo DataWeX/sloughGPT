@@ -23,7 +23,7 @@ from schemas.common import (
     success_response,
 )
 
-from domain.multimodal import get_multimodal_manager
+from domain.core import get_multimodal_manager
 
 logger = logging.getLogger("slo.routers.multimodal")
 
@@ -98,7 +98,7 @@ class MultimodalRouter:
         }
         self._bg_lock = Lock()
 
-        self._tts = None
+        self._voice_engine = None
         self._vae = None
         self._diffusion = None
         self._text_encoder = None
@@ -451,7 +451,7 @@ class MultimodalRouter:
 
         def _run():
             try:
-                from domain.training._internal.video_trainer import VideoCaptionTrainer
+                from domain.training import VideoCaptionTrainer
 
                 trainer = VideoCaptionTrainer(max_frames=8, lr=req.learning_rate)
                 result = trainer.train(
@@ -472,7 +472,7 @@ class MultimodalRouter:
                     self._video_training_state["status"] = "error"
                     self._video_training_state["error"] = str(e)
 
-        from domain.training._internal.executor import get_training_executor
+        from domain.training import get_training_executor
 
         executor = get_training_executor()
         executor.submit(_run, f"vtrain_{job_id}")
@@ -541,7 +541,7 @@ class MultimodalRouter:
                 raise_error("DPO already in progress", "E_INFRA_BUSY")
             self._dpo_state["status"] = "running"
             self._dpo_state["result"] = None
-        from domain.feedback._internal.hf_dpo import HFDPOTrainer
+        from domain.feedback import HFDPOTrainer
 
         trainer = HFDPOTrainer(model=model, tokenizer=tokenizer, learning_rate=req.learning_rate)
         t0 = time.time()
@@ -684,7 +684,7 @@ class MultimodalRouter:
         """analyze_pdf."""
         import tempfile
 
-        from domain.inference._internal.pdf_vlm import PDFVLMProcessor
+        from domain.generation import PDFVLMProcessor
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(await file.read())
@@ -760,25 +760,30 @@ class MultimodalRouter:
         language: str = Form("en"),
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """transcribe_audio."""
+        """transcribe_audio via VoiceEngine."""
         import time as _time
 
         _t0 = _time.monotonic()
         if not file.content_type or not file.content_type.startswith("audio/"):
             raise_error("Only audio files accepted", "E_BAD_REQUEST")
-        mgr = self._ensure_initialized()
-        if not mgr.capabilities.speech_to_text:
-            raise_error("Server ASR not available.", "E_NOT_IMPLEMENTED", status_code=501)
+
+        if self._voice_engine is None:
+            from domain.voice import get_voice_engine
+
+            self._voice_engine = get_voice_engine()
+
         audio_data = await file.read()
-        result = await asyncio.to_thread(mgr.recognize_speech, audio_data, language=language)
+        result = await asyncio.to_thread(self._voice_engine.recognize, audio_data, language)
+        if not result.success:
+            raise_error(result.error or "Transcription failed", "E_ASR_FAILED", status_code=500)
+
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
         return success_response(
             data={
-                "text": result.text,
-                "confidence": result.confidence,
-                "language": result.language or language,
-                "duration": result.duration,
+                "text": result.data,
+                "language": language,
                 "elapsed_ms": round(_elapsed_ms, 1),
+                "metadata": result.metadata,
             }
         )
 
@@ -786,7 +791,7 @@ class MultimodalRouter:
     async def synthesize_speech(
         self, text: str = Form(...), auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
-        """synthesize_speech."""
+        """synthesize_speech via VoiceEngine."""
         import time as _time
 
         _t0 = _time.monotonic()
@@ -796,31 +801,31 @@ class MultimodalRouter:
 
         import numpy as np
 
-        from domain.multimodal._internal.tts import TTSEngine
+        if self._voice_engine is None:
+            from domain.voice import get_voice_engine
 
-        if self._tts is None:
-            self._tts = TTSEngine()
-        tts = self._tts
-        waveform = await asyncio.to_thread(tts.text_to_waveform, text)
-        mel_spec = await asyncio.to_thread(tts.text_to_mel, text)
+            self._voice_engine = get_voice_engine()
+
+        result = await asyncio.to_thread(self._voice_engine.synthesize, text)
+        if not result.success:
+            raise_error(result.error or "TTS failed", "E_TTS_FAILED", status_code=500)
+
+        waveform = result.data
+        sample_rate = 22050
+
         buffer = io.BytesIO()
         with wave.open(buffer, "wb") as wf:
             wf.setnchannels(1)
             wf.setsampwidth(2)
-            wf.setframerate(tts.sample_rate)
+            wf.setframerate(sample_rate)
             wf.writeframes((waveform * 32767).astype(np.int16).tobytes())
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
         return success_response(
             data={
                 "audio": f"data:audio/wav;base64,{base64.b64encode(buffer.getvalue()).decode()}",
                 "text": text,
-                "duration_sec": len(waveform) / tts.sample_rate,
+                "duration_sec": len(waveform) / sample_rate,
                 "elapsed_ms": round(_elapsed_ms, 1),
-                "spectrogram": {
-                    "data": mel_spec.tolist(),
-                    "n_mels": int(mel_spec.shape[0]),
-                    "n_frames": int(mel_spec.shape[1]),
-                },
             }
         )
 

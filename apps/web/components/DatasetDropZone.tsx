@@ -3,8 +3,8 @@
 import { useState, useCallback, useRef } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconUpload } from '@sloughgpt/strui'
-import { filesController } from '@/lib/files-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { useUploadFile } from '@/lib/cache'
 
 interface DatasetDropZoneProps {
   onUploadComplete: () => void
@@ -12,36 +12,37 @@ interface DatasetDropZoneProps {
 }
 
 export function DatasetDropZone({ onUploadComplete, className }: DatasetDropZoneProps) {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
+  const uploadFile = useUploadFile()
   const [isDragging, setIsDragging] = useState(false)
-  const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFiles = useCallback(async (files: FileList | File[]) => {
-    const fileArray = Array.from(files)
-    if (fileArray.length === 0) return
+  const handleFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const fileArray = Array.from(files)
+      if (fileArray.length === 0) return
 
-    setUploading(true)
-    setProgress(`Uploading ${fileArray.length} file(s)...`)
+      setProgress(`Uploading ${fileArray.length} file(s)...`)
 
-    try {
-      for (const file of fileArray) {
-        const formData = new FormData()
-        formData.append('file', file)
-        setProgress(`Uploading ${file.name}...`)
-        await filesController.upload(formData)
+      try {
+        for (const file of fileArray) {
+          const formData = new FormData()
+          formData.append('file', file)
+          setProgress(`Uploading ${file.name}...`)
+          await uploadFile.mutateAsync(formData)
+        }
+
+        addToast(`Uploaded ${fileArray.length} file(s)`, 'success')
+        onUploadComplete()
+      } catch {
+        addToast('Upload failed', 'error')
+      } finally {
+        setProgress(null)
       }
-
-      addToast(`Uploaded ${fileArray.length} file(s)`, 'success')
-      onUploadComplete()
-    } catch {
-      addToast('Upload failed', 'error')
-    } finally {
-      setUploading(false)
-      setProgress(null)
-    }
-  }, [addToast, onUploadComplete])
+    },
+    [addToast, onUploadComplete, uploadFile],
+  )
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -62,16 +63,19 @@ export function DatasetDropZone({ onUploadComplete, className }: DatasetDropZone
     e.stopPropagation()
   }, [])
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragging(false)
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setIsDragging(false)
 
-    const files = e.dataTransfer.files
-    if (files.length > 0) {
-      handleFiles(files)
-    }
-  }, [handleFiles])
+      const files = e.dataTransfer.files
+      if (files.length > 0) {
+        handleFiles(files)
+      }
+    },
+    [handleFiles],
+  )
 
   const handleClick = () => {
     fileInputRef.current?.click()
@@ -96,8 +100,8 @@ export function DatasetDropZone({ onUploadComplete, className }: DatasetDropZone
         isDragging
           ? 'border-primary bg-primary/5'
           : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50',
-        uploading && 'pointer-events-none opacity-60',
-        className
+        uploadFile.isLoading && 'pointer-events-none opacity-60',
+        className,
       )}
     >
       <input
@@ -111,8 +115,10 @@ export function DatasetDropZone({ onUploadComplete, className }: DatasetDropZone
       />
 
       <div className="flex flex-col items-center gap-2">
-        <IconUpload className={cn('h-6 w-6', isDragging ? 'text-primary' : 'text-muted-foreground')} />
-        {uploading ? (
+        <IconUpload
+          className={cn('h-6 w-6', isDragging ? 'text-primary' : 'text-muted-foreground')}
+        />
+        {uploadFile.isLoading ? (
           <div className="space-y-1">
             <p className="text-sm font-medium">{progress}</p>
           </div>

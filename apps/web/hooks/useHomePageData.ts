@@ -10,7 +10,7 @@ import { feedbackController, type FeedbackStats } from '@/lib/feedback-controlle
 import { datasetController } from '@/lib/dataset-controller'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import { useApiReady } from '@/hooks/useLiveStatus'
-import { useModels, useSouls } from '@/lib/query/api-hooks'
+import { useModels, useSouls } from '@/lib/cache/api-hooks'
 import { logger } from '@/lib/dev-log'
 
 export interface HomePageData {
@@ -18,11 +18,24 @@ export interface HomePageData {
   checkpointCount: number
   modelStatus: { loaded: boolean; model: string | null }
   currentSoul: { name: string; description: string; traits: string[] } | null
-  recentSessions: Array<{ id: string; name: string; updated_at: string; message_count?: number; pinned?: boolean; starred?: boolean }>
+  recentSessions: Array<{
+    id: string
+    name: string
+    updated_at: string
+    message_count?: number
+    pinned?: boolean
+    starred?: boolean
+  }>
   runningTraining: { name: string; status_message: string } | null
   knowledgeCount: number
   recentJobs: Array<{ id: string; name: string; status: string; created_at?: string }>
-  recentDatasets: Array<{ id: string; name: string; updated_at?: string; size?: number; samples?: number }>
+  recentDatasets: Array<{
+    id: string
+    name: string
+    updated_at?: string
+    size?: number
+    samples?: number
+  }>
   testRunning: boolean
   testResponse: string | null
   setTestRunning: (v: boolean) => void
@@ -47,13 +60,36 @@ export interface HomePageData {
 export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
   const [modelCount, setModelCount] = useState<number | null>(null)
   const [checkpointCount, setCheckpointCount] = useState<number>(0)
-  const [modelStatus, setModelStatus] = useState<{ loaded: boolean; model: string | null }>({ loaded: false, model: null })
-  const [currentSoul, setCurrentSoul] = useState<{ name: string; description: string; traits: string[] } | null>(null)
-  const [recentSessions, setRecentSessions] = useState<Array<{ id: string; name: string; updated_at: string; message_count?: number; pinned?: boolean; starred?: boolean }>>([])
-  const [runningTraining, setRunningTraining] = useState<{ name: string; status_message: string } | null>(null)
+  const [modelStatus, setModelStatus] = useState<{ loaded: boolean; model: string | null }>({
+    loaded: false,
+    model: null,
+  })
+  const [currentSoul, setCurrentSoul] = useState<{
+    name: string
+    description: string
+    traits: string[]
+  } | null>(null)
+  const [recentSessions, setRecentSessions] = useState<
+    Array<{
+      id: string
+      name: string
+      updated_at: string
+      message_count?: number
+      pinned?: boolean
+      starred?: boolean
+    }>
+  >([])
+  const [runningTraining, setRunningTraining] = useState<{
+    name: string
+    status_message: string
+  } | null>(null)
   const [knowledgeCount, setKnowledgeCount] = useState<number>(0)
-  const [recentJobs, setRecentJobs] = useState<Array<{ id: string; name: string; status: string; created_at?: string }>>([])
-  const [recentDatasets, setRecentDatasets] = useState<Array<{ id: string; name: string; updated_at?: string; size?: number; samples?: number }>>([])
+  const [recentJobs, setRecentJobs] = useState<
+    Array<{ id: string; name: string; status: string; created_at?: string }>
+  >([])
+  const [recentDatasets, setRecentDatasets] = useState<
+    Array<{ id: string; name: string; updated_at?: string; size?: number; samples?: number }>
+  >([])
   const [testRunning, setTestRunning] = useState(false)
   const [testResponse, setTestResponse] = useState<string | null>(null)
   const [feedbackStats, setFeedbackStats] = useState<FeedbackStats | null>(null)
@@ -98,76 +134,131 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     }
   }, [health])
 
-  const inferenceCount = health && health !== 'offline' ? health.inference_count ?? 0 : null
-  const healthSummary = health && health !== 'offline' ? health.model_type ?? null : null
+  const inferenceCount = health && health !== 'offline' ? (health.inference_count ?? 0) : null
+  const healthSummary = health && health !== 'offline' ? (health.model_type ?? null) : null
 
   useEffect(() => {
     if (!ready) return
     const cancelled = { current: false }
     // Sessions, training, knowledge, feedback, and datasets are NOT available
     // via SSE/live status — these still need dedicated API calls.
-    sessionController.list().then(sessions => {
-      if (!cancelled.current) {
-        const sorted = [...sessions]
-          .filter(s => s.name || s.id)
-          .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-          .slice(0, 5)
-          .map(s => ({
-            id: s.id,
-            name: s.name,
-            updated_at: s.updated_at,
-            message_count: s.messages?.length,
-            pinned: s.pinned,
-            starred: s.starred,
-          }))
-        setRecentSessions(sorted)
-      }
-    }).catch(e => { logger.warning('Could not home sessions list', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, sessions: true })) })
-    trainingController.list().then(jobs => {
-      if (!cancelled.current) {
-        const running = jobs.find(j => j.status === 'running')
-        setRunningTraining(running ? { name: running.name || running.id, status_message: running.status_message || 'Training...' } : null)
-        const recent = [...jobs]
-          .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
-          .slice(0, 3)
-        setRecentJobs(recent)
-      }
-    }).catch(e => { logger.warning('Could not home training list', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, training: true })) })
-    knowledgeController.stats().then(s => {
-      if (!cancelled.current) setKnowledgeCount(s.total_items)
-    }).catch(e => { logger.warning('Could not home knowledge stats', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, knowledge: true })) })
-    feedbackController.getFeedbackStats().then(s => {
-      if (!cancelled.current) setFeedbackStats(s)
-    }).catch(e => { logger.warning('Could not home feedback stats', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, feedback: true })) })
-    datasetController.list().then(list => {
-      if (!cancelled.current) {
-        const sorted = [...list]
-          .sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime())
-          .slice(0, 5)
-          .map(ds => ({
-            id: ds.id,
-            name: ds.name,
-            updated_at: ds.updated_at || ds.created_at,
-            size: ds.size,
-            samples: ds.samples,
-          }))
-        setRecentDatasets(sorted)
-      }
-    }).catch(e => { logger.warning('Could not home datasets list', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, datasets: true })) })
-    return () => { cancelled.current = true }
+    sessionController
+      .list()
+      .then((sessions) => {
+        if (!cancelled.current) {
+          const sorted = [...sessions]
+            .filter((s) => s.name || s.id)
+            .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+            .slice(0, 5)
+            .map((s) => ({
+              id: s.id,
+              name: s.name,
+              updated_at: s.updated_at,
+              message_count: s.messages?.length,
+              pinned: s.pinned,
+              starred: s.starred,
+            }))
+          setRecentSessions(sorted)
+        }
+      })
+      .catch((e) => {
+        logger.warning('Could not home sessions list', { exception: String(e?.message || e) })
+        if (!cancelled.current) setErrors((p) => ({ ...p, sessions: true }))
+      })
+    trainingController
+      .list()
+      .then((jobs) => {
+        if (!cancelled.current) {
+          const running = jobs.find((j) => j.status === 'running')
+          setRunningTraining(
+            running
+              ? {
+                  name: running.name || running.id,
+                  status_message: running.status_message || 'Training...',
+                }
+              : null,
+          )
+          const recent = [...jobs]
+            .sort(
+              (a, b) =>
+                new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
+            )
+            .slice(0, 3)
+          setRecentJobs(recent)
+        }
+      })
+      .catch((e) => {
+        logger.warning('Could not home training list', { exception: String(e?.message || e) })
+        if (!cancelled.current) setErrors((p) => ({ ...p, training: true }))
+      })
+    knowledgeController
+      .stats()
+      .then((s) => {
+        if (!cancelled.current) setKnowledgeCount(s.total_items)
+      })
+      .catch((e) => {
+        logger.warning('Could not home knowledge stats', { exception: String(e?.message || e) })
+        if (!cancelled.current) setErrors((p) => ({ ...p, knowledge: true }))
+      })
+    feedbackController
+      .getFeedbackStats()
+      .then((s) => {
+        if (!cancelled.current) setFeedbackStats(s)
+      })
+      .catch((e) => {
+        logger.warning('Could not home feedback stats', { exception: String(e?.message || e) })
+        if (!cancelled.current) setErrors((p) => ({ ...p, feedback: true }))
+      })
+    datasetController
+      .list()
+      .then((list) => {
+        if (!cancelled.current) {
+          const sorted = [...list]
+            .sort(
+              (a, b) =>
+                new Date(b.updated_at || b.created_at || 0).getTime() -
+                new Date(a.updated_at || a.created_at || 0).getTime(),
+            )
+            .slice(0, 5)
+            .map((ds) => ({
+              id: ds.id,
+              name: ds.name,
+              updated_at: ds.updated_at || ds.created_at,
+              size: ds.size,
+              samples: ds.samples,
+            }))
+          setRecentDatasets(sorted)
+        }
+      })
+      .catch((e) => {
+        logger.warning('Could not home datasets list', { exception: String(e?.message || e) })
+        if (!cancelled.current) setErrors((p) => ({ ...p, datasets: true }))
+      })
+    return () => {
+      cancelled.current = true
+    }
   }, [ready])
 
   const loading = modelsLoading || soulsLoading || health === null
 
   return {
-    modelCount, checkpointCount,
-    modelStatus, currentSoul,
-    recentSessions, runningTraining,
-    knowledgeCount, recentJobs, recentDatasets,
-    testRunning, testResponse,
-    setTestRunning, setTestResponse,
-    setKnowledgeCount, inferenceCount,
-    healthSummary, feedbackStats,
+    modelCount,
+    checkpointCount,
+    modelStatus,
+    currentSoul,
+    recentSessions,
+    runningTraining,
+    knowledgeCount,
+    recentJobs,
+    recentDatasets,
+    testRunning,
+    testResponse,
+    setTestRunning,
+    setTestResponse,
+    setKnowledgeCount,
+    inferenceCount,
+    healthSummary,
+    feedbackStats,
     loading,
     errors,
   }

@@ -26,7 +26,7 @@ import {
   useCheckpoints,
   useCurrentSoul,
   useSwitchSoul,
-} from '@/lib/query/api-hooks'
+} from '@/lib/cache/api-hooks'
 
 // ── Primary: always visible, static imports ──────────────────────
 import ModelStatusCard from '@/components/models/ModelStatusCard'
@@ -34,39 +34,87 @@ import PersonalitiesCard from '@/components/models/PersonalitiesCard'
 import ModelCatalogCard from '@/components/models/ModelCatalogCard'
 
 // ── Secondary: inside FoldSection, lazy-loaded ───────────────────
-const ComposableLayersCard = dynamicNext(() => import('@/components/models/ComposableLayersCard'), { ssr: false })
-const PersonalityProfileCard = dynamicNext(() => import('@/components/models/PersonalityProfileCard'), { ssr: false })
-const FineTunedModelsCard = dynamicNext(() => import('@/components/training/FineTunedModelsCard').then(m => ({ default: m.FineTunedModelsCard })), { ssr: false })
-const ModelPlaygroundCard = dynamicNext(() => import('@/components/models/ModelPlaygroundCard'), { ssr: false })
-const ModelCacheCard = dynamicNext(() => import('@/components/models/ModelCacheCard'), { ssr: false })
-const ModelUsageCard = dynamicNext(() => import('@/components/models/ModelUsageCard'), { ssr: false })
-const QuantizationCard = dynamicNext(() => import('@/components/models/QuantizationCard'), { ssr: false })
+const ComposableLayersCard = dynamicNext(() => import('@/components/models/ComposableLayersCard'), {
+  ssr: false,
+})
+const PersonalityProfileCard = dynamicNext(
+  () => import('@/components/models/PersonalityProfileCard'),
+  { ssr: false },
+)
+const FineTunedModelsCard = dynamicNext(
+  () =>
+    import('@/components/training/FineTunedModelsCard').then((m) => ({
+      default: m.FineTunedModelsCard,
+    })),
+  { ssr: false },
+)
+const ModelPlaygroundCard = dynamicNext(() => import('@/components/models/ModelPlaygroundCard'), {
+  ssr: false,
+})
+const ModelCacheCard = dynamicNext(() => import('@/components/models/ModelCacheCard'), {
+  ssr: false,
+})
+const ModelUsageCard = dynamicNext(() => import('@/components/models/ModelUsageCard'), {
+  ssr: false,
+})
+const QuantizationCard = dynamicNext(() => import('@/components/models/QuantizationCard'), {
+  ssr: false,
+})
 const DownloadsCard = dynamicNext(() => import('@/components/models/DownloadsCard'), { ssr: false })
-const EngineStatusCard = dynamicNext(() => import('@/components/models/EngineStatusCard'), { ssr: false })
-const ProviderDiagnosticsCard = dynamicNext(() => import('@/components/models/ProviderDiagnosticsCard'), { ssr: false })
+const EngineStatusCard = dynamicNext(() => import('@/components/models/EngineStatusCard'), {
+  ssr: false,
+})
+const ProviderDiagnosticsCard = dynamicNext(
+  () => import('@/components/models/ProviderDiagnosticsCard'),
+  { ssr: false },
+)
 
 // ── Comparison: always folded, lazy-loaded ───────────────────────
 const ModelsCard = dynamicNext(() => import('@/components/compare/ModelsCard'), { ssr: false })
-const ComparisonTableCard = dynamicNext(() => import('@/components/compare/ComparisonTableCard'), { ssr: false })
+const ComparisonTableCard = dynamicNext(() => import('@/components/compare/ComparisonTableCard'), {
+  ssr: false,
+})
 const SummaryCard = dynamicNext(() => import('@/components/compare/SummaryCard'), { ssr: false })
-const OutputComparisonCard = dynamicNext<{ models: ModelEntry[] }>(() => import('@/components/compare/OutputComparisonCard'), { ssr: false })
-const VisualComparisonCard = dynamicNext(() => import('@/components/compare/VisualComparisonCard'), { ssr: false })
+const OutputComparisonCard = dynamicNext<{ models: ModelEntry[] }>(
+  () => import('@/components/compare/OutputComparisonCard'),
+  { ssr: false },
+)
+const VisualComparisonCard = dynamicNext(
+  () => import('@/components/compare/VisualComparisonCard'),
+  { ssr: false },
+)
 
 export default function ModelsPage() {
   const router = useRouter()
   const [switchingSoul, setSwitchingSoul] = useState<string | null>(null)
-  const [traitWeights, setTraitWeights] = useState<Record<string, Record<string, number>> | null>(null)
+  const [traitWeights, setTraitWeights] = useState<Record<string, Record<string, number>> | null>(
+    null,
+  )
   const [traitWeightsError, setTraitWeightsError] = useState<string | null>(null)
   const { healthLegacy: health, health: liveHealth } = useLiveStatus()
   const refreshHealth = useCallback(async () => {
     await modelController.getHealth()
   }, [])
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
 
-  const { data: modelsData, isLoading: modelsLoading, refetch: refetchModels, error: modelsError } = useModels()
-  const { data: soulsData, isLoading: soulsLoading, refetch: refetchSouls, error: soulsError } = useSouls()
+  const {
+    data: modelsData,
+    isLoading: modelsLoading,
+    refetch: refetchModels,
+    error: modelsError,
+  } = useModels()
+  const {
+    data: soulsData,
+    isLoading: soulsLoading,
+    refetch: refetchSouls,
+    error: soulsError,
+  } = useSouls()
   const { data: currentSoulData, refetch: refetchCurrentSoul } = useCurrentSoul()
-  const { data: checkpointsData, isLoading: checkpointsLoading, refetch: refetchCheckpoints } = useCheckpoints()
+  const {
+    data: checkpointsData,
+    isLoading: checkpointsLoading,
+    refetch: refetchCheckpoints,
+  } = useCheckpoints()
   const { mutateAsync: switchSoul } = useSwitchSoul()
 
   const models = modelsData ?? []
@@ -74,7 +122,8 @@ export default function ModelsPage() {
   const currentSoul = currentSoulData?.name ?? soulsData?.current_soul ?? null
   const checkpoints = checkpointsData?.checkpoints ?? []
   const activeCheckpoint = checkpointsData?.active_checkpoint ?? null
-  const activeRuntimeId = health !== null && health !== 'offline' && health.model_loaded ? health.model_type : null
+  const activeRuntimeId =
+    health !== null && health !== 'offline' && health.model_loaded ? health.model_type : null
 
   const handleSwitchSoul = async (name: string, checkpointName?: string) => {
     setSwitchingSoul(name)
@@ -88,15 +137,18 @@ export default function ModelsPage() {
     }
   }
 
-  const handleSaveTraits = useCallback(async (weights: Record<string, Record<string, number>>) => {
-    try {
-      await soulsController.saveTraitWeights(weights)
-      addToast('Personality updated', 'success')
-      setTraitWeights(weights)
-    } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not save traits'), 'error')
-    }
-  }, [addToast])
+  const handleSaveTraits = useCallback(
+    async (weights: Record<string, Record<string, number>>) => {
+      try {
+        await soulsController.saveTraitWeights(weights)
+        addToast('Personality updated', 'success')
+        setTraitWeights(weights)
+      } catch (err) {
+        addToast(extractErrorMessage(err, 'Could not save traits'), 'error')
+      }
+    },
+    [addToast],
+  )
 
   const fetchTraitWeights = useCallback(async () => {
     try {
@@ -111,7 +163,9 @@ export default function ModelsPage() {
   }, [addToast])
 
   const [refreshing, setRefreshing] = useState(false)
-  const [cacheUsage, setCacheUsage] = useState<{ total_gb: number; model_count: number } | null>(null)
+  const [cacheUsage, setCacheUsage] = useState<{ total_gb: number; model_count: number } | null>(
+    null,
+  )
   const [compareResults, setCompareResults] = useState<Record<string, BenchmarkResult | null>>({})
   const [compareRunning, setCompareRunning] = useState<Set<string>>(new Set())
   useRefreshShortcut(() => router.refresh())
@@ -119,7 +173,7 @@ export default function ModelsPage() {
 
   const compareModels: ModelEntry[] = useMemo(() => {
     const healthObj = health && health !== 'offline' ? health : null
-    return (models ?? []).map(m => ({
+    return (models ?? []).map((m) => ({
       id: m.id || m.name,
       name: (m.id || m.name).replace(/^hf\//, ''),
       loaded: m.loaded || (healthObj?.model_type?.includes(m.id || m.name) ?? false),
@@ -127,28 +181,51 @@ export default function ModelsPage() {
     }))
   }, [models, health])
 
-  useEffect(() => { setCompareLoading(modelsLoading) }, [modelsLoading])
+  useEffect(() => {
+    setCompareLoading(modelsLoading)
+  }, [modelsLoading])
 
   const runBenchmark = async (modelId: string) => {
-    setCompareRunning(prev => new Set(prev).add(modelId))
-    setCompareResults(prev => ({ ...prev, [modelId]: null }))
+    setCompareRunning((prev) => new Set(prev).add(modelId))
+    setCompareResults((prev) => ({ ...prev, [modelId]: null }))
     try {
       const result = await benchmarkController.run({ model: modelId })
-      setCompareResults(prev => ({ ...prev, [modelId]: result }))
+      setCompareResults((prev) => ({ ...prev, [modelId]: result }))
     } catch {
-      setCompareResults(prev => ({ ...prev, [modelId]: { error: 'Failed' } as BenchmarkResult }))
+      setCompareResults((prev) => ({ ...prev, [modelId]: { error: 'Failed' } as BenchmarkResult }))
       addToast(`Benchmark failed for ${modelId}`, 'error')
-    } finally { setCompareRunning(prev => { const n = new Set(prev); n.delete(modelId); return n }) }
+    } finally {
+      setCompareRunning((prev) => {
+        const n = new Set(prev)
+        n.delete(modelId)
+        return n
+      })
+    }
   }
 
-  const runAllBenchmarks = async () => { await Promise.allSettled(compareModels.map(m => runBenchmark(m.id))) }
+  const runAllBenchmarks = async () => {
+    await Promise.allSettled(compareModels.map((m) => runBenchmark(m.id)))
+  }
 
-  const clearCompareResult = (modelId: string) => setCompareResults(prev => { const n = { ...prev }; delete n[modelId]; return n })
+  const clearCompareResult = (modelId: string) =>
+    setCompareResults((prev) => {
+      const n = { ...prev }
+      delete n[modelId]
+      return n
+    })
 
-  const completedCompareResults = useMemo(() => Object.entries(compareResults).filter(([, r]) => r !== null && !r.error) as [string, BenchmarkResult][], [compareResults])
+  const completedCompareResults = useMemo(
+    () =>
+      Object.entries(compareResults).filter(([, r]) => r !== null && !r.error) as [
+        string,
+        BenchmarkResult,
+      ][],
+    [compareResults],
+  )
 
   const bestMetrics: Record<string, number> = useMemo(() => {
-    if (completedCompareResults.length === 0) return { throughput: 0, latency: Infinity, p95: Infinity, params: 0 }
+    if (completedCompareResults.length === 0)
+      return { throughput: 0, latency: Infinity, p95: Infinity, params: 0 }
     return {
       throughput: Math.max(...completedCompareResults.map(([, r]) => r.throughput_tokens_per_sec)),
       latency: Math.min(...completedCompareResults.map(([, r]) => r.inference_time_ms)),
@@ -157,9 +234,18 @@ export default function ModelsPage() {
     }
   }, [completedCompareResults])
 
-  const chartData = useMemo(() => completedCompareResults
-    .map(([modelId, r]) => ({ name: compareModels.find(m => m.id === modelId)?.name || modelId, throughput: r.throughput_tokens_per_sec, latency: r.inference_time_ms, memory: r.memory_mb }))
-    .sort((a, b) => b.throughput - a.throughput), [completedCompareResults, compareModels])
+  const chartData = useMemo(
+    () =>
+      completedCompareResults
+        .map(([modelId, r]) => ({
+          name: compareModels.find((m) => m.id === modelId)?.name || modelId,
+          throughput: r.throughput_tokens_per_sec,
+          latency: r.inference_time_ms,
+          memory: r.memory_mb,
+        }))
+        .sort((a, b) => b.throughput - a.throughput),
+    [completedCompareResults, compareModels],
+  )
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -173,7 +259,15 @@ export default function ModelsPage() {
     ])
     setRefreshing(false)
     addToast('Refreshed', 'success')
-  }, [refetchModels, refetchSouls, refetchCurrentSoul, refetchCheckpoints, refreshHealth, fetchTraitWeights, addToast])
+  }, [
+    refetchModels,
+    refetchSouls,
+    refetchCurrentSoul,
+    refetchCheckpoints,
+    refreshHealth,
+    fetchTraitWeights,
+    addToast,
+  ])
 
   useRefreshShortcut(handleRefresh)
 
@@ -183,26 +277,45 @@ export default function ModelsPage() {
   }, [refreshHealth, refetchModels])
 
   const handleCacheRefresh = useCallback(() => {
-    modelController.getCacheUsage().then(setCacheUsage).catch((e) => {
-      logger.debug('Cache refresh failed', { error: e instanceof Error ? e.message : String(e) })
-    })
+    modelController
+      .getCacheUsage()
+      .then(setCacheUsage)
+      .catch((e) => {
+        logger.debug('Cache refresh failed', { error: e instanceof Error ? e.message : String(e) })
+      })
   }, [])
 
-  useEffect(() => { fetchTraitWeights() }, [fetchTraitWeights])
-  useEffect(() => { modelController.getCacheUsage().then(setCacheUsage).catch((e) => {
-    logger.debug('Cache info unavailable', { error: e instanceof Error ? e.message : String(e) })
-  }) }, [])
+  useEffect(() => {
+    fetchTraitWeights()
+  }, [fetchTraitWeights])
+  useEffect(() => {
+    modelController
+      .getCacheUsage()
+      .then(setCacheUsage)
+      .catch((e) => {
+        logger.debug('Cache info unavailable', {
+          error: e instanceof Error ? e.message : String(e),
+        })
+      })
+  }, [])
 
   const isOnline = health !== null && health !== 'offline'
-  const subtitle = health === null ? 'Connecting...'
-    : !isOnline ? 'Service offline'
-    : health.model_loaded ? `${modelDisplayName(health.model_type)} · running`
-    : 'No model loaded'
+  const subtitle =
+    health === null
+      ? 'Connecting...'
+      : !isOnline
+        ? 'Service offline'
+        : health.model_loaded
+          ? `${modelDisplayName(health.model_type)} · running`
+          : 'No model loaded'
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void handleRefresh() }
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        void handleRefresh()
+      }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -216,140 +329,183 @@ export default function ModelsPage() {
       loading={modelsLoading && soulsLoading}
       headerRight={
         <div className="flex items-center gap-2">
-           <Button type="button" variant="outline" size="sm" onClick={() => router.push('/benchmark')}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => router.push('/benchmark')}
+          >
             Compare
           </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={() => {
-            const data = models.map(m => ({
-              id: m.id,
-              name: m.name,
-              type: m.type,
-              source: m.source,
-              params: m.params,
-              size_mb: m.size_mb,
-              size_gb: m.size_gb,
-              cached: m.cached,
-              loaded: m.loaded,
-            }))
-            downloadJson(data, `models-export-${todayDateString()}.json`)
-            addToast(`Exported ${models.length} models`, 'success')
-          }}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const data = models.map((m) => ({
+                id: m.id,
+                name: m.name,
+                type: m.type,
+                source: m.source,
+                params: m.params,
+                size_mb: m.size_mb,
+                size_gb: m.size_gb,
+                cached: m.cached,
+                loaded: m.loaded,
+              }))
+              downloadJson(data, `models-export-${todayDateString()}.json`)
+              addToast(`Exported ${models.length} models`, 'success')
+            }}
+          >
             Export
           </Button>
-           <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={handleRefresh}><Spinner className="w-3.5 h-3.5 mr-1" /> {refreshing ? 'Refreshing...' : 'Refresh'}</Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={refreshing}
+            onClick={handleRefresh}
+          >
+            <Spinner className="w-3.5 h-3.5 mr-1" /> {refreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
         </div>
       }
     >
-        {modelsError && models.length === 0 && (
-          <StatusBanner variant="error" message="Could not load models" dismissible={false} onRetry={() => refetchModels()} />
-        )}
-        {soulsError && souls.length === 0 && (
-          <StatusBanner variant="error" message="Could not load personalities" dismissible={false} onRetry={() => refetchSouls()} />
-        )}
-
-        {/* ── Primary: Status + Personalities + Catalog ─────── */}
-        <ModelStatusCard
-          isOnline={isOnline}
-          health={health}
-          currentSoul={currentSoul}
-          activeCheckpoint={activeCheckpoint}
-          modelsCount={models.length}
-          soulsCount={souls.length}
-          checkpointsCount={checkpoints.length}
-          modelsLoading={modelsLoading}
-          soulsLoading={soulsLoading}
-          checkpointsLoading={checkpointsLoading}
+      {modelsError && models.length === 0 && (
+        <StatusBanner
+          variant="error"
+          message="Could not load models"
+          dismissible={false}
+          onRetry={() => refetchModels()}
         />
-        <PersonalitiesCard
-          souls={souls}
-          soulsLoading={soulsLoading}
-          checkpoints={checkpoints}
-          checkpointsLoading={checkpointsLoading}
-          currentSoul={currentSoul}
-          activeCheckpoint={activeCheckpoint}
-          switchingSoul={switchingSoul}
-          onSwitch={handleSwitchSoul}
+      )}
+      {soulsError && souls.length === 0 && (
+        <StatusBanner
+          variant="error"
+          message="Could not load personalities"
+          dismissible={false}
+          onRetry={() => refetchSouls()}
         />
-        <ModelCatalogCard
-          models={models}
-          modelsLoading={modelsLoading}
-          activeRuntimeId={activeRuntimeId}
-          onModelLoaded={handleModelLoaded}
-        />
+      )}
 
-        {/* ── Secondary: Usage, Layers, Traits, Fine-tuned ─── */}
-        <FoldSection heading="Usage & Layers">
-          <div className="space-y-3">
-            <ModelUsageCard
-              inferenceCount={liveHealth?.inference_count ?? 0}
-              requestCount={liveHealth?.request_count ?? 0}
-              modelType={health && health !== 'offline' ? health.model_type : null}
-              isOnline={isOnline}
-            />
-            <ComposableLayersCard
-              modelsCount={models.length}
-              soulsCount={souls.length}
-              checkpoints={checkpoints}
-            />
-            <PersonalityProfileCard
-              traitWeights={traitWeights}
-              currentSoulName={currentSoul}
-              onTraitsSaved={handleSaveTraits}
-              onTraitsChanged={fetchTraitWeights}
-            />
-            <FineTunedModelsCard
-              activeModelId={activeRuntimeId}
-              onLoaded={handleModelLoaded}
-            />
+      {/* ── Primary: Status + Personalities + Catalog ─────── */}
+      <ModelStatusCard
+        isOnline={isOnline}
+        health={health}
+        currentSoul={currentSoul}
+        activeCheckpoint={activeCheckpoint}
+        modelsCount={models.length}
+        soulsCount={souls.length}
+        checkpointsCount={checkpoints.length}
+        modelsLoading={modelsLoading}
+        soulsLoading={soulsLoading}
+        checkpointsLoading={checkpointsLoading}
+      />
+      <PersonalitiesCard
+        souls={souls}
+        soulsLoading={soulsLoading}
+        checkpoints={checkpoints}
+        checkpointsLoading={checkpointsLoading}
+        currentSoul={currentSoul}
+        activeCheckpoint={activeCheckpoint}
+        switchingSoul={switchingSoul}
+        onSwitch={handleSwitchSoul}
+      />
+      <ModelCatalogCard
+        models={models}
+        modelsLoading={modelsLoading}
+        activeRuntimeId={activeRuntimeId}
+        onModelLoaded={handleModelLoaded}
+      />
+
+      {/* ── Secondary: Usage, Layers, Traits, Fine-tuned ─── */}
+      <FoldSection heading="Usage & Layers">
+        <div className="space-y-3">
+          <ModelUsageCard
+            inferenceCount={liveHealth?.inference_count ?? 0}
+            requestCount={liveHealth?.request_count ?? 0}
+            modelType={health && health !== 'offline' ? health.model_type : null}
+            isOnline={isOnline}
+          />
+          <ComposableLayersCard
+            modelsCount={models.length}
+            soulsCount={souls.length}
+            checkpoints={checkpoints}
+          />
+          <PersonalityProfileCard
+            traitWeights={traitWeights}
+            currentSoulName={currentSoul}
+            onTraitsSaved={handleSaveTraits}
+            onTraitsChanged={fetchTraitWeights}
+          />
+          <FineTunedModelsCard activeModelId={activeRuntimeId} onLoaded={handleModelLoaded} />
+        </div>
+      </FoldSection>
+
+      {/* ── Secondary: Playground, Quantization, Cache ────── */}
+      <FoldSection heading="Playground & Cache">
+        <div className="space-y-3">
+          <ModelPlaygroundCard activeRuntimeId={activeRuntimeId} />
+          <QuantizationCard isOnline={isOnline} />
+          <ModelCacheCard
+            cacheUsage={cacheUsage}
+            health={health && health !== 'offline' ? health : null}
+            onRefresh={handleCacheRefresh}
+          />
+        </div>
+      </FoldSection>
+
+      {/* ── Secondary: Downloads, Engine, Diagnostics ─────── */}
+      <FoldSection heading="Engine & Diagnostics">
+        <div className="space-y-3">
+          <DownloadsCard />
+          <EngineStatusCard />
+          <ProviderDiagnosticsCard />
+        </div>
+      </FoldSection>
+
+      {/* ── Comparison (folded) ───────────────────────────── */}
+      <FoldSection heading="Model Comparison">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Side-by-side benchmark results across models
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={runAllBenchmarks}
+              disabled={compareLoading || compareRunning.size > 0}
+            >
+              <IconRefresh className="h-3.5 w-3.5 mr-1" /> Benchmark all
+            </Button>
           </div>
-        </FoldSection>
-
-        {/* ── Secondary: Playground, Quantization, Cache ────── */}
-        <FoldSection heading="Playground & Cache">
-          <div className="space-y-3">
-            <ModelPlaygroundCard activeRuntimeId={activeRuntimeId} />
-            <QuantizationCard isOnline={isOnline} />
-            <ModelCacheCard
-              cacheUsage={cacheUsage}
-              health={health && health !== 'offline' ? health : null}
-              onRefresh={handleCacheRefresh}
-            />
-          </div>
-        </FoldSection>
-
-        {/* ── Secondary: Downloads, Engine, Diagnostics ─────── */}
-        <FoldSection heading="Engine & Diagnostics">
-          <div className="space-y-3">
-            <DownloadsCard />
-            <EngineStatusCard />
-            <ProviderDiagnosticsCard />
-          </div>
-        </FoldSection>
-
-        {/* ── Comparison (folded) ───────────────────────────── */}
-        <FoldSection heading="Model Comparison">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Side-by-side benchmark results across models</p>
-              <Button variant="outline" size="sm" onClick={runAllBenchmarks} disabled={compareLoading || compareRunning.size > 0}>
-                <IconRefresh className="h-3.5 w-3.5 mr-1" /> Benchmark all
-              </Button>
+          {completedCompareResults.length === 0 && compareRunning.size === 0 && !compareLoading ? (
+            <div className="text-center py-8 text-sm text-muted-foreground">
+              Run a benchmark on one or more models to see comparison results here.
             </div>
-            {completedCompareResults.length === 0 && compareRunning.size === 0 && !compareLoading ? (
-              <div className="text-center py-8 text-sm text-muted-foreground">
-                Run a benchmark on one or more models to see comparison results here.
-              </div>
-            ) : (
-              <>
-                <ModelsCard models={compareModels} loading={compareLoading} results={compareResults} running={compareRunning} onBenchmark={runBenchmark} onClear={clearCompareResult} />
-                <ComparisonTableCard completedResults={completedCompareResults} models={compareModels} bestMetrics={bestMetrics} />
-                <SummaryCard completedResults={completedCompareResults} models={compareModels} />
-                <OutputComparisonCard models={compareModels} />
-                <VisualComparisonCard chartData={chartData} />
-              </>
-            )}
-          </div>
-        </FoldSection>
-      </PageContainer>
+          ) : (
+            <>
+              <ModelsCard
+                models={compareModels}
+                loading={compareLoading}
+                results={compareResults}
+                running={compareRunning}
+                onBenchmark={runBenchmark}
+                onClear={clearCompareResult}
+              />
+              <ComparisonTableCard
+                completedResults={completedCompareResults}
+                models={compareModels}
+                bestMetrics={bestMetrics}
+              />
+              <SummaryCard completedResults={completedCompareResults} models={compareModels} />
+              <OutputComparisonCard models={compareModels} />
+              <VisualComparisonCard chartData={chartData} />
+            </>
+          )}
+        </div>
+      </FoldSection>
+    </PageContainer>
   )
 }

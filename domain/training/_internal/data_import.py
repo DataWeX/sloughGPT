@@ -641,24 +641,81 @@ class BooksSearch:
         return urllib.parse.quote(query.strip(), safe="")
 
     def _is_isbn(self, query: str) -> str | None:
-        import re
-
         digits = re.sub(r"[-_\s]", "", query)
-        if len(digits) == 10 and digits.isdigit():
-            return f"isbn:{digits}"
-        if len(digits) == 13 and digits.isdigit():
-            return f"isbn:{digits}"
+        if len(digits) == 10 and self._valid_isbn10(digits):
+            return digits
+        if len(digits) == 13 and self._valid_isbn13(digits):
+            return digits
         return None
+
+    def _valid_isbn10(self, isbn: str) -> bool:
+        if not isbn[:9].isdigit():
+            return False
+        check = isbn[9].upper()
+        if not (check.isdigit() or check == "X"):
+            return False
+        total = sum(int(isbn[i]) * (10 - i) for i in range(9))
+        total += 11 if check == "X" else int(check)
+        return total % 11 == 0
+
+    def _valid_isbn13(self, isbn: str) -> bool:
+        if not isbn.isdigit():
+            return False
+        total = sum(int(isbn[i]) * (1 if i % 2 == 0 else 3) for i in range(12))
+        check = (10 - (total % 10)) % 10
+        return check == int(isbn[12])
+
+    def get_by_isbn(self, isbn: str) -> dict | None:
+        """Fetch a book directly by ISBN from Open Library."""
+        clean = re.sub(r"[-_\s]", "", isbn)
+        url = f"https://openlibrary.org/isbn/{clean}.json"
+        try:
+            req = urllib.request.Request(url)
+            req.add_header("User-Agent", "SloughGPT/1.0")
+            data = _retry(
+                lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
+            )
+            return self._normalize_ol_book(data, clean)
+        except Exception:
+            return None
+
+    def _normalize_ol_book(self, data: dict, isbn: str) -> dict:
+        authors = []
+        for a in data.get("authors", []):
+            if isinstance(a, dict) and "key" in a:
+                authors.append(a["key"].split("/")[-1])
+            elif isinstance(a, str):
+                authors.append(a)
+
+        return {
+            "key": data.get("key", ""),
+            "title": data.get("title", ""),
+            "subtitle": data.get("subtitle", ""),
+            "author": ", ".join(authors) if authors else "Unknown",
+            "isbn": isbn,
+            "year": data.get("first_publish_year"),
+            "cover": None,
+            "subjects": data.get("subjects", [])[:20],
+            "subject_places": [s for s in data.get("subject_places", [])[:10]],
+            "subject_times": [s for s in data.get("subject_times", [])[:10]],
+            "subject_people": [s for s in data.get("subject_people", [])[:10]],
+            "publishers": data.get("publishers", []),
+            "publish_date": data.get("publish_date", ""),
+            "number_of_pages": data.get("number_of_pages"),
+            "physical_format": data.get("physical_format", ""),
+            "weight": data.get("weight", ""),
+            "description": "",
+        }
 
     def search(self, query: str, limit: int = 10) -> list[dict]:
         """Search books by title or ISBN."""
         isbn_query = self._is_isbn(query)
         if isbn_query:
-            q = isbn_query
-        else:
-            q = f"title:{self._sanitize_query(query)}"
+            book = self.get_by_isbn(isbn_query)
+            return [book] if book else []
 
-        url = f"https://openlibrary.org/search.json?q={q}&limit={limit}&fields=title,author_name,first_publish_year,cover_i,isbn,key"
+        q = f"title:{self._sanitize_query(query)}"
+        url = f"https://openlibrary.org/search.json?q={q}&limit={limit}&fields=title,author_name,first_publish_year,cover_i,isbn,key,subject,publisher,physical_format,number_of_pages_median"
         try:
             req = urllib.request.Request(url)
             req.add_header("User-Agent", "SloughGPT/1.0")
@@ -674,6 +731,10 @@ class BooksSearch:
                     "isbn": r.get("isbn", [""])[0],
                     "year": r.get("first_publish_year"),
                     "cover": r.get("cover_i"),
+                    "subjects": r.get("subject", [])[:20],
+                    "publishers": r.get("publisher", []),
+                    "physical_format": r.get("physical_format", ""),
+                    "number_of_pages": r.get("number_of_pages_median"),
                 }
                 for r in data.get("docs", [])[:limit]
                 if r.get("title")
@@ -999,11 +1060,11 @@ class ISBNImporter:
         self._books_search = BooksSearch()
 
     def import_from_isbn(self, isbn: str, name: str) -> ImportResult:
-        """
-        Import a book by ISBN.
+        """Import a book by ISBN.
 
-        Looks up the book via Open Library, then tries to download the full text
-        from Project Gutenberg. Falls back to saving metadata only.
+        Looks up the book via Open Library (direct ISBN endpoint), then tries
+        to download the full text from Project Gutenberg. Falls back to
+        saving metadata only.
 
         Args:
             isbn: ISBN-10 or ISBN-13
@@ -1012,117 +1073,166 @@ class ISBNImporter:
         Returns:
             ImportResult with success status
         """
-        output_dir = Path(self.output_dir) / name
-        output_dir.mkdir(parents=True, exist_ok=True)
+        clean_isbn = re.sub(r"[-_\s]", "", isbn)
 
-        books = self._books_search.search(isbn, limit=1)
-        if not books:
+        book = self._books_search.get_by_isbn(clean_isbn)
+        if not book:
+            books = self._books_search.search(isbn, limit=1)
+            if books:
+                book = books[0]
+
+        if not book:
             error_msg = f"Book not found for ISBN: {isbn}"
-            logger.error(
-                error_msg,
-                extra={"tag": "TRAIN"},
-            )
+            logger.error(error_msg, extra={"tag": "TRAIN"})
             return ImportResult(
                 success=False,
                 name=name,
-                source=f"isbn:{isbn}",
+                source=f"isbn:{clean_isbn}",
                 files_imported=0,
                 total_chars=0,
-                output_path=str(output_dir),
+                output_path="",
                 error=error_msg,
             )
 
-        book = books[0]
+        output_dir = Path(self.output_dir) / name
+        output_dir.mkdir(parents=True, exist_ok=True)
+
         title = book.get("title", "Unknown")
         author = book.get("author", "Unknown")
-        metadata = json.dumps(book, indent=2)
 
-        text_content = self._fetch_gutenberg_text(title, author)
+        text_content = self._fetch_gutenberg_text(title, author, clean_isbn)
+
+        meta_content = {
+            "source": f"isbn:{clean_isbn}",
+            "title": title,
+            "subtitle": book.get("subtitle", ""),
+            "author": author,
+            "isbn": clean_isbn,
+            "year": book.get("year"),
+            "publish_date": book.get("publish_date", ""),
+            "publishers": book.get("publishers", []),
+            "subjects": book.get("subjects", []),
+            "subject_places": book.get("subject_places", []),
+            "subject_times": book.get("subject_times", []),
+            "subject_people": book.get("subject_people", []),
+            "number_of_pages": book.get("number_of_pages"),
+            "physical_format": book.get("physical_format", ""),
+            "description": book.get("description", ""),
+        }
 
         if text_content:
             text_path = output_dir / f"{name}.txt"
             text_path.write_text(text_content, encoding="utf-8")
 
+            meta_content["source_type"] = "gutenberg"
+            meta_content["text_chars"] = len(text_content)
             meta_path = output_dir / "metadata.json"
-            meta_content = {
-                "source": f"isbn:{isbn}",
-                "title": title,
-                "author": author,
-                "isbn": isbn,
-                "year": book.get("year"),
-                "source_type": "gutenberg",
-            }
-            meta_path.write_text(json.dumps(meta_content, indent=2), encoding="utf-8")
+            meta_path.write_text(
+                json.dumps(meta_content, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
 
+            logger.info(
+                "Imported '%s' from Gutenberg (%d chars)",
+                title,
+                len(text_content),
+                extra={"tag": "TRAIN"},
+            )
             return ImportResult(
                 success=True,
                 name=name,
-                source=f"isbn:{isbn}",
+                source=f"isbn:{clean_isbn}",
                 files_imported=1,
                 total_chars=len(text_content),
                 output_path=str(output_dir),
             )
-        else:
-            meta_path = output_dir / "metadata.json"
-            meta_content = {
-                "source": f"isbn:{isbn}",
-                "title": title,
-                "author": author,
-                "isbn": isbn,
-                "year": book.get("year"),
-                "source_type": "metadata_only",
-                "note": "Full text not available on Project Gutenberg",
-            }
-            meta_path.write_text(json.dumps(meta_content, indent=2), encoding="utf-8")
 
-            book_info = f"Title: {title}\nAuthor: {author}\nISBN: {isbn}\nYear: {book.get('year', '')}\n\n{metadata}"
-            info_path = output_dir / f"{name}_info.txt"
-            info_path.write_text(book_info, encoding="utf-8")
+        meta_content["source_type"] = "metadata_only"
+        meta_content["note"] = "Full text not available on Project Gutenberg"
+        meta_path = output_dir / "metadata.json"
+        meta_path.write_text(
+            json.dumps(meta_content, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
 
-            return ImportResult(
-                success=True,
-                name=name,
-                source=f"isbn:{isbn}",
-                files_imported=1,
-                total_chars=len(book_info),
-                output_path=str(output_dir),
-            )
+        book_info = (
+            f"Title: {title}\nAuthor: {author}\nISBN: {clean_isbn}\nYear: {book.get('year', '')}\n"
+        )
+        if book.get("subtitle"):
+            book_info += f"Subtitle: {book['subtitle']}\n"
+        if book.get("publishers"):
+            book_info += f"Publishers: {', '.join(book['publishers'])}\n"
+        if book.get("subjects"):
+            book_info += f"Subjects: {', '.join(book['subjects'][:10])}\n"
+        book_info += "\nFull text not available on Project Gutenberg.\n"
 
-    def _fetch_gutenberg_text(self, title: str, author: str) -> str | None:
-        """
-        Search Project Gutenberg via Gutendex API and download full text.
+        info_path = output_dir / f"{name}_info.txt"
+        info_path.write_text(book_info, encoding="utf-8")
 
-        Args:
-            title: Book title
-            author: Book author
+        return ImportResult(
+            success=True,
+            name=name,
+            source=f"isbn:{clean_isbn}",
+            files_imported=1,
+            total_chars=len(book_info),
+            output_path=str(output_dir),
+        )
 
-        Returns:
-            Full text content if found, None otherwise
+    def _fetch_gutenberg_text(self, title: str, author: str, isbn: str) -> str | None:
+        """Search Project Gutenberg via Gutendex API and download full text.
+
+        First tries to match by ISBN, then falls back to title+author search.
         """
         import urllib.parse
 
-        search_terms = f"{title} {author}".strip()
-        if not search_terms:
-            return None
-        q = urllib.parse.quote(search_terms[:200], safe="")
+        book_id = self._find_gutenberg_id_by_isbn(isbn)
+        if not book_id:
+            search_terms = f"{title} {author}".strip()
+            if not search_terms:
+                return None
+            q = urllib.parse.quote(search_terms[:200], safe="")
+            book_id = self._find_gutenberg_id_by_search(q)
 
+        if not book_id:
+            return None
+
+        return self._download_gutenberg_text(book_id)
+
+    def _find_gutenberg_id_by_isbn(self, isbn: str) -> int | None:
+        """Try to find a Gutenberg book by ISBN via Gutendex."""
+        import urllib.parse
+
+        q = urllib.parse.quote(f"isbn:{isbn}", safe="")
+        url = f"https://gutendex.com/books?search={q}"
         try:
-            url = f"https://gutendex.com/books?search={q}"
             req = urllib.request.Request(url, headers={"User-Agent": "SloughGPT/1.0"})
             data = _retry(
                 lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
             )
             items = data.get("results", [])
-            if not items:
-                logger.info(
-                    "No Gutendex results for: %s",
-                    title,
-                    extra={"tag": "TRAIN"},
-                )
-                return None
+            if items:
+                return items[0]["id"]
+        except Exception:
+            pass
+        return None
 
-            gutenberg_id = items[0]["id"]
-            text_url = f"https://www.gutenberg.org/cache/epub/{gutenberg_id}/pg{gutenberg_id}.txt"
+    def _find_gutenberg_id_by_search(self, query: str) -> int | None:
+        """Find a Gutenberg book by title+author search."""
+        url = f"https://gutendex.com/books?search={query}"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "SloughGPT/1.0"})
+            data = _retry(
+                lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
+            )
+            items = data.get("results", [])
+            if items:
+                return items[0]["id"]
+        except Exception as e:
+            logger.warning("Gutenberg search failed: %s", e, extra={"tag": "TRAIN"})
+        return None
+
+    def _download_gutenberg_text(self, gutenberg_id: int) -> str | None:
+        """Download full text from Project Gutenberg by book ID."""
+        text_url = f"https://www.gutenberg.org/cache/epub/{gutenberg_id}/pg{gutenberg_id}.txt"
+        try:
             text_req = urllib.request.Request(text_url, headers={"User-Agent": "SloughGPT/1.0"})
             text = _retry(
                 lambda: (
@@ -1140,8 +1250,8 @@ class ISBNImporter:
             return text
         except Exception as e:
             logger.warning(
-                "Gutenberg fetch failed for '%s': %s",
-                title,
+                "Gutenberg download failed for #%s: %s",
+                gutenberg_id,
                 e,
                 extra={"tag": "TRAIN"},
             )

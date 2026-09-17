@@ -5,29 +5,47 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle, EmptyCard, cn, Spinner } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { DatasetListSkeleton } from '@/components/ui/PageSkeletons'
-import { IconRefresh, IconPlus, IconTrash, IconChevronDown, IconDownload, IconPlay } from '@sloughgpt/strui'
+import {
+  IconRefresh,
+  IconPlus,
+  IconTrash,
+  IconChevronDown,
+  IconDownload,
+  IconPlay,
+} from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
-import { datasetController, type Dataset, type DatasetPreview as PreviewData } from '@/lib/dataset-controller'
+import {
+  datasetController,
+  type Dataset,
+  type DatasetPreview as PreviewData,
+} from '@/lib/dataset-controller'
 import { formatBytes } from '@/lib/format-bytes'
 import { formatDate } from '@/lib/conversations-utils'
 import { DatasetImportDialog } from '@/components/DatasetImportDialog'
 import { DatasetDropZone } from '@/components/DatasetDropZone'
+import { useDatasetList, useDeleteDataset } from '@/lib/cache'
 
 export default function DatasetsPage() {
   const router = useRouter()
-  const addToast = useToastStore(s => s.addToast)
-  const [datasets, setDatasets] = useState<Dataset[]>([])
+  const addToast = useToastStore((s) => s.addToast)
+  const { data: allDatasets = [], isLoading: loading, refetch: refetchDatasets } = useDatasetList()
+  const deleteDataset = useDeleteDataset()
 
-  const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState(false)
   const [search, setSearch] = useState('')
   const [pendingDelete, setPendingDelete] = useState<Dataset | null>(null)
@@ -37,7 +55,9 @@ export default function DatasetsPage() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewSearch, setPreviewSearch] = useState('')
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set())
-  const [compareData, setCompareData] = useState<Array<{ id: string; name: string; preview: PreviewData | null }>>([])
+  const [compareData, setCompareData] = useState<
+    Array<{ id: string; name: string; preview: PreviewData | null }>
+  >([])
   const [sortBy, setSortBy] = useState<'date' | 'size' | 'name'>('date')
   const [versionCounts, setVersionCounts] = useState<Record<string, number>>({})
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -48,40 +68,35 @@ export default function DatasetsPage() {
   const [newTag, setNewTag] = useState('')
   const [savingTags, setSavingTags] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [searchResults, setSearchResults] = useState<Dataset[] | null>(null)
 
   const fetchDatasets = useCallback(async () => {
-    setLoading(true)
     setFetchError(false)
     try {
-      const list = await datasetController.list()
-      setDatasets(list)
+      await refetchDatasets()
     } catch {
       setFetchError(true)
       addToast('Could not load datasets', 'error')
-    } finally {
-      setLoading(false)
     }
-  }, [addToast])
+  }, [refetchDatasets, addToast])
 
   useRefreshShortcut(fetchDatasets)
 
-  useEffect(() => {
-    fetchDatasets()
-  }, [fetchDatasets])
+  const datasets = searchResults ?? allDatasets
 
   useEffect(() => {
     if (datasets.length === 0) return
     const fetchVersions = async () => {
       const counts: Record<string, number> = {}
       await Promise.all(
-        datasets.map(async ds => {
+        datasets.map(async (ds) => {
           try {
             const res = await datasetController.listVersions(ds.id)
             counts[ds.id] = res.count || 0
           } catch {
             counts[ds.id] = 0
           }
-        })
+        }),
       )
       setVersionCounts(counts)
     }
@@ -90,7 +105,12 @@ export default function DatasetsPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      )
+        return
       if (e.key === 'n' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault()
         setImportOpen(true)
@@ -106,14 +126,14 @@ export default function DatasetsPage() {
 
   useEffect(() => {
     if (!search) {
-      fetchDatasets()
+      setSearchResults(null)
       return
     }
     setSearching(true)
     const timer = setTimeout(async () => {
       try {
         const results = await datasetController.search(search)
-        setDatasets(results)
+        setSearchResults(results)
       } catch {
         // fallback to client-side filter
       } finally {
@@ -126,15 +146,11 @@ export default function DatasetsPage() {
   const handleDelete = async () => {
     if (!pendingDelete) return
     const deleted = pendingDelete
-    setDatasets(prev => prev.filter(d => d.id !== deleted.id))
     setPendingDelete(null)
     try {
-      await datasetController.delete(deleted.id)
-      addToast(`Deleted "${deleted.name}"`, 'info', undefined, () => {
-        setDatasets(prev => [deleted, ...prev])
-      })
+      await deleteDataset.mutateAsync(deleted.id)
+      addToast(`Deleted "${deleted.name}"`, 'info')
     } catch {
-      setDatasets(prev => [deleted, ...prev])
       addToast('Could not delete', 'error')
     }
   }
@@ -147,7 +163,7 @@ export default function DatasetsPage() {
 
   const toggleBulkSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    setCompareIds(prev => {
+    setCompareIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -156,7 +172,7 @@ export default function DatasetsPage() {
   }
 
   const selectAll = () => {
-    setCompareIds(new Set(filtered.map(ds => ds.id)))
+    setCompareIds(new Set(filtered.map((ds) => ds.id)))
   }
 
   const clearSelection = () => {
@@ -167,16 +183,14 @@ export default function DatasetsPage() {
     if (compareIds.size === 0) return
     setBulkDeleting(true)
     const ids = Array.from(compareIds)
-    const toDelete = datasets.filter(d => ids.includes(d.id))
 
-    setDatasets(prev => prev.filter(d => !ids.includes(d.id)))
     setCompareIds(new Set())
 
     try {
-      await Promise.all(ids.map(id => datasetController.delete(id)))
+      await Promise.all(ids.map((id) => datasetController.delete(id)))
+      await refetchDatasets()
       addToast(`Deleted ${ids.length} dataset(s)`, 'success')
     } catch {
-      setDatasets(prev => [...toDelete, ...prev])
       addToast('Some deletions failed', 'error')
     } finally {
       setBulkDeleting(false)
@@ -190,16 +204,15 @@ export default function DatasetsPage() {
     const tag = bulkTagValue.trim().toLowerCase()
 
     try {
-      await Promise.all(ids.map(id => {
-        const ds = datasets.find(d => d.id === id)
-        const newTags = [...new Set([...(ds?.tags || []), tag])]
-        return datasetController.update(id, { tags: newTags })
-      }))
+      await Promise.all(
+        ids.map((id) => {
+          const ds = datasets.find((d) => d.id === id)
+          const newTags = [...new Set([...(ds?.tags || []), tag])]
+          return datasetController.update(id, { tags: newTags })
+        }),
+      )
 
-      setDatasets(prev => prev.map(ds =>
-        ids.includes(ds.id) ? { ...ds, tags: [...new Set([...(ds.tags || []), tag])] } : ds
-      ))
-
+      await refetchDatasets()
       addToast(`Added tag "${tag}" to ${ids.length} dataset(s)`, 'success')
       setBulkTagValue('')
       setBulkTagIds(new Set())
@@ -227,7 +240,12 @@ export default function DatasetsPage() {
   }
 
   const filtered = datasets
-    .filter(ds => !search || ds.name.toLowerCase().includes(search.toLowerCase()) || ds.id.toLowerCase().includes(search.toLowerCase()))
+    .filter(
+      (ds) =>
+        !search ||
+        ds.name.toLowerCase().includes(search.toLowerCase()) ||
+        ds.id.toLowerCase().includes(search.toLowerCase()),
+    )
     .sort((a, b) => {
       if (sortBy === 'date') return (b.created_at || '').localeCompare(a.created_at || '')
       if (sortBy === 'size') return (b.size || 0) - (a.size || 0)
@@ -256,7 +274,7 @@ export default function DatasetsPage() {
   }
 
   const toggleCompare = (id: string) => {
-    setCompareIds(prev => {
+    setCompareIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -265,11 +283,14 @@ export default function DatasetsPage() {
   }
 
   const handleRenameSave = async (id: string) => {
-    if (!editingName.trim()) { setEditingId(null); return }
+    if (!editingName.trim()) {
+      setEditingId(null)
+      return
+    }
     setSavingName(true)
     try {
       await datasetController.update(id, { name: editingName.trim() })
-      setDatasets(prev => prev.map(ds => ds.id === id ? { ...ds, name: editingName.trim() } : ds))
+      await refetchDatasets()
       addToast('Renamed', 'success')
     } catch {
       addToast('Rename failed', 'error')
@@ -283,7 +304,7 @@ export default function DatasetsPage() {
     setSavingTags(true)
     try {
       await datasetController.update(id, { tags: editingTags })
-      setDatasets(prev => prev.map(ds => ds.id === id ? { ...ds, tags: editingTags } : ds))
+      await refetchDatasets()
       addToast('Tags updated', 'success')
     } catch {
       addToast('Tag update failed', 'error')
@@ -302,28 +323,34 @@ export default function DatasetsPage() {
   }
 
   const removeTag = (tag: string) => {
-    setEditingTags(editingTags.filter(t => t !== tag))
+    setEditingTags(editingTags.filter((t) => t !== tag))
   }
 
   const loadCompare = async () => {
     if (compareIds.size < 2) return
     const results = await Promise.all(
-      Array.from(compareIds).map(async id => {
-        const ds = datasets.find(d => d.id === id)
+      Array.from(compareIds).map(async (id) => {
+        const ds = datasets.find((d) => d.id === id)
         try {
           const preview = await datasetController.preview(id, 3)
           return { id, name: ds?.name || id, preview }
         } catch {
           return { id, name: ds?.name || id, preview: null }
         }
-      })
+      }),
     )
     setCompareData(results)
   }
 
   const headerRight = (
     <div className="flex items-center gap-2">
-      <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={fetchDatasets} disabled={loading}>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 text-[11px]"
+        onClick={fetchDatasets}
+        disabled={loading}
+      >
         <Spinner className="h-3.5 w-3.5 mr-1" />
         Refresh
       </Button>
@@ -334,365 +361,497 @@ export default function DatasetsPage() {
     </div>
   )
 
-  const toolbar = datasets.length > 0 ? (
-    <div className="flex items-center gap-1.5">
-      <Input
-        placeholder="Search datasets..."
-        value={search}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-        className="h-7 text-[11px] max-w-xs"
-      />
-      {searching && (
-        <span className="text-[10px] text-muted-foreground flex items-center gap-1.5" role="status" aria-live="polite">
-          <Spinner size="xs" />
-          Searching…
-        </span>
-      )}
-      <div className="flex items-center gap-1 ml-auto">
-        {(['date', 'size', 'name'] as const).map(s => (
-          <button
-            key={s}
-            type="button"
-            aria-pressed={sortBy === s}
-            aria-label={`Sort by ${s}`}
-            onClick={() => setSortBy(s)}
-            className={cn('text-[10px] px-2 py-1 rounded border transition-colors', sortBy === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80')}
+  const toolbar =
+    datasets.length > 0 ? (
+      <div className="flex items-center gap-1.5">
+        <Input
+          placeholder="Search datasets..."
+          value={search}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+          className="h-7 text-[11px] max-w-xs"
+        />
+        {searching && (
+          <span
+            className="text-[10px] text-muted-foreground flex items-center gap-1.5"
+            role="status"
+            aria-live="polite"
           >
-            {s}
-          </button>
-        ))}
-      </div>
-      {datasets.length > 1 && (
-        <div className="flex-1 max-w-xs">
-          <div className="text-[10px] text-muted-foreground mb-1">Size comparison</div>
-          <div className="flex items-end gap-1 h-8">
-            {datasets.slice(0, 8).map(ds => {
-              const maxSize = Math.max(...datasets.map(d => d.size || 1))
-              const height = Math.max(((ds.size || 0) / maxSize) * 100, 4)
-              return (
-                <div
-                  key={ds.id}
-                  className="flex-1 bg-primary/30 rounded-t transition-all hover:bg-primary/50"
-                  style={{ height: `${height}%` }}
-                  title={`${ds.name}: ${formatBytes(ds.size)}`}
-                />
-              )
-            })}
-          </div>
+            <Spinner size="xs" />
+            Searching…
+          </span>
+        )}
+        <div className="flex items-center gap-1 ml-auto">
+          {(['date', 'size', 'name'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              aria-pressed={sortBy === s}
+              aria-label={`Sort by ${s}`}
+              onClick={() => setSortBy(s)}
+              className={cn(
+                'text-[10px] px-2 py-1 rounded border transition-colors',
+                sortBy === s
+                  ? 'bg-primary/15 text-primary border-primary/30'
+                  : 'border-border/40 text-muted-foreground hover:bg-muted/80',
+              )}
+            >
+              {s}
+            </button>
+          ))}
         </div>
-      )}
-    </div>
-  ) : undefined
+        {datasets.length > 1 && (
+          <div className="flex-1 max-w-xs">
+            <div className="text-[10px] text-muted-foreground mb-1">Size comparison</div>
+            <div className="flex items-end gap-1 h-8">
+              {datasets.slice(0, 8).map((ds) => {
+                const maxSize = Math.max(...datasets.map((d) => d.size || 1))
+                const height = Math.max(((ds.size || 0) / maxSize) * 100, 4)
+                return (
+                  <div
+                    key={ds.id}
+                    className="flex-1 bg-primary/30 rounded-t transition-all hover:bg-primary/50"
+                    style={{ height: `${height}%` }}
+                    title={`${ds.name}: ${formatBytes(ds.size)}`}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    ) : undefined
 
   return (
-    <PageContainer
-      title="Datasets"
-      headerRight={headerRight}
-      toolbar={toolbar}
-    >
+    <PageContainer title="Datasets" headerRight={headerRight} toolbar={toolbar}>
+      {compareIds.size >= 2 && (
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={loadCompare}>
+            Compare {compareIds.size} datasets
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10px]"
+            onClick={() => {
+              setCompareIds(new Set())
+              setCompareData([])
+            }}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
 
-        {compareIds.size >= 2 && (
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={loadCompare}>
-              Compare {compareIds.size} datasets
-            </Button>
-            <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { setCompareIds(new Set()); setCompareData([]) }}>
-              Clear
-            </Button>
-          </div>
-        )}
-
-        {compareIds.size > 0 && (
-          <Card className="mb-4 border-primary/30 bg-primary/5">
-            <CardContent className="py-3">
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-xs font-medium">{compareIds.size} selected</span>
-                <div className="flex items-center gap-1">
-                  <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={selectAll}>Select All</Button>
-                  <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={clearSelection}>Clear</Button>
-                </div>
-                <div className="flex items-center gap-1 ml-auto">
-                  <Input
-                    value={bulkTagValue}
-                    onChange={e => setBulkTagValue(e.target.value)}
-                    placeholder="Tag name..."
-                    className="h-6 w-24 text-[10px]"
-                    onKeyDown={e => { if (e.key === 'Enter') handleBulkTag() }}
-                  />
-                  <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={handleBulkTag} disabled={bulkTagging || !bulkTagValue.trim()}>
-                    {bulkTagging ? '...' : 'Add Tag'}
-                  </Button>
-                  <Button size="sm" variant="outline" className="h-6 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={handleBulkDelete} disabled={bulkDeleting}>
-                    {bulkDeleting ? '...' : `Delete ${compareIds.size}`}
-                  </Button>
-                </div>
+      {compareIds.size > 0 && (
+        <Card className="mb-4 border-primary/30 bg-primary/5">
+          <CardContent className="py-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-xs font-medium">{compareIds.size} selected</span>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={selectAll}>
+                  Select All
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[10px]"
+                  onClick={clearSelection}
+                >
+                  Clear
+                </Button>
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {compareData.length > 0 && (
-          <Card>
-            <CardHeader className="pb-2 pt-2.5 px-2.5">
-              <CardTitle className="text-[11px] font-medium">Dataset comparison</CardTitle>
-            </CardHeader>
-            <CardContent className="px-2.5 pb-2.5">
-              <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${compareData.length}, 1fr)` }}>
-                {compareData.map(d => (
-                  <div key={d.id} className="space-y-2">
-                    <p className="text-sm font-medium truncate">{d.name}</p>
-                    {d.preview ? (
-                      <>
-                        <div className="text-xs text-muted-foreground">
-                          {d.preview.total_samples} samples · {d.preview.total_chars.toLocaleString()} chars
-                        </div>
-                        <div className="space-y-1">
-                          {d.preview.samples.slice(0, 2).map((s, i) => (
-                            <pre key={i} className="text-xs bg-muted/30 rounded p-1.5 overflow-x-auto max-h-16 font-mono whitespace-pre-wrap">
-                              {s.content.slice(0, 150)}{s.content.length > 150 ? '…' : ''}
-                            </pre>
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">No preview</p>
-                    )}
-                  </div>
-                ))}
+              <div className="flex items-center gap-1 ml-auto">
+                <Input
+                  value={bulkTagValue}
+                  onChange={(e) => setBulkTagValue(e.target.value)}
+                  placeholder="Tag name..."
+                  className="h-6 w-24 text-[10px]"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleBulkTag()
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-[10px]"
+                  onClick={handleBulkTag}
+                  disabled={bulkTagging || !bulkTagValue.trim()}
+                >
+                  {bulkTagging ? '...' : 'Add Tag'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                >
+                  {bulkDeleting ? '...' : `Delete ${compareIds.size}`}
+                </Button>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-        <DatasetDropZone onUploadComplete={fetchDatasets} className="mb-4" />
-
-        {loading ? (
-          <DatasetListSkeleton />
-        ) : fetchError && datasets.length === 0 ? (
-          <Card>
-            <CardContent className="px-2.5 pb-2.5 text-center">
-              <p className="text-sm text-destructive mb-3">Could not load datasets</p>
-              <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={fetchDatasets}>
-                <IconRefresh className="h-3.5 w-3.5 mr-1.5" />
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
-        ) : filtered.length === 0 ? (
-          <EmptyCard
-            message={datasets.length === 0 ? 'No datasets yet' : 'No datasets match your search'}
-            description={datasets.length === 0 ? 'Import a dataset to start training models.' : 'Try a different search term.'}
-            icon={<IconPlus className="h-5 w-5" />}
-            action={<Button size="sm" className="h-7 text-[11px]" onClick={() => setImportOpen(true)}>Import Dataset</Button>}
-          />
-        ) : (
-          <div className="grid gap-2 max-h-[60vh] overflow-y-auto overscroll-contain">
-            {filtered.map(ds => (
-              <div key={ds.id}>
-              <Card
-                className={cn('group transition-colors', expandedId === ds.id ? 'border-primary/40 bg-primary/[0.08]' : 'hover:bg-accent/40')}
-                onClick={() => router.push(`/dataset/${encodeURIComponent(ds.id)}`)}
-              >
-                  <CardContent className="flex items-center justify-between py-2.5 px-2.5">
-                    <div className="min-w-0 flex-1">
-                      {editingId === ds.id ? (
-                        <input
-                          autoFocus
-                          value={editingName}
-                          onChange={e => setEditingName(e.target.value)}
-                          onBlur={() => handleRenameSave(ds.id)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') handleRenameSave(ds.id)
-                            if (e.key === 'Escape') setEditingId(null)
-                          }}
-                          disabled={savingName}
-                          onClick={e => e.stopPropagation()}
-                          className="text-sm font-medium bg-background border border-primary/50 rounded px-1.5 py-0.5 w-full focus:outline-none focus:ring-1 focus:ring-primary/30"
-                        />
-                      ) : (
-                        <p
-                          className="text-sm font-medium truncate cursor-pointer hover:text-primary transition-colors"
-                          onDoubleClick={e => { e.stopPropagation(); setEditingId(ds.id); setEditingName(ds.name) }}
-                          title="Double-click to rename"
-                        >
-                          {ds.name}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        {ds.source && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
-                            {ds.source}
-                          </span>
-                        )}
-                        {ds.type && ds.type !== 'text' && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
-                            {ds.type}
-                          </span>
-                        )}
-                        {ds.vlm_metadata && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">
-                            VLM · {ds.vlm_metadata.image_count} images
-                          </span>
-                        )}
-                        {editingTagsId === ds.id ? (
-                          <div className="flex items-center gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
-                            {editingTags.map(tag => (
-                              <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium flex items-center gap-1">
-                                {tag}
-                                <button type="button" onClick={() => removeTag(tag)} className="text-muted-foreground hover:text-destructive ml-0.5">&times;</button>
-                              </span>
-                            ))}
-                            <input
-                              type="text"
-                              value={newTag}
-                              onChange={e => setNewTag(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag() } if (e.key === 'Escape') { setEditingTagsId(null) } }}
-                              placeholder="Add tag..."
-                              className="text-xs px-1.5 py-0.5 w-16 bg-background border border-primary/50 rounded focus:outline-none focus:ring-1 focus:ring-primary/30"
-                              autoFocus
-                            />
-                            <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1" onClick={() => handleTagsSave(ds.id)} disabled={savingTags}>
-                              {savingTags ? '...' : 'Save'}
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {ds.tags && ds.tags.length > 0 && ds.tags.slice(0, 3).map(tag => (
-                              <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">
-                                {tag}
-                              </span>
-                            ))}
-                            <button
-                              type="button"
-                              onClick={e => { e.stopPropagation(); setEditingTagsId(ds.id); setEditingTags(ds.tags || []) }}
-                              className="text-xs text-muted-foreground hover:text-primary transition-colors"
-                              title="Edit tags"
-                            >
-                              {(!ds.tags || ds.tags.length === 0) ? '+ Add tags' : '+ Edit'}
-                            </button>
-                          </div>
-                        )}
+      {compareData.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Dataset comparison</CardTitle>
+          </CardHeader>
+          <CardContent className="px-2.5 pb-2.5">
+            <div
+              className="grid gap-4"
+              style={{ gridTemplateColumns: `repeat(${compareData.length}, 1fr)` }}
+            >
+              {compareData.map((d) => (
+                <div key={d.id} className="space-y-2">
+                  <p className="text-sm font-medium truncate">{d.name}</p>
+                  {d.preview ? (
+                    <>
+                      <div className="text-xs text-muted-foreground">
+                        {d.preview.total_samples} samples · {d.preview.total_chars.toLocaleString()}{' '}
+                        chars
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5">
-                        <span>{formatBytes(ds.size)}</span>
-                        {ds.size > 100 * 1024 * 1024 && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-warning/15 text-warning font-medium">
-                            Large dataset
-                          </span>
-                        )}
-                        {ds.samples != null && <span>{ds.samples.toLocaleString()} samples</span>}
-                        {versionCounts[ds.id] != null && versionCounts[ds.id] > 0 && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
-                            {versionCounts[ds.id]} version{versionCounts[ds.id] !== 1 ? 's' : ''}
-                          </span>
-                        )}
-                        {ds.created_at && <span>{formatDate(ds.created_at)}</span>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 ml-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 text-muted-foreground hover:text-primary"
-                        onClick={() => router.push(`/training?dataset=${encodeURIComponent(ds.id)}`)}
-                        aria-label={`Train with ${ds.name}`}
-                      >
-                        <IconPlay className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 text-muted-foreground hover:text-primary"
-                        onClick={(e) => handleExport(ds, e)}
-                        aria-label={`Export ${ds.name}`}
-                      >
-                        <IconDownload className="h-4 w-4" />
-                      </Button>
-                      <button
-                        type="button"
-                        className={cn('h-6 w-6 rounded border transition-colors flex items-center justify-center', compareIds.has(ds.id) ? 'bg-primary border-primary text-primary-foreground' : 'border-border hover:border-primary/50')}
-                        onClick={() => toggleCompare(ds.id)}
-                        aria-label={`Select ${ds.name} for comparison`}
-                      >
-                        {compareIds.has(ds.id) && <span className="text-xs font-bold">✓</span>}
-                      </button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 text-muted-foreground hover:text-primary"
-                        onClick={(e) => handlePreview(ds, e)}
-                        aria-label={expandedId === ds.id ? `Hide preview for ${ds.name}` : `Preview ${ds.name}`}
-                      >
-                        <IconChevronDown className={cn('h-4 w-4 transition-transform', expandedId === ds.id && 'rotate-180')} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                        onClick={() => setPendingDelete(ds)}
-                        aria-label={`Delete ${ds.name}`}
-                      >
-                        <IconTrash className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-                {expandedId === ds.id && (
-                  <div className="mt-1 rounded-lg border border-border/40 bg-muted/20 px-4 py-3 text-sm">
-                    {previewLoading ? (
-                      <Skeleton className="h-16 bg-muted/20 rounded-lg" />
-                    ) : previewData && previewData.samples.length > 0 ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          <span>{previewData.total_samples.toLocaleString()} samples</span>
-                          <span>{previewData.total_chars.toLocaleString()} chars</span>
-                        </div>
-                        {previewData.samples.length > 3 && (
-                          <input
-                            type="text"
-                            value={previewSearch}
-                            onChange={e => setPreviewSearch(e.target.value)}
-                            placeholder="Filter samples..."
-                            aria-label="Filter samples"
-                            className="h-7 w-full max-w-[200px] rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-                          />
-                        )}
-                        {previewData.samples
-                          .filter(s => !previewSearch || s.content.toLowerCase().includes(previewSearch.toLowerCase()))
-                          .slice(0, 10)
-                          .map((sample, i) => (
-                          <pre key={i} className="text-xs bg-card rounded p-2 overflow-x-auto max-h-24 overflow-y-auto font-mono whitespace-pre-wrap">
-                            {sample.content.slice(0, 300)}{sample.content.length > 300 ? '…' : ''}
+                      <div className="space-y-1">
+                        {d.preview.samples.slice(0, 2).map((s, i) => (
+                          <pre
+                            key={i}
+                            className="text-xs bg-muted/30 rounded p-1.5 overflow-x-auto max-h-16 font-mono whitespace-pre-wrap"
+                          >
+                            {s.content.slice(0, 150)}
+                            {s.content.length > 150 ? '…' : ''}
                           </pre>
                         ))}
                       </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">No preview available</p>
-                    )}
-                  </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No preview</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <DatasetDropZone onUploadComplete={fetchDatasets} className="mb-4" />
+
+      {loading ? (
+        <DatasetListSkeleton />
+      ) : fetchError && datasets.length === 0 ? (
+        <Card>
+          <CardContent className="px-2.5 pb-2.5 text-center">
+            <p className="text-sm text-destructive mb-3">Could not load datasets</p>
+            <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={fetchDatasets}>
+              <IconRefresh className="h-3.5 w-3.5 mr-1.5" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      ) : filtered.length === 0 ? (
+        <EmptyCard
+          message={datasets.length === 0 ? 'No datasets yet' : 'No datasets match your search'}
+          description={
+            datasets.length === 0
+              ? 'Import a dataset to start training models.'
+              : 'Try a different search term.'
+          }
+          icon={<IconPlus className="h-5 w-5" />}
+          action={
+            <Button size="sm" className="h-7 text-[11px]" onClick={() => setImportOpen(true)}>
+              Import Dataset
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid gap-2 max-h-[60vh] overflow-y-auto overscroll-contain">
+          {filtered.map((ds) => (
+            <div key={ds.id}>
+              <Card
+                className={cn(
+                  'group transition-colors',
+                  expandedId === ds.id
+                    ? 'border-primary/40 bg-primary/[0.08]'
+                    : 'hover:bg-accent/40',
                 )}
-              </div>
-            ))}
-          </div>
-        )}
-      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => { if (!open) setPendingDelete(null) }}>
+                onClick={() => router.push(`/dataset/${encodeURIComponent(ds.id)}`)}
+              >
+                <CardContent className="flex items-center justify-between py-2.5 px-2.5">
+                  <div className="min-w-0 flex-1">
+                    {editingId === ds.id ? (
+                      <input
+                        autoFocus
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={() => handleRenameSave(ds.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleRenameSave(ds.id)
+                          if (e.key === 'Escape') setEditingId(null)
+                        }}
+                        disabled={savingName}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-sm font-medium bg-background border border-primary/50 rounded px-1.5 py-0.5 w-full focus:outline-none focus:ring-1 focus:ring-primary/30"
+                      />
+                    ) : (
+                      <p
+                        className="text-sm font-medium truncate cursor-pointer hover:text-primary transition-colors"
+                        onDoubleClick={(e) => {
+                          e.stopPropagation()
+                          setEditingId(ds.id)
+                          setEditingName(ds.name)
+                        }}
+                        title="Double-click to rename"
+                      >
+                        {ds.name}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {ds.source && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                          {ds.source}
+                        </span>
+                      )}
+                      {ds.type && ds.type !== 'text' && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                          {ds.type}
+                        </span>
+                      )}
+                      {ds.vlm_metadata && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">
+                          VLM · {ds.vlm_metadata.image_count} images
+                        </span>
+                      )}
+                      {editingTagsId === ds.id ? (
+                        <div
+                          className="flex items-center gap-1 flex-wrap"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {editingTags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="text-xs px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium flex items-center gap-1"
+                            >
+                              {tag}
+                              <button
+                                type="button"
+                                onClick={() => removeTag(tag)}
+                                className="text-muted-foreground hover:text-destructive ml-0.5"
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          ))}
+                          <input
+                            type="text"
+                            value={newTag}
+                            onChange={(e) => setNewTag(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                addTag()
+                              }
+                              if (e.key === 'Escape') {
+                                setEditingTagsId(null)
+                              }
+                            }}
+                            placeholder="Add tag..."
+                            className="text-xs px-1.5 py-0.5 w-16 bg-background border border-primary/50 rounded focus:outline-none focus:ring-1 focus:ring-primary/30"
+                            autoFocus
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 text-[10px] px-1"
+                            onClick={() => handleTagsSave(ds.id)}
+                            disabled={savingTags}
+                          >
+                            {savingTags ? '...' : 'Save'}
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {ds.tags &&
+                            ds.tags.length > 0 &&
+                            ds.tags.slice(0, 3).map((tag) => (
+                              <span
+                                key={tag}
+                                className="text-xs px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setEditingTagsId(ds.id)
+                              setEditingTags(ds.tags || [])
+                            }}
+                            className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                            title="Edit tags"
+                          >
+                            {!ds.tags || ds.tags.length === 0 ? '+ Add tags' : '+ Edit'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5">
+                      <span>{formatBytes(ds.size)}</span>
+                      {ds.size > 100 * 1024 * 1024 && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-warning/15 text-warning font-medium">
+                          Large dataset
+                        </span>
+                      )}
+                      {ds.samples != null && <span>{ds.samples.toLocaleString()} samples</span>}
+                      {versionCounts[ds.id] != null && versionCounts[ds.id] > 0 && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                          {versionCounts[ds.id]} version{versionCounts[ds.id] !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      {ds.created_at && <span>{formatDate(ds.created_at)}</span>}
+                    </div>
+                  </div>
+                  <div
+                    className="flex items-center gap-1 ml-2 shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 text-muted-foreground hover:text-primary"
+                      onClick={() => router.push(`/training?dataset=${encodeURIComponent(ds.id)}`)}
+                      aria-label={`Train with ${ds.name}`}
+                    >
+                      <IconPlay className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 text-muted-foreground hover:text-primary"
+                      onClick={(e) => handleExport(ds, e)}
+                      aria-label={`Export ${ds.name}`}
+                    >
+                      <IconDownload className="h-4 w-4" />
+                    </Button>
+                    <button
+                      type="button"
+                      className={cn(
+                        'h-6 w-6 rounded border transition-colors flex items-center justify-center',
+                        compareIds.has(ds.id)
+                          ? 'bg-primary border-primary text-primary-foreground'
+                          : 'border-border hover:border-primary/50',
+                      )}
+                      onClick={() => toggleCompare(ds.id)}
+                      aria-label={`Select ${ds.name} for comparison`}
+                    >
+                      {compareIds.has(ds.id) && <span className="text-xs font-bold">✓</span>}
+                    </button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 text-muted-foreground hover:text-primary"
+                      onClick={(e) => handlePreview(ds, e)}
+                      aria-label={
+                        expandedId === ds.id ? `Hide preview for ${ds.name}` : `Preview ${ds.name}`
+                      }
+                    >
+                      <IconChevronDown
+                        className={cn(
+                          'h-4 w-4 transition-transform',
+                          expandedId === ds.id && 'rotate-180',
+                        )}
+                      />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                      onClick={() => setPendingDelete(ds)}
+                      aria-label={`Delete ${ds.name}`}
+                    >
+                      <IconTrash className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+              {expandedId === ds.id && (
+                <div className="mt-1 rounded-lg border border-border/40 bg-muted/20 px-4 py-3 text-sm">
+                  {previewLoading ? (
+                    <Skeleton className="h-16 bg-muted/20 rounded-lg" />
+                  ) : previewData && previewData.samples.length > 0 ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span>{previewData.total_samples.toLocaleString()} samples</span>
+                        <span>{previewData.total_chars.toLocaleString()} chars</span>
+                      </div>
+                      {previewData.samples.length > 3 && (
+                        <input
+                          type="text"
+                          value={previewSearch}
+                          onChange={(e) => setPreviewSearch(e.target.value)}
+                          placeholder="Filter samples..."
+                          aria-label="Filter samples"
+                          className="h-7 w-full max-w-[200px] rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                        />
+                      )}
+                      {previewData.samples
+                        .filter(
+                          (s) =>
+                            !previewSearch ||
+                            s.content.toLowerCase().includes(previewSearch.toLowerCase()),
+                        )
+                        .slice(0, 10)
+                        .map((sample, i) => (
+                          <pre
+                            key={i}
+                            className="text-xs bg-card rounded p-2 overflow-x-auto max-h-24 overflow-y-auto font-mono whitespace-pre-wrap"
+                          >
+                            {sample.content.slice(0, 300)}
+                            {sample.content.length > 300 ? '…' : ''}
+                          </pre>
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No preview available</p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null)
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete dataset</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &ldquo;{pendingDelete?.name}&rdquo;? This cannot be undone.
+              Are you sure you want to delete &ldquo;{pendingDelete?.name}&rdquo;? This cannot be
+              undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <DatasetImportDialog open={importOpen} onOpenChange={setImportOpen} onImportComplete={fetchDatasets} />
+      <DatasetImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImportComplete={fetchDatasets}
+      />
     </PageContainer>
   )
 }
