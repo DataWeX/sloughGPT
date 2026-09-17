@@ -1,15 +1,22 @@
 'use client'
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { cn, IconStar } from '@sloughgpt/strui'
 import { formatRelativeTime } from '@/lib/time-format'
 import { ConsciousnessMessageBadge } from '../ConsciousnessMessageBadge'
 
-import { MessageActions } from './MessageActions'
-import { MessageContextMenu } from './MessageContextMenu'
 import { MessageImages } from './MessageImages'
 import { MessageContent } from './MessageContent'
 import type { ImageAttachment } from './../input/ImageUpload'
+
+const MessageActions = dynamic(() => import('./MessageActions').then((m) => m.MessageActions), {
+  ssr: false,
+})
+const MessageContextMenu = dynamic(
+  () => import('./MessageContextMenu').then((m) => m.MessageContextMenu),
+  { ssr: false },
+)
 
 export interface MessageBubbleProps {
   content: string
@@ -41,7 +48,6 @@ export interface MessageBubbleProps {
   onThread?: (messageId: string) => void
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
-
 
 export const MessageBubble = memo(function MessageBubble({
   content,
@@ -119,113 +125,121 @@ export const MessageBubble = memo(function MessageBubble({
       onAddNote={onAddNote}
       onThread={onThread}
     >
-    <div
-      id={messageId ? `msg-${messageId}` : undefined}
-      ref={bubbleRef}
-      role="article"
-      tabIndex={0}
-      aria-label={`Message from ${role === 'user' ? 'You' : 'Assistant'}`}
-      aria-live={isStreaming ? 'polite' : ariaLive}
-      onKeyDown={handleKeyDown}
-      className={cn(
-        "group flex flex-col transition-all duration-300 ease-out",
-        role === 'user' ? 'items-end' : 'items-start'
-      )}
-    >
-      {/* Role label — outside bubble for clear separation */}
-      <span className={cn(
-        "text-[10px] font-semibold tracking-wider uppercase mb-0.5 block",
-        role === 'user' ? 'text-primary/70 text-right' : 'text-muted-foreground/70'
-      )}>
-        {role === 'user' ? 'You' : 'Assistant'}
-        {isBookmarked && (
-          <span className="ml-1.5 text-warning" aria-label="Bookmarked">
-            <IconStar className="h-2.5 w-2.5 inline" filled />
-          </span>
-        )}
-        {role === 'assistant' && model && !isError && (
-          <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/40 group-hover:opacity-100 opacity-0 transition-opacity">
-            {model}
-          </span>
-        )}
-        {isError && (
-          <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-medium">
-            Interrupted
-          </span>
-        )}
-      </span>
-
       <div
+        id={messageId ? `msg-${messageId}` : undefined}
+        ref={bubbleRef}
+        role="article"
+        tabIndex={0}
+        aria-label={`Message from ${role === 'user' ? 'You' : 'Assistant'}`}
+        aria-live={isStreaming ? 'polite' : ariaLive}
+        onKeyDown={handleKeyDown}
         className={cn(
-          "relative rounded-2xl px-4 py-2.5 sm:px-5 sm:py-3 max-w-full transition-all duration-200 leading-relaxed",
-          role === 'user'
-            ? 'bg-primary text-primary-foreground rounded-br-md shadow-md max-w-[85%] sm:max-w-[75%] lg:max-w-[65%] ml-auto'
-            : 'bg-card text-foreground rounded-bl-md shadow-sm',
-          isStreaming && role === 'assistant' && "ring-1 ring-primary/20",
-          isError && role === 'assistant' && "ring-1 ring-destructive/40 border border-destructive/30"
+          'group flex flex-col transition-all duration-300 ease-out',
+          role === 'user' ? 'items-end' : 'items-start',
         )}
       >
-        {images && images.length > 0 && <MessageImages images={images} role={role} />}
+        {/* Role label — outside bubble for clear separation */}
+        <span
+          className={cn(
+            'text-[10px] font-semibold tracking-wider uppercase mb-0.5 block',
+            role === 'user' ? 'text-primary/70 text-right' : 'text-muted-foreground/70',
+          )}
+        >
+          {role === 'user' ? 'You' : 'Assistant'}
+          {isBookmarked && (
+            <span className="ml-1.5 text-warning" aria-label="Bookmarked">
+              <IconStar className="h-2.5 w-2.5 inline" filled />
+            </span>
+          )}
+          {role === 'assistant' && model && !isError && (
+            <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/40 group-hover:opacity-100 opacity-0 transition-opacity">
+              {model}
+            </span>
+          )}
+          {isError && (
+            <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-medium">
+              Interrupted
+            </span>
+          )}
+        </span>
 
-        <MessageContent
-          content={content}
-          role={role}
-          searchQuery={searchQuery}
-          messageId={messageId}
-          isStreaming={isStreaming}
-          isError={isError}
-          collapsibleLength={collapsibleLength}
-          isEditing={isEditing}
-          onEdit={onEdit}
-         onEditStart={handleEditStart}
-         onEditCancel={handleEditCancel}
-        />
+        <div
+          className={cn(
+            'relative rounded-2xl px-4 py-2.5 sm:px-5 sm:py-3 max-w-full transition-all duration-200 leading-relaxed',
+            role === 'user'
+              ? 'bg-primary text-primary-foreground rounded-br-md shadow-md max-w-[85%] sm:max-w-[75%] lg:max-w-[65%] ml-auto'
+              : 'bg-card text-foreground rounded-bl-md shadow-sm',
+            isStreaming && role === 'assistant' && 'ring-1 ring-primary/20',
+            isError &&
+              role === 'assistant' &&
+              'ring-1 ring-destructive/40 border border-destructive/30',
+          )}
+        >
+          {images && images.length > 0 && <MessageImages images={images} role={role} />}
 
-        {showTimestamp && (
-          <p className={cn(
-            "mt-1 text-[10px] font-normal leading-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity",
-            role === 'user' ? 'text-primary-foreground/50 text-right' : 'text-muted-foreground/40'
-          )}>
-            {formatRelativeTime(timestamp)}
-            {role === 'assistant' && messageId && (
-              <span className="ml-1.5">
-                <ConsciousnessMessageBadge messageId={messageId} />
-              </span>
-            )}
-          </p>
+          <MessageContent
+            content={content}
+            role={role}
+            searchQuery={searchQuery}
+            messageId={messageId}
+            isStreaming={isStreaming}
+            isError={isError}
+            collapsibleLength={collapsibleLength}
+            isEditing={isEditing}
+            onEdit={onEdit}
+            onEditStart={handleEditStart}
+            onEditCancel={handleEditCancel}
+          />
+
+          {showTimestamp && (
+            <p
+              className={cn(
+                'mt-1 text-[10px] font-normal leading-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity',
+                role === 'user'
+                  ? 'text-primary-foreground/50 text-right'
+                  : 'text-muted-foreground/40',
+              )}
+            >
+              {formatRelativeTime(timestamp)}
+              {role === 'assistant' && messageId && (
+                <span className="ml-1.5">
+                  <ConsciousnessMessageBadge messageId={messageId} />
+                </span>
+              )}
+            </p>
+          )}
+        </div>
+
+        {(showActions || isError) && (
+          <MessageActions
+            content={content}
+            messageId={id}
+            role={role}
+            onCopy={onCopy}
+            onRegenerate={onRegenerate}
+            onThumbsUp={onThumbsUp}
+            onThumbsDown={onThumbsDown}
+            onSuggestionClick={onSuggestionClick}
+            isBookmarked={isBookmarked}
+            onBookmark={onBookmark}
+            onDelete={onDelete}
+            onSaveToKnowledge={onSaveToKnowledge}
+            onReact={onReact}
+          />
+        )}
+
+        {role === 'user' && hasContent && !isEditing && (
+          <MessageActions
+            content={content}
+            messageId={id}
+            role={role}
+            onCopy={onCopy}
+            onEdit={handleEditStart}
+            onSuggestionClick={onSuggestionClick}
+            onDelete={onDelete}
+          />
         )}
       </div>
-
-      {(showActions || isError) && (
-        <MessageActions
-          content={content}
-          messageId={id}
-          role={role}
-          onCopy={onCopy}
-          onRegenerate={onRegenerate}
-          onThumbsUp={onThumbsUp}
-          onThumbsDown={onThumbsDown}
-          onSuggestionClick={onSuggestionClick}
-          isBookmarked={isBookmarked}
-          onBookmark={onBookmark}
-          onDelete={onDelete}
-          onSaveToKnowledge={onSaveToKnowledge}
-          onReact={onReact}
-        />
-      )}
-
-      {role === 'user' && hasContent && !isEditing && (
-        <MessageActions
-          content={content}
-          messageId={id}
-          role={role}
-          onCopy={onCopy}
-          onEdit={handleEditStart}
-          onSuggestionClick={onSuggestionClick}
-          onDelete={onDelete}
-        />
-      )}
-    </div>
     </MessageContextMenu>
   )
 })

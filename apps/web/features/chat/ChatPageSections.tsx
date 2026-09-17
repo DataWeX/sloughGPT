@@ -14,21 +14,79 @@ import { ChatToolbar } from '@/features/chat/components/toolbar/ChatToolbar'
 import { logger } from '@/lib/dev-log'
 import { ChatToolbarProvider } from '@/features/chat/contexts/ChatToolbarContext'
 import { useAppStore } from '@/lib/store'
+import { useChatStore } from '@/lib/chat-store'
 
-const VoiceChatMode = dynamicNext(() => import('@/features/chat/components/input/VoiceChatMode').then(m => m.VoiceChatMode), { ssr: false })
-const ConversationViewer = dynamicNext(() => import('@/features/chat/components/sidebar/ConversationViewer').then(m => m.ConversationViewer), { ssr: false })
-const ConversationSearch = dynamicNext(() => import('@/features/chat/components/sidebar/ConversationSearch').then(m => m.ConversationSearch), { ssr: false })
-const ChatSettings = dynamicNext(() => import('@/features/chat/components/dialogs/ChatSettings').then(m => m.ChatSettings), { ssr: false })
-const ConversationSidebar = dynamicNext(() => import('@/features/chat/components/sidebar/ConversationSidebar').then(m => m.ConversationSidebar), { ssr: false })
-const ChatToolPanel = dynamicNext(() => import('@/features/chat/components/panels/ChatToolPanel').then(m => m.ChatToolPanel), { ssr: false })
-const DownloadDialog = dynamicNext(() => import('@/features/chat/components/dialogs/DownloadDialog').then(m => m.DownloadDialog), { ssr: false })
-const SystemPromptDialog = dynamicNext(() => import('@/features/chat/components/dialogs/SystemPromptDialog').then(m => m.SystemPromptDialog), { ssr: false })
-const ReadFileSection = dynamicNext(() => import('@/features/chat/components/dialogs/ReadFileSection'), { ssr: false })
-const NoteDialog = dynamicNext(() => import('@/features/chat/components/dialogs/NoteDialog').then(m => m.NoteDialog), { ssr: false })
-const ThreadPanel = dynamicNext(() => import('@/features/chat/components/ThreadPanel').then(m => m.ThreadPanel), { ssr: false })
-const KeyboardShortcutsPanel = dynamicNext(() => import('@/features/chat/components/dialogs/KeyboardShortcutsPanel').then(m => m.KeyboardShortcutsPanel), { ssr: false })
-const TemplateDialog = dynamicNext(() => import('@/features/chat/components/dialogs/TemplateDialog').then(m => m.TemplateDialog), { ssr: false })
-const ChatStatsPanel = dynamicNext(() => import('@/features/chat/components/dialogs/ChatStatsPanel').then(m => m.ChatStatsPanel), { ssr: false })
+const VoiceChatMode = dynamicNext(
+  () => import('@/features/chat/components/input/VoiceChatMode').then((m) => m.VoiceChatMode),
+  { ssr: false },
+)
+const ConversationViewer = dynamicNext(
+  () =>
+    import('@/features/chat/components/sidebar/ConversationViewer').then(
+      (m) => m.ConversationViewer,
+    ),
+  { ssr: false },
+)
+const ConversationSearch = dynamicNext(
+  () =>
+    import('@/features/chat/components/sidebar/ConversationSearch').then(
+      (m) => m.ConversationSearch,
+    ),
+  { ssr: false },
+)
+const ChatSettings = dynamicNext(
+  () => import('@/features/chat/components/dialogs/ChatSettings').then((m) => m.ChatSettings),
+  { ssr: false },
+)
+const ConversationSidebar = dynamicNext(
+  () =>
+    import('@/features/chat/components/sidebar/ConversationSidebar').then(
+      (m) => m.ConversationSidebar,
+    ),
+  { ssr: false },
+)
+const ChatToolPanel = dynamicNext(
+  () => import('@/features/chat/components/panels/ChatToolPanel').then((m) => m.ChatToolPanel),
+  { ssr: false },
+)
+const DownloadDialog = dynamicNext(
+  () => import('@/features/chat/components/dialogs/DownloadDialog').then((m) => m.DownloadDialog),
+  { ssr: false },
+)
+const SystemPromptDialog = dynamicNext(
+  () =>
+    import('@/features/chat/components/dialogs/SystemPromptDialog').then(
+      (m) => m.SystemPromptDialog,
+    ),
+  { ssr: false },
+)
+const ReadFileSection = dynamicNext(
+  () => import('@/features/chat/components/dialogs/ReadFileSection'),
+  { ssr: false },
+)
+const NoteDialog = dynamicNext(
+  () => import('@/features/chat/components/dialogs/NoteDialog').then((m) => m.NoteDialog),
+  { ssr: false },
+)
+const ThreadPanel = dynamicNext(
+  () => import('@/features/chat/components/ThreadPanel').then((m) => m.ThreadPanel),
+  { ssr: false },
+)
+const KeyboardShortcutsPanel = dynamicNext(
+  () =>
+    import('@/features/chat/components/dialogs/KeyboardShortcutsPanel').then(
+      (m) => m.KeyboardShortcutsPanel,
+    ),
+  { ssr: false },
+)
+const TemplateDialog = dynamicNext(
+  () => import('@/features/chat/components/dialogs/TemplateDialog').then((m) => m.TemplateDialog),
+  { ssr: false },
+)
+const ChatStatsPanel = dynamicNext(
+  () => import('@/features/chat/components/dialogs/ChatStatsPanel').then((m) => m.ChatStatsPanel),
+  { ssr: false },
+)
 
 interface ChatPageSectionProps {
   controller: ChatPageController
@@ -36,11 +94,22 @@ interface ChatPageSectionProps {
   onConsciousnessToggle?: () => void
 }
 
-export const ChatSidebarSection = memo(function ChatSidebarSection({ controller }: ChatPageSectionProps) {
+export const ChatSidebarSection = memo(function ChatSidebarSection({
+  controller,
+}: ChatPageSectionProps) {
   const { chat, ui, convCollapsed, toggleConv } = controller
-  const handleStar = useCallback((id: string, starred: boolean) => chat.starSession(id, starred), [chat])
-  const handlePin = useCallback((id: string, pinned: boolean) => chat.pinSession(id, pinned), [chat])
-  const handleArchive = useCallback((id: string, archived: boolean) => chat.archiveSession(id, archived), [chat])
+  const handleStar = useCallback(
+    (id: string, starred: boolean) => chat.starSession(id, starred),
+    [chat],
+  )
+  const handlePin = useCallback(
+    (id: string, pinned: boolean) => chat.pinSession(id, pinned),
+    [chat],
+  )
+  const handleArchive = useCallback(
+    (id: string, archived: boolean) => chat.archiveSession(id, archived),
+    [chat],
+  )
   const handleDuplicate = useCallback((id: string) => chat.duplicateSession(id), [chat])
   const handleCloseSidebar = useCallback(() => ui.setSidebarOpen(false), [ui])
   return (
@@ -64,32 +133,54 @@ export const ChatSidebarSection = memo(function ChatSidebarSection({ controller 
   )
 })
 
-export const ChatToolbarSection = memo(function ChatToolbarSection({ controller, consciousnessOpen, onConsciousnessToggle }: ChatPageSectionProps) {
+export const ChatToolbarSection = memo(function ChatToolbarSection({
+  controller,
+  consciousnessOpen,
+  onConsciousnessToggle,
+}: ChatPageSectionProps) {
   return (
     <ChatToolbarProvider value={controller.toolbarValue}>
-      <ChatToolbar consciousnessOpen={consciousnessOpen} onConsciousnessToggle={onConsciousnessToggle} />
+      <ChatToolbar
+        consciousnessOpen={consciousnessOpen}
+        onConsciousnessToggle={onConsciousnessToggle}
+      />
     </ChatToolbarProvider>
   )
 })
 
-export const ChatSettingsSection = memo(function ChatSettingsSection({ controller }: ChatPageSectionProps) {
+export const ChatSettingsSection = memo(function ChatSettingsSection({
+  controller,
+}: ChatPageSectionProps) {
   const { ui, model, chat, clearChat } = controller
-  const settings = useAppStore(state => state.settings)
-  const updateSettings = useAppStore(state => state.updateSettings)
+  const settings = useAppStore((state) => state.settings)
+  const updateSettings = useAppStore((state) => state.updateSettings)
 
-  const handleTemperatureChange = useCallback((temp: number) => {
-    model.setTemperature(temp)
-    generationConfigController.update({ temperature: temp }).catch(e => { logger.warning('Could not generation config temperature save', { exception: String(e) }) })
-  }, [model])
+  const handleTemperatureChange = useCallback(
+    (temp: number) => {
+      model.setTemperature(temp)
+      generationConfigController.update({ temperature: temp }).catch((e) => {
+        logger.warning('Could not generation config temperature save', { exception: String(e) })
+      })
+    },
+    [model],
+  )
 
-  const handleMaxTokensChange = useCallback((tokens: number) => {
-    model.setMaxTokens(tokens)
-    generationConfigController.update({ max_new_tokens: tokens }).catch(e => { logger.warning('Could not generation config max_tokens save', { exception: String(e) }) })
-  }, [model])
+  const handleMaxTokensChange = useCallback(
+    (tokens: number) => {
+      model.setMaxTokens(tokens)
+      generationConfigController.update({ max_new_tokens: tokens }).catch((e) => {
+        logger.warning('Could not generation config max_tokens save', { exception: String(e) })
+      })
+    },
+    [model],
+  )
 
-  const handleAutoApproveToolsChange = useCallback((value: boolean) => {
-    updateSettings({ autoApproveTools: value })
-  }, [updateSettings])
+  const handleAutoApproveToolsChange = useCallback(
+    (value: boolean) => {
+      updateSettings({ autoApproveTools: value })
+    },
+    [updateSettings],
+  )
 
   if (!ui.showSettings) return null
   return (
@@ -111,35 +202,82 @@ export const ChatSettingsSection = memo(function ChatSettingsSection({ controlle
 })
 
 export const ChatChatSection = memo(function ChatChatSection({ controller }: ChatPageSectionProps) {
+  // ── Zustand selectors for hot-path state (only re-renders when these change) ──
+  const messages = useChatStore((s) => s.messages)
+  const loading = useChatStore((s) => s.loading)
+  const sessionLoading = useChatStore((s) => s.sessionLoading)
+  const input = useChatStore((s) => s.input)
+  const images = useChatStore((s) => s.images)
+  const toolEvents = useChatStore((s) => s.toolEvents)
+  const ragVerification = useChatStore((s) => s.ragVerification)
+  const contextLayers = useChatStore((s) => s.contextLayers)
+  const pendingToolApproval = useChatStore((s) => s.pendingToolApproval)
+  const currentError = useChatStore((s) => s.currentError)
+  const selectedMessageIds = useChatStore((s) => s.selectedMessageIds)
+  const selectionMode = useChatStore((s) => s.selectionMode)
+
+  // ── Controller for actions and non-hot-path state ──
   const {
-    chat, ui, model, health, suggestions, refreshHealth, showToast,
-    chatMode, setChatMode,
-    writeTone, setWriteTone,
-    writeType, setWriteType,
-    rewriteStyle, setRewriteStyle,
-    decideStructure, setDecideStructure,
-    explainDifficulty, setExplainDifficulty,
-    translateLangPair, setTranslateLangPair,
-    brainstormTopic, setBrainstormTopic,
-    wellnessType, setWellnessType,
-    createStyle, setCreateStyle,
-    readFileData, setReadFileData, readLoading, handleReadFile,
+    chat,
+    ui,
+    model,
+    health,
+    suggestions,
+    refreshHealth,
+    showToast,
+    chatMode,
+    setChatMode,
+    writeTone,
+    setWriteTone,
+    writeType,
+    setWriteType,
+    rewriteStyle,
+    setRewriteStyle,
+    decideStructure,
+    setDecideStructure,
+    explainDifficulty,
+    setExplainDifficulty,
+    translateLangPair,
+    setTranslateLangPair,
+    brainstormTopic,
+    setBrainstormTopic,
+    wellnessType,
+    setWellnessType,
+    createStyle,
+    setCreateStyle,
+    readFileData,
+    setReadFileData,
+    readLoading,
+    handleReadFile,
     handleWriteSend,
     handleExecuteCommand,
-    handleImageDropped, handleTextDropped, handlePDFDropped,
-    isBookmarked, handleToggleBookmark, handleDeleteMessage, handleSaveToKnowledge,
+    handleImageDropped,
+    handleTextDropped,
+    handlePDFDropped,
+    isBookmarked,
+    handleToggleBookmark,
+    handleDeleteMessage,
+    handleSaveToKnowledge,
     collapsibleLength,
-    contextLayers,
-    handleReact,
-    handlePin,
   } = controller
+
+  // ── Actions from store (stable references) ──
+  const storeStop = useChatStore((s) => s.stop)
+  const storeSetInput = useChatStore((s) => s.setInput)
+  const storeSetMessages = useChatStore((s) => s.setMessages)
+  const storeSetLoading = useChatStore((s) => s.setLoading)
+  const storeSetCurrentError = useChatStore((s) => s.setCurrentError)
+  const storeHandleToolApproval = useChatStore((s) => s.handleToolApproval)
+  const storeHandleReact = useChatStore((s) => s.handleReact)
+  const storeHandlePin = useChatStore((s) => s.handlePin)
+  const storeToggleMessageSelection = useChatStore((s) => s.toggleMessageSelection)
 
   const handleStop = useCallback(() => {
     if (chat.loadingRef.current) {
       chat.loadingRef.current.abort()
     }
-    chat.setLoading(false)
-  }, [chat])
+    storeStop()
+  }, [chat, storeStop])
 
   const handleCancel = useCallback(async () => {
     const sessionId = chat.sessionIdRef.current
@@ -150,86 +288,119 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
     handleStop()
   }, [chat, handleStop])
 
-  const handleAudioRecorded = useCallback(async (blob: Blob) => {
-    try {
-      const { chatController } = await import('@/lib/chat-controller')
-      const sessionId = chat.sessionIdRef.current
-      if (!sessionId) return
-      const result = await chatController.sendVoiceMessage(sessionId, blob)
-      if (result.audio_path) {
-        const audioUrl = chatController.getVoiceAudioUrl(sessionId, `voice-${Date.now()}`)
-        chat.setMessages(prev => [...prev, {
-          id: `voice-${Date.now()}`,
-          role: 'user',
-          content: result.transcript || '(voice message)',
-          timestamp: new Date(),
-          audio: {
-            id: `audio-${Date.now()}`,
-            url: audioUrl,
-            durationMs: result.audio_duration_ms,
-          },
-        }])
+  const handleAudioRecorded = useCallback(
+    async (blob: Blob) => {
+      try {
+        const { chatController } = await import('@/lib/chat-controller')
+        const sessionId = chat.sessionIdRef.current
+        if (!sessionId) return
+        const result = await chatController.sendVoiceMessage(sessionId, blob)
+        if (result.audio_path) {
+          const audioUrl = chatController.getVoiceAudioUrl(sessionId, `voice-${Date.now()}`)
+          storeSetMessages((prev) => [
+            ...prev,
+            {
+              id: `voice-${Date.now()}`,
+              role: 'user',
+              content: result.transcript || '(voice message)',
+              timestamp: new Date(),
+              audio: {
+                id: `audio-${Date.now()}`,
+                url: audioUrl,
+                durationMs: result.audio_duration_ms,
+              },
+            },
+          ])
+        }
+      } catch (err) {
+        showToast('Could not save voice message', 'error')
       }
-    } catch (err) {
-      showToast('Could not save voice message', 'error')
-    }
-  }, [chat, showToast])
+    },
+    [storeSetMessages, showToast],
+  )
 
-  const handleAudioTranscript = useCallback((text: string) => {
-    chat.setInput(prev => prev ? `${prev} ${text}` : text)
-  }, [chat])
+  const handleAudioTranscript = useCallback(
+    (text: string) => {
+      storeSetInput((prev) => (prev ? `${prev} ${text}` : text))
+    },
+    [storeSetInput],
+  )
 
-  const handleGeneratedImage = useCallback((dataUrl: string, prompt: string) => {
-    chat.setMessages(prev => [...prev, {
-      id: `img-${Date.now()}`, role: 'user',
-      content: `[Generate image: ${prompt}]`, timestamp: new Date(),
-      images: [{ id: `gen-${Date.now()}`, dataUrl, name: 'generated.png' }],
-    }])
-    showToast('Image generated — see message above', 'info')
-  }, [chat, showToast])
+  const handleGeneratedImage = useCallback(
+    (dataUrl: string, prompt: string) => {
+      storeSetMessages((prev) => [
+        ...prev,
+        {
+          id: `img-${Date.now()}`,
+          role: 'user',
+          content: `[Generate image: ${prompt}]`,
+          timestamp: new Date(),
+          images: [{ id: `gen-${Date.now()}`, dataUrl, name: 'generated.png' }],
+        },
+      ])
+      showToast('Image generated — see message above', 'info')
+    },
+    [storeSetMessages, showToast],
+  )
 
-  const handlePDFError = useCallback((error: string) => {
-    showToast(`PDF analysis failed: ${error}`, 'error')
-  }, [showToast])
+  const handlePDFError = useCallback(
+    (error: string) => {
+      showToast(`PDF analysis failed: ${error}`, 'error')
+    },
+    [showToast],
+  )
 
-  const handlePDFAnalysis = useCallback((analysis: string, filename: string) => {
-    chat.setMessages(prev => [...prev, {
-      id: `pdf-user-${Date.now()}`,
-      role: 'user',
-      content: `📎 Uploaded PDF: ${filename}`,
-      timestamp: new Date(),
-    }, {
-      id: `pdf-${Date.now()}`,
-      role: 'assistant',
-      content: analysis,
-      timestamp: new Date(),
-    }])
-    showToast('PDF analyzed — see response below', 'info')
-  }, [chat, showToast])
+  const handlePDFAnalysis = useCallback(
+    (analysis: string, filename: string) => {
+      storeSetMessages((prev) => [
+        ...prev,
+        {
+          id: `pdf-user-${Date.now()}`,
+          role: 'user',
+          content: `📎 Uploaded PDF: ${filename}`,
+          timestamp: new Date(),
+        },
+        {
+          id: `pdf-${Date.now()}`,
+          role: 'assistant',
+          content: analysis,
+          timestamp: new Date(),
+        },
+      ])
+      showToast('PDF analyzed — see response below', 'info')
+    },
+    [storeSetMessages, showToast],
+  )
 
   const handleDismissError = useCallback(() => {
-    chat.setCurrentError(null)
-  }, [chat])
+    storeSetCurrentError(null)
+  }, [storeSetCurrentError])
 
   const handleRemoveReadFile = useCallback(() => {
     setReadFileData(null)
-    chat.setMessages(prev => prev.filter(m => !m.id.startsWith('file-')))
-  }, [chat, setReadFileData])
+    storeSetMessages((prev) => prev.filter((m) => !m.id.startsWith('file-')))
+  }, [storeSetMessages, setReadFileData])
 
-  const handleApproveTool = useCallback((approved: boolean) => {
-    chat.handleToolApproval(approved)
-  }, [chat])
+  const handleApproveTool = useCallback(
+    (approved: boolean) => {
+      storeHandleToolApproval(approved)
+    },
+    [storeHandleToolApproval],
+  )
 
-  const handleModeSelect = useCallback((mode: string) => {
-    setChatMode(mode as any)
-  }, [setChatMode])
+  const handleModeSelect = useCallback(
+    (mode: string) => {
+      setChatMode(mode as any)
+    },
+    [setChatMode],
+  )
 
   return (
     <>
-      {chat.currentError && (
+      {currentError && (
         <ErrorBanner
-          error={chat.currentError}
-          onRetry={chat.handleRetry}
+          error={currentError}
+          onRetry={controller.chat.handleRetry}
           onDismiss={handleDismissError}
         />
       )}
@@ -271,53 +442,50 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
         onTextDropped={handleTextDropped}
         onPDFDropped={handlePDFDropped}
       >
-        {chat.loading && (
+        {loading && (
           <div className="px-4 py-2">
-            <ContextInjectionBar
-              onInject={chat.injectContext}
-              disabled={!chat.loading}
-            />
+            <ContextInjectionBar onInject={controller.chat.injectContext} disabled={!loading} />
           </div>
         )}
-        {chat.pendingToolApproval && (
+        {pendingToolApproval && (
           <div className="px-4 py-2">
             <ToolApprovalDialog
-              toolName={chat.pendingToolApproval.toolName}
-              args={chat.pendingToolApproval.args}
+              toolName={pendingToolApproval.toolName}
+              args={pendingToolApproval.args}
               onApprove={handleApproveTool}
             />
           </div>
         )}
         <ChatArea
-          messages={chat.messages}
-          loading={chat.loading}
-          sessionLoading={chat.sessionLoading}
+          messages={messages}
+          loading={loading}
+          sessionLoading={sessionLoading}
           model={model.model}
           health={health}
           chatMode={chatMode}
           suggestions={suggestions}
           onRefreshHealth={refreshHealth}
-          onCopy={chat.handleCopy}
-          onRegenerate={chat.handleRegenerate}
-          onRegenerateWithOptions={chat.handleRegenerateWithOptions}
-          onThumbsUp={chat.handleThumbsUp}
-          onThumbsDown={chat.handleThumbsDown}
-          onEdit={chat.handleEditMessage}
+          onCopy={controller.chat.handleCopy}
+          onRegenerate={controller.chat.handleRegenerate}
+          onRegenerateWithOptions={controller.chat.handleRegenerateWithOptions}
+          onThumbsUp={controller.chat.handleThumbsUp}
+          onThumbsDown={controller.chat.handleThumbsDown}
+          onEdit={controller.chat.handleEditMessage}
           searchQuery={ui.searchQuery}
-          onSuggestionClick={chat.handleSuggestionClick}
+          onSuggestionClick={controller.chat.handleSuggestionClick}
           onModeSelect={handleModeSelect}
-          toolEvents={chat.toolEvents}
-          streamingStatus={chat.pendingToolApproval ? 'tool_call' : 'generating'}
-          streamingToolName={chat.pendingToolApproval?.toolName}
-          ragVerification={chat.ragVerification}
-          value={chat.input}
-          onChange={chat.setInput}
+          toolEvents={toolEvents}
+          streamingStatus={pendingToolApproval ? 'tool_call' : 'generating'}
+          streamingToolName={pendingToolApproval?.toolName}
+          ragVerification={ragVerification}
+          value={input}
+          onChange={storeSetInput}
           onSend={handleWriteSend}
           onStop={handleStop}
           onCancel={handleCancel}
-          images={chat.images}
-          onAddImage={chat.handleAddImage}
-          onRemoveImage={chat.handleRemoveImage}
+          images={images}
+          onAddImage={controller.chat.handleAddImage}
+          onRemoveImage={controller.chat.handleRemoveImage}
           onAudioRecorded={handleAudioRecorded}
           onAudioTranscript={handleAudioTranscript}
           onGeneratedImage={handleGeneratedImage}
@@ -328,16 +496,16 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
           onBookmark={handleToggleBookmark}
           onDelete={handleDeleteMessage}
           onSaveToKnowledge={handleSaveToKnowledge}
-          onReact={handleReact}
-          onPin={handlePin}
+          onReact={storeHandleReact}
+          onPin={storeHandlePin}
           collapsibleLength={collapsibleLength}
           temperature={model.temperature}
           contextLayers={contextLayers}
           noteMap={controller.noteMap}
           onAddNote={controller.onAddNote}
-          selectionMode={controller.selectionMode}
-          selectedMessageIds={controller.selectedMessageIds}
-          onToggleSelection={controller.toggleMessageSelection}
+          selectionMode={selectionMode}
+          selectedMessageIds={selectedMessageIds}
+          onToggleSelection={storeToggleMessageSelection}
           hasThread={controller.hasThread}
           onThread={controller.onStartThread}
           onQuickReply={controller.onQuickReply}
@@ -347,12 +515,21 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
   )
 })
 
-export const ChatSearchSection = memo(function ChatSearchSection({ controller }: ChatPageSectionProps) {
+export const ChatSearchSection = memo(function ChatSearchSection({
+  controller,
+}: ChatPageSectionProps) {
   const { chat, ui } = controller
-  const viewerMessages = useMemo(() => chat.messages.map(m => ({
-    id: m.id, role: m.role, content: m.content,
-    timestamp: typeof m.timestamp === 'number' ? m.timestamp : m.timestamp?.getTime() || Date.now(),
-  })), [chat.messages])
+  const viewerMessages = useMemo(
+    () =>
+      chat.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp:
+          typeof m.timestamp === 'number' ? m.timestamp : m.timestamp?.getTime() || Date.now(),
+      })),
+    [chat.messages],
+  )
   return (
     <>
       <ConversationViewer
@@ -371,7 +548,9 @@ export const ChatSearchSection = memo(function ChatSearchSection({ controller }:
   )
 })
 
-export const ChatToolPanelInline = memo(function ChatToolPanelInline({ controller }: ChatPageSectionProps) {
+export const ChatToolPanelInline = memo(function ChatToolPanelInline({
+  controller,
+}: ChatPageSectionProps) {
   const { ui, chat, bookmarks, removeBookmark, clearAll } = controller
   return (
     <ChatToolPanel
@@ -386,16 +565,38 @@ export const ChatToolPanelInline = memo(function ChatToolPanelInline({ controlle
   )
 })
 
-export const ChatDialogSection = memo(function ChatDialogSection({ controller }: ChatPageSectionProps) {
+export const ChatDialogSection = memo(function ChatDialogSection({
+  controller,
+}: ChatPageSectionProps) {
   const {
-    ui, chat, model, bookmarks, removeBookmark, clearAll,
-    systemPromptOpen, setSystemPromptOpen, customSystemPrompt, handleSaveSystemPrompt,
+    ui,
+    chat,
+    model,
+    bookmarks,
+    removeBookmark,
+    clearAll,
+    systemPromptOpen,
+    setSystemPromptOpen,
+    customSystemPrompt,
+    handleSaveSystemPrompt,
     setChatMode,
-    noteDialogOpen, setNoteDialogOpen, noteDialogNote, onSaveNote, onDeleteNote,
-    shortcutsOpen, setShortcutsOpen,
-    templatesOpen, setTemplatesOpen,
-    statsOpen, setStatsOpen,
-    activeThreadMessageId, activeThread, activeThreadMessages, onStartThread, onReplyInThread, onCloseThread,
+    noteDialogOpen,
+    setNoteDialogOpen,
+    noteDialogNote,
+    onSaveNote,
+    onDeleteNote,
+    shortcutsOpen,
+    setShortcutsOpen,
+    templatesOpen,
+    setTemplatesOpen,
+    statsOpen,
+    setStatsOpen,
+    activeThreadMessageId,
+    activeThread,
+    activeThreadMessages,
+    onStartThread,
+    onReplyInThread,
+    onCloseThread,
   } = controller
 
   return (
@@ -419,7 +620,10 @@ export const ChatDialogSection = memo(function ChatDialogSection({ controller }:
             chat.setInput(text)
             await chat.sendMessage(text)
           }}
-          onClose={() => { ui.setVoiceMode(false); setChatMode('chat') }}
+          onClose={() => {
+            ui.setVoiceMode(false)
+            setChatMode('chat')
+          }}
         />
       )}
 
@@ -444,7 +648,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({ controller }:
 
       {activeThreadMessageId && activeThread && (
         <ThreadPanel
-          parentMessage={chat.messages.find(m => m.id === activeThreadMessageId)!}
+          parentMessage={chat.messages.find((m) => m.id === activeThreadMessageId)!}
           threadMessages={activeThreadMessages}
           onSend={(content) => onReplyInThread(activeThread.id, content)}
           onClose={onCloseThread}
@@ -452,10 +656,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({ controller }:
         />
       )}
 
-      <KeyboardShortcutsPanel
-        open={shortcutsOpen}
-        onClose={() => setShortcutsOpen(false)}
-      />
+      <KeyboardShortcutsPanel open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       <TemplateDialog
         open={templatesOpen}

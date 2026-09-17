@@ -132,19 +132,23 @@ export class DbCircuitBreaker {
     if (this._dead) return
     this._dead = true
     const msg = err instanceof Error ? err.message : String(err)
-    logger.warning('ManDB DocStore marked dead — all further error writes will be skipped', { error: msg })
+    logger.warning('ManDB DocStore marked dead — all further error writes will be skipped', {
+      error: msg,
+    })
   }
 }
 
 const _defaultBreaker = new DbCircuitBreaker()
 
 /** Returns true if the DocStore is known to be unavailable. */
-export function isDBDead(): boolean { return _defaultBreaker.isDead() }
+export function isDBDead(): boolean {
+  return _defaultBreaker.isDead()
+}
 
 function toStored(session: ChatSession): StoredChatSession {
   return {
     ...session,
-    messages: session.messages.map(m => ({
+    messages: session.messages.map((m) => ({
       ...m,
       timestamp: typeof m.timestamp === 'string' ? m.timestamp : m.timestamp.toISOString(),
     })),
@@ -154,7 +158,7 @@ function toStored(session: ChatSession): StoredChatSession {
 function fromStored(session: StoredChatSession): ChatSession {
   return {
     ...session,
-    messages: session.messages.map(m => ({
+    messages: session.messages.map((m) => ({
       ...m,
       timestamp: new Date(m.timestamp),
     })),
@@ -188,7 +192,10 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
       await apiDelete(docUrl('sessions', id))
     },
 
-    async updateSession(id: string, updates: { starred?: boolean; name?: string; pinned?: boolean; archived?: boolean }): Promise<void> {
+    async updateSession(
+      id: string,
+      updates: { starred?: boolean; name?: string; pinned?: boolean; archived?: boolean },
+    ): Promise<void> {
       await apiPatch(docUrl('sessions', id), {
         ...(updates.starred !== undefined && { starred: updates.starred }),
         ...(updates.name !== undefined && { name: updates.name }),
@@ -204,7 +211,7 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
 
     async getUnsyncedSessions(): Promise<ChatSession[]> {
       const sessions = await apiGet<StoredChatSession[]>(docUrl('sessions'))
-      return sessions.filter(s => s.synced === false).map(fromStored)
+      return sessions.filter((s) => s.synced === false).map(fromStored)
     },
 
     async markSynced(id: string): Promise<void> {
@@ -232,19 +239,41 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
       await apiDelete(docUrl('pendingMessages'))
     },
 
-    async searchAllSessions(query: string): Promise<Array<{ session: ChatSession; matches: ChatMessage[] }>> {
+    async searchAllSessions(
+      query: string,
+    ): Promise<Array<{ session: ChatSession; matches: ChatMessage[] }>> {
       if (!query.trim()) return []
-      const q = query.toLowerCase()
-      const all = await apiGet<StoredChatSession[]>(docUrl('sessions'))
-      const results: Array<{ session: ChatSession; matches: ChatMessage[] }> = []
-      for (const stored of all) {
-        const session = fromStored(stored)
-        const matches = session.messages.filter(m => m.content.toLowerCase().includes(q))
-        if (matches.length > 0 || session.name.toLowerCase().includes(q)) {
-          results.push({ session, matches })
-        }
+      try {
+        const data = await apiGet<any>(
+          `/chat/sessions/search?q=${encodeURIComponent(query)}&limit=30`,
+        )
+        const results = Array.isArray(data) ? data : (data?.results ?? data?.data ?? [])
+        return results.map((r: any) => ({
+          session: {
+            id: r.id,
+            name: r.name || `Chat ${r.id}`,
+            messages: (r.matches || []).map((m: any) => ({
+              id: m.id || `msg_${Date.now()}`,
+              role: (m.role || 'user') as 'user' | 'assistant',
+              content: m.content || '',
+              timestamp: new Date(m.timestamp || Date.now()),
+            })),
+            createdAt: r.created_at || '',
+            updatedAt: r.updated_at || '',
+            synced: true,
+            starred: false,
+            pinned: false,
+          },
+          matches: (r.matches || []).map((m: any) => ({
+            id: m.id || `msg_${Date.now()}`,
+            role: (m.role || 'user') as 'user' | 'assistant',
+            content: m.content || '',
+            timestamp: new Date(m.timestamp || Date.now()),
+          })),
+        }))
+      } catch {
+        return []
       }
-      return results.sort((a, b) => b.matches.length - a.matches.length)
     },
 
     async getKnowledge(): Promise<KnowledgeItem[]> {
@@ -333,7 +362,7 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
         return _inflightKV.get(key)! as Promise<T | undefined>
       }
       const promise = apiGet<KVEntry | null>(docUrl('kv', key))
-        .then(entry => entry?.value as T | undefined)
+        .then((entry) => entry?.value as T | undefined)
         .finally(() => _inflightKV.delete(key))
       _inflightKV.set(key, promise)
       return promise
@@ -364,7 +393,11 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
     async getErrors(limit = 20): Promise<ErrorEntry[]> {
       if (breaker.isDead()) return []
       try {
-        return await apiGet<ErrorEntry[]>(docUrl('errors'), { sort: 'timestamp', dir: '-1', limit: String(limit) })
+        return await apiGet<ErrorEntry[]>(docUrl('errors'), {
+          sort: 'timestamp',
+          dir: '-1',
+          limit: String(limit),
+        })
       } catch (err) {
         logger.warning('chatDB.getErrors failed', { exception: String(err) })
         return []
@@ -373,7 +406,9 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
 
     async clearErrors(): Promise<void> {
       if (breaker.isDead()) return
-      try { await apiDelete(docUrl('errors')) } catch (err) {
+      try {
+        await apiDelete(docUrl('errors'))
+      } catch (err) {
         logger.warning('chatDB.clearErrors failed', { exception: String(err) })
       }
     },
@@ -390,14 +425,18 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
 
     async saveMessageNote(note: MessageNote): Promise<void> {
       if (breaker.isDead()) return
-      try { await apiPost(docUrl('message-notes'), note) } catch (err) {
+      try {
+        await apiPost(docUrl('message-notes'), note)
+      } catch (err) {
         logger.warning('chatDB.saveMessageNote failed', { exception: String(err) })
       }
     },
 
     async removeMessageNote(sessionId: string, messageId: string): Promise<void> {
       if (breaker.isDead()) return
-      try { await apiDelete(docUrl(`message-notes/${sessionId}/${messageId}`)) } catch (err) {
+      try {
+        await apiDelete(docUrl(`message-notes/${sessionId}/${messageId}`))
+      } catch (err) {
         logger.warning('chatDB.removeMessageNote failed', { exception: String(err) })
       }
     },
