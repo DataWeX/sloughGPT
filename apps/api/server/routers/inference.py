@@ -5,6 +5,7 @@ Inference Router - Chat and text generation endpoints
 import json
 import logging
 import threading
+import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -28,20 +29,17 @@ from schemas.common import classify_and_raise, raise_error, safe_audit_log, succ
 
 from config import ServerConfig
 from config import gen_config as _gen_config
-from domain.agents._internal.system import get_agent_system
-from domain.agents._internal.tools import get_tool_registry
-from domain.cognitive._internal.rag_service import get_rag_service
-from domain.feedback._internal.response_tracker import get_response_tracker
-from domain.infrastructure._internal.errors import AppError
+from domain.agents import get_agent_system, get_tool_registry
+from domain.core import get_rag_service
+from domain.feedback import get_response_tracker
+from domain.infrastructure import AppError
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.infrastructure.conversation_log import capture
 from domain.infrastructure.request_coalescer import get_coalescer
 from domain.infrastructure.server_state import get_server_state
-from domain.learner import get_learner
-from domain.learner._internal.entity_extractor import extract_and_store
-from domain.learner._internal.knowledge import KnowledgeFact, get_knowledge_memory
-from domain.memory._internal.service import get_memory_service
-from domain.models._internal.provider import KnowledgeProcessor, apply_processors, get_provider
+from domain.learner import KnowledgeFact, extract_and_store, get_knowledge_memory, get_learner
+from domain.memory import get_memory_service
+from domain.models import KnowledgeProcessor, apply_processors, get_provider
 
 logger = logging.getLogger("slo.inference")
 
@@ -49,7 +47,6 @@ cfg = ServerConfig.from_env()
 import asyncio
 import datetime
 import sys as _sys
-import time
 import uuid
 
 # Ensure server parent dir is on path for host_metrics import (used in /info)
@@ -451,7 +448,7 @@ def _apply_meta_weights(
                 return cached_params
 
     try:
-        from domain.feedback._internal.meta_weights import get_meta_weight_manager
+        from domain.feedback import get_meta_weight_manager
 
         manager = get_meta_weight_manager()
         adj = manager.get_adjustment(
@@ -506,7 +503,7 @@ def _apply_meta_weights(
 def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 5) -> dict:
     """Search learned knowledge + optionally live web search. Returns {facts, source, topics}."""
     try:
-        from domain.learner._internal.knowledge_augmenter import enrich_with_knowledge
+        from domain.learner import enrich_with_knowledge
 
         return enrich_with_knowledge(user_msg, auto_search=auto_search, max_facts=max_facts)
     except Exception as e:
@@ -516,81 +513,142 @@ def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 
         return {"facts": [], "source": "error", "topics": [], "error": str(e)}
 
 
-def _search_sessions_sync(q: str, limit: int) -> list:
-    """Synchronous full-text search across session files on disk."""
-    q_lower = q.lower().strip()
-    results = []
-    max_matches_per_session = 3  # stop scanning messages after this many matches
+# ── In-memory session search index ──────────────────────────────────────────
 
-    search_dirs: list[Path] = []
-    sessions_dir = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
-    if sessions_dir.is_dir():
-        search_dirs.append(sessions_dir)
-    conv_dir = Path(__file__).parent.parent.parent.parent / "data" / "conversations"
-    if conv_dir.is_dir():
-        search_dirs.append(conv_dir)
-    seen = set()
 
-    for sdir in search_dirs:
-        if not sdir.is_dir():
-            continue
+class SessionSearchIndex:
+    """Caches session file contents in memory for fast search.
 
-        def _safe_mtime(p: Path) -> float:
+    Only re-reads files whose mtime has changed since last index build.
+    Thread-safe for concurrent reads; rebuilds are serialized.
+    """
+
+    def __init__(self, max_age_seconds: float = 5.0) -> None:
+        self._max_age = max_age_seconds
+        self._lock = threading.Lock()
+        self._last_build: float = 0.0
+        # sid → {name, messages, created_at, updated_at, file_path}
+        self._entries: dict[str, dict[str, Any]] = {}
+
+    def search(self, q: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Search cached sessions. Rebuilds index if stale."""
+        now = time.monotonic()
+        if now - self._last_build > self._max_age:
+            self._rebuild()
+        return self._query(q.lower().strip(), limit)
+
+    def _rebuild(self) -> None:
+        with self._lock:
+            # Double-check after acquiring lock
+            if time.monotonic() - self._last_build <= self._max_age:
+                return
+            self._scan_files()
+            self._last_build = time.monotonic()
+
+    def _scan_files(self) -> None:
+        base = Path(__file__).parent.parent.parent.parent / "data"
+        search_dirs = [base / "chat_sessions", base / "conversations"]
+
+        # Collect all current file mtimes
+        current_files: dict[str, Path] = {}
+        for sdir in search_dirs:
+            if not sdir.is_dir():
+                continue
+            for f in sdir.glob("*.json"):
+                sid = f.stem
+                if sid not in current_files:
+                    current_files[sid] = f
+
+        # Remove entries for deleted files
+        stale = set(self._entries.keys()) - set(current_files.keys())
+        for sid in stale:
+            del self._entries[sid]
+
+        # Add or update entries
+        for sid, fpath in current_files.items():
             try:
-                return p.stat().st_mtime
-            except (OSError, ValueError):
-                return 0.0
-
-        for f in sorted(sdir.glob("*.json"), key=_safe_mtime, reverse=True):
-            if len(results) >= limit:
-                break
+                mtime = fpath.stat().st_mtime
+            except OSError:
+                continue
+            existing = self._entries.get(sid)
+            if existing and existing.get("_mtime") == mtime:
+                continue  # unchanged
             try:
-                data = json.loads(f.read_text())
-                sid = data.get("id") or data.get("session_id") or f.stem
-                if sid in seen:
-                    continue
-                seen.add(sid)
-                name = data.get("name", "") or ""
-                messages = data.get("messages", [])
-                matches = []
-
-                if q_lower in name.lower():
-                    matches.append(
-                        {
-                            "role": "session",
-                            "content": name,
-                            "timestamp": data.get("updated_at", ""),
-                        }
-                    )
-
-                for msg in messages:
-                    if len(matches) >= max_matches_per_session:
-                        break
-                    content = msg.get("content", "")
-                    if q_lower in content.lower():
-                        matches.append(
-                            {
-                                "role": msg.get("role", "unknown"),
-                                "content": content,
-                                "timestamp": msg.get("timestamp", ""),
-                            }
-                        )
-
-                if matches:
-                    results.append(
-                        {
-                            "id": sid,
-                            "name": name or sid,
-                            "created_at": data.get("created_at", ""),
-                            "updated_at": data.get("updated_at", ""),
-                            "match_count": len(matches),
-                            "matches": matches[:3],
-                        }
-                    )
+                data = json.loads(fpath.read_text())
+                self._entries[sid] = {
+                    "id": data.get("id") or data.get("session_id") or sid,
+                    "name": data.get("name", "") or "",
+                    "created_at": data.get("created_at", ""),
+                    "updated_at": data.get("updated_at", ""),
+                    "messages": data.get("messages", []),
+                    "_mtime": mtime,
+                }
             except (json.JSONDecodeError, OSError):
                 continue
 
-    return results
+    def _query(self, q_lower: str, limit: int) -> list[dict[str, Any]]:
+        if not q_lower:
+            return []
+        results: list[dict[str, Any]] = []
+        max_matches_per_session = 3
+
+        # Sort by updated_at descending for most-recent-first
+        sorted_entries = sorted(
+            self._entries.values(),
+            key=lambda e: e.get("updated_at", ""),
+            reverse=True,
+        )
+
+        for entry in sorted_entries:
+            if len(results) >= limit:
+                break
+            name = entry["name"]
+            messages = entry["messages"]
+            matches: list[dict[str, str]] = []
+
+            if q_lower in name.lower():
+                matches.append(
+                    {
+                        "role": "session",
+                        "content": name,
+                        "timestamp": entry.get("updated_at", ""),
+                    }
+                )
+
+            for msg in messages:
+                if len(matches) >= max_matches_per_session:
+                    break
+                content = msg.get("content", "")
+                if q_lower in content.lower():
+                    matches.append(
+                        {
+                            "role": msg.get("role", "unknown"),
+                            "content": content,
+                            "timestamp": msg.get("timestamp", ""),
+                        }
+                    )
+
+            if matches:
+                results.append(
+                    {
+                        "id": entry["id"],
+                        "name": name or entry["id"],
+                        "created_at": entry.get("created_at", ""),
+                        "updated_at": entry.get("updated_at", ""),
+                        "match_count": len(matches),
+                        "matches": matches[:3],
+                    }
+                )
+
+        return results
+
+
+_session_search_index = SessionSearchIndex()
+
+
+def _search_sessions_sync(q: str, limit: int) -> list:
+    """Full-text search across session files using in-memory index."""
+    return _session_search_index.search(q, limit)
 
 
 # ── FileRepository-backed session store ──
@@ -722,7 +780,7 @@ def _run_post_gen_tasks(
     """Launch fire-and-forget background tasks after chat generation completes."""
     import state as _pgs_state
 
-    from domain.cognitive._internal.rag_service import get_rag_service as _pgs_rag
+    from domain.core import get_rag_service as _pgs_rag
 
     duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
     tokens = len(full_response.split())
@@ -911,7 +969,7 @@ class InferenceRouter:
             and self._context_core._vector_store is None
         ):
             try:
-                from domain.inference._internal.vector_store import simple_embed
+                from domain.generation import simple_embed
 
                 self._context_core.set_vector_store(self._vector_store_ref, simple_embed)
             except Exception as e:
@@ -1919,7 +1977,7 @@ class InferenceRouter:
             rag_context = ""
             if req.use_rag:
                 try:
-                    from domain.cognitive._internal.rag_service import is_rag_service_ready
+                    from domain.core import is_rag_service_ready
 
                     if not is_rag_service_ready():
                         logger.debug("RAG service not ready yet, skipping query")
@@ -2170,7 +2228,7 @@ class InferenceRouter:
                     yield sse_error("chat", "KNOWLEDGE_PROC_ERROR", str(e), code="KNOWLEDGE_ERROR")
 
             try:
-                from domain.consciousness import get_consciousness
+                from domain.core import get_consciousness
 
                 _ce = get_consciousness()
                 if _ce.config.is_enabled():
@@ -2641,7 +2699,7 @@ class InferenceRouter:
             except Exception as e:
                 _mgr.finish(_op_id, str(e))
                 logger.warning("Chat stream outer failed: %s", e, extra={"tag": "INF"})
-                from domain.infrastructure._internal.errors import classify_exception
+                from domain.infrastructure import classify_exception
 
                 classified = classify_exception(e)
                 err_code = classified.code or "E_INFRA_GENERATION"
@@ -3112,7 +3170,7 @@ class InferenceRouter:
     async def list_model_providers(self) -> dict:
         try:
             """list_model_providers."""
-            from domain.models._internal.provider import get_provider, list_providers
+            from domain.models import get_provider, list_providers
 
             result = {}
             for name in list_providers():
