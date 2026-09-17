@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from threading import Lock
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import (
@@ -493,7 +493,7 @@ class MultimodalRouter:
         self, req: VideoInferRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """video_infer."""
-        from domain.training._internal.video_trainer import (
+        from domain.training import (
             VideoCaptionTrainer,
             list_video_checkpoints,
         )
@@ -620,7 +620,7 @@ class MultimodalRouter:
     async def detect_objects(self, file: UploadFile = File(...)) -> dict:
         """detect_objects."""
         if not file.content_type or not file.content_type.startswith("image/"):
-            raise HTTPException(status_code=400, detail="Only image files accepted")
+            raise_error("Only image files accepted", "E_BAD_REQUEST", status_code=400)
         mgr = self._ensure_initialized()
         contents = await file.read()
         import io
@@ -724,7 +724,7 @@ class MultimodalRouter:
         """process_video."""
         import tempfile
 
-        from domain.multimodal._internal.video import VideoProcessor
+        from domain.multimodal import VideoProcessor
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             tmp.write(await file.read())
@@ -846,9 +846,7 @@ class MultimodalRouter:
         import numpy as np
         from PIL import Image
 
-        from domain.multimodal._internal.diffusion import LatentDiffusionModel
-        from domain.multimodal._internal.text_encoder import TextEncoder
-        from domain.multimodal._internal.vae import SloVAE
+        from domain.multimodal import LatentDiffusionModel, SloVAE, TextEncoder
 
         if self._vae is None:
             self._vae = SloVAE(latent_dim=64)
@@ -960,7 +958,7 @@ class MultimodalRouter:
         """list_checkpoints."""
         import math
 
-        from domain.training._internal.video_trainer import list_video_checkpoints
+        from domain.training import list_video_checkpoints
 
         def _sanitize(obj):
             if isinstance(obj, float) and (math.isinf(obj) or math.isnan(obj)):
@@ -986,7 +984,7 @@ class MultimodalRouter:
         self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """load_checkpoint."""
-        from domain.training._internal.video_trainer import (
+        from domain.training import (
             VideoCaptionTrainer,
             list_video_checkpoints,
         )
@@ -1012,7 +1010,7 @@ class MultimodalRouter:
         self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """delete_checkpoint."""
-        from domain.training._internal.video_trainer import list_video_checkpoints
+        from domain.training import list_video_checkpoints
 
         def _find_and_delete():
             ckpts = list_video_checkpoints()
@@ -1043,7 +1041,7 @@ class MultimodalRouter:
 
         Supports English, German, French, Spanish, Italian, and Portuguese with auto-detection.
         """
-        from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+        from domain.multimodal import UnifiedPhonemeEncoder
 
         text = request.get("text", "")
         language = request.get("language", None)
@@ -1074,7 +1072,7 @@ class MultimodalRouter:
         """
         import numpy as np
 
-        from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+        from domain.multimodal import UnifiedPhonemeEncoder
 
         ids = request.get("ids", [])
         language = request.get("language", "en")
@@ -1103,7 +1101,7 @@ class MultimodalRouter:
         Takes an array of texts and returns encoded results for each.
         """
         try:
-            from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+            from domain.multimodal import UnifiedPhonemeEncoder
 
             texts = request.get("texts", [])
             language = request.get("language", None)
@@ -1154,7 +1152,7 @@ class MultimodalRouter:
         Returns the detected language code and confidence.
         """
         try:
-            from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+            from domain.multimodal import UnifiedPhonemeEncoder
 
             text = request.get("text", "")
 
@@ -1181,7 +1179,7 @@ class MultimodalRouter:
 
         Compares target and spoken text at the phoneme level.
         """
-        from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+        from domain.multimodal import UnifiedPhonemeEncoder
 
         target = request.get("target", "")
         spoken = request.get("spoken", "")
@@ -1213,7 +1211,7 @@ class MultimodalRouter:
         Takes an array of target/spoken pairs and returns scores for each.
         """
         try:
-            from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+            from domain.multimodal import UnifiedPhonemeEncoder
 
             pairs = request.get("pairs", [])
             language = request.get("language", None)
@@ -1265,7 +1263,7 @@ class MultimodalRouter:
         mgr._caption_history = []
         mgr._accuracy_history = []
         if getattr(mgr, "_replay_buffer", None):
-            from domain.multimodal._internal.engine import ReplayBuffer
+            from domain.multimodal import ReplayBuffer
 
             mgr._replay_buffer = ReplayBuffer()
         mgr._multimodal_engine = None
