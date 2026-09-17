@@ -1,357 +1,283 @@
 """
-Tests for planner.kanban — the kanban CLI (``kanban`` / ``planner kanban``),
-driven through ``cli_main`` with an explicit ``--dir`` so every command
-operates on an isolated temp board.
+Tests for the planner store and CLI — board operations.
 """
 
-import re
+from __future__ import annotations
 
 import pytest
-
-from app_planner.kanban import KanbanStore, reset_kanban_store
-from app_planner.cli import cli_main
+from app_planner.cli import main as cli_main
+from app_planner.store import PlannerStore
 
 
 @pytest.fixture(autouse=True)
-def _isolate_store():
-    reset_kanban_store()
+def _reset():
+    from app_planner.store import reset_store
+
+    reset_store()
+    yield
+    reset_store()
 
 
 @pytest.fixture
-def board_dir(tmp_path):
-    return tmp_path / "board"
+def store(tmp_path):
+    return PlannerStore(board_dir=tmp_path / "board", notes_dir=tmp_path / "notes")
 
 
-def _run(board_dir, capsys, *parts):
-    code = cli_main(["--board-dir", str(board_dir), *parts])
-    return code, capsys.readouterr().out
+def _run(store_dir, *parts) -> tuple[int, str]:
+    import contextlib
+    import io
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        try:
+            code = cli_main(["--board-dir", str(store_dir), "--notes-dir", str(store_dir), *parts])
+        except SystemExit as e:
+            code = e.code or 1
+    return code, buf.getvalue()
 
 
-def _add(board_dir, capsys, title, *extra):
-    code, out = _run(board_dir, capsys, "add", title, *extra)
-    assert code == 0, out
-    m = re.search(r"Added: (\S+)", out)
-    assert m, out
-    return m.group(1)
+def _add(store_dir, title, *extra) -> tuple[int, str]:
+    return _run(store_dir, "board", "add", title, *extra)
 
 
-def test_init_creates_board(board_dir, capsys):
-    code, out = _run(board_dir, capsys, "init", "--name", "sprint-1")
-    assert code == 0
-    assert "sprint-1" in out
-    assert "todo" in out and "in_progress" in out and "done" in out
-    assert (board_dir / "board.json").exists()
+# ── Store tests ──────────────────────────────────────────────────────────
 
 
-def test_init_force_recreates(board_dir, capsys):
-    _add(board_dir, capsys, "Stale card")
-    code, out = _run(board_dir, capsys, "init", "--name", "fresh", "--force")
-    assert code == 0
-    assert "fresh" in out
-    board = KanbanStore(board_dir=board_dir).load_board()
-    assert board.name == "fresh"
-    assert board.cards == []
+class TestPlannerStore:
+    def test_add_card(self, store):
+        card = store.add_card("Test card", column="todo", priority="high")
+        assert card.title == "Test card"
+        assert card.column == "todo"
+        assert card.priority == "high"
+        assert card.id
+
+    def test_get_card(self, store):
+        card = store.add_card("Findable")
+        found = store.get_card(card.id)
+        assert found is not None
+        assert found.title == "Findable"
+
+    def test_get_card_missing(self, store):
+        assert store.get_card("nonexistent") is None
+
+    def test_update_card(self, store):
+        card = store.add_card("Update me")
+        updated = store.update_card(card.id, title="Updated", priority="critical")
+        assert updated is not None
+        assert updated.title == "Updated"
+        assert updated.priority == "critical"
+
+    def test_delete_card(self, store):
+        card = store.add_card("Delete me")
+        assert store.delete_card(card.id) is True
+        assert store.get_card(card.id) is None
+
+    def test_delete_card_missing(self, store):
+        assert store.delete_card("nonexistent") is False
+
+    def test_move_card(self, store):
+        card = store.add_card("Move me", column="todo")
+        assert store.move_card(card.id, "done") is True
+        assert store.get_card(card.id).column == "done"
+
+    def test_move_card_missing(self, store):
+        assert store.move_card("nonexistent", "done") is False
+
+    def test_list_cards(self, store):
+        store.add_card("A", column="todo")
+        store.add_card("B", column="done")
+        assert len(store.list_cards()) == 2
+        assert len(store.list_cards(column="todo")) == 1
+
+    def test_list_cards_by_assignee(self, store):
+        store.add_card("Mine", assignee="mana")
+        store.add_card("Theirs")
+        results = store.list_cards(assignee="mana")
+        assert [c.title for c in results] == ["Mine"]
+
+    def test_search_cards(self, store):
+        store.add_card("Engine tuning", tags=["kernel"], description="sweep the camshaft")
+        store.add_card("Paint the wall", tags=["ui"])
+        results = store.search_cards("engine")
+        assert len(results) == 1
+        assert results[0].title == "Engine tuning"
+
+    def test_search_cards_by_tag(self, store):
+        store.add_card("A", tags=["kernel"])
+        store.add_card("B", tags=["ui"])
+        results = store.search_cards("kernel")
+        assert len(results) == 1
+        assert results[0].title == "A"
+
+    def test_search_cards_by_description(self, store):
+        store.add_card("A", description="spinny bits")
+        store.add_card("B", description="nothing")
+        results = store.search_cards("spinny")
+        assert len(results) == 1
+
+    def test_get_tags(self, store):
+        store.add_card("A", tags=["kernel", "bug"])
+        store.add_card("B", tags=["kernel"])
+        tags = store.get_tags()
+        assert tags["kernel"] == 2
+        assert tags["bug"] == 1
+
+    def test_get_stats(self, store):
+        store.add_card("A", column="todo")
+        store.add_card("B", column="done")
+        stats = store.get_stats()
+        assert stats["total"] == 2
+        assert stats["byColumn"]["todo"] == 1
+        assert stats["byColumn"]["done"] == 1
+
+    def test_archive_done(self, store):
+        store.add_card("Keep", column="in_progress")
+        store.add_card("Done one", column="done")
+        archived = store.archive_done()
+        assert archived == 1
+        cards = store.list_cards()
+        assert len(cards) == 1
+        assert cards[0].title == "Keep"
+
+    def test_archive_done_empty(self, store):
+        store.add_card("Keep", column="todo")
+        assert store.archive_done() == 0
+
+    def test_block_and_unblock_card(self, store):
+        blocker = store.add_card("Blocker")
+        blocked = store.add_card("Blocked")
+        assert store.block_card(blocked.id, blocker.id) is not None
+        assert store.is_blocked(blocked.id) is True
+        assert store.unblock_card(blocked.id, blocker.id) is not None
+        assert store.is_blocked(blocked.id) is False
+
+    def test_block_duplicate_ignored(self, store):
+        blocker = store.add_card("Blocker")
+        blocked = store.add_card("Blocked")
+        store.block_card(blocked.id, blocker.id)
+        store.block_card(blocked.id, blocker.id)
+        assert len(store.get_card(blocked.id).blocked_by) == 1
+
+    def test_add_card_with_type(self, store):
+        card = store.add_card("Bug fix", card_type="bug")
+        assert card.card_type == "bug"
+
+    def test_edit_card_type(self, store):
+        card = store.add_card("Task")
+        updated = store.update_card(card.id, card_type="feature")
+        assert updated.card_type == "feature"
+
+    def test_update_card_ignores_unknown_keys(self, store):
+        card = store.add_card("Stable")
+        updated = store.update_card(card.id, bogus="x")
+        assert updated is not None
+        assert store.get_card(card.id).title == "Stable"
 
 
-def test_add_card_defaults(board_dir, capsys):
-    card_id = _add(board_dir, capsys, "Fix boot order")
-    code, out = _run(board_dir, capsys, "card", card_id)
-    assert code == 0
-    assert "Fix boot order" in out
-    assert "column:   todo" in out
-    assert "priority: medium" in out
-    assert "tags:     none" in out
+# ── CLI tests ────────────────────────────────────────────────────────────
 
 
-def test_add_card_with_fields(board_dir, capsys):
-    card_id = _add(board_dir, capsys, "Ship v2", "--column", "in_progress",
-                   "--priority", "high", "--tags", "kernel,os",
-                   "--due", "2026-08-15", "--assignee", "mana",
-                   "--desc", "release the kraken")
-    code, out = _run(board_dir, capsys, "card", card_id)
-    assert code == 0
-    assert "column:   in_progress" in out
-    assert "priority: high" in out
-    assert "tags:     kernel, os" in out
-    assert "assignee: mana" in out
-    assert "due:      2026-08-15" in out
-    assert "release the kraken" in out
-
-
-def test_add_rejects_invalid_priority(board_dir):
-    with pytest.raises(SystemExit) as exc:
-        cli_main(["--board-dir", str(board_dir), "add", "Bad", "--priority", "uber"])
-    assert exc.value.code == 2
-
-
-def test_list_filters(board_dir, capsys):
-    _add(board_dir, capsys, "Kernel task", "--column", "in_progress", "--priority", "high", "--tags", "kernel")
-    _add(board_dir, capsys, "UI task", "--priority", "low", "--tags", "ui")
-    code, out = _run(board_dir, capsys, "cards", "--column", "in_progress")
-    assert code == 0
-    assert "Kernel task" in out and "UI task" not in out
-    code, out = _run(board_dir, capsys, "cards", "--tag", "ui")
-    assert code == 0
-    assert "UI task" in out and "Kernel task" not in out
-    code, out = _run(board_dir, capsys, "cards", "--priority", "high")
-    assert code == 0
-    assert "Kernel task" in out and "UI task" not in out
-
-
-def test_list_empty(board_dir, capsys):
-    code, out = _run(board_dir, capsys, "cards")
-    assert code == 0
-    assert "No cards found." in out
-
-
-def test_show_unknown_returns_1(board_dir, capsys):
-    code, out = _run(board_dir, capsys, "card", "00000000_nope")
-    assert code == 1
-    assert "Card not found" in out
-
-
-def test_edit_updates_fields(board_dir, capsys):
-    card_id = _add(board_dir, capsys, "Old name", "--priority", "low")
-    code, out = _run(board_dir, capsys, "edit-card", card_id,
-                      "--title", "New name", "--priority", "critical", "--tags", "a,b",
-                      "--assignee", "mana", "--due", "2026-09-01")
-    assert code == 0
-    assert "Updated:" in out
-    code, out = _run(board_dir, capsys, "card", card_id)
-    assert code == 0
-    assert "New name" in out
-    assert "priority: critical" in out
-    assert "tags:     a, b" in out
-
-
-def test_edit_no_changes_returns_1(board_dir, capsys):
-    card_id = _add(board_dir, capsys, "T")
-    code, out = _run(board_dir, capsys, "edit-card", card_id)
-    assert code == 1
-    assert "No changes specified." in out
-
-
-def test_edit_unknown_returns_1(board_dir, capsys):
-    code, out = _run(board_dir, capsys, "edit-card", "00000000_nope", "--priority", "high")
-    assert code == 1
-    assert "Card not found" in out
-
-
-def test_move_card(board_dir, capsys):
-    card_id = _add(board_dir, capsys, "Move me", "--column", "todo")
-    code, out = _run(board_dir, capsys, "move", card_id, "done")
-    assert code == 0
-    assert "->  done" in out
-    code, out = _run(board_dir, capsys, "card", card_id)
-    assert "column:   done" in out
-
-
-def test_move_unknown_column_returns_1(board_dir, capsys):
-    card_id = _add(board_dir, capsys, "Stay")
-    code, out = _run(board_dir, capsys, "move", card_id, "frozen")
-    assert code == 1
-    assert "Card not found" in out
-
-
-def test_delete_removes_card(board_dir, capsys):
-    card_id = _add(board_dir, capsys, "Doomed")
-    code, out = _run(board_dir, capsys, "rm-card", card_id)
-    assert code == 0
-    assert "Deleted." in out
-    code, out = _run(board_dir, capsys, "cards")
-    assert "No cards found." in out
-
-
-def test_delete_unknown_prints_not_found(board_dir, capsys):
-    code, out = _run(board_dir, capsys, "delete-card", "00000000_nope")
-    assert code == 0
-    assert "Card not found." in out
-
-
-def test_board_renders_cards(board_dir, capsys):
-    c1 = _add(board_dir, capsys, "First card", "--column", "in_progress")
-    c2 = _add(board_dir, capsys, "Second card")
-    code, out = _run(board_dir, capsys, "board")
-    assert code == 0
-    assert "Kanban:" in out
-    assert c1 in out and c2 in out
-    assert "2 card(s)" in out
-
-
-def test_note_add_list_delete(board_dir, capsys):
-    card_id = _add(board_dir, capsys, "Commented")
-    code, out = _run(board_dir, capsys, "note", "add", card_id, "look into this", "--author", "mana")
-    assert code == 0
-    assert "Note added:" in out
-    note_id = re.search(r"\[(\S+)\]", out).group(1)
-    code, out = _run(board_dir, capsys, "note", "list", card_id)
-    assert code == 0
-    assert "look into this" in out
-    assert "[mana]" in out
-    code, out = _run(board_dir, capsys, "note", "delete", card_id, note_id)
-    assert code == 0
-    assert "Note deleted." in out
-    code, out = _run(board_dir, capsys, "note", "list", card_id)
-    assert "No notes on this card." in out
-
-
-def test_note_unknown_card_returns_1(board_dir, capsys):
-    code, out = _run(board_dir, capsys, "note", "add", "00000000_nope", "hi")
-    assert code == 1
-    assert "Card not found." in out
-
-
-def test_columns_and_column_management(board_dir, capsys):
-    code, out = _run(board_dir, capsys, "columns")
-    assert code == 0
-    assert "todo" in out and "in_progress" in out and "done" in out
-    code, out = _run(board_dir, capsys, "column-add", "blocked", "--wip", "2")
-    assert code == 0
-    assert "blocked" in out
-    code, out = _run(board_dir, capsys, "columns")
-    assert "blocked" in out and "(wip: 2)" in out
-    code, out = _run(board_dir, capsys, "column-rename", "blocked", "frozen")
-    assert code == 0
-    assert "Renamed." in out
-    code, out = _run(board_dir, capsys, "columns")
-    assert "frozen" in out and "blocked" not in out
-    code, out = _run(board_dir, capsys, "column-rm", "frozen")
-    assert code == 0
-    assert "Removed." in out
-    code, out = _run(board_dir, capsys, "columns")
-    assert "frozen" not in out
-
-
-def test_column_add_duplicate_fails(board_dir, capsys):
-    code, out = _run(board_dir, capsys, "column-add", "todo")
-    assert code == 1
-    assert "Failed." in out
-
-
-def test_archive_done(board_dir, capsys):
-    keep = _add(board_dir, capsys, "Keep me", "--column", "in_progress")
-    _add(board_dir, capsys, "Done one", "--column", "done")
-    code, out = _run(board_dir, capsys, "archive")
-    assert code == 0
-    assert "Archived 1 done card(s)." in out
-    code, out = _run(board_dir, capsys, "card", keep)
-    assert code == 0
-    code, out = _run(board_dir, capsys, "cards")
-
-
-def test_search_cards(board_dir, capsys):
-    _add(board_dir, capsys, "Engine tuning", "--tags", "kernel", "--desc", "sweep the camshaft")
-    _add(board_dir, capsys, "Paint the wall", "--tags", "ui")
-    for query in ("engine", "kernel", "camshaft"):
-        code, out = _run(board_dir, capsys, "search-cards", query)
+class TestCLI:
+    def test_board_add_and_show(self, tmp_path):
+        code, out = _add(tmp_path, "My Task", "--column", "todo", "--priority", "high")
         assert code == 0
-        assert "Engine tuning" in out
-        assert "Paint the wall" not in out
-    code, out = _run(board_dir, capsys, "search-cards", "missing-thing")
-    assert code == 0
-    assert "No cards matching" in out
+        assert "Created" in out
 
+        code, out = _run(tmp_path, "board", "show")
+        assert code == 0
+        assert "My Task" in out
 
-def test_stats(board_dir, capsys):
-    _add(board_dir, capsys, "One", "--column", "done", "--priority", "high")
-    _add(board_dir, capsys, "Two", "--column", "todo", "--priority", "low")
-    _add(board_dir, capsys, "Three", "--column", "done", "--priority", "medium")
-    code, out = _run(board_dir, capsys, "stats")
-    assert code == 0
-    assert "Total cards: 3" in out
-    assert "done" in out and "todo" in out
-    assert "high" in out and "low" in out
+    def test_board_add_with_all_fields(self, tmp_path):
+        code, out = _add(
+            tmp_path,
+            "Ship v2",
+            "--column",
+            "in_progress",
+            "--priority",
+            "high",
+            "--tags",
+            "kernel,os",
+            "--description",
+            "release the kraken",
+        )
+        assert code == 0
 
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        cards = store.list_cards()
+        assert len(cards) == 1
+        card = cards[0]
+        assert card.title == "Ship v2"
+        assert card.column == "in_progress"
+        assert card.priority == "high"
+        assert card.tags == ["kernel", "os"]
+        assert "release the kraken" in card.description
 
-def test_no_command_prints_help(board_dir, capsys):
-    code, out = _run(board_dir, capsys)
-    assert code == 0
-    assert "usage:" in out
+    def test_board_move(self, tmp_path):
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        card = store.add_card("Movable", column="todo")
+        code, out = _run(tmp_path, "board", "move", card.id, "done")
+        assert code == 0
+        assert "Moved" in out
 
+    def test_board_delete(self, tmp_path):
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        card = store.add_card("Doomed")
+        code, out = _run(tmp_path, "board", "delete", card.id)
+        assert code == 0
+        assert "Deleted" in out
 
-def test_add_card_invalid_priority_falls_back_to_medium(board_dir):
-    store = KanbanStore(board_dir=board_dir)
-    card = store.add_card("Fallback", priority="uber")
-    assert card.priority == "medium"
+    def test_board_tags(self, tmp_path):
+        _add(tmp_path, "A", "--tags", "kernel,bug")
+        code, out = _run(tmp_path, "board", "tags")
+        assert code == 0
+        assert "kernel" in out
 
+    def test_board_stats(self, tmp_path):
+        _add(tmp_path, "One", "--column", "done")
+        code, out = _run(tmp_path, "board", "stats")
+        assert code == 0
+        assert "Total cards: 1" in out
 
-def test_find_one_ambiguous_prefix_resolves_to_most_recent(board_dir):
-    store = KanbanStore(board_dir=board_dir)
-    first = store.add_card("Alpha one")
-    second = store.add_card("Alpha two")
-    date_prefix = first.id[:8]
-    assert store.get_card(date_prefix).id == second.id
+    def test_board_show_empty(self, tmp_path):
+        code, out = _run(tmp_path, "board", "show")
+        assert code == 0
+        assert "(empty)" in out
 
+    def test_board_show_unknown_card(self, tmp_path):
+        code, out = _run(tmp_path, "board", "show", "00000000_nope")
+        assert code == 1
 
-def test_update_card_ignores_unknown_keys(board_dir):
-    store = KanbanStore(board_dir=board_dir)
-    card = store.add_card("Stable")
-    updated = store.update_card(card.short_id, bogus="x")
-    assert updated is not None
-    assert not hasattr(updated, "bogus")
-    assert store.get_card(card.short_id).title == "Stable"
+    def test_board_move_unknown_column(self, tmp_path):
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        card = store.add_card("Stay")
+        code, out = _run(tmp_path, "board", "move", card.id, "frozen")
+        assert code == 1
 
+    def test_board_delete_unknown(self, tmp_path):
+        code, out = _run(tmp_path, "board", "delete", "00000000_nope")
+        assert code == 1
 
-def test_rename_column_migrates_cards(board_dir):
-    store = KanbanStore(board_dir=board_dir)
-    card = store.add_card("Old col", column="in_progress")
-    assert store.rename_column("in_progress", "doing")
-    assert store.get_card(card.short_id).column == "doing"
-    assert [c.name for c in store.list_columns() if c.name == "doing"]
+    def test_note_new_and_list(self, tmp_path):
+        code, out = _run(tmp_path, "note", "new", "My Note", "--tags", "dev")
+        assert code == 0
+        assert "Created note" in out
 
+        code, out = _run(tmp_path, "note", "list")
+        assert code == 0
+        assert "My Note" in out
 
-def test_remove_column_migrates_cards(board_dir):
-    store = KanbanStore(board_dir=board_dir)
-    card = store.add_card("Drop col", column="in_progress")
-    assert store.remove_column("in_progress", move_to="review")
-    assert store.get_card(card.short_id).column == "review"
-    assert not [c for c in store.list_columns() if c.name == "in_progress"]
+    def test_sync(self, tmp_path):
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        store.create_note("Synced Task", status="wip")
+        code, out = _run(tmp_path, "sync")
+        assert code == 0
+        assert "1 new card" in out
 
+    def test_unknown_command(self, tmp_path):
+        code, _ = _run(tmp_path, "nonexistent")
+        assert code != 0
 
-def test_archive_done_empty(board_dir):
-    store = KanbanStore(board_dir=board_dir)
-    store.add_card("Keep")
-    assert store.archive_done() == 0
-
-
-def test_list_cards_by_assignee(board_dir):
-    store = KanbanStore(board_dir=board_dir)
-    store.add_card("Mine", assignee="mana")
-    store.add_card("Theirs")
-    results = store.list_cards(assignee="mana")
-    assert [c.title for c in results] == ["Mine"]
-
-
-def test_block_and_unblock_card(board_dir):
-    store = KanbanStore(board_dir=board_dir)
-    blocker = store.add_card("Blocker")
-    blocked = store.add_card("Blocked")
-    blocker_id = blocker.id
-
-    assert store.block_card(blocked.id, blocker_id) is not None
-    assert store.is_blocked(blocked.id) is True
-
-    assert store.unblock_card(blocked.id, blocker_id) is not None
-    assert store.is_blocked(blocked.id) is False
-
-
-def test_block_duplicate_ignored(board_dir):
-    store = KanbanStore(board_dir=board_dir)
-    blocker = store.add_card("Blocker")
-    blocked = store.add_card("Blocked")
-    store.block_card(blocked.id, blocker.id)
-    store.block_card(blocked.id, blocker.id)
-    assert len(store.get_card(blocked.id).blocked_by) == 1
-
-
-def test_add_card_with_type(board_dir):
-    store = KanbanStore(board_dir=board_dir)
-    card = store.add_card("Bug fix", card_type="bug")
-    assert card.card_type == "bug"
-
-
-def test_edit_card_type(board_dir):
-    store = KanbanStore(board_dir=board_dir)
-    card = store.add_card("Task")
-    updated = store.update_card(card.id, card_type="feature")
-    assert updated.card_type == "feature"
+    def test_no_command_prints_help(self, tmp_path):
+        code, out = _run(tmp_path)
+        assert code == 0
+        assert "usage:" in out
