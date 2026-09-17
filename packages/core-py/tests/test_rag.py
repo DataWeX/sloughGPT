@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from domain.cognitive._internal.rag import (
+from domain.cognition._internal.rag import (
     BM25Indexer,
     CitationTracker,
     HallucinationDetector,

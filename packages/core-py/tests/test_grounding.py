@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from domain.cognitive._internal.grounding import (
+from domain.cognition._internal.grounding import (
     CurriculumLearner,
     Document,
     GroundingOrchestrator,

@@ -1,4 +1,4 @@
-"""Tests for the production RAG service (domain.cognitive._internal.rag_service.py).
+"""Tests for the production RAG service (domain.cognition._internal.rag_service.py).
 
 Covers: document ingestion, query, verification, persistence, stats, and the
 BM25/HybridRetriever/CitationTracker/HallucinationDetector from rag.py.
@@ -18,7 +18,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _isolated_rag_store(tmp_path):
     """Redirect RAG persistence to a temp directory for each test."""
-    import domain.cognitive._internal.rag_service as mod
+    import domain.cognition._internal.rag_service as mod
 
     original_data_dir = mod._DATA_DIR
     original_docs_file = mod._DOCUMENTS_FILE
@@ -32,7 +32,7 @@ def _isolated_rag_store(tmp_path):
 @pytest.fixture(autouse=True)
 def _reset_singleton():
     """Reset the RAG service singleton between tests."""
-    import domain.cognitive._internal.rag_service as mod
+    import domain.cognition._internal.rag_service as mod
 
     mod._rag_service = None
     yield
@@ -46,7 +46,7 @@ def _reset_singleton():
 
 class TestBM25Indexer:
     def test_index_and_score(self):
-        from domain.cognitive._internal.rag import BM25Indexer, TextChunk
+        from domain.cognition._internal.rag import BM25Indexer, TextChunk
 
         chunks = [
             TextChunk(id="1", content="the cat sat on the mat", metadata={}),
@@ -63,7 +63,7 @@ class TestBM25Indexer:
         assert 1 in doc_ids
 
     def test_empty_index(self):
-        from domain.cognitive._internal.rag import BM25Indexer
+        from domain.cognition._internal.rag import BM25Indexer
 
         indexer = BM25Indexer()
         indexer.index([])
@@ -78,7 +78,7 @@ class TestBM25Indexer:
 
 class TestHybridRetriever:
     def test_retrieve_returns_results(self):
-        from domain.cognitive._internal.rag import HybridRetriever, TextChunk
+        from domain.cognition._internal.rag import HybridRetriever, TextChunk
 
         retriever = HybridRetriever(use_rerank=False)
         for i, text in enumerate(
@@ -96,7 +96,7 @@ class TestHybridRetriever:
         assert all(r.combined_score > 0 for r in results)
 
     def test_retrieve_empty_index(self):
-        from domain.cognitive._internal.rag import HybridRetriever
+        from domain.cognition._internal.rag import HybridRetriever
 
         retriever = HybridRetriever()
         retriever.build_index()
@@ -104,7 +104,7 @@ class TestHybridRetriever:
         assert results == []
 
     def test_add_chunk_increases_count(self):
-        from domain.cognitive._internal.rag import HybridRetriever, TextChunk
+        from domain.cognition._internal.rag import HybridRetriever, TextChunk
 
         retriever = HybridRetriever()
         retriever.add_chunk(TextChunk(id="1", content="hello world", metadata={}))
@@ -120,7 +120,7 @@ class TestHybridRetriever:
 
 class TestCitationTracker:
     def test_extract_claims(self):
-        from domain.cognitive._internal.rag import CitationTracker
+        from domain.cognition._internal.rag import CitationTracker
 
         tracker = CitationTracker()
         claims = tracker.extract_claims("Python is a language. Java was created in 1995.")
@@ -129,7 +129,7 @@ class TestCitationTracker:
         assert "Python" in subjects
 
     def test_cite_and_format(self):
-        from domain.cognitive._internal.rag import CitationTracker, TextChunk
+        from domain.cognition._internal.rag import CitationTracker, TextChunk
 
         tracker = CitationTracker()
         claims = tracker.extract_claims("Python is a language.")
@@ -151,7 +151,7 @@ class TestCitationTracker:
 
 class TestHallucinationDetector:
     def test_detect_returns_structure(self):
-        from domain.cognitive._internal.rag import HallucinationDetector, HybridRetriever, TextChunk
+        from domain.cognition._internal.rag import HallucinationDetector, HybridRetriever, TextChunk
 
         retriever = HybridRetriever(use_rerank=False)
         retriever.add_chunk(
@@ -165,7 +165,7 @@ class TestHallucinationDetector:
         assert "grounded_claims" in result
 
     def test_unsupported_claim_detected(self):
-        from domain.cognitive._internal.rag import HallucinationDetector, HybridRetriever, TextChunk
+        from domain.cognition._internal.rag import HallucinationDetector, HybridRetriever, TextChunk
 
         retriever = HybridRetriever(use_rerank=False)
         retriever.add_chunk(
@@ -184,7 +184,7 @@ class TestHallucinationDetector:
 
 class TestProductionRAG:
     def test_add_and_query(self):
-        from domain.cognitive._internal.rag import ProductionRAG
+        from domain.cognition._internal.rag import ProductionRAG
 
         rag = ProductionRAG()
         rag.add_document(
@@ -197,7 +197,7 @@ class TestProductionRAG:
         assert len(result["context"]) > 0
 
     def test_verify_and_ground(self):
-        from domain.cognitive._internal.rag import ProductionRAG
+        from domain.cognition._internal.rag import ProductionRAG
 
         rag = ProductionRAG()
         rag.add_document(
@@ -219,14 +219,14 @@ class TestProductionRAG:
 
 class TestRAGService:
     def test_singleton(self):
-        from domain.cognitive._internal.rag_service import get_rag_service
+        from domain.cognition._internal.rag_service import get_rag_service
 
         s1 = get_rag_service()
         s2 = get_rag_service()
         assert s1 is s2
 
     def test_add_and_query(self):
-        from domain.cognitive._internal.rag_service import get_rag_service
+        from domain.cognition._internal.rag_service import get_rag_service
 
         svc = get_rag_service()
         chunk_ids = svc.add_document(
@@ -239,7 +239,7 @@ class TestRAGService:
         assert result["num_results"] >= 1
 
     def test_stats(self):
-        from domain.cognitive._internal.rag_service import get_rag_service
+        from domain.cognition._internal.rag_service import get_rag_service
 
         svc = get_rag_service()
         svc.add_document(content="test document for stats", metadata={})
@@ -248,7 +248,7 @@ class TestRAGService:
         assert stats["total_chunks"] >= 1
 
     def test_list_documents(self):
-        from domain.cognitive._internal.rag_service import get_rag_service
+        from domain.cognition._internal.rag_service import get_rag_service
 
         svc = get_rag_service()
         svc.add_document(content="document one", metadata={"source": "a"})
@@ -258,7 +258,7 @@ class TestRAGService:
         assert docs[0]["metadata"]["source"] == "a"
 
     def test_clear(self):
-        from domain.cognitive._internal.rag_service import get_rag_service
+        from domain.cognition._internal.rag_service import get_rag_service
 
         svc = get_rag_service()
         svc.add_document(content="to be cleared", metadata={})
@@ -269,19 +269,19 @@ class TestRAGService:
 
     def test_persistence(self):
         """Verify documents survive RAG service recreation."""
-        from domain.cognitive._internal.rag_service import RAGService, get_rag_service
+        from domain.cognition._internal.rag_service import RAGService, get_rag_service
 
         svc = get_rag_service()
         svc.add_document(content="persistent document", metadata={"source": "persist"})
         # Simulate restart by creating a fresh instance
-        import domain.cognitive._internal.rag_service as mod
+        import domain.cognition._internal.rag_service as mod
 
         mod._rag_service = None
         svc2 = RAGService()
         assert svc2.stats()["total_documents"] == 1
 
     def test_verify_and_ground(self):
-        from domain.cognitive._internal.rag_service import get_rag_service
+        from domain.cognition._internal.rag_service import get_rag_service
 
         svc = get_rag_service()
         svc.add_document(content="The Earth orbits the Sun.", metadata={"source": "science"})

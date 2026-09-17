@@ -1,6 +1,6 @@
 """Tests for production knowledge graph."""
 
-from domain.cognitive._internal.knowledge_graph_v2 import (
+from domain.cognition._internal.knowledge_graph_v2 import (
     Entity,
     Fact,
     KnowledgeGraph,

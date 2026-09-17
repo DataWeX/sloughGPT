@@ -7,7 +7,7 @@ import asyncio
 import pytest
 from domains import Thought
 
-from domain.cognitive._internal.metacognition import (
+from domain.cognition._internal.metacognition import (
     CognitiveProcess,
     CognitiveStateSnapshot,
     MetacognitiveAssessment,

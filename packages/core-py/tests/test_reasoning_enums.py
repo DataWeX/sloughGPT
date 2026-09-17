@@ -1,13 +1,13 @@
-"""Tests for domain.cognitive.reasoning.deep — LogicalOperator; domain.cognitive.reasoning.advanced — ReasoningMode, ThoughtStep."""
+"""Tests for domain.cognition.reasoning.deep — LogicalOperator; domain.cognition.reasoning.advanced — ReasoningMode, ThoughtStep."""
 
 import pytest
 
-from domain.cognitive._internal.reasoning.advanced import (
+from domain.cognition._internal.reasoning.advanced import (
     ReasoningMode,
     ReasoningResult,
     ThoughtStep,
 )
-from domain.cognitive._internal.reasoning.deep import (
+from domain.cognition._internal.reasoning.deep import (
     DeepReasoningContext,
     FormalLogicEngine,
     LogicalOperator,

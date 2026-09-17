@@ -1,9 +1,9 @@
-"""Tests for domain.cognitive._internal.rag — CitationTracker, TextChunk, BM25Indexer,
+"""Tests for domain.cognition._internal.rag — CitationTracker, TextChunk, BM25Indexer,
 HybridRetriever, HallucinationDetector, ProductionRAG."""
 
 import numpy as np
 
-from domain.cognitive._internal.rag import (
+from domain.cognition._internal.rag import (
     BM25Indexer,
     CitationTracker,
     HallucinationDetector,

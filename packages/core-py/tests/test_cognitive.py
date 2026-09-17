@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from domain.cognitive._internal.core import CognitiveCore, ReasoningType, ThinkingMode
-from domain.cognitive._internal.knowledge_graph_v2 import KnowledgeGraph, RelationType
-from domain.cognitive._internal.reasoning.deep import (
+from domain.cognition._internal.core import CognitiveCore, ReasoningType, ThinkingMode
+from domain.cognition._internal.knowledge_graph_v2 import KnowledgeGraph, RelationType
+from domain.cognition._internal.reasoning.deep import (
     FormalLogicEngine,
     Predicate,
     Term,

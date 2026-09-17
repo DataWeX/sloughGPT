@@ -1,4 +1,4 @@
-"""Tests for domain.cognitive.reasoning.deep — DeepReasoning, FormalLogicEngine, WorkingMemory.
+"""Tests for domain.cognition.reasoning.deep — DeepReasoning, FormalLogicEngine, WorkingMemory.
 
 Covers: retrieval-augmented reasoning, self-correction, formal logic (unification,
 modus ponens, resolution, syllogisms), working memory LRU eviction.
@@ -15,8 +15,8 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domain.cognitive._internal.reasoning.advanced import ThoughtStep
-from domain.cognitive._internal.reasoning.deep import (
+from domain.cognition._internal.reasoning.advanced import ThoughtStep
+from domain.cognition._internal.reasoning.deep import (
     DeepReasoning,
     DeepReasoningContext,
     FormalLogicEngine,

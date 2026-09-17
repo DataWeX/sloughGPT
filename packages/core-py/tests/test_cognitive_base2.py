@@ -1,4 +1,4 @@
-"""Tests for domain.cognitive._internal.base — CognitiveDomain and CognitiveException."""
+"""Tests for domain.cognition._internal.base — CognitiveDomain and CognitiveException."""
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from domains import DomainException
 
-from domain.cognitive._internal.base import CognitiveDomain, CognitiveException
+from domain.cognition._internal.base import CognitiveDomain, CognitiveException
 
 # ---------------------------------------------------------------------------
 # Exception hierarchy
@@ -52,7 +52,7 @@ class TestCognitiveDomainDefaults:
         assert self.domain.is_initialized is False
 
     def test_cognitive_state_idle(self):
-        assert self.domain.cognitive_state == "idle"
+        assert self.domain.cognition_state == "idle"
 
     def test_active_thoughts_empty(self):
         assert self.domain.active_thoughts == []
@@ -64,7 +64,7 @@ class TestCognitiveDomainDefaults:
         assert self.domain.memory_manager is None
         assert self.domain.reasoning_engine is None
         assert self.domain.metacognitive_monitor is None
-        assert self.domain.cognitive_processor is None
+        assert self.domain.cognition_processor is None
 
     def test_background_tasks_empty(self):
         assert self.domain._background_tasks == []
@@ -201,7 +201,7 @@ class TestShutdownComponent:
     async def test_calls_shutdown_if_present(self):
         domain = CognitiveDomain()
         comp = AsyncMock()
-        domain.cognitive_processor = comp
+        domain.cognition_processor = comp
         await domain._shutdown_component("cognitive_processor")
         comp.shutdown.assert_awaited_once()
 
@@ -209,7 +209,7 @@ class TestShutdownComponent:
     async def test_no_shutdown_method_is_noop(self):
         domain = CognitiveDomain()
         comp = MagicMock(spec=[])  # no shutdown attr
-        domain.cognitive_processor = comp
+        domain.cognition_processor = comp
         await domain._shutdown_component("cognitive_processor")
 
     @pytest.mark.asyncio
@@ -217,7 +217,7 @@ class TestShutdownComponent:
         domain = CognitiveDomain()
         comp = AsyncMock()
         comp.shutdown.side_effect = RuntimeError("fail")
-        domain.cognitive_processor = comp
+        domain.cognition_processor = comp
         # should not raise
         await domain._shutdown_component("cognitive_processor")
 

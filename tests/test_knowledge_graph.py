@@ -4,7 +4,7 @@ Tests for Production-Grade Knowledge Graph
 
 import pytest
 
-from domain.cognitive._internal.knowledge_graph_v2 import (
+from domain.cognition._internal.knowledge_graph_v2 import (
     KnowledgeGraph,
 )
 

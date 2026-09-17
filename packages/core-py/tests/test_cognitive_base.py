@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from domains import DomainException
 
-from domain.cognitive._internal.base import CognitiveDomain, CognitiveException
+from domain.cognition._internal.base import CognitiveDomain, CognitiveException
 
 # ── CognitiveException ────────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ class TestCognitiveDomain:
     def test_init(self):
         domain = CognitiveDomain()
         assert domain.domain_name == "cognitive"
-        assert domain.cognitive_state == "idle"
+        assert domain.cognition_state == "idle"
         assert domain.active_thoughts == []
         assert domain.is_initialized is False
 
@@ -38,7 +38,7 @@ class TestCognitiveDomain:
         assert domain.memory_manager is None
         assert domain.reasoning_engine is None
         assert domain.metacognitive_monitor is None
-        assert domain.cognitive_processor is None
+        assert domain.cognition_processor is None
 
     @pytest.mark.asyncio
     async def test_get_cognitive_state(self):

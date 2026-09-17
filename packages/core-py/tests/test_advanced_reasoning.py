@@ -1,4 +1,4 @@
-"""Tests for domain.cognitive.reasoning.advanced — all 7 reasoning engines + factory.
+"""Tests for domain.cognition.reasoning.advanced — all 7 reasoning engines + factory.
 
 Covers: ChainOfThought, TreeOfThoughts, SelfConsistency, ConstitutionalAI,
 CausalReasoning, SyllogismReasoning, ReActReasoning, advanced_reasoning factory.
@@ -16,7 +16,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domain.cognitive._internal.reasoning.advanced import (
+from domain.cognition._internal.reasoning.advanced import (
     CausalReasoning,
     ChainOfThought,
     ConstitutionalAI,

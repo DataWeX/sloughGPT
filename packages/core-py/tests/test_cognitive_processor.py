@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from domains import ComponentException, Thought
 
-from domain.cognitive._internal.processor import CognitiveProcessor
+from domain.cognition._internal.processor import CognitiveProcessor
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 

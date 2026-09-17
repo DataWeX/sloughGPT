@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from domain.cognitive._internal.grounding import (
+from domain.cognition._internal.grounding import (
     CurriculumLearner,
     Document,
     KnowledgeGrounding,
     RAGGrounder,
 )
-from domain.cognitive._internal.rag import (
+from domain.cognition._internal.rag import (
     BM25Indexer,
     CitationTracker,
     HallucinationDetector,

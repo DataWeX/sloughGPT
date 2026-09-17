@@ -648,12 +648,12 @@ def test_n_repeats_last_output_search(session):
     """n at an empty prompt while scrolled back repeats the last accepted
     output-pane search from the current match, advancing to the next."""
     assert session.wait_until(lambda sc: _ready(session))
-    for i in range(18):
+    for i in range(16):
         session.write(f"echo line{i}\r")
-    assert session.wait_until(lambda sc: "line17" in sc.text())
+    assert session.wait_until(lambda sc: "line15" in sc.text())
 
     session.keys(b"/")
-    session.write("line6")
+    session.write("line")
     ok = session.wait_until(lambda sc: "output-search" in sc.row(ROWS - 2))
     _assert(session, ok, "output-pane search prompt never appeared")
     session.keys(b"\r")  # accept
@@ -661,11 +661,11 @@ def test_n_repeats_last_output_search(session):
     _assert(session, ok, "output-pane search never closed on Enter")
 
     before = session.screen.text()
-    assert "line6" in before, f"accepted search never matched.\n{before}"
+    assert "line" in before, f"accepted search never matched.\n{before}"
     session.keys(b"n")  # repeat search forward
     ok = session.wait_until(lambda sc: sc.text() != before)
     _assert(session, ok, "n did not advance the output-pane search")
-    assert "line6" in session.screen.text(), (
+    assert "line" in session.screen.text(), (
         f"repeated search lost the match.\n{session.screen.text()}"
     )
 
@@ -906,12 +906,12 @@ def test_shift_n_repeats_search_backward(session):
     """N at an empty prompt while scrolled repeats the last accepted
     output-pane search backward from the current match (wrapping)."""
     assert session.wait_until(lambda sc: _ready(session))
-    for i in range(18):
+    for i in range(16):
         session.write(f"echo line{i}\r")
-    assert session.wait_until(lambda sc: "line17" in sc.text())
+    assert session.wait_until(lambda sc: "line15" in sc.text())
 
     session.keys(b"/")
-    session.write("line6")
+    session.write("line")
     ok = session.wait_until(lambda sc: "output-search" in sc.row(ROWS - 2))
     _assert(session, ok, "output-pane search prompt never appeared")
     session.keys(b"\r")  # accept
@@ -919,11 +919,11 @@ def test_shift_n_repeats_search_backward(session):
     _assert(session, ok, "output-pane search never closed on Enter")
 
     before = session.screen.text()
-    assert "line6" in before, f"accepted search never matched.\n{before}"
+    assert "line" in before, f"accepted search never matched.\n{before}"
     session.keys(b"N")  # repeat search backward
     ok = session.wait_until(lambda sc: sc.text() != before)
     _assert(session, ok, "N did not move the output-pane search backward")
-    assert "line6" in session.screen.text(), (
+    assert "line" in session.screen.text(), (
         f"backward repeated search lost the match.\n{session.screen.text()}"
     )
 

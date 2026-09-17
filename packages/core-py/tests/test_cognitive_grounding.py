@@ -1,9 +1,9 @@
-"""Comprehensive tests for domain.cognitive._internal.grounding.py — pure logic only."""
+"""Comprehensive tests for domain.cognition._internal.grounding.py — pure logic only."""
 
 import numpy as np
 import pytest
 
-from domain.cognitive._internal.grounding import (
+from domain.cognition._internal.grounding import (
     CurriculumLearner,
     Document,
     ElasticWeightConsolidation,

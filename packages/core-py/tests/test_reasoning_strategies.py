@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from domain.cognitive._internal.reasoning import (
+from domain.cognition._internal.reasoning import (
     ChainOfThought,
     ConstitutionalAI,
     DeepReasoning,

@@ -4,7 +4,7 @@ Tests for Production-Grade RAG System
 
 import pytest
 
-from domain.cognitive._internal.rag import (
+from domain.cognition._internal.rag import (
     BM25Indexer,
     CitationTracker,
     HybridRetriever,

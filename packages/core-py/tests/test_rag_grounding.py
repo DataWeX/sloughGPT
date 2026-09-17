@@ -1,8 +1,8 @@
-"""Tests for domain.cognitive._internal.rag — TextChunk, RetrievalResult, BM25Indexer, HybridRetriever, CitationTracker, HallucinationDetector, ProductionRAG; domain.cognitive._internal.grounding — Document, FisherInformation, KnowledgeNode, KnowledgeEdge, RAGGrounder, KnowledgeGrounding, CurriculumLearner, GroundingOrchestrator, HierarchicalContext."""
+"""Tests for domain.cognition._internal.rag — TextChunk, RetrievalResult, BM25Indexer, HybridRetriever, CitationTracker, HallucinationDetector, ProductionRAG; domain.cognition._internal.grounding — Document, FisherInformation, KnowledgeNode, KnowledgeEdge, RAGGrounder, KnowledgeGrounding, CurriculumLearner, GroundingOrchestrator, HierarchicalContext."""
 
 import numpy as np
 
-from domain.cognitive._internal.grounding import (
+from domain.cognition._internal.grounding import (
     CurriculumLearner,
     Document,
     FisherInformation,
@@ -13,7 +13,7 @@ from domain.cognitive._internal.grounding import (
     KnowledgeNode,
     RAGGrounder,
 )
-from domain.cognitive._internal.rag import (
+from domain.cognition._internal.rag import (
     BM25Indexer,
     CitationTracker,
     HallucinationDetector,

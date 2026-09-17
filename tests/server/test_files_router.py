@@ -201,7 +201,7 @@ class TestIngestFile:
         resp = client.post("/files/nonexistent/ingest")
         assert resp.status_code == 404
 
-    @patch("domain.cognitive._internal.rag_service.get_rag_service")
+    @patch("domain.cognition._internal.rag_service.get_rag_service")
     def test_ingest_existing_file(self, mock_get_rag, client):
         rag = mock_get_rag.return_value
         rag.add_document.return_value = ["chunk1"]
@@ -359,7 +359,7 @@ class TestGetFileDetail:
 
 
 class TestIngestChunking:
-    @patch("domain.cognitive._internal.rag_service.get_rag_service")
+    @patch("domain.cognition._internal.rag_service.get_rag_service")
     def test_ingest_chunks_long_text(self, mock_get_rag, client):
         rag = mock_get_rag.return_value
         rag.add_document.return_value = ["chunk1", "chunk2", "chunk3"]
@@ -377,7 +377,7 @@ class TestIngestChunking:
         assert resp.status_code == 200
         assert resp.json()["facts_stored"] >= 1
 
-    @patch("domain.cognitive._internal.rag_service.get_rag_service")
+    @patch("domain.cognition._internal.rag_service.get_rag_service")
     def test_ingest_empty_text_zero_facts(self, mock_get_rag, client):
         rag = mock_get_rag.return_value
         rag.add_document.return_value = []

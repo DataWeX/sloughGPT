@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from domain.cognitive._internal.core import (
+from domain.cognition._internal.core import (
     CognitiveCore,
     CreativeIdea,
     ReasoningChain,

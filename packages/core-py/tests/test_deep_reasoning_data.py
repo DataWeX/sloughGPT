@@ -1,6 +1,6 @@
-"""Tests for domain.cognitive.reasoning.deep — RetrievalSource, RetrievedKnowledge, DeepReasoningContext, Term, Predicate, WellFormedFormula, Substitution, FormalLogicEngine, WorkingMemory."""
+"""Tests for domain.cognition.reasoning.deep — RetrievalSource, RetrievedKnowledge, DeepReasoningContext, Term, Predicate, WellFormedFormula, Substitution, FormalLogicEngine, WorkingMemory."""
 
-from domain.cognitive._internal.reasoning.deep import (
+from domain.cognition._internal.reasoning.deep import (
     DeepReasoningContext,
     FormalLogicEngine,
     LogicalOperator,

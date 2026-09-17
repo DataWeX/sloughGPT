@@ -1,6 +1,6 @@
 """Meaningful tests for CitationTracker — claim extraction, citation, formatting."""
 
-from domain.cognitive._internal.rag import CitationTracker, TextChunk
+from domain.cognition._internal.rag import CitationTracker, TextChunk
 
 
 class TestExtractClaims:

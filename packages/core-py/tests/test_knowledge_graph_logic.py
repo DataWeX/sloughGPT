@@ -1,6 +1,6 @@
 """Meaningful tests for KnowledgeGraph — case-insensitive lookup, dedup, indexing, BFS, DFS, paths, infer, verify, consistency."""
 
-from domain.cognitive._internal.knowledge_graph_v2 import KnowledgeGraph
+from domain.cognition._internal.knowledge_graph_v2 import KnowledgeGraph
 
 
 class TestAddEntity:

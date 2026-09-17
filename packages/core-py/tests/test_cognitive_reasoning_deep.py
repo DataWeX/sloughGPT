@@ -1,4 +1,4 @@
-"""Tests for domain.cognitive.reasoning.deep — comprehensive coverage.
+"""Tests for domain.cognition.reasoning.deep — comprehensive coverage.
 
 Covers: DeepReasoning (retrieval, self-correction, synthesis), FormalLogicEngine
 (forward chaining, modus ponens, unification, resolution, syllogisms),
@@ -17,8 +17,8 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domain.cognitive._internal.reasoning.advanced import ReasoningMode, ThoughtStep
-from domain.cognitive._internal.reasoning.deep import (
+from domain.cognition._internal.reasoning.advanced import ReasoningMode, ThoughtStep
+from domain.cognition._internal.reasoning.deep import (
     DeepReasoning,
     DeepReasoningContext,
     FormalLogicEngine,
@@ -859,7 +859,7 @@ class TestDeepReasoningWithStores:
 
 class TestExports:
     def test_all_contains_expected(self):
-        from domain.cognitive._internal.reasoning.deep import __all__ as exported
+        from domain.cognition._internal.reasoning.deep import __all__ as exported
 
         expected = {
             "DeepReasoning",

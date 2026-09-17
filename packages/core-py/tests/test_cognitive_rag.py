@@ -1,9 +1,9 @@
-"""Comprehensive tests for domain.cognitive._internal.rag.py — pure logic only."""
+"""Comprehensive tests for domain.cognition._internal.rag.py — pure logic only."""
 
 import numpy as np
 import pytest
 
-from domain.cognitive._internal.rag import (
+from domain.cognition._internal.rag import (
     BM25Indexer,
     CitationTracker,
     HallucinationDetector,

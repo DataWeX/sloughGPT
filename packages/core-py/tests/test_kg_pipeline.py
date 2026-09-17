@@ -4,8 +4,8 @@ import threading
 
 import pytest
 
-from domain.cognitive._internal.knowledge_graph_v2 import Entity, KnowledgeGraph
-from domain.cognitive._internal.rag_service import (
+from domain.cognition._internal.knowledge_graph_v2 import Entity, KnowledgeGraph
+from domain.cognition._internal.rag_service import (
     KGTrainingPipeline,
     RAGService,
     get_rag_service,

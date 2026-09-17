@@ -215,7 +215,7 @@ class TestChatStream:
     )
     @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
     @patch("domain.memory._internal.memory_service.get_memory_service")
-    @patch("domain.cognitive._internal.rag_service.get_rag_service")
+    @patch("domain.cognition._internal.rag_service.get_rag_service")
     @patch("domain.models._internal.provider.get_provider", return_value=None)
     def test_chat_stream_no_provider(
         self, mock_get_provider, mock_rag, mock_mem_svc, mock_enrich, client

@@ -1,6 +1,6 @@
 """Meaningful tests for RelationshipMemory, BM25Indexer, HybridRetriever."""
 
-from domain.cognitive._internal.rag import BM25Indexer, HybridRetriever, TextChunk
+from domain.cognition._internal.rag import BM25Indexer, HybridRetriever, TextChunk
 from domain.soul._internal.cognitive import RelationshipMemory
 
 # ── RelationshipMemory ────────────────────────────────────────────────

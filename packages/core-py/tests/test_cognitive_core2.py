@@ -1,9 +1,9 @@
-"""Tests for domain.cognitive._internal.core — CognitiveCore, enums, and dataclasses."""
+"""Tests for domain.cognition._internal.core — CognitiveCore, enums, and dataclasses."""
 
 import time
 from dataclasses import fields as dc_fields
 
-from domain.cognitive._internal.core import (
+from domain.cognition._internal.core import (
     CognitiveCore,
     CreativeIdea,
     ReasoningChain,

@@ -312,7 +312,7 @@ class TestDeepReasoning:
     @pytest.mark.asyncio
     async def test_deep_reasoning_basic(self):
         """Test basic deep reasoning."""
-        from domain.cognitive._internal.reasoning.deep import DeepReasoning
+        from domain.cognition._internal.reasoning.deep import DeepReasoning
 
         reasoning = DeepReasoning()
 
@@ -324,7 +324,7 @@ class TestDeepReasoning:
 
     def test_formal_logic_engine(self):
         """Test formal logic engine."""
-        from domain.cognitive._internal.reasoning.deep import FormalLogicEngine
+        from domain.cognition._internal.reasoning.deep import FormalLogicEngine
 
         engine = FormalLogicEngine()
 
@@ -340,7 +340,7 @@ class TestDeepReasoning:
 
     def test_working_memory(self):
         """Test working memory."""
-        from domain.cognitive._internal.reasoning.deep import WorkingMemory
+        from domain.cognition._internal.reasoning.deep import WorkingMemory
 
         wm = WorkingMemory(capacity=3)
 
@@ -358,7 +358,7 @@ class TestDeepReasoning:
 
     def test_unification(self):
         """Test unification algorithm."""
-        from domain.cognitive._internal.reasoning.deep import FormalLogicEngine, Predicate, Term
+        from domain.cognition._internal.reasoning.deep import FormalLogicEngine, Predicate, Term
 
         engine = FormalLogicEngine()
 

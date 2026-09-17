@@ -1,6 +1,6 @@
-"""Comprehensive tests for domain.cognitive._internal.knowledge_graph_v2."""
+"""Comprehensive tests for domain.cognition._internal.knowledge_graph_v2."""
 
-from domain.cognitive._internal.knowledge_graph_v2 import (
+from domain.cognition._internal.knowledge_graph_v2 import (
     Entity,
     Fact,
     KnowledgeGraph,

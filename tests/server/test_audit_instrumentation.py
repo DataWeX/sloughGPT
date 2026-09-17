@@ -511,7 +511,7 @@ def kb_client():
     app = FastAPI()
     register_all_handlers(app)
     app.include_router(KBRouter().router)
-    with patch("domain.cognitive._internal.rag_service.get_rag_service", return_value=MagicMock()):
+    with patch("domain.cognition._internal.rag_service.get_rag_service", return_value=MagicMock()):
         yield TestClient(app, raise_server_exceptions=False)
 
 

@@ -1,10 +1,10 @@
-"""Tests for domain.cognitive.metacognition — enums and dataclasses."""
+"""Tests for domain.cognition.metacognition — enums and dataclasses."""
 
 import time
 
 import pytest
 
-from domain.cognitive._internal.metacognition import (
+from domain.cognition._internal.metacognition import (
     CognitiveProcess,
     CognitiveStateSnapshot,
     MetacognitiveAssessment,
