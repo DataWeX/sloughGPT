@@ -242,6 +242,23 @@ def _sync(args: argparse.Namespace) -> int:
     return 0
 
 
+def _gui(args: argparse.Namespace) -> int:
+    from app_planner.gui import main as gui_main
+
+    gui_args = []
+    if args.board_dir:
+        gui_args.extend(["--board-dir", str(args.board_dir)])
+    if args.notes_dir:
+        gui_args.extend(["--notes-dir", str(args.notes_dir)])
+    if args.host:
+        gui_args.extend(["--host", args.host])
+    if args.port:
+        gui_args.extend(["--port", str(args.port)])
+    if args.backend:
+        gui_args.extend(["--backend", args.backend])
+    return gui_main(gui_args)
+
+
 # ── CLI Parser ───────────────────────────────────────────────────────────
 
 
@@ -314,6 +331,16 @@ def build_parser() -> argparse.ArgumentParser:
     sync_p = sub.add_parser("sync", help="Sync notes to board")
     sync_p.add_argument("--quiet", action="store_true")
 
+    # GUI
+    gui_p = sub.add_parser(
+        "gui",
+        help="Local web interface",
+        description="Local web interface for notes + kanban board.",
+    )
+    gui_p.add_argument("--host", default="127.0.0.1")
+    gui_p.add_argument("--port", type=int, default=8765)
+    gui_p.add_argument("--backend", default=None, choices=["file", "mogdb"])
+
     return parser
 
 
@@ -362,6 +389,7 @@ def main(argv: list[str] | None = None) -> int:
         ("kanban", "tags"): _board_tags,
         ("kanban", "stats"): _board_stats,
         ("sync", None): _sync,
+        ("gui", None): _gui,
     }
 
     handler = dispatch.get((cmd, sub))
