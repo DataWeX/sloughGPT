@@ -21,6 +21,7 @@ or a technical term — it's wrong.
 ### 1. Chat That Remembers Me
 
 **What the user sees:**
+
 - Open the app → immediately start typing or talking
 - The AI knows their name, their preferences, past conversations
 - No "New chat" button that resets everything — memory is persistent
@@ -28,12 +29,14 @@ or a technical term — it's wrong.
   "Planning weekend trip", "Learning about climate change")
 
 **User flow:**
+
 1. Open app → typing cursor already blinking in input
 2. Type "What was that recipe we talked about yesterday?"
 3. AI remembers and answers with the recipe from yesterday's chat
 4. User can scroll up through past conversations like a timeline
 
 **What they should NOT see:**
+
 - Model names (GPT-2, Qwen, etc.)
 - Sliders for temperature, top-p, etc.
 - Session IDs or chat IDs
@@ -44,12 +47,14 @@ or a technical term — it's wrong.
 ### 2. Writing Assistant
 
 **What the user sees:**
+
 - A big text area labeled "What do you want to write?"
 - Tone buttons: Friendly | Professional | Funny | Short | Detailed
 - Type buttons: Email | Social Post | Story | Poem | Letter | Note
 - A "Make it better" button that polishes what they've written
 
 **User flow:**
+
 1. Select tone (e.g. "Friendly") and type (e.g. "Email")
 2. Type or dictate: "Tell my landlord the sink is broken and ask when he can fix it"
 3. Tap "Write" → AI generates the email
@@ -58,6 +63,7 @@ or a technical term — it's wrong.
 6. Tap "Make shorter" or "Make funnier" → instant revision
 
 **What they should NOT see:**
+
 - Inference settings
 - Model selection
 - Token counts
@@ -68,6 +74,7 @@ or a technical term — it's wrong.
 ### 3. Read My Files
 
 **What the user sees:**
+
 - A drop zone: "Drop a file here or click to upload"
 - Supported: PDF, Word, text files
 - After upload: a chat appears below the file, ready for questions
@@ -75,6 +82,7 @@ or a technical term — it's wrong.
   key points?", "Explain this section in simple terms"
 
 **User flow:**
+
 1. Drop a PDF (e.g. a lease agreement, a school article, a report from work)
 2. AI says "Got it! I've read 15 pages. What do you want to know?"
 3. Type "What's the move-out notice period?" → AI answers from the file
@@ -82,6 +90,7 @@ or a technical term — it's wrong.
 5. All questions and answers stay in the chat for that file
 
 **What they should NOT see:**
+
 - "Knowledge base", "vector store", "ingestion", "indexing"
 - "RAG", "embeddings", "chunks"
 - Any loading bar that says "Indexing..." — just say "Reading your file..."
@@ -92,12 +101,14 @@ or a technical term — it's wrong.
 ### 4. Brainstorm With Me
 
 **What the user sees:**
+
 - An open friendly input: "Let's think together. What's on your mind?"
 - A few suggestion chips: "Name ideas", "Weekend plans", "Gift ideas",
   "Solve a problem", "Plan an event"
 - Responses come back as ideas, not essays — bullet points, mind maps in text
 
 **User flow:**
+
 1. Type "I need gift ideas for my dad's 60th birthday. He loves fishing and cooking"
 2. AI responds with 10 ideas in a friendly list
 3. User says "I like #3 and #7, tell me more"
@@ -105,6 +116,7 @@ or a technical term — it's wrong.
 5. User can save the best ideas to a "notepad" for later
 
 **What they should NOT see:**
+
 - Any reference to "creative" or "deterministic" modes
 - Temperature or creativity sliders
 - Word limits
@@ -114,12 +126,14 @@ or a technical term — it's wrong.
 ### 5. Rewrite & Polish
 
 **What the user sees:**
+
 - A text box labelled "Paste what you wrote"
 - Buttons: Fix spelling/grammar | Make it shorter | Make it friendlier |
   Make it professional | Make it sound like me
 - A side-by-side view: original on left, rewritten on right
 
 **User flow:**
+
 1. Paste a draft email or message
 2. Tap "Make it professional" → polished version appears on the right
 3. Tap "Fix grammar" → only grammar corrections highlighted
@@ -127,6 +141,7 @@ or a technical term — it's wrong.
 5. Tap "Use this version" → replaces the original
 
 **What they should NOT see:**
+
 - Any reference to language models or AI settings
 - "Repetition penalty" or "token limit" or other technical controls
 
@@ -135,6 +150,7 @@ or a technical term — it's wrong.
 ### 6. Create Images
 
 **What the user sees:**
+
 - A text input: "Describe the image you want to create"
 - A simple style picker (optional): Realistic | Cartoon | Watercolor |
   Sketch | Fantasy
@@ -142,6 +158,7 @@ or a technical term — it's wrong.
 - After creation: Save | Share | Create another variation
 
 **User flow:**
+
 1. Type "A cozy cabin in the mountains at sunset, smoke coming from the chimney"
 2. Pick a style (or leave as default)
 3. Tap "Create" → image appears in a few seconds
@@ -150,6 +167,7 @@ or a technical term — it's wrong.
 6. Tap "Save to my gallery" → images are stored in a personal gallery
 
 **What they should NOT see:**
+
 - "VLM", "diffusion", "model checkpoint", "training steps"
 - Resolution or aspect ratio sliders (pick from presets if needed)
 - Negative prompts or advanced options — keep it simple
@@ -159,12 +177,14 @@ or a technical term — it's wrong.
 ### 7. Talk Out Loud
 
 **What the user sees:**
+
 - A microphone button that pulses when listening
 - A speaker button to hear the AI's response read aloud
 - When speaking: the AI transcribes in real-time (words appear as you speak)
 - The AI responds with both text and voice
 
 **User flow:**
+
 1. Tap the microphone → start speaking
 2. Words appear on screen as you speak
 3. AI responds with text + reads it aloud
@@ -173,6 +193,7 @@ or a technical term — it's wrong.
 6. Transcript is saved in the conversation history
 
 **What they should NOT see:**
+
 - "Speech-to-text", "text-to-speech", "ASR", "TTS", "Web Speech API"
 - Language selection (auto-detect)
 - Volume or speed sliders (keep defaults good)
@@ -182,12 +203,14 @@ or a technical term — it's wrong.
 ### 8. Translate
 
 **What the user sees:**
+
 - Two columns side by side — source language on left, target on right
 - Auto-detect source language
 - Big dropdown for target language (most common ones up top)
 - Paste or type on left → translation appears instantly on right
 
 **User flow:**
+
 1. Type or paste "How much does this cost?" on the left
 2. Select "Spanish" on the right → "¿Cuánto cuesta esto?" appears
 3. Tap the speaker icon to hear the translation spoken
@@ -196,6 +219,7 @@ or a technical term — it's wrong.
 6. Conversation mode: type back and forth, each side auto-translates
 
 **What they should NOT see:**
+
 - Any model selection or AI settings
 - "Neural machine translation" or "translation model"
 
@@ -204,12 +228,14 @@ or a technical term — it's wrong.
 ### 9. Help Me Decide
 
 **What the user sees:**
+
 - A simple prompt: "What are you deciding between?"
 - Input fields for options: "Option A" and "Option B", with optional notes
 - A "Help me decide" button
 - Response: a pro/con table, a recommendation, and a simple explanation
 
 **User flow:**
+
 1. Type "Should I take the job in New York or stay in my current role?"
 2. Add notes: "NY pays 20% more, current job has better hours"
 3. Tap "Help me decide"
@@ -218,6 +244,7 @@ or a technical term — it's wrong.
 6. User can save the decision to their notepad
 
 **What they should NOT see:**
+
 - "Chain of thought", "reasoning", "analysis parameters"
 - Any comparison of AI models or settings
 
@@ -226,6 +253,7 @@ or a technical term — it's wrong.
 ### 10. Explain Things Simply
 
 **What the user sees:**
+
 - An input: "What do you want explained?"
 - A difficulty selector: Simple (like explaining to a child) | Normal |
   Detailed
@@ -233,6 +261,7 @@ or a technical term — it's wrong.
 - Response: plain language, examples, analogies
 
 **User flow:**
+
 1. Type "How does the internet work?"
 2. Select "Simple" → AI explains using a post office analogy
 3. User says "Tell me more about routers" → AI drills deeper
@@ -240,6 +269,7 @@ or a technical term — it's wrong.
 5. The conversation keeps going until the user gets it
 
 **What they should NOT see:**
+
 - Any technical references to how the AI works
 - "LLM", "neural network", "training data"
 
@@ -248,12 +278,14 @@ or a technical term — it's wrong.
 ### 11. Make Me Well (Wellness)
 
 **What the user sees:**
+
 - A calming welcome screen
 - Options: Sleep story | Meditation guide | Journal prompt |
   Breathing exercise | Positive affirmation
 - No accounts, no tracking, no data stored (or at least feels private)
 
 **User flow:**
+
 1. Select "Sleep story" before bed
 2. AI asks about preferences: "Do you want a story about the ocean, a forest,
    or a starry night?"
@@ -262,14 +294,54 @@ or a technical term — it's wrong.
 5. User can set a timer: 10 min | 20 min | 30 min
 
 **What they should NOT see:**
+
 - "Voice synthesis model", "text generation", "personalization profile"
 - Any clinical or medical claims — just "feeling better", "relaxing"
+
+---
+
+### 12. Train My AI
+
+**What the user sees:**
+
+- A simple page with one question: "What do you want to teach me?"
+- A dataset selector showing their uploaded files and collections
+- A big "Start Training" button
+- While training: a friendly progress bar with plain-language status ("Learning from your data...")
+- After training: a before/after comparison ("Here's how I talk now vs before")
+
+**User flow:**
+
+1. Open the training page
+2. Pick a dataset from the list (or upload a new one — see "Read My Files")
+3. Tap "Start Training" → training begins
+4. Watch the loss chart go down (visual proof it's learning)
+5. Training completes → "Your AI has been updated!" with a "Try it now" button
+6. Tap "Try it now" → jumps to chat with the new model loaded
+7. Optionally: see a before/after comparison of how the AI responds
+
+**What they should NOT see:**
+
+- Learning rate, batch size, epochs, LoRA rank, gradient accumulation
+- "Configure training parameters" — defaults should work
+- "RLHF", "GRPO", "KL coefficient", "warmup steps"
+- Multiple training modes (turbo, session, feedback) — just one button
+- Checkpoint filenames or paths
+- "Hyperparameter grid search" or "model card" or "training analytics"
+
+**Power user extras (hidden behind "Advanced" toggle):**
+
+- Training quality slider (low / medium / high — maps to embed size + layers)
+- Save/load training configs
+- View detailed loss chart with step numbers
+- Compare checkpoints side by side
 
 ---
 
 ## Navigation & Layout (Plain English)
 
 **Home screen (what they see first):**
+
 - Simple greeting: "Hi [name], what can I help with?"
 - A search bar that accepts anything — questions, tasks, files
 - Below: quick action buttons in plain English:
@@ -280,12 +352,14 @@ or a technical term — it's wrong.
   - 🗣️ Talk instead
 
 **Sidebar (simple, no tabs):**
+
 - Recent conversations (by topic, not date)
 - My files (uploaded documents)
 - My gallery (saved images)
 - Settings
 
 **Settings (what a normal person would want):**
+
 - Appearance: Light / Dark / Auto
 - Voice: Choose the voice you like (friendly, calm, upbeat)
 - Language: Which language to use
@@ -309,3 +383,74 @@ or a technical term — it's wrong.
    then improve. Never a blank loading screen.
 7. **Conversational** — Every feature is accessible through chat. If it
    can't be done by typing or talking, it's too complex.
+
+---
+
+## User Journeys
+
+### Training: 3-Click Flow
+
+**What the user sees:**
+
+- A page titled "Teach me" with a simple subtitle: "Teach your agent from your data"
+- No jargon — no "LoRA", "GRPO", "KL coefficient", "gradient accumulation"
+- A 3-step pipeline: Pick data → Train → See results
+
+**User flow:**
+
+1. **Pick data** (click 1)
+   - User sees their datasets as simple chips with names and sample counts
+   - Can click a chip to select it, or use "Import" to add new data
+   - Quick import from HuggingFace (one-click, no setup required)
+   - Can paste text directly if no dataset exists
+   - A preview shows a few lines so user knows what the data looks like
+   - "Next" button advances to configure
+
+2. **Configure & Train** (click 2)
+   - Top: Text or Vision toggle (simple choice, no jargon)
+   - Below: A "Recommended" banner appears automatically based on dataset size
+     - Shows: "Based on your data, we recommend: LR 0.001, Batch 32, 10 epochs"
+     - One "Apply" button to accept recommendations
+   - Expert settings are hidden behind a "Show advanced options" toggle:
+     - Only shows when user explicitly asks for it
+     - Contains: epochs, batch size, learning rate, LoRA rank, tokenizer
+   - "Start training" button (disabled until ready)
+
+3. **See results** (click 3)
+   - Live loss chart while training runs (visual: line going down = good)
+   - Progress bar with ETA
+   - When complete: "Training complete! Your AI now knows [dataset name]"
+   - Checkpoint cards showing saved versions with loss and quality scores
+   - "Load for chat" button to immediately use the trained model
+   - "Train more" to go back and train again
+
+**What they should NOT see:**
+
+- Model names (GPT-2, Qwen, etc.) — just "Train from scratch" or "Continue training"
+- Parameter sliders for temperature, top-p, etc.
+- Session IDs, job IDs, or technical identifiers
+- Jargon like "LoRA rank", "KL coefficient", "gradient accumulation"
+- 15-parameter configuration forms
+- Grid search, checkpoint comparison, or model card pages (power-user features)
+- Webhooks, recovery cards, or API logs (system features)
+
+**Progressive disclosure:**
+
+- Default view: 3-step pipeline with recommended settings
+- "Show advanced options" toggle reveals expert settings
+- Results tab shows checkpoints and jobs (simple list, not analytics dashboard)
+- No separate sub-pages for trends, compare, model-card, or grid-search
+
+**Plain language translations:**
+
+| Technical term  | What user sees                                  |
+| --------------- | ----------------------------------------------- |
+| Fine-tuning     | "Continue training"                             |
+| Distillation    | "Train from scratch"                            |
+| LoRA            | "Parameter-efficient mode" (hidden by default)  |
+| Learning rate   | "Learning speed" (hidden by default)            |
+| Batch size      | "Training batch size" (hidden by default)       |
+| Checkpoint      | "Saved version"                                 |
+| Loss            | "Learning progress" (visual chart, not numbers) |
+| Epoch           | "Training round"                                |
+| Hyperparameters | "Advanced options" (hidden by default)          |

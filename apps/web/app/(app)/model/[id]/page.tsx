@@ -11,8 +11,16 @@ import { apiGet } from '@/lib/http-client'
 import { useToastStore } from '@/lib/toast-store'
 import { modelDisplayName } from '@/lib/inference-display'
 import {
-  ArrowLeft, Activity, Cpu, Zap, AlertTriangle, CheckCircle,
-  Clock, BarChart3, Settings, ExternalLink
+  ArrowLeft,
+  Activity,
+  Cpu,
+  Zap,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  BarChart3,
+  Settings,
+  ExternalLink,
 } from 'lucide-react'
 
 interface ModelDetail {
@@ -49,7 +57,7 @@ export default function ModelDetailPage() {
   const params = useParams()
   const router = useRouter()
   const modelId = params.id as string
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
 
   const [model, setModel] = useState<ModelDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -66,9 +74,11 @@ export default function ModelDetailPage() {
     }
   }, [modelId, addToast])
 
-  useEffect(() => { fetchModel() }, [fetchModel])
+  useEffect(() => {
+    fetchModel()
+  }, [fetchModel])
 
-  const statusCfg = model ? STATUS_CONFIG[model.status] ?? STATUS_CONFIG.unloaded : null
+  const statusCfg = model ? (STATUS_CONFIG[model.status] ?? STATUS_CONFIG.unloaded) : null
   const StatusIcon = statusCfg?.icon ?? Clock
 
   return (
@@ -110,8 +120,16 @@ export default function ModelDetailPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <MetricCard icon={Zap} label="Total Requests" value={model.total_requests ?? 0} />
             <MetricCard icon={BarChart3} label="Total Tokens" value={model.total_tokens ?? 0} />
-            <MetricCard icon={Activity} label="Avg Latency" value={model.avg_latency_ms ? `${model.avg_latency_ms.toFixed(1)}ms` : '—'} />
-            <MetricCard icon={Cpu} label="Tokens/sec" value={model.tokens_per_sec ? model.tokens_per_sec.toFixed(1) : '—'} />
+            <MetricCard
+              icon={Activity}
+              label="Avg Latency"
+              value={model.avg_latency_ms ? `${model.avg_latency_ms.toFixed(1)}ms` : '—'}
+            />
+            <MetricCard
+              icon={Cpu}
+              label="Tokens/sec"
+              value={model.tokens_per_sec ? model.tokens_per_sec.toFixed(1) : '—'}
+            />
           </div>
 
           <Card>
@@ -123,11 +141,15 @@ export default function ModelDetailPage() {
             <CardContent>
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <div className="text-2xl font-bold">{model.p95_latency_ms ? `${model.p95_latency_ms.toFixed(1)}` : '—'}</div>
+                  <div className="text-2xl font-bold">
+                    {model.p95_latency_ms ? `${model.p95_latency_ms.toFixed(1)}` : '—'}
+                  </div>
                   <div className="text-xs text-muted-foreground">P95 (ms)</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold">{model.p99_latency_ms ? `${model.p99_latency_ms.toFixed(1)}` : '—'}</div>
+                  <div className="text-2xl font-bold">
+                    {model.p99_latency_ms ? `${model.p99_latency_ms.toFixed(1)}` : '—'}
+                  </div>
                   <div className="text-xs text-muted-foreground">P99 (ms)</div>
                 </div>
                 <div>
@@ -148,8 +170,14 @@ export default function ModelDetailPage() {
               <CardContent className="space-y-2 text-sm">
                 <Row label="Depth" value={model.queue_depth_total ?? 0} />
                 <Row label="Served" value={model.queue_served ?? 0} />
-                <Row label="Avg Wait" value={model.queue_avg_wait_ms ? `${model.queue_avg_wait_ms.toFixed(1)}ms` : '—'} />
-                <Row label="Max Wait" value={model.queue_max_wait_ms ? `${model.queue_max_wait_ms.toFixed(1)}ms` : '—'} />
+                <Row
+                  label="Avg Wait"
+                  value={model.queue_avg_wait_ms ? `${model.queue_avg_wait_ms.toFixed(1)}ms` : '—'}
+                />
+                <Row
+                  label="Max Wait"
+                  value={model.queue_max_wait_ms ? `${model.queue_max_wait_ms.toFixed(1)}ms` : '—'}
+                />
               </CardContent>
             </Card>
 
@@ -166,7 +194,10 @@ export default function ModelDetailPage() {
                   <div className="text-xs text-red-500 mt-2">{model.warmup_error}</div>
                 )}
                 {model.last_request_at && (
-                  <Row label="Last Request" value={new Date(model.last_request_at).toLocaleString()} />
+                  <Row
+                    label="Last Request"
+                    value={new Date(model.last_request_at).toLocaleString()}
+                  />
                 )}
               </CardContent>
             </Card>
@@ -178,16 +209,14 @@ export default function ModelDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => router.push('/training/queue')}>
-                  Training Queue
+                <Button variant="outline" size="sm" onClick={() => router.push('/training')}>
+                  Training
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => router.push('/training/trends')}>
-                  Training Trends
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => router.push('/training/insights')}>
-                  Adaptive Insights
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => window.open(`https://huggingface.co/${model.model_id}`, '_blank')}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(`https://huggingface.co/${model.model_id}`, '_blank')}
+                >
                   <ExternalLink className="h-3 w-3 mr-1" /> HuggingFace
                 </Button>
               </div>
@@ -199,7 +228,15 @@ export default function ModelDetailPage() {
   )
 }
 
-function MetricCard({ icon: Icon, label, value }: { icon: typeof Zap; label: string; value: number | string }) {
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Zap
+  label: string
+  value: number | string
+}) {
   return (
     <Card>
       <CardContent className="py-3">
