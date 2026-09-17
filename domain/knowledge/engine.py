@@ -236,6 +236,23 @@ class KnowledgeEngine:
             logger.error("Topic listing failed: %s", e)
             return KnowledgeResult(success=False, error=str(e))
 
+    def list_all(self, top_k: int = 200) -> KnowledgeResult:
+        """List all knowledge items.
+
+        Args:
+            top_k: Maximum items to return.
+
+        Returns:
+            KnowledgeResult with list of item dicts.
+        """
+        try:
+            memory = self._get_memory()
+            items = memory.list_all(top_k=top_k) if hasattr(memory, "list_all") else []
+            return KnowledgeResult(success=True, data=items)
+        except Exception as e:
+            logger.error("List all failed: %s", e)
+            return KnowledgeResult(success=False, error=str(e))
+
     def update(
         self,
         item_id: str,

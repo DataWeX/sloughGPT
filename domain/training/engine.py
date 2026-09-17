@@ -366,6 +366,164 @@ class TrainingEngine:
             logger.error("Quality scoring failed: %s", e)
             return TrainingResult(success=False, error=str(e))
 
+    # ── Mobile Training Pair CRUD ────────────────────────────────────────
+
+    def get_training_store(self) -> Any:
+        """Get the mobile training store singleton."""
+        from domain.training._internal.mobile_training_store import get_training_store
+
+        return get_training_store()
+
+    def add_training_pairs(self, pairs: list[dict], topic: str = "mobile") -> TrainingResult:
+        """Add training pairs to the mobile store."""
+        try:
+            store = self.get_training_store()
+            count = store.add_batch(pairs, topic=topic)
+            return TrainingResult(success=True, data={"added": count})
+        except Exception as e:
+            logger.error("Add training pairs failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def list_training_pairs(self, limit: int = 100, offset: int = 0, **kwargs) -> TrainingResult:
+        """List training pairs from the mobile store."""
+        try:
+            store = self.get_training_store()
+            pairs = store.list_pairs(limit=limit, offset=offset, **kwargs)
+            count = store.count()
+            return TrainingResult(success=True, data={"pairs": pairs, "total": count})
+        except Exception as e:
+            logger.error("List training pairs failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def get_pending_pairs(self, limit: int = 50) -> TrainingResult:
+        """Get pending training pairs."""
+        try:
+            store = self.get_training_store()
+            pairs = store.get_pending_pairs(limit=limit)
+            return TrainingResult(success=True, data=pairs)
+        except Exception as e:
+            logger.error("Get pending pairs failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def get_session_pairs(self, session_id: str) -> TrainingResult:
+        """Get training pairs for a session."""
+        try:
+            store = self.get_training_store()
+            pairs = store.get_pairs_by_session(session_id)
+            return TrainingResult(success=True, data=pairs)
+        except Exception as e:
+            logger.error("Get session pairs failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def update_pair_quality(self, pair_id: str, quality: float) -> TrainingResult:
+        """Update quality score for a training pair."""
+        try:
+            store = self.get_training_store()
+            store.update_quality(pair_id, quality)
+            return TrainingResult(success=True, data={"updated": True})
+        except Exception as e:
+            logger.error("Update pair quality failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def delete_pair(self, pair_id: str) -> TrainingResult:
+        """Delete a training pair."""
+        try:
+            store = self.get_training_store()
+            store.delete_pair(pair_id)
+            return TrainingResult(success=True, data={"deleted": True})
+        except Exception as e:
+            logger.error("Delete pair failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def delete_synced_pairs(self) -> TrainingResult:
+        """Delete all synced training pairs."""
+        try:
+            store = self.get_training_store()
+            count = store.delete_synced()
+            return TrainingResult(success=True, data={"deleted": count})
+        except Exception as e:
+            logger.error("Delete synced pairs failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def compact_training_store(self) -> TrainingResult:
+        """Compact the training store."""
+        try:
+            store = self.get_training_store()
+            result = store.compact()
+            return TrainingResult(success=True, data=result)
+        except Exception as e:
+            logger.error("Compact training store failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def training_store_stats(self) -> TrainingResult:
+        """Get training store statistics."""
+        try:
+            store = self.get_training_store()
+            stats = store.stats()
+            breakdown = store.quality_breakdown()
+            return TrainingResult(success=True, data={**stats, "quality_breakdown": breakdown})
+        except Exception as e:
+            logger.error("Training store stats failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def extract_pairs_from_sessions(self, sessions: list[dict]) -> TrainingResult:
+        """Extract training pairs from session data."""
+        try:
+            from domain.training._internal.pair_extractor import extract_pairs_from_sessions
+
+            pairs = extract_pairs_from_sessions(sessions)
+            return TrainingResult(success=True, data=pairs)
+        except Exception as e:
+            logger.error("Extract pairs from sessions failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def extract_pairs_from_logs(self, logs: list[str]) -> TrainingResult:
+        """Extract training pairs from log data."""
+        try:
+            from domain.training._internal.pair_extractor import extract_pairs_from_logs
+
+            pairs = extract_pairs_from_logs(logs)
+            return TrainingResult(success=True, data=pairs)
+        except Exception as e:
+            logger.error("Extract pairs from logs failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def score_pairs(self, pairs: list[dict]) -> TrainingResult:
+        """Score a batch of training pairs for quality."""
+        try:
+            from domain.training._internal.quality_scorer import score_batch
+
+            scores = score_batch(pairs)
+            return TrainingResult(success=True, data=scores)
+        except Exception as e:
+            logger.error("Score pairs failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def get_auto_trainer_status(self) -> TrainingResult:
+        """Get auto-trainer status."""
+        try:
+            from domain.training._internal.auto_trainer import get_auto_trainer
+
+            trainer = get_auto_trainer()
+            return TrainingResult(success=True, data=trainer.status())
+        except Exception as e:
+            logger.error("Auto-trainer status failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def update_auto_trainer_config(self, **kwargs) -> TrainingResult:
+        """Update auto-trainer configuration."""
+        try:
+            from domain.training._internal.auto_trainer import get_auto_trainer
+
+            trainer = get_auto_trainer()
+            for key, val in kwargs.items():
+                if hasattr(trainer, key):
+                    setattr(trainer, key, val)
+            return TrainingResult(success=True, data=trainer.status())
+        except Exception as e:
+            logger.error("Auto-trainer config update failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
 
 _engine: TrainingEngine | None = None
 

@@ -21,7 +21,7 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
-from domain.infrastructure._internal.errors import AppError
+from domain.infrastructure import AppError
 
 logger = logging.getLogger(__name__)
 
@@ -283,7 +283,7 @@ class MobileRouter:
     @staticmethod
     def _get_souls():
         """Get soul list directly from the SloManager."""
-        from domain.inference._internal.slo_manager import get_slo_manager
+        from domain.generation import get_slo_manager
 
         mgr = get_slo_manager()
         souls = mgr.list_souls()
@@ -295,7 +295,7 @@ class MobileRouter:
     @staticmethod
     def _get_current_soul():
         """Get current soul directly from the SloManager."""
-        from domain.inference._internal.slo_manager import get_slo_manager
+        from domain.generation import get_slo_manager
 
         soul = get_slo_manager().get_current_soul()
         if soul is None:
@@ -341,22 +341,23 @@ class MobileRouter:
     @staticmethod
     def _get_knowledge_items(limit: int = 200, offset: int = 0, topic: str | None = None):
         """Get knowledge items directly."""
-        from domain.learner._internal.knowledge import get_knowledge_memory
+        from domain.knowledge.engine import get_knowledge_engine
 
-        km = get_knowledge_memory()
-        items = km.list_all(top_k=limit + offset)
+        engine = get_knowledge_engine()
+        result = engine.list_all(top_k=limit + offset)
+        items = result.data if result.success else []
         if topic:
-            items = [i for i in items if getattr(i, "topic", None) == topic]
+            items = [i for i in items if i.get("topic") == topic]
         return [
             {
-                "id": getattr(i, "id", ""),
-                "content": getattr(i, "content", ""),
-                "topic": getattr(i, "topic", ""),
-                "source": getattr(i, "source", "manual"),
-                "importance": getattr(i, "importance", 0.5),
-                "url": getattr(i, "url", ""),
-                "timestamp": getattr(i, "timestamp", 0),
-                "score": getattr(i, "score", 0),
+                "id": i.get("id", ""),
+                "content": i.get("content", ""),
+                "topic": i.get("topic", ""),
+                "source": i.get("source", "manual"),
+                "importance": i.get("importance", 0.5),
+                "url": i.get("url", ""),
+                "timestamp": i.get("timestamp", 0),
+                "score": i.get("score", 0),
             }
             for i in items[offset : offset + limit]
         ]
@@ -364,29 +365,31 @@ class MobileRouter:
     @staticmethod
     def _search_knowledge(query: str, limit: int = 10):
         """Search knowledge items directly."""
-        from domain.learner._internal.knowledge import get_knowledge_memory
+        from domain.knowledge.engine import get_knowledge_engine
 
-        km = get_knowledge_memory()
-        results = km.search(query, top_k=limit)
+        engine = get_knowledge_engine()
+        result = engine.query(query, top_k=limit)
+        items = result.data if result.success else []
         return [
             {
-                "id": getattr(r, "id", ""),
-                "content": getattr(r, "content", ""),
-                "topic": getattr(r, "topic", ""),
-                "source": getattr(r, "source", "manual"),
-                "importance": getattr(r, "importance", 0.5),
-                "score": getattr(r, "score", 0),
+                "id": r.get("id", ""),
+                "content": r.get("content", ""),
+                "topic": r.get("topic", ""),
+                "source": r.get("source", "manual"),
+                "importance": r.get("importance", 0.5),
+                "score": r.get("score", 0),
             }
-            for r in results
+            for r in items
         ]
 
     @staticmethod
     def _create_knowledge_item(content: str, topic: str | None = None):
         """Create a knowledge item directly."""
-        from domain.learner._internal.knowledge import get_knowledge_memory
+        from domain.knowledge.engine import get_knowledge_engine
 
-        km = get_knowledge_memory()
-        return km.store(content, topic=topic)
+        engine = get_knowledge_engine()
+        result = engine.store(content, topic=topic or "general")
+        return result.data if result.success else None
 
     @staticmethod
     def _update_knowledge_item(
@@ -396,18 +399,20 @@ class MobileRouter:
         importance: float | None = None,
     ):
         """Update a knowledge item directly."""
-        from domain.learner._internal.knowledge import get_knowledge_memory
+        from domain.knowledge.engine import get_knowledge_engine
 
-        km = get_knowledge_memory()
-        return km.update(item_id, content=content, topic=topic, importance=importance)
+        engine = get_knowledge_engine()
+        result = engine.update(item_id, content=content, topic=topic, importance=importance)
+        return result.data if result.success else None
 
     @staticmethod
     def _delete_knowledge_item(item_id: str):
         """Delete a knowledge item directly."""
-        from domain.learner._internal.knowledge import get_knowledge_memory
+        from domain.knowledge.engine import get_knowledge_engine
 
-        km = get_knowledge_memory()
-        return km.delete(item_id)
+        engine = get_knowledge_engine()
+        result = engine.delete(item_id)
+        return result.data if result.success else None
 
     @staticmethod
     def _get_checkpoints():
@@ -457,7 +462,7 @@ class MobileRouter:
     @staticmethod
     def _switch_soul(soul_name: str, checkpoint_name: str | None = None):
         """Switch soul directly."""
-        from domain.inference._internal.slo_manager import get_slo_manager
+        from domain.generation import get_slo_manager
 
         mgr = get_slo_manager()
         return mgr.switch_soul(soul_name, checkpoint_name=checkpoint_name)
@@ -947,7 +952,7 @@ class MobileRouter:
             Returns:
                 Registration status.
             """
-            from domain.mobile._internal.notifications import get_notification_service
+            from domain.mobile import get_notification_service
 
             svc = get_notification_service()
             result = svc.register_device(
@@ -966,7 +971,7 @@ class MobileRouter:
     ) -> dict:
         try:
             """Unregister a device from push notifications."""
-            from domain.mobile._internal.notifications import get_notification_service
+            from domain.mobile import get_notification_service
 
             svc = get_notification_service()
             removed = svc.unregister_device(body.token)
@@ -986,7 +991,7 @@ class MobileRouter:
             Returns:
                 List of registered devices.
             """
-            from domain.mobile._internal.notifications import get_notification_service
+            from domain.mobile import get_notification_service
 
             svc = get_notification_service()
             return success_response(data={"devices": svc.get_devices(topic=topic)})
@@ -1007,7 +1012,7 @@ class MobileRouter:
             Returns:
                 Send result with recipient count.
             """
-            from domain.mobile._internal.notifications import (
+            from domain.mobile import (
                 NotificationPayload,
                 get_notification_service,
             )
@@ -1033,7 +1038,7 @@ class MobileRouter:
     async def notification_history(self, limit: int = Query(50, ge=1, le=200)) -> dict:
         try:
             """Get recent notification history."""
-            from domain.mobile._internal.notifications import get_notification_service
+            from domain.mobile import get_notification_service
 
             svc = get_notification_service()
             return success_response(data={"history": svc.get_history(limit=limit)})
@@ -1049,7 +1054,7 @@ class MobileRouter:
             Returns:
                 Count of removed devices.
             """
-            from domain.mobile._internal.notifications import get_notification_service
+            from domain.mobile import get_notification_service
 
             svc = get_notification_service()
             removed = svc.cleanup_stale()
@@ -1063,7 +1068,7 @@ class MobileRouter:
     ) -> dict:
         try:
             """Send a training-complete notification to all registered devices."""
-            from domain.mobile._internal.notifications import (
+            from domain.mobile import (
                 NotificationPayload,
                 get_notification_service,
             )
@@ -1115,9 +1120,9 @@ class MobileRouter:
 
         t0 = int(_time.time() * 1000)
 
-        from domain.training._internal.mobile_training_store import get_training_store
+        from domain.training.engine import get_training_engine
 
-        store = get_training_store()
+        store = get_training_engine().get_training_store()
         pair_ids = store.add_batch(
             [
                 {
@@ -1256,9 +1261,9 @@ class MobileRouter:
             Side effects:
                 - Reads from MogDB training data collection.
             """
-            from domain.training._internal.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             stats = store.stats()
             quality_counts = store.quality_breakdown()
 
@@ -1289,9 +1294,9 @@ class MobileRouter:
             Side effects:
                 - Reads from MogDB training data collection.
             """
-            from domain.training._internal.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             pairs = store.get_pending_pairs(limit=limit)
             return success_response(
                 data={
@@ -1337,9 +1342,9 @@ class MobileRouter:
         Side effects:
             - Reads from MogDB training data collection.
         """
-        from domain.training._internal.mobile_training_store import get_training_store
+        from domain.training.engine import get_training_engine
 
-        store = get_training_store()
+        store = get_training_engine().get_training_store()
         pairs = store.list_pairs(
             limit=limit,
             offset=offset,
@@ -1387,9 +1392,9 @@ class MobileRouter:
         Side effects:
             - Reads from MogDB training data collection.
         """
-        from domain.training._internal.mobile_training_store import get_training_store
+        from domain.training.engine import get_training_engine
 
-        store = get_training_store()
+        store = get_training_engine().get_training_store()
         pairs = store.list_pairs(limit=limit, min_quality=min_quality, session_id=session_id)
 
         def generate() -> AsyncGenerator[str, None]:
@@ -1427,9 +1432,9 @@ class MobileRouter:
             Side effects:
                 - Reads from MogDB training data collection.
             """
-            from domain.training._internal.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             pairs = store.get_pairs_by_session(session_id)
             return success_response(
                 data={
@@ -1471,9 +1476,9 @@ class MobileRouter:
             Side effects:
                 - Updates quality field in MogDB training data collection.
             """
-            from domain.training._internal.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             updated = store.update_quality(pair_id, body.quality)
             if not updated:
                 raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
@@ -1500,9 +1505,9 @@ class MobileRouter:
             Side effects:
                 - Deletes pair from MogDB training data collection.
             """
-            from domain.training._internal.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             deleted = store.delete_pair(pair_id)
             if not deleted:
                 raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
@@ -1523,9 +1528,9 @@ class MobileRouter:
             Side effects:
                 - Deletes all synced pairs from MogDB training data collection.
             """
-            from domain.training._internal.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             count = store.delete_synced()
             safe_audit_log("mobile.pairs_delete_synced", detail=f"count={count}")
             return success_response(data={"status": "deleted", "count": count})
@@ -1540,9 +1545,9 @@ class MobileRouter:
     ) -> dict:
         try:
             """Delete multiple training pairs by ID."""
-            from domain.training._internal.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             count = 0
             for pair_id in ids:
                 if store.delete_pair(pair_id):
@@ -1558,9 +1563,9 @@ class MobileRouter:
     ) -> dict:
         try:
             """Compact the training data store (reclaim space from deleted records)."""
-            from domain.training._internal.mobile_training_store import get_training_store
+            from domain.training.engine import get_training_engine
 
-            store = get_training_store()
+            store = get_training_engine().get_training_store()
             count = store.compact()
             return success_response(data={"status": "compacted", "count": count})
 
@@ -1595,23 +1600,27 @@ class MobileRouter:
         """
         from pathlib import Path
 
-        from domain.api._internal.sse_envelope import sse_complete, sse_error, sse_event
+        from domain.api import sse_complete, sse_error, sse_event
 
         t0 = _time.time()
 
         # Extract pairs from server logs
-        from domain.training._internal.pair_extractor import (
-            extract_pairs_from_logs,
-            extract_pairs_from_sessions,
-            write_training_text,
-        )
+        from domain.training.engine import get_training_engine
 
-        pairs = extract_pairs_from_sessions(
-            limit=body.limit, min_length=body.min_length, session_ids=body.session_ids
+        engine = get_training_engine()
+
+        pairs = (
+            engine.extract_pairs_from_sessions(
+                limit=body.limit, min_length=body.min_length, session_ids=body.session_ids
+            ).data
+            or []
         )
         if len(pairs) < 5:
-            pairs = extract_pairs_from_logs(
-                limit=body.limit, min_length=body.min_length, model=body.model
+            pairs = (
+                engine.extract_pairs_from_logs(
+                    limit=body.limit, min_length=body.min_length, model=body.model
+                ).data
+                or []
             )
 
         if len(pairs) < 5:
@@ -1634,14 +1643,16 @@ class MobileRouter:
         )
 
         # Write training text file
-        text_file = write_training_text(pairs)
+        text_file = (
+            engine.write_training_text(pairs) if hasattr(engine, "write_training_text") else ""
+        )
 
         # Store pairs in MogDB (with quality scoring)
-        from domain.training._internal.mobile_training_store import get_training_store
-        from domain.training._internal.quality_scorer import score_batch
+        from domain.training.engine import get_training_engine
 
-        quality_scores = score_batch(pairs)
-        store = get_training_store()
+        engine = get_training_engine()
+        quality_scores = engine.score_pairs(pairs).data or []
+        store = engine.get_training_store()
         store.add_batch(
             [
                 {
@@ -1865,10 +1876,10 @@ class MobileRouter:
             Side effects:
                 - None (reads from AutoTrainer singleton).
             """
-            from domain.training._internal.auto_trainer import get_auto_trainer
+            from domain.training.engine import get_training_engine
 
-            trainer = get_auto_trainer()
-            return success_response(data=trainer.status())
+            engine = get_training_engine()
+            return success_response(data=engine.get_auto_trainer_status().data)
 
         except Exception as e:
             classify_and_raise(e, source="mobile.get_auto_train_status")
@@ -1892,14 +1903,16 @@ class MobileRouter:
         Side effects:
             - Modifies AutoTrainer singleton attributes.
         """
-        from domain.training._internal.auto_trainer import get_auto_trainer
+        from domain.training.engine import get_training_engine
 
-        trainer = get_auto_trainer()
+        engine = get_training_engine()
+        updates = {}
         if threshold is not None:
-            trainer.threshold = threshold
+            updates["threshold"] = threshold
         if interval_s is not None:
-            trainer.interval_s = interval_s
-        return success_response(data=trainer.status())
+            updates["interval_s"] = interval_s
+        result = engine.update_auto_trainer_config(**updates)
+        return success_response(data=result.data)
 
 
 router = MobileRouter().router
