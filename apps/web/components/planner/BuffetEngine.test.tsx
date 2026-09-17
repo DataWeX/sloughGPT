@@ -5,8 +5,8 @@ import { BuffetEngine } from './BuffetEngine'
 const mockBoard = { columns: [], cards: [] }
 const mockRefresh = vi.fn()
 
-vi.mock('@/lib/useOonBoard', () => ({
-  useOonBoard: () => ({
+vi.mock('@/lib/usePlannerBoard', () => ({
+  usePlannerBoard: () => ({
     board: mockBoard,
     tags: [],
     loading: false,
@@ -18,8 +18,12 @@ vi.mock('@/lib/useOonBoard', () => ({
   }),
 }))
 
-vi.mock('@/lib/oon', () => ({
-  oon: { move: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), sync: vi.fn() },
+vi.mock('@/lib/planner-client', () => ({
+  moveCard: vi.fn(),
+  createCard: vi.fn(),
+  updateCard: vi.fn(),
+  deleteCard: vi.fn(),
+  syncNotes: vi.fn(),
 }))
 
 afterEach(() => cleanup())

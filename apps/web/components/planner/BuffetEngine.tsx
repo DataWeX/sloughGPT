@@ -3,8 +3,8 @@
 import { useState, useCallback, useMemo } from 'react'
 import { cn, Button, IconPlus, IconSearch, IconRefresh, Spinner } from '@sloughgpt/strui'
 import type { Card, DragState, SyncState } from './types'
-import { useOonBoard } from '@/lib/useOonBoard'
-import { oon } from '@/lib/oon'
+import { usePlannerBoard } from '@/lib/usePlannerBoard'
+import * as planner from '@/lib/planner-client'
 import { Scene } from './Scene'
 import { CardEditor } from './CardEditor'
 
@@ -16,10 +16,8 @@ const DEFAULT_COLUMNS = [
 ]
 
 export function BuffetEngine() {
-  const {
-    board, tags, loading, error,
-    refresh, optimisticMove, optimisticAdd, optimisticDelete,
-  } = useOonBoard(500)
+  const { board, tags, loading, error, refresh, optimisticMove, optimisticAdd, optimisticDelete } =
+    usePlannerBoard(500)
 
   const [input, setInput] = useState<{ drag: DragState | null; selected: Card | null }>({
     drag: null,
@@ -34,7 +32,7 @@ export function BuffetEngine() {
     async (cardId: string, toColumn: string) => {
       optimisticMove(cardId, toColumn)
       try {
-        await oon.move(cardId, toColumn)
+        await planner.moveCard({ card_id: cardId, column: toColumn })
       } catch {
         refresh()
       }
@@ -45,14 +43,14 @@ export function BuffetEngine() {
   const handleCreate = useCallback(
     async (data: { title: string; column: string; priority: string; description: string }) => {
       try {
-        const { card } = await oon.create(data)
+        const { card } = await planner.createCard(data)
         optimisticAdd(card)
         setShowCreate(false)
       } catch (err) {
         refresh()
       }
     },
-    [oon, optimisticAdd, refresh],
+    [optimisticAdd, refresh],
   )
 
   const handleUpdate = useCallback(
@@ -60,12 +58,12 @@ export function BuffetEngine() {
       optimisticMove(cardId, data.column || '')
       setInput((prev) => ({ ...prev, selected: null }))
       try {
-        await oon.update(cardId, data)
+        await planner.updateCard(cardId, data)
       } catch {
         refresh()
       }
     },
-    [oon, optimisticMove, refresh],
+    [optimisticMove, refresh],
   )
 
   const handleDelete = useCallback(
@@ -73,24 +71,28 @@ export function BuffetEngine() {
       optimisticDelete(cardId)
       setInput((prev) => ({ ...prev, selected: null }))
       try {
-        await oon.delete(cardId)
+        await planner.deleteCard(cardId)
       } catch {
         refresh()
       }
     },
-    [oon, optimisticDelete, refresh],
+    [optimisticDelete, refresh],
   )
 
   const handleSync = useCallback(async () => {
     setSync({ status: 'syncing', lastSync: null, error: null })
     try {
-      await oon.sync()
+      await planner.syncNotes()
       setSync({ status: 'idle', lastSync: new Date().toISOString(), error: null })
       refresh()
     } catch (err) {
-      setSync({ status: 'error', lastSync: null, error: err instanceof Error ? err.message : 'Sync failed' })
+      setSync({
+        status: 'error',
+        lastSync: null,
+        error: err instanceof Error ? err.message : 'Sync failed',
+      })
     }
-  }, [oon, refresh])
+  }, [refresh])
 
   const handleDragStart = useCallback((e: React.DragEvent, cardId: string, column: string) => {
     e.dataTransfer.setData('text/plain', cardId)
@@ -143,7 +145,7 @@ export function BuffetEngine() {
           className={cn(
             'absolute inset-0 pointer-events-none opacity-20',
             '[background-image:',
-              'radial-gradient(circle,hsl(40,20%,75%)_1.5px,transparent_1.5px)',
+            'radial-gradient(circle,hsl(40,20%,75%)_1.5px,transparent_1.5px)',
             ']',
             '[background-size:12px_12px]',
             '[background-position:0_0]',
@@ -166,7 +168,7 @@ export function BuffetEngine() {
           className={cn(
             'absolute inset-0 pointer-events-none opacity-20',
             '[background-image:',
-              'radial-gradient(circle,hsl(40,20%,75%)_1.5px,transparent_1.5px)',
+            'radial-gradient(circle,hsl(40,20%,75%)_1.5px,transparent_1.5px)',
             ']',
             '[background-size:12px_12px]',
             '[background-position:0_0]',
@@ -193,7 +195,7 @@ export function BuffetEngine() {
         className={cn(
           'absolute inset-0 pointer-events-none opacity-20',
           '[background-image:',
-            'radial-gradient(circle,hsl(40,20%,75%)_1.5px,transparent_1.5px)',
+          'radial-gradient(circle,hsl(40,20%,75%)_1.5px,transparent_1.5px)',
           ']',
           '[background-size:12px_12px]',
           '[background-position:0_0]',
@@ -209,7 +211,13 @@ export function BuffetEngine() {
             <p className="text-sm text-[hsl(40,20%,45%)]">Board</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={refresh} disabled={loading} aria-label="Refresh board">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={refresh}
+              disabled={loading}
+              aria-label="Refresh board"
+            >
               <Spinner className="h-4 w-4" />
             </Button>
             <Button
@@ -242,59 +250,56 @@ export function BuffetEngine() {
               className="w-full rounded-lg border border-[hsl(40,20%,80%)] bg-[hsl(40,25%,97%)] pl-8 pr-3 py-1.5 text-sm text-[hsl(40,20%,20%)] placeholder:text-[hsl(40,20%,55%)] focus:outline-none focus:ring-2 focus:ring-[hsl(270,50%,60%)]"
             />
           </div>
-        {uniqueTags.length > 0 && (
-          <div className="flex items-center gap-1 flex-wrap">
-            <Button
-              variant={filterTag === null ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setFilterTag(null)}
-            >
-              All
-            </Button>
-            {uniqueTags.slice(0, 6).map((tag) => (
+          {uniqueTags.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
               <Button
-                key={tag}
-                variant={filterTag === tag ? 'default' : 'ghost'}
+                variant={filterTag === null ? 'default' : 'ghost'}
                 size="sm"
-                onClick={() => setFilterTag(filterTag === tag ? null : tag)}
+                onClick={() => setFilterTag(null)}
               >
-                {tag}
+                All
               </Button>
-            ))}
-            {uniqueTags.length > 6 && (
-              <span className="text-xs text-[hsl(40,20%,50%)]">+{uniqueTags.length - 6}</span>
-            )}
-          </div>
-        )}
-      </div>
+              {uniqueTags.slice(0, 6).map((tag) => (
+                <Button
+                  key={tag}
+                  variant={filterTag === tag ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setFilterTag(filterTag === tag ? null : tag)}
+                >
+                  {tag}
+                </Button>
+              ))}
+              {uniqueTags.length > 6 && (
+                <span className="text-xs text-[hsl(40,20%,50%)]">+{uniqueTags.length - 6}</span>
+              )}
+            </div>
+          )}
+        </div>
 
-      {/* Scene */}
-      <Scene
-        board={board || { columns: DEFAULT_COLUMNS, cards: [] }}
-        filteredCards={filteredCards}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-        onCardClick={(card) => setInput((prev) => ({ ...prev, selected: card }))}
-        draggingId={input.drag?.cardId ?? null}
-      />
-
-      {/* Card Editor */}
-      <CardEditor
-        card={input.selected}
-        onClose={() => setInput((prev) => ({ ...prev, selected: null }))}
-        onUpdate={handleUpdate}
-        onDelete={handleDelete}
-      />
-
-      {/* Create Card Dialog */}
-      {showCreate && (
-        <CreateCardDialog
-          onClose={() => setShowCreate(false)}
-          onCreate={handleCreate}
+        {/* Scene */}
+        <Scene
+          board={board || { columns: DEFAULT_COLUMNS, cards: [] }}
+          filteredCards={filteredCards}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onCardClick={(card) => setInput((prev) => ({ ...prev, selected: card }))}
+          draggingId={input.drag?.cardId ?? null}
         />
-      )}
+
+        {/* Card Editor */}
+        <CardEditor
+          card={input.selected}
+          onClose={() => setInput((prev) => ({ ...prev, selected: null }))}
+          onUpdate={handleUpdate}
+          onDelete={handleDelete}
+        />
+
+        {/* Create Card Dialog */}
+        {showCreate && (
+          <CreateCardDialog onClose={() => setShowCreate(false)} onCreate={handleCreate} />
+        )}
       </div>
     </div>
   )
