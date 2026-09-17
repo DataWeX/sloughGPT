@@ -21,10 +21,25 @@
 import { PUBLIC_API_URL } from '@/lib/config'
 
 export type LogTag =
-  | 'REQ' | 'AUTH' | 'MODEL' | 'SOUL' | 'TRAIN' | 'INFRA'
-  | 'START' | 'SLOW' | 'ERROR' | 'WARN' | 'OK'
-  | 'CHAT' | 'IDLE' | 'DOWNLOAD' | 'INFERENCE' | 'WORKFLOW'
-  | 'UI' | 'SYSTEM' | 'WEB'
+  | 'REQ'
+  | 'AUTH'
+  | 'MODEL'
+  | 'SOUL'
+  | 'TRAIN'
+  | 'INFRA'
+  | 'START'
+  | 'SLOW'
+  | 'ERROR'
+  | 'WARN'
+  | 'OK'
+  | 'CHAT'
+  | 'IDLE'
+  | 'DOWNLOAD'
+  | 'INFERENCE'
+  | 'WORKFLOW'
+  | 'UI'
+  | 'SYSTEM'
+  | 'WEB'
 
 type LogLevel = 'debug' | 'info' | 'warning' | 'error' | 'critical'
 
@@ -42,17 +57,24 @@ interface LogRecord {
 }
 
 const EVENT_TAG_MAP: Partial<Record<string, LogTag>> = {
-  model_:       'MODEL',
-  training_:    'TRAIN',
-  session_:     'CHAT',
-  stream_:      'CHAT',
-  chat_:        'CHAT',
-  webhook_:     'WORKFLOW',
-  download_:    'DOWNLOAD',
-  auth_:        'AUTH',
-  vm_:          'INFRA',
-  shell_:       'INFRA',
-  soul_:        'SOUL',
+  model_: 'MODEL',
+  training_: 'TRAIN',
+  session_: 'CHAT',
+  stream_: 'CHAT',
+  chat_: 'CHAT',
+  webhook_: 'WORKFLOW',
+  download_: 'DOWNLOAD',
+  auth_: 'AUTH',
+  vm_: 'INFRA',
+  shell_: 'INFRA',
+  soul_: 'SOUL',
+  connection_: 'SYSTEM',
+  api_connection_: 'SYSTEM',
+  startup_: 'START',
+  overlay_: 'START',
+  sse_: 'SYSTEM',
+  health_: 'SYSTEM',
+  error_lifecycle_: 'SYSTEM',
 }
 
 const LEVEL_ORDER: Record<LogLevel, number> = {
@@ -172,9 +194,15 @@ export class WebLogger {
     this._transport = transport ?? _getSharedTransport()
   }
 
-  get name() { return this._name }
-  get level() { return this._level }
-  set level(v: LogLevel) { this._level = v }
+  get name() {
+    return this._name
+  }
+  get level() {
+    return this._level
+  }
+  set level(v: LogLevel) {
+    this._level = v
+  }
 
   setContext(ctx: LogContext) {
     Object.assign(this._context, ctx)
@@ -193,9 +221,15 @@ export class WebLogger {
     )
   }
 
-  debug(message: string, context?: LogContext) { this._emit('debug', message, context) }
-  info(message: string, context?: LogContext) { this._emit('info', message, context) }
-  warning(message: string, context?: LogContext) { this._emit('warning', message, context) }
+  debug(message: string, context?: LogContext) {
+    this._emit('debug', message, context)
+  }
+  info(message: string, context?: LogContext) {
+    this._emit('info', message, context)
+  }
+  warning(message: string, context?: LogContext) {
+    this._emit('warning', message, context)
+  }
   error(message: string, opts?: { exception?: string } & LogContext) {
     const { exception, ...ctx } = opts || {}
     this._emit('error', message, ctx, exception)
@@ -215,7 +249,13 @@ export class WebLogger {
     try {
       return JSON.parse(raw)
     } catch {
-      return { timestamp: Date.now(), level: 'error', logger: 'unknown', message: `Failed to parse log: ${raw.slice(0, 100)}`, context: {} }
+      return {
+        timestamp: Date.now(),
+        level: 'error',
+        logger: 'unknown',
+        message: `Failed to parse log: ${raw.slice(0, 100)}`,
+        context: {},
+      }
     }
   }
 

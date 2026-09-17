@@ -2,8 +2,14 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { useErrorStore, addGlobalError } from './error-store'
 
 describe('error-store', () => {
-  beforeEach(() => { useErrorStore.getState().clearErrors() })
-  afterEach(() => { useErrorStore.getState().clearErrors() })
+  beforeEach(() => {
+    useErrorStore.getState().clearErrors()
+    useErrorStore.getState().clearStateEvents()
+  })
+  afterEach(() => {
+    useErrorStore.getState().clearErrors()
+    useErrorStore.getState().clearStateEvents()
+  })
 
   it('starts with no errors', () => {
     expect(useErrorStore.getState().hasErrors()).toBe(false)
@@ -81,7 +87,33 @@ describe('error-store', () => {
   })
 
   it('caps errors at 20', () => {
-    const words = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India', 'Juliet', 'Kilo', 'Lima', 'Mike', 'November', 'Oscar', 'Papa', 'Quebec', 'Romeo', 'Sierra', 'Tango', 'Uniform', 'Victor', 'Whiskey', 'Xray', 'Yankee']
+    const words = [
+      'Alpha',
+      'Bravo',
+      'Charlie',
+      'Delta',
+      'Echo',
+      'Foxtrot',
+      'Golf',
+      'Hotel',
+      'India',
+      'Juliet',
+      'Kilo',
+      'Lima',
+      'Mike',
+      'November',
+      'Oscar',
+      'Papa',
+      'Quebec',
+      'Romeo',
+      'Sierra',
+      'Tango',
+      'Uniform',
+      'Victor',
+      'Whiskey',
+      'Xray',
+      'Yankee',
+    ]
     for (let i = 0; i < 25; i++) useErrorStore.getState().addError(`Fail ${words[i]}`)
     expect(useErrorStore.getState().errors.length).toBe(20)
     expect(useErrorStore.getState().errors[0].message).toBe('Fail Yankee')
@@ -102,5 +134,49 @@ describe('error-store', () => {
   it('handles object without message field', () => {
     useErrorStore.getState().addError({ someField: 'value' })
     expect(useErrorStore.getState().errors[0].message).toContain('someField')
+  })
+
+  it('starts with no state events', () => {
+    expect(useErrorStore.getState().getStateEvents()).toEqual([])
+  })
+
+  it('logs connection transition with from/to', () => {
+    useErrorStore.getState().logStateEvent('connection_status_changed', {
+      kind: 'connection',
+      from: 'connecting',
+      to: 'connected',
+    })
+    const [e] = useErrorStore.getState().getStateEvents()
+    expect(e.event).toBe('connection_status_changed')
+    expect(e.kind).toBe('connection')
+    expect(e.from).toBe('connecting')
+    expect(e.to).toBe('connected')
+  })
+
+  it('infers api kind from api_ prefix', () => {
+    useErrorStore.getState().logStateEvent('api_connection_changed', { from: 'a', to: 'b' })
+    expect(useErrorStore.getState().getStateEvents()[0].kind).toBe('api')
+  })
+
+  it('dedups consecutive identical transitions', () => {
+    useErrorStore.getState().logStateEvent('sse_open', { kind: 'sse' })
+    useErrorStore.getState().logStateEvent('sse_open', { kind: 'sse' })
+    expect(useErrorStore.getState().getStateEvents().length).toBe(1)
+  })
+
+  it('caps state events at 100', () => {
+    for (let i = 0; i < 120; i++) {
+      useErrorStore.getState().logStateEvent(`health_ping_${i}`, { kind: 'health' })
+    }
+    expect(useErrorStore.getState().getStateEvents().length).toBe(100)
+    expect(useErrorStore.getState().getStateEvents()[0].event).toBe('health_ping_119')
+  })
+
+  it('clearStateEvents empties buffer but keeps errors', () => {
+    useErrorStore.getState().addError('keep me')
+    useErrorStore.getState().logStateEvent('startup_stage_changed', { kind: 'startup' })
+    useErrorStore.getState().clearStateEvents()
+    expect(useErrorStore.getState().getStateEvents()).toEqual([])
+    expect(useErrorStore.getState().errors.length).toBe(1)
   })
 })

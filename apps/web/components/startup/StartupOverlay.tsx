@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useLiveStatus, type StartupStage, type HookStatus } from '@/hooks/useLiveStatus'
+import { logStateEvent } from '@/lib/state-events'
 import { cn } from '@/lib/utils'
 
 const STAGE_LABELS: Record<StartupStage, string> = {
@@ -28,7 +29,14 @@ const HOOK_LABELS: Record<string, string> = {
 }
 
 export function StartupOverlay() {
-  const { startupStage, startupModelProgress, startupModelProgressMessage, startupHooks, startupElapsed, connected } = useLiveStatus()
+  const {
+    startupStage,
+    startupModelProgress,
+    startupModelProgressMessage,
+    startupHooks,
+    startupElapsed,
+    connected,
+  } = useLiveStatus()
   const [visible, setVisible] = useState(true)
   const [fadeOut, setFadeOut] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
@@ -36,21 +44,36 @@ export function StartupOverlay() {
   const isReady = startupStage === 'background' || startupStage === 'ready'
 
   useEffect(() => {
+    logStateEvent('overlay_shown', {
+      kind: 'overlay',
+      message: `overlay_shown stage=${startupStage}`,
+      data: { stage: startupStage },
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
     if (isReady && connected) {
       setFadeOut(true)
+      logStateEvent('overlay_hidden', {
+        kind: 'overlay',
+        message: `overlay_hidden stage=${startupStage}`,
+        data: { stage: startupStage },
+      })
       const timer = setTimeout(() => setVisible(false), 600)
       return () => clearTimeout(timer)
     }
-  }, [isReady, connected])
+  }, [isReady, connected, startupStage])
 
   if (!visible) return null
 
   const stageIndex = STAGE_ORDER.indexOf(startupStage)
-  const progress = startupModelProgress > 0
-    ? startupModelProgress
-    : stageIndex >= 0
-      ? (stageIndex + 1) / STAGE_ORDER.length
-      : 0.1
+  const progress =
+    startupModelProgress > 0
+      ? startupModelProgress
+      : stageIndex >= 0
+        ? (stageIndex + 1) / STAGE_ORDER.length
+        : 0.1
 
   // Get completed hooks for timing breakdown
   const completedHooks = Object.values(startupHooks)
@@ -98,9 +121,7 @@ export function StartupOverlay() {
         {startupModelProgressMessage && (
           <span className="max-w-48 truncate">{startupModelProgressMessage}</span>
         )}
-        {startupElapsed > 0 && (
-          <span className="font-mono">{startupElapsed.toFixed(1)}s</span>
-        )}
+        {startupElapsed > 0 && <span className="font-mono">{startupElapsed.toFixed(1)}s</span>}
       </div>
 
       {/* Active hooks */}

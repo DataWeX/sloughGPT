@@ -19,6 +19,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import { cn, Button, IconX } from '@sloughgpt/strui'
 import type { ErrorEvent } from '@/hooks/useErrorStream'
+import { useErrorStore, type StateEvent } from '@/lib/error-store'
 import { timeAgo } from '@/lib/time-ago'
 import { formatTimeWithSeconds } from '@/lib/time-format'
 
@@ -26,6 +27,9 @@ interface ErrorDiagnosticsPanelProps {
   errors: ErrorEvent[]
   onClear?: () => void
   className?: string
+  /** Override the state-event timeline (defaults to the error-store buffer). */
+  stateEvents?: StateEvent[]
+  onClearStateEvents?: () => void
 }
 
 type LevelFilter = 'all' | 'error' | 'critical' | 'warning' | 'info'
@@ -41,11 +45,16 @@ interface GroupedError {
 
 function levelBadge(level: ErrorEvent['level']): { label: string; color: string } {
   switch (level) {
-    case 'critical': return { label: 'CRIT', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' }
-    case 'error': return { label: 'ERR', color: 'bg-destructive/15 text-destructive border-destructive/30' }
-    case 'warning': return { label: 'WRN', color: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' }
-    case 'info': return { label: 'INFO', color: 'bg-blue-500/15 text-blue-400 border-blue-500/30' }
-    default: return { label: level, color: 'bg-muted text-muted-foreground' }
+    case 'critical':
+      return { label: 'CRIT', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' }
+    case 'error':
+      return { label: 'ERR', color: 'bg-destructive/15 text-destructive border-destructive/30' }
+    case 'warning':
+      return { label: 'WRN', color: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' }
+    case 'info':
+      return { label: 'INFO', color: 'bg-blue-500/15 text-blue-400 border-blue-500/30' }
+    default:
+      return { label: level, color: 'bg-muted text-muted-foreground' }
   }
 }
 
@@ -113,8 +122,8 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
   return (
     <div
       className={cn(
-        "group border-b border-border/20 last:border-0 transition-colors",
-        expanded ? "bg-muted/30" : "hover:bg-muted/20",
+        'group border-b border-border/20 last:border-0 transition-colors',
+        expanded ? 'bg-muted/30' : 'hover:bg-muted/20',
       )}
     >
       <button
@@ -122,30 +131,53 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
         onClick={() => setExpanded(!expanded)}
         className="w-full text-left px-2 py-1.5 flex items-start gap-2"
       >
-        <span className={cn("text-[9px] font-mono tabular-nums text-muted-foreground/40 shrink-0 w-5 text-right pt-0.5")}>
+        <span
+          className={cn(
+            'text-[9px] font-mono tabular-nums text-muted-foreground/40 shrink-0 w-5 text-right pt-0.5',
+          )}
+        >
           {index + 1}
         </span>
-        <span className={cn("shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded border", badge.color)}>
+        <span
+          className={cn(
+            'shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded border',
+            badge.color,
+          )}
+        >
           {badge.label}
         </span>
         <span className="flex-1 min-w-0">
-          <span className="text-[10px] text-foreground/90 break-all leading-tight block">{event.message.slice(0, 200)}</span>
+          <span className="text-[10px] text-foreground/90 break-all leading-tight block">
+            {event.message.slice(0, 200)}
+          </span>
           <span className="text-[9px] text-muted-foreground/50 mt-0.5 block">
             {event.httpMethod && event.httpPath && (
-              <span className="font-mono mr-1.5">{event.httpMethod} {event.httpPath}</span>
+              <span className="font-mono mr-1.5">
+                {event.httpMethod} {event.httpPath}
+              </span>
             )}
             {event.httpStatus && (
-              <span className={cn(
-                "font-mono mr-1.5",
-                event.httpStatus >= 500 ? "text-destructive" : event.httpStatus >= 400 ? "text-yellow-400" : "text-muted-foreground/50",
-              )}>{event.httpStatus}</span>
+              <span
+                className={cn(
+                  'font-mono mr-1.5',
+                  event.httpStatus >= 500
+                    ? 'text-destructive'
+                    : event.httpStatus >= 400
+                      ? 'text-yellow-400'
+                      : 'text-muted-foreground/50',
+                )}
+              >
+                {event.httpStatus}
+              </span>
             )}
             {event.durationMs != null && (
               <span className="font-mono mr-1.5">{event.durationMs}ms</span>
             )}
             {event.source && <span className="mr-1.5">{event.source}</span>}
             <span>{timeAgo(event.timestamp)}</span>
-            {event.correlationId && <span className="ml-1.5 font-mono">[{event.correlationId}]</span>}
+            {event.correlationId && (
+              <span className="ml-1.5 font-mono">[{event.correlationId}]</span>
+            )}
           </span>
         </span>
         <span className="shrink-0 text-muted-foreground/30 text-[9px] pt-0.5">
@@ -177,7 +209,10 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
           </div>
           {event.url && (
             <div className="text-[9px] text-muted-foreground/50">
-              at <span className="font-mono text-foreground/70">{event.url}:{event.line ?? 0}:{event.col ?? 0}</span>
+              at{' '}
+              <span className="font-mono text-foreground/70">
+                {event.url}:{event.line ?? 0}:{event.col ?? 0}
+              </span>
             </div>
           )}
           {event.fingerprint && (
@@ -230,8 +265,8 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
   return (
     <div
       className={cn(
-        "group border-b border-border/20 last:border-0 transition-colors",
-        expanded ? "bg-muted/30" : "hover:bg-muted/20",
+        'group border-b border-border/20 last:border-0 transition-colors',
+        expanded ? 'bg-muted/30' : 'hover:bg-muted/20',
       )}
     >
       <button
@@ -239,27 +274,46 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
         onClick={() => setExpanded(!expanded)}
         className="w-full text-left px-2 py-1.5 flex items-start gap-2"
       >
-        <span className={cn("text-[9px] font-mono tabular-nums text-muted-foreground/40 shrink-0 w-5 text-right pt-0.5")}>
+        <span
+          className={cn(
+            'text-[9px] font-mono tabular-nums text-muted-foreground/40 shrink-0 w-5 text-right pt-0.5',
+          )}
+        >
           {index + 1}
         </span>
-        <span className={cn("shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded border", badge.color)}>
+        <span
+          className={cn(
+            'shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded border',
+            badge.color,
+          )}
+        >
           {badge.label}
         </span>
         <span className="flex-1 min-w-0">
-          <span className="text-[10px] text-foreground/90 break-all leading-tight block">{group.message.slice(0, 200)}</span>
+          <span className="text-[10px] text-foreground/90 break-all leading-tight block">
+            {group.message.slice(0, 200)}
+          </span>
           <span className="text-[9px] text-muted-foreground/50 mt-0.5 block">
             {group.latest.httpMethod && group.latest.httpPath && (
-              <span className="font-mono mr-1.5">{group.latest.httpMethod} {group.latest.httpPath}</span>
+              <span className="font-mono mr-1.5">
+                {group.latest.httpMethod} {group.latest.httpPath}
+              </span>
             )}
             {group.latest.httpStatus && (
-              <span className={cn(
-                "font-mono mr-1.5",
-                group.latest.httpStatus >= 500 ? "text-destructive" : group.latest.httpStatus >= 400 ? "text-yellow-400" : "text-muted-foreground/50",
-              )}>{group.latest.httpStatus}</span>
+              <span
+                className={cn(
+                  'font-mono mr-1.5',
+                  group.latest.httpStatus >= 500
+                    ? 'text-destructive'
+                    : group.latest.httpStatus >= 400
+                      ? 'text-yellow-400'
+                      : 'text-muted-foreground/50',
+                )}
+              >
+                {group.latest.httpStatus}
+              </span>
             )}
-            {group.count > 1 && (
-              <span className="text-yellow-400/70 mr-1.5">×{group.count}</span>
-            )}
+            {group.count > 1 && <span className="text-yellow-400/70 mr-1.5">×{group.count}</span>}
             <span>{timeAgo(group.latest.timestamp)}</span>
           </span>
         </span>
@@ -281,7 +335,8 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
             </Button>
           </div>
           <div className="text-[9px] text-muted-foreground/50">
-            {group.count} occurrence{group.count !== 1 ? 's' : ''} — first {timeAgo(group.events[0].timestamp)}, latest {timeAgo(group.latest.timestamp)}
+            {group.count} occurrence{group.count !== 1 ? 's' : ''} — first{' '}
+            {timeAgo(group.events[0].timestamp)}, latest {timeAgo(group.latest.timestamp)}
           </div>
           {group.fingerprint && (
             <div className="text-[9px] text-muted-foreground/50">
@@ -290,7 +345,8 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
           )}
           {group.latest.correlationId && (
             <div className="text-[9px] text-muted-foreground/50">
-              latest correlation: <span className="font-mono text-foreground/70">{group.latest.correlationId}</span>
+              latest correlation:{' '}
+              <span className="font-mono text-foreground/70">{group.latest.correlationId}</span>
             </div>
           )}
           {group.latest.stack && (
@@ -304,23 +360,111 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
   )
 }
 
-export function ErrorDiagnosticsPanel({ errors, onClear, className }: ErrorDiagnosticsPanelProps) {
+const KIND_STYLES: Record<string, string> = {
+  connection: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  startup: 'bg-green-500/15 text-green-400 border-green-500/30',
+  sse: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+  health: 'bg-muted text-muted-foreground',
+  overlay: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+  api: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+}
+
+function StateEventsSection({ events, onClear }: { events: StateEvent[]; onClear?: () => void }) {
+  const [expanded, setExpanded] = useState(false)
+  const visible = expanded ? events.slice(0, 30) : events.slice(0, 5)
+  return (
+    <div className="mt-2 pt-2 border-t border-border/30">
+      <div className="flex items-center justify-between px-2 py-1">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+          aria-expanded={expanded}
+        >
+          State events {expanded ? '▾' : '▸'}
+        </button>
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-muted-foreground/40 tabular-nums">{events.length}</span>
+          {onClear && events.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-4 w-4 p-0 text-muted-foreground/40 hover:text-foreground"
+              onClick={onClear}
+              aria-label="Clear state events"
+            >
+              <IconX className="h-2.5 w-2.5" />
+            </Button>
+          )}
+        </div>
+      </div>
+      {visible.length === 0 ? (
+        <div className="px-3 py-3 text-center text-[10px] text-muted-foreground/40">
+          No state events yet
+        </div>
+      ) : (
+        <div className="max-h-40 overflow-y-auto">
+          {visible.map((e, i) => (
+            <div
+              key={e.id}
+              className="px-2 py-1 flex items-start gap-2 border-b border-border/20 last:border-0"
+            >
+              <span className="text-[9px] font-mono tabular-nums text-muted-foreground/40 shrink-0 w-5 text-right pt-0.5">
+                {i + 1}
+              </span>
+              <span
+                className={cn(
+                  'shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded border',
+                  KIND_STYLES[e.kind] ?? KIND_STYLES.health,
+                )}
+              >
+                {e.kind}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="text-[10px] text-foreground/90 break-all leading-tight block">
+                  {e.message.slice(0, 200)}
+                </span>
+                <span className="text-[9px] text-muted-foreground/50 mt-0.5 block">
+                  <span className="font-mono mr-1.5">{e.event}</span>
+                  <span>{timeAgo(e.timestamp)}</span>
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ErrorDiagnosticsPanel({
+  errors,
+  onClear,
+  className,
+  stateEvents: stateEventsProp,
+  onClearStateEvents,
+}: ErrorDiagnosticsPanelProps) {
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [grouped, setGrouped] = useState(true)
+  const storeStateEvents = useErrorStore((s) => s.stateEvents)
+  const clearStoreStateEvents = useErrorStore((s) => s.clearStateEvents)
+  const stateEvents = stateEventsProp ?? storeStateEvents
+  const handleClearStateEvents = onClearStateEvents ?? clearStoreStateEvents
 
   const filteredErrors = useMemo(() => {
     let result = errors
     if (levelFilter !== 'all') {
-      result = result.filter(e => e.level === levelFilter)
+      result = result.filter((e) => e.level === levelFilter)
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
-      result = result.filter(e =>
-        e.message.toLowerCase().includes(q) ||
-        e.source.toLowerCase().includes(q) ||
-        (e.correlationId && e.correlationId.toLowerCase().includes(q)) ||
-        (e.httpPath && e.httpPath.toLowerCase().includes(q))
+      result = result.filter(
+        (e) =>
+          e.message.toLowerCase().includes(q) ||
+          e.source.toLowerCase().includes(q) ||
+          (e.correlationId && e.correlationId.toLowerCase().includes(q)) ||
+          (e.httpPath && e.httpPath.toLowerCase().includes(q)),
       )
     }
     return result
@@ -329,13 +473,15 @@ export function ErrorDiagnosticsPanel({ errors, onClear, className }: ErrorDiagn
   const groupedErrors = useMemo(() => groupErrors(filteredErrors), [filteredErrors])
 
   return (
-    <div className={cn("flex flex-col", className)}>
+    <div className={cn('flex flex-col', className)}>
       <div className="flex items-center justify-between px-2 py-1 border-b border-border/30">
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
           Error Timeline
         </span>
         <div className="flex items-center gap-1">
-          <span className="text-[9px] text-muted-foreground/40 tabular-nums">{filteredErrors.length}/{errors.length}</span>
+          <span className="text-[9px] text-muted-foreground/40 tabular-nums">
+            {filteredErrors.length}/{errors.length}
+          </span>
           {onClear && errors.length > 0 && (
             <Button
               variant="ghost"
@@ -349,10 +495,12 @@ export function ErrorDiagnosticsPanel({ errors, onClear, className }: ErrorDiagn
           )}
         </div>
       </div>
-      <div className={cn(
-        "px-2 py-1 border-b border-border/20 space-y-1",
-        errors.length === 0 && "opacity-40 pointer-events-none",
-      )}>
+      <div
+        className={cn(
+          'px-2 py-1 border-b border-border/20 space-y-1',
+          errors.length === 0 && 'opacity-40 pointer-events-none',
+        )}
+      >
         <input
           type="text"
           placeholder="Filter errors..."
@@ -368,10 +516,10 @@ export function ErrorDiagnosticsPanel({ errors, onClear, className }: ErrorDiagn
                 type="button"
                 onClick={() => setLevelFilter(level)}
                 className={cn(
-                  "px-1 py-0.5 text-[8px] rounded transition-colors",
+                  'px-1 py-0.5 text-[8px] rounded transition-colors',
                   levelFilter === level
-                    ? "bg-primary/20 text-primary"
-                    : "text-muted-foreground/50 hover:text-muted-foreground",
+                    ? 'bg-primary/20 text-primary'
+                    : 'text-muted-foreground/50 hover:text-muted-foreground',
                 )}
               >
                 {level === 'all' ? 'ALL' : level === 'critical' ? 'CRIT' : level.toUpperCase()}
@@ -382,10 +530,10 @@ export function ErrorDiagnosticsPanel({ errors, onClear, className }: ErrorDiagn
             type="button"
             onClick={() => setGrouped(!grouped)}
             className={cn(
-              "px-1 py-0.5 text-[8px] rounded transition-colors",
+              'px-1 py-0.5 text-[8px] rounded transition-colors',
               grouped
-                ? "bg-primary/20 text-primary"
-                : "text-muted-foreground/50 hover:text-muted-foreground",
+                ? 'bg-primary/20 text-primary'
+                : 'text-muted-foreground/50 hover:text-muted-foreground',
             )}
           >
             {grouped ? 'GROUPED' : 'FLAT'}
@@ -402,11 +550,10 @@ export function ErrorDiagnosticsPanel({ errors, onClear, className }: ErrorDiagn
             <GroupedErrorRow key={group.fingerprint} group={group} index={i} />
           ))
         ) : (
-          filteredErrors.map((event, i) => (
-            <ErrorRow key={event.id} event={event} index={i} />
-          ))
+          filteredErrors.map((event, i) => <ErrorRow key={event.id} event={event} index={i} />)
         )}
       </div>
+      <StateEventsSection events={stateEvents} onClear={handleClearStateEvents} />
     </div>
   )
 }

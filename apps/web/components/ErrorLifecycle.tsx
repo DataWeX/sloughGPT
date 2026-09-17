@@ -19,6 +19,7 @@ import { useErrorStore } from '@/lib/error-store'
 import { useToastStore } from '@/lib/toast-store'
 import { reportError } from '@/lib/error-reporter'
 import { logger } from '@/lib/dev-log'
+import { logStateEvent } from '@/lib/state-events'
 import { chatDB } from '@/lib/db'
 
 const _log = logger.child('error-lifecycle')
@@ -44,19 +45,32 @@ const NON_FATAL_PATTERNS = [
 ]
 
 function isNonFatal(message: string): boolean {
-  return NON_FATAL_PATTERNS.some(p => p.test(message))
+  return NON_FATAL_PATTERNS.some((p) => p.test(message))
 }
 
 function isHydration(message: string, args?: unknown[]): boolean {
-  if (message.includes('hydrat') || message.includes('did not match') || message.includes('Text content does not match')) return true
+  if (
+    message.includes('hydrat') ||
+    message.includes('did not match') ||
+    message.includes('Text content does not match')
+  )
+    return true
   if (args?.[0] instanceof Error && (args[0] as Error).message.includes('hydrat')) return true
   return false
 }
 
 // ── Stack extraction ──────────────────────────────────────────────────
 
-function extractStackInfo(error: ErrorEvent | PromiseRejectionEvent): { file: string; line: number; col: number; stack: string } {
-  let file = '', line = 0, col = 0, stack = ''
+function extractStackInfo(error: ErrorEvent | PromiseRejectionEvent): {
+  file: string
+  line: number
+  col: number
+  stack: string
+} {
+  let file = '',
+    line = 0,
+    col = 0,
+    stack = ''
 
   if (error instanceof ErrorEvent) {
     file = error.filename || ''
@@ -74,7 +88,11 @@ function extractStackInfo(error: ErrorEvent | PromiseRejectionEvent): { file: st
     } else if (typeof reason === 'string') {
       stack = reason
     } else if (reason && typeof reason === 'object') {
-      try { stack = JSON.stringify(reason).slice(0, 500) } catch { stack = String(reason) }
+      try {
+        stack = JSON.stringify(reason).slice(0, 500)
+      } catch {
+        stack = String(reason)
+      }
     }
   }
 
@@ -84,8 +102,8 @@ function extractStackInfo(error: ErrorEvent | PromiseRejectionEvent): { file: st
 // ── Component ─────────────────────────────────────────────────────────
 
 export function ErrorLifecycle() {
-  const addError = useErrorStore(s => s.addError)
-  const addToast = useToastStore(s => s.addToast)
+  const addError = useErrorStore((s) => s.addError)
+  const addToast = useToastStore((s) => s.addToast)
   const initialized = useRef(false)
 
   useEffect(() => {
@@ -95,11 +113,13 @@ export function ErrorLifecycle() {
     // ── 1. Single console.error wrapper ──────────────────────────────
     const origConsoleError = console.error
     console.error = (...args: unknown[]) => {
-      const msg = args.map(a => String(a)).join(' ')
+      const msg = args.map((a) => String(a)).join(' ')
 
       // Hydration errors: persist to Dexie + report to backend, suppress overlay
       if (isHydration(msg, args)) {
-        chatDB.addError(msg.slice(0, 500), 'hydration').catch(() => /* DB write failed — non-critical */ {})
+        chatDB
+          .addError(msg.slice(0, 500), 'hydration')
+          .catch(() => /* DB write failed — non-critical */ {})
         reportError(msg.slice(0, 500), 'hydration', { metadata: { detail: msg.slice(0, 1000) } })
         return // don't forward to Next.js overlay
       }
@@ -126,7 +146,14 @@ export function ErrorLifecycle() {
 
       const verboseParts: string[] = []
       if (file) verboseParts.push(`at ${file}:${line}:${col}`)
-      if (stack) verboseParts.push(stack.split('\n').slice(0, 4).map(s => s.trim()).join('\n'))
+      if (stack)
+        verboseParts.push(
+          stack
+            .split('\n')
+            .slice(0, 4)
+            .map((s) => s.trim())
+            .join('\n'),
+        )
       const verbose = verboseParts.length > 0 ? verboseParts.join('\n') : undefined
 
       addToast('Something went wrong.', 'error', verbose)
@@ -138,7 +165,12 @@ export function ErrorLifecycle() {
     const handleRejection = (event: PromiseRejectionEvent) => {
       if (event.defaultPrevented) return
       const reason = event.reason
-      const message = reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : 'Unhandled Promise Rejection'
+      const message =
+        reason instanceof Error
+          ? reason.message
+          : typeof reason === 'string'
+            ? reason
+            : 'Unhandled Promise Rejection'
 
       if (isNonFatal(message)) {
         addToast(message, 'info')
@@ -153,7 +185,14 @@ export function ErrorLifecycle() {
 
       const verboseParts: string[] = []
       if (file) verboseParts.push(`at ${file}:${line}:${col}`)
-      if (stack) verboseParts.push(stack.split('\n').slice(0, 4).map(s => s.trim()).join('\n'))
+      if (stack)
+        verboseParts.push(
+          stack
+            .split('\n')
+            .slice(0, 4)
+            .map((s) => s.trim())
+            .join('\n'),
+        )
       const verbose = verboseParts.length > 0 ? verboseParts.join('\n') : undefined
 
       addToast('Something went wrong.', 'error', verbose)
@@ -179,9 +218,13 @@ export function ErrorLifecycle() {
     // error-reporter.ts installs its own window.error + unhandledrejection listeners
     // that batch and POST to /errors/log. We call initErrorReporter() here so it runs
     // exactly once, and its listeners coexist with ours (both fire, no conflict).
-    import('@/lib/error-reporter').then(m => m.initErrorReporter())
+    import('@/lib/error-reporter').then((m) => m.initErrorReporter())
 
     _log.info('Error lifecycle initialized')
+    logStateEvent('error_lifecycle_initialized', {
+      kind: 'health',
+      message: 'error_lifecycle_initialized',
+    })
 
     return () => {
       console.error = origConsoleError
