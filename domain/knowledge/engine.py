@@ -152,7 +152,10 @@ class KnowledgeEngine:
             delete = getattr(memory, "delete", None) or getattr(memory, "delete_by_id", None)
             if delete is None:
                 raise AttributeError("knowledge memory has no delete method")
-            delete(item_id)
+            # delete_by_id returns False when the item doesn't exist —
+            # propagate as not-found instead of false success.
+            if delete(item_id) is False:
+                raise KeyError(f"knowledge item not found: {item_id}")
             return KnowledgeResult(success=True, data={"deleted": True})
         except Exception as e:
             logger.error("Knowledge delete failed: %s", e)
@@ -247,6 +250,7 @@ class KnowledgeEngine:
                 "topics": topics,
                 "sources": sources,
                 "avg_importance": (importance_total / importance_count) if importance_count else 0.0,
+                "topic_count": len(topics),
             }
             if hasattr(memory, "stats"):
                 try:

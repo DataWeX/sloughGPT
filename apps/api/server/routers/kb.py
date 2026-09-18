@@ -673,12 +673,15 @@ class KBRouter:
 
     def get_context(self) -> dict:
         try:
-            result = self._engine.context("")
-            context = result.data if result.success else ""
             from domain.knowledge import get_knowledge_memory
 
             memory = get_knowledge_memory()
             all_facts = memory.list_all()
+            if hasattr(memory, "get_context_string"):
+                context = memory.get_context_string()
+            else:
+                result = self._engine.context("")
+                context = result.data if result.success else ""
             return success_response(data={"context": context, "count": len(all_facts)})
         except Exception as e:
             classify_and_raise(e, source="kb.get_context")
