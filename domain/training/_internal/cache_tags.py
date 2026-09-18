@@ -136,6 +136,9 @@ def find_corpus_file(entry_dir: Path) -> Path | None:
     txt_files = sorted(entry_dir.glob("*.txt"))
     if txt_files:
         return txt_files[0]
+    jsonl_files = sorted(entry_dir.glob("*.jsonl"))
+    if jsonl_files:
+        return jsonl_files[0]
     return None
 
 

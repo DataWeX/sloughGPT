@@ -51,6 +51,9 @@ class DatasetsController:
         path = self.datasets_dir / dataset_id
         if path.exists():
             return path
+        nested = self.datasets_dir / "datasets" / dataset_id
+        if nested.exists():
+            return nested
         return None
 
     def list_datasets(
@@ -67,21 +70,30 @@ class DatasetsController:
         datasets = []
         seen: set[str] = set()
         # Gather entries first (just-cache wins over legacy data/), then
-        # summarize in a single loop below.
-        entries: list[Path] = []
+        # summarize in a single loop below. The legacy data/datasets/
+        # container is expanded so its corpora list individually.
+        entries: list[tuple[Path, str]] = []
+
+        def _claim(entry: Path, source: str) -> None:
+            if not entry.is_dir():
+                return
+            # Skip MogDB store directories (e.g. training_jobs.db/, webhooks.db/)
+            if entry.name.endswith(".db"):
+                return
+            if entry.name in seen:
+                return  # just-cache entry wins over legacy data/
+            seen.add(entry.name)
+            entries.append((entry, source))
+
         for datasets_dir in self._entry_roots():
             for d in sorted(datasets_dir.iterdir(), key=lambda p: p.name):
-                if not d.is_dir():
+                if d.name == "datasets" and d.is_dir():
+                    for child in sorted(d.iterdir(), key=lambda p: p.name):
+                        _claim(child, "data/datasets")
                     continue
-                # Skip MogDB store directories (e.g. training_jobs.db/, webhooks.db/)
-                if d.name.endswith(".db"):
-                    continue
-                if d.name in seen:
-                    continue  # just-cache entry wins over legacy data/
-                seen.add(d.name)
-                entries.append(d)
+                _claim(d, "cache" if datasets_dir.name == "external" else "data")
 
-        for d in entries:
+        for d, entry_source in entries:
             # Check workspace ownership if filtering
             if workspace_id:
                 meta_path = d / ".metadata.json"
@@ -100,11 +112,16 @@ class DatasetsController:
             corpus_file = d / "corpus.jsonl"
 
             has_corpus = corpus_file.exists()
-            size = (
-                corpus_file.stat().st_size
-                if has_corpus
-                else (input_file.stat().st_size if input_file.exists() else 0)
-            )
+            if has_corpus:
+                size = corpus_file.stat().st_size
+            elif input_file.exists():
+                size = input_file.stat().st_size
+            else:
+                # Fall back to any discovered corpus file (e.g. input.jsonl).
+                from domain.training._internal.cache_tags import find_corpus_file as _find
+
+                _primary = _find(d)
+                size = _primary.stat().st_size if _primary is not None else 0
             num_samples = 0
             if has_corpus and size < 1_000_000:
                 try:
@@ -137,7 +154,7 @@ class DatasetsController:
                 "kind": kind,
                 "tags": tags,
                 "mime": guess_mime(primary) if primary is not None else "application/octet-stream",
-                "source": "cache" if d.parent.name == "external" else "data",
+                "source": entry_source,
                 "size_bytes": size,
                 "size_formatted": f"{size / 1024:.1f} KB" if size > 0 else "Empty",
                 "size": size,

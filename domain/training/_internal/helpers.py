@@ -127,6 +127,9 @@ def resolve_dataset_path(dataset_id: str) -> str:
         txt_files = list(ds_candidate.glob("*.txt"))
         if txt_files:
             return str(txt_files[0])
+        jsonl_files = sorted(ds_candidate.glob("*.jsonl"))
+        if jsonl_files:
+            return str(jsonl_files[0])
     return ""
 
 

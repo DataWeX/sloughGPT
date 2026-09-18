@@ -95,3 +95,12 @@ def test_find_corpus_file_priority(tmp_path: Path) -> None:
     (d / "train.txt").write_text("t")
     (d / "input.txt").write_text("i")
     assert find_corpus_file(d) == d / "input.txt"
+
+
+def test_find_corpus_file_jsonl_fallback(tmp_path: Path) -> None:
+    from domain.training._internal.cache_tags import find_corpus_file
+
+    d = tmp_path / "j"
+    d.mkdir()
+    (d / "input.jsonl").write_text('{"text":"a"}\n')
+    assert find_corpus_file(d) == d / "input.jsonl"

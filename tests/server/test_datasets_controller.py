@@ -76,6 +76,19 @@ class TestListDatasets:
         ctrl = DatasetsController(tmp_path)
         assert ctrl.list_datasets() == []
 
+    def test_datasets_container_expanded(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
+        nested = tmp_path / "data" / "datasets" / "chat_ds"
+        nested.mkdir(parents=True)
+        (nested / "corpus.jsonl").write_text('{"text":"a"}\n')
+        ctrl = DatasetsController(tmp_path)
+        by_id = {d["id"]: d for d in ctrl.list_datasets()}
+        assert "datasets" not in by_id
+        assert by_id["chat_ds"]["source"] == "data/datasets"
+        assert by_id["chat_ds"]["kind"] == "dataset"
+        assert by_id["chat_ds"]["num_samples"] == 1
+        assert ctrl.get_dataset_stats("chat_ds")["samples"] == 1
+
     def test_kind_tags_mime_present(self, repo_with_datasets, tmp_path):
         adapters = tmp_path / "data" / "user_adapters"
         adapters.mkdir()
