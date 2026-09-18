@@ -1,6 +1,6 @@
 'use client'
 
-import { apiGet, apiPost, apiPut, apiDelete } from './http-client'
+import { apiGet, apiPost, apiPatch, apiDelete } from './http-client'
 
 export interface KnowledgeItem {
   id: string
@@ -57,7 +57,8 @@ export const kbController = {
     id: string,
     data: { content?: string; topic?: string; importance?: number },
   ): Promise<KnowledgeItem> {
-    return apiPut<KnowledgeItem>(`/knowledge/${id}`, data)
+    // Backend serves PATCH /knowledge/{item_id} (partial update) — PUT 404s.
+    return apiPatch<KnowledgeItem>(`/knowledge/${id}`, data)
   },
 
   async remove(id: string): Promise<{ deleted: boolean }> {

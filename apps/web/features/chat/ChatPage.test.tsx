@@ -78,6 +78,7 @@ const {
   mockRemoveBookmark,
   mockIsBookmarked,
   mockClipboardWrite,
+  mockChatSetInput,
 } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockSearchParamsGet: vi.fn(),
@@ -99,6 +100,7 @@ const {
   mockRemoveBookmark: vi.fn(),
   mockIsBookmarked: vi.fn(),
   mockClipboardWrite: vi.fn(),
+  mockChatSetInput: vi.fn(),
 }))
 
 const state = vi.hoisted(() => ({
@@ -337,7 +339,12 @@ vi.mock('@/features/chat/hooks/useChatMessages', async () => {
         messages,
         setMessages,
         input: storeInput,
-        setInput: storeSetInput,
+        // Record hook-side writes separately so tests can assert the
+        // dual-write contract (store for display, hook for send paths).
+        setInput: (...args: [string]) => {
+          ;(storeSetInput as (...a: [string]) => void)(...args)
+          mockChatSetInput(...args)
+        },
         loading,
         setLoading,
         images,
@@ -627,6 +634,18 @@ describe('ChatPage', () => {
       screen.getByTestId('send-btn').click()
     })
     expect(mockSendMessage).toHaveBeenCalled()
+  })
+
+  it('writes typed text to both the store (display) and hook (send paths)', async () => {
+    // Regression: ChatInput displays store state while every send path reads
+    // hook state — typing must update both or messages silently never send.
+    await renderChat()
+    const textarea = screen.getByLabelText('Chat input')
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: 'hello' } })
+    })
+    expect(useChatStore.getState().input).toBe('hello')
+    expect(mockChatSetInput).toHaveBeenCalledWith('hello')
   })
 
   it('toasts an upload prompt when sending in read mode without a file', async () => {
