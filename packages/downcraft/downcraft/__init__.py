@@ -57,7 +57,13 @@ from pathlib import Path
 from typing import Dict, Optional, Union
 
 from .download import DownloadError, download_file, state
-from .resolve import patterns, resolve_and_download, resolve_page
+from .resolve import (
+    patterns,
+    resolve_and_download,
+    resolve_page,
+    resolve_page_browser,
+    resolve_with_browser_fallback,
+)
 from .server import CaptureEntry, start_capture_server
 
 # Compression APIs (optional dependency)
@@ -87,6 +93,8 @@ __all__ = [
     "download",
     "resolve_page",
     "resolve_and_download",
+    "resolve_page_browser",
+    "resolve_with_browser_fallback",
     "state",
     "patterns",
     "download_file",

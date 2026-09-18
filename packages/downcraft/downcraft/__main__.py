@@ -40,7 +40,6 @@ import time
 
 from . import download
 from .download import state
-from .resolve import resolve_page
 
 logging.basicConfig(
     level=logging.INFO,
@@ -158,9 +157,31 @@ def cmd_resolve(args: argparse.Namespace):
     """Resolve a page and show ranked download links."""
     url = args.url
     limit = args.limit
+    use_browser = args.browser
+    fallback = args.fallback
 
-    print(f"Resolving {url}...")
-    links = resolve_page(url, on_progress=lambda msg: print(f"  {msg}"))
+    if use_browser:
+        print(f"Resolving {url} (browser mode)...")
+        from .resolve import resolve_page_browser
+
+        links = resolve_page_browser(
+            url,
+            headless=True,
+            on_progress=lambda msg: print(f"  {msg}"),
+        )
+    elif fallback:
+        print(f"Resolving {url} (HTTP + browser fallback)...")
+        from .resolve import resolve_with_browser_fallback
+
+        links = resolve_with_browser_fallback(
+            url,
+            on_progress=lambda msg: print(f"  {msg}"),
+        )
+    else:
+        print(f"Resolving {url}...")
+        from .resolve import resolve_page
+
+        links = resolve_page(url, on_progress=lambda msg: print(f"  {msg}"))
 
     if not links:
         print("No download links found.")
@@ -381,6 +402,16 @@ def main(argv: list = None):
     p_res.add_argument("url", help="Page URL to scrape")
     p_res.add_argument("-n", "--limit", type=int, default=10, help="Max results to show")
     p_res.add_argument("-b", "--best", action="store_true", help="Print only the best URL")
+    p_res.add_argument(
+        "--browser",
+        action="store_true",
+        help="Use headless Chromium (requires: pip install downcraft[browser])",
+    )
+    p_res.add_argument(
+        "--fallback",
+        action="store_true",
+        help="Try HTTP first, fall back to browser if insufficient",
+    )
     p_res.set_defaults(func=cmd_resolve)
 
     # capture
