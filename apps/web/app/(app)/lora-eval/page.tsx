@@ -3,13 +3,25 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, KpiGrid, StatCard } from '@sloughgpt/strui'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Button,
+  Input,
+  KpiGrid,
+  StatCard,
+} from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
-import { loraEvalController, type LoraEvalResult } from '@/lib/lora-eval-controller'
+import { trainingFacade } from '@/lib/training-facade'
+import type { LoraEvalResult } from '@/lib/lora-eval-controller'
+
+const loraEval = trainingFacade.evaluation
 import { clampNumber } from '@/lib/sanitize'
 
 export default function LoraEvalPage() {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const [history, setHistory] = useState<LoraEvalResult[]>([])
   const [loading, setLoading] = useState(true)
   const [evalRunning, setEvalRunning] = useState(false)
@@ -23,7 +35,7 @@ export default function LoraEvalPage() {
   const fetchHistory = useCallback(async () => {
     setLoading(true)
     try {
-      const resp = await loraEvalController.getHistory(50)
+      const resp = await loraEval.history(50)
       setHistory(resp ?? [])
     } catch {
       addToast('Could not load eval history', 'error')
@@ -32,12 +44,17 @@ export default function LoraEvalPage() {
     }
   }, [addToast])
 
-  useEffect(() => { void fetchHistory() }, [fetchHistory])
+  useEffect(() => {
+    void fetchHistory()
+  }, [fetchHistory])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void fetchHistory() }
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        void fetchHistory()
+      }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -46,7 +63,7 @@ export default function LoraEvalPage() {
   const handleRunEval = useCallback(async () => {
     setEvalRunning(true)
     try {
-      const result = await loraEvalController.runEval(adapterPath, soul)
+      const result = await loraEval.run(adapterPath, soul)
       setLastResult(result)
       addToast(`Eval complete: ${result.status}`, 'success')
       void fetchHistory()
@@ -60,7 +77,7 @@ export default function LoraEvalPage() {
   const handleAggregate = useCallback(async () => {
     setAggregating(true)
     try {
-      const result = await loraEvalController.aggregate(topK, minFeedback)
+      const result = await loraEval.aggregate(topK, minFeedback)
       addToast(`Aggregated: ${result.status}`, 'success')
       void fetchHistory()
     } catch {
@@ -75,13 +92,18 @@ export default function LoraEvalPage() {
       title="LoRA Evaluation"
       subtitle="Evaluate adapter quality — baseline vs with-adapter comparison"
       headerRight={
-        <Button size="sm" variant="ghost" onClick={() => void fetchHistory()}>Refresh</Button>
+        <Button size="sm" variant="ghost" onClick={() => void fetchHistory()}>
+          Refresh
+        </Button>
       }
     >
       <KpiGrid columns={3}>
         <StatCard label="Total Evals" value={String(history.length)} />
         <StatCard label="Last Status" value={lastResult?.status ?? history[0]?.status ?? '—'} />
-        <StatCard label="Best Verdict" value={history.find(h => h.delta?.verdict)?.status ?? '—'} />
+        <StatCard
+          label="Best Verdict"
+          value={history.find((h) => h.delta?.verdict)?.status ?? '—'}
+        />
       </KpiGrid>
 
       <Card>
@@ -92,11 +114,19 @@ export default function LoraEvalPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Adapter Path</label>
-              <Input value={adapterPath} onChange={e => setAdapterPath(e.target.value)} className="h-8 text-xs font-mono mt-1" />
+              <Input
+                value={adapterPath}
+                onChange={(e) => setAdapterPath(e.target.value)}
+                className="h-8 text-xs font-mono mt-1"
+              />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Soul</label>
-              <Input value={soul} onChange={e => setSoul(e.target.value)} className="h-8 text-xs mt-1" />
+              <Input
+                value={soul}
+                onChange={(e) => setSoul(e.target.value)}
+                className="h-8 text-xs mt-1"
+              />
             </div>
           </div>
           <Button size="sm" onClick={() => void handleRunEval()} disabled={evalRunning}>
@@ -113,11 +143,23 @@ export default function LoraEvalPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Top K</label>
-              <Input type="number" value={topK} onChange={e => setTopK(clampNumber(parseInt(e.target.value) || 10, 1, 100))} className="h-8 text-xs mt-1" />
+              <Input
+                type="number"
+                value={topK}
+                onChange={(e) => setTopK(clampNumber(parseInt(e.target.value) || 10, 1, 100))}
+                className="h-8 text-xs mt-1"
+              />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Min Feedback</label>
-              <Input type="number" value={minFeedback} onChange={e => setMinFeedback(clampNumber(parseInt(e.target.value) || 5, 1, 1000))} className="h-8 text-xs mt-1" />
+              <Input
+                type="number"
+                value={minFeedback}
+                onChange={(e) =>
+                  setMinFeedback(clampNumber(parseInt(e.target.value) || 5, 1, 1000))
+                }
+                className="h-8 text-xs mt-1"
+              />
             </div>
           </div>
           <Button size="sm" onClick={() => void handleAggregate()} disabled={aggregating}>
@@ -141,9 +183,13 @@ export default function LoraEvalPage() {
                 <div key={i} className="rounded bg-muted/30 px-3 py-2 text-xs space-y-1">
                   <div className="flex justify-between">
                     <span className="font-medium">{h.status}</span>
-                    {h.elapsed_ms != null && <span className="text-muted-foreground">{h.elapsed_ms}ms</span>}
+                    {h.elapsed_ms != null && (
+                      <span className="text-muted-foreground">{h.elapsed_ms}ms</span>
+                    )}
                   </div>
-                  {h.report && <p className="text-muted-foreground whitespace-pre-wrap">{h.report}</p>}
+                  {h.report && (
+                    <p className="text-muted-foreground whitespace-pre-wrap">{h.report}</p>
+                  )}
                 </div>
               ))}
             </div>
