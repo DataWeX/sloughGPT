@@ -24,7 +24,7 @@ describe('route error boundaries', () => {
     // Route inventory: collections page + training power-user sub-pages
     // (presets, analytics, compare, grid-search, insights, model-card,
     // trends) were intentionally removed — update if routes change.
-    expect(errors.length).toBe(53)
+    expect(errors.length).toBe(54)
   })
 
   it.each(errors)('renders %s and retries', (key) => {
@@ -43,7 +43,7 @@ describe('route loading skeletons', () => {
 
   it('covers every route loading fallback', () => {
     // See note above — update if routes change.
-    expect(loadings.length).toBe(51)
+    expect(loadings.length).toBe(52)
   })
 
   it.each(loadings)('renders %s with a skeleton', (key) => {

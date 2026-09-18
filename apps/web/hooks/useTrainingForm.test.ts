@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, act, waitFor } from '@testing-library/react'
 import { useTrainingForm } from './useTrainingForm'
 
 const { chatDBMock } = vi.hoisted(() => {
@@ -176,16 +176,22 @@ describe('useTrainingForm', () => {
       )
     })
 
-    it('calls startStandardPoll for distill method', async () => {
-      const session = makeSession()
+    it('starts autotrain for distill method and refreshes checkpoints', async () => {
+      // Distill goes through trainingJobsController.startAutoTrain; job
+      // polling lives at the page level (10s tick), not the session.
+      const checkpoints = makeCheckpoints()
       const { result } = renderHook(() =>
-        useTrainingForm(makeDatasets('ds1'), session, makeCheckpoints(), addToast),
+        useTrainingForm(makeDatasets('ds1'), makeSession(), checkpoints, addToast),
       )
       await act(async () => {
         await result.current.startTraining()
       })
       expect(mockTrainingJobsController.startAutoTrain).toHaveBeenCalled()
-      expect(session.startStandardPoll).toHaveBeenCalled()
+      expect(addToast).toHaveBeenCalledWith('Training started', 'info')
+      // startAutoTrain's .then chain resolves after startTraining returns.
+      await waitFor(() => {
+        expect(checkpoints.fetchCheckpoints).toHaveBeenCalled()
+      })
     })
 
     it('calls startFineTune for finetune method', async () => {
