@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
-import { Button } from '@sloughgpt/strui'
+import { Button, FoldSection, KpiGrid, SectionHeader, StatCard, StatusDot } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { datasetController } from '@/lib/controllers'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -129,8 +129,30 @@ export default function TrainingPage() {
     requestNotificationPermission()
   }, [])
 
-  const runningJob = form.allJobs.find((j) => j.status === 'running')
+  // Prefer real server jobs over phantom optimistic pending-* entries so
+  // Stop targets an id the backend knows (pending-* 404s).
+  const runningJob =
+    form.allJobs.find((j) => j.status === 'running' && !j.id.startsWith('pending-')) ??
+    form.allJobs.find((j) => j.status === 'running')
   const completedCount = form.allJobs.filter((j) => j.status === 'completed').length
+  const runningCount = form.allJobs.filter((j) => j.status === 'running').length
+
+  // Hero status: the one thing the eye lands on.
+  const liveTraining = session.turboRunning || runningJob != null
+  const heroTone = liveTraining
+    ? 'primary'
+    : session.turboPhase === 'complete'
+      ? 'success'
+      : session.turboPhase === 'error'
+        ? 'destructive'
+        : 'muted'
+  const heroText = liveTraining
+    ? `Turbo training live — ${Math.round(session.turboProgress)}%${session.turboLoss != null ? ` · loss ${session.turboLoss.toFixed(4)}` : ''}`
+    : session.turboPhase === 'complete'
+      ? 'Turbo run finished — review results below'
+      : session.turboPhase === 'error'
+        ? `Turbo run failed — ${session.turboError ?? 'see details below'}`
+        : 'No active training — configure a run below'
 
   return (
     <PageContainer
@@ -143,7 +165,24 @@ export default function TrainingPage() {
           {runningJob && (
             <StopTrainingButton
               onStop={async () => {
-                await trainingJobsController.stop(runningJob.id)
+                // Phantom optimistic entry: no backend job exists, so broadcast
+                // stop-all (always succeeds) and clear local state instead of 404ing.
+                if (runningJob.id.startsWith('pending-')) {
+                  await trainingJobsController.stopAutoTrain()
+                  form.clearOptimisticJobs()
+                  session.resetTraining()
+                  void checkpoints.fetchJobs()
+                  return
+                }
+                try {
+                  await trainingJobsController.stop(runningJob.id)
+                } catch {
+                  // Job vanished server-side (restart/purge) — still stop-all + reset
+                  // so the UI doesn't stick on "Could not stop training".
+                  await trainingJobsController.stopAutoTrain()
+                  form.clearOptimisticJobs()
+                  session.resetTraining()
+                }
                 void checkpoints.fetchJobs()
               }}
               addToast={addToast}
@@ -162,7 +201,26 @@ export default function TrainingPage() {
         </div>
       }
     >
+      {/* Hero: live training status */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex items-center gap-2 rounded-lg border border-border/50 bg-card/50 px-3 py-2"
+      >
+        <StatusDot tone={heroTone} pulse={liveTraining} />
+        <p className="text-sm text-muted-foreground">{heroText}</p>
+      </div>
+
+      {/* At-a-glance counts */}
+      <KpiGrid columns={4}>
+        <StatCard label="Corpora" value={datasets.datasets.length} numeric />
+        <StatCard label="Active jobs" value={runningCount} numeric />
+        <StatCard label="Finished jobs" value={completedCount} numeric />
+        <StatCard label="Saved checkpoints" value={checkpoints.checkpoints.length} numeric />
+      </KpiGrid>
+
       {/* 3-step pipeline */}
+      <SectionHeader title="Guided setup" description="Data, configure, train, results." />
       <TrainingPipeline
         form={form}
         datasets={datasets}
@@ -177,7 +235,9 @@ export default function TrainingPage() {
       />
 
       {/* Quick train alternative */}
-      <QuickTrainCard datasets={datasets} session={session} addToast={addToast} />
+      <FoldSection heading="Fast train alternative">
+        <QuickTrainCard datasets={datasets} session={session} addToast={addToast} />
+      </FoldSection>
 
       <TestModelDialog
         open={test.testDialogOpen}

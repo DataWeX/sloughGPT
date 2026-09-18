@@ -59,6 +59,13 @@ vi.mock('@sloughgpt/strui', () => {
       </div>
     ),
     KpiGrid: ({ children }: any) => <div>{children}</div>,
+    StatusDot: ({ tone, label }: any) => <span data-testid={`status-dot-${tone}`}>{label}</span>,
+    SectionHeader: ({ title, description }: any) => (
+      <div>
+        <h2>{title}</h2>
+        {description ? <p>{description}</p> : null}
+      </div>
+    ),
     FoldSection: ({ heading, children }: any) => (
       <details open>
         <summary>{heading}</summary>
