@@ -146,6 +146,16 @@ class TestHealthRouter:
         assert "memory_history" in data
         assert isinstance(data["memory_history"], list)
         assert "data" not in data
+        # Startup fields — the StartupOverlay depends on these to clear.
+        assert "startup_stage" in data
+        assert isinstance(data["startup_stage"], str)
+        assert "startup_stage_value" in data
+        assert "startup_elapsed" in data
+        assert "startup_model_progress" in data
+        assert "startup_hooks" in data
+        assert isinstance(data["startup_hooks"], dict)
+        assert "startup_progress" in data
+        assert isinstance(data["startup_progress"], dict)
 
     def test_startup_progress(self):
         """GET /health/startup-progress returns phase."""

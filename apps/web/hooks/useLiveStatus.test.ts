@@ -169,6 +169,24 @@ describe('mapDetailedToSnapshot', () => {
     expect(snap.cpu_percent).toBeNull()
     expect(snap.device).toBeNull()
   })
+
+  it('resolves unknown stage to background when the model is loaded', () => {
+    const snap = mapDetailedToSnapshot({ model_loaded: true } as any)
+    expect(snap.startup_stage).toBe('background')
+  })
+
+  it('keeps unknown stage when no model is loaded', () => {
+    const snap = mapDetailedToSnapshot({ model_loaded: false } as any)
+    expect(snap.startup_stage).toBe('unknown')
+  })
+
+  it('prefers the staged-loader stage when present', () => {
+    const snap = mapDetailedToSnapshot({
+      model_loaded: true,
+      startup_progress: { stage: 'critical' },
+    } as any)
+    expect(snap.startup_stage).toBe('critical')
+  })
 })
 
 describe('useLiveStatus hook', () => {
@@ -242,6 +260,34 @@ describe('initLiveStatus', () => {
     expect(s.connectionStatus).toBe('connected')
     expect(s.health?.model_type).toBe('qwen')
     expect(s.health?.soul).toBe('friendly')
+    cleanup()
+  })
+
+  it('resolves unknown SSE stage to background when the model is loaded', () => {
+    const cleanup = initLiveStatus()
+    streamConfig.onEvent({ stream: 'health', data: { model_loaded: true, health_status: 'healthy' } })
+    expect(liveStatusStore.getState().health?.startup_stage).toBe('background')
+    cleanup()
+  })
+
+  it('keeps unknown SSE stage when no model is loaded', () => {
+    const cleanup = initLiveStatus()
+    streamConfig.onEvent({ stream: 'health', data: { model_loaded: false, health_status: 'healthy' } })
+    expect(liveStatusStore.getState().health?.startup_stage).toBe('unknown')
+    cleanup()
+  })
+
+  it('prefers the SSE startup_progress stage when present', () => {
+    const cleanup = initLiveStatus()
+    streamConfig.onEvent({
+      stream: 'health',
+      data: {
+        model_loaded: true,
+        health_status: 'healthy',
+        startup_progress: { stage: 'ready', stage_value: 2, elapsed_seconds: 5, model_progress: 1, hooks: {} },
+      },
+    })
+    expect(liveStatusStore.getState().health?.startup_stage).toBe('ready')
     cleanup()
   })
 

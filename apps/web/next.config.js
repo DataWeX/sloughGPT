@@ -14,7 +14,6 @@ const nextConfig = {
     pagesBufferLength: 2,
   },
   typescript: { ignoreBuildErrors: false },
-  eslint: { ignoreDuringBuilds: false },
   distDir: process.env.BUILD_DIST || (process.env.NODE_ENV === 'development' ? '.next-dev' : '.next'),
   transpilePackages: ['@sloughgpt/strui'],
   images: {
@@ -22,15 +21,24 @@ const nextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
-  experimental: {
-    optimizeCss: true,
-    modularizeImports: {
-      'lucide-react': {
-        transform: 'lucide-react/dist/esm/icons/{{ kebabCase member }}',
-      },
-      'recharts': {
-        transform: 'recharts/{{ member }}',
-      },
+  modularizeImports: {
+    'lucide-react': {
+      transform: 'lucide-react/dist/esm/icons/{{ kebabCase member }}',
+    },
+    'recharts': {
+      transform: 'recharts/{{ member }}',
+    },
+  },
+  experimental: {},
+  turbopack: {
+    // `next dev` runs on Turbopack where the `webpack` key below is ignored.
+    // The v86 ESM build pulls node builtins (fs, perf_hooks) that cannot
+    // resolve in the browser bundle. Alias the package to a stub for browser
+    // environments only (server/middleware bundles are untouched) — mirrors
+    // the webpack `externals: { v86: 'v86' }` handling used by `next build`.
+    // The stub only surfaces if the in-browser VM is actually initialized.
+    resolveAlias: {
+      v86: { browser: './lib/node-builtin-stub.ts' },
     },
   },
   webpack: (config, { isServer }) => {

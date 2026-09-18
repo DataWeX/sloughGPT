@@ -141,10 +141,12 @@ export function mapDetailedToSnapshot(d: DetailedHealth): LiveHealthSnapshot {
   const healthScore = d.health_score ?? { score: 0, status: 'unknown' }
   const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as
     StagedLoaderStatus | undefined
+  const rawStage = stagedLoader?.stage ?? 'unknown'
   return {
     model_loaded: Boolean(d.model_loaded),
     model_loading: Boolean(d.model_loading),
-    startup_stage: stagedLoader?.stage ?? 'unknown',
+    // Same hardening as the SSE path: unknown + loaded model ⇒ background.
+    startup_stage: rawStage === 'unknown' && Boolean(d.model_loaded) ? 'background' : rawStage,
     startup_stage_value: stagedLoader?.stage_value ?? 0,
     startup_elapsed: stagedLoader?.elapsed_seconds ?? 0,
     startup_model_progress: stagedLoader?.model_progress ?? 0,
@@ -373,12 +375,16 @@ export function initLiveStatus(): () => void {
     _receivedHealthEvent = true
     stopFallbackPoll()
     const d = envelope.data as Partial<LiveHealthSnapshot>
-    const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as
-      StagedLoaderStatus | undefined
+    const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as StagedLoaderStatus | undefined
+    // Hardening: very old / minimal snapshots omit every startup field, which
+    // used to pin the StartupOverlay on "Connecting" forever. A loaded model
+    // means startup finished — resolve to "background" (overlay-clearing).
+    const rawStage = stagedLoader?.stage ?? d.startup_stage ?? 'unknown'
+    const resolvedStage = rawStage === 'unknown' && Boolean(d.model_loaded) ? 'background' : rawStage
     const snap: LiveHealthSnapshot = {
       model_loaded: Boolean(d.model_loaded),
       model_loading: Boolean(d.model_loading),
-      startup_stage: stagedLoader?.stage ?? d.startup_stage ?? 'unknown',
+      startup_stage: resolvedStage,
       startup_stage_value: stagedLoader?.stage_value ?? d.startup_stage_value ?? 0,
       startup_elapsed: stagedLoader?.elapsed_seconds ?? d.startup_elapsed ?? 0,
       startup_model_progress: stagedLoader?.model_progress ?? d.startup_model_progress ?? 0,

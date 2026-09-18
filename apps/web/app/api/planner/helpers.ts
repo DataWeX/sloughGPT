@@ -283,7 +283,7 @@ export function createNote(data: {
   const notes = readNotes(workspaceId)
   const now = new Date().toISOString()
   const note: Note = {
-    id: `${now.replace(/[-:T]/g, '').slice(0, 15)}_${data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
+    id: `${now.replace(/-/g, '').replace(/:/g, '').replace(/T/g, '').slice(0, 15)}_${data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
     title: data.title,
     body: data.body || '',
     status: data.status || 'open',
@@ -406,7 +406,7 @@ export function readHashTrees(): Map<string, HashTreeData> {
       if (tree.root?.card_id) {
         trees.set(tree.root.card_id, tree)
       }
-    } catch {}
+    } catch { /* skip malformed lines */ }
   }
   return trees
 }

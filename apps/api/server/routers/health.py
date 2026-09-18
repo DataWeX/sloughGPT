@@ -724,7 +724,7 @@ class HealthRouter:
             Envelope with ``status: "ok"`` plus monitor stats, or raises
             a classified error if the monitor is unavailable.
         """
-        from domain.feedback._internal.model_health import get_health_monitor
+        from domain.feedback import get_health_monitor
 
         mon = get_health_monitor()
         import state as server_state
@@ -811,6 +811,7 @@ class HealthRouter:
         """
         detailed = ctrl.get_detailed_health()
         hs = detailed.get("health_score", {})
+        sp = detailed.get("startup_progress", {}) or {}
         return {
             "stream": "health",
             "phase": "HEALTH",
@@ -832,6 +833,17 @@ class HealthRouter:
                 "avg_tokens_per_request": detailed.get("avg_tokens_per_request", 0),
                 "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
                 "memory_percent": detailed.get("system", {}).get("memory_percent"),
+                # Startup stage — the StartupOverlay clears only when it sees
+                # stage "ready"/"background". These were missing, leaving the
+                # overlay stuck on "Connecting" forever. Both the flat fields
+                # (read by useLiveStatus) and the full object are included.
+                "startup_stage": sp.get("stage", "unknown"),
+                "startup_stage_value": sp.get("stage_value", 0),
+                "startup_elapsed": sp.get("elapsed_seconds", 0),
+                "startup_model_progress": sp.get("model_progress", 0),
+                "startup_model_progress_message": sp.get("model_progress_message", ""),
+                "startup_hooks": sp.get("hooks", {}),
+                "startup_progress": sp,
                 "health_score": hs.get("score", 0),
                 "health_status": hs.get("status", "unknown"),
                 "health_summary": hs.get("summary", ""),
@@ -908,7 +920,7 @@ class HealthRouter:
         services = {}
         # Training
         try:
-            from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
+            from domain.training import TrainingOutcomeTracker
 
             tracker = TrainingOutcomeTracker()
             stats = tracker.get_stats()
@@ -917,7 +929,7 @@ class HealthRouter:
             services["training"] = {"status": "error", "error": str(e)}
         # Settings
         try:
-            from domain.settings._internal.persistent import get_settings
+            from domain.settings import get_settings
 
             ps = get_settings()
             services["settings"] = {"status": "ok", "sections": list(vars(ps.settings).keys())}
@@ -933,7 +945,7 @@ class HealthRouter:
             services["plugins"] = {"status": "error", "error": str(e)}
         # Adaptive engine
         try:
-            from domain.training._internal.adaptive_config import AdaptiveConfigEngine
+            from domain.training import AdaptiveConfigEngine
 
             AdaptiveConfigEngine()
             services["adaptive"] = {"status": "ok"}
