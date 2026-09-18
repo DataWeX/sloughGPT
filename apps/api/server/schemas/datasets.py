@@ -12,6 +12,10 @@ class DatasetInfo(BaseModel):
     name: str
     path: str
     type: str = "text"
+    kind: str = "dataset"
+    tags: list[str] = Field(default_factory=list)
+    mime: str = "application/octet-stream"
+    source: str = "data"
     size: int = 0
     size_bytes: int = 0
     size_formatted: str = "Empty"

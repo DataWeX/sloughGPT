@@ -20,25 +20,68 @@ class DatasetsController:
         self.data_dir = repo_root / "data" / "features"
         self.datasets_dir = repo_root / "data"
 
+    def _entry_roots(self) -> list[Path]:
+        """Roots to scan: just-cache first, legacy data dir as fallback."""
+        from domain.training._internal.cache_tags import get_cache_root
+
+        roots = []
+        try:
+            cache_root = get_cache_root()
+            if cache_root.exists():
+                roots.append(cache_root)
+        except Exception as e:
+            logger.debug("Cache root unavailable: %s", e)
+        datasets_dir = self.datasets_dir
+        if not datasets_dir.exists():
+            datasets_dir = self.data_dir
+        if datasets_dir.exists():
+            roots.append(datasets_dir)
+        return roots
+
+    def _locate(self, dataset_id: str) -> Path | None:
+        """Locate an entry dir: just-cache first, legacy data dir fallback."""
+        from domain.training._internal.cache_tags import get_cache_root
+
+        try:
+            cached = get_cache_root() / dataset_id
+            if cached.is_dir():
+                return cached
+        except Exception as e:
+            logger.debug("Cache locate failed for %s: %s", dataset_id, e)
+        path = self.datasets_dir / dataset_id
+        if path.exists():
+            return path
+        return None
+
     def list_datasets(
         self, q: str | None = None, dataset_type: str | None = None, workspace_id: str = ""
     ) -> list[dict[str, Any]]:
         """List available datasets, optionally filtered by workspace."""
-        # Use datasets/ directory primarily
-        datasets_dir = self.datasets_dir
-        if not datasets_dir.exists():
-            datasets_dir = self.data_dir
-        if not datasets_dir.exists():
-            return []
+        from domain.training._internal.cache_tags import (
+            classify_kind,
+            entry_tags,
+            find_corpus_file,
+            guess_mime,
+        )
 
         datasets = []
-        for d in datasets_dir.iterdir():
-            if not d.is_dir():
-                continue
-            # Skip MogDB store directories (e.g. training_jobs.db/, webhooks.db/)
-            if d.name.endswith(".db"):
-                continue
+        seen: set[str] = set()
+        # Gather entries first (just-cache wins over legacy data/), then
+        # summarize in a single loop below.
+        entries: list[Path] = []
+        for datasets_dir in self._entry_roots():
+            for d in sorted(datasets_dir.iterdir(), key=lambda p: p.name):
+                if not d.is_dir():
+                    continue
+                # Skip MogDB store directories (e.g. training_jobs.db/, webhooks.db/)
+                if d.name.endswith(".db"):
+                    continue
+                if d.name in seen:
+                    continue  # just-cache entry wins over legacy data/
+                seen.add(d.name)
+                entries.append(d)
 
+        for d in entries:
             # Check workspace ownership if filtering
             if workspace_id:
                 meta_path = d / ".metadata.json"
@@ -71,22 +114,30 @@ class DatasetsController:
                     logger.debug("Failed to count samples in %s: %s", corpus_file, e)
 
             # Detect Visual dataset from metadata marker
+            # NOTE: local name must not shadow the dataset_type filter param.
             visual_meta_path = d / ".visual_metadata.json"
             if visual_meta_path.exists():
                 try:
                     json.loads(visual_meta_path.read_text())
-                    dataset_type = "visual"
+                    detected_type = "visual"
                 except Exception as e:
                     logger.debug("Failed to parse visual metadata from %s: %s", visual_meta_path, e)
-                    dataset_type = "corpus" if has_corpus else "text"
+                    detected_type = "corpus" if has_corpus else "text"
             else:
-                dataset_type = "corpus" if has_corpus else "text"
+                detected_type = "corpus" if has_corpus else "text"
 
+            kind = classify_kind(d.name, d)
+            tags = entry_tags(d, kind)
+            primary = find_corpus_file(d)
             dataset = {
                 "id": d.name,
                 "name": d.name.replace("_", " ").title(),
                 "path": str(d),
-                "type": dataset_type,
+                "type": detected_type,
+                "kind": kind,
+                "tags": tags,
+                "mime": guess_mime(primary) if primary is not None else "application/octet-stream",
+                "source": "cache" if d.parent.name == "external" else "data",
                 "size_bytes": size,
                 "size_formatted": f"{size / 1024:.1f} KB" if size > 0 else "Empty",
                 "size": size,
@@ -98,7 +149,7 @@ class DatasetsController:
             }
 
             # Attach Visual metadata if present
-            if visual_meta_path.exists() and dataset_type == "visual":
+            if visual_meta_path.exists() and detected_type == "visual":
                 try:
                     dataset["visual_metadata"] = json.loads(visual_meta_path.read_text())
                 except Exception as e:
@@ -126,21 +177,26 @@ class DatasetsController:
 
     def get_dataset(self, dataset_id: str) -> dict[str, Any] | None:
         """Get dataset details"""
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        from domain.training._internal.cache_tags import classify_kind, entry_tags
+
+        path = self._locate(dataset_id)
+        if path is None:
             return None
 
+        kind = classify_kind(path.name, path)
         return {
             "id": dataset_id,
             "name": path.name,
             "path": str(path),
             "exists": True,
+            "kind": kind,
+            "tags": entry_tags(path, kind),
         }
 
     def get_dataset_stats(self, dataset_id: str) -> dict[str, Any] | None:
         """Get dataset statistics matching the frontend DatasetStats interface."""
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        path = self._locate(dataset_id)
+        if path is None:
             return None
 
         files = list(path.glob("*.jsonl"))
@@ -301,9 +357,16 @@ class DatasetsController:
     def create_dataset(
         self, name: str, description: str | None = None, workspace_id: str = ""
     ) -> dict[str, Any]:
-        """Create a new dataset, optionally scoped to a workspace."""
-        path = self.datasets_dir / name
+        """Create a new dataset in the just-cache, optionally workspace-scoped."""
+        from domain.training._internal.cache_tags import get_cache_root, write_entry_meta
+
+        try:
+            path = get_cache_root() / name
+        except Exception as e:
+            logger.debug("Cache root unavailable, falling back to data dir: %s", e)
+            path = self.datasets_dir / name
         path.mkdir(parents=True, exist_ok=True)
+        write_entry_meta(path, kind="dataset", tags=["dataset"], source="api")
 
         # Persist workspace_id in metadata
         if workspace_id:
@@ -329,8 +392,8 @@ class DatasetsController:
 
     def update_dataset(self, dataset_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
         """Update dataset metadata. Renames directory if name changes, persists description."""
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        path = self._locate(dataset_id)
+        if path is None:
             return None
 
         new_name = updates.get("name")
@@ -338,7 +401,7 @@ class DatasetsController:
 
         # Rename directory if name changed
         if new_name and new_name != dataset_id:
-            new_path = self.datasets_dir / new_name
+            new_path = path.parent / new_name
             if new_path.exists():
                 return None  # target name already taken
             path.rename(new_path)
@@ -372,8 +435,8 @@ class DatasetsController:
 
     def delete_dataset(self, dataset_id: str) -> bool:
         """Delete a dataset directory"""
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        path = self._locate(dataset_id)
+        if path is None:
             return False
         shutil.rmtree(path)
         return True
@@ -381,8 +444,8 @@ class DatasetsController:
     def add_data(self, dataset_id: str, data: list[str]) -> int | None:
         """Append data rows to a dataset's corpus file"""
         # Existing implementation unchanged (kept for context)
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        path = self._locate(dataset_id)
+        if path is None:
             return None
         corpus_file = path / "corpus.jsonl"
         count = 0
@@ -395,7 +458,10 @@ class DatasetsController:
     # --- Versioning helpers -------------------------------------------------
     def _ensure_versions_dir(self, dataset_id: str) -> Path:
         """Return the versions directory for a dataset, creating it if needed."""
-        versions_dir = self.datasets_dir / dataset_id / "versions"
+        base = self._locate(dataset_id)
+        if base is None:
+            base = self.datasets_dir / dataset_id
+        versions_dir = base / "versions"
         versions_dir.mkdir(parents=True, exist_ok=True)
         return versions_dir
 
@@ -406,8 +472,8 @@ class DatasetsController:
         """
         from datetime import datetime
 
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        path = self._locate(dataset_id)
+        if path is None:
             return None
         versions_dir = self._ensure_versions_dir(dataset_id)
         timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
@@ -446,8 +512,8 @@ class DatasetsController:
 
     def preview_dataset(self, dataset_id: str, limit: int = 10) -> dict | None:
         """Return a preview of dataset contents (first N rows)."""
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        path = self._locate(dataset_id)
+        if path is None:
             return None
         corpus_file = path / "corpus.jsonl"
         data_file = corpus_file if corpus_file.exists() else path / "input.txt"
@@ -509,8 +575,8 @@ class DatasetsController:
 
     def export_dataset(self, dataset_id: str, format: str = "jsonl") -> Path | None:
         """Export a dataset as a file. Returns path to export file or None."""
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        path = self._locate(dataset_id)
+        if path is None:
             return None
         corpus_file = path / "corpus.jsonl"
         if not corpus_file.exists():
