@@ -57,6 +57,7 @@ from pathlib import Path
 from typing import Dict, Optional, Union
 
 from .download import DownloadError, download_file, state
+from .download.multipart import GroupResult, PartResult, download_parts, parse_urls_file
 from .resolve import (
     patterns,
     resolve_and_download,
@@ -99,6 +100,10 @@ __all__ = [
     "patterns",
     "download_file",
     "DownloadError",
+    "download_parts",
+    "GroupResult",
+    "PartResult",
+    "parse_urls_file",
     "start_capture_server",
     "CaptureEntry",
     # Compression (if lz4 installed)

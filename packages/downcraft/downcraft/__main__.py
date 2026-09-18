@@ -450,8 +450,83 @@ def main(argv: list = None):
     p_verify.add_argument("checksum", nargs="?", help="Expected SHA-256 checksum (omit to print)")
     p_verify.set_defaults(func=cmd_verify)
 
+    # parts <urls-file> <dest-dir>
+    p_parts = sub.add_parser("parts", help="Download multiple files from a URL list")
+    p_parts.add_argument("urls_file", help="Text file with one URL per line")
+    p_parts.add_argument("dest", help="Destination directory")
+    p_parts.add_argument("-g", "--group", default="", help="Group key for state tracking")
+    p_parts.set_defaults(func=cmd_parts)
+
     args = parser.parse_args(argv)
     args.func(args)
+
+
+# ---------------------------------------------------------------------------
+# Parts — multi-part download from URL list
+# ---------------------------------------------------------------------------
+
+
+def cmd_parts(args: argparse.Namespace):
+    """Download multiple files from a URL list as a group."""
+    from .download.multipart import download_parts, parse_urls_file
+
+    urls_file = args.urls_file
+    dest_dir = args.dest
+    group_key = args.group or ""
+
+    urls = parse_urls_file(urls_file)
+    if not urls:
+        print("No URLs found in file.")
+        sys.exit(1)
+
+    print(f"Downloading {len(urls)} parts → {dest_dir}")
+    if group_key:
+        print(f"  Group key: {group_key}")
+
+    t0 = time.time()
+    completed = [0]
+    failed = [0]
+    total_parts = len(urls)
+
+    def _on_part_complete(part):
+        if part.status == "complete":
+            completed[0] += 1
+            mb = part.bytes_downloaded / (1024 * 1024)
+            print(
+                f"\n  [{completed[0]}/{total_parts}] {part.dest.name} — {mb:.1f} MB ({part.elapsed:.0f}s)"
+            )
+        else:
+            failed[0] += 1
+            print(
+                f"\n  [{completed[0] + failed[0]}/{total_parts}] {part.dest.name} — FAILED: {part.error}"
+            )
+
+    def _on_progress(part_idx, bytes_done, total, speed):
+        if total > 0:
+            pct = int(bytes_done / total * 100)
+            speed_mb = speed / (1024 * 1024)
+            fname = urls[part_idx].rsplit("/", 1)[-1] if "/" in urls[part_idx] else urls[part_idx]
+            print(f"\r  {fname}: {pct}% @ {speed_mb:.1f} MB/s", end="", flush=True)
+
+    try:
+        result = download_parts(
+            urls,
+            dest_dir,
+            group_key=group_key,
+            on_progress=_on_progress,
+            on_part_complete=_on_part_complete,
+        )
+        elapsed = time.time() - t0
+        mb = result.total_bytes / (1024 * 1024)
+        print(
+            f"\n✓ Done — {result.completed_count}/{result.total_count} parts, {mb:.0f} MB in {elapsed:.0f}s"
+        )
+        if result.failed_count > 0:
+            print(f"  {result.failed_count} part(s) failed")
+            sys.exit(1)
+    except Exception as e:
+        print(f"\n✗ Error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
