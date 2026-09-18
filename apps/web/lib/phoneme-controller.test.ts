@@ -29,7 +29,10 @@ describe('phonemeController', () => {
 
       expect(result.phonemes).toEqual(['HH', 'EH', 'L', 'OW'])
       expect(result.language).toBe('en')
-      expect(mockApiPost).toHaveBeenCalledWith('/phoneme/encode', { text: 'hello', language: 'en' })
+      expect(mockApiPost).toHaveBeenCalledWith('/multimodal/encode-phonemes', {
+        text: 'hello',
+        language: 'en',
+      })
     })
 
     it('handles auto-detect language', async () => {
@@ -44,7 +47,7 @@ describe('phonemeController', () => {
       const result = await phonemeController.encode('hallo')
 
       expect(result.language).toBe('de')
-      expect(mockApiPost).toHaveBeenCalledWith('/phoneme/encode', {
+      expect(mockApiPost).toHaveBeenCalledWith('/multimodal/encode-phonemes', {
         text: 'hallo',
         language: undefined,
       })
