@@ -23,9 +23,6 @@ Usage::
     # Check if a file is compressed
     python -m downcraft peek file.lz4
 
-    # Verify file integrity
-    python -m downcraft verify file.bin <sha256>
-
     # Check status
     python -m downcraft status <url>
 
@@ -332,40 +329,6 @@ def cmd_estimate(args: argparse.Namespace):
 
 
 # ---------------------------------------------------------------------------
-# Verify — check file integrity
-# ---------------------------------------------------------------------------
-
-
-def cmd_verify(args: argparse.Namespace):
-    """Verify file integrity using SHA-256 checksum."""
-    import hashlib
-
-    fpath = args.file
-    expected = args.checksum
-
-    print(f"Verifying {fpath}")
-    sha256 = hashlib.sha256()
-    with open(fpath, "rb") as f:
-        while True:
-            chunk = f.read(8192)
-            if not chunk:
-                break
-            sha256.update(chunk)
-    actual = sha256.hexdigest()
-
-    if expected:
-        if actual == expected:
-            print(f"✓ Checksum matches: {actual}")
-        else:
-            print("✗ Checksum mismatch!")
-            print(f"  Expected: {expected}")
-            print(f"  Actual:   {actual}")
-            sys.exit(1)
-    else:
-        print(f"SHA-256: {actual}")
-
-
-# ---------------------------------------------------------------------------
 # Main dispatcher
 # ---------------------------------------------------------------------------
 
@@ -443,12 +406,6 @@ def main(argv: list = None):
     p_peek = sub.add_parser("peek", help="Check if a file is LZ4 compressed")
     p_peek.add_argument("file", help="File to check")
     p_peek.set_defaults(func=cmd_peek)
-
-    # verify <file> [checksum]
-    p_verify = sub.add_parser("verify", help="Verify file integrity using SHA-256")
-    p_verify.add_argument("file", help="File to verify")
-    p_verify.add_argument("checksum", nargs="?", help="Expected SHA-256 checksum (omit to print)")
-    p_verify.set_defaults(func=cmd_verify)
 
     # parts <urls-file> <dest-dir>
     p_parts = sub.add_parser("parts", help="Download multiple files from a URL list")

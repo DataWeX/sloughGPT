@@ -15,8 +15,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 from downcraft import __main__ as cli
-
-from conftest import RangeHandler, _range_url
+from helpers import RangeHandler, _range_url
 
 
 class TestHelp:
