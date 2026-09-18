@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, act, waitFor } from '@testing-library/react'
+import { renderHook, act } from '@testing-library/react'
 import { useTrainingForm } from './useTrainingForm'
 
 const { chatDBMock } = vi.hoisted(() => {
@@ -176,22 +176,31 @@ describe('useTrainingForm', () => {
       )
     })
 
-    it('starts autotrain for distill method and refreshes checkpoints', async () => {
-      // Distill goes through trainingJobsController.startAutoTrain; job
-      // polling lives at the page level (10s tick), not the session.
+    it('starts autotrain for distill method and polls the job', async () => {
+      // Distill goes through trainingJobsController.startAutoTrain, then
+      // polls the returned job via the session; checkpoints refresh when
+      // the poll completes.
+      const session = makeSession()
       const checkpoints = makeCheckpoints()
       const { result } = renderHook(() =>
-        useTrainingForm(makeDatasets('ds1'), makeSession(), checkpoints, addToast),
+        useTrainingForm(makeDatasets('ds1'), session, checkpoints, addToast),
       )
       await act(async () => {
         await result.current.startTraining()
       })
       expect(mockTrainingJobsController.startAutoTrain).toHaveBeenCalled()
       expect(addToast).toHaveBeenCalledWith('Training started', 'info')
-      // startAutoTrain's .then chain resolves after startTraining returns.
-      await waitFor(() => {
-        expect(checkpoints.fetchCheckpoints).toHaveBeenCalled()
+      expect(session.startStandardPoll).toHaveBeenCalledWith(
+        'job_test123',
+        expect.objectContaining({ addToast }),
+      )
+      const onComplete = (session.startStandardPoll as ReturnType<typeof vi.fn>).mock.calls[0][1]
+        ?.onComplete as (() => void) | undefined
+      expect(onComplete).toBeDefined()
+      await act(async () => {
+        onComplete?.()
       })
+      expect(checkpoints.fetchCheckpoints).toHaveBeenCalled()
     })
 
     it('calls startFineTune for finetune method', async () => {
