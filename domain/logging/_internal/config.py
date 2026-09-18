@@ -24,8 +24,10 @@ Usage::
 
 Environment variables:
     SLO_LOG_LEVEL   — root log level (default: INFO)
-    SLO_LOG_FORMAT  — "human" (colored terminal), "json" (legacy structured),
-                      or "slo" (slo.log v1 typed schema) (default: human)
+    SLO_LOG_FORMAT  — console format: "human" (colored terminal), "json"
+                      (legacy structured), "slo" (slo.log v1 typed schema),
+                      or "syslog" (systemd-style, no hostname) (default: human).
+                      File logs are always systemd-style syslog lines.
     SLO_LOG_DIR     — directory for log files (default: logs/ relative to repo root)
     SLO_LOG_NO_FILE — set to "1" to disable file logging
     NO_COLOR        — set to "1" to disable ANSI colors
@@ -257,6 +259,58 @@ class HumanFormatter(logging.Formatter):
             parts.append(record.exc_text)
 
         return " ".join(parts)
+
+
+# ── Syslog/journal-style formatter ────────────────────────────────────
+
+
+class SyslogFormatter(logging.Formatter):
+    """systemd/journal-style single lines for file output. No hostname.
+
+    Format (hostname deliberately omitted — machine names stay out of logs)::
+
+        Sep 18 09:31:02 slo.startup[385542]: INFO [START] model loaded corr=abc key=val
+
+    Parts: ``%b`` day ``HH:MM:SS`` timestamp, full logger name, ``[pid]``
+    (systemd's ``process[pid]`` slot), level name, optional ``[TAG]``
+    (op domain, else legacy tag), message, ``rid=`` correlation id,
+    ``key=val`` context (values containing whitespace are double-quoted),
+    exception summary with the full traceback on following lines.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        dt = datetime.fromtimestamp(record.created)
+        ts = f"{dt.strftime('%b')} {dt.day:2d} {dt.strftime('%H:%M:%S')}"
+        line = f"{ts} {record.name}[{record.process}]: {record.levelname}"
+
+        op = getattr(record, "op", None)
+        if op:
+            line += f" [{op.split('.')[0].upper()}]"
+        else:
+            tag = getattr(record, "tag", None)
+            if tag:
+                line += f" [{tag}]"
+
+        line += f" {record.getMessage()}"
+
+        rid = getattr(record, "request_id", None)
+        if rid:
+            line += f" rid={rid}"
+
+        for k, v in _collect_extras(record).items():
+            sv = str(v)
+            if not sv or any(c in sv for c in (" ", "\t", "=", '"')):
+                sv = '"' + sv.replace('"', "'") + '"'
+            line += f" {k}={sv}"
+
+        if record.exc_info and record.exc_info[1]:
+            exc_type = type(record.exc_info[1]).__name__
+            line += f" [{exc_type}] {record.exc_info[1]}"
+            line += "\n" + self.formatException(record.exc_info)
+        elif record.exc_text:
+            line += "\n" + str(record.exc_text)
+
+        return line
 
 
 # ── JSON formatter ────────────────────────────────────────────────────
@@ -851,9 +905,9 @@ def _create_file_handler(
     level: int = logging.DEBUG,
     max_bytes: int = 10 * 1024 * 1024,  # 10 MB
     backup_count: int = 5,
-    fmt: str = "json",
+    fmt: str = "syslog",
 ) -> logging.handlers.RotatingFileHandler:
-    """Create a rotating file handler for structured JSON log output."""
+    """Create a rotating file handler (systemd-style syslog lines by default)."""
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "sloughgpt.log"
 
@@ -866,8 +920,10 @@ def _create_file_handler(
     handler.setLevel(level)
     if fmt == "slo":
         handler.setFormatter(SloJSONFormatter())
-    else:
+    elif fmt == "json":
         handler.setFormatter(JSONFormatter())
+    else:
+        handler.setFormatter(SyslogFormatter())
     handler.addFilter(ClientExtensionFilter())
     return handler
 
@@ -908,7 +964,9 @@ def setup_logging(
 
     Args:
         level:            Log level (default: SLO_LOG_LEVEL env or "INFO")
-        format:           "human" or "json" (default: SLO_LOG_FORMAT env or "human")
+        format:           Console format: "human", "json", "slo" or "syslog"
+                          (default: SLO_LOG_FORMAT env or "human").
+                          File logs are always systemd-style syslog lines.
         log_dir:          Directory for log files (default: SLO_LOG_DIR env or "logs/")
         enable_file:      Enable file logging (default: SLO_LOG_NO_FILE != "1")
         enable_console:   Install console stderr handler (default: True).
@@ -961,6 +1019,8 @@ def setup_logging(
             console_formatter = SloJSONFormatter()
         elif fmt == "json":
             console_formatter = JSONFormatter()
+        elif fmt == "syslog":
+            console_formatter = SyslogFormatter()
         else:
             console_formatter = HumanFormatter(colors=colors)
 

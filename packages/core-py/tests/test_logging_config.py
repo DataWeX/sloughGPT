@@ -18,6 +18,8 @@ import json
 import logging
 import logging.handlers
 import os
+import re
+import socket
 import sys
 import tempfile
 import threading
@@ -35,6 +37,7 @@ if str(_CORE_PY) not in sys.path:
 from domain.logging._internal.config import (
     ClientExtensionFilter,
     LogFormatter,
+    SyslogFormatter,
     _collect_extras,
     _enriched_record_factory,
     _log_context,
@@ -519,3 +522,79 @@ class TestStdlibIntegration:
         assert data["corr"] == "req-42"
 
         logging.getLogger().removeHandler(test_handler)
+
+
+# ── SyslogFormatter tests ─────────────────────────────────────────────
+
+
+class TestSyslogFormatter:
+    """Tests for SyslogFormatter (systemd-style, no hostname)."""
+
+    def test_shape_matches_systemd_format(self):
+        from datetime import datetime
+
+        fmt = SyslogFormatter()
+        record = _make_record(name="slo.startup", msg="model loaded")
+        record.created = 1789824662
+        record.process = 385542
+        dt = datetime.fromtimestamp(1789824662)
+        expected_ts = f"{dt.strftime('%b')} {dt.day:2d} {dt.strftime('%H:%M:%S')}"
+        out = fmt.format(record)
+        assert out == f"{expected_ts} slo.startup[385542]: INFO model loaded", out
+        assert re.match(
+            r"^[A-Z][a-z]{2}\s+\d{1,2} \d{2}:\d{2}:\d{2} \S+\[\d+\]: \w+ ",
+            out,
+        )
+
+    def test_no_hostname_leaks(self):
+        fmt = SyslogFormatter()
+        out = fmt.format(_make_record(msg="hello"))
+        assert socket.gethostname() not in out
+
+    def test_pid_present(self):
+        fmt = SyslogFormatter()
+        out = fmt.format(_make_record())
+        assert f"[{os.getpid()}]" in out
+
+    def test_tag_badge(self):
+        fmt = SyslogFormatter()
+        out = fmt.format(_make_record(tag="START"))
+        assert "[START]" in out
+
+    def test_op_domain_badge(self):
+        fmt = SyslogFormatter()
+        out = fmt.format(_make_record(op="model.load"))
+        assert "[MODEL]" in out
+
+    def test_rid_and_ctx(self):
+        fmt = SyslogFormatter()
+        out = fmt.format(_make_record(request_id="abc", key="val", n=3))
+        assert "rid=abc" in out
+        assert "key=val" in out
+        assert "n=3" in out
+
+    def test_ctx_values_with_spaces_are_quoted(self):
+        fmt = SyslogFormatter()
+        out = fmt.format(_make_record(path="/a b/c"))
+        assert 'path="/a b/c"' in out
+
+    def test_exception_appends_summary_and_traceback(self):
+        fmt = SyslogFormatter()
+        try:
+            raise ValueError("boom")
+        except ValueError:
+            record = _make_record(msg="failed")
+            record.exc_info = sys.exc_info()
+        out = fmt.format(record)
+        assert "[ValueError] boom" in out
+        assert "Traceback (most recent call last)" in out
+
+    def test_level_names_preserved(self):
+        fmt = SyslogFormatter()
+        for level, name in (
+            (logging.DEBUG, "DEBUG"),
+            (logging.WARNING, "WARNING"),
+            (logging.ERROR, "ERROR"),
+        ):
+            out = fmt.format(_make_record(level=level))
+            assert f": {name} " in out or out.endswith(f": {name}"), out

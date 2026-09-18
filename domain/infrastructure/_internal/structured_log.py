@@ -373,7 +373,7 @@ def setup_structured_logging(
     root_level: int = logging.INFO,
     fmt: logging.Formatter | None = None,
 ) -> None:
-    """Install the JSON formatter on the root logger and all children.
+    """Install the syslog formatter on the root logger and all children.
 
     Call once at startup::
 
@@ -382,10 +382,14 @@ def setup_structured_logging(
 
     Note: This adds a handler to the root logger. The main setup_logging()
     in domains.logging.config should be called first to establish the base
-    logging pipeline. This function adds structured JSON output on top.
+    logging pipeline. This function adds systemd-style syslog output on top.
     """
+    if fmt is None:
+        from domain.logging._internal.config import SyslogFormatter
+
+        fmt = SyslogFormatter()
     handler = logging.StreamHandler()
-    handler.setFormatter(fmt or JSONFormatter())
+    handler.setFormatter(fmt)
     root = logging.getLogger()
     root.addHandler(handler)
     root.setLevel(root_level)
