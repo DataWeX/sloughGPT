@@ -23,6 +23,7 @@ from domain.infrastructure._internal.structured_log import (
     tagged,
     timed,
 )
+from domain.logging._internal.config import SyslogFormatter
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
@@ -666,7 +667,7 @@ class TestSetupStructuredLogging:
     def test_root_handler_installed(self):
         setup_structured_logging(logging.DEBUG)
         root = logging.getLogger()
-        assert any(isinstance(h.formatter, JSONFormatter) for h in root.handlers)
+        assert any(isinstance(h.formatter, SyslogFormatter) for h in root.handlers)
         assert len(root.handlers) >= 1
 
     def test_custom_formatter(self):

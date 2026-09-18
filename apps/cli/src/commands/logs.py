@@ -15,6 +15,7 @@ Usage:
 """
 
 import json
+import re
 import sys
 import time
 import urllib.error
@@ -93,6 +94,111 @@ def _parse_since(since: str) -> datetime | None:
         return None
 
 
+_SYSLOG_RE = re.compile(
+    r"^([A-Z][a-z]{2}\s+\d{1,2} \d{2}:\d{2}:\d{2}) (\S+)\[(\d+)\]: ([A-Z]+)"
+    r"(?: \[([A-Za-z0-9_]+)\])?(?: (.*))?$"
+)
+_KV_RE = re.compile(r'([A-Za-z_][\w.\-]*)=(?:"([^"]*)"|(\S+))')
+_MONTHS = {
+    "Jan": 1,
+    "Feb": 2,
+    "Mar": 3,
+    "Apr": 4,
+    "May": 5,
+    "Jun": 6,
+    "Jul": 7,
+    "Aug": 8,
+    "Sep": 9,
+    "Oct": 10,
+    "Nov": 11,
+    "Dec": 12,
+}
+_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
+
+
+def _parse_syslog_ts(ts: str) -> str:
+    """Convert 'Sep 18 09:31:02' to ISO (assumes current year)."""
+    try:
+        mon, day, hms = ts.split()
+        dt = datetime(
+            datetime.now().year,
+            _MONTHS[mon],
+            int(day),
+            *map(int, hms.split(":")),
+        )
+        return dt.isoformat()
+    except (ValueError, KeyError):
+        return ts
+
+
+def _split_msg_ctx(rest: str) -> tuple[str, dict]:
+    """Split trailing key=val pairs (values may be double-quoted) from message."""
+    matches = list(_KV_RE.finditer(rest))
+    idx = len(matches)
+    pos = len(rest)
+    while idx > 0:
+        m = matches[idx - 1]
+        if rest[m.end() : pos].strip() == "":
+            pos = m.start()
+            idx -= 1
+        else:
+            break
+    ctx = {}
+    for m in matches[idx:]:
+        key = m.group(1)
+        ctx[key] = m.group(2) if m.group(2) is not None else m.group(3)
+    return rest[:pos].rstrip(), ctx
+
+
+def _parse_syslog_line(line: str) -> dict | None:
+    """Parse a systemd-style log line into a record dict (None if no match)."""
+    m = _SYSLOG_RE.match(line.strip())
+    if not m or m.group(4) not in _LEVELS:
+        return None
+    ts_raw, logger_name, _pid, level, tag, rest = m.groups()
+    msg, ctx = _split_msg_ctx(rest or "")
+    rid = ctx.pop("rid", None) or ctx.pop("corr", None) or ctx.pop("request_id", None)
+    return {
+        "ts": _parse_syslog_ts(ts_raw),
+        "level": level,
+        "logger": logger_name,
+        "msg": msg,
+        "tag": tag or "",
+        "request_id": rid or "",
+        "ctx": ctx,
+    }
+
+
+def _normalize_json_record(data: object) -> dict | None:
+    """Normalize a parsed JSON line to the record shape (legacy file support)."""
+    if not isinstance(data, dict):
+        return None
+    if "msg" in data and ("level" in data or "lvl" in data):
+        return {
+            "ts": data.get("ts", ""),
+            "level": data.get("level", data.get("lvl", "INFO")),
+            "logger": data.get("logger", ""),
+            "msg": data.get("msg", ""),
+            "tag": data.get("tag", data.get("op", "") or ""),
+            "request_id": data.get("request_id", data.get("corr", "") or ""),
+            "ctx": data.get("ctx", {}) if isinstance(data.get("ctx"), dict) else {},
+        }
+    return None
+
+
+def _parse_line(line: str) -> dict | None:
+    """Parse one log file line (JSON legacy or systemd-style syslog)."""
+    stripped = line.strip()
+    if not stripped:
+        return None
+    if stripped.startswith("{"):
+        try:
+            return _normalize_json_record(json.loads(stripped))
+        except json.JSONDecodeError:
+            return None
+    return _parse_syslog_line(stripped)
+
+
 def _format_line(record: dict, use_color: bool = True) -> str:
     ts = record.get("ts", "")
     level = record.get("level", "INFO")
@@ -127,7 +233,11 @@ def _format_line(record: dict, use_color: bool = True) -> str:
     if rid_str:
         parts.append(rid_str)
     parts.extend([logger_str, msg])
-    return " ".join(p for p in parts if p)
+    out = " ".join(p for p in parts if p)
+    tail = record.get("_tail", "")
+    if tail:
+        out += "\n" + tail
+    return out
 
 
 def _matches_filters(record: dict, filters: dict) -> bool:
@@ -463,12 +573,8 @@ def _show_stats(log_path: Path, output_json: bool, use_color: bool) -> None:
 
     with open(log_path, encoding="utf-8", errors="replace") as f:
         for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
+            record = _parse_line(line)
+            if record is None:
                 continue
             total += 1
             level = record.get("level", "INFO")
@@ -541,20 +647,24 @@ def _show_stats(log_path: Path, output_json: bool, use_color: bool) -> None:
 
 def _read_logs(log_path: Path, tail: int, filters: dict, output_json: bool, use_color: bool):
     matches = []
+    pending = None
     with open(log_path, encoding="utf-8", errors="replace") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
+        for raw in f:
+            record = _parse_line(raw)
+            if record is None:
+                # Traceback continuation of the previous record.
+                if pending is not None:
+                    prev = pending.get("_tail", "")
+                    pending["_tail"] = (prev + "\n" if prev else "") + raw.rstrip("\n")
                 continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+            pending = record
             if _matches_filters(record, filters):
                 matches.append(record)
+            else:
+                pending = None
     for record in matches[-tail:]:
         if output_json:
-            click.echo(json.dumps(record))
+            click.echo(json.dumps({k: v for k, v in record.items() if k != "_tail"}))
         else:
             click.echo(_format_line(record, use_color=use_color))
     if not matches:
@@ -565,22 +675,27 @@ def _tail_follow(log_path: Path, filters: dict, output_json: bool, use_color: bo
     click.echo(f"Following {log_path} (Ctrl+C to stop)...", err=True)
     with open(log_path, encoding="utf-8", errors="replace") as f:
         f.seek(0, 2)
+        pending = None
         try:
             while True:
-                line = f.readline()
-                if not line:
+                raw = f.readline()
+                if not raw:
                     time.sleep(0.1)
                     continue
-                line = line.strip()
-                if not line:
+                record = _parse_line(raw)
+                if record is None:
+                    # Traceback continuation of the record being shown.
+                    if pending is not None:
+                        prev = pending.get("_tail", "")
+                        pending["_tail"] = (prev + "\n" if prev else "") + raw.rstrip("\n")
+                        if not output_json:
+                            click.echo(raw.rstrip("\n"))
                     continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
+                pending = None
                 if _matches_filters(record, filters):
+                    pending = record
                     if output_json:
-                        click.echo(json.dumps(record))
+                        click.echo(json.dumps({k: v for k, v in record.items() if k != "_tail"}))
                     else:
                         click.echo(_format_line(record, use_color=use_color))
         except KeyboardInterrupt:
