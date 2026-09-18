@@ -71,7 +71,7 @@ class TestInferTokenize:
     def test_tokenize(self):
         _app, router = _build_app()
         provider = _mock_provider()
-        with patch("domains.models.provider.get_provider", return_value=provider):
+        with patch("domain.models._internal.provider.get_provider", return_value=provider):
             resp = TestClient(_app).post("/infer/tokenize", json={"text": "hello world"})
         assert resp.status_code == 200
         data = resp.json()
@@ -81,7 +81,7 @@ class TestInferTokenize:
     def test_detokenize(self):
         _app, router = _build_app()
         provider = _mock_provider()
-        with patch("domains.models.provider.get_provider", return_value=provider):
+        with patch("domain.models._internal.provider.get_provider", return_value=provider):
             resp = TestClient(_app).post("/infer/detokenize", json={"ids": [1, 2, 3]})
         assert resp.status_code == 200
         data = resp.json()
@@ -95,7 +95,7 @@ class TestInferEmbed:
     def test_embed(self):
         _app, router = _build_app()
         provider = _mock_provider()
-        with patch("domains.models.provider.get_provider", return_value=provider):
+        with patch("domain.models._internal.provider.get_provider", return_value=provider):
             resp = TestClient(_app).post("/infer/embed", json={"text": "hello world"})
         assert resp.status_code == 200
         data = resp.json()
@@ -116,7 +116,7 @@ class TestInferGenerate:
         mock_model = MagicMock()
         with (
             patch.object(router, "_get_model", return_value=mock_model),
-            patch("domains.models.provider.get_provider", return_value=provider),
+            patch("domain.models._internal.provider.get_provider", return_value=provider),
         ):
             resp = TestClient(_app).post(
                 "/infer",

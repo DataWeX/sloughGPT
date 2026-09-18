@@ -5,6 +5,12 @@ from unittest.mock import MagicMock, patch
 
 from tests.test_support import get_test_client
 
+# NOTE: patch.object on the serving singleton — string patch targets fail
+# here two ways: short path ("routers.inference...") doesn't resolve under
+# pytest's import mode, and long path ("apps.api.server.routers...") binds
+# a SECOND module object (namespace packages) whose singleton never serves.
+from routers.inference import _instance as _inference_instance
+
 client = get_test_client()
 
 
@@ -239,7 +245,7 @@ class TestSchemaValidation:
 
 
 class TestContextStoreFact:
-    @patch("routers.inference._instance._get_context_core")
+    @patch.object(_inference_instance, "_get_context_core")
     def test_store_fact_success(self, mock_get_ctx):
         ctx = MagicMock()
         mock_get_ctx.return_value = ctx
@@ -248,7 +254,7 @@ class TestContextStoreFact:
         assert resp.json()["data"]["stored"] == "capital"
         ctx.store_fact.assert_called_once_with("capital", "London")
 
-    @patch("routers.inference._instance._get_context_core")
+    @patch.object(_inference_instance, "_get_context_core")
     def test_store_fact_no_context(self, mock_get_ctx):
         mock_get_ctx.return_value = None
         resp = client.post("/context/fact", params={"key": "k", "value": "v"})
@@ -256,7 +262,7 @@ class TestContextStoreFact:
 
 
 class TestContextGetFactsWithQuery:
-    @patch("routers.inference._instance._get_context_core")
+    @patch.object(_inference_instance, "_get_context_core")
     def test_get_facts_with_query(self, mock_get_ctx):
         ctx = MagicMock()
         ctx.search_semantic.return_value = [{"key": "k1", "score": 0.9}]

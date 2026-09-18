@@ -31,7 +31,7 @@ class TestListJobs:
         _app = _build_app()
         mock_provider = MagicMock()
         mock_provider.list_jobs.return_value = []
-        with patch("domains.training.cloud.get_provider", return_value=mock_provider):
+        with patch("domain.training._internal.cloud.get_provider", return_value=mock_provider):
             resp = TestClient(_app).get("/cloud-training/jobs")
         assert resp.status_code == 200
         data = resp.json()["data"]
@@ -46,7 +46,7 @@ class TestSubmitJob:
         _app = _build_app()
         mock_provider = MagicMock()
         mock_provider.submit_job.return_value = "job-123"
-        with patch("domains.training.cloud.get_provider", return_value=mock_provider):
+        with patch("domain.training._internal.cloud.get_provider", return_value=mock_provider):
             resp = TestClient(_app).post("/cloud-training/submit?provider=local&dataset_id=ds1")
         assert resp.status_code == 200
         data = resp.json()["data"]
@@ -68,7 +68,7 @@ class TestJobStatus:
         mock_job.progress = 50
         mock_job.error = None
         mock_provider.get_status.return_value = mock_job
-        with patch("domains.training.cloud.get_provider", return_value=mock_provider):
+        with patch("domain.training._internal.cloud.get_provider", return_value=mock_provider):
             resp = TestClient(_app).get("/cloud-training/job-123/status")
         assert resp.status_code == 200
 
@@ -81,7 +81,7 @@ class TestCancelJob:
         _app = _build_app()
         mock_provider = MagicMock()
         mock_provider.cancel_job.return_value = True
-        with patch("domains.training.cloud.get_provider", return_value=mock_provider):
+        with patch("domain.training._internal.cloud.get_provider", return_value=mock_provider):
             resp = TestClient(_app).post("/cloud-training/job-123/cancel")
         assert resp.status_code == 200
         assert resp.json()["data"]["cancelled"] is True

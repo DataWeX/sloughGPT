@@ -8,6 +8,8 @@ Public API:
     find_checkpoint, load_soul, load_lora_soul
     LoRAType, LoRAConfig, LoRALinear, LoRAEmbedding
     apply_lora_to_model, get_lora_parameters
+    VideoCaptionTrainer, list_video_checkpoints
+    get_training_executor
 """
 
 from domain.training._internal.checkpoints import (
@@ -39,6 +41,9 @@ _LAZY_IMPORTS = {
     "LoRAEmbedding": ("._internal.lora", "LoRAEmbedding"),
     "apply_lora_to_model": ("._internal.lora", "apply_lora_to_model"),
     "get_lora_parameters": ("._internal.lora", "get_lora_parameters"),
+    "VideoCaptionTrainer": ("._internal.video_trainer", "VideoCaptionTrainer"),
+    "list_video_checkpoints": ("._internal.video_trainer", "list_video_checkpoints"),
+    "get_training_executor": ("._internal.executor", "get_training_executor"),
 }
 
 
@@ -76,4 +81,7 @@ __all__ = [
     "LoRAEmbedding",
     "apply_lora_to_model",
     "get_lora_parameters",
+    "VideoCaptionTrainer",
+    "list_video_checkpoints",
+    "get_training_executor",
 ]

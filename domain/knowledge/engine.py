@@ -149,7 +149,10 @@ class KnowledgeEngine:
         """
         try:
             memory = self._get_memory()
-            memory.delete(item_id)
+            delete = getattr(memory, "delete", None) or getattr(memory, "delete_by_id", None)
+            if delete is None:
+                raise AttributeError("knowledge memory has no delete method")
+            delete(item_id)
             return KnowledgeResult(success=True, data={"deleted": True})
         except Exception as e:
             logger.error("Knowledge delete failed: %s", e)
@@ -212,12 +215,47 @@ class KnowledgeEngine:
         """Get knowledge base statistics.
 
         Returns:
-            KnowledgeResult with stats dict.
+            KnowledgeResult with stats dict containing total_items,
+            topics, sources, and avg_importance.
         """
         try:
             memory = self._get_memory()
-            stats = memory.stats() if hasattr(memory, "stats") else {}
-            return KnowledgeResult(success=True, data=stats)
+            facts = []
+            if hasattr(memory, "list_all"):
+                try:
+                    facts = memory.list_all(top_k=5000) or []
+                except Exception:
+                    facts = []
+            topics: dict[str, int] = {}
+            sources: dict[str, int] = {}
+            importance_total = 0.0
+            importance_count = 0
+            for fact in facts:
+                if not isinstance(fact, dict):
+                    continue
+                topic = fact.get("topic") or "general"
+                topics[topic] = topics.get(topic, 0) + 1
+                source = fact.get("source") or "unknown"
+                sources[source] = sources.get(source, 0) + 1
+                try:
+                    importance_total += float(fact.get("importance", 0.5))
+                    importance_count += 1
+                except (TypeError, ValueError):
+                    pass
+            data = {
+                "total_items": len(facts),
+                "topics": topics,
+                "sources": sources,
+                "avg_importance": (importance_total / importance_count) if importance_count else 0.0,
+            }
+            if hasattr(memory, "stats"):
+                try:
+                    extra = memory.stats() or {}
+                    for key, value in extra.items():
+                        data.setdefault(key, value)
+                except Exception:
+                    pass
+            return KnowledgeResult(success=True, data=data)
         except Exception as e:
             logger.error("Knowledge stats failed: %s", e)
             return KnowledgeResult(success=False, error=str(e))
@@ -226,12 +264,22 @@ class KnowledgeEngine:
         """List all topics with item counts.
 
         Returns:
-            KnowledgeResult with list of {name, count} dicts.
+            KnowledgeResult with {"topics": [{name, count}], "total": N}.
         """
         try:
             memory = self._get_memory()
-            topics = memory.list_topics() if hasattr(memory, "list_topics") else []
-            return KnowledgeResult(success=True, data=topics)
+            counts: dict[str, int] = {}
+            if hasattr(memory, "list_all"):
+                try:
+                    for fact in memory.list_all(top_k=5000) or []:
+                        if isinstance(fact, dict):
+                            topic = fact.get("topic") or "general"
+                            counts[topic] = counts.get(topic, 0) + 1
+                except Exception:
+                    pass
+            topics = [{"name": name, "count": count} for name, count in sorted(counts.items())]
+            total = sum(counts.values())
+            return KnowledgeResult(success=True, data={"topics": topics, "total": total})
         except Exception as e:
             logger.error("Topic listing failed: %s", e)
             return KnowledgeResult(success=False, error=str(e))
@@ -329,10 +377,13 @@ class KnowledgeEngine:
         """
         try:
             memory = self._get_memory()
+            delete = getattr(memory, "delete", None) or getattr(memory, "delete_by_id", None)
             count = 0
             for item_id in item_ids:
                 try:
-                    memory.delete(item_id)
+                    if delete is None:
+                        break
+                    delete(item_id)
                     count += 1
                 except Exception:
                     pass

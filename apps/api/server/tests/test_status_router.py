@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -60,7 +60,13 @@ class TestStatus:
 
 class TestReady:
     def test_ready_returns_true(self):
-        resp = client.get("/ready")
+        # The native engine requires a compiled Apple Accelerate dylib that
+        # never exists on Linux/CI — mock it to test readiness aggregation.
+        with patch(
+            "domain.inference._internal.native.engine.get_engine",
+            return_value=MagicMock(),
+        ):
+            resp = client.get("/ready")
         assert resp.status_code == 200
         data = _data(resp)
         assert data.get("ready") is True
@@ -86,14 +92,14 @@ class TestReady:
         assert isinstance(checks["inference"], bool)
 
     def test_ready_with_db_down(self):
-        with patch("domains.feedback.database.get_feedback_db", side_effect=Exception("db down")):
+        with patch("domain.feedback._internal.database.get_feedback_db", side_effect=Exception("db down")):
             resp = client.get("/ready")
             data = _data(resp)
             assert data["checks"]["database"] is False
 
     def test_ready_with_inference_down(self):
         with patch(
-            "domains.inference.native.engine.get_engine", side_effect=Exception("engine missing")
+            "domain.inference._internal.native.engine.get_engine", side_effect=Exception("engine missing")
         ):
             resp = client.get("/ready")
             data = _data(resp)

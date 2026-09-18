@@ -81,7 +81,7 @@ class TestListSouls:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_list_returns_success(self, mock_get):
         mock_get.return_value = _mock_manager(souls=[_mock_soul()])
         resp = self.client.get("/souls")
@@ -90,7 +90,7 @@ class TestListSouls:
         data = _d(resp)
         assert isinstance(data, list)
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_list_has_meta(self, mock_get):
         soul = _mock_soul()
         mock_get.return_value = _mock_manager(souls=[soul], current=soul)
@@ -99,14 +99,14 @@ class TestListSouls:
         assert "meta" in body
         assert body["meta"]["current_soul"] == "test-soul"
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_list_empty_souls(self, mock_get):
         mock_get.return_value = _mock_manager(souls=[])
         resp = self.client.get("/souls")
         assert resp.status_code == 200
         assert _d(resp) == []
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_list_soul_has_all_fields(self, mock_get):
         soul = _mock_soul()
         mock_get.return_value = _mock_manager(souls=[soul])
@@ -120,7 +120,7 @@ class TestCurrentSoul:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_get_current_soul(self, mock_get):
         soul = _mock_soul()
         mock_get.return_value = _mock_manager(current=soul)
@@ -128,14 +128,14 @@ class TestCurrentSoul:
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_current_soul_has_name(self, mock_get):
         soul = _mock_soul()
         mock_get.return_value = _mock_manager(current=soul)
         resp = self.client.get("/souls/current")
         assert _d(resp)["name"] == "test-soul"
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_no_current_soul(self, mock_get):
         mock_get.return_value = _mock_manager(current=None)
         resp = self.client.get("/souls/current")
@@ -147,7 +147,7 @@ class TestGetSoul:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_get_soul_by_name(self, mock_get):
         soul = _mock_soul("wise-owl")
         mock_get.return_value = _mock_manager(souls=[soul])
@@ -155,13 +155,13 @@ class TestGetSoul:
         assert resp.status_code == 200
         assert _d(resp)["name"] == "wise-owl"
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_get_nonexistent_soul(self, mock_get):
         mock_get.return_value = _mock_manager(souls=[])
         resp = self.client.get("/souls/nonexistent")
         assert resp.status_code == 404
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_get_soul_has_traits(self, mock_get):
         soul = _mock_soul()
         mock_get.return_value = _mock_manager(souls=[soul])
@@ -174,14 +174,14 @@ class TestTraitWeights:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_get_weights(self, mock_get):
         mock_get.return_value = _mock_manager()
         resp = self.client.get("/souls/weights")
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_get_weights_structure(self, mock_get):
         mock_get.return_value = _mock_manager()
         resp = self.client.get("/souls/weights")
@@ -190,7 +190,7 @@ class TestTraitWeights:
         assert "cognition" in data
         assert "emotion" in data
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_save_weights(self, mock_get):
         mock_get.return_value = _mock_manager()
         resp = self.client.post(
@@ -203,7 +203,7 @@ class TestTraitWeights:
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_get_trait_modes(self, mock_get):
         mock_get.return_value = _mock_manager()
         resp = self.client.get("/souls/weights/modes")
@@ -212,7 +212,7 @@ class TestTraitWeights:
         for key in ("personality", "memory", "style", "task"):
             assert key in data
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_trait_modes_have_structure(self, mock_get):
         mock_get.return_value = _mock_manager()
         resp = self.client.get("/souls/weights/modes")
@@ -227,7 +227,7 @@ class TestWeightSnapshots:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context._internal.managers.get_trait_config")
     def test_list_snapshots(self, mock_get):
         mock_get.return_value = MagicMock(list_snapshots=MagicMock(return_value=["snap1", "snap2"]))
         resp = self.client.get("/souls/weights/snapshots")
@@ -236,7 +236,7 @@ class TestWeightSnapshots:
         assert isinstance(data, list)
         assert "snap1" in data
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context._internal.managers.get_trait_config")
     def test_save_snapshot(self, mock_get):
         config = MagicMock()
         config.save_snapshot.return_value = "/snapshots/test.json"
@@ -245,7 +245,7 @@ class TestWeightSnapshots:
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context._internal.managers.get_trait_config")
     def test_load_snapshot(self, mock_get):
         config = MagicMock()
         config.load_snapshot.return_value = 5
@@ -254,7 +254,7 @@ class TestWeightSnapshots:
         assert resp.status_code == 200
         assert _d(resp)["traits_loaded"] == 5
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context._internal.managers.get_trait_config")
     def test_delete_snapshot(self, mock_get):
         config = MagicMock()
         config.delete_snapshot.return_value = True
@@ -268,14 +268,14 @@ class TestSwitchSoul:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_switch_success(self, mock_get):
         mock_get.return_value = _mock_manager()
         resp = self.client.post("/souls/switch", json={"name": "new-soul"})
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_switch_nonexistent_soul(self, mock_get):
         m = _mock_manager()
         m.switch_soul.return_value = {"success": False, "error": "not found"}
@@ -290,7 +290,7 @@ class TestSoulStats:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_stats_returns_dict(self, mock_get):
         mock_get.return_value = _mock_manager()
         resp = self.client.get("/souls/stats")
