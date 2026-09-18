@@ -160,11 +160,15 @@ def test_get_context():
 
 def test_search_files():
     client = get_test_client()
+    # Absolute path: the endpoint resolves relative paths against the server
+    # CWD, which varies — anchor to a directory full of .py files.
+    from pathlib import Path
+
     resp = client.post(
         "/knowledge/search-files",
         json={
             "query": "def function",
-            "path": "routers",
+            "path": str(Path(__file__).parent),
             "top_k": 3,
             "extensions": ["py"],
         },

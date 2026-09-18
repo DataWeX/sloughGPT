@@ -547,6 +547,9 @@ def get_configured_middleware(
         (UnifiedRequestMiddleware, {}),
         (ReadinessGateMiddleware, {}),
         (CorrelationIdMiddleware, {}),
+        # Last registered = outermost: sees the final status for the
+        # extension-origin DEBUG note.
+        (ClientErrorFilterMiddleware, {}),
     ]
 
 

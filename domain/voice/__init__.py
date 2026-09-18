@@ -32,6 +32,8 @@ from domain.voice._internal.phoneme_encoder import (
     PhonemeEncoder,
     text_to_phonemes,
 )
+from domain.voice._internal.phoneme import get_phoneme_engine
+from domain.voice.engine import VoiceEngine, get_voice_engine
 from domain.voice._internal.speech import (
     BrowserSpeechRecognizer,
     ServerSpeechRecognizer,
@@ -77,4 +79,8 @@ __all__ = [
     "SpectrogramDecoder",
     "GriffinLimVocoder",
     "TTSEngine",
+    # Facade engines
+    "VoiceEngine",
+    "get_voice_engine",
+    "get_phoneme_engine",
 ]
