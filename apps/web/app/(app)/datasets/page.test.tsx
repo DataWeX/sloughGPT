@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import DatasetsPage from './page'
+import { useQueryStore } from '@/lib/cache/client'
 
 const mockList = vi.fn()
 const mockSearch = vi.fn()
@@ -30,8 +31,16 @@ vi.mock('@/lib/dataset-controller', () => ({
 describe('DatasetsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // useDatasetList caches by key (30s staleTime) — reset between tests.
+    useQueryStore.setState({ cache: {}, fetchingKeys: new Set() })
     mockList.mockResolvedValue([
-      { id: '1', name: 'Shakespeare', row_count: 1000, size_bytes: 50000, created_at: '2025-01-01' },
+      {
+        id: '1',
+        name: 'Shakespeare',
+        row_count: 1000,
+        size_bytes: 50000,
+        created_at: '2025-01-01',
+      },
     ])
     mockSearch.mockResolvedValue([])
     mockGetStats.mockResolvedValue({ total: 1, total_rows: 1000 })

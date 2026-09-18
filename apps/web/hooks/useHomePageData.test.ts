@@ -2,24 +2,67 @@ import { describe, expect, it, vi, afterEach } from 'vitest'
 import { renderHook, cleanup } from '@testing-library/react'
 
 vi.mock('@/lib/dev-log', () => ({ logger: { child: () => ({ warning: vi.fn() }) } }))
-vi.mock('@/lib/model-controller', () => ({ modelController: { status: vi.fn().mockResolvedValue({ loaded: false, model_type: null }), list: vi.fn().mockResolvedValue([]) } }))
-vi.mock('@/lib/souls-controller', () => ({ soulsController: { list: vi.fn().mockResolvedValue({ souls: [], current_soul: '' }) } }))
-vi.mock('@/lib/session-controller', () => ({ sessionController: { list: vi.fn().mockResolvedValue([]) } }))
-vi.mock('@/lib/training-controller', () => ({ trainingController: { list: vi.fn().mockResolvedValue([]) } }))
-vi.mock('@/lib/knowledge-controller', () => ({ knowledgeController: { stats: vi.fn().mockResolvedValue({ total_items: 0 }) } }))
-vi.mock('@/lib/feedback-controller', () => ({ feedbackController: { getFeedbackStats: vi.fn().mockResolvedValue({}) } }))
-vi.mock('@/lib/dataset-controller', () => ({ datasetController: { list: vi.fn().mockResolvedValue([]) } }))
-vi.mock('@/lib/query', () => ({ useQuery: () => ({ data: undefined }), useMutation: () => ({ mutate: vi.fn() }), useInvalidate: () => vi.fn() }))
-vi.mock('@/lib/query/hooks', () => ({ useQuery: () => ({ data: undefined }), useMutation: () => ({ mutate: vi.fn() }), useInvalidate: () => vi.fn() }))
-vi.mock('@/lib/query/api-hooks', () => ({ useModels: () => ({ data: undefined }), useSouls: () => ({ data: undefined }) }))
-vi.mock('@/hooks/useLiveStatus', () => ({ liveStatusStore: { setState: vi.fn(), getState: () => ({ ready: true }) }, useApiReady: () => true, useLiveStatus: () => ({ health: null }) }))
+vi.mock('@/lib/model-controller', () => ({
+  modelController: {
+    status: vi.fn().mockResolvedValue({ loaded: false, model_type: null }),
+    list: vi.fn().mockResolvedValue([]),
+  },
+}))
+vi.mock('@/lib/souls-controller', () => ({
+  soulsController: { list: vi.fn().mockResolvedValue({ souls: [], current_soul: '' }) },
+}))
+vi.mock('@/lib/session-controller', () => ({
+  sessionController: { list: vi.fn().mockResolvedValue([]) },
+}))
+vi.mock('@/lib/training-controller', () => ({
+  trainingController: { list: vi.fn().mockResolvedValue([]) },
+}))
+vi.mock('@/lib/knowledge-controller', () => ({
+  knowledgeController: { stats: vi.fn().mockResolvedValue({ total_items: 0 }) },
+}))
+vi.mock('@/lib/feedback-controller', () => ({
+  feedbackController: { getFeedbackStats: vi.fn().mockResolvedValue({}) },
+}))
+vi.mock('@/lib/dataset-controller', () => ({
+  datasetController: { list: vi.fn().mockResolvedValue([]) },
+}))
+vi.mock('@/lib/query', () => ({
+  useQuery: () => ({ data: undefined }),
+  useMutation: () => ({ mutate: vi.fn() }),
+  useInvalidate: () => vi.fn(),
+}))
+vi.mock('@/lib/query/hooks', () => ({
+  useQuery: () => ({ data: undefined }),
+  useMutation: () => ({ mutate: vi.fn() }),
+  useInvalidate: () => vi.fn(),
+}))
+vi.mock('@/lib/cache/api-hooks', () => ({
+  useModels: () => ({ data: undefined }),
+  useSouls: () => ({ data: undefined }),
+}))
+vi.mock('@/hooks/useLiveStatus', () => ({
+  liveStatusStore: { setState: vi.fn(), getState: () => ({ ready: true }) },
+  useApiReady: () => true,
+  useLiveStatus: () => ({ health: null }),
+}))
 
 import { useHomePageData } from './useHomePageData'
 
 afterEach(() => cleanup())
 
-const ONLINE_HEALTH = { status: 'ok', model_loaded: true, model_type: 'gpt2', summary: 'ready', inference_count: 42 }
-const NO_INFERENCE_HEALTH = { status: 'ok', model_loaded: true, model_type: 'gpt2', summary: 'ready' } as const
+const ONLINE_HEALTH = {
+  status: 'ok',
+  model_loaded: true,
+  model_type: 'gpt2',
+  summary: 'ready',
+  inference_count: 42,
+}
+const NO_INFERENCE_HEALTH = {
+  status: 'ok',
+  model_loaded: true,
+  model_type: 'gpt2',
+  summary: 'ready',
+} as const
 
 describe('useHomePageData', () => {
   it('returns default state with null health', () => {

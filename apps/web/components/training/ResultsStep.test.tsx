@@ -34,8 +34,22 @@ const checkpointsWithData: UseTrainingCheckpointsReturn = {
 const checkpointsWithJobs: UseTrainingCheckpointsReturn = {
   ...checkpointsWithData,
   jobs: [
-    { id: 'j1', name: 'job-a', status: 'running', progress: 45, created_at: '2026-01-01T00:00:00Z', method: 'distill', dataset: 'shakespeare' },
-    { id: 'j2', name: 'job-b', status: 'completed', progress: 100, created_at: '2026-01-02T00:00:00Z' },
+    {
+      id: 'j1',
+      name: 'job-a',
+      status: 'running',
+      progress: 45,
+      created_at: '2026-01-01T00:00:00Z',
+      method: 'distill',
+      dataset: 'shakespeare',
+    },
+    {
+      id: 'j2',
+      name: 'job-b',
+      status: 'completed',
+      progress: 100,
+      created_at: '2026-01-02T00:00:00Z',
+    },
     { id: 'j3', name: 'job-c', status: 'failed', progress: 0, created_at: '2026-01-03T00:00:00Z' },
   ],
 }
@@ -57,7 +71,14 @@ const checkpointsWithQuality: UseTrainingCheckpointsReturn = {
 }
 
 const renderStep = (checkpoints: UseTrainingCheckpointsReturn, addToast = vi.fn()) =>
-  render(<ResultsStep checkpoints={checkpoints} goToTrain={vi.fn()} onTest={vi.fn()} addToast={addToast} />)
+  render(
+    <ResultsStep
+      checkpoints={checkpoints}
+      goToTrain={vi.fn()}
+      onTest={vi.fn()}
+      addToast={addToast}
+    />,
+  )
 
 describe('ResultsStep', () => {
   afterEach(cleanup)
@@ -135,31 +156,34 @@ describe('ResultsStep', () => {
     renderStep({ ...checkpointsWithData, handleDeleteCheckpoint })
     const deleteButtons = screen.getAllByText('Delete')
     expect(deleteButtons.length).toBe(2)
-    vi.stubGlobal('confirm', vi.fn(() => true))
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true),
+    )
     deleteButtons[0].click()
     expect(handleDeleteCheckpoint).toHaveBeenCalledWith('cp-1', expect.any(Function))
     vi.unstubAllGlobals()
   })
 
-  it('shows jobs empty state when no jobs', () => {
+  it('shows no Recent runs section when there are no finished jobs', () => {
     renderStep(checkpointsWithData)
-    expect(screen.getByText(/No jobs yet/)).toBeDefined()
+    expect(screen.queryByText('Recent runs')).toBeNull()
   })
 
-  it('renders recent training jobs with status badges', () => {
+  it('renders recent finished jobs with status badges', () => {
     renderStep(checkpointsWithJobs)
-    expect(screen.getByText('job-a')).toBeDefined()
+    // Only completed/failed jobs are listed — in-flight runs are hidden.
+    expect(screen.queryByText('job-a')).toBeNull()
     expect(screen.getByText('job-b')).toBeDefined()
     expect(screen.getByText('job-c')).toBeDefined()
-    expect(screen.getByText('Running')).toBeDefined()
     expect(screen.getByText('Completed')).toBeDefined()
     expect(screen.getByText('Failed')).toBeDefined()
   })
 
-  it('shows progress percentage for in-flight jobs only', () => {
+  it('hides in-flight jobs instead of showing progress', () => {
     renderStep(checkpointsWithJobs)
-    expect(screen.getByText('45%')).toBeDefined()
-    expect(screen.queryByText('100%')).toBeNull()
+    expect(screen.queryByText('45%')).toBeNull()
+    expect(screen.queryByText('job-a')).toBeNull()
   })
 
   it('passes addToast to handleLoadCheckpoint', () => {

@@ -964,3 +964,111 @@ def resolve_and_download(
             on_progress(f"Downloaded {done}/{total} bytes") if on_progress else None
         ),
     )
+
+
+def resolve_page_browser(
+    page_url: str,
+    *,
+    headless: bool = True,
+    timeout_ms: int = 30_000,
+    wait_after_load_ms: int = 3000,
+    min_confidence: float = 0.3,
+    on_progress: Callable[[str], None] | None = None,
+) -> list[ResolvedLink]:
+    """Resolve a page using headless Chromium for JS-heavy sites.
+
+    Falls back to browser-based resolution when the pure-HTTP scraper
+    fails to find real download links (e.g. sharemods.com, mediafire,
+    sites with JS countdowns and CAPTCHAs).
+
+    Args:
+        page_url: URL of the page to scrape.
+        headless: Run in headless mode (default True).
+        timeout_ms: Navigation timeout in milliseconds.
+        wait_after_load_ms: Extra wait after page load for JS execution.
+        min_confidence: Minimum confidence to include in results.
+        on_progress: Status callback.
+
+    Returns:
+        List of ResolvedLink sorted by confidence (best first).
+        Empty list if browser unavailable or no links found.
+
+    Requires: ``pip install downcraft[browser]``
+    """
+    from .browser import BrowserResolver
+
+    resolver = BrowserResolver(
+        headless=headless,
+        timeout_ms=timeout_ms,
+        wait_after_load_ms=wait_after_load_ms,
+    )
+    links = resolver.resolve(page_url, on_progress=on_progress)
+    return [r for r in links if r.confidence >= min_confidence]
+
+
+def resolve_with_browser_fallback(
+    page_url: str,
+    *,
+    session: requests.Session | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: int = 15,
+    max_links: int = 100,
+    max_depth: int = 2,
+    headless: bool = True,
+    min_confidence: float = 0.3,
+    on_progress: Callable[[str], None] | None = None,
+) -> list[ResolvedLink]:
+    """Resolve a page: try HTTP first, fall back to browser if needed.
+
+    Attempts pure-HTTP resolution first. If the best result has low
+    confidence or points to an HTML page, retries with headless Chromium.
+
+    Args:
+        page_url: URL of the page to scrape.
+        session: Optional requests session.
+        headers: Extra HTTP headers.
+        timeout: HTTP request timeout in seconds.
+        max_links: Max links to consider per page.
+        max_depth: Max intermediate pages to follow for HTTP resolve.
+        headless: Browser headless mode.
+        min_confidence: Minimum confidence threshold.
+        on_progress: Status callback.
+
+    Returns:
+        List of ResolvedLink sorted by confidence (best first).
+    """
+    # Try HTTP first
+    links = resolve_page(
+        page_url,
+        session=session,
+        headers=headers,
+        timeout=timeout,
+        max_links=max_links,
+        max_depth=max_depth,
+        on_progress=on_progress,
+    )
+
+    # Check if HTTP results are good enough
+    if links and links[0].confidence >= min_confidence and links[0].extension:
+        return links
+
+    # Fall back to browser
+    if on_progress:
+        on_progress("HTTP resolve insufficient, trying browser...")
+
+    browser_links = resolve_page_browser(
+        page_url,
+        headless=headless,
+        min_confidence=min_confidence,
+        on_progress=on_progress,
+    )
+
+    # Merge: prefer browser results, keep good HTTP results
+    seen = {r.url for r in browser_links}
+    for link in links:
+        if link.url not in seen and link.confidence >= min_confidence:
+            browser_links.append(link)
+            seen.add(link.url)
+
+    browser_links.sort(key=lambda r: r.confidence, reverse=True)
+    return browser_links

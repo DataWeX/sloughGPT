@@ -37,7 +37,12 @@ describe('PermissionsPage', () => {
         chat: ['chat:send', 'chat:history'],
       },
       member_permissions: [
-        { user_id: 'u1', username: 'alice', role: 'admin', permissions: ['model:list', 'train:create'] },
+        {
+          user_id: 'u1',
+          username: 'alice',
+          role: 'admin',
+          permissions: ['model:list', 'train:create'],
+        },
         { user_id: 'u2', username: 'bob', role: 'user', permissions: ['model:list', 'chat:send'] },
       ],
     },
@@ -73,13 +78,13 @@ describe('PermissionsPage', () => {
 
   it('renders role-permission matrix table', async () => {
     render(<PermissionsPage />)
-    await screen.findByText('Permissions')
+    await screen.findByText('Role Permissions')
     expect(screen.getAllByText('Role Permissions').length).toBeGreaterThanOrEqual(1)
   })
 
   it('displays role badges in matrix header', async () => {
     render(<PermissionsPage />)
-    await screen.findByText('Permissions')
+    await screen.findByText('owner')
     expect(screen.getAllByText('owner').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('admin').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('user').length).toBeGreaterThanOrEqual(1)
@@ -88,14 +93,14 @@ describe('PermissionsPage', () => {
 
   it('displays category labels', async () => {
     render(<PermissionsPage />)
-    await screen.findByText('Permissions')
     // Categories are rendered via CATEGORY_LABELS mapping
+    await screen.findByText('Models')
     expect(screen.getAllByText('Models').length).toBeGreaterThanOrEqual(1)
   })
 
   it('displays permission names', async () => {
     render(<PermissionsPage />)
-    await screen.findByText('Permissions')
+    await screen.findByText('model:list')
     expect(screen.getAllByText('model:list').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('train:create').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('chat:send').length).toBeGreaterThanOrEqual(1)
@@ -103,14 +108,13 @@ describe('PermissionsPage', () => {
 
   it('shows checkmarks for permissions that roles have', async () => {
     render(<PermissionsPage />)
-    await screen.findByText('Permissions')
-    const checkmarks = screen.getAllByText('✓')
+    const checkmarks = await screen.findAllByText('✓')
     expect(checkmarks.length).toBeGreaterThan(0)
   })
 
   it('displays member permissions section', async () => {
     render(<PermissionsPage />)
-    await screen.findByText('Permissions')
+    await screen.findByText(/Member Permissions/)
     expect(screen.getAllByText(/Member Permissions/).length).toBeGreaterThanOrEqual(1)
   })
 
