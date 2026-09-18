@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as DbModule from './db'
 
 // ── Mock the HTTP client with an in-memory DocStore ───────────────────
 // Mirrors the backend contract (/docstore/{collection}[/{id}]) so the
@@ -15,6 +16,36 @@ const { store, apiGet, apiPut, apiPatch, apiDelete, apiPost } = vi.hoisted(() =>
 
   const apiGet = vi.fn(async (url: string): Promise<any> => {
     const parts = url.split('?')[0].split('/').filter(Boolean)
+    // Backend-backed session search: scan the stored sessions for the query
+    // in the session name or message content, backend response shaped.
+    if (parts[0] === 'chat' && parts[1] === 'sessions' && parts[2] === 'search') {
+      const q = (new URLSearchParams(url.split('?')[1] ?? '').get('q') ?? '').toLowerCase()
+      const limit = Number(new URLSearchParams(url.split('?')[1] ?? '').get('limit') ?? 30)
+      const sessions = [...(store.get('sessions')?.values() ?? [])] as any[]
+      const hits = sessions
+        .map((s) => {
+          const messages = Array.isArray(s.messages) ? s.messages : []
+          const matched = messages.filter((m: any) =>
+            String(m.content ?? '')
+              .toLowerCase()
+              .includes(q),
+          )
+          const nameHit = String(s.name ?? '')
+            .toLowerCase()
+            .includes(q)
+          return { s, matched, score: matched.length + (nameHit ? 1 : 0) }
+        })
+        .filter((h) => h.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit)
+      return hits.map((h) => ({
+        id: h.s.id,
+        name: h.s.name,
+        matches: h.matched,
+        created_at: h.s.createdAt,
+        updated_at: h.s.updatedAt,
+      }))
+    }
     const id = parts[2]
     if (id) return coll(url).get(id) ?? null
     let list = [...coll(url).values()]
@@ -80,16 +111,25 @@ vi.mock('@/lib/http-client', () => ({ apiGet, apiPut, apiPatch, apiDelete, apiPo
 
 // Override the global @/lib/db mock with the real module (which uses the mocked http-client)
 vi.mock('@/lib/db', async () => {
-  const actual = await vi.importActual<typeof import('./db')>('./db')
+  const actual = await vi.importActual<DbModule>('./db')
   return actual
 })
 
 import { chatDB, createChatDB, DbCircuitBreaker, type ChatSession, type ChatMessage } from './db'
 
-beforeEach(() => { store.clear() })
-afterEach(() => { store.clear() })
+beforeEach(() => {
+  store.clear()
+})
+afterEach(() => {
+  store.clear()
+})
 
-const testMsg: ChatMessage = { id: 'm1', role: 'user', content: 'hello', timestamp: new Date('2024-01-01') }
+const testMsg: ChatMessage = {
+  id: 'm1',
+  role: 'user',
+  content: 'hello',
+  timestamp: new Date('2024-01-01'),
+}
 
 const testSession: ChatSession = {
   id: 's1',
@@ -136,7 +176,7 @@ describe('chatDB', () => {
       await chatDB.saveSession({ ...testSession, id: 'c' })
       vi.useRealTimers()
       const all = await chatDB.loadSessions()
-      expect(all.map(s => s.id)).toEqual(['a', 'c', 'b'])
+      expect(all.map((s) => s.id)).toEqual(['a', 'c', 'b'])
     })
 
     it('returns empty array when no sessions', async () => {
@@ -205,27 +245,63 @@ describe('chatDB', () => {
 
   describe('pending messages', () => {
     it('savePendingMessage stores a message', async () => {
-      await chatDB.savePendingMessage({ id: 'p1', sessionId: 's1', content: 'test', createdAt: '2024-01-01', retries: 0 })
+      await chatDB.savePendingMessage({
+        id: 'p1',
+        sessionId: 's1',
+        content: 'test',
+        createdAt: '2024-01-01',
+        retries: 0,
+      })
       const all = await chatDB.getPendingMessages()
       expect(all).toHaveLength(1)
     })
 
     it('getPendingMessages returns sorted by createdAt', async () => {
-      await chatDB.savePendingMessage({ id: 'p2', sessionId: 's1', content: 'b', createdAt: '2024-01-02', retries: 0 })
-      await chatDB.savePendingMessage({ id: 'p1', sessionId: 's1', content: 'a', createdAt: '2024-01-01', retries: 0 })
+      await chatDB.savePendingMessage({
+        id: 'p2',
+        sessionId: 's1',
+        content: 'b',
+        createdAt: '2024-01-02',
+        retries: 0,
+      })
+      await chatDB.savePendingMessage({
+        id: 'p1',
+        sessionId: 's1',
+        content: 'a',
+        createdAt: '2024-01-01',
+        retries: 0,
+      })
       const all = await chatDB.getPendingMessages()
-      expect(all.map(p => p.id)).toEqual(['p1', 'p2'])
+      expect(all.map((p) => p.id)).toEqual(['p1', 'p2'])
     })
 
     it('deletePendingMessage removes by id', async () => {
-      await chatDB.savePendingMessage({ id: 'p1', sessionId: 's1', content: 'x', createdAt: '2024-01-01', retries: 0 })
+      await chatDB.savePendingMessage({
+        id: 'p1',
+        sessionId: 's1',
+        content: 'x',
+        createdAt: '2024-01-01',
+        retries: 0,
+      })
       await chatDB.deletePendingMessage('p1')
       expect(await chatDB.getPendingMessages()).toEqual([])
     })
 
     it('clearPendingMessages removes all', async () => {
-      await chatDB.savePendingMessage({ id: 'p1', sessionId: 's1', content: 'x', createdAt: '2024-01-01', retries: 0 })
-      await chatDB.savePendingMessage({ id: 'p2', sessionId: 's2', content: 'y', createdAt: '2024-01-02', retries: 0 })
+      await chatDB.savePendingMessage({
+        id: 'p1',
+        sessionId: 's1',
+        content: 'x',
+        createdAt: '2024-01-01',
+        retries: 0,
+      })
+      await chatDB.savePendingMessage({
+        id: 'p2',
+        sessionId: 's2',
+        content: 'y',
+        createdAt: '2024-01-02',
+        retries: 0,
+      })
       await chatDB.clearPendingMessages()
       expect(await chatDB.getPendingMessages()).toEqual([])
     })
@@ -267,11 +343,27 @@ describe('chatDB', () => {
         ...testSession,
         id: 'many',
         messages: [
-          { id: 'm1', role: 'user' as const, content: 'hello world', timestamp: new Date('2024-01-01') },
-          { id: 'm2', role: 'assistant' as const, content: 'hello again', timestamp: new Date('2024-01-01') },
+          {
+            id: 'm1',
+            role: 'user' as const,
+            content: 'hello world',
+            timestamp: new Date('2024-01-01'),
+          },
+          {
+            id: 'm2',
+            role: 'assistant' as const,
+            content: 'hello again',
+            timestamp: new Date('2024-01-01'),
+          },
         ],
       }
-      const sOne = { ...testSession, id: 'one', messages: [{ id: 'm3', role: 'user' as const, content: 'hello', timestamp: new Date('2024-01-01') }] }
+      const sOne = {
+        ...testSession,
+        id: 'one',
+        messages: [
+          { id: 'm3', role: 'user' as const, content: 'hello', timestamp: new Date('2024-01-01') },
+        ],
+      }
       await chatDB.saveSession(sMany)
       await chatDB.saveSession(sOne)
       const results = await chatDB.searchAllSessions('hello')
@@ -285,7 +377,7 @@ describe('chatDB', () => {
       await chatDB.addKnowledge({ id: 'k1', content: 'old', timestamp: 1 })
       await chatDB.addKnowledge({ id: 'k2', content: 'new', timestamp: 2 })
       const all = await chatDB.getKnowledge()
-      expect(all.map(k => k.id)).toEqual(['k2', 'k1'])
+      expect(all.map((k) => k.id)).toEqual(['k2', 'k1'])
     })
 
     it('updateKnowledge merges content', async () => {
@@ -318,10 +410,30 @@ describe('chatDB', () => {
 
   describe('prompts', () => {
     it('savePrompt then importPrompts then getPrompts', async () => {
-      await chatDB.savePrompt({ id: 'p1', name: 'n', description: 'd', prompt: 'p', icon: '', category: 'a', createdAt: 1, updatedAt: 1 })
-      await chatDB.importPrompts([{ id: 'p2', name: 'n2', description: 'd2', prompt: 'p2', icon: '', category: 'b', createdAt: 2, updatedAt: 2 }])
+      await chatDB.savePrompt({
+        id: 'p1',
+        name: 'n',
+        description: 'd',
+        prompt: 'p',
+        icon: '',
+        category: 'a',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      await chatDB.importPrompts([
+        {
+          id: 'p2',
+          name: 'n2',
+          description: 'd2',
+          prompt: 'p2',
+          icon: '',
+          category: 'b',
+          createdAt: 2,
+          updatedAt: 2,
+        },
+      ])
       const all = await chatDB.getPrompts()
-      expect(all.map(p => p.id).sort()).toEqual(['p1', 'p2'])
+      expect(all.map((p) => p.id).sort()).toEqual(['p1', 'p2'])
       await chatDB.deletePrompt('p1')
       expect(await chatDB.getPrompts()).toHaveLength(1)
     })
@@ -363,7 +475,9 @@ describe('chatDB — circuit breaker', () => {
     })
   }
 
-  afterEach(() => { apiPut.mockImplementation(realPut) })
+  afterEach(() => {
+    apiPut.mockImplementation(realPut)
+  })
 
   it('addError triggers the circuit breaker on server failure, then short-circuits', async () => {
     const { breaker, chatDB: fresh } = freshHandle()

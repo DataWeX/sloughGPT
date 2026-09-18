@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { ConsciousnessChatPanel } from './ConsciousnessChatPanel'
+import { ConsciousnessProvider } from '@/features/chat/contexts/ConsciousnessContext'
 import { emitConsciousness } from '@/lib/consciousness-bus'
 import type { ConsciousnessEvent } from '@/lib/consciousness-bus'
 import { consciousnessController } from '@/lib/consciousness-controller'
@@ -46,6 +47,15 @@ async function emitAndWait(event: ConsciousnessEvent) {
   })
 }
 
+// The panel consumes useConsciousness() — every render needs the provider.
+function renderPanel(open: boolean, onClose: () => void) {
+  return render(
+    <ConsciousnessProvider>
+      <ConsciousnessChatPanel open={open} onClose={onClose} />
+    </ConsciousnessProvider>,
+  )
+}
+
 describe('ConsciousnessChatPanel', () => {
   const onClose = vi.fn()
 
@@ -55,29 +65,29 @@ describe('ConsciousnessChatPanel', () => {
   })
 
   it('returns null when not open', () => {
-    const { container } = render(<ConsciousnessChatPanel open={false} onClose={onClose} />)
+    const { container } = renderPanel(false, onClose)
     expect(container.innerHTML).toBe('')
   })
 
   it('renders panel when open', () => {
-    render(<ConsciousnessChatPanel open={true} onClose={onClose} />)
+    renderPanel(true, onClose)
     expect(screen.getByText('Consciousness')).toBeDefined()
   })
 
   it('shows no-data message initially', () => {
-    render(<ConsciousnessChatPanel open={true} onClose={onClose} />)
+    renderPanel(true, onClose)
     expect(screen.getByText('No data yet')).toBeDefined()
   })
 
   it('calls onClose on close button click', () => {
-    render(<ConsciousnessChatPanel open={true} onClose={onClose} />)
+    renderPanel(true, onClose)
     const closeBtn = screen.getByRole('button', { name: /Close consciousness panel/i })
     fireEvent.click(closeBtn)
     expect(onClose).toHaveBeenCalled()
   })
 
   it('displays qualia bars when event received', async () => {
-    render(<ConsciousnessChatPanel open={true} onClose={onClose} />)
+    renderPanel(true, onClose)
     await emitAndWait({
       level: 2,
       qualia: { joy: 0.8, curiosity: 0.6 },
@@ -90,7 +100,7 @@ describe('ConsciousnessChatPanel', () => {
   })
 
   it('shows level badge when event received', async () => {
-    render(<ConsciousnessChatPanel open={true} onClose={onClose} />)
+    renderPanel(true, onClose)
     await emitAndWait({
       level: 3,
       qualia: {},
@@ -102,7 +112,7 @@ describe('ConsciousnessChatPanel', () => {
   })
 
   it('expand/collapse toggles beliefs visibility', async () => {
-    render(<ConsciousnessChatPanel open={true} onClose={onClose} />)
+    renderPanel(true, onClose)
     await emitAndWait({
       level: 1,
       qualia: { joy: 0.5 },
@@ -119,7 +129,7 @@ describe('ConsciousnessChatPanel', () => {
   })
 
   it('reflect button calls consciousnessController.reflect', async () => {
-    render(<ConsciousnessChatPanel open={true} onClose={onClose} />)
+    renderPanel(true, onClose)
     const expandBtn = screen.getByRole('button', { name: /Expand panel/i })
     fireEvent.click(expandBtn)
     const reflectBtn = screen.getByRole('button', { name: /Reflect/i })
@@ -130,7 +140,7 @@ describe('ConsciousnessChatPanel', () => {
   })
 
   it('seed button calls consciousnessController.seedData', async () => {
-    render(<ConsciousnessChatPanel open={true} onClose={onClose} />)
+    renderPanel(true, onClose)
     const expandBtn = screen.getByRole('button', { name: /Expand panel/i })
     fireEvent.click(expandBtn)
     const seedBtn = screen.getByRole('button', { name: /Seed Data/i })
@@ -141,12 +151,12 @@ describe('ConsciousnessChatPanel', () => {
   })
 
   it('star rating renders 5 stars', async () => {
-    render(<ConsciousnessChatPanel open={true} onClose={onClose} />)
+    renderPanel(true, onClose)
     const expandBtn = screen.getByRole('button', { name: /Expand panel/i })
     fireEvent.click(expandBtn)
-    const stars = screen.getAllByRole('button').filter(b =>
-      b.getAttribute('aria-label')?.includes('star')
-    )
+    const stars = screen
+      .getAllByRole('button')
+      .filter((b) => b.getAttribute('aria-label')?.includes('star'))
     expect(stars.length).toBe(5)
   })
 })

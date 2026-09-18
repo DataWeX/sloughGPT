@@ -8,7 +8,9 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/model-controller', () => ({
   modelController: {
     list: vi.fn().mockResolvedValue([]),
-    getHealth: vi.fn().mockResolvedValue({ status: 'healthy', model_type: null, model_loaded: false }),
+    getHealth: vi
+      .fn()
+      .mockResolvedValue({ status: 'healthy', model_type: null, model_loaded: false }),
     load: vi.fn(),
     unload: vi.fn(),
     getCacheUsage: vi.fn().mockResolvedValue({ used_gb: 0, limit_gb: 0, model_count: 0 }),
@@ -34,7 +36,8 @@ vi.mock('@/lib/benchmark-controller', () => ({
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) => selector({ addToast: vi.fn() }),
+  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
+    selector({ addToast: vi.fn() }),
 }))
 
 vi.mock('@/hooks/useLiveStatus', () => ({
@@ -45,7 +48,11 @@ vi.mock('@/lib/query/api-hooks', () => ({
   useModels: () => ({ data: [], isLoading: false, refetch: vi.fn() }),
   useSouls: () => ({ data: { souls: [], current_soul: null }, isLoading: false, refetch: vi.fn() }),
   useCurrentSoul: () => ({ data: null, refetch: vi.fn() }),
-  useCheckpoints: () => ({ data: { checkpoints: [], active_checkpoint: null }, isLoading: false, refetch: vi.fn() }),
+  useCheckpoints: () => ({
+    data: { checkpoints: [], active_checkpoint: null },
+    isLoading: false,
+    refetch: vi.fn(),
+  }),
   useSwitchSoul: () => ({ mutateAsync: vi.fn() }),
 }))
 
@@ -58,10 +65,30 @@ vi.mock('@/lib/inference-display', () => ({
 }))
 
 vi.mock('next/dynamic', () => {
+  // ESM imports are unavailable inside mock factories — require is the
+  // documented workaround for pulling React here.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const React = require('react')
   return {
     __esModule: true,
-    default: () => (props: Record<string, unknown>) => React.createElement('div', { 'data-testid': 'dynamic' }),
+    // Resolve the loader so per-module mocks below apply instead of
+    // swallowing every dynamic card behind a stub.
+    default: (loader: () => Promise<unknown>) => {
+      return function DynamicMock(props: Record<string, unknown>) {
+        const [Mod, setMod] = React.useState<React.ComponentType | null>(null)
+        React.useEffect(() => {
+          let live = true
+          loader().then((m: any) => {
+            if (live) setMod(() => m.default || m || null)
+          })
+          return () => {
+            live = false
+          }
+        }, [])
+        if (!Mod) return React.createElement('div', { 'data-testid': 'dynamic' })
+        return React.createElement(Mod as any, props)
+      }
+    },
   }
 })
 
@@ -95,6 +122,26 @@ vi.mock('@/components/models/ModelPlaygroundCard', () => ({
 
 vi.mock('@/components/models/ModelCacheCard', () => ({
   default: () => <div data-testid="model-cache" />,
+}))
+
+vi.mock('@/components/models/ModelUsageCard', () => ({
+  default: () => <div data-testid="model-usage" />,
+}))
+
+vi.mock('@/components/models/DownloadsCard', () => ({
+  default: () => <div data-testid="downloads" />,
+}))
+
+vi.mock('@/components/models/EngineStatusCard', () => ({
+  default: () => <div data-testid="engine-status" />,
+}))
+
+vi.mock('@/components/models/ProviderDiagnosticsCard', () => ({
+  default: () => <div data-testid="provider-diagnostics" />,
+}))
+
+vi.mock('@/components/compare/VisualComparisonCard', () => ({
+  default: () => <div data-testid="visual-comparison" />,
 }))
 
 vi.mock('@/components/models/QuantizationCard', () => ({

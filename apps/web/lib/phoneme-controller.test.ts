@@ -29,7 +29,7 @@ describe('phonemeController', () => {
 
       expect(result.phonemes).toEqual(['HH', 'EH', 'L', 'OW'])
       expect(result.language).toBe('en')
-      expect(mockApiPost).toHaveBeenCalledWith('/multimodal/encode-phonemes', { text: 'hello', language: 'en' })
+      expect(mockApiPost).toHaveBeenCalledWith('/phoneme/encode', { text: 'hello', language: 'en' })
     })
 
     it('handles auto-detect language', async () => {
@@ -44,7 +44,10 @@ describe('phonemeController', () => {
       const result = await phonemeController.encode('hallo')
 
       expect(result.language).toBe('de')
-      expect(mockApiPost).toHaveBeenCalledWith('/multimodal/encode-phonemes', { text: 'hallo', language: undefined })
+      expect(mockApiPost).toHaveBeenCalledWith('/phoneme/encode', {
+        text: 'hallo',
+        language: undefined,
+      })
     })
   })
 
@@ -77,7 +80,10 @@ describe('phonemeController', () => {
         duration_sec: 1.5,
         elapsed_ms: 120,
         spectrogram: {
-          data: [[0.1, 0.2], [0.3, 0.4]],
+          data: [
+            [0.1, 0.2],
+            [0.3, 0.4],
+          ],
           n_mels: 2,
           n_frames: 2,
         },
@@ -88,7 +94,10 @@ describe('phonemeController', () => {
       expect(result.audio).toBe('data:audio/wav;base64,abc123')
       expect(result.duration_sec).toBe(1.5)
       expect(result.spectrogram).toEqual({
-        data: [[0.1, 0.2], [0.3, 0.4]],
+        data: [
+          [0.1, 0.2],
+          [0.3, 0.4],
+        ],
         n_mels: 2,
         n_frames: 2,
       })
@@ -113,7 +122,7 @@ describe('phonemeController', () => {
   describe('PHONEME_LANGUAGES', () => {
     it('contains all supported languages', () => {
       expect(PHONEME_LANGUAGES).toHaveLength(6)
-      expect(PHONEME_LANGUAGES.map(l => l.value)).toEqual(['en', 'de', 'fr', 'es', 'it', 'pt'])
+      expect(PHONEME_LANGUAGES.map((l) => l.value)).toEqual(['en', 'de', 'fr', 'es', 'it', 'pt'])
     })
   })
 })
