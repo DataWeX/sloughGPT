@@ -102,9 +102,13 @@ class RAGService:
                         metadata=doc.get("metadata", {}),
                         chunk_size=doc.get("chunk_size", 512),
                         overlap=doc.get("overlap", 50),
+                        rebuild_index=False,
                     )
                     loaded += 1
                 if loaded:
+                    # Single index build for the whole bulk load (per-document
+                    # rebuilds are O(n^2)).
+                    self.rag.retriever.build_index()
                     logger.debug("Loaded %d documents from MogDB RAG store", loaded)
                     return
             except Exception as e:
@@ -129,8 +133,13 @@ class RAGService:
                         metadata=doc.get("metadata", {}),
                         chunk_size=doc.get("chunk_size", 512),
                         overlap=doc.get("overlap", 50),
+                        rebuild_index=False,
                     )
                     loaded += 1
+            if loaded:
+                # Single index build for the whole bulk load (per-document
+                # rebuilds are O(n^2)).
+                self.rag.retriever.build_index()
             logger.debug("Loaded %d documents from legacy JSONL RAG store", loaded)
         except (OSError, json.JSONDecodeError) as e:
             logger.warning("Failed to load RAG documents: %s", e)

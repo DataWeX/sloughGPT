@@ -354,3 +354,63 @@ class TestProductionRAG:
         assert result["num_results"] > 0
         if result["results"]:
             assert "Alice" in result["results"][0]["content"]
+
+
+class TestBM25IdempotentIndex:
+    """Regression: index() must reset (bulk loads blew up O(n^2))."""
+
+    def _chunks(self, n=5):
+        return [
+            TextChunk(id=f"c{i}", content=f"document number {i} about cats", metadata={})
+            for i in range(n)
+        ]
+
+    def test_reindex_same_chunks_is_stable(self):
+        bm25 = BM25Indexer()
+        chunks = self._chunks()
+        bm25.index(chunks)
+        snapshot = (
+            list(bm25.doc_lengths),
+            dict(bm25.doc_freq),
+            {k: list(v) for k, v in bm25.inverted_index.items()},
+        )
+        bm25.index(chunks)
+        assert bm25.num_docs == len(chunks)
+        assert list(bm25.doc_lengths) == snapshot[0]
+        assert dict(bm25.doc_freq) == snapshot[1]
+        assert {k: list(v) for k, v in bm25.inverted_index.items()} == snapshot[2]
+
+    def test_no_triangular_growth(self):
+        bm25 = BM25Indexer()
+        bm25.index(self._chunks(5))
+        assert len(bm25.doc_lengths) == 5
+
+    def test_bulk_add_matches_per_doc_rebuild(self):
+        docs = [f"bulk document {i} about dogs and birds" for i in range(10)]
+        incremental = ProductionRAG()
+        for d in docs:
+            incremental.add_document(d)
+        bulk = ProductionRAG()
+        for d in docs:
+            bulk.add_document(d, rebuild_index=False)
+        bulk.retriever.build_index()
+        a = incremental.retriever.bm25
+        b = bulk.retriever.bm25
+        assert a.num_docs == b.num_docs == len(bulk.retriever.chunks)
+        assert list(a.doc_lengths) == list(b.doc_lengths)
+        assert dict(a.doc_freq) == dict(b.doc_freq)
+        assert {k: list(v) for k, v in a.inverted_index.items()} == {
+            k: list(v) for k, v in b.inverted_index.items()
+        }
+        # Both answer queries identically
+        ra = incremental.query("dogs", top_k=3)
+        rb = bulk.query("dogs", top_k=3)
+        assert [r["chunk_id"] for r in ra["results"]] == [r["chunk_id"] for r in rb["results"]]
+
+    def test_bulk_load_queries_correctly(self):
+        rag = ProductionRAG()
+        for i in range(20):
+            rag.add_document(f"training note {i} about neural networks", rebuild_index=False)
+        rag.retriever.build_index()
+        result = rag.query("neural networks", top_k=5)
+        assert result["num_results"] > 0

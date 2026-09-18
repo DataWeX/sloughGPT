@@ -16,7 +16,7 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def _isolated_rag_store(tmp_path):
+def _isolated_rag_store(tmp_path, monkeypatch):
     """Redirect RAG persistence to a temp directory for each test."""
     import domain.cognition._internal.rag_service as mod
 
@@ -24,6 +24,11 @@ def _isolated_rag_store(tmp_path):
     original_docs_file = mod._DOCUMENTS_FILE
     mod._DATA_DIR = tmp_path
     mod._DOCUMENTS_FILE = tmp_path / "documents.jsonl"
+    # The MogDB path is a separate module constant — without redirecting it,
+    # tests read the real store and persist test docs into it. It lives in a
+    # SIBLING dir (not under tmp_path) so directory scans in auto-ingest
+    # tests don't pick up the DB journal as a document.
+    monkeypatch.setattr(mod, "_RAG_DB_PATH", str(tmp_path.parent / (tmp_path.name + "_db")))
     yield
     mod._DATA_DIR = original_data_dir
     mod._DOCUMENTS_FILE = original_docs_file
