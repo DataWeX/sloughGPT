@@ -118,6 +118,9 @@ export const trainingFacade = {
     get startSelfTrain() {
       return selfCtl.start.bind(selfCtl)
     },
+    get stopSelfTrain() {
+      return selfCtl.stop.bind(selfCtl)
+    },
   },
   evaluation: {
     get run() {

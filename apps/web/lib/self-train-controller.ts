@@ -1,4 +1,4 @@
-import { apiGet } from './http-client'
+import { apiGet, apiPost } from './http-client'
 
 export interface SelfTrainStatus {
   jobId: string
@@ -15,7 +15,13 @@ export const selfTrainController = {
     return apiGet<SelfTrainStatus>('/self-train/status')
   },
 
-  async start(): Promise<{ jobId: string }> {
-    return apiGet<{ jobId: string }>('/self-train/start', {}, { method: 'POST' })
+  async start(params?: { model?: string; temperature?: number; forever?: boolean }): Promise<{
+    jobId: string
+  }> {
+    return apiPost<{ jobId: string }>('/self-train/start', params ?? {})
+  },
+
+  async stop(): Promise<{ status: string }> {
+    return apiPost<{ status: string }>('/self-train/stop')
   },
 }
