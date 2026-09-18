@@ -159,33 +159,43 @@ def cmd_resolve(args: argparse.Namespace):
     limit = args.limit
     use_browser = args.browser
     fallback = args.fallback
+    # --best is the scriptable mode: stdout carries ONLY the URL so
+    # `> urls.txt` and pipes stay clean; chatter goes to stderr.
+    quiet = bool(args.best)
+
+    def _emit(msg: str) -> None:
+        print(msg, file=sys.stderr if quiet else sys.stdout)
 
     if use_browser:
-        print(f"Resolving {url} (browser mode)...")
+        _emit(f"Resolving {url} (browser mode)...")
         from .resolve import resolve_page_browser
 
         links = resolve_page_browser(
             url,
             headless=True,
-            on_progress=lambda msg: print(f"  {msg}"),
+            on_progress=lambda msg: _emit(f"  {msg}"),
         )
     elif fallback:
-        print(f"Resolving {url} (HTTP + browser fallback)...")
+        _emit(f"Resolving {url} (HTTP + browser fallback)...")
         from .resolve import resolve_with_browser_fallback
 
         links = resolve_with_browser_fallback(
             url,
-            on_progress=lambda msg: print(f"  {msg}"),
+            on_progress=lambda msg: _emit(f"  {msg}"),
         )
     else:
-        print(f"Resolving {url}...")
+        _emit(f"Resolving {url}...")
         from .resolve import resolve_page
 
-        links = resolve_page(url, on_progress=lambda msg: print(f"  {msg}"))
+        links = resolve_page(url, on_progress=lambda msg: _emit(f"  {msg}"))
 
     if not links:
-        print("No download links found.")
+        _emit("No download links found.")
         sys.exit(1)
+
+    if quiet:
+        print(links[0].url)
+        return
 
     print(f"\nFound {len(links)} candidate(s):\n")
     for i, link in enumerate(links[:limit], 1):
@@ -193,9 +203,6 @@ def cmd_resolve(args: argparse.Namespace):
         ext = f" ({link.extension})" if link.extension else ""
         title = f" — {link.title}" if link.title else ""
         print(f"  {i}. [{link.confidence:.2f}] {link.url}{ext}{title}{marker}")
-
-    if args.best:
-        print(f"\nBest: {links[0].url}")
 
 
 # ---------------------------------------------------------------------------

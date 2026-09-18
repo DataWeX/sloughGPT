@@ -105,7 +105,7 @@ class TestUrl:
 
     def test_bad_url_exits(self, range_server):
         dest = str(Path("/tmp/nonexistent_cli_out.bin"))
-        with pytest.raises(SystemExit) as exc:
+        with pytest.raises(SystemExit):
             cli.cmd_url(
                 type(
                     "A",
@@ -113,4 +113,68 @@ class TestUrl:
                     {"url": "http://127.0.0.1:1/missing", "dest": dest, "compressed": False},
                 )
             )
+
+
+def _resolve_args(**over):
+    base = {
+        "url": "https://example.com/page",
+        "limit": 10,
+        "browser": False,
+        "fallback": False,
+        "best": False,
+    }
+    base.update(over)
+    return type("A", (), base)
+
+
+def _links():
+    from downcraft.resolve.scraper import ResolvedLink
+
+    return [
+        ResolvedLink(
+            url="https://cdn.example.com/f.rar", confidence=0.9, extension=".rar", source="http"
+        ),
+        ResolvedLink(
+            url="https://example.com/g.zip", confidence=0.4, extension=".zip", source="http"
+        ),
+    ]
+
+
+class TestResolve:
+    def test_lists_candidates_by_default(self, capsys):
+        with patch("downcraft.resolve.resolve_page", return_value=_links()):
+            cli.cmd_resolve(_resolve_args())
+        out = capsys.readouterr().out
+        assert "Found 2 candidate(s)" in out
+        assert "https://cdn.example.com/f.rar" in out
+        assert "https://example.com/g.zip" in out
+
+    def test_best_prints_only_url_to_stdout(self, capsys):
+        with patch("downcraft.resolve.resolve_page", return_value=_links()):
+            cli.cmd_resolve(_resolve_args(best=True))
+        captured = capsys.readouterr()
+        assert captured.out == "https://cdn.example.com/f.rar\n"
+        assert "Resolving" in captured.err
+
+    def test_best_browser_mode_clean_stdout(self, capsys):
+        with patch("downcraft.resolve.resolve_page_browser", return_value=_links()):
+            cli.cmd_resolve(_resolve_args(best=True, browser=True))
+        captured = capsys.readouterr()
+        assert captured.out == "https://cdn.example.com/f.rar\n"
+        assert "browser mode" in captured.err
+
+    def test_no_links_exits_one(self, capsys):
+        with patch("downcraft.resolve.resolve_page", return_value=[]):
+            with pytest.raises(SystemExit) as exc:
+                cli.cmd_resolve(_resolve_args())
+        assert exc.value.code == 1
+
+    def test_no_links_best_exits_one_quiet(self, capsys):
+        with patch("downcraft.resolve.resolve_page", return_value=[]):
+            with pytest.raises(SystemExit) as exc:
+                cli.cmd_resolve(_resolve_args(best=True))
+        captured = capsys.readouterr()
+        assert exc.value.code == 1
+        assert captured.out == ""
+        assert "No download links found" in captured.err
         assert exc.value.code == 1
