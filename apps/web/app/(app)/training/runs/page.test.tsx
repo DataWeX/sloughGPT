@@ -6,25 +6,55 @@ vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: (...a: any[]) => a.join(' '),
-    Button: ({ children, onClick, disabled, className }: any) => <button onClick={onClick} disabled={disabled} className={className}>{children}</button>,
+    Button: ({ children, onClick, disabled, className }: any) => (
+      <button onClick={onClick} disabled={disabled} className={className}>
+        {children}
+      </button>
+    ),
     Card: ({ children, className }: any) => <div className={className}>{children}</div>,
     CardContent: ({ children, className }: any) => <div className={className}>{children}</div>,
     Badge: ({ children, className }: any) => <span className={className}>{children}</span>,
     StatusBadge: ({ children }: any) => <span>{children}</span>,
     KpiGrid: ({ children }: any) => <div>{children}</div>,
-    StatCard: ({ label, value }: any) => <div><span>{label}</span><span>{String(value)}</span></div>,
-    SectionHeader: ({ title, description }: any) => <div><h2>{title}</h2>{description ? <p>{description}</p> : null}</div>,
-    Input: ({ value, onChange, placeholder, className, onKeyDown }: any) => <input value={value} onChange={onChange} placeholder={placeholder} className={className} onKeyDown={onKeyDown} />,
+    StatCard: ({ label, value }: any) => (
+      <div>
+        <span>{label}</span>
+        <span>{String(value)}</span>
+      </div>
+    ),
+    SectionHeader: ({ title, description }: any) => (
+      <div>
+        <h2>{title}</h2>
+        {description ? <p>{description}</p> : null}
+      </div>
+    ),
+    Input: ({ value, onChange, placeholder, className, onKeyDown }: any) => (
+      <input
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className={className}
+        onKeyDown={onKeyDown}
+      />
+    ),
   }
 })
 
 vi.mock('@/components/PageContainer', () => ({
-  PageContainer: ({ children, title, toolbar }: any) => <div data-testid="page-container" data-title={title}>{toolbar}{children}</div>,
+  PageContainer: ({ children, title, toolbar }: any) => (
+    <div data-testid="page-container" data-title={title}>
+      {toolbar}
+      {children}
+    </div>
+  ),
 }))
 
 vi.mock('@/components/AppRouteHeader', () => ({
   AppRouteHeader: ({ left, right }: any) => (
-    <div data-testid="app-route-header"><div>{left}</div><div>{right}</div></div>
+    <div data-testid="app-route-header">
+      <div>{left}</div>
+      <div>{right}</div>
+    </div>
   ),
   AppRouteHeaderLead: ({ title }: any) => <span>{title}</span>,
 }))
@@ -100,7 +130,10 @@ beforeEach(() => {
   mockBulkAddTag.mockResolvedValue({})
   mockBulkBookmark.mockResolvedValue({})
   vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:fake'), revokeObjectURL: vi.fn() })
-  vi.stubGlobal('confirm', vi.fn(() => true))
+  vi.stubGlobal(
+    'confirm',
+    vi.fn(() => true),
+  )
   vi.stubGlobal('alert', vi.fn())
 })
 
@@ -121,7 +154,12 @@ describe('TrainingRunsPage', () => {
 
   it('shows loading state with skeleton cards', async () => {
     let resolvePromise: any
-    mockFilterTrainingRuns.mockImplementation(() => new Promise(r => { resolvePromise = r }))
+    mockFilterTrainingRuns.mockImplementation(
+      () =>
+        new Promise((r) => {
+          resolvePromise = r
+        }),
+    )
     render(<TrainingRunsPage />)
     const cards = document.querySelectorAll('.animate-pulse')
     expect(cards.length).toBe(5)
@@ -139,8 +177,25 @@ describe('TrainingRunsPage', () => {
   it('renders training run cards after data loads', async () => {
     mockFilterTrainingRuns.mockResolvedValue({
       runs: [
-        { run_id: 'run-1', model: 'gpt2', method: 'lora', converged: true, quality_score: 0.85, timestamp: 1700000000, training_time_s: 120, epochs: 3, final_loss: 0.5 },
-        { run_id: 'run-2', model: 'llama', method: 'qlora', converged: false, timestamp: 1700000100, training_time_s: 45 },
+        {
+          run_id: 'run-1',
+          model: 'gpt2',
+          method: 'lora',
+          converged: true,
+          quality_score: 0.85,
+          timestamp: 1700000000,
+          training_time_s: 120,
+          epochs: 3,
+          final_loss: 0.5,
+        },
+        {
+          run_id: 'run-2',
+          model: 'llama',
+          method: 'qlora',
+          converged: false,
+          timestamp: 1700000100,
+          training_time_s: 45,
+        },
       ],
     })
     render(<TrainingRunsPage />)
