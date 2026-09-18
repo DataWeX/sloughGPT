@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { Card, CardContent, Button, Badge, Input } from '@sloughgpt/strui'
+import { Card, CardContent, Button, Badge, Input, KpiGrid, StatCard, SectionHeader, StatusBadge } from '@sloughgpt/strui'
 import { settingsController } from '@/lib/settings-controller'
 import { Clock, Download, BarChart3, Trash2, Search, X, Tag, Plus, GitCompare, Star, Copy, CheckSquare, Square } from 'lucide-react'
 
@@ -42,10 +42,8 @@ function formatDuration(secs?: number) {
 
 function qualityBadge(score?: number) {
   if (score === undefined || score === null) return null
-  const color = score >= 0.8 ? 'bg-green-100 text-green-800' :
-                score >= 0.6 ? 'bg-yellow-100 text-yellow-800' :
-                'bg-red-100 text-red-800'
-  return <Badge className={color}>{Math.round(score * 100)}%</Badge>
+  const tone = score >= 0.8 ? 'success' : score >= 0.6 ? 'warning' : 'destructive'
+  return <StatusBadge tone={tone}>{Math.round(score * 100)}%</StatusBadge>
 }
 
 function downloadBlob(content: string, filename: string, mime: string) {
@@ -278,7 +276,46 @@ export default function TrainingRunsPage() {
   }
 
   return (
-    <PageContainer title="Training Runs">
+    <PageContainer
+      title="Training Runs"
+      toolbar={
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search runs, tags, notes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8"
+              aria-label="Search runs"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-2 top-2.5" aria-label="Clear search">
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+          <select
+            value={filterModel}
+            onChange={(e) => setFilterModel(e.target.value)}
+            className="text-sm border rounded px-2 py-1.5"
+            aria-label="Filter by model"
+          >
+            <option value="">All Models</option>
+            {models.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select
+            value={filterMethod}
+            onChange={(e) => setFilterMethod(e.target.value)}
+            className="text-sm border rounded px-2 py-1.5"
+            aria-label="Filter by method"
+          >
+            <option value="">All Methods</option>
+            {methods.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+      }
+    >
       <AppRouteHeader
         left={<AppRouteHeaderLead title="Training Runs" />}
         right={
@@ -287,6 +324,7 @@ export default function TrainingRunsPage() {
               value={format}
               onChange={(e) => setFormat(e.target.value as 'json' | 'csv')}
               className="text-sm border rounded px-2 py-1"
+              aria-label="Export format"
             >
               <option value="json">JSON</option>
               <option value="csv">CSV</option>
@@ -297,66 +335,14 @@ export default function TrainingRunsPage() {
           </div>
         }
       />
+      <SectionHeader title="Run history" description={`${filteredRuns.length} of ${runs.length} shown`} />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <Card>
-          <CardContent className="pt-4 text-center">
-            <div className="text-2xl font-bold">{summary.total}</div>
-            <div className="text-xs text-muted-foreground">Total Runs</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 text-center">
-            <div className="text-2xl font-bold text-green-600">{summary.converged}</div>
-            <div className="text-xs text-muted-foreground">Converged</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 text-center">
-            <div className="text-2xl font-bold">{Math.round(summary.avgQuality * 100)}%</div>
-            <div className="text-xs text-muted-foreground">Avg Quality</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 text-center">
-            <div className="text-2xl font-bold">{summary.avgLoss.toFixed(4)}</div>
-            <div className="text-xs text-muted-foreground">Avg Loss</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search runs, tags, notes..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-2 top-2.5">
-              <X className="h-4 w-4 text-muted-foreground" />
-            </button>
-          )}
-        </div>
-        <select
-          value={filterModel}
-          onChange={(e) => setFilterModel(e.target.value)}
-          className="text-sm border rounded px-2 py-1.5"
-        >
-          <option value="">All Models</option>
-          {models.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <select
-          value={filterMethod}
-          onChange={(e) => setFilterMethod(e.target.value)}
-          className="text-sm border rounded px-2 py-1.5"
-        >
-          <option value="">All Methods</option>
-          {methods.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-      </div>
+      <KpiGrid columns={4}>
+        <StatCard label="Total Runs" value={summary.total} numeric />
+        <StatCard label="Converged" value={summary.converged} numeric />
+        <StatCard label="Avg Quality" value={`${Math.round(summary.avgQuality * 100)}%`} numeric />
+        <StatCard label="Avg Loss" value={summary.avgLoss.toFixed(4)} numeric />
+      </KpiGrid>
 
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-2 mb-4 p-3 bg-muted rounded-lg">
@@ -442,13 +428,13 @@ export default function TrainingRunsPage() {
                           <Badge variant="secondary" className="text-xs">{run.method}</Badge>
                         )}
                         {run.converged && (
-                          <Badge className="bg-green-100 text-green-800 text-xs">converged</Badge>
+                          <StatusBadge tone="success">converged</StatusBadge>
                         )}
                         {qualityBadge(run.quality_score)}
                         {(run.tags || []).map(tag => (
-                          <Badge key={tag} className="bg-purple-100 text-purple-800 text-xs">
+                          <StatusBadge key={tag} tone="info">
                             <Tag className="h-2.5 w-2.5 mr-0.5" />{tag}
-                          </Badge>
+                          </StatusBadge>
                         ))}
                       </div>
                       <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">

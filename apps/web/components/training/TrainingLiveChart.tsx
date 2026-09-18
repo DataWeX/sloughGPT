@@ -2,7 +2,15 @@
 
 import { memo, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, StatCard, KpiGrid } from '@sloughgpt/strui'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from 'recharts'
 
 interface LossPoint {
   step: number
@@ -12,7 +20,7 @@ interface LossPoint {
 
 interface TrainingLiveChartProps {
   lossHistory: LossPoint[]
-  progress: number
+  progress: number | null
   epoch: number
   totalEpochs: number
   globalStep: number
@@ -21,14 +29,25 @@ interface TrainingLiveChartProps {
   eta: number | null
 }
 
-function LossTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+function LossTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: Array<{ name: string; value: number; color: string }>
+  label?: string
+}) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-card border border-border rounded-lg px-2.5 py-1.5 shadow-lg text-[10px] font-numeric">
       <p className="text-muted-foreground/60 mb-0.5">Step {label}</p>
       {payload.map((entry, i) => (
         <div key={i} className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+          <span
+            className="w-1.5 h-1.5 rounded-full shrink-0"
+            style={{ backgroundColor: entry.color }}
+          />
           <span className="text-muted-foreground/60">{entry.name}:</span>
           <span className="font-medium tabular-nums">{entry.value.toFixed(4)}</span>
         </div>
@@ -56,15 +75,15 @@ export const TrainingLiveChart = memo(function TrainingLiveChart({
 }: TrainingLiveChartProps) {
   const chartData = useMemo(() => {
     if (lossHistory.length === 0) return []
-    return lossHistory.map(p => ({
+    return lossHistory.map((p) => ({
       step: p.step,
       loss: p.loss,
       type: p.isEval ? 'eval' : 'train',
     }))
   }, [lossHistory])
 
-  const trainData = useMemo(() => chartData.filter(d => d.type === 'train'), [chartData])
-  const evalData = useMemo(() => chartData.filter(d => d.type === 'eval'), [chartData])
+  const trainData = useMemo(() => chartData.filter((d) => d.type === 'train'), [chartData])
+  const evalData = useMemo(() => chartData.filter((d) => d.type === 'eval'), [chartData])
 
   return (
     <Card>
@@ -73,9 +92,18 @@ export const TrainingLiveChart = memo(function TrainingLiveChart({
       </CardHeader>
       <CardContent className="space-y-3">
         <KpiGrid columns={4}>
-          <StatCard label="Progress" value={`${(progress * 100).toFixed(1)}%`} />
-          <StatCard label="Epoch" value={totalEpochs > 0 ? `${epoch}/${totalEpochs}` : `${epoch}`} />
-          <StatCard label="Step" value={totalSteps > 0 ? `${globalStep}/${totalSteps}` : `${globalStep}`} />
+          <StatCard
+            label="Progress"
+            value={progress != null ? `${(progress * 100).toFixed(1)}%` : '--'}
+          />
+          <StatCard
+            label="Epoch"
+            value={totalEpochs > 0 ? `${epoch}/${totalEpochs}` : `${epoch}`}
+          />
+          <StatCard
+            label="Step"
+            value={totalSteps > 0 ? `${globalStep}/${totalSteps}` : `${globalStep}`}
+          />
           <StatCard label="ETA" value={formatEta(eta)} />
         </KpiGrid>
 

@@ -9,6 +9,7 @@ import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoint
 import { chatDB } from '@/lib/db'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { trackEvent } from '@/lib/dev-log'
+import { appShellStore, writeTraining } from '@/lib/app-shell'
 
 export type Method = 'distill' | 'finetune' | 'vlm' | 'native'
 export type InputMode = 'dataset' | 'text'
@@ -28,11 +29,55 @@ export interface TrainingPreset {
 }
 
 export const BUILT_IN_PRESETS: TrainingPreset[] = [
-  { name: 'Quick test', description: 'Fast iteration, minimal training', method: 'distill', epochs: 3, lr: 5e-4, batchSize: 32 },
-  { name: 'Personality', description: 'Train character traits from conversations', method: 'distill', epochs: 20, lr: 3e-4, batchSize: 16 },
-  { name: 'Fine-tune LoRA', description: 'Adapt an existing model with LoRA', method: 'finetune', epochs: 10, lr: 1e-4, batchSize: 8, useLoRA: true },
-  { name: 'Native small', description: 'Tiny transformer from scratch (~150K)', method: 'native', epochs: 100, lr: 3e-4, batchSize: 16, nativeEmbed: 128, nativeLayers: 2, nativeHeads: 4, nativeBlockSize: 128 },
-  { name: 'Native large', description: 'Best quality from scratch (~1M)', method: 'native', epochs: 300, lr: 1e-4, batchSize: 8, nativeEmbed: 256, nativeLayers: 4, nativeHeads: 8, nativeBlockSize: 256 },
+  {
+    name: 'Quick test',
+    description: 'Fast iteration, minimal training',
+    method: 'distill',
+    epochs: 3,
+    lr: 5e-4,
+    batchSize: 32,
+  },
+  {
+    name: 'Personality',
+    description: 'Train character traits from conversations',
+    method: 'distill',
+    epochs: 20,
+    lr: 3e-4,
+    batchSize: 16,
+  },
+  {
+    name: 'Fine-tune LoRA',
+    description: 'Adapt an existing model with LoRA',
+    method: 'finetune',
+    epochs: 10,
+    lr: 1e-4,
+    batchSize: 8,
+    useLoRA: true,
+  },
+  {
+    name: 'Native small',
+    description: 'Tiny transformer from scratch (~150K)',
+    method: 'native',
+    epochs: 100,
+    lr: 3e-4,
+    batchSize: 16,
+    nativeEmbed: 128,
+    nativeLayers: 2,
+    nativeHeads: 4,
+    nativeBlockSize: 128,
+  },
+  {
+    name: 'Native large',
+    description: 'Best quality from scratch (~1M)',
+    method: 'native',
+    epochs: 300,
+    lr: 1e-4,
+    batchSize: 8,
+    nativeEmbed: 256,
+    nativeLayers: 4,
+    nativeHeads: 8,
+    nativeBlockSize: 256,
+  },
 ]
 
 export interface TrainingFormState {
@@ -60,6 +105,7 @@ export interface TrainingFormState {
   loadingFinetunedModel: boolean
   resumeCheckpoint: string
   allJobs: TrainingJob[]
+  clearOptimisticJobs: () => void
   setMethod: (m: Method) => void
   setInputMode: (m: InputMode) => void
   setTextInput: (s: string) => void
@@ -127,7 +173,7 @@ export function useTrainingForm(
   const [configLoaded, setConfigLoaded] = useState(false)
 
   useEffect(() => {
-    chatDB.getKV<SavedConfig>(TRAINING_CONFIG_KEY).then(saved => {
+    chatDB.getKV<SavedConfig>(TRAINING_CONFIG_KEY).then((saved) => {
       if (saved) {
         if (saved.method) setMethod(saved.method)
         if (saved.inputMode) setInputMode(saved.inputMode)
@@ -161,20 +207,25 @@ export function useTrainingForm(
 
   useEffect(() => {
     let cancelled = false
-    chatDB.getKV<TrainingPreset[]>('training-presets').then(presets => {
-      if (!cancelled && presets) {
-        setCustomPresets(presets)
-      }
-    }).catch(() => {
-      // ignore load errors — keep empty presets
-    })
-    return () => { cancelled = true }
+    chatDB
+      .getKV<TrainingPreset[]>('training-presets')
+      .then((presets) => {
+        if (!cancelled && presets) {
+          setCustomPresets(presets)
+        }
+      })
+      .catch(() => {
+        // ignore load errors — keep empty presets
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const saveCustomPreset = useCallback((preset: TrainingPreset) => {
     trackEvent('training_preset_saved', { name: preset.name })
-    setCustomPresets(prev => {
-      const next = [...prev.filter(p => p.name !== preset.name), preset]
+    setCustomPresets((prev) => {
+      const next = [...prev.filter((p) => p.name !== preset.name), preset]
       chatDB.setKV('training-presets', next).catch(() => {})
       return next
     })
@@ -182,14 +233,15 @@ export function useTrainingForm(
 
   const deleteCustomPreset = useCallback((name: string) => {
     trackEvent('training_preset_deleted', { name })
-    setCustomPresets(prev => {
-      const next = prev.filter(p => p.name !== name)
+    setCustomPresets((prev) => {
+      const next = prev.filter((p) => p.name !== name)
       chatDB.setKV('training-presets', next).catch(() => {})
       return next
     })
   }, [])
 
   const [optimisticJobs, setOptimisticJobs] = useState<TrainingJob[]>([])
+  const clearOptimisticJobs = useCallback(() => setOptimisticJobs([]), [])
   const allJobs = [...optimisticJobs, ...checkpoints.jobs]
 
   // Clear optimistic jobs when training ends
@@ -199,20 +251,47 @@ export function useTrainingForm(
     }
   }, [session.phase])
 
+  // Drop phantom pending-* jobs once a real running job arrives from the server.
+  // Prevents Stop from targeting a fake id that 404s ("Could not stop training").
+  useEffect(() => {
+    if (checkpoints.jobs.some((j) => j.status === 'running' && !j.id.startsWith('pending-'))) {
+      setOptimisticJobs((prev) => (prev.length ? [] : prev))
+    }
+  }, [checkpoints.jobs])
+
   useEffect(() => {
     if (!configLoaded) return
     chatDB.setKV(TRAINING_CONFIG_KEY, {
-      method, inputMode, algo, trainingEpochs, trainingLR,
-      trainingBatchSize, selectedModel, useLoRA,
+      method,
+      inputMode,
+      algo,
+      trainingEpochs,
+      trainingLR,
+      trainingBatchSize,
+      selectedModel,
+      useLoRA,
     })
-  }, [method, inputMode, algo, trainingEpochs, trainingLR, trainingBatchSize, selectedModel, useLoRA, configLoaded])
+  }, [
+    method,
+    inputMode,
+    algo,
+    trainingEpochs,
+    trainingLR,
+    trainingBatchSize,
+    selectedModel,
+    useLoRA,
+    configLoaded,
+  ])
 
   useEffect(() => {
-    modelController.list().then(models => {
-      const ids = models.map(m => m.id)
-      setAvailableModels(ids)
-      setSelectedModel((prev: string) => prev || ids[0] || '')
-    }).catch(() => addToast('Could not load model list — training may be limited', 'info'))
+    modelController
+      .list()
+      .then((models) => {
+        const ids = models.map((m) => m.id)
+        setAvailableModels(ids)
+        setSelectedModel((prev: string) => prev || ids[0] || '')
+      })
+      .catch(() => addToast('Could not load model list — training may be limited', 'info'))
   }, [addToast])
 
   const applyPreset = useCallback((preset: TrainingPreset) => {
@@ -228,121 +307,250 @@ export function useTrainingForm(
     if (preset.nativeBlockSize !== undefined) setNativeBlockSize(preset.nativeBlockSize)
   }, [])
 
-  const canStart = !session.trainingRunning &&
+  const canStart =
+    !session.trainingRunning &&
     (inputMode !== 'dataset' || !!datasets.selectedDataset) &&
     (inputMode !== 'text' || !!textInput.trim()) &&
     (method !== 'finetune' || !!selectedModel) &&
     (method !== 'vlm' || !!datasets.selectedDataset)
 
-  const startTraining = useCallback(async (checkpointName?: string) => {
-    trackEvent('training_started', { method, input_mode: inputMode })
+  const startTraining = useCallback(
+    async (checkpointName?: string) => {
+      trackEvent('training_started', { method, input_mode: inputMode })
 
-    if (trainingEpochs < 1 || trainingEpochs > 500) {
-      addToast('Epochs must be 1–500', 'error'); return
-    }
-    if (trainingBatchSize < 1 || trainingBatchSize > 256) {
-      addToast('Batch size must be 1–256', 'error'); return
-    }
-    if (trainingLR <= 0 || trainingLR > 1) {
-      addToast('Learning rate must be 0–1', 'error'); return
-    }
+      if (trainingEpochs < 1 || trainingEpochs > 500) {
+        addToast('Epochs must be 1–500', 'error')
+        return
+      }
+      if (trainingBatchSize < 1 || trainingBatchSize > 256) {
+        addToast('Batch size must be 1–256', 'error')
+        return
+      }
+      if (trainingLR <= 0 || trainingLR > 1) {
+        addToast('Learning rate must be 0–1', 'error')
+        return
+      }
 
-    const hasDataset = inputMode === 'dataset' && datasets.selectedDataset
-    const hasText = inputMode === 'text' && textInput.trim()
+      const hasDataset = inputMode === 'dataset' && datasets.selectedDataset
+      const hasText = inputMode === 'text' && textInput.trim()
 
-    if (!hasDataset && !hasText && !checkpointName) {
-      addToast('Select a dataset or paste text to train on', 'error'); return
-    }
+      if (!hasDataset && !hasText && !checkpointName) {
+        addToast('Select a dataset or paste text to train on', 'error')
+        return
+      }
 
-    if (method === 'finetune' && !hasDataset) {
-      addToast('Continue training requires a dataset.', 'error'); return
-    }
+      if (method === 'finetune' && !hasDataset) {
+        addToast('Continue training requires a dataset.', 'error')
+        return
+      }
 
-    if (method === 'vlm' && !hasDataset) {
-      addToast('Vision model training requires a dataset with image-text pairs', 'error'); return
-    }
+      if (method === 'vlm' && !hasDataset) {
+        addToast('Vision model training requires a dataset with image-text pairs', 'error')
+        return
+      }
 
-    if (method === 'native' && !hasDataset && !hasText) {
-      addToast('Select a dataset or paste text for native training', 'error'); return
-    }
+      if (method === 'native' && !hasDataset && !hasText) {
+        addToast('Select a dataset or paste text for native training', 'error')
+        return
+      }
 
-    const body: Record<string, unknown> = {
-      name: `${method}-training-${Date.now()}`,
-      model: selectedModel || 'slonet-native',
-      algo,
-      epochs: trainingEpochs,
-      learning_rate: trainingLR,
-    }
-    if (trainingBatchSize) body.batch_size = trainingBatchSize
-    if (checkpointName) body.checkpoint_name = checkpointName
-    if (hasDataset) body.dataset = datasets.selectedDataset
-    if (hasText) body.source_text = textInput.trim()
-
-    if (method === 'native') {
-      body.n_embed = nativeEmbed
-      body.n_layer = nativeLayers
-      body.n_head = nativeHeads
-      body.block_size = nativeBlockSize
-      body.checkpoint_dir = 'models/slonet-native'
-    }
-
-    const tempId = `pending-${Date.now()}`
-    const now = new Date().toISOString()
-    setOptimisticJobs(prev => [...prev, {
-      id: tempId, name: `${method} started`, status: 'running',
-      progress: 0, created_at: now, status_message: 'Starting...',
-    }])
-
-    if (method === 'finetune') {
-      session.startFineTune({
-        model: selectedModel || 'gpt2',
-        dataset: datasets.selectedDataset || 'custom',
+      const body: Record<string, unknown> = {
+        name: `${method}-training-${Date.now()}`,
+        model: selectedModel || 'slonet-native',
+        algo,
         epochs: trainingEpochs,
-        batchSize: trainingBatchSize,
-        lr: trainingLR,
-        useLoRA,
-        loraRank,
-        loraAlpha,
-      }, addToast, () => { checkpoints.fetchJobs() })
-    } else if (method === 'vlm') {
-      session.startVisualTraining({
-        dataset: datasets.selectedDataset,
-        visionEncoder: visualVisionEncoder,
-        llm: visualLLM,
-        stage1Epochs: visualStage1Epochs,
-        stage2Epochs: visualStage2Epochs,
-        useLoRA,
-      }, addToast, () => { checkpoints.fetchJobs() })
-    } else {
-      trainingJobsController.startAutoTrain(body).then(() => {
-        addToast('Training started', 'info')
-        checkpoints.fetchCheckpoints()
-      }).catch((e: unknown) => {
-        addToast(extractErrorMessage(e, 'Could not start training'), 'error')
-      })
-    }
-  }, [method, inputMode, textInput, algo, trainingEpochs, trainingLR, trainingBatchSize,
-      selectedModel, useLoRA, datasets.selectedDataset, visualVisionEncoder, visualLLM,
-      visualStage1Epochs, visualStage2Epochs, addToast, session, checkpoints])
+        learning_rate: trainingLR,
+      }
+      if (trainingBatchSize) body.batch_size = trainingBatchSize
+      if (checkpointName) body.checkpoint_name = checkpointName
+      if (hasDataset) body.dataset = datasets.selectedDataset
+      if (hasText) body.source_text = textInput.trim()
+
+      if (method === 'native') {
+        body.n_embed = nativeEmbed
+        body.n_layer = nativeLayers
+        body.n_head = nativeHeads
+        body.block_size = nativeBlockSize
+        body.checkpoint_dir = 'models/slonet-native'
+      }
+
+      const tempId = `pending-${Date.now()}`
+      const now = new Date().toISOString()
+      setOptimisticJobs((prev) => [
+        ...prev,
+        {
+          id: tempId,
+          name: `${method} started`,
+          status: 'running',
+          progress: 0,
+          created_at: now,
+          status_message: 'Starting...',
+        },
+      ])
+
+      if (method === 'finetune') {
+        session.startFineTune(
+          {
+            model: selectedModel || 'gpt2',
+            dataset: datasets.selectedDataset || 'custom',
+            epochs: trainingEpochs,
+            batchSize: trainingBatchSize,
+            lr: trainingLR,
+            useLoRA,
+            loraRank,
+            loraAlpha,
+          },
+          (msg, type) => {
+            if (type === 'error') setOptimisticJobs([])
+            addToast(msg, type)
+          },
+          () => {
+            setOptimisticJobs([])
+            checkpoints.fetchJobs()
+          },
+        )
+      } else if (method === 'vlm') {
+        session.startVisualTraining(
+          {
+            dataset: datasets.selectedDataset,
+            visionEncoder: visualVisionEncoder,
+            llm: visualLLM,
+            stage1Epochs: visualStage1Epochs,
+            stage2Epochs: visualStage2Epochs,
+            useLoRA,
+          },
+          (msg, type) => {
+            if (type === 'error') setOptimisticJobs([])
+            addToast(msg, type)
+          },
+          () => {
+            setOptimisticJobs([])
+            checkpoints.fetchJobs()
+          },
+        )
+      } else {
+        trainingJobsController
+          .startAutoTrain(body)
+          .then((resp) => {
+            const jobId = (resp as Record<string, unknown>).job_id as string | undefined
+            // Real job takes over polling — drop the phantom pending-* entry so
+            // Stop targets the real id instead of 404ing.
+            setOptimisticJobs([])
+            appShellStore.getState().resetTraining()
+            writeTraining({
+              phase: 'TRAINING',
+              method: 'slonet',
+              jobId: jobId ?? null,
+              totalEpochs: trainingEpochs,
+              loss: null,
+              progress: 0,
+              epoch: 0,
+              globalStep: 0,
+              totalSteps: 0,
+              eta: null,
+              stepsPerSec: null,
+              elapsedSeconds: null,
+              message: '',
+              lossHistory: [],
+              evalResult: null,
+              startTime: Date.now(),
+              error: null,
+              checkpoint: null,
+              finalLoss: null,
+              modelPath: null,
+              avgQuality: null,
+              dataQuality: null,
+            })
+            if (jobId) {
+              session.startStandardPoll(jobId, {
+                addToast,
+                onComplete: () => {
+                  checkpoints.fetchCheckpoints()
+                },
+              })
+            }
+            addToast('Training started', 'info')
+          })
+          .catch((e: unknown) => {
+            setOptimisticJobs([])
+            addToast(extractErrorMessage(e, 'Could not start training'), 'error')
+          })
+      }
+    },
+    [
+      method,
+      inputMode,
+      textInput,
+      algo,
+      trainingEpochs,
+      trainingLR,
+      trainingBatchSize,
+      selectedModel,
+      useLoRA,
+      datasets.selectedDataset,
+      visualVisionEncoder,
+      visualLLM,
+      visualStage1Epochs,
+      visualStage2Epochs,
+      addToast,
+      session,
+      checkpoints,
+    ],
+  )
 
   return {
-    method, inputMode, textInput, showAdvanced, algo,
-    trainingEpochs, trainingLR, trainingBatchSize, availableModels, selectedModel, useLoRA,
-    loraRank, loraAlpha,
-    visualVisionEncoder, visualLLM, visualStage1Epochs, visualStage2Epochs,
-    nativeEmbed, nativeLayers, nativeHeads, nativeBlockSize,
+    method,
+    inputMode,
+    textInput,
+    showAdvanced,
+    algo,
+    trainingEpochs,
+    trainingLR,
+    trainingBatchSize,
+    availableModels,
+    selectedModel,
+    useLoRA,
+    loraRank,
+    loraAlpha,
+    visualVisionEncoder,
+    visualLLM,
+    visualStage1Epochs,
+    visualStage2Epochs,
+    nativeEmbed,
+    nativeLayers,
+    nativeHeads,
+    nativeBlockSize,
     loadingFinetunedModel,
     resumeCheckpoint,
     allJobs,
-    setMethod, setInputMode, setTextInput, setShowAdvanced, setAlgo,
-    setTrainingEpochs, setTrainingLR, setTrainingBatchSize, setSelectedModel, setUseLoRA,
-    setLoraRank, setLoraAlpha,
-    setVlmVisionEncoder, setVlmLLM, setVlmStage1Epochs, setVlmStage2Epochs,
-    setNativeEmbed, setNativeLayers, setNativeHeads, setNativeBlockSize,
+    clearOptimisticJobs,
+    setMethod,
+    setInputMode,
+    setTextInput,
+    setShowAdvanced,
+    setAlgo,
+    setTrainingEpochs,
+    setTrainingLR,
+    setTrainingBatchSize,
+    setSelectedModel,
+    setUseLoRA,
+    setLoraRank,
+    setLoraAlpha,
+    setVlmVisionEncoder,
+    setVlmLLM,
+    setVlmStage1Epochs,
+    setVlmStage2Epochs,
+    setNativeEmbed,
+    setNativeLayers,
+    setNativeHeads,
+    setNativeBlockSize,
     setLoadingFinetunedModel,
     setResumeCheckpoint,
     applyPreset,
-    customPresets, saveCustomPreset, deleteCustomPreset,
-    canStart, startTraining,
+    customPresets,
+    saveCustomPreset,
+    deleteCustomPreset,
+    canStart,
+    startTraining,
   }
 }

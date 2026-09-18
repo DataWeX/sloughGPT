@@ -7,7 +7,7 @@ afterEach(() => cleanup())
 
 describe('Progress', () => {
   it('renders a progressbar with default aria values', () => {
-    const { container } = render(<Progress />)
+    const { container } = render(<Progress value={0} />)
     const bar = container.querySelector<HTMLElement>('[role="progressbar"]')!
     expect(bar).toBeTruthy()
     expect(bar.getAttribute('aria-valuenow')).toBe('0')
@@ -15,14 +15,24 @@ describe('Progress', () => {
     expect(bar.getAttribute('aria-valuemax')).toBe('100')
   })
 
+  it('omits aria-valuenow when value is unknown', () => {
+    const { container } = render(<Progress />)
+    const bar = container.querySelector<HTMLElement>('[role="progressbar"]')!
+    expect(bar.getAttribute('aria-valuenow')).toBeNull()
+  })
+
   it('sets aria-valuenow to the value', () => {
     const { container } = render(<Progress value={42} />)
-    expect(container.querySelector<HTMLElement>('[role="progressbar"]')!.getAttribute('aria-valuenow')).toBe('42')
+    expect(
+      container.querySelector<HTMLElement>('[role="progressbar"]')!.getAttribute('aria-valuenow'),
+    ).toBe('42')
   })
 
   it('respects a custom max', () => {
     const { container } = render(<Progress value={50} max={200} />)
-    expect(container.querySelector<HTMLElement>('[role="progressbar"]')!.getAttribute('aria-valuemax')).toBe('200')
+    expect(
+      container.querySelector<HTMLElement>('[role="progressbar"]')!.getAttribute('aria-valuemax'),
+    ).toBe('200')
   })
 
   it('clamps visual width above max', () => {
@@ -62,22 +72,30 @@ describe('Progress', () => {
 
   it('applies xs size class', () => {
     const { container } = render(<Progress value={50} size="xs" />)
-    expect(container.querySelector<HTMLElement>('[role="progressbar"]')!.classList.contains('h-1')).toBe(true)
+    expect(
+      container.querySelector<HTMLElement>('[role="progressbar"]')!.classList.contains('h-1'),
+    ).toBe(true)
   })
 
   it('applies sm size class', () => {
     const { container } = render(<Progress value={50} size="sm" />)
-    expect(container.querySelector<HTMLElement>('[role="progressbar"]')!.classList.contains('h-1.5')).toBe(true)
+    expect(
+      container.querySelector<HTMLElement>('[role="progressbar"]')!.classList.contains('h-1.5'),
+    ).toBe(true)
   })
 
   it('applies default size class', () => {
     const { container } = render(<Progress value={50} />)
-    expect(container.querySelector<HTMLElement>('[role="progressbar"]')!.classList.contains('h-2')).toBe(true)
+    expect(
+      container.querySelector<HTMLElement>('[role="progressbar"]')!.classList.contains('h-2'),
+    ).toBe(true)
   })
 
   it('applies lg size class', () => {
     const { container } = render(<Progress value={50} size="lg" />)
-    expect(container.querySelector<HTMLElement>('[role="progressbar"]')!.classList.contains('h-3')).toBe(true)
+    expect(
+      container.querySelector<HTMLElement>('[role="progressbar"]')!.classList.contains('h-3'),
+    ).toBe(true)
   })
 
   it('removes aria values and sets aria-busy when indeterminate', () => {
@@ -97,12 +115,19 @@ describe('Progress', () => {
   it('shows label text and sets aria-label', () => {
     const { container } = render(<Progress value={50} label="Uploading" />)
     expect(screen.getByText('Uploading')).toBeTruthy()
-    expect(container.querySelector<HTMLElement>('[role="progressbar"]')!.getAttribute('aria-label')).toBe('Uploading')
+    expect(
+      container.querySelector<HTMLElement>('[role="progressbar"]')!.getAttribute('aria-label'),
+    ).toBe('Uploading')
   })
 
   it('shows percentage text when showValue is true', () => {
     render(<Progress value={33} showValue />)
     expect(screen.getByText('33%')).toBeTruthy()
+  })
+
+  it('shows -- when showValue is true and value is unknown', () => {
+    render(<Progress showValue />)
+    expect(screen.getByText('--')).toBeTruthy()
   })
 
   it('hides the label row by default', () => {

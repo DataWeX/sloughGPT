@@ -1,7 +1,21 @@
 'use client'
 
 import { useState, memo, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Button,
+  Input,
+  Label,
+  Progress,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { DatasetSelector } from '@/components/training/DatasetSelector'
 import { formatDuration } from '@/lib/formatDuration'
@@ -12,7 +26,13 @@ import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 
 export const TURBO_DEFAULTS = { epochs: 10, lr: 1e-3, embed: 128, heads: 4, layers: 3 }
 
-export type QuickTrainConfig = { epochs: number; lr: number; embed: number; heads: number; layers: number }
+export type QuickTrainConfig = {
+  epochs: number
+  lr: number
+  embed: number
+  heads: number
+  layers: number
+}
 
 export const QuickTrainCard = memo(function QuickTrainCard({
   datasets,
@@ -29,6 +49,9 @@ export const QuickTrainCard = memo(function QuickTrainCard({
   const [selectedExperimentId, setSelectedExperimentId] = useState<string>('')
   const running = session.turboPhase === 'training'
   const turboPaused = session.paused
+  const turboProgressKnown =
+    session.turboProgress > 0 || session.turboGlobalStep > 0 || session.turboTotalSteps > 0
+  const turboProgressValue: number | null = turboProgressKnown ? session.turboProgress : null
 
   const pauseTraining = useCallback(async () => {
     try {
@@ -48,8 +71,17 @@ export const QuickTrainCard = memo(function QuickTrainCard({
 
   useEffect(() => {
     let active = true
-    experimentsController.list().then(data => { if (active) setExperiments(data) }).catch(() => { if (active) addToast('Could not load experiments', 'error') })
-    return () => { active = false }
+    experimentsController
+      .list()
+      .then((data) => {
+        if (active) setExperiments(data)
+      })
+      .catch(() => {
+        if (active) addToast('Could not load experiments', 'error')
+      })
+    return () => {
+      active = false
+    }
   }, [addToast])
 
   const [starting, setStarting] = useState(false)
@@ -61,7 +93,12 @@ export const QuickTrainCard = memo(function QuickTrainCard({
     }
     setStarting(true)
     try {
-      await session.startTurboTrain(datasets.selectedDataset, config, addToast, selectedExperimentId || undefined)
+      await session.startTurboTrain(
+        datasets.selectedDataset,
+        config,
+        addToast,
+        selectedExperimentId || undefined,
+      )
     } catch {
       addToast('Could not start turbo training', 'error')
     } finally {
@@ -88,14 +125,18 @@ export const QuickTrainCard = memo(function QuickTrainCard({
   }
 
   const RANGES: Record<keyof QuickTrainConfig, [number, number]> = {
-    epochs: [1, 500], lr: [1e-6, 1], embed: [16, 1024], heads: [1, 32], layers: [1, 64],
+    epochs: [1, 500],
+    lr: [1e-6, 1],
+    embed: [16, 1024],
+    heads: [1, 32],
+    layers: [1, 64],
   }
   const setNum = (key: keyof QuickTrainConfig) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = Number(e.target.value)
     if (Number.isNaN(raw) || raw <= 0) return
     const [lo, hi] = RANGES[key]
     const clamped = Math.max(lo, Math.min(hi, Math.round(raw)))
-    setConfig(prev => ({ ...prev, [key]: clamped }))
+    setConfig((prev) => ({ ...prev, [key]: clamped }))
   }
 
   return (
@@ -106,40 +147,69 @@ export const QuickTrainCard = memo(function QuickTrainCard({
       <CardContent className="space-y-4">
         {running ? (
           <div className="space-y-3" aria-live="polite" aria-atomic="true">
-            <Progress value={session.turboProgress} max={100} />
+            <Progress value={turboProgressValue} max={100} />
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {session.turboTotalSteps > 0 && (
                 <div className="rounded-lg bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Step</p>
-                  <p className="text-sm font-semibold tabular-nums">{session.turboGlobalStep}<span className="text-muted-foreground/40 font-normal">/{session.turboTotalSteps}</span></p>
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                    Step
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {session.turboGlobalStep}
+                    <span className="text-muted-foreground/40 font-normal">
+                      /{session.turboTotalSteps}
+                    </span>
+                  </p>
                 </div>
               )}
               {session.turboLoss != null && (
                 <div className="rounded-lg bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Loss</p>
-                  <p className="text-sm font-semibold tabular-nums">{session.turboLoss.toFixed(4)}</p>
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                    Loss
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {session.turboLoss.toFixed(4)}
+                  </p>
                 </div>
               )}
               {session.turboStepsPerSec != null && (
                 <div className="rounded-lg bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Speed</p>
-                  <p className="text-sm font-semibold tabular-nums">{session.turboStepsPerSec.toFixed(1)}<span className="text-muted-foreground/40 font-normal text-xs"> steps/s</span></p>
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                    Speed
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {session.turboStepsPerSec.toFixed(1)}
+                    <span className="text-muted-foreground/40 font-normal text-xs"> steps/s</span>
+                  </p>
                 </div>
               )}
               {session.turboEta != null && (
                 <div className="rounded-lg bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">ETA</p>
-                  <p className="text-sm font-semibold tabular-nums">{formatDuration(session.turboEta)}</p>
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                    ETA
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {formatDuration(session.turboEta)}
+                  </p>
                 </div>
               )}
               <div className="rounded-lg bg-muted/30 px-3 py-2">
-                <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Elapsed</p>
-                <p className="text-sm font-semibold tabular-nums">{formatDuration(session.turboElapsedSeconds)}</p>
+                <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                  Elapsed
+                </p>
+                <p className="text-sm font-semibold tabular-nums">
+                  {formatDuration(session.turboElapsedSeconds)}
+                </p>
               </div>
               {session.avgQuality != null && (
                 <div className="rounded-lg bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Quality</p>
-                  <p className="text-sm font-semibold tabular-nums">{session.avgQuality.toFixed(1)}<span className="text-muted-foreground/40 font-normal text-xs">/5</span></p>
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                    Quality
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {session.avgQuality.toFixed(1)}
+                    <span className="text-muted-foreground/40 font-normal text-xs">/5</span>
+                  </p>
                 </div>
               )}
             </div>
@@ -148,9 +218,13 @@ export const QuickTrainCard = memo(function QuickTrainCard({
                 Stop
               </Button>
               {turboPaused ? (
-                <Button variant="outline" size="sm" onClick={resumeTraining}>Resume</Button>
+                <Button variant="outline" size="sm" onClick={resumeTraining}>
+                  Resume
+                </Button>
               ) : (
-                <Button variant="outline" size="sm" onClick={pauseTraining}>Pause</Button>
+                <Button variant="outline" size="sm" onClick={pauseTraining}>
+                  Pause
+                </Button>
               )}
             </div>
           </div>
@@ -160,11 +234,16 @@ export const QuickTrainCard = memo(function QuickTrainCard({
             {session.turboResult && (
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>
-                  Final loss: {typeof session.turboResult.final_loss === 'number' ? session.turboResult.final_loss.toFixed(4) : '--'}
+                  Final loss:{' '}
+                  {typeof session.turboResult.final_loss === 'number'
+                    ? session.turboResult.final_loss.toFixed(4)
+                    : '--'}
                 </p>
                 <p>Steps: {session.turboResult.total_steps ?? '--'}</p>
                 {session.avgQuality != null && <p>Quality: {session.avgQuality.toFixed(1)}/5</p>}
-                {session.turboResult.model_path && <p className="truncate">Model: {session.turboResult.model_path}</p>}
+                {session.turboResult.model_path && (
+                  <p className="truncate">Model: {session.turboResult.model_path}</p>
+                )}
               </div>
             )}
             <div className="flex items-center gap-2">
@@ -193,42 +272,94 @@ export const QuickTrainCard = memo(function QuickTrainCard({
             />
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-epochs" variant="uppercase">Epochs</Label>
-                <Input id="turbo-epochs" type="number" min={1} max={500} value={config.epochs}
-                  onChange={setNum('epochs')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-epochs" variant="uppercase">
+                  Epochs
+                </Label>
+                <Input
+                  id="turbo-epochs"
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={config.epochs}
+                  onChange={setNum('epochs')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-lr" variant="uppercase">LR</Label>
-                <Input id="turbo-lr" type="text" inputMode="decimal" value={config.lr}
-                  onChange={setNum('lr')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-lr" variant="uppercase">
+                  LR
+                </Label>
+                <Input
+                  id="turbo-lr"
+                  type="text"
+                  inputMode="decimal"
+                  value={config.lr}
+                  onChange={setNum('lr')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-embed" variant="uppercase">Embed</Label>
-                <Input id="turbo-embed" type="number" min={16} max={1024} value={config.embed}
-                  onChange={setNum('embed')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-embed" variant="uppercase">
+                  Embed
+                </Label>
+                <Input
+                  id="turbo-embed"
+                  type="number"
+                  min={16}
+                  max={1024}
+                  value={config.embed}
+                  onChange={setNum('embed')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-heads" variant="uppercase">Heads</Label>
-                <Input id="turbo-heads" type="number" min={1} max={32} value={config.heads}
-                  onChange={setNum('heads')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-heads" variant="uppercase">
+                  Heads
+                </Label>
+                <Input
+                  id="turbo-heads"
+                  type="number"
+                  min={1}
+                  max={32}
+                  value={config.heads}
+                  onChange={setNum('heads')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-layers" variant="uppercase">Layers</Label>
-                <Input id="turbo-layers" type="number" min={1} max={64} value={config.layers}
-                  onChange={setNum('layers')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-layers" variant="uppercase">
+                  Layers
+                </Label>
+                <Input
+                  id="turbo-layers"
+                  type="number"
+                  min={1}
+                  max={64}
+                  value={config.layers}
+                  onChange={setNum('layers')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
             </div>
             {experiments.length > 0 && (
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-experiment" variant="uppercase">Experiment</Label>
+                <Label htmlFor="turbo-experiment" variant="uppercase">
+                  Experiment
+                </Label>
                 <Select value={selectedExperimentId} onValueChange={setSelectedExperimentId}>
-                  <SelectTrigger id="turbo-experiment" className="h-8 text-xs font-mono" aria-label="Experiment">
+                  <SelectTrigger
+                    id="turbo-experiment"
+                    className="h-8 text-xs font-mono"
+                    aria-label="Experiment"
+                  >
                     <SelectValue placeholder="None" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">None</SelectItem>
-                    {experiments.map(exp => (
-                      <SelectItem key={exp.id} value={exp.id}>{exp.name || exp.id}</SelectItem>
+                    {experiments.map((exp) => (
+                      <SelectItem key={exp.id} value={exp.id}>
+                        {exp.name || exp.id}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

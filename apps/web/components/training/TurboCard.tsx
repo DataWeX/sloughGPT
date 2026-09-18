@@ -1,16 +1,31 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Button,
+  Input,
+  Label,
+  Progress,
+} from '@sloughgpt/strui'
 import { DatasetSelector } from '@/components/training/DatasetSelector'
-import { formatDuration } from '@/components/training/formatDuration'
+import { formatDuration } from '@/lib/formatDuration'
 import { trainingJobsController } from '@/lib/training-controller'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 
 export const TURBO_DEFAULTS = { epochs: 10, lr: 1e-3, embed: 128, heads: 4, layers: 3 }
 
-export type TurboConfig = { epochs: number; lr: number; embed: number; heads: number; layers: number }
+export type TurboConfig = {
+  epochs: number
+  lr: number
+  embed: number
+  heads: number
+  layers: number
+}
 
 const TURBO_PRESETS: { label: string; config: TurboConfig }[] = [
   { label: 'Quick', config: { epochs: 5, lr: 1e-3, embed: 64, heads: 2, layers: 2 } },
@@ -30,6 +45,9 @@ export function TurboCard({
   const [config, setConfig] = useState<TurboConfig>(TURBO_DEFAULTS)
   const [loadingModel, setLoadingModel] = useState(false)
   const running = session.turboPhase === 'training'
+  const turboProgressKnown =
+    session.turboProgress > 0 || session.turboGlobalStep > 0 || session.turboTotalSteps > 0
+  const turboProgressValue: number | null = turboProgressKnown ? session.turboProgress : null
 
   const start = () => {
     if (!datasets.selectedDataset) {
@@ -58,7 +76,7 @@ export function TurboCard({
   }
 
   const setNum = (key: keyof TurboConfig) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setConfig(prev => ({ ...prev, [key]: Number(e.target.value) }))
+    setConfig((prev) => ({ ...prev, [key]: Number(e.target.value) }))
 
   return (
     <Card>
@@ -68,16 +86,22 @@ export function TurboCard({
       <CardContent className="space-y-4">
         {running ? (
           <div className="space-y-3" aria-live="polite">
-            <Progress value={session.turboProgress} max={100} />
+            <Progress value={turboProgressValue} max={100} />
             <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
               <span>
                 Step {session.turboGlobalStep}/{session.turboTotalSteps || '--'}
               </span>
-              <span>{session.turboStepsPerSec != null ? `${session.turboStepsPerSec.toFixed(1)} steps/s` : '-- steps/s'}</span>
+              <span>
+                {session.turboStepsPerSec != null
+                  ? `${session.turboStepsPerSec.toFixed(1)} steps/s`
+                  : '-- steps/s'}
+              </span>
               <span>ETA {formatDuration(session.turboEta)}</span>
               <span>Elapsed {formatDuration(session.turboElapsedSeconds)}</span>
             </div>
-            {session.turboLoss != null && <p className="text-xs text-muted-foreground">Loss {session.turboLoss.toFixed(4)}</p>}
+            {session.turboLoss != null && (
+              <p className="text-xs text-muted-foreground">Loss {session.turboLoss.toFixed(4)}</p>
+            )}
             <Button variant="destructive" size="sm" onClick={session.stopTurboTrain}>
               Stop
             </Button>
@@ -88,10 +112,15 @@ export function TurboCard({
             {session.turboResult && (
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>
-                  Final loss: {typeof session.turboResult.final_loss === 'number' ? session.turboResult.final_loss.toFixed(4) : '--'}
+                  Final loss:{' '}
+                  {typeof session.turboResult.final_loss === 'number'
+                    ? session.turboResult.final_loss.toFixed(4)
+                    : '--'}
                 </p>
                 <p>Steps: {session.turboResult.total_steps ?? '--'}</p>
-                {session.turboResult.model_path && <p className="truncate">Model: {session.turboResult.model_path}</p>}
+                {session.turboResult.model_path && (
+                  <p className="truncate">Model: {session.turboResult.model_path}</p>
+                )}
               </div>
             )}
             <div className="flex items-center gap-2">
@@ -106,7 +135,9 @@ export function TurboCard({
         ) : session.turboPhase === 'error' ? (
           <div className="space-y-2 text-sm">
             <p className="text-destructive">Turbo training failed</p>
-            {session.turboError && <p className="text-xs text-muted-foreground">{session.turboError}</p>}
+            {session.turboError && (
+              <p className="text-xs text-muted-foreground">{session.turboError}</p>
+            )}
             <Button variant="outline" size="sm" onClick={session.stopTurboTrain}>
               Dismiss
             </Button>
@@ -120,8 +151,10 @@ export function TurboCard({
               showImport
             />
             <div className="flex flex-wrap gap-1.5">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Presets:</span>
-              {TURBO_PRESETS.map(p => (
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">
+                Presets:
+              </span>
+              {TURBO_PRESETS.map((p) => (
                 <Button
                   key={p.label}
                   size="sm"
@@ -135,29 +168,73 @@ export function TurboCard({
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-epochs" variant="uppercase">Epochs</Label>
-                <Input id="turbo-epochs" type="number" min={1} max={500} value={config.epochs}
-                  onChange={setNum('epochs')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-epochs" variant="uppercase">
+                  Epochs
+                </Label>
+                <Input
+                  id="turbo-epochs"
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={config.epochs}
+                  onChange={setNum('epochs')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-lr" variant="uppercase">LR</Label>
-                <Input id="turbo-lr" type="text" inputMode="decimal" value={config.lr}
-                  onChange={setNum('lr')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-lr" variant="uppercase">
+                  LR
+                </Label>
+                <Input
+                  id="turbo-lr"
+                  type="text"
+                  inputMode="decimal"
+                  value={config.lr}
+                  onChange={setNum('lr')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-embed" variant="uppercase">Embed</Label>
-                <Input id="turbo-embed" type="number" min={16} max={1024} value={config.embed}
-                  onChange={setNum('embed')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-embed" variant="uppercase">
+                  Embed
+                </Label>
+                <Input
+                  id="turbo-embed"
+                  type="number"
+                  min={16}
+                  max={1024}
+                  value={config.embed}
+                  onChange={setNum('embed')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-heads" variant="uppercase">Heads</Label>
-                <Input id="turbo-heads" type="number" min={1} max={32} value={config.heads}
-                  onChange={setNum('heads')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-heads" variant="uppercase">
+                  Heads
+                </Label>
+                <Input
+                  id="turbo-heads"
+                  type="number"
+                  min={1}
+                  max={32}
+                  value={config.heads}
+                  onChange={setNum('heads')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-layers" variant="uppercase">Layers</Label>
-                <Input id="turbo-layers" type="number" min={1} max={64} value={config.layers}
-                  onChange={setNum('layers')} className="h-8 text-xs font-mono" />
+                <Label htmlFor="turbo-layers" variant="uppercase">
+                  Layers
+                </Label>
+                <Input
+                  id="turbo-layers"
+                  type="number"
+                  min={1}
+                  max={64}
+                  value={config.layers}
+                  onChange={setNum('layers')}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
             </div>
             <Button size="sm" onClick={start} disabled={!datasets.selectedDataset}>

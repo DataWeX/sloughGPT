@@ -167,6 +167,7 @@ export { StepIndicator, type StepIndicatorProps } from './components/composed/st
 export { SectionHeader, type SectionHeaderProps } from './components/composed/section-header'
 export { ScrollPanel, type ScrollPanelProps } from './components/composed/scroll-panel'
 export { StatusDot, STATUS_DOT_TONE_CLASSES, type StatusDotProps, type StatusDotTone } from './components/composed/status-dot'
+export { StatusBadge, type StatusBadgeProps } from './components/composed/status-badge'
 export { ModelStatusPill, type ModelStatusProps, type ModelStatus } from './components/composed/model-status'
 export { FoldSection, type FoldSectionProps } from './components/composed/fold-section'
 export { Timeline, type TimelineProps, type TimelineItem } from './components/composed/timeline'

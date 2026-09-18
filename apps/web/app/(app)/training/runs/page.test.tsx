@@ -10,12 +10,16 @@ vi.mock('@sloughgpt/strui', () => {
     Card: ({ children, className }: any) => <div className={className}>{children}</div>,
     CardContent: ({ children, className }: any) => <div className={className}>{children}</div>,
     Badge: ({ children, className }: any) => <span className={className}>{children}</span>,
+    StatusBadge: ({ children }: any) => <span>{children}</span>,
+    KpiGrid: ({ children }: any) => <div>{children}</div>,
+    StatCard: ({ label, value }: any) => <div><span>{label}</span><span>{String(value)}</span></div>,
+    SectionHeader: ({ title, description }: any) => <div><h2>{title}</h2>{description ? <p>{description}</p> : null}</div>,
     Input: ({ value, onChange, placeholder, className, onKeyDown }: any) => <input value={value} onChange={onChange} placeholder={placeholder} className={className} onKeyDown={onKeyDown} />,
   }
 })
 
 vi.mock('@/components/PageContainer', () => ({
-  PageContainer: ({ children, title }: any) => <div data-testid="page-container" data-title={title}>{children}</div>,
+  PageContainer: ({ children, title, toolbar }: any) => <div data-testid="page-container" data-title={title}>{toolbar}{children}</div>,
 }))
 
 vi.mock('@/components/AppRouteHeader', () => ({

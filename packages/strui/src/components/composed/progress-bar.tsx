@@ -3,8 +3,8 @@ import type { HTMLAttributes } from 'react'
 import { cn } from '../../lib/cn'
 
 export interface ProgressBarProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
-  /** 0–`max` (ignored when `indeterminate`). */
-  value?: number
+  /** 0–`max` (ignored when `indeterminate`). `null`/`undefined` means unknown — shows “--”. */
+  value?: number | null
   max?: number
   /** Visually indeterminate (ignores value). */
   indeterminate?: boolean
@@ -34,7 +34,7 @@ const sizeHeights = {
 
 /** Accessible linear progress for jobs, uploads, and context fill. */
 export function ProgressBar({
-  value = 0,
+  value = null,
   max = 100,
   className,
   indeterminate,
@@ -44,30 +44,44 @@ export function ProgressBar({
   size = 'default',
   ...props
 }: ProgressBarProps) {
-  const pct = Math.min(100, Math.max(0, (value / max) * 100))
+  const known = value != null && Number.isFinite(value)
+  const pct = !known ? 0 : Math.min(100, Math.max(0, ((value as number) / max) * 100))
 
   return (
     <div className={cn('space-y-1', className)}>
       {(label || showValue) && (
         <div className="flex justify-between text-xs text-muted-foreground">
           {label && <span>{label}</span>}
-          {showValue && <span className="font-medium text-foreground">{Math.round(pct)}%</span>}
+          {showValue && (
+            <span className="font-medium text-foreground">
+              {known ? `${Math.round(pct)}%` : '--'}
+            </span>
+          )}
         </div>
       )}
       <div
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={max}
-        aria-valuenow={indeterminate ? undefined : Math.round(value)}
-        aria-valuetext={indeterminate ? undefined : `${Math.round(pct)}%`}
+        aria-valuenow={indeterminate || !known ? undefined : Math.round(value as number)}
+        aria-valuetext={indeterminate || !known ? undefined : `${Math.round(pct)}%`}
         className={cn('w-full overflow-hidden rounded-full bg-muted', sizeHeights[size])}
         {...props}
       >
         {indeterminate ? (
-          <div className={cn('absolute inset-y-0 left-0 animate-pulse rounded-full opacity-60', variantColors[variant])} style={{ width: '100%' }} />
+          <div
+            className={cn(
+              'absolute inset-y-0 left-0 animate-pulse rounded-full opacity-60',
+              variantColors[variant],
+            )}
+            style={{ width: '100%' }}
+          />
         ) : (
           <div
-            className={cn('absolute inset-y-0 left-0 h-full rounded-full transition-[width] duration-300 ease-smooth', variantColors[variant])}
+            className={cn(
+              'absolute inset-y-0 left-0 h-full rounded-full transition-[width] duration-300 ease-smooth',
+              variantColors[variant],
+            )}
             style={{ width: `${pct}%` }}
           />
         )}
