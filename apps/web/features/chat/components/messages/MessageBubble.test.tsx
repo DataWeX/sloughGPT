@@ -93,7 +93,9 @@ beforeEach(async () => {
   // and renders null until resolved, which would make the first test in the
   // file order-dependent. One flushed render per test keeps every assertion
   // synchronous and deterministic.
-  const { unmount } = render(<MessageBubble content="warmup" role="user" timestamp={new Date()} />)
+  const { unmount } = render(
+    <MessageBubble content="warmup" role="user" timestamp={new Date()} showTimestamp />,
+  )
   await act(async () => {})
   unmount()
 })
