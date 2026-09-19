@@ -217,3 +217,4 @@ def log_prune_report(log, report: dict) -> None:
         log.info(f"Pruned stale server (pid {entry['pid']}, port {entry['port']})")
     for entry in report["failed"]:
         log.warning(f"Stale server prune failed (pid {entry['pid']}): {entry.get('error', '?')}")
+
