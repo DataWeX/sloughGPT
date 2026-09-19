@@ -37,7 +37,7 @@ from .cmds.linux import LinuxCommandsMixin
 from .commands import ShellCommands
 from .console import Console
 from .io import ShellIO
-from .pretty import format_error_brief, format_traceback
+from .pretty import Pager, format_error_brief, format_traceback, highlight
 from .runtime import DaitRuntime
 from .state import ShellState
 
@@ -398,6 +398,8 @@ class ShellREPL(LinuxCommandsMixin):
 
         self._last_exit_code = 0
         self._last_traceback: str | None = None
+        self._pager = Pager()
+        self._pager.prompt_fn = self._read_more_key
         self._cmd_count = 0
         self._dir_stack: list[str] = []
         self._chat_session_id: str | None = None
@@ -965,7 +967,22 @@ class ShellREPL(LinuxCommandsMixin):
     def _print(self, *args, **kwargs) -> None:
         end = kwargs.get("end", "\n")
         text = " ".join(str(a) for a in args)
+        # Break endless readout: page long output on real terminals only.
+        # MemoryIO (execute/tests/pipes) and TUI surfaces never pause.
+        pager = getattr(self, "_pager", None)
+        if pager is not None and getattr(self.io, "_is_tty", False):
+            processed = pager.process(text, end)
+            if processed is None:
+                return
+            text, end = processed
         self.console.write(text, end=end)
+
+    def _read_more_key(self) -> str:
+        """Read a --More-- answer from the terminal (q quits the readout)."""
+        try:
+            return self.io.read("  --More-- [Enter: more | q: quit] ")
+        except (EOFError, KeyboardInterrupt):
+            return "q"
 
     def _table(
         self,
@@ -1035,8 +1052,6 @@ class ShellREPL(LinuxCommandsMixin):
     def _dump_json(self, obj: Any) -> str:
         # Highlighted only on color terminals (pretty.highlight degrades to
         # plain text otherwise), so captured/piped output stays clean JSON.
-        from .pretty import highlight
-
         return highlight(json.dumps(obj, indent=2, default=str), "json")
 
     def _spinner_call(self, label: str, fn, ok_msg: str | None = ""):
@@ -2136,9 +2151,10 @@ Examples:
 
         # Update config file
         try:
-            from domain.infrastructure._internal.config import _REPO_ROOT, get_config
+            from domain.infrastructure._internal.config import reload_config
+            from domain.shared import find_repo_root
 
-            config_path = _REPO_ROOT / "config" / "defaults.yaml"
+            config_path = find_repo_root() / "config" / "defaults.yaml"
             if config_path.exists():
                 with open(config_path) as f:
                     config_data = yaml.safe_load(f) or {}
@@ -2153,7 +2169,7 @@ Examples:
                 yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
 
             # Reload config
-            get_config().reload()
+            reload_config()
 
             if new_value:
                 self._print(f"  Auto-download: {_C_GREEN}ON{_C_RESET}")
@@ -5061,6 +5077,11 @@ nl: db 10
             self._show_welcome()
         while self._running:
             try:
+                # Fresh page per prompt so one long command can't eat the
+                # next command's screenful, and vice versa.
+                pager = getattr(self, "_pager", None)
+                if pager is not None:
+                    pager.reset()
                 # Poll for new log entries before rendering the prompt
                 self._log_display.poll()
                 prompt = self._render_prompt()

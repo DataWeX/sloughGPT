@@ -8930,20 +8930,24 @@ class TestCmdConfirmConfig:
             repl._cmd_confirm("on")
         assert repl._last_exit_code == 0
 
-    def test_confirm_on_config_writes(self, repl):
+    def test_confirm_on_config_writes(self, repl, tmp_path):
         mock_config = MagicMock()
         mock_config.features.auto_download = False
         mock_config.reload = MagicMock()
-        mock_config._config_dir = Path("/tmp/test_config")
-        mock_config._config_dir.mkdir(parents=True, exist_ok=True)
-        defaults = mock_config._config_dir / "defaults.yaml"
-        defaults.write_text("features:\n  auto_download: false\n")
-        with patch("domain.infrastructure.config.get_config", return_value=mock_config):
-            with patch.object(Path, "cwd", return_value=Path("/tmp/test_config").parent):
-                repl._cmd_confirm("on")
+        # Isolate from the real repo config: point _REPO_ROOT at tmp.
+        repo_config = tmp_path / "repo" / "config"
+        repo_config.mkdir(parents=True)
+        (repo_config / "defaults.yaml").write_text("features:\n  auto_download: false\n")
+        with (
+            patch("domain.infrastructure._internal.config.get_config", return_value=mock_config),
+            patch(
+                "domain.shared.find_repo_root",
+                return_value=tmp_path / "repo",
+            ),
+        ):
+            repl._cmd_confirm("on")
         assert repl._last_exit_code == 0
-        defaults.unlink(missing_ok=True)
-        mock_config._config_dir.rmdir()
+        assert "auto_download: true" in (repo_config / "defaults.yaml").read_text()
 
 
 # ── _cmd_confirm toggle variants (import-error fallback) ──────────

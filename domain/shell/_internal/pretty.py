@@ -85,3 +85,67 @@ def format_error_brief(exc: BaseException) -> str:
     detail = message[0] if message else ""
     name = type(exc).__name__
     return f"{name}: {detail}" if detail else name
+
+
+def terminal_page_size(reserved: int = 3, minimum: int = 5) -> int:
+    """Usable output lines per screenful (terminal height minus prompt)."""
+    try:
+        import shutil
+
+        return max(minimum, shutil.get_terminal_size().lines - reserved)
+    except Exception:
+        return 21
+
+
+class Pager:
+    """--More-- style output pager: breaks endless readout into screenfuls.
+
+    Feed every printed chunk through :meth:`process`; once a page fills up
+    it asks ``prompt_fn`` whether to continue (anything but ``q``) or drop
+    the rest until :meth:`reset`. With no ``prompt_fn`` it never pauses,
+    so piped/captured/TUI output is unaffected.
+
+    Usage in the run loop: ``reset()`` before each prompt, and wire
+    ``prompt_fn`` to a terminal read.
+    """
+
+    def __init__(self, page_size: int | None = None, prompt_fn=None) -> None:
+        self._page_size = page_size
+        self.prompt_fn = prompt_fn
+        self._used = 0
+        self._dropped = False
+
+    def reset(self, page_size: int | None = None) -> None:
+        """Start a fresh page (call once per prompt)."""
+        self._page_size = page_size
+        self._used = 0
+        self._dropped = False
+
+    @property
+    def page_size(self) -> int:
+        return self._page_size if self._page_size is not None else terminal_page_size()
+
+    @property
+    def dropped(self) -> bool:
+        """Whether output is currently being suppressed (user quit)."""
+        return self._dropped
+
+    def process(self, text: str, end: str = "\n") -> tuple[str, str] | None:
+        """Filter one printed chunk. Returns ``(text, end)`` or ``None``."""
+        if self._dropped:
+            return None
+        if not text:
+            lines = 1 if end == "\n" else 0
+        else:
+            lines = text.count("\n") + (1 if end == "\n" else 0)
+        if self.prompt_fn is not None and self._used + lines > self.page_size:
+            try:
+                answer = (self.prompt_fn() or "").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                answer = "q"
+            if answer.startswith("q"):
+                self._dropped = True
+                return None
+            self._used = 0
+        self._used += lines
+        return (text, end)
