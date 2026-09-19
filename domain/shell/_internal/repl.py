@@ -37,6 +37,7 @@ from .cmds.linux import LinuxCommandsMixin
 from .commands import ShellCommands
 from .console import Console
 from .io import ShellIO
+from .pretty import format_error_brief, format_traceback
 from .runtime import DaitRuntime
 from .state import ShellState
 
@@ -396,6 +397,7 @@ class ShellREPL(LinuxCommandsMixin):
         )
 
         self._last_exit_code = 0
+        self._last_traceback: str | None = None
         self._cmd_count = 0
         self._dir_stack: list[str] = []
         self._chat_session_id: str | None = None
@@ -577,6 +579,7 @@ class ShellREPL(LinuxCommandsMixin):
                     except SystemExit as e:
                         self._last_exit_code = e.code if isinstance(e.code, int) else 1
                     except Exception as e:
+                        self._last_traceback = format_traceback()
                         self._print(self._format_error(e, cmd))
                         self._last_exit_code = 1
                         self._audit.error(line, repr(e))
@@ -1921,6 +1924,7 @@ class ShellREPL(LinuxCommandsMixin):
                 "grep": "  grep [-i] [-v] <pattern> [file]  — Search for patterns",
                 "find": "  find [dir] [-name pattern] [-type f|d]  — Search for files",
                 "history": "  history [n]  — Show command history",
+                "traceback": "  traceback  — Show the traceback of the last error",
                 "alias": "  alias [name=cmd]  — List or set aliases",
                 "unalias": "  unalias <name>  — Remove an alias",
                 "chat": "  chat [msg] | chat /reset  — Multi-turn chat session",
@@ -2087,6 +2091,14 @@ Examples:
         start = max(1, len(self._history) - len(lines) + 1)
         for i, line in enumerate(lines, start):
             self._print(f"  {i:4d}  {line}")
+
+    def _cmd_traceback(self, args: str = "") -> None:
+        """traceback - show the pretty-printed traceback of the last error."""
+        last = getattr(self, "_last_traceback", None)
+        if not last:
+            self._print("  No recent traceback.")
+            return
+        self._print(last.rstrip())
 
     def _cmd_fc(self, args: str = "") -> None:
         """fc - list or re-run history commands (like bash fc)."""
@@ -5072,7 +5084,8 @@ nl: db 10
                 except SystemExit as e:
                     self._last_exit_code = e.code if isinstance(e.code, int) else 1
                 except Exception as e:
-                    self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
+                    self._last_traceback = format_traceback()
+                    self._print(f"  {_C_RED}Error:{_C_RESET} {format_error_brief(e)}  {_C_DIM}(traceback for details){_C_RESET}")
                     self._last_exit_code = 1
                     self._audit.error(line, repr(e))
                 elapsed_ms = (_time.time() - t0) * 1000 if t0 else None
@@ -5099,7 +5112,8 @@ nl: db 10
             self._aborted = True
             self._last_exit_code = 0
         except Exception as e:
-            self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
+            self._last_traceback = format_traceback()
+            self._print(f"  {_C_RED}Error:{_C_RESET} {format_error_brief(e)}  {_C_DIM}(traceback for details){_C_RESET}")
             self._audit.error(line, repr(e))
 
     def run(self) -> None:
@@ -5213,6 +5227,7 @@ _shell_commands = {
     "find": ShellREPL._cmd_find,
     "clear": ShellREPL._cmd_clear,
     "history": ShellREPL._cmd_history,
+    "traceback": ShellREPL._cmd_traceback,
     "alias": ShellREPL._cmd_alias,
     "unalias": ShellREPL._cmd_unalias,
     "py": ShellREPL._cmd_py,

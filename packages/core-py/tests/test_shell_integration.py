@@ -120,7 +120,9 @@ class TestApiCommands:
 class TestLocalCommands:
     def test_help_shows_builtins(self, repl):
         out = _capture(repl, "help")
-        assert "health" in out
+        # No "health" command exists — assert on real builtin sections.
+        assert "models" in out
+        assert "history" in out
 
     def test_echo_works(self, repl):
         out = _capture(repl, "echo hello world")

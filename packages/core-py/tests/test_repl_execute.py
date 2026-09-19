@@ -223,3 +223,41 @@ class TestCompleteArgsFor:
         result = repl._complete_args_for_uncached("finetuned")
         assert "load" in result
         assert "rm" in result
+
+
+# ── traceback command ───────────────────────────────────────────────────────
+
+
+class TestTracebackCommand:
+    def _boom_repl(self):
+        repl = _make_repl()
+
+        def _boom(self, args=""):
+            raise RuntimeError("kaboom-test")
+
+        repl.COMMANDS["boom"] = _boom
+        repl.COMMANDS["traceback"] = ShellREPL._cmd_traceback
+        printed: list[str] = []
+        repl._print = lambda *a, **kw: printed.append(" ".join(str(x) for x in a))  # noqa: E731
+        return repl, printed
+
+    def test_error_stashes_traceback(self):
+        repl, _ = self._boom_repl()
+        repl.execute("boom")
+        assert repl._last_exit_code == 1
+        assert repl._last_traceback is not None
+        assert "RuntimeError" in repl._last_traceback
+        assert "kaboom-test" in repl._last_traceback
+
+    def test_traceback_command_prints_last_error(self):
+        repl, printed = self._boom_repl()
+        repl.execute("boom")
+        out, code = repl.execute("traceback")
+        assert code == 0
+        assert "RuntimeError" in out
+
+    def test_traceback_without_error(self):
+        repl, printed = self._boom_repl()
+        out, code = repl.execute("traceback")
+        assert code == 0
+        assert "No recent traceback" in out
