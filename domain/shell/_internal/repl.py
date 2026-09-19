@@ -1944,6 +1944,7 @@ Most common commands (help [cmd] for details, help for full list):
                 self._print(f"  Unknown command: {args}")
             return
         self._print(f"""
+Built-in commands:
 {_C_CYAN}Navigation:{_C_RESET}
   cd [dir]               Change directory (default: ~, - for previous)
   pwd                    Print working directory
@@ -5230,6 +5231,8 @@ nl: db 10
 _shell_commands = {
     "help": ShellREPL._cmd_help,
     "man": ShellREPL._cmd_man,
+    "lsdev": ShellREPL._cmd_lsdev,
+    "devices": ShellREPL._cmd_lsdev,
     "exit": ShellREPL._cmd_exit,
     "cd": ShellREPL._cmd_cd,
     "pwd": ShellREPL._cmd_pwd,
