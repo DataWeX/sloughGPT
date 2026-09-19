@@ -61,6 +61,9 @@ export const trainingFacade = {
     get download() {
       return jobsCtl.downloadTrainingJob.bind(jobsCtl)
     },
+    get trainingLog() {
+      return jobsCtl.getTrainingLog.bind(jobsCtl)
+    },
     get finetune() {
       return jobsCtl.startLoraFinetune.bind(jobsCtl)
     },
