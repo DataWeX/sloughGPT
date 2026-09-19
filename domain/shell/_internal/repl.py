@@ -5298,5 +5298,12 @@ _shell_commands = {
     "lsdev": ShellREPL._cmd_lsdev,
     "render": ShellREPL._cmd_render,
 }
+# Auto-register LinuxCommandsMixin handlers missing from the explicit map
+# (env, mkdir, rm, touch, ...). Explicit entries win via setdefault so
+# ShellREPL overrides (e.g. which, time) keep precedence.
+for _mixin_name in dir(LinuxCommandsMixin):
+    if _mixin_name.startswith("_cmd_"):
+        _shell_commands.setdefault(_mixin_name[5:], getattr(LinuxCommandsMixin, _mixin_name))
+del _mixin_name
 ShellREPL.COMMANDS = _shell_commands
 del _shell_commands

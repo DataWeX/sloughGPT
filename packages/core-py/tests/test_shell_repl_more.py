@@ -26185,7 +26185,7 @@ class TestRenderPromptDeeperV3:
 
     def test_render_prompt_lambda(self, repl):
         result = repl._render_prompt()
-        assert "λ" in result
+        assert "̓" in result
 
 
 class TestLogHelpersDeeperV2:
