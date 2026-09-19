@@ -19,7 +19,10 @@ import logging
 import re
 import sys
 from collections.abc import Callable
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from .surface import TextSurface
 
 logger = logging.getLogger("slo.shell.io")
 
@@ -166,6 +169,28 @@ class ConsoleIO:
             except Exception as e:
                 logger.debug("tty close failed: %s", e)
             self._tty = None
+
+
+# ── TUI (curses event loop) ────────────────────────────────────────
+
+
+class TuiIo:
+    """ShellIO-compatible writer that feeds a TextSurface."""
+
+    def __init__(self, surface: TextSurface) -> None:
+        self._surface = surface
+        self._tui_ref: Any | None = None
+
+    def write(self, text: str, end: str = "\n") -> None:
+        self._surface.write(text, end)
+        if self._tui_ref is not None:
+            self._tui_ref._dirty = True
+
+    def flush(self) -> None:
+        pass
+
+    def read(self, prompt: str = "") -> str:
+        raise NotImplementedError("input comes from the curses event loop")
 
 
 # ── Memory (tests / TUI) ───────────────────────────────────────────

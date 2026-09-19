@@ -40,6 +40,7 @@ from .graphics import (
     Pattern,
     TabManager,
 )
+from .io import TuiIo
 from .pane import Border, Pane, PaneLayout, Rect
 from .surface import (
     STYLE_CRITICAL,
@@ -166,29 +167,9 @@ def _read_escape_remainder(stdscr, alt_map, restore_ms: int = 100):
         stdscr.timeout(restore_ms)
 
 
-# ── TuiIo — routes command output into a TextSurface ──────────────────────
-
-
-class TuiIo:
-    """ShellIO-compatible writer that feeds a TextSurface."""
-
-    def __init__(self, surface: TextSurface) -> None:
-        self._surface = surface
-        self._tui_ref: TuiRepl | None = None
-
-    def write(self, text: str, end: str = "\n") -> None:
-        self._surface.write(text, end)
-        if self._tui_ref is not None:
-            self._tui_ref._dirty = True
-
-    def flush(self) -> None:
-        pass
-
-    def read(self, prompt: str = "") -> str:
-        raise NotImplementedError("input comes from the curses event loop")
-
-
 # ── TuiRepl ───────────────────────────────────────────────────────────────
+
+# NOTE: TuiIo lives in .io as a first-class ShellIO (imported at top).
 
 
 class TuiRepl:
