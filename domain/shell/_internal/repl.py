@@ -580,7 +580,7 @@ class ShellREPL(LinuxCommandsMixin):
                         self._last_exit_code = e.code if isinstance(e.code, int) else 1
                     except Exception as e:
                         self._last_traceback = format_traceback()
-                        self._print(self._format_error(e, cmd))
+                        self._print(f"{self._format_error(e, cmd)}  {_C_DIM}(traceback for details){_C_RESET}")
                         self._last_exit_code = 1
                         self._audit.error(line, repr(e))
                     elapsed_ms = (_time.time() - t0) * 1000
