@@ -9123,7 +9123,7 @@ class TestCmdEventsExtra:
             ev.data = {"key": f"val_{i}"}
             events.append(ev)
         bus.history.return_value = events
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.infrastructure.get_event_bus", return_value=bus):
             repl._cmd_events("5")
         assert repl._last_exit_code == 0
 
@@ -9140,7 +9140,7 @@ class TestCmdEventsExtra:
         ev2.source = "monitor"
         ev2.data = {}
         bus.history.return_value = [ev1, ev2]
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.infrastructure.get_event_bus", return_value=bus):
             repl._cmd_events("model")
         assert repl._last_exit_code == 0
 
