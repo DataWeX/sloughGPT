@@ -434,9 +434,8 @@ def generate(ctx, prompt, model, max_tokens, temperature):
 @click.option("--web-port", default=3000, type=int, help="Web dev server port")
 @click.option("--watch-web", is_flag=True, help="Watch web files for changes")
 @click.option("--auto-download", is_flag=True, help="Skip download confirmation on startup")
-@click.option("--prune", is_flag=True, help="Kill stale (non-serving) servers, print report, exit")
 @click.pass_context
-def dev(ctx, model, web_port, watch_web, auto_download, prune):
+def dev(ctx, model, web_port, watch_web, auto_download):
     from commands.dev import cmd_dev
 
     args = _ns(
@@ -446,7 +445,6 @@ def dev(ctx, model, web_port, watch_web, auto_download, prune):
         port=ctx.obj["port"],
         host=ctx.obj["host"],
         auto_download=auto_download,
-        prune=prune,
     )
     cmd_dev(args)
 
@@ -463,8 +461,7 @@ def dev(ctx, model, web_port, watch_web, auto_download, prune):
 @click.option("--web-port", default=3000, type=int, help="Web UI port", show_default=True)
 @click.option("--mobile", is_flag=True, help="Start FastAPI server + React Native metro bundler")
 @click.option("--auto-download", is_flag=True, help="Skip download confirmation on startup")
-@click.option("--prune", is_flag=True, help="Kill stale (non-serving) servers, print report, exit")
-def serve(host, port, model, web, mobile, web_port, auto_download, prune):
+def serve(host, port, model, web, mobile, web_port, auto_download):
     from commands.dev import cmd_serve
 
     args = _ns(
@@ -475,7 +472,6 @@ def serve(host, port, model, web, mobile, web_port, auto_download, prune):
         mobile=mobile,
         web_port=web_port,
         auto_download=auto_download,
-        prune=prune,
     )
     cmd_serve(args)
 

@@ -353,11 +353,6 @@ def cmd_dev(args):
 
     _prune_report = prune_stale_servers()
     log_prune_report(log, _prune_report)
-    if getattr(args, "prune", False):
-        killed = _prune_report["killed"]
-        failed = _prune_report["failed"]
-        log.info(f"Prune complete: {len(killed)} killed, {len(failed)} failed")
-        return
 
     root = _repo_root()
     model = getattr(args, "model", None) or os.environ.get("SLOUGHGT_MODEL_PATH", "")
@@ -591,15 +586,6 @@ def cmd_serve(args):
 
     _prune_report = prune_stale_servers()
     log_prune_report(log, _prune_report)
-    if getattr(args, "prune", False):
-        killed = _prune_report["killed"]
-        failed = _prune_report["failed"]
-        log.info(f"Prune complete: {len(killed)} killed, {len(failed)} failed")
-        for entry in killed:
-            log.info(f"  killed pid {entry['pid']} (port {entry['port']})")
-        for entry in failed:
-            log.warning(f"  failed pid {entry['pid']}: {entry.get('error', '?')}")
-        return
 
     web = getattr(args, "web", False)
     mobile = getattr(args, "mobile", False)

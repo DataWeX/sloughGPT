@@ -3,6 +3,9 @@
 import os
 import sys
 import types
+from unittest.mock import MagicMock
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -211,8 +214,8 @@ class TestPrune:
         assert _health_ok("127.0.0.1", 1, timeout=1) is False
 
 
-class TestServePruneFlag:
-    def test_serve_prune_exits_without_starting(self, monkeypatch):
+class TestAutomaticPrune:
+    def test_serve_sweeps_before_start(self, monkeypatch):
         import types
 
         import utils.prune as prune_mod
@@ -222,17 +225,25 @@ class TestServePruneFlag:
             prune_mod,
             "prune_stale_servers",
             lambda *a, **k: calls.append((a, k)) or {"killed": [], "failed": []},
+        )
+        import commands.dev as dev_mod
+
+        # Stop at the status UI: cmd_serve would otherwise spawn a real
+        # server. The sweep running first is what we assert.
+        monkeypatch.setattr(
+            dev_mod, "StatusBlock", MagicMock(side_effect=RuntimeError("stop here"))
         )
         from commands.dev import cmd_serve
 
         args = types.SimpleNamespace(
-            model=None, web=False, mobile=False, prune=True,
+            model=None, web=False, mobile=False,
             host="localhost", port=8000,
         )
-        cmd_serve(args)
+        with pytest.raises(RuntimeError, match="stop here"):
+            cmd_serve(args)
         assert len(calls) == 1
 
-    def test_dev_prunes_before_start(self, monkeypatch):
+    def test_dev_sweeps_before_start(self, monkeypatch):
         import types
 
         import utils.prune as prune_mod
@@ -242,12 +253,20 @@ class TestServePruneFlag:
             prune_mod,
             "prune_stale_servers",
             lambda *a, **k: calls.append((a, k)) or {"killed": [], "failed": []},
+        )
+        import commands.dev as dev_mod
+
+        # Stop right after the sweep: cmd_dev would otherwise start real
+        # servers and block. The sweep running first is what we assert.
+        monkeypatch.setattr(
+            dev_mod, "StatusBlock", MagicMock(side_effect=RuntimeError("stop here"))
         )
         from commands.dev import cmd_dev
 
         args = types.SimpleNamespace(
             model=None, web_port=3000, watch_web=False, port=8000,
-            host="localhost", auto_download=False, prune=True,
+            host="localhost", auto_download=False,
         )
-        cmd_dev(args)
+        with pytest.raises(RuntimeError, match="stop here"):
+            cmd_dev(args)
         assert len(calls) == 1
