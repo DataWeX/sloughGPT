@@ -134,7 +134,8 @@ export const MessageBubble = memo(function MessageBubble({
         aria-live={isStreaming ? 'polite' : ariaLive}
         onKeyDown={handleKeyDown}
         className={cn(
-          'group flex flex-col transition-all duration-300 ease-out',
+          'group flex flex-col transition-all duration-300 ease-out rounded-2xl',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           role === 'user' ? 'items-end' : 'items-start',
         )}
       >

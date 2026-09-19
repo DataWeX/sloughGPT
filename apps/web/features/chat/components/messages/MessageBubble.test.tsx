@@ -196,6 +196,14 @@ describe('MessageBubble', () => {
     expect(article).toHaveAttribute('aria-label', 'Message from Assistant')
   })
 
+  it('shows a visible focus ring for keyboard users', () => {
+    const { container } = render(
+      <MessageBubble content="hi" role="user" timestamp={new Date()} showTimestamp />,
+    )
+    const article = container.querySelector('[role="article"]')
+    expect(article?.className).toMatch('focus-visible:ring-2')
+  })
+
   it('shows role indicator "You" for user', () => {
     render(<MessageBubble content="hi" role="user" timestamp={new Date()} showTimestamp />)
     expect(screen.getByText('You')).toBeInTheDocument()
