@@ -147,6 +147,28 @@ class TestFindStale:
         monkeypatch.setattr(prune_mod, "_health_ok", lambda host, port, timeout=3: False)
         assert [e["pid"] for e in find_stale_servers(port=8002)] == [444]
 
+    def test_supervisor_with_healthy_child_is_kept(self, monkeypatch):
+        import utils.prune as prune_mod
+
+        fake = _fake_psutil(
+            [
+                {"pid": 777, "cmdline": ["python", "cli.py", "serve"], "create_time": 0},
+                {
+                    "pid": 778,
+                    "cmdline": ["uvicorn", "apps.api.server.main:app", "--port", "8002"],
+                    "create_time": 0,
+                },
+            ]
+        )
+        fake._live[777].children = lambda recursive=False: [fake._live[778]]
+        monkeypatch.setitem(sys.modules, "psutil", fake)
+        monkeypatch.setattr(
+            prune_mod, "_health_ok", lambda host, port, timeout=3: port == 8002
+        )
+        found = [e["pid"] for e in find_stale_servers()]
+        assert 777 not in found
+        assert 778 not in found
+
 
 class TestPrune:
     def test_terminates_stale(self, monkeypatch):

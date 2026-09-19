@@ -83,6 +83,53 @@ def _protected_pids() -> set[int]:
     return protected
 
 
+def _has_healthy_server_child(proc, host: str) -> bool:
+    """Whether any child process is a healthy server (supervisor case).
+
+    A ``cli.py serve`` parent may supervise a uvicorn child on a different
+    port than the parent's own args imply — killing it would orphan a
+    working server, so such parents are kept.
+    """
+    try:
+        import psutil
+
+        children = proc.children(recursive=False)
+    except (AttributeError, psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        return False
+    for child in children:
+        try:
+            cmdline = child.info.get("cmdline") if isinstance(child.info, dict) else child.cmdline()
+        except (
+            AttributeError,
+            psutil.NoSuchProcess,
+            psutil.AccessDenied,
+            psutil.ZombieProcess,
+        ):
+            continue
+        if not cmdline or not _is_own_server(cmdline):
+            continue
+        if "cli.py" in " ".join(cmdline):
+            continue
+        if _health_ok(host, _proc_port(cmdline)):
+            return True
+    return False
+    """Current process + ancestors — never terminate these."""
+    protected = {os.getpid()}
+    try:
+        import psutil
+
+        proc = psutil.Process()
+        while True:
+            parent = proc.parent()
+            if parent is None:
+                break
+            protected.add(parent.pid)
+            proc = parent
+    except Exception:
+        pass
+    return protected
+
+
 def find_stale_servers(
     host: str = "127.0.0.1", port: int | None = None
 ) -> list[dict]:
@@ -111,6 +158,11 @@ def find_stale_servers(
                 continue
             if _health_ok(host, proc_port):
                 continue
+            try:
+                if _has_healthy_server_child(proc, host):
+                    continue
+            except Exception:
+                pass
             import time
 
             stale.append(
