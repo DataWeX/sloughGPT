@@ -86,14 +86,15 @@ class TestReady:
         assert isinstance(checks["inference"], bool)
 
     def test_ready_with_db_down(self):
-        with patch("domains.feedback.database.get_feedback_db", side_effect=Exception("db down")):
+        with patch("domain.feedback.get_feedback_db", side_effect=Exception("db down")):
             resp = client.get("/ready")
             data = _data(resp)
             assert data["checks"]["database"] is False
 
     def test_ready_with_inference_down(self):
         with patch(
-            "domains.inference.native.engine.get_engine", side_effect=Exception("engine missing")
+            "domain.inference._internal.native.engine.get_engine",
+            side_effect=Exception("engine missing"),
         ):
             resp = client.get("/ready")
             data = _data(resp)

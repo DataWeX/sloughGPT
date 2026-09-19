@@ -45,7 +45,7 @@ class StatusRouter:
 
         # Check database connectivity
         try:
-            from domain.feedback._internal.database import get_feedback_db
+            from domain.feedback import get_feedback_db
 
             db = get_feedback_db()
             checks["database"] = db is not None
@@ -55,7 +55,7 @@ class StatusRouter:
 
         # Check inference engine
         try:
-            from domain.inference.native.engine import get_engine
+            from domain.inference._internal.native.engine import get_engine
 
             engine = get_engine()
             checks["inference"] = engine is not None

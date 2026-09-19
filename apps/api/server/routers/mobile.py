@@ -283,7 +283,7 @@ class MobileRouter:
     @staticmethod
     def _get_souls():
         """Get soul list directly from the SloManager."""
-        from domain.generation import get_slo_manager
+        from domain.inference import get_slo_manager
 
         mgr = get_slo_manager()
         souls = mgr.list_souls()
@@ -295,7 +295,7 @@ class MobileRouter:
     @staticmethod
     def _get_current_soul():
         """Get current soul directly from the SloManager."""
-        from domain.generation import get_slo_manager
+        from domain.inference import get_slo_manager
 
         soul = get_slo_manager().get_current_soul()
         if soul is None:
@@ -462,7 +462,7 @@ class MobileRouter:
     @staticmethod
     def _switch_soul(soul_name: str, checkpoint_name: str | None = None):
         """Switch soul directly."""
-        from domain.generation import get_slo_manager
+        from domain.inference import get_slo_manager
 
         mgr = get_slo_manager()
         return mgr.switch_soul(soul_name, checkpoint_name=checkpoint_name)
