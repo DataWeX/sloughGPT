@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { modelController, trainingJobsController } from '@/lib/controllers'
+import { modelController } from '@/lib/controllers'
+import { trainingFacade } from '@/lib/training-facade'
 import type { TrainingJob } from '@/lib/training-controller'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
@@ -105,7 +106,6 @@ export interface TrainingFormState {
   loadingFinetunedModel: boolean
   resumeCheckpoint: string
   allJobs: TrainingJob[]
-  clearOptimisticJobs: () => void
   setMethod: (m: Method) => void
   setInputMode: (m: InputMode) => void
   setTextInput: (s: string) => void
@@ -241,7 +241,6 @@ export function useTrainingForm(
   }, [])
 
   const [optimisticJobs, setOptimisticJobs] = useState<TrainingJob[]>([])
-  const clearOptimisticJobs = useCallback(() => setOptimisticJobs([]), [])
   const allJobs = [...optimisticJobs, ...checkpoints.jobs]
 
   // Clear optimistic jobs when training ends
@@ -250,14 +249,6 @@ export function useTrainingForm(
       setOptimisticJobs([])
     }
   }, [session.phase])
-
-  // Drop phantom pending-* jobs once a real running job arrives from the server.
-  // Prevents Stop from targeting a fake id that 404s ("Could not stop training").
-  useEffect(() => {
-    if (checkpoints.jobs.some((j) => j.status === 'running' && !j.id.startsWith('pending-'))) {
-      setOptimisticJobs((prev) => (prev.length ? [] : prev))
-    }
-  }, [checkpoints.jobs])
 
   useEffect(() => {
     if (!configLoaded) return
@@ -400,12 +391,8 @@ export function useTrainingForm(
             loraRank,
             loraAlpha,
           },
-          (msg, type) => {
-            if (type === 'error') setOptimisticJobs([])
-            addToast(msg, type)
-          },
+          addToast,
           () => {
-            setOptimisticJobs([])
             checkpoints.fetchJobs()
           },
         )
@@ -419,23 +406,16 @@ export function useTrainingForm(
             stage2Epochs: visualStage2Epochs,
             useLoRA,
           },
-          (msg, type) => {
-            if (type === 'error') setOptimisticJobs([])
-            addToast(msg, type)
-          },
+          addToast,
           () => {
-            setOptimisticJobs([])
             checkpoints.fetchJobs()
           },
         )
       } else {
-        trainingJobsController
+        trainingFacade.jobs
           .startAutoTrain(body)
           .then((resp) => {
             const jobId = (resp as Record<string, unknown>).job_id as string | undefined
-            // Real job takes over polling — drop the phantom pending-* entry so
-            // Stop targets the real id instead of 404ing.
-            setOptimisticJobs([])
             appShellStore.getState().resetTraining()
             writeTraining({
               phase: 'TRAINING',
@@ -472,7 +452,6 @@ export function useTrainingForm(
             addToast('Training started', 'info')
           })
           .catch((e: unknown) => {
-            setOptimisticJobs([])
             addToast(extractErrorMessage(e, 'Could not start training'), 'error')
           })
       }
@@ -523,7 +502,6 @@ export function useTrainingForm(
     loadingFinetunedModel,
     resumeCheckpoint,
     allJobs,
-    clearOptimisticJobs,
     setMethod,
     setInputMode,
     setTextInput,

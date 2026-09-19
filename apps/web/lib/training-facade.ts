@@ -61,6 +61,12 @@ export const trainingFacade = {
     get download() {
       return jobsCtl.downloadTrainingJob.bind(jobsCtl)
     },
+    get finetune() {
+      return jobsCtl.startLoraFinetune.bind(jobsCtl)
+    },
+    get visualTrain() {
+      return jobsCtl.startVisualTrain.bind(jobsCtl)
+    },
   },
   turbo: {
     get start() {

@@ -32,6 +32,13 @@ vi.mock('@/lib/controllers', () => ({
   modelController: mockModelController,
   trainingJobsController: mockTrainingJobsController,
 }))
+vi.mock('@/lib/training-facade', () => ({
+  trainingFacade: {
+    jobs: {
+      startAutoTrain: mockTrainingJobsController.startAutoTrain,
+    },
+  },
+}))
 
 vi.mock('@/lib/error-utils', () => ({
   extractErrorMessage: (e: unknown, fallback: string) =>
