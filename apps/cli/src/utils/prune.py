@@ -98,13 +98,9 @@ def _has_healthy_server_child(proc, host: str) -> bool:
         return False
     for child in children:
         try:
-            cmdline = child.info.get("cmdline") if isinstance(child.info, dict) else child.cmdline()
-        except (
-            AttributeError,
-            psutil.NoSuchProcess,
-            psutil.AccessDenied,
-            psutil.ZombieProcess,
-        ):
+            info = getattr(child, "info", None)
+            cmdline = info.get("cmdline") if isinstance(info, dict) else child.cmdline()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
         if not cmdline or not _is_own_server(cmdline):
             continue
