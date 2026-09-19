@@ -980,9 +980,17 @@ class ShellREPL(LinuxCommandsMixin):
     def _read_more_key(self) -> str:
         """Read a --More-- answer from the terminal (q quits the readout)."""
         try:
-            return self.io.read("  --More-- [Enter: more | q: quit] ")
+            answer = self.io.read("  --More-- [Enter: more | q: quit] ")
         except (EOFError, KeyboardInterrupt):
-            return "q"
+            answer = "q"
+        try:
+            # Fresh line so resumed output never collides with the prompt.
+            # Direct io write: must bypass _print (and the pager) to avoid
+            # re-entering the prompt loop.
+            self.io.write("")
+        except Exception:
+            pass
+        return answer
 
     def _table(
         self,
