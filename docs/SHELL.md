@@ -166,7 +166,6 @@ $(<command>)                    # Command substitution
 | Command | Description |
 |---------|-------------|
 | `source <file>` / `.` | Execute commands from a file |
-| `py <expr>` | Evaluate a Python expression |
 | `ai <query>` | Natural language → shell command |
 
 ### Pipe Filters
@@ -496,17 +495,14 @@ set PS1='\u@\h \w \$ '
 
 ---
 
-## Inline Python
+## Error Details
 
 ```bash
-py 2 + 2
-py 'hello'.upper()
-py [i*i for i in range(5)]
-py __import__('json').dumps({'a': 1})
+traceback
 ```
 
-The `py` command evaluates any Python expression using `eval()` with all
-builtins available. Errors are caught and displayed.
+When a command fails, the shell prints a one-line error and stashes the
+full traceback — `traceback` shows it with syntax highlighting.
 
 ---
 
