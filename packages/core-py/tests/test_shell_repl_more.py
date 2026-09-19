@@ -4289,102 +4289,6 @@ class TestRequireApi:
         repl.os.api_status = {"available": False}
         result = repl._require_api("test")
         assert result is False
-
-
-# ── _cmd_events ──────────────────────────────────────────────────────
-
-
-class TestCmdEvents:
-    def test_events_no_bus(self, repl):
-        from unittest.mock import patch
-
-        with patch(
-            "domain.infrastructure._internal.event_bus.get_event_bus",
-            side_effect=Exception("no bus"),
-        ):
-            repl._cmd_events("")
-            assert repl._last_exit_code == 0
-
-    def test_events_empty(self, repl):
-        from unittest.mock import MagicMock, patch
-
-        bus = MagicMock()
-        bus.history.return_value = []
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
-            repl._cmd_events("")
-            assert repl._last_exit_code == 0
-
-    def test_events_with_data(self, repl):
-        import time as _time
-        from unittest.mock import MagicMock, patch
-
-        bus = MagicMock()
-        ev = MagicMock()
-        ev.name = "model.loaded"
-        ev.timestamp = _time.time()
-        ev.source = "api"
-        ev.data = {"model": "gpt2"}
-        bus.history.return_value = [ev]
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
-            repl._cmd_events("")
-            assert repl._last_exit_code == 0
-
-    def test_events_with_filter(self, repl):
-        import time as _time
-        from unittest.mock import MagicMock, patch
-
-        bus = MagicMock()
-        ev1 = MagicMock()
-        ev1.name = "model.loaded"
-        ev1.timestamp = _time.time()
-        ev1.source = "api"
-        ev1.data = None
-        ev2 = MagicMock()
-        ev2.name = "server.started"
-        ev2.timestamp = _time.time()
-        ev2.source = "api"
-        ev2.data = None
-        bus.history.return_value = [ev1, ev2]
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
-            repl._cmd_events("model")
-            assert repl._last_exit_code == 0
-
-    def test_events_no_match(self, repl):
-        from unittest.mock import MagicMock, patch
-
-        bus = MagicMock()
-        ev = MagicMock()
-        ev.name = "model.loaded"
-        ev.timestamp = 0
-        ev.source = "api"
-        ev.data = None
-        bus.history.return_value = [ev]
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
-            repl._cmd_events("nonexistent")
-            assert repl._last_exit_code == 0
-
-    def test_events_with_limit(self, repl):
-        import time as _time
-        from unittest.mock import MagicMock, patch
-
-        bus = MagicMock()
-        events = []
-        for i in range(10):
-            ev = MagicMock()
-            ev.name = f"event.{i}"
-            ev.timestamp = _time.time()
-            ev.source = "api"
-            ev.data = None
-            events.append(ev)
-        bus.history.return_value = events
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
-            repl._cmd_events(" 3")
-            assert repl._last_exit_code == 0
-
-
-# ── _cmd_confirm ─────────────────────────────────────────────────────
-
-
 class TestCmdConfirm:
     def test_confirm_no_args(self, repl):
         repl._cmd_confirm("")
@@ -8011,96 +7915,6 @@ class TestCmdVmperms:
         repl._cmd_vmperms("")
         assert repl._last_exit_code == 0
 
-
-# ── _cmd_events ───────────────────────────────────────────────────
-
-
-class TestCmdEventsV2:
-    def test_events_no_bus(self, repl):
-        repl.os.kernel = MagicMock()
-        repl.os.kernel._event_bus = None
-        repl._cmd_events("")
-        assert repl._last_exit_code == 0
-
-    def test_events_with_bus(self, repl):
-        bus = MagicMock()
-        bus.history.return_value = []
-        repl.os.kernel._event_bus = bus
-        repl._cmd_events("")
-        assert repl._last_exit_code == 0
-
-    def test_events_with_entries(self, repl):
-        from unittest.mock import MagicMock
-
-        bus = MagicMock()
-        ev = MagicMock()
-        ev.name = "test_event"
-        ev.timestamp = 1000000.0
-        ev.source = "test"
-        ev.data = {"key": "value"}
-        bus.history.return_value = [ev]
-        repl.os.kernel._event_bus = bus
-        repl._cmd_events("")
-        assert repl._last_exit_code == 0
-
-    def test_events_with_filter(self, repl):
-        from unittest.mock import MagicMock
-
-        bus = MagicMock()
-        ev = MagicMock()
-        ev.name = "model_loaded"
-        ev.timestamp = 1000000.0
-        ev.source = "test"
-        ev.data = {}
-        bus.history.return_value = [ev]
-        repl.os.kernel._event_bus = bus
-        repl._cmd_events("model")
-        assert repl._last_exit_code == 0
-
-    def test_events_with_limit(self, repl):
-        bus = MagicMock()
-        bus.history.return_value = []
-        repl.os.kernel._event_bus = bus
-        repl._cmd_events("5")
-        assert repl._last_exit_code == 0
-
-    def test_events_no_match(self, repl):
-        bus = MagicMock()
-        ev = MagicMock()
-        ev.name = "other_event"
-        ev.timestamp = 1000000.0
-        ev.source = ""
-        ev.data = {}
-        bus.history.return_value = [ev]
-        repl.os.kernel._event_bus = bus
-        repl._cmd_events("zzz")
-        assert repl._last_exit_code == 0
-
-
-# ── _cmd_metrics ──────────────────────────────────────────────────
-
-
-class TestCmdMetrics:
-    def test_metrics_success(self, repl):
-        repl.cmds.system_metrics = MagicMock(return_value={"cpu": 50.0, "memory": 4096.0})
-        repl._cmd_metrics("")
-        assert repl._last_exit_code == 0
-
-    def test_metrics_error(self, repl):
-        repl.cmds.system_metrics = MagicMock(return_value={"error": "timeout"})
-        repl._cmd_metrics("")
-        assert repl._last_exit_code == 0
-
-
-# ── _cmd_tui ──────────────────────────────────────────────────────
-
-
-class TestCmdTui:
-    def test_tui_runtime_error(self, repl):
-        import builtins
-
-        real_import = builtins.__import__
-
         def mock_import(name, *args, **kwargs):
             if name == "domain.shell._internal.tui_repl":
                 mod = MagicMock()
@@ -9106,48 +8920,6 @@ class TestStreamTrainProgressException:
         ):
             repl._stream_train_progress("j1")
         assert repl._last_exit_code == 0
-
-
-# ── _cmd_events with entries and filter ────────────────────────────
-
-
-class TestCmdEventsExtra:
-    def test_events_with_entries_and_limit(self, repl):
-        bus = MagicMock()
-        events = []
-        for i in range(10):
-            ev = MagicMock()
-            ev.name = f"event_{i}"
-            ev.timestamp = 1000000.0 + i
-            ev.source = f"src_{i}"
-            ev.data = {"key": f"val_{i}"}
-            events.append(ev)
-        bus.history.return_value = events
-        with patch("domain.infrastructure.get_event_bus", return_value=bus):
-            repl._cmd_events("5")
-        assert repl._last_exit_code == 0
-
-    def test_events_with_filter_match(self, repl):
-        bus = MagicMock()
-        ev1 = MagicMock()
-        ev1.name = "model_loaded"
-        ev1.timestamp = 1000000.0
-        ev1.source = "loader"
-        ev1.data = None
-        ev2 = MagicMock()
-        ev2.name = "health_check"
-        ev2.timestamp = 1000001.0
-        ev2.source = "monitor"
-        ev2.data = {}
-        bus.history.return_value = [ev1, ev2]
-        with patch("domain.infrastructure.get_event_bus", return_value=bus):
-            repl._cmd_events("model")
-        assert repl._last_exit_code == 0
-
-
-# ── _cmd_logs explain non-dict result ─────────────────────────────
-
-
 class TestCmdLogsExplainExtra:
     def test_logs_explain_non_dict_result(self, repl):
         from domain.shell._internal.log_buffer import LogEntry
@@ -13297,38 +13069,11 @@ class TestCmdUptimeStatus:
         assert repl._last_exit_code == 0
 
     def test_metrics(self, repl):
-        repl._cmd_metrics("")
-        assert repl._last_exit_code == 0
-
-
-# ── _cmd_events paths ─────────────────────────────────────────────
-
-
-class TestCmdEventsExtraV2:
-    def test_events_no_args(self, repl):
-        repl._cmd_events("")
-        assert repl._last_exit_code == 0
-
-    def test_events_with_limit(self, repl):
-        repl._cmd_events("-n 5")
-        assert repl._last_exit_code == 0
-
-    def test_events_filter_match(self, repl):
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus") as mock_bus:
-            mock_bus.return_value.get_recent.return_value = [{"type": "model.loaded", "data": {}}]
-            repl._cmd_events("model")
-        assert repl._last_exit_code == 0
-
-    def test_events_empty(self, repl):
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus") as mock_bus:
-            mock_bus.return_value.get_recent.return_value = []
-            repl._cmd_events("")
-        assert repl._last_exit_code == 0
-
-
-# ── _cmd_procs / _cmd_ps / _cmd_kill paths ───────────────────────
-
-
+        # metrics lives in the status dashboard now — assert its section.
+        repl.cmds.system_metrics = lambda: {"cpu_percent": 10.0}
+        out = _run_with_io(repl, [], lambda: repl._cmd_status(""))
+        assert "Metrics:" in out
+        assert "cpu_percent" in out
 class TestCmdProcsPsKill:
     def test_procs_no_args(self, repl):
         repl._cmd_procs("")
@@ -16515,56 +16260,6 @@ class TestCmdLsdevExtraV2:
             out = _run_with_io(repl, [], lambda: repl._cmd_lsdev(""))
             assert "Device nodes" in out
             assert "/dev/null" in out
-
-
-# ── _cmd_events ──────────────────────────────────────────────────────
-
-
-class TestCmdEventsExtraV3:
-    def test_events_no_bus(self, repl):
-        from unittest.mock import patch as mp
-
-        with mp(
-            "domain.infrastructure._internal.event_bus.get_event_bus",
-            side_effect=Exception("no bus"),
-        ):
-            out = _run_with_io(repl, [], lambda: repl._cmd_events(""))
-            assert "not available" in out
-
-    def test_events_empty_history(self, repl):
-        from unittest.mock import MagicMock
-        from unittest.mock import patch as mp
-
-        mock_bus = MagicMock()
-        mock_bus.history.return_value = []
-        with mp("domain.infrastructure._internal.event_bus.get_event_bus", return_value=mock_bus):
-            out = _run_with_io(repl, [], lambda: repl._cmd_events(""))
-            assert "No events" in out
-
-
-# ── _cmd_metrics ─────────────────────────────────────────────────────
-
-
-class TestCmdMetricsExtra:
-    def test_metrics_error(self, repl):
-        from unittest.mock import MagicMock
-
-        repl.cmds.system_metrics = MagicMock(return_value={"error": "connection refused"})
-        out = _run_with_io(repl, [], lambda: repl._cmd_metrics(""))
-        assert "connection refused" in out
-
-    def test_metrics_ok(self, repl):
-        from unittest.mock import MagicMock
-
-        repl.cmds.system_metrics = MagicMock(return_value={"cpu": 50.0, "mem": 1024})
-        out = _run_with_io(repl, [], lambda: repl._cmd_metrics(""))
-        assert "cpu" in out
-        assert "mem" in out
-
-
-# ── _cmd_mv overwrite ───────────────────────────────────────────────
-
-
 class TestCmdMvOverwrite:
     def test_mv_overwrites_existing(self, repl, tmp_path):
         src = tmp_path / "mv_over_src.txt"
@@ -18006,29 +17701,6 @@ class TestCmdLsdevDeeper:
     def test_lsdev_empty(self, repl):
         _run_with_io(repl, [], lambda: repl._cmd_lsdev(""))
         assert repl._last_exit_code == 0
-
-
-# ── _cmd_events deeper ──────────────────────────────────────────
-
-
-class TestCmdEventsDeeper:
-    def test_events_empty(self, repl):
-        _run_with_io(repl, [], lambda: repl._cmd_events(""))
-        assert repl._last_exit_code == 0
-
-
-# ── _cmd_metrics deeper ──────────────────────────────────────────
-
-
-class TestCmdMetricsDeeper:
-    def test_metrics_returns_output(self, repl):
-        _run_with_io(repl, [], lambda: repl._cmd_metrics(""))
-        assert repl._last_exit_code == 0
-
-
-# ── _cmd_help deeper ─────────────────────────────────────────────
-
-
 class TestCmdHelpDeeper:
     def test_help_with_command(self, repl):
         _run_with_io(repl, [], lambda: repl._cmd_help("echo"))
@@ -19913,77 +19585,6 @@ class TestCmdDenyDeeper3:
         repl._perms.grant("cmd_b")
         out = _run_with_io(repl, [], lambda: repl._cmd_deny("cmd_a cmd_b"))
         assert "cmd_a" in out and "cmd_b" in out
-
-
-# ── _cmd_events deeper ──────────────────────────────────────────
-
-
-class TestCmdEventsDeeper2:
-    def test_events_no_bus(self, repl):
-        import domain.infrastructure._internal.event_bus as eb
-
-        with patch.object(eb, "get_event_bus", side_effect=Exception("no bus")):
-            out = _run_with_io(repl, [], lambda: repl._cmd_events(""))
-            assert "not available" in out.lower() or repl._last_exit_code == 0
-
-    def test_events_empty_history(self, repl):
-        mock_bus = MagicMock()
-        mock_bus.history.return_value = []
-        import domain.infrastructure._internal.event_bus as eb
-
-        with patch.object(eb, "get_event_bus", return_value=mock_bus):
-            out = _run_with_io(repl, [], lambda: repl._cmd_events(""))
-            assert "No events" in out
-
-    def test_events_with_filter(self, repl):
-        mock_event = MagicMock()
-        mock_event.name = "model.loaded"
-        mock_event.timestamp = time.time()
-        mock_event.source = "test"
-        mock_event.data = {"model": "gpt2"}
-        mock_bus = MagicMock()
-        mock_bus.history.return_value = [mock_event]
-        import domain.infrastructure._internal.event_bus as eb
-
-        with patch.object(eb, "get_event_bus", return_value=mock_bus):
-            out = _run_with_io(repl, [], lambda: repl._cmd_events("model"))
-            assert "model.loaded" in out
-
-    def test_events_no_match(self, repl):
-        mock_event = MagicMock()
-        mock_event.name = "model.loaded"
-        mock_event.timestamp = time.time()
-        mock_event.source = "test"
-        mock_event.data = {}
-        mock_bus = MagicMock()
-        mock_bus.history.return_value = [mock_event]
-        import domain.infrastructure._internal.event_bus as eb
-
-        with patch.object(eb, "get_event_bus", return_value=mock_bus):
-            out = _run_with_io(repl, [], lambda: repl._cmd_events("nonexistent"))
-            assert "No events matching" in out
-
-    def test_events_with_limit(self, repl):
-        events = []
-        for i in range(50):
-            ev = MagicMock()
-            ev.name = f"event.{i}"
-            ev.timestamp = time.time()
-            ev.source = "test"
-            ev.data = None
-            events.append(ev)
-        mock_bus = MagicMock()
-        mock_bus.history.return_value = events
-        import domain.infrastructure._internal.event_bus as eb
-
-        with patch.object(eb, "get_event_bus", return_value=mock_bus):
-            out = _run_with_io(repl, [], lambda: repl._cmd_events("event 5"))
-            assert "5" in out or "last" in out.lower()
-
-
-# ── _cmd_protect/unprotect deeper ───────────────────────────────
-
-
 class TestCmdProtectDeeper2:
     def test_protect_no_args(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_protect(""))
@@ -20318,26 +19919,6 @@ class TestCmdPsDeeper3:
         with patch.object(repl.os.kernel, "list_processes", return_value=[mock_proc]):
             out = _run_with_io(repl, [], lambda: repl._cmd_ps(""))
         assert "test-proc" in out or "RUNNING" in out
-
-
-# ── _cmd_metrics deeper ─────────────────────────────────────────
-
-
-class TestCmdMetricsDeeper2:
-    def test_metrics_with_error(self, repl):
-        repl.cmds.system_metrics = MagicMock(return_value={"error": "connection refused"})
-        out = _run_with_io(repl, [], lambda: repl._cmd_metrics(""))
-        assert "Error" in out
-
-    def test_metrics_with_data(self, repl):
-        repl.cmds.system_metrics = MagicMock(return_value={"cpu": "50%", "mem": "2GB"})
-        out = _run_with_io(repl, [], lambda: repl._cmd_metrics(""))
-        assert "cpu" in out or "50%" in out
-
-
-# ── _cmd_confirm deeper ─────────────────────────────────────────
-
-
 class TestCmdConfirmDeeper3:
     def test_confirm_show(self, repl):
         _run_with_io(repl, [], lambda: repl._cmd_confirm(""))
@@ -22940,24 +22521,6 @@ class TestCmdSvcDeeperV3:
         with _CaptureOutput(repl):
             repl._cmd_svc("zzz_unknown")
         assert repl._last_exit_code == 1
-
-
-class TestCmdEventsDeeperV2:
-    def test_events_no_args(self, repl):
-        with patch("domain.infrastructure._internal.event_bus.get_event_bus") as mock_eb:
-            mock_bus = MagicMock()
-            mock_bus.replay.return_value = []
-            mock_eb.return_value = mock_bus
-            repl._cmd_events("")
-            assert repl._last_exit_code == 0
-
-
-class TestCmdMetricsDeeperV2:
-    def test_metrics_no_api(self, repl):
-        repl._cmd_metrics("")
-        assert repl._last_exit_code == 0
-
-
 class TestCmdPsDeeperV2:
     def test_ps_no_procs(self, repl):
         repl._cmd_ps("")
@@ -25418,22 +24981,6 @@ class TestCmdApiDeeperV3:
         with _CaptureOutput(repl):
             repl._cmd_api("status")
         assert repl._last_exit_code == 0
-
-
-class TestCmdEventsDeeperV3:
-    def test_events(self, repl):
-        with _CaptureOutput(repl):
-            repl._cmd_events("")
-        assert repl._last_exit_code == 0
-
-
-class TestCmdMetricsDeeperV3:
-    def test_metrics(self, repl):
-        with _CaptureOutput(repl):
-            repl._cmd_metrics("")
-        assert repl._last_exit_code == 0
-
-
 class TestCmdUptimeDeeperV4:
     def test_uptime(self, repl):
         with _CaptureOutput(repl):

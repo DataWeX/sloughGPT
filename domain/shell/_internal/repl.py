@@ -903,13 +903,6 @@ class ShellREPL(LinuxCommandsMixin):
                 return ["load", "rm", "del", "delete"]
             if cmd == "train":
                 return ["status", "follow", "stop", "distill", "hf", "auto", "load", "del"]
-            if cmd in ("permit", "deny"):
-                from .permissions import _CRITICAL, _DANGEROUS
-
-                candidates = sorted(_DANGEROUS | _CRITICAL) + ["--persist"]
-                if cmd == "permit":
-                    candidates.append("--all-dangerous")
-                return candidates
             if cmd == "note":
                 return [
                     "new",
@@ -1839,11 +1832,10 @@ class ShellREPL(LinuxCommandsMixin):
   datasets / knowledge  Data management
   checkpoints           Training checkpoints
   agents                Multi-agent orchestration
-  status / metrics      System health and info
-  logs / events         System logs and events
+  status                System dashboard
+  logs                  System logs
   api                   API server lifecycle
   ps / kill             Process management
-  py                    Python expressions
   ls / cat / grep / find  File operations
   cd / pwd / echo       Navigation
   history / alias       Shell features
@@ -1884,16 +1876,11 @@ class ShellREPL(LinuxCommandsMixin):
                 "souls": "  souls  — List available souls",
                 "agents": "  agents <goal>  — Multi-agent orchestration",
                 "agent": "  agent [--auto] <goal>  — Interactive agent loop (plan/approve/execute)",
-                "status": "  status  — Detailed system status",
-                "metrics": "  metrics  — Show CPU/memory/disk metrics",
-                "events": "  events [filter] [n]  — Show recent events",
+                "status": "  status  — System dashboard (health, metrics, events, logs)",
                 "logs": "  logs [-l LEVEL] [-f]  — View logs",
                 "api": "  api [start|stop|status]  — Manage API server",
                 "kill": "  kill <id>  — Stop a training job",
                 "ps": "  ps  — List kernel processes",
-                "permit": "  permit <cmd>  — Grant permission for blocked command",
-                "deny": "  deny <cmd>  — Revoke permission",
-                "permissions": "  permissions  — Show permission policy",
                 "confirm": "  confirm [on|off]  — Toggle auto-download confirmation (alias: autodownload)",
                 "autodownload": "  autodownload [on|off]  — Toggle auto-download confirmation",
                 "protect": "  protect <model>  — Protect model files",
@@ -1939,10 +1926,8 @@ Most common commands (help [cmd] for details, help for full list):
   devices              List AI device nodes
   asm [file.asm]       Run VM program
   ai <query>           NL command interpretation
-  procs                Show running jobs
-  kill <id>            Stop a job
-  permit / deny        Permission management
-  permissions          Show permission policy
+   procs                Show running jobs
+   kill <id>            Stop a job
 """)
             else:
                 self._print(f"  Unknown command: {args}")
@@ -1982,18 +1967,13 @@ Built-in commands:
   agents <goal>          Multi-agent orchestration
 
 {_C_CYAN}System:{_C_RESET}
-  status                 Detailed system status
-  metrics                CPU/memory/disk metrics
-  events                 Show recent events
+  status                 System dashboard (health, metrics, events, logs)
   logs [-f]              View logs
   api [start|stop]       Manage API server
   ps                     List kernel processes
   kill <id>              Stop a training job
 
 {_C_CYAN}Permissions:{_C_RESET}
-  permit <cmd>           Grant permission for blocked command
-  deny <cmd>             Revoke permission
-  permissions            Show permission policy
   confirm [on|off]       Toggle auto-download confirmation
   autodownload [on|off]  Toggle auto-download confirmation
   protect <model>        Protect model files
@@ -2146,79 +2126,6 @@ Type `help <command>` for details on a command.
             self._print(out, end="")
 
     # ── Permission commands ────────────────────────────────────────
-
-    def _cmd_permit(self, args: str = "") -> None:
-        """permit <cmd> — grant permission for a command (session or persistent)."""
-        from .permissions import Risk
-
-        parts = args.strip().split()
-        if not parts:
-            self._print("  Usage: permit <cmd> [--persist]")
-            self._print("         permit --all-<risk> [--persist]")
-            self._print(
-                f"  Risk levels: {Risk.SAFE}, {Risk.ELEVATED}, {Risk.DANGEROUS}, {Risk.CRITICAL}"
-            )
-            granted = self._perms.list_granted()
-            if granted:
-                self._print(f"  Currently granted: {', '.join(granted)}")
-            return
-        persist = "--persist" in parts
-        targets = [p for p in parts if p != "--persist"]
-        for t in targets:
-            if t.startswith("--all-"):
-                risk = t[len("--all-") :]
-                if risk not in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
-                    self._print(f"  Unknown risk level: {risk}")
-                    continue
-                self._perms.set_policy(risk, "allow")
-                if persist:
-                    self._perms._save_persistent()
-                self._print(f"  All {risk} commands now allowed")
-            else:
-                self._perms.grant(t, persist=persist)
-                self._print(f"  Granted: {t}" + (" (persistent)" if persist else ""))
-
-    def _cmd_deny(self, args: str = "") -> None:
-        """deny <cmd> — revoke permission for a command."""
-        from .permissions import Risk
-
-        parts = args.strip().split()
-        if not parts:
-            self._print("  Usage: deny <cmd> [--persist]")
-            self._print("         deny --all-<risk> [--persist]")
-            return
-        persist = "--persist" in parts
-        targets = [p for p in parts if p != "--persist"]
-        for t in targets:
-            if t.startswith("--all-"):
-                risk = t[len("--all-") :]
-                if risk not in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
-                    self._print(f"  Unknown risk level: {risk}")
-                    continue
-                self._perms.set_policy(risk, "deny")
-                self._perms.revoke(t, persist=persist) if persist else None
-                if persist:
-                    self._perms._save_persistent()
-                self._print(f"  All {risk} commands now denied")
-            else:
-                self._perms.revoke(t, persist=persist)
-                self._print(f"  Revoked: {t}" + (" (persistent)" if persist else ""))
-
-    def _cmd_permissions(self, args: str = "") -> None:
-        """permissions — show current permission policy and granted commands."""
-        from .permissions import Risk
-
-        self._print("  Risk policies:")
-        for risk in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
-            action = self._perms._policy.get(risk, "deny")
-            icon = (
-                f"{_C_GREEN}✓ allow{_C_RESET}" if action == "allow" else f"{_C_RED}✗ deny{_C_RESET}"
-            )
-            self._print(f"    {risk:10s} {icon}")
-        granted = self._perms.list_granted()
-        if granted:
-            self._print(f"  Granted commands: {', '.join(granted)}")
-        self._print("  Config: MogDB (shell_permissions)")
 
     def _cmd_confirm(self, args: str = "") -> None:
         """confirm [on|off] — toggle auto-download (skip download confirmations).
@@ -2439,66 +2346,51 @@ Type `help <command>` for details on a command.
         self._print(f"  Permissions: {', '.join(policies)}")
         if granted:
             self._print(f"  Granted: {', '.join(granted)}")
+        self._status_section_metrics()
+        self._status_section_events()
+        self._status_section_logs()
 
-    def _cmd_events(self, args: str = "") -> None:
-        """Show recent EventBus events. Optionally filter by event name and set limit.
+    def _status_section_metrics(self) -> None:
+        """Metrics dashboard section (consolidated from the `metrics` command)."""
+        try:
+            metrics = self.cmds.system_metrics()
+        except Exception:
+            return
+        if not isinstance(metrics, dict) or metrics.get("error"):
+            return
+        items = [(k, v) for k, v in metrics.items() if not k.startswith("_")]
+        if not items:
+            return
+        self._print(f"  {_C_CYAN}Metrics:{_C_RESET}")
+        for k, v in items[:8]:
+            self._print(f"    {k}: {v}")
 
-        Usage:
-          events              — show last 20 events
-          events model         — filter by event names containing "model"
-          events circuit 10    — filter by "circuit", show last 10
-        """
+    def _status_section_events(self) -> None:
+        """Recent-events dashboard section (consolidated from `events`)."""
         try:
             from domain.infrastructure._internal.event_bus import get_event_bus
 
-            bus = get_event_bus()
+            events = get_event_bus().history()[-5:]
         except Exception:
-            self._print("  EventBus not available")
             return
-
-        parts = args.split()
-        filter_event = parts[0] if parts else None
-        limit = 20
-        if len(parts) > 1:
-            try:
-                limit = int(parts[1])
-            except ValueError:
-                limit = 20
-
-        all_events = bus.history()
-        if not all_events:
-            self._print("  No events recorded")
+        if not events:
             return
-
-        if filter_event:
-            filtered = [e for e in all_events if filter_event.lower() in e.name.lower()]
-        else:
-            filtered = list(all_events)
-
-        if not filtered:
-            self._print(f"  No events matching '{filter_event}'")
-            return
-
-        events = filtered[-limit:]
-        self._print(
-            f"  Event history (last {len(events)} of {len(filtered)}, total {len(all_events)}):"
-        )
+        self._print(f"  {_C_CYAN}Recent events:{_C_RESET}")
         for e in events:
             t = time.strftime("%H:%M:%S", time.localtime(e.timestamp))
-            src = f"[{e.source}]" if e.source else ""
-            data_str = str(e.data)[:80] if e.data else ""
-            self._print(f"  {t}  {e.name:35s} {src:15s} {data_str}")
+            self._print(f"    {t}  {e.name}")
 
-    def _cmd_metrics(self, args: str = "") -> None:
-        metrics = self._spinner_call(
-            "Fetching metrics", lambda: self.cmds.system_metrics(), ok_msg=None
-        )
-        if metrics.get("error"):
-            self._print(f"  Error: {metrics['error']}")
+    def _status_section_logs(self) -> None:
+        """Log-tail dashboard section (consolidated from `logs`)."""
+        try:
+            entries = self._log_buffer.get()[-5:]
+        except Exception:
             return
-        for k, v in metrics.items():
-            if not k.startswith("_"):
-                self._print(f"  {k}: {v}")
+        if not entries:
+            return
+        self._print(f"  {_C_CYAN}Recent logs:{_C_RESET}")
+        for e in entries:
+            self._print(f"    {e.level}: {e.message[:100]}")
 
     def _cmd_tui(self, args: str = "") -> None:
         """Launch the split-panel TUI mode — console panel + shell output + input line."""
@@ -4034,8 +3926,6 @@ Type `help <command>` for details on a command.
                     "  ai --loop    \u2014 Interactive agent loop with approval",
                     "    Example: ai --loop fix the bug in main.py",
                     "  agent <goal> \u2014 Full agent: plan, approve, execute, repeat",
-                    "  py <expr>    \u2014 Evaluate Python inline",
-                    "    Example: py 2 + 2",
                     "  Advanced: pipelines, watch, background jobs",
                 ],
             ),
@@ -5266,15 +5156,10 @@ _shell_commands = {
     "souls": ShellREPL._cmd_souls,
     "agents": ShellREPL._cmd_agents,
     "status": ShellREPL._cmd_status,
-    "metrics": ShellREPL._cmd_metrics,
-    "events": ShellREPL._cmd_events,
     "logs": ShellREPL._cmd_logs,
     "api": ShellREPL._cmd_api,
     "kill": ShellREPL._cmd_kill,
     "ps": ShellREPL._cmd_ps,
-    "permit": ShellREPL._cmd_permit,
-    "deny": ShellREPL._cmd_deny,
-    "permissions": ShellREPL._cmd_permissions,
     "confirm": ShellREPL._cmd_confirm,
     "autodownload": ShellREPL._cmd_confirm,
     "protect": ShellREPL._cmd_protect,
