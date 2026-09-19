@@ -10,7 +10,7 @@ Layout:
   │ gpt2   124M   loaded                                      │
   ├───────────────────────────────────────────────────────────┤
   │ [OUTPUT] LIVE  ai "2+2"                    120x24 (fixed) │
-  │ λ _                                           (fixed line) │
+  │ _                                             (fixed line) │
   └───────────────────────────────────────────────────────────┘
 
 Uses the GraphicsEngine for rendering (compositing framebuffer model) and
@@ -204,6 +204,10 @@ class TuiRepl:
         self._running = False
         self._cmd_history: list[str] = []
         self._history_pos = 0
+        # Unsent draft saved on first Up from fresh input, restored on
+        # Down past newest (readline semantics — browsing never loses typing).
+        self._history_draft: list[str] | None = None
+        self._history_draft_cursor = 0
         self._search_fwd = False
         self._search_failed = False
         self._out_search_q = ""
@@ -392,7 +396,8 @@ class TuiRepl:
     def run(self) -> None:
         """Enter curses mode and start the event loop."""
         self._running = True
-        history = getattr(self._repl, "_history", None)
+        store = getattr(self._repl, "_history_store", None)
+        history = store.list() if store is not None else getattr(self._repl, "_history", None)
         self._cmd_history = list(history) if history else []
         self._history_pos = len(self._cmd_history)
 
@@ -577,9 +582,17 @@ class TuiRepl:
                     pane=pane,
                 )
         self._render_status(win_status, regions["status"].cols)
-        self._render_input(win_input, regions["input"].cols)
+        caret_col = self._render_input(win_input, regions["input"].cols)
         # Composite and render to terminal
         self._engine.render()
+        # Position the hardware cursor on the input row — without this the
+        # cursor stays where the last diff left it and history browsing
+        # looks mixed/desynced.
+        try:
+            reg = regions["input"]
+            self._engine.set_cursor(reg.top, reg.left + max(0, min(caret_col, reg.cols - 1)))
+        except Exception:
+            pass
 
     def _input_view(self, cols: int, buf: str, caret: int) -> tuple[str, int]:
         """Compute the visible input line and its caret column.
@@ -590,7 +603,7 @@ class TuiRepl:
         wider than the window the view scrolls horizontally so the caret
         stays visible; a buffer at the window edge reveals its tail.
         """
-        prompt = "\u03bb "
+        prompt = "\u0343 "
         max_w = max(cols - len(prompt) - 1, 0)
         caret = min(max(caret, 0), len(buf))
         if len(buf) <= max_w:
@@ -598,18 +611,27 @@ class TuiRepl:
         start = min(caret, len(buf) - max_w)
         return buf[start : start + max_w], len(prompt) + (caret - start)
 
-    def _render_input(self, win: curses._CursesWindow, cols: int) -> None:
-        """Draw the command line using the engine with display modes."""
+    def _render_input(self, win: curses._CursesWindow, cols: int) -> int:
+        """Draw the command line using the engine with display modes.
+
+        Returns the caret column (absolute window col) so the caller can
+        position the terminal cursor after compositing.
+        """
         if self._engine is None or self._layer_input is None:
-            return
+            return 0
+        from .prompt import PromptContext, PromptRenderer
+
         layer = self._layer_input
         layer.clear()
-        prompt = "\u03bb "
+        # Shared expander with line mode; TUI keeps its minimal PS1
+        # (no badge/exit prefix — single-row input pane).
+        prompt = PromptRenderer.render(PromptContext(ps1="\u0343 "))
         buf = "".join(self._input_buf)
         line, caret_col = self._input_view(cols, buf, self._input_cursor)
         layer.write(0, 0, prompt, fg=Color.CYAN, attr=Attr.BOLD)
         if line:
             layer.write(0, len(prompt), line)
+        return caret_col
 
     def _render_status(self, win: curses._CursesWindow, cols: int) -> None:
         """Draw the chrome bar using the engine with display modes."""
@@ -742,23 +764,32 @@ class TuiRepl:
         """Step to the previous (older) history entry, filling the input row.
 
         No-op at the oldest entry; mirrors readline ``previous-history``.
+        The unsent draft is saved on first step off fresh input.
         """
         if self._cmd_history and self._history_pos > 0:
+            if self._history_pos == len(self._cmd_history):
+                self._history_draft = list(getattr(self, "_input_buf", []))
+                self._history_draft_cursor = getattr(self, "_input_cursor", 0)
             self._history_pos -= 1
             self._input_buf = list(self._cmd_history[self._history_pos])
             self._input_cursor = len(self._input_buf)
 
     def _history_fwd(self) -> None:
-        """Step to the next (newer) history entry; past the newest clears
-        the input row (readline ``next-history``)."""
+        """Step to the next (newer) history entry; past the newest restores
+        the saved draft (or clears when none) — readline ``next-history``."""
         if self._cmd_history and self._history_pos < len(self._cmd_history) - 1:
             self._history_pos += 1
             self._input_buf = list(self._cmd_history[self._history_pos])
             self._input_cursor = len(self._input_buf)
         else:
             self._history_pos = len(self._cmd_history)
-            self._input_buf.clear()
-            self._input_cursor = 0
+            if self._history_draft is not None:
+                self._input_buf = list(self._history_draft)
+                self._input_cursor = self._history_draft_cursor
+                self._history_draft = None
+            else:
+                self._input_buf.clear()
+                self._input_cursor = 0
 
     def _move_word_forward(self) -> None:
         """Move the caret to the end of the next word (Alt+F / Ctrl+Right).
@@ -1471,7 +1502,7 @@ class TuiRepl:
                     if cmd in ("exit", "q", "quit"):
                         self._running = False
                         break
-                    self._output_surface.write(f"\u03bb {cmd}")
+                    self._output_surface.write(f"\u0343 {cmd}")
 
                     def _run() -> None:
                         with self._repl_lock:

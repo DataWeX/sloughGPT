@@ -290,7 +290,9 @@ class ShellREPL(LinuxCommandsMixin):
         self.os = os
         self.cmds = cmds or ShellCommands()
         self.state = ShellState()
-        self._history: list[str] = self.state.history[:]
+        from .history import HistoryStore
+
+        self._history_store = HistoryStore(initial=self.state.history, state=self.state)
         self._running = False
         # Line mode is the default interactive shell; the curses TUI is
         # opt-in via MAN_TUI=1 or the `tui` command / --tui flag.
@@ -307,7 +309,7 @@ class ShellREPL(LinuxCommandsMixin):
         self._piped_input: str = ""
         self._aborted = False
         self._env: dict[str, str] = {
-            "PS1": "\u03bb",
+            "PS1": "\u0343",
             "SHELL": "sloughgpt",
             "HOME": str(Path.home()),
             "TERM": "xterm-256color",
@@ -504,8 +506,7 @@ class ShellREPL(LinuxCommandsMixin):
         t0 = _time.time()
         try:
             self._cmd_count += 1
-            self._history.append(line)
-            self.state.add_history(line)
+            self._history_store.append(line)
             self.state.save()
             self._aborted = False
             self._piped_input = ""
@@ -639,23 +640,25 @@ class ShellREPL(LinuxCommandsMixin):
     def _render_prompt(self) -> str:
         """Expand PS1 escapes: \\h=host, \\w=cwd, \\t=time, \\u=user, \\s=shell, \\#=cmd count,
         \\m=model, \\S=soul. Appends a log badge for unread warnings/errors."""
-        s = self._env.get("PS1", "\u03bb")
-        s = s.replace("\\h", os.uname().nodename.split(".")[0])
-        s = s.replace("\\w", os.getcwd().replace(str(Path.home()), "~"))
-        s = s.replace("\\t", datetime.now().strftime("%H:%M:%S"))
-        s = s.replace("\\u", os.environ.get("USER", "user"))
-        s = s.replace("\\s", "sloughgpt")
-        s = s.replace("\\#", str(self._cmd_count + 1))
-        s = s.replace("\\n", "\n")
-        s = s.replace("\\m", self._get_current_model())
-        s = s.replace("\\S", self._get_current_soul())
+        from .prompt import PromptContext, PromptRenderer
+
+        exit_prefix = ""
         if self._last_exit_code != 0:
-            s = f"{_C_RED}[{self._last_exit_code}]{_C_RESET} {s}"
-        # Append log badge (unread warnings/errors)
-        badge = self._log_display.badge()
-        if badge:
-            s = f"{s}{badge}"
-        return s
+            exit_prefix = f"{_C_RED}[{self._last_exit_code}]{_C_RESET} "
+        ctx = PromptContext(
+            ps1=self._env.get("PS1", "\u0343"),
+            cwd=os.getcwd().replace(str(Path.home()), "~"),
+            user=os.environ.get("USER", "user"),
+            host=os.uname().nodename.split(".")[0],
+            time_str=datetime.now().strftime("%H:%M:%S"),
+            cmd_count=self._cmd_count + 1,
+            exit_code=self._last_exit_code,
+            model=self._get_current_model(),
+            soul=self._get_current_soul(),
+            badge=self._log_display.badge(),
+            exit_prefix=exit_prefix,
+        )
+        return PromptRenderer.render(ctx)
 
     def _get_current_model(self) -> str:
         """Fetch loaded model name (cached 30s)."""
@@ -905,6 +908,10 @@ class ShellREPL(LinuxCommandsMixin):
                     "sprint",
                     "timeline",
                 ]
+            if cmd == "svc":
+                return ["list", "start", "stop"]
+            if cmd == "api":
+                return ["start", "stop", "status"]
         except Exception as e:
             logger.debug("command completion failed: %s", e)
         return self._complete_path("")
@@ -1078,6 +1085,24 @@ class ShellREPL(LinuxCommandsMixin):
 
             text = re.sub(pattern, _repl, text, count=1)
         return text
+
+    @property
+    def _history(self) -> list[str]:
+        """Command history entries (compat view over HistoryStore)."""
+        store = getattr(self, "_history_store", None)
+        if store is None:
+            return []
+        return store.entries
+
+    @_history.setter
+    def _history(self, value: list[str]) -> None:
+        store = getattr(self, "_history_store", None)
+        if store is None:
+            from .history import HistoryStore
+
+            self._history_store = HistoryStore(initial=list(value))
+        else:
+            store.entries = list(value)
 
     def _expand_history(self, text: str) -> str:
         """Expand ! history references: !! !$ !n !-n !-n$ etc."""
@@ -1953,6 +1978,14 @@ class ShellREPL(LinuxCommandsMixin):
                 "unprotect": "  unprotect <model>  — Remove protection",
                 "tui": "  tui  — Launch three-pane TUI",
                 "clear": "  clear  — Clear the terminal screen",
+                "note": "  note <subcmd>  — Note management (add/show/edit/delete/list)",
+                "tutorial": "  tutorial  — Interactive shell walkthrough",
+                "boot": "  boot  — Boot the kernel and services",
+                "shutdown": "  shutdown  — Shut down the kernel",
+                "svc": "  svc [list|start|stop] <name>  — Manage system services",
+                "uptime": "  uptime  — Show system uptime",
+                "lsdev": "  lsdev  — List AI device nodes",
+                "render": "  render  — Neural scene rendering (path tracer)",
             }
             if args in cmd_help:
                 self._print(cmd_help[args])
@@ -2041,6 +2074,10 @@ Most common commands (help [cmd] for details, help for full list):
   api [start|stop]       Manage API server
   ps                     List kernel processes
   kill <id>              Stop a training job
+  uptime                 Show system uptime
+  lsdev                  List AI device nodes
+  boot / shutdown        Kernel lifecycle
+  svc [list|start|stop]  Manage system services
 
 {_C_CYAN}Permissions:{_C_RESET}
   permit <cmd>           Grant permission for blocked command
@@ -2063,6 +2100,9 @@ Most common commands (help [cmd] for details, help for full list):
   unalias <name>          Remove an alias
   py <expr>               Evaluate Python expression
   tui                     Launch the TUI interface
+  tutorial                Interactive shell walkthrough
+  note <subcmd>           Note management (add/show/edit/delete)
+  render                  Neural scene rendering
   clear                   Clear the terminal screen
   exit                    Exit the shell
 Examples:
@@ -3791,12 +3831,18 @@ Examples:
                 else "unexpected response"
             )
             if "timeout" in str(error).lower() or "timed out" in str(error).lower():
+                model = self._get_current_model() or "unknown"
                 self._print(
-                    f"  {_C_YELLOW}\u26a0\ufe0f AI server is busy (timeout). Try again in a moment.{_C_RESET}"
+                    f"  {_C_YELLOW}\u26a0\ufe0f Generation timed out ({model}).{_C_RESET}\n"
+                    f"    \u2022 Try a shorter prompt\n"
+                    f"    \u2022 Reduce max_tokens\n"
+                    f"    \u2022 Use a smaller/faster model: models"
                 )
             elif "connect" in str(error).lower() or "refused" in str(error).lower():
                 self._print(
-                    f"  {_C_RED}\u274c AI server is not running.{_C_RESET} Start it with: api start"
+                    f"  {_C_RED}\u274c AI server is not running.{_C_RESET}\n"
+                    f"    \u2022 Start it: api start\n"
+                    f"    \u2022 Check status: api status"
                 )
             else:
                 self._print(f"  {_C_RED}\u274c AI interpretation failed: {error}{_C_RESET}")
@@ -5013,8 +5059,7 @@ nl: db 10
         import time as _time
 
         self._cmd_count += 1
-        self._history.append(line)
-        self.state.add_history(line)
+        self._history_store.append(line)
         self.state.save()
 
         self._aborted = False
@@ -5244,6 +5289,14 @@ _shell_commands = {
     "protect": ShellREPL._cmd_protect,
     "unprotect": ShellREPL._cmd_unprotect,
     "tui": ShellREPL._cmd_tui,
+    "note": ShellREPL._cmd_note,
+    "tutorial": ShellREPL._cmd_tutorial,
+    "boot": ShellREPL._cmd_boot,
+    "shutdown": ShellREPL._cmd_shutdown,
+    "svc": ShellREPL._cmd_svc,
+    "uptime": ShellREPL._cmd_uptime,
+    "lsdev": ShellREPL._cmd_lsdev,
+    "render": ShellREPL._cmd_render,
 }
 ShellREPL.COMMANDS = _shell_commands
 del _shell_commands

@@ -16,11 +16,28 @@ Everything else (parsing, expansion, command dispatch) stays in ShellREPL.
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from collections.abc import Callable
 from typing import Protocol
 
 logger = logging.getLogger("slo.shell.io")
+
+# GNU readline counts prompt bytes as printable unless wrapped in
+# RL_PROMPT_START_IGNORE (\x01) / RL_PROMPT_END_IGNORE (\x02) —
+# the equivalent of bash \[ \].  Without this, ANSI colors in the
+# prompt make Up-arrow history redisplay mix fragments (see bash PS1).
+_ANSI_SGR_RE = re.compile(r"\033\[[0-9;]*[mK]")
+
+
+def readline_safe_prompt(prompt: str) -> str:
+    """Wrap ANSI escapes so readline treats them as zero-width.
+
+    Idempotent: already-wrapped sequences are left alone.
+    """
+    if "\x01" in prompt:
+        return prompt
+    return _ANSI_SGR_RE.sub(lambda m: f"\x01{m.group(0)}\x02", prompt)
 
 
 # ── Protocol ────────────────────────────────────────────────────────
@@ -87,6 +104,8 @@ class ConsoleIO:
             self._tty.write(prompt)
             self._tty.flush()
             return self._tty.readline().strip()
+        if self._has_readline:
+            return input(readline_safe_prompt(prompt)).strip()
         return input(prompt).strip()
 
     def flush(self) -> None:
