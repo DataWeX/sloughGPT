@@ -9,6 +9,7 @@ from .http import (
     DownloadError,
     download_compressed,
     download_file,
+    download_range,
     estimate_download_size,
     get_file_size,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "DownloadError",
     "download_file",
     "download_compressed",
+    "download_range",
     "download_parts",
     "get_file_size",
     "estimate_download_size",

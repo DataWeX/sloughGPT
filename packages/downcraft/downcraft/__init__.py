@@ -56,7 +56,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-from .download import DownloadError, download_file, state
+from .download import DownloadError, download_file, download_range, state
 from .download.multipart import GroupResult, PartResult, download_parts, parse_urls_file
 from .resolve import (
     patterns,
@@ -99,6 +99,7 @@ __all__ = [
     "state",
     "patterns",
     "download_file",
+    "download_range",
     "DownloadError",
     "download_parts",
     "GroupResult",
