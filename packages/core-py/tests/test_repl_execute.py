@@ -261,3 +261,29 @@ class TestTracebackCommand:
         out, code = repl.execute("traceback")
         assert code == 0
         assert "No recent traceback" in out
+
+
+# ── _dump_json ──────────────────────────────────────────────────────────
+
+
+class TestDumpJson:
+    def test_plain_json_without_color(self, monkeypatch):
+        repl = _make_repl()
+        monkeypatch.setenv("NO_COLOR", "1")
+        import json as _json
+
+        obj = {"name": "x", "n": 2}
+        assert repl._dump_json(obj) == _json.dumps(obj, indent=2, default=str)
+
+    def test_valid_json_always(self, monkeypatch):
+        # Highlighting must never corrupt the payload shape for parsers:
+        # strip ANSI and the result must still parse.
+        import json as _json
+        import re as _re
+
+        repl = _make_repl()
+        monkeypatch.delenv("NO_COLOR", raising=False)
+        obj = {"name": "x", "items": [1, 2], "ok": True}
+        out = repl._dump_json(obj)
+        stripped = _re.sub(r"\x1b\[[0-9;]*m", "", out)
+        assert _json.loads(stripped) == obj

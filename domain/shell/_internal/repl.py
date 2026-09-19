@@ -1033,7 +1033,11 @@ class ShellREPL(LinuxCommandsMixin):
         return "\n".join(lines)
 
     def _dump_json(self, obj: Any) -> str:
-        return json.dumps(obj, indent=2, default=str)
+        # Highlighted only on color terminals (pretty.highlight degrades to
+        # plain text otherwise), so captured/piped output stays clean JSON.
+        from .pretty import highlight
+
+        return highlight(json.dumps(obj, indent=2, default=str), "json")
 
     def _spinner_call(self, label: str, fn, ok_msg: str | None = ""):
         """
