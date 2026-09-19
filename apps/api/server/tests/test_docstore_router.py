@@ -7,19 +7,20 @@ bulk import, and sort/limit listing.
 """
 
 import pytest
-from mogdb import MogDB
-from routers import docstore
 from test_support import get_test_client
 
 client = get_test_client()
 
 
 @pytest.fixture(autouse=True)
-def _isolated_db(tmp_path):
-    """Point the router's MogDB instance at a fresh temp directory per test."""
-    docstore._db = MogDB(str(tmp_path / "docstore"))
+def _isolated_db(tmp_path, monkeypatch):
+    """Point the router's MogDB instance at a fresh temp directory per test.
+
+    The router resolves its database from MOGDB_DOCSTORE_PATH (see
+    routers.docstore._get_db) — not from any module attribute.
+    """
+    monkeypatch.setenv("MOGDB_DOCSTORE_PATH", str(tmp_path / "docstore"))
     yield
-    docstore._db = None
 
 
 def _data(resp):

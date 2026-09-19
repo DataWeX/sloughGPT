@@ -39,6 +39,12 @@ def _fresh_companion():
 
     comp_mod._companion_router._companion = None
     dom_mod._companion = None
+    # Personality persists in MogDB on disk — reset via the API so every
+    # test starts from defaults regardless of execution order.
+    try:
+        get_test_client().delete("/companion/")
+    except Exception:
+        pass
     yield
     comp_mod._companion_router._companion = None
     dom_mod._companion = None
@@ -130,7 +136,9 @@ class TestPatchPersonality:
         assert resp.status_code == 200
         t = _traits(resp)
         assert t["name"] == "Patched"
-        assert t["warmth"] == 0.7
+        # Patch preserves current traits — reset default is the "warm"
+        # preset (warmth 0.9), not the set_personality default (0.7).
+        assert t["warmth"] == 0.9
 
     def test_patch_warmth_only(self):
         resp = self.client.patch("/companion/personality", json={"warmth": 0.3})
