@@ -56,6 +56,8 @@ export interface Dataset {
   name: string
   source: string
   type?: string
+  kind?: string
+  mime?: string
   size: number
   samples?: number
   created_at: string
@@ -95,7 +97,9 @@ export const datasetController = {
   },
 
   async search(query: string): Promise<Dataset[]> {
-    const data = await apiGet<{ results: Dataset[] }>(`/datasets/search?q=${encodeURIComponent(query)}`)
+    const data = await apiGet<{ results: Dataset[] }>(
+      `/datasets/search?q=${encodeURIComponent(query)}`,
+    )
     return data?.results ?? []
   },
 
@@ -103,7 +107,9 @@ export const datasetController = {
     try {
       return await apiGet<Dataset>(`/datasets/${id}`)
     } catch (err) {
-      _log.debug('Failed to get dataset', { error: err instanceof Error ? err.message : String(err) })
+      _log.debug('Failed to get dataset', {
+        error: err instanceof Error ? err.message : String(err),
+      })
       return null
     }
   },
@@ -138,38 +144,67 @@ export const datasetController = {
   },
 
   async searchGitHubRepos(query: string, limit = 10): Promise<{ repos: GitHubRepo[] }> {
-    return apiGet<{ repos: GitHubRepo[] }>(`/datasets/search/github`, { q: query, limit: String(limit) })
+    return apiGet<{ repos: GitHubRepo[] }>(`/datasets/search/github`, {
+      q: query,
+      limit: String(limit),
+    })
   },
 
   async searchBooks(query: string, limit = 10): Promise<{ books: BookResult[] }> {
-    return apiGet<{ books: BookResult[] }>(`/datasets/search/books`, { q: query, limit: String(limit) })
+    return apiGet<{ books: BookResult[] }>(`/datasets/search/books`, {
+      q: query,
+      limit: String(limit),
+    })
   },
 
-  async importFromGitHub(request: { url: string; name: string; extensions?: string[]; max_files?: number }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
+  async importFromGitHub(
+    request: { url: string; name: string; extensions?: string[]; max_files?: number },
+    opts?: { signal?: AbortSignal },
+  ): Promise<ImportResponse> {
     return apiPost<ImportResponse>('/datasets/import/github', request, { signal: opts?.signal })
   },
 
-  async importFromHuggingFace(request: { dataset_id: string; name?: string }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
-    return apiPost<ImportResponse>('/datasets/import/huggingface', request, { signal: opts?.signal })
+  async importFromHuggingFace(
+    request: { dataset_id: string; name?: string },
+    opts?: { signal?: AbortSignal },
+  ): Promise<ImportResponse> {
+    return apiPost<ImportResponse>('/datasets/import/huggingface', request, {
+      signal: opts?.signal,
+    })
   },
 
-  async importFromURL(request: { url: string; name: string }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
+  async importFromURL(
+    request: { url: string; name: string },
+    opts?: { signal?: AbortSignal },
+  ): Promise<ImportResponse> {
     return apiPost<ImportResponse>('/datasets/import/url', request, { signal: opts?.signal })
   },
 
-  async importFromLocal(request: { path: string; name: string; extensions?: string[] }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
+  async importFromLocal(
+    request: { path: string; name: string; extensions?: string[] },
+    opts?: { signal?: AbortSignal },
+  ): Promise<ImportResponse> {
     return apiPost<ImportResponse>('/datasets/import/local', request, { signal: opts?.signal })
   },
 
-  async importFromKaggle(request: { dataset: string; name?: string }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
+  async importFromKaggle(
+    request: { dataset: string; name?: string },
+    opts?: { signal?: AbortSignal },
+  ): Promise<ImportResponse> {
     return apiPost<ImportResponse>('/datasets/import/kaggle', request, { signal: opts?.signal })
   },
 
-  async importFromCSV(request: { url: string; name: string; delimiter?: string; encoding?: string }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
+  async importFromCSV(
+    request: { url: string; name: string; delimiter?: string; encoding?: string },
+    opts?: { signal?: AbortSignal },
+  ): Promise<ImportResponse> {
     return apiPost<ImportResponse>('/datasets/import/csv', request, { signal: opts?.signal })
   },
 
-  async importFromISBN(request: { isbn: string; name: string }, opts?: { signal?: AbortSignal }): Promise<ImportResponse> {
+  async importFromISBN(
+    request: { isbn: string; name: string },
+    opts?: { signal?: AbortSignal },
+  ): Promise<ImportResponse> {
     return apiPost<ImportResponse>('/datasets/import/isbn', request, { signal: opts?.signal })
   },
 
@@ -177,12 +212,17 @@ export const datasetController = {
     return apiPost<{ imported: number; errors: string[] }>('/datasets/import/batch', { sources })
   },
 
-  async convertToMessages(datasetId: string, systemPrompt: string = "You are a helpful assistant."): Promise<{
+  async convertToMessages(
+    datasetId: string,
+    systemPrompt: string = 'You are a helpful assistant.',
+  ): Promise<{
     status: string
     new_dataset_id: string
     total_conversations: number
   }> {
-    return apiPost(`/datasets/convert-to-messages?dataset_id=${encodeURIComponent(datasetId)}&system_prompt=${encodeURIComponent(systemPrompt)}`)
+    return apiPost(
+      `/datasets/convert-to-messages?dataset_id=${encodeURIComponent(datasetId)}&system_prompt=${encodeURIComponent(systemPrompt)}`,
+    )
   },
 
   async getStats(datasetId: string): Promise<DatasetStats> {
@@ -197,8 +237,13 @@ export const datasetController = {
     return apiGet(`/datasets/${encodeURIComponent(datasetId)}/versions`)
   },
 
-  async restoreVersion(datasetId: string, timestamp: string): Promise<{ success: boolean; message: string }> {
-    return apiPost(`/datasets/${encodeURIComponent(datasetId)}/versions/${encodeURIComponent(timestamp)}`)
+  async restoreVersion(
+    datasetId: string,
+    timestamp: string,
+  ): Promise<{ success: boolean; message: string }> {
+    return apiPost(
+      `/datasets/${encodeURIComponent(datasetId)}/versions/${encodeURIComponent(timestamp)}`,
+    )
   },
 
   async createFromChat(params: {

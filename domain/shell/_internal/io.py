@@ -16,11 +16,31 @@ Everything else (parsing, expansion, command dispatch) stays in ShellREPL.
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from collections.abc import Callable
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from .surface import TextSurface
 
 logger = logging.getLogger("slo.shell.io")
+
+# GNU readline counts prompt bytes as printable unless wrapped in
+# RL_PROMPT_START_IGNORE (\x01) / RL_PROMPT_END_IGNORE (\x02) —
+# the equivalent of bash \[ \].  Without this, ANSI colors in the
+# prompt make Up-arrow history redisplay mix fragments (see bash PS1).
+_ANSI_SGR_RE = re.compile(r"\033\[[0-9;]*[mK]")
+
+
+def readline_safe_prompt(prompt: str) -> str:
+    """Wrap ANSI escapes so readline treats them as zero-width.
+
+    Idempotent: already-wrapped sequences are left alone.
+    """
+    if "\x01" in prompt:
+        return prompt
+    return _ANSI_SGR_RE.sub(lambda m: f"\x01{m.group(0)}\x02", prompt)
 
 
 # ── Protocol ────────────────────────────────────────────────────────
@@ -87,6 +107,8 @@ class ConsoleIO:
             self._tty.write(prompt)
             self._tty.flush()
             return self._tty.readline().strip()
+        if self._has_readline:
+            return input(readline_safe_prompt(prompt)).strip()
         return input(prompt).strip()
 
     def flush(self) -> None:
@@ -147,6 +169,28 @@ class ConsoleIO:
             except Exception as e:
                 logger.debug("tty close failed: %s", e)
             self._tty = None
+
+
+# ── TUI (curses event loop) ────────────────────────────────────────
+
+
+class TuiIo:
+    """ShellIO-compatible writer that feeds a TextSurface."""
+
+    def __init__(self, surface: TextSurface) -> None:
+        self._surface = surface
+        self._tui_ref: Any | None = None
+
+    def write(self, text: str, end: str = "\n") -> None:
+        self._surface.write(text, end)
+        if self._tui_ref is not None:
+            self._tui_ref._dirty = True
+
+    def flush(self) -> None:
+        pass
+
+    def read(self, prompt: str = "") -> str:
+        raise NotImplementedError("input comes from the curses event loop")
 
 
 # ── Memory (tests / TUI) ───────────────────────────────────────────

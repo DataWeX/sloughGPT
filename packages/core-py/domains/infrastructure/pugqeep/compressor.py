@@ -240,9 +240,12 @@ class PointCompressor:
             counts = np.bincount(assignments, minlength=nc).astype(np.float64)
             alive = counts > 0
             centroids[alive] = (sums[alive] / counts[alive]).astype(np.float32)
-            # Early stop if converged
+            # Early stop if converged (skip first pass: prev is inf, inf-inf is nan)
             inertia = np.sum((flat - centroids[assignments]) ** 2)
-            if abs(prev_inertia - inertia) / (prev_inertia + 1e-10) < 1e-6:
+            if (
+                prev_inertia != float("inf")
+                and abs(prev_inertia - inertia) / (prev_inertia + 1e-10) < 1e-6
+            ):
                 break
             prev_inertia = inertia
 

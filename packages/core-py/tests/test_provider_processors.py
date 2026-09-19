@@ -192,6 +192,30 @@ class TestPersonalityProcessor:
         proc.set_traits({"confidence": 0.9})
         assert proc._traits == {"confidence": 0.9}
 
+    def test_personality_line_cached(self):
+        proc = PersonalityProcessor(traits={"warmth": 0.9})
+        first = proc._personality_line()
+        second = proc._personality_line()
+        assert first == second
+        assert proc._traits_key == (("warmth", 0.9),)
+
+    def test_set_traits_invalidates_cache(self):
+        proc = PersonalityProcessor(traits={"warmth": 0.9})
+        before = proc._personality_line()
+        proc.set_traits({"warmth": 0.1})
+        after = proc._personality_line()
+        assert before != after
+        assert "neutral" in after
+
+    @pytest.mark.asyncio
+    async def test_process_uses_cached_line(self):
+        proc = PersonalityProcessor(traits={"warmth": 0.9})
+        msgs = [{"role": "user", "content": "hi"}]
+        first = await proc.process([dict(m) for m in msgs])
+        second = await proc.process([dict(m) for m in msgs])
+        assert first[0]["content"] == second[0]["content"]
+        assert "warm" in second[0]["content"].lower()
+
     @pytest.mark.asyncio
     async def test_all_ten_traits(self):
         """All 10 PersonalityCore traits should produce descriptions."""

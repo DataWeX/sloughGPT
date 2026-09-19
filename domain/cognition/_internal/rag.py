@@ -67,8 +67,14 @@ class BM25Indexer:
         self.inverted_index: dict[str, list[tuple[int, int]]] = {}
 
     def index(self, chunks: list[TextChunk]):
-        """Build BM25 index."""
+        """Build BM25 index (idempotent: resets before rebuilding)."""
         self.num_docs = len(chunks)
+        # Reset first — index() rebuilds from the full chunk list, so without
+        # this every call re-counts all docs (inflated frequencies, O(n^2)
+        # memory on bulk loads).
+        self.doc_lengths = []
+        self.doc_freq = Counter()
+        self.inverted_index = {}
         logger.debug("BM25 indexing started: %d documents", self.num_docs)
 
         for doc_id, chunk in enumerate(chunks):
@@ -510,9 +516,14 @@ class ProductionRAG:
         metadata: dict[str, Any] | None = None,
         chunk_size: int = 512,
         overlap: int = 50,
+        rebuild_index: bool = True,
     ) -> list[str]:
         """
         Add a document with intelligent chunking.
+
+        Set ``rebuild_index=False`` when bulk-loading many documents, then
+        call ``retriever.build_index()`` once at the end (rebuilding per
+        document is O(n^2)).
         """
         metadata = metadata or {"source": "user"}
         chunk_ids = []
@@ -540,8 +551,9 @@ class ProductionRAG:
             self.retriever.add_chunk(chunk)
             chunk_ids.append(chunk_id)
 
-        # Rebuild index
-        self.retriever.build_index()
+        # Rebuild index (skipped for bulk loads — caller builds once)
+        if rebuild_index:
+            self.retriever.build_index()
 
         logger.debug(
             "Document ingestion complete: chunks=%d, total_tokens=%d",

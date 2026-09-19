@@ -8,6 +8,13 @@ vi.mock('@/lib/controllers', () => ({
     startAutoTrain: (...args: unknown[]) => mockStartAutoTrain(...args),
   },
 }))
+vi.mock('@/lib/training-facade', () => ({
+  trainingFacade: {
+    jobs: {
+      startAutoTrain: (...args: unknown[]) => mockStartAutoTrain(...args),
+    },
+  },
+}))
 
 const mockReadTraining = vi.fn()
 const mockWriteTraining = vi.fn()
@@ -42,12 +49,28 @@ class MockEventSource {
 beforeEach(() => {
   vi.clearAllMocks()
   mockReadTraining.mockReturnValue({
-    phase: 'idle', jobId: null, lossHistory: [],
-    progress: 0, loss: null, epoch: 0, totalEpochs: 0,
-    globalStep: 0, totalSteps: 0, stepsPerSec: null, eta: null,
-    elapsedSeconds: null, checkpoint: null, finalLoss: null,
-    error: null, method: null, message: '', evalResult: null,
-    startTime: null, modelPath: null, avgQuality: null, dataQuality: null,
+    phase: 'idle',
+    jobId: null,
+    lossHistory: [],
+    progress: 0,
+    loss: null,
+    epoch: 0,
+    totalEpochs: 0,
+    globalStep: 0,
+    totalSteps: 0,
+    stepsPerSec: null,
+    eta: null,
+    elapsedSeconds: null,
+    checkpoint: null,
+    finalLoss: null,
+    error: null,
+    method: null,
+    message: '',
+    evalResult: null,
+    startTime: null,
+    modelPath: null,
+    avgQuality: null,
+    dataQuality: null,
   })
 })
 
@@ -164,9 +187,7 @@ describe('useTrainingStream', () => {
       } as MessageEvent)
     })
 
-    expect(mockWriteTraining).toHaveBeenCalledWith(
-      expect.objectContaining({ phase: 'error' }),
-    )
+    expect(mockWriteTraining).toHaveBeenCalledWith(expect.objectContaining({ phase: 'error' }))
     expect(addToast).toHaveBeenCalledWith('Training failed', 'error')
   })
 
@@ -229,13 +250,28 @@ describe('useTrainingStream', () => {
   it('accumulates loss history', async () => {
     mockStartAutoTrain.mockResolvedValue(undefined)
     mockReadTraining.mockReturnValue({
-      phase: 'TRAINING', jobId: 'j1',
+      phase: 'TRAINING',
+      jobId: 'j1',
       lossHistory: [{ step: 1, loss: 0.5 }],
-      progress: 0, loss: 0.5, epoch: 0, totalEpochs: 0,
-      globalStep: 0, totalSteps: 0, stepsPerSec: null, eta: null,
-      elapsedSeconds: null, checkpoint: null, finalLoss: null,
-      error: null, method: null, message: '', evalResult: null,
-      startTime: null, modelPath: null, avgQuality: null, dataQuality: null,
+      progress: 0,
+      loss: 0.5,
+      epoch: 0,
+      totalEpochs: 0,
+      globalStep: 0,
+      totalSteps: 0,
+      stepsPerSec: null,
+      eta: null,
+      elapsedSeconds: null,
+      checkpoint: null,
+      finalLoss: null,
+      error: null,
+      method: null,
+      message: '',
+      evalResult: null,
+      startTime: null,
+      modelPath: null,
+      avgQuality: null,
+      dataQuality: null,
     })
     const { result } = renderHook(() => useTrainingStream())
 

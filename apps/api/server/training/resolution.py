@@ -58,6 +58,15 @@ def resolve_training_inputs(
         return str(data_path), out_stem, manifest_meta, "manifest"
 
     stem = str(dataset).strip()
+    # Just-cache first; legacy datasets/ dir is a read-only fallback.
+    try:
+        from domain.training._internal.cache_tags import resolve_in_cache
+
+        hit = resolve_in_cache(stem)
+        if hit:
+            return hit, stem, None, "cache"
+    except ValueError:
+        pass
     p = _repo_root() / "datasets" / stem / "input.txt"
     if not p.is_file():
         raise ManifestError(f"Missing training file: {p}")

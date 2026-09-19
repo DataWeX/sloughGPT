@@ -350,7 +350,7 @@ class TestListDatasetDetails:
         ctrl = mock_get_ctrl.return_value
         ctrl.list_datasets.return_value = []
         client.get("/datasets?q=shakespeare&type=text")
-        ctrl.list_datasets.assert_called_once_with("shakespeare", "text")
+        ctrl.list_datasets.assert_called_once_with("shakespeare", "text", "")
 
     @patch("apps.api.server.routers.datasets.get_datasets_controller")
     def test_list_reports_count(self, mock_get_ctrl, client):

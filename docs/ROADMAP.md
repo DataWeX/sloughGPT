@@ -1,29 +1,75 @@
 # sloughGPT roadmap
 
-## Current state (July 2026)
-- **Inference**: Qwen2.5-0.5B-Instruct via CPU (MPS unstable on 8GB). Chat/streaming/regenerate endpoints stable. SSE envelope standardized.
-- **Native C inference engine**: `NativeEngine` (RoPE/RMSNorm/GQA/KV-cache/top-p/top-k) now loads real `.slnc` weights with the matching real tokenizer (`MorphTokenizer.from_pretrained`). `NativeEngine.from_slnc_file()` derives the HF id from the cache path and auto-attaches the tokenizer; chat prompts use the model's real chat template and stop ids. Wired into the provider chain via `setup_providers(native_slnc_path=...)` (opt-in; feature flag still off). Real end-to-end verified on `Qwen/Qwen2.5-0.5B-Instruct` (~12s load, ~1 tok/s CPU, coherent output).
-- **Training**: SloNet pure NumPy autograd (full DAG, forward+backward, 25 ops). Distillation pipeline (GPT2 teacher → LSTM student). HuggingFace fine-tuning via `transformers.Trainer` + optional LoRA. Activity classifier (CNN on sensor data).
-- **Core**: ModelServer + ModelRegistry + CircuitBreaker for composable serving. ProcessGuard for process-level isolation (production default — `_load_hf_model()` and autoload guard workers; parent weights deferred via lazy `.slnc` provider, runtime toggle via `POST /models/process-guard`). Context managers (Personality/Memory/Style/Task). Feedback workflow (LoRA + eval + aggregation).
-- **Frontend**: 32 pages, all migrated to `@sloughgpt/strui` components. Controllers migrated from legacy `api.ts` to per-domain controllers. Chat with markdown, streaming, regeneration, feedback. Full suite: 324 test files / 3048 tests pass, tsc exit 0. `app/(app)/model/[id]/ModelDetailPage.test.tsx` is excluded by design (worker-harness hang, documented in `vitest.config.ts`).
-- **CLI**: Python REPL with 40+ commands, pipelines, env, aliases, tab completion, pager (`~/.config/sloughgpt/shell_state.json`). Line-mode shell is the default UI; opt-in split-pane curses TUI (`sloughgpt tui`, `shell --tui`, or `MAN_TUI=1`) with console/output panes, status bar, input row, reverse+forward history search (Ctrl+R/S), output-pane content search (`/`, with `n`/`N` repeat-last-match), readline-style line editing (caret, word movement via Alt+F/B and Ctrl+arrows, transpose Ctrl+T, delete word forward Alt+D, Ctrl+W/U/K/A/E/D, kill ring + Ctrl+Y yank), and Ctrl+C command interrupt — all fixes verified under a real PTY.
-- **Mobile**: Not started.
+> Direction: a general-AI **model**, not a net. Owned architecture (SloNet),
+> owned objective (beyond next-token prediction), owned data. Every item serves
+> all four domains — **Cognitive, Core, Gateway, Training** — with the
+> serving engine (`InferenceEngine` + `SloNetServer`) hardened first and the
+> gateway built well as the edge optimizer of the core infra stack.
+> Borrowed weights (HF conversion, distillation) are bootstrap, not destination.
+
+## Current state (September 2026)
+
+### Model — owned machinery, bootstrap weights
+
+- Machinery is owned: SloNet pure-NumPy autograd (full DAG, 25 ops), SloTransformer, TokenTree tokenizer, `.soul`/`.slnc` formats with mmap loading. `NativeEngine` (RoPE/RMSNorm/GQA/KV-cache/top-p/top-k) loads real `.slnc` weights with the matching real tokenizer, wired via `setup_providers(native_slnc_path=...)` (opt-in).
+- Weights are still borrowed (Qwen2.5-0.5B-Instruct via CPU; distillation GPT2 → LSTM; HF fine-tuning + LoRA) — bootstrap, not destination. Fully-owned loop (own init → own data → own objective) exists only as `SloChatTrainer` on chat pairs.
+
+### Engine (hardened first)
+
+- `SloNetServer` + `ModelServer`/`ModelRegistry`/`CircuitBreaker`, warmup, metrics. ProcessGuard isolation is the production default (manual + autoload paths, runtime toggle). Lazy header-only `.slnc` provider defers weight pages. Standalone `InferenceEngine` over length-prefixed TCP (`InferenceClient`), so inference work is isolated from the API process.
+
+### Four domains
+
+- **Cognitive** — consciousness engine post-processes generation (`ConsciousnessConfig.level`); Personality/Memory/Style/Task context managers; auto-memory service learning from conversations; souls/traits with feedback-driven weight updates.
+- **Core** — provider registry + router with processor pipeline (Vision/Knowledge/ToolUse/ Personality/Style), session core + KV-cache reuse, priority queue with streaming slot reservation, cancel manager, persistent settings. Serves chat/stream/regenerate (standardized SSE envelope) plus the raw `/inference/generate` path and the `[[TOOL: name]]` tool loop.
+- **Gateway** — Rust edge builds clean with rustls (`slough-gateway`, binds `:8080`, health + degraded-sidecar behavior verified) but is bypassed: frontend points at `:8000` direct after the model-aware proxy proved to be dead infra. Remaining work is the thin generic edge (byte-relay, filters, chat-only) — tracked as Gateway-domain work, not plumbing.
+- **Training** — single composable `TrainingLoop` (`training_handler.py`: samplers, gradient handlers, loss trackers, checkpoint savers) replacing the three loop copies; distillation, LoRA (including background feedback loop), activity classifier.
+
+### Clients (separate from core infra — see PRODUCT_ENGINEERING.md)
+
+- Web: 32 pages on `@sloughgpt/strui`, per-domain controllers over one HTTP client, markdown chat with streaming/regeneration/feedback. CLI: Python REPL (40+ commands) + opt-in curses TUI. Voyager journey library (201 tests, 7 backends). Mobile: not started. Clients reach core only through the API/protocol — never internals.
+
+### What the bootstrap era taught us (keep the lessons, drop the habits)
+
+- Borrowed weights earned their keep: HF conversion + distillation got real inference running years before owned weights could. Keep as bootstrap path; never again as the headline.
+- Three training loops grew because each feature trained "just this once" — consolidated into one `TrainingLoop` with adapters. New objectives arrive as adapters, never as fourth loops.
+- A model-aware gateway rotted into dead infra (double JSON, buffered streaming, schema drift → rollback to `:8000`). Edge stays generic and thin; model logic lives in Core.
+- Routers reaching into `domain.*_internal*` created bypass webs (voice, knowledge, training). Every capability now gets one engine class; routers delegate.
+- Prompt middleware (processors) works and stays — but injections are context-token spend, so each one justifies its tokens.
+- Feedback→LoRA was wired years late, so learning lagged use. Training story ships with the feature now (fairness rule).
 
 ## Near-term goals
+
 1. ~~**Stabilize SloNet training** — Fix remaining backward pass broadcast bugs (test_tokenizer.py failures).~~ **Done** — `_mul` backward uses `_broadcast_back`; `test_slonet_broadcast.py` + `TestSloEngineLearn` 17/17 pass. Remaining: profile and optimize hot loops.
 2. ~~**Wire process isolation in production** — Enable ProcessGuard for `_load_hf_model()` so subprocess crashes don't take down the API server.~~ **Done** — guard wiring exists on the manual (`controllers/models.py:_load_hf_model`, lazy + eager) and autoload (`startup.py:_try_lazy_guard_autoload`) paths; `ServerConfig.enable_process_guard` is now the single source of truth and defaults to enabled (`SLO_ENABLE_PROCESS_GUARD`, default `true`), fixing the dead-config mismatch where the field defaulted to `false` while the runtime toggle defaulted to `true`.
 3. ~~**Fix pre-existing test failures** — 14 flaky frontend tests (DOM timing, async renders, StrictMode double-mount).~~ **Done** — suite at 324 files / 3048 tests; only `ModelDetailPage.test.tsx` excluded (worker-harness hang).
 
 ## Medium-term goals
+
 4. ~~**Incremental training from feedback** — Wire OnlineLoRAUpdater + PerUserLORAStore into a continuous background loop (currently only fires on explicit aggregation).~~ **Done** — `_run_background_training` now reads the tokenizer from the workflow's `set_model()` state (was reading a nonexistent `lora_updater._tokenizer`, so the loop always no-opped); the active server model is wired into the workflow at startup (`main.py:_start_feedback_workflow`) and on feedback (`FeedbackController._wire_model` falls back to `server_state.model` when no auto-train student is set).
 5. ~~**Multi-agent orchestration polish** — Async executor works, needs UI for agent creation/editing and dashboard for runs.~~ **Done** — full agent CRUD (create/edit/delete + validation), multi-agent orchestration card (goal/context, per-agent picks via `agent_ids`, live plan→execute→compose→complete SSE timeline), and runs dashboard on `apps/web/app/(app)/agents/page.tsx` (list/timeline views, status + agent filters, expandable detail with per-task dots/previews, result + logs). Backend: `apps/api/server/routers/agents.py` CRUD + `POST /orchestrate` (SSE, `asyncio.gather` level execution) + `GET /runs` + `GET /runs/{run_id}`; persistence via `packages/core-py/domains/agents/run_history.py` (file-backed `data/agent_runs/`). Covered by 26 frontend + 179 backend/core tests.
 6. ~~**Dataset management UI** — Import/export/versioning/search frontend.~~ **Done** — list page (search/sort/preview/compare/export/delete/version badges), detail page (rename/stats/quality/insights/preview/snapshots/JSONL+CSV export/convert-to-chat-format), import modals (local/GitHub/HF/URL/ISBN/Kaggle/CSV), chat→dataset export. Backend convert + versioning covered by tests.
+7. ~~**Voyager journey testing library** — Build a modular, cross-platform library for user journey tests and computer-use automation.~~ **Done** — `packages/voyager/` with 201 tests, 7 backends (Playwright, Selenium, CDP, API-only, CLI, Appium, Desktop), AI model integration, learning system, and full computer-use primitives (Mouse, Keyboard, InteractionChain, visual detection, smart waits, time-travel debugging, network interception, performance markers).
+
+## New goals (September 2026)
+
+8. ~~**Voyager journey tests for sloughGPT** — Write end-to-end journey tests using Voyager against the sloughGPT frontend.~~ **Done** — 8 journeys (chat, souls, training, datasets, models, knowledge, settings, agents). API backend runner + Playwright runner in `scripts/run_journey_tests.py`. `packages/voyager/tests/test_sloughgpt_journeys.py`.
+9. ~~**Wire Consciousness to inference** — Connect `domain/consciousness/` cognitive engine to the inference pipeline.~~ **Done** — `SloEngine._init_consciousness()` loads consciousness engine. `SloEngine.generate()` processes responses through `ConsciousnessEngine.process()` post-generation. Configurable via `ConsciousnessConfig.level`.
+10. ~~**Consolidate training loops** — Three copies of the forward/loss/backward/grad-clip/optimize loop exist (`train_pipeline.py`, `chat_trainer.py`, `consciousness/training.py`). Consolidate into `SloughGPTTrainer` with dataset adapters.~~ **Done** — `training_handler.py` is the single composable training engine with protocols (BatchSampler, GradientHandler, LossTracker, CheckpointSaver) and implementations (RandomBlockSampler, PermutationSampler, ChatPairSampler, DirectGradientHandler, AccumulationGradientHandler, RawLossTracker, EMALossTracker, SoulCheckpointSaver, NpzCheckpointSaver). All three training files now import from `training_handler.py`.
+11. ~~**Voice router cleanup** — TTS works, phoneme encode works, but router bypasses domain. Wire `domain/voice/` properly to `apps/api/server/routers/voice.py`.~~ **Done** — Both `voice.py` and `phoneme.py` routers properly delegate to `domain.voice` via `get_voice_engine()` and `get_phoneme_engine()`. No `_internal` imports.
+
+## Owned-model milestones (the destination past bootstrap)
+
+12. **Owned architecture** — SloNet stands alone: no HF conversion in the default path, native `.soul` training → `.slnc` serving end to end.
+13. **Owned objective** — at least one training objective beyond next-token prediction (memory consolidation, tool-use success, planning) running in the single `TrainingLoop`.
+14. **Owned data** — the model trains on experience it generates (chat sessions, tool outcomes, feedback), not only third-party text.
 
 ## Deferred (potential Rust)
-| Item | When | Why Rust |
-|------|------|----------|
-| SloNet kernel rewrite (PyO3) | If training profiling shows Python loop overhead is the bottleneck | 10-50x speedup on backward pass ops |
-| CLI rewrite (binary) | If startup time or distribution becomes a pain point | Instant startup, single binary, native readline |
-| Token streaming proxy | If Python async polling becomes a bottleneck | Zero-gap streaming, clean cancellation |
+
+| Item                         | When                                                               | Why Rust                                        |
+| ---------------------------- | ------------------------------------------------------------------ | ----------------------------------------------- |
+| SloNet kernel rewrite (PyO3) | If training profiling shows Python loop overhead is the bottleneck | 10-50x speedup on backward pass ops             |
+| CLI rewrite (binary)         | If startup time or distribution becomes a pain point               | Instant startup, single binary, native readline |
+| Token streaming proxy        | If Python async polling becomes a bottleneck                       | Zero-gap streaming, clean cancellation          |
 
 Revisit after stabilizing the Python codebase — current bottlenecks are model inference (2s/request CPU), not Python overhead.

@@ -5,9 +5,33 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { Card, CardContent, Button, Badge, Input } from '@sloughgpt/strui'
+import {
+  Card,
+  CardContent,
+  Button,
+  Badge,
+  Input,
+  KpiGrid,
+  StatCard,
+  SectionHeader,
+  StatusBadge,
+} from '@sloughgpt/strui'
 import { settingsController } from '@/lib/settings-controller'
-import { Clock, Download, BarChart3, Trash2, Search, X, Tag, Plus, GitCompare, Star, Copy, CheckSquare, Square } from 'lucide-react'
+import {
+  Clock,
+  Download,
+  BarChart3,
+  Trash2,
+  Search,
+  X,
+  Tag,
+  Plus,
+  GitCompare,
+  Star,
+  Copy,
+  CheckSquare,
+  Square,
+} from 'lucide-react'
 
 interface TrainingRun {
   run_id: string
@@ -30,7 +54,11 @@ interface TrainingRun {
 
 function formatDate(ts: number) {
   if (!ts) return '-'
-  try { return new Date(ts * 1000).toLocaleString() } catch { return String(ts) }
+  try {
+    return new Date(ts * 1000).toLocaleString()
+  } catch {
+    return String(ts)
+  }
 }
 
 function formatDuration(secs?: number) {
@@ -42,10 +70,8 @@ function formatDuration(secs?: number) {
 
 function qualityBadge(score?: number) {
   if (score === undefined || score === null) return null
-  const color = score >= 0.8 ? 'bg-green-100 text-green-800' :
-                score >= 0.6 ? 'bg-yellow-100 text-yellow-800' :
-                'bg-red-100 text-red-800'
-  return <Badge className={color}>{Math.round(score * 100)}%</Badge>
+  const tone = score >= 0.8 ? 'success' : score >= 0.6 ? 'warning' : 'destructive'
+  return <StatusBadge tone={tone}>{Math.round(score * 100)}%</StatusBadge>
 }
 
 function downloadBlob(content: string, filename: string, mime: string) {
@@ -90,16 +116,17 @@ export default function TrainingRunsPage() {
     }
   }, [filterModel, filterMethod])
 
-  useEffect(() => { fetchRuns() }, [fetchRuns])
+  useEffect(() => {
+    fetchRuns()
+  }, [fetchRuns])
 
   const handleExport = async () => {
     try {
       const resp = await settingsController.exportTrainingHistory(format, 500)
       const content = format === 'csv' ? resp.content : JSON.stringify(resp, null, 2)
-      const blob = new Blob(
-        [content ?? ''],
-        { type: format === 'csv' ? 'text/csv' : 'application/json' }
-      )
+      const blob = new Blob([content ?? ''], {
+        type: format === 'csv' ? 'text/csv' : 'application/json',
+      })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -116,7 +143,7 @@ export default function TrainingRunsPage() {
     setDeleting(runId)
     try {
       await settingsController.deleteTrainingRun(runId)
-      setRuns(prev => prev.filter(r => r.run_id !== runId))
+      setRuns((prev) => prev.filter((r) => r.run_id !== runId))
       if (selectedRun?.run_id === runId) setSelectedRun(null)
     } catch (err) {
       console.error('Delete failed:', err)
@@ -130,7 +157,11 @@ export default function TrainingRunsPage() {
     try {
       const updated = await settingsController.addRunTag(selectedRun.run_id, newTag.trim())
       setSelectedRun(updated as unknown as TrainingRun)
-      setRuns(prev => prev.map(r => r.run_id === selectedRun.run_id ? updated as unknown as TrainingRun : r))
+      setRuns((prev) =>
+        prev.map((r) =>
+          r.run_id === selectedRun.run_id ? (updated as unknown as TrainingRun) : r,
+        ),
+      )
       setNewTag('')
     } catch (err) {
       console.error('Add tag failed:', err)
@@ -142,7 +173,11 @@ export default function TrainingRunsPage() {
     try {
       const updated = await settingsController.removeRunTag(selectedRun.run_id, tag)
       setSelectedRun(updated as unknown as TrainingRun)
-      setRuns(prev => prev.map(r => r.run_id === selectedRun.run_id ? updated as unknown as TrainingRun : r))
+      setRuns((prev) =>
+        prev.map((r) =>
+          r.run_id === selectedRun.run_id ? (updated as unknown as TrainingRun) : r,
+        ),
+      )
     } catch (err) {
       console.error('Remove tag failed:', err)
     }
@@ -153,7 +188,11 @@ export default function TrainingRunsPage() {
     try {
       const updated = await settingsController.setRunNotes(selectedRun.run_id, notesValue)
       setSelectedRun(updated as unknown as TrainingRun)
-      setRuns(prev => prev.map(r => r.run_id === selectedRun.run_id ? updated as unknown as TrainingRun : r))
+      setRuns((prev) =>
+        prev.map((r) =>
+          r.run_id === selectedRun.run_id ? (updated as unknown as TrainingRun) : r,
+        ),
+      )
       setEditingNotes(false)
     } catch (err) {
       console.error('Save notes failed:', err)
@@ -182,8 +221,16 @@ export default function TrainingRunsPage() {
   const handleBookmark = async (runId: string) => {
     try {
       const updated = await settingsController.toggleBookmark(runId)
-      setSelectedRun(prev => prev?.run_id === runId ? updated as unknown as TrainingRun : prev)
-      setRuns(prev => prev.map(r => r.run_id === runId ? { ...r, bookmarked: (updated as unknown as TrainingRun).bookmarked } : r))
+      setSelectedRun((prev) =>
+        prev?.run_id === runId ? (updated as unknown as TrainingRun) : prev,
+      )
+      setRuns((prev) =>
+        prev.map((r) =>
+          r.run_id === runId
+            ? { ...r, bookmarked: (updated as unknown as TrainingRun).bookmarked }
+            : r,
+        ),
+      )
     } catch (err) {
       console.error('Bookmark failed:', err)
     }
@@ -192,7 +239,7 @@ export default function TrainingRunsPage() {
   const handleDuplicate = async (runId: string) => {
     try {
       const newRun = await settingsController.duplicateTrainingRun(runId)
-      setRuns(prev => [newRun as unknown as TrainingRun, ...prev])
+      setRuns((prev) => [newRun as unknown as TrainingRun, ...prev])
     } catch (err) {
       console.error('Duplicate failed:', err)
     }
@@ -200,7 +247,7 @@ export default function TrainingRunsPage() {
 
   // Bulk operations
   const toggleSelect = (runId: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(runId)) next.delete(runId)
       else next.add(runId)
@@ -212,7 +259,7 @@ export default function TrainingRunsPage() {
     if (selectedIds.size === filteredRuns.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(filteredRuns.map(r => r.run_id)))
+      setSelectedIds(new Set(filteredRuns.map((r) => r.run_id)))
     }
   }
 
@@ -220,7 +267,7 @@ export default function TrainingRunsPage() {
     if (!confirm(`Delete ${selectedIds.size} training runs?`)) return
     try {
       await settingsController.bulkDeleteRuns(Array.from(selectedIds))
-      setRuns(prev => prev.filter(r => !selectedIds.has(r.run_id)))
+      setRuns((prev) => prev.filter((r) => !selectedIds.has(r.run_id)))
       setSelectedIds(new Set())
       if (selectedRun && selectedIds.has(selectedRun.run_id)) setSelectedRun(null)
     } catch (err) {
@@ -249,7 +296,7 @@ export default function TrainingRunsPage() {
     }
   }
 
-  const filteredRuns = runs.filter(run => {
+  const filteredRuns = runs.filter((run) => {
     if (!searchQuery) return true
     const q = searchQuery.toLowerCase()
     return (
@@ -257,28 +304,79 @@ export default function TrainingRunsPage() {
       (run.method || '').toLowerCase().includes(q) ||
       (run.dataset || '').toLowerCase().includes(q) ||
       run.run_id.toLowerCase().includes(q) ||
-      (run.tags || []).some(t => t.toLowerCase().includes(q)) ||
+      (run.tags || []).some((t) => t.toLowerCase().includes(q)) ||
       (run.notes || '').toLowerCase().includes(q)
     )
   })
 
-  const models = [...new Set(runs.map(r => r.model).filter(Boolean))]
-  const methods = [...new Set(runs.map(r => r.method).filter(Boolean))]
+  const models = [...new Set(runs.map((r) => r.model).filter(Boolean))]
+  const methods = [...new Set(runs.map((r) => r.method).filter(Boolean))]
 
   const summary = {
     total: runs.length,
-    converged: runs.filter(r => r.converged).length,
-    avgQuality: runs.length > 0
-      ? (runs.reduce((s, r) => s + (r.quality_score || 0), 0) / runs.length)
-      : 0,
-    avgLoss: runs.filter(r => (r.final_loss || 0) > 0).length > 0
-      ? (runs.filter(r => (r.final_loss || 0) > 0).reduce((s, r) => s + (r.final_loss || 0), 0) /
-         runs.filter(r => (r.final_loss || 0) > 0).length)
-      : 0,
+    converged: runs.filter((r) => r.converged).length,
+    avgQuality:
+      runs.length > 0 ? runs.reduce((s, r) => s + (r.quality_score || 0), 0) / runs.length : 0,
+    avgLoss:
+      runs.filter((r) => (r.final_loss || 0) > 0).length > 0
+        ? runs.filter((r) => (r.final_loss || 0) > 0).reduce((s, r) => s + (r.final_loss || 0), 0) /
+          runs.filter((r) => (r.final_loss || 0) > 0).length
+        : 0,
   }
 
   return (
-    <PageContainer title="Training Runs">
+    <PageContainer
+      title="Training Runs"
+      toolbar={
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search runs, tags, notes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8"
+              aria-label="Search runs"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-2.5"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+          <select
+            value={filterModel}
+            onChange={(e) => setFilterModel(e.target.value)}
+            className="text-sm border rounded px-2 py-1.5"
+            aria-label="Filter by model"
+          >
+            <option value="">All Models</option>
+            {models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filterMethod}
+            onChange={(e) => setFilterMethod(e.target.value)}
+            className="text-sm border rounded px-2 py-1.5"
+            aria-label="Filter by method"
+          >
+            <option value="">All Methods</option>
+            {methods.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+      }
+    >
       <AppRouteHeader
         left={<AppRouteHeaderLead title="Training Runs" />}
         right={
@@ -287,6 +385,7 @@ export default function TrainingRunsPage() {
               value={format}
               onChange={(e) => setFormat(e.target.value as 'json' | 'csv')}
               className="text-sm border rounded px-2 py-1"
+              aria-label="Export format"
             >
               <option value="json">JSON</option>
               <option value="csv">CSV</option>
@@ -297,66 +396,17 @@ export default function TrainingRunsPage() {
           </div>
         }
       />
+      <SectionHeader
+        title="Run history"
+        description={`${filteredRuns.length} of ${runs.length} shown`}
+      />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <Card>
-          <CardContent className="pt-4 text-center">
-            <div className="text-2xl font-bold">{summary.total}</div>
-            <div className="text-xs text-muted-foreground">Total Runs</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 text-center">
-            <div className="text-2xl font-bold text-green-600">{summary.converged}</div>
-            <div className="text-xs text-muted-foreground">Converged</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 text-center">
-            <div className="text-2xl font-bold">{Math.round(summary.avgQuality * 100)}%</div>
-            <div className="text-xs text-muted-foreground">Avg Quality</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 text-center">
-            <div className="text-2xl font-bold">{summary.avgLoss.toFixed(4)}</div>
-            <div className="text-xs text-muted-foreground">Avg Loss</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search runs, tags, notes..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-2 top-2.5">
-              <X className="h-4 w-4 text-muted-foreground" />
-            </button>
-          )}
-        </div>
-        <select
-          value={filterModel}
-          onChange={(e) => setFilterModel(e.target.value)}
-          className="text-sm border rounded px-2 py-1.5"
-        >
-          <option value="">All Models</option>
-          {models.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <select
-          value={filterMethod}
-          onChange={(e) => setFilterMethod(e.target.value)}
-          className="text-sm border rounded px-2 py-1.5"
-        >
-          <option value="">All Methods</option>
-          {methods.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-      </div>
+      <KpiGrid columns={4}>
+        <StatCard label="Total Runs" value={summary.total} numeric />
+        <StatCard label="Converged" value={summary.converged} numeric />
+        <StatCard label="Avg Quality" value={`${Math.round(summary.avgQuality * 100)}%`} numeric />
+        <StatCard label="Avg Loss" value={summary.avgLoss.toFixed(4)} numeric />
+      </KpiGrid>
 
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-2 mb-4 p-3 bg-muted rounded-lg">
@@ -369,20 +419,46 @@ export default function TrainingRunsPage() {
               onKeyDown={(e) => e.key === 'Enter' && handleBulkTag()}
               className="w-32 text-xs h-7"
             />
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleBulkTag} disabled={!bulkTag.trim()}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={handleBulkTag}
+              disabled={!bulkTag.trim()}
+            >
               <Tag className="h-3 w-3 mr-1" /> Tag
             </Button>
           </div>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleBulkBookmark(true)}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={() => handleBulkBookmark(true)}
+          >
             <Star className="h-3 w-3 mr-1" /> Bookmark
           </Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleBulkBookmark(false)}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={() => handleBulkBookmark(false)}
+          >
             Unbookmark
           </Button>
-          <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={handleBulkDelete}>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="h-7 text-xs"
+            onClick={handleBulkDelete}
+          >
             <Trash2 className="h-3 w-3 mr-1" /> Delete
           </Button>
-          <Button size="sm" variant="ghost" className="h-7 text-xs ml-auto" onClick={() => setSelectedIds(new Set())}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs ml-auto"
+            onClick={() => setSelectedIds(new Set())}
+          >
             Clear Selection
           </Button>
         </div>
@@ -409,11 +485,15 @@ export default function TrainingRunsPage() {
           ) : (
             <>
               <div className="flex items-center gap-2 mb-2">
-                <button onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground">
-                  {selectedIds.size === filteredRuns.length && filteredRuns.length > 0
-                    ? <CheckSquare className="h-4 w-4" />
-                    : <Square className="h-4 w-4" />
-                  }
+                <button
+                  onClick={toggleSelectAll}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  {selectedIds.size === filteredRuns.length && filteredRuns.length > 0 ? (
+                    <CheckSquare className="h-4 w-4" />
+                  ) : (
+                    <Square className="h-4 w-4" />
+                  )}
                 </button>
                 <span className="text-xs text-muted-foreground">Select all</span>
               </div>
@@ -421,17 +501,25 @@ export default function TrainingRunsPage() {
                 <Card
                   key={run.run_id}
                   className={`hover:shadow-sm transition-shadow cursor-pointer ${selectedRun?.run_id === run.run_id ? 'ring-2 ring-primary' : ''} ${selectedIds.has(run.run_id) ? 'bg-muted/30' : ''}`}
-                  onClick={() => { setSelectedRun(run); setEditingNotes(false); setNotesValue(run.notes || '') }}
+                  onClick={() => {
+                    setSelectedRun(run)
+                    setEditingNotes(false)
+                    setNotesValue(run.notes || '')
+                  }}
                 >
                   <CardContent className="py-3 flex items-center gap-4">
                     <button
-                      onClick={(e) => { e.stopPropagation(); toggleSelect(run.run_id) }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleSelect(run.run_id)
+                      }}
                       className="flex-shrink-0 text-muted-foreground hover:text-foreground"
                     >
-                      {selectedIds.has(run.run_id)
-                        ? <CheckSquare className="h-4 w-4" />
-                        : <Square className="h-4 w-4" />
-                      }
+                      {selectedIds.has(run.run_id) ? (
+                        <CheckSquare className="h-4 w-4" />
+                      ) : (
+                        <Square className="h-4 w-4" />
+                      )}
                     </button>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -439,16 +527,17 @@ export default function TrainingRunsPage() {
                           {run.model || 'unknown'}
                         </span>
                         {run.method && (
-                          <Badge variant="secondary" className="text-xs">{run.method}</Badge>
-                        )}
-                        {run.converged && (
-                          <Badge className="bg-green-100 text-green-800 text-xs">converged</Badge>
-                        )}
-                        {qualityBadge(run.quality_score)}
-                        {(run.tags || []).map(tag => (
-                          <Badge key={tag} className="bg-purple-100 text-purple-800 text-xs">
-                            <Tag className="h-2.5 w-2.5 mr-0.5" />{tag}
+                          <Badge variant="secondary" className="text-xs">
+                            {run.method}
                           </Badge>
+                        )}
+                        {run.converged && <StatusBadge tone="success">converged</StatusBadge>}
+                        {qualityBadge(run.quality_score)}
+                        {(run.tags || []).map((tag) => (
+                          <StatusBadge key={tag} tone="info">
+                            <Tag className="h-2.5 w-2.5 mr-0.5" />
+                            {tag}
+                          </StatusBadge>
                         ))}
                       </div>
                       <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
@@ -458,9 +547,17 @@ export default function TrainingRunsPage() {
                         </span>
                         {run.training_time_s && <span>{formatDuration(run.training_time_s)}</span>}
                         {run.epochs && <span>{run.epochs} epochs</span>}
-                        {run.final_loss !== undefined && run.final_loss > 0 && <span>loss: {run.final_loss.toFixed(4)}</span>}
-                        {run.perplexity !== undefined && run.perplexity > 0 && <span>ppl: {run.perplexity.toFixed(2)}</span>}
-                        {run.notes && <span className="italic truncate max-w-[200px]">&quot;{run.notes}&quot;</span>}
+                        {run.final_loss !== undefined && run.final_loss > 0 && (
+                          <span>loss: {run.final_loss.toFixed(4)}</span>
+                        )}
+                        {run.perplexity !== undefined && run.perplexity > 0 && (
+                          <span>ppl: {run.perplexity.toFixed(2)}</span>
+                        )}
+                        {run.notes && (
+                          <span className="italic truncate max-w-[200px]">
+                            &quot;{run.notes}&quot;
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
@@ -468,7 +565,10 @@ export default function TrainingRunsPage() {
                         size="sm"
                         variant="ghost"
                         className={`h-7 px-2 ${run.bookmarked ? 'text-yellow-500' : 'text-muted-foreground'}`}
-                        onClick={(e) => { e.stopPropagation(); handleBookmark(run.run_id) }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleBookmark(run.run_id)
+                        }}
                       >
                         <Star className={`h-4 w-4 ${run.bookmarked ? 'fill-current' : ''}`} />
                       </Button>
@@ -476,7 +576,10 @@ export default function TrainingRunsPage() {
                         size="sm"
                         variant="ghost"
                         className="h-7 px-2 text-muted-foreground"
-                        onClick={(e) => { e.stopPropagation(); handleDuplicate(run.run_id) }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDuplicate(run.run_id)
+                        }}
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
@@ -484,7 +587,10 @@ export default function TrainingRunsPage() {
                         size="sm"
                         variant="ghost"
                         className="text-destructive hover:text-destructive"
-                        onClick={(e) => { e.stopPropagation(); handleDelete(run.run_id) }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDelete(run.run_id)
+                        }}
                         disabled={deleting === run.run_id}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -511,7 +617,12 @@ export default function TrainingRunsPage() {
                   >
                     <Star className={`h-3 w-3 ${selectedRun.bookmarked ? 'fill-current' : ''}`} />
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => handleExportSingle(selectedRun.run_id)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2"
+                    onClick={() => handleExportSingle(selectedRun.run_id)}
+                  >
                     <Download className="h-3 w-3 mr-1" /> Export
                   </Button>
                   <button onClick={() => setSelectedRun(null)}>
@@ -520,18 +631,52 @@ export default function TrainingRunsPage() {
                 </div>
               </div>
               <div className="space-y-2 text-sm">
-                <div><span className="text-muted-foreground">ID:</span> <span className="font-mono text-xs">{selectedRun.run_id}</span></div>
-                <div><span className="text-muted-foreground">Model:</span> {selectedRun.model}</div>
-                <div><span className="text-muted-foreground">Method:</span> {selectedRun.method}</div>
-                <div><span className="text-muted-foreground">Dataset:</span> {selectedRun.dataset}</div>
-                <div><span className="text-muted-foreground">Epochs:</span> {selectedRun.epochs}</div>
-                <div><span className="text-muted-foreground">Final Loss:</span> {selectedRun.final_loss?.toFixed(4)}</div>
-                <div><span className="text-muted-foreground">Best Loss:</span> {selectedRun.best_loss?.toFixed(4)}</div>
-                <div><span className="text-muted-foreground">Perplexity:</span> {selectedRun.perplexity?.toFixed(2)}</div>
-                <div><span className="text-muted-foreground">Quality:</span> {selectedRun.quality_score ? `${Math.round(selectedRun.quality_score * 100)}%` : '-'}</div>
-                <div><span className="text-muted-foreground">Duration:</span> {formatDuration(selectedRun.training_time_s)}</div>
-                <div><span className="text-muted-foreground">Converged:</span> {selectedRun.converged ? 'Yes' : 'No'}</div>
-                <div><span className="text-muted-foreground">Early Stopped:</span> {selectedRun.early_stopped ? 'Yes' : 'No'}</div>
+                <div>
+                  <span className="text-muted-foreground">ID:</span>{' '}
+                  <span className="font-mono text-xs">{selectedRun.run_id}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Model:</span> {selectedRun.model}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Method:</span> {selectedRun.method}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Dataset:</span> {selectedRun.dataset}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Epochs:</span> {selectedRun.epochs}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Final Loss:</span>{' '}
+                  {selectedRun.final_loss?.toFixed(4)}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Best Loss:</span>{' '}
+                  {selectedRun.best_loss?.toFixed(4)}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Perplexity:</span>{' '}
+                  {selectedRun.perplexity?.toFixed(2)}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Quality:</span>{' '}
+                  {selectedRun.quality_score
+                    ? `${Math.round(selectedRun.quality_score * 100)}%`
+                    : '-'}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Duration:</span>{' '}
+                  {formatDuration(selectedRun.training_time_s)}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Converged:</span>{' '}
+                  {selectedRun.converged ? 'Yes' : 'No'}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Early Stopped:</span>{' '}
+                  {selectedRun.early_stopped ? 'Yes' : 'No'}
+                </div>
               </div>
 
               <div className="border-t pt-3">
@@ -539,10 +684,17 @@ export default function TrainingRunsPage() {
                   <span className="text-sm font-medium">Tags</span>
                 </div>
                 <div className="flex flex-wrap gap-1 mb-2">
-                  {(selectedRun.tags || []).map(tag => (
-                    <Badge key={tag} className="bg-purple-100 text-purple-800 text-xs flex items-center gap-1">
-                      <Tag className="h-2.5 w-2.5" />{tag}
-                      <button onClick={() => handleRemoveTag(tag)} className="ml-0.5 hover:text-purple-600">
+                  {(selectedRun.tags || []).map((tag) => (
+                    <Badge
+                      key={tag}
+                      className="bg-purple-100 text-purple-800 text-xs flex items-center gap-1"
+                    >
+                      <Tag className="h-2.5 w-2.5" />
+                      {tag}
+                      <button
+                        onClick={() => handleRemoveTag(tag)}
+                        className="ml-0.5 hover:text-purple-600"
+                      >
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
@@ -556,7 +708,13 @@ export default function TrainingRunsPage() {
                     onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
                     className="text-xs h-7"
                   />
-                  <Button size="sm" variant="outline" className="h-7 px-2" onClick={handleAddTag} disabled={!newTag.trim()}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2"
+                    onClick={handleAddTag}
+                    disabled={!newTag.trim()}
+                  >
                     <Plus className="h-3 w-3" />
                   </Button>
                 </div>
@@ -566,7 +724,15 @@ export default function TrainingRunsPage() {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">Notes</span>
                   {!editingNotes && (
-                    <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setEditingNotes(true); setNotesValue(selectedRun.notes || '') }}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-xs"
+                      onClick={() => {
+                        setEditingNotes(true)
+                        setNotesValue(selectedRun.notes || '')
+                      }}
+                    >
                       Edit
                     </Button>
                   )}
@@ -580,8 +746,17 @@ export default function TrainingRunsPage() {
                       placeholder="Add notes about this training run..."
                     />
                     <div className="flex gap-1">
-                      <Button size="sm" className="h-6 text-xs" onClick={handleSaveNotes}>Save</Button>
-                      <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => setEditingNotes(false)}>Cancel</Button>
+                      <Button size="sm" className="h-6 text-xs" onClick={handleSaveNotes}>
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-xs"
+                        onClick={() => setEditingNotes(false)}
+                      >
+                        Cancel
+                      </Button>
                     </div>
                   </div>
                 ) : (
@@ -599,27 +774,45 @@ export default function TrainingRunsPage() {
                 <div className="flex gap-1">
                   <select
                     value={compareRunId}
-                    onChange={(e) => { setCompareRunId(e.target.value); setCompareResult(null) }}
+                    onChange={(e) => {
+                      setCompareRunId(e.target.value)
+                      setCompareResult(null)
+                    }}
                     className="text-xs border rounded px-2 py-1 flex-1"
                   >
                     <option value="">Select run to compare...</option>
-                    {runs.filter(r => r.run_id !== selectedRun.run_id).map(r => (
-                      <option key={r.run_id} value={r.run_id}>
-                        {r.model} - {r.run_id.slice(0, 12)}
-                      </option>
-                    ))}
+                    {runs
+                      .filter((r) => r.run_id !== selectedRun.run_id)
+                      .map((r) => (
+                        <option key={r.run_id} value={r.run_id}>
+                          {r.model} - {r.run_id.slice(0, 12)}
+                        </option>
+                      ))}
                   </select>
-                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleCompare} disabled={!compareRunId}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={handleCompare}
+                    disabled={!compareRunId}
+                  >
                     Compare
                   </Button>
                 </div>
                 {compareResult && (
                   <div className="mt-2 text-xs space-y-1 bg-muted/50 rounded p-2">
                     <div className="font-medium">Differences:</div>
-                    {Object.entries(compareResult.differences as Record<string, { run_a: unknown; run_b: unknown }> || {}).map(([field, diff]) => (
+                    {Object.entries(
+                      (compareResult.differences as Record<
+                        string,
+                        { run_a: unknown; run_b: unknown }
+                      >) || {},
+                    ).map(([field, diff]) => (
                       <div key={field} className="flex justify-between">
                         <span className="text-muted-foreground">{field}:</span>
-                        <span>{String(diff.run_a)} → {String(diff.run_b)}</span>
+                        <span>
+                          {String(diff.run_a)} → {String(diff.run_b)}
+                        </span>
                       </div>
                     ))}
                     {compareResult.a_wins !== undefined && (

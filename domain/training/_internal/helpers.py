@@ -102,6 +102,17 @@ def parse_subtitle_text(text: str) -> list:
 def resolve_dataset_path(dataset_id: str) -> str:
     if not _VALID_DATASET_ID.match(dataset_id):
         raise ValueError(f"Invalid dataset ID: {dataset_id!r}")
+    # Just-cache first; legacy dirs are a read-only fallback during migration.
+    try:
+        from .cache_tags import resolve_in_cache
+
+        hit = resolve_in_cache(dataset_id)
+        if hit:
+            return hit
+    except ValueError:
+        raise
+    except Exception as exc:
+        logger.debug("Cache resolution failed for %s: %s", dataset_id, exc)
     for base_name in ("datasets", "data/datasets", "data"):
         ds_candidate = (REPO_ROOT / base_name / dataset_id).resolve()
         allowed_base = (REPO_ROOT / base_name).resolve()
@@ -116,6 +127,9 @@ def resolve_dataset_path(dataset_id: str) -> str:
         txt_files = list(ds_candidate.glob("*.txt"))
         if txt_files:
             return str(txt_files[0])
+        jsonl_files = sorted(ds_candidate.glob("*.jsonl"))
+        if jsonl_files:
+            return str(jsonl_files[0])
     return ""
 
 

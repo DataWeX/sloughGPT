@@ -64,6 +64,7 @@
   --warning: 236 168 60;
   --destructive: 220 80 90;
   --destructive-foreground: 250 248 255;
+  --info: 90 150 220;
   --chart-1: 124 82 196;
   --chart-2: 52 176 125;
   --chart-3: 236 145 95;
@@ -95,6 +96,7 @@ html.dark {
   --warning: 240 192 80;
   --destructive: 235 100 110;
   --destructive-foreground: 25 22 36;
+  --info: 100 165 240;
   --chart-1: 192 170 244;
   --chart-2: 72 192 140;
   --chart-3: 240 176 130;

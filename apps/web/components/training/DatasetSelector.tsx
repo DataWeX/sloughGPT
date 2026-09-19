@@ -29,36 +29,61 @@ export function DatasetSelector({
   onChange,
   disabled,
   showImport,
+  showAllKinds,
 }: {
   datasets: UseTrainingDatasetsReturn
   value: string
   onChange: (id: string) => void
   disabled?: boolean
   showImport?: boolean
+  /** Show adapter/system/media entries too (default hides them — training needs corpora). */
+  showAllKinds?: boolean
 }) {
+  // Training selects corpora: hide adapter/system/media entries tagged by the
+  // just-cache classifier. Untagged entries (older backends/mocks) still show.
+  const visible = showAllKinds
+    ? datasets.datasets
+    : datasets.datasets.filter((ds) => ds.kind == null || ds.kind === 'dataset')
   return (
     <div className="flex items-center gap-1.5">
-      {datasets.datasets.length === 0 ? (
+      {visible.length === 0 ? (
         <>
-          <span className="text-[10px] text-muted-foreground/60">No datasets — import one to get started.</span>
-          <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => datasets.setImportModalOpen(true)}>
+          <span className="text-[10px] text-muted-foreground/60">
+            No datasets — import one to get started.
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[10px]"
+            onClick={() => datasets.setImportModalOpen(true)}
+          >
             + Import
           </Button>
         </>
       ) : (
         <>
           <Select value={value} onValueChange={onChange} disabled={disabled}>
-            <SelectTrigger className="h-7 text-[11px] font-mono flex-1 max-w-sm" aria-label="Dataset selector">
+            <SelectTrigger
+              className="h-7 text-[11px] font-mono flex-1 max-w-sm"
+              aria-label="Dataset selector"
+            >
               <SelectValue placeholder="Select a dataset..." />
             </SelectTrigger>
             <SelectContent>
-              {datasets.datasets.map(ds => (
-                <SelectItem key={ds.id} value={ds.id}>{datasetLabel(ds)}</SelectItem>
+              {visible.map((ds) => (
+                <SelectItem key={ds.id} value={ds.id}>
+                  {datasetLabel(ds)}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
           {showImport && (
-            <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => datasets.setImportModalOpen(true)}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[10px]"
+              onClick={() => datasets.setImportModalOpen(true)}
+            >
               + Import
             </Button>
           )}
@@ -68,7 +93,8 @@ export function DatasetSelector({
         open={datasets.importModalOpen}
         onOpenChange={datasets.setImportModalOpen}
         onImportComplete={(datasetId: string) => {
-          void datasets.fetchDatasets()
+          void datasets
+            .fetchDatasets()
             .then(() => datasets.setSelectedDataset(datasetId))
             .catch(() => {})
         }}

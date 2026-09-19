@@ -684,7 +684,7 @@ class MultimodalRouter:
         """analyze_pdf."""
         import tempfile
 
-        from domain.generation import PDFVLMProcessor
+        from domain.inference import PDFVLMProcessor
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(await file.read())

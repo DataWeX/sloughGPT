@@ -46,22 +46,20 @@ export function VoiceWaveform({
   }, [level, bars, variant])
 
   // Color based on variant
-  const color = variant === 'mic'
-    ? 'bg-primary'
-    : variant === 'speaker'
-      ? 'bg-emerald-500'
-      : 'bg-muted-foreground/30'
+  const color =
+    variant === 'mic'
+      ? 'bg-primary'
+      : variant === 'speaker'
+        ? 'bg-success'
+        : 'bg-muted-foreground/30'
 
-  const glowColor = variant === 'mic'
-    ? 'shadow-primary/20'
-    : variant === 'speaker'
-      ? 'shadow-emerald-500/20'
-      : ''
+  const glowColor =
+    variant === 'mic' ? 'shadow-primary/20' : variant === 'speaker' ? 'shadow-success/20' : ''
 
   return (
     <div
       ref={containerRef}
-      className={cn("flex items-center justify-center gap-[2px]", className)}
+      className={cn('flex items-center justify-center gap-[2px]', className)}
       style={{ width, height }}
       role="img"
       aria-label={`Audio ${variant} waveform`}
@@ -69,7 +67,11 @@ export function VoiceWaveform({
       {barHeights.map((h, i) => (
         <div
           key={i}
-          className={cn(color, 'rounded-full transition-all duration-100 ease-out', glowColor && `shadow-sm ${glowColor}`)}
+          className={cn(
+            color,
+            'rounded-full transition-all duration-100 ease-out',
+            glowColor && `shadow-sm ${glowColor}`,
+          )}
           style={{
             width: Math.max(2, (width - bars * 2) / bars),
             height: `${h * height * 0.9}px`,
@@ -104,11 +106,11 @@ export function VoiceOrb({
   const orbColor = isListening
     ? 'border-primary'
     : isSpeaking
-      ? 'border-emerald-500'
+      ? 'border-success'
       : isProcessing
-        ? 'border-amber-500'
+        ? 'border-warning'
         : state === 'error'
-          ? 'border-red-500'
+          ? 'border-destructive'
           : 'border-muted-foreground/20'
 
   return (
@@ -130,23 +132,30 @@ export function VoiceOrb({
       {isSpeaking && (
         <>
           <div
-            className="absolute inset-0 rounded-full border-2 border-emerald-500/20 animate-ping"
+            className="absolute inset-0 rounded-full border-2 border-success/20 animate-ping"
             style={{ animationDuration: '1.5s' }}
           />
           <div
-            className="absolute inset-0 rounded-full border border-emerald-500/10 animate-ping"
+            className="absolute inset-0 rounded-full border border-success/10 animate-ping"
             style={{ animationDuration: '2s', animationDelay: '0.3s' }}
           />
         </>
       )}
 
       {isProcessing && (
-        <div className="absolute inset-0 rounded-full border-2 border-amber-500/20 animate-spin" style={{ animationDuration: '3s' }} />
+        <div
+          className="absolute inset-0 rounded-full border-2 border-warning/20 animate-spin"
+          style={{ animationDuration: '3s' }}
+        />
       )}
 
       {/* Main orb */}
       <div
-        className={cn('relative z-10 w-24 h-24 rounded-full flex items-center justify-center border-2', orbColor, 'transition-all duration-200 shadow-lg')}
+        className={cn(
+          'relative z-10 w-24 h-24 rounded-full flex items-center justify-center border-2',
+          orbColor,
+          'transition-all duration-200 shadow-lg',
+        )}
         style={{ transform: `scale(${orbScale})` }}
       >
         {children}
@@ -159,13 +168,7 @@ export function VoiceOrb({
  * Animated listening indicator with pulsing concentric rings
  * that respond to mic level. Shows when actively listening.
  */
-export function ListeningIndicator({
-  micLevel,
-  active,
-}: {
-  micLevel: number
-  active: boolean
-}) {
+export function ListeningIndicator({ micLevel, active }: { micLevel: number; active: boolean }) {
   // Generate ring data based on mic level
   const rings = useMemo(() => {
     const count = 5
@@ -220,18 +223,23 @@ export function ListeningBars({
   active: boolean
   barCount?: number
 }) {
-  const bars = useMemo(() =>
-    Array.from({ length: barCount }, (_, i) => ({
-      delay: (i * 120) % 800,
-      baseHeight: 20 + Math.random() * 30,
-    })),
-    [barCount]
+  const bars = useMemo(
+    () =>
+      Array.from({ length: barCount }, (_, i) => ({
+        delay: (i * 120) % 800,
+        baseHeight: 20 + Math.random() * 30,
+      })),
+    [barCount],
   )
 
   if (!active) return null
 
   return (
-    <div className="flex items-center justify-center gap-[3px] h-10" role="img" aria-label="Listening animation">
+    <div
+      className="flex items-center justify-center gap-[3px] h-10"
+      role="img"
+      aria-label="Listening animation"
+    >
       {bars.map((bar, i) => (
         <div
           key={i}

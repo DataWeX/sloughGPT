@@ -888,6 +888,17 @@ def _run_post_gen_tasks(
     except Exception as e:
         logger.warning("Entity extraction failed: %s", e)
 
+    # Consciousness post-processing
+    try:
+        from domain.core import get_consciousness as _pgs_ce
+
+        _ce = _pgs_ce()
+        if _ce.config.is_enabled():
+            _ce.process(user_msg or "", full_response)
+            _ce.save()
+    except Exception as e:
+        logger.debug("Consciousness post-processing skipped: %s", e)
+
 
 class InferenceRouter:
     """OOP-style router for inference, chat, sessions, and context endpoints."""
@@ -969,7 +980,7 @@ class InferenceRouter:
             and self._context_core._vector_store is None
         ):
             try:
-                from domain.generation import simple_embed
+                from domain.inference import simple_embed
 
                 self._context_core.set_vector_store(self._vector_store_ref, simple_embed)
             except Exception as e:
@@ -1557,7 +1568,7 @@ class InferenceRouter:
                 await websocket.close()
                 return
         else:
-            from routers.api_keys import ApiKeyManager
+            from routers.security import ApiKeyManager
 
             try:
                 _key_mgr = ApiKeyManager()
@@ -2285,7 +2296,6 @@ class InferenceRouter:
                     _ce.qualia.experience(user_msg or "")
                     _q = _ce.qualia.current.to_dict()
                     _status = _ce.get_status()
-                    _last_episode = _ce.self_model.episodes[-1] if _ce.self_model.episodes else None
                     yield _sse_event(
                         "chat",
                         "CONSCIOUSNESS",
@@ -2294,8 +2304,6 @@ class InferenceRouter:
                             "level": _status.get("level", 0),
                             "qualia": _q,
                             "beliefs": _status.get("beliefs", {}),
-                            "growth_delta": _last_episode.growth_delta if _last_episode else 0.0,
-                            "self_insight": _last_episode.self_insight if _last_episode else "",
                         },
                         message="Consciousness state updated",
                     )

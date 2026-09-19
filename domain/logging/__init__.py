@@ -20,8 +20,9 @@ from domain.logging._internal.base import (
     TaggedLogger,
 )
 from domain.logging._internal.bridge import BridgeHandler
-from domain.logging._internal.cli_logger import CLILogger
+from domain.logging._internal.cli_logger import CLILogger, _c
 from domain.logging._internal.config import (
+    _A,
     clear_log_context,
     get_log_context,
     get_request_id,
@@ -30,6 +31,7 @@ from domain.logging._internal.config import (
     setup_logging,
 )
 from domain.logging._internal.console_logger import ConsoleLogger
+from domain.logging._internal.errors import format_concise, log_error
 from domain.logging._internal.shell_logger import ShellLogger
 from domain.logging._internal.web_logger import WebLogger
 
@@ -51,6 +53,8 @@ __all__ = [
     "WebEventLogger",
     "BridgeHandler",
     "setup_logging",
+    "format_concise",
+    "log_error",
     "get_request_id",
     "set_request_id",
     "get_log_context",

@@ -21,8 +21,16 @@ export { filesController } from './files-controller'
 export { voiceController } from './voice-controller'
 export { registryController } from './registry-controller'
 export { loraEvalController } from './lora-eval-controller'
+export { trainingFacade, type TrainingFacade } from './training-facade'
 export { tokenTreeController } from './token-tree-controller'
-export { ingestDocument, queryRAG, verifyRAG, listRAGDocuments, getRAGStats, clearRAG } from './rag-controller'
+export {
+  ingestDocument,
+  queryRAG,
+  verifyRAG,
+  listRAGDocuments,
+  getRAGStats,
+  clearRAG,
+} from './rag-controller'
 export { operationsController } from './operations-controller'
 export { phonemeController } from './phoneme-controller'
 export { dashboardController } from './dashboard-controller'
@@ -56,43 +64,144 @@ export { vectorController } from './vector-controller'
 export { generateController } from './generate-controller'
 
 export type { ModelInfo, ModelStatus, ModelLoadResponse, HealthStatus } from './model-controller'
-export type { TrainingJob, TrainingStatus, RecoverableJob, Webhook, WebhookStats } from './training-controller'
+export type {
+  TrainingJob,
+  TrainingStatus,
+  RecoverableJob,
+  Webhook,
+  WebhookStats,
+} from './training-controller'
 export type { Session, Conversation } from './session-controller'
-export type { Dataset, DatasetPreview, ImportResponse, ImportSource, GitHubRepo, BookResult } from './dataset-controller'
+export type {
+  Dataset,
+  DatasetPreview,
+  ImportResponse,
+  ImportSource,
+  GitHubRepo,
+  BookResult,
+} from './dataset-controller'
 export type { Soul, Checkpoint, SoulsResponse, CheckpointsResponse } from './souls-controller'
 export type { MultimodalCapabilities, TrainingReport } from './multimodal-controller'
 export type { GroupedError, TrendPoint, RecentError } from './errors-controller'
 export type { Experiment } from './experiments-controller'
-export type { MemoryItem, MemoryStats, MemoryListResponse, MemorySearchResponse, MemoryStoreResult, MemoryRememberResult, MemoryClearResult, MemoryDeleteResult } from './memory-controller'
+export type {
+  MemoryItem,
+  MemoryStats,
+  MemoryListResponse,
+  MemorySearchResponse,
+  MemoryStoreResult,
+  MemoryRememberResult,
+  MemoryClearResult,
+  MemoryDeleteResult,
+} from './memory-controller'
 export type { WorkflowStatus, WorkflowConfig, WorkflowStats } from './workflow-controller'
 export type { FileEntry, SearchResult as FilesSearchResult } from './files-controller'
 export type { VoiceStatus, TTSResult } from './voice-controller'
 export type { RegisteredModel, RegistryStats } from './registry-controller'
 export type { PhonemeEncodeResult, PhonemeScoreResult, PhonemeLanguage } from './phoneme-controller'
 export type { LoraEvalResult, LoraEvalHistory } from './lora-eval-controller'
-export type { TokenTreeStats, SimilarResult, Neighbor, TrainTreeResult, EncodeResult, LineageResult, MergeRule, CompareResult, CompareSide, SavedTree, MatrixSummary, VocabPage } from './token-tree-controller'
-export type { RAGDocument, RAGStats, RAGQueryResult, RAGQueryResponse, RAGIngestResponse, RAGVerifyResponse } from './rag-controller'
+export type {
+  TokenTreeStats,
+  SimilarResult,
+  Neighbor,
+  TrainTreeResult,
+  EncodeResult,
+  LineageResult,
+  MergeRule,
+  CompareResult,
+  CompareSide,
+  SavedTree,
+  MatrixSummary,
+  VocabPage,
+} from './token-tree-controller'
+export type {
+  RAGDocument,
+  RAGStats,
+  RAGQueryResult,
+  RAGQueryResponse,
+  RAGIngestResponse,
+  RAGVerifyResponse,
+} from './rag-controller'
 export type { Operation, OperationsResponse, CancelResponse } from './operations-controller'
 export type { DashboardSummary, DashboardEvent } from './dashboard-controller'
-export type { ServingProfile, ProfileApplyResult, ProfileRecommendResult, ActiveProfileResult } from './profiles-controller'
+export type {
+  ServingProfile,
+  ProfileApplyResult,
+  ProfileRecommendResult,
+  ActiveProfileResult,
+} from './profiles-controller'
 export type { UserInfo, WorkspaceInfo, AuthResponse, VerifyResponse } from './auth-controller'
-export type { BenchmarkResult, LoggedBenchmarkResponse, QualityMetrics, BenchmarkStatsData } from './benchmark-controller'
+export type {
+  BenchmarkResult,
+  LoggedBenchmarkResponse,
+  QualityMetrics,
+  BenchmarkStatsData,
+} from './benchmark-controller'
 export type { CompanionTraits, CompanionInfo, CompanionPreset } from './companion-controller'
 export type { DownloadProgress } from './download-controller'
 export type { Conversation as FeedbackConversation } from './feedback-conversations-controller'
 export type { GenerationConfig } from './generation-config-controller'
-export type { GenerateImageResponse, GalleryImage, GalleryResponse, ImageStyle } from './images-controller'
-export type { InferRequest, InferResponse, EmbedResponse, TokenizeResponse, DetokenizeResponse } from './infer-controller'
+export type {
+  GenerateImageResponse,
+  GalleryImage,
+  GalleryResponse,
+  ImageStyle,
+} from './images-controller'
+export type {
+  InferRequest,
+  InferResponse,
+  EmbedResponse,
+  TokenizeResponse,
+  DetokenizeResponse,
+} from './infer-controller'
 export type { KnowledgeItem, KnowledgeStats, TopicItem, KnowledgeGaps } from './kb-controller'
-export type { KnowledgeItem as KnowledgeItem2, KnowledgeSearchResult, KnowledgeStats as KnowledgeStats2, TopicCount, TopicsResponse } from './knowledge-controller'
-export type { LearnerStatus, SearchResult as LearnerSearchResult, KnowledgeResult } from './learner-controller'
+export type {
+  KnowledgeItem as KnowledgeItem2,
+  KnowledgeSearchResult,
+  KnowledgeStats as KnowledgeStats2,
+  TopicCount,
+  TopicsResponse,
+} from './knowledge-controller'
+export type {
+  LearnerStatus,
+  SearchResult as LearnerSearchResult,
+  KnowledgeResult,
+} from './learner-controller'
 export type { MetaWeights, MetaWeightStats } from './meta-weights-controller'
 export type { RateLimitStatus, RateLimitCheck } from './rate-limit-controller'
 export type { ShellExecResult, ShellStreamEvent, ShellStreamCallbacks } from './shell-controller'
-export type { SystemMetrics, SystemInfo, DiskUsage, GPUInfo, KvSessionsInfo } from './system-controller'
-export type { TokenizerStats, TokenizeResult, VocabEntry, MergeEntry, SampleWord } from './tokenizer-controller'
-export type { UserAdapterStats, UserAdapterInfo, UserAdaptersListResponse } from './user-adapters-controller'
-export type { VMRegister, VMRunResult, VMTrainingJob, VMBuiltin, VMRegisterMeta } from './vm-controller'
-export type { RenderConfig, RenderResult, TickResult, NeuralResult, WorldStats } from './world-controller'
+export type {
+  SystemMetrics,
+  SystemInfo,
+  DiskUsage,
+  GPUInfo,
+  KvSessionsInfo,
+} from './system-controller'
+export type {
+  TokenizerStats,
+  TokenizeResult,
+  VocabEntry,
+  MergeEntry,
+  SampleWord,
+} from './tokenizer-controller'
+export type {
+  UserAdapterStats,
+  UserAdapterInfo,
+  UserAdaptersListResponse,
+} from './user-adapters-controller'
+export type {
+  VMRegister,
+  VMRunResult,
+  VMTrainingJob,
+  VMBuiltin,
+  VMRegisterMeta,
+} from './vm-controller'
+export type {
+  RenderConfig,
+  RenderResult,
+  TickResult,
+  NeuralResult,
+  WorldStats,
+} from './world-controller'
 export type { VectorStats, VectorSearchResult } from './vector-controller'
 export type { GenerateRequest, GenerateResponse } from './generate-controller'

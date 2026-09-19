@@ -6,7 +6,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input } from '@sloughgpt/strui'
-import { settingsController } from '@/lib/settings-controller'
+import { trainingFacade } from '@/lib/training-facade'
+
+const autoTrain = trainingFacade.automation
 import { apiGet } from '@/lib/http-client'
 import { AutoTrainStatusCard } from '@/components/auto-train/AutoTrainStatusCard'
 import { AutoTrainConfigCard } from '@/components/auto-train/AutoTrainConfigCard'
@@ -45,7 +47,7 @@ export default function AutoTrainPage() {
     setLoading(true)
     try {
       const [statusData, statsData] = await Promise.all([
-        settingsController.getAutoTrainSettingsStatus(),
+        autoTrain.autoTrainStatus(),
         apiGet('/mobile/train/stats'),
       ])
       if (statusData) {
@@ -62,12 +64,14 @@ export default function AutoTrainPage() {
     }
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   const handleUpdateConfig = async () => {
     setUpdating(true)
     try {
-      await settingsController.updateAutoTrainSettingsConfig({ threshold, interval_s: intervalS })
+      await autoTrain.updateAutoTrainConfig({ threshold, interval_s: intervalS })
       fetchData()
     } catch (err) {
       console.error('Failed to update config:', err)
@@ -78,7 +82,11 @@ export default function AutoTrainPage() {
 
   const formatDate = (ts: string | null) => {
     if (!ts) return '-'
-    try { return new Date(ts).toLocaleString() } catch { return ts }
+    try {
+      return new Date(ts).toLocaleString()
+    } catch {
+      return ts
+    }
   }
 
   return (
@@ -86,7 +94,8 @@ export default function AutoTrainPage() {
       <AppRouteHeader left={<AppRouteHeaderLead title="Auto-Train" />} />
 
       <p className="text-sm text-muted-foreground mb-6">
-        Automatic training from conversation pairs. When enough high-quality pairs accumulate, the system trains a LoRA adapter automatically.
+        Automatic training from conversation pairs. When enough high-quality pairs accumulate, the
+        system trains a LoRA adapter automatically.
       </p>
 
       {loading ? (
@@ -109,7 +118,7 @@ export default function AutoTrainPage() {
               threshold={status?.threshold}
               intervalS={120}
               onSave={async (t, i) => {
-                await settingsController.updateAutoTrainSettingsConfig({ threshold: t, interval_s: i })
+                await autoTrain.updateAutoTrainConfig({ threshold: t, interval_s: i })
                 fetchData()
               }}
             />

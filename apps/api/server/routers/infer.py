@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log
 
 from config import ServerConfig
-from domain.infrastructure._internal.errors import AppError
+from domain.infrastructure import AppError
 
 logger = logging.getLogger("slo.infer")
 cfg = ServerConfig.from_env()
@@ -219,7 +219,7 @@ class InferRouter:
         except ImportError as exc:
             logger.debug("Memory pressure guard unavailable: %s", exc)
 
-        from domain.models._internal.provider import get_provider
+        from domain.models import get_provider
         from routers.inference import _get_model_status
 
         ms = _get_model_status()
@@ -334,7 +334,7 @@ class InferRouter:
 
             async def generate() -> AsyncIterator[str]:
                 """generate."""
-                from domain.models._internal.provider import get_provider
+                from domain.models import get_provider
 
                 provider = get_provider("default")
                 if provider is None:
@@ -397,7 +397,7 @@ class InferRouter:
                             )
                             return
                 except Exception as e:
-                    from domain.infrastructure._internal.errors import (
+                    from domain.infrastructure import (
                         classify_exception,
                         emit_error_event,
                     )
@@ -479,7 +479,7 @@ class InferRouter:
             try:
                 import numpy as np
 
-                from domain.inference._internal.vector_store import _ngram_embed
+                from domain.inference import _ngram_embed
 
                 vec = _ngram_embed(req.text)
                 if isinstance(vec, np.ndarray):

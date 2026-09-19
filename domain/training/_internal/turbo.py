@@ -65,7 +65,9 @@ def start_turbo_training(config: dict) -> dict:
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_name}")
 
     dp = Path(data_path).resolve()
-    allowed_bases = [REPO_ROOT / "datasets", REPO_ROOT / "data"]
+    from .cache_tags import get_cache_root
+
+    allowed_bases = [REPO_ROOT / "datasets", REPO_ROOT / "data", get_cache_root()]
     if not dp.exists():
         raise FileNotFoundError(f"Data file not found: {data_path}")
     if not any(str(dp).startswith(str(b.resolve())) for b in allowed_bases if b.exists()):

@@ -102,11 +102,13 @@ async def start_turbo_training_unified(req: TurboStartRequest):
         if req.dataset_id:
             from pathlib import Path
 
+            from domain.training._internal.cache_tags import resolve_in_cache
+
             repo_root = find_repo_root(Path(__file__).resolve())
             ds_path = repo_root / "data" / req.dataset_id
             if not ds_path.exists():
                 ds_path = repo_root / "data" / f"{req.dataset_id}.jsonl"
-            if not ds_path.exists():
+            if not ds_path.exists() and not resolve_in_cache(req.dataset_id):
                 raise_error(
                     f"Dataset not found: {req.dataset_id}",
                     "E_BAD_REQUEST",

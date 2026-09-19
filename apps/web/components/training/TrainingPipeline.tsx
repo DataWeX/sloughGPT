@@ -1,6 +1,6 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { cn, Card, CardContent, CardHeader, CardTitle, IconCheck } from '@sloughgpt/strui'
 import { Button, Progress } from '@sloughgpt/strui'
 import { TrainingErrorBanner } from '@/components/training/TrainingStatus'
@@ -16,7 +16,10 @@ import { TrainStep } from '@/components/training/TrainStep'
 import { ResultsStep } from '@/components/training/ResultsStep'
 import { formatDuration } from '@/lib/formatDuration'
 
-const LossChart = dynamic(() => import('@/components/training/LossChart').then(m => m.LossChart), { ssr: false })
+const LossChart = dynamic(
+  () => import('@/components/training/LossChart').then((m) => m.LossChart),
+  { ssr: false },
+)
 
 const STEPS = [
   { id: 'data', label: 'Data', description: 'Pick your training data' },
@@ -25,33 +28,68 @@ const STEPS = [
   { id: 'results', label: 'Results', description: 'View checkpoints & eval' },
 ] as const
 
-type StepId = typeof STEPS[number]['id']
+type StepId = (typeof STEPS)[number]['id']
 
-function StepIndicator({ current, completed, onStepClick }: { current: StepId; completed: Set<StepId>; onStepClick: (id: StepId) => void }) {
+function StepIndicator({
+  current,
+  completed,
+  onStepClick,
+  animatingStep,
+}: {
+  current: StepId
+  completed: Set<StepId>
+  onStepClick: (id: StepId) => void
+  animatingStep?: StepId | null
+}) {
   return (
     <nav className="flex items-center gap-0" role="navigation" aria-label="Training steps">
       {STEPS.map((step, i) => {
         const isDone = completed.has(step.id)
         const isCurrent = step.id === current
+        const isAnimating = step.id === animatingStep
         const clickable = isDone && !isCurrent
         const content = (
           <div className="flex items-center gap-2">
-            <div className={cn(
-              'relative flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold transition-all duration-300',
-              isCurrent && 'bg-primary text-primary-foreground shadow-md shadow-primary/25',
-              isDone && 'bg-primary/15 text-primary',
-              !isCurrent && !isDone && 'bg-muted/60 text-muted-foreground border border-border/40'
-            )}>
+            <div
+              className={cn(
+                'relative flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold transition-all duration-500',
+                isCurrent && 'bg-primary text-primary-foreground shadow-md shadow-primary/25',
+                isDone &&
+                  !isAnimating &&
+                  'bg-primary text-primary-foreground shadow-md shadow-primary/30',
+                isAnimating &&
+                  'bg-primary text-primary-foreground shadow-lg shadow-primary/50 scale-110',
+                !isCurrent &&
+                  !isDone &&
+                  !isAnimating &&
+                  'bg-background text-muted-foreground border-2 border-border',
+              )}
+            >
               {isDone ? <IconCheck className="h-3.5 w-3.5" /> : i + 1}
               {isCurrent && (
-                <span className="absolute inset-0 rounded-full bg-primary/20 animate-ping [animation-duration:2s]" aria-hidden="true" />
+                <span
+                  className="absolute inset-0 rounded-full bg-primary/20 animate-ping [animation-duration:2s]"
+                  aria-hidden="true"
+                />
+              )}
+              {isAnimating && (
+                <span
+                  className="absolute inset-0 rounded-full bg-primary/30 animate-ping [animation-duration:0.6s]"
+                  aria-hidden="true"
+                />
               )}
             </div>
             <div className="hidden sm:block">
-              <span className={cn(
-                'text-xs font-medium block leading-tight',
-                isCurrent ? 'text-foreground' : isDone ? 'text-primary/80' : 'text-muted-foreground/70'
-              )}>
+              <span
+                className={cn(
+                  'text-xs font-medium block leading-tight transition-colors duration-500',
+                  isCurrent
+                    ? 'text-foreground'
+                    : isDone
+                      ? 'text-primary'
+                      : 'text-muted-foreground/70',
+                )}
+              >
                 {step.label}
               </span>
               <span className="text-[10px] text-muted-foreground/50 leading-tight hidden lg:block">
@@ -63,10 +101,12 @@ function StepIndicator({ current, completed, onStepClick }: { current: StepId; c
         return (
           <div key={step.id} className="flex items-center">
             {i > 0 && (
-              <div className={cn(
-                'w-8 sm:w-12 h-px mx-1 transition-colors duration-300',
-                isDone || isCurrent ? 'bg-primary/40' : 'bg-border/40'
-              )} />
+              <div
+                className={cn(
+                  'w-8 sm:w-12 h-px mx-1 transition-colors duration-500',
+                  isDone || isAnimating ? 'bg-primary' : 'bg-border/40',
+                )}
+              />
             )}
             {clickable ? (
               <button
@@ -110,30 +150,47 @@ export const TrainingPipeline = memo(function TrainingPipeline({
   completedSteps: Set<StepId>
   onStepComplete: (id: StepId) => void
 }) {
-  const runningJob = form.allJobs.find(j => j.status === 'running')
+  const runningJob =
+    form.allJobs.find((j) => j.status === 'running' && !j.id.startsWith('pending-')) ??
+    form.allJobs.find((j) => j.status === 'running')
   const isTurbo = session.method === 'turbo' && session.trainingRunning
   const isTraining = (session.trainingRunning || !!runningJob) && !isTurbo
 
-  const displayProgress = session.progress || runningJob?.progress || 0
   const displayLoss = session.loss ?? runningJob?.loss ?? runningJob?.train_loss ?? null
   const displayEpoch = session.epoch || runningJob?.current_epoch || 0
   const displayTotalEpochs = session.totalEpochs || runningJob?.epochs || 0
   const displayGlobalStep = session.globalStep || runningJob?.global_step || 0
   const displayTotalSteps = session.totalSteps || runningJob?.total_steps || 0
+  // Unknown progress renders as “--” instead of misleading “0%”.
+  // 0 with no step/epoch evidence means the backend hasn't reported progress yet.
+  const rawProgress = session.progress ?? runningJob?.progress ?? null
+  const hasProgressEvidence =
+    displayGlobalStep > 0 ||
+    displayTotalSteps > 0 ||
+    displayEpoch > 0 ||
+    (rawProgress != null && rawProgress > 0)
+  const displayProgress: number | null = hasProgressEvidence ? (rawProgress ?? 0) : null
   const displayStepsPerSec = session.stepsPerSec ?? runningJob?.steps_per_sec ?? null
   const displayEta = session.eta ?? runningJob?.eta_s ?? null
   const displayElapsed = session.elapsedSeconds ?? runningJob?.elapsed_s ?? null
-  const displayLossHistory = session.lossHistory.length > 0
-    ? session.lossHistory
-    : (runningJob?.loss_history?.map(l => ({ step: l.step, loss: l.value })) ?? [])
+  const displayLossHistory =
+    session.lossHistory.length > 0
+      ? session.lossHistory
+      : (runningJob?.loss_history?.map((l) => ({ step: l.step, loss: l.value })) ?? [])
   const displayMethod = session.method || runningJob?.method || null
 
-  const stepIdx = STEPS.findIndex(s => s.id === step)
+  const stepIdx = STEPS.findIndex((s) => s.id === step)
+  const [animatingStep, setAnimatingStep] = useState<StepId | null>(null)
 
   const advance = () => {
-    onStepComplete(step)
-    const next = STEPS[stepIdx + 1]
-    if (next) onStepChange(next.id)
+    const currentStep = step
+    onStepComplete(currentStep)
+    setAnimatingStep(currentStep)
+    setTimeout(() => {
+      setAnimatingStep(null)
+      const next = STEPS[stepIdx + 1]
+      if (next) onStepChange(next.id)
+    }, 400)
   }
 
   const goBack = () => {
@@ -157,29 +214,41 @@ export const TrainingPipeline = memo(function TrainingPipeline({
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
               </span>
               {displayEpoch > 0 && displayTotalEpochs > 0 && (
-                <span>Epoch {displayEpoch}/{displayTotalEpochs}</span>
+                <span>
+                  Epoch {displayEpoch}/{displayTotalEpochs}
+                </span>
               )}
-              {displayLoss != null && (
-                <span>Loss: {displayLoss.toFixed(4)}</span>
-              )}
+              {displayLoss != null && <span>Loss: {displayLoss.toFixed(4)}</span>}
               {session.avgQuality != null && (
                 <span>Quality: {session.avgQuality.toFixed(1)}/5</span>
               )}
               {displayMethod && (
-                <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">{displayMethod}</span>
+                <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                  {displayMethod}
+                </span>
               )}
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {displayLossHistory.length > 0 && (
-            <LossChart data={displayLossHistory.map(p => ({ step: p.step, value: p.loss, type: 'train' as const }))} height={200} />
+            <LossChart
+              data={displayLossHistory.map((p) => ({
+                step: p.step,
+                value: p.loss,
+                type: 'train' as const,
+              }))}
+              height={200}
+            />
           )}
 
           {session.phase !== 'complete' && session.phase !== 'error' && (
             <div className="space-y-3">
               {session.paused && (
-                <div className="rounded-md bg-warning/10 border border-warning/20 px-3 py-1.5 text-xs text-warning font-medium" role="status">
+                <div
+                  className="rounded-md bg-warning/10 border border-warning/20 px-3 py-1.5 text-xs text-warning font-medium"
+                  role="status"
+                >
                   Paused
                 </div>
               )}
@@ -187,42 +256,73 @@ export const TrainingPipeline = memo(function TrainingPipeline({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {displayTotalSteps > 0 && (
                   <div className="rounded-lg bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Step</p>
-                    <p className="text-sm font-semibold tabular-nums">{displayGlobalStep}<span className="text-muted-foreground/40 font-normal">/{displayTotalSteps}</span></p>
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                      Step
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums">
+                      {displayGlobalStep}
+                      <span className="text-muted-foreground/40 font-normal">
+                        /{displayTotalSteps}
+                      </span>
+                    </p>
                   </div>
                 )}
                 {displayEpoch > 0 && displayTotalEpochs > 0 && (
                   <div className="rounded-lg bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Epoch</p>
-                    <p className="text-sm font-semibold tabular-nums">{displayEpoch}<span className="text-muted-foreground/40 font-normal">/{displayTotalEpochs}</span></p>
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                      Epoch
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums">
+                      {displayEpoch}
+                      <span className="text-muted-foreground/40 font-normal">
+                        /{displayTotalEpochs}
+                      </span>
+                    </p>
                   </div>
                 )}
                 {displayLoss != null && (
                   <div className="rounded-lg bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Loss</p>
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                      Loss
+                    </p>
                     <p className="text-sm font-semibold tabular-nums">{displayLoss.toFixed(4)}</p>
                   </div>
                 )}
                 {displayStepsPerSec != null && displayStepsPerSec > 0 && (
                   <div className="rounded-lg bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Speed</p>
-                    <p className="text-sm font-semibold tabular-nums">{displayStepsPerSec.toFixed(1)}<span className="text-muted-foreground/40 font-normal text-xs"> steps/s</span></p>
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                      Speed
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums">
+                      {displayStepsPerSec.toFixed(1)}
+                      <span className="text-muted-foreground/40 font-normal text-xs"> steps/s</span>
+                    </p>
                   </div>
                 )}
                 {displayEta != null && (
                   <div className="rounded-lg bg-muted/30 px-3 py-2">
-                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">ETA</p>
-                    <p className="text-sm font-semibold tabular-nums">{formatDuration(displayEta)}</p>
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                      ETA
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums">
+                      {formatDuration(displayEta)}
+                    </p>
                   </div>
                 )}
                 <div className="rounded-lg bg-muted/30 px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Elapsed</p>
-                  <p className="text-sm font-semibold tabular-nums">{formatDuration(displayElapsed)}</p>
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                    Elapsed
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {formatDuration(displayElapsed)}
+                  </p>
                 </div>
               </div>
               {session.dataQuality && (
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span>Repetition: {((1 - session.dataQuality.repetition_rate) * 100).toFixed(0)}%</span>
+                  <span>
+                    Repetition: {((1 - session.dataQuality.repetition_rate) * 100).toFixed(0)}%
+                  </span>
                   <span>Diversity: {(session.dataQuality.diversity * 100).toFixed(0)}%</span>
                   <span>Language: {(session.dataQuality.language_quality * 100).toFixed(0)}%</span>
                 </div>
@@ -232,49 +332,84 @@ export const TrainingPipeline = memo(function TrainingPipeline({
 
           {session.phase === 'complete' && (
             <div className="space-y-3">
-              <div className="rounded-md bg-success/10 border border-success/20 p-3 text-sm text-success" role="status" aria-live="polite">
+              <div
+                className="rounded-md bg-success/10 border border-success/20 p-3 text-sm text-success"
+                role="status"
+                aria-live="polite"
+              >
                 Training complete
-                {session.distillCheckpoint && <span className="text-muted-foreground ml-1">— {session.distillCheckpoint}</span>}
+                {session.distillCheckpoint && (
+                  <span className="text-muted-foreground ml-1">— {session.distillCheckpoint}</span>
+                )}
               </div>
               {session.dataQuality && (
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   <span>Data quality: {session.dataQuality.avg_quality.toFixed(1)}/5</span>
-                  <span>Repetition: {((1 - session.dataQuality.repetition_rate) * 100).toFixed(0)}%</span>
+                  <span>
+                    Repetition: {((1 - session.dataQuality.repetition_rate) * 100).toFixed(0)}%
+                  </span>
                   <span>Diversity: {(session.dataQuality.diversity * 100).toFixed(0)}%</span>
                   <span>Language: {(session.dataQuality.language_quality * 100).toFixed(0)}%</span>
                 </div>
               )}
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={onTest}>Test model</Button>
+                <Button size="sm" onClick={onTest}>
+                  Test model
+                </Button>
                 {session.distillCheckpoint && (
-                  <Button size="sm" variant="outline" onClick={() => {
-                    checkpoints.handleLoadCheckpoint(session.distillCheckpoint!, addToast)
-                  }}>Load checkpoint</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      checkpoints.handleLoadCheckpoint(session.distillCheckpoint!, addToast)
+                    }}
+                  >
+                    Load checkpoint
+                  </Button>
                 )}
-                {session.method === 'hf' && session.checkpoint && session.checkpoint.endsWith('.npz') && (
-                  <Button size="sm" variant="outline" onClick={async () => {
-                    try {
-                      await trainingJobsController.loadAdapter(session.checkpoint!, false)
-                      addToast('LoRA adapter loaded into model', 'success')
-                    } catch (e) {
-                      addToast('Could not load adapter: ' + (e instanceof Error ? e.message : String(e)), 'error')
-                    }
-                  }}>Load LoRA adapter</Button>
-                )}
-                <Button size="sm" variant="ghost" onClick={() => {
-                  session.resetTraining()
-                  onStepChange('results')
-                  onStepComplete('train')
-                }}>View results</Button>
+                {session.method === 'hf' &&
+                  session.checkpoint &&
+                  session.checkpoint.endsWith('.npz') && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          await trainingJobsController.loadAdapter(session.checkpoint!, false)
+                          addToast('LoRA adapter loaded into model', 'success')
+                        } catch (e) {
+                          addToast(
+                            'Could not load adapter: ' +
+                              (e instanceof Error ? e.message : String(e)),
+                            'error',
+                          )
+                        }
+                      }}
+                    >
+                      Load LoRA adapter
+                    </Button>
+                  )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    session.resetTraining()
+                    onStepChange('results')
+                    onStepComplete('train')
+                  }}
+                >
+                  View results
+                </Button>
               </div>
             </div>
           )}
 
           {session.phase === 'error' && (
             <TrainingErrorBanner
-              error={session.message || 'Training failed'}
+              error={session.error || session.message || 'Training failed'}
               onRetry={session.resetTraining}
               onDismiss={session.resetTraining}
+              onStop={session.stopTraining}
             />
           )}
         </CardContent>
@@ -284,12 +419,24 @@ export const TrainingPipeline = memo(function TrainingPipeline({
 
   return (
     <div className="space-y-4">
-      <StepIndicator current={step} completed={completedSteps} onStepClick={onStepChange} />
+      <StepIndicator
+        current={step}
+        completed={completedSteps}
+        onStepClick={onStepChange}
+        animatingStep={animatingStep}
+      />
 
       {step === 'data' && <DataStep {...stepProps} />}
       {step === 'configure' && <ConfigureStep {...stepProps} />}
       {step === 'train' && <TrainStep {...stepProps} />}
-      {step === 'results' && <ResultsStep checkpoints={checkpoints} goToTrain={goToTrain} onTest={onTest} addToast={addToast} />}
+      {step === 'results' && (
+        <ResultsStep
+          checkpoints={checkpoints}
+          goToTrain={goToTrain}
+          onTest={onTest}
+          addToast={addToast}
+        />
+      )}
     </div>
   )
 })

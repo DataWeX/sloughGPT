@@ -12,12 +12,14 @@ from controllers.datasets import DatasetsController
 
 
 @pytest.fixture
-def tmp_repo(tmp_path):
+def tmp_repo(tmp_path, monkeypatch):
+    monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
     return DatasetsController(tmp_path)
 
 
 @pytest.fixture
-def repo_with_datasets(tmp_path):
+def repo_with_datasets(tmp_path, monkeypatch):
+    monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
     ds_dir = tmp_path / "data"
     ds_dir.mkdir()
     (ds_dir / "shakespeare").mkdir()
@@ -69,9 +71,36 @@ class TestListDatasets:
         code = next(d for d in result if d["name"] == "Code")
         assert code["type"] == "text"
 
-    def test_empty_dir_no_datasets_dir(self, tmp_path):
+    def test_empty_dir_no_datasets_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
         ctrl = DatasetsController(tmp_path)
         assert ctrl.list_datasets() == []
+
+    def test_datasets_container_expanded(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
+        nested = tmp_path / "data" / "datasets" / "chat_ds"
+        nested.mkdir(parents=True)
+        (nested / "corpus.jsonl").write_text('{"text":"a"}\n')
+        ctrl = DatasetsController(tmp_path)
+        by_id = {d["id"]: d for d in ctrl.list_datasets()}
+        assert "datasets" not in by_id
+        assert by_id["chat_ds"]["source"] == "data/datasets"
+        assert by_id["chat_ds"]["kind"] == "dataset"
+        assert by_id["chat_ds"]["num_samples"] == 1
+        assert ctrl.get_dataset_stats("chat_ds")["samples"] == 1
+
+    def test_kind_tags_mime_present(self, repo_with_datasets, tmp_path):
+        adapters = tmp_path / "data" / "user_adapters"
+        adapters.mkdir()
+        (adapters / "a.npz").write_bytes(b"x")
+        result = repo_with_datasets.list_datasets()
+        by_id = {d["id"]: d for d in result}
+        assert by_id["shakespeare"]["kind"] == "dataset"
+        assert "dataset" in by_id["shakespeare"]["tags"]
+        assert by_id["shakespeare"]["mime"] == "application/x-ndjson"
+        assert by_id["shakespeare"]["source"] == "data"
+        assert by_id["user_adapters"]["kind"] == "adapter"
+        assert "adapter" in by_id["user_adapters"]["tags"]
 
 
 class TestGetDataset:
@@ -139,11 +168,13 @@ class TestGetDatasetStats:
 
 
 class TestCreateDataset:
-    def test_creates_directory(self, tmp_repo):
+    def test_creates_directory(self, tmp_repo, tmp_path):
         result = tmp_repo.create_dataset("test_ds")
         assert result["created"] is True
         assert result["id"] == "test_ds"
-        assert (tmp_repo.datasets_dir / "test_ds").exists()
+        # Just-cache is the write target; legacy data dir stays untouched.
+        assert (tmp_path / "cache" / "external" / "test_ds").is_dir()
+        assert not (tmp_repo.datasets_dir / "test_ds").exists()
 
     def test_creates_with_description(self, tmp_repo):
         result = tmp_repo.create_dataset("test_ds", description="A test dataset")

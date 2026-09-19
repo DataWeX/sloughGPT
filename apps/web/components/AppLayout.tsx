@@ -15,6 +15,7 @@ import { OutputPanel } from '@/components/OutputPanel'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { RadixToastContainer } from '@/features/chat/components/feedback/Toast'
 import { CommandPalette } from '@/components/CommandPalette'
+import { GlobalBanner } from '@/components/GlobalBanner'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useConsciousnessShortcuts } from '@/hooks/useConsciousnessShortcuts'
 import { useToastStore } from '@/lib/toast-store'
@@ -41,10 +42,10 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const [showDebug, setShowDebug] = useState(false)
   const [showWhatsNew, setShowWhatsNew] = useState(false)
   const [showOutput, setShowOutput] = useState(false)
-  const toasts = useToastStore(s => s.toasts)
-  const dismissToast = useToastStore(s => s.dismissToast)
-  const clearToasts = useToastStore(s => s.clearToasts)
-  const apiStatus = useApiMonitor(s => s.status)
+  const toasts = useToastStore((s) => s.toasts)
+  const dismissToast = useToastStore((s) => s.dismissToast)
+  const clearToasts = useToastStore((s) => s.clearToasts)
+  const apiStatus = useApiMonitor((s) => s.status)
   const { open: convOpen, navCollapsed, toggleNav, setNavCollapsed, toggleConv } = useConvSidebar()
   useGlobalShortcuts()
   useConsciousnessShortcuts()
@@ -55,7 +56,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
-    const handler = () => setShowShortcuts(v => !v)
+    const handler = () => setShowShortcuts((v) => !v)
     window.addEventListener('toggle-shortcuts', handler)
     return () => window.removeEventListener('toggle-shortcuts', handler)
   }, [])
@@ -73,13 +74,13 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   }, [toggleConv])
 
   useEffect(() => {
-    const handler = () => setShowWhatsNew(v => !v)
+    const handler = () => setShowWhatsNew((v) => !v)
     window.addEventListener('toggle-whatsnew', handler)
     return () => window.removeEventListener('toggle-whatsnew', handler)
   }, [])
 
   useEffect(() => {
-    const handler = () => setShowOutput(v => !v)
+    const handler = () => setShowOutput((v) => !v)
     window.addEventListener('toggle-output-panel', handler)
     return () => window.removeEventListener('toggle-output-panel', handler)
   }, [])
@@ -118,6 +119,8 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="sl-app-shell">
+      {/* Global banner system — one banner surface for all pages */}
+      <GlobalBanner />
       {/* Restarting banner */}
       {apiStatus === 'reloading' && (
         <div className="sl-app-banner">
@@ -159,7 +162,10 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         </a>
 
         {/* Desktop sidebar */}
-        <div className="sl-app-sidebar-desktop relative" data-collapsed={navCollapsed ? 'true' : undefined}>
+        <div
+          className="sl-app-sidebar-desktop relative"
+          data-collapsed={navCollapsed ? 'true' : undefined}
+        >
           <Sidebar variant="desktop" collapsed={navCollapsed} onToggleCollapse={toggleNav} />
           {/* 3D bookmark tab — protrudes from sidebar edge */}
           <button
@@ -170,7 +176,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
             className={cn(
               'group/tab absolute top-1/2 z-20 flex h-[4.5rem] w-[1.15rem] -translate-y-1/2 items-center justify-center',
               'rounded-r-md cursor-pointer',
-              'transition-all duration-300 ease-[cubic-bezier(222,133,0,1)\_]',
+              'transition-all duration-300 ease-[cubic-bezier(222,133,0,1)_]',
               'hover:w-[1.4rem]',
               'right-0 translate-x-[calc(100%-1px)]',
               'bg-gradient-to-b from-primary/80 via-primary to-primary/90',
@@ -180,21 +186,19 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
               'hover:shadow-[1px_0_2px_-1px_rgba(0,0,0,0.2),2px_0_4px_-2px_rgba(0,0,0,0.15),3px_0_8px_-3px_rgba(0,0,0,0.1),0_0_12px_-2px_rgba(var(--primary)/0.3)]',
             )}
           >
-            <IconChevronRight className={cn(
-              'h-3 w-3 text-primary-foreground transition-transform duration-300',
-              'drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]',
-              navCollapsed ? 'rotate-0' : 'rotate-180',
-              'group-hover/tab:scale-110',
-            )} />
+            <IconChevronRight
+              className={cn(
+                'h-3 w-3 text-primary-foreground transition-transform duration-300',
+                'drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]',
+                navCollapsed ? 'rotate-0' : 'rotate-180',
+                'group-hover/tab:scale-110',
+              )}
+            />
           </button>
         </div>
 
         {/* Main content area */}
-        <main
-          id="main-content"
-          className="sl-app-main"
-          tabIndex={-1}
-        >
+        <main id="main-content" className="sl-app-main" tabIndex={-1}>
           <div className="sl-app-content">{children}</div>
           <StatusBar />
         </main>
@@ -204,32 +208,35 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       <BottomNav />
 
       {/* Mobile drawer portal */}
-      {portalMounted && createPortal(
-        <>
-          <div
-            aria-hidden="true"
-            className={cn(
-              'sl-app-drawer-backdrop',
-              mobileNavOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
-            )}
-          />
-          <div
-            id="mobile-navigation-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Main navigation"
-            className={cn(
-              'sl-app-drawer',
-              mobileNavOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none',
-            )}
-          >
-            <span className="sr-only">Main navigation</span>
-            <span className="sr-only">Primary navigation for the sloughGPT console. Choose a section or close this panel.</span>
-            <Sidebar variant="drawer" onClose={closeMobileNav} onNavigate={closeMobileNav} />
-          </div>
-        </>,
-        document.body,
-      )}
+      {portalMounted &&
+        createPortal(
+          <>
+            <div
+              aria-hidden="true"
+              className={cn(
+                'sl-app-drawer-backdrop',
+                mobileNavOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
+              )}
+            />
+            <div
+              id="mobile-navigation-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Main navigation"
+              className={cn(
+                'sl-app-drawer',
+                mobileNavOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none',
+              )}
+            >
+              <span className="sr-only">Main navigation</span>
+              <span className="sr-only">
+                Primary navigation for the sloughGPT console. Choose a section or close this panel.
+              </span>
+              <Sidebar variant="drawer" onClose={closeMobileNav} onNavigate={closeMobileNav} />
+            </div>
+          </>,
+          document.body,
+        )}
 
       {/* Overlays */}
       <ErrorPanel />

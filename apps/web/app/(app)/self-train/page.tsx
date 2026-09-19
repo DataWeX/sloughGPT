@@ -3,9 +3,20 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, cn } from '@sloughgpt/strui'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Button,
+  Input,
+  Label,
+  cn,
+} from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
-import { apiGet, apiPost } from '@/lib/http-client'
+import { trainingFacade } from '@/lib/training-facade'
+
+const selfTrain = trainingFacade.automation
 
 interface SelfTrainStatus {
   status: 'not_started' | 'running' | 'exited'
@@ -15,7 +26,7 @@ interface SelfTrainStatus {
 }
 
 export default function SelfTrainPage() {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const [status, setStatus] = useState<SelfTrainStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [model, setModel] = useState('')
@@ -26,7 +37,7 @@ export default function SelfTrainPage() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const data = await apiGet<SelfTrainStatus>('/self-train/status')
+      const data = (await selfTrain.selfTrainStatus()) as unknown as SelfTrainStatus
       setStatus(data)
     } catch {
       addToast('Could not check status', 'error')
@@ -35,7 +46,9 @@ export default function SelfTrainPage() {
     }
   }, [addToast])
 
-  useEffect(() => { void fetchStatus() }, [fetchStatus])
+  useEffect(() => {
+    void fetchStatus()
+  }, [fetchStatus])
 
   // Poll while running
   useEffect(() => {
@@ -56,7 +69,7 @@ export default function SelfTrainPage() {
       if (model.trim()) body.model = model.trim()
       body.temperature = temperature
       body.forever = forever
-      await apiPost('/self-train/start', body)
+      await selfTrain.startSelfTrain(body)
       addToast('Self-training started', 'success')
       void fetchStatus()
     } catch {
@@ -68,7 +81,7 @@ export default function SelfTrainPage() {
 
   const stop = useCallback(async () => {
     try {
-      await apiPost('/self-train/stop')
+      await selfTrain.stopSelfTrain()
       addToast('Self-training stopped', 'success')
       void fetchStatus()
     } catch {
@@ -81,7 +94,10 @@ export default function SelfTrainPage() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void fetchStatus() }
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        void fetchStatus()
+      }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -92,7 +108,9 @@ export default function SelfTrainPage() {
       title="Self-train"
       subtitle="Autonomous self-training subprocess"
       headerRight={
-        <Button size="sm" variant="ghost" onClick={() => void fetchStatus()}>Refresh</Button>
+        <Button size="sm" variant="ghost" onClick={() => void fetchStatus()}>
+          Refresh
+        </Button>
       }
     >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -100,7 +118,13 @@ export default function SelfTrainPage() {
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Status</p>
             <p className="text-base font-medium">
-              {loading ? '...' : status?.status === 'running' ? 'Running' : status?.status === 'exited' ? 'Exited' : 'Not started'}
+              {loading
+                ? '...'
+                : status?.status === 'running'
+                  ? 'Running'
+                  : status?.status === 'exited'
+                    ? 'Exited'
+                    : 'Not started'}
             </p>
           </CardContent>
         </Card>
@@ -131,15 +155,33 @@ export default function SelfTrainPage() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="flex flex-col gap-1">
-              <Label htmlFor="st-model" variant="uppercase">Model (optional)</Label>
-              <Input id="st-model" value={model} onChange={e => setModel(e.target.value)}
-                placeholder="gpt2" className="h-8 text-xs font-mono" disabled={isRunning} />
+              <Label htmlFor="st-model" variant="uppercase">
+                Model (optional)
+              </Label>
+              <Input
+                id="st-model"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="gpt2"
+                className="h-8 text-xs font-mono"
+                disabled={isRunning}
+              />
             </div>
             <div className="flex flex-col gap-1">
-              <Label htmlFor="st-temp" variant="uppercase">Temperature</Label>
-              <Input id="st-temp" type="number" min={0} max={2} step={0.1} value={temperature}
-                onChange={e => setTemperature(Number(e.target.value))}
-                className="h-8 text-xs font-mono" disabled={isRunning} />
+              <Label htmlFor="st-temp" variant="uppercase">
+                Temperature
+              </Label>
+              <Input
+                id="st-temp"
+                type="number"
+                min={0}
+                max={2}
+                step={0.1}
+                value={temperature}
+                onChange={(e) => setTemperature(Number(e.target.value))}
+                className="h-8 text-xs font-mono"
+                disabled={isRunning}
+              />
             </div>
             <div className="flex flex-col gap-1">
               <Label variant="uppercase">Mode</Label>
@@ -149,7 +191,10 @@ export default function SelfTrainPage() {
                 aria-pressed={forever}
                 aria-label={forever ? 'Switch to single pass mode' : 'Switch to train forever mode'}
                 disabled={isRunning}
-                className={cn('h-8 rounded border px-2 text-xs transition-colors', forever ? 'border-primary bg-primary/10 text-primary' : 'border-border')}
+                className={cn(
+                  'h-8 rounded border px-2 text-xs transition-colors',
+                  forever ? 'border-primary bg-primary/10 text-primary' : 'border-border',
+                )}
               >
                 {forever ? 'Train forever' : 'Single pass'}
               </button>
@@ -157,7 +202,9 @@ export default function SelfTrainPage() {
           </div>
           <div className="flex items-center gap-2">
             {isRunning ? (
-              <Button variant="destructive" size="sm" onClick={stop}>Stop</Button>
+              <Button variant="destructive" size="sm" onClick={stop}>
+                Stop
+              </Button>
             ) : (
               <Button size="sm" onClick={start} disabled={starting}>
                 {starting ? 'Starting...' : 'Start self-training'}
@@ -172,12 +219,14 @@ export default function SelfTrainPage() {
           <CardTitle className="text-base">Training history</CardTitle>
         </CardHeader>
         <CardContent>
-          {(!status?.history || status.history.length === 0) ? (
+          {!status?.history || status.history.length === 0 ? (
             <p className="text-xs text-muted-foreground">No history yet.</p>
           ) : (
             <div className="max-h-[400px] overflow-y-auto rounded bg-muted/30 p-3 font-mono text-xs">
               {status.history.map((line, i) => (
-                <div key={i} className="whitespace-pre-wrap">{line}</div>
+                <div key={i} className="whitespace-pre-wrap">
+                  {line}
+                </div>
               ))}
               <div ref={historyEndRef} />
             </div>

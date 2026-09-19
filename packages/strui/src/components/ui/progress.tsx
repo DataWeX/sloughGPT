@@ -4,7 +4,8 @@ import * as React from 'react'
 import { cn } from '../../lib/cn'
 
 export interface ProgressProps {
-  value?: number
+  /** Progress value 0–`max`. `null`/`undefined` means unknown — renders “--” instead of misleading “0%”. */
+  value?: number | null
   max?: number
   /** Variant controls fill color using design tokens */
   variant?: 'default' | 'success' | 'warning' | 'error'
@@ -32,7 +33,7 @@ const sizeClasses = {
 }
 
 export function Progress({
-  value = 0,
+  value = null,
   max = 100,
   variant = 'default',
   size = 'default',
@@ -41,7 +42,9 @@ export function Progress({
   showValue = false,
   className = '',
 }: ProgressProps) {
-  const pct = indeterminate ? 0 : Math.min(100, Math.max(0, (value / max) * 100))
+  const known = value != null && Number.isFinite(value)
+  const pct =
+    indeterminate || !known ? 0 : Math.min(100, Math.max(0, ((value as number) / max) * 100))
 
   return (
     <div className={cn('w-full space-y-1', className)}>
@@ -49,16 +52,18 @@ export function Progress({
         <div className="flex justify-between text-xs text-muted-foreground">
           {label && <span>{label}</span>}
           {showValue && !indeterminate && (
-            <span className="font-medium text-foreground">{Math.round(pct)}%</span>
+            <span className="font-medium text-foreground">
+              {known ? `${Math.round(pct)}%` : '--'}
+            </span>
           )}
         </div>
       )}
       <div
         className={cn('w-full overflow-hidden rounded-full bg-muted', sizeClasses[size])}
         role="progressbar"
-        aria-valuenow={indeterminate ? undefined : value}
+        aria-valuenow={indeterminate || !known ? undefined : (value as number)}
         aria-valuemin={0}
-        aria-valuemax={indeterminate ? undefined : max}
+        aria-valuemax={indeterminate || !known ? undefined : max}
         aria-label={label}
         aria-busy={indeterminate}
       >
@@ -71,7 +76,10 @@ export function Progress({
           />
         ) : (
           <div
-            className={cn('h-full rounded-full transition-all duration-500 ease-smooth', variantClasses[variant])}
+            className={cn(
+              'h-full rounded-full transition-all duration-500 ease-smooth',
+              variantClasses[variant],
+            )}
             style={{ width: `${pct}%` }}
           />
         )}

@@ -319,9 +319,7 @@ class KBRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         try:
-            from domain.knowledge import get_knowledge_memory
-
-            memory = get_knowledge_memory()
+            memory = self._engine.get_memory()
             entries = memory.list_all(top_k=limit + offset + 1000)
 
             workspace_id = ""
@@ -344,9 +342,9 @@ class KBRouter:
         self, req: KnowledgeCreate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         try:
-            from domain.knowledge import KnowledgeFact, get_knowledge_memory
+            from domain.knowledge import KnowledgeFact
 
-            memory = get_knowledge_memory()
+            memory = self._engine.get_memory()
             topic = req.topic if not req.auto_tag else self._auto_tag(req.content)
 
             label = ""
@@ -420,9 +418,9 @@ class KBRouter:
         self, item_id: str, req: KnowledgeUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         try:
-            from domain.knowledge import KnowledgeFact, get_knowledge_memory
+            from domain.knowledge import KnowledgeFact
 
-            memory = get_knowledge_memory()
+            memory = self._engine.get_memory()
             all_items = memory.list_all(top_k=5000)
             target = None
             for item in all_items:
@@ -456,9 +454,9 @@ class KBRouter:
         self, req: KnowledgeBatchRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         try:
-            from domain.knowledge import KnowledgeFact, get_knowledge_memory
+            from domain.knowledge import KnowledgeFact
 
-            memory = get_knowledge_memory()
+            memory = self._engine.get_memory()
             workspace_id = ""
             if auth_user and auth_user.get("sub"):
                 workspace_id = auth_user.get("workspace_id", "")
@@ -531,9 +529,7 @@ class KBRouter:
                     "Internal/private host URLs not allowed", "E_BAD_REQUEST", status_code=400
                 )
 
-            from domain.knowledge import get_knowledge_ingestor
-
-            ingestor = get_knowledge_ingestor()
+            ingestor = self._engine.get_ingestor()
             result = ingestor.ingest_url(req.url)
 
             if result.get("new_facts", 0) > 0:
@@ -541,9 +537,7 @@ class KBRouter:
                     from domain.core import get_rag_service
 
                     rag_svc = get_rag_service()
-                    from domain.knowledge import get_knowledge_memory
-
-                    memory = get_knowledge_memory()
+                    memory = self._engine.get_memory()
                     recent = memory.list_all(top_k=result.get("new_facts", 5))
                     for item in recent:
                         if item.get("source", "").startswith("url:"):
@@ -628,9 +622,8 @@ class KBRouter:
                 get_adapter_status,
                 train_knowledge_adapter,
             )
-            from domain.knowledge import get_knowledge_memory
 
-            memory = get_knowledge_memory()
+            memory = self._engine.get_memory()
             facts = memory.list_all(top_k=5000)
 
             _t0 = _time.monotonic()
@@ -675,9 +668,7 @@ class KBRouter:
         try:
             result = self._engine.context("")
             context = result.data if result.success else ""
-            from domain.knowledge import get_knowledge_memory
-
-            memory = get_knowledge_memory()
+            memory = self._engine.get_memory()
             all_facts = memory.list_all()
             return success_response(data={"context": context, "count": len(all_facts)})
         except Exception as e:
@@ -718,9 +709,9 @@ class KBRouter:
         else:
             chunks = self._chunk_text(text, chunk_size, overlap)
 
-        from domain.knowledge import KnowledgeFact, get_knowledge_memory
+        from domain.knowledge import KnowledgeFact
 
-        memory = get_knowledge_memory()
+        memory = self._engine.get_memory()
 
         def _store_chunks():
             facts = [
@@ -774,8 +765,6 @@ class KBRouter:
         try:
             from pathlib import Path as _P
 
-            from domain.knowledge import FileIndex
-
             search_path = _P(req.path).resolve()
             _allowed_bases = [_P.home(), _P.cwd(), _P("/tmp")]
             if not any(str(search_path).startswith(str(b)) for b in _allowed_bases if b.exists()):
@@ -783,22 +772,15 @@ class KBRouter:
             if not search_path.exists():
                 raise_error(f"Path not found: {req.path}", "E_BAD_REQUEST", status_code=400)
 
-            idx = FileIndex()
-            extensions = set(req.extensions) if req.extensions else None
+            def _search():
+                return self._engine.search_files(
+                    req.query, path=req.path, extensions=req.extensions, top_k=req.top_k
+                )
 
-            def _index_and_search():
-                stats = idx.index_directory(req.path, extensions=extensions)
-                results = idx.search(req.query, top_k=req.top_k)
-                return stats, results
-
-            stats, results = await asyncio.to_thread(_index_and_search)
-            return success_response(
-                data={
-                    "results": results,
-                    "indexed_files": stats["files_indexed"],
-                    "indexed_chunks": stats["chunks_total"],
-                }
-            )
+            result = await asyncio.to_thread(_search)
+            if not result.success:
+                raise_error(result.error or "Search failed", "E_INTERNAL", status_code=500)
+            return success_response(data=result.data)
         except Exception as e:
             classify_and_raise(e, source="kb.search_files")
 
@@ -806,24 +788,14 @@ class KBRouter:
         self, req: DuplicateCheckRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         try:
-            from domain.knowledge import DuplicateDetector, get_knowledge_memory
-
-            memory = get_knowledge_memory()
-            dup = DuplicateDetector(threshold=req.threshold)
 
             def _check_dup():
-                dup.load_from_store(memory._vector_store)
-                return dup.check(req.content, embed_fn=memory._get_embedding)
+                return self._engine.check_duplicate(req.content, threshold=req.threshold)
 
-            is_dup, best_match, score = await asyncio.to_thread(_check_dup)
-            return success_response(
-                data={
-                    "is_duplicate": is_dup,
-                    "best_match": best_match,
-                    "score": score,
-                    "threshold": req.threshold,
-                }
-            )
+            result = await asyncio.to_thread(_check_dup)
+            if not result.success:
+                raise_error(result.error or "Duplicate check failed", "E_INTERNAL", status_code=500)
+            return success_response(data=result.data)
         except Exception as e:
             classify_and_raise(e, source="kb.check_duplicate")
 
@@ -831,46 +803,27 @@ class KBRouter:
         self, req: CategorizeRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         try:
-            from domain.knowledge import AutoCategorizer, get_knowledge_memory
-
-            memory = get_knowledge_memory()
-            cat = AutoCategorizer()
 
             def _categorize():
-                cat.load_from_store(memory._vector_store)
-                topic = cat.categorize(req.content, embed_fn=memory._get_embedding)
-                suggestions = cat.suggest_topics(req.content, top_k=3)
-                return topic, suggestions
+                return self._engine.categorize_with_store(req.content)
 
-            topic, suggestions = await asyncio.to_thread(_categorize)
-            return success_response(
-                data={
-                    "topic": topic,
-                    "suggestions": [{"topic": t, "score": round(s, 4)} for t, s in suggestions],
-                }
-            )
+            result = await asyncio.to_thread(_categorize)
+            if not result.success:
+                raise_error(result.error or "Categorization failed", "E_INTERNAL", status_code=500)
+            return success_response(data=result.data)
         except Exception as e:
             classify_and_raise(e, source="kb.categorize_knowledge")
 
     async def knowledge_gaps(self) -> dict:
         try:
-            from domain.knowledge import KnowledgeGapDetector, get_knowledge_memory
-
-            memory = get_knowledge_memory()
-            gap = KnowledgeGapDetector()
 
             def _find_gaps():
-                gap.load_from_store(memory._vector_store)
-                return gap.find_gaps(), gap._topic_counts
+                return self._engine.find_gaps_with_store()
 
-            gaps, topic_counts = await asyncio.to_thread(_find_gaps)
-            return success_response(
-                data={
-                    "gaps": gaps,
-                    "total_facts": memory._fact_counter,
-                    "topics": list(topic_counts.keys()),
-                }
-            )
+            result = await asyncio.to_thread(_find_gaps)
+            if not result.success:
+                raise_error(result.error or "Gap detection failed", "E_INTERNAL", status_code=500)
+            return success_response(data=result.data)
         except Exception as e:
             classify_and_raise(e, source="kb.knowledge_gaps")
 
@@ -878,20 +831,19 @@ class KBRouter:
         self, req: BulkIngestRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         try:
-            from domain.knowledge import BulkProcessor, get_knowledge_memory
-
-            memory = get_knowledge_memory()
-            bp = BulkProcessor(memory)
 
             def _bulk():
-                return bp.ingest_texts(
+                return self._engine.bulk_ingest_with_memory(
                     req.items,
                     topic=req.topic,
                     source=req.source,
                     dedup_threshold=req.dedup_threshold,
                 )
 
-            report = await asyncio.to_thread(_bulk)
+            result = await asyncio.to_thread(_bulk)
+            if not result.success:
+                raise_error(result.error or "Bulk ingest failed", "E_INTERNAL", status_code=500)
+            report = result.data
             safe_audit_log(
                 "knowledge.add",
                 resource=req.topic or "bulk",
@@ -911,7 +863,7 @@ class KBRouter:
             def _train():
                 from pathlib import Path
 
-                from domain.generation import train_embedder
+                from domain.inference import train_embedder
 
                 REPO = Path(__file__).resolve().parents[4]
                 texts = []
@@ -994,11 +946,11 @@ class KBRouter:
 
     async def embedder_status(self) -> dict:
         try:
-            from domain.generation import SloTextEmbedder
+            from domain.inference import SloTextEmbedder
 
             _embedder_path = None
             try:
-                from domain.inference._internal.slo_embedder import _EMBEDDER_PATH
+                from domain.inference import _EMBEDDER_PATH
 
                 _embedder_path = _EMBEDDER_PATH
             except ImportError:

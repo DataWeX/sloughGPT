@@ -7,9 +7,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from domain.chat import (
         ChatDomain,
+        ChatManager,
         ChatRequest,
         ChatResponse,
         get_chat_domain,
+        get_chat_manager,
+        reset_chat_manager,
     )
 
 __all__ = [
@@ -17,6 +20,9 @@ __all__ = [
     "ChatResponse",
     "ChatDomain",
     "get_chat_domain",
+    "ChatManager",
+    "get_chat_manager",
+    "reset_chat_manager",
 ]
 
 _lazy_imports = {
@@ -24,6 +30,9 @@ _lazy_imports = {
     "ChatResponse": "domain.chat",
     "ChatDomain": "domain.chat",
     "get_chat_domain": "domain.chat",
+    "ChatManager": "domain.chat",
+    "get_chat_manager": "domain.chat",
+    "reset_chat_manager": "domain.chat",
     "domain": "domain.chat._internal",
 }
 

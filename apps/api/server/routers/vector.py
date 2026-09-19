@@ -55,7 +55,7 @@ class VectorRouter:
             """get_vector_store."""
             if self._vector_store is None:
                 try:
-                    from domain.inference._internal.vector_store import create_vector_store
+                    from domain.inference import create_vector_store
 
                     kwargs = {"dimension": 384}
                     if self._vector_store_type == "chromadb":
@@ -77,7 +77,7 @@ class VectorRouter:
         """init_vector_store."""
         self._vector_store_type = config.provider or "chromadb"
         try:
-            from domain.inference._internal.vector_store import create_vector_store
+            from domain.inference import create_vector_store
 
             kwargs = {"dimension": config.dimension}
             if self._vector_store_type == "chromadb":
@@ -152,7 +152,7 @@ class VectorRouter:
             store = await self.get_vector_store()
             if not store:
                 raise_error("Vector store not connected", "E_INFRA_STARTUP", status_code=500)
-            from domain.inference._internal.vector_store import VectorEntry, simple_embed
+            from domain.inference import VectorEntry, simple_embed
 
             entries = []
             for i, text in enumerate(request.texts):
@@ -196,7 +196,7 @@ class VectorRouter:
             store = await self.get_vector_store()
             if not store:
                 return success_response(data={"results": []})
-            from domain.inference._internal.vector_store import simple_embed
+            from domain.inference import simple_embed
 
             query_embedding = simple_embed(request.query)
             results = await store.query(query_embedding, top_k=request.top_k)

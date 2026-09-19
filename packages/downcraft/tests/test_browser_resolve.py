@@ -11,6 +11,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from downcraft.resolve.browser import (
     BrowserResolver,
     _extract_links_from_html,
+    _extract_text_urls,
+    _on_response,
     _score_captured_urls,
 )
 from downcraft.resolve.scraper import ResolvedLink
@@ -78,6 +80,32 @@ class TestScoreCapturedUrls:
         links = _score_captured_urls([], "https://example.com", "")
         assert links == []
 
+    def test_same_origin_non_download_penalized(self):
+        captured = [
+            {
+                "url": "https://example.com/api/status.json",
+                "content_type": "application/json",
+                "content_length": 2048,
+                "status": 200,
+            }
+        ]
+        links = _score_captured_urls(captured, "https://example.com/page", "")
+        assert len(links) == 1
+        assert links[0].confidence < 0.4  # base - same-origin penalty
+
+    def test_cross_origin_download_not_penalized(self):
+        captured = [
+            {
+                "url": "https://cdn.example.com/file.rar",
+                "content_type": "application/x-rar",
+                "content_length": 2048,
+                "status": 200,
+            }
+        ]
+        links = _score_captured_urls(captured, "https://example.com/page", "")
+        assert len(links) == 1
+        assert links[0].confidence >= 0.7
+
 
 # ---------------------------------------------------------------------------
 # _extract_links_from_html
@@ -114,6 +142,130 @@ class TestExtractLinksFromHtml:
         links = _extract_links_from_html(html, "https://example.com")
         assert len(links) == 1
         assert links[0].confidence >= 0.6  # ext + download context
+
+    def test_skips_asset_hrefs(self):
+        html = (
+            '<link href="https://example.com/assets/styles.css">'
+            '<script src="https://example.com/app.js"></script>'
+            '<img src="https://example.com/logo.png">'
+            '<a href="https://example.com/font.woff2">font</a>'
+        )
+        links = _extract_links_from_html(html, "https://example.com")
+        assert links == []
+
+    def test_drops_nav_links_without_download_signal(self):
+        html = (
+            '<a href="https://example.com/faq">FAQ</a>'
+            '<a href="https://example.com/login">Login</a>'
+            '<a href="https://fonts.googleapis.com">fonts</a>'
+        )
+        links = _extract_links_from_html(html, "https://example.com")
+        assert links == []
+
+    def test_keeps_extensionless_download_link(self):
+        html = '<a href="https://gofile.io/d/abc123">Download</a>'
+        links = _extract_links_from_html(html, "https://example.com")
+        assert len(links) == 1
+        assert links[0].url == "https://gofile.io/d/abc123"
+
+
+# ---------------------------------------------------------------------------
+# _on_response — asset filtering
+# ---------------------------------------------------------------------------
+
+
+def _fake_response(url, content_type="application/octet-stream", length="2048", status=200):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        url=url,
+        status=status,
+        headers={"content-type": content_type, "content-length": length},
+    )
+
+
+class TestOnResponse:
+    def test_captures_real_download(self):
+        captured = []
+        _on_response(
+            _fake_response("https://cdn.example.com/f.rar", "application/x-rar", "50000000"),
+            captured,
+        )
+        assert len(captured) == 1
+
+    def test_skips_stylesheet(self):
+        captured = []
+        _on_response(_fake_response("https://example.com/a.css", "text/css", "5000"), captured)
+        assert captured == []
+
+    def test_skips_script(self):
+        captured = []
+        _on_response(
+            _fake_response("https://example.com/a.js", "application/javascript", "5000"),
+            captured,
+        )
+        assert captured == []
+
+    def test_skips_image_by_content_type(self):
+        captured = []
+        _on_response(_fake_response("https://example.com/logo", "image/png", "5000"), captured)
+        assert captured == []
+
+    def test_skips_image_by_extension(self):
+        captured = []
+        _on_response(
+            _fake_response("https://example.com/photo.png", "application/octet-stream", "5000"),
+            captured,
+        )
+        assert captured == []
+
+    def test_skips_font(self):
+        captured = []
+        _on_response(
+            _fake_response("https://example.com/f.woff2", "font/woff2", "5000"),
+            captured,
+        )
+        assert captured == []
+
+
+# ---------------------------------------------------------------------------
+# _extract_text_urls — plain-text payload mining
+# ---------------------------------------------------------------------------
+
+
+class TestExtractTextUrls:
+    def test_finds_plain_text_download(self):
+        html = "<div>mirror: https://cdn.example.com/game.rar enjoy</div>"
+        links = _extract_text_urls(html, "https://pastelink.net/abc")
+        rar = [l for l in links if l.extension == ".rar"]
+        assert len(rar) == 1
+        assert rar[0].confidence >= 0.7
+        assert rar[0].source == "browser_text"
+
+    def test_cross_origin_text_link_scored(self):
+        html = "<p>go here https://mega.nz/file/xyz for the files</p>"
+        links = _extract_text_urls(html, "https://pastelink.net/abc")
+        assert len(links) == 1
+        assert links[0].confidence >= 0.4
+
+    def test_skips_self_link(self):
+        html = "<p>share this https://pastelink.net/abc with friends</p>"
+        links = _extract_text_urls(html, "https://pastelink.net/abc")
+        assert links == []
+
+    def test_ignores_script_blobs(self):
+        html = (
+            "<script>var cdn='https://static.example.com/bundle.min.js';</script>"
+            "<p>get https://cdn.example.com/game.zip here</p>"
+        )
+        links = _extract_text_urls(html, "https://pastelink.net/abc")
+        assert [l.url for l in links] == ["https://cdn.example.com/game.zip"]
+
+    def test_strips_trailing_punctuation(self):
+        html = "<p>link (https://cdn.example.com/f.7z).</p>"
+        links = _extract_text_urls(html, "https://pastelink.net/abc")
+        assert len(links) == 1
+        assert links[0].url == "https://cdn.example.com/f.7z"
 
 
 # ---------------------------------------------------------------------------
