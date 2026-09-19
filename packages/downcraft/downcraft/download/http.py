@@ -440,3 +440,160 @@ def download_compressed(
         on_complete=on_complete,
         compressed=True,
     )
+
+
+def download_range(
+    url: str,
+    dest: Path | str,
+    start: int,
+    end: int,
+    checksum: str = "",
+    on_chunk: Callable[[int, int], None] | None = None,
+    on_complete: Callable[[Path], None] | None = None,
+) -> Path:
+    """Download a single byte range ``[start, end]`` (inclusive) with retries.
+
+    Sends ``Range: bytes={start}-{end}`` and expects ``206 Partial Content``.
+    Unlike :func:`download_file` (resume-to-end), this fetches only the
+    requested slice so callers pay for part of a file, not the whole file.
+
+    Slice downloads are always raw bytes — never LZ4-decompressed, since a
+    partial LZ4 frame cannot be decoded on its own.
+
+    Args:
+        url: HTTP/HTTPS URL to download from.
+        dest: Final destination path on disk (holds exactly the slice bytes).
+        start: First byte offset (inclusive, ``>= 0``).
+        end: Last byte offset (inclusive, ``>= start``).
+        checksum: Optional SHA-256 hex of the *slice* to verify after download.
+        on_chunk: Called with ``(bytes_written, expected_len)`` per chunk.
+        on_complete: Called with final path after successful download.
+
+    Returns:
+        The final destination path on success.
+
+    Raises:
+        ValueError: If ``start``/``end`` are negative or ``end < start``.
+        DownloadError: If the server ignores Range (no ``206``), returns a
+            mismatched ``Content-Range``, truncates the slice, or fails
+            permanently (after retries). Checksum mismatches also raise.
+    """
+    if start < 0 or end < 0:
+        raise ValueError(f"Range offsets must be >= 0 (got start={start}, end={end})")
+    if end < start:
+        raise ValueError(f"Range end must be >= start (got start={start}, end={end})")
+
+    dest = Path(dest)
+    expected_len = end - start + 1
+
+    # Skip download if dest already holds the slice with matching checksum
+    if checksum and dest.exists() and dest.stat().st_size == expected_len:
+        if _verify_checksum(dest, checksum):
+            logger.info("Skipping %s (slice checksum matches)", dest.name)
+            if on_chunk:
+                on_chunk(expected_len, expected_len)
+            if on_complete:
+                on_complete(dest)
+            return dest
+
+    part = _part_path(dest)
+    headers = {"Range": f"bytes={start}-{end}"}
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            resp = requests.get(url, headers=headers, stream=True, timeout=30)
+            resp.raise_for_status()
+
+            if resp.status_code != 206:
+                raise DownloadError(
+                    f"Server does not honor Range for {dest.name} "
+                    f"(got {resp.status_code}, expected 206); "
+                    "refusing full download to save data"
+                )
+
+            cr = resp.headers.get("Content-Range", "")
+            if cr:
+                m = re.match(r"bytes\s+(\d+)-(\d+)/(\d+|\*)", cr)
+                if not m or int(m.group(1)) != start:
+                    raise DownloadError(
+                        f"Content-Range mismatch for {dest.name}: {cr!r} (requested start={start})"
+                    )
+
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            written = 0
+            with open(part, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
+                    if not chunk:
+                        continue
+                    # Stop at the slice boundary even if the server sends more.
+                    remaining = expected_len - written
+                    if len(chunk) > remaining:
+                        chunk = chunk[:remaining]
+                    f.write(chunk)
+                    written += len(chunk)
+                    if on_chunk:
+                        on_chunk(written, expected_len)
+                    if written >= expected_len:
+                        break
+            resp.close()
+
+            if written < expected_len:
+                logger.warning(
+                    "Truncated range for %s: got %d/%d bytes (attempt %d/%d)",
+                    dest.name,
+                    written,
+                    expected_len,
+                    attempt,
+                    MAX_RETRIES,
+                )
+                part.unlink(missing_ok=True)
+                if attempt < MAX_RETRIES:
+                    time.sleep(RETRY_DELAY * attempt)
+                    continue
+                raise DownloadError(
+                    f"Truncated range for {dest.name}: got {written}/{expected_len} bytes"
+                )
+
+            if checksum:
+                hasher = hashlib.sha256()
+                with open(part, "rb") as f:
+                    for block in iter(lambda: f.read(CHUNK_SIZE), b""):
+                        hasher.update(block)
+                actual = hasher.hexdigest()
+                if actual != checksum:
+                    logger.error(
+                        "Checksum mismatch for %s: expected %s, got %s",
+                        dest.name,
+                        checksum,
+                        actual,
+                    )
+                    part.unlink(missing_ok=True)
+                    raise DownloadError(f"Checksum mismatch for {dest.name}")
+
+            os.replace(str(part), str(dest))
+            logger.info("Downloaded range %s [%d-%d]", dest.name, start, end)
+
+            if on_complete:
+                on_complete(dest)
+
+            return dest
+
+        except (requests.RequestException, OSError) as e:
+            logger.warning(
+                "Attempt %d/%d failed for range %s [%d-%d]: %s",
+                attempt,
+                MAX_RETRIES,
+                dest.name,
+                start,
+                end,
+                e,
+            )
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY * attempt)
+            else:
+                raise DownloadError(
+                    f"Failed to download range [{start}-{end}] of {dest.name} "
+                    f"after {MAX_RETRIES} attempts: {e}"
+                ) from e
+
+    raise DownloadError(f"Failed to download range [{start}-{end}] of {dest.name}")
