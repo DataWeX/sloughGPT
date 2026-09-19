@@ -55,4 +55,16 @@ describe('SystemBanner', () => {
     render(<SystemBanner type="info" title="Info" />)
     expect(screen.queryByText('Something happened')).toBeNull()
   })
+
+  it('renders dismiss button when onDismiss provided', () => {
+    const onDismiss = vi.fn()
+    render(<SystemBanner type="warning" title="Warning" onDismiss={onDismiss} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }))
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not render dismiss button when onDismiss is missing', () => {
+    const { container } = render(<SystemBanner type="info" title="Info" />)
+    expect(container.querySelector('button')).toBeNull()
+  })
 })

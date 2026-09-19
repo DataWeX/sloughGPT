@@ -2,7 +2,7 @@
 
 import { memo } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
-import { IconAlert, IconInfo, IconCloudOff } from '@sloughgpt/strui'
+import { IconAlert, IconInfo, IconCloudOff, IconX } from '@sloughgpt/strui'
 
 export type SystemBannerType = 'offline' | 'warning' | 'info'
 
@@ -22,12 +22,19 @@ const STYLES: Record<SystemBannerType, string> = {
 }
 
 const ICONS: Record<SystemBannerType, React.ReactNode> = {
-      offline: <IconCloudOff className="h-4 w-4" aria-hidden="true" />,
+  offline: <IconCloudOff className="h-4 w-4" aria-hidden="true" />,
   warning: <IconAlert className="h-4 w-4" aria-hidden="true" />,
   info: <IconInfo className="h-4 w-4" aria-hidden="true" />,
 }
 
-export const SystemBanner = memo(function SystemBanner({ type, title, message, actionLabel, onAction, onDismiss }: SystemBannerProps) {
+export const SystemBanner = memo(function SystemBanner({
+  type,
+  title,
+  message,
+  actionLabel,
+  onAction,
+  onDismiss,
+}: SystemBannerProps) {
   return (
     <div
       className={cn('mb-3 rounded-lg border p-3 text-xs', STYLES[type])}
@@ -40,15 +47,21 @@ export const SystemBanner = memo(function SystemBanner({ type, title, message, a
           <p className="font-medium">{title}</p>
           {message && <p className="mt-1 opacity-80">{message}</p>}
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 items-start gap-1">
           {actionLabel && onAction && (
+            <Button variant="outline" size="sm" onClick={onAction} className="h-7 text-xs">
+              {actionLabel}
+            </Button>
+          )}
+          {onDismiss && (
             <Button
-              variant="outline"
-              size="sm"
-              onClick={onAction}
-              className="h-7 text-xs"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onDismiss}
+              className="h-7 w-7"
+              aria-label="Dismiss notification"
             >
-              {actionLabel || 'Dismiss'}
+              <IconX className="h-3.5 w-3.5" aria-hidden="true" />
             </Button>
           )}
         </div>
