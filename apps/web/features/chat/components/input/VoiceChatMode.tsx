@@ -2,7 +2,12 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useVoiceChat, VoiceExchange, VoiceSettings } from '@/features/chat/hooks/useVoiceChat'
-import { VoiceWaveform, VoiceOrb, ListeningIndicator, ListeningBars } from '@/features/chat/components/input/VoiceWaveform'
+import {
+  VoiceWaveform,
+  VoiceOrb,
+  ListeningIndicator,
+  ListeningBars,
+} from '@/features/chat/components/input/VoiceWaveform'
 import { cn, Spinner } from '@sloughgpt/strui'
 import { IconX, IconSettings, IconSpeaker, IconMicFilled } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
@@ -34,7 +39,9 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
   const [showTranscript, setShowTranscript] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
-  useEffect(() => { startListening() }, [startListening])
+  useEffect(() => {
+    startListening()
+  }, [startListening])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -52,21 +59,38 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
         <div className="flex items-center gap-2">
-          <div className={cn('w-2 h-2 rounded-full', isListening ? 'bg-primary animate-pulse' :
-            isSpeaking ? 'bg-emerald-500 animate-pulse' :
-            isProcessing ? 'bg-amber-500 animate-pulse' :
-            'bg-muted-foreground/30')} />
+          <div
+            className={cn(
+              'w-2 h-2 rounded-full',
+              isListening
+                ? 'bg-primary animate-pulse'
+                : isSpeaking
+                  ? 'bg-success animate-pulse'
+                  : isProcessing
+                    ? 'bg-warning animate-pulse'
+                    : 'bg-muted-foreground/30',
+            )}
+          />
           <span className="text-sm font-medium" aria-live="polite">
-            {isListening ? 'Listening' :
-             isProcessing ? 'Processing...' :
-             isSpeaking ? 'Speaking' : 'Ready'}
+            {isListening
+              ? 'Listening'
+              : isProcessing
+                ? 'Processing...'
+                : isSpeaking
+                  ? 'Speaking'
+                  : 'Ready'}
           </span>
         </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => setShowTranscript(!showTranscript)}
-            className={cn('p-2 rounded-lg transition-colors', showTranscript ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground')}
+            className={cn(
+              'p-2 rounded-lg transition-colors',
+              showTranscript
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
             aria-label={showTranscript ? 'Hide transcript' : 'Show transcript'}
           >
             {showTranscript ? 'Hide transcript' : 'Show transcript'}
@@ -74,7 +98,12 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
           <button
             type="button"
             onClick={() => setShowSettings(!showSettings)}
-            className={cn('p-2 rounded-lg transition-colors', showSettings ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground')}
+            className={cn(
+              'p-2 rounded-lg transition-colors',
+              showSettings
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
             aria-label="Voice settings"
           >
             <IconSettings className="h-4 w-4" />
@@ -131,7 +160,14 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             type="button"
             onClick={handleToggle}
             disabled={isProcessing}
-            className={cn('w-full h-full rounded-full flex items-center justify-center transition-all duration-200', isListening ? 'bg-primary text-primary-foreground' : isProcessing ? 'bg-muted text-muted-foreground cursor-wait' : 'bg-primary/10 text-primary hover:bg-primary/20')}
+            className={cn(
+              'w-full h-full rounded-full flex items-center justify-center transition-all duration-200',
+              isListening
+                ? 'bg-primary text-primary-foreground'
+                : isProcessing
+                  ? 'bg-muted text-muted-foreground cursor-wait'
+                  : 'bg-primary/10 text-primary hover:bg-primary/20',
+            )}
             aria-label={isListening ? 'Tap to stop listening' : 'Tap to start listening'}
           >
             {isProcessing ? (
@@ -146,28 +182,37 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
 
         {/* Interim text */}
         {interimText && (
-          <div className="mt-4 text-sm text-muted-foreground italic max-w-md text-center" aria-live="polite">
+          <div
+            className="mt-4 text-sm text-muted-foreground italic max-w-md text-center"
+            aria-live="polite"
+          >
             {interimText}
           </div>
         )}
 
         {/* Final text */}
         {finalText && (
-          <div className="mt-2 text-sm text-foreground max-w-md text-center">
-            {finalText}
-          </div>
+          <div className="mt-2 text-sm text-foreground max-w-md text-center">{finalText}</div>
         )}
 
         {/* Error message */}
         {errorMessage && (
           <div className="mt-4 max-w-md w-full">
-            <StatusBanner variant="error" message={errorMessage} dismissible={false} className="text-center" />
+            <StatusBanner
+              variant="error"
+              message={errorMessage}
+              dismissible={false}
+              className="text-center"
+            />
           </div>
         )}
 
         {/* Hint text */}
         {!interimText && !finalText && !errorMessage && (
-          <div className="mt-4 text-sm text-muted-foreground italic max-w-md text-center" aria-live="polite">
+          <div
+            className="mt-4 text-sm text-muted-foreground italic max-w-md text-center"
+            aria-live="polite"
+          >
             Speak naturally...
           </div>
         )}
@@ -175,7 +220,9 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
 
       {/* Footer hint */}
       <div className="px-4 py-3 text-center text-xs text-muted-foreground border-t border-border/50">
-        {hasConversation ? `${conversation.length} exchange${conversation.length !== 1 ? 's' : ''}` : 'No conversation yet'}
+        {hasConversation
+          ? `${conversation.length} exchange${conversation.length !== 1 ? 's' : ''}`
+          : 'No conversation yet'}
       </div>
     </div>
   )

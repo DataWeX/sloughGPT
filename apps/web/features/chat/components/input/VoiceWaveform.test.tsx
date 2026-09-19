@@ -20,7 +20,7 @@ describe('VoiceWaveform', () => {
 
   it('applies speaker variant color', () => {
     const { container } = render(<VoiceWaveform level={0.5} variant="speaker" />)
-    const bar = container.querySelector('.bg-emerald-500')
+    const bar = container.querySelector('.bg-success')
     expect(bar).toBeTruthy()
   })
 
@@ -64,7 +64,7 @@ describe('VoiceOrb', () => {
     render(
       <VoiceOrb state="idle" micLevel={0}>
         <button>Click me</button>
-      </VoiceOrb>
+      </VoiceOrb>,
     )
     expect(screen.getByText('Click me')).toBeDefined()
   })
@@ -73,7 +73,7 @@ describe('VoiceOrb', () => {
     const { container } = render(
       <VoiceOrb state="speaking" micLevel={0}>
         <span>child</span>
-      </VoiceOrb>
+      </VoiceOrb>,
     )
     const pings = container.querySelectorAll('.animate-ping')
     expect(pings.length).toBeGreaterThan(0)
@@ -83,7 +83,7 @@ describe('VoiceOrb', () => {
     const { container } = render(
       <VoiceOrb state="processing" micLevel={0}>
         <span>child</span>
-      </VoiceOrb>
+      </VoiceOrb>,
     )
     const spinner = container.querySelector('.animate-spin')
     expect(spinner).toBeTruthy()
@@ -93,7 +93,7 @@ describe('VoiceOrb', () => {
     const { container, rerender } = render(
       <VoiceOrb state="listening" micLevel={0}>
         <span>child</span>
-      </VoiceOrb>
+      </VoiceOrb>,
     )
     const orb = container.querySelector('.relative.z-10')
     const lowScale = orb?.getAttribute('style')
@@ -101,7 +101,7 @@ describe('VoiceOrb', () => {
     rerender(
       <VoiceOrb state="listening" micLevel={0.8}>
         <span>child</span>
-      </VoiceOrb>
+      </VoiceOrb>,
     )
     const highScale = orb?.getAttribute('style')
     expect(lowScale).not.toBe(highScale)
@@ -111,9 +111,9 @@ describe('VoiceOrb', () => {
     const { container } = render(
       <VoiceOrb state="error" micLevel={0}>
         <span>child</span>
-      </VoiceOrb>
+      </VoiceOrb>,
     )
-    const orb = container.querySelector('.border-red-500')
+    const orb = container.querySelector('.border-destructive')
     expect(orb).toBeTruthy()
   })
 })
@@ -172,7 +172,9 @@ describe('ListeningBars', () => {
   })
 
   it('scales bar height with mic level', () => {
-    const { container, rerender } = render(<ListeningBars micLevel={0.1} active={true} barCount={3} />)
+    const { container, rerender } = render(
+      <ListeningBars micLevel={0.1} active={true} barCount={3} />,
+    )
     const bars = container.querySelectorAll('.w-1.rounded-full.bg-primary\\/60')
     const lowHeight = bars[0]?.getAttribute('style')
 
