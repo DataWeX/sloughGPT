@@ -6,6 +6,8 @@ Public API:
     SloProfile, PersonalityCore, BehavioralTraits, CognitiveSignature, EmotionalRange
     GenerationParams, ContextParams, SouParser, create_soul_profile
     save_soul, load_soul, write_v3_sou, generate_sample_dialogue
+    train_embedder, SloTextEmbedder
+    create_vector_store, get_slo_manager, PDFVLMProcessor, _ngram_embed
 """
 
 from domain.inference._internal.slo_format import (
@@ -54,4 +56,33 @@ __all__ = [
     "load_soul",
     "write_v3_sou",
     "generate_sample_dialogue",
+    "train_embedder",
+    "SloTextEmbedder",
+    "create_vector_store",
+    "get_slo_manager",
+    "PDFVLMProcessor",
+    "_ngram_embed",
+    "SloNetChatProvider",
+    "VectorEntry",
 ]
+
+
+def __getattr__(name):
+    _lazy = {
+        "train_embedder": "domain.inference._internal.slo_embedder",
+        "SloTextEmbedder": "domain.inference._internal.slo_embedder",
+        "_EMBEDDER_PATH": "domain.inference._internal.slo_embedder",
+        "create_vector_store": "domain.inference._internal.vector_store",
+        "_ngram_embed": "domain.inference._internal.vector_store",
+        "get_slo_manager": "domain.inference._internal.slo_manager",
+        "PDFVLMProcessor": "domain.inference._internal.pdf_vlm",
+        "SloNetChatProvider": "domain.inference._internal.slonet_provider",
+        "VectorEntry": "domain.inference._internal.vector_store",
+        "PineconeVectorStore": "domain.inference._internal.vector_stores.pinecone_store",
+    }
+    if name in _lazy:
+        import importlib
+
+        mod = importlib.import_module(_lazy[name])
+        return getattr(mod, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
