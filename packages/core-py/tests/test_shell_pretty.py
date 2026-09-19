@@ -64,6 +64,74 @@ class TestTerminalPageSize:
         assert pretty.terminal_page_size() >= 5
 
 
+class TestLiveCapable:
+    def test_dumb_term_not_capable(self, monkeypatch):
+        monkeypatch.setenv("TERM", "dumb")
+        assert pretty.live_capable() is False
+
+
+class TestLivePager:
+    def _pager(self, keys, height=4):
+        emitted: list[str] = []
+        key_iter = iter(keys)
+        return pretty.LivePager(
+            emit=emitted.append,
+            read_key=lambda: next(key_iter),
+            height_fn=lambda: height,
+        ), emitted
+
+    def test_passthrough_until_full(self):
+        pager, emitted = self._pager([], height=4)
+        assert pager.process("a", "\n") == ("a", "\n")
+        assert pager.process("b", "\n") == ("b", "\n")
+        assert emitted == []
+        assert not pager.dropped
+
+    def test_quit_drops_rest(self):
+        pager, emitted = self._pager(["q"], height=4)
+        for i in range(1, 5):
+            assert pager.process(f"l{i}", "\n") == (f"l{i}", "\n")
+        assert pager.process("l5", "\n") is None
+        assert pager.dropped
+        assert pager.process("l6", "\n") is None
+        assert any("1049" in chunk for chunk in emitted)
+
+    def test_scroll_past_end_resumes_streaming(self):
+        pager, emitted = self._pager([" "], height=4)
+        for i in range(1, 5):
+            pager.process(f"l{i}", "\n")
+        # Space at the bottom exits the viewer; chunk already shown.
+        assert pager.process("l5", "\n") is None
+        assert not pager.dropped
+        # Next overflow re-opens the viewer.
+        pager2_keys = iter(["q"])
+        pager.read_key = lambda: next(pager2_keys)
+        assert pager.process("l6", "\n") is None
+        assert pager.dropped
+
+    def test_scroll_up_and_down(self):
+        pager, emitted = self._pager(["k", "k", "j", "q"], height=4)
+        for i in range(1, 5):
+            pager.process(f"l{i}", "\n")
+        assert pager.process("l5", "\n") is None
+        assert pager.dropped
+
+    def test_reset_clears(self):
+        pager, emitted = self._pager(["q"], height=4)
+        for i in range(1, 5):
+            pager.process(f"l{i}", "\n")
+        pager.process("l5", "\n")
+        assert pager.dropped
+        pager.reset()
+        assert not pager.dropped
+        assert pager.process("l6", "\n") == ("l6", "\n")
+
+    def test_status_line(self):
+        pager, _ = self._pager([], height=10)
+        pager.process("a\nb\nc", "\n")
+        assert "1-3/3" in pager._status()
+
+
 class TestPager:
     def test_passes_through_without_prompt_fn(self):
         pager = pretty.Pager(page_size=2)

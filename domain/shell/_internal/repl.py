@@ -37,7 +37,7 @@ from .cmds.linux import LinuxCommandsMixin
 from .commands import ShellCommands
 from .console import Console
 from .io import ShellIO
-from .pretty import Pager, format_error_brief, format_traceback, highlight
+from .pretty import LivePager, Pager, format_error_brief, format_traceback, highlight, live_capable, terminal_key_reader
 from .runtime import DaitRuntime
 from .state import ShellState
 
@@ -967,14 +967,35 @@ class ShellREPL(LinuxCommandsMixin):
     def _print(self, *args, **kwargs) -> None:
         end = kwargs.get("end", "\n")
         text = " ".join(str(a) for a in args)
-        # Break endless readout: page long output on real terminals only.
-        # MemoryIO (execute/tests/pipes) and TUI surfaces never pause.
-        pager = getattr(self, "_pager", None)
-        if pager is not None and getattr(self.io, "_is_tty", False):
-            processed = pager.process(text, end)
-            if processed is None:
+        # Break endless readout — but only on real terminals. MemoryIO
+        # (execute/tests/pipes) and TUI surfaces never pause. Prefers the
+        # live viewport (less-like); falls back to line mode.
+        if getattr(self.io, "_is_tty", False):
+            live = getattr(self, "_live_pager", None)
+            if live is None and live_capable():
+                try:
+                    read_key = terminal_key_reader()
+                except ImportError:
+                    read_key = None
+                if read_key is not None:
+                    live = LivePager(
+                        emit=lambda s: self.io.write(s, end=""),
+                        read_key=read_key,
+                    )
+                    self._live_pager = live
+            if live is not None:
+                processed = live.process(text, end)
+                if processed is None:
+                    return
+                text, end = processed
+                self.console.write(text, end=end)
                 return
-            text, end = processed
+            pager = getattr(self, "_pager", None)
+            if pager is not None:
+                processed = pager.process(text, end)
+                if processed is None:
+                    return
+                text, end = processed
         self.console.write(text, end=end)
 
     def _read_more_key(self) -> str:
@@ -5090,6 +5111,9 @@ nl: db 10
                 pager = getattr(self, "_pager", None)
                 if pager is not None:
                     pager.reset()
+                live = getattr(self, "_live_pager", None)
+                if live is not None:
+                    live.reset()
                 # Poll for new log entries before rendering the prompt
                 self._log_display.poll()
                 prompt = self._render_prompt()
