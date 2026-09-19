@@ -1,19 +1,53 @@
+//! slough-gateway — transport-only edge for the Python core.
+//!
+//! CCGT Gateway domain: expose + optimize, never understand. This process
+//! terminates TLS (rustls), caps request bodies, enforces edge timeouts,
+//! relays response bytes untouched (streaming-safe: no buffering, no JSON
+//! parsing, no SSE re-chunking), and serves static files. Auth, rate limits,
+//! CORS semantics, and error envelopes are owned by Python — see
+//! docs/PRODUCT_ENGINEERING.md ("Client / core separation").
+
 use axum::{
+    body::{to_bytes, Body},
     extract::{Request, State},
     http::{HeaderMap, StatusCode},
-    response::{IntoResponse, Response, Sse},
-    routing::{get, post, any},
+    response::{IntoResponse, Response},
+    routing::get,
     Json, Router,
 };
-use futures::stream::Stream;
+use futures::StreamExt;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
-use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
+use serde::Serialize;
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
-use tokio_stream::StreamExt;
-use tower_http::cors::{Any, CorsLayer};
-use tower_http::trace::TraceLayer;
+use tower_http::{
+    cors::{Any, CorsLayer},
+    services::ServeDir,
+    trace::TraceLayer,
+};
 use tracing::info;
+
+// ── Edge policy (transport only — no model knowledge) ──────────────────────
+
+/// Inbound body cap. Oversize → 413 before Python ever wakes.
+const MAX_BODY_BYTES: usize = 1024 * 1024;
+/// Total edge timeout for buffered (non-streaming) requests → 504.
+const BUFFERED_TIMEOUT: Duration = Duration::from_secs(30);
+/// Streaming relays (SSE) have no total timeout here — Python owns generation
+/// timeouts. The reqwest client timeout below remains as a backstop.
+const CLIENT_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Hop-by-hop headers, never forwarded upstream→client.
+const HOP_HEADERS: [&str; 8] = [
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+];
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -57,48 +91,7 @@ struct CoreStatus {
     model_name: String,
 }
 
-// ── Type-Safe Request/Response Models ───────────────────────────────────────
-
-#[derive(Deserialize)]
-struct ChatRequest {
-    messages: Vec<ChatMessage>,
-    #[serde(default = "default_max_tokens")]
-    max_tokens: u32,
-    #[serde(default = "default_temperature")]
-    temperature: f32,
-}
-
-fn default_max_tokens() -> u32 { 512 }
-fn default_temperature() -> f32 { 0.8 }
-
-#[derive(Deserialize, Serialize, Clone)]
-struct ChatMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Serialize)]
-struct ChatResponse {
-    message: String,
-    session_id: String,
-    done: bool,
-}
-
-#[derive(Deserialize)]
-struct GenerateRequest {
-    prompt: String,
-    #[serde(default = "default_max_tokens")]
-    max_new_tokens: u32,
-    #[serde(default = "default_temperature")]
-    temperature: f32,
-}
-
-#[derive(Serialize)]
-struct GenerateResponse {
-    text: String,
-    model: String,
-    tokens_generated: u32,
-}
+// ── Health models (gateway-owned) ───────────────────────────────────────────
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -106,14 +99,6 @@ struct HealthResponse {
     gateway: String,
     sidecar: CoreStatus,
     uptime_seconds: u64,
-}
-
-#[derive(Serialize)]
-struct ModelInfo {
-    id: String,
-    name: String,
-    loaded: bool,
-    source: String,
 }
 
 // ── Errors ──────────────────────────────────────────────────────────────────
@@ -132,6 +117,12 @@ impl IntoResponse for GatewayError {
 
 impl From<reqwest::Error> for GatewayError {
     fn from(e: reqwest::Error) -> Self {
+        if e.is_timeout() {
+            return GatewayError {
+                status: StatusCode::GATEWAY_TIMEOUT,
+                message: "Sidecar timed out".into(),
+            };
+        }
         GatewayError {
             status: StatusCode::BAD_GATEWAY,
             message: format!("Sidecar error: {}", e),
@@ -156,7 +147,9 @@ async fn main() {
     let _ = START_TIME.set(std::time::Instant::now());
 
     let http = Client::builder()
-        .timeout(Duration::from_secs(120))
+        .timeout(CLIENT_TIMEOUT)
+        .tcp_keepalive(Duration::from_secs(30))
+        .pool_idle_timeout(Duration::from_secs(90))
         .build()
         .expect("Failed to create HTTP client");
 
@@ -175,58 +168,31 @@ async fn main() {
         }
     });
 
-    let app = Router::new()
-        // Health & info
+    let mut app = Router::new()
+        // Health & info (gateway-owned — the only endpoints understood here)
         .route("/health", get(health_check))
         .route("/health/detailed", get(detailed_health))
+        // Everything else: generic byte-relay to the sidecar.
+        // No per-endpoint handlers — the edge never parses bodies.
+        .fallback(proxy_http);
 
-        // Chat (streaming SSE + non-streaming)
-        .route("/chat", post(chat_handler))
-        .route("/chat/stream", post(chat_stream_handler))
+    if std::path::Path::new(&config.static_dir).is_dir() {
+        info!("serving static files from {}", config.static_dir);
+        app = app.nest_service("/static", ServeDir::new(&config.static_dir));
+    } else {
+        info!(
+            "static dir {} absent — skipping /static (frontend serves itself)",
+            config.static_dir
+        );
+    }
 
-        // Generation
-        .route("/inference/generate", post(generate_handler))
-        .route("/inference/generate/stream", post(generate_stream_handler))
-
-        // Models (proxy)
-        .route("/models", get(proxy_get))
-        .route("/models/hf", get(proxy_get))
-        .route("/models/load", post(proxy_post))
-        .route("/models/unload", post(proxy_post))
-
-        // Training (proxy)
-        .route("/training/start", post(proxy_post))
-        .route("/training/jobs", get(proxy_get))
-        .route("/auto-train/start", post(proxy_post))
-        .route("/auto-train/stream", get(proxy_sse))
-
-        // Knowledge (proxy)
-        .route("/knowledge", get(proxy_get))
-        .route("/knowledge", post(proxy_post))
-
-        // Datasets (proxy)
-        .route("/datasets", get(proxy_get))
-        .route("/datasets", post(proxy_post))
-
-        // Souls (proxy)
-        .route("/souls", get(proxy_get))
-        .route("/souls/current", get(proxy_get))
-        .route("/souls/switch", post(proxy_post))
-
-        // Sessions (proxy)
-        .route("/session/{id}/context", post(proxy_post))
-        .route("/session/{id}/regenerate", post(proxy_sse))
-
-        // Feedback (proxy)
-        .route("/feedback/workflow-record", post(proxy_post))
-
-        // Catch-all proxy (must be last — uses fallback)
-        .fallback(catch_all_proxy)
-
-        .layer(CorsLayer::new()
-            .allow_origin(Any)
-            .allow_methods(Any)
-            .allow_headers(Any))
+    let app = app
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        )
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
@@ -244,35 +210,33 @@ async fn main() {
 
 // ── Health Handlers ─────────────────────────────────────────────────────────
 
-async fn health_check(
-    State(state): State<AppState>,
-) -> Json<HealthResponse> {
+async fn health_check(State(state): State<AppState>) -> Json<HealthResponse> {
     let sidecar = state.core_status.read().await.clone();
-    let uptime = START_TIME.get()
-        .map(|t| t.elapsed().as_secs())
-        .unwrap_or(0);
+    let uptime = START_TIME.get().map(|t| t.elapsed().as_secs()).unwrap_or(0);
 
     Json(HealthResponse {
-        status: if sidecar.healthy { "ok".into() } else { "degraded".into() },
+        status: if sidecar.healthy {
+            "ok".into()
+        } else {
+            "degraded".into()
+        },
         gateway: "rust".into(),
         sidecar,
         uptime_seconds: uptime,
     })
 }
 
-async fn detailed_health(
-    State(state): State<AppState>,
-) -> Json<serde_json::Value> {
+async fn detailed_health(State(state): State<AppState>) -> Json<serde_json::Value> {
     let sidecar = state.core_status.read().await.clone();
-    let uptime = START_TIME.get()
-        .map(|t| t.elapsed().as_secs())
-        .unwrap_or(0);
+    let uptime = START_TIME.get().map(|t| t.elapsed().as_secs()).unwrap_or(0);
 
     Json(serde_json::json!({
         "gateway": {
             "status": "ok",
             "version": env!("CARGO_PKG_VERSION"),
             "uptime_seconds": uptime,
+            "mode": "transport-relay",
+            "max_body_bytes": MAX_BODY_BYTES,
         },
         "sidecar": sidecar,
     }))
@@ -280,261 +244,69 @@ async fn detailed_health(
 
 async fn check_sidecar_health(state: &AppState) {
     let url = format!("{}/health", state.config.python_core_url);
-    match state.http.get(&url).send().await {
-        Ok(resp) => {
-            if let Ok(health) = resp.json::<serde_json::Value>().await {
-                let mut status = state.core_status.write().await;
-                status.healthy = true;
-                status.last_check = Some(chrono::Utc::now());
-                status.model_loaded = health.get("model_loaded")
+    let (healthy, model_loaded, model_name) = match state.http.get(&url).send().await {
+        Ok(resp) => match resp.json::<serde_json::Value>().await {
+            Ok(health) => (
+                true,
+                health
+                    .get("model_loaded")
                     .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                status.model_name = health.get("model")
+                    .unwrap_or(false),
+                health
+                    .get("model")
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown")
-                    .to_string();
-            }
-        }
-        Err(_) => {
-            let mut status = state.core_status.write().await;
-            status.healthy = false;
-            status.last_check = Some(chrono::Utc::now());
+                    .to_string(),
+            ),
+            Err(_) => (false, false, String::new()),
+        },
+        Err(_) => (false, false, String::new()),
+    };
+
+    // Read first: skip the write lock entirely when nothing changed.
+    {
+        let status = state.core_status.read().await;
+        if status.healthy == healthy
+            && status.model_loaded == model_loaded
+            && status.model_name == model_name
+        {
+            return;
         }
     }
+    let mut status = state.core_status.write().await;
+    status.healthy = healthy;
+    status.last_check = Some(chrono::Utc::now());
+    status.model_loaded = model_loaded;
+    status.model_name = model_name;
 }
 
-// ── Chat Handlers ───────────────────────────────────────────────────────────
+// ── Generic byte-relay proxy ────────────────────────────────────────────────
+//
+// Forwards method + path + query + one content-type header + a size-capped
+// body, then streams the sidecar's response bytes untouched. Works for JSON,
+// SSE, and anything else without understanding any of it.
 
-async fn chat_handler(
-    State(state): State<AppState>,
-    Json(req): Json<ChatRequest>,
-) -> Result<Json<ChatResponse>, GatewayError> {
-    let url = format!("{}/chat", state.config.python_core_url);
-    let resp = state.http.post(&url)
-        .json(&serde_json::json!({
-            "messages": req.messages,
-            "max_tokens": req.max_tokens,
-            "temperature": req.temperature,
-        }))
-        .send()
-        .await?;
-
-    let body: serde_json::Value = resp.json().await?;
-    let message = body.get("message")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-
-    Ok(Json(ChatResponse {
-        message,
-        session_id: body.get("session_id")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown")
-            .to_string(),
-        done: true,
-    }))
-}
-
-async fn chat_stream_handler(
-    State(state): State<AppState>,
-    Json(req): Json<ChatRequest>,
-) -> Sse<impl Stream<Item = Result<axum::response::sse::Event, std::convert::Infallible>>> {
-    let url = format!("{}/chat/stream", state.config.python_core_url);
-    let http = state.http.clone();
-
-    let stream = async_stream::stream! {
-        let resp = http.post(&url)
-            .json(&serde_json::json!({
-                "messages": req.messages,
-                "max_tokens": req.max_tokens,
-                "temperature": req.temperature,
-            }))
-            .send()
-            .await;
-
-        let mut resp = match resp {
-            Ok(r) => r,
-            Err(e) => {
-                let evt = axum::response::sse::Event::default()
-                    .data(format!("{{\"error\":\"{}\"}}", e));
-                yield Ok(evt);
-                return;
-            }
-        };
-
-        while let Some(chunk) = resp.chunk().await.unwrap_or(None) {
-            let text = String::from_utf8_lossy(&chunk);
-            for line in text.lines() {
-                if line.starts_with("data: ") {
-                    let data = &line[6..];
-                    let evt = axum::response::sse::Event::default()
-                        .data(data.to_string());
-                    yield Ok(evt);
-                }
-            }
-        }
-    };
-
-    Sse::new(stream).keep_alive(
-        axum::response::sse::KeepAlive::new()
-            .interval(Duration::from_secs(15))
-            .text("keepalive"),
-    )
-}
-
-// ── Generation Handlers ─────────────────────────────────────────────────────
-
-async fn generate_handler(
-    State(state): State<AppState>,
-    Json(req): Json<GenerateRequest>,
-) -> Result<Json<GenerateResponse>, GatewayError> {
-    let url = format!("{}/inference/generate", state.config.python_core_url);
-    let resp = state.http.post(&url)
-        .json(&serde_json::json!({
-            "prompt": req.prompt,
-            "max_new_tokens": req.max_new_tokens,
-            "temperature": req.temperature,
-        }))
-        .send()
-        .await?;
-
-    let body: serde_json::Value = resp.json().await?;
-    Ok(Json(GenerateResponse {
-        text: body.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        model: body.get("model").and_then(|v| v.as_str()).unwrap_or("unknown").to_string(),
-        tokens_generated: body.get("tokens_generated").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-    }))
-}
-
-async fn generate_stream_handler(
-    State(state): State<AppState>,
-    Json(req): Json<GenerateRequest>,
-) -> Sse<impl Stream<Item = Result<axum::response::sse::Event, Infallible>>> {
-    let url = format!("{}/inference/generate/stream", state.config.python_core_url);
-    let http = state.http.clone();
-
-    let stream = async_stream::stream! {
-        let resp = http.post(&url)
-            .json(&serde_json::json!({
-                "prompt": req.prompt,
-                "max_new_tokens": req.max_new_tokens,
-                "temperature": req.temperature,
-            }))
-            .send()
-            .await;
-
-        let mut resp = match resp {
-            Ok(r) => r,
-            Err(e) => {
-                let evt = axum::response::sse::Event::default()
-                    .data(format!("{{\"error\":\"{}\"}}", e));
-                yield Ok(evt);
-                return;
-            }
-        };
-
-        while let Some(chunk) = resp.chunk().await.unwrap_or(None) {
-            let text = String::from_utf8_lossy(&chunk);
-            for line in text.lines() {
-                if line.starts_with("data: ") {
-                    let data = &line[6..];
-                    let evt = axum::response::sse::Event::default()
-                        .data(data.to_string());
-                    yield Ok(evt);
-                }
-            }
-        }
-    };
-
-    Sse::new(stream).keep_alive(
-        axum::response::sse::KeepAlive::new()
-            .interval(Duration::from_secs(15))
-            .text("keepalive"),
-    )
-}
-
-// ── Generic Proxy Handlers ──────────────────────────────────────────────────
-
-async fn proxy_get(
-    State(state): State<AppState>,
-    axum::extract::OriginalUri(uri): axum::extract::OriginalUri,
-) -> Result<Response, GatewayError> {
-    let url = format!("{}{}", state.config.python_core_url, uri.path());
-    let resp = state.http.get(&url).send().await?;
-    proxy_response(resp).await
-}
-
-async fn proxy_post(
-    State(state): State<AppState>,
-    axum::extract::OriginalUri(uri): axum::extract::OriginalUri,
-    body: axum::body::Body,
-) -> Result<Response, GatewayError> {
-    let url = format!("{}{}", state.config.python_core_url, uri.path());
-    let body_bytes = axum::body::to_bytes(body, usize::MAX).await
-        .map_err(|e| GatewayError {
-            status: StatusCode::BAD_REQUEST,
-            message: format!("Failed to read body: {}", e),
-        })?;
-    let resp = state.http.post(&url)
-        .body(body_bytes)
-        .header("content-type", "application/json")
-        .send()
-        .await?;
-    proxy_response(resp).await
-}
-
-async fn proxy_sse(
-    State(state): State<AppState>,
-    axum::extract::OriginalUri(uri): axum::extract::OriginalUri,
-) -> Sse<impl Stream<Item = Result<axum::response::sse::Event, Infallible>>> {
-    let url = format!("{}{}", state.config.python_core_url, uri.path());
-    let http = state.http.clone();
-
-    let stream = async_stream::stream! {
-        let resp = http.get(&url).send().await;
-        let mut resp = match resp {
-            Ok(r) => r,
-            Err(e) => {
-                let evt = axum::response::sse::Event::default()
-                    .data(format!("{{\"error\":\"{}\"}}", e));
-                yield Ok(evt);
-                return;
-            }
-        };
-
-        while let Some(chunk) = resp.chunk().await.unwrap_or(None) {
-            let text = String::from_utf8_lossy(&chunk);
-            for line in text.lines() {
-                if line.starts_with("data: ") {
-                    let data = &line[6..];
-                    let evt = axum::response::sse::Event::default()
-                        .data(data.to_string());
-                    yield Ok(evt);
-                }
-            }
-        }
-    };
-
-    Sse::new(stream).keep_alive(
-        axum::response::sse::KeepAlive::new()
-            .interval(Duration::from_secs(15))
-            .text("keepalive"),
-    )
-}
-
-async fn catch_all_proxy(
+async fn proxy_http(
     State(state): State<AppState>,
     req: Request,
 ) -> Result<Response, GatewayError> {
     let method = req.method().clone();
     let path = req.uri().path().to_string();
-    let url = format!("{}{}", state.config.python_core_url, path);
+    let query = req
+        .uri()
+        .query()
+        .map(|q| format!("?{q}"))
+        .unwrap_or_default();
+    let url = format!("{}{}{}", state.config.python_core_url, path, query);
+
     let (parts, body) = req.into_parts();
-    let body_bytes = axum::body::to_bytes(body, usize::MAX).await
-        .map_err(|e| GatewayError {
-            status: StatusCode::BAD_REQUEST,
-            message: format!("Failed to read body: {}", e),
-        })?;
+    let content_type = parts.headers.get("content-type").cloned();
+
+    // Inbound cap enforced before Python wakes. 413 on overflow.
+    let body_bytes = to_bytes(body, MAX_BODY_BYTES).await.map_err(|_| GatewayError {
+        status: StatusCode::PAYLOAD_TOO_LARGE,
+        message: format!("Request body too large (limit {} bytes)", MAX_BODY_BYTES),
+    })?;
 
     let mut builder = match method {
         axum::http::Method::GET => state.http.get(&url),
@@ -542,33 +314,55 @@ async fn catch_all_proxy(
         axum::http::Method::PUT => state.http.put(&url),
         axum::http::Method::DELETE => state.http.delete(&url),
         axum::http::Method::PATCH => state.http.patch(&url),
-        _ => return Err(GatewayError {
-            status: StatusCode::METHOD_NOT_ALLOWED,
-            message: format!("Method {} not supported", method),
-        }),
+        _ => {
+            return Err(GatewayError {
+                status: StatusCode::METHOD_NOT_ALLOWED,
+                message: format!("Method {} not supported", method),
+            })
+        }
     };
-
-    // Forward query string
-    if let Some(qs) = parts.uri.query() {
-        builder = builder.query(qs);
+    if let Some(ct) = content_type {
+        builder = builder.header("content-type", ct);
     }
+    let request = builder.body(body_bytes).build()?;
 
-    builder = builder.body(body_bytes);
-    let resp = builder.send().await?;
-    proxy_response(resp).await
+    // Streaming paths (SSE) get no total edge timeout — Python owns
+    // generation timeouts. Buffered paths get a bounded edge timeout → 504.
+    let streaming = path.ends_with("/stream") || path.ends_with("/regenerate");
+    let resp = if streaming {
+        state.http.execute(request).await?
+    } else {
+        tokio::time::timeout(BUFFERED_TIMEOUT, state.http.execute(request))
+            .await
+            .map_err(|_| GatewayError {
+                status: StatusCode::GATEWAY_TIMEOUT,
+                message: "Edge timeout waiting for sidecar".into(),
+            })??
+    };
+    relay_response(resp).await
 }
 
-async fn proxy_response(resp: reqwest::Response) -> Result<Response, GatewayError> {
-    let status = StatusCode::from_u16(resp.status().as_u16())
-        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+async fn relay_response(resp: reqwest::Response) -> Result<Response, GatewayError> {
+    let status =
+        StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
     let mut headers = HeaderMap::new();
     for (key, value) in resp.headers() {
+        if HOP_HEADERS.contains(&key.as_str()) {
+            continue;
+        }
         if let Ok(name) = key.as_str().parse::<axum::http::HeaderName>() {
-            headers.insert(name, value.clone());
+            headers.append(name, value.clone());
         }
     }
 
-    let body = resp.bytes().await?;
-    Ok((status, headers, body).into_response())
+    // Byte stream straight through: no buffering, no UTF-8 assumption,
+    // safe for JSON, SSE, and binary alike.
+    let stream = resp
+        .bytes_stream()
+        .map(|chunk| chunk.map_err(axum::Error::new));
+    let mut out = Body::from_stream(stream).into_response();
+    *out.status_mut() = status;
+    out.headers_mut().extend(headers);
+    Ok(out)
 }
