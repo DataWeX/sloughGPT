@@ -52,6 +52,7 @@ module.exports = {
         },
         success: 'rgb(var(--success) / <alpha-value>)',
         warning: 'rgb(var(--warning) / <alpha-value>)',
+        info: 'rgb(var(--info) / <alpha-value>)',
         chart: {
           1: 'rgb(var(--chart-1) / <alpha-value>)',
           2: 'rgb(var(--chart-2) / <alpha-value>)',
