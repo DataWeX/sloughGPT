@@ -263,6 +263,46 @@ class TestTracebackCommand:
         assert "No recent traceback" in out
 
 
+# ── man ─────────────────────────────────────────────────────────────────
+
+
+class TestManCommand:
+    def _man_repl(self):
+        repl = _make_repl()
+        repl.COMMANDS["man"] = ShellREPL._cmd_man
+        repl.COMMANDS["echo"] = ShellREPL._cmd_echo
+        repl.COMMANDS["exit"] = ShellREPL._cmd_exit
+        return repl
+
+    def test_man_no_args_shows_usage(self):
+        repl = self._man_repl()
+        out, code = repl.execute("man")
+        assert code == 0
+        assert "Usage: man <command>" in out
+
+    def test_man_renders_sections(self):
+        repl = self._man_repl()
+        out, code = repl.execute("man echo")
+        assert code == 0
+        assert "ECHO(1)" in out
+        assert "NAME" in out
+        assert "SYNOPSIS" in out
+        assert "DESCRIPTION" in out
+        assert "EXIT STATUS" in out
+
+    def test_man_resolves_alias(self):
+        repl = self._man_repl()
+        out, code = repl.execute("man q")
+        assert code == 0
+        assert "EXIT(1)" in out
+
+    def test_man_unknown_suggests_and_fails(self):
+        repl = self._man_repl()
+        out, code = repl.execute("man ech")
+        assert code == 1
+        assert "No manual entry for ech" in out
+
+
 # ── _dump_json ──────────────────────────────────────────────────────────
 
 

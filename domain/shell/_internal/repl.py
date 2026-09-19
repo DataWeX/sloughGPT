@@ -584,8 +584,11 @@ class ShellREPL(LinuxCommandsMixin):
                             )
                             self._env.pop("_piped_input", None)
                         else:
-                            handler(self, args_str)
+                            # Default success BEFORE the handler runs: handlers
+                            # report failure via self._last_exit_code (or by
+                            # raising), which must survive (see `man badcmd`).
                             self._last_exit_code = 0
+                            handler(self, args_str)
                     except SystemExit as e:
                         self._last_exit_code = e.code if isinstance(e.code, int) else 1
                     except Exception as e:
@@ -1841,6 +1844,7 @@ class ShellREPL(LinuxCommandsMixin):
   cd / pwd / echo       Navigation
   history / alias       Shell features
   help <cmd>            Help for a specific command
+  man <cmd>             Manual page for a command
   exit                  Exit shell
 
   Pipe features: |  &  >  >>  $(...)  $?  $VAR
@@ -1848,6 +1852,7 @@ class ShellREPL(LinuxCommandsMixin):
                 return
             cmd_help = {
                 "help": "  help [cmd]  — Show this help or help for a specific command",
+                "man": "  man <cmd>  — Show the manual page for a command",
                 "exit": "  exit  — Exit the shell",
                 "cd": "  cd [dir]  — Change directory (default: ~, - for previous)",
                 "pwd": "  pwd  — Print working directory",
@@ -2001,6 +2006,7 @@ Most common commands (help [cmd] for details, help for full list):
   alias [name=cmd]        List or set aliases
   unalias <name>          Remove an alias
   traceback               Show the traceback of the last error
+  man <cmd>               Manual page for a command
   tui                     Launch the TUI interface
   clear                   Clear the terminal screen
   exit                    Exit the shell
@@ -2012,6 +2018,65 @@ Examples:
 
 Type `help <command>` for details on a command.
 """)
+
+    def _cmd_man(self, args: str = "") -> None:
+        """man <command> — Show the manual page for a command."""
+        name = (args or "").strip().split()[0] if args.strip() else ""
+        if not name:
+            self._print("  Usage: man <command>")
+            self._print("  Example: man gen")
+            return
+        # Resolve aliases the way dispatch does.
+        resolved = self._expand_alias(name)
+        key = resolved.split(maxsplit=1)[0].lower() if resolved else name.lower()
+        handler = self.COMMANDS.get(key)
+        if handler is None:
+            ext_mod = self._ext_cmds.get(key)
+            if ext_mod is not None:
+                help_text = getattr(ext_mod, "help", "") or "(external command)"
+                title = name.upper()
+                self._print(f"{title}(1)")
+                self._print("NAME")
+                self._print(f"       {key} — {help_text}")
+                self._print("SEE ALSO")
+                self._print("       help (quick reference)")
+                self._last_exit_code = 0
+                return
+            suggestion = self._suggest_command(key)
+            msg = f"  No manual entry for {name}."
+            if suggestion:
+                msg += f" Did you mean `{suggestion}`?"
+            self._print(msg)
+            self._last_exit_code = 1
+            return
+        doc = (handler.__doc__ or "").strip().splitlines()
+        one_liner = doc[0] if doc else "(built-in command)"
+        usage = [line.strip() for line in doc[1:] if line.strip().startswith(("Usage:", "<"))]
+        body = [
+            line.strip()
+            for line in doc[1:]
+            if line.strip() and not line.strip().startswith(("Usage:", "Example:"))
+        ]
+        examples = [line.strip() for line in doc if line.strip().startswith("Example:")]
+        title = key.upper()
+        self._print(f"{title}(1)")
+
+        def _section(heading: str, lines: list[str]) -> None:
+            self._print(heading)
+            if lines:
+                for line in lines:
+                    self._print(f"       {line}")
+            else:
+                self._print("       (none)")
+
+        _section("NAME", [f"{key} — {one_liner}"])
+        _section("SYNOPSIS", usage or [key])
+        _section("DESCRIPTION", body)
+        if examples:
+            _section("EXAMPLES", [e[len("Example:"):].strip() for e in examples])
+        _section("EXIT STATUS", ["0 on success, otherwise the failing exit code."])
+        _section("SEE ALSO", ["help (quick reference), traceback (last error details)"])
+        self._last_exit_code = 0
 
     def _cmd_exit(self, args: str = "") -> None:
         self._running = False
@@ -5017,8 +5082,11 @@ nl: db 10
                             self._env,
                         )
                     else:
-                        handler(self, args_str)
+                        # Default success BEFORE the handler runs: handlers
+                        # report failure via self._last_exit_code (or by
+                        # raising), which must survive (see `man badcmd`).
                         self._last_exit_code = 0
+                        handler(self, args_str)
                 except SystemExit as e:
                     self._last_exit_code = e.code if isinstance(e.code, int) else 1
                 except Exception as e:
@@ -5161,6 +5229,7 @@ nl: db 10
 # are not yet available as bare names. Built here after class creation.
 _shell_commands = {
     "help": ShellREPL._cmd_help,
+    "man": ShellREPL._cmd_man,
     "exit": ShellREPL._cmd_exit,
     "cd": ShellREPL._cmd_cd,
     "pwd": ShellREPL._cmd_pwd,

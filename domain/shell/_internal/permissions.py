@@ -39,6 +39,7 @@ class Risk:
 _SAFE = frozenset(
     {
         "help",
+        "man",
         "exit",
         "which",
         "type",
