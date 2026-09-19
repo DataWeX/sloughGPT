@@ -1224,6 +1224,8 @@ def _try_lazy_guard_autoload(cfg) -> bool:
             quant_mode=cfg.quant_mode,
             quant_clip=cfg.quant_clip,
             free_quantized_originals=True,
+            # Server is inference-only: embeddings stay file-backed.
+            mmap_embeddings=True,
         )
     except Exception as e:
         logger.warning(

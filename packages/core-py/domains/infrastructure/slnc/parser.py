@@ -257,6 +257,23 @@ class SLNCParser:
 
         return arr
 
+    def get_tensor_view(self, name: str) -> np.ndarray:
+        """Get weight tensor as a TRUE zero-copy view into the mmap.
+
+        Unlike :meth:`get_tensor` (whose ``mmap[a:b]`` slice materializes
+        a bytes copy), this uses the ``offset`` form of ``np.frombuffer``
+        so the array shares pages with the mapped file. The result is
+        read-only; writers must ``.copy()`` first.
+        """
+        if name not in self._tensor_map:
+            raise KeyError(f"Unknown tensor: {name}")
+
+        offset, shape, dtype, _crc = self._tensor_map[name]
+        count = int(np.prod(shape))
+        return np.frombuffer(self._mm, dtype=dtype, count=count, offset=offset).reshape(
+            shape
+        )
+
     def get_tensor_copy(self, name: str) -> np.ndarray:
         """Get weight tensor as an independent writable copy.
 

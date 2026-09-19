@@ -411,6 +411,33 @@ def convert_hf_to_slonet(
     return result if result is not None else {}
 
 
+def _attach_mmap_embeddings(model, parser) -> str | None:
+    """Point the token-embedding weight at its read-only mmap view.
+
+    Replaces the heap copy loaded by DirectWeightLoader with a zero-copy
+    view into the .slnc file, reclaiming ~vocab*dim*4 bytes of heap.
+    Inference only reads embeddings (row gather), so read-only is fine —
+    same constraint as ``free_quantized_originals`` (training writes would
+    fail on the read-only pages).
+
+    Returns the tensor name attached, or None when no exact shape match
+    was found (caller keeps the heap copy).
+    """
+    try:
+        emb = model.layers[0]
+        want = tuple(emb.weight.data.shape)
+        for name in parser.tensor_names:
+            if not any(k in name.lower() for k in ("embed", "wte", "token")):
+                continue
+            _off, shape, _dtype, _crc = parser.get_tensor_info(name)
+            if tuple(shape) == want:
+                emb.weight.data = parser.get_tensor_view(name)
+                return name
+    except Exception:
+        logger.debug("mmap embeddings unavailable, keeping heap copy", extra={"tag": "INF"})
+    return None
+
+
 class SloNetChatProvider:
     """Pure NumPy inference via SloTransformer.
 
@@ -526,6 +553,7 @@ class SloNetChatProvider:
         free_quantized_originals: bool = False,
         release_mmap_pages: bool = True,
         trim_allocator_after_load: bool = True,
+        mmap_embeddings: bool = False,
     ) -> "SloNetChatProvider":
         """Create provider from .slnc file (mmap, zero-copy).
 
@@ -546,6 +574,10 @@ class SloNetChatProvider:
                 pages after all tensors have been copied out. Tensors are
                 copies (``get_tensor``), so this frees RSS with no correctness
                 impact; a later read simply re-faults from disk.
+            mmap_embeddings: If True, point the token-embedding weight at its
+                read-only mmap view instead of the heap copy (reclaims
+                ~vocab*dim*4 bytes). Inference-only: training writes would
+                fail on the read-only pages.
             trim_allocator_after_load: If True, call ``malloc_trim(0)`` after
                 load (glibc/Linux only) so transient peak allocations from
                 weight conversion are returned to the OS. No-op elsewhere.
@@ -772,6 +804,18 @@ class SloNetChatProvider:
                 extra={"op": "model.load", "model": {"id": model_id}},
             )
 
+        # File-back the token embeddings (read-only mmap view, ~vocab*dim*4
+        # bytes reclaimed from heap). Views re-fault transparently even when
+        # release_mmap_pages drops residency below.
+        if mmap_embeddings:
+            _emb_name = _attach_mmap_embeddings(model, parser)
+            if _emb_name is not None:
+                logger.info(
+                    "SloNetChatProvider.from_slnc: token embeddings mmap-backed (%s)",
+                    _emb_name,
+                    extra={"op": "model.load", "model": {"id": model_id}},
+                )
+
         if release_mmap_pages:
             if parser.release_file_pages():
                 logger.info(
@@ -851,6 +895,7 @@ class SloNetChatProvider:
         free_quantized_originals: bool = False,
         release_mmap_pages: bool = True,
         trim_allocator_after_load: bool = True,
+        mmap_embeddings: bool = False,
     ) -> "SloNetChatProvider":
         """Create a provider whose model weights load lazily on first use.
 
@@ -876,6 +921,8 @@ class SloNetChatProvider:
                 least-recently-used eviction kicks in
             free_quantized_originals: Passed through to the lazy load
             release_mmap_pages: Passed through to the lazy load
+            trim_allocator_after_load: Passed through to the lazy load
+            mmap_embeddings: Passed through to the lazy load
             trim_allocator_after_load: Passed through to the lazy load
 
         Returns:
@@ -913,6 +960,7 @@ class SloNetChatProvider:
             "free_quantized_originals": free_quantized_originals,
             "release_mmap_pages": release_mmap_pages,
             "trim_allocator_after_load": trim_allocator_after_load,
+            "mmap_embeddings": mmap_embeddings,
         }
         instance._lazy_lock = threading.Lock()
         instance._materializing = threading.Event()

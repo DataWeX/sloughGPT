@@ -13,8 +13,15 @@ no /proc (non-Linux).
 from __future__ import annotations
 
 import gc
+import os
 import sys
 from pathlib import Path
+
+# Cap BLAS threads for deterministic RSS (per-thread scratch buffers add
+# hundreds of MB of variance with unbounded thread counts).
+os.environ.setdefault("OMP_NUM_THREADS", "4")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "4")
+os.environ.setdefault("MKL_NUM_THREADS", "4")
 
 import pytest
 
@@ -67,9 +74,46 @@ def provider():
         quant_bits=8,
         quant_mode="symmetric",
         free_quantized_originals=True,
+        mmap_embeddings=True,
     )
     gc.collect()
     return prov
+
+
+def _emb_data(prov):
+    return prov._model.layers[0].weight.data
+
+
+@needs_proc
+def test_embeddings_are_mmap_backed(provider):
+    import numpy as np
+
+    emb = _emb_data(provider)
+    assert emb.shape == (151936, 896)
+    assert not emb.flags.writeable
+    tensor = provider._parser.get_tensor_view("model.embed_tokens.weight")
+    assert np.shares_memory(emb, tensor)
+
+
+@needs_proc
+def test_embeddings_mmap_output_parity(provider):
+    """mmap-backed embeddings generate byte-identical output to heap."""
+    slnc = _slnc_path()
+    from domain.inference._internal.slonet_provider import SloNetChatProvider
+
+    heap_prov = SloNetChatProvider.from_slnc(
+        str(slnc),
+        model_id=QWEN_ID,
+        quantize=True,
+        quant_bits=8,
+        quant_mode="symmetric",
+        free_quantized_originals=True,
+        mmap_embeddings=False,
+    )
+    prompt = "The capital of France is"
+    assert provider.generate(prompt, max_tokens=8, temperature=0.0) == heap_prov.generate(
+        prompt, max_tokens=8, temperature=0.0
+    )
 
 
 @needs_proc
