@@ -461,7 +461,8 @@ def dev(ctx, model, web_port, watch_web, auto_download):
 @click.option("--web-port", default=3000, type=int, help="Web UI port", show_default=True)
 @click.option("--mobile", is_flag=True, help="Start FastAPI server + React Native metro bundler")
 @click.option("--auto-download", is_flag=True, help="Skip download confirmation on startup")
-def serve(host, port, model, web, mobile, web_port, auto_download):
+@click.option("--prune", is_flag=True, help="Kill stale (non-serving) servers, print report, exit")
+def serve(host, port, model, web, mobile, web_port, auto_download, prune):
     from commands.dev import cmd_serve
 
     args = _ns(
@@ -472,6 +473,7 @@ def serve(host, port, model, web, mobile, web_port, auto_download):
         mobile=mobile,
         web_port=web_port,
         auto_download=auto_download,
+        prune=prune,
     )
     cmd_serve(args)
 

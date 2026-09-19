@@ -83,6 +83,9 @@ def ensure_server(
     If the port is occupied by a loading server (unhealthy), wait for it.
     Only spawns a new subprocess if the port is genuinely free.
 
+    Stale servers (alive but never serving, e.g. killed workers) on *port*
+    are reaped first so a corpse can't squat the port forever.
+
     Server stderr is routed to the LogBuffer (via ``LogBufferHandler``) so
     shell line-mode can display a status badge and the ``logs`` command
     without polluting the terminal.
@@ -108,6 +111,15 @@ def ensure_server(
 
     if not auto_start:
         return base_url, None
+
+    # Reap stale servers on this port (alive but not serving) so a corpse
+    # can't squat it forever. Best-effort: never break startup.
+    try:
+        from utils.prune import prune_stale_servers
+
+        prune_stale_servers(host=host, port=port)
+    except Exception:
+        pass
 
     # Port occupied? Check if it's a loading server
     _port_busy = False

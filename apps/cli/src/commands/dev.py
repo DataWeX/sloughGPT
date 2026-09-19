@@ -573,6 +573,24 @@ def cmd_serve(args):
     # ── Pre-flight: check if model needs download ─────────
     _preflight_model_check(args)
 
+    # ── Janitor: reap stale servers before reuse-or-bump ──────────
+    # A process can be alive yet never serve (killed worker, stuck boot).
+    # Without this, each start stacks another full backend beside the corpse.
+    from utils.prune import prune_stale_servers
+
+    _prune_report = prune_stale_servers()
+    for entry in _prune_report["killed"]:
+        log.info(f"Pruned stale server (pid {entry['pid']}, port {entry['port']})")
+    if getattr(args, "prune", False):
+        killed = _prune_report["killed"]
+        failed = _prune_report["failed"]
+        log.info(f"Prune complete: {len(killed)} killed, {len(failed)} failed")
+        for entry in killed:
+            log.info(f"  killed pid {entry['pid']} (port {entry['port']})")
+        for entry in failed:
+            log.warning(f"  failed pid {entry['pid']}: {entry.get('error', '?')}")
+        return
+
     web = getattr(args, "web", False)
     mobile = getattr(args, "mobile", False)
 
