@@ -17,7 +17,7 @@ from downcraft.download.http import (
     download_file,
 )
 
-from conftest import RangeHandler, _range_url
+from packages.downcraft.tests.conftest import RangeHandler, _range_url
 
 
 class TestUtilityFunctions:

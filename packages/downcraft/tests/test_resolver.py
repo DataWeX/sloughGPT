@@ -33,7 +33,7 @@ from downcraft.resolve.scraper import (
     resolve_page,
 )
 
-from conftest import _range_url
+from packages.downcraft.tests.conftest import _range_url
 
 # ---------------------------------------------------------------------------
 # Utility function tests
@@ -228,7 +228,7 @@ class TestResolvePage:
     """Tests for resolve_page using a local HTTP server."""
 
     def test_finds_download_link(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html>
@@ -244,7 +244,7 @@ class TestResolvePage:
         assert best.confidence > 0.3
 
     def test_ranks_extension_above_non_extension(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html>
@@ -258,7 +258,7 @@ class TestResolvePage:
         assert best.extension in (".tar.gz", ".zip")
 
     def test_follows_js_redirect(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html>
@@ -273,7 +273,7 @@ class TestResolvePage:
         assert exe_links[0].source == "js_redirect"
 
     def test_empty_page(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"<html><body></body></html>"
         url = _range_url(range_server, "/page")
@@ -281,7 +281,7 @@ class TestResolvePage:
         assert links == []
 
     def test_on_progress_called(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <a href="/file.zip">Download</a>
@@ -292,7 +292,7 @@ class TestResolvePage:
         assert len(messages) >= 1
 
     def test_deduplicates_same_url(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html>
@@ -307,7 +307,7 @@ class TestResolvePage:
         assert len(zip_links) == 1
 
     def test_penalizes_ad_signals(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html>
@@ -324,7 +324,7 @@ class TestResolvePage:
         assert len(ad_links) == 0  # filtered as HTML page
 
     def test_follows_js_redirect_to_download(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html>
@@ -336,7 +336,7 @@ class TestResolvePage:
         assert len(links) >= 1
 
     def test_resolves_relative_urls(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/downloads/page"] = b"""
         <a href="file.zip">Download</a>
@@ -348,7 +348,7 @@ class TestResolvePage:
         assert zip_links[0].url.endswith("/downloads/file.zip")
 
     def test_max_links_limit(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         many_links = "".join(f'<a href="/file{i}.zip">Link {i}</a>' for i in range(200))
         RangeHandler.payloads["/page"] = f"<html>{many_links}</html>".encode()
@@ -550,7 +550,7 @@ class TestScoreLinkWithContext:
 
 class TestResolveObfuscatedPage:
     def test_finds_base64_hidden_link(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         real_url = f"http://127.0.0.1:{range_server.server_port}/files/secret.zip"
         encoded = base64.b64encode(real_url.encode()).decode()
@@ -569,7 +569,7 @@ class TestResolveObfuscatedPage:
         assert decoded_links[0].source == "obfuscated"
 
     def test_finds_json_ld_link(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         html = """
         <html>
@@ -737,7 +737,7 @@ class TestCollectUrlsFromDict:
 
 class TestFollowIntermediate:
     def test_follows_to_download(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         # Intermediate page has a low-confidence link (no extension, no download signal)
         RangeHandler.content_types["/intermediate"] = "text/html"
@@ -792,7 +792,7 @@ class TestFollowIntermediate:
         assert results == []
 
     def test_non_html_response(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.head_responses["/file.bin"] = {
             "status": 200,
@@ -817,7 +817,7 @@ class TestFollowIntermediate:
         assert results[0].confidence == 0.6
 
     def test_recursive_follow(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         # Page1 has a low-confidence link → follow to page2
         RangeHandler.content_types["/page1"] = "text/html"
@@ -844,7 +844,7 @@ class TestFollowIntermediate:
         assert any("safetensors" in r.url for r in results)
 
     def test_preserves_source_prefix(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html><a href="/files/data.zip">Download</a></html>
@@ -873,7 +873,7 @@ class TestFollowIntermediate:
 
 class TestVerifyContentType:
     def test_binary_content_type(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.head_responses["/file.bin"] = {
             "status": 200,
@@ -883,7 +883,7 @@ class TestVerifyContentType:
         assert _verify_content_type(url) == 1
 
     def test_html_content_type(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.head_responses["/page"] = {
             "status": 200,
@@ -893,7 +893,7 @@ class TestVerifyContentType:
         assert _verify_content_type(url) == -1
 
     def test_ambiguous_content_type(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.head_responses["/file"] = {
             "status": 200,
@@ -903,7 +903,7 @@ class TestVerifyContentType:
         assert _verify_content_type(url) == 0
 
     def test_large_non_text_is_binary(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.head_responses["/big.bin"] = {
             "status": 200,
@@ -916,7 +916,7 @@ class TestVerifyContentType:
         assert _verify_content_type("http://127.0.0.1:1/nonexistent") == 0
 
     def test_zip_content_type(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.head_responses["/archive.zip"] = {
             "status": 200,
@@ -1139,7 +1139,7 @@ class TestScoreAndDeduplicate:
 
 class TestResolvePageIntermediate:
     def test_follows_intermediate_page(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         # Page has a low-confidence link (no extension) → triggers intermediate follow
         RangeHandler.content_types["/page"] = "text/html"
@@ -1160,7 +1160,7 @@ class TestResolvePageIntermediate:
         assert len(gguf) >= 1
 
     def test_max_depth_zero_skips_follow(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html><a href="/other">Link</a></html>
@@ -1171,7 +1171,7 @@ class TestResolvePageIntermediate:
         assert followed == []
 
     def test_high_confidence_skips_follow(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html>
@@ -1184,7 +1184,7 @@ class TestResolvePageIntermediate:
         assert followed == []
 
     def test_no_results_no_follow(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"<html><body></body></html>"
         url = _range_url(range_server, "/page")
@@ -1203,7 +1203,7 @@ class TestResolvePageIntermediate:
 
 class TestResolvePageVerifyContentType:
     def test_html_content_reduces_confidence(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html><a href="/files/model.bin">Download</a></html>
@@ -1220,7 +1220,7 @@ class TestResolvePageVerifyContentType:
         assert model_link.confidence < 0.5
 
     def test_binary_content_boosts_confidence(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html><a href="/files/model.bin">Download</a></html>
@@ -1239,7 +1239,7 @@ class TestResolvePageVerifyContentType:
         assert after.source == "verified_binary"
 
     def test_no_results_skips_verify(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"<html></html>"
         url = _range_url(range_server, "/page")
@@ -1254,7 +1254,7 @@ class TestResolvePageVerifyContentType:
 
 class TestResolvePageEdgeCases:
     def test_custom_headers(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b'<a href="/file.zip">Dl</a>'
         url = _range_url(range_server, "/page")
@@ -1262,7 +1262,7 @@ class TestResolvePageEdgeCases:
         assert len(links) >= 1
 
     def test_redirect_chain_preserved(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b'<a href="/file.zip">Dl</a>'
         url = _range_url(range_server, "/page")
@@ -1270,7 +1270,7 @@ class TestResolvePageEdgeCases:
         assert len(links) >= 1
 
     def test_progress_callback(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b'<a href="/file.zip">Dl</a>'
         url = _range_url(range_server, "/page")
@@ -1281,7 +1281,7 @@ class TestResolvePageEdgeCases:
         assert any("Best candidate" in m for m in messages)
 
     def test_empty_page_progress(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"<html><body></body></html>"
         url = _range_url(range_server, "/page")
@@ -1290,7 +1290,7 @@ class TestResolvePageEdgeCases:
         assert any("No download links" in m for m in messages)
 
     def test_many_links_capped(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         html = "".join(f'<a href="/f{i}.zip">L{i}</a>' for i in range(300))
         RangeHandler.payloads["/page"] = html.encode()
@@ -1306,7 +1306,7 @@ class TestResolvePageEdgeCases:
 
 class TestResolveAndDownload:
     def test_raises_on_no_links(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"<html></html>"
         url = _range_url(range_server, "/page")
@@ -1314,7 +1314,7 @@ class TestResolveAndDownload:
             resolve_and_download(url, "/tmp/dest.zip")
 
     def test_raises_on_low_confidence(self, range_server):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html><a href="/files/model.zip" class="sponsor">Sponsor</a></html>
@@ -1324,7 +1324,7 @@ class TestResolveAndDownload:
             resolve_and_download(url, "/tmp/dest.zip", min_confidence=0.9)
 
     def test_success_path(self, range_server, tmp_path):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html><a href="/files/app.zip">Download App</a></html>
@@ -1337,7 +1337,7 @@ class TestResolveAndDownload:
         assert result.read_bytes() == b"PK\x03\x04fake-zip-content"
 
     def test_progress_callback_called(self, range_server, tmp_path):
-        from conftest import RangeHandler
+        from packages.downcraft.tests.conftest import RangeHandler
 
         RangeHandler.payloads["/page"] = b"""
         <html><a href="/files/data.bin">Download</a></html>

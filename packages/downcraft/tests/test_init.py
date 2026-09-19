@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from downcraft import download
 
-from conftest import RangeHandler, _range_url
+from packages.downcraft.tests.conftest import RangeHandler, _range_url
 
 
 class TestDownload:
