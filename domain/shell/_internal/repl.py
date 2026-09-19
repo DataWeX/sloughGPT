@@ -883,6 +883,10 @@ class ShellREPL(LinuxCommandsMixin):
     def _complete_args_for_uncached(self, cmd: str) -> list[str]:
         """Fetch fresh completion candidates (no cache)."""
         try:
+            if cmd in ("man", "help", "type", "which"):
+                # Complete command names (builtins + externals + aliases).
+                names = set(self.COMMANDS) | set(self._ext_cmds) | set(self._aliases)
+                return sorted(names)
             if cmd in ("load", "unload", "gen", "protect", "unprotect"):
                 models = self.cmds.models()
                 return [m.get("name", m.get("id", "")) for m in models]

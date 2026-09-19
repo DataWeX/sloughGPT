@@ -303,6 +303,26 @@ class TestManCommand:
         assert "No manual entry for ech" in out
 
 
+# ── arg completion ──────────────────────────────────────────────────────
+
+
+class TestCompleteArgsForMan:
+    def test_man_completes_command_names(self):
+        repl = _make_repl()
+        repl.COMMANDS["man"] = ShellREPL._cmd_man
+        repl.COMMANDS["models"] = ShellREPL._cmd_models
+        names = repl._complete_args_for_uncached("man")
+        assert "man" in names
+        assert "models" in names
+
+    def test_help_and_type_complete_command_names(self):
+        repl = _make_repl()
+        repl.COMMANDS["help"] = ShellREPL._cmd_help
+        for cmd in ("help", "type", "which"):
+            names = repl._complete_args_for_uncached(cmd)
+            assert "help" in names
+
+
 # ── _dump_json ──────────────────────────────────────────────────────────
 
 
