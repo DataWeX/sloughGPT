@@ -37,7 +37,15 @@ from .cmds.linux import LinuxCommandsMixin
 from .commands import ShellCommands
 from .console import Console
 from .io import ShellIO
-from .pretty import LivePager, Pager, format_error_brief, format_traceback, highlight, live_capable, terminal_key_reader
+from .pretty import (
+    LivePager,
+    Pager,
+    format_error_brief,
+    format_traceback,
+    highlight,
+    live_capable,
+    terminal_key_reader,
+)
 from .runtime import DaitRuntime
 from .state import ShellState
 
