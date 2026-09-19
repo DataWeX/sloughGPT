@@ -209,3 +209,11 @@ def prune_stale_servers(
             logger.debug("Prune failed for pid=%s: %s", entry["pid"], exc)
             failed.append({**entry, "error": str(exc)})
     return {"killed": killed, "failed": failed}
+
+
+def log_prune_report(log, report: dict) -> None:
+    """Log a prune report through a domain logger (info/warning interface)."""
+    for entry in report["killed"]:
+        log.info(f"Pruned stale server (pid {entry['pid']}, port {entry['port']})")
+    for entry in report["failed"]:
+        log.warning(f"Stale server prune failed (pid {entry['pid']}): {entry.get('error', '?')}")

@@ -434,8 +434,9 @@ def generate(ctx, prompt, model, max_tokens, temperature):
 @click.option("--web-port", default=3000, type=int, help="Web dev server port")
 @click.option("--watch-web", is_flag=True, help="Watch web files for changes")
 @click.option("--auto-download", is_flag=True, help="Skip download confirmation on startup")
+@click.option("--prune", is_flag=True, help="Kill stale (non-serving) servers, print report, exit")
 @click.pass_context
-def dev(ctx, model, web_port, watch_web, auto_download):
+def dev(ctx, model, web_port, watch_web, auto_download, prune):
     from commands.dev import cmd_dev
 
     args = _ns(
@@ -445,6 +446,7 @@ def dev(ctx, model, web_port, watch_web, auto_download):
         port=ctx.obj["port"],
         host=ctx.obj["host"],
         auto_download=auto_download,
+        prune=prune,
     )
     cmd_dev(args)
 

@@ -209,3 +209,45 @@ class TestPrune:
 
     def test_health_ok_before_check(self):
         assert _health_ok("127.0.0.1", 1, timeout=1) is False
+
+
+class TestServePruneFlag:
+    def test_serve_prune_exits_without_starting(self, monkeypatch):
+        import types
+
+        import utils.prune as prune_mod
+
+        calls: list = []
+        monkeypatch.setattr(
+            prune_mod,
+            "prune_stale_servers",
+            lambda *a, **k: calls.append((a, k)) or {"killed": [], "failed": []},
+        )
+        from commands.dev import cmd_serve
+
+        args = types.SimpleNamespace(
+            model=None, web=False, mobile=False, prune=True,
+            host="localhost", port=8000,
+        )
+        cmd_serve(args)
+        assert len(calls) == 1
+
+    def test_dev_prunes_before_start(self, monkeypatch):
+        import types
+
+        import utils.prune as prune_mod
+
+        calls: list = []
+        monkeypatch.setattr(
+            prune_mod,
+            "prune_stale_servers",
+            lambda *a, **k: calls.append((a, k)) or {"killed": [], "failed": []},
+        )
+        from commands.dev import cmd_dev
+
+        args = types.SimpleNamespace(
+            model=None, web_port=3000, watch_web=False, port=8000,
+            host="localhost", auto_download=False, prune=True,
+        )
+        cmd_dev(args)
+        assert len(calls) == 1
