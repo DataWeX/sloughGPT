@@ -37,7 +37,7 @@ from .cmds.linux import LinuxCommandsMixin
 from .commands import ShellCommands
 from .console import Console
 from .io import ShellIO
-from .pretty import format_error_brief, format_traceback, highlight
+from .pretty import format_error_brief, format_traceback
 from .runtime import DaitRuntime
 from .state import ShellState
 
@@ -1709,143 +1709,6 @@ class ShellREPL(LinuxCommandsMixin):
         except OSError as e:
             self._print(self._format_error(e, "source"))
 
-    def _cmd_py(self, args: str = "") -> None:
-        """Evaluate a Python expression and print the result.
-
-        Sandboxed: only safe builtins and whitelisted modules available.
-        Every evaluation is audit-logged.
-        """
-        if not args:
-            self._print("  Usage: py <expression> | py <statement>")
-            self._print("  Example: py 2 + 2")
-            self._print("  Example: py [i*i for i in range(5)]")
-            self._print("  Example: py x = 1  (persists for later py calls)")
-            self._print("  Example: py __import__('json').dumps({'a': 1})")
-            return
-
-        # Restricted __import__ — only safe stdlib modules
-        _SAFE_MODULES = frozenset(
-            {
-                "math",
-                "json",
-                "datetime",
-                "time",
-                "re",
-                "collections",
-                "itertools",
-                "functools",
-                "operator",
-                "string",
-                "textwrap",
-                "statistics",
-                "decimal",
-                "fractions",
-                "random",
-                "uuid",
-                "hashlib",
-                "base64",
-                "binascii",
-                "struct",
-                "codecs",
-                "unicodedata",
-                "enum",
-                "dataclasses",
-                "typing",
-                "copy",
-                "pprint",
-                "array",
-                "heapq",
-                "bisect",
-                "graphlib",
-            }
-        )
-
-        def _safe_import(name: str, *args: Any, **kwargs: Any) -> Any:
-            root = name.split(".")[0]
-            if root not in _SAFE_MODULES:
-                raise ImportError(
-                    f"module {name!r} is not allowed in py. "
-                    f"Allowed: {', '.join(sorted(_SAFE_MODULES))}"
-                )
-            return __import__(name, *args, **kwargs)
-
-        safe_builtins = {
-            "abs": abs,
-            "all": all,
-            "any": any,
-            "bool": bool,
-            "chr": chr,
-            "dict": dict,
-            "dir": dir,
-            "enumerate": enumerate,
-            "filter": filter,
-            "float": float,
-            "format": format,
-            "frozenset": frozenset,
-            "getattr": getattr,
-            "hasattr": hasattr,
-            "hash": hash,
-            "hex": hex,
-            "int": int,
-            "isinstance": isinstance,
-            "issubclass": issubclass,
-            "iter": iter,
-            "len": len,
-            "list": list,
-            "map": map,
-            "max": max,
-            "min": min,
-            "next": next,
-            "oct": oct,
-            "ord": ord,
-            "pow": pow,
-            "print": print,
-            "property": property,
-            "range": range,
-            "repr": repr,
-            "reversed": reversed,
-            "round": round,
-            "set": set,
-            "slice": slice,
-            "sorted": sorted,
-            "str": str,
-            "sum": sum,
-            "super": super,
-            "tuple": tuple,
-            "type": type,
-            "zip": zip,
-            "__import__": _safe_import,
-        }
-
-        exit_code = 0
-        result_repr = ""
-        try:
-            # Persistent namespace across py invocations so assignments
-            # survive (py x = 1, then py x + 1). Sandboxed builtins only.
-            namespace = getattr(self, "_py_namespace", None)
-            if namespace is None:
-                namespace = {"__builtins__": safe_builtins}
-                self._py_namespace = namespace
-            try:
-                result = eval(args, namespace)
-            except SyntaxError:
-                # Statements (assignments, loops, defs) — execute for
-                # side effects in the persistent namespace instead.
-                exec(compile(args, "<py>", "exec"), namespace)  # noqa: S102
-                result = None
-            if result is None:
-                result_repr = ""
-            else:
-                result_repr = repr(result)
-                self._print(highlight(result_repr, "python"))
-        except Exception as e:
-            exit_code = 1
-            result_repr = self._format_error(e)
-            self._print(f"  {result_repr}")
-
-        # Audit-log every evaluation
-        self._audit.eval(args, result_repr, exit_code)
-
     def _cmd_bg(self, args: str = "") -> None:
         if not self._bg_threads:
             self._print("  No background processes")
@@ -1954,7 +1817,6 @@ class ShellREPL(LinuxCommandsMixin):
                 "load": "  load <name>  — Load a model",
                 "train": "  train [dataset]  — Start training or list datasets",
                 "ops": "  ops  — List active operations",
-                "operations": "  ops  — List active operations",
                 "datasets": "  datasets  — List datasets",
                 "knowledge": "  knowledge [query]  — List/search knowledge base",
                 "checkpoints": "  checkpoints  — List training checkpoints",
@@ -1968,11 +1830,11 @@ class ShellREPL(LinuxCommandsMixin):
                 "api": "  api [start|stop|status]  — Manage API server",
                 "kill": "  kill <id>  — Stop a training job",
                 "ps": "  ps  — List kernel processes",
-                "py": "  py <expr>  — Evaluate Python expression",
                 "permit": "  permit <cmd>  — Grant permission for blocked command",
                 "deny": "  deny <cmd>  — Revoke permission",
                 "permissions": "  permissions  — Show permission policy",
-                "confirm": "  confirm [on|off]  — Toggle auto-download confirmation",
+                "confirm": "  confirm [on|off]  — Toggle auto-download confirmation (alias: autodownload)",
+                "autodownload": "  autodownload [on|off]  — Toggle auto-download confirmation",
                 "protect": "  protect <model>  — Protect model files",
                 "unprotect": "  unprotect <model>  — Remove protection",
                 "tui": "  tui  — Launch three-pane TUI",
@@ -5250,7 +5112,6 @@ _shell_commands = {
     "traceback": ShellREPL._cmd_traceback,
     "alias": ShellREPL._cmd_alias,
     "unalias": ShellREPL._cmd_unalias,
-    "py": ShellREPL._cmd_py,
     "chat": ShellREPL._cmd_chat,
     "gen": ShellREPL._cmd_gen,
     "ai": ShellREPL._cmd_ai,
@@ -5259,7 +5120,6 @@ _shell_commands = {
     "load": ShellREPL._cmd_load,
     "train": ShellREPL._cmd_train,
     "ops": ShellREPL._cmd_ops,
-    "operations": ShellREPL._cmd_ops,
     "datasets": ShellREPL._cmd_datasets,
     "knowledge": ShellREPL._cmd_knowledge,
     "checkpoints": ShellREPL._cmd_checkpoints,
@@ -5276,6 +5136,7 @@ _shell_commands = {
     "deny": ShellREPL._cmd_deny,
     "permissions": ShellREPL._cmd_permissions,
     "confirm": ShellREPL._cmd_confirm,
+    "autodownload": ShellREPL._cmd_confirm,
     "protect": ShellREPL._cmd_protect,
     "unprotect": ShellREPL._cmd_unprotect,
     "tui": ShellREPL._cmd_tui,

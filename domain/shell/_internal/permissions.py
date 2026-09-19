@@ -116,7 +116,6 @@ _ELEVATED = frozenset(
         "read",
         "source",
         ".",
-        "py",
         "ai",
         "cd",
         "bg",
@@ -171,6 +170,7 @@ _CRITICAL = frozenset(
         "deny",
         "permissions",
         "confirm",
+        "autodownload",
     }
 )
 

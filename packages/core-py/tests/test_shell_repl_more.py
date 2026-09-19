@@ -1176,52 +1176,6 @@ class TestSource:
         script.write_text("echo ok\ntotally_invalid_cmd_xyz_123\n")
         out = capture_cmd(repl, repl._cmd_source, str(script))
         assert "Unknown command: totally_invalid_cmd_xyz_123" in out
-
-
-# ── py ───────────────────────────────────────────────────────────────
-
-
-class TestCmdPy:
-    def test_py_usage(self, repl):
-        out = capture_cmd(repl, repl._cmd_py, "")
-        assert "Usage: py <expression>" in out
-
-    def test_py_eval(self, repl):
-        out = capture_cmd(repl, repl._cmd_py, "2 + 2")
-        assert out.strip() == "4"
-
-    def test_py_list_comprehension(self, repl):
-        out = capture_cmd(repl, repl._cmd_py, "[i*i for i in range(3)]")
-        assert "[0, 1, 4]" in out
-
-    def test_py_error(self, repl):
-        out = capture_cmd(repl, repl._cmd_py, "1/0")
-        assert "Error:" in out
-
-    def test_py_blocks_unsafe_import(self, repl):
-        out = capture_cmd(repl, repl._cmd_py, "__import__('os').getcwd()")
-        assert "not allowed in py" in out
-
-    def test_py_allows_safe_import(self, repl):
-        out = capture_cmd(repl, repl._cmd_py, "__import__('math').sqrt(16)")
-        assert out.strip() == "4.0"
-
-    def test_py_assignment_persists(self, repl):
-        out = capture_cmd(repl, repl._cmd_py, "py_test_var_xyz = 21")
-        assert out.strip() == ""
-        out = capture_cmd(repl, repl._cmd_py, "py_test_var_xyz * 2")
-        assert out.strip() == "42"
-
-    def test_py_for_loop(self, repl):
-        out = capture_cmd(repl, repl._cmd_py, "py_loop_total_xyz = sum([1, 2, 3])")
-        assert out.strip() == ""
-        out = capture_cmd(repl, repl._cmd_py, "py_loop_total_xyz")
-        assert out.strip() == "6"
-
-
-# ── logs ─────────────────────────────────────────────────────────────
-
-
 class TestLogs:
     def test_logs_clear(self, repl):
         _add_log(repl)
@@ -4111,32 +4065,6 @@ class TestCalCommand:
     def test_cal_invalid(self, repl):
         out = capture_cmd(repl, repl._cmd_cal, "13 2026")
         assert repl._last_exit_code != 0 or "invalid" in out.lower() or "error" in out.lower()
-
-
-# ── py command internals ─────────────────────────────────────────────
-
-
-class TestPyCommand:
-    def test_py_no_args(self, repl):
-        out = capture_cmd(repl, repl._cmd_py, "")
-        assert "Usage" in out
-
-    def test_py_expr(self, repl):
-        out = capture_cmd(repl, repl._cmd_py, "2 + 2")
-        assert "4" in out
-
-    def test_py_string(self, repl):
-        out = capture_cmd(repl, repl._cmd_py, "'hello' + ' world'")
-        assert "hello world" in out
-
-    def test_py_error(self, repl):
-        out = capture_cmd(repl, repl._cmd_py, "1 / 0")
-        assert repl._last_exit_code != 0 or "error" in out.lower()
-
-
-# ── which / type ─────────────────────────────────────────────────────
-
-
 class TestWhichTypeCommand:
     def test_which_builtin(self, repl):
         out = capture_cmd(repl, repl._cmd_which, "echo")
@@ -8431,24 +8359,6 @@ class TestCmdWatchV2:
     def test_watch_bad_interval(self, repl):
         repl._cmd_watch("abc ls")
         assert repl._last_exit_code == 1
-
-
-# ── _cmd_py ───────────────────────────────────────────────────────
-
-
-class TestCmdPyV2:
-    def test_py_expr(self, repl):
-        repl._cmd_py("2 + 2")
-        assert repl._last_exit_code == 0
-
-    def test_py_error(self, repl):
-        repl._cmd_py("1/0")
-        assert repl._last_exit_code == 0
-
-
-# ── _cmd_expand / _cmd_unexpand ───────────────────────────────────
-
-
 class TestCmdExpand:
     def test_expand_piped(self, repl):
         repl._piped_input = "a\tb"
@@ -15409,28 +15319,6 @@ class TestStripRedirectionV2:
         assert args == "echo hello"
         assert path == "/tmp/out.txt"
         assert append is True
-
-
-# ── _cmd_py ────────────────────────────────────────────────────────
-
-
-class TestCmdPyV3:
-    def test_py_eval(self, repl):
-        repl._cmd_py("2 + 2")
-        assert repl._last_exit_code == 0
-
-    def test_py_no_args(self, repl):
-        repl._cmd_py("")
-        assert repl._last_exit_code == 0
-
-    def test_py_print(self, repl):
-        repl._cmd_py('print("hello")')
-        assert repl._last_exit_code == 0
-
-
-# ── _format_table ──────────────────────────────────────────────────
-
-
 class TestFormatTableV2:
     def test_empty(self, repl):
         result = repl._format_table([])
@@ -17612,48 +17500,6 @@ class TestCmdAgentsDeeper:
     def test_agents_empty(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_agents(""))
         assert "agents" in out
-
-
-# ── _cmd_py deeper ────────────────────────────────────────────────
-
-
-class TestCmdPyDeeper:
-    def test_py_blocked_import(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_py("__import__('os')"))
-        assert "not allowed" in out
-
-    def test_py_syntax_error(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_py("def"))
-        assert "Error" in out or "invalid" in out.lower()
-
-    def test_py_runtime_error(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_py("1/0"))
-        assert "Error" in out or "division" in out.lower()
-
-    def test_py_safe_import(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_py("__import__('math').pi"))
-        assert "3.14" in out
-
-    def test_py_list_comprehension(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_py("[i*i for i in range(3)]"))
-        assert "[0, 1, 4]" in out
-
-    def test_py_string_method(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_py("'hello'.upper()"))
-        assert "HELLO" in out
-
-    def test_py_dict(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_py("{'a': 1, 'b': 2}"))
-        assert "'a'" in out
-
-    def test_py_nested_import(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_py("__import__('json').dumps([1,2])"))
-        assert "[1, 2]" in out
-
-
-# ── _cmd_source deeper ────────────────────────────────────────────
-
-
 class TestCmdSourceDeeper:
     def test_source_with_pipeline(self, repl, tmp_path):
         src = tmp_path / "src_pipe.sh"
@@ -23432,29 +23278,6 @@ class TestCmdSourceDeeperV2:
         with _CaptureOutput(repl) as cap:
             repl._cmd_source("")
         assert "Usage" in cap.getvalue()
-
-
-class TestCmdPyDeeperV2:
-    def test_py_syntax_error(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("def (")
-        assert (
-            "Error" in cap.getvalue()
-            or "error" in cap.getvalue()
-            or "SyntaxError" in cap.getvalue()
-        )
-
-    def test_py_runtime_error(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("1/0")
-        assert "Error" in cap.getvalue() or "error" in cap.getvalue()
-
-    def test_py_valid(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("2 + 2")
-        assert "4" in cap.getvalue()
-
-
 class TestFormatSize:
     def test_format_size_bytes(self, repl):
         assert "100" in repl._format_size(100)
@@ -23916,15 +23739,6 @@ class TestUpdateColorStateDeeper:
         repl._update_color_state()
         repl._env["NO_COLOR"] = ""
         repl._update_color_state()
-
-
-class TestSafeImportDeeper:
-    def test_py_eval(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("1 + 1")
-        assert "2" in cap.getvalue()
-
-
 class TestGroupExtCmdsDeeper:
     def test_group_ext_cmds_empty(self, repl):
         from domain.shell._internal.repl import ShellREPL
@@ -25576,34 +25390,6 @@ class TestCmdTimeDeeperV2:
         with _CaptureOutput(repl):
             repl._cmd_time("echo hello")
         assert repl._last_exit_code == 0
-
-
-class TestCmdPyDeeperV3:
-    def test_py_valid(self, repl):
-        repl._cmd_py("1 + 1")
-        assert repl._last_exit_code == 0
-
-    def test_py_print(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("print('hello')")
-        assert "None" in cap.getvalue() or "hello" in cap.getvalue()
-
-    def test_py_syntax_error(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("def (")
-        assert "Error" in cap.getvalue() or "SyntaxError" in cap.getvalue()
-
-    def test_py_runtime_error(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("1/0")
-        assert "Error" in cap.getvalue() or "ZeroDivisionError" in cap.getvalue()
-
-    def test_py_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("")
-        assert "Usage" in cap.getvalue()
-
-
 class TestCmdLogsDeeperV3:
     def test_logs(self, repl):
         with _CaptureOutput(repl):
@@ -26150,19 +25936,6 @@ class TestUpdateColorStateDeeperV2:
         with patch.dict(os.environ, {}, clear=True):
             repl._update_color_state()
         assert repl._last_exit_code == 0
-
-
-class TestSafeImportDeeperV2:
-    def test_safe_import_builtin(self, repl):
-        repl._cmd_py("__import__('os')")
-        assert repl._last_exit_code == 0
-
-    def test_safe_import_blocked(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("__import__('subprocess')")
-        assert "not allowed" in cap.getvalue()
-
-
 class TestGroupExtCmdsDeeperV2:
     def test_group_ext_cmds(self, repl):
         result = ShellREPL._group_ext_cmds(repl._ext_cmds)
@@ -27042,51 +26815,6 @@ class TestCmdVmrunDeeper:
             assert repl._last_exit_code == 1
         finally:
             os.environ.pop("MAN_VM_ROLE", None)
-
-
-class TestCmdPyDeeperV4:
-    def test_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("")
-        assert "Usage" in cap.getvalue()
-
-    def test_valid_expression(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("2 + 2")
-        assert "4" in cap.getvalue()
-
-    def test_syntax_error(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("def def def")
-        assert "Error" in cap.getvalue()
-
-    def test_runtime_error(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("1/0")
-        assert "Error" in cap.getvalue()
-
-    def test_safe_module_import(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("__import__('math').pi")
-        out = cap.getvalue()
-        assert "3.14" in out
-
-    def test_blocked_module(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("__import__('os').system('ls')")
-        assert "not allowed" in cap.getvalue()
-
-    def test_list_comprehension(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("[i*i for i in range(5)]")
-        assert "[0, 1, 4, 9, 16]" in cap.getvalue()
-
-    def test_string_expression(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("'hello'.upper()")
-        assert "HELLO" in cap.getvalue()
-
-
 class TestCmdFindVFS:
     def test_find_nonexistent_dir(self, repl):
         with _CaptureOutput(repl) as cap:
@@ -27796,35 +27524,6 @@ class TestCmdSource:
             or "No such" in cap.getvalue()
             or "Error reading" in cap.getvalue()
         )
-
-
-class TestCmdPyV4:
-    def test_py_empty(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("")
-        assert "Usage" in cap.getvalue()
-
-    def test_py_syntax_error(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("def def def")
-        assert "Error" in cap.getvalue() or "syntax" in cap.getvalue().lower()
-
-    def test_py_runtime_error(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("1/0")
-        assert "Error" in cap.getvalue() or "division" in cap.getvalue()
-
-    def test_py_expression(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("2 + 3")
-        assert "5" in cap.getvalue()
-
-    def test_py_import_via_dunder(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("__import__('math').sqrt(16)")
-        assert "4.0" in cap.getvalue()
-
-
 class TestCmdAlias:
     def test_alias_create(self, repl):
         repl._cmd_alias("ll=ls -la")
@@ -28755,30 +28454,6 @@ class TestCdPwdEchoV2:
         with _CaptureOutput(repl) as cap:
             repl._cmd_echo("")
         assert cap.getvalue().strip() == "" or len(cap.getvalue()) >= 0
-
-
-class TestCmdPyMore:
-    def test_py_list(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("[i*i for i in range(5)]")
-        assert "0" in cap.getvalue() and "16" in cap.getvalue()
-
-    def test_py_string(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("'hello' + ' ' + 'world'")
-        assert "hello world" in cap.getvalue()
-
-    def test_py_import_math(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("__import__('math').pi")
-        assert "3.14" in cap.getvalue()
-
-    def test_py_disallowed_module(self, repl):
-        with _CaptureOutput(repl) as cap:
-            repl._cmd_py("__import__('os').getcwd()")
-        assert "not allowed" in cap.getvalue() or "Error" in cap.getvalue()
-
-
 class TestSourceMore:
     def test_source_dot(self, repl, tmp_path):
         script = tmp_path / "test.sh"
