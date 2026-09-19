@@ -1716,9 +1716,10 @@ class ShellREPL(LinuxCommandsMixin):
         Every evaluation is audit-logged.
         """
         if not args:
-            self._print("  Usage: py <expression>")
+            self._print("  Usage: py <expression> | py <statement>")
             self._print("  Example: py 2 + 2")
             self._print("  Example: py [i*i for i in range(5)]")
+            self._print("  Example: py x = 1  (persists for later py calls)")
             self._print("  Example: py __import__('json').dumps({'a': 1})")
             return
 
@@ -1819,9 +1820,24 @@ class ShellREPL(LinuxCommandsMixin):
         exit_code = 0
         result_repr = ""
         try:
-            result = eval(args, {"__builtins__": safe_builtins})
-            result_repr = repr(result)
-            self._print(highlight(result_repr, "python"))
+            # Persistent namespace across py invocations so assignments
+            # survive (py x = 1, then py x + 1). Sandboxed builtins only.
+            namespace = getattr(self, "_py_namespace", None)
+            if namespace is None:
+                namespace = {"__builtins__": safe_builtins}
+                self._py_namespace = namespace
+            try:
+                result = eval(args, namespace)
+            except SyntaxError:
+                # Statements (assignments, loops, defs) — execute for
+                # side effects in the persistent namespace instead.
+                exec(compile(args, "<py>", "exec"), namespace)  # noqa: S102
+                result = None
+            if result is None:
+                result_repr = ""
+            else:
+                result_repr = repr(result)
+                self._print(highlight(result_repr, "python"))
         except Exception as e:
             exit_code = 1
             result_repr = self._format_error(e)

@@ -1206,6 +1206,18 @@ class TestCmdPy:
         out = capture_cmd(repl, repl._cmd_py, "__import__('math').sqrt(16)")
         assert out.strip() == "4.0"
 
+    def test_py_assignment_persists(self, repl):
+        out = capture_cmd(repl, repl._cmd_py, "py_test_var_xyz = 21")
+        assert out.strip() == ""
+        out = capture_cmd(repl, repl._cmd_py, "py_test_var_xyz * 2")
+        assert out.strip() == "42"
+
+    def test_py_for_loop(self, repl):
+        out = capture_cmd(repl, repl._cmd_py, "py_loop_total_xyz = sum([1, 2, 3])")
+        assert out.strip() == ""
+        out = capture_cmd(repl, repl._cmd_py, "py_loop_total_xyz")
+        assert out.strip() == "6"
+
 
 # ── logs ─────────────────────────────────────────────────────────────
 
