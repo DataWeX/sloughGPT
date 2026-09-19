@@ -781,7 +781,7 @@ def _run_post_gen_tasks(
     """Launch fire-and-forget background tasks after chat generation completes."""
     import state as _pgs_state
 
-    from domain.core import get_rag_service as _pgs_rag
+    from domain.core._internal.rag_service import get_rag_service as _pgs_rag
 
     duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
     tokens = len(full_response.split())
@@ -2004,7 +2004,7 @@ class InferenceRouter:
             rag_context = ""
             if req.use_rag:
                 try:
-                    from domain.core import is_rag_service_ready
+                    from domain.core._internal.rag_service import is_rag_service_ready
 
                     if not is_rag_service_ready():
                         logger.debug("RAG service not ready yet, skipping query")
@@ -2285,7 +2285,7 @@ class InferenceRouter:
                     yield sse_error("chat", "KNOWLEDGE_PROC_ERROR", str(e), code="KNOWLEDGE_ERROR")
 
             try:
-                from domain.core import get_consciousness
+                from domain.consciousness._internal.engine import get_consciousness
 
                 _ce = get_consciousness()
                 if _ce.config.is_enabled():

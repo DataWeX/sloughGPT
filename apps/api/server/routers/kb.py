@@ -378,7 +378,7 @@ class KBRouter:
 
             if is_new:
                 try:
-                    from domain.core import get_rag_service
+                    from domain.core._internal.rag_service import get_rag_service
 
                     rag_svc = get_rag_service()
                     rag_svc.add_document(
@@ -538,7 +538,7 @@ class KBRouter:
 
             if result.get("new_facts", 0) > 0:
                 try:
-                    from domain.core import get_rag_service
+                    from domain.core._internal.rag_service import get_rag_service
 
                     rag_svc = get_rag_service()
                     from domain.knowledge import get_knowledge_memory
@@ -737,7 +737,7 @@ class KBRouter:
         stored = await asyncio.to_thread(_store_chunks)
 
         try:
-            from domain.core import get_rag_service
+            from domain.core._internal.rag_service import get_rag_service
 
             rag_svc = get_rag_service()
 
@@ -1067,7 +1067,7 @@ class KBRouter:
         try:
             import time as _time
 
-            from domain.core import get_rag_service
+            from domain.core._internal.rag_service import get_rag_service
 
             _t0 = _time.monotonic()
             rag_svc = get_rag_service()
@@ -1098,7 +1098,7 @@ class KBRouter:
         try:
             import time as _time
 
-            from domain.core import get_rag_service
+            from domain.core._internal.rag_service import get_rag_service
 
             _t0 = _time.monotonic()
             rag_svc = get_rag_service()
@@ -1115,7 +1115,7 @@ class KBRouter:
         try:
             import time as _time
 
-            from domain.core import get_rag_service
+            from domain.core._internal.rag_service import get_rag_service
 
             _t0 = _time.monotonic()
             rag_svc = get_rag_service()
@@ -1128,7 +1128,7 @@ class KBRouter:
 
     async def rag_list_documents(self) -> dict:
         try:
-            from domain.core import get_rag_service, is_rag_service_ready
+            from domain.core._internal.rag_service import get_rag_service, is_rag_service_ready
 
             if not is_rag_service_ready():
                 return success_response(data={"documents": [], "stats": {}, "ready": False})
@@ -1145,7 +1145,7 @@ class KBRouter:
 
     def rag_clear(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
-            from domain.core import get_rag_service
+            from domain.core._internal.rag_service import get_rag_service
 
             rag_svc = get_rag_service()
             _t0 = time.monotonic()
@@ -1162,7 +1162,7 @@ class KBRouter:
 
     async def rag_stats(self) -> dict:
         try:
-            from domain.core import get_rag_service, is_rag_service_ready
+            from domain.core._internal.rag_service import get_rag_service, is_rag_service_ready
 
             if not is_rag_service_ready():
                 return success_response(
@@ -1175,7 +1175,7 @@ class KBRouter:
 
     def kg_sync_to_rag(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
-            from domain.core import KGTrainingPipeline, get_rag_service
+            from domain.core._internal.rag_service import KGTrainingPipeline, get_rag_service
 
             rag_svc = get_rag_service()
             pipeline = KGTrainingPipeline(rag_service=rag_svc)
@@ -1186,7 +1186,7 @@ class KBRouter:
 
     def kg_pipeline_stats(self) -> dict:
         try:
-            from domain.core import KGTrainingPipeline
+            from domain.core._internal.rag_service import KGTrainingPipeline
 
             pipeline = KGTrainingPipeline()
             return success_response(data=pipeline.stats())

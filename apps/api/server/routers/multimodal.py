@@ -23,7 +23,7 @@ from schemas.common import (
     success_response,
 )
 
-from domain.core import get_multimodal_manager
+from domain.multimodal._internal.manager import get_multimodal_manager
 
 logger = logging.getLogger("slo.routers.multimodal")
 
