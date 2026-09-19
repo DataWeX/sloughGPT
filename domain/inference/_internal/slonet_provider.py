@@ -550,6 +550,7 @@ class SloNetChatProvider:
         quant_mode: str = "symmetric",
         quant_clip: float = 0.999,
         kv_max_sessions: int = 64,
+        kv_ttl_seconds: float = 3600.0,
         free_quantized_originals: bool = False,
         release_mmap_pages: bool = True,
         trim_allocator_after_load: bool = True,
@@ -566,6 +567,8 @@ class SloNetChatProvider:
             quant_clip: Outlier clipping percentile (e.g., 0.999)
             kv_max_sessions: Max simultaneous cross-turn KV sessions before
                 least-recently-used eviction kicks in
+            kv_ttl_seconds: Idle seconds after which a session's KV state is
+                evicted (default 1 hour)
             free_quantized_originals: If True, release the float32 weight of
                 every quantized/point linear layer after quantization. Saves
                 ~(projection bytes) per layer; safe only for inference-only
@@ -866,7 +869,7 @@ class SloNetChatProvider:
         # Cross-turn KV cache state per session (lazy NumpyKVState per session_id)
         instance._kv_states: dict[str, Any] = {}
         instance._kv_last_access: dict[str, float] = {}  # session_id → monotonic timestamp
-        instance._kv_ttl: float = 3600.0  # 1 hour default TTL for idle sessions
+        instance._kv_ttl: float = kv_ttl_seconds  # idle TTL for sessions
         instance._kv_max_sessions: int = kv_max_sessions  # LRU cap on concurrent sessions
         # Guard for the session KV map — mutated from to_thread workers and
         # API routes concurrently, so check-then-set races must be serialized.
@@ -892,6 +895,7 @@ class SloNetChatProvider:
         quant_mode: str = "symmetric",
         quant_clip: float = 0.999,
         kv_max_sessions: int = 64,
+        kv_ttl_seconds: float = 3600.0,
         free_quantized_originals: bool = False,
         release_mmap_pages: bool = True,
         trim_allocator_after_load: bool = True,
@@ -919,11 +923,12 @@ class SloNetChatProvider:
             quant_clip: Outlier clipping percentile (e.g., 0.999)
             kv_max_sessions: Max simultaneous cross-turn KV sessions before
                 least-recently-used eviction kicks in
+            kv_ttl_seconds: Idle seconds after which a session's KV state is
+                evicted (default 1 hour)
             free_quantized_originals: Passed through to the lazy load
             release_mmap_pages: Passed through to the lazy load
             trim_allocator_after_load: Passed through to the lazy load
             mmap_embeddings: Passed through to the lazy load
-            trim_allocator_after_load: Passed through to the lazy load
 
         Returns:
             Lazy SloNetChatProvider. ``_model`` is None until first use.
@@ -957,6 +962,7 @@ class SloNetChatProvider:
             "quant_mode": quant_mode,
             "quant_clip": quant_clip,
             "kv_max_sessions": kv_max_sessions,
+            "kv_ttl_seconds": kv_ttl_seconds,
             "free_quantized_originals": free_quantized_originals,
             "release_mmap_pages": release_mmap_pages,
             "trim_allocator_after_load": trim_allocator_after_load,
@@ -982,7 +988,7 @@ class SloNetChatProvider:
         }
         instance._kv_states: dict[str, Any] = {}
         instance._kv_last_access: dict[str, float] = {}
-        instance._kv_ttl: float = 3600.0
+        instance._kv_ttl: float = kv_ttl_seconds
         instance._kv_max_sessions: int = kv_max_sessions
         instance._kv_lock = threading.Lock()
 

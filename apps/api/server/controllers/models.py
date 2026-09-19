@@ -187,6 +187,8 @@ class ModelsController:
                     quant_bits=cfg.quant_bits,
                     quant_mode=cfg.quant_mode,
                     quant_clip=cfg.quant_clip,
+                    kv_max_sessions=cfg.kv_max_sessions,
+                    kv_ttl_seconds=cfg.kv_ttl_seconds,
                 )
                 setup_providers(
                     slonet_provider=lazy_provider,

@@ -115,6 +115,9 @@ class ServerConfig:
     memory_pressure_critical: float = 90.0  # percent — force GC, drop KV caches, release weights
     memory_pressure_emergency: float = 95.0  # percent — block new model loads + inference
 
+    kv_max_sessions: int = 16  # cap on concurrent cross-turn KV sessions (LRU)
+    kv_ttl_seconds: float = 1800.0  # idle seconds before a session's KV is evicted
+
     jwt_secret: str = ""  # auto-generated if empty
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
@@ -167,6 +170,8 @@ class ServerConfig:
             memory_pressure_warning=float(os.getenv("SLO_MEMORY_PRESSURE_WARNING", "80")),
             memory_pressure_critical=float(os.getenv("SLO_MEMORY_PRESSURE_CRITICAL", "90")),
             memory_pressure_emergency=float(os.getenv("SLO_MEMORY_PRESSURE_EMERGENCY", "95")),
+            kv_max_sessions=int(os.getenv("SLO_KV_MAX_SESSIONS", "16")),
+            kv_ttl_seconds=float(os.getenv("SLO_KV_TTL_SECONDS", "1800")),
             jwt_secret=os.getenv("SLO_JWT_SECRET")
             or os.getenv("JWT_SECRET")
             or secrets.token_urlsafe(64),

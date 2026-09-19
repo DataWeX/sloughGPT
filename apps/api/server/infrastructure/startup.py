@@ -1226,6 +1226,8 @@ def _try_lazy_guard_autoload(cfg) -> bool:
             free_quantized_originals=True,
             # Server is inference-only: embeddings stay file-backed.
             mmap_embeddings=True,
+            kv_max_sessions=cfg.kv_max_sessions,
+            kv_ttl_seconds=cfg.kv_ttl_seconds,
         )
     except Exception as e:
         logger.warning(

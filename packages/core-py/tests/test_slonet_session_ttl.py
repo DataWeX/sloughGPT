@@ -499,3 +499,93 @@ class TestKvConcurrency:
         assert state is not None
         assert len(stub._kv_states) == 1
         assert stub.session_stats()["active_sessions"] == 1
+
+
+class TestSessionTuningPlumbing:
+    """kv_max_sessions / kv_ttl_seconds flow from constructors to state."""
+
+    def test_from_slnc_signature(self):
+        import inspect
+
+        for fn in (
+            SloNetChatProvider.from_slnc,
+            SloNetChatProvider.lazy_from_slnc,
+        ):
+            params = inspect.signature(fn).parameters
+            assert params["kv_max_sessions"].default == 64
+            assert params["kv_ttl_seconds"].default == 3600.0
+
+    def test_lazy_plumbs_tuning_without_loading(self):
+        from pathlib import Path
+
+        slnc = (
+            Path(__file__).resolve().parents[3]
+            / "models"
+            / "hf-cache"
+            / "hub"
+            / "models--Qwen--Qwen2.5-0.5B-Instruct"
+            / "model.slnc"
+        )
+        if not slnc.is_file():
+            pytest.skip("Qwen .slnc not cached locally")
+        lazy = SloNetChatProvider.lazy_from_slnc(
+            str(slnc), kv_max_sessions=7, kv_ttl_seconds=123.0
+        )
+        assert lazy._kv_max_sessions == 7
+        assert lazy._kv_ttl == 123.0
+        assert lazy._load_kwargs["kv_max_sessions"] == 7
+        assert lazy._load_kwargs["kv_ttl_seconds"] == 123.0
+
+    def test_custom_cap_evicts_lru(self, tiny_model):
+        """A non-default cap is honored by eviction (stub, no weights)."""
+
+        class _Stub:
+            pass
+
+        import threading as _threading
+        from types import MethodType as _MethodType
+
+        stub = _Stub()
+        stub._model = tiny_model
+        stub._get_model = lambda: stub._model
+        stub._kv_states = {}
+        stub._kv_last_access = {}
+        stub._kv_ttl = 3600.0
+        stub._kv_max_sessions = 2
+        stub._kv_lock = _threading.Lock()
+        stub._evict_lru_session = _MethodType(
+            SloNetChatProvider._evict_lru_session, stub
+        )
+        stub._evict_stale_sessions = _MethodType(
+            SloNetChatProvider._evict_stale_sessions, stub
+        )
+        stub._resolve_session_kv = _MethodType(
+            SloNetChatProvider._resolve_session_kv, stub
+        )
+        stub._resolve_session_kv("s1")
+        stub._resolve_session_kv("s2")
+        stub._resolve_session_kv("s3")
+        assert len(stub._kv_states) == 2
+        assert "s1" not in stub._kv_states
+
+    def test_server_config_defaults(self, monkeypatch):
+        import importlib
+        import sys
+        from pathlib import Path as _Path
+
+        sys.path.insert(0, str(_Path(__file__).resolve().parents[3] / "apps" / "api" / "server"))
+        import config as _cfgmod
+
+        assert _cfgmod.__file__.endswith("apps/api/server/config.py"), _cfgmod.__file__
+        monkeypatch.delenv("SLO_KV_MAX_SESSIONS", raising=False)
+        monkeypatch.delenv("SLO_KV_TTL_SECONDS", raising=False)
+        importlib.reload(_cfgmod)
+        fresh = _cfgmod.ServerConfig.from_env()
+        assert fresh.kv_max_sessions == 16
+        assert fresh.kv_ttl_seconds == 1800.0
+        monkeypatch.setenv("SLO_KV_MAX_SESSIONS", "5")
+        monkeypatch.setenv("SLO_KV_TTL_SECONDS", "60")
+        importlib.reload(_cfgmod)
+        overridden = _cfgmod.ServerConfig.from_env()
+        assert overridden.kv_max_sessions == 5
+        assert overridden.kv_ttl_seconds == 60.0
