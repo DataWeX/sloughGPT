@@ -546,9 +546,16 @@ class PersonalityProcessor:
 
     def __init__(self, traits: dict[str, float] | None = None):
         self._traits = traits or {}
+        # Cache for the built personality line. Traits change only via
+        # set_traits() (soul switch, manual set) — never per request —
+        # so the line is rebuilt only when the trait dict changes.
+        self._line_cache: str | None = None
+        self._traits_key: tuple | None = None
 
     def set_traits(self, traits: dict[str, float]) -> None:
         self._traits = traits
+        self._line_cache = None
+        self._traits_key = None
 
     def _describe_trait(self, name: str, value: float) -> str:
         adjectives = self.TRAIT_ADJECTIVES.get(name, {})
@@ -557,20 +564,29 @@ class PersonalityProcessor:
         best_threshold = max((t for t in adjectives if t <= value), default=min(adjectives))
         return adjectives[best_threshold]
 
+    def _personality_line(self) -> str | None:
+        """Build (or reuse the cached) personality instruction line."""
+        key = tuple(sorted(self._traits.items()))
+        if key != self._traits_key:
+            descriptions = []
+            for trait, value in self._traits.items():
+                desc = self._describe_trait(trait, value)
+                if desc:
+                    descriptions.append(desc)
+            self._line_cache = (
+                "Be " + ", ".join(descriptions) + " in your responses." if descriptions else None
+            )
+            self._traits_key = key
+        return self._line_cache
+
     async def process(self, messages: list) -> list:
         if not self._traits:
             return messages
 
-        descriptions = []
-        for trait, value in self._traits.items():
-            desc = self._describe_trait(trait, value)
-            if desc:
-                descriptions.append(desc)
+        personality_line = self._personality_line()
 
-        if not descriptions:
+        if not personality_line:
             return messages
-
-        personality_line = "Be " + ", ".join(descriptions) + " in your responses."
         personality_msg = {"role": "system", "content": f"Personality: {personality_line}"}
 
         has_system = any(m.get("role") == "system" for m in messages)
