@@ -37,7 +37,7 @@ from .cmds.linux import LinuxCommandsMixin
 from .commands import ShellCommands
 from .console import Console
 from .io import ShellIO
-from .pretty import format_error_brief, format_traceback
+from .pretty import format_error_brief, format_traceback, highlight
 from .runtime import DaitRuntime
 from .state import ShellState
 
@@ -1821,7 +1821,7 @@ class ShellREPL(LinuxCommandsMixin):
         try:
             result = eval(args, {"__builtins__": safe_builtins})
             result_repr = repr(result)
-            self._print(result_repr)
+            self._print(highlight(result_repr, "python"))
         except Exception as e:
             exit_code = 1
             result_repr = self._format_error(e)
