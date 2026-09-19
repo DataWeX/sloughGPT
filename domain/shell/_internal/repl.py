@@ -1985,6 +1985,7 @@ Most common commands (help [cmd] for details, help for full list):
   deny <cmd>             Revoke permission
   permissions            Show permission policy
   confirm [on|off]       Toggle auto-download confirmation
+  autodownload [on|off]  Toggle auto-download confirmation
   protect <model>        Protect model files
   unprotect <model>      Remove protection
 
@@ -1999,7 +2000,7 @@ Most common commands (help [cmd] for details, help for full list):
   history [n]             Show command history
   alias [name=cmd]        List or set aliases
   unalias <name>          Remove an alias
-  py <expr>               Evaluate Python expression
+  traceback               Show the traceback of the last error
   tui                     Launch the TUI interface
   clear                   Clear the terminal screen
   exit                    Exit the shell
@@ -2007,7 +2008,9 @@ Examples:
   models | head
   gen hello > output.txt
   ai show me running training jobs
-  py 2 + 2
+  history 5
+
+Type `help <command>` for details on a command.
 """)
 
     def _cmd_exit(self, args: str = "") -> None:
