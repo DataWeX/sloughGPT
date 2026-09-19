@@ -117,7 +117,7 @@ class TestWeightSnapshots:
         assert "data" in data
         assert isinstance(data["data"], list)
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     def test_save_snapshot(self, mock_get_config):
         mock_config = MagicMock()
         mock_config.save_snapshot.return_value = "/tmp/snap.json"
@@ -129,7 +129,7 @@ class TestWeightSnapshots:
         assert resp.status_code == 200
         assert resp.json()["data"]["path"] == "/tmp/snap.json"
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     def test_delete_nonexistent_snapshot(self, mock_get_config):
         mock_config = MagicMock()
         mock_config.delete_snapshot.return_value = False

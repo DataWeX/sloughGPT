@@ -178,7 +178,7 @@ class SoulsRouter:
                 return {"status": "not_found", "path": str(checkpoint_file)}
 
             # Use SloNet import for .soul files
-            from domain.training._internal.slonet import import_from_sou
+            from domain.training import import_from_sou
 
             try:
                 soul_net = import_from_sou(str(checkpoint_file))
@@ -364,7 +364,7 @@ Be yourself — let your personality shape how you respond."""
             import time as _time
 
             _switch_t0 = _time.monotonic()
-            from domain.inference._internal.slo_manager import get_slo_manager
+            from domain.inference import get_slo_manager
 
             manager = get_slo_manager()
             result = manager.switch_soul(req.name)
@@ -388,7 +388,7 @@ Be yourself — let your personality shape how you respond."""
 
                 # Update PersonalityProcessor with soul traits
                 try:
-                    from domain.models._internal.provider import update_personality_traits
+                    from domain.models import update_personality_traits
 
                     personality = getattr(soul_info, "personality", {})
                     if personality:
@@ -415,7 +415,7 @@ Be yourself — let your personality shape how you respond."""
 
             if result.get("success") and soul_info and soul_info.path:
                 try:
-                    from domain.core._internal.soul import SloEngine
+                    from domain.core import SloEngine
 
                     engine = SloEngine(device="cpu")
                     soul = engine.load_soul(soul_info.path)
@@ -476,7 +476,7 @@ Be yourself — let your personality shape how you respond."""
         try:
             import asyncio
 
-            from domain.inference._internal.slo_manager import get_slo_manager
+            from domain.inference import get_slo_manager
 
             manager = get_slo_manager()
             souls = await asyncio.to_thread(manager.list_souls)
@@ -518,7 +518,7 @@ Be yourself — let your personality shape how you respond."""
         """Get details for a specific soul by name."""
         import asyncio
 
-        from domain.inference._internal.slo_manager import get_slo_manager
+        from domain.inference import get_slo_manager
 
         manager = get_slo_manager()
         souls = await asyncio.to_thread(manager.list_souls)
@@ -565,7 +565,7 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls SloManager.get_trait_weights()
         """
-        from domain.inference._internal.slo_manager import get_slo_manager
+        from domain.inference import get_slo_manager
 
         manager = get_slo_manager()
         weights = manager.get_trait_weights()
@@ -587,7 +587,7 @@ Be yourself — let your personality shape how you respond."""
             - does not modify soul files — only the live config overlay
         """
         try:
-            from domain.context._internal.managers import get_trait_config
+            from domain.context import get_trait_config
 
             config = get_trait_config()
             flat: dict[str, float] = {}
@@ -628,7 +628,7 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - reads current TraitWeightsConfig
         """
-        from domain.context._internal.managers import (
+        from domain.context import (
             MemoryManager,
             PersonalityManager,
             StyleManager,
@@ -657,7 +657,7 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls SloManager.get_current_soul()
         """
-        from domain.inference._internal.slo_manager import get_slo_manager
+        from domain.inference import get_slo_manager
 
         manager = get_slo_manager()
         current = manager.get_current_soul()
@@ -684,7 +684,7 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls TraitWeightsConfig.list_snapshots()
         """
-        from domain.context._internal.managers import get_trait_config
+        from domain.context import get_trait_config
 
         config = get_trait_config()
         return success_response(data=config.list_snapshots())
@@ -706,7 +706,7 @@ Be yourself — let your personality shape how you respond."""
             - writes snapshot JSON to disk
         """
         try:
-            from domain.context._internal.managers import get_trait_config
+            from domain.context import get_trait_config
 
             config = get_trait_config()
             path = config.save_snapshot(name)
@@ -733,7 +733,7 @@ Be yourself — let your personality shape how you respond."""
             - overwrites current trait weights with snapshot values
         """
         try:
-            from domain.context._internal.managers import get_trait_config
+            from domain.context import get_trait_config
 
             config = get_trait_config()
             count = config.load_snapshot(name)
@@ -760,7 +760,7 @@ Be yourself — let your personality shape how you respond."""
             - removes snapshot file from disk
         """
         try:
-            from domain.context._internal.managers import get_trait_config
+            from domain.context import get_trait_config
 
             config = get_trait_config()
             ok = config.delete_snapshot(name)
@@ -781,7 +781,7 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls SloManager.get_stats()
         """
-        from domain.inference._internal.slo_manager import get_slo_manager
+        from domain.inference import get_slo_manager
 
         return success_response(data=get_slo_manager().get_stats())
 

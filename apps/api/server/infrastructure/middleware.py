@@ -259,7 +259,9 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
         >1s  -> logger.warning (tag SLOW)  - unless path is in _COLD_START_PATHS
         else -> logger.debug   (tag REQ)
 
-    On unhandled exceptions the full traceback is logged via logger.exception.
+    On unhandled exceptions only a concise debug line is logged here.
+    The single ERROR line + full file traceback come from the FastAPI
+    exception handlers (which own error responses).
 
     Error detail extraction is intentionally left to FastAPI exception
     handlers - they already produce structured JSON responses.  This
@@ -282,15 +284,25 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
-        except Exception:
+        except Exception as exc:
             elapsed = time.monotonic() - start
             elapsed_str = f"{elapsed:.3f}s"
-            logger.exception(
-                "unhandled exception on %s %s (%s) corr=%s",
+            try:
+                from domain.logging._internal.errors import format_concise
+
+                detail = format_concise(exc, source=f"{method} {path}")
+            except Exception:
+                detail = f"{type(exc).__name__}: {exc}"
+            # Debug only: the exception handler logs the single ERROR
+            # line + the file log keeps the full traceback. Logging
+            # here at error level would triple-log every failure.
+            logger.debug(
+                "unhandled exception on %s %s (%s) corr=%s: %s",
                 method,
                 path,
                 elapsed_str,
                 corr_id,
+                detail,
                 extra={
                     "op": "http.request",
                     "ok": False,
@@ -409,6 +421,109 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             collector.set_active_requests(max(0, collector.get_active_requests() - 1))
             path = request.url.path
             collector.record_request(path, status_code, elapsed)
+
+
+class SerializationGuardMiddleware(BaseHTTPMiddleware):
+    """Catches response serialization/validation errors and returns structured JSON.
+
+    FastAPI wraps Pydantic errors in ``ResponseValidationError`` for validation
+    and may let ``PydanticSerializationError`` escape during JSON encoding.
+    Both result in a bare 500 with no body.  This middleware intercepts both
+    and returns a structured JSON error with diagnostic info.
+    """
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        try:
+            return await call_next(request)
+        except Exception as exc:
+            from fastapi.exceptions import ResponseValidationError
+
+            is_validation = isinstance(exc, ResponseValidationError)
+            is_serialization = type(exc).__name__ in (
+                "PydanticSerializationError",
+                "SerializationError",
+            ) or (isinstance(exc, (ValueError, TypeError)) and "serialize" in str(exc).lower())
+
+            if not (is_validation or is_serialization):
+                raise
+
+            import re
+            import traceback
+
+            cid = request.scope.get("correlation_id", "-")
+            error_msg = str(exc)
+
+            # Extract the unknown type: <class 'method'> or <class 'SomeType'>
+            unknown_type = None
+            match = re.search(r"<class\s+['\"]?(\w+)['\"]?>", error_msg)
+            if match:
+                unknown_type = match.group(1)
+
+            # Identify response_model from the route
+            route = request.scope.get("route")
+            response_model_name = None
+            if route is not None:
+                rm = getattr(route, "response_model", None)
+                if rm is not None:
+                    response_model_name = getattr(rm, "__name__", str(rm))
+
+            # Extract failing fields from Pydantic error list
+            failing_fields = []
+            if is_validation:
+                for err in exc.errors():
+                    loc = err.get("loc", ())
+                    if len(loc) >= 2:
+                        failing_fields.append(str(loc[-1]))
+
+            if unknown_type == "method":
+                detail = "A method was returned instead of its value. Check route handlers for missing ()"
+            elif unknown_type:
+                detail = f"Unexpected type {unknown_type} in response"
+            elif failing_fields:
+                detail = f"Response field(s) {', '.join(failing_fields)} failed validation"
+            else:
+                detail = "Response serialization failed"
+
+            logger.error(
+                "Response serialization error on %s %s [%s] response_model=%s unknown_type=%s fields=%s",
+                request.method,
+                request.url.path,
+                cid,
+                response_model_name or "none",
+                unknown_type or "none",
+                failing_fields or "none",
+                extra={
+                    "tag": "REQ",
+                    "context": {
+                        "corr": cid,
+                        "status": 500,
+                        "error_type": type(exc).__name__,
+                        "response_model": response_model_name,
+                        "unknown_type": unknown_type,
+                        "failing_fields": failing_fields,
+                    },
+                },
+            )
+            logger.debug(
+                "Response serialization traceback:\n%s",
+                traceback.format_exc(),
+                extra={"tag": "REQ", "context": {"corr": cid}},
+            )
+
+            from schemas.common import error_response as _err
+
+            return JSONResponse(
+                status_code=500,
+                content=_err(
+                    "The server encountered an error processing your request. Please try again.",
+                    "E_SERIALIZATION",
+                    details={"detail": detail, "response_model": response_model_name}
+                    if logger.isEnabledFor(logging.DEBUG)
+                    else None,
+                ),
+            )
 
 
 class PayloadLoggingMiddleware(BaseHTTPMiddleware):
@@ -545,6 +660,7 @@ def get_configured_middleware(
         (RequestTimeoutMiddleware, {"timeout": request_timeout}),
         (MetricsMiddleware, {}),
         (UnifiedRequestMiddleware, {}),
+        (SerializationGuardMiddleware, {}),
         (ReadinessGateMiddleware, {}),
         (CorrelationIdMiddleware, {}),
     ]
