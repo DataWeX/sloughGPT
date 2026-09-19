@@ -8,6 +8,72 @@ Reference this BEFORE writing any new feature, router, or page.
 
 ---
 
+## The model (model, not net)
+
+sloughGPT is a general-AI **model**, not a pile of layers. SloNet (pure-NumPy
+Tensor/autograd, SloTransformer, TokenTree, `.soul`/`.slnc`) is machinery in
+service of the model — never the definition of it. The model is defined by:
+
+- **Capabilities** — what it can do (converse, remember, use tools, learn).
+- **I/O contract** — declared inputs/outputs, versioned with the weights.
+- **Evals** — reproducible checks that prove each capability per release.
+- **Versioning** — weights + tokenizer + contract ship as one unit.
+
+Borrowed weights (HF conversion, distillation) are bootstrap, not destination.
+New work must move at least one of owned architecture, owned objective
+(beyond next-token prediction), owned data toward the model — or say why not.
+
+---
+
+## CCGT fairness rule (Cognitive, Core, Gateway, Training)
+
+The only four domains. Every piece ships all four or it doesn't ship:
+
+| Domain        | Question it answers                                                                                 |
+| ------------- | --------------------------------------------------------------------------------------------------- |
+| **Cognitive** | How does this integrate with reasoning, memory, souls, attention?                                   |
+| **Core**      | Where does it live in the serving core (engine, providers, KV, queues)?                             |
+| **Gateway**   | How is this exposed and optimized at the edge (filtering, streaming relay, timeouts, load shaping)? |
+| **Training**  | How is this learned or improved (objective, data, loop)?                                            |
+
+No Core-only work that leaves the other three behind. The gateway is a
+domain, not plumbing — it is how we optimize the core infra stack's exposure,
+so it must be built well: generic byte-relay, zero-buffer streaming, strict
+filters, never duplicated model logic.
+
+---
+
+## Engine-first
+
+`InferenceEngine` + `SloNetServer` is the core everything flows through.
+Harden it before adding features. Perf budgets are acceptance gates:
+
+- Facade dispatch overhead: sub-millisecond (respond/stream).
+- KV-cache session reuse across turns; prefix-stable prompts where possible.
+- Zero-buffer token streaming end to end; per-route timeouts.
+- Benchmark before/after (`scripts/benchmark_latency.py`,
+  `scripts/benchmark_kv_cache.py`); >20% regression reverts.
+
+---
+
+## Client / core separation
+
+Clients (web, CLI, mobile, SDK) stay out of core infra so both sides stay
+writable — and the Gateway domain, which owns edge optimization, talks to core
+only through the same stable interfaces:
+
+- Web → FastAPI over HTTP, exclusively via `http-client.ts`
+  (`apiGet/apiPost/...`) — never raw `fetch`, never `domain/*` imports.
+- API server → engine over the length-prefixed TCP protocol
+  (`inference_protocol.py`) via `InferenceClient`, or in-process through the
+  provider registry — never by reaching into engine internals.
+- Gateway → core as a generic byte-relay with filters (no model logic
+  duplicated at the edge); same interface discipline as any client.
+- No client imports from `domain.*_internal*`; no core file imports from
+  `apps/web`, `apps/cli`, or `apps/gateway`.
+
+---
+
 ## Core Features (what Alex actually uses)
 
 | #   | Feature       | What Alex does                         | Domain module                 | API prefix                       | Frontend page |
