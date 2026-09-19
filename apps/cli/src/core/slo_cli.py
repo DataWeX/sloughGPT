@@ -143,16 +143,10 @@ class IntRange:
 
 
 # ── Exceptions ──────────────────────────────────────────────────────────
+# Single source of truth lives in framework.py — do not fork these, the
+# tests (and callers) match on framework.UsageError identity.
 
-
-class UsageError(Exception):
-    def __init__(self, message: str):
-        self.message = message
-        super().__init__(message)
-
-
-class BadParameter(UsageError):
-    pass
+from core.framework import BadParameter, UsageError  # noqa: E402
 
 
 # ── Parameter definitions ───────────────────────────────────────────────
@@ -489,8 +483,12 @@ def _parse_args(
                 if arg in opt.names:
                     if opt.is_flag:
                         if opt.is_bool_flag:
-                            # --no- prefix means False
-                            if arg.startswith("--no-"):
+                            # --no- prefix negates only when the option also
+                            # declares a positive name; a lone --no-* flag
+                            # (e.g. --no-color) means True when passed.
+                            if arg.startswith("--no-") and any(
+                                not n.startswith("--no-") for n in opt.names
+                            ):
                                 kwargs[opt.dest] = False
                             else:
                                 kwargs[opt.dest] = True
@@ -759,7 +757,11 @@ def run(group: Group, args: list[str] | None = None):
     ctx.ensure_object()
 
     # Parse global options
-    global_opts, remaining = _parse_global_options(args)
+    try:
+        global_opts, remaining = _parse_global_options(args)
+    except UsageError as e:
+        _p(f"  {_c('Error:', _RED)} {e}")
+        sys.exit(1)
     ctx.obj.update(global_opts)
 
     # Handle --help
@@ -829,7 +831,19 @@ def _parse_global_options(args: list[str]) -> tuple[dict, list[str]]:
     while i < len(args):
         arg = args[i]
 
-        if arg == "--host" and i + 1 < len(args):
+        # Universal flags work anywhere on the command line.
+        if arg in ("--help", "-h"):
+            global_opts["help"] = True
+            i += 1
+        elif arg == "--version":
+            global_opts["version"] = True
+            i += 1
+        elif not arg.startswith("-") or arg == "-":
+            # First positional is the subcommand — everything from here
+            # belongs to command parsing, not globals.
+            remaining.extend(args[i:])
+            break
+        elif arg == "--host" and i + 1 < len(args):
             global_opts["host"] = args[i + 1]
             i += 2
         elif arg == "--port" and i + 1 < len(args):
@@ -850,15 +864,11 @@ def _parse_global_options(args: list[str]) -> tuple[dict, list[str]]:
         elif arg == "--timeout" and i + 1 < len(args):
             global_opts["timeout"] = int(args[i + 1])
             i += 2
-        elif arg == "--version":
-            global_opts["version"] = True
-            i += 1
-        elif arg in ("--help", "-h"):
-            global_opts["help"] = True
-            i += 1
         elif arg in ("--yes", "-y"):
             global_opts["yes"] = True
             i += 1
+        elif arg.startswith("-"):
+            raise UsageError(f"Unknown option: {arg}")
         else:
             remaining.append(arg)
             i += 1

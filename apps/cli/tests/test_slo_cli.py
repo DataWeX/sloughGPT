@@ -10,8 +10,9 @@ import pytest
 
 sys.path.insert(0, str(StdPath(__file__).resolve().parent.parent / "src"))
 
-# Import the framework from cli.py
-from cli import (
+# Import the framework from its current home (moved out of cli.py into
+# core.framework, with run/parse/usage helpers in core.slo_cli).
+from core.framework import (
     Argument,
     BadParameter,
     Choice,
@@ -21,16 +22,14 @@ from cli import (
     Group,
     Option,
     UsageError,
-    _parse_args,
-    _record_usage,
     argument,
     confirm,
     echo,
     group,
     option,
     pass_context,
-    run,
 )
+from core.slo_cli import _parse_args, _record_usage, run
 
 # ── Choice type ─────────────────────────────────────────────────────────
 
@@ -368,9 +367,9 @@ class TestConfirm:
 class TestUsageTracking:
     def test_record_usage(self, tmp_path):
         usage_file = tmp_path / "usage.json"
-        from core import framework as _fw
+        from core import slo_cli as _slo
 
-        with patch.object(_fw, "_USAGE_PATH", usage_file):
+        with patch.object(_slo, "_USAGE_PATH", usage_file):
             _record_usage("model list")
             _record_usage("model list")
             _record_usage("train start")

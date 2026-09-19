@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from domain.errors._internal import (
+from domain.errors._internal.errors import (
     EmptyPromptError,
     InvalidGenerationInputError,
     SloughGPTDomainError,
