@@ -162,6 +162,25 @@ entirely.
 SLO_MEMORY_PRESSURE_EMERGENCY=95
 ```
 
+### SLO_KV_MAX_SESSIONS
+**Optional** — Default: `16`
+
+Cap on concurrent cross-turn KV sessions (least-recently-used eviction).
+Bounds inference session memory for the sub-1GB program.
+
+```bash
+SLO_KV_MAX_SESSIONS=16
+```
+
+### SLO_KV_TTL_SECONDS
+**Optional** — Default: `1800`
+
+Idle seconds before a session's KV cache is evicted.
+
+```bash
+SLO_KV_TTL_SECONDS=1800
+```
+
 ### SLO_IDLE_TIMEOUT
 
 **Optional** — Default: `300`

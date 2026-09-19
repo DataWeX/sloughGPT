@@ -29,17 +29,18 @@ from schemas.common import classify_and_raise, raise_error, safe_audit_log, succ
 
 from config import ServerConfig
 from config import gen_config as _gen_config
-from domain.agents import get_agent_system, get_tool_registry
-from domain.core import get_rag_service
+from domain.core._internal.rag_service import get_rag_service
 from domain.feedback import get_response_tracker
 from domain.infrastructure import AppError
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.infrastructure.conversation_log import capture
 from domain.infrastructure.request_coalescer import get_coalescer
 from domain.infrastructure.server_state import get_server_state
-from domain.learner import KnowledgeFact, extract_and_store, get_knowledge_memory, get_learner
+from domain.knowledge import KnowledgeFact, get_knowledge_memory
+from domain.learner import get_learner
+from domain.learner._internal.entity_extractor import extract_and_store
 from domain.memory import get_memory_service
-from domain.models import KnowledgeProcessor, apply_processors, get_provider
+from domain.models._internal.provider import KnowledgeProcessor, apply_processors, get_provider
 
 logger = logging.getLogger("slo.inference")
 
@@ -1824,6 +1825,8 @@ class InferenceRouter:
         try:
             """list_chat_tools."""
             try:
+                from domain.agents._internal.tools import get_tool_registry
+
                 return success_response(data={"tools": get_tool_registry().list_tools()})
             except Exception as e:
                 logger.warning("Failed to list tools: %s", e, extra={"tag": "INF"})
@@ -2032,6 +2035,8 @@ class InferenceRouter:
 
             if req.agent_id:
                 try:
+                    from domain.agents._internal.system import get_agent_system
+
                     agent_sys = get_agent_system()
                     agent_instructions = agent_sys.get_instructions(req.agent_id)
                     if agent_instructions:
@@ -2085,8 +2090,10 @@ class InferenceRouter:
             except Exception as _cog_err:
                 logger.debug("Cognitive context injection skipped: %s", _cog_err)
 
-            tool_result_data = None
+                tool_result_data = None
             try:
+                from domain.agents._internal.tools import get_tool_registry
+
                 logger.debug(
                     "CHAT_PIPELINE corr=%s step=TOOL_DETECT start",
                     corr_id,
@@ -2877,6 +2884,8 @@ class InferenceRouter:
 
         if req.agent_id:
             try:
+                from domain.agents._internal.system import get_agent_system
+
                 agent_sys = get_agent_system()
                 agent_instructions = agent_sys.get_instructions(req.agent_id)
                 if agent_instructions:
