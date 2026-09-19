@@ -411,28 +411,37 @@ def convert_hf_to_slonet(
     return result if result is not None else {}
 
 
-def _attach_mmap_embeddings(model, parser) -> str | None:
+def _attach_mmap_embeddings(model, parser, tensor_map) -> str | None:
     """Point the token-embedding weight at its read-only mmap view.
 
-    Replaces the heap copy loaded by DirectWeightLoader with a zero-copy
-    view into the .slnc file, reclaiming ~vocab*dim*4 bytes of heap.
-    Inference only reads embeddings (row gather), so read-only is fine —
-    same constraint as ``free_quantized_originals`` (training writes would
-    fail on the read-only pages).
+    Resolves the file tensor through the load plan (exact param identity,
+    no name guessing): the plan maps each file tensor to the model
+    parameter it fills, so the entry feeding ``layers[0].weight`` is
+    unambiguous. Replaces the heap copy with a zero-copy view, reclaiming
+    ~vocab*dim*4 bytes of heap. Inference only reads embeddings (row
+    gather), so read-only is fine — same constraint as
+    ``free_quantized_originals`` (training writes would fail).
 
-    Returns the tensor name attached, or None when no exact shape match
-    was found (caller keeps the heap copy).
+    Returns the tensor name attached, or None when unresolvable (caller
+    keeps the heap copy).
     """
     try:
-        emb = model.layers[0]
-        want = tuple(emb.weight.data.shape)
-        for name in parser.tensor_names:
-            if not any(k in name.lower() for k in ("embed", "wte", "token")):
-                continue
-            _off, shape, _dtype, _crc = parser.get_tensor_info(name)
-            if tuple(shape) == want:
-                emb.weight.data = parser.get_tensor_view(name)
-                return name
+        emb_weight = model.layers[0].weight
+        emb_name = next(
+            (n for n, p in dict(model._named_parameters()).items() if p is emb_weight),
+            None,
+        )
+        if emb_name is None:
+            return None
+        for file_name, mapping in tensor_map.items():
+            if getattr(mapping, "param_name", None) == emb_name:
+                emb_weight.data = parser.get_tensor_view(file_name)
+                logger.info(
+                    "token embeddings mmap-backed (%s)",
+                    file_name,
+                    extra={"tag": "INF"},
+                )
+                return file_name
     except Exception:
         logger.debug("mmap embeddings unavailable, keeping heap copy", extra={"tag": "INF"})
     return None
@@ -613,6 +622,9 @@ class SloNetChatProvider:
             plan = build_load_plan(weights_dict, n_layer, config)
             loader = DirectWeightLoader._from_plan(parser, plan, weights_dict)
             result = loader.load(model)
+            if mmap_embeddings:
+                # File-back embeddings right away: views, no heap copy.
+                _attach_mmap_embeddings(model, parser, plan.tensor_map)
             _t_direct = result.timing.get("direct", 0)
             _t_fused = result.timing.get("fused_qkv", 0)
             _t_synth = result.timing.get("tied_synth", 0)
@@ -636,6 +648,8 @@ class SloNetChatProvider:
             _t_weights = _time.monotonic()
             plan = build_load_plan(weights_dict, n_layer, config)
             load_into_model(model, plan, weights_dict)
+            if mmap_embeddings:
+                _attach_mmap_embeddings(model, parser, plan.tensor_map)
             _t_convert = _time.monotonic()
             _t_load = _t_convert
             del weights_dict, plan
@@ -806,18 +820,6 @@ class SloNetChatProvider:
                 freed,
                 extra={"op": "model.load", "model": {"id": model_id}},
             )
-
-        # File-back the token embeddings (read-only mmap view, ~vocab*dim*4
-        # bytes reclaimed from heap). Views re-fault transparently even when
-        # release_mmap_pages drops residency below.
-        if mmap_embeddings:
-            _emb_name = _attach_mmap_embeddings(model, parser)
-            if _emb_name is not None:
-                logger.info(
-                    "SloNetChatProvider.from_slnc: token embeddings mmap-backed (%s)",
-                    _emb_name,
-                    extra={"op": "model.load", "model": {"id": model_id}},
-                )
 
         if release_mmap_pages:
             if parser.release_file_pages():

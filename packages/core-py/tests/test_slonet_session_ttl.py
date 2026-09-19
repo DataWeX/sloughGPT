@@ -569,7 +569,6 @@ class TestSessionTuningPlumbing:
         assert "s1" not in stub._kv_states
 
     def test_server_config_defaults(self, monkeypatch):
-        import importlib
         import sys
         from pathlib import Path as _Path
 
@@ -577,15 +576,14 @@ class TestSessionTuningPlumbing:
         import config as _cfgmod
 
         assert _cfgmod.__file__.endswith("apps/api/server/config.py"), _cfgmod.__file__
+        # from_env() reads the environment on every call — no reload needed.
         monkeypatch.delenv("SLO_KV_MAX_SESSIONS", raising=False)
         monkeypatch.delenv("SLO_KV_TTL_SECONDS", raising=False)
-        importlib.reload(_cfgmod)
         fresh = _cfgmod.ServerConfig.from_env()
         assert fresh.kv_max_sessions == 16
         assert fresh.kv_ttl_seconds == 1800.0
         monkeypatch.setenv("SLO_KV_MAX_SESSIONS", "5")
         monkeypatch.setenv("SLO_KV_TTL_SECONDS", "60")
-        importlib.reload(_cfgmod)
         overridden = _cfgmod.ServerConfig.from_env()
         assert overridden.kv_max_sessions == 5
         assert overridden.kv_ttl_seconds == 60.0

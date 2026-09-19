@@ -14,10 +14,9 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
+from _core_tests_conftest import build_test_app
 from fastapi.testclient import TestClient
 from routers.mobile import MobileRouter
-
-from conftest import build_test_app
 
 
 def _app(mr: MobileRouter):

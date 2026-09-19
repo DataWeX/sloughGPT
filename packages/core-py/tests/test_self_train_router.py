@@ -14,9 +14,8 @@ if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
 import state as server_state
+from _core_tests_conftest import build_test_app
 from fastapi.testclient import TestClient
-
-from conftest import build_test_app
 
 
 @pytest.fixture(autouse=True)

@@ -17,9 +17,8 @@ if _server_dir not in sys.path:
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
+from _core_tests_conftest import build_test_app
 from routers.souls import SloRouterState, SoulsRouter  # noqa: E402
-
-from conftest import build_test_app
 
 
 def _mock_manager(**overrides) -> MagicMock:
