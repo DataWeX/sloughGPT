@@ -10,7 +10,13 @@ import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconChat, IconModels } from '@/components/icons/NavIcons'
-import { IconChevronRight, IconMessage, LossCurve, SectionHeader, StatusDot } from '@sloughgpt/strui'
+import {
+  IconChevronRight,
+  IconMessage,
+  LossCurve,
+  SectionHeader,
+  StatusDot,
+} from '@sloughgpt/strui'
 
 import { apiGet } from '@/lib/http-client'
 import { chatController } from '@/lib/chat-controller'
@@ -39,14 +45,30 @@ import {
   NavigationGridSkeleton,
 } from '@/components/ui/HomePageSkeleton'
 
-const LazyStatsGrid = React.lazy(() => import('@/components/home/StatsGrid').then(m => ({ default: m.StatsGrid })))
-const LazyFeedbackBar = React.lazy(() => import('@/components/home/FeedbackBar').then(m => ({ default: m.FeedbackBar })))
-const LazyTrainingStatus = React.lazy(() => import('@/components/home/TrainingStatus').then(m => ({ default: m.TrainingStatus })))
-const LazyQuickActions = React.lazy(() => import('@/components/home/QuickActions').then(m => ({ default: m.QuickActions })))
-const LazyRecentActivity = React.lazy(() => import('@/components/home/RecentActivity').then(m => ({ default: m.RecentActivity })))
-const LazyUsageStats = React.lazy(() => import('@/components/home/UsageStats').then(m => ({ default: m.UsageStats })))
-const LazySystemHealth = React.lazy(() => import('@/components/home/SystemHealth').then(m => ({ default: m.SystemHealth })))
-const LazyNavigationGrid = React.lazy(() => import('@/components/home/NavigationGrid').then(m => ({ default: m.NavigationGrid })))
+const LazyStatsGrid = React.lazy(() =>
+  import('@/components/home/StatsGrid').then((m) => ({ default: m.StatsGrid })),
+)
+const LazyFeedbackBar = React.lazy(() =>
+  import('@/components/home/FeedbackBar').then((m) => ({ default: m.FeedbackBar })),
+)
+const LazyTrainingStatus = React.lazy(() =>
+  import('@/components/home/TrainingStatus').then((m) => ({ default: m.TrainingStatus })),
+)
+const LazyQuickActions = React.lazy(() =>
+  import('@/components/home/QuickActions').then((m) => ({ default: m.QuickActions })),
+)
+const LazyRecentActivity = React.lazy(() =>
+  import('@/components/home/RecentActivity').then((m) => ({ default: m.RecentActivity })),
+)
+const LazyUsageStats = React.lazy(() =>
+  import('@/components/home/UsageStats').then((m) => ({ default: m.UsageStats })),
+)
+const LazySystemHealth = React.lazy(() =>
+  import('@/components/home/SystemHealth').then((m) => ({ default: m.SystemHealth })),
+)
+const LazyNavigationGrid = React.lazy(() =>
+  import('@/components/home/NavigationGrid').then((m) => ({ default: m.NavigationGrid })),
+)
 
 function Greeting() {
   const [greeting, setGreeting] = useState('Hello')
@@ -82,8 +104,21 @@ export default function HomePage() {
   const router = useRouter()
   const { t } = useLocale()
   const { healthLegacy: health, health: liveHealth } = useLiveStatus()
-  const addToast = useToastStore(s => s.addToast)
-  const { modelCount, currentSoul, modelStatus, inferenceCount, runningTraining, knowledgeCount, recentSessions, recentJobs, recentDatasets, healthSummary, feedbackStats, ...data } = useHomePageData(health)
+  const addToast = useToastStore((s) => s.addToast)
+  const {
+    modelCount,
+    currentSoul,
+    modelStatus,
+    inferenceCount,
+    runningTraining,
+    knowledgeCount,
+    recentSessions,
+    recentJobs,
+    recentDatasets,
+    healthSummary,
+    feedbackStats,
+    ...data
+  } = useHomePageData(health)
 
   const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
@@ -98,10 +133,12 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false
-    chatDB.getKV<string>('onboarding_dismissed').then(v => {
+    chatDB.getKV<string>('onboarding_dismissed').then((v) => {
       if (!cancelled) setOnboardingDismissed(v === '1')
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -112,55 +149,79 @@ export default function HomePage() {
     }
   }, [onboardingDismissed])
 
-  const [convStats, setConvStats] = useState<{ totalConversations: number; totalMessages: number; totalWords: number; activeDays: number; mostActiveHour: number | null } | null>(null)
+  const [convStats, setConvStats] = useState<{
+    totalConversations: number
+    totalMessages: number
+    totalWords: number
+    activeDays: number
+    mostActiveHour: number | null
+  } | null>(null)
 
-  const [datasetStats, setDatasetStats] = useState<{ totalDatasets: number; totalSize: number; totalSamples: number } | null>(null)
+  const [datasetStats, setDatasetStats] = useState<{
+    totalDatasets: number
+    totalSize: number
+    totalSamples: number
+  } | null>(null)
 
   useEffect(() => {
     if (apiStatus !== 'online') return
     let cancelled = false
-    sessionController.list().then(sessions => {
-      if (cancelled) return
-      let totalMessages = 0
-      let totalWords = 0
-      const days = new Set<string>()
-      const hourCounts = new Array(24).fill(0)
-      for (const s of sessions) {
-        totalMessages += s.messages?.length || 0
-        for (const m of s.messages || []) {
-          totalWords += m.content ? m.content.split(/\s+/).length : 0
-          if (m.timestamp) {
-            const d = new Date(m.timestamp)
-            days.add(d.toISOString().slice(0, 10))
-            hourCounts[d.getHours()]++
+    sessionController
+      .list()
+      .then((sessions) => {
+        if (cancelled) return
+        let totalMessages = 0
+        let totalWords = 0
+        const days = new Set<string>()
+        const hourCounts = new Array(24).fill(0)
+        for (const s of sessions) {
+          totalMessages += s.messages?.length || 0
+          for (const m of s.messages || []) {
+            totalWords += m.content ? m.content.split(/\s+/).length : 0
+            if (m.timestamp) {
+              const d = new Date(m.timestamp)
+              days.add(d.toISOString().slice(0, 10))
+              hourCounts[d.getHours()]++
+            }
           }
+          if (s.updated_at) days.add(new Date(s.updated_at).toISOString().slice(0, 10))
         }
-        if (s.updated_at) days.add(new Date(s.updated_at).toISOString().slice(0, 10))
-      }
-      const maxHour = hourCounts.indexOf(Math.max(...hourCounts))
-      setConvStats({
-        totalConversations: sessions.length,
-        totalMessages,
-        totalWords,
-        activeDays: days.size,
-        mostActiveHour: days.size > 0 ? maxHour : null,
+        const maxHour = hourCounts.indexOf(Math.max(...hourCounts))
+        setConvStats({
+          totalConversations: sessions.length,
+          totalMessages,
+          totalWords,
+          activeDays: days.size,
+          mostActiveHour: days.size > 0 ? maxHour : null,
+        })
       })
-    }).catch(() => { /* session stats non-critical */ })
-    return () => { cancelled = true }
+      .catch(() => {
+        /* session stats non-critical */
+      })
+    return () => {
+      cancelled = true
+    }
   }, [apiStatus])
 
   useEffect(() => {
     if (apiStatus !== 'online') return
     let cancelled = false
-    datasetController.list().then(list => {
-      if (cancelled) return
-      setDatasetStats({
-        totalDatasets: list.length,
-        totalSize: list.reduce((sum, ds) => sum + (ds.size || 0), 0),
-        totalSamples: list.reduce((sum, ds) => sum + (ds.samples || 0), 0),
+    datasetController
+      .list()
+      .then((list) => {
+        if (cancelled) return
+        setDatasetStats({
+          totalDatasets: list.length,
+          totalSize: list.reduce((sum, ds) => sum + (ds.size || 0), 0),
+          totalSamples: list.reduce((sum, ds) => sum + (ds.samples || 0), 0),
+        })
       })
-    }).catch(() => { /* dataset stats non-critical */ })
-    return () => { cancelled = true }
+      .catch(() => {
+        /* dataset stats non-critical */
+      })
+    return () => {
+      cancelled = true
+    }
   }, [apiStatus])
 
   useEffect(() => {
@@ -168,15 +229,30 @@ export default function HomePage() {
     let cancelled = false
     const poll = async () => {
       try {
-        const result = await apiGet<{phase: string; step: number; total: number; message: string}>('/health/startup-progress')
+        const result = await apiGet<{
+          phase: string
+          step: number
+          total: number
+          message: string
+        }>('/health/startup-progress')
         if (!cancelled) setModelReadiness({ ...result, ready: result.phase === 'ready' })
       } catch {
-        if (!cancelled) setModelReadiness({ ready: false, phase: 'unknown', step: 0, total: 9, message: 'Connecting...' })
+        if (!cancelled)
+          setModelReadiness({
+            ready: false,
+            phase: 'unknown',
+            step: 0,
+            total: 9,
+            message: 'Connecting...',
+          })
       }
     }
     poll()
     const id = setInterval(poll, 3000)
-    return () => { cancelled = true; clearInterval(id) }
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
   }, [apiStatus])
 
   function subtitleText(): string {
@@ -184,7 +260,10 @@ export default function HomePage() {
     if (apiStatus === 'offline') return t('home.subtitle.offline')
     if (healthSummary) {
       const shortName = healthSummary.split('/').pop() || healthSummary
-      const convs = inferenceCount !== null ? `${inferenceCount} conversation${inferenceCount === 1 ? '' : 's'}` : null
+      const convs =
+        inferenceCount !== null
+          ? `${inferenceCount} conversation${inferenceCount === 1 ? '' : 's'}`
+          : null
       return convs ? `${shortName} loaded · ${convs}` : `${shortName} loaded`
     }
     return 'Your AI, your way'
@@ -198,7 +277,10 @@ export default function HomePage() {
       contentClassName="space-y-4"
     >
       {/* Decorative training loss curve — signature element */}
-      <div className="absolute top-0 right-0 w-48 h-32 opacity-[0.06] pointer-events-none overflow-hidden hidden sm:block" aria-hidden="true">
+      <div
+        className="absolute top-0 right-0 w-48 h-32 opacity-[0.06] pointer-events-none overflow-hidden hidden sm:block"
+        aria-hidden="true"
+      >
         <LossCurve className="w-full h-full" />
       </div>
 
@@ -219,7 +301,9 @@ export default function HomePage() {
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/40" />
                         <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
                       </span>
-                      <span className="text-xs font-medium text-success uppercase tracking-wider">Active Model</span>
+                      <span className="text-xs font-medium text-success uppercase tracking-wider">
+                        Active Model
+                      </span>
                     </div>
                     <h3 className="text-sm font-semibold truncate">{healthSummary || 'Unknown'}</h3>
                     {currentSoul && (
@@ -230,7 +314,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Link
-                      href="/models"
+                      href="/personality"
                       className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-primary bg-primary/10 hover:bg-primary/15 transition-colors"
                     >
                       <IconModels className="h-3 w-3" />
@@ -248,16 +332,25 @@ export default function HomePage() {
                 {inferenceCount !== null && inferenceCount !== undefined && (
                   <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/40">
                     <span className="text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground/80 tabular-nums">{inferenceCount.toLocaleString()}</span> conversations
+                      <span className="font-medium text-foreground/80 tabular-nums">
+                        {inferenceCount.toLocaleString()}
+                      </span>{' '}
+                      conversations
                     </span>
                     {liveHealth?.tokens_per_sec && (
                       <span className="text-xs text-muted-foreground">
-                        <span className="font-medium text-foreground/80 tabular-nums">{liveHealth.tokens_per_sec.toFixed(1)}</span> tok/s
+                        <span className="font-medium text-foreground/80 tabular-nums">
+                          {liveHealth.tokens_per_sec.toFixed(1)}
+                        </span>{' '}
+                        tok/s
                       </span>
                     )}
                     {liveHealth?.uptime_seconds && liveHealth.uptime_seconds > 0 && (
                       <span className="text-xs text-muted-foreground">
-                        Uptime: <span className="font-medium text-foreground/80">{formatUptime(liveHealth.uptime_seconds)}</span>
+                        Uptime:{' '}
+                        <span className="font-medium text-foreground/80">
+                          {formatUptime(liveHealth.uptime_seconds)}
+                        </span>
                       </span>
                     )}
                   </div>
@@ -290,10 +383,7 @@ export default function HomePage() {
 
           {/* Lazy: Feedback bar */}
           <Suspense fallback={<FeedbackBarSkeleton />}>
-            <LazyFeedbackBar
-              loading={apiStatus === 'loading'}
-              feedbackStats={feedbackStats}
-            />
+            <LazyFeedbackBar loading={apiStatus === 'loading'} feedbackStats={feedbackStats} />
           </Suspense>
 
           {/* Lazy: Quick actions */}
@@ -323,9 +413,7 @@ export default function HomePage() {
           </Suspense>
 
           {!onboardingDismissed && (
-            <OnboardingCard
-              onComplete={() => setOnboardingDismissed(true)}
-            />
+            <OnboardingCard onComplete={() => setOnboardingDismissed(true)} />
           )}
 
           {recentSessions.length > 0 && (
@@ -344,7 +432,9 @@ export default function HomePage() {
                   {recentSessions[0].pinned && <span className="text-xs text-primary">📌</span>}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {recentSessions[0].message_count != null && <span>{recentSessions[0].message_count} messages · </span>}
+                  {recentSessions[0].message_count != null && (
+                    <span>{recentSessions[0].message_count} messages · </span>
+                  )}
                   {new Date(recentSessions[0].updated_at).toLocaleDateString()}
                 </p>
               </div>
@@ -371,21 +461,30 @@ export default function HomePage() {
             />
           </Suspense>
 
-          {apiStatus === 'online' && datasetStats && datasetStats.totalDatasets > 0 && modelStatus.loaded && (
-            <Card className="border-accent/25 bg-accent/[0.03]">
-              <CardContent className="py-3 flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">Ready to train</p>
-                  <p className="text-xs text-muted-foreground">
-                    {datasetStats.totalDatasets} dataset{datasetStats.totalDatasets === 1 ? '' : 's'} available · {formatBytes(datasetStats.totalSize)}
-                  </p>
-                </div>
-                <Button size="sm" className="h-8 text-xs shrink-0" onClick={() => router.push('/training')}>
-                  Start training
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+          {apiStatus === 'online' &&
+            datasetStats &&
+            datasetStats.totalDatasets > 0 &&
+            modelStatus.loaded && (
+              <Card className="border-accent/25 bg-accent/[0.03]">
+                <CardContent className="py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">Ready to train</p>
+                    <p className="text-xs text-muted-foreground">
+                      {datasetStats.totalDatasets} dataset
+                      {datasetStats.totalDatasets === 1 ? '' : 's'} available ·{' '}
+                      {formatBytes(datasetStats.totalSize)}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs shrink-0"
+                    onClick={() => router.push('/training')}
+                  >
+                    Start training
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
           {/* Lazy: Navigation grid */}
           <Suspense fallback={<NavigationGridSkeleton />}>
@@ -397,7 +496,6 @@ export default function HomePage() {
           </Suspense>
         </>
       )}
-
     </PageContainer>
   )
 }

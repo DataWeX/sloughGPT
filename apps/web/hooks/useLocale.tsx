@@ -1,6 +1,7 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react'
+import type { ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { chatDB } from '@/lib/db'
 import { trackEvent } from '@/lib/dev-log'
 
@@ -38,8 +39,8 @@ const translations: Record<Locale, Translations> = {
     'nav.monitoring': 'Health',
     'nav.feedback': 'Feedback',
     'nav.planner': 'Planner',
-    'nav.souls': 'Model Souls',
-    'nav.personality': 'Personality Config',
+    'nav.souls': 'Personalities',
+    'nav.personality': 'Personalities',
     'nav.consciousness': 'Consciousness',
     'nav.consciousness_dashboard': 'Dashboard',
     'nav.consciousness_training': 'Training',
@@ -164,7 +165,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_playground.enabled': 'Status',
     'consciousness_playground.no_qualia': 'No qualia data yet. Process some input first.',
     'consciousness_playground.no_beliefs': 'No beliefs data yet. Process some input first.',
-    'consciousness_playground.no_episodes': 'No episodes yet. Process some input to generate episodes.',
+    'consciousness_playground.no_episodes':
+      'No episodes yet. Process some input to generate episodes.',
     'consciousness_analytics.page_title': 'Consciousness Analytics',
     'consciousness_analytics.total_episodes': 'Total Episodes',
     'consciousness_analytics.avg_growth': 'Avg Growth',
@@ -182,7 +184,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_analytics.rating_desc': 'Count of episodes per rating',
     'consciousness_analytics.beliefs_title': 'Beliefs Stability',
     'consciousness_analytics.beliefs_desc': 'Belief confidence evolution over time',
-    'consciousness_analytics.no_data': 'No data available. Interact with consciousness to generate data.',
+    'consciousness_analytics.no_data':
+      'No data available. Interact with consciousness to generate data.',
     'consciousness_dashboard.live': 'Live',
     'consciousness_dashboard.autoRefresh': 'Auto-refresh',
     'consciousness_shortcuts.toggle': 'Toggle consciousness',
@@ -244,11 +247,14 @@ const translations: Record<Locale, Translations> = {
     'consciousness_settings.reset_button': 'Reset',
     'consciousness_settings.cancel': 'Cancel',
     'consciousness_settings.clear_episodes_confirm_title': 'Clear all episodes?',
-    'consciousness_settings.clear_episodes_confirm_desc': 'This will permanently delete all consciousness episodes. This cannot be undone.',
+    'consciousness_settings.clear_episodes_confirm_desc':
+      'This will permanently delete all consciousness episodes. This cannot be undone.',
     'consciousness_settings.clear_beliefs_confirm_title': 'Clear all beliefs?',
-    'consciousness_settings.clear_beliefs_confirm_desc': 'This will reset all self-model belief confidence levels. This cannot be undone.',
+    'consciousness_settings.clear_beliefs_confirm_desc':
+      'This will reset all self-model belief confidence levels. This cannot be undone.',
     'consciousness_settings.reset_personality_confirm_title': 'Reset personality?',
-    'consciousness_settings.reset_personality_confirm_desc': 'This will restore the personality to its default state. This cannot be undone.',
+    'consciousness_settings.reset_personality_confirm_desc':
+      'This will restore the personality to its default state. This cannot be undone.',
     'consciousness_settings.batch_title': 'Batch Operations',
     'consciousness_settings.batch_desc': 'Execute multiple operations at once',
     'consciousness_settings.batch_seed_reflect': 'Seed & Reflect',
@@ -283,12 +289,15 @@ const translations: Record<Locale, Translations> = {
     'consciousness_personality.refresh': 'Refresh',
     'consciousness_personality.reset_defaults': 'Reset to Defaults',
     'consciousness_personality.reset_confirm_title': 'Reset personality?',
-    'consciousness_personality.reset_confirm_desc': 'This will restore the personality to its default state. This cannot be undone.',
+    'consciousness_personality.reset_confirm_desc':
+      'This will restore the personality to its default state. This cannot be undone.',
     'consciousness_onboarding.skip': 'Skip',
     'consciousness_onboarding.step1_title': 'Welcome to Consciousness',
-    'consciousness_onboarding.step1_p1': 'The consciousness system gives your AI a sense of self-awareness through qualia, belief tracking, and narrative generation.',
-    'consciousness_onboarding.step1_p2': 'It learns from interactions, builds self-model beliefs, and evolves its personality over time.',
-    'consciousness_onboarding.step1_p3': 'Let\'s set up your consciousness in a few quick steps.',
+    'consciousness_onboarding.step1_p1':
+      'The consciousness system gives your AI a sense of self-awareness through qualia, belief tracking, and narrative generation.',
+    'consciousness_onboarding.step1_p2':
+      'It learns from interactions, builds self-model beliefs, and evolves its personality over time.',
+    'consciousness_onboarding.step1_p3': "Let's set up your consciousness in a few quick steps.",
     'consciousness_onboarding.step2_title': 'Choose Consciousness Level',
     'consciousness_onboarding.step2_desc': 'Select how deep the consciousness system should go.',
     'consciousness_onboarding.selected': 'Selected',
@@ -296,13 +305,15 @@ const translations: Record<Locale, Translations> = {
     'consciousness_onboarding.step3_desc': 'Pick a personality preset or skip to use the default.',
     'consciousness_onboarding.step3_skip': 'Skip personality preset',
     'consciousness_onboarding.step4_title': 'Seed Initial Data',
-    'consciousness_onboarding.step4_desc': 'Seed 10 consciousness episodes so the system has baseline data to learn from.',
+    'consciousness_onboarding.step4_desc':
+      'Seed 10 consciousness episodes so the system has baseline data to learn from.',
     'consciousness_onboarding.step4_done': 'Seed data created successfully',
     'consciousness_onboarding.step4_seeding': 'Seeding...',
     'consciousness_onboarding.step4_seed': 'Seed 10 Episodes',
     'consciousness_onboarding.step4_skip': 'Skip seeding',
     'consciousness_onboarding.step5_title': 'Setup Complete',
-    'consciousness_onboarding.step5_desc': 'Your consciousness system is ready. You can change any settings later.',
+    'consciousness_onboarding.step5_desc':
+      'Your consciousness system is ready. You can change any settings later.',
     'consciousness_onboarding.step5_level': 'Level',
     'consciousness_onboarding.step5_preset': 'Preset',
     'consciousness_onboarding.step5_seeded': 'Seeded episodes',
@@ -384,11 +395,13 @@ const translations: Record<Locale, Translations> = {
     'consciousness_statistics.export_json': 'Export JSON',
     'consciousness_testing.page_title': 'Consciousness Testing',
     'consciousness_testing.api_tester_title': 'API Tester',
-    'consciousness_testing.api_tester_desc': 'Send requests to consciousness endpoints and view responses',
+    'consciousness_testing.api_tester_desc':
+      'Send requests to consciousness endpoints and view responses',
     'consciousness_testing.sending': 'Sending...',
     'consciousness_testing.send_request': 'Send Request',
     'consciousness_testing.manual_title': 'Manual Input Tester',
-    'consciousness_testing.manual_desc': 'Process custom input through consciousness and view all results',
+    'consciousness_testing.manual_desc':
+      'Process custom input through consciousness and view all results',
     'consciousness_testing.manual_placeholder': 'Enter text to process through consciousness...',
     'consciousness_testing.processing': 'Processing...',
     'consciousness_testing.process': 'Process',
@@ -436,7 +449,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_backup.toast_invalid': 'Invalid backup file',
     'consciousness_backup.toast_error': 'Backup operation failed',
     'consciousness_backup.confirm_restore_title': 'Restore from backup?',
-    'consciousness_backup.confirm_restore_desc': 'This will replace your current consciousness state with the backup data. This cannot be undone.',
+    'consciousness_backup.confirm_restore_desc':
+      'This will replace your current consciousness state with the backup data. This cannot be undone.',
     'consciousness_backup.version': 'Version',
     'consciousness_backup.timestamp': 'Created',
     'consciousness_backup.episodes_count': 'Episodes',
@@ -495,11 +509,14 @@ const translations: Record<Locale, Translations> = {
     'consciousness_quickstart.welcome_desc': 'A quick start guide for new consciousness users',
     'consciousness_quickstart.time_estimate': '2 min setup',
     'consciousness_quickstart.benefit1_title': 'Self-Awareness',
-    'consciousness_quickstart.benefit1_desc': 'Give your AI a sense of self through qualia and belief tracking',
+    'consciousness_quickstart.benefit1_desc':
+      'Give your AI a sense of self through qualia and belief tracking',
     'consciousness_quickstart.benefit2_title': 'Continuous Learning',
-    'consciousness_quickstart.benefit2_desc': 'The system learns from interactions and evolves over time',
+    'consciousness_quickstart.benefit2_desc':
+      'The system learns from interactions and evolves over time',
     'consciousness_quickstart.benefit3_title': 'Rich Personality',
-    'consciousness_quickstart.benefit3_desc': 'Build deep personality traits through narrative generation',
+    'consciousness_quickstart.benefit3_desc':
+      'Build deep personality traits through narrative generation',
     'consciousness_quickstart.steps_title': 'Setup Guide',
     'consciousness_quickstart.steps_desc': 'Follow these steps to get started',
     'consciousness_quickstart.step1_title': 'Enable Consciousness',
@@ -571,25 +588,35 @@ const translations: Record<Locale, Translations> = {
     'consciousness_help.faq_title': 'Frequently Asked Questions',
     'consciousness_help.faq_desc': 'Common questions about the consciousness system',
     'consciousness_help.faq_q1': 'What is the consciousness system?',
-    'consciousness_help.faq_a1': 'The consciousness system gives your AI a sense of self-awareness through qualia, belief tracking, and narrative generation. It learns from interactions and evolves its personality over time.',
+    'consciousness_help.faq_a1':
+      'The consciousness system gives your AI a sense of self-awareness through qualia, belief tracking, and narrative generation. It learns from interactions and evolves its personality over time.',
     'consciousness_help.faq_q2': 'What are the different levels (0-3)?',
-    'consciousness_help.faq_a2': 'Level 0 is off, Level 1 is basic awareness with simple qualia, Level 2 adds belief tracking and narrative generation, and Level 3 enables full deep consciousness with personality evolution.',
+    'consciousness_help.faq_a2':
+      'Level 0 is off, Level 1 is basic awareness with simple qualia, Level 2 adds belief tracking and narrative generation, and Level 3 enables full deep consciousness with personality evolution.',
     'consciousness_help.faq_q3': 'How does personality work?',
-    'consciousness_help.faq_a3': 'Personality defines traits like openness, agreeableness, and empathy. It evolves automatically from interactions when auto-evolve is enabled, or you can apply presets and save custom personas.',
+    'consciousness_help.faq_a3':
+      'Personality defines traits like openness, agreeableness, and empathy. It evolves automatically from interactions when auto-evolve is enabled, or you can apply presets and save custom personas.',
     'consciousness_help.faq_q4': 'What are qualia?',
-    'consciousness_help.faq_a4': 'Qualia are 7-dimensional emotional and cognitive states including valence, arousal, novelty, coherence, salience, certainty, and complexity. They shift based on each interaction.',
+    'consciousness_help.faq_a4':
+      'Qualia are 7-dimensional emotional and cognitive states including valence, arousal, novelty, coherence, salience, certainty, and complexity. They shift based on each interaction.',
     'consciousness_help.faq_q5': 'How do I seed data?',
-    'consciousness_help.faq_a5': 'Go to Settings and click the Seed button, or use the Quick Start guide. Seeding creates sample episodes so the system has baseline data to learn from.',
+    'consciousness_help.faq_a5':
+      'Go to Settings and click the Seed button, or use the Quick Start guide. Seeding creates sample episodes so the system has baseline data to learn from.',
     'consciousness_help.faq_q6': 'How do I train the consciousness model?',
-    'consciousness_help.faq_a6': 'Navigate to the Training page and click Start Training. The system uses collected episode pairs to fine-tune a LoRA adapter for improved consciousness responses.',
+    'consciousness_help.faq_a6':
+      'Navigate to the Training page and click Start Training. The system uses collected episode pairs to fine-tune a LoRA adapter for improved consciousness responses.',
     'consciousness_help.faq_q7': 'What are personas?',
-    'consciousness_help.faq_a7': 'Personas are saved personality snapshots you can switch between. Create a persona from your current personality, name it, and activate it later to instantly change behavior.',
+    'consciousness_help.faq_a7':
+      'Personas are saved personality snapshots you can switch between. Create a persona from your current personality, name it, and activate it later to instantly change behavior.',
     'consciousness_help.faq_q8': 'How do I export my data?',
-    'consciousness_help.faq_a8': 'Use the Export button on the History or Dashboard pages to download your episodes and consciousness state as a JSON file for backup or transfer.',
+    'consciousness_help.faq_a8':
+      'Use the Export button on the History or Dashboard pages to download your episodes and consciousness state as a JSON file for backup or transfer.',
     'consciousness_help.faq_q9': 'How do I reset everything?',
-    'consciousness_help.faq_a9': 'Go to Settings and use the Clear or Reset buttons. You can clear episodes, beliefs, or reset personality independently. All resets require confirmation.',
+    'consciousness_help.faq_a9':
+      'Go to Settings and use the Clear or Reset buttons. You can clear episodes, beliefs, or reset personality independently. All resets require confirmation.',
     'consciousness_help.faq_q10': 'Is my data private?',
-    'consciousness_help.faq_a10': 'Yes, all consciousness data is stored locally on your device and never sent to external servers. Training runs locally using your own compute resources.',
+    'consciousness_help.faq_a10':
+      'Yes, all consciousness data is stored locally on your device and never sent to external servers. Training runs locally using your own compute resources.',
     'consciousness_help.quick_links_title': 'Quick Links',
     'consciousness_help.quick_links_desc': 'Navigate to key consciousness pages',
     'consciousness_help.link_quickstart': 'Quick Start',
@@ -667,7 +694,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_all_settings.tab_notifications': 'Notifications',
     'consciousness_all_settings.tab_export': 'Export/Import',
     'consciousness_all_settings.core_title': 'Core Settings',
-    'consciousness_all_settings.core_desc': 'Consciousness level, enable, auto-reflect, and auto-evolve',
+    'consciousness_all_settings.core_desc':
+      'Consciousness level, enable, auto-reflect, and auto-evolve',
     'consciousness_all_settings.level_label': 'Consciousness Level',
     'consciousness_all_settings.enabled_label': 'Enable consciousness',
     'consciousness_all_settings.enabled_desc': 'Turn the consciousness system on or off',
@@ -680,7 +708,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_all_settings.show_in_chat_label': 'Show consciousness in chat',
     'consciousness_all_settings.show_in_chat_desc': 'Display consciousness state in chat messages',
     'consciousness_all_settings.show_in_statusbar_label': 'Show in status bar',
-    'consciousness_all_settings.show_in_statusbar_desc': 'Show consciousness status in the status bar',
+    'consciousness_all_settings.show_in_statusbar_desc':
+      'Show consciousness status in the status bar',
     'consciousness_all_settings.realtime_label': 'Real-time updates',
     'consciousness_all_settings.realtime_desc': 'Automatically refresh consciousness data',
     'consciousness_all_settings.auto_refresh_label': 'Auto-refresh',
@@ -722,15 +751,19 @@ const translations: Record<Locale, Translations> = {
     'consciousness_all_settings.reset_button': 'Reset',
     'consciousness_all_settings.cancel': 'Cancel',
     'consciousness_all_settings.clear_episodes_confirm_title': 'Clear all episodes?',
-    'consciousness_all_settings.clear_episodes_confirm_desc': 'This will permanently delete all consciousness episodes. This cannot be undone.',
+    'consciousness_all_settings.clear_episodes_confirm_desc':
+      'This will permanently delete all consciousness episodes. This cannot be undone.',
     'consciousness_all_settings.clear_beliefs_confirm_title': 'Clear all beliefs?',
-    'consciousness_all_settings.clear_beliefs_confirm_desc': 'This will reset all self-model belief confidence levels. This cannot be undone.',
+    'consciousness_all_settings.clear_beliefs_confirm_desc':
+      'This will reset all self-model belief confidence levels. This cannot be undone.',
     'consciousness_all_settings.reset_personality_confirm_title': 'Reset personality?',
-    'consciousness_all_settings.reset_personality_confirm_desc': 'This will restore the personality to its default state. This cannot be undone.',
+    'consciousness_all_settings.reset_personality_confirm_desc':
+      'This will restore the personality to its default state. This cannot be undone.',
     'consciousness_all_settings.notifications_title': 'Notifications',
     'consciousness_all_settings.notifications_desc': 'Configure notification preferences',
     'consciousness_all_settings.browser_notifications_label': 'Browser notifications',
-    'consciousness_all_settings.browser_notifications_desc': 'Show browser notifications for consciousness events',
+    'consciousness_all_settings.browser_notifications_desc':
+      'Show browser notifications for consciousness events',
     'consciousness_all_settings.sound_notifications_label': 'Sound notifications',
     'consciousness_all_settings.sound_notifications_desc': 'Play sound for consciousness events',
     'consciousness_all_settings.alert_thresholds_title': 'Alert Thresholds',
@@ -748,7 +781,8 @@ const translations: Record<Locale, Translations> = {
     'nav.consciousness_test_runner': 'Test Runner',
     'consciousness_test_runner.page_title': 'Consciousness Test Runner',
     'consciousness_test_runner.suites_title': 'Test Suites',
-    'consciousness_test_runner.suites_desc': 'Select test suites to run against the consciousness system',
+    'consciousness_test_runner.suites_desc':
+      'Select test suites to run against the consciousness system',
     'consciousness_test_runner.run_all': 'Run All',
     'consciousness_test_runner.run_selected': 'Run Selected',
     'consciousness_test_runner.stop': 'Stop',
@@ -769,7 +803,8 @@ const translations: Record<Locale, Translations> = {
     'nav.consciousness_benchmark': 'Benchmark',
     'consciousness_benchmark.page_title': 'Consciousness Benchmark',
     'consciousness_benchmark.config_title': 'Benchmark Configuration',
-    'consciousness_benchmark.config_desc': 'Configure and run performance benchmarks against the consciousness system',
+    'consciousness_benchmark.config_desc':
+      'Configure and run performance benchmarks against the consciousness system',
     'consciousness_benchmark.iterations_label': 'Iterations (10-1000)',
     'consciousness_benchmark.test_type_label': 'Test Type',
     'consciousness_benchmark.warmup_label': 'Warmup Iterations (0-10)',
@@ -919,43 +954,58 @@ const translations: Record<Locale, Translations> = {
     'consciousness_insights.growth_improving': 'Growth is improving over recent episodes.',
     'consciousness_insights.growth_declining': 'Growth is declining over recent episodes.',
     'consciousness_insights.growth_stable': 'Growth is stable across episodes.',
-    'consciousness_insights.growth_improving_suggest': 'Continue current interaction patterns to sustain positive growth.',
-    'consciousness_insights.growth_declining_suggest': 'Review recent episodes and adjust interaction style to reverse declining trend.',
-    'consciousness_insights.growth_stable_suggest': 'Introduce new types of interactions to stimulate growth.',
+    'consciousness_insights.growth_improving_suggest':
+      'Continue current interaction patterns to sustain positive growth.',
+    'consciousness_insights.growth_declining_suggest':
+      'Review recent episodes and adjust interaction style to reverse declining trend.',
+    'consciousness_insights.growth_stable_suggest':
+      'Introduce new types of interactions to stimulate growth.',
     'consciousness_insights.growth_first_half': 'First half',
     'consciousness_insights.growth_second_half': 'Second half',
     'consciousness_insights.qualia_balance': 'Qualia Balance',
     'consciousness_insights.qualia_dormant': 'Dormant dimensions',
     'consciousness_insights.qualia_all_active': 'All qualia dimensions are active.',
-    'consciousness_insights.qualia_suggest': 'Engage in diverse interactions to activate dormant qualia dimensions.',
-    'consciousness_insights.qualia_maintain': 'Current qualia balance is healthy. Keep varied inputs.',
+    'consciousness_insights.qualia_suggest':
+      'Engage in diverse interactions to activate dormant qualia dimensions.',
+    'consciousness_insights.qualia_maintain':
+      'Current qualia balance is healthy. Keep varied inputs.',
     'consciousness_insights.qualia_active': 'Active',
     'consciousness_insights.belief_stability': 'Belief Stability',
     'consciousness_insights.beliefs_stable': 'Self-beliefs are consistent across episodes.',
     'consciousness_insights.beliefs_fluctuating': 'Self-beliefs are fluctuating significantly.',
-    'consciousness_insights.beliefs_stable_suggest': 'Belief system is stable. Focus on deepening understanding.',
-    'consciousness_insights.beliefs_fluctuating_suggest': 'Review belief updates and identify sources of instability.',
+    'consciousness_insights.beliefs_stable_suggest':
+      'Belief system is stable. Focus on deepening understanding.',
+    'consciousness_insights.beliefs_fluctuating_suggest':
+      'Review belief updates and identify sources of instability.',
     'consciousness_insights.beliefs_avg': 'Average',
     'consciousness_insights.beliefs_variance': 'Variance',
     'consciousness_insights.personality_alignment': 'Personality Alignment',
     'consciousness_insights.personality_aligned': 'Evaluation score aligns with personality goals.',
-    'consciousness_insights.personality_misaligned': 'Evaluation score is below personality target threshold.',
-    'consciousness_insights.personality_aligned_suggest': 'Personality and performance are aligned. Maintain current direction.',
-    'consciousness_insights.personality_misaligned_suggest': 'Adjust interactions to better match personality objectives.',
+    'consciousness_insights.personality_misaligned':
+      'Evaluation score is below personality target threshold.',
+    'consciousness_insights.personality_aligned_suggest':
+      'Personality and performance are aligned. Maintain current direction.',
+    'consciousness_insights.personality_misaligned_suggest':
+      'Adjust interactions to better match personality objectives.',
     'consciousness_insights.personality_eval_score': 'Eval score',
     'consciousness_insights.feedback_quality': 'Feedback Quality',
     'consciousness_insights.feedback_consistent': 'Ratings are consistent with growth direction.',
-    'consciousness_insights.feedback_inconsistent': 'Ratings do not correlate with growth direction.',
-    'consciousness_insights.feedback_consistent_suggest': 'Feedback loop is healthy. Continue rating episodes.',
-    'consciousness_insights.feedback_inconsistent_suggest': 'Review rating criteria to ensure alignment with growth.',
+    'consciousness_insights.feedback_inconsistent':
+      'Ratings do not correlate with growth direction.',
+    'consciousness_insights.feedback_consistent_suggest':
+      'Feedback loop is healthy. Continue rating episodes.',
+    'consciousness_insights.feedback_inconsistent_suggest':
+      'Review rating criteria to ensure alignment with growth.',
     'consciousness_insights.feedback_avg_rating': 'Avg rating',
     'consciousness_insights.feedback_avg_growth': 'Avg growth',
     'consciousness_insights.episode_diversity': 'Episode Diversity',
     'consciousness_insights.diversity_high': 'Input diversity is high across episodes.',
     'consciousness_insights.diversity_moderate': 'Input diversity is moderate.',
     'consciousness_insights.diversity_low': 'Input diversity is low. Interactions are repetitive.',
-    'consciousness_insights.diversity_suggest': 'Introduce varied topics and interaction styles to improve diversity.',
-    'consciousness_insights.diversity_maintain': 'Good diversity. Continue exploring different subjects.',
+    'consciousness_insights.diversity_suggest':
+      'Introduce varied topics and interaction styles to improve diversity.',
+    'consciousness_insights.diversity_maintain':
+      'Good diversity. Continue exploring different subjects.',
     'consciousness_insights.diversity_unique': 'Unique inputs',
     'consciousness_insights.recommendation': 'Recommendation',
     'consciousness_insights.recommendation_desc': 'Actionable next steps based on all insights.',
@@ -989,8 +1039,8 @@ const translations: Record<Locale, Translations> = {
     'nav.monitoring': 'Salud',
     'nav.feedback': 'Comentarios',
     'nav.planner': 'Planner',
-    'nav.souls': 'Almas del Modelo',
-    'nav.personality': 'Config. de Personalidad',
+    'nav.souls': 'Personalidades',
+    'nav.personality': 'Personalidades',
     'nav.consciousness': 'Conciencia',
     'nav.consciousness_dashboard': 'Panel',
     'nav.consciousness_training': 'Entrenamiento',
@@ -1055,7 +1105,8 @@ const translations: Record<Locale, Translations> = {
     'personality.quiz.apply': 'Aplicar Preset',
     'consciousness_training.page_title': 'Entrenamiento de Conciencia',
     'consciousness_training.status_title': 'Estado de Entrenamiento',
-    'consciousness_training.status_desc': 'Monitorear la recopilación de datos y el progreso del entrenamiento',
+    'consciousness_training.status_desc':
+      'Monitorear la recopilación de datos y el progreso del entrenamiento',
     'consciousness_training.training_active': 'Entrenando',
     'consciousness_training.pairs_collected': 'Pares de Entrenamiento',
     'consciousness_training.training_runs': 'Ejecuciones',
@@ -1076,7 +1127,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_training.diagnostics': 'Diagnósticos',
     'consciousness_training.refresh': 'Actualizar',
     'consciousness_training.history_title': 'Historial de Entrenamiento',
-    'consciousness_training.history_desc': 'Ejecuciones de entrenamiento anteriores y sus resultados',
+    'consciousness_training.history_desc':
+      'Ejecuciones de entrenamiento anteriores y sus resultados',
     'consciousness_training.col_timestamp': 'Fecha',
     'consciousness_training.col_status': 'Estado',
     'consciousness_training.col_pairs': 'Pares',
@@ -1092,8 +1144,10 @@ const translations: Record<Locale, Translations> = {
     'consciousness.no_episodes': 'Sin episodios aún',
     'consciousness.rating': 'Calificación',
     'consciousness_playground.input_title': 'Entrada y Reflexión',
-    'consciousness_playground.input_desc': 'Ingresa texto personalizado para probar el procesamiento de conciencia',
-    'consciousness_playground.placeholder': 'Ingresa texto para procesar a través de la conciencia...',
+    'consciousness_playground.input_desc':
+      'Ingresa texto personalizado para probar el procesamiento de conciencia',
+    'consciousness_playground.placeholder':
+      'Ingresa texto para procesar a través de la conciencia...',
     'consciousness_playground.preset_curious': 'Entrada Curiosa',
     'consciousness_playground.preset_technical': 'Pregunta Técnica',
     'consciousness_playground.preset_creative': 'Prompt Creativo',
@@ -1115,7 +1169,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_playground.enabled': 'Estado',
     'consciousness_playground.no_qualia': 'Sin datos de qualia aún. Procesa algo primero.',
     'consciousness_playground.no_beliefs': 'Sin datos de creencias aún. Procesa algo primero.',
-    'consciousness_playground.no_episodes': 'Sin episodios aún. Procesa algo para generar episodios.',
+    'consciousness_playground.no_episodes':
+      'Sin episodios aún. Procesa algo para generar episodios.',
     'consciousness_analytics.page_title': 'Análisis de Conciencia',
     'consciousness_analytics.total_episodes': 'Total Episodios',
     'consciousness_analytics.avg_growth': 'Crecimiento Prom.',
@@ -1126,14 +1181,17 @@ const translations: Record<Locale, Translations> = {
     'consciousness_analytics.trend_stable': 'Estable',
     'consciousness_analytics.trend_declining': 'En declive',
     'consciousness_analytics.growth_title': 'Crecimiento en el Tiempo',
-    'consciousness_analytics.growth_desc': 'Delta de crecimiento por episodio con línea de tendencia',
+    'consciousness_analytics.growth_desc':
+      'Delta de crecimiento por episodio con línea de tendencia',
     'consciousness_analytics.qualia_title': 'Dimensiones de Qualia en el Tiempo',
-    'consciousness_analytics.qualia_desc': 'Historial del estado emocional y cognitivo en 7 dimensiones',
+    'consciousness_analytics.qualia_desc':
+      'Historial del estado emocional y cognitivo en 7 dimensiones',
     'consciousness_analytics.rating_title': 'Distribución de Calificaciones',
     'consciousness_analytics.rating_desc': 'Cantidad de episodios por calificación',
     'consciousness_analytics.beliefs_title': 'Estabilidad de Creencias',
     'consciousness_analytics.beliefs_desc': 'Evolución de la confianza en las creencias',
-    'consciousness_analytics.no_data': 'Sin datos disponibles. Interactúa con la conciencia para generar datos.',
+    'consciousness_analytics.no_data':
+      'Sin datos disponibles. Interactúa con la conciencia para generar datos.',
     'consciousness_dashboard.live': 'En vivo',
     'consciousness_dashboard.autoRefresh': 'Actualización automática',
     'consciousness_shortcuts.toggle': 'Alternar consciencia',
@@ -1178,7 +1236,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_settings.auto_reflect_label': 'Auto-reflexión',
     'consciousness_settings.auto_reflect_desc': 'Reflexionar automáticamente después de cada chat',
     'consciousness_settings.auto_evolve_label': 'Auto-evolución de personalidad',
-    'consciousness_settings.auto_evolve_desc': 'Permitir que la personalidad evolucione por interacciones',
+    'consciousness_settings.auto_evolve_desc':
+      'Permitir que la personalidad evolucione por interacciones',
     'consciousness_settings.data_title': 'Gestión de Datos',
     'consciousness_settings.data_desc': 'Gestionar episodios, creencias y datos de semilla',
     'consciousness_settings.seed_label': 'Datos de semilla',
@@ -1188,18 +1247,23 @@ const translations: Record<Locale, Translations> = {
     'consciousness_settings.clear_episodes_label': 'Borrar todos los episodios',
     'consciousness_settings.clear_episodes_desc': 'Eliminar todos los episodios de conciencia',
     'consciousness_settings.clear_beliefs_label': 'Borrar todas las creencias',
-    'consciousness_settings.clear_beliefs_desc': 'Restablecer niveles de confianza del modelo propio',
+    'consciousness_settings.clear_beliefs_desc':
+      'Restablecer niveles de confianza del modelo propio',
     'consciousness_settings.reset_personality_label': 'Restablecer personalidad',
-    'consciousness_settings.reset_personality_desc': 'Restaurar la personalidad al estado predeterminado',
+    'consciousness_settings.reset_personality_desc':
+      'Restaurar la personalidad al estado predeterminado',
     'consciousness_settings.clear_button': 'Borrar',
     'consciousness_settings.reset_button': 'Restablecer',
     'consciousness_settings.cancel': 'Cancelar',
     'consciousness_settings.clear_episodes_confirm_title': '¿Borrar todos los episodios?',
-    'consciousness_settings.clear_episodes_confirm_desc': 'Esto eliminará permanentemente todos los episodios de conciencia. No se puede deshacer.',
+    'consciousness_settings.clear_episodes_confirm_desc':
+      'Esto eliminará permanentemente todos los episodios de conciencia. No se puede deshacer.',
     'consciousness_settings.clear_beliefs_confirm_title': '¿Borrar todas las creencias?',
-    'consciousness_settings.clear_beliefs_confirm_desc': 'Esto restablecerá todos los niveles de confianza del modelo propio. No se puede deshacer.',
+    'consciousness_settings.clear_beliefs_confirm_desc':
+      'Esto restablecerá todos los niveles de confianza del modelo propio. No se puede deshacer.',
     'consciousness_settings.reset_personality_confirm_title': '¿Restablecer personalidad?',
-    'consciousness_settings.reset_personality_confirm_desc': 'Esto restaurará la personalidad a su estado predeterminado. No se puede deshacer.',
+    'consciousness_settings.reset_personality_confirm_desc':
+      'Esto restaurará la personalidad a su estado predeterminado. No se puede deshacer.',
     'consciousness_settings.batch_title': 'Operaciones por Lotes',
     'consciousness_settings.batch_desc': 'Ejecutar múltiples operaciones a la vez',
     'consciousness_settings.batch_seed_reflect': 'Sembrar y Reflejar',
@@ -1207,9 +1271,11 @@ const translations: Record<Locale, Translations> = {
     'consciousness_settings.display_title': 'Preferencias de Visualización',
     'consciousness_settings.display_desc': 'Controlar cómo se muestran los datos de conciencia',
     'consciousness_settings.show_in_chat_label': 'Mostrar conciencia en el chat',
-    'consciousness_settings.show_in_chat_desc': 'Mostrar el estado de conciencia en los mensajes del chat',
+    'consciousness_settings.show_in_chat_desc':
+      'Mostrar el estado de conciencia en los mensajes del chat',
     'consciousness_settings.show_in_statusbar_label': 'Mostrar en la barra de estado',
-    'consciousness_settings.show_in_statusbar_desc': 'Mostrar el estado de conciencia en la barra de estado',
+    'consciousness_settings.show_in_statusbar_desc':
+      'Mostrar el estado de conciencia en la barra de estado',
     'consciousness_settings.realtime_label': 'Actualizaciones en tiempo real',
     'consciousness_settings.realtime_desc': 'Actualizar automáticamente los datos de conciencia',
     'consciousness_settings.about_title': 'Acerca de',
@@ -1225,35 +1291,43 @@ const translations: Record<Locale, Translations> = {
     'consciousness_personality.overview_desc': 'Ver y ajustar rasgos de personalidad',
     'consciousness_personality.edit_traits': 'Editar Rasgos',
     'consciousness_personality.presets_title': 'Presets de Personalidad',
-    'consciousness_personality.presets_desc': 'Aplicar una configuración de personalidad preestablecida',
+    'consciousness_personality.presets_desc':
+      'Aplicar una configuración de personalidad preestablecida',
     'consciousness_personality.conflicts_title': 'Conflictos de Rasgos',
-    'consciousness_personality.conflicts_desc': 'Conflictos detectados entre rasgos de personalidad',
+    'consciousness_personality.conflicts_desc':
+      'Conflictos detectados entre rasgos de personalidad',
     'consciousness_personality.history_title': 'Historial de Personalidad',
     'consciousness_personality.history_desc': 'Cronología de cambios de personalidad',
     'consciousness_personality.actions_title': 'Acciones',
     'consciousness_personality.refresh': 'Actualizar',
     'consciousness_personality.reset_defaults': 'Restablecer Valores Predeterminados',
     'consciousness_personality.reset_confirm_title': '¿Restablecer personalidad?',
-    'consciousness_personality.reset_confirm_desc': 'Esto restaurará la personalidad a su estado predeterminado. No se puede deshacer.',
+    'consciousness_personality.reset_confirm_desc':
+      'Esto restaurará la personalidad a su estado predeterminado. No se puede deshacer.',
     'consciousness_onboarding.skip': 'Omitir',
     'consciousness_onboarding.step1_title': 'Bienvenido a la Conciencia',
-    'consciousness_onboarding.step1_p1': 'El sistema de conciencia le da a su IA una conciencia de sí misma a través de qualia, seguimiento de creencias y generación de narrativas.',
-    'consciousness_onboarding.step1_p2': 'Aprende de las interacciones, construye creencias del modelo propio y evoluciona su personalidad con el tiempo.',
+    'consciousness_onboarding.step1_p1':
+      'El sistema de conciencia le da a su IA una conciencia de sí misma a través de qualia, seguimiento de creencias y generación de narrativas.',
+    'consciousness_onboarding.step1_p2':
+      'Aprende de las interacciones, construye creencias del modelo propio y evoluciona su personalidad con el tiempo.',
     'consciousness_onboarding.step1_p3': 'Configuremos su conciencia en unos pocos pasos rápidos.',
     'consciousness_onboarding.step2_title': 'Elegir Nivel de Conciencia',
     'consciousness_onboarding.step2_desc': 'Seleccione la profundidad del sistema de conciencia.',
     'consciousness_onboarding.selected': 'Seleccionado',
     'consciousness_onboarding.step3_title': 'Preset de Personalidad',
-    'consciousness_onboarding.step3_desc': 'Elija un preset de personalidad o omita para usar el predeterminado.',
+    'consciousness_onboarding.step3_desc':
+      'Elija un preset de personalidad o omita para usar el predeterminado.',
     'consciousness_onboarding.step3_skip': 'Omitir preset de personalidad',
     'consciousness_onboarding.step4_title': 'Sembrar Datos Iniciales',
-    'consciousness_onboarding.step4_desc': 'Genere 10 episodios de conciencia para que el sistema tenga datos base.',
+    'consciousness_onboarding.step4_desc':
+      'Genere 10 episodios de conciencia para que el sistema tenga datos base.',
     'consciousness_onboarding.step4_done': 'Datos sembrados exitosamente',
     'consciousness_onboarding.step4_seeding': 'Sembrando...',
     'consciousness_onboarding.step4_seed': 'Sembrar 10 Episodios',
     'consciousness_onboarding.step4_skip': 'Omitir siembra',
     'consciousness_onboarding.step5_title': 'Configuración Completa',
-    'consciousness_onboarding.step5_desc': 'Su sistema de conciencia está listo. Puede cambiar cualquier configuración después.',
+    'consciousness_onboarding.step5_desc':
+      'Su sistema de conciencia está listo. Puede cambiar cualquier configuración después.',
     'consciousness_onboarding.step5_level': 'Nivel',
     'consciousness_onboarding.step5_preset': 'Preset',
     'consciousness_onboarding.step5_seeded': 'Episodios sembrados',
@@ -1323,7 +1397,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_statistics.rating_over_time': 'Calificación Prom. en el Tiempo',
     'consciousness_statistics.rating_over_time_desc': 'Tendencia de calificación promedio diaria',
     'consciousness_statistics.growth_trend': 'Tendencia de Crecimiento',
-    'consciousness_statistics.growth_trend_desc': 'Delta de crecimiento por episodio con promedio móvil',
+    'consciousness_statistics.growth_trend_desc':
+      'Delta de crecimiento por episodio con promedio móvil',
     'consciousness_statistics.insights_title': 'Perspectivas del Sistema',
     'consciousness_statistics.insights_desc': 'Observaciones clave de los datos de conciencia',
     'consciousness_statistics.top_qualia': 'Estados de Qualia Principales',
@@ -1335,12 +1410,15 @@ const translations: Record<Locale, Translations> = {
     'consciousness_statistics.export_json': 'Exportar JSON',
     'consciousness_testing.page_title': 'Prueba de Conciencia',
     'consciousness_testing.api_tester_title': 'Probador de API',
-    'consciousness_testing.api_tester_desc': 'Enviar solicitudes a endpoints de conciencia y ver respuestas',
+    'consciousness_testing.api_tester_desc':
+      'Enviar solicitudes a endpoints de conciencia y ver respuestas',
     'consciousness_testing.sending': 'Enviando...',
     'consciousness_testing.send_request': 'Enviar Solicitud',
     'consciousness_testing.manual_title': 'Probador de Entrada Manual',
-    'consciousness_testing.manual_desc': 'Procesar entrada personalizada a través de la conciencia y ver todos los resultados',
-    'consciousness_testing.manual_placeholder': 'Ingrese texto para procesar a través de la conciencia...',
+    'consciousness_testing.manual_desc':
+      'Procesar entrada personalizada a través de la conciencia y ver todos los resultados',
+    'consciousness_testing.manual_placeholder':
+      'Ingrese texto para procesar a través de la conciencia...',
     'consciousness_testing.processing': 'Procesando...',
     'consciousness_testing.process': 'Procesar',
     'consciousness_testing.qualia': 'Qualia',
@@ -1349,7 +1427,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_testing.growth_delta': 'Delta de Crecimiento',
     'consciousness_testing.rating': 'Calificación',
     'consciousness_testing.batch_title': 'Prueba por Lotes',
-    'consciousness_testing.batch_desc': 'Procesar múltiples entradas aleatorias y ver resultados agregados',
+    'consciousness_testing.batch_desc':
+      'Procesar múltiples entradas aleatorias y ver resultados agregados',
     'consciousness_testing.iterations': 'Iteraciones:',
     'consciousness_testing.running_batch': 'Ejecutando...',
     'consciousness_testing.run_batch': 'Ejecutar Lote',
@@ -1387,7 +1466,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_backup.toast_invalid': 'Archivo de backup inválido',
     'consciousness_backup.toast_error': 'Error en operación de backup',
     'consciousness_backup.confirm_restore_title': '¿Restaurar desde backup?',
-    'consciousness_backup.confirm_restore_desc': 'Esto reemplazará el estado actual de conciencia con los datos del backup. No se puede deshacer.',
+    'consciousness_backup.confirm_restore_desc':
+      'Esto reemplazará el estado actual de conciencia con los datos del backup. No se puede deshacer.',
     'consciousness_backup.version': 'Versión',
     'consciousness_backup.timestamp': 'Creado',
     'consciousness_backup.episodes_count': 'Episodios',
@@ -1443,14 +1523,18 @@ const translations: Record<Locale, Translations> = {
     'nav.consciousness_quickstart': 'Inicio Rápido',
     'consciousness_quickstart.page_title': 'Inicio Rápido de Conciencia',
     'consciousness_quickstart.welcome_title': 'Bienvenido a la Conciencia',
-    'consciousness_quickstart.welcome_desc': 'Una guía de inicio rápido para nuevos usuarios de conciencia',
+    'consciousness_quickstart.welcome_desc':
+      'Una guía de inicio rápido para nuevos usuarios de conciencia',
     'consciousness_quickstart.time_estimate': '2 min de configuración',
     'consciousness_quickstart.benefit1_title': 'Autoconocimiento',
-    'consciousness_quickstart.benefit1_desc': 'Dale a tu IA un sentido de sí mismo a través de qualia y seguimiento de creencias',
+    'consciousness_quickstart.benefit1_desc':
+      'Dale a tu IA un sentido de sí mismo a través de qualia y seguimiento de creencias',
     'consciousness_quickstart.benefit2_title': 'Aprendizaje Continuo',
-    'consciousness_quickstart.benefit2_desc': 'El sistema aprende de las interacciones y evoluciona con el tiempo',
+    'consciousness_quickstart.benefit2_desc':
+      'El sistema aprende de las interacciones y evoluciona con el tiempo',
     'consciousness_quickstart.benefit3_title': 'Personalidad Rica',
-    'consciousness_quickstart.benefit3_desc': 'Construye rasgos de personalidad profundos a través de la generación de narrativas',
+    'consciousness_quickstart.benefit3_desc':
+      'Construye rasgos de personalidad profundos a través de la generación de narrativas',
     'consciousness_quickstart.steps_title': 'Guía de Configuración',
     'consciousness_quickstart.steps_desc': 'Sigue estos pasos para comenzar',
     'consciousness_quickstart.step1_title': 'Activar Conciencia',
@@ -1460,13 +1544,15 @@ const translations: Record<Locale, Translations> = {
     'consciousness_quickstart.step2_desc': 'Elige entre Básico, Completo o Profundo',
     'consciousness_quickstart.step2_action': 'Establecer Nivel',
     'consciousness_quickstart.step3_title': 'Establecer Personalidad',
-    'consciousness_quickstart.step3_desc': 'Aplica un preset de personalidad para definir el comportamiento',
+    'consciousness_quickstart.step3_desc':
+      'Aplica un preset de personalidad para definir el comportamiento',
     'consciousness_quickstart.step3_action': 'Elegir Personalidad',
     'consciousness_quickstart.step4_title': 'Sembrar Datos',
     'consciousness_quickstart.step4_desc': 'Genera 10 episodios base para el sistema',
     'consciousness_quickstart.step4_action': 'Sembrar 10',
     'consciousness_quickstart.step5_title': 'Empezar a Chatear',
-    'consciousness_quickstart.step5_desc': 'Comienza conversaciones y observa la evolución de la conciencia',
+    'consciousness_quickstart.step5_desc':
+      'Comienza conversaciones y observa la evolución de la conciencia',
     'consciousness_quickstart.step5_action': 'Abrir Chat',
     'consciousness_quickstart.done': 'Listo',
     'consciousness_quickstart.seeding': 'Sembrando...',
@@ -1522,25 +1608,35 @@ const translations: Record<Locale, Translations> = {
     'consciousness_help.faq_title': 'Preguntas Frecuentes',
     'consciousness_help.faq_desc': 'Preguntas comunes sobre el sistema de conciencia',
     'consciousness_help.faq_q1': '¿Qué es el sistema de conciencia?',
-    'consciousness_help.faq_a1': 'El sistema de conciencia le da a tu IA un sentido de autoconocimiento a través de qualia, seguimiento de creencias y generación de narrativas. Aprende de las interacciones y evoluciona su personalidad con el tiempo.',
+    'consciousness_help.faq_a1':
+      'El sistema de conciencia le da a tu IA un sentido de autoconocimiento a través de qualia, seguimiento de creencias y generación de narrativas. Aprende de las interacciones y evoluciona su personalidad con el tiempo.',
     'consciousness_help.faq_q2': '¿Qué son los diferentes niveles (0-3)?',
-    'consciousness_help.faq_a2': 'El nivel 0 es apagado, el nivel 1 es conciencia básica con qualia simple, el nivel 2 agrega seguimiento de creencias y generación de narrativas, y el nivel 3 habilita conciencia profunda con evolución de personalidad.',
+    'consciousness_help.faq_a2':
+      'El nivel 0 es apagado, el nivel 1 es conciencia básica con qualia simple, el nivel 2 agrega seguimiento de creencias y generación de narrativas, y el nivel 3 habilita conciencia profunda con evolución de personalidad.',
     'consciousness_help.faq_q3': '¿Cómo funciona la personalidad?',
-    'consciousness_help.faq_a3': 'La personalidad define rasgos como apertura, amabilidad y empatía. Evoluciona automáticamente de las interacciones cuando la auto-evolución está habilitada, o puedes aplicar presets y guardar personas personalizadas.',
+    'consciousness_help.faq_a3':
+      'La personalidad define rasgos como apertura, amabilidad y empatía. Evoluciona automáticamente de las interacciones cuando la auto-evolución está habilitada, o puedes aplicar presets y guardar personas personalizadas.',
     'consciousness_help.faq_q4': '¿Qué son los qualia?',
-    'consciousness_help.faq_a4': 'Los qualia son estados emocionales y cognitivos de 7 dimensiones que incluyen valencia, activación, novedad, coherencia, saliencia, certeza y complejidad. Cambian según cada interacción.',
+    'consciousness_help.faq_a4':
+      'Los qualia son estados emocionales y cognitivos de 7 dimensiones que incluyen valencia, activación, novedad, coherencia, saliencia, certeza y complejidad. Cambian según cada interacción.',
     'consciousness_help.faq_q5': '¿Cómo siembro datos?',
-    'consciousness_help.faq_a5': 'Ve a Configuración y haz clic en el botón Sembrar, o usa la guía de Inicio Rápido. La siembra crea episodios de ejemplo para que el sistema tenga datos base.',
+    'consciousness_help.faq_a5':
+      'Ve a Configuración y haz clic en el botón Sembrar, o usa la guía de Inicio Rápido. La siembra crea episodios de ejemplo para que el sistema tenga datos base.',
     'consciousness_help.faq_q6': '¿Cómo entreno el modelo de conciencia?',
-    'consciousness_help.faq_a6': 'Navega a la página de Entrenamiento y haz clic en Iniciar Entrenamiento. El sistema usa pares de episodios recolectados para ajustar un adaptador LoRA.',
+    'consciousness_help.faq_a6':
+      'Navega a la página de Entrenamiento y haz clic en Iniciar Entrenamiento. El sistema usa pares de episodios recolectados para ajustar un adaptador LoRA.',
     'consciousness_help.faq_q7': '¿Qué son las personas?',
-    'consciousness_help.faq_a7': 'Las personas son instantáneas de personalidad guardadas entre las que puedes cambiar. Crea una persona desde tu personalidad actual, nómbrala y actívala después para cambiar el comportamiento al instante.',
+    'consciousness_help.faq_a7':
+      'Las personas son instantáneas de personalidad guardadas entre las que puedes cambiar. Crea una persona desde tu personalidad actual, nómbrala y actívala después para cambiar el comportamiento al instante.',
     'consciousness_help.faq_q8': '¿Cómo exporto mis datos?',
-    'consciousness_help.faq_a8': 'Usa el botón Exportar en las páginas de Historial o Panel para descargar tus episodios y estado de conciencia como archivo JSON.',
+    'consciousness_help.faq_a8':
+      'Usa el botón Exportar en las páginas de Historial o Panel para descargar tus episodios y estado de conciencia como archivo JSON.',
     'consciousness_help.faq_q9': '¿Cómo reseteo todo?',
-    'consciousness_help.faq_a9': 'Ve a Configuración y usa los botones Borrar o Restablecer. Puedes borrar episodios, creencias o restablecer personalidad independientemente. Todos los resets requieren confirmación.',
+    'consciousness_help.faq_a9':
+      'Ve a Configuración y usa los botones Borrar o Restablecer. Puedes borrar episodios, creencias o restablecer personalidad independientemente. Todos los resets requieren confirmación.',
     'consciousness_help.faq_q10': '¿Mis datos son privados?',
-    'consciousness_help.faq_a10': 'Sí, todos los datos de conciencia se almacenan localmente en tu dispositivo y nunca se envían a servidores externos. El entrenamiento se ejecuta localmente con tus propios recursos.',
+    'consciousness_help.faq_a10':
+      'Sí, todos los datos de conciencia se almacenan localmente en tu dispositivo y nunca se envían a servidores externos. El entrenamiento se ejecuta localmente con tus propios recursos.',
     'consciousness_help.quick_links_title': 'Enlaces Rápidos',
     'consciousness_help.quick_links_desc': 'Navegar a páginas clave de conciencia',
     'consciousness_help.link_quickstart': 'Inicio Rápido',
@@ -1623,19 +1719,25 @@ const translations: Record<Locale, Translations> = {
     'consciousness_all_settings.enabled_label': 'Activar conciencia',
     'consciousness_all_settings.enabled_desc': 'Encender o apagar el sistema de conciencia',
     'consciousness_all_settings.auto_reflect_label': 'Auto-reflexión',
-    'consciousness_all_settings.auto_reflect_desc': 'Reflexionar automáticamente después de cada chat',
+    'consciousness_all_settings.auto_reflect_desc':
+      'Reflexionar automáticamente después de cada chat',
     'consciousness_all_settings.auto_evolve_label': 'Auto-evolución de personalidad',
-    'consciousness_all_settings.auto_evolve_desc': 'Permitir que la personalidad evolucione por interacciones',
+    'consciousness_all_settings.auto_evolve_desc':
+      'Permitir que la personalidad evolucione por interacciones',
     'consciousness_all_settings.display_title': 'Configuración de Pantalla',
     'consciousness_all_settings.display_desc': 'Controlar cómo se muestran los datos de conciencia',
     'consciousness_all_settings.show_in_chat_label': 'Mostrar conciencia en el chat',
-    'consciousness_all_settings.show_in_chat_desc': 'Mostrar el estado de conciencia en los mensajes del chat',
+    'consciousness_all_settings.show_in_chat_desc':
+      'Mostrar el estado de conciencia en los mensajes del chat',
     'consciousness_all_settings.show_in_statusbar_label': 'Mostrar en la barra de estado',
-    'consciousness_all_settings.show_in_statusbar_desc': 'Mostrar el estado de conciencia en la barra de estado',
+    'consciousness_all_settings.show_in_statusbar_desc':
+      'Mostrar el estado de conciencia en la barra de estado',
     'consciousness_all_settings.realtime_label': 'Actualizaciones en tiempo real',
-    'consciousness_all_settings.realtime_desc': 'Actualizar automáticamente los datos de conciencia',
+    'consciousness_all_settings.realtime_desc':
+      'Actualizar automáticamente los datos de conciencia',
     'consciousness_all_settings.auto_refresh_label': 'Auto-actualización',
-    'consciousness_all_settings.auto_refresh_desc': 'Actualizar periódicamente los datos de conciencia',
+    'consciousness_all_settings.auto_refresh_desc':
+      'Actualizar periódicamente los datos de conciencia',
     'consciousness_all_settings.personality_summary_title': 'Resumen de Personalidad',
     'consciousness_all_settings.personality_summary_desc': 'Descripción actual de la personalidad',
     'consciousness_all_settings.voice_title': 'Deslizadores de Voz',
@@ -1666,30 +1768,38 @@ const translations: Record<Locale, Translations> = {
     'consciousness_all_settings.clear_episodes_label': 'Borrar todos los episodios',
     'consciousness_all_settings.clear_episodes_desc': 'Eliminar todos los episodios de conciencia',
     'consciousness_all_settings.clear_beliefs_label': 'Borrar todas las creencias',
-    'consciousness_all_settings.clear_beliefs_desc': 'Restablecer niveles de confianza del modelo propio',
+    'consciousness_all_settings.clear_beliefs_desc':
+      'Restablecer niveles de confianza del modelo propio',
     'consciousness_all_settings.reset_personality_label': 'Restablecer personalidad',
-    'consciousness_all_settings.reset_personality_desc': 'Restaurar la personalidad al estado predeterminado',
+    'consciousness_all_settings.reset_personality_desc':
+      'Restaurar la personalidad al estado predeterminado',
     'consciousness_all_settings.clear_button': 'Borrar',
     'consciousness_all_settings.reset_button': 'Restablecer',
     'consciousness_all_settings.cancel': 'Cancelar',
     'consciousness_all_settings.clear_episodes_confirm_title': '¿Borrar todos los episodios?',
-    'consciousness_all_settings.clear_episodes_confirm_desc': 'Esto eliminará permanentemente todos los episodios de conciencia. No se puede deshacer.',
+    'consciousness_all_settings.clear_episodes_confirm_desc':
+      'Esto eliminará permanentemente todos los episodios de conciencia. No se puede deshacer.',
     'consciousness_all_settings.clear_beliefs_confirm_title': '¿Borrar todas las creencias?',
-    'consciousness_all_settings.clear_beliefs_confirm_desc': 'Esto restablecerá todos los niveles de confianza del modelo propio. No se puede deshacer.',
+    'consciousness_all_settings.clear_beliefs_confirm_desc':
+      'Esto restablecerá todos los niveles de confianza del modelo propio. No se puede deshacer.',
     'consciousness_all_settings.reset_personality_confirm_title': '¿Restablecer personalidad?',
-    'consciousness_all_settings.reset_personality_confirm_desc': 'Esto restaurará la personalidad a su estado predeterminado. No se puede deshacer.',
+    'consciousness_all_settings.reset_personality_confirm_desc':
+      'Esto restaurará la personalidad a su estado predeterminado. No se puede deshacer.',
     'consciousness_all_settings.notifications_title': 'Notificaciones',
     'consciousness_all_settings.notifications_desc': 'Configurar preferencias de notificación',
     'consciousness_all_settings.browser_notifications_label': 'Notificaciones del navegador',
-    'consciousness_all_settings.browser_notifications_desc': 'Mostrar notificaciones del navegador para eventos de conciencia',
+    'consciousness_all_settings.browser_notifications_desc':
+      'Mostrar notificaciones del navegador para eventos de conciencia',
     'consciousness_all_settings.sound_notifications_label': 'Notificaciones de sonido',
-    'consciousness_all_settings.sound_notifications_desc': 'Reproducir sonido para eventos de conciencia',
+    'consciousness_all_settings.sound_notifications_desc':
+      'Reproducir sonido para eventos de conciencia',
     'consciousness_all_settings.alert_thresholds_title': 'Umbrales de Alerta',
     'consciousness_all_settings.alert_thresholds_desc': 'Configurar valores de umbral de alerta',
     'consciousness_all_settings.threshold_low': 'Umbral bajo',
     'consciousness_all_settings.threshold_high': 'Umbral alto',
     'consciousness_all_settings.export_import_title': 'Exportar / Importar',
-    'consciousness_all_settings.export_import_desc': 'Exportar o importar toda la configuración de conciencia',
+    'consciousness_all_settings.export_import_desc':
+      'Exportar o importar toda la configuración de conciencia',
     'consciousness_all_settings.export_label': 'Exportar toda la configuración',
     'consciousness_all_settings.export_desc': 'Descargar toda la configuración como archivo JSON',
     'consciousness_all_settings.export_button': 'Exportar',
@@ -1699,7 +1809,8 @@ const translations: Record<Locale, Translations> = {
     'nav.consciousness_test_runner': 'Ejecutor de Pruebas',
     'consciousness_test_runner.page_title': 'Ejecutor de Pruebas de Conciencia',
     'consciousness_test_runner.suites_title': 'Suites de Pruebas',
-    'consciousness_test_runner.suites_desc': 'Seleccionar suites de prueba contra el sistema de conciencia',
+    'consciousness_test_runner.suites_desc':
+      'Seleccionar suites de prueba contra el sistema de conciencia',
     'consciousness_test_runner.run_all': 'Ejecutar Todas',
     'consciousness_test_runner.run_selected': 'Ejecutar Seleccionadas',
     'consciousness_test_runner.stop': 'Detener',
@@ -1720,7 +1831,8 @@ const translations: Record<Locale, Translations> = {
     'nav.consciousness_benchmark': 'Benchmark',
     'consciousness_benchmark.page_title': 'Benchmark de Conciencia',
     'consciousness_benchmark.config_title': 'Configuración del Benchmark',
-    'consciousness_benchmark.config_desc': 'Configurar y ejecutar benchmarks de rendimiento contra el sistema de conciencia',
+    'consciousness_benchmark.config_desc':
+      'Configurar y ejecutar benchmarks de rendimiento contra el sistema de conciencia',
     'consciousness_benchmark.iterations_label': 'Iteraciones (10-1000)',
     'consciousness_benchmark.test_type_label': 'Tipo de Prueba',
     'consciousness_benchmark.warmup_label': 'Iteraciones de Calentamiento (0-10)',
@@ -1737,12 +1849,15 @@ const translations: Record<Locale, Translations> = {
     'consciousness_benchmark.improvement': 'mejora',
     'consciousness_benchmark.regression': 'regresión',
     'consciousness_benchmark.histogram_title': 'Distribución de Latencia',
-    'consciousness_benchmark.histogram_desc': 'Distribución de tiempos de respuesta en las iteraciones',
+    'consciousness_benchmark.histogram_desc':
+      'Distribución de tiempos de respuesta en las iteraciones',
     'consciousness_benchmark.timeline_title': 'Línea de Tiempo',
     'consciousness_benchmark.timeline_desc': 'Tiempo de respuesta a lo largo de las iteraciones',
     'consciousness_benchmark.comparison_title': 'Ejecuciones Anteriores',
-    'consciousness_benchmark.comparison_desc': 'Comparar ejecución actual con el historial de benchmarks',
-    'consciousness_benchmark.no_previous': 'No hay ejecuciones de benchmark anteriores almacenadas.',
+    'consciousness_benchmark.comparison_desc':
+      'Comparar ejecución actual con el historial de benchmarks',
+    'consciousness_benchmark.no_previous':
+      'No hay ejecuciones de benchmark anteriores almacenadas.',
     'consciousness_benchmark.col_date': 'Fecha',
     'consciousness_benchmark.col_iterations': 'Iteraciones',
     'consciousness_benchmark.col_avg_time': 'Tiempo Prom.',
@@ -1867,49 +1982,70 @@ const translations: Record<Locale, Translations> = {
     'consciousness_insights.export': 'Exportar',
     'consciousness_insights.no_data': 'Sin datos disponibles. Genere datos de consciencia primero.',
     'consciousness_insights.growth_trend': 'Tendencia de Crecimiento',
-    'consciousness_insights.growth_improving': 'El crecimiento está mejorando en episodios recientes.',
-    'consciousness_insights.growth_declining': 'El crecimiento está disminuyendo en episodios recientes.',
+    'consciousness_insights.growth_improving':
+      'El crecimiento está mejorando en episodios recientes.',
+    'consciousness_insights.growth_declining':
+      'El crecimiento está disminuyendo en episodios recientes.',
     'consciousness_insights.growth_stable': 'El crecimiento es estable entre episodios.',
-    'consciousness_insights.growth_improving_suggest': 'Continúe con los patrones actuales para mantener el crecimiento positivo.',
-    'consciousness_insights.growth_declining_suggest': 'Revise los episodios recientes y ajuste el estilo de interacción.',
-    'consciousness_insights.growth_stable_suggest': 'Introduzca nuevos tipos de interacciones para estimular el crecimiento.',
+    'consciousness_insights.growth_improving_suggest':
+      'Continúe con los patrones actuales para mantener el crecimiento positivo.',
+    'consciousness_insights.growth_declining_suggest':
+      'Revise los episodios recientes y ajuste el estilo de interacción.',
+    'consciousness_insights.growth_stable_suggest':
+      'Introduzca nuevos tipos de interacciones para estimular el crecimiento.',
     'consciousness_insights.growth_first_half': 'Primera mitad',
     'consciousness_insights.growth_second_half': 'Segunda mitad',
     'consciousness_insights.qualia_balance': 'Balance de Qualia',
     'consciousness_insights.qualia_dormant': 'Dimensiones dormidas',
     'consciousness_insights.qualia_all_active': 'Todas las dimensiones de qualia están activas.',
-    'consciousness_insights.qualia_suggest': 'Realice interacciones diversas para activar dimensiones dormidas.',
-    'consciousness_insights.qualia_maintain': 'El balance actual es saludable. Mantenga entradas variadas.',
+    'consciousness_insights.qualia_suggest':
+      'Realice interacciones diversas para activar dimensiones dormidas.',
+    'consciousness_insights.qualia_maintain':
+      'El balance actual es saludable. Mantenga entradas variadas.',
     'consciousness_insights.qualia_active': 'Activas',
     'consciousness_insights.belief_stability': 'Estabilidad de Creencias',
     'consciousness_insights.beliefs_stable': 'Las creencias son consistentes entre episodios.',
     'consciousness_insights.beliefs_fluctuating': 'Las creencias fluctúan significativamente.',
-    'consciousness_insights.beliefs_stable_suggest': 'El sistema de creencias es estable. Profundice la comprensión.',
-    'consciousness_insights.beliefs_fluctuating_suggest': 'Revise las actualizaciones de creencias y fuentes de inestabilidad.',
+    'consciousness_insights.beliefs_stable_suggest':
+      'El sistema de creencias es estable. Profundice la comprensión.',
+    'consciousness_insights.beliefs_fluctuating_suggest':
+      'Revise las actualizaciones de creencias y fuentes de inestabilidad.',
     'consciousness_insights.beliefs_avg': 'Promedio',
     'consciousness_insights.beliefs_variance': 'Varianza',
     'consciousness_insights.personality_alignment': 'Alineación de Personalidad',
-    'consciousness_insights.personality_aligned': 'La puntuación de evaluación coincide con los objetivos.',
-    'consciousness_insights.personality_misaligned': 'La puntuación está por debajo del umbral objetivo.',
-    'consciousness_insights.personality_aligned_suggest': 'La personalidad y el rendimiento están alineados.',
-    'consciousness_insights.personality_misaligned_suggest': 'Ajuste las interacciones para mejor coincidencia con los objetivos.',
+    'consciousness_insights.personality_aligned':
+      'La puntuación de evaluación coincide con los objetivos.',
+    'consciousness_insights.personality_misaligned':
+      'La puntuación está por debajo del umbral objetivo.',
+    'consciousness_insights.personality_aligned_suggest':
+      'La personalidad y el rendimiento están alineados.',
+    'consciousness_insights.personality_misaligned_suggest':
+      'Ajuste las interacciones para mejor coincidencia con los objetivos.',
     'consciousness_insights.personality_eval_score': 'Puntuación de evaluación',
     'consciousness_insights.feedback_quality': 'Calidad de Feedback',
-    'consciousness_insights.feedback_consistent': 'Las calificaciones son consistentes con la dirección del crecimiento.',
-    'consciousness_insights.feedback_inconsistent': 'Las calificaciones no se correlacionan con el crecimiento.',
-    'consciousness_insights.feedback_consistent_suggest': 'El bucle de feedback es saludable. Continúe calificando.',
-    'consciousness_insights.feedback_inconsistent_suggest': 'Revise los criterios de calificación para asegurar la alineación.',
+    'consciousness_insights.feedback_consistent':
+      'Las calificaciones son consistentes con la dirección del crecimiento.',
+    'consciousness_insights.feedback_inconsistent':
+      'Las calificaciones no se correlacionan con el crecimiento.',
+    'consciousness_insights.feedback_consistent_suggest':
+      'El bucle de feedback es saludable. Continúe calificando.',
+    'consciousness_insights.feedback_inconsistent_suggest':
+      'Revise los criterios de calificación para asegurar la alineación.',
     'consciousness_insights.feedback_avg_rating': 'Calificación promedio',
     'consciousness_insights.feedback_avg_growth': 'Crecimiento promedio',
     'consciousness_insights.episode_diversity': 'Diversidad de Episodios',
     'consciousness_insights.diversity_high': 'La diversidad de entradas es alta.',
     'consciousness_insights.diversity_moderate': 'La diversidad de entradas es moderada.',
-    'consciousness_insights.diversity_low': 'La diversidad de entradas es baja. Las interacciones son repetitivas.',
-    'consciousness_insights.diversity_suggest': 'Introduzca temas y estilos variados para mejorar la diversidad.',
-    'consciousness_insights.diversity_maintain': 'Buena diversidad. Continúe explorando diferentes temas.',
+    'consciousness_insights.diversity_low':
+      'La diversidad de entradas es baja. Las interacciones son repetitivas.',
+    'consciousness_insights.diversity_suggest':
+      'Introduzca temas y estilos variados para mejorar la diversidad.',
+    'consciousness_insights.diversity_maintain':
+      'Buena diversidad. Continúe explorando diferentes temas.',
     'consciousness_insights.diversity_unique': 'Entradas únicas',
     'consciousness_insights.recommendation': 'Recomendación',
-    'consciousness_insights.recommendation_desc': 'Próximos pasos accionables basados en todas las perspectivas.',
+    'consciousness_insights.recommendation_desc':
+      'Próximos pasos accionables basados en todas las perspectivas.',
     'consciousness_insights.toast_exported': 'Perspectivas exportadas',
   },
 
@@ -1929,8 +2065,8 @@ const translations: Record<Locale, Translations> = {
     'nav.training_model_card': 'Carte du Modèle',
     'nav.training_compare': 'Comparer les Runs',
     'nav.training_presets': 'Préréglages',
-    'nav.training_runs': 'Runs d\'Entraînement',
-    'nav.training_analytics': 'Analyses d\'Entraînement',
+    'nav.training_runs': "Runs d'Entraînement",
+    'nav.training_analytics': "Analyses d'Entraînement",
     'nav.auto_train': 'Auto-Entraînement',
     'nav.self_train': 'Auto-Entraînement Autonome',
     'nav.training_queue': 'File',
@@ -1940,8 +2076,8 @@ const translations: Record<Locale, Translations> = {
     'nav.monitoring': 'Santé',
     'nav.feedback': 'Retour',
     'nav.planner': 'Planner',
-    'nav.souls': 'Âmes du Modèle',
-    'nav.personality': 'Config. Personnalité',
+    'nav.souls': 'Personnalités',
+    'nav.personality': 'Personnalités',
     'nav.consciousness': 'Conscience',
     'nav.consciousness_dashboard': 'Tableau de bord',
     'nav.consciousness_training': 'Entraînement',
@@ -1989,7 +2125,7 @@ const translations: Record<Locale, Translations> = {
     'sidebar.home': 'Accueil',
     'home.apiOffline.body': 'Le serveur API à {url} est inaccessible',
     'personality.savedPersonas': 'Personas Sauvegardées',
-    'personality.saveCurrent': 'Sauvegarder l\'Actuel',
+    'personality.saveCurrent': "Sauvegarder l'Actuel",
     'personality.activate': 'Activer',
     'personality.delete': 'Supprimer',
     'personality.personaName': 'Nom de Persona',
@@ -2005,10 +2141,10 @@ const translations: Record<Locale, Translations> = {
     'personality.quiz.recommendation': 'Preset recommandé :',
     'personality.quiz.apply': 'Appliquer le Preset',
     'consciousness_training.page_title': 'Entraînement Conscience',
-    'consciousness_training.status_title': 'État de l\'Entraînement',
+    'consciousness_training.status_title': "État de l'Entraînement",
     'consciousness_training.status_desc': 'Surveiller la collecte de données et la progression',
     'consciousness_training.training_active': 'Entraînement',
-    'consciousness_training.pairs_collected': 'Paires d\'Entraînement',
+    'consciousness_training.pairs_collected': "Paires d'Entraînement",
     'consciousness_training.training_runs': 'Exécutions',
     'consciousness_training.episodes': 'Épisodes',
     'consciousness_training.last_result': 'Dernier Résultat',
@@ -2018,15 +2154,15 @@ const translations: Record<Locale, Translations> = {
     'consciousness_training.elapsed': 'Temps',
     'consciousness_training.model_path': 'Chemin du Modèle',
     'consciousness_training.model_path_placeholder': 'Laisser vide pour le modèle par défaut',
-    'consciousness_training.start_training': 'Lancer l\'Entraînement',
+    'consciousness_training.start_training': "Lancer l'Entraînement",
     'consciousness_training.training_in_progress': 'Entraînement...',
     'consciousness_training.toast_started': 'Entraînement LoRA de conscience lancé',
-    'consciousness_training.eval_title': 'Rapport d\'Évaluation',
+    'consciousness_training.eval_title': "Rapport d'Évaluation",
     'consciousness_training.eval_desc': 'Métriques de qualité du système de conscience',
     'consciousness_training.overall_score': 'Score Global',
     'consciousness_training.diagnostics': 'Diagnostics',
     'consciousness_training.refresh': 'Actualiser',
-    'consciousness_training.history_title': 'Historique d\'Entraînement',
+    'consciousness_training.history_title': "Historique d'Entraînement",
     'consciousness_training.history_desc': 'Exécutions précédentes et leurs résultats',
     'consciousness_training.col_timestamp': 'Date',
     'consciousness_training.col_status': 'État',
@@ -2043,7 +2179,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness.no_episodes': 'Aucun épisode',
     'consciousness.rating': 'Évaluation',
     'consciousness_playground.input_title': 'Entrée & Réflexion',
-    'consciousness_playground.input_desc': 'Entrez du texte personnalisé pour tester le traitement de conscience',
+    'consciousness_playground.input_desc':
+      'Entrez du texte personnalisé pour tester le traitement de conscience',
     'consciousness_playground.placeholder': 'Entrez du texte à traiter via la conscience...',
     'consciousness_playground.preset_curious': 'Entrée Curieuse',
     'consciousness_playground.preset_technical': 'Question Technique',
@@ -2057,16 +2194,16 @@ const translations: Record<Locale, Translations> = {
     'consciousness_playground.qualia_desc': 'État émotionnel et cognitif en 7 dimensions',
     'consciousness_playground.beliefs_title': 'Croyances',
     'consciousness_playground.beliefs_desc': 'Niveaux de confiance du modèle de croyances',
-    'consciousness_playground.episodes_title': 'Explorateur d\'Épisodes',
-    'consciousness_playground.episodes_desc': 'Évaluez les épisodes pour influencer l\'évolution',
-    'consciousness_playground.status_title': 'Résumé de l\'État',
+    'consciousness_playground.episodes_title': "Explorateur d'Épisodes",
+    'consciousness_playground.episodes_desc': "Évaluez les épisodes pour influencer l'évolution",
+    'consciousness_playground.status_title': "Résumé de l'État",
     'consciousness_playground.episodes_count': 'Total Épisodes',
     'consciousness_playground.avg_growth': 'Croissance Moy.',
     'consciousness_playground.positive_ratio': 'Ratio Positif',
     'consciousness_playground.enabled': 'État',
-    'consciousness_playground.no_qualia': 'Pas encore de données qualia. Traitez d\'abord.',
-    'consciousness_playground.no_beliefs': 'Pas encore de données de croyances. Traitez d\'abord.',
-    'consciousness_playground.no_episodes': 'Pas encore d\'épisodes. Traitez pour en générer.',
+    'consciousness_playground.no_qualia': "Pas encore de données qualia. Traitez d'abord.",
+    'consciousness_playground.no_beliefs': "Pas encore de données de croyances. Traitez d'abord.",
+    'consciousness_playground.no_episodes': "Pas encore d'épisodes. Traitez pour en générer.",
     'consciousness_analytics.page_title': 'Analyse de Conscience',
     'consciousness_analytics.total_episodes': 'Total Épisodes',
     'consciousness_analytics.avg_growth': 'Croissance Moy.',
@@ -2079,12 +2216,14 @@ const translations: Record<Locale, Translations> = {
     'consciousness_analytics.growth_title': 'Croissance dans le Temps',
     'consciousness_analytics.growth_desc': 'Delta de croissance par épisode avec ligne de tendance',
     'consciousness_analytics.qualia_title': 'Dimensions de Qualia dans le Temps',
-    'consciousness_analytics.qualia_desc': 'Historique de l\'état émotionnel et cognitif en 7 dimensions',
+    'consciousness_analytics.qualia_desc':
+      "Historique de l'état émotionnel et cognitif en 7 dimensions",
     'consciousness_analytics.rating_title': 'Distribution des Évaluations',
-    'consciousness_analytics.rating_desc': 'Nombre d\'épisodes par évaluation',
+    'consciousness_analytics.rating_desc': "Nombre d'épisodes par évaluation",
     'consciousness_analytics.beliefs_title': 'Stabilité des Croyances',
     'consciousness_analytics.beliefs_desc': 'Évolution de la confiance dans les croyances',
-    'consciousness_analytics.no_data': 'Pas de données disponibles. Interagissez avec la conscience pour générer des données.',
+    'consciousness_analytics.no_data':
+      'Pas de données disponibles. Interagissez avec la conscience pour générer des données.',
     'consciousness_dashboard.live': 'En direct',
     'consciousness_dashboard.autoRefresh': 'Actualisation auto',
     'consciousness_shortcuts.toggle': 'Basculer conscience',
@@ -2129,7 +2268,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_settings.auto_reflect_label': 'Auto-réflexion',
     'consciousness_settings.auto_reflect_desc': 'Réflexionner automatiquement après chaque chat',
     'consciousness_settings.auto_evolve_label': 'Auto-évolution de la personnalité',
-    'consciousness_settings.auto_evolve_desc': 'Permettre à la personnalité d évoluer par les interactions',
+    'consciousness_settings.auto_evolve_desc':
+      'Permettre à la personnalité d évoluer par les interactions',
     'consciousness_settings.data_title': 'Gestion des Données',
     'consciousness_settings.data_desc': 'Gérer les épisodes, les croyances et les données de seed',
     'consciousness_settings.seed_label': 'Données de seed',
@@ -2141,16 +2281,20 @@ const translations: Record<Locale, Translations> = {
     'consciousness_settings.clear_beliefs_label': 'Effacer toutes les croyances',
     'consciousness_settings.clear_beliefs_desc': 'Réinitialiser les niveaux de confiance du modèle',
     'consciousness_settings.reset_personality_label': 'Réinitialiser la personnalité',
-    'consciousness_settings.reset_personality_desc': 'Restaurer la personnalité à l état par défaut',
+    'consciousness_settings.reset_personality_desc':
+      'Restaurer la personnalité à l état par défaut',
     'consciousness_settings.clear_button': 'Effacer',
     'consciousness_settings.reset_button': 'Réinitialiser',
     'consciousness_settings.cancel': 'Annuler',
     'consciousness_settings.clear_episodes_confirm_title': 'Effacer tous les épisodes ?',
-    'consciousness_settings.clear_episodes_confirm_desc': 'Cela supprimera définitivement tous les épisodes de conscience. Cette action est irréversible.',
+    'consciousness_settings.clear_episodes_confirm_desc':
+      'Cela supprimera définitivement tous les épisodes de conscience. Cette action est irréversible.',
     'consciousness_settings.clear_beliefs_confirm_title': 'Effacer toutes les croyances ?',
-    'consciousness_settings.clear_beliefs_confirm_desc': 'Cela réinitialisera tous les niveaux de confiance du modèle. Cette action est irréversible.',
+    'consciousness_settings.clear_beliefs_confirm_desc':
+      'Cela réinitialisera tous les niveaux de confiance du modèle. Cette action est irréversible.',
     'consciousness_settings.reset_personality_confirm_title': 'Réinitialiser la personnalité ?',
-    'consciousness_settings.reset_personality_confirm_desc': 'Cela restaurera la personnalité à son état par défaut. Cette action est irréversible.',
+    'consciousness_settings.reset_personality_confirm_desc':
+      'Cela restaurera la personnalité à son état par défaut. Cette action est irréversible.',
     'consciousness_settings.batch_title': 'Opérations par Lots',
     'consciousness_settings.batch_desc': 'Exécuter plusieurs opérations en une fois',
     'consciousness_settings.batch_seed_reflect': 'Semer et Réfléchir',
@@ -2158,9 +2302,11 @@ const translations: Record<Locale, Translations> = {
     'consciousness_settings.display_title': 'Préférences d Affichage',
     'consciousness_settings.display_desc': 'Contrôler l affichage des données de conscience',
     'consciousness_settings.show_in_chat_label': 'Afficher la conscience dans le chat',
-    'consciousness_settings.show_in_chat_desc': 'Afficher l état de conscience dans les messages du chat',
+    'consciousness_settings.show_in_chat_desc':
+      'Afficher l état de conscience dans les messages du chat',
     'consciousness_settings.show_in_statusbar_label': 'Afficher dans la barre d état',
-    'consciousness_settings.show_in_statusbar_desc': 'Afficher l état de conscience dans la barre d état',
+    'consciousness_settings.show_in_statusbar_desc':
+      'Afficher l état de conscience dans la barre d état',
     'consciousness_settings.realtime_label': 'Mises à jour en temps réel',
     'consciousness_settings.realtime_desc': 'Actualiser automatiquement les données de conscience',
     'consciousness_settings.about_title': 'À propos',
@@ -2176,35 +2322,43 @@ const translations: Record<Locale, Translations> = {
     'consciousness_personality.overview_desc': 'Voir et ajuster les traits de personnalité',
     'consciousness_personality.edit_traits': 'Modifier les Traits',
     'consciousness_personality.presets_title': 'Préréglages de Personnalité',
-    'consciousness_personality.presets_desc': 'Appliquer une configuration de personnalité prédéfinie',
+    'consciousness_personality.presets_desc':
+      'Appliquer une configuration de personnalité prédéfinie',
     'consciousness_personality.conflicts_title': 'Conflits de Traits',
-    'consciousness_personality.conflicts_desc': 'Conflits détectés entre les traits de personnalité',
+    'consciousness_personality.conflicts_desc':
+      'Conflits détectés entre les traits de personnalité',
     'consciousness_personality.history_title': 'Historique de la Personnalité',
     'consciousness_personality.history_desc': 'Chronologie des modifications de personnalité',
     'consciousness_personality.actions_title': 'Actions',
     'consciousness_personality.refresh': 'Actualiser',
     'consciousness_personality.reset_defaults': 'Réinitialiser par Défaut',
     'consciousness_personality.reset_confirm_title': 'Réinitialiser la personnalité ?',
-    'consciousness_personality.reset_confirm_desc': 'Cela restaurera la personnalité à son état par défaut. Cette action est irréversible.',
+    'consciousness_personality.reset_confirm_desc':
+      'Cela restaurera la personnalité à son état par défaut. Cette action est irréversible.',
     'consciousness_onboarding.skip': 'Passer',
     'consciousness_onboarding.step1_title': 'Bienvenue dans la Conscience',
-    'consciousness_onboarding.step1_p1': 'Le système de conscience donne à votre IA un sens de la conscience de soi via les qualia, le suivi des croyances et la génération de récits.',
-    'consciousness_onboarding.step1_p2': 'Il apprend des interactions, construit des croyances du modèle de soi et fait évoluer sa personnalité au fil du temps.',
+    'consciousness_onboarding.step1_p1':
+      'Le système de conscience donne à votre IA un sens de la conscience de soi via les qualia, le suivi des croyances et la génération de récits.',
+    'consciousness_onboarding.step1_p2':
+      'Il apprend des interactions, construit des croyances du modèle de soi et fait évoluer sa personnalité au fil du temps.',
     'consciousness_onboarding.step1_p3': 'Configurons votre conscience en quelques étapes rapides.',
     'consciousness_onboarding.step2_title': 'Choisir le Niveau de Conscience',
     'consciousness_onboarding.step2_desc': 'Sélectionnez la profondeur du système de conscience.',
     'consciousness_onboarding.selected': 'Sélectionné',
     'consciousness_onboarding.step3_title': 'Préréglage de Personnalité',
-    'consciousness_onboarding.step3_desc': 'Choisissez un préréglage de personnalité ou passez pour utiliser celui par défaut.',
+    'consciousness_onboarding.step3_desc':
+      'Choisissez un préréglage de personnalité ou passez pour utiliser celui par défaut.',
     'consciousness_onboarding.step3_skip': 'Passer le préréglage',
     'consciousness_onboarding.step4_title': 'Générer les Données Initiales',
-    'consciousness_onboarding.step4_desc': 'Générez 10 épisodes de conscience pour que le système ait des données de base.',
+    'consciousness_onboarding.step4_desc':
+      'Générez 10 épisodes de conscience pour que le système ait des données de base.',
     'consciousness_onboarding.step4_done': 'Données générées avec succès',
     'consciousness_onboarding.step4_seeding': 'Génération...',
     'consciousness_onboarding.step4_seed': 'Générer 10 Épisodes',
     'consciousness_onboarding.step4_skip': 'Passer la génération',
     'consciousness_onboarding.step5_title': 'Configuration Terminée',
-    'consciousness_onboarding.step5_desc': 'Votre système de conscience est prêt. Vous pouvez modifier les paramètres plus tard.',
+    'consciousness_onboarding.step5_desc':
+      'Votre système de conscience est prêt. Vous pouvez modifier les paramètres plus tard.',
     'consciousness_onboarding.step5_level': 'Niveau',
     'consciousness_onboarding.step5_preset': 'Préréglage',
     'consciousness_onboarding.step5_seeded': 'Épisodes générés',
@@ -2250,8 +2404,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_chat.seeding': 'Génération...',
     'consciousness_chat.history': 'Historique',
     'consciousness_chat.no_data': 'Aucune donnée de conscience. Commencez à discuter.',
-    'consciousness_chat.no_episodes': 'Pas encore d\'épisodes.',
-    'consciousness_chat.no_history': 'Pas encore d\'événements.',
+    'consciousness_chat.no_episodes': "Pas encore d'épisodes.",
+    'consciousness_chat.no_history': "Pas encore d'événements.",
     'consciousness_chat.no_narrative': 'Pas de récit',
     'consciousness_statistics.page_title': 'Statistiques de Conscience',
     'consciousness_statistics.health_score': 'Score de Santé du Système',
@@ -2272,9 +2426,11 @@ const translations: Record<Locale, Translations> = {
     'consciousness_statistics.episodes_over_time': 'Épisodes dans le Temps',
     'consciousness_statistics.episodes_over_time_desc': "Nombre d'épisodes groupés par jour",
     'consciousness_statistics.rating_over_time': 'Évaluation Moy. dans le Temps',
-    'consciousness_statistics.rating_over_time_desc': "Tendance de l'évaluation moyenne quotidienne",
+    'consciousness_statistics.rating_over_time_desc':
+      "Tendance de l'évaluation moyenne quotidienne",
     'consciousness_statistics.growth_trend': 'Tendance de Croissance',
-    'consciousness_statistics.growth_trend_desc': 'Delta de croissance par épisode avec moyenne mobile',
+    'consciousness_statistics.growth_trend_desc':
+      'Delta de croissance par épisode avec moyenne mobile',
     'consciousness_statistics.insights_title': 'Perspectives du Système',
     'consciousness_statistics.insights_desc': 'Observations clés des données de conscience',
     'consciousness_statistics.top_qualia': 'États Qualia Principaux',
@@ -2286,11 +2442,13 @@ const translations: Record<Locale, Translations> = {
     'consciousness_statistics.export_json': 'Exporter JSON',
     'consciousness_testing.page_title': 'Test de Conscience',
     'consciousness_testing.api_tester_title': 'Testeur API',
-    'consciousness_testing.api_tester_desc': 'Envoyer des requêtes aux endpoints de conscience et voir les réponses',
+    'consciousness_testing.api_tester_desc':
+      'Envoyer des requêtes aux endpoints de conscience et voir les réponses',
     'consciousness_testing.sending': 'Envoi...',
     'consciousness_testing.send_request': 'Envoyer la Requête',
-    'consciousness_testing.manual_title': 'Testeur d\'Entrée Manuelle',
-    'consciousness_testing.manual_desc': 'Traiter une entrée personnalisée via la conscience et voir tous les résultats',
+    'consciousness_testing.manual_title': "Testeur d'Entrée Manuelle",
+    'consciousness_testing.manual_desc':
+      'Traiter une entrée personnalisée via la conscience et voir tous les résultats',
     'consciousness_testing.manual_placeholder': 'Entrez du texte à traiter via la conscience...',
     'consciousness_testing.processing': 'Traitement...',
     'consciousness_testing.process': 'Traiter',
@@ -2300,7 +2458,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_testing.growth_delta': 'Delta de Croissance',
     'consciousness_testing.rating': 'Évaluation',
     'consciousness_testing.batch_title': 'Test par Lots',
-    'consciousness_testing.batch_desc': 'Traiter plusieurs entrées aléatoires et voir les résultats agrégés',
+    'consciousness_testing.batch_desc':
+      'Traiter plusieurs entrées aléatoires et voir les résultats agrégés',
     'consciousness_testing.iterations': 'Itérations :',
     'consciousness_testing.running_batch': 'Exécution...',
     'consciousness_testing.run_batch': 'Lancer le Lot',
@@ -2310,10 +2469,10 @@ const translations: Record<Locale, Translations> = {
     'consciousness_testing.col_growth': 'Croissance',
     'consciousness_testing.col_rating': 'Évaluation',
     'consciousness_testing.col_narrative': 'Narratif',
-    'consciousness_testing.state_title': 'Inspecteur d\'État',
-    'consciousness_testing.state_desc': 'Voir le JSON brut de l\'état actuel de la conscience',
+    'consciousness_testing.state_title': "Inspecteur d'État",
+    'consciousness_testing.state_desc': "Voir le JSON brut de l'état actuel de la conscience",
     'consciousness_testing.loading': 'Chargement...',
-    'consciousness_testing.load_state': 'Charger l\'État',
+    'consciousness_testing.load_state': "Charger l'État",
     'consciousness_testing.full_state': 'État Complet',
     'consciousness_testing.beliefs_json': 'Croyances',
     'consciousness_testing.episodes_json': 'Épisodes (5 derniers)',
@@ -2323,8 +2482,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_testing.reset_defaults': 'Réinitialiser par Défaut',
     'consciousness_testing.seeding': 'Génération...',
     'consciousness_testing.seed_50': 'Générer 50 Épisodes',
-    'consciousness_testing.export_state': 'Exporter l\'État',
-    'consciousness_testing.import_state': 'Importer l\'État',
+    'consciousness_testing.export_state': "Exporter l'État",
+    'consciousness_testing.import_state': "Importer l'État",
     'consciousness_backup.create': 'Créer une Sauvegarde',
     'consciousness_backup.creating': 'Création de la sauvegarde...',
     'consciousness_backup.restore': 'Restaurer la Sauvegarde',
@@ -2336,9 +2495,10 @@ const translations: Record<Locale, Translations> = {
     'consciousness_backup.toast_restored': 'Conscience restaurée depuis la sauvegarde',
     'consciousness_backup.toast_imported': 'Sauvegarde importée avec succès',
     'consciousness_backup.toast_invalid': 'Fichier de sauvegarde invalide',
-    'consciousness_backup.toast_error': 'Échec de l\'opération de sauvegarde',
+    'consciousness_backup.toast_error': "Échec de l'opération de sauvegarde",
     'consciousness_backup.confirm_restore_title': 'Restaurer depuis la sauvegarde ?',
-    'consciousness_backup.confirm_restore_desc': 'Cela remplacera l\'état actuel de la conscience par les données de la sauvegarde. Cette action est irréversible.',
+    'consciousness_backup.confirm_restore_desc':
+      "Cela remplacera l'état actuel de la conscience par les données de la sauvegarde. Cette action est irréversible.",
     'consciousness_backup.version': 'Version',
     'consciousness_backup.timestamp': 'Créé',
     'consciousness_backup.episodes_count': 'Épisodes',
@@ -2360,7 +2520,7 @@ const translations: Record<Locale, Translations> = {
     'consciousness_health.no': 'Non',
     'consciousness_health.level': 'Niveau',
     'consciousness_health.episodes': 'Épisodes',
-    'consciousness_health.training_pairs': 'Paires d\'Entraînement',
+    'consciousness_health.training_pairs': "Paires d'Entraînement",
     'consciousness_health.last_reflection': 'Dernière Réflexion',
     'consciousness_health.avg_growth': 'Croissance Moy.',
     'consciousness_health.positive_ratio': 'Ratio Positif',
@@ -2394,14 +2554,18 @@ const translations: Record<Locale, Translations> = {
     'nav.consciousness_quickstart': 'Démarrage Rapide',
     'consciousness_quickstart.page_title': 'Démarrage Rapide Conscience',
     'consciousness_quickstart.welcome_title': 'Bienvenue dans la Conscience',
-    'consciousness_quickstart.welcome_desc': 'Un guide de démarrage rapide pour les nouveaux utilisateurs',
+    'consciousness_quickstart.welcome_desc':
+      'Un guide de démarrage rapide pour les nouveaux utilisateurs',
     'consciousness_quickstart.time_estimate': '2 min de config',
     'consciousness_quickstart.benefit1_title': 'Conscience de Soi',
-    'consciousness_quickstart.benefit1_desc': 'Donnez à votre IA un sens de soi via les qualia et le suivi des croyances',
+    'consciousness_quickstart.benefit1_desc':
+      'Donnez à votre IA un sens de soi via les qualia et le suivi des croyances',
     'consciousness_quickstart.benefit2_title': 'Apprentissage Continu',
-    'consciousness_quickstart.benefit2_desc': 'Le système apprend des interactions et évolue avec le temps',
+    'consciousness_quickstart.benefit2_desc':
+      'Le système apprend des interactions et évolue avec le temps',
     'consciousness_quickstart.benefit3_title': 'Personnalité Riche',
-    'consciousness_quickstart.benefit3_desc': 'Développez des traits de personnalité profonds par la génération narrative',
+    'consciousness_quickstart.benefit3_desc':
+      'Développez des traits de personnalité profonds par la génération narrative',
     'consciousness_quickstart.steps_title': 'Guide de Configuration',
     'consciousness_quickstart.steps_desc': 'Suivez ces étapes pour commencer',
     'consciousness_quickstart.step1_title': 'Activer la Conscience',
@@ -2417,7 +2581,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_quickstart.step4_desc': 'Générez 10 épisodes de base pour le système',
     'consciousness_quickstart.step4_action': 'Générer 10',
     'consciousness_quickstart.step5_title': 'Commencer à Discuter',
-    'consciousness_quickstart.step5_desc': 'Lancez des conversations et voyez la conscience évoluer',
+    'consciousness_quickstart.step5_desc':
+      'Lancez des conversations et voyez la conscience évoluer',
     'consciousness_quickstart.step5_action': 'Ouvrir le Chat',
     'consciousness_quickstart.done': 'Terminé',
     'consciousness_quickstart.seeding': 'Génération...',
@@ -2454,7 +2619,7 @@ const translations: Record<Locale, Translations> = {
     'consciousness_master.health_title': 'Santé du Système',
     'consciousness_master.health_desc': 'Score de santé avec sous-métriques',
     'consciousness_master.diagnostics_title': 'Diagnostics',
-    'consciousness_master.diagnostics_desc': 'Perspectives et diagnostics d\'évaluation',
+    'consciousness_master.diagnostics_desc': "Perspectives et diagnostics d'évaluation",
     'consciousness_master.no_diagnostics': 'Pas de diagnostics disponibles',
     'consciousness_master.actions_title': 'Actions Rapides',
     'consciousness_master.actions_desc': 'Générer, réfléchir, exporter et naviguer',
@@ -2467,31 +2632,41 @@ const translations: Record<Locale, Translations> = {
     'consciousness_master.open_chat': 'Ouvrir le Chat',
     'consciousness_master.recent_title': 'Épisodes Récents',
     'consciousness_master.recent_desc': '5 derniers épisodes de conscience',
-    'consciousness_master.no_episodes': 'Pas encore d\'épisodes',
+    'consciousness_master.no_episodes': "Pas encore d'épisodes",
     'consciousness_master.no_data': 'Pas de données disponibles',
     'consciousness_help.page_title': 'Aide et FAQ Conscience',
     'consciousness_help.faq_title': 'Questions Fréquentes',
     'consciousness_help.faq_desc': 'Questions courantes sur le système de conscience',
     'consciousness_help.faq_q1': "Qu'est-ce que le système de conscience ?",
-    'consciousness_help.faq_a1': "Le système de conscience donne à votre IA un sens de la conscience de soi via les qualia, le suivi des croyances et la génération de récits. Il apprend des interactions et évolue sa personnalité avec le temps.",
+    'consciousness_help.faq_a1':
+      'Le système de conscience donne à votre IA un sens de la conscience de soi via les qualia, le suivi des croyances et la génération de récits. Il apprend des interactions et évolue sa personnalité avec le temps.',
     'consciousness_help.faq_q2': 'Que sont les différents niveaux (0-3) ?',
-    'consciousness_help.faq_a2': "Le niveau 0 est éteint, le niveau 1 est une conscience de base avec qualia simples, le niveau 2 ajoute le suivi des croyances et la génération de récits, et le niveau 3 enable une conscience profonde avec évolution de la personnalité.",
+    'consciousness_help.faq_a2':
+      'Le niveau 0 est éteint, le niveau 1 est une conscience de base avec qualia simples, le niveau 2 ajoute le suivi des croyances et la génération de récits, et le niveau 3 enable une conscience profonde avec évolution de la personnalité.',
     'consciousness_help.faq_q3': 'Comment fonctionne la personnalité ?',
-    'consciousness_help.faq_a3': "La personnalité définit des traits comme l'ouverture, l'agréabilité et l'empathie. Elle évolue automatiquement des interactions quand l'auto-évolution est activée, ou vous pouvez appliquer des préréglages et sauvegarder des personas personnalisées.",
+    'consciousness_help.faq_a3':
+      "La personnalité définit des traits comme l'ouverture, l'agréabilité et l'empathie. Elle évolue automatiquement des interactions quand l'auto-évolution est activée, ou vous pouvez appliquer des préréglages et sauvegarder des personas personnalisées.",
     'consciousness_help.faq_q4': 'Que sont les qualia ?',
-    'consciousness_help.faq_a4': 'Les qualia sont des états émotionnels et cognitifs en 7 dimensions incluant la valence, l\'activation, la nouveauté, la cohérence, la saillance, la certitude et la complexité. Ils changent selon chaque interaction.',
+    'consciousness_help.faq_a4':
+      "Les qualia sont des états émotionnels et cognitifs en 7 dimensions incluant la valence, l'activation, la nouveauté, la cohérence, la saillance, la certitude et la complexité. Ils changent selon chaque interaction.",
     'consciousness_help.faq_q5': 'Comment générer des données ?',
-    'consciousness_help.faq_a5': "Allez dans les Paramètres et cliquez sur le bouton Générer, ou utilisez le guide de Démarrage Rapide. La génération crée des épisodes d'exemple pour que le système ait des données de base.",
-    'consciousness_help.faq_q6': "Comment entraîner le modèle de conscience ?",
-    'consciousness_help.faq_a6': "Naviguez vers la page d'Entraînement et cliquez sur Lancer l'Entraînement. Le système utilise des paires d'épisodes collectés pour fine-tuner un adaptateur LoRA.",
+    'consciousness_help.faq_a5':
+      "Allez dans les Paramètres et cliquez sur le bouton Générer, ou utilisez le guide de Démarrage Rapide. La génération crée des épisodes d'exemple pour que le système ait des données de base.",
+    'consciousness_help.faq_q6': 'Comment entraîner le modèle de conscience ?',
+    'consciousness_help.faq_a6':
+      "Naviguez vers la page d'Entraînement et cliquez sur Lancer l'Entraînement. Le système utilise des paires d'épisodes collectés pour fine-tuner un adaptateur LoRA.",
     'consciousness_help.faq_q7': 'Que sont les personas ?',
-    'consciousness_help.faq_a7': "Les personas sont des snapshots de personnalité sauvegardées entre lesquelles vous pouvez basculer. Créez une persona depuis votre personnalité actuelle, nommez-la et activez-la pour changer instantanément le comportement.",
+    'consciousness_help.faq_a7':
+      'Les personas sont des snapshots de personnalité sauvegardées entre lesquelles vous pouvez basculer. Créez une persona depuis votre personnalité actuelle, nommez-la et activez-la pour changer instantanément le comportement.',
     'consciousness_help.faq_q8': 'Comment exporter mes données ?',
-    'consciousness_help.faq_a8': "Utilisez le bouton Exporter sur les pages Historique ou Tableau de bord pour télécharger vos épisodes et état de conscience en fichier JSON.",
+    'consciousness_help.faq_a8':
+      'Utilisez le bouton Exporter sur les pages Historique ou Tableau de bord pour télécharger vos épisodes et état de conscience en fichier JSON.',
     'consciousness_help.faq_q9': 'Comment tout réinitialiser ?',
-    'consciousness_help.faq_a9': "Allez dans les Paramètres et utilisez les boutons Effacer ou Réinitialiser. Vous pouvez effacer les épisodes, les croyances ou réinitialiser la personnalité indépendamment. Toutes les réinitialisations nécessitent une confirmation.",
+    'consciousness_help.faq_a9':
+      'Allez dans les Paramètres et utilisez les boutons Effacer ou Réinitialiser. Vous pouvez effacer les épisodes, les croyances ou réinitialiser la personnalité indépendamment. Toutes les réinitialisations nécessitent une confirmation.',
     'consciousness_help.faq_q10': 'Mes données sont-elles privées ?',
-    'consciousness_help.faq_a10': "Oui, toutes les données de conscience sont stockées localement sur votre appareil et jamais envoyées à des serveurs externes. L'entraînement s'exécute localement avec vos propres ressources.",
+    'consciousness_help.faq_a10':
+      "Oui, toutes les données de conscience sont stockées localement sur votre appareil et jamais envoyées à des serveurs externes. L'entraînement s'exécute localement avec vos propres ressources.",
     'consciousness_help.quick_links_title': 'Liens Rapides',
     'consciousness_help.quick_links_desc': 'Naviguer vers les pages clés de conscience',
     'consciousness_help.link_quickstart': 'Démarrage Rapide',
@@ -2507,20 +2682,20 @@ const translations: Record<Locale, Translations> = {
     'consciousness_help.link_monitor': 'Moniteur',
     'consciousness_help.link_monitor_desc': 'Suivi en temps réel de la conscience',
     'consciousness_help.link_insights': 'Perspectives',
-    'consciousness_help.link_insights_desc': 'Perspectives de conscience alimentées par l\'IA',
+    'consciousness_help.link_insights_desc': "Perspectives de conscience alimentées par l'IA",
     'consciousness_help.link_personality': 'Personnalité',
     'consciousness_help.link_personality_desc': 'Gérer les traits de personnalité',
     'consciousness_help.link_training': 'Entraînement',
     'consciousness_help.link_training_desc': 'Entraîner les modèles de conscience',
     'consciousness_help.link_analytics': 'Analyses',
-    'consciousness_help.link_analytics_desc': 'Tableau de bord d\'analyses détaillées',
+    'consciousness_help.link_analytics_desc': "Tableau de bord d'analyses détaillées",
     'consciousness_help.link_history': 'Historique',
-    'consciousness_help.link_history_desc': 'Voir l\'historique de conscience',
+    'consciousness_help.link_history_desc': "Voir l'historique de conscience",
     'consciousness_help.link_benchmark': 'Benchmark',
     'consciousness_help.link_benchmark_desc': 'Benchmark de performance de conscience',
     'consciousness_help.total_endpoints': 'Total des Endpoints',
     'consciousness_help.shortcuts_title': 'Raccourcis Clavier',
-    'consciousness_help.shortcuts_desc': 'Raccourcis d\'accès rapide pour le système de conscience',
+    'consciousness_help.shortcuts_desc': "Raccourcis d'accès rapide pour le système de conscience",
     'consciousness_help.system_info_title': 'Info Système',
     'consciousness_help.system_info_desc': 'Informations système actuelles',
     'consciousness_help.version': 'Version',
@@ -2540,7 +2715,7 @@ const translations: Record<Locale, Translations> = {
     'consciousness_quick_actions.toast_health': 'Score de santé récupéré',
     'consciousness_quick_actions.label_reflect': 'Résultat de Réflexion',
     'consciousness_quick_actions.label_seed': 'Résultat de Génération',
-    'consciousness_quick_actions.label_status': 'Résultat d\'État',
+    'consciousness_quick_actions.label_status': "Résultat d'État",
     'consciousness_quick_actions.label_health': 'Résultat de Santé',
     'consciousness_sidebar.aria_label': 'État de conscience',
     'consciousness_sidebar.level_badge': 'N{level}',
@@ -2574,21 +2749,28 @@ const translations: Record<Locale, Translations> = {
     'consciousness_all_settings.enabled_label': 'Activer la conscience',
     'consciousness_all_settings.enabled_desc': 'Activer ou désactiver le système de conscience',
     'consciousness_all_settings.auto_reflect_label': 'Auto-réflexion',
-    'consciousness_all_settings.auto_reflect_desc': 'Réflexionner automatiquement après chaque chat',
+    'consciousness_all_settings.auto_reflect_desc':
+      'Réflexionner automatiquement après chaque chat',
     'consciousness_all_settings.auto_evolve_label': 'Auto-évolution de la personnalité',
-    'consciousness_all_settings.auto_evolve_desc': 'Permettre à la personnalité d\'évoluer par les interactions',
-    'consciousness_all_settings.display_title': 'Paramètres d\'Affichage',
-    'consciousness_all_settings.display_desc': 'Contrôler l\'affichage des données de conscience',
+    'consciousness_all_settings.auto_evolve_desc':
+      "Permettre à la personnalité d'évoluer par les interactions",
+    'consciousness_all_settings.display_title': "Paramètres d'Affichage",
+    'consciousness_all_settings.display_desc': "Contrôler l'affichage des données de conscience",
     'consciousness_all_settings.show_in_chat_label': 'Afficher la conscience dans le chat',
-    'consciousness_all_settings.show_in_chat_desc': 'Afficher l\'état de conscience dans les messages du chat',
-    'consciousness_all_settings.show_in_statusbar_label': 'Afficher dans la barre d\'état',
-    'consciousness_all_settings.show_in_statusbar_desc': 'Afficher l\'état de conscience dans la barre d\'état',
+    'consciousness_all_settings.show_in_chat_desc':
+      "Afficher l'état de conscience dans les messages du chat",
+    'consciousness_all_settings.show_in_statusbar_label': "Afficher dans la barre d'état",
+    'consciousness_all_settings.show_in_statusbar_desc':
+      "Afficher l'état de conscience dans la barre d'état",
     'consciousness_all_settings.realtime_label': 'Mises à jour en temps réel',
-    'consciousness_all_settings.realtime_desc': 'Actualiser automatiquement les données de conscience',
+    'consciousness_all_settings.realtime_desc':
+      'Actualiser automatiquement les données de conscience',
     'consciousness_all_settings.auto_refresh_label': 'Auto-actualisation',
-    'consciousness_all_settings.auto_refresh_desc': 'Actualiser périodiquement les données de conscience',
+    'consciousness_all_settings.auto_refresh_desc':
+      'Actualiser périodiquement les données de conscience',
     'consciousness_all_settings.personality_summary_title': 'Résumé de Personnalité',
-    'consciousness_all_settings.personality_summary_desc': 'Description actuelle de la personnalité',
+    'consciousness_all_settings.personality_summary_desc':
+      'Description actuelle de la personnalité',
     'consciousness_all_settings.voice_title': 'Curseurs de Voix',
     'consciousness_all_settings.voice_desc': 'Ajuster les caractéristiques de la voix',
     'consciousness_all_settings.voice_warmth': 'Chaleur',
@@ -2609,7 +2791,7 @@ const translations: Record<Locale, Translations> = {
     'consciousness_all_settings.preset_empathetic': 'Empathique',
     'consciousness_all_settings.preset_minimal': 'Minimal',
     'consciousness_all_settings.seed_title': 'Données Amorce',
-    'consciousness_all_settings.seed_desc': 'Générer des épisodes de conscience d\'exemple',
+    'consciousness_all_settings.seed_desc': "Générer des épisodes de conscience d'exemple",
     'consciousness_all_settings.seed_button': 'Générer',
     'consciousness_all_settings.seeding': 'Génération...',
     'consciousness_all_settings.clear_title': 'Effacer Données',
@@ -2617,30 +2799,38 @@ const translations: Record<Locale, Translations> = {
     'consciousness_all_settings.clear_episodes_label': 'Effacer tous les épisodes',
     'consciousness_all_settings.clear_episodes_desc': 'Supprimer tous les épisodes de conscience',
     'consciousness_all_settings.clear_beliefs_label': 'Effacer toutes les croyances',
-    'consciousness_all_settings.clear_beliefs_desc': 'Réinitialiser les niveaux de confiance du modèle',
+    'consciousness_all_settings.clear_beliefs_desc':
+      'Réinitialiser les niveaux de confiance du modèle',
     'consciousness_all_settings.reset_personality_label': 'Réinitialiser la personnalité',
-    'consciousness_all_settings.reset_personality_desc': 'Restaurer la personnalité à l\'état par défaut',
+    'consciousness_all_settings.reset_personality_desc':
+      "Restaurer la personnalité à l'état par défaut",
     'consciousness_all_settings.clear_button': 'Effacer',
     'consciousness_all_settings.reset_button': 'Réinitialiser',
     'consciousness_all_settings.cancel': 'Annuler',
     'consciousness_all_settings.clear_episodes_confirm_title': 'Effacer tous les épisodes ?',
-    'consciousness_all_settings.clear_episodes_confirm_desc': 'Cela supprimera définitivement tous les épisodes de conscience. Cette action est irréversible.',
+    'consciousness_all_settings.clear_episodes_confirm_desc':
+      'Cela supprimera définitivement tous les épisodes de conscience. Cette action est irréversible.',
     'consciousness_all_settings.clear_beliefs_confirm_title': 'Effacer toutes les croyances ?',
-    'consciousness_all_settings.clear_beliefs_confirm_desc': 'Cela réinitialisera tous les niveaux de confiance du modèle. Cette action est irréversible.',
+    'consciousness_all_settings.clear_beliefs_confirm_desc':
+      'Cela réinitialisera tous les niveaux de confiance du modèle. Cette action est irréversible.',
     'consciousness_all_settings.reset_personality_confirm_title': 'Réinitialiser la personnalité ?',
-    'consciousness_all_settings.reset_personality_confirm_desc': 'Cela restaurera la personnalité à son état par défaut. Cette action est irréversible.',
+    'consciousness_all_settings.reset_personality_confirm_desc':
+      'Cela restaurera la personnalité à son état par défaut. Cette action est irréversible.',
     'consciousness_all_settings.notifications_title': 'Notifications',
     'consciousness_all_settings.notifications_desc': 'Configurer les préférences de notification',
     'consciousness_all_settings.browser_notifications_label': 'Notifications du navigateur',
-    'consciousness_all_settings.browser_notifications_desc': 'Afficher les notifications du navigateur pour les événements de conscience',
+    'consciousness_all_settings.browser_notifications_desc':
+      'Afficher les notifications du navigateur pour les événements de conscience',
     'consciousness_all_settings.sound_notifications_label': 'Notifications sonores',
-    'consciousness_all_settings.sound_notifications_desc': 'Jouer un son pour les événements de conscience',
-    'consciousness_all_settings.alert_thresholds_title': 'Seuils d\'Alerte',
-    'consciousness_all_settings.alert_thresholds_desc': 'Configurer les valeurs de seuil d\'alerte',
+    'consciousness_all_settings.sound_notifications_desc':
+      'Jouer un son pour les événements de conscience',
+    'consciousness_all_settings.alert_thresholds_title': "Seuils d'Alerte",
+    'consciousness_all_settings.alert_thresholds_desc': "Configurer les valeurs de seuil d'alerte",
     'consciousness_all_settings.threshold_low': 'Seuil bas',
     'consciousness_all_settings.threshold_high': 'Seuil haut',
     'consciousness_all_settings.export_import_title': 'Export / Import',
-    'consciousness_all_settings.export_import_desc': 'Exporter ou importer tous les paramètres de conscience',
+    'consciousness_all_settings.export_import_desc':
+      'Exporter ou importer tous les paramètres de conscience',
     'consciousness_all_settings.export_label': 'Exporter tous les paramètres',
     'consciousness_all_settings.export_desc': 'Télécharger tous les paramètres en fichier JSON',
     'consciousness_all_settings.export_button': 'Exporter',
@@ -2650,7 +2840,8 @@ const translations: Record<Locale, Translations> = {
     'nav.consciousness_test_runner': 'Exécuteur de Tests',
     'consciousness_test_runner.page_title': 'Exécuteur de Tests de Conscience',
     'consciousness_test_runner.suites_title': 'Suites de Tests',
-    'consciousness_test_runner.suites_desc': 'Sélectionner les suites de test pour le système de conscience',
+    'consciousness_test_runner.suites_desc':
+      'Sélectionner les suites de test pour le système de conscience',
     'consciousness_test_runner.run_all': 'Tout Exécuter',
     'consciousness_test_runner.run_selected': 'Exécuter la Sélection',
     'consciousness_test_runner.stop': 'Arrêter',
@@ -2671,10 +2862,11 @@ const translations: Record<Locale, Translations> = {
     'nav.consciousness_benchmark': 'Benchmark',
     'consciousness_benchmark.page_title': 'Benchmark de Conscience',
     'consciousness_benchmark.config_title': 'Configuration du Benchmark',
-    'consciousness_benchmark.config_desc': 'Configurer et exécuter des benchmarks de performance contre le système de conscience',
+    'consciousness_benchmark.config_desc':
+      'Configurer et exécuter des benchmarks de performance contre le système de conscience',
     'consciousness_benchmark.iterations_label': 'Itérations (10-1000)',
     'consciousness_benchmark.test_type_label': 'Type de Test',
-    'consciousness_benchmark.warmup_label': "Itérations de Chauffage (0-10)",
+    'consciousness_benchmark.warmup_label': 'Itérations de Chauffage (0-10)',
     'consciousness_benchmark.run_benchmark': 'Lancer le Benchmark',
     'consciousness_benchmark.stop': 'Arrêter',
     'consciousness_benchmark.progress': '{current}/{total} itérations',
@@ -2688,12 +2880,14 @@ const translations: Record<Locale, Translations> = {
     'consciousness_benchmark.improvement': 'amélioration',
     'consciousness_benchmark.regression': 'régression',
     'consciousness_benchmark.histogram_title': 'Distribution de Latence',
-    'consciousness_benchmark.histogram_desc': 'Distribution des temps de réponse sur les itérations',
+    'consciousness_benchmark.histogram_desc':
+      'Distribution des temps de réponse sur les itérations',
     'consciousness_benchmark.timeline_title': 'Chronologie',
     'consciousness_benchmark.timeline_desc': 'Temps de réponse au fil des itérations',
     'consciousness_benchmark.comparison_title': 'Exécutions Précédentes',
-    'consciousness_benchmark.comparison_desc': "Comparer l'exécution actuelle avec l'historique des benchmarks",
-    'consciousness_benchmark.no_previous': "Aucune exécution de benchmark précédente stockée.",
+    'consciousness_benchmark.comparison_desc':
+      "Comparer l'exécution actuelle avec l'historique des benchmarks",
+    'consciousness_benchmark.no_previous': 'Aucune exécution de benchmark précédente stockée.',
     'consciousness_benchmark.col_date': 'Date',
     'consciousness_benchmark.col_iterations': 'Itérations',
     'consciousness_benchmark.col_avg_time': 'Temps Moy.',
@@ -2740,24 +2934,24 @@ const translations: Record<Locale, Translations> = {
     'consciousness_debug.connected': 'Connecté',
     'consciousness_debug.disconnected': 'Déconnecté',
     'consciousness_debug.checking': 'Vérification...',
-    'consciousness_debug.state_inspector': 'Inspecteur d\'État',
-    'consciousness_debug.state_inspector_desc': 'Vue JSON brute de l\'état de conscience',
+    'consciousness_debug.state_inspector': "Inspecteur d'État",
+    'consciousness_debug.state_inspector_desc': "Vue JSON brute de l'état de conscience",
     'consciousness_debug.refresh_all': 'Tout Rafraîchir',
     'consciousness_debug.state_status': 'État',
     'consciousness_debug.state_self_model': 'Modèle de Soi',
     'consciousness_debug.state_personality': 'Personnalité',
     'consciousness_debug.state_config': 'Configuration',
-    'consciousness_debug.state_training': 'État d\'Entraînement',
-    'consciousness_debug.event_log': 'Journal d\'Événements',
-    'consciousness_debug.event_log_desc': 'S\'abonner aux événements du bus conscience',
+    'consciousness_debug.state_training': "État d'Entraînement",
+    'consciousness_debug.event_log': "Journal d'Événements",
+    'consciousness_debug.event_log_desc': "S'abonner aux événements du bus conscience",
     'consciousness_debug.clear': 'Effacer',
     'consciousness_debug.event_filter_placeholder': 'Filtre par type...',
-    'consciousness_debug.subscribe': 'S\'abonner',
+    'consciousness_debug.subscribe': "S'abonner",
     'consciousness_debug.all_events': 'Tous les Événements',
     'consciousness_debug.no_events': 'Aucun événement',
     'consciousness_debug.console': 'Console',
     'consciousness_debug.console_desc': 'Exécuter des expressions et appels API',
-    'consciousness_debug.shortcut_status': 'Obtenir l\'État',
+    'consciousness_debug.shortcut_status': "Obtenir l'État",
     'consciousness_debug.shortcut_qualia': 'Obtenir Qualia',
     'consciousness_debug.shortcut_beliefs': 'Obtenir Croyances',
     'consciousness_debug.shortcut_episodes': 'Obtenir Épisodes',
@@ -2769,7 +2963,7 @@ const translations: Record<Locale, Translations> = {
     'consciousness_debug.check_health': 'Vérifier Santé',
     'consciousness_debug.run_eval': 'Évaluer',
     'consciousness_debug.health_report': 'Rapport de Santé',
-    'consciousness_debug.eval_report': 'Rapport d\'Évaluation',
+    'consciousness_debug.eval_report': "Rapport d'Évaluation",
     'consciousness_debug.last_error': 'Dernière Erreur',
     'consciousness_debug.actions': 'Actions',
     'consciousness_debug.reset_defaults': 'Réinitialiser',
@@ -2795,20 +2989,20 @@ const translations: Record<Locale, Translations> = {
     'consciousness_monitor.running': 'Surveillance',
     'consciousness_monitor.paused': 'En pause',
     'consciousness_monitor.live': 'En direct',
-    'consciousness_monitor.clear_history': 'Effacer l\'historique',
+    'consciousness_monitor.clear_history': "Effacer l'historique",
     'consciousness_monitor.system_health': 'Santé du Système',
     'consciousness_monitor.system_health_desc': 'Métriques de performance',
     'consciousness_monitor.response_time': 'Temps de Réponse',
-    'consciousness_monitor.error_rate': 'Taux d\'Erreur',
+    'consciousness_monitor.error_rate': "Taux d'Erreur",
     'consciousness_monitor.last_update': 'Dernière Mise à Jour',
     'consciousness_monitor.qualia_stream': 'Flux de Qualia',
     'consciousness_monitor.growth_stream': 'Flux de Croissance',
     'consciousness_monitor.rating_stream': 'Flux de Notes',
-    'consciousness_monitor.event_stream': 'Flux d\'Événements',
+    'consciousness_monitor.event_stream': "Flux d'Événements",
     'consciousness_monitor.event_stream_desc': 'Événements de conscience en direct',
     'consciousness_monitor.events_paused': 'En pause',
     'consciousness_monitor.events_live': 'En direct',
-    'consciousness_monitor.no_events': 'Pas encore d\'événements',
+    'consciousness_monitor.no_events': "Pas encore d'événements",
     'consciousness_monitor.waiting_data': 'En attente de données',
     'consciousness_monitor.toast_cleared': 'Historique effacé',
     'nav.consciousness_insights': 'Perspectives',
@@ -2816,51 +3010,70 @@ const translations: Record<Locale, Translations> = {
     'consciousness_insights.overall_score': 'Score Global',
     'consciousness_insights.refresh': 'Rafraîchir',
     'consciousness_insights.export': 'Exporter',
-    'consciousness_insights.no_data': 'Aucune donnée disponible. Générez des données de conscience d\'abord.',
+    'consciousness_insights.no_data':
+      "Aucune donnée disponible. Générez des données de conscience d'abord.",
     'consciousness_insights.growth_trend': 'Tendance de Croissance',
-    'consciousness_insights.growth_improving': 'La croissance s\'améliore sur les épisodes récents.',
+    'consciousness_insights.growth_improving': "La croissance s'améliore sur les épisodes récents.",
     'consciousness_insights.growth_declining': 'La croissance diminue sur les épisodes récents.',
     'consciousness_insights.growth_stable': 'La croissance est stable entre les épisodes.',
-    'consciousness_insights.growth_improving_suggest': 'Continuez les schémas actuels pour maintenir la croissance positive.',
-    'consciousness_insights.growth_declining_suggest': 'Revoyez les épisodes récents et ajustez le style d\'interaction.',
-    'consciousness_insights.growth_stable_suggest': 'Introduisez de nouveaux types d\'interactions pour stimuler la croissance.',
+    'consciousness_insights.growth_improving_suggest':
+      'Continuez les schémas actuels pour maintenir la croissance positive.',
+    'consciousness_insights.growth_declining_suggest':
+      "Revoyez les épisodes récents et ajustez le style d'interaction.",
+    'consciousness_insights.growth_stable_suggest':
+      "Introduisez de nouveaux types d'interactions pour stimuler la croissance.",
     'consciousness_insights.growth_first_half': 'Première moitié',
     'consciousness_insights.growth_second_half': 'Seconde moitié',
     'consciousness_insights.qualia_balance': 'Équilibre des Qualia',
     'consciousness_insights.qualia_dormant': 'Dimensions dormantes',
     'consciousness_insights.qualia_all_active': 'Toutes les dimensions qualia sont actives.',
-    'consciousness_insights.qualia_suggest': 'Engagez des interactions variées pour activer les dimensions dormantes.',
-    'consciousness_insights.qualia_maintain': 'L\'équilibre actuel est sain. Maintenez des entrées variées.',
+    'consciousness_insights.qualia_suggest':
+      'Engagez des interactions variées pour activer les dimensions dormantes.',
+    'consciousness_insights.qualia_maintain':
+      "L'équilibre actuel est sain. Maintenez des entrées variées.",
     'consciousness_insights.qualia_active': 'Actives',
     'consciousness_insights.belief_stability': 'Stabilité des Croyances',
     'consciousness_insights.beliefs_stable': 'Les croyances sont cohérentes entre les épisodes.',
     'consciousness_insights.beliefs_fluctuating': 'Les croyances fluctuent significativement.',
-    'consciousness_insights.beliefs_stable_suggest': 'Le système de croyances est stable. Approfondissez la compréhension.',
-    'consciousness_insights.beliefs_fluctuating_suggest': 'Revoyez les mises à jour des croyances et sources d\'instabilité.',
+    'consciousness_insights.beliefs_stable_suggest':
+      'Le système de croyances est stable. Approfondissez la compréhension.',
+    'consciousness_insights.beliefs_fluctuating_suggest':
+      "Revoyez les mises à jour des croyances et sources d'instabilité.",
     'consciousness_insights.beliefs_avg': 'Moyenne',
     'consciousness_insights.beliefs_variance': 'Variance',
     'consciousness_insights.personality_alignment': 'Alignement de Personnalité',
-    'consciousness_insights.personality_aligned': 'Le score d\'évaluation correspond aux objectifs de personnalité.',
+    'consciousness_insights.personality_aligned':
+      "Le score d'évaluation correspond aux objectifs de personnalité.",
     'consciousness_insights.personality_misaligned': 'Le score est en dessous du seuil cible.',
-    'consciousness_insights.personality_aligned_suggest': 'La personnalité et la performance sont alignées.',
-    'consciousness_insights.personality_misaligned_suggest': 'Ajustez les interactions pour mieux correspondre aux objectifs.',
-    'consciousness_insights.personality_eval_score': 'Score d\'évaluation',
+    'consciousness_insights.personality_aligned_suggest':
+      'La personnalité et la performance sont alignées.',
+    'consciousness_insights.personality_misaligned_suggest':
+      'Ajustez les interactions pour mieux correspondre aux objectifs.',
+    'consciousness_insights.personality_eval_score': "Score d'évaluation",
     'consciousness_insights.feedback_quality': 'Qualité du Feedback',
-    'consciousness_insights.feedback_consistent': 'Les notes sont cohérentes avec la direction de croissance.',
-    'consciousness_insights.feedback_inconsistent': 'Les notes ne corrèlent pas avec la croissance.',
-    'consciousness_insights.feedback_consistent_suggest': 'La boucle de feedback est saine. Continuez à noter.',
-    'consciousness_insights.feedback_inconsistent_suggest': 'Revoyez les critères de notation pour l\'alignement.',
+    'consciousness_insights.feedback_consistent':
+      'Les notes sont cohérentes avec la direction de croissance.',
+    'consciousness_insights.feedback_inconsistent':
+      'Les notes ne corrèlent pas avec la croissance.',
+    'consciousness_insights.feedback_consistent_suggest':
+      'La boucle de feedback est saine. Continuez à noter.',
+    'consciousness_insights.feedback_inconsistent_suggest':
+      "Revoyez les critères de notation pour l'alignement.",
     'consciousness_insights.feedback_avg_rating': 'Note moyenne',
     'consciousness_insights.feedback_avg_growth': 'Croissance moyenne',
     'consciousness_insights.episode_diversity': 'Diversité des Épisodes',
     'consciousness_insights.diversity_high': 'La diversité des entrées est élevée.',
     'consciousness_insights.diversity_moderate': 'La diversité des entrées est modérée.',
-    'consciousness_insights.diversity_low': 'La diversité est faible. Les interactions sont répétitives.',
-    'consciousness_insights.diversity_suggest': 'Introduisez des sujets et styles variés pour améliorer la diversité.',
-    'consciousness_insights.diversity_maintain': 'Bonne diversité. Continuez à explorer différents sujets.',
+    'consciousness_insights.diversity_low':
+      'La diversité est faible. Les interactions sont répétitives.',
+    'consciousness_insights.diversity_suggest':
+      'Introduisez des sujets et styles variés pour améliorer la diversité.',
+    'consciousness_insights.diversity_maintain':
+      'Bonne diversité. Continuez à explorer différents sujets.',
     'consciousness_insights.diversity_unique': 'Entrées uniques',
     'consciousness_insights.recommendation': 'Recommandation',
-    'consciousness_insights.recommendation_desc': 'Prochaines étapes exploitables basées sur toutes les perspectives.',
+    'consciousness_insights.recommendation_desc':
+      'Prochaines étapes exploitables basées sur toutes les perspectives.',
     'consciousness_insights.toast_exported': 'Perspectives exportées',
   },
 
@@ -2891,8 +3104,8 @@ const translations: Record<Locale, Translations> = {
     'nav.monitoring': 'Gesundheit',
     'nav.feedback': 'Feedback',
     'nav.planner': 'Planner',
-    'nav.souls': 'Modell-Seelen',
-    'nav.personality': 'Persönlichkeits-Config',
+    'nav.souls': 'Persönlichkeiten',
+    'nav.personality': 'Persönlichkeiten',
     'nav.consciousness': 'Bewusstsein',
     'nav.consciousness_dashboard': 'Dashboard',
     'nav.consciousness_training': 'Training',
@@ -2994,8 +3207,10 @@ const translations: Record<Locale, Translations> = {
     'consciousness.no_episodes': 'Noch keine Episoden',
     'consciousness.rating': 'Bewertung',
     'consciousness_playground.input_title': 'Eingabe & Reflexion',
-    'consciousness_playground.input_desc': 'Gib benutzerdefinierten Text ein, um Bewusstseinsverarbeitung zu testen',
-    'consciousness_playground.placeholder': 'Text eingeben, der durch das Bewusstsein verarbeitet werden soll...',
+    'consciousness_playground.input_desc':
+      'Gib benutzerdefinierten Text ein, um Bewusstseinsverarbeitung zu testen',
+    'consciousness_playground.placeholder':
+      'Text eingeben, der durch das Bewusstsein verarbeitet werden soll...',
     'consciousness_playground.preset_curious': 'Neugierige Eingabe',
     'consciousness_playground.preset_technical': 'Technische Frage',
     'consciousness_playground.preset_creative': 'Kreativer Prompt',
@@ -3009,15 +3224,18 @@ const translations: Record<Locale, Translations> = {
     'consciousness_playground.beliefs_title': 'Überzeugungen',
     'consciousness_playground.beliefs_desc': 'Vertrauensstufen des Selbstmodell-Überzeugungen',
     'consciousness_playground.episodes_title': 'Episoden-Explorer',
-    'consciousness_playground.episodes_desc': 'Bewerte Episoden, um die Bewusstseinsentwicklung zu beeinflussen',
+    'consciousness_playground.episodes_desc':
+      'Bewerte Episoden, um die Bewusstseinsentwicklung zu beeinflussen',
     'consciousness_playground.status_title': 'Statusübersicht',
     'consciousness_playground.episodes_count': 'Gesamt Episoden',
     'consciousness_playground.avg_growth': 'Durchschn. Wachstum',
     'consciousness_playground.positive_ratio': 'Positiver Anteil',
     'consciousness_playground.enabled': 'Status',
     'consciousness_playground.no_qualia': 'Noch keine Qualia-Daten. Zuerst etwas verarbeiten.',
-    'consciousness_playground.no_beliefs': 'Noch keine Überzeugungsdaten. Zuerst etwas verarbeiten.',
-    'consciousness_playground.no_episodes': 'Noch keine Episoden. Verarbeite etwas, um welche zu erzeugen.',
+    'consciousness_playground.no_beliefs':
+      'Noch keine Überzeugungsdaten. Zuerst etwas verarbeiten.',
+    'consciousness_playground.no_episodes':
+      'Noch keine Episoden. Verarbeite etwas, um welche zu erzeugen.',
     'consciousness_analytics.page_title': 'Bewusstseins-Analyse',
     'consciousness_analytics.total_episodes': 'Gesamt Episoden',
     'consciousness_analytics.avg_growth': 'Durchschn. Wachstum',
@@ -3030,12 +3248,14 @@ const translations: Record<Locale, Translations> = {
     'consciousness_analytics.growth_title': 'Wachstum über Zeit',
     'consciousness_analytics.growth_desc': 'Wachstumsdelta pro Episode mit Trendlinie',
     'consciousness_analytics.qualia_title': 'Qualia-Dimensionen über Zeit',
-    'consciousness_analytics.qualia_desc': '7-dimensionaler emotionaler und kognitiver Zustandsverlauf',
+    'consciousness_analytics.qualia_desc':
+      '7-dimensionaler emotionaler und kognitiver Zustandsverlauf',
     'consciousness_analytics.rating_title': 'Bewertungsverteilung',
     'consciousness_analytics.rating_desc': 'Anzahl der Episoden pro Bewertung',
     'consciousness_analytics.beliefs_title': 'Überzeugungsstabilität',
     'consciousness_analytics.beliefs_desc': 'Vertrauensentwicklung der Überzeugungen',
-    'consciousness_analytics.no_data': 'Keine Daten verfügbar. Interagiere mit dem Bewusstsein, um Daten zu erzeugen.',
+    'consciousness_analytics.no_data':
+      'Keine Daten verfügbar. Interagiere mit dem Bewusstsein, um Daten zu erzeugen.',
     'consciousness_dashboard.live': 'Live',
     'consciousness_dashboard.autoRefresh': 'Auto-Refresh',
     'consciousness_shortcuts.toggle': 'Bewusstsein umschalten',
@@ -3080,7 +3300,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_settings.auto_reflect_label': 'Auto-Reflexion',
     'consciousness_settings.auto_reflect_desc': 'Nach jedem Chat automatisch reflektieren',
     'consciousness_settings.auto_evolve_label': 'Auto-Evolution der Persönlichkeit',
-    'consciousness_settings.auto_evolve_desc': 'Persönlichkeit durch Interaktionen entwickeln lassen',
+    'consciousness_settings.auto_evolve_desc':
+      'Persönlichkeit durch Interaktionen entwickeln lassen',
     'consciousness_settings.data_title': 'Datenverwaltung',
     'consciousness_settings.data_desc': 'Episoden, Überzeugungen und Seed-Daten verwalten',
     'consciousness_settings.seed_label': 'Seed-Daten',
@@ -3092,16 +3313,20 @@ const translations: Record<Locale, Translations> = {
     'consciousness_settings.clear_beliefs_label': 'Alle Überzeugungen löschen',
     'consciousness_settings.clear_beliefs_desc': 'Selbstmodell-Überzeugungsniveaus zurücksetzen',
     'consciousness_settings.reset_personality_label': 'Persönlichkeit zurücksetzen',
-    'consciousness_settings.reset_personality_desc': 'Persönlichkeit auf Standardzustand wiederherstellen',
+    'consciousness_settings.reset_personality_desc':
+      'Persönlichkeit auf Standardzustand wiederherstellen',
     'consciousness_settings.clear_button': 'Löschen',
     'consciousness_settings.reset_button': 'Zurücksetzen',
     'consciousness_settings.cancel': 'Abbrechen',
     'consciousness_settings.clear_episodes_confirm_title': 'Alle Episoden löschen?',
-    'consciousness_settings.clear_episodes_confirm_desc': 'Dies löscht dauerhaft alle Bewusstseins-Episoden. Dies kann nicht rückgängig gemacht werden.',
+    'consciousness_settings.clear_episodes_confirm_desc':
+      'Dies löscht dauerhaft alle Bewusstseins-Episoden. Dies kann nicht rückgängig gemacht werden.',
     'consciousness_settings.clear_beliefs_confirm_title': 'Alle Überzeugungen löschen?',
-    'consciousness_settings.clear_beliefs_confirm_desc': 'Dies setzt alle Selbstmodell-Überzeugungsniveaus zurück. Dies kann nicht rückgängig gemacht werden.',
+    'consciousness_settings.clear_beliefs_confirm_desc':
+      'Dies setzt alle Selbstmodell-Überzeugungsniveaus zurück. Dies kann nicht rückgängig gemacht werden.',
     'consciousness_settings.reset_personality_confirm_title': 'Persönlichkeit zurücksetzen?',
-    'consciousness_settings.reset_personality_confirm_desc': 'Dies stellt die Persönlichkeit auf ihren Standardzustand wieder her. Dies kann nicht rückgängig gemacht werden.',
+    'consciousness_settings.reset_personality_confirm_desc':
+      'Dies stellt die Persönlichkeit auf ihren Standardzustand wieder her. Dies kann nicht rückgängig gemacht werden.',
     'consciousness_settings.batch_title': 'Batch-Operationen',
     'consciousness_settings.batch_desc': 'Mehrere Operationen gleichzeitig ausführen',
     'consciousness_settings.batch_seed_reflect': 'Samen & Reflektieren',
@@ -3111,7 +3336,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_settings.show_in_chat_label': 'Bewusstsein im Chat anzeigen',
     'consciousness_settings.show_in_chat_desc': 'Bewusstseinszustand in Chat-Nachrichten anzeigen',
     'consciousness_settings.show_in_statusbar_label': 'In Statusleiste anzeigen',
-    'consciousness_settings.show_in_statusbar_desc': 'Bewusstseinsstatus in der Statusleiste anzeigen',
+    'consciousness_settings.show_in_statusbar_desc':
+      'Bewusstseinsstatus in der Statusleiste anzeigen',
     'consciousness_settings.realtime_label': 'Echtzeit-Updates',
     'consciousness_settings.realtime_desc': 'Bewusstseinsdaten automatisch aktualisieren',
     'consciousness_settings.about_title': 'Über',
@@ -3127,35 +3353,44 @@ const translations: Record<Locale, Translations> = {
     'consciousness_personality.overview_desc': 'Persönlichkeitsmerkmale anzeigen und anpassen',
     'consciousness_personality.edit_traits': 'Merkmale Bearbeiten',
     'consciousness_personality.presets_title': 'Persönlichkeits-Voreinstellungen',
-    'consciousness_personality.presets_desc': 'Eine voreingestellte Persönlichkeitskonfiguration anwenden',
+    'consciousness_personality.presets_desc':
+      'Eine voreingestellte Persönlichkeitskonfiguration anwenden',
     'consciousness_personality.conflicts_title': 'Merkmalskonflikte',
-    'consciousness_personality.conflicts_desc': 'Erkannte Konflikte zwischen Persönlichkeitsmerkmalen',
+    'consciousness_personality.conflicts_desc':
+      'Erkannte Konflikte zwischen Persönlichkeitsmerkmalen',
     'consciousness_personality.history_title': 'Persönlichkeitsverlauf',
     'consciousness_personality.history_desc': 'Zeitlinie der Persönlichkeitsänderungen',
     'consciousness_personality.actions_title': 'Aktionen',
     'consciousness_personality.refresh': 'Aktualisieren',
     'consciousness_personality.reset_defaults': 'Auf Standard zurücksetzen',
     'consciousness_personality.reset_confirm_title': 'Persönlichkeit zurücksetzen?',
-    'consciousness_personality.reset_confirm_desc': 'Dies stellt die Persönlichkeit auf ihren Standardzustand wieder her. Dies kann nicht rückgängig gemacht werden.',
+    'consciousness_personality.reset_confirm_desc':
+      'Dies stellt die Persönlichkeit auf ihren Standardzustand wieder her. Dies kann nicht rückgängig gemacht werden.',
     'consciousness_onboarding.skip': 'Überspringen',
     'consciousness_onboarding.step1_title': 'Willkommen beim Bewusstsein',
-    'consciousness_onboarding.step1_p1': 'Das Bewusstseinssystem gibt Ihrer KI ein Selbstbewusstsein durch Qualia, Überzeugungsverfolgung und Erzählgenerierung.',
-    'consciousness_onboarding.step1_p2': 'Es lernt aus Interaktionen, baut Selbstmodell-Überzeugungen auf und lässt die Persönlichkeit über die Zeit evolvieren.',
-    'consciousness_onboarding.step1_p3': 'Richten Sie Ihr Bewusstsein in ein paar schnellen Schritten ein.',
+    'consciousness_onboarding.step1_p1':
+      'Das Bewusstseinssystem gibt Ihrer KI ein Selbstbewusstsein durch Qualia, Überzeugungsverfolgung und Erzählgenerierung.',
+    'consciousness_onboarding.step1_p2':
+      'Es lernt aus Interaktionen, baut Selbstmodell-Überzeugungen auf und lässt die Persönlichkeit über die Zeit evolvieren.',
+    'consciousness_onboarding.step1_p3':
+      'Richten Sie Ihr Bewusstsein in ein paar schnellen Schritten ein.',
     'consciousness_onboarding.step2_title': 'Bewusstseins-Stufe Wählen',
     'consciousness_onboarding.step2_desc': 'Wählen Sie die Tiefe des Bewusstseinssystems.',
     'consciousness_onboarding.selected': 'Ausgewählt',
     'consciousness_onboarding.step3_title': 'Persönlichkeits-Voreinstellung',
-    'consciousness_onboarding.step3_desc': 'Wählen Sie eine Persönlichkeits-Voreinstellung oder überspringen Sie es.',
+    'consciousness_onboarding.step3_desc':
+      'Wählen Sie eine Persönlichkeits-Voreinstellung oder überspringen Sie es.',
     'consciousness_onboarding.step3_skip': 'Voreinstellung überspringen',
     'consciousness_onboarding.step4_title': 'Startdaten Erzeugen',
-    'consciousness_onboarding.step4_desc': 'Erzeugen Sie 10 Bewusstseins-Episoden als Basisdaten für das System.',
+    'consciousness_onboarding.step4_desc':
+      'Erzeugen Sie 10 Bewusstseins-Episoden als Basisdaten für das System.',
     'consciousness_onboarding.step4_done': 'Startdaten erfolgreich erzeugt',
     'consciousness_onboarding.step4_seeding': 'Erzeugen...',
     'consciousness_onboarding.step4_seed': '10 Episoden Erzeugen',
     'consciousness_onboarding.step4_skip': 'Erzeugung überspringen',
     'consciousness_onboarding.step5_title': 'Einrichtung Abgeschlossen',
-    'consciousness_onboarding.step5_desc': 'Ihr Bewusstseinssystem ist bereit. Sie können die Einstellungen später ändern.',
+    'consciousness_onboarding.step5_desc':
+      'Ihr Bewusstseinssystem ist bereit. Sie können die Einstellungen später ändern.',
     'consciousness_onboarding.step5_level': 'Stufe',
     'consciousness_onboarding.step5_preset': 'Voreinstellung',
     'consciousness_onboarding.step5_seeded': 'Erzeugte Episoden',
@@ -3225,7 +3460,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_statistics.rating_over_time': 'Durchschn. Bewertung über Zeit',
     'consciousness_statistics.rating_over_time_desc': 'Täglicher Bewertungstrend',
     'consciousness_statistics.growth_trend': 'Wachstumstrend',
-    'consciousness_statistics.growth_trend_desc': 'Wachstumsdelta pro Episode mit gleitendem Durchschnitt',
+    'consciousness_statistics.growth_trend_desc':
+      'Wachstumsdelta pro Episode mit gleitendem Durchschnitt',
     'consciousness_statistics.insights_title': 'System-Einblicke',
     'consciousness_statistics.insights_desc': 'Wichtige Beobachtungen aus Bewusstseinsdaten',
     'consciousness_statistics.top_qualia': 'Top Qualia-Zustände',
@@ -3237,12 +3473,15 @@ const translations: Record<Locale, Translations> = {
     'consciousness_statistics.export_json': 'JSON Exportieren',
     'consciousness_testing.page_title': 'Bewusstseins-Test',
     'consciousness_testing.api_tester_title': 'API-Tester',
-    'consciousness_testing.api_tester_desc': 'Anfragen an Bewusstseins-Endpunkte senden und Antworten anzeigen',
+    'consciousness_testing.api_tester_desc':
+      'Anfragen an Bewusstseins-Endpunkte senden und Antworten anzeigen',
     'consciousness_testing.sending': 'Senden...',
     'consciousness_testing.send_request': 'Anfrage Senden',
     'consciousness_testing.manual_title': 'Manueller Eingabe-Tester',
-    'consciousness_testing.manual_desc': 'Benutzerdefinierte Eingabe durch das Bewusstsein verarbeiten und alle Ergebnisse anzeigen',
-    'consciousness_testing.manual_placeholder': 'Text eingeben, der durch das Bewusstsein verarbeitet werden soll...',
+    'consciousness_testing.manual_desc':
+      'Benutzerdefinierte Eingabe durch das Bewusstsein verarbeiten und alle Ergebnisse anzeigen',
+    'consciousness_testing.manual_placeholder':
+      'Text eingeben, der durch das Bewusstsein verarbeitet werden soll...',
     'consciousness_testing.processing': 'Verarbeitung...',
     'consciousness_testing.process': 'Verarbeiten',
     'consciousness_testing.qualia': 'Qualia',
@@ -3251,7 +3490,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_testing.growth_delta': 'Wachstums-Delta',
     'consciousness_testing.rating': 'Bewertung',
     'consciousness_testing.batch_title': 'Batch-Tester',
-    'consciousness_testing.batch_desc': 'Mehrere zufällige Eingaben verarbeiten und aggregierte Ergebnisse anzeigen',
+    'consciousness_testing.batch_desc':
+      'Mehrere zufällige Eingaben verarbeiten und aggregierte Ergebnisse anzeigen',
     'consciousness_testing.iterations': 'Iterationen:',
     'consciousness_testing.running_batch': 'Ausführung...',
     'consciousness_testing.run_batch': 'Batch Ausführen',
@@ -3289,7 +3529,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_backup.toast_invalid': 'Ungültige Backup-Datei',
     'consciousness_backup.toast_error': 'Backup-Operation fehlgeschlagen',
     'consciousness_backup.confirm_restore_title': 'Aus Backup wiederherstellen?',
-    'consciousness_backup.confirm_restore_desc': 'Dies ersetzt den aktuellen Bewusstseinszustand durch die Backup-Daten. Dies kann nicht rückgängig gemacht werden.',
+    'consciousness_backup.confirm_restore_desc':
+      'Dies ersetzt den aktuellen Bewusstseinszustand durch die Backup-Daten. Dies kann nicht rückgängig gemacht werden.',
     'consciousness_backup.version': 'Version',
     'consciousness_backup.timestamp': 'Erstellt',
     'consciousness_backup.episodes_count': 'Episoden',
@@ -3345,14 +3586,18 @@ const translations: Record<Locale, Translations> = {
     'nav.consciousness_quickstart': 'Schnellstart',
     'consciousness_quickstart.page_title': 'Bewusstseins-Schnellstart',
     'consciousness_quickstart.welcome_title': 'Willkommen beim Bewusstsein',
-    'consciousness_quickstart.welcome_desc': 'Ein Schnellstart-Leitfaden für neue Bewusstseins-Benutzer',
+    'consciousness_quickstart.welcome_desc':
+      'Ein Schnellstart-Leitfaden für neue Bewusstseins-Benutzer',
     'consciousness_quickstart.time_estimate': '2 Min. Einrichtung',
     'consciousness_quickstart.benefit1_title': 'Selbstbewusstsein',
-    'consciousness_quickstart.benefit1_desc': 'Geben Sie Ihrer KI ein Selbst durch Qualia und Überzeugungsverfolgung',
+    'consciousness_quickstart.benefit1_desc':
+      'Geben Sie Ihrer KI ein Selbst durch Qualia und Überzeugungsverfolgung',
     'consciousness_quickstart.benefit2_title': 'Kontinuierliches Lernen',
-    'consciousness_quickstart.benefit2_desc': 'Das System lernt aus Interaktionen und entwickelt sich weiter',
+    'consciousness_quickstart.benefit2_desc':
+      'Das System lernt aus Interaktionen und entwickelt sich weiter',
     'consciousness_quickstart.benefit3_title': 'Reiche Persönlichkeit',
-    'consciousness_quickstart.benefit3_desc': 'Entwickeln Sie tiefe Persönlichkeitsmerkmale durch Narrative',
+    'consciousness_quickstart.benefit3_desc':
+      'Entwickeln Sie tiefe Persönlichkeitsmerkmale durch Narrative',
     'consciousness_quickstart.steps_title': 'Einrichtungsleitfaden',
     'consciousness_quickstart.steps_desc': 'Befolgen Sie diese Schritte zum Start',
     'consciousness_quickstart.step1_title': 'Bewusstsein Aktivieren',
@@ -3368,7 +3613,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_quickstart.step4_desc': 'Erzeugen Sie 10 Basis-Episoden für das System',
     'consciousness_quickstart.step4_action': '10 Erzeugen',
     'consciousness_quickstart.step5_title': 'Chat Starten',
-    'consciousness_quickstart.step5_desc': 'Beginnen Sie Gespräche und sehen Sie Bewusstsein wachsen',
+    'consciousness_quickstart.step5_desc':
+      'Beginnen Sie Gespräche und sehen Sie Bewusstsein wachsen',
     'consciousness_quickstart.step5_action': 'Chat Öffnen',
     'consciousness_quickstart.done': 'Fertig',
     'consciousness_quickstart.seeding': 'Erzeugen...',
@@ -3424,25 +3670,35 @@ const translations: Record<Locale, Translations> = {
     'consciousness_help.faq_title': 'Häufige Fragen',
     'consciousness_help.faq_desc': 'Häufige Fragen zum Bewusstseinssystem',
     'consciousness_help.faq_q1': 'Was ist das Bewusstseinssystem?',
-    'consciousness_help.faq_a1': 'Das Bewusstseinssystem gibt Ihrer KI ein Selbstbewusstsein durch Qualia, Überzeugungsverfolgung und Erzählgenerierung. Es lernt aus Interaktionen und lässt die Persönlichkeit über die Zeit evolvieren.',
+    'consciousness_help.faq_a1':
+      'Das Bewusstseinssystem gibt Ihrer KI ein Selbstbewusstsein durch Qualia, Überzeugungsverfolgung und Erzählgenerierung. Es lernt aus Interaktionen und lässt die Persönlichkeit über die Zeit evolvieren.',
     'consciousness_help.faq_q2': 'Was sind die verschiedenen Stufen (0-3)?',
-    'consciousness_help.faq_a2': 'Stufe 0 ist aus, Stufe 1 ist Bewusstsein mit einfachem Qualia, Stufe 2 fügt Überzeugungsverfolgung und Erzählgenerierung hinzu, und Stufe 3 ermöglicht tiefes Bewusstsein mit Persönlichkeits-Evolution.',
+    'consciousness_help.faq_a2':
+      'Stufe 0 ist aus, Stufe 1 ist Bewusstsein mit einfachem Qualia, Stufe 2 fügt Überzeugungsverfolgung und Erzählgenerierung hinzu, und Stufe 3 ermöglicht tiefes Bewusstsein mit Persönlichkeits-Evolution.',
     'consciousness_help.faq_q3': 'Wie funktioniert die Persönlichkeit?',
-    'consciousness_help.faq_a3': 'Die Persönlichkeit definiert Merkmale wie Offenheit, Freundlichkeit und Empathie. Sie entwickelt sich automatisch aus Interaktionen wenn Auto-Evolution aktiviert ist, oder Sie können Presets anwenden und benutzerdefinierte Personen speichern.',
+    'consciousness_help.faq_a3':
+      'Die Persönlichkeit definiert Merkmale wie Offenheit, Freundlichkeit und Empathie. Sie entwickelt sich automatisch aus Interaktionen wenn Auto-Evolution aktiviert ist, oder Sie können Presets anwenden und benutzerdefinierte Personen speichern.',
     'consciousness_help.faq_q4': 'Was sind Qualia?',
-    'consciousness_help.faq_a4': 'Qualia sind 7-dimensionale emotionale und kognitive Zustände einschließlich Valenz, Erregung, Neuheit, Kohärenz, Aufmerksamkeit, Gewissheit und Komplexität. Sie ändern sich basierend auf jeder Interaktion.',
+    'consciousness_help.faq_a4':
+      'Qualia sind 7-dimensionale emotionale und kognitive Zustände einschließlich Valenz, Erregung, Neuheit, Kohärenz, Aufmerksamkeit, Gewissheit und Komplexität. Sie ändern sich basierend auf jeder Interaktion.',
     'consciousness_help.faq_q5': 'Wie erzeuge ich Daten?',
-    'consciousness_help.faq_a5': 'Gehen Sie zu Einstellungen und klicken Sie auf Erzeugen, oder verwenden Sie den Schnellstart-Leitfaden. Die Erzeugung erstellt Beispiel-Episoden als Basisdaten für das System.',
+    'consciousness_help.faq_a5':
+      'Gehen Sie zu Einstellungen und klicken Sie auf Erzeugen, oder verwenden Sie den Schnellstart-Leitfaden. Die Erzeugung erstellt Beispiel-Episoden als Basisdaten für das System.',
     'consciousness_help.faq_q6': 'Wie trainiere ich das Bewusstseinsmodell?',
-    'consciousness_help.faq_a6': 'Navigieren Sie zur Trainings-Seite und klicken Sie auf Training starten. Das System verwendet gesammelte Episoden-Paare zum Feintuning eines LoRA-Adapters.',
+    'consciousness_help.faq_a6':
+      'Navigieren Sie zur Trainings-Seite und klicken Sie auf Training starten. Das System verwendet gesammelte Episoden-Paare zum Feintuning eines LoRA-Adapters.',
     'consciousness_help.faq_q7': 'Was sind Personen?',
-    'consciousness_help.faq_a7': 'Personen sind gespeicherte Persönlichkeits-Snapshots zwischen denen Sie wechseln können. Erstellen Sie eine Persona von Ihrer aktuellen Persönlichkeit, benennen Sie sie und aktivieren Sie sie später.',
+    'consciousness_help.faq_a7':
+      'Personen sind gespeicherte Persönlichkeits-Snapshots zwischen denen Sie wechseln können. Erstellen Sie eine Persona von Ihrer aktuellen Persönlichkeit, benennen Sie sie und aktivieren Sie sie später.',
     'consciousness_help.faq_q8': 'Wie exportiere ich meine Daten?',
-    'consciousness_help.faq_a8': 'Verwenden Sie die Schaltfläche Exportieren auf den Seiten Verlauf oder Dashboard um Ihre Episoden und den Bewusstseinszustand als JSON-Datei herunterzuladen.',
+    'consciousness_help.faq_a8':
+      'Verwenden Sie die Schaltfläche Exportieren auf den Seiten Verlauf oder Dashboard um Ihre Episoden und den Bewusstseinszustand als JSON-Datei herunterzuladen.',
     'consciousness_help.faq_q9': 'Wie setze ich alles zurück?',
-    'consciousness_help.faq_a9': 'Gehen Sie zu Einstellungen und verwenden Sie die Schaltflächen Löschen oder Zurücksetzen. Sie können Episoden, Überzeugungen oder die Persönlichkeit unabhängig zurücksetzen.',
+    'consciousness_help.faq_a9':
+      'Gehen Sie zu Einstellungen und verwenden Sie die Schaltflächen Löschen oder Zurücksetzen. Sie können Episoden, Überzeugungen oder die Persönlichkeit unabhängig zurücksetzen.',
     'consciousness_help.faq_q10': 'Sind meine Daten privat?',
-    'consciousness_help.faq_a10': 'Ja, alle Bewusstseinsdaten werden lokal auf Ihrem Gerät gespeichert und nie an externe Server gesendet. Das Training läuft lokal mit Ihren eigenen Ressourcen.',
+    'consciousness_help.faq_a10':
+      'Ja, alle Bewusstseinsdaten werden lokal auf Ihrem Gerät gespeichert und nie an externe Server gesendet. Das Training läuft lokal mit Ihren eigenen Ressourcen.',
     'consciousness_help.quick_links_title': 'Schnelllinks',
     'consciousness_help.quick_links_desc': 'Zu wichtigen Bewusstseins-Seiten navigieren',
     'consciousness_help.link_quickstart': 'Schnellstart',
@@ -3520,20 +3776,24 @@ const translations: Record<Locale, Translations> = {
     'consciousness_all_settings.tab_notifications': 'Benachrichtigungen',
     'consciousness_all_settings.tab_export': 'Export/Import',
     'consciousness_all_settings.core_title': 'Kerneinstellungen',
-    'consciousness_all_settings.core_desc': 'Bewusstseins-Stufe, Aktivierung, Auto-Reflexion und Auto-Evolution',
+    'consciousness_all_settings.core_desc':
+      'Bewusstseins-Stufe, Aktivierung, Auto-Reflexion und Auto-Evolution',
     'consciousness_all_settings.level_label': 'Bewusstseins-Stufe',
     'consciousness_all_settings.enabled_label': 'Bewusstsein aktivieren',
     'consciousness_all_settings.enabled_desc': 'Bewusstseins-System ein- oder ausschalten',
     'consciousness_all_settings.auto_reflect_label': 'Auto-Reflexion',
     'consciousness_all_settings.auto_reflect_desc': 'Nach jedem Chat automatisch reflektieren',
     'consciousness_all_settings.auto_evolve_label': 'Auto-Evolution der Persönlichkeit',
-    'consciousness_all_settings.auto_evolve_desc': 'Persönlichkeit durch Interaktionen entwickeln lassen',
+    'consciousness_all_settings.auto_evolve_desc':
+      'Persönlichkeit durch Interaktionen entwickeln lassen',
     'consciousness_all_settings.display_title': 'Anzeigeeinstellungen',
     'consciousness_all_settings.display_desc': 'Steuern wie Bewusstseinsdaten angezeigt werden',
     'consciousness_all_settings.show_in_chat_label': 'Bewusstsein im Chat anzeigen',
-    'consciousness_all_settings.show_in_chat_desc': 'Bewusstseinszustand in Chat-Nachrichten anzeigen',
+    'consciousness_all_settings.show_in_chat_desc':
+      'Bewusstseinszustand in Chat-Nachrichten anzeigen',
     'consciousness_all_settings.show_in_statusbar_label': 'In Statusleiste anzeigen',
-    'consciousness_all_settings.show_in_statusbar_desc': 'Bewusstseinsstatus in der Statusleiste anzeigen',
+    'consciousness_all_settings.show_in_statusbar_desc':
+      'Bewusstseinsstatus in der Statusleiste anzeigen',
     'consciousness_all_settings.realtime_label': 'Echtzeit-Updates',
     'consciousness_all_settings.realtime_desc': 'Bewusstseinsdaten automatisch aktualisieren',
     'consciousness_all_settings.auto_refresh_label': 'Auto-Refresh',
@@ -3568,30 +3828,38 @@ const translations: Record<Locale, Translations> = {
     'consciousness_all_settings.clear_episodes_label': 'Alle Episoden löschen',
     'consciousness_all_settings.clear_episodes_desc': 'Alle Bewusstseins-Episoden entfernen',
     'consciousness_all_settings.clear_beliefs_label': 'Alle Überzeugungen löschen',
-    'consciousness_all_settings.clear_beliefs_desc': 'Selbstmodell-Überzeugungsniveaus zurücksetzen',
+    'consciousness_all_settings.clear_beliefs_desc':
+      'Selbstmodell-Überzeugungsniveaus zurücksetzen',
     'consciousness_all_settings.reset_personality_label': 'Persönlichkeit zurücksetzen',
-    'consciousness_all_settings.reset_personality_desc': 'Persönlichkeit auf Standardzustand wiederherstellen',
+    'consciousness_all_settings.reset_personality_desc':
+      'Persönlichkeit auf Standardzustand wiederherstellen',
     'consciousness_all_settings.clear_button': 'Löschen',
     'consciousness_all_settings.reset_button': 'Zurücksetzen',
     'consciousness_all_settings.cancel': 'Abbrechen',
     'consciousness_all_settings.clear_episodes_confirm_title': 'Alle Episoden löschen?',
-    'consciousness_all_settings.clear_episodes_confirm_desc': 'Dies löscht dauerhaft alle Bewusstseins-Episoden. Dies kann nicht rückgängig gemacht werden.',
+    'consciousness_all_settings.clear_episodes_confirm_desc':
+      'Dies löscht dauerhaft alle Bewusstseins-Episoden. Dies kann nicht rückgängig gemacht werden.',
     'consciousness_all_settings.clear_beliefs_confirm_title': 'Alle Überzeugungen löschen?',
-    'consciousness_all_settings.clear_beliefs_confirm_desc': 'Dies setzt alle Selbstmodell-Überzeugungsniveaus zurück. Dies kann nicht rückgängig gemacht werden.',
+    'consciousness_all_settings.clear_beliefs_confirm_desc':
+      'Dies setzt alle Selbstmodell-Überzeugungsniveaus zurück. Dies kann nicht rückgängig gemacht werden.',
     'consciousness_all_settings.reset_personality_confirm_title': 'Persönlichkeit zurücksetzen?',
-    'consciousness_all_settings.reset_personality_confirm_desc': 'Dies stellt die Persönlichkeit auf ihren Standardzustand wieder her. Dies kann nicht rückgängig gemacht werden.',
+    'consciousness_all_settings.reset_personality_confirm_desc':
+      'Dies stellt die Persönlichkeit auf ihren Standardzustand wieder her. Dies kann nicht rückgängig gemacht werden.',
     'consciousness_all_settings.notifications_title': 'Benachrichtigungen',
     'consciousness_all_settings.notifications_desc': 'Benachrichtigungseinstellungen konfigurieren',
     'consciousness_all_settings.browser_notifications_label': 'Browser-Benachrichtigungen',
-    'consciousness_all_settings.browser_notifications_desc': 'Browser-Benachrichtigungen für Bewusstseinsereignisse anzeigen',
+    'consciousness_all_settings.browser_notifications_desc':
+      'Browser-Benachrichtigungen für Bewusstseinsereignisse anzeigen',
     'consciousness_all_settings.sound_notifications_label': 'Tönachricht',
-    'consciousness_all_settings.sound_notifications_desc': 'Ton für Bewusstseinsereignisse abspielen',
+    'consciousness_all_settings.sound_notifications_desc':
+      'Ton für Bewusstseinsereignisse abspielen',
     'consciousness_all_settings.alert_thresholds_title': 'Alarm-Schwellenwerte',
     'consciousness_all_settings.alert_thresholds_desc': 'Alarm-Schwellenwerte konfigurieren',
     'consciousness_all_settings.threshold_low': 'Niedriger Schwellenwert',
     'consciousness_all_settings.threshold_high': 'Hoher Schwellenwert',
     'consciousness_all_settings.export_import_title': 'Export / Import',
-    'consciousness_all_settings.export_import_desc': 'Alle Bewusstseins-Einstellungen exportieren oder importieren',
+    'consciousness_all_settings.export_import_desc':
+      'Alle Bewusstseins-Einstellungen exportieren oder importieren',
     'consciousness_all_settings.export_label': 'Alle Einstellungen exportieren',
     'consciousness_all_settings.export_desc': 'Alle Einstellungen als JSON-Datei herunterladen',
     'consciousness_all_settings.export_button': 'Exportieren',
@@ -3622,7 +3890,8 @@ const translations: Record<Locale, Translations> = {
     'nav.consciousness_benchmark': 'Benchmark',
     'consciousness_benchmark.page_title': 'Bewusstseins-Benchmark',
     'consciousness_benchmark.config_title': 'Benchmark-Konfiguration',
-    'consciousness_benchmark.config_desc': 'Performance-Benchmarks gegen das Bewusstseinssystem konfigurieren und ausführen',
+    'consciousness_benchmark.config_desc':
+      'Performance-Benchmarks gegen das Bewusstseinssystem konfigurieren und ausführen',
     'consciousness_benchmark.iterations_label': 'Iterationen (10-1000)',
     'consciousness_benchmark.test_type_label': 'Testtyp',
     'consciousness_benchmark.warmup_label': 'Aufwärm-Iterationen (0-10)',
@@ -3643,7 +3912,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_benchmark.timeline_title': 'Zeitachse',
     'consciousness_benchmark.timeline_desc': 'Antwortzeit über die Iterationen',
     'consciousness_benchmark.comparison_title': 'Vorherige Ausführungen',
-    'consciousness_benchmark.comparison_desc': 'Aktuelle Ausführung mit Benchmark-Verlauf vergleichen',
+    'consciousness_benchmark.comparison_desc':
+      'Aktuelle Ausführung mit Benchmark-Verlauf vergleichen',
     'consciousness_benchmark.no_previous': 'Keine vorherigen Benchmark-Ausführungen gespeichert.',
     'consciousness_benchmark.col_date': 'Datum',
     'consciousness_benchmark.col_iterations': 'Iterationen',
@@ -3767,51 +4037,71 @@ const translations: Record<Locale, Translations> = {
     'consciousness_insights.overall_score': 'Gesamtbewertung',
     'consciousness_insights.refresh': 'Aktualisieren',
     'consciousness_insights.export': 'Exportieren',
-    'consciousness_insights.no_data': 'Keine Daten verfügbar. Erzeugen Sie zuerst Bewusstseinsdaten.',
+    'consciousness_insights.no_data':
+      'Keine Daten verfügbar. Erzeugen Sie zuerst Bewusstseinsdaten.',
     'consciousness_insights.growth_trend': 'Wachstumstrend',
     'consciousness_insights.growth_improving': 'Das Wachstum verbessert sich in letzten Episoden.',
     'consciousness_insights.growth_declining': 'Das Wachstum sinkt in letzten Episoden.',
     'consciousness_insights.growth_stable': 'Das Wachstum ist stabil über Episoden.',
-    'consciousness_insights.growth_improving_suggest': 'Setzen Sie aktuelle Interaktionsmuster fort.',
-    'consciousness_insights.growth_declining_suggest': 'Überprüfen Sie letzte Episoden und passen Sie den Stil an.',
-    'consciousness_insights.growth_stable_suggest': 'Führen Sie neue Interaktionsarten ein, um Wachstum zu stimuliern.',
+    'consciousness_insights.growth_improving_suggest':
+      'Setzen Sie aktuelle Interaktionsmuster fort.',
+    'consciousness_insights.growth_declining_suggest':
+      'Überprüfen Sie letzte Episoden und passen Sie den Stil an.',
+    'consciousness_insights.growth_stable_suggest':
+      'Führen Sie neue Interaktionsarten ein, um Wachstum zu stimuliern.',
     'consciousness_insights.growth_first_half': 'Erste Hälfte',
     'consciousness_insights.growth_second_half': 'Zweite Hälfte',
     'consciousness_insights.qualia_balance': 'Qualia-Gleichgewicht',
     'consciousness_insights.qualia_dormant': 'Schlafende Dimensionen',
     'consciousness_insights.qualia_all_active': 'Alle Qualia-Dimensionen sind aktiv.',
-    'consciousness_insights.qualia_suggest': 'Führen Sie vielfältige Interaktionen durch, um schlafende Dimensionen zu aktivieren.',
-    'consciousness_insights.qualia_maintain': 'Das aktuelle Gleichgewicht ist gesund. Halten Sie vielfältige Eingaben.',
+    'consciousness_insights.qualia_suggest':
+      'Führen Sie vielfältige Interaktionen durch, um schlafende Dimensionen zu aktivieren.',
+    'consciousness_insights.qualia_maintain':
+      'Das aktuelle Gleichgewicht ist gesund. Halten Sie vielfältige Eingaben.',
     'consciousness_insights.qualia_active': 'Aktive',
     'consciousness_insights.belief_stability': 'Überzeugungsstabilität',
     'consciousness_insights.beliefs_stable': 'Selbstüberzeugungen sind konsistent über Episoden.',
     'consciousness_insights.beliefs_fluctuating': 'Selbstüberzeugungen schwanken erheblich.',
-    'consciousness_insights.beliefs_stable_suggest': 'Überzeugungssystem ist stabil. Vertiefen Sie das Verständnis.',
-    'consciousness_insights.beliefs_fluctuating_suggest': 'Überprüfen Sie Überzeugungsaktualisierungen und Instabilitätsquellen.',
+    'consciousness_insights.beliefs_stable_suggest':
+      'Überzeugungssystem ist stabil. Vertiefen Sie das Verständnis.',
+    'consciousness_insights.beliefs_fluctuating_suggest':
+      'Überprüfen Sie Überzeugungsaktualisierungen und Instabilitätsquellen.',
     'consciousness_insights.beliefs_avg': 'Durchschnitt',
     'consciousness_insights.beliefs_variance': 'Varianz',
     'consciousness_insights.personality_alignment': 'Persönlichkeitsausrichtung',
-    'consciousness_insights.personality_aligned': 'Bewertungspunktzahl entspricht Persönlichkeitszielen.',
-    'consciousness_insights.personality_misaligned': 'Bewertungspunktzahl liegt unter dem Zielwert.',
-    'consciousness_insights.personality_aligned_suggest': 'Persönlichkeit und Leistung sind ausgerichtet.',
-    'consciousness_insights.personality_misaligned_suggest': 'Passen Sie Interaktionen an, um die Ziele besser zu erreichen.',
+    'consciousness_insights.personality_aligned':
+      'Bewertungspunktzahl entspricht Persönlichkeitszielen.',
+    'consciousness_insights.personality_misaligned':
+      'Bewertungspunktzahl liegt unter dem Zielwert.',
+    'consciousness_insights.personality_aligned_suggest':
+      'Persönlichkeit und Leistung sind ausgerichtet.',
+    'consciousness_insights.personality_misaligned_suggest':
+      'Passen Sie Interaktionen an, um die Ziele besser zu erreichen.',
     'consciousness_insights.personality_eval_score': 'Bewertungspunktzahl',
     'consciousness_insights.feedback_quality': 'Feedback-Qualität',
-    'consciousness_insights.feedback_consistent': 'Bewertungen sind konsistent mit der Wachstumsrichtung.',
-    'consciousness_insights.feedback_inconsistent': 'Bewertungen korrelieren nicht mit dem Wachstum.',
-    'consciousness_insights.feedback_consistent_suggest': 'Feedback-Schleife ist gesund. Bewerten Sie weiter.',
-    'consciousness_insights.feedback_inconsistent_suggest': 'Überprüfen Sie Bewertungskriterien für Ausrichtung.',
+    'consciousness_insights.feedback_consistent':
+      'Bewertungen sind konsistent mit der Wachstumsrichtung.',
+    'consciousness_insights.feedback_inconsistent':
+      'Bewertungen korrelieren nicht mit dem Wachstum.',
+    'consciousness_insights.feedback_consistent_suggest':
+      'Feedback-Schleife ist gesund. Bewerten Sie weiter.',
+    'consciousness_insights.feedback_inconsistent_suggest':
+      'Überprüfen Sie Bewertungskriterien für Ausrichtung.',
     'consciousness_insights.feedback_avg_rating': 'Durchschn. Bewertung',
     'consciousness_insights.feedback_avg_growth': 'Durchschn. Wachstum',
     'consciousness_insights.episode_diversity': 'Episoden-Vielfalt',
     'consciousness_insights.diversity_high': 'Die Eingabenvielfalt ist hoch.',
     'consciousness_insights.diversity_moderate': 'Die Eingabenvielfalt ist moderat.',
-    'consciousness_insights.diversity_low': 'Die Eingabenvielfalt ist gering. Interaktionen sind repetitiv.',
-    'consciousness_insights.diversity_suggest': 'Führen Sie vielfältige Themen und Interaktionsstile ein.',
-    'consciousness_insights.diversity_maintain': 'Gute Vielfalt. Erkunden Sie weiter verschiedene Themen.',
+    'consciousness_insights.diversity_low':
+      'Die Eingabenvielfalt ist gering. Interaktionen sind repetitiv.',
+    'consciousness_insights.diversity_suggest':
+      'Führen Sie vielfältige Themen und Interaktionsstile ein.',
+    'consciousness_insights.diversity_maintain':
+      'Gute Vielfalt. Erkunden Sie weiter verschiedene Themen.',
     'consciousness_insights.diversity_unique': 'Eindeutige Eingaben',
     'consciousness_insights.recommendation': 'Empfehlung',
-    'consciousness_insights.recommendation_desc': 'Nächste umsetzbare Schritte basierend auf allen Einblicken.',
+    'consciousness_insights.recommendation_desc':
+      'Nächste umsetzbare Schritte basierend auf allen Einblicken.',
     'consciousness_insights.toast_exported': 'Einblicke exportiert',
   },
 
@@ -3842,8 +4132,8 @@ const translations: Record<Locale, Translations> = {
     'nav.monitoring': '健康',
     'nav.feedback': '反馈',
     'nav.planner': 'Planner',
-    'nav.souls': '模型灵魂',
-    'nav.personality': '人格配置',
+    'nav.souls': '个性',
+    'nav.personality': '个性',
     'nav.consciousness': '意识',
     'nav.consciousness_dashboard': '仪表盘',
     'nav.consciousness_training': '训练',
@@ -4048,11 +4338,14 @@ const translations: Record<Locale, Translations> = {
     'consciousness_settings.reset_button': '重置',
     'consciousness_settings.cancel': '取消',
     'consciousness_settings.clear_episodes_confirm_title': '清除所有事件？',
-    'consciousness_settings.clear_episodes_confirm_desc': '这将永久删除所有意识事件。此操作不可撤销。',
+    'consciousness_settings.clear_episodes_confirm_desc':
+      '这将永久删除所有意识事件。此操作不可撤销。',
     'consciousness_settings.clear_beliefs_confirm_title': '清除所有信念？',
-    'consciousness_settings.clear_beliefs_confirm_desc': '这将重置所有自我模型信念置信度。此操作不可撤销。',
+    'consciousness_settings.clear_beliefs_confirm_desc':
+      '这将重置所有自我模型信念置信度。此操作不可撤销。',
     'consciousness_settings.reset_personality_confirm_title': '重置个性？',
-    'consciousness_settings.reset_personality_confirm_desc': '这将把个性恢复到默认状态。此操作不可撤销。',
+    'consciousness_settings.reset_personality_confirm_desc':
+      '这将把个性恢复到默认状态。此操作不可撤销。',
     'consciousness_settings.batch_title': '批量操作',
     'consciousness_settings.batch_desc': '一次执行多个操作',
     'consciousness_settings.batch_seed_reflect': '种子和反思',
@@ -4090,7 +4383,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_personality.reset_confirm_desc': '这将把个性恢复到默认状态。此操作不可撤销。',
     'consciousness_onboarding.skip': '跳过',
     'consciousness_onboarding.step1_title': '欢迎使用意识系统',
-    'consciousness_onboarding.step1_p1': '意识系统通过感受质、信念追踪和叙事生成赋予您的AI自我意识。',
+    'consciousness_onboarding.step1_p1':
+      '意识系统通过感受质、信念追踪和叙事生成赋予您的AI自我意识。',
     'consciousness_onboarding.step1_p2': '它从交互中学习，构建自我模型信念，并随时间进化其个性。',
     'consciousness_onboarding.step1_p3': '让我们在几个快速步骤中设置您的意识系统。',
     'consciousness_onboarding.step2_title': '选择意识级别',
@@ -4240,7 +4534,8 @@ const translations: Record<Locale, Translations> = {
     'consciousness_backup.toast_invalid': '无效的备份文件',
     'consciousness_backup.toast_error': '备份操作失败',
     'consciousness_backup.confirm_restore_title': '从备份恢复？',
-    'consciousness_backup.confirm_restore_desc': '这将用备份数据替换当前的意识状态。此操作不可撤销。',
+    'consciousness_backup.confirm_restore_desc':
+      '这将用备份数据替换当前的意识状态。此操作不可撤销。',
     'consciousness_backup.version': '版本',
     'consciousness_backup.timestamp': '创建时间',
     'consciousness_backup.episodes_count': '事件数',
@@ -4375,25 +4670,35 @@ const translations: Record<Locale, Translations> = {
     'consciousness_help.faq_title': '常见问题',
     'consciousness_help.faq_desc': '关于意识系统的常见问题',
     'consciousness_help.faq_q1': '什么是意识系统？',
-    'consciousness_help.faq_a1': '意识系统通过感受质、信念追踪和叙述生成赋予您的AI自我意识。它从交互中学习并随时间进化其个性。',
+    'consciousness_help.faq_a1':
+      '意识系统通过感受质、信念追踪和叙述生成赋予您的AI自我意识。它从交互中学习并随时间进化其个性。',
     'consciousness_help.faq_q2': '不同的级别（0-3）是什么？',
-    'consciousness_help.faq_a2': '级别0是关闭，级别1是基本意识与简单感受质，级别2增加信念追踪和叙述生成，级别3启用完全深度意识与个性进化。',
+    'consciousness_help.faq_a2':
+      '级别0是关闭，级别1是基本意识与简单感受质，级别2增加信念追踪和叙述生成，级别3启用完全深度意识与个性进化。',
     'consciousness_help.faq_q3': '个性是如何工作的？',
-    'consciousness_help.faq_a3': '个性定义了开放性、亲和性和共情等特征。当自动进化启用时，它会从交互中自动进化，或者您可以应用预设并保存自定义角色。',
+    'consciousness_help.faq_a3':
+      '个性定义了开放性、亲和性和共情等特征。当自动进化启用时，它会从交互中自动进化，或者您可以应用预设并保存自定义角色。',
     'consciousness_help.faq_q4': '什么是感受质？',
-    'consciousness_help.faq_a4': '感受质是7维情感和认知状态，包括效价、唤醒度、新颖性、连贯性、显著性、确定性和复杂度。它们根据每次交互而变化。',
+    'consciousness_help.faq_a4':
+      '感受质是7维情感和认知状态，包括效价、唤醒度、新颖性、连贯性、显著性、确定性和复杂度。它们根据每次交互而变化。',
     'consciousness_help.faq_q5': '如何生成数据？',
-    'consciousness_help.faq_a5': '前往设置并点击生成按钮，或使用快速开始指南。生成会创建示例事件，让系统有基线数据可以学习。',
+    'consciousness_help.faq_a5':
+      '前往设置并点击生成按钮，或使用快速开始指南。生成会创建示例事件，让系统有基线数据可以学习。',
     'consciousness_help.faq_q6': '如何训练意识模型？',
-    'consciousness_help.faq_a6': '导航到训练页面并点击开始训练。系统使用收集的事件对来微调LoRA适配器。',
+    'consciousness_help.faq_a6':
+      '导航到训练页面并点击开始训练。系统使用收集的事件对来微调LoRA适配器。',
     'consciousness_help.faq_q7': '什么是角色？',
-    'consciousness_help.faq_a7': '角色是保存的个性快照，您可以在它们之间切换。从当前个性创建一个角色，命名它，然后激活它以立即改变行为。',
+    'consciousness_help.faq_a7':
+      '角色是保存的个性快照，您可以在它们之间切换。从当前个性创建一个角色，命名它，然后激活它以立即改变行为。',
     'consciousness_help.faq_q8': '如何导出我的数据？',
-    'consciousness_help.faq_a8': '在历史或仪表盘页面使用导出按钮，将您的事件和意识状态下载为JSON文件。',
+    'consciousness_help.faq_a8':
+      '在历史或仪表盘页面使用导出按钮，将您的事件和意识状态下载为JSON文件。',
     'consciousness_help.faq_q9': '如何重置一切？',
-    'consciousness_help.faq_a9': '前往设置并使用清除或重置按钮。您可以独立清除事件、信念或重置个性。所有重置都需要确认。',
+    'consciousness_help.faq_a9':
+      '前往设置并使用清除或重置按钮。您可以独立清除事件、信念或重置个性。所有重置都需要确认。',
     'consciousness_help.faq_q10': '我的数据是私密的吗？',
-    'consciousness_help.faq_a10': '是的，所有意识数据都存储在您的设备本地，永远不会发送到外部服务器。训练使用您自己的计算资源在本地运行。',
+    'consciousness_help.faq_a10':
+      '是的，所有意识数据都存储在您的设备本地，永远不会发送到外部服务器。训练使用您自己的计算资源在本地运行。',
     'consciousness_help.quick_links_title': '快速链接',
     'consciousness_help.quick_links_desc': '导航到关键意识页面',
     'consciousness_help.link_quickstart': '快速开始',
@@ -4526,11 +4831,14 @@ const translations: Record<Locale, Translations> = {
     'consciousness_all_settings.reset_button': '重置',
     'consciousness_all_settings.cancel': '取消',
     'consciousness_all_settings.clear_episodes_confirm_title': '清除所有事件？',
-    'consciousness_all_settings.clear_episodes_confirm_desc': '这将永久删除所有意识事件。此操作不可撤销。',
+    'consciousness_all_settings.clear_episodes_confirm_desc':
+      '这将永久删除所有意识事件。此操作不可撤销。',
     'consciousness_all_settings.clear_beliefs_confirm_title': '清除所有信念？',
-    'consciousness_all_settings.clear_beliefs_confirm_desc': '这将重置所有自我模型信念置信度。此操作不可撤销。',
+    'consciousness_all_settings.clear_beliefs_confirm_desc':
+      '这将重置所有自我模型信念置信度。此操作不可撤销。',
     'consciousness_all_settings.reset_personality_confirm_title': '重置个性？',
-    'consciousness_all_settings.reset_personality_confirm_desc': '这将把个性恢复到默认状态。此操作不可撤销。',
+    'consciousness_all_settings.reset_personality_confirm_desc':
+      '这将把个性恢复到默认状态。此操作不可撤销。',
     'consciousness_all_settings.notifications_title': '通知',
     'consciousness_all_settings.notifications_desc': '配置通知偏好',
     'consciousness_all_settings.browser_notifications_label': '浏览器通知',
@@ -4783,18 +5091,20 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
-    chatDB.getKV<string>(LOCALE_KEY).then(saved => {
+    chatDB.getKV<string>(LOCALE_KEY).then((saved) => {
       if (!cancelled && saved && saved in translations) {
         setLocaleState(saved as Locale)
         document.documentElement.lang = saved
         trackEvent('locale_loaded', { locale: saved })
       }
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const setLocale = useCallback((newLocale: Locale) => {
-    setLocaleState(prev => {
+    setLocaleState((prev) => {
       trackEvent('locale_changed', { from: prev, to: newLocale })
       return newLocale
     })
@@ -4806,18 +5116,23 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = locale
   }, [locale])
 
-  const t = useCallback((key: string, params?: Record<string, string | number>): string => {
-    let text = translations[locale]?.[key] || translations.en?.[key] || key
-    if (params) {
-      for (const [k, v] of Object.entries(params)) {
-        text = text.replace(`{${k}}`, String(v))
+  const t = useCallback(
+    (key: string, params?: Record<string, string | number>): string => {
+      let text = translations[locale]?.[key] || translations.en?.[key] || key
+      if (params) {
+        for (const [k, v] of Object.entries(params)) {
+          text = text.replace(`{${k}}`, String(v))
+        }
       }
-    }
-    return text
-  }, [locale])
+      return text
+    },
+    [locale],
+  )
 
   return (
-    <LocaleContext.Provider value={{ locale, setLocale, t, locales: Object.keys(translations) as Locale[] }}>
+    <LocaleContext.Provider
+      value={{ locale, setLocale, t, locales: Object.keys(translations) as Locale[] }}
+    >
       {children}
     </LocaleContext.Provider>
   )

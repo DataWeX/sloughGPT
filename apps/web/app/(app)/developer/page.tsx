@@ -14,6 +14,11 @@ import { authFetch } from '@/lib/http-client'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useFileList } from '@/lib/cache'
+import { useModels } from '@/lib/cache/api-hooks'
+import ModelCatalogCard from '@/components/models/ModelCatalogCard'
+import QuantizationCard from '@/components/models/QuantizationCard'
+import DownloadsCard from '@/components/models/DownloadsCard'
+import EngineStatusCard from '@/components/models/EngineStatusCard'
 import { StartupTimeline } from '@/components/startup/StartupTimeline'
 import { StartupHistoryChart } from '@/components/startup/StartupHistoryChart'
 
@@ -107,6 +112,12 @@ export default function DeveloperPage() {
             Voice
           </TabsTrigger>
           <TabsTrigger
+            value="models"
+            className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]"
+          >
+            Models
+          </TabsTrigger>
+          <TabsTrigger
             value="api"
             className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]"
           >
@@ -134,6 +145,9 @@ export default function DeveloperPage() {
         </TabsContent>
         <TabsContent value="voice">
           <VoiceTab />
+        </TabsContent>
+        <TabsContent value="models">
+          <ModelsTab />
         </TabsContent>
         <TabsContent value="api">
           <ApiTab />
@@ -185,6 +199,33 @@ function ShellTab() {
       ) : (
         <V86TerminalPanel className="h-[calc(100vh-12rem)]" />
       )}
+    </div>
+  )
+}
+
+function ModelsTab() {
+  const { data: modelsData, isLoading: modelsLoading, refetch: refetchModels } = useModels()
+  const { healthLegacy: health } = useLiveStatus()
+  const models = modelsData ?? []
+  const isOnline = health !== null && health !== 'offline'
+  const activeRuntimeId =
+    health !== null && health !== 'offline' && health.model_loaded ? health.model_type : null
+
+  const handleModelLoaded = useCallback(async () => {
+    await refetchModels()
+  }, [refetchModels])
+
+  return (
+    <div className="space-y-3">
+      <ModelCatalogCard
+        models={models}
+        modelsLoading={modelsLoading}
+        activeRuntimeId={activeRuntimeId}
+        onModelLoaded={handleModelLoaded}
+      />
+      <QuantizationCard isOnline={isOnline} />
+      <DownloadsCard />
+      <EngineStatusCard />
     </div>
   )
 }

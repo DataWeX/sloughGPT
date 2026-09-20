@@ -3,7 +3,11 @@ import { render } from '@testing-library/react'
 import { NavigationGrid } from './NavigationGrid'
 
 vi.mock('next/link', () => ({
-  default: ({ children, href, ...props }: any) => <a href={href} {...props}>{children}</a>,
+  default: ({ children, href, ...props }: any) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
 }))
 
 vi.mock('@/components/icons/NavIcons', () => ({
@@ -21,17 +25,24 @@ vi.mock('@sloughgpt/strui', async () => {
     IconBolt: () => <span data-testid="icon-bolt" />,
     IconChart: () => <span data-testid="icon-chart" />,
     cn: (...args: any[]) => args.filter(Boolean).join(' '),
-  
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -58,7 +69,7 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 vi.mock('@/lib/format-bytes', () => ({
@@ -85,9 +96,9 @@ describe('NavigationGrid', () => {
   it('links to correct routes', () => {
     const { container } = render(<NavigationGrid {...baseProps} />)
     const links = container.querySelectorAll('a')
-    const hrefs = Array.from(links).map(a => a.getAttribute('href'))
+    const hrefs = Array.from(links).map((a) => a.getAttribute('href'))
     expect(hrefs).toContain('/chat')
-    expect(hrefs).toContain('/models')
+    expect(hrefs).toContain('/personality')
     expect(hrefs).toContain('/datasets')
     expect(hrefs).toContain('/training')
     expect(hrefs).toContain('/monitoring')
@@ -97,21 +108,26 @@ describe('NavigationGrid', () => {
   it('shows dataset count badge on Datasets tile', () => {
     const { container } = render(<NavigationGrid {...baseProps} />)
     const links = container.querySelectorAll('a')
-    const datasetsLink = Array.from(links).find(a => a.getAttribute('href') === '/datasets')
+    const datasetsLink = Array.from(links).find((a) => a.getAttribute('href') === '/datasets')
     expect(datasetsLink!.textContent).toContain('5')
   })
 
   it('hides dataset badge when 0 datasets', () => {
-    const { container } = render(<NavigationGrid {...baseProps} datasetStats={{ totalDatasets: 0, totalSize: 0, totalSamples: 0 }} />)
+    const { container } = render(
+      <NavigationGrid
+        {...baseProps}
+        datasetStats={{ totalDatasets: 0, totalSize: 0, totalSamples: 0 }}
+      />,
+    )
     const links = container.querySelectorAll('a')
-    const datasetsLink = Array.from(links).find(a => a.getAttribute('href') === '/datasets')
+    const datasetsLink = Array.from(links).find((a) => a.getAttribute('href') === '/datasets')
     expect(datasetsLink!.textContent).not.toMatch(/\b0\b/)
   })
 
   it('hides dataset badge when stats are null', () => {
     const { container } = render(<NavigationGrid {...baseProps} datasetStats={null} />)
     const links = container.querySelectorAll('a')
-    const datasetsLink = Array.from(links).find(a => a.getAttribute('href') === '/datasets')
+    const datasetsLink = Array.from(links).find((a) => a.getAttribute('href') === '/datasets')
     const badge = datasetsLink!.querySelector('span.text-xs')
     expect(badge).toBeNull()
   })

@@ -14,7 +14,7 @@ describe('navigation', () => {
   })
 
   it('every route has a unique path', () => {
-    const paths = ALL_ROUTES.map(r => r.path)
+    const paths = ALL_ROUTES.map((r) => r.path)
     expect(new Set(paths).size).toBe(paths.length)
   })
 
@@ -26,13 +26,13 @@ describe('navigation', () => {
 
   it('SHORTCUT_TO_PATH maps shortcuts to correct paths', () => {
     expect(SHORTCUT_TO_PATH['1']).toBe('/chat')
-    expect(SHORTCUT_TO_PATH['4']).toBe('/models')
-    expect(SHORTCUT_TO_PATH['6']).toBe('/souls')
+    expect(SHORTCUT_TO_PATH['4']).toBe('/personality')
+    expect(SHORTCUT_TO_PATH['5']).toBe('/agents')
     expect(SHORTCUT_TO_PATH['shift+A']).toBe('/settings')
   })
 
   it('every shortcut key maps to a valid route path', () => {
-    const routePaths = new Set(ALL_ROUTES.map(r => r.path))
+    const routePaths = new Set(ALL_ROUTES.map((r) => r.path))
     for (const [key, path] of Object.entries(SHORTCUT_TO_PATH)) {
       expect(routePaths.has(path)).toBe(true)
     }
@@ -45,7 +45,7 @@ describe('navigation', () => {
   })
 
   it('ALL_ROUTES is flat concatenation of sections', () => {
-    const flat = NAV_SECTIONS.flatMap(s => s.routes)
+    const flat = NAV_SECTIONS.flatMap((s) => s.routes)
     expect(ALL_ROUTES).toEqual(flat)
   })
 })

@@ -26,6 +26,26 @@ vi.mock('@/components/files/FileStatsCard', () => ({
   FileStatsCard: () => <div data-testid="file-stats-card" />,
 }))
 
+vi.mock('@/lib/cache/api-hooks', () => ({
+  useModels: () => ({ data: [], isLoading: false, refetch: vi.fn() }),
+}))
+
+vi.mock('@/components/models/ModelCatalogCard', () => ({
+  default: () => <div data-testid="model-catalog-card" />,
+}))
+
+vi.mock('@/components/models/QuantizationCard', () => ({
+  default: () => <div data-testid="quantization-card" />,
+}))
+
+vi.mock('@/components/models/DownloadsCard', () => ({
+  default: () => <div data-testid="downloads-card" />,
+}))
+
+vi.mock('@/components/models/EngineStatusCard', () => ({
+  default: () => <div data-testid="engine-status-card" />,
+}))
+
 import DeveloperPage from './page'
 import { filesController } from '@/lib/files-controller'
 import { voiceController } from '@/lib/voice-controller'
@@ -33,7 +53,11 @@ import { voiceController } from '@/lib/voice-controller'
 describe('DeveloperPage', () => {
   beforeEach(() => {
     vi.mocked(filesController.list).mockResolvedValue([])
-    vi.mocked(voiceController.getStatus).mockResolvedValue({ server_tts: false, model: null, error: null })
+    vi.mocked(voiceController.getStatus).mockResolvedValue({
+      server_tts: false,
+      model: null,
+      error: null,
+    })
   })
 
   afterEach(() => {
@@ -99,5 +123,18 @@ describe('DeveloperPage', () => {
     render(<DeveloperPage />)
     await user.click(screen.getByRole('tab', { name: /api/i }))
     expect(screen.getByLabelText(/authorization header/i)).toBeTruthy()
+  })
+
+  it('renders Models tab with catalog cards', async () => {
+    const user = userEvent.setup()
+    render(<DeveloperPage />)
+    expect(screen.getByRole('tab', { name: /models/i })).toBeTruthy()
+    await user.click(screen.getByRole('tab', { name: /models/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('model-catalog-card')).toBeTruthy()
+    })
+    expect(screen.getByTestId('quantization-card')).toBeTruthy()
+    expect(screen.getByTestId('downloads-card')).toBeTruthy()
+    expect(screen.getByTestId('engine-status-card')).toBeTruthy()
   })
 })

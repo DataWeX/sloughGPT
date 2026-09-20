@@ -10,7 +10,11 @@ import { Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
-import { benchmarkController, type BenchmarkResult, type LoggedBenchmarkResponse } from '@/lib/benchmark-controller'
+import {
+  benchmarkController,
+  type BenchmarkResult,
+  type LoggedBenchmarkResponse,
+} from '@/lib/benchmark-controller'
 import { apiPost } from '@/lib/http-client'
 import { BenchmarkInsightsCard } from '@/components/benchmark/BenchmarkInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -21,7 +25,7 @@ type SingleModelTab = 'metrics' | 'quality' | 'responses' | 'perplexity'
 
 export default function EvaluatePage() {
   const router = useRouter()
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const [section, setSection] = useState<'single' | 'compare'>('single')
 
   const cmp = useComparison()
@@ -29,7 +33,13 @@ export default function EvaluatePage() {
   // ── Single Model state ──
   const [smTab, setSmTab] = useState<SingleModelTab>('metrics')
   const [metrics, setMetrics] = useState<BenchmarkResult | null>(null)
-  const [quality, setQuality] = useState<{ coherence_score: number; quality_score: number; repetition_rate: number; total_responses: number; avg_length: number } | null>(null)
+  const [quality, setQuality] = useState<{
+    coherence_score: number
+    quality_score: number
+    repetition_rate: number
+    total_responses: number
+    avg_length: number
+  } | null>(null)
   const [responses, setResponses] = useState<LoggedBenchmarkResponse[]>([])
   const [stats, setStats] = useState<{ total: number; avg_tokens: number } | null>(null)
   const [smLoading, setSmLoading] = useState(true)
@@ -37,7 +47,11 @@ export default function EvaluatePage() {
   const [smLoadError, setSmLoadError] = useState<string | null>(null)
   const [currentModel, setCurrentModel] = useState<string>('gpt2')
   const [pplxText, setPplxText] = useState('')
-  const [pplxResult, setPplxResult] = useState<{ perplexity: number; loss: number; tokens: number } | null>(null)
+  const [pplxResult, setPplxResult] = useState<{
+    perplexity: number
+    loss: number
+    tokens: number
+  } | null>(null)
   const [pplxLoading, setPplxLoading] = useState(false)
 
   // ── Single Model effects ──
@@ -49,7 +63,9 @@ export default function EvaluatePage() {
       const h = await modelController.getHealth()
       model = h?.model_type ?? 'gpt2'
       setCurrentModel(model)
-    } catch { /* use default */ }
+    } catch {
+      /* use default */
+    }
 
     try {
       const [m, q, s] = await Promise.all([
@@ -68,7 +84,9 @@ export default function EvaluatePage() {
     }
   }
 
-  useEffect(() => { loadBenchmark() }, [])
+  useEffect(() => {
+    loadBenchmark()
+  }, [])
 
   // ── Single Model handlers ──
   const handleRefreshMetrics = async () => {
@@ -133,7 +151,12 @@ export default function EvaluatePage() {
           running={cmp.running}
         />
       )}
-      <Button variant="outline" size="sm" onClick={section === 'single' ? handleRefreshMetrics : cmp.runAll} disabled={section === 'single' ? smRunning : cmp.loading || cmp.running.size > 0}>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={section === 'single' ? handleRefreshMetrics : cmp.runAll}
+        disabled={section === 'single' ? smRunning : cmp.loading || cmp.running.size > 0}
+      >
         <Spinner className="h-3.5 w-3.5 mr-1" />
         {section === 'single' ? 'Refresh' : 'Benchmark all'}
       </Button>
@@ -149,20 +172,28 @@ export default function EvaluatePage() {
       subtitle="Model evaluation and comparison"
       loading={loading}
       error={error}
-      onRetry={() => { setSmLoading(true); loadBenchmark() }}
+      onRetry={() => {
+        setSmLoading(true)
+        loadBenchmark()
+      }}
       headerRight={headerRight}
     >
       {/* Section tabs */}
       <div className="flex gap-1 border-b border-border/30 pb-0">
-        {([
+        {[
           { key: 'single' as const, label: 'Single Model' },
           { key: 'compare' as const, label: 'Comparison' },
-        ]).map(t => (
+        ].map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setSection(t.key)}
-            className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', section === t.key ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
+            className={cn(
+              'px-3 py-1.5 text-xs font-medium rounded-t transition-colors',
+              section === t.key
+                ? 'bg-primary/10 text-primary border-b-2 border-primary'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
           >
             {t.label}
           </button>
@@ -173,7 +204,7 @@ export default function EvaluatePage() {
       {section === 'single' && (
         <>
           <div className="flex gap-1 border-b border-border/30 pb-0">
-            {(['metrics', 'quality', 'responses', 'perplexity'] as SingleModelTab[]).map(t => (
+            {(['metrics', 'quality', 'responses', 'perplexity'] as SingleModelTab[]).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -181,7 +212,12 @@ export default function EvaluatePage() {
                   setSmTab(t)
                   if (t === 'responses') handleLoadResponses()
                 }}
-                className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', smTab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
+                className={cn(
+                  'px-3 py-1.5 text-xs font-medium rounded-t transition-colors',
+                  smTab === t
+                    ? 'bg-primary/10 text-primary border-b-2 border-primary'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
               >
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
@@ -194,7 +230,10 @@ export default function EvaluatePage() {
               <KpiGrid>
                 <StatCard label="Model" value={String(metrics?.model ?? '—')} />
                 <StatCard label="Responses" value={String(metrics?.inference_count ?? 0)} />
-                <StatCard label="Speed" value={`${String(metrics?.tokens_per_second ?? 0)} tokens/s`} />
+                <StatCard
+                  label="Speed"
+                  value={`${String(metrics?.tokens_per_second ?? 0)} tokens/s`}
+                />
                 <StatCard label="Memory" value={`${metrics?.memory_mb ?? 0} MB`} />
                 <StatCard label="Total tokens" value={String(metrics?.total_tokens ?? 0)} />
                 <StatCard label="Loaded" value={metrics?.model_loaded ? 'Yes' : 'No'} />
@@ -202,7 +241,14 @@ export default function EvaluatePage() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
                   <CardTitle className="text-[11px] font-medium">Model Metrics</CardTitle>
-                  <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={smRunning} aria-label="Refresh metrics" className="h-6 text-[10px]">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleRefreshMetrics}
+                    disabled={smRunning}
+                    aria-label="Refresh metrics"
+                    className="h-6 text-[10px]"
+                  >
                     <Spinner className="h-4 w-4" />
                   </Button>
                 </CardHeader>
@@ -213,10 +259,13 @@ export default function EvaluatePage() {
                         { label: 'Model', value: String(metrics.model ?? '—') },
                         { label: 'Responses', value: String(metrics.inference_count ?? 0) },
                         { label: 'Total tokens', value: String(metrics.total_tokens ?? 0) },
-                        { label: 'Speed', value: `${String(metrics.tokens_per_second ?? 0)} tokens/s` },
+                        {
+                          label: 'Speed',
+                          value: `${String(metrics.tokens_per_second ?? 0)} tokens/s`,
+                        },
                         { label: 'Memory', value: `${metrics.memory_mb ?? 0} MB` },
                         { label: 'Loaded', value: metrics.model_loaded ? 'Yes' : 'No' },
-                      ].map(s => (
+                      ].map((s) => (
                         <div key={s.label} className="rounded-lg bg-muted/20 p-2.5 text-center">
                           <div className="text-[10px] text-muted-foreground">{s.label}</div>
                           <div className="text-[11px] font-mono font-medium">{s.value}</div>
@@ -227,7 +276,12 @@ export default function EvaluatePage() {
                     <div className="text-center py-6 text-[10px] text-muted-foreground/60">
                       No quality data yet. Chat with the model to generate responses.
                       <div className="mt-2">
-                        <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => router.push('/models')}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[10px]"
+                          onClick={() => router.push('/developer')}
+                        >
                           Open Models
                         </Button>
                       </div>
@@ -235,7 +289,8 @@ export default function EvaluatePage() {
                   )}
                   {stats && (
                     <div className="mt-3 text-[10px] text-muted-foreground">
-                      {stats.total} responses logged · avg {stats.avg_tokens?.toFixed(0) ?? 0} tokens
+                      {stats.total} responses logged · avg {stats.avg_tokens?.toFixed(0) ?? 0}{' '}
+                      tokens
                     </div>
                   )}
                 </CardContent>
@@ -252,20 +307,42 @@ export default function EvaluatePage() {
                 {quality ? (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                     {[
-                      { label: 'Coherence', value: `${(quality.coherence_score * 100).toFixed(1)}%`, color: 'text-success' },
-                      { label: 'Quality', value: `${(quality.quality_score * 100).toFixed(1)}%`, color: 'text-primary' },
-                      { label: 'Repetition', value: `${(quality.repetition_rate * 100).toFixed(1)}%`, color: quality.repetition_rate > 0.3 ? 'text-destructive' : 'text-muted-foreground' },
-                    ].map(s => (
+                      {
+                        label: 'Coherence',
+                        value: `${(quality.coherence_score * 100).toFixed(1)}%`,
+                        color: 'text-success',
+                      },
+                      {
+                        label: 'Quality',
+                        value: `${(quality.quality_score * 100).toFixed(1)}%`,
+                        color: 'text-primary',
+                      },
+                      {
+                        label: 'Repetition',
+                        value: `${(quality.repetition_rate * 100).toFixed(1)}%`,
+                        color:
+                          quality.repetition_rate > 0.3
+                            ? 'text-destructive'
+                            : 'text-muted-foreground',
+                      },
+                    ].map((s) => (
                       <div key={s.label} className="rounded-lg bg-muted/20 p-2.5 text-center">
                         <div className="text-[10px] text-muted-foreground">{s.label}</div>
-                        <div className={cn('text-[11px] font-mono font-medium', s.color)}>{s.value}</div>
+                        <div className={cn('text-[11px] font-mono font-medium', s.color)}>
+                          {s.value}
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : (
                   <div className="text-center py-6 text-[10px] text-muted-foreground/60 space-y-2">
                     <div>No quality data yet. Chat with the model to generate responses.</div>
-                    <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => router.push('/chat')}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[10px]"
+                      onClick={() => router.push('/chat')}
+                    >
                       Open Chat
                     </Button>
                   </div>
@@ -277,12 +354,25 @@ export default function EvaluatePage() {
           {smTab === 'responses' && (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
-                <CardTitle className="text-[11px] font-medium">Logged Responses ({responses.length})</CardTitle>
+                <CardTitle className="text-[11px] font-medium">
+                  Logged Responses ({responses.length})
+                </CardTitle>
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" onClick={handleLoadResponses} aria-label="Refresh responses" className="h-6 text-[10px]">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleLoadResponses}
+                    aria-label="Refresh responses"
+                    className="h-6 text-[10px]"
+                  >
                     <IconRefresh className="h-4 w-4" />
                   </Button>
-                  <Button size="sm" variant="ghost" className="text-destructive h-6 text-[10px]" onClick={handleClearHistory}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive h-6 text-[10px]"
+                    onClick={handleClearHistory}
+                  >
                     Clear
                   </Button>
                 </div>
@@ -291,19 +381,32 @@ export default function EvaluatePage() {
                 {responses.length === 0 ? (
                   <div className="text-center py-6 text-[10px] text-muted-foreground/60 space-y-2">
                     <div>No responses logged yet.</div>
-                    <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => router.push('/chat')}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[10px]"
+                      onClick={() => router.push('/chat')}
+                    >
                       Open Chat
                     </Button>
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-96 overflow-y-auto">
                     {responses.map((r, i) => (
-                      <div key={i} className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 text-sm">
+                      <div
+                        key={i}
+                        className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 text-sm"
+                      >
                         <div className="text-[10px] text-muted-foreground mb-1">
-                          {r.timestamp ? new Date(r.timestamp).toLocaleString() : '—'} · {r.model} · {r.tokens_generated} tokens · {r.duration_ms?.toFixed(0)}ms
+                          {r.timestamp ? new Date(r.timestamp).toLocaleString() : '—'} · {r.model} ·{' '}
+                          {r.tokens_generated} tokens · {r.duration_ms?.toFixed(0)}ms
                         </div>
-                        <div className="text-[10px]"><span className="text-muted-foreground">User:</span> {r.user_message}</div>
-                        <div className="text-[10px] mt-0.5"><span className="text-muted-foreground">AI:</span> {r.assistant_response}</div>
+                        <div className="text-[10px]">
+                          <span className="text-muted-foreground">User:</span> {r.user_message}
+                        </div>
+                        <div className="text-[10px] mt-0.5">
+                          <span className="text-muted-foreground">AI:</span> {r.assistant_response}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -320,18 +423,25 @@ export default function EvaluatePage() {
               <CardContent className="px-2.5 pb-2.5 space-y-3">
                 <Textarea
                   value={pplxText}
-                  onChange={e => setPplxText(e.target.value)}
+                  onChange={(e) => setPplxText(e.target.value)}
                   placeholder="Enter text to calculate perplexity..."
                   rows={3}
                 />
-                <Button size="sm" onClick={handleCalcPerplexity} disabled={pplxLoading || !pplxText.trim()} className="h-7 text-[11px]">
+                <Button
+                  size="sm"
+                  onClick={handleCalcPerplexity}
+                  disabled={pplxLoading || !pplxText.trim()}
+                  className="h-7 text-[11px]"
+                >
                   {pplxLoading ? 'Calculating...' : 'Calculate'}
                 </Button>
                 {pplxResult && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                     <div className="rounded-lg bg-muted/20 p-2.5 text-center">
                       <div className="text-[10px] text-muted-foreground">Perplexity</div>
-                      <div className="text-[11px] font-mono font-medium">{pplxResult.perplexity}</div>
+                      <div className="text-[11px] font-mono font-medium">
+                        {pplxResult.perplexity}
+                      </div>
                     </div>
                     <div className="rounded-lg bg-muted/20 p-2.5 text-center">
                       <div className="text-[10px] text-muted-foreground">Loss</div>

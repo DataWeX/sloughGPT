@@ -3,7 +3,13 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@sloughgpt/strui'
-import { IconChat, IconTraining, IconBookmark, IconModels, IconSettings } from '@/components/icons/NavIcons'
+import {
+  IconChat,
+  IconTraining,
+  IconBookmark,
+  IconBrain,
+  IconSettings,
+} from '@/components/icons/NavIcons'
 import { useLocale } from '@/hooks/useLocale'
 import type { ComponentType } from 'react'
 
@@ -17,7 +23,7 @@ const BOTTOM_NAV_ITEMS: BottomNavItem[] = [
   { path: '/chat', labelKey: 'nav.chat', icon: IconChat },
   { path: '/training', labelKey: 'nav.training', icon: IconTraining },
   { path: '/knowledge', labelKey: 'nav.knowledge', icon: IconBookmark },
-  { path: '/models', labelKey: 'nav.models', icon: IconModels },
+  { path: '/personality', labelKey: 'nav.personality', icon: IconBrain },
   { path: '/settings', labelKey: 'nav.settings', icon: IconSettings },
 ]
 
@@ -32,7 +38,7 @@ export function BottomNav() {
 
   return (
     <nav className="sl-bottom-nav" aria-label="Bottom navigation">
-      {BOTTOM_NAV_ITEMS.map(item => {
+      {BOTTOM_NAV_ITEMS.map((item) => {
         const active = isActive(item.path)
         const Icon = item.icon
         return (
@@ -41,10 +47,7 @@ export function BottomNav() {
             href={item.path}
             aria-label={t(item.labelKey)}
             aria-current={active ? 'page' : undefined}
-            className={cn(
-              'sl-bottom-nav-item',
-              active && 'sl-bottom-nav-item--active',
-            )}
+            className={cn('sl-bottom-nav-item', active && 'sl-bottom-nav-item--active')}
           >
             <Icon className="h-5 w-5" />
             <span className="sl-bottom-nav-label">{t(item.labelKey)}</span>

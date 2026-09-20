@@ -3,7 +3,11 @@ import { render, screen, cleanup } from '@testing-library/react'
 import { BottomNav } from './BottomNav'
 
 vi.mock('next/link', () => ({
-  default: ({ children, href, ...props }: any) => <a href={href} {...props}>{children}</a>,
+  default: ({ children, href, ...props }: any) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
 }))
 vi.mock('next/navigation', () => ({
   usePathname: () => '/chat',
@@ -20,7 +24,7 @@ describe('BottomNav', () => {
     expect(screen.getAllByText('chat').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('training').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('knowledge').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('models').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('personality').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('settings').length).toBeGreaterThanOrEqual(1)
   })
   it('has aria-label on nav', () => {
@@ -30,17 +34,17 @@ describe('BottomNav', () => {
   it('sets aria-current on active item', () => {
     render(<BottomNav />)
     const links = screen.getAllByRole('link')
-    const active = links.find(l => l.getAttribute('aria-current') === 'page')
+    const active = links.find((l) => l.getAttribute('aria-current') === 'page')
     expect(active).toBeDefined()
   })
   it('renders links with correct hrefs', () => {
     render(<BottomNav />)
     const links = screen.getAllByRole('link')
-    const hrefs = links.map(l => l.getAttribute('href'))
+    const hrefs = links.map((l) => l.getAttribute('href'))
     expect(hrefs).toContain('/chat')
     expect(hrefs).toContain('/training')
     expect(hrefs).toContain('/knowledge')
-    expect(hrefs).toContain('/models')
+    expect(hrefs).toContain('/personality')
     expect(hrefs).toContain('/settings')
   })
 })

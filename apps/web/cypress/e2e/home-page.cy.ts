@@ -6,7 +6,9 @@ describe('Home page - dashboard', () => {
 
   it('displays the dashboard greeting header', () => {
     cy.get('.sl-app-content').within(() => {
-      cy.contains(/(Good morning|Good afternoon|Good evening|Burning the midnight oil|Late night vibes)/).should('be.visible')
+      cy.contains(
+        /(Good morning|Good afternoon|Good evening|Burning the midnight oil|Late night vibes)/,
+      ).should('be.visible')
       cy.contains('gpt2 loaded').should('be.visible')
     })
   })
@@ -29,7 +31,11 @@ describe('Home page - dashboard', () => {
   it('links quick actions to correct routes', () => {
     cy.get('.sl-app-content').within(() => {
       cy.contains('a[href="/chat"]', 'Start chatting').should('have.attr', 'href', '/chat')
-      cy.contains('a[href="/models"]', 'Personalities').should('have.attr', 'href', '/models')
+      cy.contains('a[href="/personality"]', 'Personalities').should(
+        'have.attr',
+        'href',
+        '/personality',
+      )
       cy.contains('a[href="/training"]', 'Teach me').should('have.attr', 'href', '/training')
       cy.contains('a[href="/datasets"]', 'Datasets').should('have.attr', 'href', '/datasets')
     })

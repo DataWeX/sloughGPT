@@ -20,7 +20,10 @@ beforeEach(() => {
   mockPush.mockReset()
 })
 
-function keydown(key: string, mods: { ctrl?: boolean; meta?: boolean; shift?: boolean; alt?: boolean } = {}) {
+function keydown(
+  key: string,
+  mods: { ctrl?: boolean; meta?: boolean; shift?: boolean; alt?: boolean } = {},
+) {
   const ev = new KeyboardEvent('keydown', {
     key,
     ctrlKey: mods.ctrl ?? false,
@@ -51,10 +54,10 @@ describe('useGlobalShortcuts', () => {
     expect(mockPush).toHaveBeenCalledWith('/datasets')
   })
 
-  it('Ctrl+4 navigates to /models', () => {
+  it('Ctrl+4 navigates to /personality', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('4', { ctrl: true })
-    expect(mockPush).toHaveBeenCalledWith('/models')
+    expect(mockPush).toHaveBeenCalledWith('/personality')
   })
 
   it('Ctrl+5 navigates to agents', () => {

@@ -89,7 +89,7 @@ export default function ModelDetailPage() {
       loadingCards={4}
       headerRight={
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push('/models')}>
+          <Button variant="outline" size="sm" onClick={() => router.push('/developer')}>
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
           </Button>
           <Button variant="outline" size="sm" onClick={fetchModel}>

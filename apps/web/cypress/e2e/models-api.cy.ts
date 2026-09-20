@@ -1,16 +1,30 @@
 /**
- * Models page - behavioral tests
+ * Models catalog (Developer tab) - behavioral tests
  * Tests model listing, loading, and health display.
  */
-describe('Models page', () => {
+describe('Models catalog', () => {
   beforeEach(() => {
     cy.mockHealth({ model_loaded: true, model_type: 'gpt2' })
     cy.mockSystem()
     cy.intercept('GET', 'http://localhost:8000/models/hf', {
       statusCode: 200,
       body: [
-        { id: 'gpt2', name: 'GPT-2', source: 'huggingface', loaded: true, size_gb: 0.5, parameters: '124M' },
-        { id: 'gpt2-medium', name: 'GPT-2 Medium', source: 'huggingface', loaded: false, size_gb: 1.5, parameters: '355M' },
+        {
+          id: 'gpt2',
+          name: 'GPT-2',
+          source: 'huggingface',
+          loaded: true,
+          size_gb: 0.5,
+          parameters: '124M',
+        },
+        {
+          id: 'gpt2-medium',
+          name: 'GPT-2 Medium',
+          source: 'huggingface',
+          loaded: false,
+          size_gb: 1.5,
+          parameters: '355M',
+        },
       ],
     }).as('modelsHf')
     cy.intercept('GET', 'http://localhost:8000/souls', {
@@ -24,21 +38,24 @@ describe('Models page', () => {
   })
 
   it('displays model list from API', () => {
-    cy.visit('/models')
+    cy.visit('/developer')
+    cy.contains('Models').click()
     cy.wait('@modelsHf')
     cy.contains('GPT-2').scrollIntoView().should('be.visible')
     cy.contains('GPT-2 Medium').scrollIntoView().should('be.visible')
   })
 
   it('shows loaded model indicator', () => {
-    cy.visit('/models')
+    cy.visit('/developer')
+    cy.contains('Models').click()
     cy.wait('@modelsHf')
     cy.contains('GPT-2').scrollIntoView().should('be.visible')
     cy.contains('Loaded').scrollIntoView().should('be.visible')
   })
 
   it('shows model sizes', () => {
-    cy.visit('/models')
+    cy.visit('/developer')
+    cy.contains('Models').click()
     cy.wait('@modelsHf')
     cy.contains('GPT-2 Medium').scrollIntoView().should('be.visible')
     cy.contains('0.5 GB').should('be.visible')

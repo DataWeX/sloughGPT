@@ -3,7 +3,11 @@ import { render } from '@testing-library/react'
 import { TrainingStatus } from './TrainingStatus'
 
 vi.mock('next/link', () => ({
-  default: ({ children, href, ...props }: any) => <a href={href} {...props}>{children}</a>,
+  default: ({ children, href, ...props }: any) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
 }))
 
 vi.mock('@/hooks/useLocale', () => ({
@@ -28,17 +32,24 @@ vi.mock('@sloughgpt/strui', () => {
     CardHeader: passthrough,
     CardTitle: passthrough,
     cn: (...args: any[]) => args.filter(Boolean).join(' '),
-  
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -65,7 +76,7 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 const baseProps = {
@@ -78,28 +89,56 @@ const baseProps = {
 describe('TrainingStatus', () => {
   describe('offline state', () => {
     it('shows startup progress when initializing', () => {
-      const { container } = render(<TrainingStatus {...baseProps} apiStatus="offline" modelReadiness={{ ready: false, phase: 'loading', step: 5, total: 9, message: 'Loading weights...' }} />)
+      const { container } = render(
+        <TrainingStatus
+          {...baseProps}
+          apiStatus="offline"
+          modelReadiness={{
+            ready: false,
+            phase: 'loading',
+            step: 5,
+            total: 9,
+            message: 'Loading weights...',
+          }}
+        />,
+      )
       expect(container.textContent).toMatch(/Starting up/)
       expect(container.textContent).toContain('Loading weights...')
     })
 
     it('shows offline card when phase is unknown', () => {
-      const { container } = render(<TrainingStatus {...baseProps} apiStatus="offline" modelReadiness={{ ready: false, phase: 'unknown', step: 0, total: 9, message: '' }} />)
+      const { container } = render(
+        <TrainingStatus
+          {...baseProps}
+          apiStatus="offline"
+          modelReadiness={{ ready: false, phase: 'unknown', step: 0, total: 9, message: '' }}
+        />,
+      )
       expect(container.textContent).toContain('API Offline')
     })
   })
 
   describe('running training', () => {
     it('shows training banner when training is running', () => {
-      const { container } = render(<TrainingStatus {...baseProps} runningTraining={{ name: 'my-run', status_message: 'Epoch 3/10' }} />)
+      const { container } = render(
+        <TrainingStatus
+          {...baseProps}
+          runningTraining={{ name: 'my-run', status_message: 'Epoch 3/10' }}
+        />,
+      )
       expect(container.textContent).toMatch(/Training: my-run/)
       expect(container.textContent).toContain('Epoch 3/10')
     })
 
     it('links to training page', () => {
-      const { container } = render(<TrainingStatus {...baseProps} runningTraining={{ name: 'run-1', status_message: 'done' }} />)
+      const { container } = render(
+        <TrainingStatus
+          {...baseProps}
+          runningTraining={{ name: 'run-1', status_message: 'done' }}
+        />,
+      )
       const links = container.querySelectorAll('a')
-      const trainingLink = Array.from(links).find(a => a.getAttribute('href') === '/training')
+      const trainingLink = Array.from(links).find((a) => a.getAttribute('href') === '/training')
       expect(trainingLink).toBeDefined()
       expect(trainingLink!.textContent).toMatch(/Training: run-1/)
     })
@@ -112,7 +151,18 @@ describe('TrainingStatus', () => {
 
   describe('model loading', () => {
     it('shows loading progress when model not ready', () => {
-      const { container } = render(<TrainingStatus {...baseProps} modelReadiness={{ ready: false, phase: 'loading', step: 3, total: 9, message: 'Loading...' }} />)
+      const { container } = render(
+        <TrainingStatus
+          {...baseProps}
+          modelReadiness={{
+            ready: false,
+            phase: 'loading',
+            step: 3,
+            total: 9,
+            message: 'Loading...',
+          }}
+        />,
+      )
       expect(container.textContent).toContain('Model loading')
       expect(container.textContent).toContain('Loading...')
     })
@@ -120,10 +170,12 @@ describe('TrainingStatus', () => {
 
   describe('no model loaded', () => {
     it('shows no model card with link to models', () => {
-      const { container } = render(<TrainingStatus {...baseProps} modelStatus={{ loaded: false, model: null }} />)
+      const { container } = render(
+        <TrainingStatus {...baseProps} modelStatus={{ loaded: false, model: null }} />,
+      )
       expect(container.textContent).toContain('No model loaded')
       const links = container.querySelectorAll('a')
-      const modelsLink = Array.from(links).find(a => a.getAttribute('href') === '/models')
+      const modelsLink = Array.from(links).find((a) => a.getAttribute('href') === '/developer')
       expect(modelsLink).toBeDefined()
       expect(modelsLink!.textContent).toContain('Open Models')
     })

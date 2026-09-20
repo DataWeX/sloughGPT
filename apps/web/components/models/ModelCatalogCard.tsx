@@ -27,6 +27,7 @@ interface Model {
   params?: string
   cached?: boolean
   thumbnail?: string
+  archive_format?: 'lz4' | null
 }
 
 interface ModelCatalogCardProps {
@@ -142,7 +143,7 @@ export default memo(function ModelCatalogCard({
                 size="sm"
                 variant="outline"
                 className="h-8 text-xs"
-                onClick={() => router.push('/models')}
+                onClick={() => router.push('/developer')}
               >
                 Browse models
               </Button>

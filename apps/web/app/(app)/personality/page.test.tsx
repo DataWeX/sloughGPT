@@ -15,6 +15,9 @@ const {
   mockDeletePersona,
   mockApiPatch,
   mockAddToast,
+  mockGetTraitWeights,
+  mockSaveTraitWeights,
+  mockSwitchSoul,
 } = vi.hoisted(() => ({
   mockGetPersonality: vi.fn(),
   mockGetPersonalityPresets: vi.fn(),
@@ -28,14 +31,29 @@ const {
   mockDeletePersona: vi.fn(),
   mockApiPatch: vi.fn(),
   mockAddToast: vi.fn(),
+  mockGetTraitWeights: vi.fn(),
+  mockSaveTraitWeights: vi.fn(),
+  mockSwitchSoul: vi.fn(),
 }))
 
 const mockProfile = {
   values: ['honesty', 'curiosity'],
   goals: ['be helpful'],
   voice: { formality: 0.5, warmth: 0.7, confidence: 0.6, humor: 0.3, verbosity: 0.4, empathy: 0.8 },
-  style: { use_examples: true, ask_follow_ups: false, acknowledge_uncertainty: true, use_analogies: false, break_down_complex_topics: true },
-  traits: { openness: 0.6, conscientiousness: 0.7, extraversion: 0.4, agreeableness: 0.8, neuroticism: 0.3 },
+  style: {
+    use_examples: true,
+    ask_follow_ups: false,
+    acknowledge_uncertainty: true,
+    use_analogies: false,
+    break_down_complex_topics: true,
+  },
+  traits: {
+    openness: 0.6,
+    conscientiousness: 0.7,
+    extraversion: 0.4,
+    agreeableness: 0.8,
+    neuroticism: 0.3,
+  },
   interests: ['AI', 'science'],
   avoid: ['rudeness'],
 }
@@ -53,12 +71,16 @@ vi.mock('@/hooks/useLocale', () => ({
 
 vi.mock('@/components/PageContainer', () => ({
   PageContainer: ({ children, title }: { children: React.ReactNode; title: string }) => (
-    <div data-testid="page-container" data-title={title}>{children}</div>
+    <div data-testid="page-container" data-title={title}>
+      {children}
+    </div>
   ),
 }))
 
 vi.mock('recharts', () => ({
-  ResponsiveContainer: ({ children }: any) => <div data-testid="responsive-container">{children}</div>,
+  ResponsiveContainer: ({ children }: any) => (
+    <div data-testid="responsive-container">{children}</div>
+  ),
   LineChart: ({ children }: any) => <div data-testid="line-chart">{children}</div>,
   Line: () => null,
   XAxis: () => null,
@@ -74,7 +96,9 @@ vi.mock('@sloughgpt/strui', () => {
     cn: vi.fn((...a: any[]) => a.join(' ')),
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
     Button: ({ children, onClick, disabled, variant }: any) => (
-      <button onClick={onClick} disabled={disabled} data-variant={variant}>{children}</button>
+      <button onClick={onClick} disabled={disabled} data-variant={variant}>
+        {children}
+      </button>
     ),
     Card: passthrough,
     CardContent: passthrough,
@@ -88,12 +112,26 @@ vi.mock('@sloughgpt/strui', () => {
   }
 })
 
-vi.mock('./PersonalityQuiz', () => ({
-  PersonalityQuiz: ({ onApply }: { onApply: (preset: string) => void }) => (
-    <div data-testid="personality-quiz">
-      <button onClick={() => onApply('creative')}>Apply Creative</button>
-    </div>
-  ),
+vi.mock('@/components/models/PersonalitiesCard', () => ({
+  default: () => <div data-testid="personalities-card" />,
+}))
+
+vi.mock('@/components/models/PersonalityProfileCard', () => ({
+  default: () => <div data-testid="personality-profile-card" />,
+}))
+
+vi.mock('@/lib/cache/api-hooks', () => ({
+  useSouls: () => ({ data: { souls: [], current_soul: null }, isLoading: false }),
+  useCurrentSoul: () => ({ data: null }),
+  useCheckpoints: () => ({ data: { checkpoints: [], active_checkpoint: null }, isLoading: false }),
+  useSwitchSoul: () => ({ mutateAsync: mockSwitchSoul }),
+}))
+
+vi.mock('@/lib/souls-controller', () => ({
+  soulsController: {
+    getTraitWeights: mockGetTraitWeights,
+    saveTraitWeights: mockSaveTraitWeights,
+  },
 }))
 
 vi.mock('@/lib/http-client', () => ({
@@ -140,15 +178,22 @@ beforeEach(() => {
     ],
   })
   mockGetPersonalityConflicts.mockResolvedValue({
-    conflicts: [{ type: 'style', severity: 'medium', message: 'Conflict', fields: ['humor', 'formality'] }],
+    conflicts: [
+      { type: 'style', severity: 'medium', message: 'Conflict', fields: ['humor', 'formality'] },
+    ],
   })
-  mockListPersonas.mockResolvedValue({ personas: [{ id: 'p1', name: 'Test Persona', values: ['honesty'] }] })
+  mockListPersonas.mockResolvedValue({
+    personas: [{ id: 'p1', name: 'Test Persona', values: ['honesty'] }],
+  })
   mockResetPersonality.mockResolvedValue({ reset: true })
   mockApplyPersonalityPreset.mockResolvedValue({ applied: true })
   mockSavePersona.mockResolvedValue({ id: 'new-p' })
   mockActivatePersona.mockResolvedValue({ activated: true })
   mockDeletePersona.mockResolvedValue({ deleted: true })
   mockApiPatch.mockResolvedValue(mockProfile)
+  mockGetTraitWeights.mockResolvedValue({ personality: { warmth: 0.8 } })
+  mockSaveTraitWeights.mockResolvedValue(undefined)
+  mockSwitchSoul.mockResolvedValue({ success: true })
 })
 
 afterEach(() => {
@@ -209,10 +254,13 @@ describe('PersonalityPage', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('Save Changes'))
     })
-    expect(apiPatch).toHaveBeenCalledWith('/consciousness/personality', expect.objectContaining({
-      values: expect.any(Array),
-      goals: expect.any(Array),
-    }))
+    expect(apiPatch).toHaveBeenCalledWith(
+      '/consciousness/personality',
+      expect.objectContaining({
+        values: expect.any(Array),
+        goals: expect.any(Array),
+      }),
+    )
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('Personality saved', 'success')
     })
@@ -230,16 +278,17 @@ describe('PersonalityPage', () => {
     })
   })
 
-  it('applies preset via quiz', async () => {
+  it('renders merged personalities switcher and trait weights sections', async () => {
     render(<PersonalityPage />)
     await waitForLoad()
-    await act(async () => {
-      fireEvent.click(screen.getByText('Apply Creative'))
-    })
-    expect(consciousnessController.applyPersonalityPreset).toHaveBeenCalledWith('creative')
-    await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Applied "creative" preset', 'success')
-    })
+    expect(screen.getByTestId('personalities-card')).toBeInTheDocument()
+    expect(screen.getByTestId('personality-profile-card')).toBeInTheDocument()
+  })
+
+  it('does not render the quiz', async () => {
+    render(<PersonalityPage />)
+    await waitForLoad()
+    expect(screen.queryByTestId('personality-quiz')).not.toBeInTheDocument()
   })
 
   it('updates voice slider values', async () => {
@@ -274,13 +323,15 @@ describe('PersonalityPage', () => {
     })
     await act(async () => {
       const btns = screen.getAllByText('personality.savePersona')
-      const saveBtn = btns.find(el => el.tagName === 'BUTTON')!
+      const saveBtn = btns.find((el) => el.tagName === 'BUTTON')!
       fireEvent.click(saveBtn)
     })
-    expect(consciousnessController.savePersona).toHaveBeenCalledWith(expect.objectContaining({
-      persona_id: 'my-test-persona',
-      name: 'My Test Persona',
-    }))
+    expect(consciousnessController.savePersona).toHaveBeenCalledWith(
+      expect.objectContaining({
+        persona_id: 'my-test-persona',
+        name: 'My Test Persona',
+      }),
+    )
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('Persona saved', 'success')
     })
@@ -341,12 +392,6 @@ describe('PersonalityPage', () => {
       fireEvent.click(screen.getByText('Cancel'))
     })
     expect(screen.queryByPlaceholderText('My Persona')).not.toBeInTheDocument()
-  })
-
-  it('renders personality quiz component', async () => {
-    render(<PersonalityPage />)
-    await waitForLoad()
-    expect(screen.getByTestId('personality-quiz')).toBeInTheDocument()
   })
 
   it('shows persona card with values', async () => {

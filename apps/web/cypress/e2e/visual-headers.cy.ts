@@ -10,7 +10,7 @@
 const PAGES = [
   { path: '/', name: 'home' },
   { path: '/chat', name: 'chat' },
-  { path: '/models', name: 'models' },
+  { path: '/personality', name: 'personality' },
   { path: '/training', name: 'training' },
   { path: '/datasets', name: 'datasets' },
   { path: '/settings', name: 'settings' },
@@ -22,7 +22,7 @@ const PAGES = [
   { path: '/companion', name: 'companion' },
   { path: '/agents', name: 'agents' },
   { path: '/collections', name: 'collections' },
-  { path: '/souls', name: 'souls' },
+  { path: '/developer', name: 'developer' },
   { path: '/tokenizer', name: 'tokenizer' },
   { path: '/token-tree', name: 'token-tree' },
   { path: '/infer', name: 'infer' },
@@ -64,8 +64,13 @@ describe('Visual — AppRouteHeader across all pages', () => {
     it(`header: ${name} (${path})`, () => {
       cy.visit(path, { failOnStatusCode: false })
       cy.get('body').then(($body) => {
-        if ($body.find('[class*="sl-page-header"], [class*="app-route-header"], header, nav').length > 0) {
-          cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav').first().screenshot(`headers/${name}`)
+        if (
+          $body.find('[class*="sl-page-header"], [class*="app-route-header"], header, nav').length >
+          0
+        ) {
+          cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
+            .first()
+            .screenshot(`headers/${name}`)
         } else {
           cy.screenshotPage(`headers/${name}-fullpage`)
         }
@@ -82,16 +87,22 @@ describe('Visual — Header responsive breakpoints', () => {
 
   it('header at desktop (1280px)', () => {
     cy.viewport(1280, 800)
-    cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav').first().screenshot('headers/responsive-desktop')
+    cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
+      .first()
+      .screenshot('headers/responsive-desktop')
   })
 
   it('header at tablet (768px)', () => {
     cy.viewport(768, 1024)
-    cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav').first().screenshot('headers/responsive-tablet')
+    cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
+      .first()
+      .screenshot('headers/responsive-tablet')
   })
 
   it('header at mobile (375px)', () => {
     cy.viewport(375, 667)
-    cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav').first().screenshot('headers/responsive-mobile')
+    cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
+      .first()
+      .screenshot('headers/responsive-mobile')
   })
 })

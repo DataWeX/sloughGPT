@@ -5,14 +5,31 @@ import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import { apiPatch } from '@/lib/http-client'
 import {
-  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Skeleton,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Skeleton,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
-import { PersonalityQuiz } from './PersonalityQuiz'
+import PersonalitiesCard from '@/components/models/PersonalitiesCard'
+import PersonalityProfileCard from '@/components/models/PersonalityProfileCard'
+import { useSouls, useCheckpoints, useCurrentSoul, useSwitchSoul } from '@/lib/cache/api-hooks'
+import { soulsController } from '@/lib/souls-controller'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
   ResponsiveContainer,
 } from 'recharts'
 
@@ -71,7 +88,7 @@ const STYLE_LABELS: Record<string, string> = {
 }
 
 export default function PersonalityPage() {
-  const addToast = useToastStore(state => state.addToast)
+  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -93,12 +110,61 @@ export default function PersonalityPage() {
   const [activatingPersona, setActivatingPersona] = useState<string | null>(null)
   const [deletingPersona, setDeletingPersona] = useState<string | null>(null)
   const [showSavePersonaDialog, setShowSavePersonaDialog] = useState(false)
+  const [switchingSoul, setSwitchingSoul] = useState<string | null>(null)
+  const [traitWeights, setTraitWeights] = useState<Record<string, Record<string, number>> | null>(
+    null,
+  )
+
+  const { data: soulsData, isLoading: soulsLoading } = useSouls()
+  const { data: currentSoulData } = useCurrentSoul()
+  const { data: checkpointsData, isLoading: checkpointsLoading } = useCheckpoints()
+  const { mutateAsync: switchSoul } = useSwitchSoul()
+  const souls = soulsData?.souls ?? []
+  const currentSoul = currentSoulData?.name ?? soulsData?.current_soul ?? null
+  const checkpoints = checkpointsData?.checkpoints ?? []
+  const activeCheckpoint = checkpointsData?.active_checkpoint ?? null
+
+  const handleSwitchSoul = async (name: string, checkpointName?: string) => {
+    setSwitchingSoul(name)
+    try {
+      await switchSoul({ name, checkpointName })
+      addToast(checkpointName ? `${name} + ${checkpointName}` : name, 'success')
+    } catch (err) {
+      addToast(extractErrorMessage(err, 'Could not switch personality'), 'error')
+    } finally {
+      setSwitchingSoul(null)
+    }
+  }
+
+  const handleSaveTraits = useCallback(
+    async (weights: Record<string, Record<string, number>>) => {
+      try {
+        await soulsController.saveTraitWeights(weights)
+        addToast('Personality updated', 'success')
+        setTraitWeights(weights)
+      } catch (err) {
+        addToast(extractErrorMessage(err, 'Could not save traits'), 'error')
+      }
+    },
+    [addToast],
+  )
+
+  const fetchTraitWeights = useCallback(async () => {
+    try {
+      const w = await soulsController.getTraitWeights()
+      if (w && !('error' in w)) setTraitWeights(w)
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Could not load trait weights', 'info')
+    }
+  }, [addToast])
 
   const fetchPersonas = useCallback(async () => {
     try {
-      const data = await consciousnessController.listPersonas() as any
+      const data = (await consciousnessController.listPersonas()) as any
       setSavedPersonas(data.personas ?? [])
-    } catch {}
+    } catch {
+      // Saved personas are optional — the page works without them.
+    }
   }, [])
 
   const fetchProfile = useCallback(async () => {
@@ -134,17 +200,34 @@ export default function PersonalityPage() {
     fetchPersonas()
   }, [addToast, fetchPersonas])
 
-  useEffect(() => { fetchProfile() }, [fetchProfile])
+  useEffect(() => {
+    fetchProfile()
+  }, [fetchProfile])
+  useEffect(() => {
+    fetchTraitWeights()
+  }, [fetchTraitWeights])
 
   const handleSave = async () => {
     if (!profile) return
     setSaving(true)
     try {
       const data = await apiPatch('/consciousness/personality', {
-        values: valuesInput.split(',').map(s => s.trim()).filter(Boolean),
-        goals: goalsInput.split(',').map(s => s.trim()).filter(Boolean),
-        interests: interestsInput.split(',').map(s => s.trim()).filter(Boolean),
-        avoid: avoidInput.split(',').map(s => s.trim()).filter(Boolean),
+        values: valuesInput
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        goals: goalsInput
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        interests: interestsInput
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        avoid: avoidInput
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
         voice: profile.voice,
         traits: profile.traits,
         style: profile.style,
@@ -313,13 +396,21 @@ export default function PersonalityPage() {
         {/* Header with save/reset */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h2 className="text-base sm:text-lg font-semibold">Personality Configuration</h2>
-            <p className="text-xs sm:text-sm text-muted-foreground">Define how the consciousness system thinks, speaks, and behaves</p>
+            <h2 className="text-base sm:text-lg font-semibold">Personalities</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Switch personalities and define how your agent speaks and behaves
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={handleExport}>Export</Button>
-            <Button variant="outline" onClick={handleImport}>Import</Button>
-            <Button variant="outline" onClick={handleReset}>Reset</Button>
+            <Button variant="outline" onClick={handleExport}>
+              Export
+            </Button>
+            <Button variant="outline" onClick={handleImport}>
+              Import
+            </Button>
+            <Button variant="outline" onClick={handleReset}>
+              Reset
+            </Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving ? 'Saving...' : 'Save Changes'}
             </Button>
@@ -343,10 +434,7 @@ export default function PersonalityPage() {
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {savedPersonas.map((persona) => (
-                  <div
-                    key={persona.id}
-                    className="rounded-lg border p-3 sm:p-4 space-y-2"
-                  >
+                  <div key={persona.id} className="rounded-lg border p-3 sm:p-4 space-y-2">
                     <div className="text-sm sm:text-base font-medium">{persona.name}</div>
                     <div className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2">
                       {persona.values?.join(', ') || '—'}
@@ -388,7 +476,9 @@ export default function PersonalityPage() {
             </CardHeader>
             <CardContent className="space-y-2 sm:space-y-3">
               <div>
-                <label className="text-xs sm:text-sm font-medium">{t('personality.personaName')}</label>
+                <label className="text-xs sm:text-sm font-medium">
+                  {t('personality.personaName')}
+                </label>
                 <Input
                   value={personaNameInput}
                   onChange={(e) => setPersonaNameInput(e.target.value)}
@@ -397,10 +487,21 @@ export default function PersonalityPage() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleSavePersona} disabled={savingPersona || !personaNameInput.trim()}>
+                <Button
+                  size="sm"
+                  onClick={handleSavePersona}
+                  disabled={savingPersona || !personaNameInput.trim()}
+                >
                   {savingPersona ? '...' : t('personality.savePersona')}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => { setShowSavePersonaDialog(false); setPersonaNameInput('') }}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setShowSavePersonaDialog(false)
+                    setPersonaNameInput('')
+                  }}
+                >
                   Cancel
                 </Button>
               </div>
@@ -408,11 +509,22 @@ export default function PersonalityPage() {
           </Card>
         )}
 
-        {/* Personality Quiz */}
-        <PersonalityQuiz
-          onApply={(preset) => {
-            handleApplyPreset(preset).then(() => fetchProfile())
-          }}
+        {/* Switch active personality + trait weights */}
+        <PersonalitiesCard
+          souls={souls}
+          soulsLoading={soulsLoading}
+          checkpoints={checkpoints}
+          checkpointsLoading={checkpointsLoading}
+          currentSoul={currentSoul}
+          activeCheckpoint={activeCheckpoint}
+          switchingSoul={switchingSoul}
+          onSwitch={handleSwitchSoul}
+        />
+        <PersonalityProfileCard
+          traitWeights={traitWeights}
+          currentSoulName={currentSoul}
+          onTraitsSaved={handleSaveTraits}
+          onTraitsChanged={fetchTraitWeights}
         />
 
         {/* Presets */}
@@ -448,13 +560,21 @@ export default function PersonalityPage() {
         {conflicts.length > 0 && (
           <Card className="border-yellow-500/50">
             <CardHeader>
-              <CardTitle className="text-yellow-600 dark:text-yellow-400">Personality Conflicts</CardTitle>
+              <CardTitle className="text-yellow-600 dark:text-yellow-400">
+                Personality Conflicts
+              </CardTitle>
               <CardDescription>These settings may work against each other</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {conflicts.map((c, i) => (
-                <div key={i} className="flex items-start gap-2 text-sm p-2 rounded-md bg-yellow-500/5">
-                  <Badge variant={c.severity === 'medium' ? 'destructive' : 'outline'} className="text-[10px] mt-0.5">
+                <div
+                  key={i}
+                  className="flex items-start gap-2 text-sm p-2 rounded-md bg-yellow-500/5"
+                >
+                  <Badge
+                    variant={c.severity === 'medium' ? 'destructive' : 'outline'}
+                    className="text-[10px] mt-0.5"
+                  >
                     {c.severity}
                   </Badge>
                   <div>
@@ -526,7 +646,9 @@ export default function PersonalityPage() {
           <CardContent className="space-y-2 sm:space-y-3">
             {Object.entries(profile.voice).map(([key, value]) => (
               <div key={key} className="flex items-center gap-2 sm:gap-4">
-                <label className="text-xs sm:text-sm w-24 sm:w-32 shrink-0">{VOICE_LABELS[key] || key}</label>
+                <label className="text-xs sm:text-sm w-24 sm:w-32 shrink-0">
+                  {VOICE_LABELS[key] || key}
+                </label>
                 <input
                   type="range"
                   min="0"
@@ -536,7 +658,9 @@ export default function PersonalityPage() {
                   onChange={(e) => handleVoiceChange(key, parseFloat(e.target.value))}
                   className="flex-1 min-w-0"
                 />
-                <span className="text-[10px] sm:text-xs text-muted-foreground w-8 sm:w-10 text-right shrink-0">{(value * 100).toFixed(0)}%</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground w-8 sm:w-10 text-right shrink-0">
+                  {(value * 100).toFixed(0)}%
+                </span>
               </div>
             ))}
           </CardContent>
@@ -551,7 +675,9 @@ export default function PersonalityPage() {
           <CardContent className="space-y-2 sm:space-y-3">
             {Object.entries(profile.traits).map(([key, value]) => (
               <div key={key} className="flex items-center gap-2 sm:gap-4">
-                <label className="text-xs sm:text-sm w-24 sm:w-32 shrink-0">{TRAIT_LABELS[key] || key}</label>
+                <label className="text-xs sm:text-sm w-24 sm:w-32 shrink-0">
+                  {TRAIT_LABELS[key] || key}
+                </label>
                 <input
                   type="range"
                   min="0"
@@ -561,7 +687,9 @@ export default function PersonalityPage() {
                   onChange={(e) => handleTraitChange(key, parseFloat(e.target.value))}
                   className="flex-1 min-w-0"
                 />
-                <span className="text-[10px] sm:text-xs text-muted-foreground w-8 sm:w-10 text-right shrink-0">{(value * 100).toFixed(0)}%</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground w-8 sm:w-10 text-right shrink-0">
+                  {(value * 100).toFixed(0)}%
+                </span>
               </div>
             ))}
           </CardContent>
@@ -580,7 +708,9 @@ export default function PersonalityPage() {
                   onClick={() => handleStyleToggle(key)}
                   className={`w-10 h-5 rounded-full transition-colors ${value ? 'bg-primary' : 'bg-muted'}`}
                 >
-                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${value ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  <div
+                    className={`w-4 h-4 rounded-full bg-white transition-transform ${value ? 'translate-x-5' : 'translate-x-0.5'}`}
+                  />
                 </button>
                 <label className="text-sm">{STYLE_LABELS[key] || key}</label>
               </div>
@@ -592,7 +722,9 @@ export default function PersonalityPage() {
         {showComparison && originalProfile && profile && (
           <Card className="border-blue-500/50">
             <CardHeader>
-              <CardTitle className="text-blue-600 dark:text-blue-400">Imported Profile — Review</CardTitle>
+              <CardTitle className="text-blue-600 dark:text-blue-400">
+                Imported Profile — Review
+              </CardTitle>
               <CardDescription>Compare imported values with your current profile</CardDescription>
             </CardHeader>
             <CardContent>
@@ -602,16 +734,32 @@ export default function PersonalityPage() {
                 <div className="font-medium text-muted-foreground">Imported</div>
                 {Object.keys(originalProfile.voice).map((key) => (
                   <>
-                    <div key={`label-${key}`} className="capitalize">{key}</div>
+                    <div key={`label-${key}`} className="capitalize">
+                      {key}
+                    </div>
                     <div key={`old-${key}`}>{(originalProfile.voice[key] * 100).toFixed(0)}%</div>
-                    <div key={`new-${key}`} className={profile.voice[key] !== originalProfile.voice[key] ? 'text-blue-500 font-medium' : ''}>
+                    <div
+                      key={`new-${key}`}
+                      className={
+                        profile.voice[key] !== originalProfile.voice[key]
+                          ? 'text-blue-500 font-medium'
+                          : ''
+                      }
+                    >
                       {(profile.voice[key] * 100).toFixed(0)}%
                     </div>
                   </>
                 ))}
               </div>
               <div className="flex gap-2 mt-4">
-                <Button size="sm" variant="outline" onClick={() => { setShowComparison(false); setProfile(originalProfile) }}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setShowComparison(false)
+                    setProfile(originalProfile)
+                  }}
+                >
                   Discard
                 </Button>
                 <Button size="sm" onClick={() => setShowComparison(false)}>
@@ -627,44 +775,132 @@ export default function PersonalityPage() {
           <Card>
             <CardHeader>
               <CardTitle>Personality Evolution</CardTitle>
-              <CardDescription>How your voice and traits have changed over interactions</CardDescription>
+              <CardDescription>
+                How your voice and traits have changed over interactions
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-2">Voice Over Time</div>
+                  <div className="text-xs font-medium text-muted-foreground mb-2">
+                    Voice Over Time
+                  </div>
                   <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={personalityHistory.map((p) => ({
-                      time: new Date(p.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                      ...p.voice,
-                    }))}>
+                    <LineChart
+                      data={personalityHistory.map((p) => ({
+                        time: new Date(p.timestamp * 1000).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        }),
+                        ...p.voice,
+                      }))}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="time" tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis domain={[0, 1]} tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '11px' }} />
+                      <XAxis
+                        dataKey="time"
+                        tick={{ fontSize: 9 }}
+                        stroke="hsl(var(--muted-foreground))"
+                      />
+                      <YAxis
+                        domain={[0, 1]}
+                        tick={{ fontSize: 9 }}
+                        stroke="hsl(var(--muted-foreground))"
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                          fontSize: '11px',
+                        }}
+                      />
                       <Legend wrapperStyle={{ fontSize: '10px' }} />
-                      <Line type="monotone" dataKey="warmth" stroke="#ec4899" strokeWidth={1.5} dot={false} />
-                      <Line type="monotone" dataKey="confidence" stroke="#6366f1" strokeWidth={1.5} dot={false} />
-                      <Line type="monotone" dataKey="humor" stroke="#f59e0b" strokeWidth={1.5} dot={false} />
-                      <Line type="monotone" dataKey="empathy" stroke="#22c55e" strokeWidth={1.5} dot={false} />
+                      <Line
+                        type="monotone"
+                        dataKey="warmth"
+                        stroke="#ec4899"
+                        strokeWidth={1.5}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="confidence"
+                        stroke="#6366f1"
+                        strokeWidth={1.5}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="humor"
+                        stroke="#f59e0b"
+                        strokeWidth={1.5}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="empathy"
+                        stroke="#22c55e"
+                        strokeWidth={1.5}
+                        dot={false}
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-2">Traits Over Time</div>
+                  <div className="text-xs font-medium text-muted-foreground mb-2">
+                    Traits Over Time
+                  </div>
                   <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={personalityHistory.map((p) => ({
-                      time: new Date(p.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                      ...p.traits,
-                    }))}>
+                    <LineChart
+                      data={personalityHistory.map((p) => ({
+                        time: new Date(p.timestamp * 1000).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        }),
+                        ...p.traits,
+                      }))}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="time" tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis domain={[0, 1]} tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '11px' }} />
+                      <XAxis
+                        dataKey="time"
+                        tick={{ fontSize: 9 }}
+                        stroke="hsl(var(--muted-foreground))"
+                      />
+                      <YAxis
+                        domain={[0, 1]}
+                        tick={{ fontSize: 9 }}
+                        stroke="hsl(var(--muted-foreground))"
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                          fontSize: '11px',
+                        }}
+                      />
                       <Legend wrapperStyle={{ fontSize: '10px' }} />
-                      <Line type="monotone" dataKey="openness" stroke="#8b5cf6" strokeWidth={1.5} dot={false} />
-                      <Line type="monotone" dataKey="agreeableness" stroke="#22c55e" strokeWidth={1.5} dot={false} />
-                      <Line type="monotone" dataKey="conscientiousness" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
+                      <Line
+                        type="monotone"
+                        dataKey="openness"
+                        stroke="#8b5cf6"
+                        strokeWidth={1.5}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="agreeableness"
+                        stroke="#22c55e"
+                        strokeWidth={1.5}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="conscientiousness"
+                        stroke="#3b82f6"
+                        strokeWidth={1.5}
+                        dot={false}
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>

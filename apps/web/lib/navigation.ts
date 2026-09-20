@@ -2,7 +2,6 @@
 
 import {
   IconChat,
-  IconModels,
   IconSettings,
   IconTraining,
   IconBrain,
@@ -104,11 +103,11 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     labelKey: 'nav.section.ai',
     routes: [
       {
-        path: '/models',
-        labelKey: 'nav.models',
+        path: '/personality',
+        labelKey: 'nav.personality',
         shortcut: '4',
-        icon: 'models',
-        description: 'Models, adapters & inference',
+        icon: 'brain',
+        description: 'Personalities & traits',
       },
       {
         path: '/agents',
@@ -116,25 +115,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
         shortcut: '5',
         icon: 'agents',
         description: 'Manage agents',
-      },
-      {
-        path: '/souls',
-        labelKey: 'nav.souls',
-        shortcut: '6',
-        icon: 'brain',
-        description: 'Trained model souls & checkpoints',
-      },
-      {
-        path: '/personality',
-        labelKey: 'nav.personality',
-        icon: 'brain',
-        description: 'Runtime personality configuration',
-      },
-      {
-        path: '/consciousness',
-        labelKey: 'nav.consciousness',
-        icon: 'sparkle',
-        description: 'Cognitive engine (core)',
       },
       {
         path: '/benchmark',
@@ -326,11 +306,8 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/self-train': IconBrain,
   '/datasets': IconChart,
   '/knowledge': IconBookmark,
-  '/models': IconModels,
-  '/agents': IconAgents,
-  '/souls': IconSparkle,
   '/personality': IconBrain,
-  '/consciousness': IconSparkle,
+  '/agents': IconAgents,
   '/benchmark': IconBenchmark,
   '/monitoring': IconActivity,
   '/settings': IconSettings,

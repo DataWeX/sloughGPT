@@ -14,7 +14,9 @@ vi.mock('@/hooks/useLocale', () => ({
 
 vi.mock('./ThemeSwitcher', () => ({ ThemeSwitcher: () => <div data-testid="theme-switcher" /> }))
 
-vi.mock('@/lib/route-match', () => ({ routeMatchesPath: (p: string, path: string) => p.startsWith(path) }))
+vi.mock('@/lib/route-match', () => ({
+  routeMatchesPath: (p: string, path: string) => p.startsWith(path),
+}))
 
 import { Sidebar } from './Sidebar'
 
@@ -32,7 +34,7 @@ describe('Sidebar', () => {
     expect(screen.getByText('nav.chat')).toBeDefined()
     expect(screen.getByText('nav.training')).toBeDefined()
     expect(screen.getByText('nav.datasets')).toBeDefined()
-    expect(screen.getByText('nav.models')).toBeDefined()
+    expect(screen.getByText('nav.personality')).toBeDefined()
     expect(screen.getByText('nav.agents')).toBeDefined()
     expect(screen.getByText('nav.knowledge')).toBeDefined()
     expect(screen.getByText('nav.settings')).toBeDefined()
@@ -67,7 +69,7 @@ describe('Sidebar', () => {
   it('hides nav labels and section labels when collapsed', () => {
     render(<Sidebar collapsed />)
     expect(screen.queryByText('nav.chat')).toBeNull()
-    expect(screen.queryByText('nav.models')).toBeNull()
+    expect(screen.queryByText('nav.personality')).toBeNull()
     expect(screen.queryByText('nav.section.core')).toBeNull()
   })
 

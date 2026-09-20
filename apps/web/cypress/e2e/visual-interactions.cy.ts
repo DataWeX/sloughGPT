@@ -18,8 +18,14 @@ describe('Visual interactions — Home page', () => {
   it('captures quick action hover states', () => {
     cy.screenshotSequence('home-quick-actions', [
       { label: 'default', action: () => {} },
-      { label: 'hover-chat', action: () => cy.contains('a', 'Start chatting').trigger('mouseover') },
-      { label: 'hover-models', action: () => cy.contains('a', 'Personalities').trigger('mouseover') },
+      {
+        label: 'hover-chat',
+        action: () => cy.contains('a', 'Start chatting').trigger('mouseover'),
+      },
+      {
+        label: 'hover-models',
+        action: () => cy.contains('a', 'Personalities').trigger('mouseover'),
+      },
       { label: 'hover-training', action: () => cy.contains('a', 'Teach me').trigger('mouseover') },
       { label: 'hover-datasets', action: () => cy.contains('a', 'Datasets').trigger('mouseover') },
     ])
@@ -53,10 +59,10 @@ describe('Visual interactions — Chat page', () => {
   })
 })
 
-describe('Visual interactions — Models page', () => {
+describe('Visual interactions — Models catalog', () => {
   beforeEach(() => {
     cy.mockAll()
-    cy.visit('/models')
+    cy.visit('/developer')
   })
 
   it('captures models grid', () => {
@@ -107,7 +113,7 @@ describe('Visual interactions — Navigation', () => {
     cy.screenshotSequence('navigation-flow', [
       { label: '01-home', action: () => {} },
       { label: '02-chat', action: () => cy.visit('/chat') },
-      { label: '03-models', action: () => cy.visit('/models') },
+      { label: '03-personality', action: () => cy.visit('/personality') },
       { label: '04-training', action: () => cy.visit('/training') },
       { label: '05-datasets', action: () => cy.visit('/datasets') },
       { label: '06-settings', action: () => cy.visit('/settings') },

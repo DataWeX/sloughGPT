@@ -24,7 +24,9 @@ export function NavigationGrid({ apiStatus, modelStatus, datasetStats }: Navigat
           </div>
           <div className="min-w-0">
             <p className="text-xs sm:text-sm font-semibold">Start chatting</p>
-            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Ask anything, get answers</p>
+            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">
+              Ask anything, get answers
+            </p>
           </div>
         </div>
         <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-accent/50 transition-colors">
@@ -32,7 +34,7 @@ export function NavigationGrid({ apiStatus, modelStatus, datasetStats }: Navigat
         </div>
       </Link>
       <Link
-        href="/models"
+        href="/personality"
         className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
       >
         <div className="flex items-center gap-2 sm:gap-3">
@@ -41,7 +43,9 @@ export function NavigationGrid({ apiStatus, modelStatus, datasetStats }: Navigat
           </div>
           <div className="min-w-0">
             <p className="text-xs sm:text-sm font-semibold">Personalities</p>
-            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Switch your agent&apos;s personality</p>
+            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">
+              Switch your agent&apos;s personality
+            </p>
           </div>
         </div>
         <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
@@ -60,10 +64,14 @@ export function NavigationGrid({ apiStatus, modelStatus, datasetStats }: Navigat
             <div className="flex items-center gap-2">
               <p className="text-xs sm:text-sm font-semibold">Datasets</p>
               {datasetStats && datasetStats.totalDatasets > 0 && (
-                <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{datasetStats.totalDatasets}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                  {datasetStats.totalDatasets}
+                </span>
               )}
             </div>
-            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Manage training data</p>
+            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">
+              Manage training data
+            </p>
           </div>
         </div>
         <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
@@ -82,10 +90,14 @@ export function NavigationGrid({ apiStatus, modelStatus, datasetStats }: Navigat
             <div className="flex items-center gap-2">
               <p className="text-xs sm:text-sm font-semibold">Teach me</p>
               {datasetStats && datasetStats.totalDatasets > 0 && (
-                <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">{datasetStats.totalDatasets}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">
+                  {datasetStats.totalDatasets}
+                </span>
               )}
             </div>
-            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Train from your writing</p>
+            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">
+              Train from your writing
+            </p>
           </div>
         </div>
         <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
@@ -102,7 +114,9 @@ export function NavigationGrid({ apiStatus, modelStatus, datasetStats }: Navigat
           </div>
           <div className="min-w-0">
             <p className="text-xs sm:text-sm font-semibold">System Health</p>
-            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Monitor API and resources</p>
+            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">
+              Monitor API and resources
+            </p>
           </div>
         </div>
         <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
@@ -119,7 +133,9 @@ export function NavigationGrid({ apiStatus, modelStatus, datasetStats }: Navigat
           </div>
           <div className="min-w-0">
             <p className="text-xs sm:text-sm font-semibold">Knowledge</p>
-            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Facts the AI remembers</p>
+            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">
+              Facts the AI remembers
+            </p>
           </div>
         </div>
         <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">

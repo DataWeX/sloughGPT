@@ -3,11 +3,18 @@ import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/re
 import React from 'react'
 import { act } from 'react'
 
-const mockCva = vi.hoisted(() => { const fn = () => ''; return fn })
+const mockCva = vi.hoisted(() => {
+  const fn = () => ''
+  return fn
+})
 vi.mock('class-variance-authority', () => ({ cva: () => mockCva }))
 
 vi.mock('@sloughgpt/strui', () => {
-  const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
+  const iconMock = (name: string) => {
+    const C = () => <span data-testid={`icon-${name}`}>{name}</span>
+    C.displayName = `Icon${name}`
+    return C
+  }
   const passthrough = ({ children, className }: any) => <div className={className}>{children}</div>
   return {
     cn: vi.fn((...args: any[]) => args.join(' ')),
@@ -17,7 +24,15 @@ vi.mock('@sloughgpt/strui', () => {
     CardDescription: ({ children, className }: any) => <p className={className}>{children}</p>,
     CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
     Button: ({ children, onClick, type, disabled, className, 'aria-label': ariaLabel }: any) => (
-      <button onClick={onClick} type={type} disabled={disabled} className={className} aria-label={ariaLabel}>{children}</button>
+      <button
+        onClick={onClick}
+        type={type}
+        disabled={disabled}
+        className={className}
+        aria-label={ariaLabel}
+      >
+        {children}
+      </button>
     ),
     IconChevronRight: iconMock('chevron-right'),
     IconMessage: iconMock('message'),
@@ -28,19 +43,37 @@ vi.mock('@sloughgpt/strui', () => {
     IconThumbUp: iconMock('thumb-up'),
     IconThumbDown: iconMock('thumb-down'),
     KpiGrid: ({ children }: any) => <div>{children}</div>,
-    StatCard: ({ label, value, icon }: any) => <div><span>{label}</span>{value}{icon}</div>,
-    FoldSection: ({ heading, children }: any) => <div><h3>{heading}</h3>{children}</div>,
+    StatCard: ({ label, value, icon }: any) => (
+      <div>
+        <span>{label}</span>
+        {value}
+        {icon}
+      </div>
+    ),
+    FoldSection: ({ heading, children }: any) => (
+      <div>
+        <h3>{heading}</h3>
+        {children}
+      </div>
+    ),
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-  
+
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -67,7 +100,7 @@ vi.mock('@sloughgpt/strui', () => {
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 vi.mock('@/components/icons/NavIcons', () => ({
@@ -76,12 +109,19 @@ vi.mock('@/components/icons/NavIcons', () => ({
 }))
 
 vi.mock('next/link', () => ({
-  default: ({ children, href, className, ...rest }: any) => <a href={href} className={className} {...rest}>{children}</a>,
+  default: ({ children, href, className, ...rest }: any) => (
+    <a href={href} className={className} {...rest}>
+      {children}
+    </a>
+  ),
 }))
 
 vi.mock('@/components/home/StatsGrid', () => ({
   StatsGrid: ({ modelCount, currentSoul }: any) => (
-    <div><p>{modelCount}</p><p>{currentSoul?.name}</p></div>
+    <div>
+      <p>{modelCount}</p>
+      <p>{currentSoul?.name}</p>
+    </div>
   ),
 }))
 vi.mock('@/components/home/FeedbackBar', () => ({
@@ -102,7 +142,9 @@ vi.mock('@/components/home/TrainingStatus', () => ({
       if (modelReadiness.phase !== 'initializing' && modelReadiness.phase !== 'unknown') {
         return (
           <div>
-            <p>Starting up… ({modelReadiness.step}/{modelReadiness.total})</p>
+            <p>
+              Starting up… ({modelReadiness.step}/{modelReadiness.total})
+            </p>
             <p>{modelReadiness.message}</p>
           </div>
         )
@@ -123,20 +165,45 @@ vi.mock('@/components/home/TrainingStatus', () => ({
       )
     }
     if (!modelStatus.loaded) {
-      return <div><p>No model loaded</p></div>
+      return (
+        <div>
+          <p>No model loaded</p>
+        </div>
+      )
     }
     return null
   },
 }))
 vi.mock('@/components/home/QuickActions', () => ({
-  QuickActions: ({ modelStatus, testRunning, testResponse, setTestRunning, setTestResponse, knowledgeCount, setKnowledgeCount }: any) => {
+  QuickActions: ({
+    modelStatus,
+    testRunning,
+    testResponse,
+    setTestRunning,
+    setTestResponse,
+    knowledgeCount,
+    setKnowledgeCount,
+  }: any) => {
     if (!modelStatus.loaded) return null
     return (
       <div>
-        <button onClick={() => { setTestRunning(true); setTestResponse(null) }}>Test model</button>
+        <button
+          onClick={() => {
+            setTestRunning(true)
+            setTestResponse(null)
+          }}
+        >
+          Test model
+        </button>
         {testRunning && <span>Testing...</span>}
         {testResponse && <div>{testResponse}</div>}
-        <form onSubmit={(e: any) => { e.preventDefault(); const input = e.currentTarget.querySelector('input'); if (input?.value) setKnowledgeCount((k: number) => k + 1) }}>
+        <form
+          onSubmit={(e: any) => {
+            e.preventDefault()
+            const input = e.currentTarget.querySelector('input')
+            if (input?.value) setKnowledgeCount((k: number) => k + 1)
+          }}
+        >
           <input placeholder="e.g., I prefer Python over JavaScript" />
           <button type="submit">Save</button>
         </form>
@@ -149,8 +216,12 @@ vi.mock('@/components/home/RecentActivity', () => ({
     if (apiStatus !== 'online' || !modelStatus.loaded) return null
     return (
       <div>
-        {recentSessions.map((s: any) => <div key={s.id}>{s.name}</div>)}
-        {recentJobs.map((j: any) => <div key={j.id}>{j.name}</div>)}
+        {recentSessions.map((s: any) => (
+          <div key={s.id}>{s.name}</div>
+        ))}
+        {recentJobs.map((j: any) => (
+          <div key={j.id}>{j.name}</div>
+        ))}
       </div>
     )
   },
@@ -170,11 +241,12 @@ vi.mock('@/components/home/SystemHealth', () => ({
     )
   },
 }))
+/* eslint-disable @next/next/no-html-link-for-pages -- test mock stands in for next/link */
 vi.mock('@/components/home/NavigationGrid', () => ({
   NavigationGrid: () => (
     <div>
       <a href="/chat">Chat</a>
-      <a href="/models">Personalities</a>
+      <a href="/personality">Personalities</a>
       <a href="/datasets">Datasets</a>
       <a href="/training">Teach me</a>
       <a href="/monitoring">System Health</a>
@@ -194,7 +266,15 @@ vi.mock('@/components/ui/HomePageSkeleton', () => ({
   NavigationGridSkeleton: () => <div data-testid="skeleton" />,
 }))
 
-const { mockPush, mockApiGet, mockChatSend, mockKnowledgeAdd, mockSessionList, mockDatasetList, mockAddToast } = vi.hoisted(() => ({
+const {
+  mockPush,
+  mockApiGet,
+  mockChatSend,
+  mockKnowledgeAdd,
+  mockSessionList,
+  mockDatasetList,
+  mockAddToast,
+} = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockApiGet: vi.fn(),
   mockChatSend: vi.fn(),
@@ -204,7 +284,11 @@ const { mockPush, mockApiGet, mockChatSend, mockKnowledgeAdd, mockSessionList, m
   mockAddToast: vi.fn(),
 }))
 
-const state = vi.hoisted(() => ({ health: null as any, liveHealth: null as any, home: null as any }))
+const state = vi.hoisted(() => ({
+  health: null as any,
+  liveHealth: null as any,
+  home: null as any,
+}))
 
 const homeTranslations: Record<string, string> = {
   'home.subtitle.offline': 'Server offline',
@@ -224,8 +308,12 @@ const mockT = vi.fn((key: string, params?: Record<string, string | number>) => {
 })
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
-vi.mock('@/hooks/useLocale', () => ({ useLocale: () => ({ t: mockT, locale: 'en', setLocale: vi.fn(), locales: ['en'] }) }))
-vi.mock('@/hooks/useLiveStatus', () => ({ useLiveStatus: () => ({ healthLegacy: state.health, health: state.liveHealth }) }))
+vi.mock('@/hooks/useLocale', () => ({
+  useLocale: () => ({ t: mockT, locale: 'en', setLocale: vi.fn(), locales: ['en'] }),
+}))
+vi.mock('@/hooks/useLiveStatus', () => ({
+  useLiveStatus: () => ({ healthLegacy: state.health, health: state.liveHealth }),
+}))
 vi.mock('@/hooks/useHomePageData', async () => {
   const React = await import('react')
   return {
@@ -233,11 +321,21 @@ vi.mock('@/hooks/useHomePageData', async () => {
       const [testRunning, setTestRunning] = React.useState(false)
       const [testResponse, setTestResponse] = React.useState<string | null>(null)
       const [knowledgeCount, setKnowledgeCount] = React.useState(state.home?.knowledgeCount ?? 0)
-      return { ...state.home, testRunning, setTestRunning, testResponse, setTestResponse, knowledgeCount, setKnowledgeCount }
+      return {
+        ...state.home,
+        testRunning,
+        setTestRunning,
+        testResponse,
+        setTestResponse,
+        knowledgeCount,
+        setKnowledgeCount,
+      }
     },
   }
 })
-vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mockAddToast }) }))
+vi.mock('@/lib/toast-store', () => ({
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+}))
 vi.mock('@/lib/http-client', () => ({ apiGet: mockApiGet }))
 vi.mock('@/lib/chat-controller', () => ({ chatController: { send: mockChatSend } }))
 vi.mock('@/lib/knowledge-controller', () => ({ knowledgeController: { add: mockKnowledgeAdd } }))
@@ -248,8 +346,12 @@ const kvStore: Record<string, unknown> = {}
 vi.mock('@/lib/db', () => ({
   chatDB: {
     getKV: vi.fn(async (key: string) => kvStore[key]),
-    setKV: vi.fn(async (key: string, value: unknown) => { kvStore[key] = value }),
-    deleteKV: vi.fn(async (key: string) => { delete kvStore[key] }),
+    setKV: vi.fn(async (key: string, value: unknown) => {
+      kvStore[key] = value
+    }),
+    deleteKV: vi.fn(async (key: string) => {
+      delete kvStore[key]
+    }),
   },
 }))
 
@@ -346,15 +448,26 @@ function makeHomeData(overrides: Record<string, unknown> = {}) {
     inferenceCount: 5,
     healthSummary: 'hf/gpt2',
     feedbackStats: null,
-    errors: { models: false, soul: false, sessions: false, training: false, knowledge: false, feedback: false, datasets: false },
+    errors: {
+      models: false,
+      soul: false,
+      sessions: false,
+      training: false,
+      knowledge: false,
+      feedback: false,
+      datasets: false,
+    },
     ...overrides,
   }
 }
 
-afterEach(() => { cleanup(); vi.useRealTimers() })
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 beforeEach(() => {
   vi.clearAllMocks()
-  Object.keys(kvStore).forEach(k => delete kvStore[k])
+  Object.keys(kvStore).forEach((k) => delete kvStore[k])
   localStorage.clear()
   ;(globalThis as any).__testHealth = null
   ;(globalThis as any).__testModelReadiness = null
@@ -380,7 +493,9 @@ describe('HomePage', () => {
     state.liveHealth = 'offline'
     ;(globalThis as any).__testHealth = 'offline'
     render(<HomePage />)
-    expect(await screen.findByText('API server at http://localhost:8000 is not reachable')).toBeTruthy()
+    expect(
+      await screen.findByText('API server at http://localhost:8000 is not reachable'),
+    ).toBeTruthy()
     expect(screen.queryByText('Online')).toBeFalsy()
   })
 
@@ -388,7 +503,13 @@ describe('HomePage', () => {
     state.health = 'offline'
     state.liveHealth = 'offline'
     ;(globalThis as any).__testHealth = 'offline'
-    ;(globalThis as any).__testModelReadiness = { ready: false, phase: 'loading-model', step: 2, total: 5, message: 'Loading PyTorch' }
+    ;(globalThis as any).__testModelReadiness = {
+      ready: false,
+      phase: 'loading-model',
+      step: 2,
+      total: 5,
+      message: 'Loading PyTorch',
+    }
     render(<HomePage />)
     expect(await screen.findByText(/Starting up.*2\/5/)).toBeTruthy()
     expect(screen.getByText('Loading PyTorch')).toBeTruthy()
@@ -398,7 +519,9 @@ describe('HomePage', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date(2026, 5, 15, 9, 30, 0))
     render(<HomePage />)
-    await waitFor(() => { expect(screen.getByText('Good morning')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Good morning')).toBeTruthy()
+    })
   })
 
   it('summarizes the loaded model and conversation count in the subtitle', () => {
@@ -452,7 +575,11 @@ describe('HomePage', () => {
 
   it('renders feedback stats and links to training', async () => {
     state.home = makeHomeData({
-      feedbackStats: { db_stats: { feedback_total: 10, thumbs_up: 7, thumbs_down: 3, ratio: 0.7 }, train_stats: null, adapter_stats: null },
+      feedbackStats: {
+        db_stats: { feedback_total: 10, thumbs_up: 7, thumbs_down: 3, ratio: 0.7 },
+        train_stats: null,
+        adapter_stats: null,
+      },
     })
     render(<HomePage />)
     expect(await screen.findByText('10')).toBeTruthy()
@@ -462,7 +589,9 @@ describe('HomePage', () => {
   })
 
   it('renders the running training card', async () => {
-    state.home = makeHomeData({ runningTraining: { name: 'lora-finetune', status_message: 'Epoch 2/5' } })
+    state.home = makeHomeData({
+      runningTraining: { name: 'lora-finetune', status_message: 'Epoch 2/5' },
+    })
     render(<HomePage />)
     expect(await screen.findByText('Training: lora-finetune')).toBeTruthy()
     expect(screen.getByText('Epoch 2/5')).toBeTruthy()
@@ -478,18 +607,24 @@ describe('HomePage', () => {
     })
     render(<HomePage />)
     const resume = await screen.findByText('First chat')
-    await act(async () => { resume.click() })
+    await act(async () => {
+      resume.click()
+    })
     expect(mockPush).toHaveBeenCalledWith('/chat?session=s1')
   })
 
   it('provides a resume button for the most recent session', async () => {
     state.home = makeHomeData({
-      recentSessions: [{ id: 's9', name: 'Latest chat', updated_at: new Date().toISOString(), message_count: 4 }],
+      recentSessions: [
+        { id: 's9', name: 'Latest chat', updated_at: new Date().toISOString(), message_count: 4 },
+      ],
       modelStatus: { loaded: false, model: null },
     })
     render(<HomePage />)
     const resume = await screen.findByText('Latest chat')
-    await act(async () => { resume.click() })
+    await act(async () => {
+      resume.click()
+    })
     expect(mockPush).toHaveBeenCalledWith('/chat?session=s9')
   })
 
@@ -498,28 +633,42 @@ describe('HomePage', () => {
     expect(screen.getByText('Welcome to SloughGPT')).toBeTruthy()
     await act(async () => {})
     const skip = screen.getByText('Skip')
-    await act(async () => { skip.click() })
+    await act(async () => {
+      skip.click()
+    })
     expect(kvStore['onboarding_dismissed']).toBe('1')
     expect(screen.queryByText('Welcome to SloughGPT')).toBeFalsy()
   })
 
   it('renders conversation and dataset stats cards from controller data', async () => {
     mockSessionList.mockResolvedValue([
-      { id: 'a', name: 'A', updated_at: '2026-06-01T10:00:00Z', messages: [
-        { content: 'hello world foo', timestamp: '2026-06-01T10:00:00Z' },
-        { content: 'hi', timestamp: '2026-06-01T10:00:00Z' },
-      ] },
+      {
+        id: 'a',
+        name: 'A',
+        updated_at: '2026-06-01T10:00:00Z',
+        messages: [
+          { content: 'hello world foo', timestamp: '2026-06-01T10:00:00Z' },
+          { content: 'hi', timestamp: '2026-06-01T10:00:00Z' },
+        ],
+      },
     ])
-    mockDatasetList.mockResolvedValue([
-      { id: 'd1', size: 1048576, samples: 100 },
-    ])
+    mockDatasetList.mockResolvedValue([{ id: 'd1', size: 1048576, samples: 100 }])
     render(<HomePage />)
-    await waitFor(() => { expect(mockSessionList).toHaveBeenCalled() })
-    await waitFor(() => { expect(mockDatasetList).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(mockSessionList).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(mockDatasetList).toHaveBeenCalled()
+    })
   })
 
   it('renders the live health system card with CPU, memory, requests, and uptime', async () => {
-    state.liveHealth = { cpu_percent: 42.3, memory_percent: 60.9, request_count: 1200, uptime_seconds: 3661 }
+    state.liveHealth = {
+      cpu_percent: 42.3,
+      memory_percent: 60.9,
+      request_count: 1200,
+      uptime_seconds: 3661,
+    }
     render(<HomePage />)
     expect(await screen.findByText('42%')).toBeTruthy()
     expect(screen.getByText('61%')).toBeTruthy()
