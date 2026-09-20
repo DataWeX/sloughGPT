@@ -37,6 +37,27 @@ def _run_async(coro: Coroutine) -> None:
         logger.debug("Fire-and-forget dispatch failed: %s", exc)
 
 
+def notify_push(title: str, body: str, **kwargs: Any) -> None:
+    """Fire-and-forget mobile push notification (never blocks the caller).
+
+    Push delivery is synchronous HTTPS; called inline it holds training
+    worker threads past completion. Dispatches via :func:`_run_async`.
+    """
+    try:
+        from domain.mobile import get_notification_service
+
+        service = get_notification_service()
+
+        async def _push() -> None:
+            await asyncio.to_thread(
+                service.send_notification_sync, title=title, body=body, **kwargs
+            )
+
+        _run_async(_push())
+    except Exception as exc:
+        logger.debug("Push dispatch failed: %s", exc)
+
+
 def _finish_job(job_id: str, status: str, error: str | None = None) -> None:
     """Set job status and notify CancelManager so operations store stays in sync."""
     job = training_jobs.get(job_id)

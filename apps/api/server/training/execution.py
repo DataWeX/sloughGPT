@@ -15,11 +15,8 @@ from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
-from domain.mobile import get_notification_service
-from domain.training._internal.executor import get_training_executor
-
 from .controller import get_training_controller
-from .helpers import _finish_job, _run_async, _sloughgpt_trainer_kwds
+from .helpers import _finish_job, _run_async, _sloughgpt_trainer_kwds, notify_push
 from .jobs import training_jobs
 from .resolution import resolve_training_inputs
 from .schemas import TrainingRequest
@@ -69,7 +66,9 @@ async def start_training(
     ``*.soul`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
     for char-LM eval; see ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
-    from domain.training._internal.dataset_manifest import ManifestError
+    from domain.training.engine import get_training_engine as _eng
+
+    ManifestError = _eng().get_manifest_error()
 
     try:
         data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
@@ -141,9 +140,9 @@ async def start_training(
             _raw = ""
 
         if _raw:
-            from domain.training._internal.quality_scorer import compute_data_quality
+            from domain.training.engine import get_training_engine as _eng
 
-            _quality = await _aio.to_thread(compute_data_quality, _raw)
+            _quality = await _aio.to_thread(_eng().compute_data_quality, _raw)
             _avg = _quality.get("avg_quality", 0)
             _tox = _quality.get("toxicity_rate", 0)
 
@@ -175,7 +174,9 @@ async def start_training(
         import asyncio as _aio
         from pathlib import Path as _PJ
 
-        from domain.training._internal.train_pipeline import validate_conversation_data
+        from domain.training.engine import get_training_engine
+
+        validate = get_training_engine().validate_conversation_data
 
         _j_path = _PJ(data_path_str)
         _j_file = None
@@ -188,7 +189,7 @@ async def start_training(
                     break
 
         if _j_file:
-            _result = await _aio.to_thread(validate_conversation_data, str(_j_file))
+            _result = await _aio.to_thread(validate, str(_j_file))
             if _result["error_count"] > 0 and _result["valid_count"] == 0:
                 raise_error(
                     f"Dataset has no valid conversation entries ({_result['error_count']} malformed lines). "
@@ -313,7 +314,7 @@ async def start_training(
         logger.warning("CancelManager registration failed for %s: %s", job_id, e)
 
     def run_training(job_id_: str = jid) -> None:
-        from domain.training._internal.train_pipeline import SloughGPTTrainer
+        from domain.training import SloughGPTTrainer
         from domain.training._internal.wandb_helpers import create_training_tracker_for_api_job
 
         tracker = None
@@ -401,18 +402,15 @@ async def start_training(
             except Exception as e:
                 logger.debug("Training completion webhook failed: %s", e, extra={"tag": "TRAIN"})
 
-            # Push notification to mobile devices
-            try:
-                loss = training_jobs[jid].get("loss")
-                loss_str = f"Final loss: {loss:.4f}" if loss is not None else "Training"
-                get_notification_service().send_notification_sync(
-                    title="Training Complete",
-                    body=f"{loss_str}. Checkpoint saved.",
-                    data={"screen": "Training", "job_id": jid},
-                    topics=["training"],
-                )
-            except Exception as e:
-                logger.debug("Training completion push failed: %s", e, extra={"tag": "TRAIN"})
+            # Push notification to mobile devices (off-thread via notify_push).
+            loss = training_jobs[jid].get("loss")
+            loss_str = f"Final loss: {loss:.4f}" if loss is not None else "Training"
+            notify_push(
+                title="Training Complete",
+                body=f"{loss_str}. Checkpoint saved.",
+                data={"screen": "Training", "job_id": jid},
+                topics=["training"],
+            )
         except Exception as e:
             logger.exception("Training job %s failed", jid, extra={"tag": "TRAIN"})
             _finish_job(jid, "failed", str(e))
@@ -436,16 +434,13 @@ async def start_training(
             except Exception as exc:
                 logger.warning("Training failure webhook failed for %s: %s", jid, exc)
 
-            # Push notification to mobile devices
-            try:
-                get_notification_service().send_notification_sync(
-                    title="Training Failed",
-                    body=f"Job {training_jobs[jid].get('name', jid)} failed: {str(e)[:100]}",
-                    data={"screen": "Training", "job_id": jid},
-                    topics=["training"],
-                )
-            except Exception as exc:
-                logger.warning("Training failure push notification failed for %s: %s", jid, exc)
+            # Push notification to mobile devices (off-thread via notify_push).
+            notify_push(
+                title="Training Failed",
+                body=f"Job {training_jobs[jid].get('name', jid)} failed: {str(e)[:100]}",
+                data={"screen": "Training", "job_id": jid},
+                topics=["training"],
+            )
         finally:
             if tracker is not None:
                 try:
@@ -453,7 +448,7 @@ async def start_training(
                 except Exception:
                     logger.exception("W&B end_run failed for job %s", jid, extra={"tag": "TRAIN"})
 
-    executor = get_training_executor()
+    executor = get_training_engine().get_executor()
     executor.submit(run_training, jid)
 
     return {
