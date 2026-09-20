@@ -3,9 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
 import { makeForm, makeDatasets, makeCheckpoints } from './__test-helper'
-import type { DataStep as DataStepType } from './DataStep'
-import type { TrainStep as TrainStepType } from './TrainStep'
-import type { ResultsStep as ResultsStepType } from './ResultsStep'
+import type { ComponentType } from 'react'
 
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
@@ -102,7 +100,7 @@ afterEach(() => {
 })
 
 describe('DataStep', () => {
-  let DataStep: DataStepType
+  let DataStep: ComponentType<any>
 
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -214,7 +212,7 @@ describe('DataStep', () => {
 })
 
 describe('TrainStep', () => {
-  let TrainStep: TrainStepType
+  let TrainStep: ComponentType<any>
 
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -305,7 +303,7 @@ describe('TrainStep', () => {
 })
 
 describe('ResultsStep', () => {
-  let ResultsStep: ResultsStepType
+  let ResultsStep: ComponentType<any>
 
   beforeEach(async () => {
     vi.clearAllMocks()

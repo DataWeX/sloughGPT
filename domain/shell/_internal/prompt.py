@@ -20,7 +20,7 @@ from dataclasses import dataclass
 class PromptContext:
     """Precomputed values for prompt expansion (no I/O inside render)."""
 
-    ps1: str = "\u0343"
+    ps1: str = "λ"
     cwd: str = "~"
     user: str = "user"
     host: str = ""
