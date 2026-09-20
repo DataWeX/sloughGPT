@@ -216,8 +216,24 @@ describe('WebLogger — trackEvent', () => {
     log.flush()
     expect(fetch).toHaveBeenCalledTimes(1)
     const body = JSON.parse((fetch as any).mock.calls[0][1].body)
-    expect(body.logs[0].message).toBe('session_created session_id=abc')
+    // Message is a clean one-liner; structured fields live in context only
+    expect(body.logs[0].message).toBe('session_created')
+    expect(body.logs[0].context.session_id).toBe('abc')
     expect(body.logs[0].context.tag).toBe('CHAT')
+  })
+
+  it('trackEvent sends a bare event — backend composes the transition', () => {
+    const transport = new LogTransport()
+    const log = new WebLogger('slo.web.ui', 'info', {}, transport)
+    log.trackEvent('api_connection_changed', { kind: 'api', from: 'connecting', to: 'connected' })
+    log.flush()
+    const body = JSON.parse((fetch as any).mock.calls[0][1].body)
+    expect(body.logs[0].message).toBe('api_connection_changed')
+    expect(body.logs[0].context).toMatchObject({
+      kind: 'api',
+      from: 'connecting',
+      to: 'connected',
+    })
   })
 
   it('trackEvent uses explicit tag over inference', () => {
@@ -245,7 +261,8 @@ describe('WebLogger — trackEvent', () => {
     log.flush()
     const body = JSON.parse((fetch as any).mock.calls[0][1].body)
     expect(body.logs[0].context.tag).toBe('MODEL')
-    expect(body.logs[0].message).toBe('model_loaded model=gpt2')
+    expect(body.logs[0].message).toBe('model_loaded')
+    expect(body.logs[0].context.model).toBe('gpt2')
   })
 
   it('trackEvent infers INFRA tag from vm_ prefix', () => {

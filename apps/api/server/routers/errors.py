@@ -30,6 +30,36 @@ logger = logging.getLogger("slo.errors")
 # ── Constants ─────────────────────────────────────────────────────────────
 
 MAX_ERRORS = 500
+# stdlib LogRecord attributes — passing any of these via `extra` makes
+# Logger.makeRecord raise KeyError, so frontend context keys with these
+# names are dropped on ingest instead of 500ing the batch.
+_INGEST_RESERVED_KEYS = frozenset(
+    {
+        "name",
+        "msg",
+        "args",
+        "levelname",
+        "levelno",
+        "pathname",
+        "filename",
+        "module",
+        "exc_info",
+        "exc_text",
+        "stack_info",
+        "lineno",
+        "funcName",
+        "created",
+        "msecs",
+        "relativeCreated",
+        "thread",
+        "threadName",
+        "processName",
+        "process",
+        "taskName",
+        "message",
+        "asctime",
+    }
+)
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _ERROR_DB_PATH = os.path.join(_REPO_ROOT, "data", "errors_mogdb")
 _ERROR_SYNC_PATH = os.path.join(_REPO_ROOT, "data", "errors_json")
@@ -253,7 +283,11 @@ class ErrorsRouter:
 
             raw_tag = context.pop("tag", None)
             tag = raw_tag if raw_tag and raw_tag in LogTag._value2member_map_ else "WEB"
-            context["user"] = user_id
+            # Drop keys that would collide with stdlib LogRecord attributes
+            # (makeRecord raises KeyError on overwrite) — they carry no
+            # structured value for our formatters anyway.
+            for reserved in _INGEST_RESERVED_KEYS:
+                context.pop(reserved, None)
             level = getattr(logging, entry.level.upper(), logging.INFO)
             logger_name = (
                 f"slo.web.{entry.logger}"
@@ -261,11 +295,14 @@ class ErrorsRouter:
                 else entry.logger or "slo.web"
             )
 
+            # Spread context as top-level extras so formatters render each
+            # key once as `k=v`.  The logger name already identifies the
+            # source — no nested `context` dict or `source` echo.
             _log = logging.getLogger(logger_name)
             _log.log(
                 level,
                 entry.message,
-                extra={"tag": tag, "context": context, "source": f"web.{entry.logger}"},
+                extra={"tag": tag, **context, "user": user_id},
             )
 
         return success_response(data={"status": "ok", "ingested": len(batch.logs)})

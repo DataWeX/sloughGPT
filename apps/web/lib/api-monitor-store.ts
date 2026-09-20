@@ -1,6 +1,5 @@
 'use client'
 import { create } from 'zustand'
-import { trackEvent } from '@/lib/dev-log'
 import { logStateEvent } from '@/lib/state-events'
 
 export type ApiStatus = 'connected' | 'connecting' | 'offline' | 'reloading' | 'error'
@@ -66,7 +65,8 @@ export const useApiMonitor = create<ApiMonitorState>((set) => ({
   setStatus: (status) =>
     set((s) => {
       if (s.status !== status) {
-        trackEvent('api_connection_changed', { from: s.status, to: status })
+        // Single call: logStateEvent already forwards to the backend ingest,
+        // so a direct trackEvent here would log the transition twice.
         logStateEvent('api_connection_changed', {
           kind: 'api',
           from: s.status,
@@ -81,11 +81,8 @@ export const useApiMonitor = create<ApiMonitorState>((set) => ({
     }),
   setHealthSummary: (data) => set({ healthSummary: data }),
   addFailure: (diag) => {
-    trackEvent('api_connection_failure', {
-      endpoint: diag.endpoint,
-      status_code: diag.status,
-      error_type: diag.kind,
-    })
+    // Single call: logStateEvent forwards the structured data to the backend
+    // ingest — a direct trackEvent here would log the failure twice.
     logStateEvent('api_connection_failure', {
       kind: 'api',
       message: `api_connection_failure ${diag.endpoint} ${diag.kind}`,

@@ -191,8 +191,47 @@ def _enriched_record_factory(*args, **kwargs):
 # ── Human-readable formatter ─────────────────────────────────────────
 
 
+def _render_tail(ctx: dict[str, Any], rid: str | None, colors: bool) -> list[str]:
+    """Render grouped trailing segments for human console lines.
+
+    Canonical shape: ``[from → to] {k=v k=v} (req=...)`` — each fact once.
+    A ``from``/``to`` pair composes the ``[...]`` transition segment and
+    leaves ``ctx`` (a lone ``from`` or ``to`` stays a normal ``k=v`` pair).
+    Remaining keys form the ``{...}`` block; the correlation id closes the
+    line in parens.  Empty segments are omitted.  Takes a copy — the
+    caller's dict is never mutated.
+    """
+    ctx = dict(ctx)
+    segs: list[str] = []
+    frm = ctx.pop("from", None)
+    to = ctx.pop("to", None)
+    if frm is not None and to is not None:
+        seg = f"[{frm} → {to}]"
+        segs.append(f"{_A.DIM}{seg}{_A.RESET}" if colors else seg)
+    else:
+        if frm is not None:
+            ctx["from"] = frm
+        if to is not None:
+            ctx["to"] = to
+    if ctx:
+        pairs = []
+        for k, v in ctx.items():
+            if colors:
+                pairs.append(f"{_A.DIM}{k}={_A.WHITE}{v}{_A.RESET}")
+            else:
+                pairs.append(f"{k}={v}")
+        if colors:
+            segs.append(f"{_A.DIM}{{{_A.RESET}" + " ".join(pairs) + f"{_A.DIM}}}{_A.RESET}")
+        else:
+            segs.append("{" + " ".join(pairs) + "}")
+    if rid:
+        seg = f"(req={rid})"
+        segs.append(f"{_A.DIM}{seg}{_A.RESET}" if colors else seg)
+    return segs
+
+
 class HumanFormatter(logging.Formatter):
-    """Colored terminal output: HH:MM:SS LVL [TAG] logger message key=val"""
+    """Colored terminal output: HH:MM:SS LVL [TAG] logger message [from → to] {k=v} (req=...)"""
 
     def __init__(self, colors: bool = True):
         super().__init__()
@@ -231,21 +270,10 @@ class HumanFormatter(logging.Formatter):
         # Message
         parts.append(record.getMessage())
 
-        # Request ID (if present and not already in tag)
-        rid = getattr(record, "request_id", None)
-        if rid:
-            parts.append(f"{_A.DIM}req={rid}{_A.RESET}" if c else f"req={rid}")
-
-        # Structured context — collect non-standard fields
+        # Structured tail: [from → to] {k=v} (req=...)
         ctx = _collect_extras(record)
-        if ctx:
-            ctx_parts = []
-            for k, v in ctx.items():
-                if c:
-                    ctx_parts.append(f"{_A.DIM}{k}={_A.WHITE}{v}{_A.RESET}")
-                else:
-                    ctx_parts.append(f"{k}={v}")
-            parts.append(" ".join(ctx_parts))
+        rid = getattr(record, "request_id", None)
+        parts.extend(_render_tail(ctx, rid, c))
 
         # Exception
         if record.exc_info and record.exc_info[1]:
@@ -434,7 +462,7 @@ class LogFormatter(logging.Formatter):
         LogFormatter(fmt="json")    — slo.log v1 JSON (for file handler)
 
     Console (fmt="human"):
-        HH:MM:SS LVL [OP] logger message key=val
+        HH:MM:SS LVL [OP] logger message [from → to] {key=val} (req=...)
 
     File (fmt="json"):
         {"v":1,"ts":"...","lvl":"INFO","op":"model.load","corr":"abc1",...}
@@ -550,11 +578,6 @@ class LogFormatter(logging.Formatter):
         if error_code:
             parts.append(f"[{error_code}]")
 
-        # Request ID
-        rid = record.context.get("request_id") if record.context else None
-        if rid:
-            parts.append(f"{_A.DIM}req={rid}{_A.RESET}" if c else f"req={rid}")
-
         # Exception
         if record.exception:
             if c:
@@ -562,9 +585,15 @@ class LogFormatter(logging.Formatter):
             else:
                 parts.append(f"[{record.exception}]")
 
-        line1 = " ".join(parts)
+        # Structured tail: transition joins line 1, {k=v} (req=...) go below
+        ctx = {k: v for k, v in (record.context or {}).items() if k != "request_id"}
+        rid = record.context.get("request_id") if record.context else None
+        has_transition = "from" in ctx and "to" in ctx
+        tail = _render_tail(ctx, rid, c)
+        line1 = " ".join(parts + (tail[:1] if has_transition else []))
+        rest = tail[1:] if has_transition else tail
 
-        # Secondary line: logger name + context
+        # Secondary line: logger name + grouped context
         secondary_parts = []
         logger_name = record.logger or ""
         if logger_name:
@@ -572,14 +601,7 @@ class LogFormatter(logging.Formatter):
                 secondary_parts.append(f"{_A.GREY}{_A.DIM}{logger_name}{_A.RESET}")
             else:
                 secondary_parts.append(logger_name)
-
-        ctx = {k: v for k, v in (record.context or {}).items() if k != "request_id"}
-        if ctx:
-            for k, v in ctx.items():
-                if c:
-                    secondary_parts.append(f"{_A.DIM}{k}={_A.WHITE}{v}{_A.RESET}")
-                else:
-                    secondary_parts.append(f"{k}={v}")
+        secondary_parts.extend(rest)
 
         if secondary_parts:
             return line1 + "\n    " + " ".join(secondary_parts)
@@ -617,21 +639,10 @@ class LogFormatter(logging.Formatter):
         # Message
         parts.append(record.getMessage())
 
-        # Request ID
-        rid = getattr(record, "request_id", None)
-        if rid:
-            parts.append(f"{_A.DIM}req={rid}{_A.RESET}" if c else f"req={rid}")
-
-        # Structured context
+        # Structured tail: [from → to] {k=v} (req=...)
         ctx = _collect_extras(record)
-        if ctx:
-            ctx_parts = []
-            for k, v in ctx.items():
-                if c:
-                    ctx_parts.append(f"{_A.DIM}{k}={_A.WHITE}{v}{_A.RESET}")
-                else:
-                    ctx_parts.append(f"{k}={v}")
-            parts.append(" ".join(ctx_parts))
+        rid = getattr(record, "request_id", None)
+        parts.extend(_render_tail(ctx, rid, c))
 
         # Exception
         if record.exc_info and record.exc_info[1]:
@@ -793,8 +804,17 @@ def _collect_domain_payload(record: logging.LogRecord, domain: str) -> dict:
 
 
 def _collect_extras(record: logging.LogRecord) -> dict:
-    """Extract non-standard extra fields from a LogRecord."""
+    """Extract non-standard extra fields from a LogRecord.
+
+    A nested ``context`` dict (``extra={"context": {...}}``, as documented
+    in ``bridge.py``) is unwrapped so its keys render as ``k=v`` instead of
+    a raw ``context={...}`` dump.  Mirrors ``bridge.record_extra_context``:
+    the explicit nested dict wins over stray top-level fields on conflict.
+    """
     ctx = {}
+    nested = getattr(record, "context", None)
+    if isinstance(nested, dict):
+        ctx.update(nested)
     for key, val in record.__dict__.items():
         if key in _KNOWN_KEYS or key.startswith("_"):
             continue
@@ -828,7 +848,8 @@ def _collect_extras(record: logging.LogRecord) -> dict:
         # Skip already-handled fields
         if key in ("tag", "request_id", "error_code", "op", "corr", "dur_ms", "ok", "err"):
             continue
-        ctx[key] = val
+        if key not in ctx:
+            ctx[key] = val
     return ctx
 
 
@@ -860,6 +881,8 @@ _KNOWN_KEYS = frozenset(
         "tag",
         "request_id",
         "error_code",
+        # nested structured payload (unwrapped separately in _collect_extras)
+        "context",
         # slo.log v1 envelope fields
         "op",
         "corr",

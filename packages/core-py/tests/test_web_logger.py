@@ -171,3 +171,19 @@ class TestFormatBrief:
         log = WebLogger("slo.web")
         out = log._format_brief(_record(message="hi", exception="Err: x"))
         assert "— Err: x" in out
+
+
+class TestTrackEvent:
+    def test_bare_event_message_with_structured_context(self):
+        records = []
+
+        class Capture(WebLogger):
+            def emit(self, record):
+                records.append(record)
+
+        log = Capture("slo.web.ui")
+        log.track_event("api_connection_changed", {"from": "a", "to": "b"})
+        assert len(records) == 1
+        assert records[0].message == "api_connection_changed"
+        assert records[0].context["from"] == "a"
+        assert records[0].context["to"] == "b"
