@@ -118,7 +118,8 @@ class NarrativeGenerator:
 
         if self.self_model:
             reflection = self.self_model.reflect()
-            parts.append(f"Self-reflection: {reflection}")
+            text = reflection.narrative if hasattr(reflection, "narrative") else str(reflection)
+            parts.append(f"Self-reflection: {text}")
 
         if qualia:
             mag = qualia.magnitude()

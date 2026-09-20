@@ -42,6 +42,30 @@ class SelfIdentity:
 
 
 @dataclass
+class Reflection:
+    """Structured result of self-reflection."""
+
+    narrative: str
+    belief_deltas: dict[str, float]
+    strategy_notes: list[str]
+    avg_growth: float
+    trajectory: str
+    episode_count: int
+    created_at: float = field(default_factory=time.time)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "narrative": self.narrative,
+            "belief_deltas": dict(self.belief_deltas),
+            "strategy_notes": list(self.strategy_notes),
+            "avg_growth": self.avg_growth,
+            "trajectory": self.trajectory,
+            "episode_count": self.episode_count,
+            "created_at": self.created_at,
+        }
+
+
+@dataclass
 class SelfEpisode:
     """A single self-reflective episode."""
 
@@ -136,10 +160,17 @@ class SelfModel:
         "Certain patterns in conversation spark my attention more than others.",
     ]
 
-    def reflect(self) -> str:
-        """Generate a self-reflection narrative from recent episodes."""
+    def reflect(self) -> Reflection:
+        """Generate a structured self-reflection from recent episodes."""
         if not self.episodes:
-            return "I have no experiences to reflect on yet."
+            return Reflection(
+                narrative="I have no experiences to reflect on yet.",
+                belief_deltas={},
+                strategy_notes=[],
+                avg_growth=0.0,
+                trajectory="stagnation",
+                episode_count=0,
+            )
 
         recent = self.episodes[-5:]
         beliefs_str = ", ".join(f"{k}={v:.2f}" for k, v in self.self_beliefs.items())
@@ -151,21 +182,51 @@ class SelfModel:
             f"Average growth rate: {avg_growth:+.3f}.",
         ]
 
-        # Growth trajectory statement
+        # Growth trajectory
         if avg_growth > 0.05:
+            trajectory = "growth"
             parts.append(random.choice(self._GROWTH_STATEMENTS))
+            belief_deltas: dict[str, float] = {"competence": 0.03, "helpfulness": 0.02, "accuracy": 0.01}
+            strategy_notes: list[str] = []
+            # Novelty bonus
+            avg_novelty = sum(e.qualia.get("novelty", 0.5) for e in recent) / len(recent)
+            if avg_novelty > 0.6:
+                belief_deltas["creativity"] = 0.02
         elif avg_growth < -0.05:
+            trajectory = "decline"
             parts.append(random.choice(self._DECLINE_STATEMENTS))
+            belief_deltas = {"competence": -0.03, "helpfulness": -0.01}
+            strategy_notes = ["Review recent failures for patterns", "Seek deeper questions to clarify gaps"]
         else:
+            trajectory = "stagnation"
             parts.append(random.choice(self._STAGNATION_STATEMENTS))
+            belief_deltas = {}
+            strategy_notes = []
 
-        # Always include one uncertainty or curiosity statement (varied)
+        # Curiosity/uncertainty flavor — does not affect deltas
         if len(self.episodes) > 10 and random.random() < 0.5:
             parts.append(random.choice(self._UNCERTAINTY_STATEMENTS))
         elif random.random() < 0.3:
             parts.append(random.choice(self._CURIOSITY_STATEMENTS))
 
-        return " ".join(parts)
+        narrative = " ".join(parts)
+
+        # On decline, ensure at least one actionable note
+        if trajectory == "decline" and not strategy_notes:
+            strategy_notes = ["Try varying prompt style to break stagnation"]
+
+        return Reflection(
+            narrative=narrative,
+            belief_deltas=belief_deltas,
+            strategy_notes=strategy_notes,
+            avg_growth=avg_growth,
+            trajectory=trajectory,
+            episode_count=len(self.episodes),
+        )
+
+    # Backward-compat: old callers expect str
+    def reflect_text(self) -> str:
+        return self.reflect().narrative
 
     def clear_episodes(self) -> int:
         """Clear all episodes.
@@ -198,6 +259,13 @@ class SelfModel:
     def update_belief(self, key: str, delta: float) -> None:
         current = self.self_beliefs.get(key, 0.5)
         self.self_beliefs[key] = max(0.0, min(1.0, current + delta))
+
+    def apply_beliefs(self, deltas: dict[str, float]) -> dict[str, float]:
+        """Apply belief deltas, clamp to [0,1], persist, and return updated beliefs."""
+        for k, d in deltas.items():
+            self.update_belief(k, d)
+        self.save()
+        return dict(self.self_beliefs)
 
     def save(self) -> None:
         """Persist self-model to JSON."""

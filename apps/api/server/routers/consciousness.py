@@ -192,10 +192,19 @@ class ConsciousnessRouter:
 
     @endpoint("consciousness.reflect")
     async def reflect(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Trigger a self-reflection."""
+        """Trigger a structured self-reflection and apply belief deltas."""
         engine = self._get_engine()
         reflection = engine.reflect()
-        return success_response(data={"reflection": reflection})
+        if hasattr(reflection, "to_dict"):
+            data = reflection.to_dict()
+            data["reflection"] = data["narrative"]
+            # Close the loop: apply deltas to beliefs with persistence
+            if reflection.belief_deltas:
+                updated = engine.apply_beliefs(reflection.belief_deltas)
+                data["updated_beliefs"] = {k: round(v, 4) for k, v in updated.items()}
+        else:
+            data = {"reflection": reflection, "narrative": str(reflection)}
+        return success_response(data=data)
 
     @endpoint("consciousness.update_config")
     async def update_config(

@@ -102,7 +102,16 @@ export const consciousnessController = {
     return apiGet('/consciousness/qualia')
   },
 
-  async reflect(): Promise<{ reflection: string }> {
+  async reflect(): Promise<{
+    reflection: string
+    narrative: string
+    belief_deltas: Record<string, number>
+    strategy_notes: string[]
+    avg_growth: number
+    trajectory: string
+    episode_count: number
+    updated_beliefs?: Record<string, number>
+  }> {
     return apiPost('/consciousness/reflect')
   },
 
