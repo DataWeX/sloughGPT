@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useEffect, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, ToggleGroup, ToggleGroupItem, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Label, Checkbox } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, ToggleGroup, ToggleGroupItem, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Label, Checkbox, FoldSection } from '@sloughgpt/strui'
 import { TrainingPresets } from '@/components/training/TrainingPresets'
 import { trainingJobsController, type TrainingRecommendationResponse } from '@/lib/training-controller'
 import type { StepProps } from './DataStep'
@@ -149,41 +149,87 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="train-epochs" variant="uppercase">Epochs</Label>
-                <Input id="train-epochs" type="number" min={1} max={500} value={form.trainingEpochs}
-                  onChange={e => form.setTrainingEpochs(Number(e.target.value))}
-                  error={form.trainingEpochs < 1 || form.trainingEpochs > 500}
-                  aria-invalid={form.trainingEpochs < 1 || form.trainingEpochs > 500}
-                  aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
-                  className="h-7 text-[11px] font-mono" />
+            <FoldSection heading="Advanced — training knobs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="train-epochs" variant="uppercase">Training rounds</Label>
+                  <Input id="train-epochs" type="number" min={1} max={500} value={form.trainingEpochs}
+                    onChange={e => form.setTrainingEpochs(Number(e.target.value))}
+                    error={form.trainingEpochs < 1 || form.trainingEpochs > 500}
+                    aria-invalid={form.trainingEpochs < 1 || form.trainingEpochs > 500}
+                    aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
+                    className="h-7 text-[11px] font-mono" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="train-batch" variant="uppercase">Training batch size</Label>
+                  <Input id="train-batch" type="number" min={1} max={256} value={form.trainingBatchSize}
+                    onChange={e => form.setTrainingBatchSize(Number(e.target.value))}
+                    error={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
+                    aria-invalid={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
+                    aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
+                    className="h-7 text-[11px] font-mono" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="train-lr" variant="uppercase">Learning speed</Label>
+                  <Input id="train-lr" type="text" inputMode="decimal" value={form.trainingLR}
+                    onChange={e => form.setTrainingLR(Number(e.target.value) || 1e-3)}
+                    error={form.trainingLR <= 0 || form.trainingLR > 1}
+                    aria-invalid={form.trainingLR <= 0 || form.trainingLR > 1}
+                    aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
+                    className="h-7 text-[11px] font-mono" />
+                </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="train-batch" variant="uppercase">Batch size</Label>
-                <Input id="train-batch" type="number" min={1} max={256} value={form.trainingBatchSize}
-                  onChange={e => form.setTrainingBatchSize(Number(e.target.value))}
-                  error={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
-                  aria-invalid={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
-                  aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
-                  className="h-7 text-[11px] font-mono" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="train-lr" variant="uppercase">Learning rate</Label>
-                <Input id="train-lr" type="text" inputMode="decimal" value={form.trainingLR}
-                  onChange={e => form.setTrainingLR(Number(e.target.value) || 1e-3)}
-                  error={form.trainingLR <= 0 || form.trainingLR > 1}
-                  aria-invalid={form.trainingLR <= 0 || form.trainingLR > 1}
-                  aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
-                  className="h-7 text-[11px] font-mono" />
-              </div>
-            </div>
-
-            {hpErrors.length > 0 && (
-              <div id="configure-hp-errors" className="text-[11px] text-destructive space-y-0.5">
-                {hpErrors.map(e => <div key={e}>{e}</div>)}
-              </div>
-            )}
+              {hpErrors.length > 0 && (
+                <div id="configure-hp-errors" className="text-[11px] text-destructive space-y-0.5">
+                  {hpErrors.map(e => <div key={e}>{e}</div>)}
+                </div>
+              )}
+              {form.method === 'finetune' && (
+                <div className="space-y-1.5 mt-2">
+                  <label className="flex items-center gap-2 text-[11px]">
+                    <Checkbox checked={form.useLoRA} onCheckedChange={e => form.setUseLoRA(e === true)}
+                      className="rounded border-border" aria-label="Enable parameter-efficient fine-tuning" />
+                    Use parameter-efficient fine-tuning
+                  </label>
+                  {form.useLoRA && (
+                    <div className="grid grid-cols-2 gap-2 pl-5">
+                      <div className="flex flex-col gap-1">
+                        <Label htmlFor="lora-rank" variant="uppercase">Rank</Label>
+                        <Input id="lora-rank" type="number" min={1} max={128} value={form.loraRank}
+                          onChange={e => form.setLoraRank(Number(e.target.value) || 8)}
+                          className="h-7 text-[11px] font-mono" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Label htmlFor="lora-alpha" variant="uppercase">Alpha</Label>
+                        <Input id="lora-alpha" type="number" min={1} max={256} value={form.loraAlpha}
+                          onChange={e => form.setLoraAlpha(Number(e.target.value) || 16)}
+                          className="h-7 text-[11px] font-mono" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {checkpoints && checkpoints.checkpoints.length > 0 && (
+                <div className="flex flex-col gap-1.5 mt-2">
+                  <label htmlFor="resume-checkpoint" className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    Resume from saved version (optional)
+                  </label>
+                  <Select value={form.resumeCheckpoint} onValueChange={form.setResumeCheckpoint}>
+                    <SelectTrigger id="resume-checkpoint" className="h-8 text-xs font-mono" aria-label="Resume from saved version">
+                      <SelectValue placeholder="Start fresh" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Start fresh</SelectItem>
+                      {checkpoints.checkpoints.map(c => (
+                        <SelectItem key={c.name} value={c.name}>
+                          {c.name} {c.loss != null ? `(${c.loss.toFixed(4)})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </FoldSection>
 
             {/* Training recommendation */}
             {recommendation && (
@@ -212,53 +258,6 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
             )}
             {loadingRec && (
               <div className="text-[10px] text-muted-foreground animate-pulse">Loading recommendation...</div>
-            )}
-
-            {form.method === 'finetune' && (
-              <div className="space-y-1.5">
-                <label className="flex items-center gap-2 text-[11px]">
-                  <Checkbox checked={form.useLoRA} onCheckedChange={e => form.setUseLoRA(e === true)}
-                    className="rounded border-border" aria-label="Enable LoRA" />
-                  Use LoRA (parameter-efficient fine-tuning)
-                </label>
-                {form.useLoRA && (
-                  <div className="grid grid-cols-2 gap-2 pl-5">
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor="lora-rank" variant="uppercase">Rank</Label>
-                      <Input id="lora-rank" type="number" min={1} max={128} value={form.loraRank}
-                        onChange={e => form.setLoraRank(Number(e.target.value) || 8)}
-                        className="h-7 text-[11px] font-mono" />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor="lora-alpha" variant="uppercase">Alpha</Label>
-                      <Input id="lora-alpha" type="number" min={1} max={256} value={form.loraAlpha}
-                        onChange={e => form.setLoraAlpha(Number(e.target.value) || 16)}
-                        className="h-7 text-[11px] font-mono" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {checkpoints && checkpoints.checkpoints.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="resume-checkpoint" className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                  Resume from checkpoint (optional)
-                </label>
-                <Select value={form.resumeCheckpoint} onValueChange={form.setResumeCheckpoint}>
-                  <SelectTrigger id="resume-checkpoint" className="h-8 text-xs font-mono" aria-label="Resume from checkpoint">
-                    <SelectValue placeholder="Start fresh" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Start fresh</SelectItem>
-                    {checkpoints.checkpoints.map(c => (
-                      <SelectItem key={c.name} value={c.name}>
-                        {c.name} {c.loss != null ? `(${c.loss.toFixed(4)})` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             )}
           </>
         ) : (
