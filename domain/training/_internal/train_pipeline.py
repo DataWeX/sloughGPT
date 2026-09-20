@@ -47,6 +47,10 @@ from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
 from domain.training._internal.quality_scorer import compute_data_quality
 from domain.training._internal.slonet import load_checkpoint_npz
 from domain.training._internal.trainer_protocol import TrainResult
+from domain.training._internal.training_handler import (
+    clip_gradients,
+    zero_grads,
+)
 
 logger = logging.getLogger("slo.trainer")
 
@@ -303,7 +307,7 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
 # =============================================================================
 
 
-@dataclass
+@dataclass(slots=True)
 class TrainerConfig:
     """Training configuration with sensible defaults."""
 
@@ -474,7 +478,7 @@ def _build_training_state_metadata(
 
     Args:
         optimizer: SloAdamW / SloAdam / SloSGD (or None).
-        scheduler: SloLRScheduler (or None).
+        scheduler: LRScheduler (or None).
         step: Current global training step.
         epoch: Current epoch.
         completed_epochs: Number of fully completed epochs so far (honest
@@ -1169,12 +1173,7 @@ class SloughGPTTrainer:
         if self.accumulation_step >= self.config.gradient_accumulation_steps:
             params = [p for p in model.parameters() if p.grad is not None]
             if self.config.max_grad_norm > 0 and params:
-                total_norm = 0.0
-                for p in params:
-                    if p.grad is not None:
-                        g = p.grad.data if hasattr(p.grad, "data") else p.grad
-                        total_norm += float(np.sum(g**2))
-                total_norm = total_norm**0.5
+                total_norm = clip_gradients(params, self.config.max_grad_norm)
 
                 # Record gradient norm to training monitor
                 try:
@@ -1187,15 +1186,8 @@ class SloughGPTTrainer:
                 except Exception:
                     pass
 
-                clip_coef = self.config.max_grad_norm / (total_norm + 1e-6)
-                if clip_coef < 1.0:
-                    for p in params:
-                        if p.grad is not None:
-                            g = p.grad.data if hasattr(p.grad, "data") else p.grad
-                            g *= clip_coef
             self.optimizer.step(params)
-            for p in model.parameters():
-                p.grad = None
+            zero_grads(list(model.parameters()))
             if self.scheduler is not None:
                 self.scheduler.step()
             self.accumulation_step = 0
@@ -1913,6 +1905,7 @@ class SloughGPTTrainer:
             training_duration=training_duration,
             include_optimizer_state=not is_final,
             avg_quality=self._avg_quality,
+            is_final=is_final,
         )
         self._last_checkpoint_path = str(checkpoint_path) + ".soul"
         self._prune_stale_checkpoints(keep_final=is_final)
@@ -1987,6 +1980,16 @@ class SloughGPTTrainer:
                     meta.unlink()
             except OSError:
                 pass
+            # Sidecars use the stem name (<name>.points.json, <name>.meta.json),
+            # not the full .soul name — remove them so pruned checkpoints
+            # leave no orphaned artifacts behind.
+            for suffix in (".points.json", ".meta.json"):
+                sidecar = stale.parent / (stale.stem + suffix)
+                try:
+                    if sidecar.exists():
+                        sidecar.unlink()
+                except OSError:
+                    pass
 
         if keep_final and self._last_checkpoint_path:
             # The just-written final checkpoint is the newest file (kept above);
@@ -2005,6 +2008,7 @@ class SloughGPTTrainer:
         training_duration=None,
         include_optimizer_state: bool = True,
         avg_quality: float | None = None,
+        is_final: bool = False,
     ):
         """Save the model in ``.soul`` format (the only SloNet checkpoint format).
 
@@ -2130,21 +2134,26 @@ class SloughGPTTrainer:
 
         logger.info("Model saved to %s", output_path, extra={"tag": "TRAIN"})
 
-        # Auto-compress checkpoint into pugqeep Points for efficient inference
-        try:
-            from domain.training._internal.executor import compress_checkpoint
+        # Auto-compress checkpoint into pugqeep Points for efficient inference.
+        # Final saves only: periodic checkpoints sit beside a fresh .soul,
+        # which is the primary artifact (points.json is merely its fallback),
+        # so clustering on every save is pure overhead (pure-Python k-means
+        # costs ~18s even for a 21K-param model).
+        if is_final:
+            try:
+                from domain.training._internal.executor import compress_checkpoint
 
-            result = compress_checkpoint(output_path, n_clusters=16)
-            if result:
-                logger.info(
-                    "Compressed %s: %.1fx ratio (%d points)",
-                    output_path,
-                    result.get("compression_ratio", 0),
-                    result.get("point_count", 0),
-                    extra={"tag": "TRAIN"},
-                )
-        except Exception as exc:
-            logger.debug("Pugqeep compression skipped: %s", exc, extra={"tag": "TRAIN"})
+                result = compress_checkpoint(output_path, n_clusters=16)
+                if result:
+                    logger.info(
+                        "Compressed %s: %.1fx ratio (%d points)",
+                        output_path,
+                        result.get("compression_ratio", 0),
+                        result.get("point_count", 0),
+                        extra={"tag": "TRAIN"},
+                    )
+            except Exception as exc:
+                logger.debug("Pugqeep compression skipped: %s", exc, extra={"tag": "TRAIN"})
 
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""

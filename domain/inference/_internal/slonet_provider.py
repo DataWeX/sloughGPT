@@ -1864,6 +1864,8 @@ class SloNetChatProvider:
         ):
             tok_id, logits = tok_id  # unpack (token_id, logits) tuple
             decoded = self._tokenizer.decode([tok_id])
+            # Stream yields batched (1, vocab) logits — flatten before indexing.
+            logits = np.asarray(logits).reshape(-1)
             # Compute true log-probability from raw logits
             shifted = logits - np.max(logits)
             log_probs = shifted - np.log(np.sum(np.exp(shifted)))
