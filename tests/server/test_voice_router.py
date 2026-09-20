@@ -51,14 +51,29 @@ def _voice_router_instance():
     raise RuntimeError("no bound endpoint found")
 
 
+def _mock_engine(waveform=None, fail=False):
+    """Mock voice engine matching the synthesize()/status() contract."""
+    engine = MagicMock()
+    if fail:
+        engine.synthesize.side_effect = RuntimeError("boom")
+    else:
+        result = MagicMock()
+        result.success = True
+        result.data = waveform if waveform is not None else np.zeros(22050, dtype=np.float32)
+        result.error = None
+        engine.synthesize.return_value = result
+    return engine
+
+
 class TestTTS:
-    def test_produces_audio_with_native_engine(self, client):
-        resp = client.post("/voice/tts", json={"text": "Hello world"})
+    def test_produces_audio_with_voice_engine(self, client):
+        with patch.object(_voice_router_instance(), "_get_engine", return_value=_mock_engine()):
+            resp = client.post("/voice/tts", json={"text": "Hello world"})
         assert resp.status_code == 200
         data = resp.json()
-        assert data["backend"] == "native-numpy"
+        assert data["backend"] == "voice-engine"
         assert data["audio"] != ""
-        assert data["sample_rate"] > 0
+        assert data["sample_rate"] == 22050
 
     def test_rejects_empty_text(self, client):
         resp = client.post("/voice/tts", json={"text": ""})
@@ -84,10 +99,13 @@ class TestTTS:
         resp = client.post("/voice/tts", json={"text": "Hi"})
         assert resp.status_code == 200
 
-    def test_voice_param_ignored(self, client):
-        resp = client.post("/voice/tts", json={"text": "test", "voice": "custom"})
+    def test_voice_param_forwarded_to_engine(self, client):
+        engine = _mock_engine()
+        with patch.object(_voice_router_instance(), "_get_engine", return_value=engine):
+            resp = client.post("/voice/tts", json={"text": "test", "voice": "custom"})
         assert resp.status_code == 200
-        assert resp.json()["backend"] == "native-numpy"
+        assert resp.json()["backend"] == "voice-engine"
+        engine.synthesize.assert_called_once_with("test", "custom")
 
 
 class TestTTSSuccessPath:
@@ -95,45 +113,46 @@ class TestTTSSuccessPath:
 
     @pytest.fixture(autouse=True)
     def _backend(self):
-        backend = MagicMock()
-        backend.load.return_value = True
-        backend.generate.return_value = (_make_wav(), 24000)
-        with patch.object(_voice_router_instance(), "_tts_backend", backend):
+        backend = _mock_engine()
+        with patch.object(_voice_router_instance(), "_get_engine", return_value=backend):
             yield backend
 
     def test_returns_audio_when_backend_loaded(self, client):
         resp = client.post("/voice/tts", json={"text": "hello"})
         assert resp.status_code == 200
         data = resp.json()
-        assert data["backend"] == "native-numpy"
+        assert data["backend"] == "voice-engine"
         assert data["audio"] != ""
-        assert data["sample_rate"] == 24000
+        assert data["sample_rate"] == 22050
         assert data["duration_ms"] == 1000
 
-    def test_sample_rate_read_from_wav(self, client, _backend):
-        _backend.generate.return_value = (_make_wav(rate=16000), 16000)
+    def test_sample_rate_is_fixed(self, client, _backend):
         resp = client.post("/voice/tts", json={"text": "hello"})
-        assert resp.json()["sample_rate"] == 16000
+        assert resp.json()["sample_rate"] == 22050
 
     def test_duration_from_frame_count(self, client, _backend):
-        _backend.generate.return_value = (_make_wav(frames=8000, rate=16000), 16000)
+        result = MagicMock()
+        result.success = True
+        result.data = np.zeros(8000, dtype=np.float32)
+        result.error = None
+        _backend.synthesize.return_value = result
         resp = client.post("/voice/tts", json={"text": "hello"})
-        assert resp.json()["duration_ms"] == 500
+        assert resp.json()["duration_ms"] == 362
 
     def test_audio_decodes_as_wav(self, client):
         resp = client.post("/voice/tts", json={"text": "hello"})
         raw = base64.b64decode(resp.json()["audio"])
         with wave.open(io.BytesIO(raw)) as wf:
-            assert wf.getnframes() == 24000
+            assert wf.getnframes() == 22050
 
     def test_backend_failure_falls_back(self, client, _backend):
-        _backend.generate.side_effect = RuntimeError("boom")
+        _backend.synthesize.side_effect = RuntimeError("boom")
         resp = client.post("/voice/tts", json={"text": "hello"})
         assert resp.status_code == 200
         assert resp.json()["backend"] == "browser-fallback"
 
     def test_load_failure_falls_back(self, client, _backend):
-        _backend.load.return_value = False
+        _backend.synthesize.side_effect = RuntimeError("engine unavailable")
         resp = client.post("/voice/tts", json={"text": "hello"})
         assert resp.json()["backend"] == "browser-fallback"
 
@@ -142,26 +161,20 @@ class TestVoiceStatusBackend:
     """GET /voice/status with a controllable backend."""
 
     def test_reports_available(self, client):
-        backend = MagicMock()
-        backend.load.return_value = True
-        backend._error = None
-        with patch.object(_voice_router_instance(), "_tts_backend", backend):
+        backend = _mock_engine()
+        backend.status.return_value = {"capabilities": ["tts"], "model": "voice"}
+        with patch.object(_voice_router_instance(), "_get_engine", return_value=backend):
             resp = client.get("/voice/status")
         data = resp.json()["data"]
         assert data["server_tts"] is True
-        assert data["model"] == "native-numpy"
-        assert data["error"] is None
+        assert data["capabilities"] == ["tts"]
 
     def test_reports_unavailable_with_error(self, client):
-        backend = MagicMock()
-        backend.load.return_value = False
-        backend._error = "engine load failed"
-        with patch.object(_voice_router_instance(), "_tts_backend", backend):
+        backend = _mock_engine()
+        backend.status.side_effect = RuntimeError("engine load failed")
+        with patch.object(_voice_router_instance(), "_get_engine", return_value=backend):
             resp = client.get("/voice/status")
-        data = resp.json()["data"]
-        assert data["server_tts"] is False
-        assert data["model"] is None
-        assert data["error"] == "engine load failed"
+        assert resp.status_code == 500
 
 
 class TestStatus:
@@ -175,7 +188,7 @@ class TestStatus:
         resp = client.get("/voice/status")
         data = resp.json()["data"]
         assert "server_tts" in data
-        assert "model" in data or "error" in data
+        assert "capabilities" in data or "loaded" in data
 
     def test_status_structure(self, client):
         resp = client.get("/voice/status")
@@ -200,12 +213,10 @@ class TestTTSValidation:
         assert resp.status_code == 422
 
     def test_voice_param_passed_to_backend(self, client):
-        backend = MagicMock()
-        backend.load.return_value = True
-        backend.generate.return_value = (_make_wav(), 24000)
-        with patch.object(_voice_router_instance(), "_tts_backend", backend):
+        backend = _mock_engine()
+        with patch.object(_voice_router_instance(), "_get_engine", return_value=backend):
             client.post("/voice/tts", json={"text": "hello", "voice": "en-us-female"})
-        assert backend.generate.call_args.args[0] == "hello"
+        backend.synthesize.assert_called_once_with("hello", "en-us-female")
 
 
 class TestVoiceMethodMismatch:
@@ -224,31 +235,28 @@ class TestVoiceStatusFailure:
     """Status when backend load raises."""
 
     def test_status_reports_error_after_load_failure(self, client):
-        backend = MagicMock()
-        backend.load.side_effect = RuntimeError("crashed")
-        with patch.object(_voice_router_instance(), "_tts_backend", backend):
+        backend = _mock_engine()
+        backend.status.side_effect = RuntimeError("crashed")
+        with patch.object(_voice_router_instance(), "_get_engine", return_value=backend):
             resp = client.get("/voice/status")
         assert resp.status_code == 500
 
     def test_status_load_success_reports_model(self, client):
-        backend = MagicMock()
-        backend.load.return_value = True
-        backend._error = None
-        with patch.object(_voice_router_instance(), "_tts_backend", backend):
+        backend = _mock_engine()
+        backend.status.return_value = {"capabilities": ["tts"]}
+        with patch.object(_voice_router_instance(), "_get_engine", return_value=backend):
             resp = client.get("/voice/status")
         data = resp.json()["data"]
         assert data["server_tts"] is True
-        assert data["model"] == "native-numpy"
+        assert data["capabilities"] == ["tts"]
 
 
 class TestTTSErrorAfterLoad:
     """TTS failure inside the try block falls back to browser."""
 
     def test_wav_read_error_falls_back(self, client):
-        backend = MagicMock()
-        backend.load.return_value = True
-        backend.generate.side_effect = ValueError("bad audio")
-        with patch.object(_voice_router_instance(), "_tts_backend", backend):
+        backend = _mock_engine(fail=True)
+        with patch.object(_voice_router_instance(), "_get_engine", return_value=backend):
             resp = client.post("/voice/tts", json={"text": "hello"})
         assert resp.status_code == 200
         assert resp.json()["backend"] == "browser-fallback"
