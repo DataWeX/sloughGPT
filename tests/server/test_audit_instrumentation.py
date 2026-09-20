@@ -175,7 +175,7 @@ class TestModelAudit:
         assert kwargs["extra"] == {"mode": "auto"}
         assert kwargs["detail"] == resp.json()["data"]["precision"]
 
-    @patch("domain.infrastructure._internal.download_manager.get_download_manager")
+    @patch("domain.infrastructure.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_start_download_logs_event(self, mock_logger, mock_mgr, models_client):
         mgr = MagicMock()
@@ -196,7 +196,7 @@ class TestModelAudit:
         assert first_call_kwargs["detail"] == "started"
         assert first_call_kwargs["extra"] == {"total_bytes_hint": 1000}
 
-    @patch("domain.infrastructure._internal.download_manager.get_download_manager")
+    @patch("domain.infrastructure.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_cancel_download_logs_event(self, mock_logger, mock_mgr, models_client):
         mgr = MagicMock()
@@ -211,7 +211,7 @@ class TestModelAudit:
         assert kwargs["resource"] == "gpt2"
         assert kwargs["detail"] == "cancelled"
 
-    @patch("domain.infrastructure._internal.download_manager.get_download_manager")
+    @patch("domain.infrastructure.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_cancel_missing_download_no_audit(self, mock_logger, mock_mgr, models_client):
         mgr = MagicMock()
@@ -243,7 +243,7 @@ class TestSoulAudit:
         assert kwargs["resource"] == "friendly"
         assert kwargs["extra"] == {"checkpoint_name": ""}
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_save_weight_snapshot_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -257,7 +257,7 @@ class TestSoulAudit:
         assert args[0] == "weights.snapshot.save"
         assert kwargs["resource"] == "my-snap"
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_load_weight_snapshot_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -272,7 +272,7 @@ class TestSoulAudit:
         assert kwargs["resource"] == "my-snap"
         assert kwargs["detail"] == "traits_loaded=5"
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_delete_weight_snapshot_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -287,7 +287,7 @@ class TestSoulAudit:
         assert kwargs["resource"] == "my-snap"
         assert kwargs["detail"] == "deleted=True"
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_save_trait_weights_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -356,16 +356,19 @@ def training_router_client():
 class TestTrainingRouterAudit:
     """Training job lifecycle + webhook ops emit audit events."""
 
-    @patch("apps.api.server.training.router.get_training_executor")
-    @patch("apps.api.server.training.router.get_training_controller")
+    @patch("domain.training.engine.get_training_engine")
+    @patch("apps.api.server.training.execution.get_training_controller")
     @patch("apps.api.server.training.execution.resolve_training_inputs")
     @patch("infrastructure.auth.get_audit_logger")
     def test_start_training_logs_event(
-        self, mock_logger, mock_resolve, mock_ctrl, mock_executor, training_router_client
+        self, mock_logger, mock_resolve, mock_ctrl, mock_engine, training_router_client, tmp_path
     ):
-        mock_resolve.return_value = ("/tmp/input.txt", "out_stem", None, "dataset")
+        # Endpoint validates the resolved dataset path (must exist, ≥100 bytes).
+        data_file = tmp_path / "input.txt"
+        data_file.write_text("hello world\n" * 20)
+        mock_resolve.return_value = (str(data_file), "out_stem", None, "dataset")
         mock_ctrl.return_value = MagicMock()
-        mock_executor.return_value = MagicMock()
+        mock_engine.return_value.get_executor.return_value.submit = MagicMock()
         resp = training_router_client.post(
             "/training/start",
             json={"dataset": "ds1", "model": "gpt2", "epochs": 3, "name": "my-job"},
@@ -385,20 +388,19 @@ class TestTrainingRouterAudit:
             "source_kind": "dataset",
         }
 
-    @patch("apps.api.server.training.router.get_training_executor")
+    @patch("apps.api.server.training.lora.get_training_engine")
+    @patch("apps.api.server.training.lora.find_repo_root")
     @patch("infrastructure.auth.get_audit_logger")
     def test_start_hf_training_logs_event(
-        self, mock_logger, mock_executor, training_router_client, tmp_path
+        self, mock_logger, mock_root, mock_engine, training_router_client, tmp_path
     ):
+        mock_root.return_value = tmp_path
         text_file = tmp_path / "input.txt"
         text_file.write_text("hello world\n")
-        mock_executor.return_value = MagicMock()
         model_file = tmp_path / "model.slnc"
         model_file.write_bytes(b"\x00" * 16)
-        from pathlib import Path as RealPath
-
-        repo_root = RealPath(__file__).resolve().parents[2]
-        ds_dir = repo_root / "datasets" / "audit_test_ds"
+        # find_repo_root is mocked to tmp_path above: stage the dataset there.
+        ds_dir = tmp_path / "datasets" / "audit_test_ds"
         ds_dir.mkdir(parents=True, exist_ok=True)
         (ds_dir / "input.txt").write_text("hello world\n")
         try:
@@ -421,13 +423,12 @@ class TestTrainingRouterAudit:
         assert kwargs["extra"]["job_id"] == job_id
         assert kwargs["extra"]["model"] == "model"
 
-    @patch("apps.api.server.training.router.get_training_executor")
+    @patch("apps.api.server.training.jobs_api.get_training_engine")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_stop_training_job_logs_event(self, mock_logger, mock_executor, training_router_client):
+    def test_stop_training_job_logs_event(self, mock_logger, mock_engine, training_router_client):
         from apps.api.server.training.jobs import training_jobs
 
         training_jobs["job_1"] = {"status": "running", "id": "job_1"}
-        mock_executor.return_value = MagicMock()
         resp = training_router_client.post("/training/jobs/job_1/stop")
         assert resp.status_code == 200
         logger = mock_logger.return_value
@@ -510,20 +511,27 @@ class TestTrainingRouterAudit:
 def kb_client():
     app = FastAPI()
     register_all_handlers(app)
-    app.include_router(KBRouter().router)
-    with patch("domain.cognition._internal.rag_service.get_rag_service", return_value=MagicMock()):
-        yield TestClient(app, raise_server_exceptions=False)
+    # Patch the engine factory during router construction: KBRouter reads
+    # get_knowledge_engine() once in __init__ (deferred import), so the
+    # mock must be active before KBRouter() is built. Yields (client, memory)
+    # where memory is engine.get_memory() for per-test customization.
+    with patch("domain.knowledge.engine.get_knowledge_engine") as mock_factory:
+        app.include_router(KBRouter().router)
+        with patch(
+            "domain.cognition._internal.rag_service.get_rag_service", return_value=MagicMock()
+        ):
+            yield TestClient(app, raise_server_exceptions=False), mock_factory.return_value
 
 
 class TestKnowledgeAudit:
     """Knowledge base mutations emit audit events."""
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_add_logs_event(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
+    def test_add_logs_event(self, mock_logger, kb_client):
+        client, engine = kb_client
+        memory = engine.get_memory.return_value
         memory.add_fact.return_value = True
-        resp = kb_client.post(
+        resp = client.post(
             "/knowledge",
             json={
                 "content": "SloNet is a numpy autograd engine",
@@ -540,21 +548,21 @@ class TestKnowledgeAudit:
         assert kwargs["detail"] == "stored"
         assert kwargs["extra"]["source"] == "manual"
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_add_duplicate_logs_detail(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
+    def test_add_duplicate_logs_detail(self, mock_logger, kb_client):
+        client, engine = kb_client
+        memory = engine.get_memory.return_value
         memory.add_fact.return_value = False
-        resp = kb_client.post("/knowledge", json={"content": "duplicate fact"})
+        resp = client.post("/knowledge", json={"content": "duplicate fact"})
         assert resp.status_code == 200
         logger = mock_logger.return_value
         args, kwargs = logger.log.call_args
         assert kwargs["detail"] == "duplicate"
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_update_logs_event(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
+    def test_update_logs_event(self, mock_logger, kb_client):
+        client, engine = kb_client
+        memory = engine.get_memory.return_value
         memory.list_all.return_value = [
             {
                 "id": "fact_1",
@@ -566,7 +574,7 @@ class TestKnowledgeAudit:
         ]
         memory.delete_by_id.return_value = True
         memory.add_fact.return_value = True
-        resp = kb_client.patch("/knowledge/fact_1", json={"content": "new"})
+        resp = client.patch("/knowledge/fact_1", json={"content": "new"})
         assert resp.status_code == 200
         logger = mock_logger.return_value
         logger.log.assert_called_once()
@@ -574,14 +582,12 @@ class TestKnowledgeAudit:
         assert args[0] == "knowledge.update"
         assert kwargs["resource"] == "fact_1"
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_batch_ingest_logs_event(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
+    def test_batch_ingest_logs_event(self, mock_logger, kb_client):
+        client, engine = kb_client
+        memory = engine.get_memory.return_value
         memory.add_fact.return_value = True
-        resp = kb_client.post(
-            "/knowledge/batch", json={"items": [{"content": "a"}, {"content": "b"}]}
-        )
+        resp = client.post("/knowledge/batch", json={"items": [{"content": "a"}, {"content": "b"}]})
         assert resp.status_code == 200
         logger = mock_logger.return_value
         args, kwargs = logger.log.call_args
@@ -589,36 +595,33 @@ class TestKnowledgeAudit:
         assert kwargs["resource"] == "batch"
         assert kwargs["detail"] == "stored=2"
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_batch_delete_logs_event(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
-        memory.delete_by_id.return_value = True
-        resp = kb_client.post("/knowledge/batch-delete", json={"ids": ["fact_1", "fact_2"]})
+    def test_batch_delete_logs_event(self, mock_logger, kb_client):
+        client, engine = kb_client
+        engine.batch_delete.return_value = MagicMock(data={"deleted": 2}, success=True)
+        resp = client.post("/knowledge/batch-delete", json={"ids": ["fact_1", "fact_2"]})
         assert resp.status_code == 200
         logger = mock_logger.return_value
         args, kwargs = logger.log.call_args
         assert args[0] == "knowledge.batch.delete"
         assert kwargs["detail"] == "deleted=2"
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_delete_logs_event(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
-        memory.delete_by_id.return_value = True
-        resp = kb_client.delete("/knowledge/fact_1")
+    def test_delete_logs_event(self, mock_logger, kb_client):
+        client, engine = kb_client
+        engine.delete.return_value = MagicMock(success=True)
+        resp = client.delete("/knowledge/fact_1")
         assert resp.status_code == 200
         logger = mock_logger.return_value
         args, kwargs = logger.log.call_args
         assert args[0] == "knowledge.delete"
         assert kwargs["resource"] == "fact_1"
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_delete_missing_no_audit(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
-        memory.delete_by_id.return_value = False
-        resp = kb_client.delete("/knowledge/fact-missing")
+    def test_delete_missing_no_audit(self, mock_logger, kb_client):
+        client, engine = kb_client
+        engine.delete.return_value = MagicMock(success=False)
+        resp = client.delete("/knowledge/fact-missing")
         assert resp.status_code == 404
         logger = mock_logger.return_value
         logger.log.assert_not_called()
@@ -848,7 +851,12 @@ class TestExperimentsAudit:
         assert resp.status_code == 200
         logger = mock_logger.return_value
         logger.log.assert_called_with(
-            "experiment.delete", user="anonymous", resource=exp_id, detail="", extra=None
+            "experiment.delete",
+            user="anonymous",
+            resource=exp_id,
+            detail="",
+            extra=None,
+            workspace_id="",
         )
         assert [c.args[0] for c in logger.log.call_args_list] == [
             "experiment.create",

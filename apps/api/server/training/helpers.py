@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from collections.abc import Coroutine
 from typing import Any
 
@@ -16,33 +17,24 @@ logger = logging.getLogger("slo")
 
 
 def _run_async(coro: Coroutine) -> None:
-    """Run an async coroutine from a sync (background thread) context.
+    """Run an async coroutine without blocking the caller (fire-and-forget).
 
-    If an event loop is already running in the current thread, spawns a
-    daemon thread to avoid "cannot call asyncio.run from a running loop".
-    Otherwise uses ``asyncio.run()`` directly. Failures are logged and
-    swallowed — this is fire-and-forget.
+    Always dispatches to a daemon thread: calling ``asyncio.run()`` inline
+    would hold the worker thread until every webhook delivery finishes,
+    which stalls job finalization (observed: record stuck at 96% during
+    fan-out). Failures are logged and swallowed.
     """
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
 
-    if loop is not None and loop.is_running():
-        import threading
-
-        def _target():
-            try:
-                asyncio.run(coro)
-            except Exception as exc:
-                logger.debug("Fire-and-forget coroutine failed: %s", exc)
-
-        threading.Thread(target=_target, daemon=True).start()
-    else:
+    def _target() -> None:
         try:
             asyncio.run(coro)
         except Exception as exc:
             logger.debug("Fire-and-forget coroutine failed: %s", exc)
+
+    try:
+        threading.Thread(target=_target, daemon=True).start()
+    except Exception as exc:
+        logger.debug("Fire-and-forget dispatch failed: %s", exc)
 
 
 def _finish_job(job_id: str, status: str, error: str | None = None) -> None:
