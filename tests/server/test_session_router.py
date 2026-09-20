@@ -337,7 +337,7 @@ class TestInspectorEdgePaths:
         assert resp.status_code == 500
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
-    @patch("domain.infrastructure._internal.context_core.get_context_core")
+    @patch("domain.infrastructure.context_core.get_context_core")
     def test_inspector_includes_workspace(self, mock_cc, mock_get, client):
         mock_get.return_value = [{"role": "user", "content": "Hi"}]
         cc = MagicMock()

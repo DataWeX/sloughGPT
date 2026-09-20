@@ -1,4 +1,4 @@
-"""AI package — models, learning, and the computer-use agent."""
+"""AI package — models, learning, verification, and the computer-use agent."""
 
 from arken.ai.agent import Agent, AgentConfig, AgentResult
 from arken.ai.learning import Experience, ExperienceBuffer, FeedbackLoop
@@ -17,6 +17,7 @@ from arken.ai.models import (
     tool_cards_text,
     validate_action,
 )
+from arken.ai.verifier import GoalCheck, Verifier, VerifyResult
 
 __all__ = [
     "ACTION_CARDS",
@@ -31,10 +32,13 @@ __all__ = [
     "Experience",
     "ExperienceBuffer",
     "FeedbackLoop",
+    "GoalCheck",
     "RewardModel",
     "RuleBasedModel",
     "Step",
     "Trajectory",
+    "Verifier",
+    "VerifyResult",
     "VisionModel",
     "tool_cards_text",
     "validate_action",

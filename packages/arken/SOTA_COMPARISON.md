@@ -132,7 +132,10 @@ Tests: 201 passing, 14 skipped. Solid base, mocks only.
    observations instead of executing.
 3. **Thought in loop** — `Action.reasoning` persisted per Step (in
    trajectory + JSONL).
-4. **Real reward** — open: still curated rewards; verifier hookup pending.
+4. **Real reward** ✅ — `ai/verifier.py`: `GoalCheck`
+   (url_contains, text_present/absent, element_present) checked against
+   the live page on DONE. Pass → reward 1.0 + success; fail → reward
+   0.0 + `stop_reason="unverified"`. No goal → old behavior.
 5. **One transcript file** ✅ — `output_dir/<task>.jsonl`, one line per
    Step, flushed before the next model call.
 

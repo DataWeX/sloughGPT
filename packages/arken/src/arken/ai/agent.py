@@ -22,6 +22,7 @@ from arken.ai.models import (
     VisionModel,
     validate_action,
 )
+from arken.ai.verifier import Verifier
 from arken.interact.primitives import (
     Coordinate,
     Keyboard,
@@ -59,7 +60,7 @@ class AgentResult:
     total_duration_ms: float = 0.0
     steps_taken: int = 0
     screenshots_captured: int = 0
-    stop_reason: str = ""  # done|fail|max_steps|deadline|no_progress|aborted
+    stop_reason: str = ""  # done|fail|max_steps|deadline|no_progress|unverified|aborted
 
     def summary(self) -> str:
         return (
@@ -255,10 +256,18 @@ class Agent:
 
                 # 3. ACT (validated against the action's tool card)
                 validation_error = validate_action(action)
+                goal_error = ""
+                if validation_error is None and action.action_type == ActionType.DONE:
+                    goal_error = await self._check_goal(context)
                 if validation_error:
                     step_result = {
                         "observation": f"Invalid action: {validation_error}",
                         "reward": -0.5,
+                    }
+                elif goal_error:
+                    step_result = {
+                        "observation": f"Unverified: {goal_error}",
+                        "reward": 0.0,
                     }
                 else:
                     step_result = await self._execute_action(action, step_num)
@@ -312,8 +321,13 @@ class Agent:
                         pass
 
                 if action.action_type == ActionType.DONE:
-                    trajectory.success = True
-                    stop_reason = "done"
+                    if goal_error:
+                        trajectory.success = False
+                        trajectory.metadata["error"] = goal_error
+                        stop_reason = "unverified"
+                    else:
+                        trajectory.success = True
+                        stop_reason = "done"
                     break
                 if action.action_type == ActionType.FAIL:
                     trajectory.success = False
@@ -429,6 +443,31 @@ class Agent:
             result["reward"] = -0.5
 
         return result
+
+    # ── Goal verification ─────────────────────────────────────────────
+
+    async def _check_goal(self, context: dict[str, Any] | None) -> str:
+        """Verify the run goal against the live page. '' = pass/no goal."""
+        goal = (context or {}).get("goal")
+        if not goal:
+            return ""
+        try:
+            url = await self._backend.get_url()
+        except Exception:
+            url = ""
+        try:
+            text = str(await self._backend.evaluate("document.body.innerText") or "")
+        except Exception:
+            text = ""
+
+        async def find(locator):
+            try:
+                return await self._backend.find_element(locator)
+            except Exception:
+                return None
+
+        result = await Verifier().verify(goal, url=url, text=text, find=find)
+        return "" if result.passed else "; ".join(result.failed)
 
     # ── Perception ──────────────────────────────────────────────────────
 

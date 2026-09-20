@@ -320,3 +320,70 @@ class TestStopRules:
         first = json.loads(lines[0])
         assert first["action"]["action_type"] == "keyboard_type"
         assert first["observation"] == "Typed 'hi'"
+
+
+class TestVerifier:
+    def test_url_and_text_checks(self):
+        from arken.ai.verifier import GoalCheck, Verifier
+
+        v = Verifier()
+        r = run(
+            v.verify(
+                [
+                    GoalCheck("url_contains", "/chat"),
+                    GoalCheck("text_present", "hi"),
+                    {"kind": "text_absent", "value": "bye"},
+                ],
+                url="http://x/chat",
+                text="hi there",
+            )
+        )
+        assert r.passed is True and r.checked == 3
+
+    def test_failures_listed(self):
+        from arken.ai.verifier import GoalCheck, Verifier
+
+        r = run(
+            Verifier().verify(
+                [GoalCheck("url_contains", "/missing"), GoalCheck("unknown_kind", "x")],
+                url="http://x/chat",
+                text="hi",
+            )
+        )
+        assert r.passed is False and len(r.failed) == 2
+
+    def test_element_present(self):
+        from arken.ai.verifier import GoalCheck, Verifier
+        from arken.core.element import ElementLocator
+
+        backend = AgentBackend()
+
+        async def find(locator):
+            return await backend.find_element(locator)
+
+        ok = run(
+            Verifier().verify(
+                [GoalCheck("element_present", ElementLocator.text("Start").describe())],
+                find=find,
+            )
+        )
+        assert ok.passed is True
+        missing = run(Verifier().verify([GoalCheck("element_present", "css=.nope")], find=find))
+        assert missing.passed is False
+
+    def test_goal_pass_marks_done(self):
+        agent = TestAgent()._agent([Action(ActionType.DONE)])
+        agent._backend.url = "http://x/chat"
+        result = run(agent.run("t", context={"goal": [{"kind": "url_contains", "value": "/chat"}]}))
+        run(agent.stop())
+        assert result.success is True
+        assert result.stop_reason == "done"
+
+    def test_goal_fail_marks_unverified(self):
+        agent = TestAgent()._agent([Action(ActionType.DONE)])
+        agent._backend.url = "http://x/other"
+        result = run(agent.run("t", context={"goal": [{"kind": "url_contains", "value": "/chat"}]}))
+        run(agent.stop())
+        assert result.success is False
+        assert result.stop_reason == "unverified"
+        assert "Unverified" in result.trajectory.steps[0].observation
