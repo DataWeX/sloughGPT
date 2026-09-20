@@ -15,6 +15,7 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
+  FoldSection,
 } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { DatasetSelector } from '@/components/training/DatasetSelector'
@@ -143,7 +144,8 @@ export const QuickTrainCard = memo(function QuickTrainCard({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Fast train (turbo)</CardTitle>
+        <CardTitle className="text-base">Quick train</CardTitle>
+        <p className="text-xs text-muted-foreground">Pick a file, tap Start — defaults work.</p>
       </CardHeader>
       <CardContent className="space-y-4">
         {running ? (
@@ -271,103 +273,62 @@ export const QuickTrainCard = memo(function QuickTrainCard({
               onChange={datasets.setSelectedDataset}
               showImport
             />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-epochs" variant="uppercase">
-                  Epochs
-                </Label>
-                <Input
-                  id="turbo-epochs"
-                  type="number"
-                  min={1}
-                  max={500}
-                  value={config.epochs}
-                  onChange={setNum('epochs')}
-                  className="h-8 text-xs font-mono"
-                />
+            <FoldSection heading="Advanced — training knobs">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="turbo-epochs" variant="uppercase">
+                    Training rounds
+                  </Label>
+                  <Input id="turbo-epochs" type="number" min={1} max={500} value={config.epochs} onChange={setNum('epochs')} className="h-8 text-xs font-mono" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="turbo-lr" variant="uppercase">
+                    Learning speed
+                  </Label>
+                  <Input id="turbo-lr" type="text" inputMode="decimal" value={config.lr} onChange={setNum('lr')} className="h-8 text-xs font-mono" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="turbo-embed" variant="uppercase">
+                    Meaning size
+                  </Label>
+                  <Input id="turbo-embed" type="number" min={16} max={1024} value={config.embed} onChange={setNum('embed')} className="h-8 text-xs font-mono" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="turbo-heads" variant="uppercase">
+                    Focus heads
+                  </Label>
+                  <Input id="turbo-heads" type="number" min={1} max={32} value={config.heads} onChange={setNum('heads')} className="h-8 text-xs font-mono" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="turbo-layers" variant="uppercase">
+                    Depth
+                  </Label>
+                  <Input id="turbo-layers" type="number" min={1} max={64} value={config.layers} onChange={setNum('layers')} className="h-8 text-xs font-mono" />
+                </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-lr" variant="uppercase">
-                  LR
-                </Label>
-                <Input
-                  id="turbo-lr"
-                  type="text"
-                  inputMode="decimal"
-                  value={config.lr}
-                  onChange={setNum('lr')}
-                  className="h-8 text-xs font-mono"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-embed" variant="uppercase">
-                  Embed
-                </Label>
-                <Input
-                  id="turbo-embed"
-                  type="number"
-                  min={16}
-                  max={1024}
-                  value={config.embed}
-                  onChange={setNum('embed')}
-                  className="h-8 text-xs font-mono"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-heads" variant="uppercase">
-                  Heads
-                </Label>
-                <Input
-                  id="turbo-heads"
-                  type="number"
-                  min={1}
-                  max={32}
-                  value={config.heads}
-                  onChange={setNum('heads')}
-                  className="h-8 text-xs font-mono"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-layers" variant="uppercase">
-                  Layers
-                </Label>
-                <Input
-                  id="turbo-layers"
-                  type="number"
-                  min={1}
-                  max={64}
-                  value={config.layers}
-                  onChange={setNum('layers')}
-                  className="h-8 text-xs font-mono"
-                />
-              </div>
-            </div>
-            {experiments.length > 0 && (
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="turbo-experiment" variant="uppercase">
-                  Experiment
-                </Label>
-                <Select value={selectedExperimentId} onValueChange={setSelectedExperimentId}>
-                  <SelectTrigger
-                    id="turbo-experiment"
-                    className="h-8 text-xs font-mono"
-                    aria-label="Experiment"
-                  >
-                    <SelectValue placeholder="None" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">None</SelectItem>
-                    {experiments.map((exp) => (
-                      <SelectItem key={exp.id} value={exp.id}>
-                        {exp.name || exp.id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+              {experiments.length > 0 && (
+                <div className="flex flex-col gap-1 mt-3">
+                  <Label htmlFor="turbo-experiment" variant="uppercase">
+                    Experiment
+                  </Label>
+                  <Select value={selectedExperimentId} onValueChange={setSelectedExperimentId}>
+                    <SelectTrigger id="turbo-experiment" className="h-8 text-xs font-mono" aria-label="Experiment">
+                      <SelectValue placeholder="None" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {experiments.map((exp) => (
+                        <SelectItem key={exp.id} value={exp.id}>
+                          {exp.name || exp.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </FoldSection>
             <Button size="sm" onClick={start} disabled={!datasets.selectedDataset || starting}>
-              {starting ? 'Starting...' : 'Start turbo train'}
+              {starting ? 'Starting...' : 'Start training'}
             </Button>
           </div>
         )}

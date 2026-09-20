@@ -22,6 +22,11 @@ vi.mock('@sloughgpt/strui', () => ({
   Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
   Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
   Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  SelectTrigger: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  SelectValue: ({ children }: any) => <span>{children}</span>,
+  SelectContent: ({ children }: any) => <div>{children}</div>,
+  SelectItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  FoldSection: ({ children, heading }: any) => <div><span>{heading}</span>{children}</div>,
   ActionCard: ({ title, children }: any) => (
     <div data-testid="action-card">
       <h3>{title}</h3>
@@ -126,9 +131,9 @@ describe('QuickTrainCard', () => {
       />,
     )
     expect(screen.getByTestId('dataset-selector')).toBeDefined()
-    expect(screen.getByText('Epochs')).toBeDefined()
-    expect(screen.getByText('Embed')).toBeDefined()
-    expect(screen.getByText('Start turbo train')).toBeDefined()
+    expect(screen.getByText(/Training rounds|Epochs/)).toBeDefined()
+    expect(screen.getByText(/Meaning size|Embed/)).toBeDefined()
+    expect(screen.getByText(/Start training|Start turbo train/)).toBeDefined()
   })
 
   it('disables start when no dataset is selected', () => {
@@ -141,7 +146,7 @@ describe('QuickTrainCard', () => {
         addToast={addToast}
       />,
     )
-    const start = screen.getByText('Start turbo train') as HTMLButtonElement
+    const start = screen.getByText(/Start training|Start turbo train/) as HTMLButtonElement
     expect(start.disabled).toBe(true)
     expect(addToast).not.toHaveBeenCalled()
   })
@@ -156,7 +161,7 @@ describe('QuickTrainCard', () => {
         addToast={vi.fn()}
       />,
     )
-    fireEvent.click(screen.getByText('Start turbo train'))
+    fireEvent.click(screen.getByText(/Start training|Start turbo train/))
     expect(session.startTurboTrain).toHaveBeenCalledWith(
       '1',
       TURBO_DEFAULTS,
