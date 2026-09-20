@@ -5,6 +5,7 @@ import { trainingFacade } from '@/lib/training-facade'
 import { readTraining, writeTraining, type TrainingToastFn } from '@/lib/app-shell'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { logger } from '@/lib/dev-log'
+import { formatToastError } from '@/lib/error-utils'
 
 const _log = logger.child('training-stream')
 
@@ -137,7 +138,7 @@ export function useTrainingStream() {
             }
           }
         })
-        .catch(() => addToast('Could not start training', 'error'))
+        .catch((e) => addToast(formatToastError(e, 'Could not start training'), 'error'))
     },
     [closeStream],
   )

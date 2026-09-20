@@ -223,6 +223,13 @@ class GitBackend(DownloadBackend):
             files = self._scan_repo(cache_dir)
             self._save_manifest(resource_id, {"files": files, "branch": branch})
 
+            # Drop per-file hashes (git has no server manifest to compare)
+            # and report them so callers can verify without re-hashing.
+            from .download_backend import write_sha_sidecar
+
+            for f in files:
+                f["sha256"] = write_sha_sidecar(cache_dir / f["path"])
+
             # Notify file completions
             for f in files:
                 on_file_complete(resource_id, str(cache_dir / f["path"]))
@@ -231,6 +238,7 @@ class GitBackend(DownloadBackend):
                 "status": "completed",
                 "cache_dir": str(cache_dir),
                 "total_bytes": sum(f.get("size", 0) for f in files),
+                "files": files,
             }
         except Exception as e:
             return {

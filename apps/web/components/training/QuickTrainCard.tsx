@@ -21,6 +21,7 @@ import { DatasetSelector } from '@/components/training/DatasetSelector'
 import { formatDuration } from '@/lib/formatDuration'
 import { trainingJobsController } from '@/lib/training-controller'
 import { experimentsController, type Experiment } from '@/lib/experiments-controller'
+import { formatToastError } from '@/lib/error-utils'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 
@@ -56,16 +57,16 @@ export const QuickTrainCard = memo(function QuickTrainCard({
   const pauseTraining = useCallback(async () => {
     try {
       await trainingJobsController.pauseTraining()
-    } catch {
-      addToast('Could not pause training', 'error')
+    } catch (e) {
+      addToast(formatToastError(e, 'Could not pause training'), 'error')
     }
   }, [addToast])
 
   const resumeTraining = useCallback(async () => {
     try {
       await trainingJobsController.resumeTraining()
-    } catch {
-      addToast('Could not resume training', 'error')
+    } catch (e) {
+      addToast(formatToastError(e, 'Could not resume training'), 'error')
     }
   }, [addToast])
 
@@ -76,8 +77,8 @@ export const QuickTrainCard = memo(function QuickTrainCard({
       .then((data) => {
         if (active) setExperiments(data)
       })
-      .catch(() => {
-        if (active) addToast('Could not load experiments', 'error')
+      .catch((e) => {
+        if (active) addToast(formatToastError(e, 'Could not load experiments'), 'error')
       })
     return () => {
       active = false
@@ -99,8 +100,8 @@ export const QuickTrainCard = memo(function QuickTrainCard({
         addToast,
         selectedExperimentId || undefined,
       )
-    } catch {
-      addToast('Could not start turbo training', 'error')
+    } catch (e) {
+      addToast(formatToastError(e, 'Could not start turbo training'), 'error')
     } finally {
       setStarting(false)
     }
@@ -117,8 +118,8 @@ export const QuickTrainCard = memo(function QuickTrainCard({
     try {
       await trainingJobsController.loadCheckpoint(name)
       addToast(`Loaded trained version: ${name}`, 'success')
-    } catch {
-      addToast('Could not load trained version', 'error')
+    } catch (e) {
+      addToast(formatToastError(e, 'Could not load trained version'), 'error')
     } finally {
       setLoadingModel(false)
     }

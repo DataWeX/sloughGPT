@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).parent.parent.parent.parent.parent
+# File lives at <repo>/domain/training/_internal/state.py → 4 parents up.
+REPO_ROOT = Path(__file__).parent.parent.parent.parent
 CHECKPOINTS_DIR = REPO_ROOT / "models" / "auto-training"
 LORA_DIR = REPO_ROOT / "data" / "user_adapters"
 TURBO_DIR = REPO_ROOT / "models" / "turbo-trained"

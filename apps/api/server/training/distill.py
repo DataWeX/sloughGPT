@@ -94,7 +94,7 @@ async def start_distillation(
                 details=quality,
             )
     except Exception as e:
-        from schemas.common import AppError
+        from domain.infrastructure._internal.errors import AppError
 
         if isinstance(e, AppError):
             raise

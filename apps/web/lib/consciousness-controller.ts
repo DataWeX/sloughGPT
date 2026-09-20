@@ -2,6 +2,7 @@
  * Consciousness controller — API client for the consciousness subsystem.
  */
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/http-client'
+import { createSSEStream } from '@/lib/sse-client'
 
 export interface ConsciousnessStatus {
   status: string
@@ -30,7 +31,7 @@ export interface SelfModel {
   self_beliefs: Record<string, number>
 }
 
-export interface Qualia {
+export interface QualiaEntry {
   id: string
   type: string
   intensity: number
@@ -117,7 +118,11 @@ export const consciousnessController = {
     return apiPost('/consciousness/train/start', config ?? {})
   },
 
-  async evaluate(): Promise<{ overall_score: number; metrics: Record<string, { score: number; weight: number; details: string }>; diagnostics: string[] }> {
+  async evaluate(): Promise<{
+    overall_score: number
+    metrics: Record<string, { score: number; weight: number; details: string }>
+    diagnostics: string[]
+  }> {
     return apiGet('/consciousness/evaluate')
   },
 
@@ -126,12 +131,14 @@ export const consciousnessController = {
     return apiGet(`/consciousness/history/episodes${qs}`)
   },
 
-  async getQualiaHistory(limit?: number): Promise<{ history: Qualia[] }> {
+  async getQualiaHistory(limit?: number): Promise<{ history: QualiaEntry[] }> {
     const qs = limit ? `?limit=${limit}` : ''
     return apiGet(`/consciousness/history/qualia${qs}`)
   },
 
-  async getBeliefsHistory(limit?: number): Promise<{ beliefs: Array<{ timestamp: number; step: number; [key: string]: number }> }> {
+  async getBeliefsHistory(
+    limit?: number,
+  ): Promise<{ beliefs: Array<{ timestamp: number; step: number; [key: string]: number }> }> {
     const qs = limit ? `?limit=${limit}` : ''
     return apiGet(`/consciousness/history/beliefs${qs}`)
   },
@@ -201,7 +208,17 @@ export const consciousnessController = {
     return apiDelete(`/consciousness/personas/${personaId}`)
   },
 
-  async healthCheck(): Promise<{ health_score: number; enabled: boolean; level: number; episodes: number; avg_growth: number; positive_ratio: number; qualia: Record<string, number>; last_reflection: string; diagnostics: string[] }> {
+  async healthCheck(): Promise<{
+    health_score: number
+    enabled: boolean
+    level: number
+    episodes: number
+    avg_growth: number
+    positive_ratio: number
+    qualia: Record<string, number>
+    last_reflection: string
+    diagnostics: string[]
+  }> {
     return apiGet('/consciousness/health')
   },
 
@@ -227,12 +244,16 @@ export const consciousnessController = {
     return apiGet('/consciousness/stats')
   },
 
-  async batch(operations: Array<{ type: string; payload: Record<string, unknown> }>): Promise<unknown> {
+  async batch(
+    operations: Array<{ type: string; payload: Record<string, unknown> }>,
+  ): Promise<unknown> {
     return apiPost('/consciousness/batch', { operations })
   },
 
-  connectStream(onEvent: (event: Record<string, unknown>) => void, onError?: (err: Error) => void): () => void {
-    const { createSSEStream } = require('./sse-client') as typeof import('./sse-client')
+  connectStream(
+    onEvent: (event: Record<string, unknown>) => void,
+    onError?: (err: Error) => void,
+  ): () => void {
     const stream = createSSEStream({
       url: '/consciousness/stream',
       onEvent: (envelope: { data: Record<string, unknown>; type?: string }) => {
@@ -245,6 +266,8 @@ export const consciousnessController = {
       maxReconnectMs: 15_000,
     })
     stream.start()
-    return () => { stream.stop() }
+    return () => {
+      stream.stop()
+    }
   },
 }

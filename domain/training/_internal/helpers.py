@@ -113,6 +113,15 @@ def resolve_dataset_path(dataset_id: str) -> str:
         raise
     except Exception as exc:
         logger.debug("Cache resolution failed for %s: %s", dataset_id, exc)
+    # Shared corpus priority via the artifact registry; roots stay local
+    # so the REPO_ROOT seam (and per-caller bases) keep working.
+    try:
+        from domain.infrastructure._internal.artifact_registry import (
+            find_corpus_file as _find_corpus,
+        )
+    except Exception as exc:
+        logger.debug("Registry import failed for %s: %s", dataset_id, exc)
+        return ""
     for base_name in ("datasets", "data/datasets", "data"):
         ds_candidate = (REPO_ROOT / base_name / dataset_id).resolve()
         allowed_base = (REPO_ROOT / base_name).resolve()
@@ -120,16 +129,9 @@ def resolve_dataset_path(dataset_id: str) -> str:
             continue
         if not ds_candidate.exists():
             continue
-        for name in ("corpus.jsonl", "input.txt", "train.txt", "text.txt"):
-            candidate = ds_candidate / name
-            if candidate.exists():
-                return str(candidate)
-        txt_files = list(ds_candidate.glob("*.txt"))
-        if txt_files:
-            return str(txt_files[0])
-        jsonl_files = sorted(ds_candidate.glob("*.jsonl"))
-        if jsonl_files:
-            return str(jsonl_files[0])
+        hit = _find_corpus(ds_candidate)
+        if hit is not None:
+            return str(hit)
     return ""
 
 

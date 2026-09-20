@@ -164,7 +164,7 @@ async def start_training(
                     details=_quality,
                 )
     except Exception as e:
-        from schemas.common import AppError
+        from domain.infrastructure._internal.errors import AppError
 
         if isinstance(e, AppError):
             raise
@@ -214,7 +214,7 @@ async def start_training(
                         status_code=400,
                     )
     except Exception as e:
-        from schemas.common import AppError
+        from domain.infrastructure._internal.errors import AppError
 
         if isinstance(e, AppError):
             raise

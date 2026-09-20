@@ -104,29 +104,27 @@ async def start_turbo_training_unified(req: TurboStartRequest):
 
             from domain.training._internal.cache_tags import resolve_in_cache
 
+            from .resolution import resolve_legacy_corpus_path
+
             repo_root = find_repo_root(Path(__file__).resolve())
             ds_path = repo_root / "data" / req.dataset_id
             if not ds_path.exists():
                 ds_path = repo_root / "data" / f"{req.dataset_id}.jsonl"
-            if not ds_path.exists() and not resolve_in_cache(req.dataset_id):
+            data_file = None
+            if ds_path.is_file():
+                data_file = ds_path
+            elif ds_path.is_dir():
+                # Shared legacy lookup: datasets/{id}/input.txt, data/{id},
+                # data/datasets/{id} (corpus.jsonl, input.txt, train.txt,
+                # text.txt, *.txt, *.jsonl).
+                data_file = resolve_legacy_corpus_path(req.dataset_id)
+            if data_file is None and not resolve_in_cache(req.dataset_id):
                 raise_error(
                     f"Dataset not found: {req.dataset_id}",
                     "E_BAD_REQUEST",
                     status_code=400,
                 )
-            if ds_path.is_dir():
-                candidates = [
-                    ds_path / "input.txt",
-                    ds_path / "corpus.jsonl",
-                    ds_path / "train.txt",
-                ]
-                data_file = next((c for c in candidates if c.exists()), None)
-                if not data_file:
-                    raise_error(
-                        f"No data files found in dataset directory: {req.dataset_id}",
-                        "E_BAD_REQUEST",
-                        status_code=400,
-                    )
+            if data_file is not None:
                 if data_file.stat().st_size < 100:
                     raise_error(
                         f"Dataset file too small ({data_file.stat().st_size} bytes, minimum 100)",
@@ -160,13 +158,28 @@ async def start_turbo_training_unified(req: TurboStartRequest):
 
         executor = get_training_executor()
 
-        def _run():
+        # NOTE: the executor calls fn(job_id, ...) — _run must accept it.
+        def _run(_job_id: str) -> None:
             try:
                 run_turbo_worker(config)
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "Turbo training job %s failed", job_info["job_id"], extra={"tag": "TRAIN"}
                 )
+                # Backstop: run_turbo_worker handles its own errors, but if it
+                # raises before that, surface the cause instead of leaving the
+                # job stuck until the heartbeat watchdog fires.
+                try:
+                    from domain.training._internal.state import _turbo_pause_event
+                    from domain.training._internal.turbo import _turbo_lock, _turbo_state
+
+                    with _turbo_lock:
+                        _turbo_state["status"] = "error"
+                        _turbo_state["error"] = str(exc) or "Turbo training failed"
+                        _turbo_state["paused"] = False
+                    _turbo_pause_event.clear()
+                except Exception:
+                    logger.debug("Failed to mark turbo job as error", exc_info=True)
 
         executor.submit(_run, job_info["job_id"])
 
