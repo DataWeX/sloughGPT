@@ -521,6 +521,26 @@ class TestPointNbytes:
         p = Point(identity="x", function_type="cluster", params={"centroids": np.zeros(4)})
         assert p._estimate_raw_bytes() == 0
 
+    def test_block_q4_nbytes(self):
+        c = PointCompressor()
+        p = c.compress_block_q4(np.random.randn(64).astype(np.float32))
+        expected = p.params["mins"].nbytes + p.params["scales"].nbytes + p.params["packed"].nbytes
+        assert expected > 0
+        assert p.nbytes() == expected
+
+    def test_block_q8_nbytes(self):
+        c = PointCompressor()
+        p = c.compress_block_q8(np.random.randn(64).astype(np.float32))
+        expected = p.params["mins"].nbytes + p.params["scales"].nbytes + p.params["values"].nbytes
+        assert expected > 0
+        assert p.nbytes() == expected
+
+    def test_block_nbytes_missing_params_is_zero(self):
+        p = Point(identity="x", function_type="block_q4", params={})
+        assert p.nbytes() == 0
+        p = Point(identity="x", function_type="block_q8", params={})
+        assert p.nbytes() == 0
+
 
 # ---------------------------------------------------------------------------
 # Point __repr__, __eq__, __hash__

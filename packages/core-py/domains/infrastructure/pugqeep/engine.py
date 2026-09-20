@@ -174,7 +174,7 @@ class Process:
 
     @property
     def stream_results(self) -> list[Any]:
-        return self._stream_results
+        return list(self._stream_results)
 
     @property
     def progress(self) -> float:
