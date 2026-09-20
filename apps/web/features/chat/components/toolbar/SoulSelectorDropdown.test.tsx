@@ -211,10 +211,10 @@ describe('SoulSelectorDropdown', () => {
     expect(items.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('has View full profile link that navigates to /personality', () => {
+  it('has View full profile link that navigates to /souls', () => {
     renderWithCtx()
     fireEvent.click(screen.getByText('View full profile'))
-    expect(mockPush).toHaveBeenCalledWith('/personality')
+    expect(mockPush).toHaveBeenCalledWith('/souls')
   })
 
   it('calls onSelect when a soul is clicked', () => {

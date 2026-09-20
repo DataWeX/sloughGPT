@@ -18,10 +18,6 @@ import {
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
-import PersonalitiesCard from '@/components/models/PersonalitiesCard'
-import PersonalityProfileCard from '@/components/models/PersonalityProfileCard'
-import { useSouls, useCheckpoints, useCurrentSoul, useSwitchSoul } from '@/lib/cache/api-hooks'
-import { soulsController } from '@/lib/souls-controller'
 import {
   LineChart,
   Line,
@@ -110,53 +106,6 @@ export default function PersonalityPage() {
   const [activatingPersona, setActivatingPersona] = useState<string | null>(null)
   const [deletingPersona, setDeletingPersona] = useState<string | null>(null)
   const [showSavePersonaDialog, setShowSavePersonaDialog] = useState(false)
-  const [switchingSoul, setSwitchingSoul] = useState<string | null>(null)
-  const [traitWeights, setTraitWeights] = useState<Record<string, Record<string, number>> | null>(
-    null,
-  )
-
-  const { data: soulsData, isLoading: soulsLoading } = useSouls()
-  const { data: currentSoulData } = useCurrentSoul()
-  const { data: checkpointsData, isLoading: checkpointsLoading } = useCheckpoints()
-  const { mutateAsync: switchSoul } = useSwitchSoul()
-  const souls = soulsData?.souls ?? []
-  const currentSoul = currentSoulData?.name ?? soulsData?.current_soul ?? null
-  const checkpoints = checkpointsData?.checkpoints ?? []
-  const activeCheckpoint = checkpointsData?.active_checkpoint ?? null
-
-  const handleSwitchSoul = async (name: string, checkpointName?: string) => {
-    setSwitchingSoul(name)
-    try {
-      await switchSoul({ name, checkpointName })
-      addToast(checkpointName ? `${name} + ${checkpointName}` : name, 'success')
-    } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not switch personality'), 'error')
-    } finally {
-      setSwitchingSoul(null)
-    }
-  }
-
-  const handleSaveTraits = useCallback(
-    async (weights: Record<string, Record<string, number>>) => {
-      try {
-        await soulsController.saveTraitWeights(weights)
-        addToast('Personality updated', 'success')
-        setTraitWeights(weights)
-      } catch (err) {
-        addToast(extractErrorMessage(err, 'Could not save traits'), 'error')
-      }
-    },
-    [addToast],
-  )
-
-  const fetchTraitWeights = useCallback(async () => {
-    try {
-      const w = await soulsController.getTraitWeights()
-      if (w && !('error' in w)) setTraitWeights(w)
-    } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Could not load trait weights', 'info')
-    }
-  }, [addToast])
 
   const fetchPersonas = useCallback(async () => {
     try {
@@ -203,9 +152,6 @@ export default function PersonalityPage() {
   useEffect(() => {
     fetchProfile()
   }, [fetchProfile])
-  useEffect(() => {
-    fetchTraitWeights()
-  }, [fetchTraitWeights])
 
   const handleSave = async () => {
     if (!profile) return
@@ -508,24 +454,6 @@ export default function PersonalityPage() {
             </CardContent>
           </Card>
         )}
-
-        {/* Switch active personality + trait weights */}
-        <PersonalitiesCard
-          souls={souls}
-          soulsLoading={soulsLoading}
-          checkpoints={checkpoints}
-          checkpointsLoading={checkpointsLoading}
-          currentSoul={currentSoul}
-          activeCheckpoint={activeCheckpoint}
-          switchingSoul={switchingSoul}
-          onSwitch={handleSwitchSoul}
-        />
-        <PersonalityProfileCard
-          traitWeights={traitWeights}
-          currentSoulName={currentSoul}
-          onTraitsSaved={handleSaveTraits}
-          onTraitsChanged={fetchTraitWeights}
-        />
 
         {/* Presets */}
         {presetNames.length > 0 && (

@@ -28,6 +28,7 @@ describe('navigation', () => {
     expect(SHORTCUT_TO_PATH['1']).toBe('/chat')
     expect(SHORTCUT_TO_PATH['4']).toBe('/personality')
     expect(SHORTCUT_TO_PATH['5']).toBe('/agents')
+    expect(SHORTCUT_TO_PATH['6']).toBe('/souls')
     expect(SHORTCUT_TO_PATH['shift+A']).toBe('/settings')
   })
 

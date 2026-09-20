@@ -22,7 +22,7 @@ const PAGES = [
   { path: '/companion', name: 'companion' },
   { path: '/agents', name: 'agents' },
   { path: '/collections', name: 'collections' },
-  { path: '/developer', name: 'developer' },
+  { path: '/souls', name: 'souls' },
   { path: '/tokenizer', name: 'tokenizer' },
   { path: '/token-tree', name: 'token-tree' },
   { path: '/infer', name: 'infer' },

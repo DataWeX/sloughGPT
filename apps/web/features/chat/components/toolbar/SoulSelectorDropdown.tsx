@@ -52,7 +52,7 @@ export function SoulSelectorDropdown() {
             type="button"
             onClick={() => {
               setOpen(false)
-              router.push('/personality')
+              router.push('/souls')
             }}
             className="inline-flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors mt-1"
           >

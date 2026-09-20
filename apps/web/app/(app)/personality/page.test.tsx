@@ -15,9 +15,6 @@ const {
   mockDeletePersona,
   mockApiPatch,
   mockAddToast,
-  mockGetTraitWeights,
-  mockSaveTraitWeights,
-  mockSwitchSoul,
 } = vi.hoisted(() => ({
   mockGetPersonality: vi.fn(),
   mockGetPersonalityPresets: vi.fn(),
@@ -31,9 +28,6 @@ const {
   mockDeletePersona: vi.fn(),
   mockApiPatch: vi.fn(),
   mockAddToast: vi.fn(),
-  mockGetTraitWeights: vi.fn(),
-  mockSaveTraitWeights: vi.fn(),
-  mockSwitchSoul: vi.fn(),
 }))
 
 const mockProfile = {
@@ -112,28 +106,6 @@ vi.mock('@sloughgpt/strui', () => {
   }
 })
 
-vi.mock('@/components/models/PersonalitiesCard', () => ({
-  default: () => <div data-testid="personalities-card" />,
-}))
-
-vi.mock('@/components/models/PersonalityProfileCard', () => ({
-  default: () => <div data-testid="personality-profile-card" />,
-}))
-
-vi.mock('@/lib/cache/api-hooks', () => ({
-  useSouls: () => ({ data: { souls: [], current_soul: null }, isLoading: false }),
-  useCurrentSoul: () => ({ data: null }),
-  useCheckpoints: () => ({ data: { checkpoints: [], active_checkpoint: null }, isLoading: false }),
-  useSwitchSoul: () => ({ mutateAsync: mockSwitchSoul }),
-}))
-
-vi.mock('@/lib/souls-controller', () => ({
-  soulsController: {
-    getTraitWeights: mockGetTraitWeights,
-    saveTraitWeights: mockSaveTraitWeights,
-  },
-}))
-
 vi.mock('@/lib/http-client', () => ({
   apiPatch: mockApiPatch,
 }))
@@ -191,9 +163,6 @@ beforeEach(() => {
   mockActivatePersona.mockResolvedValue({ activated: true })
   mockDeletePersona.mockResolvedValue({ deleted: true })
   mockApiPatch.mockResolvedValue(mockProfile)
-  mockGetTraitWeights.mockResolvedValue({ personality: { warmth: 0.8 } })
-  mockSaveTraitWeights.mockResolvedValue(undefined)
-  mockSwitchSoul.mockResolvedValue({ success: true })
 })
 
 afterEach(() => {
@@ -276,13 +245,6 @@ describe('PersonalityPage', () => {
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('Personality reset to defaults', 'success')
     })
-  })
-
-  it('renders merged personalities switcher and trait weights sections', async () => {
-    render(<PersonalityPage />)
-    await waitForLoad()
-    expect(screen.getByTestId('personalities-card')).toBeInTheDocument()
-    expect(screen.getByTestId('personality-profile-card')).toBeInTheDocument()
   })
 
   it('does not render the quiz', async () => {

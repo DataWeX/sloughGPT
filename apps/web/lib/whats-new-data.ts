@@ -93,10 +93,10 @@ export const whatsNewItems: WhatsNewItem[] = [
     id: 'snapshot-weights',
     title: 'Snapshot trait weights',
     description:
-      'Save and load personality weight presets from the Personalities page. Switch between different trait configurations instantly.',
+      'Save and load soul weight presets from the Souls page. Switch between different trait configurations instantly.',
     icon: '💾',
     date: '2026-05-26',
-    href: '/personality',
+    href: '/souls',
     tags: ['Personality', 'Persistence'],
   },
   {

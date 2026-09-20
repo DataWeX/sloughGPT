@@ -117,6 +117,13 @@ export const NAV_SECTIONS: NavSectionDef[] = [
         description: 'Manage agents',
       },
       {
+        path: '/souls',
+        labelKey: 'nav.souls',
+        shortcut: '6',
+        icon: 'brain',
+        description: 'Soul artifacts, checkpoints & weights',
+      },
+      {
         path: '/benchmark',
         labelKey: 'nav.benchmark',
         icon: 'activity',
@@ -308,6 +315,7 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/knowledge': IconBookmark,
   '/personality': IconBrain,
   '/agents': IconAgents,
+  '/souls': IconSparkle,
   '/benchmark': IconBenchmark,
   '/monitoring': IconActivity,
   '/settings': IconSettings,
