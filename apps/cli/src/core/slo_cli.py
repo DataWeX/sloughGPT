@@ -145,15 +145,7 @@ class IntRange:
 # ── Exceptions ──────────────────────────────────────────────────────────
 
 
-class UsageError(Exception):
-    def __init__(self, message: str):
-        self.message = message
-        super().__init__(message)
-
-
-class BadParameter(UsageError):
-    pass
-
+from core.framework import BadParameter, UsageError
 
 # ── Parameter definitions ───────────────────────────────────────────────
 
@@ -489,8 +481,11 @@ def _parse_args(
                 if arg in opt.names:
                     if opt.is_flag:
                         if opt.is_bool_flag:
-                            # --no- prefix means False
-                            if arg.startswith("--no-"):
+                            # --no- prefix negates only when a positive form
+                            # exists (--cache/--no-cache). A lone declared
+                            # --no-* flag (e.g. --no-color) means True.
+                            positive = [n for n in opt.names if not n.startswith("--no-")]
+                            if arg.startswith("--no-") and positive:
                                 kwargs[opt.dest] = False
                             else:
                                 kwargs[opt.dest] = True

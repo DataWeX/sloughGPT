@@ -249,11 +249,15 @@ class TestArchive:
     }
 
     def _patch(self, monkeypatch, stats=None, records=None):
-        from domain.memory import task_memory as tm
+        # Patch where the command looks them up: cmd_memory_archive does
+        # `from domain.memory import archive_stats, ...` at call time.
+        import domain.memory as mem
 
-        monkeypatch.setattr(tm, "archive_stats", lambda: stats if stats is not None else self.STATS)
         monkeypatch.setattr(
-            tm,
+            mem, "archive_stats", lambda: stats if stats is not None else self.STATS
+        )
+        monkeypatch.setattr(
+            mem,
             "list_archive",
             lambda limit: (
                 records
@@ -294,10 +298,12 @@ class TestArchive:
         assert any("Records" in str(c) for c in mock_log.key_value.call_args_list)
 
     def test_archive_prune_confirmed(self, monkeypatch, mock_log):
-        from domain.memory import task_memory as tm
+        import domain.memory as mem
 
         calls = []
-        monkeypatch.setattr(tm, "prune_archive", lambda retain_days: calls.append(retain_days) or 3)
+        monkeypatch.setattr(
+            mem, "prune_archive", lambda retain_days: calls.append(retain_days) or 3
+        )
         import click
 
         monkeypatch.setattr(click, "confirm", lambda *a, **k: True)
@@ -308,10 +314,12 @@ class TestArchive:
         assert any("Pruned 3" in str(c) for c in mock_log.success.call_args_list)
 
     def test_archive_prune_declined(self, monkeypatch):
-        from domain.memory import task_memory as tm
+        import domain.memory as mem
 
         calls = []
-        monkeypatch.setattr(tm, "prune_archive", lambda retain_days: calls.append(retain_days) or 3)
+        monkeypatch.setattr(
+            mem, "prune_archive", lambda retain_days: calls.append(retain_days) or 3
+        )
         import click
 
         monkeypatch.setattr(click, "confirm", lambda *a, **k: False)

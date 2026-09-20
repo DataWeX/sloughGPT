@@ -8,8 +8,6 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-import domain.core._internal.soul as _soul_mod
-
 
 @pytest.fixture(autouse=True)
 def mock_log(monkeypatch):
@@ -42,7 +40,7 @@ class TestCmdGenerate:
         mock_engine = MagicMock()
         mock_engine.generate.return_value = "Generated text"
 
-        monkeypatch.setattr(_soul_mod, "SloEngine", lambda **kw: mock_engine)
+        monkeypatch.setattr("domain.core.SloEngine", lambda **kw: mock_engine)
 
         cmd_generate(args)
 
@@ -59,7 +57,7 @@ class TestCmdGenerate:
         mock_engine = MagicMock()
         mock_engine.generate.return_value = "ok"
 
-        monkeypatch.setattr(_soul_mod, "SloEngine", lambda **kw: mock_engine)
+        monkeypatch.setattr("domain.core.SloEngine", lambda **kw: mock_engine)
 
         cmd_generate(args)
 
@@ -80,7 +78,7 @@ class TestCmdGenerate:
         mock_engine = MagicMock()
         mock_engine.generate.return_value = "Demo"
 
-        monkeypatch.setattr(_soul_mod, "SloEngine", lambda **kw: mock_engine)
+        monkeypatch.setattr("domain.core.SloEngine", lambda **kw: mock_engine)
 
         cmd_generate(args)
 
@@ -102,7 +100,7 @@ class TestCmdGenerate:
         mock_engine.load_soul.return_value = mock_soul
         mock_engine.generate.return_value = "ok"
 
-        monkeypatch.setattr(_soul_mod, "SloEngine", lambda **kw: mock_engine)
+        monkeypatch.setattr("domain.core.SloEngine", lambda **kw: mock_engine)
         import utils.helpers
 
         monkeypatch.setattr(

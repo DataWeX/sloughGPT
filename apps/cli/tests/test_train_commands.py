@@ -32,7 +32,7 @@ def mock_log(monkeypatch):
 
 class TestDistillConfig:
     def test_config_defaults(self):
-        from domain.training._internal.distill_gpt2 import DistillConfig
+        from domain.training import DistillConfig
 
         c = DistillConfig()
         assert c.n_embed == 128
@@ -45,14 +45,14 @@ class TestDistillConfig:
         assert c.resume_checkpoint is None
 
     def test_config_resume(self):
-        from domain.training._internal.distill_gpt2 import DistillConfig
+        from domain.training import DistillConfig
 
         c = DistillConfig(resume_checkpoint="test.soul", resume_epoch=5)
         assert c.resume_checkpoint == "test.soul"
         assert c.resume_epoch == 5
 
     def test_config_custom_values(self):
-        from domain.training._internal.distill_gpt2 import DistillConfig
+        from domain.training import DistillConfig
 
         c = DistillConfig(n_embed=64, n_layer=2, n_head=2, epochs=3, lr=1e-3)
         assert c.n_embed == 64
@@ -61,7 +61,7 @@ class TestDistillConfig:
         assert c.lr == 1e-3
 
     def test_config_temperature(self):
-        from domain.training._internal.distill_gpt2 import DistillConfig
+        from domain.training import DistillConfig
 
         c = DistillConfig(temperature=2.0)
         assert c.temperature == 2.0
@@ -150,7 +150,7 @@ class TestCmdTrainNative:
         from commands.train import cmd_train_native
 
         args = self._args(resume="/x.soul", resume_latest=True)
-        with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
+        with patch("domain.training.SloughGPTTrainer") as mock_trainer:
             mock_trainer.return_value.training_model.num_parameters.return_value = 1000
             with pytest.raises(SystemExit) as exc:
                 cmd_train_native(args)
@@ -162,7 +162,7 @@ class TestCmdTrainNative:
 
         mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         args = self._args(save_format="pt")
-        with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
+        with patch("domain.training.SloughGPTTrainer") as mock_trainer:
             instance = mock_trainer.return_value
             instance.training_model.num_parameters.return_value = 1000
             cmd_train_native(args)
@@ -175,7 +175,7 @@ class TestCmdTrainNative:
         from commands.train import cmd_train_native
 
         mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
-        with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
+        with patch("domain.training.SloughGPTTrainer") as mock_trainer:
             instance = mock_trainer.return_value
             instance.training_model.num_parameters.return_value = 1000
             cmd_train_native(self._args())
@@ -189,7 +189,7 @@ class TestCmdTrainNative:
 
         mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         args = self._args(save_stem="my_model")
-        with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
+        with patch("domain.training.SloughGPTTrainer") as mock_trainer:
             instance = mock_trainer.return_value
             instance.training_model.num_parameters.return_value = 1000
             cmd_train_native(args)
@@ -215,7 +215,7 @@ class TestCmdTrainNative:
         ):
             (ckpt_dir / name).write_text("x", encoding="utf-8")
         args = self._args(checkpoint_dir=str(ckpt_dir))
-        with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
+        with patch("domain.training.SloughGPTTrainer") as mock_trainer:
             instance = mock_trainer.return_value
             instance.training_model.num_parameters.return_value = 1000
             cmd_train_native(args)
@@ -227,7 +227,7 @@ class TestCmdTrainNative:
         from commands.train import cmd_train_native
 
         mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
-        with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
+        with patch("domain.training.SloughGPTTrainer") as mock_trainer:
             instance = mock_trainer.return_value
             instance.training_model.num_parameters.return_value = 1000
             cmd_train_native(self._args())
@@ -236,7 +236,7 @@ class TestCmdTrainNative:
     def test_token_tree_tokenizer_trains_and_passes_tree(self, tmp_path):
         from commands.train import cmd_train_native
 
-        from domain.training._internal.token_tree import TokenTree
+        from domain.training import TokenTree
 
         corpus = tmp_path / "corpus.txt"
         corpus.write_text(
@@ -244,7 +244,7 @@ class TestCmdTrainNative:
             encoding="utf-8",
         )
         args = self._args(dataset=str(corpus), tokenizer="token-tree", token_vocab_size=64)
-        with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
+        with patch("domain.training.SloughGPTTrainer") as mock_trainer:
             instance = mock_trainer.return_value
             instance.training_model.num_parameters.return_value = 1000
             cmd_train_native(args)
@@ -262,7 +262,7 @@ class TestCmdTrainNative:
         args = self._args(tokenizer="token-tree")
         # When the tokenizer kind is not recognized the CLI falls back to char.
         args.tokenizer = "bogus"
-        with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
+        with patch("domain.training.SloughGPTTrainer") as mock_trainer:
             instance = mock_trainer.return_value
             instance.training_model.num_parameters.return_value = 1000
             cmd_train_native(args)

@@ -20210,7 +20210,22 @@ class TestCmdLogsExplainV2:
 
     def test_logs_follow(self, repl):
         repl._log_buffer.clear()
-        _run_with_io(repl, [], lambda: repl._cmd_logs("-f"))
+        # Follow mode is a while True loop: break it with SIGALRM like
+        # TestCmdLogsExplainV2's twin, asserting clean init, not the loop.
+        import signal
+
+        def alarm_handler(signum, frame):
+            raise KeyboardInterrupt()
+
+        old_handler = signal.signal(signal.SIGALRM, alarm_handler)
+        signal.alarm(1)
+        try:
+            _run_with_io(repl, [], lambda: repl._cmd_logs("-f"))
+        except KeyboardInterrupt:
+            pass
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
         assert repl._last_exit_code == 0
 
 
@@ -26185,7 +26200,7 @@ class TestRenderPromptDeeperV3:
 
     def test_render_prompt_lambda(self, repl):
         result = repl._render_prompt()
-        assert "̓" in result
+        assert "λ" in result
 
 
 class TestLogHelpersDeeperV2:
