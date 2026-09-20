@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from domain.shell._internal.kernel_syscall import SyscallResult
-from domain.shell._internal.npu_device import NPUDevice
+from domain.shell._internal.npu_device import NPUDevice, NPUModel
 
 
 def _make_provider():
@@ -365,3 +365,53 @@ class TestNPUDevice:
         npu._default_model = "a"
         npu.unload("a")
         assert npu._default_model == "b"
+
+
+# ── NPUModel (read-only loaded models) ──────────────────────────────────
+
+
+class TestNPUModel:
+    def test_load_creates_model(self):
+        npu = NPUDevice()
+        with patch.object(npu, "_load_numpy", return_value={"type": "model"}):
+            npu.ioctl("LOAD", "/tmp/model.npy", "m")
+        g = npu.model("m")
+        assert isinstance(g, NPUModel)
+        assert g.name == "m"
+        assert g.config["name"] == "m"
+        assert "m" in npu.info()["models_loaded"]
+
+    def test_model_call_reads_without_writing(self):
+        npu = NPUDevice()
+        prov = _make_provider()
+        npu._models["t"] = prov
+        g = npu.model("t")
+        before = {
+            k: (v.copy() if isinstance(v, np.ndarray) else v)
+            for k, v in prov._model._params.items()
+        }
+        out = g("hello")
+        assert out["text"] == "generated"
+        for k, v in prov._model._params.items():
+            np.testing.assert_array_equal(v, before[k])
+
+    def test_device_call_routes_to_default_model(self):
+        npu = NPUDevice()
+        npu._models["t"] = _make_provider()
+        npu._default_model = "t"
+        out = npu("hello")
+        assert out["text"] == "generated"
+
+    def test_unload_drops_model(self):
+        npu = NPUDevice()
+        npu._models["t"] = _make_provider()
+        npu._default_model = "t"
+        npu.model("t")
+        npu.unload("t")
+        with pytest.raises(ValueError):
+            npu.model("t")
+
+    def test_unknown_model_raises(self):
+        npu = NPUDevice()
+        with pytest.raises(ValueError):
+            npu("hello")
