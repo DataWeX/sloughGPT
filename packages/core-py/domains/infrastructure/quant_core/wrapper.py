@@ -28,7 +28,10 @@ logger = logging.getLogger("slo.quant_core")
 
 # ── Paths ──────────────────────────────────────────────────────────
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
+# realpath: this module is also reached via the
+# domain/infrastructure/quant_core/wrapper.py symlink — resolve to the
+# canonical dir so the prebuilt .so/.c files are found.
+_HERE = os.path.dirname(os.path.realpath(__file__))
 
 # Platform-specific shared library extension
 if sys.platform == "darwin":
@@ -429,7 +432,7 @@ def policy_kernel(m: int) -> int:
 
 def _set_kernel_for_shape(m: int) -> None:
     """Set the C kernel for the next GEMM of batch size ``m``."""
-    if not HAS_AVX2 or _LIB.matmul_int8_select_kernel is None:
+    if not HAS_AVX2 or _LIB is None or _LIB.matmul_int8_select_kernel is None:
         return
     if os.environ.get("MAN_QUANT_KERNEL"):
         return  # explicit pin already handled in C
