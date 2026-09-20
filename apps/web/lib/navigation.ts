@@ -210,12 +210,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
         description: 'Planner board + notes',
       },
       {
-        path: '/phoneme',
-        labelKey: 'nav.phoneme',
-        icon: 'tokenizer',
-        description: 'Phoneme encoding & pronunciation',
-      },
-      {
         path: '/plugins-cloud',
         labelKey: 'nav.plugins_cloud',
         icon: 'settings',
