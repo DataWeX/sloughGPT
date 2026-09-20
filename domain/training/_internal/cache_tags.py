@@ -128,18 +128,17 @@ def guess_mime(path: str | Path) -> str:
 
 
 def find_corpus_file(entry_dir: Path) -> Path | None:
-    """Pick the training corpus file inside an entry (priority order)."""
-    for name in _CORPUS_CANDIDATES:
-        candidate = entry_dir / name
-        if candidate.is_file():
-            return candidate
-    txt_files = sorted(entry_dir.glob("*.txt"))
-    if txt_files:
-        return txt_files[0]
-    jsonl_files = sorted(entry_dir.glob("*.jsonl"))
-    if jsonl_files:
-        return jsonl_files[0]
-    return None
+    r"""Pick the training corpus file inside an entry (priority order).
+
+    Delegates to the unified artifact registry (single priority
+    implementation). Adds a raw-\*.csv last resort over the historic
+    set; everything else resolves identically.
+    """
+    from domain.infrastructure._internal.artifact_registry import (
+        find_corpus_file as _registry_find_corpus,
+    )
+
+    return _registry_find_corpus(entry_dir)
 
 
 def read_entry_meta(entry_dir: Path) -> dict[str, Any]:
