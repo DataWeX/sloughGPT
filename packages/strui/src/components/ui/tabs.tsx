@@ -115,11 +115,14 @@ const TabsList = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
       onKeyDown?.(e)
-      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End')
+        return
       const list = listRef.current
       if (!list) return
       const tabs = Array.from(list.querySelectorAll<HTMLElement>('[role="tab"]'))
-      const enabled = tabs.filter((t) => t.getAttribute('data-disabled') !== 'true' && !t.hasAttribute('disabled'))
+      const enabled = tabs.filter(
+        (t) => t.getAttribute('data-disabled') !== 'true' && !t.hasAttribute('disabled'),
+      )
       if (enabled.length === 0) return
       const currentIndex = enabled.findIndex((t) => t.dataset.value === value)
       const baseIndex = currentIndex >= 0 ? currentIndex : 0
@@ -141,7 +144,7 @@ const TabsList = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
         role="tablist"
         onKeyDown={handleKeyDown}
         className={cn(
-          'inline-flex h-10 items-center justify-start gap-0.5 rounded-lg border border-border bg-muted/50 p-1 text-muted-foreground',
+          'inline-flex h-10 max-w-full items-center justify-start gap-0.5 overflow-x-auto rounded-lg border border-border bg-muted/50 p-1 text-muted-foreground',
           className,
         )}
         {...props}
@@ -179,12 +182,12 @@ const TabsTrigger = forwardRef<HTMLButtonElement, TabsTriggerProps>(
         disabled={disabled}
         onClick={() => !disabled && onValueChange(triggerValue)}
         className={cn(
-          'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-150',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2',
+          'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium motion-safe:transition-all motion-safe:duration-200',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           'disabled:pointer-events-none disabled:opacity-40',
           isActive
-            ? 'bg-background text-foreground shadow-sm'
-            : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
+            ? 'bg-primary/10 text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground hover:bg-background/50 active:scale-[0.98]',
           className,
         )}
         {...props}
@@ -220,7 +223,7 @@ const TabsContent = forwardRef<HTMLDivElement, TabsContentProps>(
         tabIndex={0}
         hidden={forceMount ? !isActive : undefined}
         className={cn(
-          'mt-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2',
+          'mt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           className,
         )}
         {...props}
