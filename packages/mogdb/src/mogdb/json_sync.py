@@ -152,26 +152,42 @@ class SyncableCollection:
                 self._sync_to_json()
 
     def _mark_dirty(self) -> None:
-        """Mark collection as needing sync and schedule background sync if needed."""
-        self._dirty = True
-        now = time.monotonic()
-        if now - self._last_sync >= self._lazy_interval:
-            self._do_sync()
+        """Flag pending writes and ensure a background sync is scheduled.
+
+        Never performs I/O inline — the writer always returns immediately
+        and persistence happens in a daemon timer thread.
+        """
+        with self._lock:
+            self._dirty = True
+            if self._shutdown:
+                return
+            timer = self._lazy_timer
+            if timer is None or not timer.is_alive():
+                self._schedule_locked()
+
+    def _schedule_locked(self) -> None:
+        """Start a daemon timer for the next background sync (lock held)."""
+        timer = threading.Timer(self._lazy_interval, self._do_sync)
+        timer.daemon = True
+        self._lazy_timer = timer
+        timer.start()
 
     def _do_sync(self) -> None:
-        """Perform the actual sync and schedule next if still dirty."""
-        if self._shutdown:
-            return
+        """Run the scheduled background sync; schedule another if still dirty."""
         with self._lock:
-            self._sync_to_json()
-            self._last_sync = time.monotonic()
+            if self._shutdown:
+                self._lazy_timer = None
+                return
+            # Claim everything written so far, then snapshot after the claim
+            # so late-arriving writes re-dirty and trigger another round.
             self._dirty = False
-
-        # Schedule next sync if still dirty
-        if self._dirty and not self._shutdown:
-            self._lazy_timer = threading.Timer(self._lazy_interval, self._do_sync)
-            self._lazy_timer.daemon = True
-            self._lazy_timer.start()
+            self._lazy_timer = None
+        self._sync_to_json()
+        with self._lock:
+            self._last_sync = time.monotonic()
+            timer = self._lazy_timer
+            if self._dirty and (timer is None or not timer.is_alive()):
+                self._schedule_locked()
 
     # ------------------------------------------------------------------
     # Proxied CRUD — all writes trigger JSON sync
@@ -302,13 +318,15 @@ class SyncableCollection:
 
     def close(self) -> None:
         """Shut down lazy sync timer and flush any pending writes."""
-        self._shutdown = True
-        if self._lazy_timer:
-            self._lazy_timer.cancel()
-            self._lazy_timer = None
+        with self._lock:
+            self._shutdown = True
+            timer, self._lazy_timer = self._lazy_timer, None
+            if timer is not None:
+                timer.cancel()
         if self._dirty:
             self._sync_to_json()
-            self._dirty = False
+            with self._lock:
+                self._dirty = False
 
     def reload(self) -> None:
         """Force reload from JSON file into collection."""
@@ -333,13 +351,22 @@ class _BatchContext:
         self._syncable = syncable
 
     def __enter__(self):
+        # Only the outermost batch clears the flag, so an inner batch that
+        # raises does not discard the outer batch's pending writes.
+        if self._syncable._batch_depth == 0:
+            self._syncable._batch_had_writes = False
         self._syncable._batch_depth += 1
-        self._syncable._batch_had_writes = False
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._syncable._batch_depth -= 1
-        if exc_type is None and self._syncable._batch_had_writes:
+        # On exception the flag is kept: in-memory writes are not rolled
+        # back, so an outer batch must still sync them on its clean exit.
+        if (
+            exc_type is None
+            and self._syncable._batch_depth == 0
+            and self._syncable._batch_had_writes
+        ):
             self._syncable._batch_had_writes = False
             self._syncable._on_write()
         return False
