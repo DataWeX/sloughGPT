@@ -564,6 +564,14 @@ from groups.error import register as _register_error
 _register_error(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
+# logger — live error catch for the agent fix flow
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.logger import register as _register_logger
+
+_register_logger(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
 # memory — auto-memory layer management
 # ═══════════════════════════════════════════════════════════════════════
 
