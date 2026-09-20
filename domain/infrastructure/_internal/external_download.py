@@ -169,6 +169,7 @@ class ExternalDownloadBackend(DownloadBackend):
         total_size = sum(f.get("size", 0) for f in files)
         bytes_done = 0
         start_time = time.monotonic()
+        completed: list[dict] = []
 
         for f in files:
             file_path = f["path"]
@@ -187,6 +188,7 @@ class ExternalDownloadBackend(DownloadBackend):
 
             if self._compressed:
                 from .compressed_transfer import CompressedDownloader
+                from .download_backend import write_sha_sidecar
 
                 downloader = CompressedDownloader()
                 result = downloader.download_from_url(
@@ -201,10 +203,18 @@ class ExternalDownloadBackend(DownloadBackend):
                         "cache_dir": str(cache_dir),
                         "error": result.error,
                     }
+                # Verified by the downloader when a server hash exists;
+                # drop the sidecar so later checks work offline.
+                digest = write_sha_sidecar(dest, result.sha256 or None)
+                completed.append({"path": file_path, "size": file_size, "sha256": digest})
             else:
+                import hashlib
                 import urllib.request
 
+                from .download_backend import write_sha_sidecar
+
                 try:
+                    hasher = hashlib.sha256()
                     req = urllib.request.Request(url)
                     with urllib.request.urlopen(req, timeout=300) as resp:
                         with open(dest, "wb") as out:
@@ -213,6 +223,7 @@ class ExternalDownloadBackend(DownloadBackend):
                                 if not chunk:
                                     break
                                 out.write(chunk)
+                                hasher.update(chunk)
                                 _progress(len(chunk), file_size)
                 except Exception as e:
                     return {
@@ -220,6 +231,25 @@ class ExternalDownloadBackend(DownloadBackend):
                         "cache_dir": str(cache_dir),
                         "error": str(e),
                     }
+                actual = hasher.hexdigest()
+                if file_sha256 and actual != file_sha256.lower():
+                    logger.warning(
+                        "SHA-256 mismatch for %s: server %s, got %s",
+                        file_path,
+                        file_sha256,
+                        actual,
+                    )
+                    try:
+                        dest.unlink()
+                    except OSError:
+                        pass
+                    return {
+                        "status": "error",
+                        "cache_dir": str(cache_dir),
+                        "error": f"SHA-256 mismatch for {file_path}",
+                    }
+                write_sha_sidecar(dest, actual)
+                completed.append({"path": file_path, "size": file_size, "sha256": actual})
 
             bytes_done += file_size
             on_file_complete(resource_id, str(dest))
@@ -228,6 +258,7 @@ class ExternalDownloadBackend(DownloadBackend):
             "status": "completed",
             "cache_dir": str(cache_dir),
             "total_bytes": total_size,
+            "files": completed,
         }
 
     def cleanup(self, resource_id: str) -> bool:

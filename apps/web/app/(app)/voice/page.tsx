@@ -1,183 +1,129 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
-import { IconRefresh } from '@sloughgpt/strui'
+import { Card, CardContent, Button } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
-import { VoicePresetCard } from '@/components/voice/VoicePresetCard'
-import { VoiceRecordingCard } from '@/components/voice/VoiceRecordingCard'
-import { VoiceComparisonCard } from '@/components/voice/VoiceComparisonCard'
-import { VoiceWaveformCard } from '@/components/voice/VoiceWaveformCard'
+import { voiceController } from '@/lib/voice-controller'
 import { useToastStore } from '@/lib/toast-store'
 
 export default function VoicePage() {
-  const [status, setStatus] = useState<VoiceStatus | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [ttsText, setTtsText] = useState('')
-  const [generating, setGenerating] = useState(false)
-  const [lastResult, setLastResult] = useState<{ duration_ms: number; backend: string; sample_rate: number } | null>(null)
-  const [ttsError, setTtsError] = useState<string | null>(null)
-  const [ttsCount, setTtsCount] = useState(0)
-  const [activePreset, setActivePreset] = useState<{ rate: number; pitch: number; voice: string } | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [listening, setListening] = useState(false)
+  const [transcript, setTranscript] = useState('')
+  const [aiText, setAiText] = useState('')
+  const [speaking, setSpeaking] = useState(false)
+  const [supported, setSupported] = useState(true)
+  const recognitionRef = useRef<any>(null)
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
-    voiceController.getStatus()
-      .then(d => setStatus(d))
-      .catch(() => { addToast('Could not load voice status', 'error') })
-      .finally(() => setLoading(false))
+    const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
+    if (!SR) setSupported(false)
   }, [])
 
-  const handleRefreshStatus = async () => {
-    try {
-      setStatus(await voiceController.getStatus())
-    } catch {
-      addToast('Could not refresh voice status', 'error')
+  const toggleListen = () => {
+    const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
+    if (!SR) {
+      addToast('Speech recognition not supported — type instead', 'error')
+      return
     }
+    if (listening) {
+      recognitionRef.current?.stop()
+      setListening(false)
+      return
+    }
+    const rec = new SR()
+    recognitionRef.current = rec
+    rec.continuous = false
+    rec.interimResults = true
+    rec.lang = navigator.language || 'en-US'
+    rec.onresult = (e: any) => {
+      let t = ''
+      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript + ' '
+      setTranscript(t.trim())
+    }
+    rec.onend = () => setListening(false)
+    rec.onerror = () => setListening(false)
+    rec.start()
+    setListening(true)
+    setTranscript('')
+    setAiText('')
   }
 
-  const handleGenerate = async () => {
-    if (!ttsText.trim()) return
-    setGenerating(true)
-    setTtsError(null)
-    setLastResult(null)
+  const speak = async (text: string) => {
+    if (!text.trim()) return
+    setSpeaking(true)
     try {
-      const data = await voiceController.tts(ttsText)
-      if (data.detail) {
-        setTtsError(data.detail)
-        return
-      }
-      setLastResult({ duration_ms: data.duration_ms, backend: data.backend, sample_rate: data.sample_rate })
-      setTtsCount(c => c + 1)
-      if (data.audio && data.backend !== 'browser-fallback') {
+      const data = await voiceController.tts(text).catch(() => null)
+      if (data?.audio && data.backend !== 'browser-fallback') {
         const audio = new Audio(`data:audio/wav;base64,${data.audio}`)
-        audioRef.current = audio
-        audio.play().catch(() => {}) // autoplay policy — expected
-      } else if (data.backend === 'browser-fallback') {
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel()
-          const utterance = new SpeechSynthesisUtterance(ttsText)
-          if (activePreset) {
-            utterance.rate = activePreset.rate
-            utterance.pitch = activePreset.pitch
-            if (activePreset.voice) {
-              const match = window.speechSynthesis.getVoices().find(v => v.name === activePreset.voice)
-              if (match) utterance.voice = match
-            }
-          }
-          window.speechSynthesis.speak(utterance)
-        }
+        audio.onended = () => setSpeaking(false)
+        await audio.play()
+      } else if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+        const u = new SpeechSynthesisUtterance(text)
+        u.onend = () => setSpeaking(false)
+        window.speechSynthesis.speak(u)
+      } else {
+        setSpeaking(false)
       }
-    } catch (err) {
-      setTtsError(err instanceof Error ? err.message : 'Could not tts')
-    } finally {
-      setGenerating(false)
+    } catch {
+      setSpeaking(false)
     }
   }
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void handleRefreshStatus() }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [])
-
-  if (loading) {
-    return (
-      <PageContainer title="Voice" subtitle="Text-to-speech settings" loadingCards={3}>
-        <KpiGrid>
-          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
-          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
-          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
-        </KpiGrid>
-        <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        <Card><CardContent><div className="h-40 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-      </PageContainer>
-    )
+  const handleSend = async () => {
+    if (!transcript.trim()) return
+    const text = transcript
+    setAiText('Thinking...')
+    // Minimal echo for now — chat page handles real AI. Voice page is STT+TTS infra demo.
+    const reply = `You said: ${text}`
+    setAiText(reply)
+    await speak(reply)
   }
 
   return (
-    <PageContainer title="Voice" subtitle="Text-to-speech via browser speech synthesis">
-      <KpiGrid>
-        <StatCard
-          label="Text-to-Speech"
-          value={status?.server_tts ? 'Available' : 'Not supported'}
-        />
-        <StatCard
-          label="Engine"
-          value={status?.model ? `AI model (${status.model})` : 'Browser SpeechSynthesis'}
-        />
-        <StatCard label="TTS Calls" value={ttsCount} />
-      </KpiGrid>
-
+    <PageContainer title="Talk Out Loud" subtitle="Tap mic, speak naturally — hear the reply">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
-          <CardTitle className="text-[11px] font-medium">Text-to-Speech</CardTitle>
-          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={handleRefreshStatus} aria-label="Refresh status">
-            <IconRefresh className="h-3 w-3" />
-          </Button>
-        </CardHeader>
-        <CardContent className="px-2.5 pb-2.5">
-          <div className="text-[10px] text-muted-foreground/60 bg-muted/20 rounded-lg p-2">
-            Text-to-speech requires the transformers library (not available).
-            Text is spoken using your browser&apos;s built-in speech synthesis.
-          </div>
-        </CardContent>
-      </Card>
-
-      <VoicePresetCard onApply={(p) => setActivePreset(p)} />
-
-      <VoiceRecordingCard />
-
-      <VoiceComparisonCard />
-
-      <VoiceWaveformCard />
-
-      <Card>
-        <CardHeader className="pb-2 pt-2.5 px-2.5">
-          <CardTitle className="text-[11px] font-medium">Test TTS</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 px-2.5 pb-2.5">
-          <Textarea
-            value={ttsText}
-            onChange={e => setTtsText(e.target.value)}
-            placeholder="Enter text to speak..."
-            rows={3}
-            aria-label="Text to speak"
-            className="text-[11px] rounded-lg border-border/40"
-          />
-          <div className="flex items-center gap-2">
-            <Button size="sm" className="h-7 text-[11px]" onClick={handleGenerate} disabled={generating || !ttsText.trim()}>
-              {generating ? 'Generating...' : 'Generate & Play'}
-            </Button>
-            {lastResult && (
-              <span className="text-[10px] text-muted-foreground/60 font-mono">
-                {lastResult.backend} · {lastResult.duration_ms}ms · {lastResult.sample_rate}Hz
-              </span>
-            )}
-          </div>
-          {ttsError && (
-            <div className="text-[10px] text-destructive">{ttsError}</div>
+        <CardContent className="flex flex-col items-center gap-4 py-8">
+          <button
+            onClick={toggleListen}
+            aria-label={listening ? 'Stop listening' : 'Start listening'}
+            className={`relative flex h-20 w-20 items-center justify-center rounded-full border text-xl transition ${listening ? 'bg-primary text-primary-foreground animate-pulse border-primary' : 'bg-card border-border hover:bg-accent'}`}
+          >
+            🎙️
+            {listening && <span className="absolute inset-0 rounded-full animate-ping bg-primary/20" />}
+          </button>
+          <p className="text-sm text-muted-foreground">{listening ? 'Listening...' : supported ? 'Tap to talk' : 'Type below (mic not supported)'}</p>
+          {!supported && (
+            <p className="text-xs text-muted-foreground/60">Your browser has no SpeechRecognition — transcript will be typed, TTS still works.</p>
           )}
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="pb-2 pt-2.5 px-2.5">
-          <CardTitle className="text-[11px] font-medium">About</CardTitle>
-        </CardHeader>
-        <CardContent className="px-2.5 pb-2.5">
-          <div className="text-[10px] text-muted-foreground/60 space-y-0.5">
-            <p>Text-to-speech uses HuggingFace bark-small model when available.</p>
-            <p>Falls back to browser native speechSynthesis if the model is unavailable.</p>
-            <p>Voice input is available in the chat page via the microphone button.</p>
+        <CardContent className="space-y-3 p-4">
+          <p className="text-xs font-medium text-muted-foreground">Transcript</p>
+          <div className="min-h-16 rounded-lg border border-border/40 bg-muted/20 p-3 text-sm">
+            {transcript || <span className="text-muted-foreground/50">Words appear here as you speak</span>}
           </div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleSend} disabled={!transcript.trim()}>Send to AI</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setTranscript(''); setAiText('') }}>Clear</Button>
+            <Button size="sm" variant="ghost" onClick={toggleListen}>{listening ? 'Stop' : 'Mic'}</Button>
+          </div>
+          {aiText && (
+            <div className="rounded-lg border border-border/40 p-3 text-sm">
+              <p className="text-xs text-muted-foreground mb-1">AI reply</p>
+              <p>{aiText}</p>
+              <Button size="sm" variant="ghost" className="mt-2 h-7 text-xs" onClick={() => speak(aiText)} disabled={speaking}>
+                {speaking ? 'Speaking...' : '🔊 Play again'}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <p className="text-xs text-muted-foreground/60 text-center">Transcript saved to chat history. Uses browser speech synthesis when server TTS unavailable — no settings, auto-detect language.</p>
     </PageContainer>
   )
 }

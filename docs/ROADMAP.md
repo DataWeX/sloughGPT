@@ -29,6 +29,10 @@
 
 - Web: 32 pages on `@sloughgpt/strui`, per-domain controllers over one HTTP client, markdown chat with streaming/regeneration/feedback. CLI: Python REPL (40+ commands) + opt-in curses TUI. Voyager journey library (201 tests, 7 backends). Mobile: not started. Clients reach core only through the API/protocol — never internals.
 
+### Compression (pugqeep)
+
+- VQ cluster path is wired end to end: k-means++ init + entropy-adaptive k + Lloyd's early-stop refinement, Huffman-coded assignments, `Point.generate` decodes on read. `test_pugqeep_compressor.py` 159/159 green (cluster/function/round-trip/serialization/nbytes + extended suites). Open: Lloyd+Huffman vs Q4-block benchmark, plus a dedicated Huffman round-trip test (decode is currently covered only implicitly via decompress round-trips).
+
 ### What the bootstrap era taught us (keep the lessons, drop the habits)
 
 - Borrowed weights earned their keep: HF conversion + distillation got real inference running years before owned weights could. Keep as bootstrap path; never again as the headline.

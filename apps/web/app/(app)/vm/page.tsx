@@ -766,22 +766,9 @@ export default function VMPage() {
       maxWidth="max-w-6xl"
     >
       <Tabs value={vmMode} onValueChange={(v) => setVmMode(v as 'assembly' | 'browser')}>
-        <TabsList
-          aria-label="VM mode"
-          className="rounded-xl border border-white/[0.06] bg-[#111111] p-1 h-auto mb-4"
-        >
-          <TabsTrigger
-            value="assembly"
-            className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]"
-          >
-            Assembly Sandbox
-          </TabsTrigger>
-          <TabsTrigger
-            value="browser"
-            className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]"
-          >
-            Browser VM
-          </TabsTrigger>
+        <TabsList aria-label="VM mode">
+          <TabsTrigger value="assembly">Assembly Sandbox</TabsTrigger>
+          <TabsTrigger value="browser">Browser VM</TabsTrigger>
         </TabsList>
 
         <TabsContent value="assembly">

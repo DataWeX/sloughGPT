@@ -127,7 +127,7 @@ describe('useTrainingStream', () => {
       es.onmessage?.({
         data: JSON.stringify({
           stream: 'auto-train',
-          phase: 'training',
+          phase: 'TRAINING',
           data: { progress: 50, global_step: 100, loss: 0.3 },
           meta: { epoch: 2, total_epochs: 10 },
         }),
@@ -308,7 +308,7 @@ describe('useTrainingStream', () => {
       result.current.startSSETraining({}, addToast)
     })
 
-    expect(addToast).toHaveBeenCalledWith('Could not start training', 'error')
+    expect(addToast).toHaveBeenCalledWith('Could not start training: fail', 'error')
   })
 
   it('cleans up EventSource on unmount', async () => {

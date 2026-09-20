@@ -1,11 +1,9 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import React from 'react'
-import type * as StruiModule from '@sloughgpt/strui'
-
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@sloughgpt/strui', async () => {
-  const actual = await vi.importActual<StruiModule>('@sloughgpt/strui')
+  const actual = await vi.importActual<typeof import('@sloughgpt/strui')>('@sloughgpt/strui')
   return {
     ...actual,
     Progress: ({ value, size, variant, label, showValue }: any) => (

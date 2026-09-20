@@ -584,7 +584,7 @@ class TuiRepl:
         wider than the window the view scrolls horizontally so the caret
         stays visible; a buffer at the window edge reveals its tail.
         """
-        prompt = "\u0343 "
+        prompt = "λ "
         max_w = max(cols - len(prompt) - 1, 0)
         caret = min(max(caret, 0), len(buf))
         if len(buf) <= max_w:
@@ -606,7 +606,7 @@ class TuiRepl:
         layer.clear()
         # Shared expander with line mode; TUI keeps its minimal PS1
         # (no badge/exit prefix — single-row input pane).
-        prompt = PromptRenderer.render(PromptContext(ps1="\u0343 "))
+        prompt = PromptRenderer.render(PromptContext(ps1="λ "))
         buf = "".join(self._input_buf)
         line, caret_col = self._input_view(cols, buf, self._input_cursor)
         layer.write(0, 0, prompt, fg=Color.CYAN, attr=Attr.BOLD)
@@ -1483,7 +1483,7 @@ class TuiRepl:
                     if cmd in ("exit", "q", "quit"):
                         self._running = False
                         break
-                    self._output_surface.write(f"\u0343 {cmd}")
+                    self._output_surface.write(f"λ {cmd}")
 
                     def _run() -> None:
                         with self._repl_lock:

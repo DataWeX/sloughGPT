@@ -309,7 +309,7 @@ class ShellREPL(LinuxCommandsMixin):
         self._piped_input: str = ""
         self._aborted = False
         self._env: dict[str, str] = {
-            "PS1": "\u0343",
+            "PS1": "λ",
             "SHELL": "sloughgpt",
             "HOME": str(Path.home()),
             "TERM": "xterm-256color",
@@ -646,7 +646,7 @@ class ShellREPL(LinuxCommandsMixin):
         if self._last_exit_code != 0:
             exit_prefix = f"{_C_RED}[{self._last_exit_code}]{_C_RESET} "
         ctx = PromptContext(
-            ps1=self._env.get("PS1", "\u0343"),
+            ps1=self._env.get("PS1", "λ"),
             cwd=os.getcwd().replace(str(Path.home()), "~"),
             user=os.environ.get("USER", "user"),
             host=os.uname().nodename.split(".")[0],

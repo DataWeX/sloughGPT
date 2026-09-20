@@ -22,10 +22,40 @@ Usage::
 
 from __future__ import annotations
 
+import hashlib
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger("slo.download_backend")
+
+
+def write_sha_sidecar(path: str | Path, digest: str | None = None) -> str | None:
+    """Write a ``<file>.sha256`` sidecar (``<hex>[  <name>]``).
+
+    The artifact registry and backend ``verify()`` read these back, so a
+    downloaded weight can be integrity-checked without the server manifest.
+    Computes the hash with a streamed read unless ``digest`` is given.
+    Returns the hex digest, or None when the file is missing.
+    """
+    fp = Path(path)
+    if not fp.is_file():
+        return None
+    try:
+        if digest is None:
+            h = hashlib.sha256()
+            with open(fp, "rb") as f:
+                for chunk in iter(lambda: f.read(8 * 1024 * 1024), b""):
+                    h.update(chunk)
+            digest = h.hexdigest()
+        fp.with_suffix(fp.suffix + ".sha256").write_text(f"{digest}  {fp.name}\n")
+        return digest
+    except Exception as exc:
+        logger.debug("sha sidecar failed for %s: %s", fp, exc)
+        return None
 
 
 @dataclass

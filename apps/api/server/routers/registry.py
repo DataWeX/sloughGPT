@@ -8,7 +8,7 @@ registry operations reflect the real state of loaded models.
 
 import time as _time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from schemas.common import (
     endpoint,
     raise_error,
@@ -31,6 +31,8 @@ class RegistryRouter:
         )
         self.router.add_api_route(path="/best", endpoint=self.get_best_model, methods=["GET"])
         self.router.add_api_route(path="/stats", endpoint=self.get_registry_stats, methods=["GET"])
+        self.router.add_api_route(path="/artifacts", endpoint=self.list_artifacts, methods=["GET"])
+        self.router.add_api_route(path="/verify", endpoint=self.verify_artifacts, methods=["GET"])
 
     def _get_registry(self):
         from domain.infrastructure.model_registry import get_model_registry
@@ -83,6 +85,60 @@ class RegistryRouter:
         _elapsed_ms = (_time.monotonic() - _t0) * 1000
         safe_audit_log("registry.stats", resource="health", detail=f"elapsed={_elapsed_ms:.0f}ms")
         return success_response(data=health)
+
+    @endpoint("registry.artifacts")
+    async def list_artifacts(
+        self,
+        kind: str | None = Query(None, description="Filter by kind"),
+        q: str | None = Query(None, description="Substring search on id/name"),
+    ) -> dict:
+        """List artifacts across all kinds (Stage 1: read-only index)."""
+        import asyncio as _aio
+
+        from domain.infrastructure._internal import artifact_registry as _ar
+
+        if kind is not None and kind not in _ar.ARTIFACT_KINDS:
+            raise_error(
+                f"Unknown kind {kind!r} (expected one of {', '.join(_ar.ARTIFACT_KINDS)})",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
+        _t0 = _time.monotonic()
+        artifacts = await _aio.to_thread(_ar.list_artifacts, kind, q)
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log(
+            "registry.artifacts",
+            resource=kind or "all",
+            detail=f"elapsed={_elapsed_ms:.0f}ms count={len(artifacts)}",
+        )
+        return success_response(data={"artifacts": artifacts, "count": len(artifacts)})
+
+    @endpoint("registry.verify")
+    async def verify_artifacts(
+        self,
+        kind: str | None = Query(None, description="Filter by kind"),
+        q: str | None = Query(None, description="Substring search on id/name"),
+    ) -> dict:
+        """Hash/size integrity check over artifacts (read-only, hashed in thread)."""
+        import asyncio as _aio
+
+        from domain.infrastructure._internal import artifact_registry as _ar
+
+        if kind is not None and kind not in _ar.ARTIFACT_KINDS:
+            raise_error(
+                f"Unknown kind {kind!r} (expected one of {', '.join(_ar.ARTIFACT_KINDS)})",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
+        _t0 = _time.monotonic()
+        report = await _aio.to_thread(_ar.verify, kind, q)
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log(
+            "registry.verify",
+            resource=kind or "all",
+            detail=f"elapsed={_elapsed_ms:.0f}ms summary={report['summary']}",
+        )
+        return success_response(data=report)
 
 
 router = RegistryRouter().router

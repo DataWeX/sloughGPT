@@ -55,8 +55,16 @@ class ConsciousnessEngine:
     def save(self) -> None:
         self.self_model.save()
 
-    def reflect(self) -> str:
+    def reflect(self):
+        """Return structured Reflection (caller should use .narrative for text)."""
         return self.self_model.reflect()
+
+    def reflect_text(self) -> str:
+        r = self.self_model.reflect()
+        return r.narrative if hasattr(r, "narrative") else str(r)
+
+    def apply_beliefs(self, deltas: dict[str, float]) -> dict[str, float]:
+        return self.self_model.apply_beliefs(deltas)
 
     def clear_episodes(self) -> int:
         count = self.self_model.clear_episodes()

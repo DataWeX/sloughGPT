@@ -48,7 +48,7 @@ describe('DatasetsPage', () => {
 
   it('renders page title', async () => {
     render(<DatasetsPage />)
-    expect(screen.getByText('Datasets')).toBeTruthy()
+    expect(screen.getByText('My Files')).toBeTruthy()
   })
 
   it('loads and displays datasets', async () => {
@@ -62,7 +62,7 @@ describe('DatasetsPage', () => {
     mockList.mockResolvedValue([])
     render(<DatasetsPage />)
     await waitFor(() => {
-      expect(screen.getByText(/no datasets/i)).toBeTruthy()
+      expect(screen.getByText(/no files yet|no datasets/i)).toBeTruthy()
     })
   })
 })

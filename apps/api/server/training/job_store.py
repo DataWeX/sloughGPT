@@ -367,10 +367,17 @@ class PersistentTrainingJobs:
     Provides the same ``training_jobs[job_id]`` interface while persisting
     all mutations to MogDB. Falls back to an in-memory dict if JobStore
     is unavailable.
+
+    ``__getitem__`` returns the LIVE in-process object, so the established
+    ``training_jobs[job_id][field] = value`` pattern works as callers
+    expect. Only JSON-serializable, non-private fields are persisted to
+    MogDB (private ``_`` keys hold threads/events); the live object keeps
+    everything for the life of the process.
     """
 
     def __init__(self):
         self._fallback: dict[str, dict[str, Any]] = {}
+        self._live: dict[str, dict[str, Any]] = {}
 
     def _store(self) -> JobStore | None:
         try:
@@ -379,30 +386,54 @@ class PersistentTrainingJobs:
         except Exception:
             return None
 
+    @staticmethod
+    def _persistable(value: dict[str, Any]) -> dict[str, Any]:
+        """Strip private/non-serializable keys before MogDB persistence."""
+        return {k: v for k, v in value.items() if not k.startswith("_")}
+
+    def _persist(self, key: str, value: dict[str, Any]) -> None:
+        store = self._store()
+        persistable = self._persistable(value)
+        if store:
+            try:
+                existing = store.get(key)
+                if existing:
+                    # Merge: update existing doc with new values
+                    updates = {k: v for k, v in persistable.items() if k not in ("id", "_id")}
+                    if updates:
+                        store.update(key, **updates)
+                else:
+                    # Create new doc
+                    doc = {**persistable, "_id": key, "id": key}
+                    store._jobs.insert_one(doc)
+            except Exception as exc:
+                logger.debug("JobStore persist failed for %s: %s", key, exc)
+        else:
+            self._fallback[key] = value
+
+    def save(self, key: str) -> None:
+        """Write the live object back to MogDB (after in-place mutation)."""
+        live = self._live.get(key)
+        if live is not None:
+            self._persist(key, live)
+
     def __getitem__(self, key: str) -> dict[str, Any]:
+        if key in self._live:
+            return self._live[key]
         store = self._store()
         if store:
             doc = store.get(key)
             if doc is not None:
+                self._live[key] = doc
                 return doc
         return self._fallback[key]
 
     def __setitem__(self, key: str, value: dict[str, Any]) -> None:
-        store = self._store()
-        if store:
-            existing = store.get(key)
-            if existing:
-                # Merge: update existing doc with new values
-                updates = {k: v for k, v in value.items() if k not in ("id", "_id")}
-                store.update(key, **updates)
-            else:
-                # Create new doc
-                doc = {**value, "_id": key, "id": key}
-                store._jobs.insert_one(doc)
-        else:
-            self._fallback[key] = value
+        self._live[key] = value
+        self._persist(key, value)
 
     def __delitem__(self, key: str) -> None:
+        self._live.pop(key, None)
         store = self._store()
         if store:
             store.delete(key)
@@ -434,6 +465,7 @@ class PersistentTrainingJobs:
             return default
 
     def pop(self, key: str, *args):
+        self._live.pop(key, None)
         store = self._store()
         if store:
             doc = store.get(key)
@@ -445,17 +477,20 @@ class PersistentTrainingJobs:
             raise KeyError(key)
         return self._fallback.pop(key, *args)
 
-    def items(self):
-        store = self._store()
-        if store:
-            return [(j["id"], j) for j in store.list()]
-        return self._fallback.items()
-
     def values(self):
+        # Live objects win: in-place progress/status mutations between
+        # persists must be visible to polling readers in the same process.
         store = self._store()
         if store:
-            return store.list()
-        return self._fallback.values()
+            merged = {j["id"]: j for j in store.list()}
+            merged.update(self._live)
+            return list(merged.values())
+        merged = dict(self._fallback)
+        merged.update(self._live)
+        return list(merged.values())
+
+    def items(self):
+        return [(j["id"], j) for j in self.values()]
 
     def keys(self):
         store = self._store()
@@ -477,6 +512,7 @@ class PersistentTrainingJobs:
 
     def clear(self) -> None:
         """Remove all jobs from both the persistent store and the fallback dict."""
+        self._live.clear()
         store = self._store()
         if store:
             for doc in store.list():

@@ -25,9 +25,8 @@ const nextConfig = {
     'lucide-react': {
       transform: 'lucide-react/dist/esm/icons/{{ kebabCase member }}',
     },
-    'recharts': {
-      transform: 'recharts/{{ member }}',
-    },
+    // NOTE: recharts must NOT be modularized — v2 has no per-component
+    // subpath exports (recharts/Area etc. do not resolve).
   },
   experimental: {},
   turbopack: {

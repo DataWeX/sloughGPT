@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as DbModule from './db'
+
 
 // ── Mock the HTTP client with an in-memory DocStore ───────────────────
 // Mirrors the backend contract (/docstore/{collection}[/{id}]) so the
@@ -111,7 +111,7 @@ vi.mock('@/lib/http-client', () => ({ apiGet, apiPut, apiPatch, apiDelete, apiPo
 
 // Override the global @/lib/db mock with the real module (which uses the mocked http-client)
 vi.mock('@/lib/db', async () => {
-  const actual = await vi.importActual<DbModule>('./db')
+  const actual = await vi.importActual<typeof import('./db')>('./db')
   return actual
 })
 

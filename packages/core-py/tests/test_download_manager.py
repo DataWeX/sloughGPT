@@ -1,7 +1,6 @@
 """Tests for download_manager — generic orchestration via DownloadBackend."""
 
 import asyncio
-import sys
 import time
 
 import domain.infrastructure._internal.download_manager as dm
@@ -103,23 +102,27 @@ class TestDownloadProgress:
 
 
 class TestModuleLevelFunctions:
-    def test_is_download_complete_delegates(self, monkeypatch):
-        fake = FakeBackend()
-        fake.cached.add("gpt2")
-        monkeypatch.setattr(dm, "_backend", fake)
+    def test_is_download_complete(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path))
+        assert dm.is_download_complete("gpt2") is False
+        (tmp_path / "gpt2").write_bytes(b"data")
         assert dm.is_download_complete("gpt2") is True
+        (tmp_path / "empty").write_bytes(b"")
+        assert dm.is_download_complete("empty") is False
 
-    def test_cleanup_incomplete_delegates(self, monkeypatch):
-        fake = FakeBackend()
-        monkeypatch.setattr(dm, "_backend", fake)
+    def test_cleanup_incomplete(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path))
+        assert dm.cleanup_incomplete("gpt2") is False
+        (tmp_path / "gpt2.sgpart").write_bytes(b"partial")
         assert dm.cleanup_incomplete("gpt2") is True
-        assert "gpt2" in fake.cleaned
+        assert not (tmp_path / "gpt2.sgpart").exists()
 
-    def test_list_incomplete_models_delegates(self, monkeypatch):
-        fake = FakeBackend()
-        fake.incomplete = ["org/model_a", "org/model_b"]
-        monkeypatch.setattr(dm, "_backend", fake)
-        assert dm.list_incomplete_models() == ["org/model_a", "org/model_b"]
+    def test_list_incomplete_models(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path))
+        assert dm.list_incomplete_models() == []
+        (tmp_path / "a.sgpart").write_bytes(b"x")
+        (tmp_path / "b.sgpart").write_bytes(b"x")
+        assert sorted(dm.list_incomplete_models()) == ["a", "b"]
 
 
 # ---------------------------------------------------------------------------
@@ -198,18 +201,13 @@ class TestDownloadManager:
         assert mgr.is_downloading("c") is False
         assert mgr.is_downloading("nope") is False
 
-    def test_cancel_queued(self, monkeypatch):
-        fake = FakeBackend()
-        monkeypatch.setattr(dm, "_backend", fake)
+    def test_cancel_queued(self):
         mgr = dm.DownloadManager()
         mgr._set_progress("gpt2", status=dm.DownloadStatus.QUEUED)
         assert mgr.cancel("gpt2") is True
         assert mgr.get_progress("gpt2")["status"] == "cancelled"
-        assert "gpt2" in fake.cancelled
 
-    def test_cancel_complete_returns_false(self, monkeypatch):
-        fake = FakeBackend()
-        monkeypatch.setattr(dm, "_backend", fake)
+    def test_cancel_complete_returns_false(self):
         mgr = dm.DownloadManager()
         mgr._set_progress("gpt2", status=dm.DownloadStatus.COMPLETE)
         assert mgr.cancel("gpt2") is False
@@ -233,68 +231,59 @@ class TestDownloadManager:
         mgr._set_progress("gpt2")  # should not raise
         mgr._notify_callbacks("gpt2")  # should not raise
 
-    def test_download_already_cached(self, monkeypatch):
-        fake = FakeBackend()
-        fake.cached.add("gpt2")
-        monkeypatch.setattr(dm, "_backend", fake)
+    def test_download_already_cached(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path))
+        (tmp_path / "gpt2").write_bytes(b"data")
         mgr = dm.DownloadManager()
-        result = asyncio.run(mgr.download("gpt2"))
+        result = asyncio.run(mgr.download("gpt2", url="http://example/models/gpt2"))
         assert result == {"status": "already_cached", "model_id": "gpt2"}
 
-    def test_download_already_downloading(self, monkeypatch):
-        fake = FakeBackend()
-        monkeypatch.setattr(dm, "_backend", fake)
+    def test_download_already_downloading(self):
         mgr = dm.DownloadManager()
         mgr._set_progress("gpt2", status=dm.DownloadStatus.DOWNLOADING)
-        result = asyncio.run(mgr.download("gpt2"))
+        result = asyncio.run(mgr.download("gpt2", url="http://example/models/gpt2"))
         assert result["status"] == "already_downloading"
 
     def test_download_completes(self, monkeypatch):
-        fake = FakeBackend()
-        monkeypatch.setattr(dm, "_backend", fake)
+        from unittest.mock import AsyncMock
+
         mgr = dm.DownloadManager()
-        result = asyncio.run(mgr.download("gpt2"))
+        monkeypatch.setattr(
+            mgr,
+            "_download_worker",
+            AsyncMock(return_value={"status": "complete", "model_id": "gpt2"}),
+        )
+        result = asyncio.run(mgr.download("gpt2", url="http://example/models/gpt2"))
         assert result["status"] == "complete"
-        assert mgr.is_downloading("gpt2") is False
+        assert mgr.get_progress("gpt2") is not None
 
     def test_download_failure_reported(self, monkeypatch):
-        fake = FakeBackend()
+        from unittest.mock import AsyncMock
 
-        def fail_download(rid, on_progress, on_file_complete):
-            raise ValueError("network down")
-
-        fake.download = fail_download
-        monkeypatch.setattr(dm, "_backend", fake)
         mgr = dm.DownloadManager()
-        result = asyncio.run(mgr.download("gpt2"))
+        monkeypatch.setattr(
+            mgr, "_download_worker", AsyncMock(side_effect=ValueError("network down"))
+        )
+        result = asyncio.run(mgr.download("gpt2", url="http://example/models/gpt2"))
         assert result["status"] == "failed"
         assert "network down" in result["error"]
 
     def test_download_cancelled(self, monkeypatch):
-        fake = FakeBackend()
+        from unittest.mock import AsyncMock
 
-        def cancel_download(rid, on_progress, on_file_complete):
-            raise asyncio.CancelledError()
-
-        fake.download = cancel_download
-        monkeypatch.setattr(dm, "_backend", fake)
         mgr = dm.DownloadManager()
-        result = asyncio.run(mgr.download("gpt2"))
+        monkeypatch.setattr(
+            mgr, "_download_worker", AsyncMock(side_effect=asyncio.CancelledError())
+        )
+        result = asyncio.run(mgr.download("gpt2", url="http://example/models/gpt2"))
         assert result["status"] == "cancelled"
 
-    def test_is_cached(self, monkeypatch):
-        fake = FakeBackend()
-        fake.cached.add("gpt2")
-        monkeypatch.setattr(dm, "_backend", fake)
+    def test_is_cached(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path))
         mgr = dm.DownloadManager()
+        assert mgr.is_cached("gpt2") is False
+        (tmp_path / "gpt2").write_bytes(b"data")
         assert mgr.is_cached("gpt2") is True
-
-    def test_download_calls_prepare(self, monkeypatch):
-        fake = FakeBackend()
-        monkeypatch.setattr(dm, "_backend", fake)
-        mgr = dm.DownloadManager()
-        asyncio.run(mgr.download("gpt2"))
-        assert "gpt2" in fake.download_calls
 
     def test_cleanup_stale(self):
         mgr = dm.DownloadManager()
@@ -337,31 +326,25 @@ class TestSingleton:
 
 
 class TestBackendManagement:
-    def test_set_and_get_backend(self, monkeypatch):
-        monkeypatch.setattr(dm, "_backend", None)
-        fake = FakeBackend()
-        dm.set_backend(fake)
-        assert dm.get_backend() is fake
-        dm.reset_backend()
-
-    def test_null_backend_fallback(self, monkeypatch):
-        import threading
-
-        monkeypatch.setattr(dm, "_backend", None)
-        monkeypatch.setattr(dm, "_backend_lock", threading.Lock())
-        old_val = sys.modules.get("domain.infrastructure._internal.hf_hub")
-        sys.modules["domain.infrastructure._internal.hf_hub"] = None
+    def test_singleton_reset_gives_fresh_manager(self):
+        dm.reset_download_manager()
         try:
-            backend = dm.get_backend()
-            assert backend.is_cached("x") is False
-            assert backend.get_cache_dir("x") == ""
-            assert backend.list_incomplete() == []
+            a = dm.get_download_manager()
+            b = dm.get_download_manager()
+            assert a is b
+            assert isinstance(a, dm.DownloadManager)
         finally:
-            if old_val is not None:
-                sys.modules["domain.infrastructure._internal.hf_hub"] = old_val
-            else:
-                sys.modules.pop("domain.infrastructure._internal.hf_hub", None)
-            dm._backend = None
+            dm.reset_download_manager()
+
+    def test_reset_drops_old_singleton(self):
+        dm.reset_download_manager()
+        try:
+            a = dm.get_download_manager()
+            dm.reset_download_manager()
+            b = dm.get_download_manager()
+            assert a is not b
+        finally:
+            dm.reset_download_manager()
 
 
 # ---------------------------------------------------------------------------
@@ -434,20 +417,11 @@ class TestCompressedDownload:
 
 
 class TestDownloadManagerRouting:
-    def test_uses_compressed_when_backend_supports(self, monkeypatch):
-        """DownloadManager routes to download_compressed when supported."""
-        import threading
-
-        monkeypatch.setattr(dm, "_backend", None)
-        monkeypatch.setattr(dm, "_backend_lock", threading.Lock())
-
+    def test_compressed_support_probe(self):
+        """Backends report compression support per resource."""
         backend = CompressedFakeBackend()
-        dm.set_backend(backend)
-
-        # Verify routing logic directly
         assert backend.supports_compression("http://server/models/7B") is True
         assert backend.supports_compression("meta-llama/Llama-2-7B") is False
-        dm.reset_backend()
 
     def test_compressed_flag_defaults_false(self):
         """Default DownloadBackend.supports_compression returns False."""
@@ -455,52 +429,28 @@ class TestDownloadManagerRouting:
         assert backend.supports_compression("http://anything") is False
 
 
-class TestDownloadWith:
-    def test_download_with_uses_specific_backend(self):
-        """download_with uses the provided backend, not the global one."""
-        global_backend = FakeBackend()
-        specific_backend = FakeBackend()
-        specific_backend.downloaded = {"model-x": {"cache_dir": "/tmp/specific"}}
-        specific_backend._download_result = {
-            "status": "complete",
-            "cache_dir": "/tmp/specific",
-        }
-
-        dm.set_backend(global_backend)
-        try:
-            mgr = dm.get_download_manager()
-            result = asyncio.get_event_loop().run_until_complete(
-                mgr.download_with("model-x", specific_backend)
-            )
-            assert result["status"] == "complete"
-            assert result["cache_dir"] == "/tmp/specific"
-            assert "model-x" in specific_backend.download_calls
-            assert "model-x" not in global_backend.download_calls
-        finally:
-            dm.reset_backend()
-
-    def test_download_with_already_cached(self):
-        """download_with returns already_cached when resource is cached."""
-        backend = FakeBackend()
-        backend.cached.add("cached-model")
-
-        mgr = dm.get_download_manager()
-        result = asyncio.get_event_loop().run_until_complete(
-            mgr.download_with("cached-model", backend)
-        )
+class TestDownloadGuards:
+    def test_download_short_circuits_when_cached(self, tmp_path, monkeypatch):
+        """Real download() returns already_cached without network."""
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path))
+        (tmp_path / "cached-model").write_bytes(b"data")
+        mgr = dm.DownloadManager()
+        result = asyncio.run(mgr.download("cached-model", url="http://example/m"))
         assert result["status"] == "already_cached"
 
-    def test_download_with_uses_compressed_when_supported(self):
-        """download_with routes to download_compressed when backend supports it."""
-        backend = CompressedFakeBackend()
+    def test_download_short_circuits_when_active(self):
+        """Real download() returns already_downloading without network."""
+        mgr = dm.DownloadManager()
+        mgr._set_progress("busy-model", status=dm.DownloadStatus.DOWNLOADING)
+        result = asyncio.run(mgr.download("busy-model", url="http://example/m"))
+        assert result["status"] == "already_downloading"
 
-        mgr = dm.get_download_manager()
-        result = asyncio.get_event_loop().run_until_complete(
-            mgr.download_with("http://server/model", backend)
-        )
-        assert result["status"] == "complete"
-        assert "http://server/model" in backend.compressed_calls
-        assert "http://server/model" not in backend.download_calls
+    def test_download_without_downcraft_fails(self, monkeypatch):
+        """Without downcraft, download() fails instead of hanging."""
+        monkeypatch.setattr(dm, "_downcraft", None)
+        mgr = dm.DownloadManager()
+        result = asyncio.run(mgr.download("any-model", url="http://example/m"))
+        assert result["status"] == "failed"
 
 
 class RetryBackend(FakeBackend):
@@ -518,63 +468,33 @@ class RetryBackend(FakeBackend):
         return super().download(resource_id, on_progress, on_file_complete)
 
 
-class TestRetryLogic:
-    def test_retries_on_failure_then_succeeds(self):
-        """Download retries and succeeds after transient failures."""
-        backend = RetryBackend(fail_count=2)
-        dm.set_backend(backend)
-        try:
-            mgr = dm.get_download_manager()
-            result = asyncio.get_event_loop().run_until_complete(
-                mgr.download("model-retry", max_retries=3)
-            )
-            assert result["status"] == "complete"
-            assert backend._attempts == 3  # 2 failures + 1 success
-        finally:
-            dm.reset_backend()
+class TestRetryPlumbing:
+    def test_max_retries_accepted(self, monkeypatch):
+        """max_retries flows to the worker (mocked, no network)."""
 
-    def test_fails_after_all_retries_exhausted(self):
-        """Download fails when all retries are exhausted."""
-        backend = RetryBackend(fail_count=10)
-        dm.set_backend(backend)
-        try:
-            mgr = dm.get_download_manager()
-            result = asyncio.get_event_loop().run_until_complete(
-                mgr.download("model-fail", max_retries=2)
-            )
-            assert result["status"] == "failed"
-            assert "Simulated failure" in result["error"]
-            assert backend._attempts == 3  # max_retries + 1
-        finally:
-            dm.reset_backend()
+        seen: dict = {}
 
-    def test_no_retry_on_success(self):
-        """Download doesn't retry when first attempt succeeds."""
-        backend = RetryBackend(fail_count=0)
-        dm.set_backend(backend)
-        try:
-            mgr = dm.get_download_manager()
-            result = asyncio.get_event_loop().run_until_complete(
-                mgr.download("model-ok", max_retries=3)
-            )
-            assert result["status"] == "complete"
-            assert backend._attempts == 1
-        finally:
-            dm.reset_backend()
+        async def fake_worker(
+            model_id, url, dest, hint, checksum, compressed, cancel_event, retries
+        ):
+            seen["retries"] = retries
+            return {"status": "complete", "model_id": model_id}
 
-    def test_max_retries_zero_no_retry(self):
-        """With max_retries=0, no retry on failure."""
-        backend = RetryBackend(fail_count=1)
-        dm.set_backend(backend)
-        try:
-            mgr = dm.get_download_manager()
-            result = asyncio.get_event_loop().run_until_complete(
-                mgr.download("model-no-retry", max_retries=0)
-            )
-            assert result["status"] == "failed"
-            assert backend._attempts == 1
-        finally:
-            dm.reset_backend()
+        mgr = dm.DownloadManager()
+        monkeypatch.setattr(mgr, "_download_worker", fake_worker)
+        result = asyncio.run(mgr.download("m", url="http://example/m", max_retries=5))
+        assert result["status"] == "complete"
+        assert seen["retries"] == 5
+
+    def test_worker_exception_maps_to_failed(self, monkeypatch):
+        """Worker exceptions surface as failed results, not crashes."""
+        from unittest.mock import AsyncMock
+
+        mgr = dm.DownloadManager()
+        monkeypatch.setattr(mgr, "_download_worker", AsyncMock(side_effect=ConnectionError("down")))
+        result = asyncio.run(mgr.download("m", url="http://example/m"))
+        assert result["status"] == "failed"
+        assert "down" in result["error"]
 
 
 class TestPauseResume:
@@ -661,8 +581,36 @@ class TestPauseResume:
 
 
 class TestVerify:
-    def test_verify_valid_model(self, tmp_path):
-        """Verify returns valid when all files match."""
+    def test_verify_valid_model(self, tmp_path, monkeypatch):
+        """Real verify() passes for a present, non-empty file."""
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path))
+        (tmp_path / "model").write_bytes(b"hello world")
+        mgr = dm.DownloadManager()
+        result = mgr.verify("model")
+        assert result["valid"] is True
+        assert result["files_checked"] == 1
+        assert result["files_valid"] == 1
+        assert result["errors"] == []
+
+    def test_verify_missing_file(self, tmp_path, monkeypatch):
+        """Real verify() fails for a missing file."""
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path))
+        mgr = dm.DownloadManager()
+        result = mgr.verify("model")
+        assert result["valid"] is False
+        assert result["files_checked"] == 0
+        assert len(result["errors"]) == 1
+
+    def test_verify_empty_file(self, tmp_path, monkeypatch):
+        """Real verify() fails for an empty file."""
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path))
+        (tmp_path / "model").write_bytes(b"")
+        mgr = dm.DownloadManager()
+        result = mgr.verify("model")
+        assert result["valid"] is False
+
+    def test_verify_backend_checks_sizes_and_hashes(self, tmp_path):
+        """The backend-level verify() still checks sizes and checksums."""
         import hashlib
 
         from domain.infrastructure._internal.download_backend import DownloadBackend
@@ -679,7 +627,7 @@ class TestVerify:
                 return str(self._cache_dir)
 
             def estimate_total(self, resource_id):
-                return sum(f.size for f in self._files)
+                return 0
 
             def list_files(self, resource_id):
                 return self._files
@@ -693,194 +641,20 @@ class TestVerify:
             def list_incomplete(self):
                 return []
 
-        # Create cache dir with valid file
-        cache = tmp_path / "cache"
-        cache.mkdir()
         data = b"hello world"
-        sha = hashlib.sha256(data).hexdigest()
-        (cache / "model.bin").write_bytes(data)
-
-        files = [FileEstimate(path="model.bin", size=len(data), checksum=sha)]
-        backend = VerifyBackend(cache, files)
-        dm.set_backend(backend)
-        try:
-            mgr = dm.get_download_manager()
-            result = mgr.verify("model")
-            assert result["valid"] is True
-            assert result["files_checked"] == 1
-            assert result["files_valid"] == 1
-            assert result["errors"] == []
-        finally:
-            dm.reset_backend()
-
-    def test_verify_missing_file(self, tmp_path):
-        """Verify returns invalid when file is missing."""
-        from domain.infrastructure._internal.download_backend import DownloadBackend
-
-        class VerifyBackend(DownloadBackend):
-            def __init__(self, cache_dir, files):
-                self._cache_dir = cache_dir
-                self._files = files
-
-            def is_cached(self, resource_id, deep_check=False):
-                return False
-
-            def get_cache_dir(self, resource_id):
-                return str(self._cache_dir)
-
-            def estimate_total(self, resource_id):
-                return 0
-
-            def list_files(self, resource_id):
-                return self._files
-
-            def download(self, resource_id, on_progress, on_file_complete):
-                return {"status": "complete"}
-
-            def cleanup(self, resource_id):
-                return True
-
-            def list_incomplete(self):
-                return []
-
-        cache = tmp_path / "cache"
-        cache.mkdir()
-        files = [FileEstimate(path="missing.bin", size=100, checksum="abc")]
-        backend = VerifyBackend(cache, files)
-        dm.set_backend(backend)
-        try:
-            mgr = dm.get_download_manager()
-            result = mgr.verify("model")
-            assert result["valid"] is False
-            assert result["files_checked"] == 1
-            assert result["files_valid"] == 0
-            assert len(result["errors"]) == 1
-            assert "Missing" in result["errors"][0]
-        finally:
-            dm.reset_backend()
-
-    def test_verify_size_mismatch(self, tmp_path):
-        """Verify returns invalid when file size doesn't match."""
-        from domain.infrastructure._internal.download_backend import DownloadBackend
-
-        class VerifyBackend(DownloadBackend):
-            def __init__(self, cache_dir, files):
-                self._cache_dir = cache_dir
-                self._files = files
-
-            def is_cached(self, resource_id, deep_check=False):
-                return True
-
-            def get_cache_dir(self, resource_id):
-                return str(self._cache_dir)
-
-            def estimate_total(self, resource_id):
-                return 0
-
-            def list_files(self, resource_id):
-                return self._files
-
-            def download(self, resource_id, on_progress, on_file_complete):
-                return {"status": "complete"}
-
-            def cleanup(self, resource_id):
-                return True
-
-            def list_incomplete(self):
-                return []
-
-        cache = tmp_path / "cache"
-        cache.mkdir()
-        (cache / "model.bin").write_bytes(b"short")
-        files = [FileEstimate(path="model.bin", size=999)]  # Wrong size
-        backend = VerifyBackend(cache, files)
-        dm.set_backend(backend)
-        try:
-            mgr = dm.get_download_manager()
-            result = mgr.verify("model")
-            assert result["valid"] is False
-            assert "Size mismatch" in result["errors"][0]
-        finally:
-            dm.reset_backend()
-
-    def test_verify_checksum_mismatch(self, tmp_path):
-        """Verify returns invalid when checksum doesn't match."""
-        from domain.infrastructure._internal.download_backend import DownloadBackend
-
-        class VerifyBackend(DownloadBackend):
-            def __init__(self, cache_dir, files):
-                self._cache_dir = cache_dir
-                self._files = files
-
-            def is_cached(self, resource_id, deep_check=False):
-                return True
-
-            def get_cache_dir(self, resource_id):
-                return str(self._cache_dir)
-
-            def estimate_total(self, resource_id):
-                return 0
-
-            def list_files(self, resource_id):
-                return self._files
-
-            def download(self, resource_id, on_progress, on_file_complete):
-                return {"status": "complete"}
-
-            def cleanup(self, resource_id):
-                return True
-
-            def list_incomplete(self):
-                return []
-
-        cache = tmp_path / "cache"
-        cache.mkdir()
-        (cache / "model.bin").write_bytes(b"data")
-        files = [FileEstimate(path="model.bin", size=4, checksum="wrong_checksum")]
-        backend = VerifyBackend(cache, files)
-        dm.set_backend(backend)
-        try:
-            mgr = dm.get_download_manager()
-            result = mgr.verify("model")
-            assert result["valid"] is False
-            assert "Checksum mismatch" in result["errors"][0]
-        finally:
-            dm.reset_backend()
-
-    def test_verify_empty_files_list(self):
-        """Verify returns invalid when no files found."""
-        from domain.infrastructure._internal.download_backend import DownloadBackend
-
-        class EmptyBackend(DownloadBackend):
-            def is_cached(self, resource_id, deep_check=False):
-                return True
-
-            def get_cache_dir(self, resource_id):
-                return "/tmp"
-
-            def estimate_total(self, resource_id):
-                return 0
-
-            def list_files(self, resource_id):
-                return []
-
-            def download(self, resource_id, on_progress, on_file_complete):
-                return {"status": "complete"}
-
-            def cleanup(self, resource_id):
-                return True
-
-            def list_incomplete(self):
-                return []
-
-        dm.set_backend(EmptyBackend())
-        try:
-            mgr = dm.get_download_manager()
-            result = mgr.verify("model")
-            assert result["valid"] is False
-            assert result["files_checked"] == 0
-        finally:
-            dm.reset_backend()
+        (tmp_path / "model.bin").write_bytes(data)
+        files = [
+            FileEstimate(
+                path="model.bin",
+                size=len(data),
+                checksum=hashlib.sha256(data).hexdigest(),
+            )
+        ]
+        assert VerifyBackend(str(tmp_path), files).verify("model")["valid"] is True
+        bad = [FileEstimate(path="model.bin", size=999, checksum="0" * 64)]
+        result = VerifyBackend(str(tmp_path), bad).verify("model")
+        assert result["valid"] is False
+        assert len(result["errors"]) == 1
 
 
 class TestDownloadStats:

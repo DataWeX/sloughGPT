@@ -6,8 +6,14 @@ import { useParams, useRouter } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardHeader, CardTitle, cn } from '@sloughgpt/strui'
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from '@sloughgpt/strui'
 import { Button, Spinner } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
@@ -17,15 +23,25 @@ import { Breadcrumbs } from '@sloughgpt/strui'
 import dynamicNext from 'next/dynamic'
 import type { LossPoint, RewardPoint } from '@/components/training/LossChart'
 
-const LossChart = dynamicNext(() => import('@/components/training/LossChart').then(m => m.LossChart), { ssr: false })
+const LossChart = dynamicNext(
+  () => import('@/components/training/LossChart').then((m) => m.LossChart),
+  { ssr: false },
+)
 import { IconTrash, IconDownload } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
 import { formatElapsed } from '@/lib/formatDuration'
+import { extractErrorMessage, formatToastError } from '@/lib/error-utils'
 
-const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'error' }> = {
+const STATUS_BADGE: Record<
+  string,
+  {
+    label: string
+    variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'error'
+  }
+> = {
   running: { label: 'Running', variant: 'default' },
   completed: { label: 'Completed', variant: 'secondary' },
   failed: { label: 'Failed', variant: 'destructive' },
@@ -36,7 +52,7 @@ const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'second
 export default function TrainingJobDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const jobId = (params.id as string) || ''
 
   const [job, setJob] = useState<TrainingJob | null>(null)
@@ -53,8 +69,8 @@ export default function TrainingJobDetailPage() {
     try {
       const j = await trainingJobsController.get(jobId)
       setJob(j)
-    } catch {
-      setFetchError('Failed to load training job. Check your connection and try again.')
+    } catch (e) {
+      setFetchError(formatToastError(e, 'Failed to load training job'))
     } finally {
       setLoading(false)
     }
@@ -74,7 +90,10 @@ export default function TrainingJobDetailPage() {
   }, [jobId])
 
   useEffect(() => {
-    if (!jobId) { router.push('/training'); return }
+    if (!jobId) {
+      router.push('/training')
+      return
+    }
     void fetchJob()
     void fetchSummary()
   }, [jobId, fetchJob, fetchSummary, router])
@@ -105,7 +124,9 @@ export default function TrainingJobDetailPage() {
     try {
       await modelController.loadModelPath(job.checkpoint)
       addToast(`Loaded trained version: ${job.checkpoint}`, 'success')
-    } catch { addToast('Could not load trained version', 'error') }
+    } catch (e) {
+      addToast(formatToastError(e, 'Could not load trained version'), 'error')
+    }
   }
 
   const handleDelete = async () => {
@@ -114,8 +135,11 @@ export default function TrainingJobDetailPage() {
       await trainingJobsController.delete(job.id)
       addToast('Job deleted', 'info')
       router.push('/training')
-    } catch {       addToast('Something went wrong deleting the job', 'error')
-    } finally { setShowDelete(false) }
+    } catch (e) {
+      addToast(formatToastError(e, 'Something went wrong deleting the job'), 'error')
+    } finally {
+      setShowDelete(false)
+    }
   }
 
   const handleExport = () => {
@@ -141,13 +165,32 @@ export default function TrainingJobDetailPage() {
 
   const headerRight = (
     <div className="flex items-center gap-1">
-      <Button variant="ghost" size="sm" onClick={fetchJob} disabled={loading} aria-label="Refresh job status">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={fetchJob}
+        disabled={loading}
+        aria-label="Refresh job status"
+      >
         <Spinner className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="sm" onClick={handleExport} disabled={!job} aria-label="Export job details">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleExport}
+        disabled={!job}
+        aria-label="Export job details"
+      >
         <IconDownload className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setShowDelete(true)} disabled={!job} aria-label="Delete job">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-destructive"
+        onClick={() => setShowDelete(true)}
+        disabled={!job}
+        aria-label="Delete job"
+      >
         <IconTrash className="h-4 w-4" />
       </Button>
     </div>
@@ -177,12 +220,16 @@ export default function TrainingJobDetailPage() {
         <Card>
           <CardContent className="py-8 text-center">
             <p className="text-sm text-destructive mb-2">{fetchError}</p>
-            <Button size="sm" variant="outline" onClick={fetchJob}>Retry</Button>
+            <Button size="sm" variant="outline" onClick={fetchJob}>
+              Retry
+            </Button>
           </CardContent>
         </Card>
       ) : !loading && !job ? (
         <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">Job not found</CardContent>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            Job not found
+          </CardContent>
         </Card>
       ) : job ? (
         <>
@@ -206,7 +253,9 @@ export default function TrainingJobDetailPage() {
                   <Skeleton className="h-3 w-1/2" />
                 </div>
               ) : summaryText ? (
-                <div className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{summaryText}</div>
+                <div className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                  {summaryText}
+                </div>
               ) : (
                 <p className="text-sm text-muted-foreground">Summary not available</p>
               )}
@@ -228,41 +277,67 @@ export default function TrainingJobDetailPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
                   {job!.status === 'running' && (
-                    <Button size="sm" variant="outline" className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={async () => {
-                      try {
-                        await trainingJobsController.stop(job!.id)
-                        addToast('Training stopped', 'info')
-                        await fetchJob()
-                      } catch { addToast('Could not stop training', 'error') }
-                    }}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                      onClick={async () => {
+                        try {
+                          await trainingJobsController.stop(job!.id)
+                          addToast('Training stopped', 'info')
+                          await fetchJob()
+                        } catch (e) {
+                          addToast(formatToastError(e, 'Could not stop training'), 'error')
+                        }
+                      }}
+                    >
                       Stop
                     </Button>
                   )}
                   {job!.checkpoint && job!.status === 'completed' && (
                     <>
-                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleLoadCheckpoint}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs"
+                        onClick={handleLoadCheckpoint}
+                      >
                         Load saved version
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={async () => {
-                        try {
-                          const blob = await trainingJobsController.downloadTrainingJob(job!.id)
-                          downloadBlob(blob, `${job!.id}.checkpoint`)
-                          addToast('Checkpoint downloaded', 'success')
-                        } catch { addToast('Could not download', 'error') }
-                      }}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 text-xs"
+                        onClick={async () => {
+                          try {
+                            const blob = await trainingJobsController.downloadTrainingJob(job!.id)
+                            downloadBlob(blob, `${job!.id}.checkpoint`)
+                            addToast('Checkpoint downloaded', 'success')
+                          } catch (e) {
+                            addToast(formatToastError(e, 'Could not download'), 'error')
+                          }
+                        }}
+                      >
                         <IconDownload className="h-4 w-4 mr-1" /> Export
                       </Button>
                     </>
                   )}
-                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={async () => {
-                    if (job?.checkpoint) {
-                      try {
-                        await modelController.loadModelPath(job.checkpoint)
-                        addToast(`Loaded trained version: ${job.checkpoint}`, 'success')
-                      } catch { addToast('Could not load model', 'error') }
-                    }
-                    router.push('/chat')
-                  }}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={async () => {
+                      if (job?.checkpoint) {
+                        try {
+                          await modelController.loadModelPath(job.checkpoint)
+                          addToast(`Loaded trained version: ${job.checkpoint}`, 'success')
+                        } catch (e) {
+                          addToast(formatToastError(e, 'Could not load model'), 'error')
+                        }
+                      }
+                      router.push('/chat')
+                    }}
+                  >
                     Try in chat
                   </Button>
                 </div>
@@ -272,22 +347,27 @@ export default function TrainingJobDetailPage() {
               {job!.status === 'running' && (
                 <div className="mb-3">
                   <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-primary transition-all duration-500 rounded-full" style={{ width: `${Math.min(job!.progress, 100)}%` }} />
+                    <div
+                      className="h-full bg-primary transition-all duration-500 rounded-full"
+                      style={{ width: `${Math.min(job!.progress, 100)}%` }}
+                    />
                   </div>
                   <div className="flex items-center justify-between mt-1">
                     <p className="text-xs text-muted-foreground">{job!.progress}%</p>
-                    {job!.progress > 0 && job!.created_at && (() => {
-                      const elapsed = (Date.now() - new Date(job!.created_at).getTime()) / 1000
-                      const rate = job!.progress / elapsed
-                      const remaining = rate > 0 ? (100 - job!.progress) / rate : 0
-                      const mins = Math.floor(remaining / 60)
-                      const secs = Math.floor(remaining % 60)
-                      return (
-                        <p className="text-xs text-muted-foreground">
-                          ETA: {mins > 0 ? `${mins}m ${secs}s` : `${secs}s`}
-                        </p>
-                      )
-                    })()}
+                    {job!.progress > 0 &&
+                      job!.created_at &&
+                      (() => {
+                        const elapsed = (Date.now() - new Date(job!.created_at).getTime()) / 1000
+                        const rate = job!.progress / elapsed
+                        const remaining = rate > 0 ? (100 - job!.progress) / rate : 0
+                        const mins = Math.floor(remaining / 60)
+                        const secs = Math.floor(remaining % 60)
+                        return (
+                          <p className="text-xs text-muted-foreground">
+                            ETA: {mins > 0 ? `${mins}m ${secs}s` : `${secs}s`}
+                          </p>
+                        )
+                      })()}
                   </div>
                 </div>
               )}
@@ -295,19 +375,30 @@ export default function TrainingJobDetailPage() {
               <KpiGrid columns={4}>
                 <StatCard label="Model" value={job!.model || '—'} />
                 <StatCard label="Dataset" value={job!.dataset || '—'} />
-                <StatCard label="Epochs" value={job!.epochs != null ? `${job!.current_epoch ?? 0} / ${job!.epochs}` : '—'} />
-                <StatCard label="Steps" value={job!.global_step != null ? String(job!.global_step) : '—'} />
+                <StatCard
+                  label="Epochs"
+                  value={job!.epochs != null ? `${job!.current_epoch ?? 0} / ${job!.epochs}` : '—'}
+                />
+                <StatCard
+                  label="Steps"
+                  value={job!.global_step != null ? String(job!.global_step) : '—'}
+                />
               </KpiGrid>
-              {job!.status === 'running' && job!.global_step && job!.created_at && (() => {
-                const elapsed = (Date.now() - new Date(job!.created_at).getTime()) / 1000
-                const stepsPerMin = elapsed > 0 ? (job!.global_step / elapsed) * 60 : 0
-                return stepsPerMin > 0 ? (
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Speed:</span>
-                    <span className="text-xs font-mono text-primary">{stepsPerMin.toFixed(1)} steps/min</span>
-                  </div>
-                ) : null
-              })()}
+              {job!.status === 'running' &&
+                job!.global_step &&
+                job!.created_at &&
+                (() => {
+                  const elapsed = (Date.now() - new Date(job!.created_at).getTime()) / 1000
+                  const stepsPerMin = elapsed > 0 ? (job!.global_step / elapsed) * 60 : 0
+                  return stepsPerMin > 0 ? (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Speed:</span>
+                      <span className="text-xs font-mono text-primary">
+                        {stepsPerMin.toFixed(1)} steps/min
+                      </span>
+                    </div>
+                  ) : null
+                })()}
             </CardContent>
           </Card>
 
@@ -316,34 +407,53 @@ export default function TrainingJobDetailPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Loss &amp; Reward</CardTitle>
-                {job!.loss_history && job!.loss_history.length >= 3 && (() => {
-                  const recent = job!.loss_history.slice(-5)
-                  const firstHalf = recent.slice(0, Math.floor(recent.length / 2))
-                  const secondHalf = recent.slice(Math.floor(recent.length / 2))
-                  const avgFirst = firstHalf.reduce((s, p) => s + p.value, 0) / firstHalf.length
-                  const avgSecond = secondHalf.reduce((s, p) => s + p.value, 0) / secondHalf.length
-                  const improving = avgSecond < avgFirst
-                  const pctChange = avgFirst > 0 ? ((avgSecond - avgFirst) / avgFirst * 100).toFixed(1) : '0'
-                  return (
-                    <span className={cn('text-xs font-medium px-2 py-0.5 rounded', improving ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>
-                      {improving ? '↓' : '↑'} {Math.abs(Number(pctChange))}%
-                    </span>
-                  )
-                })()}
+                {job!.loss_history &&
+                  job!.loss_history.length >= 3 &&
+                  (() => {
+                    const recent = job!.loss_history.slice(-5)
+                    const firstHalf = recent.slice(0, Math.floor(recent.length / 2))
+                    const secondHalf = recent.slice(Math.floor(recent.length / 2))
+                    const avgFirst = firstHalf.reduce((s, p) => s + p.value, 0) / firstHalf.length
+                    const avgSecond =
+                      secondHalf.reduce((s, p) => s + p.value, 0) / secondHalf.length
+                    const improving = avgSecond < avgFirst
+                    const pctChange =
+                      avgFirst > 0 ? (((avgSecond - avgFirst) / avgFirst) * 100).toFixed(1) : '0'
+                    return (
+                      <span
+                        className={cn(
+                          'text-xs font-medium px-2 py-0.5 rounded',
+                          improving ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning',
+                        )}
+                      >
+                        {improving ? '↓' : '↑'} {Math.abs(Number(pctChange))}%
+                      </span>
+                    )
+                  })()}
               </div>
             </CardHeader>
             <CardContent>
               <KpiGrid columns={job!.reward_history?.length ? 4 : 3}>
                 {job!.loss != null && <StatCard label="Final loss" value={job!.loss.toFixed(4)} />}
-                {job!.train_loss != null && <StatCard label="Train loss" value={job!.train_loss.toFixed(4)} />}
-                {job!.eval_loss != null && <StatCard label="Validation loss" value={job!.eval_loss.toFixed(4)} />}
-                {typeof job!.result?.final_reward === 'number' && <StatCard label="Final reward" value={job!.result.final_reward.toFixed(4)} />}
+                {job!.train_loss != null && (
+                  <StatCard label="Train loss" value={job!.train_loss.toFixed(4)} />
+                )}
+                {job!.eval_loss != null && (
+                  <StatCard label="Validation loss" value={job!.eval_loss.toFixed(4)} />
+                )}
+                {typeof job!.result?.final_reward === 'number' && (
+                  <StatCard label="Final reward" value={job!.result.final_reward.toFixed(4)} />
+                )}
               </KpiGrid>
               {job!.loss_history && job!.loss_history.length > 1 && (
                 <div className="mt-4">
                   <LossChart
-                    data={job!.loss_history.map(p => ({ step: p.step, value: p.value, type: p.type } as LossPoint))}
-                    rewardData={job!.reward_history?.map(p => ({ step: p.step, value: p.value } as RewardPoint))}
+                    data={job!.loss_history.map(
+                      (p) => ({ step: p.step, value: p.value, type: p.type }) as LossPoint,
+                    )}
+                    rewardData={job!.reward_history?.map(
+                      (p) => ({ step: p.step, value: p.value }) as RewardPoint,
+                    )}
                     live={job!.status === 'running'}
                   />
                 </div>
@@ -372,7 +482,9 @@ export default function TrainingJobDetailPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Duration</p>
-                  <p className="text-xs mt-0.5">{formatElapsed(job!.created_at, job!.finished_at)}</p>
+                  <p className="text-xs mt-0.5">
+                    {formatElapsed(job!.created_at, job!.finished_at)}
+                  </p>
                 </div>
                 {job!.checkpoint && (
                   <div className="col-span-2">
@@ -397,12 +509,16 @@ export default function TrainingJobDetailPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete job</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &ldquo;{job?.name || job?.id}&rdquo;? This cannot be undone.
+              Are you sure you want to delete &ldquo;{job?.name || job?.id}&rdquo;? This cannot be
+              undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -24,16 +24,23 @@ from .state import (
 logger = logging.getLogger("slo.training")
 
 
+# Watchdog window: first progress on a loaded CPU can take minutes
+# (queued executor + slow NumPy steps), so allow 3 minutes of silence.
+TURBO_HEARTBEAT_TIMEOUT_S = 180
+
+
 def get_turbo_status() -> dict:
     with _turbo_lock:
         state = dict(_turbo_state)
         if (
             state.get("status") == "running"
             and state.get("last_heartbeat", 0) > 0
-            and (time.time() - state["last_heartbeat"]) > 30
+            and (time.time() - state["last_heartbeat"]) > TURBO_HEARTBEAT_TIMEOUT_S
         ):
             state["status"] = "error"
-            state["error"] = "Training process lost — no progress for 30 seconds"
+            state["error"] = (
+                f"Training process lost — no progress for {TURBO_HEARTBEAT_TIMEOUT_S} seconds"
+            )
             state["paused"] = False
             _turbo_state["status"] = "error"
             _turbo_state["error"] = state["error"]
@@ -43,10 +50,18 @@ def get_turbo_status() -> dict:
 
 
 def start_turbo_training(config: dict) -> dict:
+    # Fail fast when a job is already running, before validating anything
+    # else — the caller gets "already running", not a misleading data error.
+    with _turbo_lock:
+        if _turbo_state.get("status") == "running":
+            raise RuntimeError("A turbo training job is already running")
+
     data_path = config.get("data_path", "")
     dataset_id = config.get("dataset_id")
     if not data_path and dataset_id:
         data_path = resolve_dataset_path(dataset_id)
+        if not data_path:
+            raise ValueError(f"Could not resolve dataset_id to a data file: {dataset_id!r}")
 
     if not data_path:
         raise ValueError("No data_path or dataset_id provided")
@@ -79,8 +94,9 @@ def start_turbo_training(config: dict) -> dict:
     cancel_event = threading.Event()
     pause_event = threading.Event()
 
-    # Atomic check-and-set: reserve the "running" slot under a single lock
-    # acquisition to prevent two concurrent requests from both starting.
+    # Reserve the "running" slot under a single lock acquisition to prevent
+    # two concurrent requests from both starting (already-running was
+    # checked up front; re-check here to close the race).
     with _turbo_lock:
         if _turbo_state.get("status") == "running":
             raise RuntimeError("A turbo training job is already running")
@@ -179,9 +195,19 @@ def run_turbo_worker(config: dict) -> None:
         if dataset_id:
             data_path = resolve_dataset_path(dataset_id)
         if not data_path:
-            update_job(job_id, status="error", error="No data_path or dataset_id provided")
-            _finish_cm("error", "No data_path or dataset_id provided")
+            reason = (
+                f"Could not resolve dataset_id to a data file: {dataset_id!r}"
+                if dataset_id
+                else "No data_path or dataset_id provided"
+            )
+            update_job(job_id, status="error", error=reason)
+            _finish_cm("error", reason)
             return
+
+    # Worker actually started (queue wait over) — refresh the heartbeat so the
+    # watchdog measures silence from here, not from job submission.
+    with _turbo_lock:
+        _turbo_state["last_heartbeat"] = time.time()
 
     output_dir = config.get("output_dir", str(TURBO_DIR))
     resume = config.get("resume", False)

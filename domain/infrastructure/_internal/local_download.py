@@ -158,6 +158,8 @@ class LocalFileBackend(DownloadBackend):
                 "error": "No files found in source directory",
             }
 
+        from .download_backend import write_sha_sidecar
+
         cache_dir = self._cache_dir(resource_id)
         cache_dir.mkdir(parents=True, exist_ok=True)
         source_dir = self._source_model_dir(resource_id)
@@ -190,12 +192,14 @@ class LocalFileBackend(DownloadBackend):
                     _progress(copied, file_size)
 
             bytes_done += file_size
+            f["sha256"] = write_sha_sidecar(dest)
             on_file_complete(resource_id, str(dest))
 
         return {
             "status": "completed",
             "cache_dir": str(cache_dir),
             "total_bytes": total_size,
+            "files": files,
         }
 
     def cleanup(self, resource_id: str) -> bool:

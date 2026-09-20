@@ -128,6 +128,7 @@ export interface TrainingFormState {
   setNativeBlockSize: (n: number) => void
   setLoadingFinetunedModel: (v: boolean) => void
   setResumeCheckpoint: (s: string) => void
+  clearOptimisticJobs: () => void
   applyPreset: (preset: TrainingPreset) => void
   customPresets: TrainingPreset[]
   saveCustomPreset: (preset: TrainingPreset) => void
@@ -415,7 +416,7 @@ export function useTrainingForm(
         trainingFacade.jobs
           .startAutoTrain(body)
           .then((resp) => {
-            const jobId = (resp as Record<string, unknown>).job_id as string | undefined
+            const jobId = (resp as unknown as Record<string, unknown>).job_id as string | undefined
             appShellStore.getState().resetTraining()
             writeTraining({
               phase: 'TRAINING',
@@ -524,6 +525,7 @@ export function useTrainingForm(
     setNativeBlockSize,
     setLoadingFinetunedModel,
     setResumeCheckpoint,
+    clearOptimisticJobs: () => setOptimisticJobs([]),
     applyPreset,
     customPresets,
     saveCustomPreset,

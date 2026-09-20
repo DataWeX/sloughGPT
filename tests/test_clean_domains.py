@@ -12,7 +12,7 @@ import pytest
 from domain.chat._internal.domain import ChatDomain, ChatRequest, ChatResponse, get_chat_domain
 
 # companion.py (top-level, single file)
-from domain.companion._internal import (
+from domain.companion._internal.companion import (
     CompanionSystem,
     CompanionTraits,
     ConversationContext,

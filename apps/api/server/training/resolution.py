@@ -15,9 +15,35 @@ from .schemas import TrainDatasetRef
 def _repo_root() -> Path:
     from pathlib import Path
 
-    from domain.shared._internal.utils import find_repo_root
+    from domain.shared import find_repo_root
 
     return find_repo_root(Path(__file__).resolve())
+
+
+def resolve_legacy_corpus_path(stem: str) -> Path | None:
+    """Find a training corpus file for a dataset id across legacy locations.
+
+    Search order (first hit wins, preserving the historic priority):
+    ``datasets/{stem}/input.txt`` (exact legacy contract), then
+    ``data/{stem}`` and ``data/datasets/{stem}`` via the shared
+    ``find_corpus_file`` priority (corpus.jsonl, input.txt, train.txt,
+    text.txt, *.txt, *.jsonl).
+
+    Returns the corpus file Path, or None when nothing resolves.
+    """
+    from domain.training._internal.cache_tags import find_corpus_file
+
+    root = _repo_root()
+    legacy = root / "datasets" / stem / "input.txt"
+    if legacy.is_file():
+        return legacy
+    for base in ("data", "data/datasets"):
+        candidate_dir = root / base / stem
+        if candidate_dir.is_dir():
+            hit = find_corpus_file(candidate_dir)
+            if hit is not None:
+                return hit
+    return None
 
 
 def resolve_training_inputs(
@@ -67,7 +93,9 @@ def resolve_training_inputs(
             return hit, stem, None, "cache"
     except ValueError:
         pass
-    p = _repo_root() / "datasets" / stem / "input.txt"
-    if not p.is_file():
-        raise ManifestError(f"Missing training file: {p}")
-    return str(p.resolve()), stem, None, "legacy"
+    hit = resolve_legacy_corpus_path(stem)
+    if hit is None:
+        searched = ["datasets/{s}/input.txt", "data/{s}/", "data/datasets/{s}/"]
+        locations = ", ".join(loc.format(s=stem) for loc in searched)
+        raise ManifestError(f"Missing training file for {stem!r} (searched: {locations})")
+    return str(hit.resolve()), stem, None, "legacy"

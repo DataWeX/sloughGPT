@@ -24,6 +24,7 @@ import {
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { trainingJobsController } from '@/lib/training-controller'
 import { soulsController } from '@/lib/souls-controller'
+import { formatToastError } from '@/lib/error-utils'
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
@@ -113,10 +114,11 @@ export function FeedbackTrainCard({ addToast }: Props) {
       setPhase('training')
       addToast(`Training started from ${resp.samples ?? 0} feedback pairs`, 'success')
       if (resp.job_id) startPolling(resp.job_id)
-    } catch {
+    } catch (e) {
+      const msg = formatToastError(e, 'Could not start training from feedback')
       setPhase('error')
-      setError('Could not start training')
-      addToast('Could not start training from feedback', 'error')
+      setError(msg)
+      addToast(msg, 'error')
     } finally {
       setStarting(false)
     }
@@ -127,8 +129,8 @@ export function FeedbackTrainCard({ addToast }: Props) {
     if (job?.job_id) {
       try {
         await trainingJobsController.stop(job.job_id)
-      } catch {
-        addToast('Could not stop training', 'error')
+      } catch (e) {
+        addToast(formatToastError(e, 'Could not stop training'), 'error')
       }
     }
     setPhase('idle')
@@ -142,8 +144,8 @@ export function FeedbackTrainCard({ addToast }: Props) {
     try {
       await soulsController.loadCheckpoint(checkpoint)
       addToast(`Loaded: ${checkpoint}`, 'success')
-    } catch {
-      addToast('Could not load checkpoint', 'error')
+    } catch (e) {
+      addToast(formatToastError(e, 'Could not load checkpoint'), 'error')
     } finally {
       setLoadingModel(false)
     }

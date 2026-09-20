@@ -37,7 +37,8 @@ from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.infrastructure.conversation_log import capture
 from domain.infrastructure.request_coalescer import get_coalescer
 from domain.infrastructure.server_state import get_server_state
-from domain.learner import KnowledgeFact, extract_and_store, get_knowledge_memory, get_learner
+from domain.knowledge import KnowledgeFact, get_knowledge_memory
+from domain.learner import extract_and_store, get_learner
 from domain.memory import get_memory_service
 from domain.models import KnowledgeProcessor, apply_processors, get_provider
 
