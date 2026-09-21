@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arken"
+version = "0.1.0"
+description = "Arken — minimal web autoclicker: find, click, type via Playwright."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+playwright = ["playwright>=1.40"]
+dev = ["pytest>=7", "pytest-asyncio>=0.21"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

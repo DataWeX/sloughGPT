@@ -6,7 +6,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { agentsController, type Agent, type AgentRun } from '@/lib/agents-controller'
 import { useToastStore } from '@/lib/toast-store'
 import {
@@ -297,9 +296,9 @@ export default function AgentDetailPage() {
               <CardContent className="space-y-2">
                 {runs.slice(0, 5).map(run => (
                   <div key={run.id} className="flex items-center gap-2 text-xs">
-                    {run.status === 'completed' && <CheckCircle className="h-3 w-3 text-green-500" />}
-                    {run.status === 'failed' && <XCircle className="h-3 w-3 text-red-500" />}
-                    {run.status === 'running' && <Loader2 className="h-3 w-3 text-blue-500 animate-spin" />}
+                    {run.status === 'completed' && <CheckCircle className="h-3 w-3 text-success" />}
+                    {run.status === 'failed' && <XCircle className="h-3 w-3 text-destructive" />}
+                    {run.status === 'running' && <Loader2 className="h-3 w-3 text-info animate-spin" />}
                     <span className="flex-1 truncate">{run.goal}</span>
                     <span className="text-muted-foreground">{run.completed_count}/{run.tasks.length} tasks</span>
                   </div>

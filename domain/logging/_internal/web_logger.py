@@ -198,16 +198,16 @@ class WebLogger(Logger):
         with every other ``log.tag("X").info(...)`` call.
         """
         resolved_tag = tag or self._infer_tag(event)
-        summary_parts = [event]
-        if data:
-            summary_parts.extend(f"{k}={v}" for k, v in data.items())
+        # Bare event name only — structured fields stay in context so every
+        # emitter renders each fact once (mirrors the TS WebLogger.trackEvent
+        # contract: backend composes `[from → to] {k=v} (req=...)`).
         ctx = dict(data) if data else {}
         ctx["tag"] = resolved_tag
         tagged = self.tag(resolved_tag)
         tagged.emit(
             tagged._make_record(
                 level=LogLevel.INFO,
-                message=" ".join(summary_parts),
+                message=event,
                 context=ctx,
             )
         )

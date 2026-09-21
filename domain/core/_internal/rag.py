@@ -150,11 +150,16 @@ class HybridRetriever:
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3,
         use_rerank: bool = True,
+        use_dense: bool = True,
         embedding_fn: Any | None = None,
     ):
         self.dense_weight = dense_weight
         self.sparse_weight = sparse_weight
         self.use_rerank = use_rerank
+        # Dense runs embedding inference per query (and the default
+        # embedding_fn is an uninformative random projection). Disabling
+        # skips that cost and keeps retrieval fully sparse + rerank.
+        self.use_dense = use_dense
 
         self.chunks: list[TextChunk] = []
         self.bm25 = BM25Indexer()
@@ -228,8 +233,9 @@ class HybridRetriever:
         """
         logger.debug("Retrieving for query (len=%d), top_k=%d", len(query), top_k)
 
-        # Get results from both methods
-        dense_results = self._dense_search(query, top_k * 2)
+        # Get results from both methods (dense skipped when disabled —
+        # fusion below then reduces to the sparse term, unchanged math).
+        dense_results = self._dense_search(query, top_k * 2) if self.use_dense else []
         sparse_results = self._sparse_search(query, top_k * 2)
 
         logger.debug(
@@ -292,31 +298,93 @@ class HybridRetriever:
         )
         return final_results
 
+    # Rerank feature weights: fusion base, query-term coverage,
+    # exact-phrase match, term proximity. Deterministic, no model weights.
+    RERANK_WEIGHTS = {
+        "base": 0.4,
+        "coverage": 0.25,
+        "phrase": 0.2,
+        "proximity": 0.15,
+    }
+    RERANK_MMR_LAMBDA = 0.7
+
     def _rerank(
         self,
         query: str,
         results: list[RetrievalResult],
     ) -> list[RetrievalResult]:
-        """
-        Rerank results using cross-encoder style scoring.
-        In production, use: sentence-transformers cross-encoder.
-        """
-        # Simple MMR (Maximal Marginal Relevance) for diversity
-        reranked = []
-        seen_contexts = set()
+        """Feature-based rerank with MMR diversity selection.
 
+        Each candidate is rescored on exact-phrase match, query-term
+        coverage, and term proximity blended with the fusion score; the
+        final order comes from Maximal Marginal Relevance selection, so
+        near-duplicates sink instead of crowding out diverse hits.
+        Always returns all candidates, reordered. ``combined_score``
+        keeps the fusion value; ``rank`` reflects the reranked order.
+        """
+        if not results:
+            return []
+        query_terms = self.bm25._tokenize(query)
+        if not query_terms:
+            for i, r in enumerate(results):
+                r.rank = i + 1
+            return results
+        query_set = set(query_terms)
+        phrase = " ".join(query_terms)
+
+        scored: list[tuple[float, RetrievalResult]] = []
         for r in results:
-            # Check novelty
-            novelty = len(set(r.chunk.content.split()) & seen_contexts) / len(
-                r.chunk.content.split()
+            content = r.chunk.content.lower()
+            doc_terms = self.bm25._tokenize(content)
+            doc_set = set(doc_terms)
+            matched = query_set & doc_set
+            coverage = len(matched) / len(query_set)
+            exact = 1.0 if phrase in content else 0.0
+            if len(matched) < 2 or len(doc_terms) == 0:
+                proximity = 1.0 if matched else 0.0
+            else:
+                positions = [i for i, tok in enumerate(doc_terms) if tok in matched]
+                span = max(positions) - min(positions)
+                proximity = 1.0 - span / len(doc_terms)
+            w = self.RERANK_WEIGHTS
+            # Tier bonus: full query-term coverage outranks everything;
+            # an exact-phrase bonus confirms but never alone overrides
+            # full coverage (chance contiguous matches occur in distractors).
+            tier = (0.5 if exact > 0 else 0.0) + (1.0 if coverage >= 1.0 else 0.0)
+            score = (
+                tier
+                + w["base"] * r.combined_score
+                + w["coverage"] * coverage
+                + w["phrase"] * exact
+                + w["proximity"] * proximity
             )
-            diversity_score = r.combined_score * (1 - novelty * 0.3)
+            scored.append((score, r))
 
-            if diversity_score > 0.1:
-                reranked.append(r)
-                seen_contexts.update(r.chunk.content.split())
+        # MMR selection: relevance minus similarity to already-selected.
+        selected: list[RetrievalResult] = []
+        selected_terms: list[set[str]] = []
+        remaining = scored
+        while remaining:
+            best_idx = 0
+            best_mmr = float("-inf")
+            for i, (score, r) in enumerate(remaining):
+                doc_set = set(self.bm25._tokenize(r.chunk.content.lower()))
+                sim = 0.0
+                for prev in selected_terms:
+                    union = doc_set | prev
+                    if union:
+                        sim = max(sim, len(doc_set & prev) / len(union))
+                mmr = self.RERANK_MMR_LAMBDA * score - (1 - self.RERANK_MMR_LAMBDA) * sim
+                if mmr > best_mmr:
+                    best_mmr = mmr
+                    best_idx = i
+            _, best = remaining.pop(best_idx)
+            selected.append(best)
+            selected_terms.append(set(self.bm25._tokenize(best.chunk.content.lower())))
 
-        return reranked[: len(results)]
+        for i, r in enumerate(selected):
+            r.rank = i + 1
+        return selected
 
 
 class CitationTracker:
@@ -507,6 +575,11 @@ class ProductionRAG:
         self.retriever = HybridRetriever(
             dense_weight=config.get("dense_weight", 0.7),
             sparse_weight=config.get("sparse_weight", 0.3),
+            # Live path is sparse + rerank: the default embedding_fn is
+            # an uninformative random projection, so dense adds noise,
+            # not signal. Pass use_dense=True with a real embedding_fn
+            # to re-enable the dense side.
+            use_dense=config.get("use_dense", False),
         )
         self.hallucination_detector = HallucinationDetector(self.retriever)
 

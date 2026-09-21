@@ -95,7 +95,8 @@ class EpisodicMemory:
         Retrieve k episodes.
 
         Args:
-            k: number of episodes to return (capped by buffer size).
+            k: number of episodes to return (capped by buffer size;
+                k <= 0 returns all).
             by_reward: when True, return the k highest-reward episodes;
                 otherwise return the k most recent.
 
@@ -103,12 +104,10 @@ class EpisodicMemory:
             List of episodes in chronological order.
         """
         episodes = self._chronological()
-        if k <= 0:
-            return []
         if not by_reward:
-            return episodes[-k:]
+            return episodes if k <= 0 else episodes[-k:]
         ranked = sorted(episodes, key=lambda e: e.reward, reverse=True)
-        return ranked[:k]
+        return ranked if k <= 0 else ranked[:k]
 
     def mean_reward(self, k: int = 5) -> float:
         """

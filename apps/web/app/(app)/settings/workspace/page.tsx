@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -256,8 +255,7 @@ export default function WorkspaceSettingsPage() {
   }
 
   return (
-    <PageContainer title="Workspace Settings">
-      <AppRouteHeader left={<AppRouteHeaderLead title={`${settings.name} — Settings`} />} />
+    <PageContainer title={settings?.name ? `${settings.name} — Settings` : "Workspace Settings"}>
 
       <KpiGrid className="mb-6">
         <StatCard label="Members" value={String(usage?.members?.total ?? settings.member_count ?? 0)} />

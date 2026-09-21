@@ -344,7 +344,10 @@ class TestIngestFrontendLogs:
         args, kwargs = mock_logger.log.call_args
         assert args[0] == logging.WARNING
         assert args[1] == "warn"
-        assert kwargs["extra"]["source"] == "web.models"
+        # Structured fields are top-level extras — no nested dict, no source echo
+        assert "context" not in kwargs["extra"]
+        assert "source" not in kwargs["extra"]
+        assert kwargs["extra"]["user"] == "anonymous"
 
     @patch("logging.getLogger")
     def test_ingest_unknown_level_defaults_info(self, mock_get_logger, client):
@@ -381,9 +384,10 @@ class TestIngestFrontendLogs:
         )
         assert resp.status_code == 200
         _, kwargs = mock_logger.log.call_args
-        ctx = kwargs["extra"]["context"]
-        assert ctx["page"] == "/settings"
-        assert ctx["exception"] == "TypeError: x"
+        extra = kwargs["extra"]
+        assert extra["page"] == "/settings"
+        assert extra["exception"] == "TypeError: x"
+        assert "context" not in extra
 
     @patch("logging.getLogger")
     def test_ingest_empty_batch(self, mock_get_logger, client):

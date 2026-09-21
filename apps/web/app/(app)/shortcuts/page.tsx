@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic'
 
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import {
   Keyboard, RefreshCw, Plus, Search, Command, ArrowUp,
   MessageSquare, Settings, Zap, Database, Brain, GraduationCap
@@ -61,10 +60,6 @@ const categories = [...new Set(shortcuts.map(s => s.category))]
 export default function ShortcutsPage() {
   return (
     <PageContainer title="Keyboard Shortcuts">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Keyboard Shortcuts" />}
-      />
-
       <div className="space-y-6">
         <p className="text-sm text-muted-foreground">
           Keyboard shortcuts available across the application. Shortcuts are disabled when focus is in input fields.

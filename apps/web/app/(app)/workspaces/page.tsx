@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconPlus, IconTrash } from '@/components/icons/NavIcons'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
@@ -205,12 +204,8 @@ export default function WorkspacesPage() {
   }
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Workspaces" subtitle="Manage workspaces and members" />}
-      />
+    <PageContainer title="Workspaces" subtitle="Manage workspaces and members">
 
-      <div className="space-y-4">
         <KpiGrid>
           <StatCard label="Workspaces" value={activeCount} />
           <StatCard label="Current" value={currentWorkspace?.name ?? 'None'} />
@@ -390,7 +385,6 @@ export default function WorkspacesPage() {
             </CardContent>
           </Card>
         )}
-      </div>
-    </div>
+    </PageContainer>
   )
 }

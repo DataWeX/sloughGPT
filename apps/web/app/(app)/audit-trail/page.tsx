@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh, IconDownload } from '@/components/icons/NavIcons'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { logger } from '@/lib/dev-log'
@@ -121,8 +120,6 @@ export default function AuditTrailPage() {
 
   return (
     <PageContainer title="Audit Trail">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Audit Trail" />} />
-
       <KpiGrid className="mb-6">
         <StatCard label="Total Events" value={activities.length} />
         <StatCard label="Filtered" value={filteredActivities.length} />

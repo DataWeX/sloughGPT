@@ -103,16 +103,26 @@ def _base_job(checkpoint_dir, checkpoint_path=""):
 @pytest.fixture
 def deps():
     """Wire fakes into the router module and yield the handles to assert on."""
+    from domain.training._internal.train_pipeline import CheckpointManager
+
     executor = _SyncExecutor()
     trainer_cls = MagicMock()
     trainer_inst = trainer_cls.return_value
     trainer_inst._last_checkpoint_path = None
     trainer_inst.train.return_value = {"success": True, "global_step": 7}
 
+    engine = MagicMock()
+    engine.get_executor.return_value = executor
+    # Real manager class so tests can patch its methods with patch.object.
+    engine.get_checkpoint_manager_class.return_value = CheckpointManager
+
     with (
-        patch.object(router_mod, "get_training_executor", return_value=executor),
+        patch.object(router_mod, "get_training_engine", return_value=engine),
         patch.object(router_mod, "get_training_controller", return_value=_FakeController()),
         patch.object(router_mod, "notify_training_event", new=MagicMock()),
+        # Patch the defining submodule, not the lazy package attribute: a
+        # real attribute on ``domain.training`` would shadow __getattr__ and
+        # hide per-test submodule patches (e.g. tcls below) from run_recovery.
         patch(
             "domain.training._internal.train_pipeline.SloughGPTTrainer",
             new=trainer_cls,

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { logger } from '@/lib/dev-log'
@@ -68,12 +67,8 @@ export default function UsagePage() {
   }
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Usage" subtitle={`Metrics for ${usage?.name ?? currentWorkspace.name}`} />}
-      />
+    <PageContainer title="Usage" subtitle={`Metrics for ${usage?.name ?? currentWorkspace.name}`}>
 
-      <div className="space-y-4">
         <KpiGrid>
           <StatCard label="Members" value={usage?.members.total ?? 0} />
           <StatCard label="Datasets" value={usage?.datasets ?? 0} />
@@ -89,19 +84,19 @@ export default function UsagePage() {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="text-center p-2 rounded bg-muted/30">
-                <div className="text-lg font-bold text-green-500">{usage?.training.by_status.completed ?? 0}</div>
+                <div className="text-base font-bold text-success">{usage?.training.by_status.completed ?? 0}</div>
                 <div className="text-[10px] text-muted-foreground">Completed</div>
               </div>
               <div className="text-center p-2 rounded bg-muted/30">
-                <div className="text-lg font-bold text-blue-500">{usage?.training.by_status.running ?? 0}</div>
+                <div className="text-base font-bold text-info">{usage?.training.by_status.running ?? 0}</div>
                 <div className="text-[10px] text-muted-foreground">Running</div>
               </div>
               <div className="text-center p-2 rounded bg-muted/30">
-                <div className="text-lg font-bold text-yellow-500">{usage?.training.by_status.queued ?? 0}</div>
+                <div className="text-base font-bold text-warning">{usage?.training.by_status.queued ?? 0}</div>
                 <div className="text-[10px] text-muted-foreground">Queued</div>
               </div>
               <div className="text-center p-2 rounded bg-muted/30">
-                <div className="text-lg font-bold text-red-500">{usage?.training.by_status.failed ?? 0}</div>
+                <div className="text-base font-bold text-destructive">{usage?.training.by_status.failed ?? 0}</div>
                 <div className="text-[10px] text-muted-foreground">Failed</div>
               </div>
             </div>
@@ -130,7 +125,6 @@ export default function UsagePage() {
             </div>
           </CardContent>
         </Card>
-      </div>
-    </div>
+    </PageContainer>
   )
 }

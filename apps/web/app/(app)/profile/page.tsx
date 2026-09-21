@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet, apiPut, apiPost } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
@@ -117,12 +116,8 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Profile" subtitle="Your account settings" />}
-      />
+    <PageContainer title="Profile" subtitle="Your account settings">
 
-      <div className="space-y-4">
         <KpiGrid>
           <StatCard label="Username" value={profile?.username ?? '—'} />
           <StatCard label="Role" value={profile?.role ?? '—'} />
@@ -238,7 +233,6 @@ export default function ProfilePage() {
             </div>
           </CardContent>
         </Card>
-      </div>
-    </div>
+    </PageContainer>
   )
 }

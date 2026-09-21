@@ -18,8 +18,12 @@ for _sys_path in [_CLI_DIR, str(_CORE_PY_DIR)]:
         sys.path.insert(0, str(_sys_path))
 
 # ── Structured logging (centralized, CLI uses CLILogger via BridgeHandler)
-from domain.logging import BridgeHandler, CLILogger, set_global  # noqa: E402
-from domain.logging._internal.config import setup_logging  # noqa: E402
+from domain.logging import (  # noqa: E402
+    BridgeHandler,
+    CLILogger,
+    set_global,
+    setup_logging,  # noqa: E402
+)
 
 setup_logging(enable_console=False, enable_output_buffer=False)
 log = CLILogger("slo")
@@ -329,8 +333,7 @@ def shell(ctx, command, tui, line):
     from utils.helpers import ensure_server
 
     actual_url, _server_proc = ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
-    from domain.shell import DaitRuntime
-    from domain.shell._internal.repl import ShellREPL
+    from domain.shell import DaitRuntime, ShellREPL
 
     os = DaitRuntime(api_url=actual_url)
     # Default to TUI when TTY, line mode when piped or --line
@@ -564,6 +567,14 @@ from groups.error import register as _register_error
 _register_error(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
+# logger — live error catch for the agent fix flow
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.logger import register as _register_logger
+
+_register_logger(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
 # memory — auto-memory layer management
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -719,7 +730,7 @@ def simulate(
 
     # ── Self-test mode ──
     if do_self_test:
-        from domain.shell._internal.vm import self_test
+        from domain.shell import self_test
 
         _p(f"{_c('Running VM self-test...', _BOLD)}\n")
         results = self_test()
@@ -730,7 +741,7 @@ def simulate(
 
     # ── Run assembly mode ──
     if asm_source:
-        from domain.shell._internal.vm import VMRunner
+        from domain.shell import VMRunner
 
         _p(f"{_c('Running VM assembly...', _BOLD)}\n")
         runner = VMRunner()
@@ -765,7 +776,7 @@ def simulate(
 
     # ── Boot ──
     t0 = time.perf_counter()
-    from domain.shell._internal.kernel import Kernel
+    from domain.shell import Kernel
 
     k = Kernel()
     boot_msg = k.boot()
@@ -811,7 +822,7 @@ def simulate(
             mock = MockModel()
             k.engine.load_model(model, mock)
         else:
-            from domain.shell._internal.kernel_npu import NPUDevice
+            from domain.shell import NPUDevice
 
             npu = NPUDevice(name="npu")
             npu.open()
@@ -865,7 +876,7 @@ def simulate(
         )
 
         # ── Create inference process ──
-        from domain.shell._internal.kernel_neural import NeuralProcessType
+        from domain.shell import NeuralProcessType
 
         proc = k.create_neural_process("sim-infer", NeuralProcessType.INFERENCE, model_name=model)
 

@@ -276,17 +276,12 @@ export class WebLogger {
 
   trackEvent(event: string, data?: Record<string, unknown>) {
     const tag = (data?.tag as LogTag) || WebLogger.inferTag(event)
-    const summary = data
-      ? Object.entries(data)
-          .filter(([k]) => k !== 'tag')
-          .map(([k, v]) => `${k}=${v}`)
-          .join(' ')
-      : ''
-
+    // Bare event name only — the backend composes `[from → to] {k=v} (req=...)`
+    // from the structured context, so each fact renders exactly once.
     const record: LogRecord = {
       level: 'info',
       logger: this._name,
-      message: summary ? `${event} ${summary}` : event,
+      message: event,
       timestamp: Date.now() / 1000,
       context: { ...data, tag },
     }

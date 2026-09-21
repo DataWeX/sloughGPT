@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@/components/icons/NavIcons'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
@@ -104,8 +103,6 @@ export default function NotificationsPage() {
 
   return (
     <PageContainer title="Notifications">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Notifications" />} />
-
       <KpiGrid className="mb-6">
         <StatCard label="Total" value={notifications.length} />
         <StatCard label="Training" value={typeCounts['training'] ?? 0} />

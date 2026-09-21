@@ -46,9 +46,9 @@ _SloLayerNorm = None
 def _get_slo_layernorm():
     global _SloLayerNorm
     if _SloLayerNorm is None:
-        from domain.training._internal.slonet import SloLayerNorm
+        from domain.training._internal.slonet import LayerNorm
 
-        _SloLayerNorm = SloLayerNorm
+        _SloLayerNorm = LayerNorm
     return _SloLayerNorm
 
 
@@ -805,6 +805,23 @@ class SloNetChatProvider:
             Exception
         ) as e:  # pragma: no cover — defensive; real ResourceManager never raises here
             logger.warning("ResourceManager.apply_blas_env skipped: %s", e)
+
+        # Warm the LM-head transpose cache: its ~543MB first touch faults
+        # .slnc mmap pages and costs 1-2.6s on the first user request.
+        # Best-effort — must never break load.
+        try:
+            _t_warm = _time.monotonic()
+            _lm_head = getattr(model, "layers", [None])[-1]
+            _warm = getattr(_lm_head, "_get_weight_T_contig", None)
+            if callable(_warm):
+                _warm()
+                logger.info(
+                    "SloNetChatProvider.from_slnc: warmed lm-head transpose (%.2fs)",
+                    _time.monotonic() - _t_warm,
+                    extra={"tag": "INF"},
+                )
+        except Exception as e:
+            logger.debug("lm-head warmup skipped: %s", e)
 
         # Load tokenizer
         _t_tok_start = _time.monotonic()
@@ -1847,6 +1864,8 @@ class SloNetChatProvider:
         ):
             tok_id, logits = tok_id  # unpack (token_id, logits) tuple
             decoded = self._tokenizer.decode([tok_id])
+            # Stream yields batched (1, vocab) logits — flatten before indexing.
+            logits = np.asarray(logits).reshape(-1)
             # Compute true log-probability from raw logits
             shifted = logits - np.max(logits)
             log_probs = shifted - np.log(np.sum(np.exp(shifted)))

@@ -534,10 +534,11 @@ html {
 /*
  * sl-page — standard page content wrapper
  * Used by non-chat pages (settings, models, training, etc.)
- * Provides scroll containment and responsive padding.
+ * Provides responsive padding; scrolling is handled by parent .sl-app-content.
+ * Inner centered column (.mx-auto max-w-*) controls width, not this wrapper.
  */
 .sl-page {
-  @apply min-h-0 flex-1 overflow-y-auto overscroll-contain text-foreground;
+  @apply w-full text-foreground;
   padding: 0.75rem;
   background-color: rgb(var(--background));
 }
@@ -815,6 +816,9 @@ html.dark .sl-kanban-tray-surface {
   }
   .sl-interactive:active {
     transform: none;
+  }
+  .view-pane {
+    animation: none;
   }
 }
 

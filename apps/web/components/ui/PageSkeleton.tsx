@@ -1,30 +1,28 @@
 'use client'
 
 import { Skeleton } from '@sloughgpt/strui'
+import { cn } from '@sloughgpt/strui'
 
 interface PageSkeletonProps {
   /** Number of card skeletons to show. */
   cards?: number
-  /** Show header skeleton. */
+  /** Show header skeleton (title + subtitle). Use false when parent renders real header. */
   header?: boolean
   /** Show grid skeleton instead of card skeleton. */
   grid?: boolean
+  className?: string
 }
 
 /**
  * Responsive page loading skeleton.
- *
- * Matches PageContainer layout:
- * - sl-page responsive padding
- * - Title skeleton: h-8 on mobile, h-9 on md+ (approximates sl-h1)
- * - Subtitle skeleton: h-4
- * - Cards: full-width on mobile, 2-col on sm, 4-col on sm+ for grid
+ * No outer page wrapper — parent `PageContainer` handles `sl-page` and max-width.
+ * Set header=false when the real AppRouteHeader is already visible.
  */
-export function PageSkeleton({ cards = 3, header = true, grid = false }: PageSkeletonProps) {
+export function PageSkeleton({ cards = 3, header = false, grid = false, className }: PageSkeletonProps) {
   return (
-    <div className="sl-page mx-auto max-w-4xl space-y-4">
+    <div className={cn('space-y-4', className)} aria-busy="true" aria-live="polite">
       {header && (
-        <div className="space-y-2">
+        <div className="space-y-2 py-2">
           <Skeleton className="h-8 w-48 md:h-9 md:w-56" />
           <Skeleton className="h-4 w-72 max-w-full" />
         </div>

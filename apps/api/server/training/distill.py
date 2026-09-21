@@ -15,10 +15,9 @@ from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
 from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
 
 from .controller import get_training_controller
-from .helpers import _finish_job, _run_async
+from .helpers import _finish_job, _run_async, notify_push
 from .jobs import training_jobs
 from .schemas import DistillStartRequest
 from .webhooks import notify_training_event
@@ -73,9 +72,9 @@ async def start_distillation(
 
     # Pre-flight quality gate
     try:
-        from domain.training._internal.quality_scorer import compute_data_quality
+        from domain.training.engine import get_training_engine
 
-        quality = compute_data_quality(data_str[:200_000])
+        quality = get_training_engine().compute_data_quality(data_str[:200_000])
         avg_q = quality.get("avg_quality", 0)
         tox_r = quality.get("toxicity_rate", 0)
 
@@ -312,7 +311,7 @@ async def start_distillation(
             safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
             ckpt_path = output_dir / f"{safe_stem}_distilled.soul"
 
-            from domain.training._internal.slonet import export_to_sou
+            from domain.training import export_to_sou
 
             export_to_sou(
                 student,
@@ -368,18 +367,13 @@ async def start_distillation(
                 )
             except Exception as e:
                 logger.debug("Training completion webhook failed: %s", e)
-            # Push notification
-            try:
-                from domain.mobile._internal.notifications import get_notification_service
-
-                get_notification_service().send_notification_sync(
-                    title="Distillation Complete",
-                    body=f"Student model saved: {ckpt_path.name} (loss: {epoch_losses[-1]:.4f})"
-                    if epoch_losses
-                    else "Distillation complete",
-                )
-            except Exception as e:
-                logger.debug("Training completion push notification failed: %s", e)
+            # Push notification (off-thread via notify_push).
+            notify_push(
+                title="Distillation Complete",
+                body=f"Student model saved: {ckpt_path.name} (loss: {epoch_losses[-1]:.4f})"
+                if epoch_losses
+                else "Distillation complete",
+            )
 
         except Exception as e:
             logger.exception("Distillation job %s failed", job_id, extra={"tag": "TRAIN"})
@@ -399,18 +393,13 @@ async def start_distillation(
                 )
             except Exception as exc:
                 logger.debug("Training failure webhook failed: %s", exc)
-            # Push notification
-            try:
-                from domain.mobile._internal.notifications import get_notification_service
+            # Push notification (off-thread via notify_push).
+            notify_push(
+                title="Distillation Failed",
+                body=f"Error: {str(e)[:100]}",
+            )
 
-                get_notification_service().send_notification_sync(
-                    title="Distillation Failed",
-                    body=f"Error: {str(e)[:100]}",
-                )
-            except Exception as exc:
-                logger.debug("Training failure push notification failed: %s", exc)
-
-    executor = get_training_executor()
+    executor = get_training_engine().get_executor()
     executor.submit(_run_distill, job_id)
 
     return {

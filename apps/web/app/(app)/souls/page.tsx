@@ -35,7 +35,7 @@ import {
   Spinner,
 } from '@sloughgpt/strui'
 import { IconRefresh, IconPlus, IconTrash, IconDownload } from '@sloughgpt/strui'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
+import { PageContainer } from '@/components/PageContainer'
 import { soulsController, type Soul, type Checkpoint } from '@/lib/souls-controller'
 import { SoulPersonalityCard } from '@/components/souls/SoulPersonalityCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -401,44 +401,42 @@ export default function SoulsPage() {
   // ── Loading State ──
   if (loading) {
     return (
-      <div className="sl-page mx-auto max-w-4xl">
-        <AppRouteHeader
-          left={<AppRouteHeaderLead title="Souls" subtitle="Personality management" />}
-        />
-        <div className="space-y-4">
-          <KpiGrid>
-            <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
-            <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
-            <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
-            <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
-          </KpiGrid>
-          <Card>
-            <CardContent>
-              <Skeleton className="h-32 w-full rounded" />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <PageContainer
+        title="Souls"
+        subtitle="Personality management"
+        loading
+        loadingContent={
+          <div className="space-y-4">
+            <KpiGrid>
+              <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+              <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+              <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+              <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+            </KpiGrid>
+            <Card>
+              <CardContent>
+                <Skeleton className="h-32 w-full rounded" />
+              </CardContent>
+            </Card>
+          </div>
+        }
+      >
+        <></>
+      </PageContainer>
     )
   }
 
   // ── Render ──
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={
-          <AppRouteHeaderLead
-            title="Souls"
-            subtitle={`${souls.length} personalities · ${currentSoul ?? 'none'} active`}
-          />
-        }
-        right={
-          <Button size="sm" variant="ghost" onClick={handleRefresh} aria-label="Refresh">
-            <IconRefresh className="h-4 w-4" />
-          </Button>
-        }
-      />
-
+    <PageContainer
+      title="Souls"
+      subtitle={`${souls.length} personalities · ${currentSoul ?? 'none'} active`}
+      headerRight={
+        <Button size="sm" variant="ghost" onClick={handleRefresh} aria-label="Refresh">
+          <IconRefresh className="h-4 w-4" />
+        </Button>
+      }
+    >
       <KpiGrid>
         <StatCard label="Personalities" value={souls.length} />
         <StatCard label="Active Soul" value={currentSoul ?? 'None'} />
@@ -1560,6 +1558,6 @@ export default function SoulsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageContainer>
   )
 }

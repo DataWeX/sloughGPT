@@ -109,7 +109,7 @@ describe('ErrorDiagnosticsPanel', () => {
             id: 'ste_1',
             kind: 'connection',
             event: 'connection_status_changed',
-            message: 'connection_status_changed connecting → connected',
+            message: 'connection_status_changed',
             from: 'connecting',
             to: 'connected',
             timestamp: Date.now(),
@@ -118,8 +118,9 @@ describe('ErrorDiagnosticsPanel', () => {
       />,
     )
     expect(screen.getAllByText(/State events/).length).toBeGreaterThanOrEqual(1)
+    // Headline composes the transition from structured from/to fields
     expect(
-      screen.getAllByText(/connection_status_changed connecting/).length,
+      screen.getAllByText(/connection_status_changed connecting → connected/).length,
     ).toBeGreaterThanOrEqual(1)
   })
   it('shows empty state events message', () => {

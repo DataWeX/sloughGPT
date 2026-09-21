@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -132,16 +131,15 @@ export default function ApiKeysPage() {
 
   if (loading) {
     return (
-      <PageContainer title="API Keys">
-        <Skeleton className="h-8 w-64 mb-4" />
-        <Skeleton className="h-64 w-full" />
-      </PageContainer>
+      <PageContainer title="API Keys" subtitle="Manage API keys for programmatic access" loading />
     )
   }
 
   return (
-    <PageContainer title="API Keys">
-      <AppRouteHeader left={<AppRouteHeaderLead title="API Keys" />} />
+    <PageContainer
+      title="API Keys"
+      subtitle="Manage API keys for programmatic access"
+    >
 
       {newKey && (
         <Card className="mb-6 border-green-500/50 bg-green-500/5">

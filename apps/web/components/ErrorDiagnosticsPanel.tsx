@@ -375,6 +375,14 @@ const KIND_STYLES: Record<string, string> = {
   ui: 'bg-muted text-muted-foreground',
 }
 
+/** Headline for a state event — transition composed from structured fields. */
+function stateEventHeadline(e: StateEvent): string {
+  if (e.from !== undefined || e.to !== undefined) {
+    return `${e.message} ${e.from ?? '?'} → ${e.to ?? '?'}`
+  }
+  return e.message
+}
+
 function StateEventsSection({ events, onClear }: { events: StateEvent[]; onClear?: () => void }) {
   const [expanded, setExpanded] = useState(false)
   const visible = expanded ? events.slice(0, 30) : events.slice(0, 5)
@@ -428,7 +436,7 @@ function StateEventsSection({ events, onClear }: { events: StateEvent[]; onClear
               </span>
               <span className="flex-1 min-w-0">
                 <span className="text-[10px] text-foreground/90 break-all leading-tight block">
-                  {e.message.slice(0, 200)}
+                  {stateEventHeadline(e).slice(0, 200)}
                 </span>
                 <span className="text-[9px] text-muted-foreground/50 mt-0.5 block">
                   <span className="font-mono mr-1.5">{e.event}</span>

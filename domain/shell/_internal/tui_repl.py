@@ -158,6 +158,17 @@ def _read_escape_remainder(stdscr, alt_map, restore_ms: int = 100):
                 return "seq:ctrl-right"
             if seq.endswith("D") and "5" in seq:
                 return "seq:ctrl-left"
+            if seq in ("A", "B", "C", "D"):
+                # Plain CSI arrows (no modifier): only reached when ncurses
+                # did not fold the sequence into KEY_UP/DOWN/LEFT/RIGHT.
+                return {"A": "seq:up", "B": "seq:down", "C": "seq:right", "D": "seq:left"}[seq]
+            return None
+        if first == ord("O"):
+            # SS3 application-cursor sequences (xterm): ESC O A/B/C/D.
+            # Same fallback as above when keypad folding misses them.
+            b = stdscr.getch()
+            if b in (ord("A"), ord("B"), ord("C"), ord("D")):
+                return {"A": "seq:up", "B": "seq:down", "C": "seq:right", "D": "seq:left"}[chr(b)]
             return None
         if 32 <= first < 127:
             name = alt_map.get(chr(first))
@@ -591,6 +602,22 @@ class TuiRepl:
             return buf, len(prompt) + caret
         start = min(caret, len(buf) - max_w)
         return buf[start : start + max_w], len(prompt) + (caret - start)
+
+    def _place_layers(self, regions) -> None:
+        """Pin each engine layer to its pane region (top/left)."""
+        pairs = (
+            ("console_bg", "console"),
+            ("console", "console"),
+            ("output_bg", "output"),
+            ("output", "output"),
+            ("status", "status"),
+            ("input", "input"),
+        )
+        for layer_name, region_name in pairs:
+            layer = getattr(self, "_layer_" + layer_name, None)
+            region = regions.get(region_name)
+            if layer is not None and region is not None:
+                layer.set_position(region.left, region.top)
 
     def _render_input(self, win: curses._CursesWindow, cols: int) -> int:
         """Draw the command line using the engine with display modes.
@@ -1150,6 +1177,7 @@ class TuiRepl:
         self._layer_output.resize(regions["output"].rows, regions["output"].cols)
         self._layer_status.resize(regions["status"].rows, regions["status"].cols)
         self._layer_input.resize(regions["input"].rows, regions["input"].cols)
+        self._place_layers(regions)
 
         # Fill background patterns on bg layers
         self._layer_console_bg.fill_pattern(Pattern.DOTS, fg=Color.BRIGHT_BLACK)
@@ -1234,6 +1262,7 @@ class TuiRepl:
                 self._layer_status.resize(regions["status"].rows, regions["status"].cols)
             if self._layer_input is not None:
                 self._layer_input.resize(regions["input"].rows, regions["input"].cols)
+            self._place_layers(regions)
             win_console = curses.newwin(
                 regions["console"].rows,
                 regions["console"].cols,
@@ -1528,6 +1557,20 @@ class TuiRepl:
                     _redraw()
                 elif action == "seq:ctrl-left":
                     self._move_word_backward()
+                    _redraw()
+                elif action == "seq:left":
+                    if self._input_cursor > 0:
+                        self._input_cursor -= 1
+                        _redraw()
+                elif action == "seq:right":
+                    if self._input_cursor < len(self._input_buf):
+                        self._input_cursor += 1
+                        _redraw()
+                elif action == "seq:up":
+                    self._history_back()
+                    _redraw()
+                elif action == "seq:down":
+                    self._history_fwd()
                     _redraw()
 
             elif ch in (_KEY_CTRL_LEFT, _KEY_CTRL_RIGHT):  # Ctrl+Left / Ctrl+Right

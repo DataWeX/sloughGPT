@@ -20,6 +20,41 @@ from .tensor_device import TensorDevice
 logger = logging.getLogger("slo.npu")
 
 
+class NPUModel:
+    """A loaded model: the device's handle on a model file and its space.
+
+    Wraps one provider plus its config. Calling executes against the loaded
+    weights without mutating them — reads, never writes (file-cache style).
+    Models are owned by an :class:`NPUDevice`; use ``device.load()`` to
+    create one and ``device.model(name)`` to fetch it.
+    """
+
+    def __init__(self, name: str, provider: Any, device: NPUDevice, config: dict | None = None):
+        self._name = name
+        self._provider = provider
+        self._device = device
+        self._config = dict(config) if config else {"name": name}
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def provider(self) -> Any:
+        return self._provider
+
+    @property
+    def config(self) -> dict:
+        return dict(self._config)
+
+    def __call__(self, input_data, **kwargs):
+        """Execute the model — input goes in, output comes out (no writes)."""
+        return self._device.execute(self._name, input_data, **kwargs)
+
+    def __repr__(self) -> str:
+        return f"NPUModel(name={self._name!r}, provider={type(self._provider).__name__})"
+
+
 class NPUDevice:
     """Standalone neural processing hardware — loads models, executes them.
 
@@ -33,6 +68,7 @@ class NPUDevice:
         self._models: dict[str, Any] = {}
         self._default_model: str = ""
         self._checkpoints: dict[str, dict] = {}
+        self._loaded_models: dict[str, NPUModel] = {}
 
     @property
     def name(self) -> str:
@@ -47,6 +83,7 @@ class NPUDevice:
             "names": list(self._models.keys()),
             "default": self._default_model,
             "checkpoints": list(self._checkpoints.keys()),
+            "models_loaded": list(self._loaded_models.keys()),
         }
 
     def call(self, method: str, *args: Any) -> Any:
@@ -195,6 +232,9 @@ class NPUDevice:
             raise ValueError(f"unsupported: {path}")
 
         self._models[key] = provider
+        self._loaded_models[key] = NPUModel(
+            key, provider, self, {"name": key, "provider": type(provider).__name__}
+        )
         if not self._default_model:
             self._default_model = key
         return provider
@@ -203,10 +243,27 @@ class NPUDevice:
         """Unload model."""
         if name in self._models:
             del self._models[name]
+            self._loaded_models.pop(name, None)
             if self._default_model == name:
                 self._default_model = next(iter(self._models), "")
             return True
         return False
+
+    def model(self, name: str = "") -> NPUModel:
+        """Fetch a loaded model (builds lazily if the provider is loaded)."""
+        key = name or self._default_model
+        model = self._loaded_models.get(key)
+        if model is None:
+            provider = self._models.get(key)
+            if provider is None:
+                raise ValueError(f"model '{key}' not loaded")
+            model = NPUModel(key, provider, self, {"name": key})
+            self._loaded_models[key] = model
+        return model
+
+    def __call__(self, input_data, model_name: str = "", **kwargs):
+        """Execute the default (or named) model — reads, never writes."""
+        return self.model(model_name)(input_data, **kwargs)
 
     def execute(self, model_name: str, input_data, **kwargs):
         """Execute model — input goes in, output comes out."""

@@ -4,7 +4,6 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input } from '@sloughgpt/strui'
 import { trainingFacade } from '@/lib/training-facade'
 
@@ -91,8 +90,6 @@ export default function AutoTrainPage() {
 
   return (
     <PageContainer title="Auto-Train">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Auto-Train" />} />
-
       <p className="text-sm text-muted-foreground mb-6">
         Automatic training from conversation pairs. When enough high-quality pairs accumulate, the
         system trains a LoRA adapter automatically.

@@ -476,13 +476,22 @@ class Layer:
         z: int = 0,
         visible: bool = True,
         opacity: float = 1.0,
+        x: int = 0,
+        y: int = 0,
     ) -> None:
         self.name = name
         self.z = z
         self.visible = visible
         self.opacity = opacity
+        self.x = x
+        self.y = y
         self.framebuffer = Framebuffer(rows, cols)
         self._draw_ops: list[Callable[[], None]] = []
+
+    def set_position(self, x: int, y: int) -> None:
+        """Place the layer's origin on the screen (region top/left)."""
+        self.x = x
+        self.y = y
 
     def resize(self, rows: int, cols: int) -> None:
         self.framebuffer.resize(rows, cols)
@@ -971,11 +980,11 @@ class GraphicsEngine:
         # Start with the back buffer
         self._front_buffer.restore(self._back_buffer)
 
-        # Composite visible layers in z-order
+        # Composite visible layers in z-order at their positions
         for layer in self._layers:
             if not layer.visible:
                 continue
-            self._front_buffer.composite(layer.framebuffer)
+            self._front_buffer.composite(layer.framebuffer, layer.y, layer.x)
 
         # Diff against previous frame and emit minimal escape codes
         self._render_diff()
