@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Skeleton, EmptyCard } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
@@ -141,20 +140,19 @@ export default function SharedDataPage() {
   }
 
   return (
-    <PageContainer title="Shared Data">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Shared Data" />}
-        right={
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { fetchShares(); fetchWorkspaces(); fetchDatasets() }}>
-              <RefreshCw className="h-3 w-3 mr-1" /> Refresh
-            </Button>
-            <Button size="sm" className="h-6 text-[10px]" onClick={() => setShowShareDialog(true)}>
-              Share Data
-            </Button>
-          </div>
-        }
-      />
+    <PageContainer
+      title="Shared Data"
+      headerRight={
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { fetchShares(); fetchWorkspaces(); fetchDatasets() }}>
+            <RefreshCw className="h-3 w-3 mr-1" /> Refresh
+          </Button>
+          <Button size="sm" className="h-6 text-[10px]" onClick={() => setShowShareDialog(true)}>
+            Share Data
+          </Button>
+        </div>
+      }
+    >
 
       {/* Share dialog */}
       {showShareDialog && (

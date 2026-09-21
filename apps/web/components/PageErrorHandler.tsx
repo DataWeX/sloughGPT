@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { IconAlert, IconRefresh, IconCopy } from '@sloughgpt/strui'
+import { PageContainer } from '@/components/PageContainer'
 import { addGlobalError } from '@/lib/error-store'
 import { reportError } from '@/lib/error-reporter'
 import { extractErrorMessage, formatStackTrace, getErrorType } from '@/lib/error-utils'
-import { useEffect } from 'react'
 import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
 interface PageErrorHandlerProps {
@@ -54,7 +54,7 @@ export function PageErrorHandler({ error, reset, title }: PageErrorHandlerProps)
   }
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
+    <PageContainer title={title || 'Something went wrong'} subtitle={errorMessage.slice(0, 80)}>
       <Card className="shadow-sm">
         <CardHeader className="pb-2">
           <div className="flex items-center gap-2">
@@ -137,6 +137,6 @@ export function PageErrorHandler({ error, reset, title }: PageErrorHandlerProps)
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   )
 }

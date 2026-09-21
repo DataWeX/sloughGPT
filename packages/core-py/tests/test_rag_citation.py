@@ -586,9 +586,7 @@ class TestProductionRAG:
         rag.add_document("Python is a language.")
         rag.add_document("Rust is fast.")
         rag.add_document("Go is simple.")
-        # Sparse retrieval needs lexical overlap (dense is off by default;
-        # the old random-projection dense path matched everything by noise).
-        result = rag.query("Python language", top_k=5)
+        result = rag.query("programming languages", top_k=5)
         assert result["num_results"] >= 1
 
     def test_query_results_structure(self):

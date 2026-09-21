@@ -4,7 +4,6 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import {
   Card,
   CardContent,
@@ -327,6 +326,22 @@ export default function TrainingRunsPage() {
   return (
     <PageContainer
       title="Training Runs"
+      headerRight={
+        <div className="flex items-center gap-2">
+          <select
+            value={format}
+            onChange={(e) => setFormat(e.target.value as 'json' | 'csv')}
+            className="text-sm border rounded px-2 py-1"
+            aria-label="Export format"
+          >
+            <option value="json">JSON</option>
+            <option value="csv">CSV</option>
+          </select>
+          <Button size="sm" variant="outline" onClick={handleExport}>
+            <Download className="h-4 w-4 mr-1" /> Export
+          </Button>
+        </div>
+      }
       toolbar={
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
@@ -377,25 +392,6 @@ export default function TrainingRunsPage() {
         </div>
       }
     >
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Training Runs" />}
-        right={
-          <div className="flex items-center gap-2">
-            <select
-              value={format}
-              onChange={(e) => setFormat(e.target.value as 'json' | 'csv')}
-              className="text-sm border rounded px-2 py-1"
-              aria-label="Export format"
-            >
-              <option value="json">JSON</option>
-              <option value="csv">CSV</option>
-            </select>
-            <Button size="sm" variant="outline" onClick={handleExport}>
-              <Download className="h-4 w-4 mr-1" /> Export
-            </Button>
-          </div>
-        }
-      />
       <SectionHeader
         title="Run history"
         description={`${filteredRuns.length} of ${runs.length} shown`}

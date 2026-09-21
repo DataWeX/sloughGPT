@@ -6,7 +6,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
 import { useToastStore } from '@/lib/toast-store'
 import { modelDisplayName } from '@/lib/inference-display'
@@ -46,10 +45,10 @@ interface ModelDetail {
 }
 
 const STATUS_CONFIG: Record<string, { color: string; icon: typeof CheckCircle }> = {
-  ready: { color: 'text-green-500', icon: CheckCircle },
-  degraded: { color: 'text-yellow-500', icon: AlertTriangle },
-  error: { color: 'text-red-500', icon: AlertTriangle },
-  loading: { color: 'text-blue-500', icon: Activity },
+  ready: { color: 'text-success', icon: CheckCircle },
+  degraded: { color: 'text-warning', icon: AlertTriangle },
+  error: { color: 'text-destructive', icon: AlertTriangle },
+  loading: { color: 'text-info', icon: Activity },
   unloaded: { color: 'text-muted-foreground', icon: Clock },
 }
 
@@ -105,7 +104,7 @@ export default function ModelDetailPage() {
               <div className="flex items-center gap-3">
                 <StatusIcon className={`h-6 w-6 ${statusCfg?.color}`} />
                 <div className="flex-1">
-                  <div className="font-medium text-lg">{modelDisplayName(model.model_id)}</div>
+                  <div className="font-medium text-base">{modelDisplayName(model.model_id)}</div>
                   <div className="text-sm text-muted-foreground">
                     {model.device} {model.is_default ? '(default)' : ''}
                   </div>
@@ -141,19 +140,19 @@ export default function ModelDetailPage() {
             <CardContent>
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <div className="text-2xl font-bold">
+                  <div className="text-base font-bold">
                     {model.p95_latency_ms ? `${model.p95_latency_ms.toFixed(1)}` : '—'}
                   </div>
                   <div className="text-xs text-muted-foreground">P95 (ms)</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold">
+                  <div className="text-base font-bold">
                     {model.p99_latency_ms ? `${model.p99_latency_ms.toFixed(1)}` : '—'}
                   </div>
                   <div className="text-xs text-muted-foreground">P99 (ms)</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-red-500">{model.error_count ?? 0}</div>
+                  <div className="text-base font-bold text-destructive">{model.error_count ?? 0}</div>
                   <div className="text-xs text-muted-foreground">Errors</div>
                 </div>
               </div>
@@ -191,7 +190,7 @@ export default function ModelDetailPage() {
                 <Row label="State" value={model.circuit_breaker} />
                 <Row label="Warmup" value={model.warmup_completed ? 'Complete' : 'Pending'} />
                 {model.warmup_error && (
-                  <div className="text-xs text-red-500 mt-2">{model.warmup_error}</div>
+                  <div className="text-xs text-destructive mt-2">{model.warmup_error}</div>
                 )}
                 {model.last_request_at && (
                   <Row
@@ -243,7 +242,7 @@ function MetricCard({
         <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
           <Icon className="h-3 w-3" /> {label}
         </div>
-        <div className="text-xl font-bold">{value}</div>
+        <div className="text-base font-bold">{value}</div>
       </CardContent>
     </Card>
   )

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Skeleton } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
@@ -79,8 +78,6 @@ export default function PermissionsPage() {
 
   return (
     <PageContainer title="Permissions">
-      <AppRouteHeader left={<AppRouteHeaderLead title="Permissions" />} />
-
       {/* Role-Permission Matrix */}
       <Card className="mb-6">
         <CardHeader className="pb-2">

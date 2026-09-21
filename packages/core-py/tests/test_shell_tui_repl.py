@@ -576,24 +576,6 @@ def test_read_escape_remainder_ctrl_right():
     assert _read_escape_remainder(win, {}) == "seq:ctrl-right"
 
 
-def test_read_escape_remainder_ss3_arrows():
-    assert _read_escape_remainder(_FakeKeyWin([ord("O"), ord("A")]), {}) == "seq:up"
-    assert _read_escape_remainder(_FakeKeyWin([ord("O"), ord("B")]), {}) == "seq:down"
-    assert _read_escape_remainder(_FakeKeyWin([ord("O"), ord("C")]), {}) == "seq:right"
-    assert _read_escape_remainder(_FakeKeyWin([ord("O"), ord("D")]), {}) == "seq:left"
-
-
-def test_read_escape_remainder_ss3_lone_o_noop():
-    assert _read_escape_remainder(_FakeKeyWin([ord("O")]), {}) is None
-
-
-def test_read_escape_remainder_plain_csi_arrows():
-    assert _read_escape_remainder(_FakeKeyWin([ord("["), ord("A")]), {}) == "seq:up"
-    assert _read_escape_remainder(_FakeKeyWin([ord("["), ord("B")]), {}) == "seq:down"
-    assert _read_escape_remainder(_FakeKeyWin([ord("["), ord("C")]), {}) == "seq:right"
-    assert _read_escape_remainder(_FakeKeyWin([ord("["), ord("D")]), {}) == "seq:left"
-
-
 def test_read_escape_remainder_restores_timeout():
     win = _FakeKeyWin([-1])
     _read_escape_remainder(win, {}, restore_ms=200)

@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid, Skeleton, Button } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
@@ -165,11 +164,7 @@ export default function WorkspaceDashboardPage() {
   }
 
   return (
-    <PageContainer title="Workspace Dashboard">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title={`${stats?.name ?? currentWorkspace?.name ?? 'Workspace'} — Dashboard`} />}
-      />
-
+    <PageContainer title={stats?.name ? `${stats.name} — Dashboard` : "Workspace Dashboard"}>
       {/* KPIs */}
       <KpiGrid className="mb-6">
         <StatCard label="Members" value={stats?.member_count ?? 0} />

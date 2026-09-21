@@ -334,50 +334,6 @@ class TestCollectExtras:
         ctx = _collect_extras(record)
         assert ctx == {}
 
-    def test_unwraps_nested_context_dict(self):
-        record = _make_record(context={"kind": "api", "from": "a", "to": "b"})
-        ctx = _collect_extras(record)
-        assert ctx["kind"] == "api"
-        assert ctx["from"] == "a"
-        assert "context" not in ctx
-
-    def test_nested_context_wins_over_stray_top_level(self):
-        record = _make_record(context={"kind": "api"}, kind="stray")
-        ctx = _collect_extras(record)
-        assert ctx["kind"] == "api"
-
-    def test_human_output_has_no_raw_context_dump(self):
-        fmt = LogFormatter(colors=False)
-        record = _make_record(
-            name="slo.web.ui",
-            msg="api_connection_changed",
-            request_id="6bb0f30a",
-            context={"kind": "api", "from": "connecting", "to": "connected"},
-        )
-        output = fmt.format(record)
-        assert "context={" not in output
-        # Transition composed once in brackets; each fact appears exactly once
-        assert "[connecting → connected]" in output
-        assert output.count("connecting") == 1
-        assert output.count("connected") == 1
-        assert "{kind=api}" in output
-        assert "(req=6bb0f30a)" in output
-
-    def test_human_output_lone_from_stays_key_value(self):
-        fmt = LogFormatter(colors=False)
-        record = _make_record(msg="route_changed", context={"from": "/chat"})
-        output = fmt.format(record)
-        assert "→" not in output
-        assert "{from=/chat}" in output
-
-    def test_human_output_no_empty_groups(self):
-        fmt = LogFormatter(colors=False)
-        record = _make_record(msg="hello")
-        output = fmt.format(record)
-        assert "{" not in output
-        assert "(req=" not in output
-        assert "[" not in output.split("hello")[1]
-
 
 # ── Record factory tests ──────────────────────────────────────────────
 

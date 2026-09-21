@@ -26,11 +26,6 @@ class _FakeResponse:
 class _FakeRequests(types.ModuleType):
     def __init__(self):
         super().__init__("requests")
-        # Mirror the real requests exception surface used in except clauses.
-        from requests import ConnectionError, Timeout
-
-        self.ConnectionError = ConnectionError
-        self.Timeout = Timeout
         self._get_resp = _FakeResponse()
         self._post_resp = _FakeResponse()
         self._delete_resp = _FakeResponse()

@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconPlus, IconTrash, IconRefresh } from '@/components/icons/NavIcons'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/http-client'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
@@ -127,17 +126,15 @@ export default function UsersAdminPage() {
   }
 
   return (
-    <div className="sl-page mx-auto max-w-4xl">
-      <AppRouteHeader
-        left={<AppRouteHeaderLead title="Users" subtitle="Manage user accounts" />}
-        right={
-          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => fetchUsers()}>
-            <IconRefresh className="h-3 w-3 mr-1" /> Refresh
-          </Button>
-        }
-      />
-
-      <div className="space-y-4">
+    <PageContainer
+      title="Users"
+      subtitle="Manage user accounts"
+      headerRight={
+        <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => fetchUsers()}>
+          <IconRefresh className="h-3 w-3 mr-1" /> Refresh
+        </Button>
+      }
+    >
         <KpiGrid>
           <StatCard label="Total Users" value={users.length} />
           <StatCard label="Active" value={activeUsers.length} />
@@ -240,13 +237,13 @@ export default function UsersAdminPage() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-xs">{u.username}</span>
                           <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                            u.role === 'owner' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
-                            u.role === 'admin' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                            u.role === 'owner' ? 'bg-accent/15 text-accent' :
+                            u.role === 'admin' ? 'bg-blue-100 text-blue-700 dark:bg-info/15 text-info' :
                             'bg-muted text-muted-foreground'
                           }`}>{u.role}</span>
                           <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                            u.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                            'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                            u.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-success/15 text-success' :
+                            'bg-red-100 text-red-700 dark:bg-destructive/15 text-destructive'
                           }`}>{u.status}</span>
                         </div>
                         <div className="text-[10px] text-muted-foreground mt-0.5">
@@ -271,7 +268,6 @@ export default function UsersAdminPage() {
             )}
           </CardContent>
         </Card>
-      </div>
-    </div>
+    </PageContainer>
   )
 }

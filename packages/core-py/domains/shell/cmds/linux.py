@@ -394,7 +394,6 @@ class LinuxCommandsMixin:
             else:
                 paths.append(p)
         if len(paths) < 2:
-            self._print("  cp: missing destination")
             self._print("  Usage: cp [-rfvpi] <src> <dst>")
             self._last_exit_code = 1
             return
@@ -448,7 +447,6 @@ class LinuxCommandsMixin:
             else:
                 paths.append(p)
         if len(paths) < 2:
-            self._print("  mv: missing destination")
             self._print("  Usage: mv [-fvi] <src> <dst>")
             self._last_exit_code = 1
             return

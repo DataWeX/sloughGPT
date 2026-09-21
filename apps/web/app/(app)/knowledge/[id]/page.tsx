@@ -6,7 +6,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
 import { knowledgeController, type KnowledgeItem } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -17,12 +16,12 @@ import {
 } from 'lucide-react'
 
 const TOPIC_COLORS: Record<string, string> = {
-  personal: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  preferences: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  technical: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  personal: 'bg-blue-100 text-blue-700 dark:bg-info/15 text-info',
+  preferences: 'bg-accent/15 text-accent',
+  technical: 'bg-green-100 text-green-700 dark:bg-success/15 text-success',
   planning: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
   interests: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400',
-  food: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+  food: 'bg-yellow-100 text-yellow-700 dark:bg-warning/15 text-warning',
   general: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
 }
 
@@ -197,7 +196,7 @@ export default function KnowledgeDetailPage() {
                 <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
                   <BarChart3 className="h-3 w-3" /> Score
                 </div>
-                <span className="text-xl font-bold">{item.score.toFixed(2)}</span>
+                <span className="text-base font-bold">{item.score.toFixed(2)}</span>
               </CardContent>
             </Card>
 
