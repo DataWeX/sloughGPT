@@ -15,6 +15,7 @@ from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
 from domain.shared import find_repo_root
+from domain.training._internal.executor import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async, notify_push
@@ -144,9 +145,11 @@ async def start_distillation(
             _random.seed(42)
             np.random.seed(42)
 
-            from domain.infrastructure.model_registry import get_model_registry
+            from domain.infrastructure._internal.model_registry import (
+                get_model_registry as _get_model_registry,
+            )
 
-            registry = get_model_registry()
+            registry = _get_model_registry()
             server = registry.get(request.teacher_model) if registry else None
 
             slonet_provider = None
@@ -156,9 +159,11 @@ async def start_distillation(
                 teacher_model = server._model_ref
                 teacher_tokenizer = getattr(server, "_tokenizer", None)
             else:
-                from domain.infrastructure.server_state import get_server_state
+                from domain.infrastructure._internal.server_state import (
+                    get_server_state as _get_server_state,
+                )
 
-                provider = get_server_state().model.get()
+                provider = _get_server_state().model.get()
                 if (
                     provider is not None
                     and getattr(provider, "model_id", None) == request.teacher_model
@@ -399,7 +404,7 @@ async def start_distillation(
                 body=f"Error: {str(e)[:100]}",
             )
 
-    executor = get_training_engine().get_executor()
+    executor = get_training_executor()
     executor.submit(_run_distill, job_id)
 
     return {

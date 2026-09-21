@@ -22,7 +22,7 @@ class DatasetsController:
         self.datasets_dir = repo_root / "data"
 
     def _entry_roots(self) -> list[Path]:
-        """Roots to scan: cache-only (Just-Cache). Legacy data/ is read-only."""
+        """Roots to scan: cache-first, legacy data/ read-only."""
         from domain.training._internal.cache_tags import get_cache_root
 
         roots = []
@@ -32,15 +32,17 @@ class DatasetsController:
                 roots.append(cache_root)
         except Exception as e:
             logger.debug("Cache root unavailable: %s", e)
-        # Legacy data/ fallback removed — cache is now source of truth.
-        # Keep warning for leftover data/ entries that haven't been backfilled.
-        legacy = self.datasets_dir / "datasets"
-        if legacy.exists() and any(legacy.iterdir()):
-            logger.debug("Legacy data/datasets/ still present but ignored (cache-only mode)")
+        # Legacy data/ is now read-only (writes go to cache). Keep for
+        # graceful migration until backfill is fully verified.
+        datasets_dir = self.datasets_dir
+        if not datasets_dir.exists():
+            datasets_dir = self.data_dir
+        if datasets_dir.exists():
+            roots.append(datasets_dir)
         return roots
 
     def _locate(self, dataset_id: str) -> Path | None:
-        """Locate an entry dir: cache-only."""
+        """Locate an entry dir: cache-first, legacy fallback (read-only)."""
         from domain.training._internal.cache_tags import get_cache_root
 
         try:
@@ -49,7 +51,12 @@ class DatasetsController:
                 return cached
         except Exception as e:
             logger.debug("Cache locate failed for %s: %s", dataset_id, e)
-        # Legacy fallback removed — return None so caller 404s cleanly.
+        path = self.datasets_dir / dataset_id
+        if path.exists():
+            return path
+        nested = self.datasets_dir / "datasets" / dataset_id
+        if nested.exists():
+            return nested
         return None
 
     def list_datasets(

@@ -15,6 +15,8 @@ from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
+from domain.training._internal.executor import get_training_executor
+
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async, _sloughgpt_trainer_kwds, notify_push
 from .jobs import training_jobs
@@ -448,7 +450,7 @@ async def start_training(
                 except Exception:
                     logger.exception("W&B end_run failed for job %s", jid, extra={"tag": "TRAIN"})
 
-    executor = get_training_engine().get_executor()
+    executor = get_training_executor()
     executor.submit(run_training, jid)
 
     return {
