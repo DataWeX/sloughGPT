@@ -314,7 +314,11 @@ export default function ConsciousnessDashboardPage() {
 
   return (
     <PageContainer
-      title="Consciousness Dashboard"
+      title={
+        <div className="border border-primary/20 bg-gradient-to-br from-primary/[0.04] via-transparent to-accent/[0.03]">
+          <h1 className="sl-h1">Consciousness Dashboard</h1>
+        </div>
+      }
       headerRight={
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={handleSeed} disabled={seeding}>
