@@ -149,7 +149,7 @@ A fast, lightweight local AI inference engine that runs on any device, with a un
 | 4. Training dropdown filters `kind == dataset` (frontend)                                                                           | ✅     | Hides adapters/system/media from Teach-me selector        |
 | 5. All importers write to cache (github/hf/url/kaggle/csv/local)                                                                    | ✅     | `create_dataset` already does; extend the rest            |
 | 6. Backfill: migrate `data/` corpora into cache with tags                                                                           | ✅     | Tag-first-then-move per entry, verify sizes/samples match |
-| 7. Cut over: cache-only reads, `data/` read-only, then remove legacy paths                                                          | ⬜     | Delete fallback code + legacy `datasets/` resolver last   |
+| 7. Cut over: cache-only reads, `data/` read-only, then remove legacy paths                                                          | ✅     | Delete fallback code + legacy `datasets/` resolver last   |
 
 ## Phase 7: Mobile (Future)
 

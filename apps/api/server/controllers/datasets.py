@@ -17,11 +17,12 @@ class DatasetsController:
 
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
+        # Legacy paths retained for read-only migration warning; writes go to cache only.
         self.data_dir = repo_root / "data" / "features"
         self.datasets_dir = repo_root / "data"
 
     def _entry_roots(self) -> list[Path]:
-        """Roots to scan: just-cache first, legacy data dir as fallback."""
+        """Roots to scan: cache-only (Just-Cache). Legacy data/ is read-only."""
         from domain.training._internal.cache_tags import get_cache_root
 
         roots = []
@@ -31,15 +32,15 @@ class DatasetsController:
                 roots.append(cache_root)
         except Exception as e:
             logger.debug("Cache root unavailable: %s", e)
-        datasets_dir = self.datasets_dir
-        if not datasets_dir.exists():
-            datasets_dir = self.data_dir
-        if datasets_dir.exists():
-            roots.append(datasets_dir)
+        # Legacy data/ fallback removed — cache is now source of truth.
+        # Keep warning for leftover data/ entries that haven't been backfilled.
+        legacy = self.datasets_dir / "datasets"
+        if legacy.exists() and any(legacy.iterdir()):
+            logger.debug("Legacy data/datasets/ still present but ignored (cache-only mode)")
         return roots
 
     def _locate(self, dataset_id: str) -> Path | None:
-        """Locate an entry dir: just-cache first, legacy data dir fallback."""
+        """Locate an entry dir: cache-only."""
         from domain.training._internal.cache_tags import get_cache_root
 
         try:
@@ -48,12 +49,7 @@ class DatasetsController:
                 return cached
         except Exception as e:
             logger.debug("Cache locate failed for %s: %s", dataset_id, e)
-        path = self.datasets_dir / dataset_id
-        if path.exists():
-            return path
-        nested = self.datasets_dir / "datasets" / dataset_id
-        if nested.exists():
-            return nested
+        # Legacy fallback removed — return None so caller 404s cleanly.
         return None
 
     def list_datasets(
@@ -377,11 +373,7 @@ class DatasetsController:
         """Create a new dataset in the just-cache, optionally workspace-scoped."""
         from domain.training._internal.cache_tags import get_cache_root, write_entry_meta
 
-        try:
-            path = get_cache_root() / name
-        except Exception as e:
-            logger.debug("Cache root unavailable, falling back to data dir: %s", e)
-            path = self.datasets_dir / name
+        path = get_cache_root() / name
         path.mkdir(parents=True, exist_ok=True)
         write_entry_meta(path, kind="dataset", tags=["dataset"], source="api")
 
@@ -477,7 +469,10 @@ class DatasetsController:
         """Return the versions directory for a dataset, creating it if needed."""
         base = self._locate(dataset_id)
         if base is None:
-            base = self.datasets_dir / dataset_id
+            # Should not happen in cache-only mode — caller already 404'd
+            from domain.training._internal.cache_tags import get_cache_root
+
+            base = get_cache_root() / dataset_id
         versions_dir = base / "versions"
         versions_dir.mkdir(parents=True, exist_ok=True)
         return versions_dir
@@ -516,9 +511,9 @@ class DatasetsController:
 
         Returns True on success, False if the version or dataset does not exist.
         """
-        path = self.datasets_dir / dataset_id
+        path = self._locate(dataset_id)
         version_path = self._ensure_versions_dir(dataset_id) / version
-        if not path.exists() or not version_path.exists():
+        if path is None or not path.exists() or not version_path.exists():
             return False
         # Overwrite main corpus/input files with the snapshot copies
         for fname in ["corpus.jsonl", "input.txt"]:
