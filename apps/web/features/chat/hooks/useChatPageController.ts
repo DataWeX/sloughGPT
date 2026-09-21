@@ -72,11 +72,11 @@ export function useChatPageController(
       if (v) setCustomSystemPrompt(v)
     })
   }, [])
+  const modeValue = searchParams.get('mode')
   useEffect(() => {
-    const modeParam = searchParams.get('mode')
-    if (modeParam) setChatMode(modeParam as ChatMode)
+    if (modeValue) setChatMode(modeValue as ChatMode)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [modeValue])
   const [systemPromptOpen, setSystemPromptOpen] = useState(false)
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
   const [noteDialogMessageId, setNoteDialogMessageId] = useState<string | null>(null)
