@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -176,11 +177,16 @@ class ChatDomain:
 
     @staticmethod
     def _build_prompt(system_prompt: str, messages: list[dict[str, str]], user_msg: str) -> str:
-        """Build a prompt that preserves full conversation context."""
+        """Legacy prompt builder — kept for backwards-compat/tests (deprecated)."""
+
+        warnings.warn(
+            "ChatDomain._build_prompt is deprecated — use PromptEngine",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         parts = []
         if system_prompt:
             parts.append(f"System: {system_prompt}")
-        # Add all prior messages (excluding the last user message to avoid duplication)
         cutoff = len(messages) - 1
         for i, m in enumerate(messages):
             if i >= cutoff:
@@ -193,7 +199,6 @@ class ChatDomain:
                 parts.append(f"User: {content}")
             elif role == "assistant":
                 parts.append(f"Assistant: {content}")
-        # Add the last user message
         parts.append(f"User: {user_msg}")
         parts.append("Assistant:")
         return "\n".join(parts)

@@ -1259,30 +1259,13 @@ class SloNetChatProvider:
         )
 
     def _build_prompt(self, messages):
-        """Build prompt from messages using tokenizer's chat template.
+        """Build prompt via central PromptEngine (single source)."""
+        from .prompt_engine import render_prompt as _render
 
-        Handles:
-        - List of {role, content} dicts (normal chat)
-        - List of strings (legacy)
-        - String (legacy)
-        - None/empty (empty prompt)
-        """
-        if not messages:
-            return ""
-        # String shortcut
+        # Preserve legacy string shortcut for backwards compat.
         if isinstance(messages, str):
             return messages
-        # List of strings
-        if isinstance(messages, list) and messages and isinstance(messages[0], str):
-            return messages[-1]
-        # List of dicts — use chat template
-        if hasattr(self._tokenizer, "apply_chat_template"):
-            return self._tokenizer.apply_chat_template(messages)
-        # Fallback: last message content (dead with MorphTokenizer, which
-        # always implements apply_chat_template)
-        if messages and isinstance(messages[-1], dict):  # pragma: no cover
-            return messages[-1].get("content", "")  # pragma: no cover
-        return ""  # pragma: no cover
+        return _render(messages, tokenizer=getattr(self, "_tokenizer", None), model_type="qwen2")
 
     def _load_tokenizer(self, model_dir, config):
         """Load tokenizer — MorphTokenizer.from_pretrained handles all parsing.
