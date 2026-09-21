@@ -635,9 +635,9 @@ class ModelsController:
             slnc_path = target / "model.slnc"
             if not slnc_path.exists():
                 logger.info(
-                    "Compiling fine-tuned model %s to .slnc (int8) ...", model_path, extra={"tag": "MODEL"}
+                    "Compiling fine-tuned model %s to .slnc ...", model_path, extra={"tag": "MODEL"}
                 )
-                SLNCCompiler().compile_from_directory(str(target), output=str(slnc_path), quantize="int8")
+                SLNCCompiler().compile_from_directory(str(target), output=str(slnc_path))  # float32 file, live quantize
 
             if base_model_id is None:
                 base_model_id = self._resolve_base_model_id(target)
