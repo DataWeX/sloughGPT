@@ -141,7 +141,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
   {
     labelKey: 'nav.section.tools',
     routes: [
-      { path: '/tools', labelKey: 'nav.tools', icon: 'grid', description: 'All everyday tools' },
       {
         path: '/feedback',
         labelKey: 'nav.feedback',
@@ -274,12 +273,4 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/shared-data': IconUsers,
   '/plugins-cloud': IconSettings,
   '/shortcuts': IconSettings,
-  '/writing': IconDocument,
-  '/tools': IconGrid,
-  '/translate': IconChat,
-  '/rewrite': IconSparkle,
-  '/brainstorm': IconBrain,
-  '/decide': IconChart,
-  '/explain': IconSearch,
-  '/wellness': IconSparkle,
 }

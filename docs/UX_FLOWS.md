@@ -16,6 +16,14 @@ or a technical term — it's wrong.
 
 ---
 
+**Implementation note (Sep 2026):** Tool flows below — Writing, Rewrite,
+Translate, Explain, Brainstorm, Decide, Wellness, Talk Out Loud, Create Images —
+are all implemented inside the chat `ModeBar` (one `chat?mode=<mode>`
+deep-link per flow), **not** as standalone pages. Flows 1 and 12 still have
+their own pages (`/chat`, `/training`).
+
+---
+
 ## Features
 
 ### 1. Chat That Remembers Me
