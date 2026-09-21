@@ -69,32 +69,67 @@
 
 ---
 
+## Tertiary: Jon the Infra Builder
+
+**Demographics:** 27-42, platform/infra engineer, runs own GPU box or shared cluster, builds model **destination + repo + infra** for himself on **shared hardware**.
+
+**What they want:**
+
+- A **model destination & repo** he controls (push/pull `.soul`/`.slnc`, version on his infra, not ours)
+- To build **infra for himself** on **shared hardware / platform infra** — `ModelRegistry` + `ProcessGuard` + `TrainingExecutor` + `~/.cache` that survives `data/` deletes, with **compute** isolation (per-workspace `TrainingExecutor`, `get_training_executor().submit`)
+- **No magic delete** of the model file when he stacks datasets/knowledge/caches — copy-on-write, `ModelBase` `chmod 444`
+- **Competition/compute** visibility: `benchmark/score` programmable + `system/executor` + `metrics` to tune his box
+
+**What they don't want:**
+
+- Vendor-locked model store that decimates his `.soul` on cache clear
+- A UI that hides the model path, registry, or executor logs
+- `data/` vs `.cache` duality — wants single `Just-Cache` he can `rsync`
+
+**How they interact:**
+
+- 50% infra/repo (`registry`, `model-stack`, `executor`, `cache_tags`), 30% train/bench, 20% API
+- Lives in `domain/infrastructure` + `apps/api/server/routers/system.py` + `training/executor`
+- Expects `docs/PRODUCT_ENGINEERING.md:42` CCGT — infra is a domain, not plumbing
+
+**Success criteria:**
+
+- "I built my repo `models/jon-llama.soul`, set destination `~/.cache/sloughgpt/models`, stacked 3 caches, train still sees model" → success
+- "Adding a dataset deleted my model file" → failure
+- "My shared hardware shows `executor` + `inference` + `cache` in one `system` view" → success
+- "I can’t `scp` my model repo off the box" → failure
+
+---
+
 ## Feature Visibility Matrix
 
-| Feature                                                                    | Alex (Hobbyist)                   | Maya (Builder)                 |
-| -------------------------------------------------------------------------- | --------------------------------- | ------------------------------ |
-| **Chat**                                                                   | ✅ Core                           | ✅ Core (via API)              |
-| **Soul/personality switcher**                                              | ✅ Core                           | ✅ Core (API)                  |
-| **Dataset selector**                                                       | ✅ Core                           | ✅ Core (SDK)                  |
-| **Train button**                                                           | ✅ Core                           | ✅ API `/training`             |
-| **Loss chart**                                                             | ✅ After training                 | ✅ API + bench                 |
-| **Checkpoint catalog**                                                     | ✅ After training                 | ✅ API                         |
-| **Eval results** (coherence, repetition)                                   | ✅ After training (plain verdict) | ✅ Weighted score 0-100        |
-| **Benchmark weighted** (`bench_weights.yaml` + `POST /benchmark/score`)    | ❌ Hidden                         | ✅ Core (CI gate)              |
-| **ModelStack** (`POST /model-stack/push`) — one-time model, stacked layers | ❌ Hidden                         | ✅ Core (never delete `.soul`) |
-| **Just-Cache** (`~/.cache/sloughgpt/external`)                             | ❌ Hidden                         | ✅ Core                        |
-| **Config save/load**                                                       | 🔧 Power user                     | ✅ Core                        |
-| **Dataset stats**                                                          | 🔧 Power user                     | ✅ Core                        |
-| **Checkpoint comparison**                                                  | 🔧 Power user                     | ✅ Core                        |
-| **RL / GRPO**                                                              | ❌ Hidden                         | ⚠️ Advanced (preset)           |
-| **KL coefficient**                                                         | ❌ Hidden                         | ⚠️ Advanced                    |
-| **LoRA rank/alpha**                                                        | ❌ Hidden (slider)                | ⚠️ Advanced                    |
-| **Gradient accumulation**                                                  | ❌ Hidden                         | ⚠️ Advanced                    |
-| **Reward function mode**                                                   | ❌ Hidden                         | ⚠️ Advanced                    |
-| **Warmup steps**                                                           | ❌ Hidden                         | ⚠️ Advanced                    |
-| **Max sequence length**                                                    | ❌ Hidden                         | ⚠️ Advanced                    |
-| **Learning rate**                                                          | ⚠️ Advanced only                  | ✅ Tunable                     |
-| **Batch size**                                                             | ⚠️ Advanced only                  | ✅ Tunable                     |
+| Feature                                                                    | Alex (Hobbyist)                   | Maya (Builder)                 | Jon (Infra)                     |
+| -------------------------------------------------------------------------- | --------------------------------- | ------------------------------ | ------------------------------- |
+| **Chat**                                                                   | ✅ Core                           | ✅ Core (via API)              | ✅ Core (API)                   |
+| **Soul/personality switcher**                                              | ✅ Core                           | ✅ Core (API)                  | ✅ Core (API)                   |
+| **Dataset selector**                                                       | ✅ Core                           | ✅ Core (SDK)                  | ✅ Core (SDK)                   |
+| **Train button**                                                           | ✅ Core                           | ✅ API `/training`             | ✅ API `/training` + `executor` |
+| **Loss chart**                                                             | ✅ After training                 | ✅ API + bench                 | ✅ API + bench                  |
+| **Checkpoint catalog**                                                     | ✅ After training                 | ✅ API                         | ✅ API                          |
+| **Eval results** (coherence, repetition)                                   | ✅ After training (plain verdict) | ✅ Weighted score 0-100        | ✅ Weighted score + compute     |
+| **Benchmark weighted** (`bench_weights.yaml` + `POST /benchmark/score`)    | ❌ Hidden                         | ✅ Core (CI gate)              | ✅ Core (compute gate)          |
+| **ModelStack** (`POST /model-stack/push`) — one-time model, stacked layers | ❌ Hidden                         | ✅ Core (never delete `.soul`) | ✅ Core (destination + repo)    |
+| **Just-Cache** (`~/.cache/sloughgpt/external`)                             | ❌ Hidden                         | ✅ Core                        | ✅ Core (rsync)                 |
+| **Model destination/repo** (push/pull `.soul`/`.slnc`)                     | ❌ Hidden                         | 🔧 Power                       | ✅ Core (own infra)             |
+| **Shared hardware / platform infra** (`/system`, `executor`, `registry`)   | ❌ Hidden                         | ⚠️ Advanced                    | ✅ Core                         |
+| **Compute isolation** (`TrainingExecutor`, `ProcessGuard`)                 | ❌ Hidden                         | ⚠️ Advanced                    | ✅ Core                         |
+| **Config save/load**                                                       | 🔧 Power user                     | ✅ Core                        | ✅ Core                         |
+| **Dataset stats**                                                          | 🔧 Power user                     | ✅ Core                        | ✅ Core                         |
+| **Checkpoint comparison**                                                  | 🔧 Power user                     | ✅ Core                        | ✅ Core                         |
+| **RL / GRPO**                                                              | ❌ Hidden                         | ⚠️ Advanced (preset)           | ⚠️ Advanced (preset)            |
+| **KL coefficient**                                                         | ❌ Hidden                         | ⚠️ Advanced                    | ⚠️ Advanced                     |
+| **LoRA rank/alpha**                                                        | ❌ Hidden (slider)                | ⚠️ Advanced                    | ⚠️ Advanced                     |
+| **Gradient accumulation**                                                  | ❌ Hidden                         | ⚠️ Advanced                    | ⚠️ Advanced                     |
+| **Reward function mode**                                                   | ❌ Hidden                         | ⚠️ Advanced                    | ⚠️ Advanced                     |
+| **Warmup steps**                                                           | ❌ Hidden                         | ⚠️ Advanced                    | ⚠️ Advanced                     |
+| **Max sequence length**                                                    | ❌ Hidden                         | ⚠️ Advanced                    | ⚠️ Advanced                     |
+| **Learning rate**                                                          | ⚠️ Advanced only                  | ✅ Tunable                     | ✅ Tunable                      |
+| **Batch size**                                                             | ⚠️ Advanced only                  | ✅ Tunable                     | ✅ Tunable                      |
 
 ---
 
