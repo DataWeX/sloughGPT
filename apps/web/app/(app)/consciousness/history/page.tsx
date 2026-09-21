@@ -23,16 +23,16 @@ interface Episode {
 }
 
 const QUALIA_DIMS = [
-  { key: 'valence', color: '#8b5cf6' },
-  { key: 'arousal', color: '#ef4444' },
-  { key: 'novelty', color: '#f59e0b' },
-  { key: 'coherence', color: '#22c55e' },
-  { key: 'salience', color: '#3b82f6' },
-  { key: 'certainty', color: '#06b6d4' },
-  { key: 'complexity', color: '#d946ef' },
+  { key: 'valence', color: 'var(--chart-1)' },
+  { key: 'arousal', color: 'var(--chart-2)' },
+  { key: 'novelty', color: 'var(--chart-3)' },
+  { key: 'coherence', color: 'var(--chart-4)' },
+  { key: 'salience', color: 'var(--chart-5)' },
+  { key: 'certainty', color: 'var(--chart-1)' },
+  { key: 'complexity', color: 'var(--chart-2)' },
 ]
 
-const RATING_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e']
+const RATING_CHART_VARS = ['var(--destructive)', 'var(--chart-2)', 'var(--warning)', 'var(--chart-4)', 'var(--success)'] as const
 
 const PAGE_SIZE = 20
 
@@ -59,7 +59,7 @@ function StarRating({ rating, onRate, disabled }: { rating: number; onRate: (r: 
           key={s}
           onClick={() => onRate(s)}
           disabled={disabled}
-          className={`text-sm transition-colors ${s <= rating ? 'text-yellow-400' : 'text-muted-foreground/40'} ${disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:text-yellow-300'}`}
+          className={`text-sm transition-colors ${s <= rating ? 'text-warning' : 'text-muted-foreground/40'} ${disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:text-warning'}`}
         >
           {s <= rating ? '\u2605' : '\u2606'}
         </button>
@@ -268,7 +268,7 @@ export default function ConsciousnessHistoryPage() {
                 <CardTitle className="text-sm text-muted-foreground">{t('consciousness_history.avg_growth')}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${stats.avgGrowth >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                <div className={`text-2xl font-bold ${stats.avgGrowth >= 0 ? 'text-success' : 'text-destructive'}`}>
                   {stats.avgGrowth >= 0 ? '+' : ''}{(stats.avgGrowth * 100).toFixed(1)}%
                 </div>
               </CardContent>
@@ -292,7 +292,7 @@ export default function ConsciousnessHistoryPage() {
                         className="w-full rounded-sm transition-all"
                         style={{
                           height: `${Math.max(4, h)}%`,
-                          backgroundColor: RATING_COLORS[i],
+                          backgroundColor: `rgb(${RATING_CHART_VARS[i]})`,
                           opacity: 0.8,
                         }}
                       />
@@ -399,7 +399,7 @@ export default function ConsciousnessHistoryPage() {
                     const isSelected = selectedIds.has(String(realIndex))
                     return (
                       <div key={i} className="relative pl-10">
-                        <div className={`absolute left-2.5 top-3 h-3 w-3 rounded-full border-2 border-background ${ep.growth_delta >= 0 ? 'bg-green-500' : 'bg-red-500'}`} />
+                        <div className={`absolute left-2.5 top-3 h-3 w-3 rounded-full border-2 border-background ${ep.growth_delta >= 0 ? 'bg-success' : 'bg-destructive'}`} />
                         <div className={`rounded-lg border p-3 text-sm cursor-pointer hover:bg-muted/50 transition-colors ${isSelected ? 'bg-primary/10 border-primary/30' : ''}`} onClick={() => setExpandedIndex(isExpanded ? null : i)}>
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-center gap-2">
