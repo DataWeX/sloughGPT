@@ -512,11 +512,28 @@ class StartupOrchestrator:
                 try:
                     from domain.models._internal.provider import setup_providers
 
+                    # Native C path: wire slnc for fused AVX2 if flag enabled.
+                    _native_slnc = None
+                    try:
+                        from domain.shared._internal.feature_flags import is_enabled
+
+                        if is_enabled("native_c_inference"):
+                            from domain.infrastructure.model_resolver import get_model_dir as _gmd
+
+                            _p = str(_gmd(cfg.autoload_model) / "model.slnc")
+                            import os as _os
+
+                            if _os.path.exists(_p):
+                                _native_slnc = _p
+                    except Exception:
+                        pass
+
                     setup_providers(
                         slonet_provider=engine_client,
                         quantize=cfg.quantize_slonet,
                         quant_bits=cfg.quant_bits,
                         quant_mode=cfg.quant_mode,
+                        native_slnc_path=_native_slnc,
                     )
                 except Exception as e:
                     logger.error(
@@ -1297,6 +1314,15 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         from domain.infrastructure.model_registry import get_model_registry
         from domain.models._internal.provider import setup_providers
 
+        _native_slnc2 = None
+        try:
+            from domain.shared._internal.feature_flags import is_enabled as _is_en
+
+            if _is_en("native_c_inference"):
+                _native_slnc2 = slnc_path  # from outer scope, already validated
+        except Exception:
+            pass
+
         setup_providers(
             slonet_provider=provider,
             model_registry=get_model_registry(),
@@ -1304,6 +1330,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
             quantize=cfg.quantize_slonet,
             quant_bits=cfg.quant_bits,
             quant_mode=cfg.quant_mode,
+            native_slnc_path=_native_slnc2,
         )
     except Exception as e:
         logger.error(
