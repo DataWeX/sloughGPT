@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
 def _load_weights(model_id: str) -> tuple[dict, dict]:
     """Load config.json + weights from HF cache. Returns (config, weights)."""
-    from domain.infrastructure._internal.slnc.parser import (
+    from domain.infrastructure._internal.model_resolver import (
         find_safetensors,
         get_model_dir,
         load_model_config,
@@ -72,8 +72,8 @@ def _load_weights(model_id: str) -> tuple[dict, dict]:
     if not slnc_path.exists():
         from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
 
-        logger.info("Converting %s → .slnc", model_id, extra={"tag": "INFRA"})
-        SLNCCompiler().compile(model_id, str(slnc_path))
+        logger.info("Converting %s → .slnc (int8)", model_id, extra={"tag": "INFRA"})
+        SLNCCompiler().compile(model_id, str(slnc_path), quantize="int8")
 
     from domain.infrastructure._internal.slnc.parser import SLNCParser
 

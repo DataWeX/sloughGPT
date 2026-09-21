@@ -55,11 +55,11 @@ def load_model_weights(
 
 
 def _auto_convert(st_path: Path, slnc_path: Path, model_id: str) -> None:
-    """Convert safetensors to .slnc on first load."""
+    """Convert safetensors to .slnc on first load (int8 storage, float32 load)."""
     from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
 
-    logger.info("Converting %s → .slnc", st_path.name, extra={"tag": "INFRA"})
-    SLNCCompiler().compile(model_id, str(slnc_path))
+    logger.info("Converting %s → .slnc (int8)", st_path.name, extra={"tag": "INFRA"})
+    SLNCCompiler().compile(model_id, str(slnc_path), quantize="int8")
     logger.info(
         "Converted to .slnc: %s (%.1f MB)",
         slnc_path.name,
