@@ -2138,8 +2138,17 @@ class SloughGPTTrainer:
         # Final saves only: periodic checkpoints sit beside a fresh .soul,
         # which is the primary artifact (points.json is merely its fallback),
         # so clustering on every save is pure overhead (pure-Python k-means
-        # costs ~18s even for a 21K-param model).
+        # costs ~18s even for a 21K-param model). Runs in a background daemon
+        # thread so run completion is never blocked; safe because points are
+        # fallback-only (missing/incomplete points just fall back to .soul).
+        # Use wait_for_compression() when the points are actually needed.
         if is_final:
+            self._compress_in_background(output_path)
+
+    def _compress_in_background(self, output_path: str) -> None:
+        """Compress a final checkpoint without blocking run completion."""
+
+        def _work() -> None:
             try:
                 from domain.training._internal.executor import compress_checkpoint
 
@@ -2154,6 +2163,23 @@ class SloughGPTTrainer:
                     )
             except Exception as exc:
                 logger.debug("Pugqeep compression skipped: %s", exc, extra={"tag": "TRAIN"})
+
+        thread = threading.Thread(target=_work, name="pugqeep-compress", daemon=True)
+        self._compress_thread = thread
+        thread.start()
+
+    def wait_for_compression(self, timeout: float | None = None) -> bool:
+        """Block until background checkpoint compression finishes.
+
+        Returns True when no compression is running (or it completed),
+        False on timeout. Points are fallback-only, so callers that don't
+        need them can skip waiting entirely.
+        """
+        thread = getattr(self, "_compress_thread", None)
+        if thread is None or not thread.is_alive():
+            return True
+        thread.join(timeout=timeout)
+        return not thread.is_alive()
 
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""
