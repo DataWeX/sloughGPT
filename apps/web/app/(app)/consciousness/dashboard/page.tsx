@@ -315,9 +315,28 @@ export default function ConsciousnessDashboardPage() {
   return (
     <PageContainer
       title={
-        <div className="border-b border-primary/20 bg-gradient-to-br from-primary/[0.08] via-primary/[0.04] to-accent/[0.06] px-3 py-3 shadow-sm backdrop-blur-sm">
-          <h1 className="sl-h1">Consciousness Dashboard</h1>
-        </div>
+        <Card className="border-primary/20 bg-gradient-to-br from-primary/[0.04] via-transparent to-accent/[0.03]">
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <StatusDot tone="success" pulse showLabel label={isLive ? t('consciousness_dashboard.live') : t('consciousness_dashboard.autoRefresh')} />
+                </div>
+                <h1 className="sl-h1">Consciousness Dashboard</h1>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Switch checked={isLive} onCheckedChange={toggleLive} aria-label="Toggle live updates" />
+              </div>
+            </div>
+            {lastUpdate && (
+              <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/40">
+                <span className="text-xs text-muted-foreground">
+                  Updated {formatTimeAgo(lastUpdate / 1000)}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       }
       headerRight={
         <div className="flex flex-wrap gap-2">
@@ -352,15 +371,6 @@ export default function ConsciousnessDashboardPage() {
           description={`Depth of reflection · ${isLive ? 'live' : 'auto-refresh'}`}
         />
       </KpiGrid>
-
-      {/* Live strip — breathing status instead of a fifth stat card */}
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/50 bg-card/50 px-4 py-3">
-        <StatusDot tone="success" pulse showLabel label={isLive ? t('consciousness_dashboard.live') : t('consciousness_dashboard.autoRefresh')} />
-        <Switch checked={isLive} onCheckedChange={toggleLive} aria-label="Toggle live updates" />
-        <span className="text-xs text-muted-foreground">
-          {lastUpdate ? `Updated ${formatTimeAgo(lastUpdate / 1000)}` : 'No updates yet'}
-        </span>
-      </div>
 
       {/* Response quality & reflection */}
       <SectionHeader

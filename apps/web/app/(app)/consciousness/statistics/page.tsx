@@ -5,6 +5,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
+  KpiGrid, StatCard, SectionHeader, FoldSection, Button,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -42,11 +43,9 @@ interface EvalData {
 }
 
 const QUALIA_KEYS = ['valence', 'arousal', 'novelty', 'coherence', 'salience', 'certainty', 'complexity']
-const QUALIA_COLORS: Record<string, string> = {
-  valence: '#8b5cf6', arousal: '#ef4444', novelty: '#f59e0b',
-  coherence: '#22c55e', salience: '#3b82f6', certainty: '#06b6d4', complexity: '#d946ef',
-}
-const RATING_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e']
+const QUALIA_CHART_VARS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)', 'var(--chart-1)', 'var(--chart-2)'] as const
+const QUALIA_COLORS: Record<string, string> = Object.fromEntries(QUALIA_KEYS.map((k, i) => [k, QUALIA_CHART_VARS[i]]))
+const RATING_CHART_VARS = ['var(--destructive)', 'var(--chart-2)', 'var(--warning)', 'var(--chart-4)', 'var(--success)'] as const
 
 const SVG_W = 800
 const SVG_H = 300
@@ -366,27 +365,19 @@ export default function ConsciousnessStatisticsPage() {
     addToast('Statistics exported', 'success')
   }, [healthScore, trend, episodes, performanceMetrics, episodesByDay, avgRatingByDay, topQualia, beliefTrends, healthData, evalData, statusData, addToast])
 
-  const healthColor = healthScore > 70 ? 'text-green-500' : healthScore > 40 ? 'text-yellow-500' : 'text-red-500'
-  const healthBg = healthScore > 70 ? 'bg-green-500/10' : healthScore > 40 ? 'bg-yellow-500/10' : 'bg-red-500/10'
+  const healthColor = healthScore > 70 ? 'text-success' : healthScore > 40 ? 'text-warning' : 'text-destructive'
+  const healthBg = healthScore > 70 ? 'bg-success/10' : healthScore > 40 ? 'bg-warning/10' : 'bg-destructive/10'
 
   if (loading) {
     return (
-      <PageContainer title={t('consciousness_statistics.page_title')}>
-        <div className="space-y-6 p-6">
-          <Skeleton className="h-48" />
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <Skeleton className="h-24" />
-            <Skeleton className="h-24" />
-            <Skeleton className="h-24" />
-            <Skeleton className="h-24" />
+      <PageContainer
+        title={
+          <div className="border-b border-primary/20 bg-gradient-to-br from-primary/[0.08] via-primary/[0.04] to-accent/[0.06] px-3 py-3 shadow-sm backdrop-blur-sm">
+            <h1 className="sl-h1">{t('consciousness_statistics.page_title')}</h1>
           </div>
-          <Skeleton className="h-72" />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Skeleton className="h-72" />
-            <Skeleton className="h-72" />
-          </div>
-        </div>
-      </PageContainer>
+        }
+        loadingGrid
+      />
     )
   }
 
@@ -406,7 +397,7 @@ export default function ConsciousnessStatisticsPage() {
             </div>
             <div className="flex items-center justify-center mt-4 gap-6 text-sm text-muted-foreground">
               <span>{t('consciousness_statistics.trend')}: <span className={`font-medium ${
-                trend === 'improving' ? 'text-green-500' : trend === 'declining' ? 'text-red-500' : 'text-muted-foreground'
+                trend === 'improving' ? 'text-success' : trend === 'declining' ? 'text-destructive' : 'text-muted-foreground'
               }`}>
                 {t(`consciousness_statistics.trend_${trend}`)}
               </span></span>
@@ -432,7 +423,7 @@ export default function ConsciousnessStatisticsPage() {
                 <CardTitle className="text-xs text-muted-foreground">{t('consciousness_statistics.avg_growth_ep')}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${performanceMetrics.avgGrowth >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                <div className={`text-2xl font-bold ${performanceMetrics.avgGrowth >= 0 ? 'text-success' : 'text-destructive'}`}>
                   {performanceMetrics.avgGrowth >= 0 ? '+' : ''}{(performanceMetrics.avgGrowth * 100).toFixed(1)}%
                 </div>
               </CardContent>
@@ -486,10 +477,10 @@ export default function ConsciousnessStatisticsPage() {
                   return (
                     <div key={i} className="flex flex-col items-center gap-1">
                       <span className="text-xs text-muted-foreground">{count}</span>
-                      <div className="w-12 rounded-t" style={{ height: `${h}%`, backgroundColor: RATING_COLORS[i], opacity: 0.8 }} />
+                      <div className="w-12 rounded-t" style={{ height: `${h}%`, backgroundColor: `rgb(${RATING_CHART_VARS[i]})`, opacity: 0.8 }} />
                       <div className="flex gap-0.5">
                         {Array.from({ length: i + 1 }).map((_, s) => (
-                          <svg key={s} className="w-3 h-3" viewBox="0 0 20 20" fill={RATING_COLORS[i]}>
+                          <svg key={s} className="w-3 h-3" viewBox="0 0 20 20" fill={`rgb(${RATING_CHART_VARS[i]})`}>
                             <path d="M10 1l2.39 4.84 5.34.78-3.87 3.77.91 5.33L10 13.28l-4.77 2.44.91-5.33L2.27 6.62l5.34-.78L10 1z" />
                           </svg>
                         ))}
@@ -517,7 +508,7 @@ export default function ConsciousnessStatisticsPage() {
                 <BarChart
                   data={episodesByDay.counts}
                   labels={episodesByDay.labels}
-                  colors={['#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4', '#22c55e']}
+                  colors={['rgb(var(--chart-1))', 'rgb(var(--chart-2))', 'rgb(var(--chart-3))', 'rgb(var(--chart-4))', 'rgb(var(--chart-5))']}
                   yLabel="Episodes"
                   tooltip={tooltipBar}
                   onTooltip={setTooltipBar}
@@ -589,7 +580,7 @@ export default function ConsciousnessStatisticsPage() {
                   const x = M.left + (growthTrend.values.length > 1 ? i * xStep : PW / 2)
                   const y = M.top + PH - ((v - (-0.1)) / (0.1 - (-0.1))) * PH
                   return (
-                    <circle key={i} cx={x} cy={y} r="3" fill={v >= 0 ? '#22c55e' : '#ef4444'} stroke="hsl(var(--background))" strokeWidth="1"
+                    <circle key={i} cx={x} cy={y} r="3" fill={v >= 0 ? 'rgb(var(--success))' : 'rgb(var(--destructive))'} stroke="hsl(var(--background))" strokeWidth="1"
                       onMouseEnter={() => setTooltipLine2({ x, y, lines: [`Episode ${i + 1}`, `Growth: ${(v * 100).toFixed(2)}%`] })}
                       onMouseLeave={() => setTooltipLine2(null)}
                     />
@@ -634,14 +625,14 @@ export default function ConsciousnessStatisticsPage() {
                   <div>
                     <h4 className="text-sm font-medium mb-1">{t('consciousness_statistics.most_positive')}</h4>
                     <p className="text-xs text-muted-foreground line-clamp-2">{bestWorst.best.narrative || bestWorst.best.response}</p>
-                    <span className="text-xs text-green-500">{t('consciousness_statistics.rating')}: {bestWorst.best.rating}/5</span>
+                    <span className="text-xs text-success">{t('consciousness_statistics.rating')}: {bestWorst.best.rating}/5</span>
                   </div>
                 )}
                 {bestWorst.worst && (
                   <div>
                     <h4 className="text-sm font-medium mb-1">{t('consciousness_statistics.most_negative')}</h4>
                     <p className="text-xs text-muted-foreground line-clamp-2">{bestWorst.worst.narrative || bestWorst.worst.response}</p>
-                    <span className="text-xs text-red-500">{t('consciousness_statistics.rating')}: {bestWorst.worst.rating}/5</span>
+                    <span className="text-xs text-destructive">{t('consciousness_statistics.rating')}: {bestWorst.worst.rating}/5</span>
                   </div>
                 )}
               </div>
@@ -653,9 +644,9 @@ export default function ConsciousnessStatisticsPage() {
                 <div className="space-y-1">
                   {beliefTrends.map(b => (
                     <div key={b.key} className="flex items-center gap-2 text-xs">
-                      <span className={b.growing ? 'text-green-500' : 'text-red-500'}>{b.growing ? '↑' : '↓'}</span>
+                      <span className={b.growing ? 'text-success' : 'text-destructive'}>{b.growing ? '↑' : '↓'}</span>
                       <span className="text-muted-foreground">{b.key}</span>
-                      <span className={b.growing ? 'text-green-500' : 'text-red-500'}>
+                      <span className={b.growing ? 'text-success' : 'text-destructive'}>
                         {b.delta >= 0 ? '+' : ''}{(b.delta * 100).toFixed(1)}%
                       </span>
                     </div>
