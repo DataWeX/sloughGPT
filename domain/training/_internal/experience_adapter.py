@@ -95,6 +95,87 @@ def _load_feedback_pairs(path: Path | None = None) -> list[dict[str, str]]:
     return []
 
 
+def _build_experience_text(
+    pairs: list[dict[str, str]],
+    block_size: int | None = None,
+    use_prompt_engine: bool = True,
+) -> str:
+    """Build well-structured training text from owned pairs.
+
+    Structure is the single most important factor for owned-data training.
+    Requirements:
+      - Unambiguous role boundaries (model must never confuse user vs assistant)
+      - Train ≡ serve (same template as inference, so learned delimiters transfer)
+      - No collision with user content (delimiters are special tokens, not plain "User:")
+      - Explicit turn boundaries (each pair is a complete turn, not ad-hoc lines)
+
+    Format (Qwen-style, also used by NativeEngine/SloNetChatProvider via PromptEngine):
+      <|im_start|>user\n{user_msg}<|im_end|>\n<|im_start|>assistant\n{assistant_msg}<|im_end|>\n
+
+    When a tokenizer with apply_chat_template is available and use_prompt_engine=True,
+    we delegate to PromptEngine for 100% train/serve identity. Otherwise we use
+    the explicit fallback above, which is still unambiguous and mirrors native/engine.
+
+    Why not "User: {u}\\nAssistant: {a}\\n\\n":
+      - "User:" and "Assistant:" appear verbatim inside user messages ("User: ...")
+      - No explicit end marker — model can't tell where assistant ends and next user begins
+      - Bare newlines are weak boundaries; the model must guess turn structure
+
+    The explicit <|im_start|>/<|im_end|> tokens are multi-char but atomic at the
+    char-level vocab — they tokenize deterministically and become strong learned
+    boundaries. For BPE vocab they map to single tokens; for char vocab they are
+    still unique sequences the model can latch onto.
+
+    Args:
+        pairs: list of {user_msg, assistant_msg}
+        block_size: unused for text building, kept for API compat
+        use_prompt_engine: try PromptEngine first if True
+
+    Returns:
+        Single concatenated string ready for char/BPE tokenization.
+    """
+    # Try PromptEngine for 100% train/serve parity when available
+    if use_prompt_engine:
+        try:
+            from domain.inference._internal.prompt_engine import render_prompt
+
+            # Build one text per pair via the same engine that serves inference.
+            # render_prompt expects list[dict] messages; we render each pair as
+            # a 2-turn conversation and strip the trailing generation prompt.
+            parts: list[str] = []
+            for p in pairs:
+                msgs = [
+                    {"role": "user", "content": p["user_msg"]},
+                    {"role": "assistant", "content": p["assistant_msg"]},
+                ]
+                rendered = render_prompt(msgs, model_type="qwen2")
+                # Qwen fallback appends a trailing generation prompt
+                # "<|im_start|>assistant\n" after the completed assistant turn —
+                # for training we want the *closed* turn only, so strip it.
+                trail = "<|im_start|>assistant\n"
+                if rendered.endswith(trail):
+                    rendered = rendered[: -len(trail)]
+                elif rendered.endswith("<|im_start|>assistant"):
+                    rendered = rendered[: -len("<|im_start|>assistant")]
+                # Ensure each turn ends with <|im_end|>\n so boundaries are explicit
+                if not rendered.endswith("\n"):
+                    rendered += "\n"
+                parts.append(rendered)
+            # Join turns — each already ends with a delimiter, no extra separator needed
+            return "".join(parts)
+        except Exception as e:
+            logger.debug("PromptEngine render failed, using explicit fallback: %s", e)
+
+    # Explicit fallback — well-structured, unambiguous, never collides
+    IMS, IME = "<|im_start|>", "<|im_end|>"
+    out: list[str] = []
+    for p in pairs:
+        u = p["user_msg"].strip()
+        a = p["assistant_msg"].strip()
+        out.append(f"{IMS}user\n{u}{IME}\n{IMS}assistant\n{a}{IME}\n")
+    return "".join(out)
+
+
 class ExperienceSampler(BatchSampler):
     """BatchSampler that concatenates owned experience into token blocks.
 
@@ -133,9 +214,18 @@ class ExperienceSampler(BatchSampler):
             ]
             logger.info("No owned experience found — using synthetic seed", extra={"tag": "TRAIN"})
 
-        # build flat ids same as ChatPairSampler but from owned pairs
-        text = "".join(f"User: {p['user_msg']}\nAssistant: {p['assistant_msg']}\n\n" for p in pairs)
+        # Build flat ids — STRUCTURE IS CRITICAL for owned-data quality.
+        # Use the same chat template as inference (PromptEngine) so train ≡ serve.
+        # Fallback is explicit role tags that never collide with user text.
+        # Format per pair (well-structured, unambiguous, role-isolated):
+        #   <|im_start|>user\n{user}\n<|im_end|>\n<|im_start|>assistant\n{assistant}\n<|im_end|>\n
+        # For char-level vocab without special tokens, this still tokenizes
+        # deterministically and the model learns the delimiter as a boundary.
+        # We use PromptEngine when a tokenizer is available; else the explicit
+        # fallback above (mirrors native/engine format_chat for Qwen).
+        text = _build_experience_text(pairs, block_size=block_size)
         self.ids = np.array([stoi.get(c, 0) for c in text], dtype=np.int32)
+        self._text = text  # keep for debugging / structure inspection
         self.n_samples = max(1, len(self.ids) - block_size - 1)
         self._pairs = pairs
 
