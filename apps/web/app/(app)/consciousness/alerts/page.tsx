@@ -129,15 +129,15 @@ function formatTimeAgo(ts: number): string {
 }
 
 function severityColor(sev: AlertSeverity): string {
-  if (sev === 'critical') return 'bg-red-500/10 text-red-500'
-  if (sev === 'warning') return 'bg-amber-500/10 text-amber-500'
-  return 'bg-blue-500/10 text-blue-500'
+  if (sev === 'critical') return 'bg-destructive/10 text-destructive'
+  if (sev === 'warning') return 'bg-warning/10 text-warning'
+  return 'bg-info/10 text-info'
 }
 
 function severityBadgeColor(sev: AlertSeverity): string {
-  if (sev === 'critical') return 'bg-red-500'
-  if (sev === 'warning') return 'bg-amber-500'
-  return 'bg-blue-500'
+  if (sev === 'critical') return 'bg-destructive'
+  if (sev === 'warning') return 'bg-warning'
+  return 'bg-info'
 }
 
 function playBeep() {
@@ -377,7 +377,7 @@ export default function ConsciousnessAlertsPage() {
               <CardTitle className="text-xs text-muted-foreground">{t('consciousness_alerts.health_score')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={`text-xl font-bold ${health && health.health_score > 70 ? 'text-green-500' : health && health.health_score > 40 ? 'text-amber-500' : 'text-red-500'}`}>
+              <div className={`text-xl font-bold ${health && health.health_score > 70 ? 'text-success' : health && health.health_score > 40 ? 'text-warning' : 'text-destructive'}`}>
                 {health?.health_score?.toFixed(0) ?? '—'}
               </div>
             </CardContent>
@@ -387,7 +387,7 @@ export default function ConsciousnessAlertsPage() {
               <CardTitle className="text-xs text-muted-foreground">{t('consciousness_alerts.active_alerts')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={`text-xl font-bold ${activeCount > 0 ? 'text-red-500' : 'text-green-500'}`}>
+              <div className={`text-xl font-bold ${activeCount > 0 ? 'text-destructive' : 'text-success'}`}>
                 {activeCount}
               </div>
             </CardContent>
