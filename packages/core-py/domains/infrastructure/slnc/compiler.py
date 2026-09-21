@@ -27,6 +27,7 @@ from pathlib import Path
 import numpy as np
 
 from domain.infrastructure._internal.slnc.spec import (
+    FLAG_QUANTIZED_INT8,
     MAGIC,
     MAX_NAME_LEN,
     MAX_NDIM,
@@ -95,17 +96,22 @@ _ARCH_LAYOUTS = {
 
 
 class SLNCCompiler:
-    """Compiles model weights into .slnc format."""
+    """Compiles model weights into .slnc format.
+
+    When `quantize="int8"` (or True), tensor data is stored as int8 with
+    per-tensor float32 scale (save=int8, load=float32 via parser de-quant).
+    """
 
     def __init__(self, config: SLNCConfig | None = None):
         self._config = config or SLNCConfig()
-        self._tensor_entries: list[tuple[str, int, bytes, np.dtype, int, int]] = []
-        # (name, offset, data_bytes, dtype, ndim, crc32)
+        self._tensor_entries: list[tuple[str, int, bytes, np.dtype, int, int, float]] = []
+        # (name, offset, data_bytes, dtype, ndim, crc32, scale)
 
     def compile(
         self,
         model_id: str,
         output: str | None = None,
+        quantize: bool | str = False,
     ) -> str:
         """Compile HuggingFace model to .slnc.
 
@@ -147,13 +153,14 @@ class SLNCCompiler:
         except Exception as e:
             logger.debug("Could not protect .slnc file: %s", e)
 
-        return self.compile_from_dict(config, weights, output)
+        return self.compile_from_dict(config, weights, output, quantize=quantize)
 
     def compile_from_directory(
         self,
         model_dir: str,
         output: str,
         config_path: str | None = None,
+        quantize: bool | str = False,
     ) -> str:
         """Compile a local fine-tuned model directory to .slnc."""
         directory = Path(model_dir)
@@ -177,7 +184,7 @@ class SLNCCompiler:
 
         out_path = Path(output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        return self.compile_from_dict(config, weights, str(out_path))
+        return self.compile_from_dict(config, weights, str(out_path), quantize=quantize)
 
     def _read_weights(self, safetensors_path: Path) -> dict[str, np.ndarray]:
         """Read all weight arrays from a safetensors file."""
@@ -216,6 +223,7 @@ class SLNCCompiler:
         config: dict,
         weights: dict[str, np.ndarray],
         output: str,
+        quantize: bool | str = False,
     ) -> str:
         """Compile from config + weight dict.
 
@@ -223,6 +231,8 @@ class SLNCCompiler:
             config: HuggingFace config.json
             weights: Dict mapping tensor names to numpy arrays
             output: Output file path
+            quantize: If "int8" or True, store as int8 with per-tensor scale
+                      (save=int8, load=float32). Default False = float32.
 
         Returns:
             Path to created .slnc file
@@ -241,6 +251,10 @@ class SLNCCompiler:
             if len(tensor.shape) > MAX_NDIM:
                 raise ValueError(f"Tensor {name} has {len(tensor.shape)} dims (max {MAX_NDIM})")
 
+        # Quantize flag
+        do_quant = quantize is True or (isinstance(quantize, str) and quantize.lower() == "int8")
+        quantized = bool(do_quant)
+
         # Build shape lookup (O(1) instead of O(n²))
         shape_map = {name: tensor.shape for name, tensor in tensor_list}
 
@@ -248,13 +262,19 @@ class SLNCCompiler:
         config_json = json.dumps(config, sort_keys=True).encode()
         header_size = compute_header_size(config_json)
 
-        # Compute tensor entries
+        # Compute tensor entries (need quantized dtype/size for sizing)
         entries_for_size = []
         for name, tensor in tensor_list:
             ndim = len(tensor.shape)
-            entries_for_size.append((name, 0, tensor.tobytes(), ndim, tensor.dtype, 0))
+            if quantized:
+                dtype = np.dtype(np.int8)
+                dummy = b"\x00" * int(np.prod(tensor.shape))
+            else:
+                dtype = tensor.dtype
+                dummy = tensor.tobytes()
+            entries_for_size.append((name, 0, dummy, ndim, dtype, 0))
 
-        tensor_table_size = compute_tensor_table_size(entries_for_size)
+        tensor_table_size = compute_tensor_table_size(entries_for_size, quantized=quantized)
 
         # Compute offsets
         data_start = _align(header_size + tensor_table_size)
@@ -262,29 +282,38 @@ class SLNCCompiler:
 
         self._tensor_entries = []
         for name, tensor in tensor_list:
-            tensor_bytes = tensor.tobytes()
-            crc = _crc32(tensor_bytes)
-            dtype_to_code(tensor.dtype)
-            ndim = len(tensor.shape)
-
-            # Align tensor data if enabled
-            if self._config.align_tensors:
-                current_offset = _align_offset(current_offset)
-
-            self._tensor_entries.append(
-                (
-                    name,
-                    current_offset,
-                    tensor_bytes,
-                    tensor.dtype,
-                    ndim,
-                    crc,
+            if quantized:
+                arr = tensor.astype(np.float32, copy=False)
+                max_abs = float(np.max(np.abs(arr))) if arr.size else 0.0
+                scale = max_abs / 127.0 if max_abs > 0 else 1.0
+                q = np.clip(np.round(arr / scale), -127, 127).astype(np.int8)
+                tensor_bytes = q.tobytes()
+                stor_dtype = np.dtype(np.int8)
+                crc = _crc32(tensor_bytes)
+                dtype_to_code(stor_dtype)
+                ndim = len(tensor.shape)
+                if self._config.align_tensors:
+                    current_offset = _align_offset(current_offset)
+                self._tensor_entries.append(
+                    (name, current_offset, tensor_bytes, stor_dtype, ndim, crc, scale)
                 )
-            )
-            current_offset += len(tensor_bytes)
+                current_offset += len(tensor_bytes)
+            else:
+                tensor_bytes = tensor.tobytes()
+                crc = _crc32(tensor_bytes)
+                dtype_to_code(tensor.dtype)
+                ndim = len(tensor.shape)
+                if self._config.align_tensors:
+                    current_offset = _align_offset(current_offset)
+                self._tensor_entries.append(
+                    (name, current_offset, tensor_bytes, tensor.dtype, ndim, crc, 1.0)
+                )
+                current_offset += len(tensor_bytes)
 
         # Compute flags
         flags = self._config.to_flags()
+        if quantized:
+            flags |= FLAG_QUANTIZED_INT8
 
         # Write file
         with open(output, "wb") as f:
@@ -340,7 +369,13 @@ class SLNCCompiler:
                 f.seek(f_pos)
 
             # Tensor table (variable-length entries)
-            for name, offset, data_bytes, dtype, ndim, crc in self._tensor_entries:
+            is_quant = bool(flags & FLAG_QUANTIZED_INT8)
+            for entry in self._tensor_entries:
+                if len(entry) == 7:
+                    name, offset, data_bytes, dtype, ndim, crc, scale = entry
+                else:
+                    name, offset, data_bytes, dtype, ndim, crc = entry  # compat
+                    scale = 1.0
                 name_bytes = name.encode()
                 if len(name_bytes) > MAX_NAME_LEN:
                     raise ValueError(
@@ -357,6 +392,8 @@ class SLNCCompiler:
                     f.write(struct.pack("<I", dim))
                 f.write(struct.pack("<I", dtype_to_code(dtype)))
                 f.write(struct.pack("<I", crc))
+                if is_quant:
+                    f.write(struct.pack("<f", float(scale)))
 
             # Pad to data start
             current = f.tell()
@@ -364,12 +401,18 @@ class SLNCCompiler:
                 f.write(b"\x00" * (data_start - current))
 
             # Tensor data (computation order, aligned)
-            for name, offset, data_bytes, dtype, ndim, crc in self._tensor_entries:
+            for entry in self._tensor_entries:
+                if len(entry) == 7:
+                    name, offset, data_bytes, dtype, ndim, crc, scale = entry
+                else:
+                    name, offset, data_bytes, dtype, ndim, crc = entry
                 # Pad to alignment before writing
                 current_pos = f.tell()
                 if current_pos < offset:
                     f.write(b"\x00" * (offset - current_pos))
                 f.write(data_bytes)
+
+        return output
 
     def _order_tensors(
         self, config: dict, weights: dict[str, np.ndarray]

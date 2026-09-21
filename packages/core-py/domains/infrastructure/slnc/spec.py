@@ -64,6 +64,7 @@ FLAGS_DEFAULT = 0
 
 FLAG_HAS_HEADER_CRC = 0x01  # reserved region contains header CRC32
 FLAG_ALIGNED_TENSORS = 0x02  # each tensor starts at 64B-aligned offset
+FLAG_QUANTIZED_INT8 = 0x04  # tensor data stored as int8 with per-tensor float32 scale
 FLAG_HAS_FILE_HASH = 0x08  # reserved region contains file-level hash
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -102,6 +103,7 @@ DTYPE_BFLOAT16 = 2
 DTYPE_INT32 = 3
 DTYPE_INT64 = 4
 DTYPE_UINT8 = 5
+DTYPE_INT8 = 6
 
 DTYPE_MAP = {
     DTYPE_FLOAT32: "float32",
@@ -110,6 +112,7 @@ DTYPE_MAP = {
     DTYPE_INT32: "int32",
     DTYPE_INT64: "int64",
     DTYPE_UINT8: "uint8",
+    DTYPE_INT8: "int8",
 }
 
 
@@ -161,13 +164,14 @@ def compute_header_size(json_bytes: bytes) -> int:
     return _align(size)
 
 
-def compute_tensor_entry_size(ndim: int, name_len: int) -> int:
+def compute_tensor_entry_size(ndim: int, name_len: int, quantized: bool = False) -> int:
     """Compute size of a tensor table entry for given dimensionality and name length."""
-    # name_len(4) + name_bytes[name_len] + offset(8) + size(4) + ndim(4) + shape[ndim](4 each) + dtype(4) + crc32(4)
-    return 4 + name_len + 8 + 4 + 4 + ndim * 4 + 4 + 4
+    # name_len(4) + name_bytes[name_len] + offset(8) + size(4) + ndim(4) + shape[ndim](4 each) + dtype(4) + crc32(4) [+ scale(4) if quantized]
+    base = 4 + name_len + 8 + 4 + 4 + ndim * 4 + 4 + 4
+    return base + (4 if quantized else 0)
 
 
-def compute_tensor_table_size(entries: list) -> int:
+def compute_tensor_table_size(entries: list, quantized: bool = False) -> int:
     """Compute total size of tensor table.
 
     entries: list of (name, offset, data_bytes, ndim, dtype, crc)
@@ -175,7 +179,7 @@ def compute_tensor_table_size(entries: list) -> int:
     total = 0
     for name, _, _, ndim, _, _ in entries:
         name_bytes = name.encode() if isinstance(name, str) else name
-        total += compute_tensor_entry_size(ndim, len(name_bytes))
+        total += compute_tensor_entry_size(ndim, len(name_bytes), quantized=quantized)
     return total
 
 
@@ -205,6 +209,8 @@ def dtype_to_code(dtype) -> int:
         return DTYPE_INT64
     elif dtype == np.uint8:
         return DTYPE_UINT8
+    elif dtype == np.int8:
+        return DTYPE_INT8
     else:
         raise ValueError(f"Unsupported dtype: {dtype}")
 
@@ -216,6 +222,8 @@ def code_to_dtype(code: int):
     if code == DTYPE_BFLOAT16:
         # bfloat16 not in standard numpy; return uint16 as storage dtype
         return np.uint16
+    if code == DTYPE_INT8:
+        return np.int8
     name = DTYPE_MAP.get(code)
     if name is None or not hasattr(np, name):
         raise ValueError(f"Unknown dtype code: {code}")

@@ -28,6 +28,7 @@ import numpy as np
 from domain.infrastructure._internal.slnc.spec import (
     FLAG_ALIGNED_TENSORS,
     FLAG_HAS_HEADER_CRC,
+    FLAG_QUANTIZED_INT8,
     MAGIC,
     MAX_NAME_LEN,
     MAX_NDIM,
@@ -130,6 +131,7 @@ class SLNCParser:
         # Decode flags
         self._has_header_crc = bool(self._flags & FLAG_HAS_HEADER_CRC)
         self._aligned_tensors = bool(self._flags & FLAG_ALIGNED_TENSORS)
+        self._quantized = bool(self._flags & FLAG_QUANTIZED_INT8)
 
         # Model metadata (64 bytes → 10 × uint32)
         self._n_layer = struct.unpack("<I", buf[pos : pos + 4])[0]
@@ -187,7 +189,8 @@ class SLNCParser:
 
     def _parse_tensor_table(self):
         """Parse the tensor table from buffered data (fast, no mmap)."""
-        self._tensor_map: dict[str, tuple[int, tuple[int, ...], np.dtype, int]] = {}
+        # quantized files store per-tensor float32 scale after crc
+        self._tensor_map: dict[str, tuple[int, tuple[int, ...], np.dtype, int, float]] = {}
 
         header_size = compute_header_size(json.dumps(self._config_dict, sort_keys=True).encode())
         buf = self._header_data
@@ -223,37 +226,45 @@ class SLNCParser:
             pos += 4
             crc = struct.unpack("<I", buf[pos : pos + 4])[0]
             pos += 4
+            scale = 1.0
+            if self._quantized:
+                scale = struct.unpack("<f", buf[pos : pos + 4])[0]
+                pos += 4
 
             dtype = code_to_dtype(dtype_code)
-            self._tensor_map[name] = (offset, shape, dtype, crc)
+            self._tensor_map[name] = (offset, shape, dtype, crc, scale)
 
     def get_tensor(self, name: str) -> np.ndarray:
         """Get weight tensor from mmap'd file.
 
-        Args:
-            name: Tensor name (e.g. "h.0.attn.c_attn.weight")
-
-        Returns:
-            numpy array — TRUE ZERO-COPY VIEW into mmap'd file
+        When file is quantized (FLAG_QUANTIZED_INT8), storage dtype is int8 with
+        per-tensor scale; this method de-quantizes to float32 on load so callers
+        always receive float32 (save=int8, load=float32).
         """
         if name not in self._tensor_map:
             raise KeyError(f"Unknown tensor: {name}")
 
-        offset, shape, dtype, crc = self._tensor_map[name]
+        entry = self._tensor_map[name]
+        if len(entry) == 5:
+            offset, shape, dtype, crc, scale = entry
+        else:
+            offset, shape, dtype, crc = entry  # type: ignore
+            scale = 1.0
+
         nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
 
-        # True zero-copy: view into mmap without .copy()
         arr = np.frombuffer(self._mm[offset : offset + nbytes], dtype=dtype).reshape(shape)
 
-        # Optional integrity check
         if self._verify:
             import zlib
-
             actual_crc = zlib.crc32(arr.tobytes()) & 0xFFFFFFFF
             if actual_crc != crc:
                 raise ValueError(
                     f"Checksum mismatch for {name}: expected {crc:#x}, got {actual_crc:#x}"
                 )
+
+        if np.dtype(dtype) == np.dtype(np.int8):
+            return (arr.astype(np.float32) * np.float32(scale)).reshape(shape)
 
         return arr
 
@@ -272,27 +283,25 @@ class SLNCParser:
         """
         return self.get_tensor(name).copy()
 
-    def get_tensor_info(self, name: str) -> tuple[int, tuple[int, ...], np.dtype, int]:
-        """Get tensor metadata without reading data.
-
-        Returns:
-            (offset, shape, dtype, crc) — file offset, array shape, element dtype, CRC32
-
-        Raises:
-            KeyError: if tensor name not found
-        """
+    def get_tensor_info(self, name: str) -> tuple[int, tuple[int, ...], np.dtype, int, float] | tuple[int, tuple[int, ...], np.dtype, int]:
+        """Get tensor metadata without reading data."""
         if name not in self._tensor_map:
             raise KeyError(f"Unknown tensor: {name}")
         return self._tensor_map[name]
 
     def read_tensor_region(self, name: str) -> np.ndarray:
-        """Read tensor directly from mmap into numpy array (writable copy).
-
-        Like get_tensor_copy() but named for backward compatibility.
-        """
-        offset, shape, dtype, crc = self.get_tensor_info(name)
+        """Read tensor directly from mmap into numpy array (writable copy)."""
+        info = self.get_tensor_info(name)
+        if len(info) == 5:
+            offset, shape, dtype, crc, scale = info  # type: ignore
+        else:
+            offset, shape, dtype, crc = info  # type: ignore
+            scale = 1.0
         nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
-        return np.frombuffer(self._mm[offset : offset + nbytes], dtype=dtype).reshape(shape).copy()
+        arr = np.frombuffer(self._mm[offset : offset + nbytes], dtype=dtype).reshape(shape).copy()
+        if np.dtype(dtype) == np.dtype(np.int8):
+            return (arr.astype(np.float32) * np.float32(scale)).reshape(shape)
+        return arr
 
     @property
     def tensor_names(self) -> list[str]:
@@ -367,7 +376,11 @@ class SLNCParser:
         import zlib
 
         for name in self._tensor_map:
-            offset, shape, dtype, expected_crc = self._tensor_map[name]
+            entry = self._tensor_map[name]
+            if len(entry) == 5:
+                offset, shape, dtype, expected_crc, _ = entry
+            else:
+                offset, shape, dtype, expected_crc = entry  # type: ignore
             nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
             data = self._mm[offset : offset + nbytes]
             actual_crc = zlib.crc32(data) & 0xFFFFFFFF
@@ -397,7 +410,7 @@ class SLNCParser:
     @property
     def param_count(self) -> int:
         """Total number of model parameters (sum of tensor elements)."""
-        return int(sum(np.prod(shape) for (_, shape, _, _) in self._tensor_map.values()))
+        return int(sum(int(__import__('numpy').prod(v[1])) for v in self._tensor_map.values()))
 
     @property
     def n_layer(self) -> int:
