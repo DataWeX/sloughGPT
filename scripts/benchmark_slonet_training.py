@@ -13,17 +13,28 @@ import tracemalloc
 from pathlib import Path
 
 # Ensure imports resolve
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "core-py"))
 
 import numpy as np
 
 
 def main():
-    from domain.training.train_pipeline import SloughGPTTrainer, TrainerConfig
+    from domain.training._internal.cache_tags import get_cache_root
+    from domain.training._internal.train_pipeline import SloughGPTTrainer, TrainerConfig
 
-    data_path = str(Path(__file__).resolve().parents[1] / "data" / "tinyshakespeare" / "input.txt")
+    candidates = [
+        Path(__file__).resolve().parents[1] / "data" / "datasets" / "tinyshakespeare" / "input.txt",
+        Path(__file__).resolve().parents[1] / "data" / "tinyshakespeare" / "input.txt",
+        get_cache_root() / "tinyshakespeare" / "corpus.jsonl",
+    ]
+    data_path = next((str(p) for p in candidates if p.exists()), str(candidates[0]))
     print(f"Dataset: {data_path}")
-    print(f"Data size: {os.path.getsize(data_path) / 1024:.1f} KB")
+    if Path(data_path).exists():
+        print(f"Data size: {os.path.getsize(data_path) / 1024:.1f} KB")
+    else:
+        print("Data not found — using synthetic tiny dataset")
+        data_path = None
 
     configs = [
         {

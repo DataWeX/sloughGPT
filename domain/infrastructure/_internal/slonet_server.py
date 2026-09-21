@@ -17,6 +17,19 @@ from .model_server import CircuitBreaker, ModelMetrics
 
 logger = logging.getLogger("slo.infrastructure.slonet_server")
 
+# Stop-marker truncation — defense-in-depth beyond token-id stop.
+_STOP_MARKERS = ("<|im_end|>", "<|endoftext|>", "<|im_start|>")
+
+
+def _truncate_at_stop_markers(text: str) -> str:
+    """Cut text at first chat stop marker string (defense if token-id stop missed)."""
+    cut = len(text)
+    for m in _STOP_MARKERS:
+        idx = text.find(m)
+        if idx != -1 and idx < cut:
+            cut = idx
+    return text[:cut] if cut != len(text) else text
+
 
 class SloNetServer:
     """
@@ -291,7 +304,11 @@ class SloNetServer:
                 top_k=top_k,
                 repetition_penalty=repetition_penalty,
             )
-            text = result.get("text", "")
+            full = result.get("text", "")
+            # Worker returns full decode (prompt+gen) — strip prompt echo before truncating.
+            if prompt and prompt in full:
+                full = full.split(prompt)[-1]
+            text = _truncate_at_stop_markers(full).strip()
             logger.debug(
                 "generate_sync",
                 extra={
@@ -323,7 +340,30 @@ class SloNetServer:
                     kv_state=kv_state,
                     quantize_kv=self._quantize_kv,
                 )
-            text = self._tokenizer.decode(result[0].tolist())
+            # Prefer generated_ids slice (prompt stripped by model) — fallback to full decode.
+            try:
+                if hasattr(result, "generated_ids"):
+                    gen = result.generated_ids
+                    if gen.shape[1] > 0:
+                        text = self._tokenizer.decode(gen[0].tolist())
+                    else:
+                        text = ""
+                else:
+                    text = self._tokenizer.decode(result[0].tolist())
+                    # Strip prompt echo if present
+                    if prompt and prompt in text:
+                        text = text.split(prompt)[-1].strip()
+                    else:
+                        try:
+                            pt = self._tokenizer.decode(tokens)
+                            if pt and pt in text:
+                                text = text.split(pt)[-1].strip()
+                        except Exception:
+                            pass
+                text = _truncate_at_stop_markers(text).strip()
+            except Exception as e:
+                logger.warning("slonet_server decode error: %s", e)
+                text = _truncate_at_stop_markers(self._tokenizer.decode(result[0].tolist())).strip()
             logger.debug(
                 "generate_sync",
                 extra={
@@ -419,6 +459,15 @@ class SloNetServer:
                         logger.debug("PUMP_STREAM: cancel_event set, stopping generation")
                         return
                     decoded = self._tokenizer.decode([tok_id])
+                    if decoded and any(m in decoded for m in _STOP_MARKERS):
+                        # Truncate inside the token that contains a stop marker and halt.
+                        for m in _STOP_MARKERS:
+                            if m in decoded:
+                                decoded = decoded.split(m, 1)[0]
+                                break
+                        if decoded:
+                            yield decoded
+                        return
                     if decoded:
                         yield decoded
             logger.debug(

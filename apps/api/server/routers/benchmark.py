@@ -104,6 +104,8 @@ class BenchmarkRouter:
         self.router.add_api_route("/responses", self.get_logged_responses, methods=["GET"])
         self.router.add_api_route("/stats", self.get_tracker_stats, methods=["GET"])
         self.router.add_api_route("/history/clear", self.clear_history, methods=["POST"])
+        self.router.add_api_route("/program", self.get_program, methods=["GET"])
+        self.router.add_api_route("/score", self.score_results, methods=["POST"])
         self.router.add_api_route("/{model_id}", self.get_benchmark_by_id, methods=["GET"])
 
     def _get_model_metrics(self, model: str) -> dict[str, Any]:
@@ -338,6 +340,56 @@ class BenchmarkRouter:
         bench = get_benchmark_domain()
         bench.clear_history()
         return success_response(data={"cleared": True})
+
+    @endpoint("benchmark.get_program")
+    async def get_program(self) -> dict:
+        """Return current weighted program (config/bench_weights.yaml)."""
+        from pathlib import Path
+
+        from domain.benchmark.weighted import BenchProgram
+
+        cfg = Path(__file__).resolve().parents[4] / "config" / "bench_weights.yaml"
+        if not cfg.exists():
+            cfg = Path(__file__).resolve().parents[3] / "config" / "bench_weights.yaml"
+        try:
+            prog = BenchProgram.from_yaml(cfg) if cfg.exists() else BenchProgram()
+            return success_response(data=prog.to_dict())
+        except Exception as e:
+            classify_and_raise(e, source="benchmark.get_program")
+
+    @endpoint("benchmark.score_results")
+    async def score_results(self, payload: dict) -> dict:
+        """Score raw results with weighted programmable logic.
+
+        Body: { results: {latency_p99: 120, recall_at_5: 0.92, ...}, program?: {...} }
+        If program omitted, uses config/bench_weights.yaml.
+        """
+        from pathlib import Path
+
+        from domain.benchmark.weighted import BenchProgram, score_benchmarks
+
+        try:
+            results = payload.get("results") or payload
+            # allow top-level metrics directly
+            if "results" in payload and isinstance(payload["results"], dict):
+                results = payload["results"]
+            prog_dict = payload.get("program")
+            if prog_dict:
+                prog = BenchProgram.from_dict(prog_dict)
+            else:
+                cfg = Path(__file__).resolve().parents[4] / "config" / "bench_weights.yaml"
+                if not cfg.exists():
+                    cfg = Path(__file__).resolve().parents[3] / "config" / "bench_weights.yaml"
+                prog = BenchProgram.from_yaml(cfg) if cfg.exists() else BenchProgram()
+            scored = score_benchmarks(
+                prog, {k: float(v) for k, v in results.items() if isinstance(v, (int, float))}
+            )
+            safe_audit_log(
+                "benchmark.score", resource="weighted", detail=f"score={scored['score']:.1f}"
+            )
+            return success_response(data=scored)
+        except Exception as e:
+            classify_and_raise(e, source="benchmark.score_results")
 
 
 router = BenchmarkRouter().router

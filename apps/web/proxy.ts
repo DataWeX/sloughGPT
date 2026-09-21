@@ -31,10 +31,18 @@ const REDIRECTS: Record<string, string> = {
   '/images': '/developer',
   '/session': '/chat',
   '/files': '/developer',
-  '/voice': '/developer',
+  '/voice': '/chat?mode=talk',
+  '/writing': '/chat?mode=write',
+  '/rewrite': '/chat?mode=rewrite',
+  '/translate': '/chat?mode=translate',
+  '/brainstorm': '/chat?mode=brainstorm',
+  '/decide': '/chat?mode=decide',
+  '/explain': '/chat?mode=explain',
+  '/wellness': '/chat?mode=wellness',
   '/shell': '/developer',
   '/vm': '/developer',
   '/workflow': '/feedback',
+  '/tools': '/chat',
 }
 
 export function proxy(request: NextRequest) {

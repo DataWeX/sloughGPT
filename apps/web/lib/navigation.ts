@@ -72,18 +72,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
         description: 'View all training runs',
       },
       {
-        path: '/auto-train',
-        labelKey: 'nav.auto_train',
-        icon: 'zap',
-        description: 'Auto-training from conversations',
-      },
-      {
-        path: '/self-train',
-        labelKey: 'nav.self_train',
-        icon: 'brain',
-        description: 'Autonomous self-training',
-      },
-      {
         path: '/datasets',
         labelKey: 'nav.datasets',
         shortcut: '3',
@@ -123,12 +111,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
         icon: 'brain',
         description: 'Soul artifacts, checkpoints & weights',
       },
-      {
-        path: '/benchmark',
-        labelKey: 'nav.benchmark',
-        icon: 'activity',
-        description: 'Evaluation & comparison',
-      },
     ],
   },
   {
@@ -159,44 +141,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
   {
     labelKey: 'nav.section.tools',
     routes: [
-      { path: '/tools', labelKey: 'nav.tools', icon: 'grid', description: 'All everyday tools' },
-      {
-        path: '/writing',
-        labelKey: 'nav.writing',
-        icon: 'document',
-        description: 'Writing assistant',
-      },
-      {
-        path: '/translate',
-        labelKey: 'nav.translate',
-        icon: 'chat',
-        description: 'Translate text',
-      },
-      {
-        path: '/rewrite',
-        labelKey: 'nav.rewrite',
-        icon: 'sparkle',
-        description: 'Rewrite & polish text',
-      },
-      {
-        path: '/brainstorm',
-        labelKey: 'nav.brainstorm',
-        icon: 'brain',
-        description: 'Brainstorm ideas',
-      },
-      { path: '/decide', labelKey: 'nav.decide', icon: 'chart', description: 'Help me decide' },
-      {
-        path: '/explain',
-        labelKey: 'nav.explain',
-        icon: 'search',
-        description: 'Explain things simply',
-      },
-      {
-        path: '/wellness',
-        labelKey: 'nav.wellness',
-        icon: 'sparkle',
-        description: 'Wellness & relaxation',
-      },
       {
         path: '/feedback',
         labelKey: 'nav.feedback',
@@ -329,12 +273,4 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/shared-data': IconUsers,
   '/plugins-cloud': IconSettings,
   '/shortcuts': IconSettings,
-  '/writing': IconDocument,
-  '/tools': IconGrid,
-  '/translate': IconChat,
-  '/rewrite': IconSparkle,
-  '/brainstorm': IconBrain,
-  '/decide': IconChart,
-  '/explain': IconSearch,
-  '/wellness': IconSparkle,
 }

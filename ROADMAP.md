@@ -146,10 +146,10 @@ A fast, lightweight local AI inference engine that runs on any device, with a un
 | 1. Tag layer (`cache_tags.py`: kind/tags/mime, `.manifest.json` sidecar)                                                            | ✅     | Single source of truth; no duplicate root logic           |
 | 2. Resolvers cache-first, legacy fallback (helpers, turbo, turbo_endpoints, resolution)                                             | ✅     | Nothing breaks; cache wins                                |
 | 3. Listing classifies + expands (`DatasetsController`: kind/tags/mime/source, `data/datasets/` children listed, `*.jsonl` fallback) | ✅     | Adapters/system no longer pose as datasets                |
-| 4. Training dropdown filters `kind == dataset` (frontend)                                                                           | ⬜     | Hides adapters/system/media from Teach-me selector        |
-| 5. All importers write to cache (github/hf/url/kaggle/csv/local)                                                                    | ⬜     | `create_dataset` already does; extend the rest            |
-| 6. Backfill: migrate `data/` corpora into cache with tags                                                                           | ⬜     | Tag-first-then-move per entry, verify sizes/samples match |
-| 7. Cut over: cache-only reads, `data/` read-only, then remove legacy paths                                                          | ⬜     | Delete fallback code + legacy `datasets/` resolver last   |
+| 4. Training dropdown filters `kind == dataset` (frontend)                                                                           | ✅     | Hides adapters/system/media from Teach-me selector        |
+| 5. All importers write to cache (github/hf/url/kaggle/csv/local)                                                                    | ✅     | `create_dataset` already does; extend the rest            |
+| 6. Backfill: migrate `data/` corpora into cache with tags                                                                           | ✅     | Tag-first-then-move per entry, verify sizes/samples match |
+| 7. Cut over: cache-only reads, `data/` read-only, then remove legacy paths                                                          | ✅     | Delete fallback code + legacy `datasets/` resolver last   |
 
 ## Phase 7: Mobile (Future)
 

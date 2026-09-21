@@ -8,6 +8,26 @@ This is the **only** design system for sloughGPT. It does not change. All UI wor
 **Character:** Warm, sophisticated, technical. Rich violet primary with warm terracotta accents.  
 **Mood:** Calm confidence. Not sterile, not playful. A tool that respects its user.
 
+## The Two Non-Negotiables
+
+Every page ships with the following two rules, and they outrank every other instruction in this document:
+
+1. **Colors are never fixed in markup.** Zero hardcoded hex, zero stock Tailwind palette utilities, zero `hsl()` without a var reference. Every hue resolves from theme tokens — `rgb(var(--token))`, semantic utilities (`text-success`, `bg-warning`), or chart tokens (`var(--chart-N)`). This is what makes the theme switcher (light/dark × theme aura × palette) work: if markup pins a hue, the switcher becomes cosmetic and the page breaks the theme contract.
+2. **Compose, don't stack.** Dashboards are built from the strui primitives below, never from raw `Card` stacks. If a layout would need more than two plain cards in a row with no hierarchy, the composition is wrong, not the page.
+
+## Systematic & Functional UI
+
+The dashboard re-skin (`consciousness/dashboard`) is the reference implementation of these principles:
+
+- **One focal metric per page.** A page leads with a small `KpiGrid` of `StatCard`s hitting one hero number. Metrics never sit as five identically-weighted cards.
+- **`KpiGrid` → `StatCard`** for any single-number callout. `StatCard` owns the stat type scale (its `text-xl` numeric value), the uppercase micro-label, and the trend tint (`text-success` / `text-destructive`).
+- **Actions live in `PageContainer` `headerRight`**, not in an "Actions" card in the body.
+- **`SectionHeader`** groups related content (metrics, quality/reflection, evolution, timeline). A `SectionHeader` + card beats a bare card for every section title.
+- **`FoldSection`** (collapsible) for secondary controls — settings, snapshots, config. Keeping them collapsed distributes visual interest instead of packing the body with controls.
+- **Live/streaming state is a `StatusDot`** (`tone="success" pulse showLabel`) — the visual "breathing" of live data — placed on a slim strip, not as a dotted badge inside a fifth card.
+- **Chart series and progress bars use `var(--chart-N)`** or semantic tokens. If a series needs a distinct hue, it takes a token, never a hex constant.
+- **Empty and loading states come from the components themselves** (`StatCard loading`, `PageContainer loadingGrid`, explicit "need at least 2 data points" callouts). No blank widgets, no endless spinners.
+
 ## Color Tokens
 
 All colors are RGB triples used as `rgb(var(--token))` in CSS and `bg-token`, `text-token` in Tailwind.
@@ -67,6 +87,8 @@ All colors are RGB triples used as `rgb(var(--token))` in CSS and `bg-token`, `t
 | `--chart-3` | `236 145 95` | `240 176 130` |
 | `--chart-4` | `90 150 220` | `100 165 240` |
 | `--chart-5` | `220 80 90` | `235 100 110` |
+
+**Chart rule:** every chart series, legend swatch, progress bar, and per-item accent references a chart or semantic token — `stroke="var(--chart-1)"`, `backgroundColor: 'var(--chart-N)'`, `bg-success`/`bg-warning`/`bg-destructive`. Color constants at the top of a component (`const COLORS = { a: '#6366f1' }`) are forbidden; define them as `{ a: 'var(--chart-1)' }` so they follow theme and palette like everything else.
 
 ## Accent Auras
 
@@ -289,6 +311,15 @@ className="opacity-40 pointer-events-none"
 | New font families | Use Rubik, Lato, or JetBrains Mono |
 | `rounded-full` on cards | Use `rounded` or `rounded-lg` |
 | Animations without motion check | Add `motion-reduce:` variants |
+| Stock Tailwind palette (`text-green-500`, `bg-red-400`, `border-blue-500`, `text-indigo-600`) | Semantic tokens (`text-success`, `bg-destructive`, `border-border`, `text-primary`) |
+| Hex in chart series / progress bars (`#6366f1`, `#22c55e`) | `var(--chart-N)` / `bg-success` / `bg-warning` / `bg-destructive` |
+| Loud AI-default hero gradients (vivid purple→indigo at full opacity) | Token-tinted ambient washes only (below) |
+| "Actions" card in the page body | `PageContainer headerRight` |
+| Five identical stat cards (`Card` + `text-2xl`) | `KpiGrid` + `StatCard` |
+| Stat numbers at `text-2xl` in body | `StatCard` value (owns its own scale) |
+| Live/status conveyed as raw text + `bg-green-400` dot | `StatusDot` (`tone="success" pulse`) |
+| Secondary controls stacked as cards | `FoldSection` (collapsible) |
+| A row/stack of more than two flat cards with no hierarchy | `SectionHeader`, `KpiGrid`, or rethink the layout |
 
 ## AI Agent Rules
 
@@ -300,3 +331,40 @@ className="opacity-40 pointer-events-none"
 6. **Always add hover states.** No clickable elements without feedback.
 7. **Always use focus rings.** Accessibility is not optional.
 8. **Test in both light and dark mode.** Every component must work in both.
+9. **Never fix a hue in markup.** No hex, no stock Tailwind palette, no `hsl()` without a var. All color resolves through tokens, semantic utilities, or `var(--chart-N)`.
+10. **Compose dashboards from primitives.** `KpiGrid`/`StatCard` for metrics, `SectionHeader` for grouping, `FoldSection` for secondary controls, `StatusDot` for live state, actions in `headerRight`. Raw card stacks are the exception, not the default.
+11. **Verify against the AI-slop scanner** below or run the `design-system-enforcement` skill before committing UI changes.
+
+## Dispatch the AI Slop (self-check before any UI commit)
+
+A page has AI-slop fingerprints if any of these are true — fix them before merge:
+
+1. It uses stock Tailwind color utilities (`text-green-500`, `bg-blue-400`, `border-amber-500`, …) or hex constants.
+2. It stacks three or more identical cards with no `KpiGrid`/`StatCard`/`SectionHeader` hierarchy.
+3. Stat numbers rendered at `text-lg`/`text-2xl` in the body instead of via `StatCard`.
+4. Chart series or progress bars print a fixed hue instead of `var(--chart-N)`.
+5. Live/status indicators are text + floating colored dot inside a card.
+6. It reads like "any SaaS product" — a generic dashboard the viewer can't tell belongs to Noir Violet (no StatDots, no loss-curve motif, no personality).
+
+### The Wine Wash is Signature, Not Slop
+
+The token-tinted ambient gradient is sloughGPT's personality and is **explicitly protected** — do not "clean it up":
+
+- `ActiveModelBanner` on the home page: `bg-gradient-to-br from-primary/[0.04] via-transparent to-accent/[0.03]` — the violet→peach "wine" header, and its skeleton (`ActiveModelBannerSkeleton`) uses the same wash so the loading state keeps it.
+- `.sl-sidebar-surface` and `.sl-mobile-header` radial washes in `globals.css` (primary/accent at 7–10% opacity).
+
+These are allowed because they are **token-tinted and near-transparent**. They must never become vivid or hardcoded. If an audit flags them along a stock-palette run, they are the exception — the AI-slop ban targets loud stock-hue gradients, never this wash.
+
+The audit command that found the 367-instance outbreak and every offender in the `consciousness/*` family:
+
+```bash
+# Stock Tailwind palette (AI-slop rainbow) — all must be zero
+grep -rEo '(bg|text|border|ring|from|to|via|divide|decoration|accent|caret|fill|stroke|shadow|outline)-(indigo|fuchsia|cyan|sky|emerald|lime|amber|teal|rose|pink|red|yellow|green|blue|orange|purple)-(50|100|200|300|400|500|600|700|800|900|950)' \
+  apps/web/app/\(app\)/ --include=page.tsx | wc -l
+
+# Hex in components
+grep -rn '#[0-9a-fA-F]\{3,8\}' apps/web/ --include='*.tsx' | grep -v '.test.\|stories.\|node_modules'
+
+# Hex chart/list constants at top of a component (forbidden)
+grep -rn "': '#" apps/web/components apps/web/app --include='*.tsx' | grep -v '.test.'
+```

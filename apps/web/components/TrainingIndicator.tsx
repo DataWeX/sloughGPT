@@ -1,14 +1,21 @@
 'use client'
 
 import Link from 'next/link'
-import { memo } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { cn } from '@sloughgpt/strui'
 import { useTrainingSession } from '@/hooks/useTrainingSession'
 
 export const TrainingIndicator = memo(function TrainingIndicator() {
+  // Mount gate: training state is rehydrated from localStorage, so the
+  // first client render would differ from SSR (null) and break hydration.
+  // Render nothing until mounted so both trees match.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
   const { trainingRunning, phase, progress, loss, method } = useTrainingSession()
 
-  if (!trainingRunning && phase !== 'complete' && phase !== 'error') {
+  if (!mounted || (!trainingRunning && phase !== 'complete' && phase !== 'error')) {
     return null
   }
 

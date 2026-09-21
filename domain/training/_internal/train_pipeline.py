@@ -22,6 +22,7 @@ Eval semantics: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
 
 from __future__ import annotations
 
+import functools
 import logging
 import math
 import os
@@ -759,6 +760,63 @@ class CheckpointManager:
 # =============================================================================
 
 
+# Steps between explicit cyclic-GC collections during training.
+_GC_COLLECT_EVERY_STEPS = 50
+
+
+def _gc_parked(fn):
+    """Park the cyclic GC for a whole training run.
+
+    Each train step allocates millions of short-lived temporaries plus
+    cyclic autograd-graph garbage; at default thresholds CPython runs full
+    cyclic collections constantly (~90% of loop wall time — measured 2.9 vs
+    31+ steps/s with GC parked). Refcounting still frees acyclic temps
+    instantly. Toggling per step does NOT work: re-enabling lets the
+    over-threshold allocation counter trip an immediate collection, so the
+    collector stays parked for the entire run and state restores once, in
+    the finally, on every exit path.
+    """
+    import gc
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        was_enabled = gc.isenabled()
+        if was_enabled:
+            gc.disable()
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            gc.collect()
+            if was_enabled:
+                gc.enable()
+
+    return wrapper
+
+
+def _gc_parked_step(fn):
+    """Reclaim cyclic garbage periodically during a parked training run.
+
+    No GC state changes here (the surrounding ``_gc_parked`` run owns
+    that); just an explicit collection every ``_GC_COLLECT_EVERY_STEPS``
+    steps so cyclic garbage stays bounded on long runs. Also safe
+    standalone: a bare ``gc.collect()`` never hurts.
+    """
+    import gc
+
+    _counter = [0]
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            _counter[0] += 1
+            if _counter[0] % _GC_COLLECT_EVERY_STEPS == 0:
+                gc.collect()
+
+    return wrapper
+
+
 class SloughGPTTrainer:
     """
     Unified trainer for SloughGPTModel (pure NumPy / SloNet).
@@ -1115,6 +1173,7 @@ class SloughGPTTrainer:
         for _ in range(num_batches):
             yield self.get_batch("train")
 
+    @_gc_parked_step
     def train_step(self) -> dict[str, float]:
         """Execute a single training step on the pure numpy SloNet path."""
         model = self.training_model
@@ -1360,6 +1419,7 @@ class SloughGPTTrainer:
             return f"{m}m {s:02d}s"
         return f"{s}s"
 
+    @_gc_parked
     def train(
         self,
         resume: bool = False,
@@ -2138,8 +2198,17 @@ class SloughGPTTrainer:
         # Final saves only: periodic checkpoints sit beside a fresh .soul,
         # which is the primary artifact (points.json is merely its fallback),
         # so clustering on every save is pure overhead (pure-Python k-means
-        # costs ~18s even for a 21K-param model).
+        # costs ~18s even for a 21K-param model). Runs in a background daemon
+        # thread so run completion is never blocked; safe because points are
+        # fallback-only (missing/incomplete points just fall back to .soul).
+        # Use wait_for_compression() when the points are actually needed.
         if is_final:
+            self._compress_in_background(output_path)
+
+    def _compress_in_background(self, output_path: str) -> None:
+        """Compress a final checkpoint without blocking run completion."""
+
+        def _work() -> None:
             try:
                 from domain.training._internal.executor import compress_checkpoint
 
@@ -2154,6 +2223,23 @@ class SloughGPTTrainer:
                     )
             except Exception as exc:
                 logger.debug("Pugqeep compression skipped: %s", exc, extra={"tag": "TRAIN"})
+
+        thread = threading.Thread(target=_work, name="pugqeep-compress", daemon=True)
+        self._compress_thread = thread
+        thread.start()
+
+    def wait_for_compression(self, timeout: float | None = None) -> bool:
+        """Block until background checkpoint compression finishes.
+
+        Returns True when no compression is running (or it completed),
+        False on timeout. Points are fallback-only, so callers that don't
+        need them can skip waiting entirely.
+        """
+        thread = getattr(self, "_compress_thread", None)
+        if thread is None or not thread.is_alive():
+            return True
+        thread.join(timeout=timeout)
+        return not thread.is_alive()
 
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""

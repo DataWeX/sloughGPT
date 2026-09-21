@@ -11,7 +11,7 @@ def test_sloughgpt_trainer_runs_short_cpu_session(
     """Mirrors ``cli.py train`` local path: tiny data, CPU, few steps."""
     monkeypatch.chdir(tmp_path)
     corpus = tmp_path / "corpus.txt"
-    corpus.write_text("abcdefgh" * 80, encoding="utf-8")
+    corpus.write_text("abcdefghij" * 64, encoding="utf-8")
 
     from domain.training._internal.train_pipeline import SloughGPTTrainer
 
@@ -28,7 +28,7 @@ def test_sloughgpt_trainer_runs_short_cpu_session(
         checkpoint_dir=str(tmp_path / "ckpt"),
         checkpoint_interval=100_000,
     )
-    assert trainer.vocab_size == 8
+    assert trainer.vocab_size == 10
     result = trainer.train()
     assert "global_step" in result
     assert result["global_step"] > 0

@@ -13,7 +13,7 @@ def test_sloughgpt_trainer_on_progress_receives_steps_and_loss(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     corpus = tmp_path / "corpus.txt"
-    corpus.write_text("abcdefgh" * 80, encoding="utf-8")
+    corpus.write_text("abcdefghij" * 64, encoding="utf-8")
 
     from domain.training._internal.train_pipeline import SloughGPTTrainer
 
