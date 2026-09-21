@@ -127,6 +127,8 @@ grep -rEo '(bg|text|border|ring|from|to|via|divide|decoration|accent|caret|fill|
 
 **Fix:** semantic utility → `text-success`, `bg-warning`, `text-destructive`, `text-primary`, `border-border`. Distinct-hue series → `var(--chart-N)`.
 
+> **Do not flag the Wine Wash.** `ActiveModelBanner`'s `bg-gradient-to-br from-primary/[0.04] via-transparent to-accent/[0.03]` (and its `ActiveModelBannerSkeleton`), plus the `.sl-sidebar-surface` / `.sl-mobile-header` radial washes, are signature. They're token-tinted at 3–10% opacity. The rainbow ban targets stock-hue utilities (any `from-green-*`, full-opacity vivid gradients, `bg-gradient-to-*` with stock palette hues), never these.
+
 ### Hardcoded Chart / List Color Constants
 
 ```bash

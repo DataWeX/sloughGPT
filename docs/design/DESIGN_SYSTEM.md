@@ -313,6 +313,7 @@ className="opacity-40 pointer-events-none"
 | Animations without motion check | Add `motion-reduce:` variants |
 | Stock Tailwind palette (`text-green-500`, `bg-red-400`, `border-blue-500`, `text-indigo-600`) | Semantic tokens (`text-success`, `bg-destructive`, `border-border`, `text-primary`) |
 | Hex in chart series / progress bars (`#6366f1`, `#22c55e`) | `var(--chart-N)` / `bg-success` / `bg-warning` / `bg-destructive` |
+| Loud AI-default hero gradients (vivid purple→indigo at full opacity) | Token-tinted ambient washes only (below) |
 | "Actions" card in the page body | `PageContainer headerRight` |
 | Five identical stat cards (`Card` + `text-2xl`) | `KpiGrid` + `StatCard` |
 | Stat numbers at `text-2xl` in body | `StatCard` value (owns its own scale) |
@@ -344,6 +345,15 @@ A page has AI-slop fingerprints if any of these are true — fix them before mer
 4. Chart series or progress bars print a fixed hue instead of `var(--chart-N)`.
 5. Live/status indicators are text + floating colored dot inside a card.
 6. It reads like "any SaaS product" — a generic dashboard the viewer can't tell belongs to Noir Violet (no StatDots, no loss-curve motif, no personality).
+
+### The Wine Wash is Signature, Not Slop
+
+The token-tinted ambient gradient is sloughGPT's personality and is **explicitly protected** — do not "clean it up":
+
+- `ActiveModelBanner` on the home page: `bg-gradient-to-br from-primary/[0.04] via-transparent to-accent/[0.03]` — the violet→peach "wine" header, and its skeleton (`ActiveModelBannerSkeleton`) uses the same wash so the loading state keeps it.
+- `.sl-sidebar-surface` and `.sl-mobile-header` radial washes in `globals.css` (primary/accent at 7–10% opacity).
+
+These are allowed because they are **token-tinted and near-transparent**. They must never become vivid or hardcoded. If an audit flags them along a stock-palette run, they are the exception — the AI-slop ban targets loud stock-hue gradients, never this wash.
 
 The audit command that found the 367-instance outbreak and every offender in the `consciousness/*` family:
 
