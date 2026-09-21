@@ -21,18 +21,18 @@ interface MonitorEvent {
 }
 
 const QUALIA_COLORS: Record<string, string> = {
-  valence: '#8b5cf6',
-  arousal: '#ef4444',
-  novelty: '#f59e0b',
-  coherence: '#22c55e',
+  valence: 'var(--chart-1)',
+  arousal: 'var(--chart-2)',
+  novelty: 'var(--chart-3)',
+  coherence: 'var(--chart-4)',
 }
 
 const BELIEF_COLORS: Record<string, string> = {
-  competence: '#6366f1',
-  helpfulness: '#22c55e',
-  creativity: '#f59e0b',
-  accuracy: '#3b82f6',
-  empathy: '#ec4899',
+  competence: 'var(--chart-1)',
+  helpfulness: 'var(--chart-4)',
+  creativity: 'var(--chart-3)',
+  accuracy: 'var(--chart-5)',
+  empathy: 'var(--chart-2)',
 }
 
 const QUALIA_DIMS = ['valence', 'arousal', 'novelty', 'coherence']
@@ -286,7 +286,7 @@ export default function ConsciousnessMonitorPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${connected === true ? 'bg-green-500' : connected === false ? 'bg-red-500' : 'bg-yellow-500'}`} />
+            <div className={`w-2 h-2 rounded-full ${connected === true ? 'bg-success' : connected === false ? 'bg-destructive' : 'bg-warning'}`} />
             <span className="text-xs text-muted-foreground">
               {connected === true ? t('consciousness_monitor.connected') : connected === false ? t('consciousness_monitor.disconnected') : t('consciousness_monitor.checking')}
             </span>
@@ -307,7 +307,7 @@ export default function ConsciousnessMonitorPage() {
                 </div>
                 {isLive && (
                   <Badge variant="default" className="text-[10px] px-1.5 py-0">
-                    <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+                    <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
                     {t('consciousness_monitor.live')}
                   </Badge>
                 )}
@@ -359,7 +359,7 @@ export default function ConsciousnessMonitorPage() {
               <div className="flex gap-4 pt-2 border-t border-border/30">
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-muted-foreground">{t('consciousness_monitor.growth')}</span>
-                  <span className={`text-xs font-mono font-bold ${growthDelta >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  <span className={`text-xs font-mono font-bold ${growthDelta >= 0 ? 'text-success' : 'text-destructive'}`}>
                     {growthDelta >= 0 ? '+' : ''}{(growthDelta * 100).toFixed(1)}%
                   </span>
                 </div>
@@ -378,8 +378,8 @@ export default function ConsciousnessMonitorPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {[
-                { label: 'CPU', value: cpuUsage, color: cpuUsage > 80 ? '#ef4444' : cpuUsage > 50 ? '#f59e0b' : '#22c55e' },
-                { label: 'Memory', value: memoryUsage, color: memoryUsage > 80 ? '#ef4444' : memoryUsage > 50 ? '#f59e0b' : '#22c55e' },
+                { label: 'CPU', value: cpuUsage, color: cpuUsage > 80 ? 'rgb(var(--destructive))' : cpuUsage > 50 ? 'rgb(var(--warning))' : 'rgb(var(--success))' },
+                { label: 'Memory', value: memoryUsage, color: memoryUsage > 80 ? 'rgb(var(--destructive))' : memoryUsage > 50 ? 'rgb(var(--warning))' : 'rgb(var(--success))' },
               ].map(item => (
                 <div key={item.label}>
                   <div className="flex items-center justify-between mb-1">
@@ -400,7 +400,7 @@ export default function ConsciousnessMonitorPage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-muted-foreground">{t('consciousness_monitor.error_rate')}</span>
-                <span className={`text-[10px] font-mono ${errorRate > 20 ? 'text-red-500' : 'text-muted-foreground'}`}>{errorRate.toFixed(0)}%</span>
+                <span className={`text-[10px] font-mono ${errorRate > 20 ? 'text-destructive' : 'text-muted-foreground'}`}>{errorRate.toFixed(0)}%</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-muted-foreground">{t('consciousness_monitor.last_update')}</span>
