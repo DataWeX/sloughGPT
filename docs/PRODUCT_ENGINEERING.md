@@ -206,23 +206,27 @@ Single /training router with sub-paths for each feature
 
 ### Target: ~20 frontend pages, ~15 routers
 
-| Target Page   | Current Pages That Merge                                                                   | Routers That Merge                                                            |
-| ------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `/chat`       | `/chat` (already clean)                                                                    | `inference.py`                                                                |
-| `/training`   | `/training` + `/self-train` + `/lora-eval` + `/auto-train` + `/datasets` + 12 sub-pages    | `training/router.py` + `self_train.py` + `lora_eval.py` + `cloud_training.py` |
-| `/datasets`   | `/datasets` + `/dataset/[id]`                                                              | `datasets.py`                                                                 |
-| `/models`     | `/models` + `/model/[id]` + `/infer` + `/registry`                                         | `models.py` + `infer.py` + `registry.py`                                      |
-| `/souls`      | `/souls` + `/personality` + `/companion`                                                   | `souls.py` + `companion.py`                                                   |
-| `/knowledge`  | `/knowledge` + `/kb` + `/docstore` + `/learn`                                              | `kb.py` + `learner.py`                                                        |
-| `/tools`      | `/tools` + `/writing` + `/rewrite` + `/translate` + `/explain` + `/brainstorm` + `/decide` | `tools.py` (already clean)                                                    |
-| `/benchmark`  | `/benchmark` + `/experiments`                                                              | `benchmark.py` + `experiments.py`                                             |
-| `/feedback`   | `/feedback` + `/meta-weights` + `/workflow`                                                | `feedback.py` + `meta_weights.py` + `workflow.py`                             |
-| `/settings`   | `/settings` + `/admin` + `/security` + `/api-keys` + `/rate-limit`                         | `settings.py` + `security.py`                                                 |
-| `/shell`      | `/shell` + `/vm` + `/developer`                                                            | `shell.py` + `vm.py`                                                          |
-| `/voice`      | `/voice` + `/phoneme` + `/tokenizer` + `/token-tree`                                       | `voice.py` + `tokenizer.py` + `token_tree.py`                                 |
-| `/memory`     | `/memory` (already clean)                                                                  | `memory.py`                                                                   |
-| `/files`      | `/files` + `/images`                                                                       | `files.py` + `images.py`                                                      |
-| `/monitoring` | `/monitoring` + `/errors` + `/session`                                                     | `system.py` + `errors.py` + `session.py`                                      |
+**Status legend:** ✅ done / 🔧 partial (nav-level) / ⏳ pending
+
+| Target Page   | Current Pages That Merge                                                                   | Routers That Merge                                                            | Status                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `/chat`       | `/chat` (already clean)                                                                    | `inference.py`                                                                | ✅                                                                                    |
+| `/training`   | `/training` + `/self-train` + `/lora-eval` + `/auto-train` + `/datasets` + 12 sub-pages    | `training/router.py` + `self_train.py` + `lora_eval.py` + `cloud_training.py` | 🔧 sidebar keeps `/training` + `/training/runs`; `/auto-train` `/self-train` headless |
+| `/datasets`   | `/datasets` + `/dataset/[id]`                                                              | `datasets.py`                                                                 | ✅                                                                                    |
+| `/models`     | `/models` + `/model/[id]` + `/infer` + `/registry`                                         | `models.py` + `infer.py` + `registry.py`                                      | ⏳                                                                                    |
+| `/souls`      | `/souls` + `/personality` + `/companion`                                                   | `souls.py` + `companion.py`                                                   | ⏳                                                                                    |
+| `/knowledge`  | `/knowledge` + `/kb` + `/docstore` + `/learn`                                              | `kb.py` + `learner.py`                                                        | ⏳                                                                                    |
+| `/tools`      | `/tools` + `/writing` + `/rewrite` + `/translate` + `/explain` + `/brainstorm` + `/decide` | `tools.py` (already clean)                                                    | 🔧 all 7 sub-pages removed from sidebar → reached via `/tools` selector               |
+| `/benchmark`  | `/benchmark` + `/experiments`                                                              | `benchmark.py` + `experiments.py`                                             | 🔧 headless (removed from sidebar — API-only `POST /benchmark/score`, no UI for Alex) |
+| `/feedback`   | `/feedback` + `/meta-weights` + `/workflow`                                                | `feedback.py` + `meta_weights.py` + `workflow.py`                             | 🔧 kept in sidebar (Venn center for Maya/Jon)                                         |
+| `/settings`   | `/settings` + `/admin` + `/security` + `/api-keys` + `/rate-limit`                         | `settings.py` + `security.py`                                                 | ⏳                                                                                    |
+| `/shell`      | `/shell` + `/vm` + `/developer`                                                            | `shell.py` + `vm.py`                                                          | ⏳                                                                                    |
+| `/voice`      | `/voice` + `/phoneme` + `/tokenizer` + `/token-tree`                                       | `voice.py` + `tokenizer.py` + `token_tree.py`                                 | ⏳ (phoneme left alone per directive)                                                 |
+| `/memory`     | `/memory` (already clean)                                                                  | `memory.py`                                                                   | ✅                                                                                    |
+| `/files`      | `/files` + `/images`                                                                       | `files.py` + `images.py`                                                      | ⏳                                                                                    |
+| `/monitoring` | `/monitoring` + `/errors` + `/session`                                                     | `system.py` + `errors.py` + `session.py`                                      | ⏳                                                                                    |
+
+> **Persona rule for benchmarking (from USER_PERSONA.md):** `/benchmark` is hidden from Alex (he gets an inline training verdict) and there is no dedicated benchmark UI — `POST /benchmark/score` + `config/bench_weights.yaml` is the headless API for Maya/Jon CI gating. Do not reintroduce a benchmark page into the sidebar.
 
 ---
 
@@ -244,7 +248,7 @@ Single /training router with sub-paths for each feature
 ## Build Order (what to do next)
 
 1. **Write this doc** ✅ (you're reading it)
-2. **Quick cleanup** — delete dead routers, merge duplicates
+2. **Quick cleanup** ✅ — dead routers removed (metrics, collections, feeds, session_store); nav consolidated: `/benchmark` headless, training sub-pages integrated, 7 tool sub-pages → `/tools` selector
 3. **Feature engines** — VoiceEngine, KnowledgeEngine, TrainingEngine (follow ToolsEngine pattern)
 4. **Wire routers** — point routers at engines, not internals
 5. **UI flows** — restructure phoneme, knowledge, training pages to follow UX_FLOWS.md
