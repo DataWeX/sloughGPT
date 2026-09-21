@@ -54,15 +54,15 @@ const CONFIG_OPTIONS: Array<{ key: ConfigKey; labelKey: string }> = [
 const QUALIA_DIMS = ['valence', 'arousal', 'novelty', 'coherence', 'salience', 'certainty', 'complexity']
 
 function getScoreColor(score: number): string {
-  if (score < 40) return '#ef4444'
-  if (score < 70) return '#f59e0b'
-  return '#22c55e'
+  if (score < 40) return 'rgb(var(--destructive))'
+  if (score < 70) return 'rgb(var(--warning))'
+  return 'rgb(var(--success))'
 }
 
 function getDiffColor(a: number, b: number, higherBetter = true): string {
   const diff = a - b
   if (Math.abs(diff) < 0.01) return ''
-  return higherBetter ? (diff > 0 ? 'text-green-500' : 'text-red-500') : (diff < 0 ? 'text-green-500' : 'text-red-500')
+  return higherBetter ? (diff > 0 ? 'text-success' : 'text-destructive') : (diff < 0 ? 'text-success' : 'text-destructive')
 }
 
 function getDiffIcon(a: number, b: number, higherBetter = true): string {
@@ -339,7 +339,7 @@ export default function ConsciousnessComparePage() {
                       <div className="text-[10px] text-muted-foreground">{t('consciousness_compare.episodes')}</div>
                     </div>
                     <div>
-                      <div className={`text-lg font-bold ${(data?.avg_growth ?? 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      <div className={`text-lg font-bold ${(data?.avg_growth ?? 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
                         {data ? `${data.avg_growth >= 0 ? '+' : ''}${avgGrowthA || (data.avg_growth * 100).toFixed(1)}%` : '—'}
                       </div>
                       <div className="text-[10px] text-muted-foreground">{t('consciousness_compare.avg_growth')}</div>
@@ -368,8 +368,8 @@ export default function ConsciousnessComparePage() {
                 const maxH = 120
                 const hA = m.max > 0 ? (m.valueA / m.max) * maxH : 0
                 const hB = m.max > 0 ? (m.valueB / m.max) * maxH : 0
-                const colorA = '#8b5cf6'
-                const colorB = '#06b6d4'
+                const colorA = 'rgb(var(--chart-1))'
+                const colorB = 'rgb(var(--chart-4))'
                 return (
                   <g key={i}>
                     <rect x={x} y={140 - hA} width={barWidth} height={hA} fill={colorA} rx="2" className="transition-all duration-500" />
@@ -390,11 +390,11 @@ export default function ConsciousnessComparePage() {
             </svg>
             <div className="flex items-center justify-center gap-4 mt-2">
               <div className="flex items-center gap-1.5">
-                <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: '#8b5cf6' }} />
+                <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'rgb(var(--chart-1))' }} />
                 <span className="text-xs text-muted-foreground">{getLabel(configA)}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: '#06b6d4' }} />
+                <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'rgb(var(--chart-4))' }} />
                 <span className="text-xs text-muted-foreground">{getLabel(configB)}</span>
               </div>
             </div>
@@ -473,11 +473,11 @@ export default function ConsciousnessComparePage() {
             </div>
             <div className="flex items-center justify-center gap-4 mt-2">
               <div className="flex items-center gap-1.5">
-                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: '#8b5cf6' }} />
+                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: 'rgb(var(--chart-1))' }} />
                 <span className="text-xs text-muted-foreground">{getLabel(configA)}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: '#06b6d4' }} />
+                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: 'rgb(var(--chart-4))' }} />
                 <span className="text-xs text-muted-foreground">{getLabel(configB)}</span>
               </div>
             </div>
