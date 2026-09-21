@@ -91,11 +91,11 @@ const ENDPOINTS: Record<Category, Endpoint[]> = {
 }
 
 const METHOD_COLORS: Record<HttpMethod, string> = {
-  GET: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  POST: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  PUT: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
-  PATCH: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  DELETE: 'bg-red-500/15 text-red-400 border-red-500/30',
+  GET: 'bg-success/15 text-success border-success/30',
+  POST: 'bg-info/15 text-info border-info/30',
+  PUT: 'bg-warning/15 text-warning border-warning/30',
+  PATCH: 'bg-warning/15 text-warning border-warning/30',
+  DELETE: 'bg-destructive/15 text-destructive border-destructive/30',
 }
 
 const ALL_ENDPOINTS = Object.values(ENDPOINTS).flat()
@@ -351,8 +351,8 @@ export default function ConsciousnessApiExplorerPage() {
                       {h.method}
                     </Badge>
                     <span className={`font-mono ${
-                      h.status >= 200 && h.status < 300 ? 'text-green-500' :
-                      h.status >= 400 ? 'text-red-500' : 'text-muted-foreground'
+                      h.status >= 200 && h.status < 300 ? 'text-success' :
+                      h.status >= 400 ? 'text-destructive' : 'text-muted-foreground'
                     }`}>
                       {h.status || 'ERR'}
                     </span>
@@ -417,7 +417,7 @@ export default function ConsciousnessApiExplorerPage() {
                       <div key={p.name} className="flex items-center gap-2">
                         <span className="text-[10px] font-mono text-muted-foreground w-24 shrink-0">
                           {p.name}
-                          {p.required && <span className="text-red-400">*</span>}
+                          {p.required && <span className="text-destructive">*</span>}
                         </span>
                         <Input
                           value={params[i]?.value ?? ''}
@@ -507,9 +507,9 @@ export default function ConsciousnessApiExplorerPage() {
                   <div className="flex items-center gap-3">
                     <Badge variant="outline" className={`font-mono text-xs border ${
                       response.status >= 200 && response.status < 300
-                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                        ? 'bg-success/15 text-success border-success/30'
                         : response.status >= 400
-                          ? 'bg-red-500/15 text-red-400 border-red-500/30'
+                          ? 'bg-destructive/15 text-destructive border-destructive/30'
                           : 'bg-muted/50 text-muted-foreground border-border/50'
                     }`}>
                       {response.status || 'ERR'}
