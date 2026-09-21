@@ -143,43 +143,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     routes: [
       { path: '/tools', labelKey: 'nav.tools', icon: 'grid', description: 'All everyday tools' },
       {
-        path: '/writing',
-        labelKey: 'nav.writing',
-        icon: 'document',
-        description: 'Writing assistant',
-      },
-      {
-        path: '/translate',
-        labelKey: 'nav.translate',
-        icon: 'chat',
-        description: 'Translate text',
-      },
-      {
-        path: '/rewrite',
-        labelKey: 'nav.rewrite',
-        icon: 'sparkle',
-        description: 'Rewrite & polish text',
-      },
-      {
-        path: '/brainstorm',
-        labelKey: 'nav.brainstorm',
-        icon: 'brain',
-        description: 'Brainstorm ideas',
-      },
-      { path: '/decide', labelKey: 'nav.decide', icon: 'chart', description: 'Help me decide' },
-      {
-        path: '/explain',
-        labelKey: 'nav.explain',
-        icon: 'search',
-        description: 'Explain things simply',
-      },
-      {
-        path: '/wellness',
-        labelKey: 'nav.wellness',
-        icon: 'sparkle',
-        description: 'Wellness & relaxation',
-      },
-      {
         path: '/feedback',
         labelKey: 'nav.feedback',
         icon: 'activity',

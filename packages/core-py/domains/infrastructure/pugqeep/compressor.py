@@ -201,7 +201,12 @@ class PointCompressor:
         """
         if n_clusters is None:
             n_clusters = self.n_clusters
-        rng = np.random.default_rng(seed) if seed is not None else np.random
+        # Thread-safe local Generator when seeded; otherwise the legacy
+        # global RandomState (preserves exact legacy streams — some callers
+        # seed globally for reproducibility).
+        rng = np.random.default_rng(seed) if seed is not None else None
+        rand_int = (lambda n: rng.integers(n)) if rng is not None else np.random.randint
+        choice = rng.choice if rng is not None else np.random.choice
 
         # Input validation
         if weights.size == 0:
@@ -226,10 +231,10 @@ class PointCompressor:
 
         # k-means++ initialization (sample-based for speed)
         centroids = np.empty(nc, dtype=np.float32)
-        idx = rng.integers(n)
+        idx = rand_int(n)
         centroids[0] = flat[idx]
         for i in range(1, nc):
-            sample_idx = rng.choice(n, min(1000, n), replace=False)
+            sample_idx = choice(n, min(1000, n), replace=False)
             sample = flat[sample_idx]
             dists = np.min(np.abs(sample[:, None] - centroids[:i, None].T), axis=1)
             probs = dists**2
@@ -238,7 +243,7 @@ class PointCompressor:
                 probs /= probs_sum
             else:
                 probs = np.ones(len(sample)) / len(sample)
-            centroids[i] = sample[rng.choice(len(sample), p=probs)]
+            centroids[i] = sample[choice(len(sample), p=probs)]
         centroids.sort()
 
         # Lloyd's refinement with early stopping
