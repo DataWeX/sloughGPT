@@ -187,9 +187,9 @@ export default function ConsciousnessHealthPage() {
   }
 
   const severityColor = (sev: string) => {
-    if (sev === 'error') return 'text-red-500 bg-red-500/10'
-    if (sev === 'warning') return 'text-amber-500 bg-amber-500/10'
-    return 'text-blue-500 bg-blue-500/10'
+    if (sev === 'error') return 'text-destructive bg-destructive/10'
+    if (sev === 'warning') return 'text-warning bg-warning/10'
+    return 'text-info bg-info/10'
   }
 
   if (loading) {
@@ -266,7 +266,7 @@ export default function ConsciousnessHealthPage() {
             </svg>
             <div className="mt-2 text-sm text-muted-foreground">
               {t('consciousness_health.trend')}: {' '}
-              <span className={trend === 'up' ? 'text-green-500' : trend === 'down' ? 'text-red-500' : ''}>
+              <span className={trend === 'up' ? 'text-success' : trend === 'down' ? 'text-destructive' : ''}>
                 {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'} {t(`consciousness_health.trend_${trend}`)}
               </span>
             </div>
@@ -279,7 +279,7 @@ export default function ConsciousnessHealthPage() {
               <CardTitle className="text-xs text-muted-foreground">{t('consciousness_health.enabled')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={`text-lg font-bold ${health?.enabled ? 'text-green-500' : 'text-red-500'}`}>
+              <div className={`text-lg font-bold ${health?.enabled ? 'text-success' : 'text-destructive'}`}>
                 {health?.enabled ? t('consciousness_health.yes') : t('consciousness_health.no')}
               </div>
             </CardContent>
@@ -326,7 +326,7 @@ export default function ConsciousnessHealthPage() {
               <CardTitle className="text-xs text-muted-foreground">{t('consciousness_health.avg_growth')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={`text-xl font-bold ${health && health.avg_growth >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              <div className={`text-xl font-bold ${health && health.avg_growth >= 0 ? 'text-success' : 'text-destructive'}`}>
                 {health ? `${health.avg_growth >= 0 ? '+' : ''}${avgGrowthPct}%` : '—'}
               </div>
               <div className="text-xs text-muted-foreground mt-1">

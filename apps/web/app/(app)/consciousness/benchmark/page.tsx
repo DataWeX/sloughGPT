@@ -353,7 +353,7 @@ export default function ConsciousnessBenchmarkPage() {
                 {improvement !== null && (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">{t('consciousness_benchmark.vs_previous')}:</span>
-                    <Badge className={improvement >= 0 ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-red-500/15 text-red-400 border-red-500/30'}>
+                    <Badge className={improvement >= 0 ? 'bg-success/15 text-success border-success/30' : 'bg-destructive/15 text-destructive border-destructive/30'}>
                       {improvement >= 0 ? `+${improvement}%` : `${improvement}%`}
                     </Badge>
                     <span className="text-xs text-muted-foreground">

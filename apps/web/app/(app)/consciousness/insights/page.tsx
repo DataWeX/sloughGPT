@@ -300,11 +300,11 @@ export default function ConsciousnessInsightsPage() {
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">{t('consciousness_insights.overall_score')}</span>
                 <span className={`text-2xl font-bold ${
-                  overallScore > 70 ? 'text-green-500' : overallScore > 40 ? 'text-yellow-500' : 'text-red-500'
+                  overallScore > 70 ? 'text-success' : overallScore > 40 ? 'text-warning' : 'text-destructive'
                 }`}>{overallScore}</span>
                 <span className="text-xs text-muted-foreground">/100</span>
                 <span className={`text-xs ${
-                  scoreTrend === 'up' ? 'text-green-500' : scoreTrend === 'down' ? 'text-red-500' : 'text-muted-foreground'
+                  scoreTrend === 'up' ? 'text-success' : scoreTrend === 'down' ? 'text-destructive' : 'text-muted-foreground'
                 }`}>
                   {scoreTrend === 'up' ? '↑' : scoreTrend === 'down' ? '↓' : '→'}
                 </span>

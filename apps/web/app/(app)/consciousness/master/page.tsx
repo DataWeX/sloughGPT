@@ -233,7 +233,7 @@ export default function ConsciousnessMasterDashboardPage() {
           </Badge>
           {isLive && (
             <Badge variant="default" className="text-[10px] px-1.5 py-0">
-              <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+              <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
               {t('consciousness_master.live')}
             </Badge>
           )}
@@ -285,7 +285,7 @@ export default function ConsciousnessMasterDashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
-                <span className={`text-xl sm:text-2xl font-bold ${avgGrowth >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                <span className={`text-xl sm:text-2xl font-bold ${avgGrowth >= 0 ? 'text-success' : 'text-destructive'}`}>
                   {avgGrowth >= 0 ? '↑' : '↓'} {(avgGrowth * 100).toFixed(1)}%
                 </span>
               </div>
@@ -301,7 +301,7 @@ export default function ConsciousnessMasterDashboardPage() {
                 {avgRating > 0 ? (
                   <span className="flex items-center gap-1">
                     {avgRating.toFixed(1)}
-                    <span className="text-yellow-400 text-sm">{'★'.repeat(Math.round(avgRating))}</span>
+                    <span className="text-warning text-sm">{'★'.repeat(Math.round(avgRating))}</span>
                   </span>
                 ) : '—'}
               </div>
@@ -545,7 +545,7 @@ export default function ConsciousnessMasterDashboardPage() {
                   <div key={i} className="flex gap-3 rounded-lg border p-2 sm:p-3 text-xs sm:text-sm">
                     <div className="flex flex-col items-center gap-1 text-[10px] sm:text-xs text-muted-foreground min-w-[48px]">
                       <span>{formatTimeAgo(ep.timestamp)}</span>
-                      <span className={`font-mono ${(ep.growth_delta ?? 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      <span className={`font-mono ${(ep.growth_delta ?? 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
                         {(ep.growth_delta ?? 0) >= 0 ? '+' : ''}{((ep.growth_delta ?? 0) * 100).toFixed(1)}%
                       </span>
                     </div>

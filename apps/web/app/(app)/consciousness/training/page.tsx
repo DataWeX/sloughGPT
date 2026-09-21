@@ -98,21 +98,21 @@ export default function ConsciousnessTrainingPage() {
   const canTrain = trainStatus && !trainStatus.is_training && trainStatus.pairs_collected >= trainStatus.min_pairs
 
   const getScoreColor = (score: number) => {
-    if (score > 70) return 'text-green-500'
-    if (score > 40) return 'text-yellow-500'
-    return 'text-red-500'
+    if (score > 70) return 'text-success'
+    if (score > 40) return 'text-warning'
+    return 'text-destructive'
   }
 
   const getScoreBg = (score: number) => {
-    if (score > 70) return 'bg-green-500'
-    if (score > 40) return 'bg-yellow-500'
-    return 'bg-red-500'
+    if (score > 70) return 'bg-success'
+    if (score > 40) return 'bg-warning'
+    return 'bg-destructive'
   }
 
   const getBarColor = (score: number) => {
-    if (score > 70) return 'bg-green-500'
-    if (score > 40) return 'bg-yellow-500'
-    return 'bg-red-500'
+    if (score > 70) return 'bg-success'
+    if (score > 40) return 'bg-warning'
+    return 'bg-destructive'
   }
 
   if (loading) {

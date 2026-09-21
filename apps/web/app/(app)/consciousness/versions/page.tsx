@@ -240,11 +240,11 @@ export default function ConsciousnessVersionsPage() {
     return (
       <div className="flex items-center gap-3 text-sm">
         <span className="w-24 text-muted-foreground shrink-0">{label}</span>
-        <span className={`flex-1 rounded px-2 py-1 font-mono text-xs ${leftType === 'same' ? 'bg-muted/50' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}>
+        <span className={`flex-1 rounded px-2 py-1 font-mono text-xs ${leftType === 'same' ? 'bg-muted/50' : 'bg-destructive/10 text-destructive dark:text-destructive'}`}>
           {leftVal}
         </span>
         <span className="text-muted-foreground text-xs">→</span>
-        <span className={`flex-1 rounded px-2 py-1 font-mono text-xs ${rightType === 'same' ? 'bg-muted/50' : 'bg-green-500/10 text-green-600 dark:text-green-400'}`}>
+        <span className={`flex-1 rounded px-2 py-1 font-mono text-xs ${rightType === 'same' ? 'bg-muted/50' : 'bg-success/10 text-success dark:text-success'}`}>
           {rightVal}
         </span>
       </div>
@@ -530,13 +530,13 @@ export default function ConsciousnessVersionsPage() {
                         <span className="w-24 text-muted-foreground shrink-0">{t('consciousness_versions.traits')}</span>
                         <span className="flex-1 flex flex-wrap gap-1">
                           {(left.personality?.traits || []).map((trait, i) => (
-                            <Badge key={i} variant="outline" className="text-xs bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30">{trait}</Badge>
+                            <Badge key={i} variant="outline" className="text-xs bg-destructive/10 text-destructive dark:text-destructive border-destructive/30">{trait}</Badge>
                           ))}
                         </span>
                         <span className="text-muted-foreground text-xs">→</span>
                         <span className="flex-1 flex flex-wrap gap-1">
                           {(right.personality?.traits || []).map((trait, i) => (
-                            <Badge key={i} variant="outline" className="text-xs bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30">{trait}</Badge>
+                            <Badge key={i} variant="outline" className="text-xs bg-success/10 text-success dark:text-success border-success/30">{trait}</Badge>
                           ))}
                         </span>
                       </div>

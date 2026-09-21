@@ -516,10 +516,10 @@ const ENDPOINTS: Record<Category, Endpoint[]> = {
 }
 
 const METHOD_COLORS: Record<HttpMethod, string> = {
-  GET: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  POST: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  PATCH: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  DELETE: 'bg-red-500/15 text-red-400 border-red-500/30',
+  GET: 'bg-success/15 text-success border-success/30',
+  POST: 'bg-info/15 text-info border-info/30',
+  PATCH: 'bg-warning/15 text-warning border-warning/30',
+  DELETE: 'bg-destructive/15 text-destructive border-destructive/30',
   PUT: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
 }
 
@@ -629,7 +629,7 @@ export default function ConsciousnessDocsPage() {
                                 <td className="px-3 py-1.5 text-muted-foreground">{p.type}</td>
                                 <td className="px-3 py-1.5">
                                   {p.required ? (
-                                    <span className="text-amber-400">{t('consciousness_docs.yes')}</span>
+                                    <span className="text-warning">{t('consciousness_docs.yes')}</span>
                                   ) : (
                                     <span className="text-muted-foreground">{t('consciousness_docs.no')}</span>
                                   )}
@@ -710,8 +710,8 @@ export default function ConsciousnessDocsPage() {
                     <div ref={el => { responseRefs.current[key] = el }}>
                       <div className="flex items-center gap-3 text-xs mb-1">
                         <span className={`font-mono font-medium ${
-                          result.status >= 200 && result.status < 300 ? 'text-green-500' :
-                          result.status >= 400 ? 'text-red-500' : 'text-muted-foreground'
+                          result.status >= 200 && result.status < 300 ? 'text-success' :
+                          result.status >= 400 ? 'text-destructive' : 'text-muted-foreground'
                         }`}>
                           {result.status || 'ERR'}
                         </span>

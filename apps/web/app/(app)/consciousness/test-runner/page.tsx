@@ -388,10 +388,10 @@ export default function ConsciousnessTestRunnerPage() {
 
   const statusColor = (s: TestStatus) => {
     switch (s) {
-      case 'pass': return 'bg-green-500/15 text-green-400 border-green-500/30'
-      case 'fail': return 'bg-red-500/15 text-red-400 border-red-500/30'
+      case 'pass': return 'bg-success/15 text-success border-success/30'
+      case 'fail': return 'bg-destructive/15 text-destructive border-destructive/30'
       case 'skip': return 'bg-muted/30 text-muted-foreground border-border/30'
-      case 'running': return 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+      case 'running': return 'bg-info/15 text-info border-info/30'
       default: return 'bg-muted/20 text-muted-foreground border-border/30'
     }
   }
@@ -473,11 +473,11 @@ export default function ConsciousnessTestRunnerPage() {
                 </div>
                 <div>
                   <div className="text-muted-foreground text-xs">{t('consciousness_test_runner.summary_passed')}</div>
-                  <div className="font-mono text-lg text-green-500">{passed}</div>
+                  <div className="font-mono text-lg text-success">{passed}</div>
                 </div>
                 <div>
                   <div className="text-muted-foreground text-xs">{t('consciousness_test_runner.summary_failed')}</div>
-                  <div className="font-mono text-lg text-red-500">{failed}</div>
+                  <div className="font-mono text-lg text-destructive">{failed}</div>
                 </div>
                 <div>
                   <div className="text-muted-foreground text-xs">{t('consciousness_test_runner.summary_skipped')}</div>
@@ -510,7 +510,7 @@ export default function ConsciousnessTestRunnerPage() {
                         <td className="px-3 py-1.5 text-muted-foreground">{tc.suite}</td>
                         <td className="px-3 py-1.5">{tc.name}</td>
                         <td className="px-3 py-1.5 font-mono">{tc.duration}ms</td>
-                        <td className="px-3 py-1.5 text-red-400 max-w-[300px] truncate">{tc.error ?? ''}</td>
+                        <td className="px-3 py-1.5 text-destructive max-w-[300px] truncate">{tc.error ?? ''}</td>
                       </tr>
                     ))}
                   </tbody>

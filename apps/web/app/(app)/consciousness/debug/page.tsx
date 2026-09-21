@@ -331,7 +331,7 @@ export default function ConsciousnessDebugPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${connected === true ? 'bg-green-500' : connected === false ? 'bg-red-500' : 'bg-yellow-500'}`} />
+            <div className={`w-2 h-2 rounded-full ${connected === true ? 'bg-success' : connected === false ? 'bg-destructive' : 'bg-warning'}`} />
             <span className="text-xs text-muted-foreground">
               {connected === true ? t('consciousness_debug.connected') : connected === false ? t('consciousness_debug.disconnected') : t('consciousness_debug.checking')}
             </span>
@@ -360,7 +360,7 @@ export default function ConsciousnessDebugPage() {
                     className="w-full flex items-center justify-between px-3 py-2 text-left"
                   >
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="font-mono text-[9px] border px-1.5 py-0 shrink-0 bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                      <Badge variant="outline" className="font-mono text-[9px] border px-1.5 py-0 shrink-0 bg-success/15 text-success border-success/30">
                         GET
                       </Badge>
                       <span className="text-xs font-medium">{t(ep.labelKey)}</span>
@@ -522,8 +522,8 @@ export default function ConsciousnessDebugPage() {
               )}
               {lastError && (
                 <div>
-                  <p className="text-[10px] font-medium text-red-400 mb-1">{t('consciousness_debug.last_error')}</p>
-                  <pre className="max-h-24 overflow-auto rounded border border-red-500/20 bg-red-500/5 p-2 text-[10px] font-mono text-red-400 whitespace-pre-wrap">
+                  <p className="text-[10px] font-medium text-destructive mb-1">{t('consciousness_debug.last_error')}</p>
+                  <pre className="max-h-24 overflow-auto rounded border border-destructive/20 bg-destructive/5 p-2 text-[10px] font-mono text-destructive whitespace-pre-wrap">
                     {lastError}
                   </pre>
                 </div>
