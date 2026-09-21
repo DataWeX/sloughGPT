@@ -5104,12 +5104,17 @@ def import_from_sou(path: str) -> SloNet:
 
     if is_transformer:
         md = meta.get("metadata", {}) or meta.get("soul_signature", {})
+        # Architecture lives under metadata.config for files written by
+        # SloughGPTTrainer.save (flat keys are HF-style fallbacks). Reading
+        # the wrong level silently builds a default 6-layer net and
+        # strict=False backfills random weights — a corrupt restore.
+        cfg = md.get("config", {}) or {}
         net = SloTransformer(
             vocab_size=md.get("vocab_size", md.get("vocab", 256)),
-            n_embed=md.get("n_embed", md.get("hidden_size", 384)),
-            n_layer=md.get("n_layer", md.get("num_hidden_layers", 6)),
-            n_head=md.get("n_head", md.get("num_attention_heads", 8)),
-            block_size=md.get("block_size", 64),
+            n_embed=cfg.get("n_embed", md.get("n_embed", md.get("hidden_size", 384))),
+            n_layer=cfg.get("n_layer", md.get("n_layer", md.get("num_hidden_layers", 6))),
+            n_head=cfg.get("n_head", md.get("n_head", md.get("num_attention_heads", 8))),
+            block_size=cfg.get("block_size", md.get("block_size", 64)),
             max_seq_len=md.get("max_seq_len", 2048),
             dropout=md.get("dropout", 0.1),
             use_rope=md.get("use_rope", True),
