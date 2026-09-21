@@ -5,6 +5,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
+  KpiGrid, StatCard, SectionHeader, FoldSection, Button,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -51,25 +52,25 @@ interface PersonalityHistory {
 }
 
 const QUALIA_DIMS = [
-  { key: 'valence', color: '#8b5cf6' },
-  { key: 'arousal', color: '#ef4444' },
-  { key: 'novelty', color: '#f59e0b' },
-  { key: 'coherence', color: '#22c55e' },
-  { key: 'salience', color: '#3b82f6' },
-  { key: 'certainty', color: '#06b6d4' },
-  { key: 'complexity', color: '#d946ef' },
+  { key: 'valence', color: 'var(--chart-1)' },
+  { key: 'arousal', color: 'var(--chart-2)' },
+  { key: 'novelty', color: 'var(--chart-3)' },
+  { key: 'coherence', color: 'var(--chart-4)' },
+  { key: 'salience', color: 'var(--chart-5)' },
+  { key: 'certainty', color: 'var(--chart-1)' },
+  { key: 'complexity', color: 'var(--chart-2)' },
 ]
 
 const BELIEF_KEYS = ['competence', 'helpfulness', 'creativity', 'accuracy', 'empathy'] as const
 const BELIEF_COLORS: Record<string, string> = {
-  competence: '#6366f1',
-  helpfulness: '#22c55e',
-  creativity: '#f59e0b',
-  accuracy: '#3b82f6',
-  empathy: '#ec4899',
+  competence: 'var(--chart-1)',
+  helpfulness: 'var(--chart-4)',
+  creativity: 'var(--chart-3)',
+  accuracy: 'var(--chart-5)',
+  empathy: 'var(--chart-2)',
 }
 
-const RATING_COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e']
+const RATING_CHART_VARS = ['var(--destructive)', 'var(--chart-2)', 'var(--warning)', 'var(--chart-4)', 'var(--success)'] as const
 
 const SVG_W = 800
 const SVG_H = 300
@@ -267,7 +268,7 @@ export default function ConsciousnessAnalyticsPage() {
                 <CardTitle className="text-sm text-muted-foreground">{t('consciousness_analytics.avg_growth')}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${stats.avgGrowth >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                <div className={`text-2xl font-bold ${stats.avgGrowth >= 0 ? 'text-success' : 'text-destructive'}`}>
                   {stats.avgGrowth >= 0 ? '+' : ''}{(stats.avgGrowth * 100).toFixed(1)}%
                 </div>
               </CardContent>
@@ -298,7 +299,7 @@ export default function ConsciousnessAnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className={`text-lg font-semibold ${
-                stats.trend === 'improving' ? 'text-green-500' : stats.trend === 'declining' ? 'text-red-500' : 'text-muted-foreground'
+                stats.trend === 'improving' ? 'text-success' : stats.trend === 'declining' ? 'text-destructive' : 'text-muted-foreground'
               }`}>
                 {stats.trend === 'improving' ? `↑ ${t('consciousness_analytics.trend_improving')}` :
                  stats.trend === 'declining' ? `↓ ${t('consciousness_analytics.trend_declining')}` :
@@ -332,7 +333,7 @@ export default function ConsciousnessAnalyticsPage() {
                   const x = M.left + (growthData.values.length > 1 ? i * xStep : PW / 2)
                   const y = M.top + PH - ((v - (-0.1)) / (0.1 - (-0.1))) * PH
                   return (
-                    <circle key={i} cx={x} cy={y} r="3" fill={v >= 0 ? '#22c55e' : '#ef4444'} stroke="hsl(var(--background))" strokeWidth="1"
+                    <circle key={i} cx={x} cy={y} r="3" fill={v >= 0 ? 'rgb(var(--success))' : 'rgb(var(--destructive))'} stroke="hsl(var(--background))" strokeWidth="1"
                       onMouseEnter={() => setTooltip1({ x, y, lines: [`Episode ${i + 1}`, `Growth: ${(v * 100).toFixed(2)}%`] })}
                       onMouseLeave={() => setTooltip1(null)}
                     />
@@ -421,7 +422,7 @@ export default function ConsciousnessAnalyticsPage() {
                     const y = M.top + PH - barH
                     return (
                       <g key={i}>
-                        <rect x={x} y={y} width={barW} height={barH} rx="3" fill={RATING_COLORS[i]} fillOpacity="0.8"
+                        <rect x={x} y={y} width={barW} height={barH} rx="3" fill={`rgb(${RATING_CHART_VARS[i]})`} fillOpacity="0.8"
                           onMouseEnter={() => setTooltip3({ x: x + barW / 2, y, lines: [`Rating ${i + 1}: ${count} episodes`] })}
                           onMouseLeave={() => setTooltip3(null)}
                         />
