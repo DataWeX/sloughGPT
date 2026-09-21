@@ -28,6 +28,20 @@ description: Enforce the Noir Violet design system. Scans for hardcoded colors, 
 | `--muted` | `244 242 248` | `38 34 52` | `bg-muted` |
 | `--muted-foreground` | `130 122 150` | `150 140 172` | `text-muted-foreground` |
 
+### Chart Tokens
+
+Every chart series, progress bar, and per-item accent uses a chart or semantic token — never hex, never stock Tailwind.
+
+| Token | Light | Dark | Use |
+|-------|-------|------|-----|
+| `--chart-1` | `124 82 196` | `192 170 244` | `stroke="var(--chart-1)"`, `fill="var(--chart-1)"` |
+| `--chart-2` | `52 176 125` | `72 192 140` | Series 2 / success family |
+| `--chart-3` | `236 145 95` | `240 176 130` | Series 3 / accent family |
+| `--chart-4` | `90 150 220` | `100 165 240` | Series 4 / info family |
+| `--chart-5` | `220 80 90` | `235 100 110` | Series 5 / destructive family |
+
+**Rule:** a component's color map must be token references (`const C = { a: 'var(--chart-1)' }`), never hex (`{ a: '#6366f1' }`). The theme/palette switcher only works if markup never pins a hue.
+
 ### Typography Scale
 
 | Role | Class | Size | Weight |
@@ -101,6 +115,36 @@ grep -rn 'style={{' apps/web/ --include="*.tsx"
 
 **Fix:** Use Tailwind classes instead
 
+### Stock Tailwind Palette (AI-Slop Rainbow)
+
+The single biggest palette leak: pages importing Tailwind's default color wheel and washing out Noir Violet. This found 367 instances across 35 pages, concentrated in `consciousness/*`.
+
+```bash
+# All of these must be zero before a UI commit
+grep -rEo '(bg|text|border|ring|from|to|via|divide|decoration|accent|caret|fill|stroke|shadow|outline)-(indigo|fuchsia|cyan|sky|emerald|lime|amber|teal|rose|pink|red|yellow|green|blue|orange|purple)-(50|100|200|300|400|500|600|700|800|900|950)' \
+  apps/web/ --include="*.tsx" --include="*.css" | wc -l
+```
+
+**Fix:** semantic utility → `text-success`, `bg-warning`, `text-destructive`, `text-primary`, `border-border`. Distinct-hue series → `var(--chart-N)`.
+
+### Hardcoded Chart / List Color Constants
+
+```bash
+# Hex constants at top of a component (chart series, per-item maps)
+grep -rn "': '#" apps/web/ --include="*.tsx" | grep -v '.test.'
+```
+
+**Fix:** `{ a: 'var(--chart-1)' }`, `{ ok: 'var(--success)' }`, `{ bad: 'var(--destructive)' }`.
+
+### Dashboard Card Soup
+
+```bash
+# Count plain-card sections per file — 5+ plain <Card> in a row, no KpiGrid, is a flag
+grep -rEc '<Card>' apps/web/app/\(app\)/ --include="page.tsx" | sort -t: -k2 -rn | head
+```
+
+**Fix:** `KpiGrid` + `StatCard` for metrics, `SectionHeader` for grouping, `FoldSection` for secondary controls, `StatusDot` for live state, actions in `headerRight`.
+
 ## Component Checklist
 
 Before committing any UI component, verify:
@@ -108,11 +152,17 @@ Before committing any UI component, verify:
 | Check | Pass |
 |-------|------|
 | Colors use tokens (no hex, no rgb without var) | |
+| No stock Tailwind palette utils (`text-green-500`, `bg-red-400`…) | |
+| Chart series / progress bars use `var(--chart-N)` or semantic tokens | |
 | Typography follows scale (no text-lg in body) | |
 | Spacing uses system (no arbitrary px values) | |
 | Interactive elements have hover states | |
 | Focus states use ring-2 + ring-offset-2 | |
 | Disabled states use opacity-40 | |
+| Metrics use `KpiGrid` + `StatCard`, not raw `Card` + `text-2xl` | |
+| Actions in `PageContainer headerRight`, not a body card | |
+| Secondary controls use `FoldSection` | |
+| Live state uses `StatusDot` (pulse) | |
 | Cards use CardHeader/CardTitle/CardContent | |
 | Page uses `sl-page mx-auto max-w-4xl` | |
 | No inline styles | |
@@ -127,8 +177,15 @@ Before committing any UI component, verify:
 | `text-gray-500` | `text-muted-foreground` |
 | `bg-white` | `bg-card` |
 | `border-gray-200` | `border-border` |
+| `text-green-500` / `bg-red-400` / `text-indigo-600` (stock palette) | `text-success` / `bg-destructive` / `text-primary` or `var(--chart-N)` |
+| `#6366f1` / `#22c55e` in chart series / progress bars | `var(--chart-1)` / `bg-success` |
+| `const COLORS = { k: '#hex' }` in a component | `{ k: 'var(--chart-N)' }` |
 | `text-lg` in page body | `text-sm` or `text-base` |
 | `px-8 py-6` on page | `sl-page` class |
 | `rounded-lg` everywhere | Use appropriate radius for context |
+| Stat cards as raw `Card` + `text-2xl` | `KpiGrid` + `StatCard` |
+| "Actions" card in body | `PageContainer headerRight` |
+| Five flat cards with no hierarchy | `KpiGrid`/`SectionHeader` or rethink layout |
+| Live dot via `bg-green-400` in a card | `StatusDot` (`tone="success" pulse showLabel`) |
 | No hover on button | Add `hover:bg-primary/90` |
 | Focus without ring | Add `focus-visible:ring-2 focus-visible:ring-ring` |
