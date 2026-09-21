@@ -315,7 +315,7 @@ export default function ConsciousnessDashboardPage() {
   return (
     <PageContainer
       title={
-        <div className="border border-primary/20 bg-gradient-to-br from-primary/[0.04] via-transparent to-accent/[0.03]">
+        <div className="border-b border-primary/20 bg-gradient-to-br from-primary/[0.08] via-primary/[0.04] to-accent/[0.06] px-3 py-3 shadow-sm backdrop-blur-sm">
           <h1 className="sl-h1">Consciousness Dashboard</h1>
         </div>
       }
