@@ -183,16 +183,25 @@ class PointCompressor:
         self.quantize_centroids = quantize_centroids
 
     def compress_cluster(
-        self, weights: np.ndarray, identity: str = "unknown", n_clusters: int | None = None
+        self,
+        weights: np.ndarray,
+        identity: str = "unknown",
+        n_clusters: int | None = None,
+        seed: int | None = None,
     ) -> Point:
         """
         Compress using vector quantization (cluster-based).
 
         Uses k-means++ initialization + Lloyd's refinement + Huffman encoding.
         When adaptive_k is enabled, cluster count varies by weight entropy.
+
+        Pass ``seed`` for thread-safe deterministic sampling (a local
+        Generator); without it the global RandomState is used, which is
+        neither thread-safe nor reproducible across processes.
         """
         if n_clusters is None:
             n_clusters = self.n_clusters
+        rng = np.random.default_rng(seed) if seed is not None else np.random
 
         # Input validation
         if weights.size == 0:
@@ -217,10 +226,10 @@ class PointCompressor:
 
         # k-means++ initialization (sample-based for speed)
         centroids = np.empty(nc, dtype=np.float32)
-        idx = np.random.randint(n)
+        idx = rng.integers(n)
         centroids[0] = flat[idx]
         for i in range(1, nc):
-            sample_idx = np.random.choice(n, min(1000, n), replace=False)
+            sample_idx = rng.choice(n, min(1000, n), replace=False)
             sample = flat[sample_idx]
             dists = np.min(np.abs(sample[:, None] - centroids[:i, None].T), axis=1)
             probs = dists**2
@@ -229,7 +238,7 @@ class PointCompressor:
                 probs /= probs_sum
             else:
                 probs = np.ones(len(sample)) / len(sample)
-            centroids[i] = sample[np.random.choice(len(sample), p=probs)]
+            centroids[i] = sample[rng.choice(len(sample), p=probs)]
         centroids.sort()
 
         # Lloyd's refinement with early stopping

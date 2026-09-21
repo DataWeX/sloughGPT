@@ -456,22 +456,50 @@ def compress_checkpoint(
     compressor = PointCompressor()
     library = PointLibrary(name=lib_name, storage_dir=out_dir)
 
+    import hashlib
+    import os
+
     import numpy as np
 
+    # Normalize once on the calling thread (cheap); cluster in parallel.
+    prepared: dict[str, np.ndarray] = {}
     total_raw = 0
-    total_compressed = 0
     for name, weights in state_dict.items():
         if not isinstance(weights, np.ndarray):
             weights = np.asarray(weights, dtype=np.float32)
         total_raw += weights.nbytes
-        point_id = f"{lib_name}.{name}"
-        point = compressor.compress_cluster(
+        prepared[name] = weights
+
+    def _compress_one(item: tuple[str, np.ndarray]):
+        name, weights = item
+        # Stable per-tensor seed: deterministic across runs and
+        # thread-safe (a local Generator, never the global RandomState).
+        seed = int(hashlib.md5(name.encode("utf-8")).hexdigest()[:8], 16)
+        return compressor.compress_cluster(
             weights,
-            point_id,
+            f"{lib_name}.{name}",
             n_clusters=n_clusters,
+            seed=seed,
         )
-        total_compressed += point.nbytes()
-        library.add(point)
+
+    if len(prepared) > 1:
+        # NOTE: pugqeep's ParallelExecutor.map hangs on a drain event that
+        # never fires — stdlib futures join on exit and propagate errors.
+        from concurrent.futures import ThreadPoolExecutor
+
+        workers = max(1, min(os.cpu_count() or 4, len(prepared)))
+        points = {}
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = {ex.submit(_compress_one, (n, w)): n for n, w in prepared.items()}
+            for fut in futs:
+                points[futs[fut]] = fut.result()
+    else:
+        points = {name: _compress_one((name, w)) for name, w in prepared.items()}
+
+    total_compressed = 0
+    for name in sorted(points):
+        total_compressed += points[name].nbytes()
+        library.add(points[name])
 
     library.save(lib_path)
 

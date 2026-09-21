@@ -123,12 +123,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
         icon: 'brain',
         description: 'Soul artifacts, checkpoints & weights',
       },
-      {
-        path: '/benchmark',
-        labelKey: 'nav.benchmark',
-        icon: 'activity',
-        description: 'Evaluation & comparison',
-      },
     ],
   },
   {
