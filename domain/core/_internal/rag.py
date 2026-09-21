@@ -98,6 +98,16 @@ class BM25Indexer:
             len(self.doc_freq),
         )
 
+        # Structural invariants — a term can occur in at most every chunk,
+        # and there is exactly one length entry per chunk. If either breaks,
+        # the index was double-counted: fail loud, never silently wrong.
+        assert len(self.doc_lengths) == len(chunks), (
+            f"BM25 index corrupt: {len(self.doc_lengths)} lengths for {len(chunks)} chunks"
+        )
+        assert all(df <= len(chunks) for df in self.doc_freq.values()), (
+            "BM25 index corrupt: term frequency exceeds chunk count"
+        )
+
     def _tokenize(self, text: str) -> list[str]:
         """Tokenize text."""
         text = text.lower()

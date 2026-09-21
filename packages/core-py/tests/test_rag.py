@@ -414,3 +414,32 @@ class TestBM25IdempotentIndex:
         rag.retriever.build_index()
         result = rag.query("neural networks", top_k=5)
         assert result["num_results"] > 0
+
+    def test_invariants_hold_after_every_mutation_path(self):
+        """Structural invariants hold no matter how the index was built."""
+        import random
+
+        rng = random.Random(42)
+        words = ["alpha", "beta", "gamma", "delta", "epsilon"]
+        for trial in range(5):
+            n = rng.randint(1, 12)
+            docs = [
+                " ".join(rng.choice(words) for _ in range(rng.randint(1, 30))) for _ in range(n)
+            ]
+            rag = ProductionRAG()
+            if trial % 2:
+                for d in docs:
+                    rag.add_document(d)
+            else:
+                for d in docs:
+                    rag.add_document(d, rebuild_index=False)
+                rag.retriever.build_index()
+            bm25 = rag.retriever.bm25
+            n_chunks = len(rag.retriever.chunks)
+            assert len(bm25.doc_lengths) == n_chunks
+            assert all(df <= n_chunks for df in bm25.doc_freq.values())
+            # Rebuild stability: a second build changes nothing.
+            before = (list(bm25.doc_lengths), dict(bm25.doc_freq))
+            bm25.index(rag.retriever.chunks)
+            assert list(bm25.doc_lengths) == before[0]
+            assert dict(bm25.doc_freq) == before[1]
