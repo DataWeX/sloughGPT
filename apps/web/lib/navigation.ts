@@ -72,18 +72,6 @@ export const NAV_SECTIONS: NavSectionDef[] = [
         description: 'View all training runs',
       },
       {
-        path: '/auto-train',
-        labelKey: 'nav.auto_train',
-        icon: 'zap',
-        description: 'Auto-training from conversations',
-      },
-      {
-        path: '/self-train',
-        labelKey: 'nav.self_train',
-        icon: 'brain',
-        description: 'Autonomous self-training',
-      },
-      {
         path: '/datasets',
         labelKey: 'nav.datasets',
         shortcut: '3',
