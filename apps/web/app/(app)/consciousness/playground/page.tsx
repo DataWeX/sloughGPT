@@ -47,21 +47,21 @@ interface Episode {
 }
 
 const QUALIA_DIMENSIONS = [
-  { key: 'valence', color: '#8b5cf6', label: 'Valence' },
-  { key: 'arousal', color: '#ef4444', label: 'Arousal' },
-  { key: 'novelty', color: '#f59e0b', label: 'Novelty' },
-  { key: 'coherence', color: '#22c55e', label: 'Coherence' },
-  { key: 'salience', color: '#3b82f6', label: 'Salience' },
-  { key: 'certainty', color: '#06b6d4', color2: '#06b6d4', label: 'Certainty' },
-  { key: 'complexity', color: '#d946ef', label: 'Complexity' },
+  { key: 'valence', color: 'var(--chart-1)', label: 'Valence' },
+  { key: 'arousal', color: 'var(--chart-2)', label: 'Arousal' },
+  { key: 'novelty', color: 'var(--chart-3)', label: 'Novelty' },
+  { key: 'coherence', color: 'var(--chart-4)', label: 'Coherence' },
+  { key: 'salience', color: 'var(--chart-5)', label: 'Salience' },
+  { key: 'certainty', color: 'var(--chart-1)', color2: 'var(--chart-1)', label: 'Certainty' },
+  { key: 'complexity', color: 'var(--chart-2)', label: 'Complexity' },
 ]
 
 const BELIEF_DIMENSIONS = [
-  { key: 'competence', color: '#6366f1', label: 'Competence' },
-  { key: 'helpfulness', color: '#22c55e', label: 'Helpfulness' },
-  { key: 'creativity', color: '#f59e0b', label: 'Creativity' },
-  { key: 'accuracy', color: '#3b82f6', label: 'Accuracy' },
-  { key: 'empathy', color: '#ec4899', label: 'Empathy' },
+  { key: 'competence', color: 'var(--chart-1)', label: 'Competence' },
+  { key: 'helpfulness', color: 'var(--chart-4)', label: 'Helpfulness' },
+  { key: 'creativity', color: 'var(--chart-3)', label: 'Creativity' },
+  { key: 'accuracy', color: 'var(--chart-5)', label: 'Accuracy' },
+  { key: 'empathy', color: 'var(--chart-2)', label: 'Empathy' },
 ]
 
 const PRESETS: Record<string, string> = {

@@ -418,29 +418,12 @@ class NativeEngine:
             )
 
     def _build_prompt(self, messages: list[dict[str, str]], system: str = "") -> str:
-        """Render a chat prompt, preferring the model's real chat template.
+        """Render a chat prompt via central PromptEngine (single source)."""
+        from .prompt_engine import render_prompt as _render
 
-        Args:
-            messages: conversation turns
-            system: system prompt (prepended as a system message)
-
-        Returns:
-            prompt string ready for tokenization
-        """
-        tok = self._tokenizer
-        if tok is not None and hasattr(tok, "apply_chat_template"):
-            msgs = list(messages)
-            if system:
-                msgs = [{"role": "system", "content": system}] + msgs
-            try:
-                rendered = tok.apply_chat_template(msgs)
-                if rendered:
-                    return rendered
-            except Exception as exc:
-                logger.warning(
-                    "apply_chat_template failed, falling back: %s", exc, extra={"tag": "MODEL"}
-                )
-        return format_chat(messages, self._model_type, system)
+        return _render(
+            messages, tokenizer=self._tokenizer, model_type=self._model_type, system=system
+        )
 
     def _stop_ids(self) -> set:
         """Resolve the generation stop-token set.
