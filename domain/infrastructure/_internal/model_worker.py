@@ -52,6 +52,18 @@ from .constants import DEFAULT_GENERATE_TIMEOUT, DEFAULT_STARTUP_TIMEOUT
 
 logger = logging.getLogger("slo.infrastructure.model_worker")
 
+_STOP_MARKERS = ("<|im_end|>", "<|endoftext|>", "<|im_start|>")
+
+
+def _truncate_at_stop_markers(text: str) -> str:
+    cut = len(text)
+    for m in _STOP_MARKERS:
+        idx = text.find(m)
+        if idx != -1 and idx < cut:
+            cut = idx
+    return text[:cut] if cut != len(text) else text
+
+
 _ctx = mp.get_context("spawn")  # spawn avoids fork-safety issues with torch
 
 # Worker-side cap on a single queue write. If the parent stops draining
