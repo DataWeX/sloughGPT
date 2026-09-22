@@ -56,7 +56,7 @@ function QualitySparkline({ values }: { values: number[] }) {
           strokeLinejoin="round"
         />
       </svg>
-      <span className={`text-[10px] font-medium ${trend ? 'text-green-600' : 'text-red-500'}`}>
+      <span className={`text-[10px] font-medium ${trend ? 'text-success' : 'text-destructive'}`}>
         {trend ? 'Improving' : 'Declining'}
       </span>
     </div>

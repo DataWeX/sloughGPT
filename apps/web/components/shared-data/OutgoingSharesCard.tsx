@@ -8,9 +8,9 @@ const RESOURCE_ICONS: Record<string, typeof Database> = {
 }
 
 const RESOURCE_COLORS: Record<string, string> = {
-  dataset: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  dataset: 'bg-success/15 text-success dark:bg-success/10 dark:text-success',
   knowledge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-  api_key: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  api_key: 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary',
 }
 
 interface Share {
@@ -50,7 +50,7 @@ export function OutgoingSharesCard({ shares, resolveName, resolveWorkspace, onRe
               <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-gray-100 text-gray-700'}`}>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}>
                       <Icon className="h-2.5 w-2.5 inline mr-0.5" />
                       {s.resource_type}
                     </span>

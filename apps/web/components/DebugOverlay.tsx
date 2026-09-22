@@ -35,9 +35,9 @@ interface DebugOverlayProps {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 80) return 'text-green-400'
-  if (score >= 50) return 'text-yellow-400'
-  return 'text-red-400'
+  if (score >= 80) return 'text-success'
+  if (score >= 50) return 'text-warning'
+  return 'text-destructive'
 }
 
 function Sparkline({
@@ -74,7 +74,7 @@ function Sparkline({
 }
 
 function scoreBg(score: number): string {
-  if (score >= 80) return 'bg-green-400/10 border-green-400/20'
+  if (score >= 80) return 'bg-success/10 border-green-400/20'
   if (score >= 50) return 'bg-yellow-400/10 border-yellow-400/20'
   return 'bg-red-400/10 border-red-400/20'
 }
@@ -219,7 +219,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
             <span
               className={cn(
                 'text-[8px] flex items-center gap-0.5',
-                debugApiStatus === 'error' ? 'text-yellow-400/70' : 'text-destructive/70',
+                debugApiStatus === 'error' ? 'text-warning/70' : 'text-destructive/70',
               )}
               title={
                 debugApiStatus === 'error' ? 'Debug API returned error' : 'Debug API unreachable'
@@ -235,8 +235,8 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
             </span>
           )}
           {streamConnected && (
-            <span className="text-[8px] text-green-400/70 flex items-center gap-0.5">
-              <span className="inline-block h-1 w-1 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-[8px] text-success/70 flex items-center gap-0.5">
+              <span className="inline-block h-1 w-1 rounded-full bg-success animate-pulse" />
               live
             </span>
           )}
@@ -322,12 +322,12 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
                     className={cn(
                       'shrink-0',
                       e.type === 'load'
-                        ? 'text-green-400'
+                        ? 'text-success'
                         : e.type === 'unload'
-                          ? 'text-yellow-400'
+                          ? 'text-warning'
                           : e.type === 'error'
-                            ? 'text-red-400'
-                            : 'text-blue-400',
+                            ? 'text-destructive'
+                            : 'text-info',
                     )}
                   >
                     {e.type}
@@ -377,7 +377,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
             <div className="space-y-0.5">
               {rateViolations.slice(0, 3).map((v, i) => (
                 <div key={i} className="flex items-center justify-between gap-2 text-[10px]">
-                  <span className="text-yellow-400 truncate">{v.path}</span>
+                  <span className="text-warning truncate">{v.path}</span>
                   <span className="text-muted-foreground/40 tabular-nums shrink-0">
                     {v.count}/{v.limit}/s
                   </span>
@@ -436,7 +436,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
         {streamErrors.length === 0 && lastError && (
           <div className="mt-2 pt-2 border-t border-border/30">
             <div className="text-muted-foreground/50 text-[9px] mb-1">Last FE error</div>
-            <div className="text-red-400 text-[10px] break-all leading-tight">
+            <div className="text-destructive text-[10px] break-all leading-tight">
               {lastError.title}
               {lastError.requestId ? ` [${lastError.requestId}]` : ''}
             </div>

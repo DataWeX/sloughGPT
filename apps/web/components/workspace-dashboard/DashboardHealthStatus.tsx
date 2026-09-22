@@ -16,9 +16,9 @@ export function DashboardHealthStatus({
   if (!status) return null
 
   const colorMap: Record<string, string> = {
-    healthy: 'bg-green-500',
-    warning: 'bg-yellow-500',
-    error: 'bg-red-500',
+    healthy: 'bg-success',
+    warning: 'bg-warning',
+    error: 'bg-destructive',
   }
 
   return (
@@ -26,7 +26,7 @@ export function DashboardHealthStatus({
       <CardContent className="py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs">
-            <span className={`h-2 w-2 rounded-full ${colorMap[status] ?? 'bg-gray-500'}`} />
+            <span className={`h-2 w-2 rounded-full ${colorMap[status] ?? 'bg-muted'}`} />
             <span className="font-medium capitalize">Workspace {status}</span>
           </div>
           {onRecheck && (

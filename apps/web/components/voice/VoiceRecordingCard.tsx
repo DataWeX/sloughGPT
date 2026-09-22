@@ -152,7 +152,7 @@ export function VoiceRecordingCard() {
           <div
             className={`w-16 h-16 rounded-full flex items-center justify-center cursor-pointer transition-all ${
               recordState === 'recording'
-                ? 'bg-red-500 hover:bg-red-600 scale-110'
+                ? 'bg-destructive hover:bg-red-600 scale-110'
                 : 'bg-primary hover:bg-primary/90'
             }`}
             onClick={recordState === 'recording' ? stopRecording : startRecording}
@@ -166,12 +166,12 @@ export function VoiceRecordingCard() {
 
           {recordState === 'recording' && (
             <div className="text-center space-y-2">
-              <p className="text-sm text-red-500 font-medium">Recording... {formatDuration(duration)}</p>
+              <p className="text-sm text-destructive font-medium">Recording... {formatDuration(duration)}</p>
               <div className="flex gap-0.5 justify-center h-6">
                 {Array.from({ length: 24 }).map((_, i) => (
                   <div
                     key={i}
-                    className="w-0.5 bg-red-500 rounded-full transition-all duration-75"
+                    className="w-0.5 bg-destructive rounded-full transition-all duration-75"
                     style={{
                       height: `${Math.max(2, audioLevel * 50 * (1 - Math.abs(i - 12) / 12))}px`,
                     }}

@@ -56,7 +56,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
           className={cn(
             'h-5 w-5 flex items-center justify-center rounded transition-colors',
             n <= value
-              ? 'text-amber-400'
+              ? 'text-warning'
               : 'text-muted-foreground/30 hover:text-muted-foreground/60',
           )}
           aria-label={`${n} ${t('consciousness_chat.star')}`}

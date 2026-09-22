@@ -407,7 +407,7 @@ export default function ConsciousnessHistoryPage() {
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={(e) => { e.stopPropagation(); toggleSelect(String(realIndex)) }}
-                                className="h-4 w-4 rounded border-gray-300"
+                                className="h-4 w-4 rounded border-border"
                                 onClick={(e) => e.stopPropagation()}
                               />
                               <div className="flex-1 min-w-0">

@@ -27,9 +27,9 @@ function getDifficulty(avg: number): 'easy' | 'medium' | 'hard' {
 
 function getDifficultyColor(d: string): string {
   switch (d) {
-    case 'easy': return 'bg-green-100 text-green-800'
-    case 'medium': return 'bg-yellow-100 text-yellow-800'
-    case 'hard': return 'bg-red-100 text-red-800'
+    case 'easy': return 'bg-success/15 text-green-800'
+    case 'medium': return 'bg-warning/15 text-yellow-800'
+    case 'hard': return 'bg-destructive/15 text-red-800'
     default: return ''
   }
 }
@@ -161,8 +161,8 @@ export default function WordDifficultyRanker() {
                   <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                     <div
                       className={`h-full rounded-full ${
-                        w.difficulty === 'easy' ? 'bg-green-500' :
-                        w.difficulty === 'medium' ? 'bg-yellow-500' : 'bg-red-500'
+                        w.difficulty === 'easy' ? 'bg-success' :
+                        w.difficulty === 'medium' ? 'bg-warning' : 'bg-destructive'
                       }`}
                       style={{ width: `${w.avgScore * 100}%` }}
                     />

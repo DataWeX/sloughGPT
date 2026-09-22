@@ -132,7 +132,7 @@ export default function PronunciationComparison() {
                     <div
                       key={i}
                       className={`flex flex-col items-center p-1 rounded ${
-                        isMatch ? 'bg-green-500/10' : 'bg-destructive/10'
+                        isMatch ? 'bg-success/10' : 'bg-destructive/10'
                       }`}
                     >
                       <span className="text-xs font-mono">{p1}</span>

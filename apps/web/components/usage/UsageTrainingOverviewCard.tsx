@@ -16,10 +16,10 @@ export interface UsageTrainingOverviewCardProps {
 
 export function UsageTrainingOverviewCard({ status, totalMinutes }: UsageTrainingOverviewCardProps) {
   const stats = [
-    { label: 'Completed', value: status.completed, color: 'text-green-500' },
-    { label: 'Running', value: status.running, color: 'text-blue-500' },
-    { label: 'Queued', value: status.queued, color: 'text-yellow-500' },
-    { label: 'Failed', value: status.failed, color: 'text-red-500' },
+    { label: 'Completed', value: status.completed, color: 'text-success' },
+    { label: 'Running', value: status.running, color: 'text-info' },
+    { label: 'Queued', value: status.queued, color: 'text-warning' },
+    { label: 'Failed', value: status.failed, color: 'text-destructive' },
   ]
 
   return (

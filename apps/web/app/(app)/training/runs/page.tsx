@@ -560,7 +560,7 @@ export default function TrainingRunsPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className={`h-7 px-2 ${run.bookmarked ? 'text-yellow-500' : 'text-muted-foreground'}`}
+                        className={`h-7 px-2 ${run.bookmarked ? 'text-warning' : 'text-muted-foreground'}`}
                         onClick={(e) => {
                           e.stopPropagation()
                           handleBookmark(run.run_id)
@@ -608,7 +608,7 @@ export default function TrainingRunsPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className={`h-6 px-2 ${selectedRun.bookmarked ? 'text-yellow-500' : 'text-muted-foreground'}`}
+                    className={`h-6 px-2 ${selectedRun.bookmarked ? 'text-warning' : 'text-muted-foreground'}`}
                     onClick={() => handleBookmark(selectedRun.run_id)}
                   >
                     <Star className={`h-3 w-3 ${selectedRun.bookmarked ? 'fill-current' : ''}`} />
@@ -683,13 +683,13 @@ export default function TrainingRunsPage() {
                   {(selectedRun.tags || []).map((tag) => (
                     <Badge
                       key={tag}
-                      className="bg-purple-100 text-purple-800 text-xs flex items-center gap-1"
+                      className="bg-primary/15 text-primary text-xs flex items-center gap-1"
                     >
                       <Tag className="h-2.5 w-2.5" />
                       {tag}
                       <button
                         onClick={() => handleRemoveTag(tag)}
-                        className="ml-0.5 hover:text-purple-600"
+                        className="ml-0.5 hover:text-primary"
                       >
                         <X className="h-3 w-3" />
                       </button>

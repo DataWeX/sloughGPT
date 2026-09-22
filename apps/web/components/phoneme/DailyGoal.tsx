@@ -96,7 +96,7 @@ export default function DailyGoal() {
           <div className="h-3 rounded-full bg-muted overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
-                isComplete ? 'bg-green-500' : 'bg-primary'
+                isComplete ? 'bg-success' : 'bg-primary'
               }`}
               style={{ width: `${progress}%` }}
             />
@@ -107,7 +107,7 @@ export default function DailyGoal() {
         </div>
 
         {isComplete && (
-          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-sm text-green-700">
+          <div className="p-3 rounded-lg bg-success/10 border border-green-500/20 text-sm text-green-700">
             Great job! You&apos;ve reached your daily goal! Keep practicing or set a higher target.
           </div>
         )}

@@ -214,8 +214,8 @@ export default function AuditTrailPage() {
                     <div className="flex items-center gap-2">
                       <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${expandedIdx === i ? 'rotate-180' : ''}`} />
                       <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
-                        a.type === 'training' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                        a.type === 'audit' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+                        a.type === 'training' ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info' :
+                        a.type === 'audit' ? 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary' :
                         'bg-muted text-muted-foreground'
                       }`}>
                         {a.type}
@@ -228,9 +228,9 @@ export default function AuditTrailPage() {
                     {a.user && <span className="text-muted-foreground">{a.user}</span>}
                     {a.status && (
                       <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
-                        a.status === 'completed' || a.status === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                        a.status === 'failed' || a.status === 'failure' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                        a.status === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                        a.status === 'completed' || a.status === 'success' ? 'bg-success/15 text-success dark:bg-success/10 dark:text-success' :
+                        a.status === 'failed' || a.status === 'failure' ? 'bg-destructive/15 text-destructive dark:bg-destructive/10 dark:text-destructive' :
+                        a.status === 'running' ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info' :
                         'bg-muted text-muted-foreground'
                       }`}>
                         {a.status}

@@ -20,7 +20,7 @@ export const VoiceTranscript = forwardRef<HTMLDivElement, VoiceTranscriptProps>(
           <TranscriptExchange key={ex.id} exchange={ex} />
         ))}
         {responseText && !isSpeaking && (
-          <div className="text-sm text-emerald-600 dark:text-emerald-400">
+          <div className="text-sm text-emerald-600 dark:text-success">
             <span className="font-medium text-xs text-muted-foreground">Assistant</span>
             <p className="mt-0.5">{responseText}</p>
           </div>
@@ -37,7 +37,7 @@ function TranscriptExchange({ exchange }: { exchange: VoiceExchange }) {
         <span className="font-medium text-xs text-muted-foreground">You</span>
         <p className="mt-0.5">{exchange.userText}</p>
       </div>
-      <div className="text-sm text-emerald-600 dark:text-emerald-400">
+      <div className="text-sm text-emerald-600 dark:text-success">
         <span className="font-medium text-xs text-muted-foreground">Assistant</span>
         <p className="mt-0.5">{exchange.assistantText}</p>
       </div>

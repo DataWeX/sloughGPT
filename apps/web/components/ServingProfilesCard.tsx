@@ -31,10 +31,10 @@ const TIER_LABELS: Record<string, string> = {
 
 const TIER_COLORS: Record<string, string> = {
   cpu_only: 'bg-muted-foreground/30',
-  cpu_optimized: 'bg-blue-500/80',
+  cpu_optimized: 'bg-info/80',
   balanced: 'bg-primary/80',
-  gpu_performance: 'bg-green-500/80',
-  training: 'bg-amber-500/80',
+  gpu_performance: 'bg-success/80',
+  training: 'bg-warning/80',
 }
 
 export function ServingProfilesCard() {
@@ -160,7 +160,7 @@ export function ServingProfilesCard() {
             <div className="text-[9px] text-muted-foreground/60 space-y-px">
               <p>Applied live: {Object.keys(applyResult.live_settings).join(', ') || 'none'}</p>
               {applyResult.requires_restart.length > 0 && (
-                <p className="text-amber-500">Requires restart: {applyResult.requires_restart.join(', ')}</p>
+                <p className="text-warning">Requires restart: {applyResult.requires_restart.join(', ')}</p>
               )}
             </div>
           </div>

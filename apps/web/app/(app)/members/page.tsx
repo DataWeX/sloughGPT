@@ -362,8 +362,8 @@ export default function MembersPage() {
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-medium ${
-                          m.role === 'admin' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                          m.role === 'member' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                          m.role === 'admin' ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info' :
+                          m.role === 'member' ? 'bg-success/15 text-success dark:bg-success/10 dark:text-success' :
                           'bg-muted text-muted-foreground'
                         }`}>
                           {m.role}

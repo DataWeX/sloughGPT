@@ -692,11 +692,11 @@ function QuickActionsTab() {
   }
 
   const METHOD_COLORS: Record<string, string> = {
-    GET: 'bg-emerald-500/10 text-emerald-500',
-    POST: 'bg-amber-500/10 text-amber-500',
-    PUT: 'bg-blue-500/10 text-blue-400',
-    PATCH: 'bg-purple-500/10 text-purple-400',
-    DELETE: 'bg-red-500/10 text-red-500',
+    GET: 'bg-success/10 text-success',
+    POST: 'bg-warning/10 text-warning',
+    PUT: 'bg-info/10 text-info',
+    PATCH: 'bg-primary/10 text-primary',
+    DELETE: 'bg-destructive/10 text-destructive',
   }
 
   return (
@@ -715,8 +715,8 @@ function QuickActionsTab() {
                 ? 'border-primary/40 bg-primary/[0.04]'
                 : results[action.label]
                   ? results[action.label]!.status >= 200 && results[action.label]!.status < 300
-                    ? 'border-emerald-500/20 bg-emerald-500/[0.03]'
-                    : 'border-red-500/20 bg-red-500/[0.03]'
+                    ? 'border-success/20 bg-success/[0.03]'
+                    : 'border-red-500/20 bg-destructive/[0.03]'
                   : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]',
             )}
           >

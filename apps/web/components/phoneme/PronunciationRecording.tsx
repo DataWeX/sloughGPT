@@ -138,7 +138,7 @@ export default function PronunciationRecording() {
             <div
               className={`absolute inset-0 rounded-full transition-all duration-200 ${
                 recordState === 'recording'
-                  ? 'bg-red-500/20 scale-110'
+                  ? 'bg-destructive/20 scale-110'
                   : 'bg-muted/30'
               }`}
               style={recordState === 'recording' ? {
@@ -148,7 +148,7 @@ export default function PronunciationRecording() {
             <div
               className={`w-20 h-20 rounded-full flex items-center justify-center cursor-pointer transition-colors ${
                 recordState === 'recording'
-                  ? 'bg-red-500 hover:bg-red-600'
+                  ? 'bg-destructive hover:bg-red-600'
                   : 'bg-primary hover:bg-primary/90'
               }`}
               onClick={recordState === 'recording' ? stopRecording : startRecording}
@@ -164,13 +164,13 @@ export default function PronunciationRecording() {
           <div className="text-center">
             {recordState === 'recording' && (
               <div className="space-y-1">
-                <p className="text-sm text-red-500 font-medium">Recording...</p>
+                <p className="text-sm text-destructive font-medium">Recording...</p>
                 <p className="text-2xl font-mono">{formatDuration(duration)}</p>
                 <div className="flex gap-0.5 justify-center h-4">
                   {Array.from({ length: 20 }).map((_, i) => (
                     <div
                       key={i}
-                      className="w-1 bg-red-500 rounded-full transition-all duration-100"
+                      className="w-1 bg-destructive rounded-full transition-all duration-100"
                       style={{
                         height: `${Math.max(2, audioLevel * 40 * (1 - Math.abs(i - 10) / 10))}px`,
                       }}

@@ -16,13 +16,13 @@ import {
 } from 'lucide-react'
 
 const TOPIC_COLORS: Record<string, string> = {
-  personal: 'bg-blue-100 text-blue-700 dark:bg-info/15 text-info',
+  personal: 'bg-info/15 text-info dark:bg-info/15 text-info',
   preferences: 'bg-accent/15 text-accent',
-  technical: 'bg-green-100 text-green-700 dark:bg-success/15 text-success',
+  technical: 'bg-success/15 text-success dark:bg-success/15 text-success',
   planning: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-  interests: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400',
-  food: 'bg-yellow-100 text-yellow-700 dark:bg-warning/15 text-warning',
-  general: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+  interests: 'bg-primary/15 text-pink-700 dark:bg-primary/10 dark:text-primary',
+  food: 'bg-warning/15 text-warning dark:bg-warning/15 text-warning',
+  general: 'bg-muted/50 text-muted-foreground dark:bg-muted/10 dark:text-muted-foreground',
 }
 
 export default function KnowledgeDetailPage() {

@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 
 const ROLE_COLORS: Record<string, string> = {
-  owner: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-  admin: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  user: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  owner: 'bg-warning/15 text-warning dark:bg-warning/10 dark:text-warning',
+  admin: 'bg-info/15 text-info dark:bg-info/10 dark:text-info',
+  user: 'bg-success/15 text-success dark:bg-success/10 dark:text-success',
   viewer: 'bg-muted text-muted-foreground',
 }
 

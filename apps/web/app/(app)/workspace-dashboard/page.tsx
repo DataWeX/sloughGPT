@@ -182,10 +182,10 @@ export default function WorkspaceDashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs">
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
                 </span>
-                <span className="text-green-600 dark:text-green-400 font-medium">
+                <span className="text-success dark:text-success font-medium">
                   {stats?.active_training_jobs} training job{stats?.active_training_jobs !== 1 ? 's' : ''} running
                 </span>
               </div>
@@ -212,33 +212,33 @@ export default function WorkspaceDashboardPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between text-[10px]">
                 <span className="text-muted-foreground">Completed</span>
-                <span className="font-medium text-green-600">{trainingByStatus.completed}</span>
+                <span className="font-medium text-success">{trainingByStatus.completed}</span>
               </div>
               <div className="w-full bg-muted rounded-full h-1.5">
                 <div
-                  className="bg-green-500 h-1.5 rounded-full"
+                  className="bg-success h-1.5 rounded-full"
                   style={{ width: `${usage?.training?.total ? (trainingByStatus.completed / usage.training.total) * 100 : 0}%` }}
                 />
               </div>
 
               <div className="flex items-center justify-between text-[10px]">
                 <span className="text-muted-foreground">Running</span>
-                <span className="font-medium text-blue-600">{trainingByStatus.running}</span>
+                <span className="font-medium text-info">{trainingByStatus.running}</span>
               </div>
               <div className="w-full bg-muted rounded-full h-1.5">
                 <div
-                  className="bg-blue-500 h-1.5 rounded-full"
+                  className="bg-info h-1.5 rounded-full"
                   style={{ width: `${usage?.training?.total ? (trainingByStatus.running / usage.training.total) * 100 : 0}%` }}
                 />
               </div>
 
               <div className="flex items-center justify-between text-[10px]">
                 <span className="text-muted-foreground">Failed</span>
-                <span className="font-medium text-red-600">{trainingByStatus.failed}</span>
+                <span className="font-medium text-destructive">{trainingByStatus.failed}</span>
               </div>
               <div className="w-full bg-muted rounded-full h-1.5">
                 <div
-                  className="bg-red-500 h-1.5 rounded-full"
+                  className="bg-destructive h-1.5 rounded-full"
                   style={{ width: `${usage?.training?.total ? (trainingByStatus.failed / usage.training.total) * 100 : 0}%` }}
                 />
               </div>
@@ -263,8 +263,8 @@ export default function WorkspaceDashboardPage() {
                   <div key={type} className="flex items-center justify-between text-[10px]">
                     <div className="flex items-center gap-2">
                       <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
-                        type === 'training' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                        type === 'audit' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+                        type === 'training' ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info' :
+                        type === 'audit' ? 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary' :
                         'bg-muted text-muted-foreground'
                       }`}>
                         {type}
@@ -274,8 +274,8 @@ export default function WorkspaceDashboardPage() {
                       <div className="w-24 bg-muted rounded-full h-1.5">
                         <div
                           className={`h-1.5 rounded-full ${
-                            type === 'training' ? 'bg-blue-500' :
-                            type === 'audit' ? 'bg-purple-500' : 'bg-gray-500'
+                            type === 'training' ? 'bg-info' :
+                            type === 'audit' ? 'bg-primary' : 'bg-muted'
                           }`}
                           style={{ width: `${maxActivityType.count ? (count / maxActivityType.count) * 100 : 0}%` }}
                         />
@@ -299,12 +299,12 @@ export default function WorkspaceDashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs">
                 <span className={`h-2 w-2 rounded-full ${
-                  healthStatus === 'healthy' ? 'bg-green-500' :
-                  healthStatus === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
+                  healthStatus === 'healthy' ? 'bg-success' :
+                  healthStatus === 'warning' ? 'bg-warning' : 'bg-destructive'
                 }`} />
                 <span className="font-medium capitalize">Workspace {healthStatus}</span>
                 {healthStatus === 'error' && (
-                  <AlertTriangle className="h-3 w-3 text-yellow-500" />
+                  <AlertTriangle className="h-3 w-3 text-warning" />
                 )}
               </div>
               <button
@@ -353,9 +353,9 @@ export default function WorkspaceDashboardPage() {
                       {a.user && <span className="text-muted-foreground">{a.user}</span>}
                       {a.status && (
                         <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
-                          a.status === 'completed' || a.status === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                          a.status === 'failed' || a.status === 'failure' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                          a.status === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                          a.status === 'completed' || a.status === 'success' ? 'bg-success/15 text-success dark:bg-success/10 dark:text-success' :
+                          a.status === 'failed' || a.status === 'failure' ? 'bg-destructive/15 text-destructive dark:bg-destructive/10 dark:text-destructive' :
+                          a.status === 'running' ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info' :
                           'bg-muted text-muted-foreground'
                         }`}>
                           {a.status}

@@ -208,7 +208,7 @@ export default function PronunciationGame() {
             </div>
             <div className="space-y-1 max-h-40 overflow-y-auto">
               {results.map((r, i) => (
-                <div key={i} className={`flex items-center gap-2 p-1.5 rounded text-xs ${r.isCorrect ? 'bg-green-500/5' : 'bg-destructive/5'}`}>
+                <div key={i} className={`flex items-center gap-2 p-1.5 rounded text-xs ${r.isCorrect ? 'bg-success/5' : 'bg-destructive/5'}`}>
                   <span className="w-4 text-muted-foreground">{i + 1}</span>
                   <span className="font-mono min-w-[60px]">{r.word}</span>
                   <span className="text-muted-foreground truncate flex-1">{r.userInput}</span>

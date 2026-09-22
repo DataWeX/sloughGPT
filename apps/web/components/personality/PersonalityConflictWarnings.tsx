@@ -17,12 +17,12 @@ export function PersonalityConflictWarnings({ conflicts }: PersonalityConflictWa
   return (
     <Card className="border-yellow-500/50">
       <CardHeader>
-        <CardTitle className="text-yellow-600 dark:text-yellow-400">Personality Conflicts</CardTitle>
+        <CardTitle className="text-warning dark:text-warning">Personality Conflicts</CardTitle>
         <CardDescription>These settings may work against each other</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         {conflicts.map((c, i) => (
-          <div key={i} className="flex items-start gap-2 text-sm p-2 rounded-md bg-yellow-500/5">
+          <div key={i} className="flex items-start gap-2 text-sm p-2 rounded-md bg-warning/5">
             <Badge variant={c.severity === 'medium' ? 'destructive' : 'outline'} className="text-[10px] mt-0.5">
               {c.severity}
             </Badge>

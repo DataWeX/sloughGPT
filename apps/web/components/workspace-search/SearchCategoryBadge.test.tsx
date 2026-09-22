@@ -64,7 +64,7 @@ describe('SearchCategoryBadge', () => {
   it('applies default color for known types', () => {
     const { container } = render(<SearchCategoryBadge type="member" label="Members" />)
     const badge = container.firstChild as HTMLElement
-    expect(badge.className).toContain('bg-purple-100')
+    expect(badge.className).toContain('bg-primary/15')
   })
 
   it('applies custom color class when provided', () => {

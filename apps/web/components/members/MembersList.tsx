@@ -58,8 +58,8 @@ export function MembersList({ members, loading, onRemove }: MembersListProps) {
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <span className={`px-2 py-0.5 rounded-full text-[9px] font-medium ${
-                  m.role === 'admin' ? 'bg-blue-100 text-blue-700' :
-                  m.role === 'member' ? 'bg-green-100 text-green-700' :
+                  m.role === 'admin' ? 'bg-info/15 text-info' :
+                  m.role === 'member' ? 'bg-success/15 text-success' :
                   'bg-muted text-muted-foreground'
                 }`}>
                   {m.role}

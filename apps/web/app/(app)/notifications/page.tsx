@@ -141,8 +141,8 @@ export default function NotificationsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
-                      n.type === 'training' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                      n.type === 'member' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+                      n.type === 'training' ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info' :
+                      n.type === 'member' ? 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary' :
                       'bg-muted text-muted-foreground'
                     }`}>
                       {n.type}
@@ -154,8 +154,8 @@ export default function NotificationsPage() {
                 <div className="flex items-center gap-3 shrink-0">
                   {n.status && (
                     <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
-                      n.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                      n.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                      n.status === 'completed' ? 'bg-success/15 text-success dark:bg-success/10 dark:text-success' :
+                      n.status === 'failed' ? 'bg-destructive/15 text-destructive dark:bg-destructive/10 dark:text-destructive' :
                       'bg-muted text-muted-foreground'
                     }`}>
                       {n.status}

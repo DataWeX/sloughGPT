@@ -473,13 +473,13 @@ export default function SystemHealthPage() {
             {servicesHealth && (
               <Card className="p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <div className={`h-2 w-2 rounded-full ${servicesHealth.status === 'healthy' ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                  <div className={`h-2 w-2 rounded-full ${servicesHealth.status === 'healthy' ? 'bg-success' : 'bg-warning'}`} />
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Services Health</span>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {Object.entries(servicesHealth.services).map(([name, svc]) => (
                     <div key={name} className="flex items-center gap-2 text-sm">
-                      <div className={`h-1.5 w-1.5 rounded-full ${svc.status === 'ok' ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <div className={`h-1.5 w-1.5 rounded-full ${svc.status === 'ok' ? 'bg-success' : 'bg-destructive'}`} />
                       <span className="capitalize">{name}</span>
                     </div>
                   ))}

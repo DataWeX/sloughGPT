@@ -34,19 +34,19 @@ function getPhonemeCategory(phoneme: string): string {
 }
 
 function getAccuracyColor(accuracy: number): string {
-  if (accuracy >= 0.9) return 'bg-green-500'
-  if (accuracy >= 0.7) return 'bg-yellow-500'
+  if (accuracy >= 0.9) return 'bg-success'
+  if (accuracy >= 0.7) return 'bg-warning'
   if (accuracy >= 0.5) return 'bg-orange-500'
   if (accuracy >= 0.3) return 'bg-red-400'
   return 'bg-red-600'
 }
 
 function getAccuracyTextColor(accuracy: number): string {
-  if (accuracy >= 0.9) return 'text-green-700'
+  if (accuracy >= 0.9) return 'text-success'
   if (accuracy >= 0.7) return 'text-yellow-700'
   if (accuracy >= 0.5) return 'text-orange-700'
-  if (accuracy >= 0.3) return 'text-red-500'
-  return 'text-red-700'
+  if (accuracy >= 0.3) return 'text-destructive'
+  return 'text-destructive'
 }
 
 const CATEGORIES = ['Vowels', 'Stops', 'Fricatives', 'Affricates', 'Nasals', 'Liquids', 'Glides']
@@ -144,8 +144,8 @@ export default function PronunciationHeatmap() {
             <div className="w-4 h-3 rounded bg-red-600" />
             <div className="w-4 h-3 rounded bg-red-400" />
             <div className="w-4 h-3 rounded bg-orange-500" />
-            <div className="w-4 h-3 rounded bg-yellow-500" />
-            <div className="w-4 h-3 rounded bg-green-500" />
+            <div className="w-4 h-3 rounded bg-warning" />
+            <div className="w-4 h-3 rounded bg-success" />
           </div>
           <span>High</span>
         </div>
@@ -175,7 +175,7 @@ export default function PronunciationHeatmap() {
             <p className="text-sm font-medium mb-2">Mastered</p>
             <div className="space-y-1">
               {bestPhonemes.map(p => (
-                <div key={p.phoneme} className="flex items-center gap-2 p-1.5 rounded bg-green-500/5">
+                <div key={p.phoneme} className="flex items-center gap-2 p-1.5 rounded bg-success/5">
                   <Badge variant="outline" className="w-12 justify-center font-mono text-xs">{p.phoneme}</Badge>
                   <span className="text-xs text-muted-foreground w-6">{p.ipa}</span>
                   <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">

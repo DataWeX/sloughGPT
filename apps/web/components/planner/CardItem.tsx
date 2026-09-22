@@ -41,7 +41,7 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
         </p>
         {card.root_hash && (
           <span
-            className="mt-0.5 h-2 w-2 rounded-full bg-purple-500 shrink-0"
+            className="mt-0.5 h-2 w-2 rounded-full bg-primary shrink-0"
             title="Hash tree active"
             aria-label="Hash tree active"
           />

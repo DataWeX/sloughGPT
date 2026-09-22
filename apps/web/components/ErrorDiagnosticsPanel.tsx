@@ -46,13 +46,13 @@ interface GroupedError {
 function levelBadge(level: ErrorEvent['level']): { label: string; color: string } {
   switch (level) {
     case 'critical':
-      return { label: 'CRIT', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' }
+      return { label: 'CRIT', color: 'bg-primary/20 text-primary border-purple-500/30' }
     case 'error':
       return { label: 'ERR', color: 'bg-destructive/15 text-destructive border-destructive/30' }
     case 'warning':
-      return { label: 'WRN', color: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' }
+      return { label: 'WRN', color: 'bg-warning/15 text-warning border-yellow-500/30' }
     case 'info':
-      return { label: 'INFO', color: 'bg-blue-500/15 text-blue-400 border-blue-500/30' }
+      return { label: 'INFO', color: 'bg-info/15 text-info border-blue-500/30' }
     default:
       return { label: level, color: 'bg-muted text-muted-foreground' }
   }
@@ -163,7 +163,7 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
                   event.httpStatus >= 500
                     ? 'text-destructive'
                     : event.httpStatus >= 400
-                      ? 'text-yellow-400'
+                      ? 'text-warning'
                       : 'text-muted-foreground/50',
                 )}
               >
@@ -219,7 +219,7 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
             <div className="text-[9px] text-muted-foreground/50">
               fingerprint: <span className="font-mono text-foreground/70">{event.fingerprint}</span>
               {event.count && event.count > 1 && (
-                <span className="ml-1 text-yellow-400/70">×{event.count}</span>
+                <span className="ml-1 text-warning/70">×{event.count}</span>
               )}
             </div>
           )}
@@ -306,14 +306,14 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
                   group.latest.httpStatus >= 500
                     ? 'text-destructive'
                     : group.latest.httpStatus >= 400
-                      ? 'text-yellow-400'
+                      ? 'text-warning'
                       : 'text-muted-foreground/50',
                 )}
               >
                 {group.latest.httpStatus}
               </span>
             )}
-            {group.count > 1 && <span className="text-yellow-400/70 mr-1.5">×{group.count}</span>}
+            {group.count > 1 && <span className="text-warning/70 mr-1.5">×{group.count}</span>}
             <span>{timeAgo(group.latest.timestamp)}</span>
           </span>
         </span>
@@ -361,16 +361,16 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
 }
 
 const KIND_STYLES: Record<string, string> = {
-  connection: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  startup: 'bg-green-500/15 text-green-400 border-green-500/30',
-  sse: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+  connection: 'bg-info/15 text-info border-blue-500/30',
+  startup: 'bg-success/15 text-success border-green-500/30',
+  sse: 'bg-info/15 text-info border-info/30',
   health: 'bg-muted text-muted-foreground',
-  overlay: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  api: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+  overlay: 'bg-primary/15 text-primary border-purple-500/30',
+  api: 'bg-warning/15 text-warning border-yellow-500/30',
   auth: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
-  chat: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
-  training: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  model: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
+  chat: 'bg-info/15 text-info border-info/30',
+  training: 'bg-success/15 text-success border-success/30',
+  model: 'bg-primary/15 text-primary border-primary/30',
   system: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
   ui: 'bg-muted text-muted-foreground',
 }

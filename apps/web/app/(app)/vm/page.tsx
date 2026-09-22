@@ -1600,9 +1600,9 @@ function VGADisplay({
           {cells ? (
             renderCells()
           ) : text ? (
-            <span className="text-green-400">{text}</span>
+            <span className="text-success">{text}</span>
           ) : (
-            <span className="text-green-700">Programs that write to 0xB8000 will appear here.</span>
+            <span className="text-success">Programs that write to 0xB8000 will appear here.</span>
           )}
         </div>
       </CardContent>

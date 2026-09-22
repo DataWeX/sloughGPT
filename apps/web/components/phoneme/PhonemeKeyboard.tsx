@@ -28,10 +28,10 @@ function getPhonemeColor(phoneme: string): string {
   const liquids = ['L', 'R']
   const glides = ['W', 'Y']
 
-  if (stops.includes(phoneme)) return 'bg-blue-100 hover:bg-blue-200 text-blue-800 border-blue-300'
-  if (fricatives.includes(phoneme)) return 'bg-purple-100 hover:bg-purple-200 text-purple-800 border-purple-300'
+  if (stops.includes(phoneme)) return 'bg-info/15 hover:bg-blue-200 text-blue-800 border-blue-300'
+  if (fricatives.includes(phoneme)) return 'bg-primary/15 hover:bg-purple-200 text-purple-800 border-purple-300'
   if (affricates.includes(phoneme)) return 'bg-pink-100 hover:bg-pink-200 text-pink-800 border-pink-300'
-  if (nasals.includes(phoneme)) return 'bg-green-100 hover:bg-green-200 text-green-800 border-green-300'
+  if (nasals.includes(phoneme)) return 'bg-success/15 hover:bg-green-200 text-green-800 border-green-300'
   if (liquids.includes(phoneme)) return 'bg-orange-100 hover:bg-orange-200 text-orange-800 border-orange-300'
   if (glides.includes(phoneme)) return 'bg-cyan-100 hover:bg-cyan-200 text-cyan-800 border-cyan-300'
   return 'bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-300'

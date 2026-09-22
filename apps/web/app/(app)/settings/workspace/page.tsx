@@ -414,8 +414,8 @@ export default function WorkspaceSettingsPage() {
           <CardContent>
             <div className="flex items-center gap-2 mb-2">
               <span className={`inline-block w-2 h-2 rounded-full ${
-                health.status === 'healthy' ? 'bg-green-500' :
-                health.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
+                health.status === 'healthy' ? 'bg-success' :
+                health.status === 'warning' ? 'bg-warning' : 'bg-destructive'
               }`} />
               <span className="font-medium capitalize">{health.status}</span>
             </div>

@@ -142,7 +142,7 @@ export default function PhonemeTypingMode() {
             <div className={`p-4 rounded-lg text-center ${
               userInput.toUpperCase().replace(/[^A-Z0-9]/g, '') ===
               challenge.phonemes.join('').toUpperCase()
-                ? 'bg-green-500/10 border border-green-500/20'
+                ? 'bg-success/10 border border-green-500/20'
                 : 'bg-destructive/10 border border-destructive/20'
             }`}>
               <p className="text-sm font-medium">

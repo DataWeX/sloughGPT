@@ -142,9 +142,9 @@ export default function ApiKeysPage() {
     >
 
       {newKey && (
-        <Card className="mb-6 border-green-500/50 bg-green-500/5">
+        <Card className="mb-6 border-success/50 bg-success/5">
           <CardHeader>
-            <CardTitle className="text-green-600">New API Key</CardTitle>
+            <CardTitle className="text-success">New API Key</CardTitle>
             <CardDescription>
               Copy this key now. It won&apos;t be shown again.
             </CardDescription>
@@ -207,7 +207,7 @@ export default function ApiKeysPage() {
                       {' · '}
                       {new Date(key.created_at * 1000).toLocaleDateString()}
                       {key.expires_at && (
-                        <span className="ml-1 text-yellow-600">
+                        <span className="ml-1 text-warning">
                           · expires {new Date(key.expires_at * 1000).toLocaleDateString()}
                         </span>
                       )}

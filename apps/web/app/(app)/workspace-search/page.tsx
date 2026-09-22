@@ -31,19 +31,19 @@ interface SearchResponse {
 
 const TYPE_CONFIG: Record<string, { color: string; label: string; icon: typeof Users; link: string }> = {
   member: {
-    color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+    color: 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary',
     label: 'Members',
     icon: Users,
     link: '/workspaces',
   },
   training: {
-    color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    color: 'bg-info/15 text-info dark:bg-info/10 dark:text-info',
     label: 'Training Jobs',
     icon: Brain,
     link: '/training/queue',
   },
   dataset: {
-    color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    color: 'bg-success/15 text-success dark:bg-success/10 dark:text-success',
     label: 'Datasets',
     icon: Database,
     link: '/datasets',

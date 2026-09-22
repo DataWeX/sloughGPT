@@ -5,10 +5,10 @@ import { useLocale } from '@/hooks/useLocale'
 import { useConsciousnessNotifications } from '@/hooks/useConsciousnessNotifications'
 
 const TYPE_COLORS: Record<string, string> = {
-  info: 'text-blue-400',
-  warning: 'text-amber-400',
-  success: 'text-emerald-400',
-  error: 'text-red-400',
+  info: 'text-info',
+  warning: 'text-warning',
+  success: 'text-success',
+  error: 'text-destructive',
 }
 
 const TYPE_ICONS: Record<string, JSX.Element> = {

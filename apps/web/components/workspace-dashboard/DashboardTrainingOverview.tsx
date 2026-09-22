@@ -42,26 +42,26 @@ export function DashboardTrainingOverview({
         <div className="space-y-3">
           <div className="flex items-center justify-between text-[10px]">
             <span className="text-muted-foreground">Completed</span>
-            <span className="font-medium text-green-600">{training.completed}</span>
+            <span className="font-medium text-success">{training.completed}</span>
           </div>
           <div className="w-full bg-muted rounded-full h-1.5">
-            <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${completedPct}%` }} />
+            <div className="bg-success h-1.5 rounded-full" style={{ width: `${completedPct}%` }} />
           </div>
 
           <div className="flex items-center justify-between text-[10px]">
             <span className="text-muted-foreground">Running</span>
-            <span className="font-medium text-blue-600">{training.running}</span>
+            <span className="font-medium text-info">{training.running}</span>
           </div>
           <div className="w-full bg-muted rounded-full h-1.5">
-            <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${runningPct}%` }} />
+            <div className="bg-info h-1.5 rounded-full" style={{ width: `${runningPct}%` }} />
           </div>
 
           <div className="flex items-center justify-between text-[10px]">
             <span className="text-muted-foreground">Failed</span>
-            <span className="font-medium text-red-600">{training.failed}</span>
+            <span className="font-medium text-destructive">{training.failed}</span>
           </div>
           <div className="w-full bg-muted rounded-full h-1.5">
-            <div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${failedPct}%` }} />
+            <div className="bg-destructive h-1.5 rounded-full" style={{ width: `${failedPct}%` }} />
           </div>
 
           <div className="pt-2 border-t text-[10px] text-muted-foreground">

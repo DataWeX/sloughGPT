@@ -18,10 +18,10 @@ interface AgentRunCardProps {
 
 function StatusDot({ status }: { status: AgentRun['status'] }) {
   const color = status === 'completed'
-    ? 'bg-green-500'
+    ? 'bg-success'
     : status === 'failed'
-      ? 'bg-red-500'
-      : 'bg-yellow-500 animate-pulse'
+      ? 'bg-destructive'
+      : 'bg-warning animate-pulse'
 
   return <span className={cn('inline-block h-2 w-2 rounded-full', color)} />
 }

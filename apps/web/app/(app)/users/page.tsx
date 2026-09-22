@@ -238,12 +238,12 @@ export default function UsersAdminPage() {
                           <span className="font-medium text-xs">{u.username}</span>
                           <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                             u.role === 'owner' ? 'bg-accent/15 text-accent' :
-                            u.role === 'admin' ? 'bg-blue-100 text-blue-700 dark:bg-info/15 text-info' :
+                            u.role === 'admin' ? 'bg-info/15 text-info dark:bg-info/15 text-info' :
                             'bg-muted text-muted-foreground'
                           }`}>{u.role}</span>
                           <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                            u.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-success/15 text-success' :
-                            'bg-red-100 text-red-700 dark:bg-destructive/15 text-destructive'
+                            u.status === 'active' ? 'bg-success/15 text-success dark:bg-success/15 text-success' :
+                            'bg-destructive/15 text-destructive dark:bg-destructive/15 text-destructive'
                           }`}>{u.status}</span>
                         </div>
                         <div className="text-[10px] text-muted-foreground mt-0.5">

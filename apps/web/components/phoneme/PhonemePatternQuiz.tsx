@@ -184,7 +184,7 @@ export default function PhonemePatternQuiz() {
           <div className="space-y-3">
             <div className={`p-4 rounded-lg text-center ${
               question.options.indexOf(question.correctPattern) >= 0
-                ? 'bg-green-500/10 border border-green-500/20'
+                ? 'bg-success/10 border border-green-500/20'
                 : ''
             }`}>
               <p className="text-lg font-mono font-bold">{question.correctPattern}</p>

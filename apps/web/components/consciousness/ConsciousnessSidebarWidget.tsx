@@ -49,15 +49,15 @@ export function ConsciousnessSidebarWidget() {
         {mood && <span className="truncate text-muted-foreground/60">{mood}</span>}
         <span className="relative flex h-2 w-2 shrink-0">
           <span className={cn('absolute inline-flex h-full w-full animate-ping rounded-full opacity-75', enabled ? 'bg-green-400' : 'bg-gray-400')} />
-          <span className={cn('relative inline-flex h-2 w-2 rounded-full', enabled ? 'bg-green-500' : 'bg-gray-500')} />
+          <span className={cn('relative inline-flex h-2 w-2 rounded-full', enabled ? 'bg-success' : 'bg-muted')} />
         </span>
       </button>
 
       {expanded && (
         <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-border/40 bg-popover p-3 shadow-xl">
           <div className="mb-2 space-y-1.5">
-            <MiniQualiaBar label={t('consciousness_sidebar.qualia_valence')} value={valence} color="bg-green-500" />
-            <MiniQualiaBar label={t('consciousness_sidebar.qualia_arousal')} value={arousal} color="bg-amber-500" />
+            <MiniQualiaBar label={t('consciousness_sidebar.qualia_valence')} value={valence} color="bg-success" />
+            <MiniQualiaBar label={t('consciousness_sidebar.qualia_arousal')} value={arousal} color="bg-warning" />
             <MiniQualiaBar label={t('consciousness_sidebar.qualia_novelty')} value={novelty} color="bg-violet-500" />
           </div>
 

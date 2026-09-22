@@ -10,9 +10,9 @@ interface SearchCategoryBadgeProps {
 }
 
 const DEFAULT_COLORS: Record<string, string> = {
-  member: 'bg-purple-100 text-purple-700',
-  training: 'bg-blue-100 text-blue-700',
-  dataset: 'bg-green-100 text-green-700',
+  member: 'bg-primary/15 text-primary',
+  training: 'bg-info/15 text-info',
+  dataset: 'bg-success/15 text-success',
   knowledge: 'bg-orange-100 text-orange-700',
 }
 
