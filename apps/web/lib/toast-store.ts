@@ -24,20 +24,25 @@ const toastStore = createStore<ToastStore>((set, get) => ({
   toasts: [],
 
   addToast: (message, type = 'info', verbose, onUndo) => {
+    const existing = get().toasts.find((t) => t.message === message && t.type === type)
+    if (existing) return existing.id
     const id = `toast_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
     const toast: Toast = { id, message, type, verbose, onUndo }
-    set(prev => ({ toasts: [...prev.toasts, toast] }))
-    setTimeout(() => {
-      const current = get().toasts
-      if (current.find(t => t.id === id)) {
-        set(prev => ({ toasts: prev.toasts.filter(t => t.id !== id) }))
-      }
-    }, onUndo ? 8000 : 6000)
+    set((prev) => ({ toasts: [...prev.toasts, toast] }))
+    setTimeout(
+      () => {
+        const current = get().toasts
+        if (current.find((t) => t.id === id)) {
+          set((prev) => ({ toasts: prev.toasts.filter((t) => t.id !== id) }))
+        }
+      },
+      onUndo ? 8000 : 6000,
+    )
     return id
   },
 
   dismissToast: (id) => {
-    set(prev => ({ toasts: prev.toasts.filter(t => t.id !== id) }))
+    set((prev) => ({ toasts: prev.toasts.filter((t) => t.id !== id) }))
   },
 
   clearToasts: () => {
@@ -46,7 +51,6 @@ const toastStore = createStore<ToastStore>((set, get) => ({
 }))
 
 export const useToastStore = Object.assign(
-  <T>(selector: (state: ToastStore) => T): T =>
-    useStore(toastStore, selector),
+  <T>(selector: (state: ToastStore) => T): T => useStore(toastStore, selector),
   { getState: toastStore.getState },
 )

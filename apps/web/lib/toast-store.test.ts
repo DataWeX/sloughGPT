@@ -17,20 +17,20 @@ describe('toast-store', () => {
 
   it('addToast creates a toast with given message and type', () => {
     const id = useToastStore.getState().addToast('Hello', 'success')
-    const toast = useToastStore.getState().toasts.find(t => t.id === id)
+    const toast = useToastStore.getState().toasts.find((t) => t.id === id)
     expect(toast?.message).toBe('Hello')
     expect(toast?.type).toBe('success')
   })
 
   it('addToast defaults type to info', () => {
     const id = useToastStore.getState().addToast('Hello')
-    const toast = useToastStore.getState().toasts.find(t => t.id === id)
+    const toast = useToastStore.getState().toasts.find((t) => t.id === id)
     expect(toast?.type).toBe('info')
   })
 
   it('addToast stores verbose message', () => {
     const id = useToastStore.getState().addToast('Hello', 'error', 'Details here')
-    expect(useToastStore.getState().toasts.find(t => t.id === id)?.verbose).toBe('Details here')
+    expect(useToastStore.getState().toasts.find((t) => t.id === id)?.verbose).toBe('Details here')
   })
 
   it('dismissToast removes toast', () => {
@@ -58,5 +58,20 @@ describe('toast-store', () => {
     const id1 = useToastStore.getState().addToast('A')
     const id2 = useToastStore.getState().addToast('B')
     expect(id1).not.toBe(id2)
+  })
+
+  it('dedupes identical visible message+type and returns the existing id', () => {
+    const id1 = useToastStore.getState().addToast('Session expired', 'info')
+    const id2 = useToastStore.getState().addToast('Session expired', 'info')
+    expect(id2).toBe(id1)
+    expect(useToastStore.getState().toasts).toHaveLength(1)
+  })
+
+  it('allows the same message again after the toast expires', () => {
+    const id1 = useToastStore.getState().addToast('Session expired', 'info')
+    vi.advanceTimersByTime(6000)
+    const id2 = useToastStore.getState().addToast('Session expired', 'info')
+    expect(id2).not.toBe(id1)
+    expect(useToastStore.getState().toasts).toHaveLength(1)
   })
 })
