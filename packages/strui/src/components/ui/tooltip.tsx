@@ -76,7 +76,13 @@ export function Tooltip({
 
   return (
     <TooltipContext.Provider
-      value={{ open, onOpenChange: handleOpenChange, triggerRef, contentId: id, delay: delayDuration }}
+      value={{
+        open,
+        onOpenChange: handleOpenChange,
+        triggerRef,
+        contentId: id,
+        delay: delayDuration,
+      }}
     >
       {children}
     </TooltipContext.Provider>
@@ -109,14 +115,21 @@ function mergeIntoChild(
 ): Record<string, unknown> {
   const merged: Record<string, unknown> = { ...ours, ...child.props }
   for (const key of Object.keys(ours)) {
-    if (key.startsWith('on') && typeof ours[key] === 'function' && typeof child.props[key] === 'function') {
+    if (
+      key.startsWith('on') &&
+      typeof ours[key] === 'function' &&
+      typeof child.props[key] === 'function'
+    ) {
       merged[key] = composeHandlers(
         child.props[key] as (e: Event) => void,
         ours[key] as (e: Event) => void,
       )
     }
   }
-  merged.className = cn(ours.className as string | undefined, child.props.className as string | undefined)
+  merged.className = cn(
+    ours.className as string | undefined,
+    child.props.className as string | undefined,
+  )
   merged.style = { ...(ours.style as object), ...(child.props.style as object) }
   merged.ref = ours.ref ?? child.props.ref
   return merged
@@ -135,7 +148,7 @@ export const TooltipTrigger = forwardRef<HTMLButtonElement, TooltipTriggerProps>
     }
 
     const setTriggerRef = (node: HTMLElement | null) => {
-      triggerRef.current = node
+      ;(triggerRef as React.MutableRefObject<HTMLElement | null>).current = node
       if (typeof ref === 'function') ref(node as HTMLButtonElement | null)
       else if (ref) ref.current = node as HTMLButtonElement | null
     }
@@ -169,7 +182,11 @@ export const TooltipTrigger = forwardRef<HTMLButtonElement, TooltipTriggerProps>
       return cloneElement(child, mergeIntoChild(child, triggerProps))
     }
 
-    return <button {...(triggerProps as React.ButtonHTMLAttributes<HTMLButtonElement>)}>{children}</button>
+    return (
+      <button {...(triggerProps as React.ButtonHTMLAttributes<HTMLButtonElement>)}>
+        {children}
+      </button>
+    )
   },
 )
 TooltipTrigger.displayName = 'TooltipTrigger'
@@ -193,14 +210,18 @@ const tooltipContentVariants = cva(
   },
 )
 
-interface TooltipContentProps extends HTMLAttributes<HTMLDivElement>, VariantProps<typeof tooltipContentVariants> {
+interface TooltipContentProps
+  extends HTMLAttributes<HTMLDivElement>, VariantProps<typeof tooltipContentVariants> {
   side?: Side
   align?: Align
   sideOffset?: number
 }
 
 export const TooltipContent = forwardRef<HTMLDivElement, TooltipContentProps>(
-  ({ className, children, variant, side = 'top', align = 'center', sideOffset = 8, ...props }, ref) => {
+  (
+    { className, children, variant, side = 'top', align = 'center', sideOffset = 8, ...props },
+    ref,
+  ) => {
     const { open, triggerRef, contentId } = useTooltipContext()
     const [mounted, setMounted] = useState(false)
     const [pos, setPos] = useState({ top: 0, left: 0 })
