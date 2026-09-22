@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import threading
 import time as _time
-from collections.abc import Iterator, MutableMapping
+from collections.abc import Callable, Iterator, MutableMapping
 from typing import Any
 
 from domain.infrastructure._internal.kv_cache.kv_state import KVState
@@ -109,6 +109,27 @@ class SessionKVManager:
     def set_session(self, session_id: str, state: Any) -> None:
         """Set KV state for a session, evicting TTL-expired + LRU if needed."""
         self._kv.session_store(session_id, [], state)
+
+    def get_or_create(self, session_id: str, factory: Callable[[], Any]) -> Any:
+        """Atomically return the state for ``session_id`` or create one.
+
+        The check → create → store runs under one lock acquisition, so
+        concurrent resolutions of the same id yield exactly one state object
+        (no lost-update / double-create race from get-then-set callers).
+        The factory is invoked only on a miss.
+        """
+        with self.lock:
+            self._kv._session_evict_expired()
+            entry = self._kv._sessions.get(session_id)
+            if entry is not None:
+                self._kv._sessions[session_id] = (entry[0], entry[1], _time.monotonic())
+                return entry[1]
+            if len(self._kv._sessions) >= self._kv._max_sessions:
+                oldest = min(self._kv._sessions, key=lambda k: self._kv._sessions[k][2])
+                del self._kv._sessions[oldest]
+            state = factory()
+            self._kv._sessions[session_id] = ([], state, _time.monotonic())
+            return state
 
     def remove_session(self, session_id: str) -> bool:
         """Remove KV state for a session. Returns True if it existed."""

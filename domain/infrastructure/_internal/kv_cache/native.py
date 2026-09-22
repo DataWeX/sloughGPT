@@ -32,15 +32,30 @@ class _NumpyBackend:
     ``(1, seq, heads, head_dim)`` conventions.
     """
 
-    __slots__ = ("_n_layers", "_max_cap", "_k", "_v", "_lens", "_cap")
+    __slots__ = (
+        "_n_layers",
+        "_max_cap",
+        "_k",
+        "_v",
+        "_lens",
+        "_cap",
+        "_sk",
+        "_sv",
+        "_quant",
+    )
 
-    def __init__(self, n_layers: int, cap: int = 0):
+    _MISSING = object()
+
+    def __init__(self, n_layers: int, cap: int = 0, quantized: bool = False):
         self._n_layers = n_layers
         self._max_cap = max(cap, 64)  # hard ceiling for geometric growth
         self._k: list[np.ndarray | None] = [None] * n_layers
         self._v: list[np.ndarray | None] = [None] * n_layers
+        self._sk: list[np.ndarray | None] = [None] * n_layers
+        self._sv: list[np.ndarray | None] = [None] * n_layers
         self._lens = [0] * n_layers
         self._cap = 0  # per-layer buffers grow to the same capacity
+        self._quant = quantized
 
     @property
     def n_layers(self) -> int:
@@ -49,6 +64,149 @@ class _NumpyBackend:
     @property
     def seq_len(self) -> int:
         return max(self._lens)
+
+    # ── raw access (composition surface for callers that bind buffers) ──
+
+    @property
+    def capacity(self) -> int:
+        return self._cap
+
+    @property
+    def lens(self) -> list[int]:
+        return self._lens
+
+    @property
+    def quantized(self) -> bool:
+        return self._quant
+
+    @property
+    def buffers(self) -> tuple[list[np.ndarray | None], list[np.ndarray | None]]:
+        return self._k, self._v
+
+    @property
+    def scales(self) -> tuple[list[np.ndarray | None], list[np.ndarray | None]]:
+        return self._sk, self._sv
+
+    def bind(
+        self,
+        n_layers: int,
+        total_len: int,
+        nkv: int | list[int],
+        head_dim: int,
+        quantized: bool,
+    ) -> None:
+        """Allocate exact preallocated buffers for every layer (zero-filled).
+
+        ``nkv`` may be a per-layer list (GQA) or a single head count. Sets
+        the capacity and resets all fill lengths, keeping the same backend.
+        """
+        self._n_layers = n_layers
+        self._lens = [0] * n_layers
+        self._cap = total_len
+        self._max_cap = total_len
+        self._quant = quantized
+        nkv_list = [nkv] * n_layers if isinstance(nkv, int) else list(nkv)
+        dtype = np.int8 if quantized else np.float32
+        self._k = [np.zeros((1, total_len, nvk, head_dim), dtype=dtype) for nvk in nkv_list]
+        self._v = [np.zeros((1, total_len, nvk, head_dim), dtype=dtype) for nvk in nkv_list]
+        if quantized:
+            self._sk = [
+                np.zeros((1, total_len, nvk, 1), dtype=np.float32) for nvk in nkv_list
+            ]
+            self._sv = [
+                np.zeros((1, total_len, nvk, 1), dtype=np.float32) for nvk in nkv_list
+            ]
+        else:
+            self._sk = [None] * n_layers
+            self._sv = [None] * n_layers
+
+    def grow_to(self, cap: int) -> None:
+        """Resize every layer to at least ``cap``, zero-filling new space."""
+        if cap <= self._cap:
+            return
+        dtype = np.int8 if self._quant else np.float32
+        new_k = []
+        new_v = []
+        for bi in range(self._n_layers):
+            b = self._k[bi] if bi < len(self._k) else None
+            bv = self._v[bi] if bi < len(self._v) else None
+            dl = self._lens[bi] if bi < len(self._lens) else 0
+            if b is None:
+                new_k.append(None)
+                new_v.append(None)
+                continue
+            nk = np.zeros((1, cap, b.shape[2], b.shape[3]), dtype=dtype)
+            nk[:, :dl] = b[:, :dl]
+            new_k.append(nk)
+            if bv is None:
+                new_v.append(np.zeros((1, cap, b.shape[2], b.shape[3]), dtype=dtype))
+            else:
+                nv = np.zeros((1, cap, bv.shape[2], bv.shape[3]), dtype=dtype)
+                nv[:, :dl] = bv[:, :dl]
+                new_v.append(nv)
+        self._k, self._v = new_k, new_v
+        if self._quant:
+            new_sk, new_sv = [], []
+            for bi in range(self._n_layers):
+                sk = self._sk[bi] if bi < len(self._sk) else None
+                sv = self._sv[bi] if bi < len(self._sv) else None
+                dl = self._lens[bi] if bi < len(self._lens) else 0
+                if sk is None:
+                    new_sk.append(None)
+                    new_sv.append(None)
+                    continue
+                nsk = np.zeros((1, cap, sk.shape[2], 1), dtype=np.float32)
+                nsv = np.zeros((1, cap, sv.shape[2], 1), dtype=np.float32)
+                nsk[:, :dl] = sk[:, :dl]
+                nsv[:, :dl] = sv[:, :dl]
+                new_sk.append(nsk)
+                new_sv.append(nsv)
+            self._sk, self._sv = new_sk, new_sv
+        self._cap = cap
+
+    def adopt(
+        self,
+        *,
+        k=_MISSING,
+        v=_MISSING,
+        sk=_MISSING,
+        sv=_MISSING,
+        lens=_MISSING,
+        cap=_MISSING,
+        quant=_MISSING,
+    ) -> None:
+        """Replace individual storage fields (composition surface).
+
+        Only the supplied fields are updated; the others keep their current
+        value. Assigning ``k`` or ``v`` also syncs the layer count so later
+        ``grow_to`` / ``clear`` stay consistent with the adopted buffers.
+        """
+        if k is not self._MISSING:
+            self._k = k
+            self._n_layers = len(k)
+        if v is not self._MISSING:
+            self._v = v
+            self._n_layers = len(v)
+        if sk is not self._MISSING:
+            self._sk = sk
+        if sv is not self._MISSING:
+            self._sv = sv
+        if lens is not self._MISSING:
+            self._lens = lens
+        if cap is not self._MISSING:
+            self._cap = cap
+        if quant is not self._MISSING:
+            self._quant = quant
+
+    def clear(self) -> None:
+        self._k = []
+        self._v = []
+        self._sk = []
+        self._sv = []
+        self._lens = []
+        self._n_layers = 0
+        self._cap = 0
+        self._quant = False
 
     def _grow(self, layer_idx: int, needed: int) -> None:
         cap = self._cap
@@ -66,6 +224,13 @@ class _NumpyBackend:
         new_v[:, :dl] = self._v[layer_idx][:, :dl]
         self._k[layer_idx] = new_k
         self._v[layer_idx] = new_v
+        if self._quant:
+            nsk = np.empty((*self._sk[layer_idx].shape[:1], cap, *self._sk[layer_idx].shape[2:]), np.float32)
+            nsv = np.empty((*self._sv[layer_idx].shape[:1], cap, *self._sv[layer_idx].shape[2:]), np.float32)
+            nsk[:, :dl] = self._sk[layer_idx][:, :dl]
+            nsv[:, :dl] = self._sv[layer_idx][:, :dl]
+            self._sk[layer_idx] = nsk
+            self._sv[layer_idx] = nsv
         self._cap = cap
 
     def update(self, layer_idx: int, k: np.ndarray, v: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -152,6 +317,16 @@ class NativeKVState:
     @property
     def is_c(self) -> bool:
         return self._cache is not None
+
+    @property
+    def backend(self):
+        """The active numpy storage backend (composition surface).
+
+        When the C library is unavailable this is the storage that serves
+        the whole object; consumers that bind exact buffers (e.g. the
+        training-side state) compose against it through ``bind``/``grow_to``.
+        """
+        return self._fallback
 
     @property
     def seq_len(self) -> int:

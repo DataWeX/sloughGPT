@@ -1506,11 +1506,7 @@ class SloNetChatProvider:
         if session_id is None:
             return None
         self._evict_stale_sessions()
-        kv_state = self._kv_manager.get_session(session_id)
-        if kv_state is None:
-            kv_state = self._get_model().new_kv_state()
-            self._kv_manager.set_session(session_id, kv_state)
-        return kv_state
+        return self._kv_manager.get_or_create(session_id, self._get_model().new_kv_state)
 
     def _generate_sync(
         self,
