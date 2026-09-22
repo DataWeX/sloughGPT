@@ -149,6 +149,62 @@ class TestTimeout:
         assert resp.json()["code"] == "E_INFRA_TIMEOUT"
 
 
+class TestColdStartPrefixSuppression:
+    """SLOW warnings for prefix-based cold-start paths show as debug during warm-up."""
+
+    def _slow_app(self):
+        app = FastAPI()
+        register_app_error_handler(app)
+        register_all_middleware(app, request_timeout=20.0)
+
+        @app.get("/token-tree/stats")
+        async def stats():
+            import asyncio
+
+            await asyncio.sleep(1.2)
+            return {"ok": 1}
+
+        return app
+
+    def test_cold_start_prefix_is_debug_in_warmup(self, monkeypatch):
+        import time
+
+        import infrastructure.middleware as mw
+
+        monkeypatch.setattr(mw, "_SERVER_START", time.monotonic())
+        app = self._slow_app()
+        client = TestClient(app)
+
+        def run(cap):
+            resp = client.get("/token-tree/stats")
+            assert resp.status_code == 200
+            slow = [r for r in cap.records if "token-tree/stats" in r.getMessage()]
+            assert len(slow) >= 1
+            assert all(r.levelno == logging.DEBUG for r in slow)
+            assert any("cold-start" in r.getMessage() for r in slow)
+
+        _with_capture(app, run)
+
+    def test_cold_start_prefix_warns_after_warmup(self, monkeypatch):
+        import time
+
+        import infrastructure.middleware as mw
+
+        monkeypatch.setattr(mw, "_SERVER_START", time.monotonic() - 1000.0)
+        app = self._slow_app()
+        client = TestClient(app)
+
+        def run(cap):
+            resp = client.get("/token-tree/stats")
+            assert resp.status_code == 200
+            slow = [r for r in cap.records if "token-tree/stats" in r.getMessage()]
+            assert len(slow) >= 1
+            assert all(r.levelno == logging.WARNING for r in slow)
+            assert not any("cold-start" in r.getMessage() for r in slow)
+
+        _with_capture(app, run)
+
+
 class TestMetrics:
     def test_request_recorded(self):
         from domain.infrastructure.metrics import get_metrics_collector

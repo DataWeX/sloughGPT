@@ -55,6 +55,13 @@ _COLD_START_PATHS = frozenset(
     }
 )
 
+# Prefixes that lazy-train a component on their first request. Suppressed only
+# during the warm-up window after process start so a genuinely slow route
+# still surfaces once the server is warm.
+_COLD_START_PREFIXES = frozenset({"/token-tree/"})
+_WARMUP_SECONDS = 120.0
+_SERVER_START = time.monotonic()
+
 # Inference endpoints that require a loaded model
 _INFERENCE_PATHS = frozenset(
     {
@@ -354,7 +361,10 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
                 },
             )
         elif elapsed > SLOW_THRESHOLD_SECONDS:
-            if path in _COLD_START_PATHS and elapsed < 60.0:
+            is_cold_exact = path in _COLD_START_PATHS
+            is_cold_prefix = any(path.startswith(p) for p in _COLD_START_PREFIXES)
+            in_warmup = (time.monotonic() - _SERVER_START) < _WARMUP_SECONDS
+            if (is_cold_exact and elapsed < 60.0) or (is_cold_prefix and in_warmup):
                 logger.debug(
                     "cold-start %s %s %d (%s) corr=%s",
                     method,

@@ -157,3 +157,57 @@ class TestTokenTreeMerges:
         for left, right in tree.merges:
             assert isinstance(left, str)
             assert isinstance(right, str)
+
+
+# ── Aggregate caching ─────────────────────────────────────────────────────
+
+
+class TestAggregateCaching:
+    _CORPUS = ["the quick brown fox jumps over the lazy dog"] * 4
+
+    @pytest.fixture(autouse=True)
+    def _trained_tree(self):
+        self.tree = TokenTree()
+        self.tree.train(self._CORPUS, vocab_size=64, embed_dim=8)
+        return self.tree
+
+    def test_ranked_merges_is_memoized(self):
+        first = self.tree._ranked_merges()
+        assert first, "trained corpus should produce merges"
+        second = self.tree._ranked_merges()
+        assert second is first
+
+    def test_top_merges_reuses_ranked_cache(self):
+        self.tree.top_merges(top_n=3)
+        cached = self.tree._ranked_merges_cache
+        assert cached is not None
+        assert self.tree.top_merges(top_n=5) == cached[:5]
+
+    def test_search_merges_does_not_refresh_ranking(self):
+        before = self.tree._ranked_merges()
+        self.tree.search_merges("quick", limit=3)
+        assert self.tree._ranked_merges_cache is before
+
+    def test_library_stats_is_memoized(self):
+        first = self.tree._library_stats()
+        second = self.tree._library_stats()
+        assert second is first
+        assert self.tree.stats()["library"] is first
+
+    def test_stale_cache_invalidated_on_retrain(self):
+        self.tree.top_merges(top_n=5)
+        old_ranked = self.tree._ranked_merges_cache
+        self.tree.stats()
+        old_stats = self.tree._library_stats_cache
+        assert old_ranked is not None and old_stats is not None
+        self.tree.train(["apple banana apple banana"], vocab_size=32, embed_dim=8)
+        assert old_ranked is not self.tree._ranked_merges_cache
+        assert old_stats is not self.tree._library_stats_cache
+        assert self.tree._ranked_merges() != old_ranked
+
+    def test_untrained_aggregates_match_baseline(self):
+        bare = TokenTree()
+        assert bare.top_merges(top_n=5) == []
+        assert bare.search_merges("a", limit=5) == []
+        bare.stats()
+        assert bare._library_stats_cache is not None

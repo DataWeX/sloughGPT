@@ -42,6 +42,56 @@ class TestLazyTraining:
         assert get_token_tree_manager() is TokenTreeManager.get_instance()
 
 
+class TestDefaultCache:
+    """Persisted default tree: cached on first train, loaded (not retrained) later."""
+
+    def _purge_cache(self):
+        cache_dir = token_tree_manager_module._SAVE_DIR / "_cache"
+        if cache_dir.exists():
+            import shutil
+
+            shutil.rmtree(cache_dir)
+
+    def test_default_tree_is_persisted_to_cache(self):
+        self._purge_cache()
+        first = TokenTreeManager.get_instance()
+        tree = first.get_tree(vocab_size=64, embed_dim=8)
+        assert tree.is_trained
+        cache_path = first._default_cache_path(64, 8)
+        assert (str(cache_path) + ".meta.json").endswith("_default_v64_e8.meta.json")
+        # The cache lives under _cache/ and must never surface as a saved tree.
+        saved = first.list_saved()
+        assert not any(
+            entry["name"].startswith("_cache_") or "_default_" in entry["name"] for entry in saved
+        )
+
+    def test_cold_start_reuses_cache(self):
+        self._purge_cache()
+        first = TokenTreeManager.get_instance()
+        expected = first.get_tree(vocab_size=64, embed_dim=8)
+        assert expected.is_trained
+
+        # Simulate a fresh process: new singleton with no in-memory tree
+        # must reconstruct from the persisted cache instead of retraining.
+        TokenTreeManager._instance = None
+        second = TokenTreeManager.get_instance()
+        tree = second.get_tree(vocab_size=64, embed_dim=8)
+        assert tree is not expected
+        assert tree.encode("the quick brown fox") == expected.encode("the quick brown fox")
+        assert second._load_cached_default(64, 8) is not None
+
+    def test_cache_is_param_keyed(self):
+        self._purge_cache()
+        first = TokenTreeManager.get_instance()
+        a = first.get_tree(vocab_size=64, embed_dim=8)
+
+        TokenTreeManager._instance = None
+        second = TokenTreeManager.get_instance()
+        b = second.get_tree(vocab_size=32, embed_dim=8)
+        assert a.vocab_size != b.vocab_size
+        assert second._default_cache_path(64, 8) != second._default_cache_path(32, 8)
+
+
 class TestExplicitTrain:
     def test_train_replaces_tree(self):
         mgr = TokenTreeManager.get_instance()

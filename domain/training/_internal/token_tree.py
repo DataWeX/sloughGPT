@@ -107,6 +107,13 @@ class TokenTree:
         self._library: PointLibrary = PointLibrary(name="token_tree")
         self._embed_dim: int = 0
         self._trained: bool = False
+        self._ranked_merges_cache: list[dict] | None = None
+        self._library_stats_cache: dict | None = None
+
+    def _invalidate_caches(self) -> None:
+        """Drop memoized aggregates; call whenever the tree is (re)built."""
+        self._ranked_merges_cache = None
+        self._library_stats_cache = None
 
     # ------------------------------------------------------------------
     # Special ids / interface
@@ -183,6 +190,7 @@ class TokenTree:
         self._library = PointLibrary(name="token_tree")
         self._embed_dim = embed_dim
         self._trained = False
+        self._invalidate_caches()
 
         corpus = [self._normalize(t, lowercase) for t in texts]
 
@@ -559,13 +567,19 @@ class TokenTree:
             return None
         return point.generate(self._embed_dim).astype(np.float32)
 
+    def _library_stats(self) -> dict:
+        """Memoized PointLibrary aggregate stats (append-only after training)."""
+        if self._library_stats_cache is None:
+            self._library_stats_cache = self._library.stats()
+        return self._library_stats_cache
+
     def embedding_points(self) -> int:
         """Number of embedding Points stored in the library."""
-        return len(self._library.list_all())
+        return len(self._library)
 
     def embedding_compression_ratio(self) -> float:
         """Aggregate compression ratio of all embedding Points."""
-        stats = self._library.stats()
+        stats = self._library_stats()
         raw = stats.get("total_raw_bytes", 0)
         comp = stats.get("total_compressed_bytes", 0)
         return raw / max(comp, 1)
@@ -808,7 +822,7 @@ class TokenTree:
             "embedding_points": self.embedding_points(),
             "embedding_compression_ratio": round(self.embedding_compression_ratio(), 2),
             "embed_dim": self._embed_dim,
-            "library": self._library.stats(),
+            "library": self._library_stats(),
         }
 
     def vocab_entries(self, offset: int = 0, limit: int = 50) -> dict:
@@ -866,14 +880,14 @@ class TokenTree:
             with rank = global frequency rank (1 = most frequent). Empty
             when the tree is untrained.
         """
-        if not self._trained:
-            return []
+        if not self._trained or self._ranked_merges_cache is not None:
+            return self._ranked_merges_cache or []
         ranked = sorted(
             ((m, self._freqs.get(self.stoi.get(m[0] + m[1]), 0)) for m in self.merges),
             key=lambda x: x[1],
             reverse=True,
         )
-        return [
+        self._ranked_merges_cache = [
             {
                 "rank": i + 1,
                 "left": left,
@@ -883,6 +897,7 @@ class TokenTree:
             }
             for i, ((left, right), count) in enumerate(ranked)
         ]
+        return self._ranked_merges_cache
 
     def top_merges(self, top_n: int = 20) -> list[dict]:
         """Return the most frequent merge rules as data.

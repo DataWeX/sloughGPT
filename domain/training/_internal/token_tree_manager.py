@@ -77,17 +77,44 @@ class TokenTreeManager:
             the current :class:`TokenTree`.
 
         Side effects:
-            - trains the default corpus on the first call.
+            - trains (or loads from cache) the default corpus on the first call.
         """
         with self._lock:
             if self._tree is None:
-                self._tree = TokenTree().train(
-                    list(DEFAULT_CORPUS),
-                    vocab_size=vocab_size,
-                    min_frequency=1,
-                    embed_dim=embed_dim,
-                )
+                self._tree = self._load_or_train_default(vocab_size, embed_dim)
             return self._tree
+
+    def _default_cache_path(self, vocab_size: int, embed_dim: int) -> Path:
+        """Path (without extension) of the persisted default-tree cache.
+
+        Lives under a ``_cache`` subdirectory so ``list_saved`` (which globs
+        ``*.meta.json`` non-recursively) never reports it as a user tree.
+        """
+        return _SAVE_DIR / "_cache" / f"_default_v{vocab_size}_e{embed_dim}"
+
+    def _load_cached_default(self, vocab_size: int, embed_dim: int) -> TokenTree | None:
+        """Load the persisted default tree, or None when no cache exists."""
+        try:
+            return TokenTree.load(str(self._default_cache_path(vocab_size, embed_dim)))
+        except (FileNotFoundError, OSError, ValueError):
+            return None
+
+    def _load_or_train_default(self, vocab_size: int, embed_dim: int) -> TokenTree:
+        """Reuse the persisted default tree when present, else train and cache."""
+        cached = self._load_cached_default(vocab_size, embed_dim)
+        if cached is not None:
+            return cached
+        tree = TokenTree().train(
+            list(DEFAULT_CORPUS),
+            vocab_size=vocab_size,
+            min_frequency=1,
+            embed_dim=embed_dim,
+        )
+        try:
+            tree.save(str(self._default_cache_path(vocab_size, embed_dim)))
+        except OSError:
+            pass
+        return tree
 
     def get_tree(self, vocab_size: int = 512, embed_dim: int = 16) -> TokenTree:
         """Return the live tree, lazily training the default corpus first.
