@@ -20,6 +20,7 @@ from domain.inference._internal.slonet_provider import (
     _TreeTokenizer,
     convert_hf_to_slonet,
 )
+from domain.infrastructure._internal.kv_cache.session import SessionKVManager
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -138,11 +139,10 @@ def _make_provider(**overrides):
     p._quant_engine = overrides.get("_quant_engine", None)
     p._parser = overrides.get("_parser", None)
     p._slnc_path = overrides.get("_slnc_path", "/tmp/fake.slnc")
-    p._kv_states = {}
-    p._kv_last_access = {}
-    p._kv_ttl = 3600.0
-    p._kv_max_sessions = overrides.get("_kv_max_sessions", 64)
-    p._kv_lock = threading.Lock()
+    p._kv_manager = SessionKVManager(
+        kv_ttl=3600.0,
+        kv_max_sessions=overrides.get("_kv_max_sessions", 64),
+    )
     p._server = None
     return p
 
@@ -500,22 +500,22 @@ class TestSessionManagement:
 
     def test_clear_session_existent_returns_true(self):
         p = _make_provider()
-        p._kv_states["s1"] = MagicMock()
-        p._kv_last_access["s1"] = time.monotonic()
+        p._kv_manager.kv_states["s1"] = MagicMock()
+        p._kv_manager.kv_last_access["s1"] = time.monotonic()
         assert p.clear_session("s1") is True
-        assert "s1" not in p._kv_states
-        assert "s1" not in p._kv_last_access
+        assert "s1" not in p._kv_manager.kv_states
+        assert "s1" not in p._kv_manager.kv_last_access
 
     def test_clear_all_sessions(self):
         p = _make_provider()
-        p._kv_states["s1"] = MagicMock()
-        p._kv_states["s2"] = MagicMock()
-        p._kv_last_access["s1"] = time.monotonic()
-        p._kv_last_access["s2"] = time.monotonic()
+        p._kv_manager.kv_states["s1"] = MagicMock()
+        p._kv_manager.kv_states["s2"] = MagicMock()
+        p._kv_manager.kv_last_access["s1"] = time.monotonic()
+        p._kv_manager.kv_last_access["s2"] = time.monotonic()
         n = p.clear_all_sessions()
         assert n == 2
-        assert len(p._kv_states) == 0
-        assert len(p._kv_last_access) == 0
+        assert len(p._kv_manager.kv_states) == 0
+        assert len(p._kv_manager.kv_last_access) == 0
 
     def test_clear_all_sessions_empty_returns_zero(self):
         p = _make_provider()
@@ -525,8 +525,8 @@ class TestSessionManagement:
         p = _make_provider()
         mock_state = MagicMock()
         mock_state.kv_len = 50
-        p._kv_states["s1"] = mock_state
-        p._kv_last_access["s1"] = time.monotonic()
+        p._kv_manager.kv_states["s1"] = mock_state
+        p._kv_manager.kv_last_access["s1"] = time.monotonic()
         stats = p.session_stats()
         assert stats["active_sessions"] == 1
         assert stats["cached_tokens"] == 50
@@ -535,54 +535,41 @@ class TestSessionManagement:
         p = _make_provider()
         mock_state = MagicMock()
         mock_state.kv_len = (10, 20)
-        p._kv_states["s1"] = mock_state
-        p._kv_last_access["s1"] = time.monotonic()
+        p._kv_manager.kv_states["s1"] = mock_state
+        p._kv_manager.kv_last_access["s1"] = time.monotonic()
         stats = p.session_stats()
         assert stats["cached_tokens"] == 30
 
     def test_evict_lru_session(self):
-        p = _make_provider()
-        p._kv_max_sessions = 2
-        now = time.monotonic()
-        p._kv_last_access["old"] = now - 100
-        p._kv_last_access["mid"] = now - 50
-        p._kv_states["old"] = MagicMock()
-        p._kv_states["mid"] = MagicMock()
-        # _evict_lru_session is called AFTER new session is inserted by
-        # _resolve_session_kv, so we need > max_sessions already present.
-        # With 2 states and max=2, len == max → no eviction. Set max=1 so
-        # that 2 states > max triggers eviction of "old" (LRU).
-        p._kv_max_sessions = 1
-        p._kv_lock.acquire()
-        try:
-            p._evict_lru_session("mid")  # "mid" is kept; "old" is evicted
-        finally:
-            p._kv_lock.release()
-        assert "old" not in p._kv_states
-        assert "mid" in p._kv_states
+        """Exceeding the session cap evicts the least-recently-used session.
+
+        LRU eviction now lives in SessionKVManager.set_session (helper
+        _evict_if_needed), exercised here exactly as _resolve_session_kv
+        would trigger it on an over-cap insert.
+        """
+        p = _make_provider(_kv_max_sessions=1)
+        p._kv_manager.set_session("old", MagicMock())
+        p._kv_manager.set_session("mid", MagicMock())
+        assert "old" not in p._kv_manager.kv_states
+        assert "mid" in p._kv_manager.kv_states
 
     def test_evict_lru_under_cap_does_nothing(self):
-        p = _make_provider()
-        p._kv_max_sessions = 10
-        p._kv_states["s1"] = MagicMock()
-        p._kv_last_access["s1"] = time.monotonic()
-        p._kv_lock.acquire()
-        try:
-            p._evict_lru_session("s2")
-        finally:
-            p._kv_lock.release()
-        assert "s1" in p._kv_states
+        p = _make_provider(_kv_max_sessions=10)
+        p._kv_manager.set_session("s1", MagicMock())
+        p._kv_manager.set_session("s2", MagicMock())
+        assert "s1" in p._kv_manager.kv_states
+        assert "s2" in p._kv_manager.kv_states
 
     def test_evict_stale_sessions(self):
         p = _make_provider()
-        p._kv_ttl = 1.0
-        p._kv_states["stale"] = MagicMock()
-        p._kv_last_access["stale"] = time.monotonic() - 10.0  # 10s ago
-        p._kv_states["fresh"] = MagicMock()
-        p._kv_last_access["fresh"] = time.monotonic()
+        p._kv_manager.kv_ttl = 1.0
+        p._kv_manager.kv_states["stale"] = MagicMock()
+        p._kv_manager.kv_last_access["stale"] = time.monotonic() - 10.0  # 10s ago
+        p._kv_manager.kv_states["fresh"] = MagicMock()
+        p._kv_manager.kv_last_access["fresh"] = time.monotonic()
         p._evict_stale_sessions()
-        assert "stale" not in p._kv_states
-        assert "fresh" in p._kv_states
+        assert "stale" not in p._kv_manager.kv_states
+        assert "fresh" in p._kv_manager.kv_states
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
