@@ -39,6 +39,25 @@ export interface UISettings {
   compact_mode: boolean
 }
 
+export interface ProviderApiSettings {
+  enabled: boolean
+  api_url: string
+  model: string
+  timeout: number
+  max_retries: number
+  api_key_set: boolean
+  registered?: boolean
+}
+
+export interface ProviderApiSettingsUpdate {
+  enabled?: boolean
+  api_url?: string
+  api_key?: string
+  model?: string
+  timeout?: number
+  max_retries?: number
+}
+
 export interface AllSettings {
   generation: GenerationSettings
   training: TrainingSettings
@@ -102,6 +121,16 @@ export const settingsController = {
 
   async updateUI(updates: Partial<UISettings>): Promise<UISettings> {
     return apiPatch<UISettings>('/settings/ui', updates)
+  },
+
+  // ── External API provider (OpenRouter / OpenAI-compatible) ───
+
+  async getProviderApi(): Promise<ProviderApiSettings> {
+    return apiGet<ProviderApiSettings>('/settings/providers/api')
+  },
+
+  async updateProviderApi(updates: ProviderApiSettingsUpdate): Promise<ProviderApiSettings> {
+    return apiPatch<ProviderApiSettings>('/settings/providers/api', updates)
   },
 
   async reset(): Promise<{ status: string; message: string }> {
