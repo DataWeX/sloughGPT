@@ -56,6 +56,27 @@ class UISettingsUpdate(BaseModel):
     compact_mode: bool | None = None
 
 
+class ProviderApiSettingsUpdate(BaseModel):
+    enabled: bool | None = None
+    api_url: str | None = Field(default=None, pattern=r"^https?://.+")
+    api_key: str | None = None
+    model: str | None = None
+    timeout: float | None = Field(default=None, ge=1.0, le=600.0)
+    max_retries: int | None = Field(default=None, ge=0, le=10)
+
+
+def _provider_public(s) -> dict:
+    """Public view of provider settings — never leaks the raw API key."""
+    return {
+        "enabled": s.enabled,
+        "api_url": s.api_url,
+        "model": s.model,
+        "timeout": s.timeout,
+        "max_retries": s.max_retries,
+        "api_key_set": bool(s.api_key),
+    }
+
+
 # ── Router ─────────────────────────────────────────────────────────
 
 
@@ -103,6 +124,17 @@ class SettingsRouter:
             self.update_ui,
             methods=["PATCH"],
             operation_id="update_settings_ui",
+        )
+
+        # External API provider (OpenRouter / OpenAI-compatible)
+        self.router.add_api_route(
+            "/providers/api", self.get_providers_api, methods=["GET"]
+        )
+        self.router.add_api_route(
+            "/providers/api",
+            self.update_providers_api,
+            methods=["PATCH"],
+            operation_id="update_settings_providers_api",
         )
 
         # Reset
@@ -416,6 +448,45 @@ class SettingsRouter:
         from dataclasses import asdict
 
         return success_response(data=asdict(ps.settings.ui))
+
+    @endpoint("settings.get_providers_api")
+    async def get_providers_api(self) -> dict:
+        """Get external API provider settings (key never returned)."""
+        from domain.settings._internal.persistent import get_settings as _get
+
+        s = _get().settings.providers
+        return success_response(data=_provider_public(s))
+
+    @endpoint("settings.update_providers_api")
+    async def update_providers_api(
+        self,
+        req: ProviderApiSettingsUpdate,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Update external API provider settings and apply at runtime."""
+        from dataclasses import asdict
+
+        from domain.inference._internal.api_provider import configure_api_provider
+        from domain.settings._internal.persistent import get_settings as _get
+
+        updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        if not updates:
+            return success_response(data={"message": "No changes"})
+        ps = _get()
+        merged = {**asdict(ps.settings.providers), **updates}
+        ps.update("providers", **merged)
+        outcome = configure_api_provider(
+            bool(ps.settings.providers.enabled),
+            api_url=ps.settings.providers.api_url,
+            api_key=ps.settings.providers.api_key,
+            model=ps.settings.providers.model,
+            timeout=ps.settings.providers.timeout,
+            max_retries=ps.settings.providers.max_retries,
+        )
+        safe_audit_log("settings.update", resource="providers.api", detail=str(updates))
+        return success_response(
+            data={**_provider_public(ps.settings.providers), "registered": outcome["registered"]}
+        )
 
     @endpoint("settings.reset")
     async def reset_settings(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:

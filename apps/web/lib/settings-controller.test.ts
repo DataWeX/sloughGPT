@@ -242,3 +242,54 @@ describe('settingsController.updateAutoTrainSettingsConfig', () => {
     expect(apiClient.apiPatch).toHaveBeenCalledWith(expect.stringContaining('interval_s=300'))
   })
 })
+
+describe('settingsController.getProviderApi', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('GETs /settings/providers/api without the raw key', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      enabled: false,
+      api_url: '',
+      model: 'gpt-4o-mini',
+      timeout: 60,
+      max_retries: 2,
+      api_key_set: false,
+    })
+    const result = await settingsController.getProviderApi()
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/settings/providers/api')
+    expect(result.api_key_set).toBe(false)
+    expect(result).not.toHaveProperty('api_key')
+  })
+})
+
+describe('settingsController.updateProviderApi', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('PATCHes provider settings body', async () => {
+    apiClient.apiPatch.mockResolvedValue({
+      enabled: true,
+      api_url: 'https://openrouter.ai/api/v1',
+      model: 'openai/gpt-4o-mini',
+      timeout: 60,
+      max_retries: 2,
+      api_key_set: true,
+      registered: true,
+    })
+    const body = {
+      enabled: true,
+      api_url: 'https://openrouter.ai/api/v1',
+      api_key: 'sk-test',
+      model: 'openai/gpt-4o-mini',
+    }
+    const result = await settingsController.updateProviderApi(body)
+    expect(apiClient.apiPatch).toHaveBeenCalledWith('/settings/providers/api', body)
+    expect(result.registered).toBe(true)
+    expect(result).not.toHaveProperty('api_key')
+  })
+
+  it('omits api_key when not provided (clear uses explicit empty string)', async () => {
+    apiClient.apiPatch.mockResolvedValue({ enabled: false, api_key_set: false })
+    await settingsController.updateProviderApi({ enabled: false })
+    expect(apiClient.apiPatch).toHaveBeenCalledWith('/settings/providers/api', { enabled: false })
+  })
+})

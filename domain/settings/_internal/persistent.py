@@ -73,6 +73,18 @@ class UISettings:
 
 
 @dataclass
+class ProviderSettings:
+    """External API provider (OpenRouter / any OpenAI-compatible endpoint)."""
+
+    enabled: bool = False
+    api_url: str = ""
+    api_key: str = ""
+    model: str = "gpt-4o-mini"
+    timeout: float = 60.0
+    max_retries: int = 2
+
+
+@dataclass
 class AppSettings:
     """All user settings in one place."""
 
@@ -81,6 +93,7 @@ class AppSettings:
     adaptive: AdaptiveSettings = field(default_factory=AdaptiveSettings)
     voice: VoiceSettings = field(default_factory=VoiceSettings)
     ui: UISettings = field(default_factory=UISettings)
+    providers: ProviderSettings = field(default_factory=ProviderSettings)
     version: int = 1
 
     def to_dict(self) -> dict[str, Any]:
@@ -121,6 +134,14 @@ class AppSettings:
         if "ui" in d:
             settings.ui = UISettings(
                 **{k: v for k, v in d["ui"].items() if k in UISettings.__dataclass_fields__}
+            )
+        if "providers" in d:
+            settings.providers = ProviderSettings(
+                **{
+                    k: v
+                    for k, v in d["providers"].items()
+                    if k in ProviderSettings.__dataclass_fields__
+                }
             )
         if "version" in d:
             settings.version = d["version"]
@@ -186,7 +207,8 @@ class PersistentSettings:
         """Update a section of settings and save.
 
         Args:
-            section: One of 'generation', 'training', 'adaptive', 'voice', 'ui'
+            section: One of 'generation', 'training', 'adaptive', 'voice', 'ui',
+                'providers'
             **kwargs: Key-value pairs to update
         """
         settings = self.settings
@@ -266,6 +288,7 @@ __all__ = [
     "AdaptiveSettings",
     "VoiceSettings",
     "UISettings",
+    "ProviderSettings",
     "PersistentSettings",
     "get_settings",
 ]

@@ -32,6 +32,7 @@ import { SettingsChatDefaultsCard } from '@/components/settings/SettingsChatDefa
 import { SettingsMemoryCard } from '@/components/settings/SettingsMemoryCard'
 import { SettingsSystemHealthCard } from '@/components/settings/SettingsSystemHealthCard'
 import { SettingsBackupRestoreCard } from '@/components/settings/SettingsBackupRestoreCard'
+import { SettingsExternalProviderCard } from '@/components/settings/SettingsExternalProviderCard'
 import { ToggleGroup as ToggleGroupRadix, ToggleGroupItem } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { useSettings, useUpdateSettings, DEFAULT_SETTINGS } from '@/lib/store'
@@ -352,6 +353,9 @@ export default function SettingsPage() {
             <VersionBadge label="v" version={detailed?.versions?.api} />
           </CardFooter>
         </Card>
+
+        {/* External model provider (OpenRouter / OpenAI-compatible) — separate from service API URL + HF token */}
+        <SettingsExternalProviderCard version={WEB_VERSION} />
 
         {/* Chat defaults */}
         <SettingsChatDefaultsCard
