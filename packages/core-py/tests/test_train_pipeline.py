@@ -1584,6 +1584,32 @@ class TestFeedLiveRefresh:
         assert math.isfinite(r.final_loss)
         assert t._feed_sampler.stats()["pairs"] == 4
 
+    def test_interval_on_non_feed_data_path_is_ignored(self, data_path, tmp_path, caplog):
+        cfg = tiny_config(tmp_path, max_steps=2, feed_refresh_interval=0.01)
+        t = make_trainer(data_path, cfg)
+        assert t._feed_sampler is None
+        assert "is not a feed spec" in caplog.text
+
+    def test_legacy_param_flows_into_config(self, tmp_path, monkeypatch):
+        _corpus, tf = self._seed_feed_corpus(tmp_path)
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+        t = SloughGPTTrainer(
+            "feed:api-conversations",
+            config=None,
+            n_embed=16,
+            n_layer=1,
+            n_head=2,
+            block_size=8,
+            batch_size=2,
+            epochs=1,
+            max_steps=2,
+            lr=3e-4,
+            feed_refresh_interval=0.01,
+            checkpoint_dir=str(tmp_path / "ckpts"),
+        )
+        assert t.config.feed_refresh_interval == 0.01
+        assert t._feed_sampler is not None
+
 
 class TestSave:
     def test_save_sou(self, data_path, tmp_path):

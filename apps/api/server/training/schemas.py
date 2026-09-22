@@ -72,6 +72,8 @@ class _TrainHyperparameters(BaseModel):
     max_checkpoints: int = Field(default=5, ge=1, le=100)
     device: str | None = None
     use_compile: bool = False
+    # Live feed ingestion (seconds between refresh; 0 = disabled, first page only).
+    feed_refresh_interval: float = Field(default=0.0, ge=0.0, le=86_400.0)
 
     @field_validator("device", mode="before")
     @classmethod

@@ -892,6 +892,7 @@ class SloughGPTTrainer:
         eval_interval: int = 100,
         experiment_tracker: ExperimentTracker | None = None,
         tokenizer: Any | None = None,
+        feed_refresh_interval: float = 0.0,
     ):
         # Handle both TrainerConfig and legacy parameters
         if config is not None:
@@ -924,6 +925,7 @@ class SloughGPTTrainer:
                 device=device or "auto",
                 log_interval=log_interval,
                 eval_interval=eval_interval,
+                feed_refresh_interval=feed_refresh_interval,
             )
 
         self.data_path = data_path

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
 from collections.abc import Coroutine
 from typing import Any
 
@@ -32,7 +31,9 @@ def _run_async(coro: Coroutine) -> None:
             logger.debug("Fire-and-forget coroutine failed: %s", exc)
 
     try:
-        threading.Thread(target=_target, daemon=True).start()
+        from domain.infrastructure._internal.fire_and_forget import get_pool
+
+        get_pool().submit(_target)
     except Exception as exc:
         logger.debug("Fire-and-forget dispatch failed: %s", exc)
 
@@ -122,5 +123,6 @@ def _sloughgpt_trainer_kwds(req_snapshot: dict[str, Any]) -> dict[str, Any]:
         "lora_alpha": int(req_snapshot.get("lora_alpha") or 16),
         "log_interval": int(req_snapshot.get("log_interval") or 10),
         "eval_interval": int(req_snapshot.get("eval_interval") or 100),
+        "feed_refresh_interval": float(req_snapshot.get("feed_refresh_interval") or 0.0),
         "device": device if device is not None and str(device).strip() != "" else None,
     }

@@ -212,12 +212,14 @@ class TestFeedSpec:
 
 
 class _FakeTrainer:
-    """Records the data_path the endpoint feeds to SloughGPTTrainer, runs nothing."""
+    """Records the data_path and kwargs the endpoint feeds to SloughGPTTrainer, runs nothing."""
 
     captured: list[str] = []
+    captured_kwargs: list[dict] = []
 
     def __init__(self, data_path, **kwargs) -> None:
         _FakeTrainer.captured.append(data_path)
+        _FakeTrainer.captured_kwargs.append(kwargs)
 
     def train(self, **kwargs) -> dict:
         return {"best_eval_loss": 0.5}
@@ -264,6 +266,7 @@ class TestTrainingStartFeed:
         monkeypatch.setattr(exec_mod, "notify_training_event", _async_noop)
         monkeypatch.setattr(exec_mod, "notify_push", lambda **kw: None)
         _FakeTrainer.captured.clear()
+        _FakeTrainer.captured_kwargs.clear()
 
         resp = client.post(
             "/training/start",
@@ -288,3 +291,69 @@ class TestTrainingStartFeed:
         assert job["data_path"] == dataset
         assert job["output_checkpoint_stem"] == stem
         assert _FakeTrainer.captured == [dataset]
+
+    def test_feed_start_passes_refresh_interval(self, monkeypatch):
+        from training import execution as exec_mod
+        from training.jobs import training_jobs
+
+        import domain.training as domain_training
+        from domain.training._internal import wandb_helpers
+
+        monkeypatch.setattr(domain_training, "SloughGPTTrainer", _FakeTrainer)
+        monkeypatch.setattr(
+            wandb_helpers, "create_training_tracker_for_api_job", lambda **kw: _FakeTracker()
+        )
+        monkeypatch.setattr(exec_mod, "notify_training_event", _async_noop)
+        monkeypatch.setattr(exec_mod, "notify_push", lambda **kw: None)
+        _FakeTrainer.captured.clear()
+        _FakeTrainer.captured_kwargs.clear()
+
+        resp = client.post(
+            "/training/start",
+            json={
+                "name": "feed live",
+                "model": "slonet",
+                "dataset": "feed:api-conversations",
+                "feed_refresh_interval": 30,
+            },
+        )
+        assert resp.status_code == 200
+        job_id = resp.json()["job_id"]
+
+        deadline = time.time() + 5.0
+        status = None
+        while time.time() < deadline:
+            status = training_jobs.get(job_id, {}).get("status")
+            if status in ("completed", "failed"):
+                break
+            time.sleep(0.02)
+        assert status == "completed", f"job did not complete: {status}"
+
+        kw = _FakeTrainer.captured_kwargs[-1]
+        assert kw["feed_refresh_interval"] == 30.0
+
+
+class TestFeedLiveRefreshSchema:
+    def test_refresh_interval_defaults_off(self):
+        req = TrainingRequest(name="x", model="slonet", dataset="feed:api-conversations")
+        assert req.feed_refresh_interval == 0.0
+
+    def test_refresh_interval_passthrough(self):
+        req = TrainingRequest(
+            name="x",
+            model="slonet",
+            dataset="feed:api-conversations",
+            feed_refresh_interval=30,
+        )
+        assert req.feed_refresh_interval == 30.0
+
+    def test_refresh_interval_rejects_negative(self):
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            TrainingRequest(
+                name="x",
+                model="slonet",
+                dataset="feed:api-conversations",
+                feed_refresh_interval=-1,
+            )
