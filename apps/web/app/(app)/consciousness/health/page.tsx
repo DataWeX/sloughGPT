@@ -46,9 +46,9 @@ const HISTORY_KEY = 'consciousness_health_history'
 const MAX_HISTORY = 20
 
 function getScoreColor(score: number): string {
-  if (score < 40) return '#ef4444'
-  if (score < 70) return '#f59e0b'
-  return '#22c55e'
+  if (score < 40) return 'rgb(var(--destructive))'
+  if (score < 70) return 'rgb(var(--warning))'
+  return 'rgb(var(--success))'
 }
 
 function getScoreLabel(score: number, t: (k: string) => string): string {
@@ -195,7 +195,7 @@ export default function ConsciousnessHealthPage() {
   if (loading) {
     return (
       <PageContainer title={t('consciousness_health.page_title')}>
-        <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+      <div className="space-y-4">
           <Skeleton className="h-48 w-full max-w-xs mx-auto" />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
             <Skeleton className="h-20" />

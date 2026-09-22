@@ -70,17 +70,17 @@ export default function DeveloperPage() {
       headerRight={
         <div className="flex items-center gap-3">
           {startupStage && startupStage !== 'ready' && startupStage !== 'background' && (
-            <div className="flex items-center gap-2 rounded-lg border border-[#febc2e]/20 bg-[#febc2e]/[0.06] px-3 py-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#febc2e] animate-pulse" />
-              <span className="text-[10px] font-medium text-[#febc2e] uppercase tracking-wider">
+            <div className="flex items-center gap-2 rounded-lg border border-warning/20 bg-warning/[0.06] px-3 py-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
+              <span className="text-[10px] font-medium text-warning uppercase tracking-wider">
                 {startupStage} {startupElapsed > 0 && `· ${startupElapsed.toFixed(0)}s`}
               </span>
             </div>
           )}
           {startupStage === 'ready' && (
-            <div className="flex items-center gap-2 rounded-lg border border-[#28c840]/20 bg-[#28c840]/[0.06] px-3 py-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#28c840]" />
-              <span className="text-[10px] font-medium text-[#28c840] uppercase tracking-wider">
+            <div className="flex items-center gap-2 rounded-lg border border-success/20 bg-success/[0.06] px-3 py-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-success" />
+              <span className="text-[10px] font-medium text-success uppercase tracking-wider">
                 Ready
               </span>
             </div>
@@ -130,15 +130,15 @@ function ShellTab() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-1 rounded-xl border border-white/[0.06] bg-[#111111] p-1 w-fit">
+      <div className="flex items-center gap-1 rounded-xl border border-border/20 bg-muted/20 p-1 w-fit">
         <button
           type="button"
           onClick={() => setShellMode('backend')}
           className={cn(
             'rounded-lg px-4 py-1.5 text-[11px] font-medium transition-all duration-200',
             shellMode === 'backend'
-              ? 'bg-[#1c1c1e] text-[#c7c7cc] shadow-sm shadow-black/20'
-              : 'text-[#636366] hover:text-[#8e8e93]',
+              ? 'bg-muted/30 text-muted-foreground shadow-sm shadow-black/20'
+              : 'text-muted-foreground/60 hover:text-muted-foreground/80',
           )}
         >
           Backend
@@ -149,8 +149,8 @@ function ShellTab() {
           className={cn(
             'rounded-lg px-4 py-1.5 text-[11px] font-medium transition-all duration-200',
             shellMode === 'v86'
-              ? 'bg-[#1c1c1e] text-[#c7c7cc] shadow-sm shadow-black/20'
-              : 'text-[#636366] hover:text-[#8e8e93]',
+              ? 'bg-muted/30 text-muted-foreground shadow-sm shadow-black/20'
+              : 'text-muted-foreground/60 hover:text-muted-foreground/80',
           )}
         >
           Browser VM
@@ -201,16 +201,16 @@ function FilesTab() {
   return (
     <div className="space-y-4">
       <FileStatsCard files={files} />
-      <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-        <div className="flex items-center justify-between h-11 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
-          <span className="text-[11px] font-medium text-[#8e8e93]">Documents</span>
+      <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
+        <div className="flex items-center justify-between h-11 px-4 bg-muted/30 border-b border-border/20">
+          <span className="text-[11px] font-medium text-muted-foreground/80">Documents</span>
           <div className="flex items-center gap-2">
             <input
               type="text"
               placeholder="Search..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-40 h-7 rounded-md border border-white/[0.06] bg-[#111111] px-2.5 text-[11px] text-[#c7c7cc] placeholder:text-[#48484a] outline-none focus:border-white/[0.12] transition-colors font-mono"
+              className="w-40 h-7 rounded-md border border-border/20 bg-muted/20 px-2.5 text-[11px] text-muted-foreground placeholder:text-muted-foreground/40 outline-none focus:border-white/[0.12] transition-colors font-mono"
               aria-label="Search files"
             />
             <button
@@ -218,7 +218,7 @@ function FilesTab() {
               onClick={() => {
                 refetch()
               }}
-              className="h-7 w-7 flex items-center justify-center rounded-md border border-white/[0.06] bg-[#111111] text-[#8e8e93] hover:text-[#c7c7cc] hover:border-white/[0.12] transition-colors"
+              className="h-7 w-7 flex items-center justify-center rounded-md border border-border/20 bg-muted/20 text-muted-foreground/80 hover:text-muted-foreground hover:border-white/[0.12] transition-colors"
               aria-label="Refresh files"
             >
               <IconRefresh className="w-3 h-3" />
@@ -229,11 +229,11 @@ function FilesTab() {
           {loading ? (
             <div className="space-y-2 py-2">
               {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-7 w-full bg-[#1c1c1e]" />
+                <Skeleton key={i} className="h-7 w-full bg-muted/30" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="text-[11px] text-[#636366] py-6 text-center">
+            <p className="text-[11px] text-muted-foreground/60 py-6 text-center">
               {search ? 'No files match your search.' : 'No files uploaded yet.'}
             </p>
           ) : (
@@ -246,8 +246,8 @@ function FilesTab() {
                     i > 0 && 'border-t border-white/[0.04]',
                   )}
                 >
-                  <span className="font-mono text-[#c7c7cc] truncate">{f.filename}</span>
-                  <span className="text-[#636366] shrink-0 ml-3 font-mono">
+                  <span className="font-mono text-muted-foreground truncate">{f.filename}</span>
+                  <span className="text-muted-foreground/60 shrink-0 ml-3 font-mono">
                     {f.size ? `${(f.size / 1024).toFixed(1)} KB` : '—'}
                   </span>
                 </div>
@@ -304,51 +304,51 @@ function VoiceTab() {
   return (
     <div className="grid grid-cols-2 gap-4">
       {/* Status card */}
-      <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-        <div className="flex items-center h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
-          <span className="text-[11px] font-medium text-[#8e8e93]">Voice Status</span>
+      <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
+        <div className="flex items-center h-9 px-4 bg-muted/30 border-b border-border/20">
+          <span className="text-[11px] font-medium text-muted-foreground/80">Voice Status</span>
         </div>
         <div className="px-4 py-3">
           {loading ? (
-            <Skeleton className="h-14 w-full bg-[#1c1c1e]" />
+            <Skeleton className="h-14 w-full bg-muted/30" />
           ) : status ? (
             <div className="space-y-2.5">
               <div className="flex items-center gap-2.5">
                 <span
                   className={cn(
                     'w-2 h-2 rounded-full',
-                    status.server_tts ? 'bg-[#28c840]' : 'bg-[#ff5f57]',
+                    status.server_tts ? 'bg-success' : 'bg-destructive',
                   )}
                 />
-                <span className="text-[12px] text-[#c7c7cc]">
+                <span className="text-[12px] text-muted-foreground">
                   {status.server_tts ? 'TTS Available' : 'TTS Unavailable'}
                 </span>
               </div>
-              <p className="text-[11px] text-[#636366] font-mono">{status.model ?? 'no model'}</p>
+              <p className="text-[11px] text-muted-foreground/60 font-mono">{status.model ?? 'no model'}</p>
               {status.error && (
-                <div className="flex items-start gap-2 text-[#ff5f57] bg-[#ff5f57]/[0.08] rounded-lg px-3 py-2 text-[11px]">
+                <div className="flex items-start gap-2 text-destructive bg-destructive/[0.08] rounded-lg px-3 py-2 text-[11px]">
                   <span className="shrink-0 text-[10px] font-bold">!</span>
                   {status.error}
                 </div>
               )}
             </div>
           ) : (
-            <p className="text-[11px] text-[#636366]">Could not load status</p>
+            <p className="text-[11px] text-muted-foreground/60">Could not load status</p>
           )}
         </div>
       </div>
 
       {/* Quick Test card */}
-      <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-        <div className="flex items-center h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
-          <span className="text-[11px] font-medium text-[#8e8e93]">Quick Test</span>
+      <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
+        <div className="flex items-center h-9 px-4 bg-muted/30 border-b border-border/20">
+          <span className="text-[11px] font-medium text-muted-foreground/80">Quick Test</span>
         </div>
         <div className="px-4 py-3 space-y-2.5">
           <textarea
             placeholder="Type text to speak..."
             value={ttsText}
             onChange={(e) => setTtsText(e.target.value)}
-            className="w-full h-16 rounded-lg border border-white/[0.06] bg-[#111111] px-3 py-2 text-[12px] text-[#c7c7cc] placeholder:text-[#48484a] resize-none outline-none focus:border-white/[0.12] transition-colors font-mono"
+            className="w-full h-16 rounded-lg border border-border/20 bg-muted/20 px-3 py-2 text-[12px] text-muted-foreground placeholder:text-muted-foreground/40 resize-none outline-none focus:border-white/[0.12] transition-colors font-mono"
             aria-label="Text to speech input"
           />
           <button
@@ -358,20 +358,20 @@ function VoiceTab() {
             className={cn(
               'w-full h-8 rounded-lg text-[11px] font-medium transition-all duration-200',
               generating || !ttsText.trim()
-                ? 'bg-[#28c840]/20 text-[#28c840]/40 cursor-not-allowed'
-                : 'bg-[#28c840]/10 text-[#28c840] hover:bg-[#28c840]/20',
+                ? 'bg-success/20 text-success/40 cursor-not-allowed'
+                : 'bg-success/10 text-success hover:bg-success/20',
             )}
           >
             {generating ? 'Generating...' : 'Speak'}
           </button>
           {ttsError && (
-            <div className="flex items-start gap-2 text-[#ff5f57] bg-[#ff5f57]/[0.08] rounded-lg px-3 py-2 text-[11px]">
+            <div className="flex items-start gap-2 text-destructive bg-destructive/[0.08] rounded-lg px-3 py-2 text-[11px]">
               <span className="shrink-0 text-[10px] font-bold">!</span>
               {ttsError}
             </div>
           )}
           {lastResult && (
-            <p className="text-[10px] text-[#636366] font-mono">
+            <p className="text-[10px] text-muted-foreground/60 font-mono">
               {lastResult.duration_ms}ms · {lastResult.backend}
             </p>
           )}
@@ -491,19 +491,19 @@ function ApiTab() {
   }
 
   const METHOD_COLORS: Record<string, string> = {
-    GET: 'bg-[#28c840]/10 text-[#28c840] border-[#28c840]/20',
-    POST: 'bg-[#febc2e]/10 text-[#febc2e] border-[#febc2e]/20',
-    PUT: 'bg-[#5ac8fa]/10 text-[#5ac8fa] border-[#5ac8fa]/20',
-    PATCH: 'bg-[#bf5af2]/10 text-[#bf5af2] border-[#bf5af2]/20',
-    DELETE: 'bg-[#ff5f57]/10 text-[#ff5f57] border-[#ff5f57]/20',
+    GET: 'bg-success/10 text-success border-success/20',
+    POST: 'bg-warning/10 text-warning border-warning/20',
+    PUT: 'bg-info/60/10 text-info border-info/60/20',
+    PATCH: 'bg-primary/10 text-primary border-primary/20',
+    DELETE: 'bg-destructive/10 text-destructive border-destructive/20',
   }
 
   return (
     <div className="space-y-4">
       {/* API Playground */}
-      <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-        <div className="flex items-center h-11 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
-          <span className="text-[11px] font-medium text-[#8e8e93]">API Playground</span>
+      <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
+        <div className="flex items-center h-11 px-4 bg-muted/30 border-b border-border/20">
+          <span className="text-[11px] font-medium text-muted-foreground/80">API Playground</span>
         </div>
         <div className="px-4 py-3 space-y-3">
           {/* URL bar */}
@@ -512,8 +512,8 @@ function ApiTab() {
               value={method}
               onChange={(e) => setMethod(e.target.value)}
               className={cn(
-                'h-8 rounded-lg border px-2.5 text-[11px] font-mono font-medium bg-[#111111] outline-none',
-                METHOD_COLORS[method] ?? 'border-white/[0.06] text-[#c7c7cc]',
+                'h-8 rounded-lg border px-2.5 text-[11px] font-mono font-medium bg-muted/20 outline-none',
+                METHOD_COLORS[method] ?? 'border-border/20 text-muted-foreground',
               )}
               aria-label="HTTP method"
             >
@@ -527,7 +527,7 @@ function ApiTab() {
               value={path}
               onChange={(e) => setPath(e.target.value)}
               placeholder="/endpoint"
-              className="flex-1 h-8 rounded-lg border border-white/[0.06] bg-[#111111] px-3 text-[12px] font-mono text-[#c7c7cc] placeholder:text-[#48484a] outline-none focus:border-white/[0.12] transition-colors"
+              className="flex-1 h-8 rounded-lg border border-border/20 bg-muted/20 px-3 text-[12px] font-mono text-muted-foreground placeholder:text-muted-foreground/40 outline-none focus:border-white/[0.12] transition-colors"
               aria-label="Request path"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleSend()
@@ -540,8 +540,8 @@ function ApiTab() {
               className={cn(
                 'h-8 px-4 rounded-lg text-[11px] font-medium transition-all duration-200',
                 loading || !path.trim()
-                  ? 'bg-[#0a7aff]/20 text-[#0a7aff]/40 cursor-not-allowed'
-                  : 'bg-[#0a7aff]/10 text-[#0a7aff] hover:bg-[#0a7aff]/20',
+                  ? 'bg-info/20 text-info/40 cursor-not-allowed'
+                  : 'bg-info/10 text-info hover:bg-info/20',
               )}
             >
               {loading ? 'Sending...' : 'Send'}
@@ -553,7 +553,7 @@ function ApiTab() {
             value={authHeader}
             onChange={(e) => setAuthHeader(e.target.value)}
             placeholder="Authorization: Bearer <token>"
-            className="w-full h-8 rounded-lg border border-white/[0.06] bg-[#111111] px-3 text-[11px] font-mono text-[#c7c7cc] placeholder:text-[#48484a] outline-none focus:border-white/[0.12] transition-colors"
+            className="w-full h-8 rounded-lg border border-border/20 bg-muted/20 px-3 text-[11px] font-mono text-muted-foreground placeholder:text-muted-foreground/40 outline-none focus:border-white/[0.12] transition-colors"
             aria-label="Authorization header"
           />
 
@@ -563,7 +563,7 @@ function ApiTab() {
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder='{"key": "value"}'
-              className="w-full h-24 rounded-lg border border-white/[0.06] bg-[#111111] px-3 py-2 text-[11px] font-mono text-[#c7c7cc] placeholder:text-[#48484a] resize-none outline-none focus:border-white/[0.12] transition-colors"
+              className="w-full h-24 rounded-lg border border-border/20 bg-muted/20 px-3 py-2 text-[11px] font-mono text-muted-foreground placeholder:text-muted-foreground/40 resize-none outline-none focus:border-white/[0.12] transition-colors"
               aria-label="Request body"
             />
           )}
@@ -576,25 +576,25 @@ function ApiTab() {
                   className={cn(
                     'font-mono font-medium',
                     responseStatus && responseStatus >= 200 && responseStatus < 300
-                      ? 'text-[#28c840]'
+                      ? 'text-success'
                       : responseStatus && responseStatus >= 400
-                        ? 'text-[#ff5f57]'
-                        : 'text-[#636366]',
+                        ? 'text-destructive'
+                        : 'text-muted-foreground/60',
                   )}
                 >
                   {responseStatus}
                 </span>
                 {responseTime != null && (
-                  <span className="text-[#636366] font-mono">{responseTime}ms</span>
+                  <span className="text-muted-foreground/60 font-mono">{responseTime}ms</span>
                 )}
               </div>
 
               {responseHeaders && Object.keys(responseHeaders).length > 0 && (
                 <details className="text-[11px]">
-                  <summary className="text-[#636366] cursor-pointer hover:text-[#8e8e93] transition-colors">
+                  <summary className="text-muted-foreground/60 cursor-pointer hover:text-muted-foreground/80 transition-colors">
                     Response Headers
                   </summary>
-                  <pre className="mt-1.5 rounded-lg border border-white/[0.04] bg-[#111111] p-2.5 font-mono text-[10px] text-[#c7c7cc] overflow-auto max-h-32 leading-relaxed">
+                  <pre className="mt-1.5 rounded-lg border border-white/[0.04] bg-muted/20 p-2.5 font-mono text-[10px] text-muted-foreground overflow-auto max-h-32 leading-relaxed">
                     {Object.entries(responseHeaders)
                       .map(([k, v]) => `${k}: ${v}`)
                       .join('\n')}
@@ -602,7 +602,7 @@ function ApiTab() {
                 </details>
               )}
 
-              <pre className="rounded-xl border border-white/[0.04] bg-[#111111] p-3.5 text-[11px] font-mono text-[#c7c7cc] overflow-auto max-h-96 whitespace-pre-wrap leading-relaxed">
+              <pre className="rounded-xl border border-white/[0.04] bg-muted/20 p-3.5 text-[11px] font-mono text-muted-foreground overflow-auto max-h-96 whitespace-pre-wrap leading-relaxed">
                 {response}
               </pre>
             </div>
@@ -612,13 +612,13 @@ function ApiTab() {
 
       {/* History */}
       {history.length > 0 && (
-        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-          <div className="flex items-center justify-between h-11 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
-            <span className="text-[11px] font-medium text-[#8e8e93]">Request History</span>
+        <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
+          <div className="flex items-center justify-between h-11 px-4 bg-muted/30 border-b border-border/20">
+            <span className="text-[11px] font-medium text-muted-foreground/80">Request History</span>
             <button
               type="button"
               onClick={clearHistory}
-              className="text-[10px] text-[#ff5f57]/60 hover:text-[#ff5f57] transition-colors"
+              className="text-[10px] text-destructive/60 hover:text-destructive transition-colors"
             >
               Clear
             </button>
@@ -638,17 +638,17 @@ function ApiTab() {
                   className={cn(
                     'font-mono font-medium w-10 shrink-0',
                     entry.status >= 200 && entry.status < 300
-                      ? 'text-[#28c840]'
+                      ? 'text-success'
                       : entry.status >= 400
-                        ? 'text-[#ff5f57]'
-                        : 'text-[#636366]',
+                        ? 'text-destructive'
+                        : 'text-muted-foreground/60',
                   )}
                 >
                   {entry.status || 'ERR'}
                 </span>
-                <span className="font-mono text-[#48484a] w-12 shrink-0">{entry.method}</span>
-                <span className="font-mono text-[#c7c7cc] truncate flex-1">{entry.path}</span>
-                <span className="text-[#636366] shrink-0 font-mono">{entry.timeMs}ms</span>
+                <span className="font-mono text-muted-foreground/40 w-12 shrink-0">{entry.method}</span>
+                <span className="font-mono text-muted-foreground truncate flex-1">{entry.path}</span>
+                <span className="text-muted-foreground/60 shrink-0 font-mono">{entry.timeMs}ms</span>
               </button>
             ))}
           </div>
@@ -717,7 +717,7 @@ function QuickActionsTab() {
                   ? results[action.label]!.status >= 200 && results[action.label]!.status < 300
                     ? 'border-success/20 bg-success/[0.03]'
                     : 'border-red-500/20 bg-destructive/[0.03]'
-                  : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]',
+                  : 'border-border/20 bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]',
             )}
           >
             <div className="flex items-center gap-2 w-full mb-1">
@@ -729,10 +729,10 @@ function QuickActionsTab() {
               >
                 {action.method}
               </span>
-              <span className="text-sm font-medium text-[#e5e5ea]">{action.label}</span>
+              <span className="text-sm font-medium text-border">{action.label}</span>
               {running === action.label && (
-                <span className="ml-auto flex items-center gap-1.5 text-[10px] text-[#febc2e]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#febc2e] animate-pulse" />
+                <span className="ml-auto flex items-center gap-1.5 text-[10px] text-warning">
+                  <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
                   running
                 </span>
               )}
@@ -741,18 +741,18 @@ function QuickActionsTab() {
                   className={cn(
                     'ml-auto text-[10px] font-mono',
                     results[action.label]!.status >= 200 && results[action.label]!.status < 300
-                      ? 'text-[#28c840]'
+                      ? 'text-success'
                       : results[action.label]!.status >= 400
-                        ? 'text-[#febc2e]'
-                        : 'text-[#ff5f57]',
+                        ? 'text-warning'
+                        : 'text-destructive',
                   )}
                 >
                   {results[action.label]!.status || 'ERR'}
                 </span>
               )}
             </div>
-            <span className="text-[11px] text-[#8e8e93]">{action.description}</span>
-            <span className="text-[10px] text-[#48484a] font-mono mt-1.5">{action.endpoint}</span>
+            <span className="text-[11px] text-muted-foreground/80">{action.description}</span>
+            <span className="text-[10px] text-muted-foreground/40 font-mono mt-1.5">{action.endpoint}</span>
           </button>
         ))}
       </div>
@@ -762,27 +762,27 @@ function QuickActionsTab() {
           result && (
             <div
               key={label}
-              className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden"
+              className="rounded-xl border border-border/20 bg-card overflow-hidden"
             >
-              <div className="flex items-center justify-between px-4 py-2.5 bg-[#1c1c1e] border-b border-[#0.06]">
-                <span className="text-[11px] font-medium text-[#c7c7cc]">{label}</span>
+              <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b border-[#0.06]">
+                <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
                 <div className="flex items-center gap-2">
                   <span
                     className={cn(
                       'text-[10px] font-mono',
                       result.status >= 200 && result.status < 300
-                        ? 'text-[#28c840]'
+                        ? 'text-success'
                         : result.status >= 400
-                          ? 'text-[#febc2e]'
-                          : 'text-[#ff5f57]',
+                          ? 'text-warning'
+                          : 'text-destructive',
                     )}
                   >
                     {result.status || 'ERR'}
                   </span>
-                  <span className="text-[10px] text-[#636366] font-mono">{result.timeMs}ms</span>
+                  <span className="text-[10px] text-muted-foreground/60 font-mono">{result.timeMs}ms</span>
                 </div>
               </div>
-              <pre className="px-4 py-3 text-[11px] font-mono text-[#c7c7cc] overflow-auto max-h-48 whitespace-pre-wrap leading-relaxed">
+              <pre className="px-4 py-3 text-[11px] font-mono text-muted-foreground overflow-auto max-h-48 whitespace-pre-wrap leading-relaxed">
                 {result.body || 'No response'}
               </pre>
             </div>
@@ -827,18 +827,18 @@ function StartupTab() {
   }, [])
 
   const STAGE_COLORS: Record<string, string> = {
-    init: 'text-[#636366]',
-    critical: 'text-[#febc2e]',
-    ready: 'text-[#0a7aff]',
-    background: 'text-[#28c840]',
+    init: 'text-muted-foreground/60',
+    critical: 'text-warning',
+    ready: 'text-info',
+    background: 'text-success',
   }
 
   const HOOK_STATUS_COLORS: Record<string, string> = {
-    pending: 'text-[#636366]',
-    running: 'text-[#febc2e]',
-    ok: 'text-[#28c840]',
-    timeout: 'text-[#ff5f57]',
-    error: 'text-[#ff5f57]',
+    pending: 'text-muted-foreground/60',
+    running: 'text-warning',
+    ok: 'text-success',
+    timeout: 'text-destructive',
+    error: 'text-destructive',
   }
 
   const hooks = startupData?.hooks as
@@ -886,26 +886,26 @@ function StartupTab() {
               className={cn(
                 'rounded-xl border px-4 py-3 flex items-center gap-3',
                 alert.severity === 'error'
-                  ? 'border-[#ff5f57]/20 bg-[#ff5f57]/[0.06]'
-                  : 'border-[#febc2e]/20 bg-[#febc2e]/[0.06]',
+                  ? 'border-destructive/20 bg-destructive/[0.06]'
+                  : 'border-warning/20 bg-warning/[0.06]',
               )}
             >
               <span
                 className={cn(
                   'w-2 h-2 rounded-full shrink-0',
-                  alert.severity === 'error' ? 'bg-[#ff5f57]' : 'bg-[#febc2e]',
+                  alert.severity === 'error' ? 'bg-destructive' : 'bg-warning',
                 )}
               />
               <div className="flex-1 min-w-0">
                 <span
                   className={cn(
                     'text-[11px] font-medium',
-                    alert.severity === 'error' ? 'text-[#ff5f57]' : 'text-[#febc2e]',
+                    alert.severity === 'error' ? 'text-destructive' : 'text-warning',
                   )}
                 >
                   {alert.type.replace(/_/g, ' ')}
                 </span>
-                <span className="text-[10px] text-[#636366] ml-2">{alert.message}</span>
+                <span className="text-[10px] text-muted-foreground/60 ml-2">{alert.message}</span>
               </div>
             </div>
           ))}
@@ -914,10 +914,10 @@ function StartupTab() {
 
       {/* Suggestions */}
       {suggestions && suggestions.length > 0 && (
-        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-          <div className="h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06] flex items-center">
-            <span className="text-[11px] font-medium text-[#8e8e93]">Optimization Suggestions</span>
-            <span className="text-[9px] text-[#636366] ml-2">{suggestions.length} suggestions</span>
+        <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
+          <div className="h-9 px-4 bg-muted/30 border-b border-border/20 flex items-center">
+            <span className="text-[11px] font-medium text-muted-foreground/80">Optimization Suggestions</span>
+            <span className="text-[9px] text-muted-foreground/60 ml-2">{suggestions.length} suggestions</span>
           </div>
           <div className="divide-y divide-white/[0.04]">
             {suggestions.map((suggestion, i) => (
@@ -926,10 +926,10 @@ function StartupTab() {
                   className={cn(
                     'w-2 h-2 rounded-full shrink-0 mt-1',
                     suggestion.severity === 'error'
-                      ? 'bg-[#ff5f57]'
+                      ? 'bg-destructive'
                       : suggestion.severity === 'warning'
-                        ? 'bg-[#febc2e]'
-                        : 'bg-[#0a7aff]',
+                        ? 'bg-warning'
+                        : 'bg-info',
                   )}
                 />
                 <div className="flex-1 min-w-0">
@@ -938,26 +938,26 @@ function StartupTab() {
                       className={cn(
                         'text-[11px] font-medium',
                         suggestion.severity === 'error'
-                          ? 'text-[#ff5f57]'
+                          ? 'text-destructive'
                           : suggestion.severity === 'warning'
-                            ? 'text-[#febc2e]'
-                            : 'text-[#0a7aff]',
+                            ? 'text-warning'
+                            : 'text-info',
                       )}
                     >
                       {suggestion.type.replace(/_/g, ' ')}
                     </span>
                     {suggestion.stage && (
-                      <span className="text-[9px] text-[#636366] bg-[#1c1c1e] px-1.5 py-0.5 rounded">
+                      <span className="text-[9px] text-muted-foreground/60 bg-muted/30 px-1.5 py-0.5 rounded">
                         {suggestion.stage}
                       </span>
                     )}
                     {suggestion.hook && (
-                      <span className="text-[9px] text-[#636366] bg-[#1c1c1e] px-1.5 py-0.5 rounded">
+                      <span className="text-[9px] text-muted-foreground/60 bg-muted/30 px-1.5 py-0.5 rounded">
                         {suggestion.hook}
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-[#8e8e93]">{suggestion.message}</span>
+                  <span className="text-[10px] text-muted-foreground/80">{suggestion.message}</span>
                 </div>
               </div>
             ))}
@@ -970,35 +970,35 @@ function StartupTab() {
 
       {/* Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] p-4">
-          <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Stage</div>
+        <div className="rounded-xl border border-border/20 bg-card p-4">
+          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Stage</div>
           <div
             className={cn(
               'text-[14px] font-medium font-mono',
-              STAGE_COLORS[startupStage] ?? 'text-[#c7c7cc]',
+              STAGE_COLORS[startupStage] ?? 'text-muted-foreground',
             )}
           >
             {startupStage}
           </div>
         </div>
-        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] p-4">
-          <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Elapsed</div>
-          <div className="text-[14px] font-medium font-mono text-[#c7c7cc]">
+        <div className="rounded-xl border border-border/20 bg-card p-4">
+          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Elapsed</div>
+          <div className="text-[14px] font-medium font-mono text-muted-foreground">
             {startupElapsed.toFixed(1)}s
           </div>
         </div>
-        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] p-4">
-          <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Model</div>
-          <div className="text-[14px] font-medium font-mono text-[#c7c7cc]">
+        <div className="rounded-xl border border-border/20 bg-card p-4">
+          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Model</div>
+          <div className="text-[14px] font-medium font-mono text-muted-foreground">
             {Math.round(startupModelProgress * 100)}%
           </div>
         </div>
-        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] p-4">
-          <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Status</div>
+        <div className="rounded-xl border border-border/20 bg-card p-4">
+          <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Status</div>
           <div
             className={cn(
               'text-[14px] font-medium',
-              startupStage === 'background' ? 'text-[#28c840]' : 'text-[#febc2e]',
+              startupStage === 'background' ? 'text-success' : 'text-warning',
             )}
           >
             {startupStage === 'background' ? 'Ready' : 'Starting'}
@@ -1007,16 +1007,16 @@ function StartupTab() {
       </div>
 
       {/* Progress bar */}
-      <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] p-4">
+      <div className="rounded-xl border border-border/20 bg-card p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] text-[#8e8e93]">Startup Progress</span>
-          <span className="text-[11px] text-[#636366] font-mono">
+          <span className="text-[11px] text-muted-foreground/80">Startup Progress</span>
+          <span className="text-[11px] text-muted-foreground/60 font-mono">
             {startupModelProgressMessage}
           </span>
         </div>
-        <div className="h-2 rounded-full bg-[#1c1c1e] overflow-hidden">
+        <div className="h-2 rounded-full bg-muted/30 overflow-hidden">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[#0a7aff] to-[#28c840] transition-all duration-300"
+            className="h-full rounded-full bg-gradient-to-r from-info to-success transition-all duration-300"
             style={{
               width: `${Math.min(100, (startupModelProgress || (startupStage === 'background' ? 1 : startupStage === 'ready' ? 0.6 : startupStage === 'critical' ? 0.3 : 0.1)) * 100)}%`,
             }}
@@ -1029,8 +1029,8 @@ function StartupTab() {
               className={cn(
                 'text-[9px] font-mono',
                 i <= ['init', 'critical', 'ready', 'background'].indexOf(startupStage)
-                  ? 'text-[#28c840]'
-                  : 'text-[#2c2c2e]',
+                  ? 'text-success'
+                  : 'text-foreground',
               )}
             >
               {stage}
@@ -1041,53 +1041,53 @@ function StartupTab() {
 
       {/* Performance comparison */}
       {stats && stats.count > 0 && (
-        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-          <div className="h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06] flex items-center">
-            <span className="text-[11px] font-medium text-[#8e8e93]">Performance History</span>
-            <span className="text-[9px] text-[#636366] ml-2">{stats.count} startups recorded</span>
+        <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
+          <div className="h-9 px-4 bg-muted/30 border-b border-border/20 flex items-center">
+            <span className="text-[11px] font-medium text-muted-foreground/80">Performance History</span>
+            <span className="text-[9px] text-muted-foreground/60 ml-2">{stats.count} startups recorded</span>
           </div>
           <div className="p-4">
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               <div className="text-center">
-                <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Avg</div>
-                <div className="text-[14px] font-mono text-[#c7c7cc]">{stats.avg_duration}s</div>
+                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Avg</div>
+                <div className="text-[14px] font-mono text-muted-foreground">{stats.avg_duration}s</div>
               </div>
               <div className="text-center">
-                <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">P50</div>
-                <div className="text-[14px] font-mono text-[#c7c7cc]">{stats.p50_duration}s</div>
+                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">P50</div>
+                <div className="text-[14px] font-mono text-muted-foreground">{stats.p50_duration}s</div>
               </div>
               <div className="text-center">
-                <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">P95</div>
-                <div className="text-[14px] font-mono text-[#c7c7cc]">{stats.p95_duration}s</div>
+                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">P95</div>
+                <div className="text-[14px] font-mono text-muted-foreground">{stats.p95_duration}s</div>
               </div>
               <div className="text-center">
-                <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Min</div>
-                <div className="text-[14px] font-mono text-[#28c840]">{stats.min_duration}s</div>
+                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Min</div>
+                <div className="text-[14px] font-mono text-success">{stats.min_duration}s</div>
               </div>
               <div className="text-center">
-                <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Max</div>
-                <div className="text-[14px] font-mono text-[#ff5f57]">{stats.max_duration}s</div>
+                <div className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">Max</div>
+                <div className="text-[14px] font-mono text-destructive">{stats.max_duration}s</div>
               </div>
             </div>
             {startupElapsed > 0 && stats.avg_duration > 0 && (
               <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center justify-center gap-2">
-                <span className="text-[10px] text-[#636366]">Current:</span>
+                <span className="text-[10px] text-muted-foreground/60">Current:</span>
                 <span
                   className={cn(
                     'text-[11px] font-mono font-medium',
-                    startupElapsed < stats.avg_duration ? 'text-[#28c840]' : 'text-[#febc2e]',
+                    startupElapsed < stats.avg_duration ? 'text-success' : 'text-warning',
                   )}
                 >
                   {startupElapsed.toFixed(1)}s
                 </span>
-                <span className="text-[10px] text-[#636366]">vs avg {stats.avg_duration}s</span>
+                <span className="text-[10px] text-muted-foreground/60">vs avg {stats.avg_duration}s</span>
                 {startupElapsed < stats.avg_duration && (
-                  <span className="text-[9px] text-[#28c840]">
+                  <span className="text-[9px] text-success">
                     ({((1 - startupElapsed / stats.avg_duration) * 100).toFixed(0)}% faster)
                   </span>
                 )}
                 {startupElapsed > stats.avg_duration && (
-                  <span className="text-[9px] text-[#febc2e]">
+                  <span className="text-[9px] text-warning">
                     (+{((startupElapsed / stats.avg_duration - 1) * 100).toFixed(0)}% slower)
                   </span>
                 )}
@@ -1099,9 +1099,9 @@ function StartupTab() {
 
       {/* Stages */}
       {stages && (
-        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-          <div className="h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06] flex items-center">
-            <span className="text-[11px] font-medium text-[#8e8e93]">Stages</span>
+        <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
+          <div className="h-9 px-4 bg-muted/30 border-b border-border/20 flex items-center">
+            <span className="text-[11px] font-medium text-muted-foreground/80">Stages</span>
           </div>
           <div className="divide-y divide-white/[0.04]">
             {Object.entries(stages).map(([stage, data]) => (
@@ -1111,18 +1111,18 @@ function StartupTab() {
                     className={cn(
                       'w-2 h-2 rounded-full',
                       stage === startupStage
-                        ? 'bg-[#0a7aff] animate-pulse'
+                        ? 'bg-info animate-pulse'
                         : data.time !== null
-                          ? 'bg-[#28c840]'
-                          : 'bg-[#2c2c2e]',
+                          ? 'bg-success'
+                          : 'bg-muted/20',
                     )}
                   />
-                  <span className="text-[12px] font-medium text-[#c7c7cc] capitalize">{stage}</span>
-                  <span className="text-[10px] text-[#636366] font-mono">
+                  <span className="text-[12px] font-medium text-muted-foreground capitalize">{stage}</span>
+                  <span className="text-[10px] text-muted-foreground/60 font-mono">
                     {data.hooks.length} hooks
                   </span>
                 </div>
-                <span className="text-[11px] font-mono text-[#636366]">
+                <span className="text-[11px] font-mono text-muted-foreground/60">
                   {data.time !== null ? `${data.time}s` : '—'}
                 </span>
               </div>
@@ -1133,41 +1133,41 @@ function StartupTab() {
 
       {/* Stage Stats */}
       {stageStats && Object.keys(stageStats).length > 0 && (
-        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-          <div className="h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06] flex items-center">
-            <span className="text-[11px] font-medium text-[#8e8e93]">Stage Performance</span>
+        <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
+          <div className="h-9 px-4 bg-muted/30 border-b border-border/20 flex items-center">
+            <span className="text-[11px] font-medium text-muted-foreground/80">Stage Performance</span>
           </div>
           <div className="p-4">
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               {Object.entries(stageStats).map(([stage, data]) => (
-                <div key={stage} className="rounded-lg border border-white/[0.04] bg-[#111111] p-3">
+                <div key={stage} className="rounded-lg border border-white/[0.04] bg-muted/20 p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <div
                       className={cn(
                         'w-2 h-2 rounded-full',
-                        stage === startupStage ? 'bg-[#0a7aff]' : 'bg-[#28c840]',
+                        stage === startupStage ? 'bg-info' : 'bg-success',
                       )}
                     />
-                    <span className="text-[11px] font-medium text-[#c7c7cc] capitalize">
+                    <span className="text-[11px] font-medium text-muted-foreground capitalize">
                       {stage}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-[10px]">
                     <div>
-                      <span className="text-[#636366]">Avg</span>
-                      <span className="ml-1 font-mono text-[#c7c7cc]">{data.avg}s</span>
+                      <span className="text-muted-foreground/60">Avg</span>
+                      <span className="ml-1 font-mono text-muted-foreground">{data.avg}s</span>
                     </div>
                     <div>
-                      <span className="text-[#636366]">P50</span>
-                      <span className="ml-1 font-mono text-[#c7c7cc]">{data.p50}s</span>
+                      <span className="text-muted-foreground/60">P50</span>
+                      <span className="ml-1 font-mono text-muted-foreground">{data.p50}s</span>
                     </div>
                     <div>
-                      <span className="text-[#636366]">Min</span>
-                      <span className="ml-1 font-mono text-[#28c840]">{data.min}s</span>
+                      <span className="text-muted-foreground/60">Min</span>
+                      <span className="ml-1 font-mono text-success">{data.min}s</span>
                     </div>
                     <div>
-                      <span className="text-[#636366]">Max</span>
-                      <span className="ml-1 font-mono text-[#ff5f57]">{data.max}s</span>
+                      <span className="text-muted-foreground/60">Max</span>
+                      <span className="ml-1 font-mono text-destructive">{data.max}s</span>
                     </div>
                   </div>
                 </div>
@@ -1182,9 +1182,9 @@ function StartupTab() {
 
       {/* Hooks */}
       {hooks && Object.keys(hooks).length > 0 && (
-        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-          <div className="h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06] flex items-center">
-            <span className="text-[11px] font-medium text-[#8e8e93]">Hooks</span>
+        <div className="rounded-xl border border-border/20 bg-card overflow-hidden">
+          <div className="h-9 px-4 bg-muted/30 border-b border-border/20 flex items-center">
+            <span className="text-[11px] font-medium text-muted-foreground/80">Hooks</span>
           </div>
           <div className="divide-y divide-white/[0.04]">
             {Object.values(hooks).map((hook) => (
@@ -1193,19 +1193,19 @@ function StartupTab() {
                   <span
                     className={cn(
                       'w-1.5 h-1.5 rounded-full',
-                      HOOK_STATUS_COLORS[hook.status] ?? 'text-[#636366]',
+                      HOOK_STATUS_COLORS[hook.status] ?? 'text-muted-foreground/60',
                     )}
                   />
-                  <span className="text-[11px] font-mono text-[#c7c7cc]">{hook.name}</span>
-                  <span className="text-[9px] text-[#636366] uppercase">{hook.stage}</span>
+                  <span className="text-[11px] font-mono text-muted-foreground">{hook.name}</span>
+                  <span className="text-[9px] text-muted-foreground/60 uppercase">{hook.stage}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   {hook.error && (
-                    <span className="text-[9px] text-[#ff5f57] max-w-32 truncate">
+                    <span className="text-[9px] text-destructive max-w-32 truncate">
                       {hook.error}
                     </span>
                   )}
-                  <span className="text-[10px] font-mono text-[#636366]">
+                  <span className="text-[10px] font-mono text-muted-foreground/60">
                     {hook.duration_seconds > 0 ? `${hook.duration_seconds}s` : '—'}
                   </span>
                   <span

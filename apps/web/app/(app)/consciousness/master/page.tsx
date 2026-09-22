@@ -195,7 +195,7 @@ export default function ConsciousnessMasterDashboardPage() {
   if (loading || statsLoading) {
     return (
       <PageContainer title="Consciousness Master Dashboard">
-        <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+        <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <Skeleton className="h-28" />
             <Skeleton className="h-28" />
@@ -240,7 +240,7 @@ export default function ConsciousnessMasterDashboardPage() {
         </div>
       }
     >
-      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+      <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
