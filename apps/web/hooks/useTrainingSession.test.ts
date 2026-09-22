@@ -64,6 +64,7 @@ const mockAddToast = vi.fn()
 
 import { useTrainingSession } from './useTrainingSession'
 import { appShellStore } from '@/lib/app-shell'
+import { useToastStore } from '@/lib/toast-store'
 
 class MockEventSource {
   onmessage: ((e: MessageEvent) => void) | null = null
@@ -95,6 +96,7 @@ describe('useTrainingSession', () => {
     mockCreate.mockRejectedValue(new Error('fail'))
     mockListJobs.mockResolvedValue([])
     mockGetTurboStatus.mockResolvedValue({ status: 'idle' })
+    useToastStore.getState().clearToasts()
   })
 
   afterEach(() => {
@@ -421,6 +423,42 @@ describe('useTrainingSession', () => {
     expect(result.current.trainingRunning).toBe(false)
     expect(result.current.progress).toBe(0)
     expect(result.current.loss).toBeNull()
+    expect(
+      useToastStore
+        .getState()
+        .toasts.filter(
+          (t) => t.message === 'Previous training session expired — server was restarted',
+        ),
+    ).toHaveLength(1)
+  })
+
+  it('shows the expired-session toast once when two consumers mount concurrently', async () => {
+    vi.useFakeTimers()
+    appShellStore.getState().setTraining({
+      phase: 'TRAINING',
+      method: 'turbo',
+      progress: 3,
+      globalStep: 10,
+      totalSteps: 100,
+    })
+    mockGetTurboStatus.mockResolvedValue({ status: 'idle' })
+    mockListJobs.mockResolvedValue([])
+
+    const a = renderHook(() => useTrainingSession())
+    const b = renderHook(() => useTrainingSession())
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    const expired = useToastStore
+      .getState()
+      .toasts.filter(
+        (t) => t.message === 'Previous training session expired — server was restarted',
+      )
+    expect(expired).toHaveLength(1)
+
+    a.unmount()
+    b.unmount()
   })
 
   it('clears stale standard job state when server confirms job is no longer running', async () => {
