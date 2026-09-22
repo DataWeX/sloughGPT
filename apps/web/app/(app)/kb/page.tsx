@@ -374,7 +374,7 @@ export default function KbPage() {
             )}
 
             {relatedItems.length > 0 && (
-              <div className="rounded border border-border/50 bg-muted/20 p-3 space-y-2">
+              <div className="rounded border border-border/40 bg-muted/20 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-medium text-muted-foreground">Related items ({relatedItems.length})</p>
                   <Button size="sm" variant="ghost" className="text-[10px] h-6" onClick={() => { setRelatedItems([]); setRelatedLoading(null) }}>Clear</Button>

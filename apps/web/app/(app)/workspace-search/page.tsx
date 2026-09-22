@@ -154,7 +154,7 @@ export default function WorkspaceSearchPage() {
                     <button
                       key={item.id}
                       onClick={() => router.push(config.link)}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50 transition-colors text-left group"
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40 transition-colors text-left group"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="font-medium group-hover:text-primary transition-colors">{item.title}</div>

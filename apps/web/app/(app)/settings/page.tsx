@@ -55,7 +55,7 @@ const WEB_VERSION = '3.0.0'
 function VersionBadge({ label, version }: { label: string; version?: string | null }) {
   if (!version) return null
   return (
-    <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 h-5 text-muted-foreground border-border/50">
+    <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 h-5 text-muted-foreground border-border/40">
       {label} {version}
     </Badge>
   )
@@ -195,7 +195,7 @@ export default function SettingsPage() {
               <ToggleGroupItem value="dark">Dark</ToggleGroupItem>
               <ToggleGroupItem value="system">System</ToggleGroupItem>
             </ToggleGroupRadix>
-            <div className="mt-3 p-3 rounded-lg border border-border/50 bg-card">
+            <div className="mt-3 p-3 rounded-lg border border-border/40 bg-card">
               <div className="flex items-center gap-2 mb-2">
                 <div className="h-3 w-3 rounded-full bg-primary" />
                 <div className="h-2 w-16 rounded bg-muted" />
@@ -237,7 +237,7 @@ export default function SettingsPage() {
                 </Button>
               ))}
             </div>
-            <div className="mt-3 p-3 rounded-lg border border-border/50 bg-card">
+            <div className="mt-3 p-3 rounded-lg border border-border/40 bg-card">
               <div className="flex items-center gap-2 mb-2">
                 <div className="h-3 w-3 rounded-full bg-primary" />
                 <div className="h-2 w-16 rounded bg-muted" />

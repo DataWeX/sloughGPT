@@ -140,7 +140,7 @@ export default function ImagesPage() {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
               {gallery.map(img => (
-                <div key={img.id} className="rounded-lg border border-border/40 overflow-hidden hover:border-border/60 transition-colors">
+                <div key={img.id} className="rounded-lg border border-border/40 overflow-hidden hover:border-border/40 transition-colors">
                   <img
                     src={`${PUBLIC_API_URL}${img.path}`}
                     alt={img.id}

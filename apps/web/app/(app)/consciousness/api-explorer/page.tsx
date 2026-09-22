@@ -390,7 +390,7 @@ export default function ConsciousnessApiExplorerPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {showSave && (
-                <div className="flex items-center gap-2 p-2 rounded border border-border/50 bg-muted/20">
+                <div className="flex items-center gap-2 p-2 rounded border border-border/40 bg-muted/20">
                   <Input
                     value={saveName}
                     onChange={(e) => setSaveName((e.target as HTMLInputElement).value)}
@@ -441,7 +441,7 @@ export default function ConsciousnessApiExplorerPage() {
                   <textarea
                     value={body}
                     onChange={(e) => setBody((e.target as HTMLTextAreaElement).value)}
-                    className="w-full h-32 rounded-md border border-border/50 bg-muted/20 p-3 text-xs font-mono resize-y focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="w-full h-32 rounded-md border border-border/40 bg-muted/20 p-3 text-xs font-mono resize-y focus:outline-none focus:ring-1 focus:ring-primary/50"
                     placeholder="{}"
                   />
                 </div>
@@ -510,7 +510,7 @@ export default function ConsciousnessApiExplorerPage() {
                         ? 'bg-success/15 text-success border-success/30'
                         : response.status >= 400
                           ? 'bg-destructive/15 text-destructive border-destructive/30'
-                          : 'bg-muted/50 text-muted-foreground border-border/50'
+                          : 'bg-muted/50 text-muted-foreground border-border/40'
                     }`}>
                       {response.status || 'ERR'}
                     </Badge>
@@ -521,7 +521,7 @@ export default function ConsciousnessApiExplorerPage() {
                   {Object.keys(response.headers).length > 0 && (
                     <div>
                       <h4 className="text-xs font-medium text-muted-foreground mb-1">{t('consciousness_api_explorer.response_headers')}</h4>
-                      <div className="rounded-md border border-border/50 bg-muted/20 p-2 space-y-0.5">
+                      <div className="rounded-md border border-border/40 bg-muted/20 p-2 space-y-0.5">
                         {Object.entries(response.headers).map(([k, v]) => (
                           <div key={k} className="text-[10px] font-mono">
                             <span className="text-primary">{k}</span>
@@ -533,7 +533,7 @@ export default function ConsciousnessApiExplorerPage() {
                   )}
                   <div>
                     <h4 className="text-xs font-medium text-muted-foreground mb-1">{t('consciousness_api_explorer.response_body')}</h4>
-                    <pre className="rounded-md border border-border/50 bg-muted/20 p-3 text-xs font-mono overflow-auto max-h-80 whitespace-pre-wrap">
+                    <pre className="rounded-md border border-border/40 bg-muted/20 p-3 text-xs font-mono overflow-auto max-h-80 whitespace-pre-wrap">
                       {response.body}
                     </pre>
                   </div>

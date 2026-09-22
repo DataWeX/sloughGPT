@@ -234,7 +234,7 @@ export default function SharedDataPage() {
             incoming.map(s => {
               const Icon = RESOURCE_ICONS[s.resource_type] || Database
               return (
-                <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50">
+                <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}>
@@ -270,7 +270,7 @@ export default function SharedDataPage() {
             outgoing.map(s => {
               const Icon = RESOURCE_ICONS[s.resource_type] || Database
               return (
-                <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50">
+                <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}>

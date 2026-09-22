@@ -204,7 +204,7 @@ export default function AuditTrailPage() {
             filteredActivities.map((a, i) => (
               <div
                 key={i}
-                className="rounded-md border border-transparent hover:border-border/50 transition-colors"
+                className="rounded-md border border-transparent hover:border-border/40 transition-colors"
               >
                 <div
                   className="flex items-center justify-between px-3 py-2 text-[10px] hover:bg-muted/50 cursor-pointer"

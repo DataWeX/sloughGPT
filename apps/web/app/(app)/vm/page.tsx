@@ -946,7 +946,7 @@ export default function VMPage() {
                   <div className="relative border rounded-md overflow-hidden">
                     <div className="flex h-80">
                       {/* Line numbers */}
-                      <div className="select-none text-right text-xs text-muted-foreground font-mono bg-muted/20 border-r border-border/50 py-3 px-2 overflow-hidden">
+                      <div className="select-none text-right text-xs text-muted-foreground font-mono bg-muted/20 border-r border-border/40 py-3 px-2 overflow-hidden">
                         {source.split('\n').map((_, i) => (
                           <div key={i} className="leading-5">
                             {i + 1}

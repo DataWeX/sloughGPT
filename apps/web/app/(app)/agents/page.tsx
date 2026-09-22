@@ -582,7 +582,7 @@ export default function AgentsPage() {
                     value={agentSearch}
                     onChange={e => setAgentSearch(e.target.value)}
                     placeholder="Search agents..."
-                    className="h-7 w-full max-w-xs rounded-md border border-border/60 bg-background px-2.5 text-[11px] placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="h-7 w-full max-w-xs rounded-md border border-border/40 bg-background px-2.5 text-[11px] placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                 )}
                 {filteredAgents.length > 0 && (
