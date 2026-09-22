@@ -436,18 +436,26 @@ class TokenTree:
             reconstructed string.
         """
         pieces: list[str] = []
+        word_end = False
         for tid in ids:
             token = self.itos.get(tid)
             if token is None:
                 continue
             if token == WORD_SUFFIX:
+                word_end = True
                 continue
             if token in self.stoi and token in SPECIAL_TOKENS:
                 if skip_special:
                     continue
                 pieces.append(token)
+                word_end = False
             else:
-                pieces.append(token.replace(WORD_SUFFIX, ""))
+                piece = token.replace(WORD_SUFFIX, "")
+                if word_end and pieces and piece and not piece[0].isspace():
+                    pieces.append(" " + piece)
+                else:
+                    pieces.append(piece)
+                word_end = token.endswith(WORD_SUFFIX)
         return "".join(pieces)
 
     def resolve_token(self, token: str) -> int:

@@ -13,15 +13,63 @@ vi.mock('./config', () => ({
 import { setupApiMocks, apiClient } from './__test-helper'
 setupApiMocks()
 
-import { datasetController } from './dataset-controller'
+import { datasetController, humanizeDatasetName, isTrainingCorpus } from './dataset-controller'
+
+describe('isTrainingCorpus', () => {
+  it('keeps dataset and untagged entries', () => {
+    expect(isTrainingCorpus({ kind: 'dataset' })).toBe(true)
+    expect(isTrainingCorpus({ kind: undefined })).toBe(true)
+    expect(isTrainingCorpus({ kind: null as unknown as string })).toBe(true)
+  })
+
+  it('rejects adapter/system/media kinds', () => {
+    expect(isTrainingCorpus({ kind: 'adapter' })).toBe(false)
+    expect(isTrainingCorpus({ kind: 'system' })).toBe(false)
+    expect(isTrainingCorpus({ kind: 'media' })).toBe(false)
+  })
+})
+
+describe('humanizeDatasetName', () => {
+  it('replaces underscores and hyphens with spaces', () => {
+    expect(humanizeDatasetName('mental_health-chat')).toBe('Mental Health Chat')
+  })
+
+  it('strips storage-backend suffixes', () => {
+    expect(humanizeDatasetName('knowledge_graph_json')).toBe('Knowledge Graph')
+    expect(humanizeDatasetName('Auth-Mogdb')).toBe('Auth')
+    expect(humanizeDatasetName('errors_json')).toBe('Errors')
+    expect(humanizeDatasetName('model_catalog_json')).toBe('Model Catalog')
+  })
+
+  it('title-cases lowercase words only', () => {
+    expect(humanizeDatasetName('tinyshakespeare')).toBe('Tinyshakespeare')
+    expect(humanizeDatasetName('Api Conversations')).toBe('Api Conversations')
+    expect(humanizeDatasetName('ultrachat_200k')).toBe('Ultrachat 200k')
+  })
+
+  it('returns original when empty after cleanup', () => {
+    expect(humanizeDatasetName('_')).toBe('_')
+    expect(humanizeDatasetName('')).toBe('')
+  })
+})
 
 describe('datasetController.list', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GET /datasets and returns rows', async () => {
     const mockData = {
       datasets: [
-        { id: 'ds1', name: 'shakespeare', source: 'local', size: 12345, samples: 100, type: 'text', created_at: '2026-01-01' },
+        {
+          id: 'ds1',
+          name: 'shakespeare',
+          source: 'local',
+          size: 12345,
+          samples: 100,
+          type: 'text',
+          created_at: '2026-01-01',
+        },
       ],
     }
     apiClient.apiGet.mockResolvedValue(mockData)
@@ -49,10 +97,14 @@ describe('datasetController.list', () => {
 })
 
 describe('datasetController.search', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /datasets/search with the query and returns results', async () => {
-    const results = [{ id: 'ds2', name: 'shakespeare', source: 'local', size: 10, created_at: '2026-01-02' }]
+    const results = [
+      { id: 'ds2', name: 'shakespeare', source: 'local', size: 10, created_at: '2026-01-02' },
+    ]
     apiClient.apiGet.mockResolvedValue({ results, count: 1 })
 
     const rows = await datasetController.search('shakes')
@@ -79,7 +131,9 @@ describe('datasetController.search', () => {
 })
 
 describe('datasetController.export', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /datasets/{id}/export and returns the blob', async () => {
     const blob = new Blob(['{"a":1}'], { type: 'application/json' })
@@ -115,7 +169,9 @@ describe('datasetController.export', () => {
 })
 
 describe('datasetController versioning', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('creates a version via POST /datasets/{id}/versions', async () => {
     apiClient.apiPost.mockResolvedValue({ timestamp: '20260801120000', message: 'Version created' })
