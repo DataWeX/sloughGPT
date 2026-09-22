@@ -1,68 +1,135 @@
-"""Session KV state registry — canonical home for per-session KV management.
+"""Session KV state registry — a thin manager over ``KVState`` session mode.
 
-Consolidates the per-session KV bookkeeping (LRU eviction + TTL) that was
-previously duplicated across ``session_kv_manager`` and inference providers.
+This is the single home for per-session KV bookkeeping (LRU eviction + TTL).
+It does not own storage: every entry lives in a ``KVState`` instance opened
+in session mode (opaque entries — no prefix key), so the LRU/TTL/locking
+machinery has exactly one implementation.
 """
 
 from __future__ import annotations
 
 import threading
 import time as _time
-from dataclasses import dataclass, field
+from collections.abc import Iterator, MutableMapping
 from typing import Any
 
+from domain.infrastructure._internal.kv_cache.kv_state import KVState
 
-@dataclass
-class SessionKVManager:
-    """Manages per-session KV cache state with LRU eviction and TTL.
 
-    This class encapsulates the KV cache management logic that was
-    duplicated across SloNetChatProvider's construction paths.
+class _SessionView(MutableMapping):
+    """Mutable view over one ``KVState._sessions`` entry field.
+
+    ``kv_states`` reads/writes ``entry[1]`` (the state); ``kv_last_access``
+    reads/writes ``entry[2]`` (the timestamp). Both views share the same
+    backing storage — no second registry.
     """
 
-    kv_states: dict[str, Any] = field(default_factory=dict)
-    kv_last_access: dict[str, float] = field(default_factory=dict)
-    kv_ttl: float = 3600.0  # 1 hour default TTL for idle sessions
-    kv_max_sessions: int = 64  # LRU cap on concurrent sessions
-    lock: threading.Lock = field(default_factory=threading.Lock)
+    __slots__ = ("_kv", "_field")
+
+    def __init__(self, kv: KVState, field: int) -> None:
+        self._kv = kv
+        self._field = field
+
+    def __getitem__(self, sid: str) -> Any:
+        return self._kv._sessions[sid][self._field]
+
+    def __setitem__(self, sid: str, value: Any) -> None:
+        entry = self._kv._sessions.get(sid)
+        if entry is None:
+            base = [[], None, _time.time()]
+        else:
+            base = [*entry]
+        base[self._field] = value
+        self._kv._sessions[sid] = tuple(base)
+
+    def __delitem__(self, sid: str) -> None:
+        self._kv._sessions.pop(sid, None)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._kv._sessions)
+
+    def __len__(self) -> int:
+        return len(self._kv._sessions)
+
+    def __contains__(self, sid: object) -> bool:
+        return sid in self._kv._sessions
+
+
+class SessionKVManager:
+    """Per-session KV state register with LRU eviction + TTL.
+
+    Storage is delegated onto ``KVState`` session mode: sessions are stored
+    as opaque (prefix-free) entries, and reads/lookups touch last-access so
+    LRU is by recency. The capped size and idle TTL live on the KVState.
+    """
+
+    __slots__ = ("_kv", "_state_view", "_access_view")
+
+    def __init__(self, kv_ttl: float = 3600.0, kv_max_sessions: int = 64) -> None:
+        self._kv = KVState(n_layers=0, max_sessions=kv_max_sessions, ttl=kv_ttl)
+        self._state_view = _SessionView(self._kv, 1)
+        self._access_view = _SessionView(self._kv, 2)
+
+    @property
+    def kv_ttl(self) -> float:
+        """Idle TTL before a session is considered stale (seconds)."""
+        return self._kv._ttl
+
+    @kv_ttl.setter
+    def kv_ttl(self, value: float) -> None:
+        self._kv._ttl = value
+
+    @property
+    def kv_max_sessions(self) -> int:
+        """LRU cap on concurrent sessions."""
+        return self._kv._max_sessions
+
+    @kv_max_sessions.setter
+    def kv_max_sessions(self, value: int) -> None:
+        self._kv._max_sessions = value
+
+    @property
+    def lock(self) -> threading.Lock:
+        return self._kv._session_lock
+
+    @property
+    def kv_states(self) -> MutableMapping[str, Any]:
+        """Session id -> KV state (mutable view over KVState storage)."""
+        return self._state_view
+
+    @property
+    def kv_last_access(self) -> MutableMapping[str, float]:
+        """Session id -> last-access timestamp (mutable view over storage)."""
+        return self._access_view
 
     def get_session(self, session_id: str) -> Any | None:
         """Get KV state for a session, updating last access time."""
-        with self.lock:
-            state = self.kv_states.get(session_id)
-            if state is not None:
-                self.kv_states[session_id] = state
-                self.kv_last_access[session_id] = _time.monotonic()
-            return state
+        return self._kv.session_get(session_id, [])[0]
 
     def set_session(self, session_id: str, state: Any) -> None:
-        """Set KV state for a session, evicting LRU if at capacity."""
-        with self.lock:
-            self.kv_states[session_id] = state
-            self.kv_last_access[session_id] = _time.monotonic()
-            self._evict_if_needed(session_id)
+        """Set KV state for a session, evicting TTL-expired + LRU if needed."""
+        self._kv.session_store(session_id, [], state)
 
     def remove_session(self, session_id: str) -> bool:
         """Remove KV state for a session. Returns True if it existed."""
         with self.lock:
-            existed = self.kv_states.pop(session_id, None) is not None
-            self.kv_last_access.pop(session_id, None)
-            return existed
+            return self._kv._sessions.pop(session_id, None) is not None
 
     def clear_all(self) -> int:
         """Clear all KV states. Returns number of sessions cleared."""
         with self.lock:
-            n = len(self.kv_states)
-            self.kv_states.clear()
-            self.kv_last_access.clear()
+            n = len(self._kv._sessions)
+            self._kv._sessions.clear()
             return n
 
     def get_stats(self) -> dict[str, Any]:
         """Get KV cache statistics."""
         with self.lock:
-            n_sessions = len(self.kv_states)
+            sessions = self._kv._sessions
+            n_sessions = len(sessions)
             state_sizes = {}
-            for sid, state in self.kv_states.items():
+            for sid, entry in sessions.items():
+                state = entry[1]
                 if hasattr(state, "k") and hasattr(state, "v"):
                     state_sizes[sid] = {
                         "k_shape": list(state.k.shape) if hasattr(state.k, "shape") else None,
@@ -71,62 +138,31 @@ class SessionKVManager:
                 else:
                     state_sizes[sid] = {"type": type(state).__name__}
 
+            last_access = [entry[2] for entry in sessions.values()]
             return {
                 "active_sessions": n_sessions,
                 "session_sizes": state_sizes,
                 "max_sessions": self.kv_max_sessions,
                 "ttl_seconds": self.kv_ttl,
                 "oldest_session_age": (
-                    max(self.kv_last_access.values()) - min(self.kv_last_access.values())
-                    if len(self.kv_last_access) > 1
-                    else 0.0
+                    max(last_access) - min(last_access) if len(last_access) > 1 else 0.0
                 ),
             }
 
     def evict_stale_sessions(self) -> int:
         """Remove KV states for sessions idle longer than kv_ttl seconds."""
-        now = _time.monotonic()
         with self.lock:
-            stale = [sid for sid, ts in self.kv_last_access.items() if now - ts > self.kv_ttl]
-            for sid in stale:
-                self.kv_states.pop(sid, None)
-                self.kv_last_access.pop(sid, None)
-            if stale:
-                from domain.infrastructure._internal.structured_log import StructuredLogger
+            before = len(self._kv._sessions)
+            self._kv._session_evict_expired()
+            n = before - len(self._kv._sessions)
+        if n > 0:
+            from domain.infrastructure._internal.structured_log import StructuredLogger
 
-                logger = StructuredLogger("slo.inference.kv_cache")
-                logger.info(
-                    "Evicted %d stale KV sessions (TTL=%.0fs)",
-                    len(stale),
-                    self.kv_ttl,
-                    extra={"tag": "INF"},
-                )
-            return len(stale)
-
-    def _evict_if_needed(self, current_session_id: str) -> None:
-        """Evict LRU session if at capacity.
-
-        Must be called with self.lock held. The session being resolved is
-        excluded from eviction candidates (it just got a write).
-        """
-        if len(self.kv_states) <= self.kv_max_sessions:
-            return
-
-        evictable = {
-            sid: ts for sid, ts in self.kv_last_access.items() if sid != current_session_id
-        }
-        if not evictable:
-            return
-
-        lru_id = min(evictable, key=evictable.get)
-        self.kv_states.pop(lru_id, None)
-        self.kv_last_access.pop(lru_id, None)
-        from domain.infrastructure._internal.structured_log import StructuredLogger
-
-        logger = StructuredLogger("slo.inference.kv_cache")
-        logger.info(
-            "Evicted LRU session %s (max=%d)",
-            lru_id,
-            self.kv_max_sessions,
-            extra={"tag": "INF"},
-        )
+            logger = StructuredLogger("slo.inference.kv_cache")
+            logger.info(
+                "Evicted %d stale KV sessions (TTL=%.0fs)",
+                n,
+                self.kv_ttl,
+                extra={"tag": "INF"},
+            )
+        return n

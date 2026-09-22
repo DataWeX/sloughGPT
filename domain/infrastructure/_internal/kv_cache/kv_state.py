@@ -195,8 +195,12 @@ class KVState:
             if not cached_ids:
                 # Opaque entry (no prefix key): a pure lookup (empty query)
                 # returns the state so session managers can delegate their
-                # registers onto KVState; a prefix query is a miss.
-                return (cached_pkv, 0) if not current_ids else (None, 0)
+                # registers onto KVState; a prefix query is a miss. Touched
+                # so LRU is by last access.
+                if not current_ids:
+                    self._sessions[session_id] = (cached_ids, cached_pkv, time.monotonic())
+                    return cached_pkv, 0
+                return None, 0
             prefix_len = 0
             for a, b in zip(cached_ids, current_ids, strict=False):
                 if a != b:
@@ -205,17 +209,17 @@ class KVState:
             if prefix_len == 0:
                 return None, 0
             # Touch the entry so LRU is by last access.
-            self._sessions[session_id] = (cached_ids, cached_pkv, time.time())
+            self._sessions[session_id] = (cached_ids, cached_pkv, time.monotonic())
             return cached_pkv, prefix_len
 
     def session_store(self, session_id: str, token_ids: list[int], past_key_values: Any) -> None:
         """Store past_key_values keyed by session + token IDs."""
         with self._session_lock:
             self._session_evict_expired()
-            if len(self._sessions) >= self._max_sessions:
+            if session_id not in self._sessions and len(self._sessions) >= self._max_sessions:
                 oldest = min(self._sessions, key=lambda k: self._sessions[k][2])
                 del self._sessions[oldest]
-            self._sessions[session_id] = (token_ids, past_key_values, time.time())
+            self._sessions[session_id] = (token_ids, past_key_values, time.monotonic())
 
     def session_clear(self, session_id: str) -> None:
         with self._session_lock:
@@ -226,7 +230,7 @@ class KVState:
             self._sessions.clear()
 
     def _session_evict_expired(self) -> None:
-        now = time.time()
+        now = time.monotonic()
         expired = [k for k, v in self._sessions.items() if now - v[2] > self._ttl]
         for k in expired:
             del self._sessions[k]
