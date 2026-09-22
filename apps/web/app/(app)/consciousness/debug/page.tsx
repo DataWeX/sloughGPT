@@ -353,7 +353,7 @@ export default function ConsciousnessDebugPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {STATE_ENDPOINTS.map(ep => (
-                <div key={ep.key} className="rounded-md border border-border/50 bg-muted/10">
+                <div key={ep.key} className="rounded-md border border-border/40 bg-muted/10">
                   <button
                     type="button"
                     onClick={() => setExpandedState(prev => ({ ...prev, [ep.key]: !prev[ep.key] }))}
@@ -412,7 +412,7 @@ export default function ConsciousnessDebugPage() {
               <select
                 value={eventFilter}
                 onChange={(e) => setEventFilter((e.target as HTMLSelectElement).value)}
-                className="w-full h-7 rounded-md border border-border/50 bg-muted/20 px-2 text-xs"
+                className="w-full h-7 rounded-md border border-border/40 bg-muted/20 px-2 text-xs"
               >
                 <option value="all">{t('consciousness_debug.all_events')}</option>
                 {EVENT_TYPES.map(type => (

@@ -107,7 +107,7 @@ export default function PermissionsPage() {
                       </td>
                     </tr>
                     {perms.map(perm => (
-                      <tr key={perm} className="border-b border-border/50">
+                      <tr key={perm} className="border-b border-border/40">
                         <td className="py-1.5 pr-4 text-muted-foreground">{perm}</td>
                         {Object.entries(roles).map(([role, { permissions }]) => (
                           <td key={role} className="text-center py-1.5 px-2">
@@ -140,7 +140,7 @@ export default function PermissionsPage() {
             memberPerms.map(m => (
               <div
                 key={m.user_id}
-                className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50 cursor-pointer"
+                className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40 cursor-pointer"
                 onClick={() => setSelectedRole(selectedRole === m.user_id ? null : m.user_id)}
               >
                 <div className="min-w-0 flex-1">

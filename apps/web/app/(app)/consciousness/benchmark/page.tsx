@@ -449,7 +449,7 @@ export default function ConsciousnessBenchmarkPage() {
                 {prevForType.length === 0 ? (
                   <div className="text-sm text-muted-foreground">{t('consciousness_benchmark.no_previous')}</div>
                 ) : (
-                  <div className="rounded-md border border-border/50 overflow-hidden">
+                  <div className="rounded-md border border-border/40 overflow-hidden">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="bg-muted/30">

@@ -82,7 +82,7 @@ export default function PluginsCloudPage() {
 
   return (
     <PageContainer title="Plugins & Cloud Training">
-      <div className="border-b border-border/50 mb-6">
+      <div className="border-b border-border/40 mb-6">
         <div className="flex gap-0">
           {(['cloud', 'plugins'] as const).map(tab => (
             <button
@@ -150,7 +150,7 @@ export default function PluginsCloudPage() {
               ) : (
                 <div className="space-y-2">
                   {cloudJobs.map(job => (
-                    <div key={job.job_id} className="flex items-center justify-between p-2 border border-border/50 rounded">
+                    <div key={job.job_id} className="flex items-center justify-between p-2 border border-border/40 rounded">
                       <div>
                         <span className="font-mono text-xs">{job.job_id}</span>
                         <span className="ml-2 text-xs text-muted-foreground">{job.provider}</span>
@@ -182,7 +182,7 @@ export default function PluginsCloudPage() {
               ) : (
                 <div className="space-y-2">
                   {plugins.map(plugin => (
-                    <div key={plugin.name} className="flex items-center justify-between p-2 border border-border/50 rounded">
+                    <div key={plugin.name} className="flex items-center justify-between p-2 border border-border/40 rounded">
                       <div>
                         <span className="font-medium text-sm">{plugin.name}</span>
                         <span className="ml-2 text-xs text-muted-foreground">v{plugin.version}</span>

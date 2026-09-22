@@ -204,7 +204,7 @@ export default function CalendarPage() {
                 'group flex min-h-[48px] border-b transition-colors',
                 isCurrentHour
                   ? 'border-primary/30 bg-primary/5'
-                  : 'border-border/50 hover:bg-muted/30',
+                  : 'border-border/40 hover:bg-muted/30',
               )}
             >
               <div className="w-16 shrink-0 py-2 pr-3 text-right">
@@ -249,7 +249,7 @@ export default function CalendarPage() {
                     })}
                   </div>
                 ) : (
-                  <div className="h-full min-h-[32px] rounded-md border border-dashed border-transparent group-hover:border-border/50 transition-colors" />
+                  <div className="h-full min-h-[32px] rounded-md border border-dashed border-transparent group-hover:border-border/40 transition-colors" />
                 )}
               </div>
             </div>

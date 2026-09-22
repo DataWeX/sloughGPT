@@ -137,7 +137,7 @@ export default function NotificationsPage() {
             </p>
           ) : (
             filtered.map((n, i) => (
-              <div key={i} className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50">
+              <div key={i} className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${

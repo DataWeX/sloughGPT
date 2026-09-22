@@ -428,7 +428,7 @@ export default function DatasetDetailPage() {
               ) : (
                 <ul className="space-y-2">
                   {versions.map(v => (
-                    <li key={v} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2">
+                    <li key={v} className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2">
                       <div className="flex items-center gap-2 text-sm">
                         <IconClock className="h-4 w-4 text-muted-foreground" />
                         <span className="font-mono text-xs">{v}</span>

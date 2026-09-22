@@ -64,7 +64,7 @@ export default function ConsciousnessHelpPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {FAQ_ITEMS.map((item, idx) => (
-              <div key={idx} className="rounded-md border border-border/50">
+              <div key={idx} className="rounded-md border border-border/40">
                 <button
                   type="button"
                   onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
@@ -112,7 +112,7 @@ export default function ConsciousnessHelpPage() {
           <CardContent>
             <div className="space-y-2">
               {KEYBOARD_SHORTCUTS.map((item) => (
-                <div key={item.shortcut} className="flex items-center justify-between rounded-md border border-border/50 px-4 py-2">
+                <div key={item.shortcut} className="flex items-center justify-between rounded-md border border-border/40 px-4 py-2">
                   <span className="text-sm">{t(item.actionKey)}</span>
                   <Badge variant="outline" className="font-mono text-xs">{item.shortcut}</Badge>
                 </div>
@@ -128,19 +128,19 @@ export default function ConsciousnessHelpPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2 text-sm">
-              <div className="flex items-center justify-between rounded-md border border-border/50 px-4 py-2">
+              <div className="flex items-center justify-between rounded-md border border-border/40 px-4 py-2">
                 <span className="text-muted-foreground">{t('consciousness_help.version')}</span>
                 <span className="font-mono text-xs">3.0.0</span>
               </div>
-              <div className="flex items-center justify-between rounded-md border border-border/50 px-4 py-2">
+              <div className="flex items-center justify-between rounded-md border border-border/40 px-4 py-2">
                 <span className="text-muted-foreground">{t('consciousness_help.api_endpoint')}</span>
                 <span className="font-mono text-xs">/consciousness</span>
               </div>
-              <div className="flex items-center justify-between rounded-md border border-border/50 px-4 py-2">
+              <div className="flex items-center justify-between rounded-md border border-border/40 px-4 py-2">
                 <span className="text-muted-foreground">{t('consciousness_help.total_pages')}</span>
                 <span className="font-mono text-xs">26</span>
               </div>
-              <div className="flex items-center justify-between rounded-md border border-border/50 px-4 py-2">
+              <div className="flex items-center justify-between rounded-md border border-border/40 px-4 py-2">
                 <span className="text-muted-foreground">{t('consciousness_help.total_endpoints')}</span>
                 <span className="font-mono text-xs">37</span>
               </div>

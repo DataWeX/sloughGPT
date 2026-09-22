@@ -496,7 +496,7 @@ export default function SoulsPage() {
                         'flex items-center justify-between rounded-md border px-3 py-2.5 text-sm transition-colors cursor-pointer group',
                         currentSoul === soul.name
                           ? 'border-primary/40 bg-primary/[0.08]'
-                          : 'border-border/60 hover:bg-muted/50',
+                          : 'border-border/40 hover:bg-muted/50',
                       )}
                       onClick={() => setDetailSoul(soul)}
                       onKeyDown={(e) => {
@@ -652,7 +652,7 @@ export default function SoulsPage() {
                   {filteredCheckpoints.map((cp) => (
                     <div
                       key={cp.name}
-                      className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2.5 text-sm group hover:bg-muted/50 transition-colors"
+                      className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2.5 text-sm group hover:bg-muted/50 transition-colors"
                     >
                       <div
                         className="flex-1 min-w-0 cursor-pointer"
@@ -770,7 +770,7 @@ export default function SoulsPage() {
               <CardContent>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {Object.entries(modes).map(([key, mode]) => (
-                    <div key={key} className="rounded-md border border-border/60 p-3 space-y-1">
+                    <div key={key} className="rounded-md border border-border/40 p-3 space-y-1">
                       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         {key}
                       </div>
@@ -895,7 +895,7 @@ export default function SoulsPage() {
                   {snapshots.map((snap) => (
                     <div
                       key={snap.name}
-                      className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm group hover:bg-muted/50 transition-colors"
+                      className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2 text-sm group hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex-1 min-w-0">
                         <span className="font-medium truncate">{snap.name}</span>
@@ -961,7 +961,7 @@ export default function SoulsPage() {
                       return (
                         <div
                           key={soul.name}
-                          className="flex items-center gap-3 rounded-md border border-border/60 px-3 py-2 text-sm"
+                          className="flex items-center gap-3 rounded-md border border-border/40 px-3 py-2 text-sm"
                         >
                           <TraitRadar values={soul.personality || {}} size={40} />
                           <div className="flex-1 min-w-0">
@@ -1054,17 +1054,17 @@ export default function SoulsPage() {
                         Checkpoint Summary
                       </div>
                       <div className="grid grid-cols-3 gap-3 text-sm">
-                        <div className="rounded-md border border-border/60 p-2 text-center">
+                        <div className="rounded-md border border-border/40 p-2 text-center">
                           <div className="text-base font-bold">{checkpoints.length}</div>
                           <div className="text-xs text-muted-foreground">Total</div>
                         </div>
-                        <div className="rounded-md border border-border/60 p-2 text-center">
+                        <div className="rounded-md border border-border/40 p-2 text-center">
                           <div className="text-base font-bold text-success">
                             {checkpoints.filter((c) => c.verdict === 'improved').length}
                           </div>
                           <div className="text-xs text-muted-foreground">Improved</div>
                         </div>
-                        <div className="rounded-md border border-border/60 p-2 text-center">
+                        <div className="rounded-md border border-border/40 p-2 text-center">
                           <div className="text-base font-bold text-destructive">
                             {checkpoints.filter((c) => c.verdict === 'degraded').length}
                           </div>

@@ -612,7 +612,7 @@ export default function ConsciousnessDocsPage() {
                   {ep.params && ep.params.length > 0 && (
                     <div>
                       <h4 className="text-xs font-medium text-muted-foreground mb-1">{t('consciousness_docs.params')}</h4>
-                      <div className="rounded-md border border-border/50 overflow-hidden">
+                      <div className="rounded-md border border-border/40 overflow-hidden">
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="bg-muted/30">
@@ -659,7 +659,7 @@ export default function ConsciousnessDocsPage() {
                           {t('consciousness_docs.copy')}
                         </Button>
                       </div>
-                      <pre className="rounded-md border border-border/50 bg-muted/20 p-3 text-xs font-mono overflow-auto max-h-40 whitespace-pre-wrap">
+                      <pre className="rounded-md border border-border/40 bg-muted/20 p-3 text-xs font-mono overflow-auto max-h-40 whitespace-pre-wrap">
                         {ep.requestBody}
                       </pre>
                     </div>
@@ -680,7 +680,7 @@ export default function ConsciousnessDocsPage() {
                         {t('consciousness_docs.copy')}
                       </Button>
                     </div>
-                    <pre className="rounded-md border border-border/50 bg-muted/20 p-3 text-xs font-mono overflow-auto max-h-48 whitespace-pre-wrap">
+                    <pre className="rounded-md border border-border/40 bg-muted/20 p-3 text-xs font-mono overflow-auto max-h-48 whitespace-pre-wrap">
                       {ep.responseExample}
                     </pre>
                   </div>
@@ -728,7 +728,7 @@ export default function ConsciousnessDocsPage() {
                           {t('consciousness_docs.copy')}
                         </Button>
                       </div>
-                      <pre className="rounded-md border border-border/50 bg-muted/20 p-3 text-xs font-mono overflow-auto max-h-64 whitespace-pre-wrap">
+                      <pre className="rounded-md border border-border/40 bg-muted/20 p-3 text-xs font-mono overflow-auto max-h-64 whitespace-pre-wrap">
                         {result.body}
                       </pre>
                     </div>

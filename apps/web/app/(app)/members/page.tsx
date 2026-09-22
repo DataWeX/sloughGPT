@@ -354,7 +354,7 @@ export default function MembersPage() {
                   filteredMembers.map(m => (
                     <div
                       key={m.user_id}
-                      className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50"
+                      className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="font-medium">{m.username}</div>
