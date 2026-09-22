@@ -4,13 +4,13 @@ import time
 
 import numpy as np
 
-from domain.infrastructure._internal.kv_cache.kv_cache import KVCache
-from domain.infrastructure._internal.session_cache import SessionKVCache
+from domain.infrastructure._internal.kv_cache.kv_state import KVState
+from domain.infrastructure._internal.session_cache import SessionKVState
 
 
 def bench_session_cache(n_sessions=100, prefix_len=100, new_tokens=10, n_iters=500):
-    """Benchmark legacy SessionKVCache."""
-    cache = SessionKVCache(max_sessions=n_sessions, ttl=3600.0)
+    """Benchmark legacy SessionKVState."""
+    cache = SessionKVState(max_sessions=n_sessions, ttl=3600.0)
     prefix = list(range(prefix_len))
     full_ids = prefix + list(range(prefix_len, prefix_len + new_tokens))
 
@@ -71,8 +71,8 @@ def bench_inline_concat(
 
 
 def bench_base_session(n_sessions=100, prefix_len=100, new_tokens=10, n_iters=500):
-    """Benchmark KVCache session mode."""
-    cache = KVCache(n_layers=0, max_sessions=n_sessions, ttl=3600.0)
+    """Benchmark KVState session mode."""
+    cache = KVState(n_layers=0, max_sessions=n_sessions, ttl=3600.0)
     prefix = list(range(prefix_len))
     full_ids = prefix + list(range(prefix_len, prefix_len + new_tokens))
 
@@ -101,8 +101,8 @@ def bench_base_session(n_sessions=100, prefix_len=100, new_tokens=10, n_iters=50
 
 
 def bench_base_paged(n_layers=12, n_heads=12, head_dim=64, n_tokens=256, n_iters=1000):
-    """Benchmark KVCache paged mode (get_blocks, no concat)."""
-    cache = KVCache(
+    """Benchmark KVState paged mode (get_blocks, no concat)."""
+    cache = KVState(
         n_layers, n_heads=n_heads, head_dim=head_dim, max_seq_len=n_tokens * 2, block_size=64
     )
     k = np.random.randn(1, n_tokens, n_heads, head_dim).astype(np.float32)
@@ -129,11 +129,11 @@ if __name__ == "__main__":
     print("KV Cache Benchmark — Unified Base vs Legacy")
     print("=" * 70)
 
-    print("\n--- Legacy SessionKVCache ---")
+    print("\n--- Legacy SessionKVState ---")
     r1 = bench_session_cache()
     print(f"  {r1['us_per_op']:.2f} us/op  ({r1['ops_per_sec']:.1f} ops/s)")
 
-    print("\n--- KVCache session mode ---")
+    print("\n--- KVState session mode ---")
     r2 = bench_base_session()
     print(f"  {r2['us_per_op']:.2f} us/op  ({r2['ops_per_sec']:.1f} ops/s)")
 
@@ -142,10 +142,10 @@ if __name__ == "__main__":
     for sl, m in r3.items():
         print(f"  seq_len={sl:>5}: {m['us_per_op']:>8.2f} us/op  ({m['ops_per_sec']:>10.1f} ops/s)")
 
-    print("\n--- KVCache paged mode (get_blocks, no alloc) ---")
+    print("\n--- KVState paged mode (get_blocks, no alloc) ---")
     r5 = bench_base_paged()
     print(f"  {r5['us_per_op']:.2f} us/op  ({r5['ops_per_sec']:.1f} ops/s)")
 
     print("\n" + "=" * 70)
-    print("base = session + paged. native = C + numpy (concat).")
+    print("base = KVState (state+paged+session). native = NativeKVState (C+numpy).")
     print("=" * 70)

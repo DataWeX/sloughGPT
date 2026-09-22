@@ -1,6 +1,6 @@
-"""Native KV cache — C backend (ctypes) with numpy concat fallback.
+"""Native KV state — C backend (ctypes) with an internal numpy fallback.
 
-``NativeKVCache`` is the concatenating per-layer KV cache used for greedy
+``NativeKVState`` is the concatenating per-layer KV state used for greedy
 decoding. Two backends, one API:
 
 - C path: mirrors the layout of ``libtransformer_forward`` — one flat float
@@ -12,8 +12,7 @@ decoding. Two backends, one API:
 
 When the C library is absent or unloadable (it ships as a macOS dylib next
 to ``domain.inference._internal.native.bindings``), the numpy backend serves
-the same API. Concatenated access lives here — ``KVCache`` is session +
-paged only.
+the same API. This is *native*; the modular default lives in :mod:`.kv_state`.
 """
 
 from __future__ import annotations
@@ -23,8 +22,8 @@ import ctypes
 import numpy as np
 
 
-class NumpyKVCache:
-    """Concatenating KV cache backed by numpy per-layer arrays (batch-1)."""
+class _NumpyState:
+    """Internal numpy concatenating backend (batch-1) for NativeKVState."""
 
     __slots__ = ("_n_layers", "_k", "_v")
 
@@ -65,7 +64,7 @@ class NumpyKVCache:
         self._v = [None] * self._n_layers
 
 
-class NativeKVCache:
+class NativeKVState:
     """Concatenating KV cache — C (ctypes) with numpy fallback.
 
     Parameters match the transformer forward path: ``n_kv_heads`` and
@@ -92,7 +91,7 @@ class NativeKVCache:
         self._lens = [0] * n_layers
         self._lib = None
         self._cache = None
-        self._fallback = None
+        self._fallback = _NumpyState(n_layers)
 
         try:
             from domain.inference._internal.native.bindings import load_lib
@@ -111,11 +110,8 @@ class NativeKVCache:
                 self._lib = lib
                 self._cache = cache
                 self._cache.seq_len = 0
-                return
         except Exception:
             pass
-
-        self._fallback = NumpyKVCache(n_layers)
 
     @property
     def n_layers(self) -> int:

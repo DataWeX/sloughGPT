@@ -11,7 +11,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.kv_cache import NativeKVCache, NumpyKVCache
+from domain.infrastructure._internal.kv_cache import NativeKVState
+from domain.infrastructure._internal.kv_cache.native import _NumpyState
 
 
 def _kv(seq_len: int, n_kv_heads: int = 4, head_dim: int = 8) -> np.ndarray:
@@ -19,27 +20,27 @@ def _kv(seq_len: int, n_kv_heads: int = 4, head_dim: int = 8) -> np.ndarray:
 
 
 @pytest.fixture()
-def native_cache() -> NativeKVCache:
-    return NativeKVCache(n_layers=2, n_kv_heads=4, head_dim=8, seq_capacity=32)
+def native_cache() -> NativeKVState:
+    return NativeKVState(n_layers=2, n_kv_heads=4, head_dim=8, seq_capacity=32)
 
 
-# ── NumpyKVCache ──────────────────────────────────────────────────────────────
+# ── numpy backend (internal to native) ──────────────────────────────────────────────────────────────
 
 
-class TestNumpyKVCache:
+class TestNumpyBackend:
     def test_init_empty(self):
-        cache = NumpyKVCache(2)
+        cache = _NumpyState(2)
         assert cache.seq_len == 0
         assert cache.get(0) is None
 
     def test_update_returns_full_tensor(self):
-        cache = NumpyKVCache(1)
+        cache = _NumpyState(1)
         k, v = cache.update(0, _kv(3), _kv(3))
         assert k.shape == (1, 3, 4, 8)
         assert v.shape == (1, 3, 4, 8)
 
     def test_update_concatenates_along_seq(self):
-        cache = NumpyKVCache(1)
+        cache = _NumpyState(1)
         cache.update(0, _kv(2), _kv(2))
         k, v = cache.update(0, _kv(4), _kv(4))
         assert k.shape == (1, 6, 4, 8)
@@ -47,27 +48,27 @@ class TestNumpyKVCache:
         assert np.allclose(k[:, :2], cache.get(0)[0][:, :2])
 
     def test_layers_independent(self):
-        cache = NumpyKVCache(2)
+        cache = _NumpyState(2)
         cache.update(0, _kv(3), _kv(3))
         assert cache.get(0) is not None
         assert cache.get(1) is None
 
     def test_get_returns_none_before_first_update(self):
-        cache = NumpyKVCache(1)
+        cache = _NumpyState(1)
         assert cache.get(0) is None
 
     def test_reset_clears(self):
-        cache = NumpyKVCache(1)
+        cache = _NumpyState(1)
         cache.update(0, _kv(3), _kv(3))
         cache.reset()
         assert cache.seq_len == 0
         assert cache.get(0) is None
 
 
-# ── NativeKVCache ─────────────────────────────────────────────────────────────
+# ── NativeKVState ─────────────────────────────────────────────────────────────
 
 
-class TestNativeKVCache:
+class TestNativeKVState:
     def test_falls_back_to_numpy_when_lib_unavailable(self, native_cache):
         assert native_cache.is_c is False
         assert native_cache.n_layers == 2
@@ -94,7 +95,7 @@ class TestNativeKVCache:
         assert native_cache.is_c is False
 
     def test_close_alias(self, native_cache):
-        assert NativeKVCache.close is NativeKVCache.free
+        assert NativeKVState.close is NativeKVState.free
 
     def test_update_deviates_to_numpy_on_odd_shape(self, native_cache):
         batch2 = np.random.randn(2, 3, 4, 8).astype(np.float32)
@@ -102,7 +103,7 @@ class TestNativeKVCache:
         assert k.shape == (2, 3, 4, 8)
 
     def test_fallback_ignores_seq_capacity_cap(self):
-        cache = NativeKVCache(n_layers=1, n_kv_heads=2, head_dim=4, seq_capacity=8)
+        cache = NativeKVState(n_layers=1, n_kv_heads=2, head_dim=4, seq_capacity=8)
         for _ in range(10):
             cache.update(0, _kv(1, 2, 4), _kv(1, 2, 4))
         assert cache.seq_len == 10
