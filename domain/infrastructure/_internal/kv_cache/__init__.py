@@ -1,11 +1,15 @@
-"""Unified KV cache — single base with paged + session support.
+"""KV state — two layers: base and native.
 
-Backends:
-  - KVCacheBase: C-backed concat, paged blocks, session LRU — all in one
-  - NativeKVCache: ctypes wrapper for C transformer library
+- KVState (base): the default — paged K/V storage + generated-token state +
+  session prefix cache (LRU + TTL)
+- NativeKVState (native): the concatenating decode state — C (ctypes) with
+  an internal numpy fallback
+- SessionKVManager: per-session KV state registry with LRU + TTL — delegates
+  its storage onto ``KVState`` session mode
 """
 
-from domain.infrastructure._internal.kv_cache.base import KVCacheBase
-from domain.infrastructure._internal.kv_cache.native import NativeKVCache
+from domain.infrastructure._internal.kv_cache.kv_state import KVState
+from domain.infrastructure._internal.kv_cache.native import NativeKVState
+from domain.infrastructure._internal.kv_cache.session import SessionKVManager
 
-__all__ = ["KVCacheBase", "NativeKVCache"]
+__all__ = ["KVState", "NativeKVState", "SessionKVManager"]

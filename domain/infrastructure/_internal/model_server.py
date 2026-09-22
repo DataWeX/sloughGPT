@@ -44,7 +44,7 @@ from .request_queue import (  # noqa: F401
     QueueMetrics,
     _QueueItem,
 )
-from .session_cache import SessionKVCache  # noqa: F401
+from .session_cache import SessionKVState  # noqa: F401
 from .structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.infrastructure.model_server")
@@ -366,7 +366,7 @@ class LocalBackend(GenerateBackend):
         # Session KV cache: reuse cached prefix to skip re-encoding
         pkv = None
         if session_id is not None and self._model_ref is not None:
-            pkv, prefix_len = SESSION_KV_CACHE.get(session_id, input_ids[0].tolist())
+            pkv, prefix_len = SESSION_KV_STATE.get(session_id, input_ids[0].tolist())
             if pkv is not None:
                 logger.debug(
                     "Session[%s]: reuse KV cache for %d of %d tokens",
@@ -430,7 +430,7 @@ class LocalBackend(GenerateBackend):
         if session_id is not None and self._model_ref is not None:
             if pkv is not None:
                 # Cache was passed — it's been extended in-place during generate
-                SESSION_KV_CACHE.store(session_id, input_ids[0].tolist(), pkv)
+                SESSION_KV_STATE.store(session_id, input_ids[0].tolist(), pkv)
             else:
                 # No cache was passed (first turn or mismatch) — store it now
                 # If we can get it from the model's internal state, do so
@@ -439,7 +439,7 @@ class LocalBackend(GenerateBackend):
                         self._model_ref, "past_key_values", None
                     )
                     if captured is not None:
-                        SESSION_KV_CACHE.store(session_id, input_ids[0].tolist(), captured)
+                        SESSION_KV_STATE.store(session_id, input_ids[0].tolist(), captured)
                 except Exception as e:
                     logger.debug(
                         "model_server: KV cache capture failed",
@@ -490,7 +490,7 @@ class LocalBackend(GenerateBackend):
         # Session KV cache: reuse cached prefix to skip re-encoding
         pkv = None
         if session_id is not None and self._model_ref is not None:
-            pkv, prefix_len = SESSION_KV_CACHE.get(session_id, input_ids[0].tolist())
+            pkv, prefix_len = SESSION_KV_STATE.get(session_id, input_ids[0].tolist())
             if pkv is not None:
                 logger.debug(
                     "Session[%s]: reuse KV cache for %d of %d tokens",
@@ -588,13 +588,13 @@ class LocalBackend(GenerateBackend):
         if session_id is not None and self._model_ref is not None:
             final_pkv = _pkv_holder[0]
             if final_pkv is not None:
-                SESSION_KV_CACHE.store(session_id, input_ids[0].tolist(), final_pkv)
+                SESSION_KV_STATE.store(session_id, input_ids[0].tolist(), final_pkv)
 
         return {"text": "", "tokens_generated": token_count, "elapsed_ms": elapsed_ms}
 
 
 # Module-level session KV cache singleton
-SESSION_KV_CACHE = SessionKVCache()
+SESSION_KV_STATE = SessionKVState()
 
 
 def _cancelable_gen(gen, cancel_event):
@@ -1194,7 +1194,7 @@ class ModelServer:
         """Generate text with priority-aware request scheduling.
 
         If ``session_id`` is provided, the KV cache from previous
-        generations is reused via :class:`SessionKVCache`, avoiding
+        generations is reused via :class:`SessionKVState`, avoiding
         re-encoding the shared prompt prefix.
 
         Returns::
@@ -1428,7 +1428,7 @@ class ModelServer:
         yields tokens.
 
         If ``session_id`` is provided, the KV cache from previous
-        generations is reused via :class:`SessionKVCache`, avoiding
+        generations is reused via :class:`SessionKVState`, avoiding
         re-encoding the shared prompt prefix.
 
         Args:

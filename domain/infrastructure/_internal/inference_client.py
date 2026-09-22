@@ -13,7 +13,6 @@ import socket
 import threading
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any
 
 from .constants import DEFAULT_GENERATE_TIMEOUT
 from .inference_protocol import (
@@ -53,12 +52,6 @@ class InferenceClient:
         self._lock = threading.Lock()
         self._model_id = "unknown"
         self._loaded = False
-
-        self._kv_states: dict[str, Any] = {}
-        self._kv_last_access: dict[str, float] = {}
-        self._kv_lock = threading.Lock()
-        self._kv_max_sessions = 64
-        self._kv_ttl = 3600.0
 
     @property
     def model_id(self) -> str:

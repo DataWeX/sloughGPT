@@ -27,6 +27,10 @@ from domain.voice._internal.audio_filter import (
     detect_voice_activity,
     normalize_loudness,
 )
+from domain.voice._internal.phoneme import (
+    PhonemeEngine,
+    get_phoneme_engine,
+)
 from domain.voice._internal.phoneme_encoder import (
     NUM_PHONEMES,
     PhonemeEncoder,
@@ -48,6 +52,10 @@ from domain.voice._internal.tts import (
 from domain.voice._internal.unified_phoneme_encoder import (
     UnifiedPhonemeEncoder,
     detect_language,
+)
+from domain.voice.engine import (
+    VoiceEngine,
+    get_voice_engine,
 )
 
 __all__ = [
@@ -77,4 +85,9 @@ __all__ = [
     "SpectrogramDecoder",
     "GriffinLimVocoder",
     "TTSEngine",
+    # Engines
+    "VoiceEngine",
+    "get_voice_engine",
+    "PhonemeEngine",
+    "get_phoneme_engine",
 ]

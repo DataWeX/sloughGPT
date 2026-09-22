@@ -9,8 +9,10 @@ from domain.knowledge._internal.knowledge import (
     get_knowledge_memory,
 )
 from domain.knowledge._internal.knowledge_ops import (
+    AutoCategorizer,
     BulkProcessor,
     DuplicateDetector,
+    FileIndex,
     KnowledgeGapDetector,
 )
 from domain.knowledge.engine import KnowledgeEngine, get_knowledge_engine
@@ -25,7 +27,9 @@ __all__ = [
     "get_knowledge_ingestor",
     "DataFilter",
     "get_data_filter",
+    "AutoCategorizer",
     "BulkProcessor",
     "DuplicateDetector",
+    "FileIndex",
     "KnowledgeGapDetector",
 ]
