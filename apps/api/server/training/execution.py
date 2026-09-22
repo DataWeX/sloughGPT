@@ -28,6 +28,43 @@ logger = logging.getLogger("slo")
 
 router = APIRouter(tags=["training-execution"])
 
+
+def _feed_spec(request: TrainingRequest) -> tuple[str, str, None, str] | None:
+    """Resolve a training-feed data_path, or None when the request isn't a feed.
+
+    Returns a ``(data_path_str, out_stem, manifest_meta, source_kind)`` tuple for
+    ``feed:<source>`` / ``http(s)://...`` dataset specs so ``start_training`` can
+    skip on-disk pre-flight: the trainer (``prepare_data`` -> ``load_feed_text``)
+    reads the feed at run time. ``out_stem`` is derived from the feed source/URL
+    so checkpoints get a stable name.
+    """
+    from domain.training._internal.training_feed import is_feed_source
+
+    dataset_str = (request.dataset or "").strip()
+    is_feed = (
+        is_feed_source(dataset_str) and request.manifest_uri is None and request.dataset_ref is None
+    )
+    if not is_feed:
+        return None
+    try:
+        from urllib.parse import urlparse
+
+        if dataset_str.startswith(("http://", "https://")):
+            stem = str(urlparse(dataset_str).path.rstrip("/").split("/")[-1] or "feed")
+        else:
+            stem = dataset_str.split(":", 1)[1] or "feed"
+    except Exception:
+        stem = "feed"
+    out_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in stem)[:80]
+    logger.info(
+        "Starting training from feed %s (stem=%s)",
+        dataset_str,
+        out_stem,
+        extra={"tag": "TRAIN"},
+    )
+    return dataset_str, out_stem, None, "feed"
+
+
 # Include legacy /train endpoints
 from .legacy import router as legacy_router
 
@@ -72,35 +109,9 @@ async def start_training(
 
     ManifestError = _eng().get_manifest_error()
 
-    dataset_str = (request.dataset or "").strip()
-    from domain.training._internal.training_feed import is_feed_source
-
-    # Training feeds (feed:<source> or a feed URL) resolve directly — no corpus
-    # file on disk. The trainer (prepare_data -> load_feed_text) reads/forwards
-    # the feed at run time, so the usual pre-flight path checks are skipped.
-    is_feed = (
-        is_feed_source(dataset_str) and request.manifest_uri is None and request.dataset_ref is None
-    )
-    if is_feed:
-        try:
-            from urllib.parse import urlparse
-
-            if dataset_str.startswith(("http://", "https://")):
-                stem = str(urlparse(dataset_str).path.rstrip("/").split("/")[-1] or "feed")
-            else:
-                stem = dataset_str.split(":", 1)[1] or "feed"
-        except Exception:
-            stem = "feed"
-        data_path_str = dataset_str
-        out_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in stem)[:80]
-        manifest_meta = None
-        source_kind = "feed"
-        logger.info(
-            "Starting training from feed %s (stem=%s)",
-            data_path_str,
-            out_stem,
-            extra={"tag": "TRAIN"},
-        )
+    feed_spec = _feed_spec(request)
+    if feed_spec is not None:
+        data_path_str, out_stem, manifest_meta, source_kind = feed_spec
     else:
         try:
             data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
@@ -111,12 +122,12 @@ async def start_training(
         except ManifestError as e:
             raise_error(str(e), "E_BAD_REQUEST", status_code=400)
 
-    if not is_feed:
-        # Pre-flight dataset validation
-        from pathlib import Path as _P
+    # Pre-flight dataset validation (feed specs have no file on disk to check)
+    from pathlib import Path as _P
 
-        _data_path = _P(data_path_str)
-    if not _data_path.exists():
+    _data_path = _P(data_path_str)
+    if feed_spec is None and not _data_path.exists():
+        raise_error(f"Dataset not found: {data_path_str}", "E_BAD_REQUEST", status_code=400)
         raise_error(f"Dataset not found: {data_path_str}", "E_BAD_REQUEST", status_code=400)
     if _data_path.is_file():
         _size = _data_path.stat().st_size

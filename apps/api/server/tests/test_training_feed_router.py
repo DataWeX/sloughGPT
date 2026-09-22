@@ -16,7 +16,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_app_error_handler
 from training import feeds
+from training.execution import _feed_spec
 from training.router import router
+from training.schemas import TrainingRequest
 
 app = FastAPI()
 register_app_error_handler(app)
@@ -171,3 +173,35 @@ class TestTrainingFeedsList:
         feeds_map = {f["name"]: f for f in resp.json()["data"]["feeds"]}
         assert feeds_map["response-logs"]["total"] == 2
         assert feeds_map["response-logs"]["last_updated"] is not None
+
+
+# ── start_training feed short-circuit (_feed_spec) ─────────────────────────────
+
+
+class TestFeedSpec:
+    """The /training/start feed spec: point a feed URL at the training flow."""
+
+    def _req(self, **kwargs):
+        defaults = {"name": "feed job", "model": "slonet"}
+        defaults.update(kwargs)
+        return TrainingRequest(**defaults)
+
+    def test_feed_source_tuple(self):
+        spec = _feed_spec(self._req(dataset="feed:api-conversations"))
+        assert spec == ("feed:api-conversations", "api-conversations", None, "feed")
+
+    def test_http_url_uses_path_for_stem(self):
+        spec = _feed_spec(self._req(dataset="http://localhost:8000/training/feed/corpus.jsonl"))
+        assert spec[0] == "http://localhost:8000/training/feed/corpus.jsonl"
+        assert spec[1] == "corpus_jsonl"
+        assert spec[2] is None
+        assert spec[3] == "feed"
+
+    def test_plain_dataset_is_not_a_feed(self):
+        assert _feed_spec(self._req(dataset="data/foo/input.txt")) is None
+
+    def test_manifest_request_is_not_a_feed(self):
+        # Exactly one of dataset / manifest_uri / dataset_ref is enforced by the
+        # request model; a manifest-resolved job must not be treated as a feed.
+        spec = _feed_spec(self._req(dataset=None, manifest_uri="data/manifests/corpus.json"))
+        assert spec is None

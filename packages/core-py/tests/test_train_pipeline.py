@@ -1018,6 +1018,52 @@ class TestTrain:
         assert t._best_model_path is not None
         assert t._patience_counter == 0
 
+    def test_trains_from_feed_source(self, tmp_path, monkeypatch):
+        from domain.training._internal import training_feed as tf
+
+        seed_pairs = [
+            {
+                "messages": [
+                    {"role": "user", "content": "can the model read from a live feed?"},
+                    {
+                        "role": "assistant",
+                        "content": "yes, the training flow accepts a feed url or feed:source",
+                    },
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "how does the offset cursor behave across pages?"},
+                    {
+                        "role": "assistant",
+                        "content": "each page reports next_offset so consumers resume where they stopped",
+                    },
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "what happens when the corpus grows mid training?"},
+                    {
+                        "role": "assistant",
+                        "content": "the sampler refreshes on a timer and ingests new records",
+                    },
+                ]
+            },
+        ]
+        corpus = tmp_path / "data" / "api_conversations" / "corpus.jsonl"
+        corpus.parent.mkdir(parents=True)
+        corpus.write_text("\n".join(json.dumps(r) for r in seed_pairs) + "\n", encoding="utf-8")
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+
+        cfg = tiny_config(tmp_path, max_steps=2)
+        t = make_trainer("feed:api-conversations", cfg)
+        r = t.train()
+        assert r.success is True
+        assert r.global_step == 2
+        assert math.isfinite(r.final_loss)
+        assert os.path.exists(r.model_path)
+        assert t.is_training is False
+
     def test_save_best_only_skips_worse_periodic_saves(self, data_path, tmp_path):
         cfg = tiny_config(tmp_path, max_steps=3, checkpoint_interval=1, save_best_only=True)
         t = make_trainer(data_path, cfg)
