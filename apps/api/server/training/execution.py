@@ -105,14 +105,12 @@ async def start_training(
     ``*.soul`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
     for char-LM eval; see ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
-    from domain.training.engine import get_training_engine as _eng
-
-    ManifestError = _eng().get_manifest_error()
-
     feed_spec = _feed_spec(request)
     if feed_spec is not None:
         data_path_str, out_stem, manifest_meta, source_kind = feed_spec
     else:
+        from domain.training._internal.dataset_manifest import ManifestError
+
         try:
             data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
                 request.dataset,
@@ -127,7 +125,6 @@ async def start_training(
 
     _data_path = _P(data_path_str)
     if feed_spec is None and not _data_path.exists():
-        raise_error(f"Dataset not found: {data_path_str}", "E_BAD_REQUEST", status_code=400)
         raise_error(f"Dataset not found: {data_path_str}", "E_BAD_REQUEST", status_code=400)
     if _data_path.is_file():
         _size = _data_path.stat().st_size

@@ -8,6 +8,7 @@ records written since their last position.
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -205,3 +206,85 @@ class TestFeedSpec:
         # request model; a manifest-resolved job must not be treated as a feed.
         spec = _feed_spec(self._req(dataset=None, manifest_uri="data/manifests/corpus.json"))
         assert spec is None
+
+
+# ── POST /training/start with a feed dataset (full API journey) ────────────────
+
+
+class _FakeTrainer:
+    """Records the data_path the endpoint feeds to SloughGPTTrainer, runs nothing."""
+
+    captured: list[str] = []
+
+    def __init__(self, data_path, **kwargs) -> None:
+        _FakeTrainer.captured.append(data_path)
+
+    def train(self, **kwargs) -> dict:
+        return {"best_eval_loss": 0.5}
+
+    def save(self, path: str) -> None:  # noqa: ARG002 - stub, must not touch disk
+        pass
+
+
+class _FakeTracker:
+    def end_run(self) -> None:
+        pass
+
+
+async def _async_noop(*args, **kwargs) -> None:  # noqa: ARG002
+    return None
+
+
+class TestTrainingStartFeed:
+    """Feed dataset spec flows through /training/start end to end.
+
+    The trainer itself is stubbed (hermetic — no compute, no models/ writes);
+    the real endpoint pre-flight, feed short-circuit, job enqueue, background
+    executor dispatch, and SloughGPTTrainer construction are all exercised.
+    """
+
+    @pytest.mark.parametrize(
+        "dataset, stem",
+        [
+            ("feed:api-conversations", "api-conversations"),
+            ("http://localhost:8000/training/feed/api-conversations", "api-conversations"),
+        ],
+    )
+    def test_feed_start_trains(self, dataset, stem, monkeypatch):
+        from training import execution as exec_mod
+        from training.jobs import training_jobs
+
+        import domain.training as domain_training
+        from domain.training._internal import wandb_helpers
+
+        monkeypatch.setattr(domain_training, "SloughGPTTrainer", _FakeTrainer)
+        monkeypatch.setattr(
+            wandb_helpers, "create_training_tracker_for_api_job", lambda **kw: _FakeTracker()
+        )
+        monkeypatch.setattr(exec_mod, "notify_training_event", _async_noop)
+        monkeypatch.setattr(exec_mod, "notify_push", lambda **kw: None)
+        _FakeTrainer.captured.clear()
+
+        resp = client.post(
+            "/training/start",
+            json={"name": "feed journey", "model": "slonet", "dataset": dataset},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["status"] == "started"
+        job_id = payload["job_id"]
+
+        deadline = time.time() + 5.0
+        status = None
+        while time.time() < deadline:
+            status = training_jobs.get(job_id, {}).get("status")
+            if status in ("completed", "failed"):
+                break
+            time.sleep(0.02)
+        assert status == "completed", f"job did not complete: {status}"
+
+        job = training_jobs[job_id]
+        assert job["data_source"] == "feed"
+        assert job["data_path"] == dataset
+        assert job["output_checkpoint_stem"] == stem
+        assert _FakeTrainer.captured == [dataset]
