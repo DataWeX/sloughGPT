@@ -357,6 +357,12 @@ class TrainerConfig:
     min_data_quality: float = 1.0
     max_toxicity_rate: float = 0.5
 
+    # Live feed ingestion (0 = disabled). When > 0 AND data_path is a feed
+    # spec, new corpus records stream into the train batch source on this timer.
+    # Vocabulary stays fixed (unknown chars map to token 0), so model dimensions
+    # never change mid-run; eval remains on the initial snapshot.
+    feed_refresh_interval: float = 0.0
+
     # Early stopping (0 = disabled; stop if no improvement for N evals)
     early_stopping_patience: int = 5
 
@@ -411,6 +417,10 @@ class TrainerConfig:
                 f"block_size ({self.block_size}) > 4*n_embed ({self.n_embed * 4}) may cause instability",
                 UserWarning,
                 stacklevel=2,
+            )
+        if self.feed_refresh_interval < 0:
+            raise ValueError(
+                f"feed_refresh_interval must be >= 0, got {self.feed_refresh_interval}"
             )
 
 
@@ -971,6 +981,11 @@ class SloughGPTTrainer:
                 f"Reduce batch_size/block_size or add more data."
             )
 
+        # Live feed ingestion: when configured on a feed data_path, a
+        # FeedBatchSampler streams new corpus records into the train batch
+        # source on a timer (see TrainerConfig.feed_refresh_interval).
+        self._feed_sampler = self._build_feed_sampler_if_configured()
+
         # Compute data quality metrics
         try:
             raw_text = "".join(
@@ -1161,7 +1176,14 @@ class SloughGPTTrainer:
 
         Uses vectorized advanced indexing instead of Python-level loops
         for O(1) batch construction regardless of batch_size.
+
+        When live feed ingestion is configured, the train split streams from
+        the FeedBatchSampler (fixed vocab, timer refresh); val stays on the
+        initial snapshot.
         """
+        if split == "train" and self._feed_sampler is not None:
+            x, y = self._feed_sampler.get_batch(self.config.batch_size)
+            return x.astype(np.int64), y.astype(np.int64)
         data = self.train_data if split == "train" else self.val_data
         batch_size = self.config.batch_size
         block_size = self.config.block_size
@@ -1171,6 +1193,50 @@ class SloughGPTTrainer:
         x = data[idx[:, None] + offsets]
         y = data[idx[:, None] + offsets + 1]
         return x, y
+
+    def _build_feed_sampler_if_configured(self):
+        """Build the live feed sampler, or None when not configured.
+
+        Requires ``config.feed_refresh_interval > 0`` AND a feed data_path
+        (``feed:<source>`` / ``http(s)://...``). FeedBatchSampler owns the
+        offset cursor and the refresh timer; unknown characters map to token 0
+        so the fixed model vocabulary never resizes (embedding/output dims are
+        stable while new records stream in).
+        """
+        from domain.training._internal.training_feed import FeedBatchSampler
+
+        if self.config.feed_refresh_interval <= 0:
+            return None
+        if not is_feed_source(self.data_path):
+            logger.warning(
+                "feed_refresh_interval set but data_path %r is not a feed spec — "
+                "live ingestion ignored",
+                self.data_path,
+                extra={"tag": "TRAIN"},
+            )
+            return None
+        if self.data_path.startswith("feed:"):
+            source = self.data_path.split(":", 1)[1]
+            feed_url = None
+        else:
+            source = "api-conversations"
+            feed_url = self.data_path
+        sampler = FeedBatchSampler(
+            stoi=self.stoi,
+            block_size=self.config.block_size,
+            feed_url=feed_url,
+            source=source,
+            refresh_interval=self.config.feed_refresh_interval,
+            use_prompt_engine=True,
+        )
+        logger.info(
+            "Live feed ingestion enabled for %s (interval=%.1fs, %d pairs)",
+            self.data_path,
+            self.config.feed_refresh_interval,
+            sampler.stats()["pairs"],
+            extra={"tag": "TRAIN"},
+        )
+        return sampler
 
     def _get_train_loader(self, num_batches: int = 10):
         """Generate training batches for EWC Fisher estimation."""

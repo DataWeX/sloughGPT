@@ -1497,6 +1497,94 @@ class TestSaveCheckpoint:
         assert not (tmp_path / "nope").exists()
 
 
+class TestFeedLiveRefresh:
+    """Live feed ingestion: FeedBatchSampler streams new records mid-training."""
+
+    def _seed_feed_corpus(self, tmp_path):
+        from domain.training._internal import training_feed as tf
+
+        seed_pairs = [
+            {
+                "messages": [
+                    {"role": "user", "content": "can the model read from a live feed?"},
+                    {
+                        "role": "assistant",
+                        "content": "yes, the training flow accepts a feed url or feed:source",
+                    },
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "how does the offset cursor behave across pages?"},
+                    {
+                        "role": "assistant",
+                        "content": "each page reports next_offset so consumers resume where they stopped",
+                    },
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "what happens when the corpus grows mid training?"},
+                    {
+                        "role": "assistant",
+                        "content": "the sampler refreshes on a timer and ingests new records",
+                    },
+                ]
+            },
+        ]
+        corpus = tmp_path / "data" / "api_conversations" / "corpus.jsonl"
+        corpus.parent.mkdir(parents=True)
+        corpus.write_text("\n".join(json.dumps(r) for r in seed_pairs) + "\n", encoding="utf-8")
+        return str(corpus), tf
+
+    def test_sampler_disabled_by_default(self, tmp_path, monkeypatch):
+        _corpus, tf = self._seed_feed_corpus(tmp_path)
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+        t = make_trainer("feed:api-conversations", tiny_config(tmp_path, max_steps=2))
+        assert t._feed_sampler is None
+
+    def test_sampler_enabled_with_refresh_interval(self, tmp_path, monkeypatch):
+        _corpus, tf = self._seed_feed_corpus(tmp_path)
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+        cfg = tiny_config(tmp_path, max_steps=3, feed_refresh_interval=0.01)
+        t = make_trainer("feed:api-conversations", cfg)
+        assert t._feed_sampler is not None
+        assert t._feed_sampler.stats()["pairs"] == 3
+        x, y = t.get_batch("train")
+        assert x.shape == (cfg.batch_size, cfg.block_size)
+        assert y.shape == (cfg.batch_size, cfg.block_size)
+        assert x.dtype == np.int64
+        # val stays on the fixed initial snapshot
+        vx, vy = t.get_batch("val")
+        assert vx.shape == (cfg.batch_size, cfg.block_size)
+
+    def test_new_records_stream_into_training(self, tmp_path, monkeypatch):
+        corpus, tf = self._seed_feed_corpus(tmp_path)
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+        cfg = tiny_config(tmp_path, max_steps=6, feed_refresh_interval=0.01)
+        t = make_trainer("feed:api-conversations", cfg)
+        assert t._feed_sampler.stats()["pairs"] == 3
+
+        extra = {
+            "messages": [
+                {"role": "user", "content": "does a newly appended record get ingested?"},
+                {
+                    "role": "assistant",
+                    "content": "yes, the sampler refreshes past its cursor and grows the window",
+                },
+            ]
+        }
+        with open(corpus, "a", encoding="utf-8") as f:
+            f.write(json.dumps(extra) + "\n")
+        time.sleep(0.05)  # let the refresh timer elapse before training
+
+        r = t.train()
+        assert r.success is True
+        assert r.global_step == 6
+        assert math.isfinite(r.final_loss)
+        assert t._feed_sampler.stats()["pairs"] == 4
+
+
 class TestSave:
     def test_save_sou(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
