@@ -262,7 +262,7 @@ export default function ConsciousnessExportPage() {
 
   return (
     <PageContainer title={t('consciousness_export.page_title')}>
-      <div className="space-y-6 p-6">
+      <div className="space-y-4">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t('consciousness_export.export_options_title')}</CardTitle>

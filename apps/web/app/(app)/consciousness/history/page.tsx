@@ -219,7 +219,7 @@ export default function ConsciousnessHistoryPage() {
   if (loading) {
     return (
       <PageContainer title={t('consciousness_history.page_title')}>
-        <div className="space-y-6 p-6">
+        <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
@@ -236,7 +236,7 @@ export default function ConsciousnessHistoryPage() {
 
   return (
     <PageContainer title={t('consciousness_history.page_title')}>
-      <div className="space-y-6 p-6">
+      <div className="space-y-4">
         {stats && (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <Card>

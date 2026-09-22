@@ -232,7 +232,7 @@ export default function ConsciousnessAnalyticsPage() {
   if (loading) {
     return (
       <PageContainer title={t('consciousness_analytics.page_title')}>
-        <div className="space-y-6 p-6">
+        <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
@@ -252,7 +252,7 @@ export default function ConsciousnessAnalyticsPage() {
 
   return (
     <PageContainer title={t('consciousness_analytics.page_title')}>
-      <div className="space-y-6 p-6">
+      <div className="space-y-4">
         {stats && (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <Card>

@@ -60,7 +60,7 @@ const categories = [...new Set(shortcuts.map(s => s.category))]
 export default function ShortcutsPage() {
   return (
     <PageContainer title="Keyboard Shortcuts">
-      <div className="space-y-6">
+      <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
           Keyboard shortcuts available across the application. Shortcuts are disabled when focus is in input fields.
         </p>

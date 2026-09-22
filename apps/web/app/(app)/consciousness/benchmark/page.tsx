@@ -234,7 +234,7 @@ export default function ConsciousnessBenchmarkPage() {
 
   return (
     <PageContainer title={t('consciousness_benchmark.page_title')}>
-      <div className="space-y-6 p-6">
+      <div className="space-y-4">
 
         <Card>
           <CardHeader>

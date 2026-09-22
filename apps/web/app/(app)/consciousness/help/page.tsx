@@ -56,7 +56,7 @@ export default function ConsciousnessHelpPage() {
 
   return (
     <PageContainer title={t('consciousness_help.page_title')}>
-      <div className="space-y-6 p-6">
+      <div className="space-y-4">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t('consciousness_help.faq_title')}</CardTitle>

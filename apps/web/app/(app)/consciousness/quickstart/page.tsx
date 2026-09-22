@@ -176,7 +176,7 @@ export default function ConsciousnessQuickstartPage() {
 
   return (
     <PageContainer title={t('consciousness_quickstart.page_title')}>
-      <div className="space-y-6 p-6">
+      <div className="space-y-4">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">

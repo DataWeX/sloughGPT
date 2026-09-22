@@ -187,7 +187,7 @@ export default function ConsciousnessComparePage() {
   if (loading) {
     return (
       <PageContainer title={t('consciousness_compare.page_title')}>
-        <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+        <div className="space-y-4">
           <div className="flex gap-3">
             <Skeleton className="h-10 w-48" />
             <Skeleton className="h-10 w-48" />
@@ -221,7 +221,7 @@ export default function ConsciousnessComparePage() {
 
   return (
     <PageContainer title={t('consciousness_compare.page_title')}>
-      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+      <div className="space-y-4">
         <Card>
           <CardContent className="p-3 sm:p-4">
             <div className="flex flex-wrap items-center gap-3">

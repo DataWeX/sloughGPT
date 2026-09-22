@@ -170,7 +170,7 @@ export default function ConsciousnessPlaygroundPage() {
   if (loading) {
     return (
       <PageContainer title="Consciousness Playground">
-        <div className="space-y-6 p-6">
+        <div className="space-y-4">
           <Skeleton className="h-32" />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Skeleton className="h-48" />
@@ -185,7 +185,7 @@ export default function ConsciousnessPlaygroundPage() {
 
   return (
     <PageContainer title="Consciousness Playground">
-      <div className="space-y-6 p-6">
+      <div className="space-y-4">
         <Card>
           <CardHeader>
             <CardTitle>{t('consciousness_playground.input_title')}</CardTitle>

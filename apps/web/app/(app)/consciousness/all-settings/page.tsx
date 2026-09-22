@@ -320,7 +320,7 @@ export default function AllSettingsPage() {
   if (loading) {
     return (
       <PageContainer title={t('consciousness_all_settings.page_title')}>
-        <div className="space-y-6 p-6">
+        <div className="space-y-4">
           {[1, 2, 3].map(i => (
             <Card key={i}>
               <CardHeader>

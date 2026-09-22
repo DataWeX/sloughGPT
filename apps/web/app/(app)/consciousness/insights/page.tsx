@@ -273,7 +273,7 @@ export default function ConsciousnessInsightsPage() {
   if (loading) {
     return (
       <PageContainer title={t('consciousness_insights.page_title')}>
-        <div className="space-y-6 p-6">
+        <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
@@ -293,7 +293,7 @@ export default function ConsciousnessInsightsPage() {
 
   return (
     <PageContainer title={t('consciousness_insights.page_title')}>
-      <div className="space-y-6 p-6">
+      <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Card className="px-4 py-2">

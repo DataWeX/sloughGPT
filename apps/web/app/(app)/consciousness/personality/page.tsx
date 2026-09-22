@@ -117,7 +117,7 @@ export default function ConsciousnessPersonalityPage() {
   if (loading) {
     return (
       <PageContainer title={t('consciousness_personality.page_title')}>
-        <div className="space-y-6 p-6">
+        <div className="space-y-4">
           {[1, 2, 3].map(i => (
             <Card key={i}>
               <CardHeader>
@@ -140,7 +140,7 @@ export default function ConsciousnessPersonalityPage() {
 
   return (
     <PageContainer title={t('consciousness_personality.page_title')}>
-      <div className="space-y-6 p-6">
+      <div className="space-y-4">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">

@@ -355,7 +355,7 @@ export default function ConsciousnessAlertsPage() {
   if (loading) {
     return (
       <PageContainer title={t('consciousness_alerts.page_title')}>
-        <div className="space-y-6 p-6">
+        <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             <Skeleton className="h-20" />
             <Skeleton className="h-20" />
@@ -371,7 +371,7 @@ export default function ConsciousnessAlertsPage() {
 
   return (
     <PageContainer title={t('consciousness_alerts.page_title')}>
-      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+      <div className="space-y-4">
         <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3">
           <Card>
             <CardHeader className="pb-2">

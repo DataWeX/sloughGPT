@@ -186,7 +186,7 @@ export default function ConsciousnessPage() {
   if (loading) {
     return (
       <PageContainer title="Consciousness">
-        <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+        <div className="space-y-4">
           <div className="flex items-center gap-2">
             <Skeleton className="h-8 w-20" />
             <Skeleton className="h-8 w-20" />
@@ -242,7 +242,7 @@ export default function ConsciousnessPage() {
 
   return (
     <PageContainer title="Consciousness">
-      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+      <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <Button onClick={handleSeed} disabled={seeding} variant="secondary" size="sm">
             {seeding ? 'Seeding...' : 'Seed Data'}

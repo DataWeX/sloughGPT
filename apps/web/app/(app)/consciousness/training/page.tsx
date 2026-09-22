@@ -118,7 +118,7 @@ export default function ConsciousnessTrainingPage() {
   if (loading) {
     return (
       <PageContainer title={t('consciousness_training.page_title')}>
-        <div className="space-y-6 p-6">
+        <div className="space-y-4">
           <Card><CardContent className="p-4 space-y-3">
             <Skeleton className="h-4 w-32" />
             <Skeleton className="h-1.5 w-full rounded-full" />
@@ -153,7 +153,7 @@ export default function ConsciousnessTrainingPage() {
 
   return (
     <PageContainer title={t('consciousness_training.page_title')}>
-      <div className="space-y-6 p-6">
+      <div className="space-y-4">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

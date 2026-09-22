@@ -226,7 +226,7 @@ export default function ConsciousnessHealthPage() {
 
   return (
     <PageContainer title={t('consciousness_health.page_title')}>
-      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+      <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} />

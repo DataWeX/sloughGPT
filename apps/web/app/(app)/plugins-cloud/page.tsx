@@ -103,7 +103,7 @@ export default function PluginsCloudPage() {
       </div>
 
       {activeTab === 'cloud' && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Submit Training Job</CardTitle>
@@ -168,7 +168,7 @@ export default function PluginsCloudPage() {
       )}
 
       {activeTab === 'plugins' && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Installed Plugins</CardTitle>
