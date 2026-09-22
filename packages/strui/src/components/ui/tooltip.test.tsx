@@ -1,7 +1,9 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import '@testing-library/jest-dom/vitest'
 import { describe, expect, it, vi, afterEach } from 'vitest'
 
 import { SimpleTooltip, Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
+import { Button } from './button'
 
 function stubLayout() {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -46,6 +48,60 @@ describe('Tooltip', () => {
     const trigger = screen.getByTestId('trigger')
     expect(trigger.hasAttribute('aschild')).toBe(false)
     expect(trigger.hasAttribute('asChild')).toBe(false)
+  })
+
+  it('merges into the child element with asChild (single button, no nesting)', () => {
+    const { container } = render(
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button data-testid="trigger" className="mine">
+            Child
+          </button>
+        </TooltipTrigger>
+        <TooltipContent data-testid="content">Tip text</TooltipContent>
+      </Tooltip>,
+    )
+    expect(container.querySelectorAll('button')).toHaveLength(1)
+    const trigger = screen.getByTestId('trigger')
+    expect(trigger.tagName).toBe('BUTTON')
+    expect(trigger.classList.contains('mine')).toBe(true)
+    expect(trigger.textContent).toBe('Child')
+  })
+
+  it('does not wrap a Button child in a nested button when asChild', () => {
+    const { container } = render(
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button disabled data-testid="trigger">
+            Go
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent data-testid="content">Tip text</TooltipContent>
+      </Tooltip>,
+    )
+    expect(container.querySelectorAll('button')).toHaveLength(1)
+    const trigger = screen.getByTestId('trigger')
+    expect(trigger.tagName).toBe('BUTTON')
+    expect(trigger).toBeDisabled()
+    expect(trigger.getAttribute('aria-describedby')).toBeTruthy()
+  })
+
+  it('opens on hover when the trigger is a custom element via asChild', () => {
+    vi.useFakeTimers()
+    stubLayout()
+    render(
+      <Tooltip delayDuration={100}>
+        <TooltipTrigger asChild>
+          <button data-testid="trigger">Hover</button>
+        </TooltipTrigger>
+        <TooltipContent data-testid="content">Tip text</TooltipContent>
+      </Tooltip>,
+    )
+    fireEvent.mouseOver(screen.getByTestId('trigger'))
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    expect(queryContent()).toBeTruthy()
   })
 
   it('recomputes position when opened from the start', () => {
@@ -256,14 +312,27 @@ describe('Tooltip', () => {
 })
 
 describe('SimpleTooltip', () => {
-  it('wraps the child in a trigger button', () => {
-    render(
+  it('merges into the child element as the trigger (no nested wrapper)', () => {
+    const { container } = render(
       <SimpleTooltip content="Copy">
-        <span>Button</span>
+        <span data-testid="child-trigger">Button</span>
       </SimpleTooltip>,
     )
-    const trigger = screen.getByText('Button').closest('button')
-    expect(trigger).toBeTruthy()
+    expect(container.querySelectorAll('button')).toHaveLength(0)
+    const trigger = screen.getByTestId('child-trigger')
+    expect(trigger.tagName).toBe('SPAN')
+    expect(trigger.closest('button')).toBeNull()
+    expect(trigger.getAttribute('aria-describedby')).toBeTruthy()
+  })
+
+  it('keeps a single button when given a Button child', () => {
+    const { container } = render(
+      <SimpleTooltip content="Copy">
+        <Button data-testid="child-trigger">Go</Button>
+      </SimpleTooltip>,
+    )
+    expect(container.querySelectorAll('button')).toHaveLength(1)
+    expect(screen.getByTestId('child-trigger').tagName).toBe('BUTTON')
   })
 
   it('shows content on hover', () => {

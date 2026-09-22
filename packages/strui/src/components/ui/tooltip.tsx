@@ -1,8 +1,10 @@
 'use client'
 
 import {
+  cloneElement,
   createContext,
   forwardRef,
+  isValidElement,
   useCallback,
   useContext,
   useEffect,
@@ -10,6 +12,7 @@ import {
   useRef,
   useState,
   type HTMLAttributes,
+  type ReactElement,
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
@@ -87,8 +90,40 @@ interface TooltipTriggerProps extends HTMLAttributes<HTMLElement> {
   children: ReactNode
 }
 
+function composeHandlers<T extends Event>(
+  first: ((e: T) => void) | undefined,
+  second: ((e: T) => void) | undefined,
+): ((e: T) => void) | undefined {
+  if (!first) return second
+  if (!second) return first
+  return (e) => {
+    first(e)
+    second(e)
+  }
+}
+
+/** Merge the trigger's event handlers/props onto a custom child element (Slot pattern). */
+function mergeIntoChild(
+  child: ReactElement<Record<string, unknown>>,
+  ours: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...ours, ...child.props }
+  for (const key of Object.keys(ours)) {
+    if (key.startsWith('on') && typeof ours[key] === 'function' && typeof child.props[key] === 'function') {
+      merged[key] = composeHandlers(
+        child.props[key] as (e: Event) => void,
+        ours[key] as (e: Event) => void,
+      )
+    }
+  }
+  merged.className = cn(ours.className as string | undefined, child.props.className as string | undefined)
+  merged.style = { ...(ours.style as object), ...(child.props.style as object) }
+  merged.ref = ours.ref ?? child.props.ref
+  return merged
+}
+
 export const TooltipTrigger = forwardRef<HTMLButtonElement, TooltipTriggerProps>(
-  ({ children, asChild: _asChild, onMouseEnter, onMouseLeave, onFocus, onBlur, ...props }, ref) => {
+  ({ children, asChild = false, onMouseEnter, onMouseLeave, onFocus, onBlur, ...props }, ref) => {
     const { onOpenChange, triggerRef, contentId, delay } = useTooltipContext()
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -99,37 +134,42 @@ export const TooltipTrigger = forwardRef<HTMLButtonElement, TooltipTriggerProps>
       }
     }
 
-    return (
-      <button
-        ref={(node) => {
-          ;(triggerRef as React.MutableRefObject<HTMLElement | null>).current = node
-          if (typeof ref === 'function') ref(node)
-          else if (ref) ref.current = node
-        }}
-        type="button"
-        aria-describedby={contentId}
-        onMouseEnter={(e) => {
-          timerRef.current = setTimeout(() => onOpenChange(true), delay)
-          onMouseEnter?.(e as any)
-        }}
-        onMouseLeave={(e) => {
-          clearTimer()
-          onOpenChange(false)
-          onMouseLeave?.(e as any)
-        }}
-        onFocus={(e) => {
-          onOpenChange(true)
-          onFocus?.(e as any)
-        }}
-        onBlur={(e) => {
-          onOpenChange(false)
-          onBlur?.(e as any)
-        }}
-        {...props}
-      >
-        {children}
-      </button>
-    )
+    const setTriggerRef = (node: HTMLElement | null) => {
+      triggerRef.current = node
+      if (typeof ref === 'function') ref(node as HTMLButtonElement | null)
+      else if (ref) ref.current = node as HTMLButtonElement | null
+    }
+
+    const triggerProps: Record<string, unknown> = {
+      ref: setTriggerRef,
+      type: 'button',
+      'aria-describedby': contentId,
+      onMouseEnter: (e: React.MouseEvent<HTMLElement>) => {
+        timerRef.current = setTimeout(() => onOpenChange(true), delay)
+        onMouseEnter?.(e)
+      },
+      onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
+        clearTimer()
+        onOpenChange(false)
+        onMouseLeave?.(e)
+      },
+      onFocus: (e: React.FocusEvent<HTMLElement>) => {
+        onOpenChange(true)
+        onFocus?.(e)
+      },
+      onBlur: (e: React.FocusEvent<HTMLElement>) => {
+        onOpenChange(false)
+        onBlur?.(e)
+      },
+      ...props,
+    }
+
+    if (asChild && isValidElement(children)) {
+      const child = children as ReactElement<Record<string, unknown>>
+      return cloneElement(child, mergeIntoChild(child, triggerProps))
+    }
+
+    return <button {...(triggerProps as React.ButtonHTMLAttributes<HTMLButtonElement>)}>{children}</button>
   },
 )
 TooltipTrigger.displayName = 'TooltipTrigger'

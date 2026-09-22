@@ -18,6 +18,8 @@ interface ThemeContextType {
   theme: StoredThemeId
   mode: ThemeMode
   palette: StoredPaletteId
+  /** True once the client has mounted; guards SSR/client state divergence (theme hydration). */
+  mounted: boolean
   setTheme: (theme: StoredThemeId) => void
   setMode: (mode: ThemeMode) => void
   setPalette: (palette: StoredPaletteId) => void
@@ -88,7 +90,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [mode, setMode])
 
   return (
-    <ThemeContext.Provider value={{ theme, mode, palette, setTheme, setMode, setPalette }}>
+    <ThemeContext.Provider value={{ theme, mode, palette, mounted, setTheme, setMode, setPalette }}>
       {children}
     </ThemeContext.Provider>
   )
