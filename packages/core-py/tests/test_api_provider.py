@@ -127,3 +127,134 @@ class TestApiProviderConnection:
 
             result = p.test_connection()
             assert result["status"] == "error"
+
+
+class TestApiProviderTokenUsage:
+    def _make_p(self):
+        return ApiProvider(api_key="sk-test", api_url="https://api.openai.com/v1", model="gpt-4o")
+
+    def test_usage_less_until_chat(self):
+        p = self._make_p()
+        assert p.last_usage is None
+        assert p.usage_tokens() == {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+    def test_usage_tokens_fallback_estimate(self):
+        p = self._make_p()
+        usage = p.usage_tokens(
+            text="Hello beautiful world", messages=[{"role": "user", "content": "Hi there"}]
+        )
+        assert usage["completion_tokens"] > 0
+        assert usage["prompt_tokens"] > 0
+        assert usage["total_tokens"] == usage["prompt_tokens"] + usage["completion_tokens"]
+
+    @pytest.mark.asyncio
+    async def test_chat_captures_usage_from_response(self):
+        p = self._make_p()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [{"message": {"content": "Hello!"}}],
+            "usage": {"prompt_tokens": 12, "completion_tokens": 3, "total_tokens": 15},
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("domain.inference._internal.api_provider.httpx.AsyncClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = mock_client
+
+            result = await p.chat([{"role": "user", "content": "Hi"}])
+            assert result == "Hello!"
+            assert p.last_usage == {"prompt_tokens": 12, "completion_tokens": 3, "total_tokens": 15}
+
+    @pytest.mark.asyncio
+    async def test_chat_empty_usage_keeps_none(self):
+        p = self._make_p()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"choices": [{"message": {"content": "No usage here"}}]}
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("domain.inference._internal.api_provider.httpx.AsyncClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = mock_client
+
+            await p.chat([{"role": "user", "content": "Hi"}])
+            assert p.last_usage is None
+
+    @pytest.mark.asyncio
+    async def test_chat_stream_captures_trailing_usage_chunk(self):
+        p = self._make_p()
+
+        async def mock_aiter_lines():
+            yield 'data: {"choices":[{"delta":{"content":"Hello"}}]}'
+            yield 'data: {"choices":[{"delta":{"content":" world"}}]}'
+            yield 'data: {"choices":[],"usage":{"prompt_tokens":7,"completion_tokens":2,"total_tokens":9}}'
+            yield "data: [DONE]"
+
+        mock_response = AsyncMock()
+        mock_response.aiter_lines = mock_aiter_lines
+        mock_response.raise_for_status = MagicMock()
+
+        mock_stream_ctx = AsyncMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("domain.inference._internal.api_provider.httpx.AsyncClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = mock_client
+
+            tokens = []
+            async for token in p.chat_stream([{"role": "user", "content": "Hi"}]):
+                tokens.append(token)
+            assert tokens == ["Hello", " world"]
+            assert p.last_usage == {"prompt_tokens": 7, "completion_tokens": 2, "total_tokens": 9}
+
+    @pytest.mark.asyncio
+    async def test_chat_stream_payload_requests_usage(self):
+        p = self._make_p()
+        captured = {}
+
+        async def mock_aiter_lines():
+            yield "data: [DONE]"
+
+        mock_response = AsyncMock()
+        mock_response.aiter_lines = mock_aiter_lines
+        mock_response.raise_for_status = MagicMock()
+
+        mock_stream_ctx = AsyncMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        def fake_stream(method, url, headers, json=None):
+            captured["json"] = json
+            return mock_stream_ctx
+
+        with patch("domain.inference._internal.api_provider.httpx.AsyncClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.stream = MagicMock(side_effect=fake_stream)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = mock_client
+
+            async for _ in p.chat_stream([{"role": "user", "content": "Hi"}]):
+                pass
+
+            assert captured["json"].get("stream_options", {}).get("include_usage") is True
+
+    def test_metadata_includes_last_usage(self):
+        p = self._make_p()
+        p.last_usage = {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}
+        assert p.metadata["last_usage"] == {
+            "prompt_tokens": 1,
+            "completion_tokens": 2,
+            "total_tokens": 3,
+        }

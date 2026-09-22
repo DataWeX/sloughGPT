@@ -83,6 +83,7 @@ class ChatRouter:
                     "session_id": resp.session_id,
                     "tokens_generated": resp.tokens_generated,
                     "duration_ms": resp.duration_ms,
+                    "usage_tokens": resp.usage_tokens,
                 }
             )
         except Exception as e:
@@ -121,7 +122,9 @@ class ChatRouter:
                             yield self._sse_token("chat", token)
                         else:
                             yield ": heartbeat\n\n"
-                    yield self._sse_token("chat", "", done=True)
+                    yield self._sse_token(
+                        "chat", "", done=True, meta={"usage_tokens": manager.last_usage()}
+                    )
                     _elapsed_ms = round((time.time() - _start) * 1000)
                     safe_audit_log(
                         "chat.stream",
@@ -162,7 +165,9 @@ class ChatRouter:
                         if token:
                             _token_count += 1
                             yield self._sse_token("chat", token)
-                    yield self._sse_token("chat", "", done=True)
+                    yield self._sse_token(
+                        "chat", "", done=True, meta={"usage_tokens": manager.last_usage()}
+                    )
                     _elapsed_ms = round((time.time() - _start) * 1000)
                     safe_audit_log(
                         "chat.regenerate",

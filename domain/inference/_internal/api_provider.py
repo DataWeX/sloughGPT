@@ -60,11 +60,34 @@ class ApiProvider:
         self.model_name = model
         self.timeout = timeout
         self.max_retries = max_retries
+        self.last_usage: dict[str, int] | None = None
 
         if not self.api_key:
             raise ValueError("API key required")
         if not self.api_url:
             raise ValueError("API URL required")
+
+    def usage_tokens(
+        self,
+        text: str = "",
+        messages: list[dict[str, Any]] | None = None,
+    ) -> dict[str, int]:
+        """Report token usage, preferring the API-provided ``usage`` block.
+
+        Falls back to a character-based estimate (~4 chars/token) when the
+        endpoint does not return usage, so accounting always has a figure.
+        """
+        if self.last_usage:
+            return dict(self.last_usage)
+        estimate_prompt = 0
+        for m in messages or []:
+            estimate_prompt += len(m.get("content", "")) // 4
+        estimate_completion = len(text) // 4
+        return {
+            "prompt_tokens": estimate_prompt,
+            "completion_tokens": estimate_completion,
+            "total_tokens": estimate_prompt + estimate_completion,
+        }
 
     @property
     def model_id(self) -> str:
@@ -82,12 +105,15 @@ class ApiProvider:
 
     @property
     def metadata(self) -> dict[str, Any]:
-        return {
+        meta = {
             "model_id": self.model_name,
             "provider": "api",
             "api_url": self.api_url,
             "streaming": True,
         }
+        if self.last_usage:
+            meta["last_usage"] = dict(self.last_usage)
+        return meta
 
     async def chat(
         self,
@@ -127,6 +153,13 @@ class ApiProvider:
                 )
                 response.raise_for_status()
                 data = response.json()
+                usage = data.get("usage")
+                if isinstance(usage, dict):
+                    self.last_usage = {
+                        "prompt_tokens": int(usage.get("prompt_tokens", 0)),
+                        "completion_tokens": int(usage.get("completion_tokens", 0)),
+                        "total_tokens": int(usage.get("total_tokens", 0)),
+                    }
 
                 return data["choices"][0]["message"]["content"]
         except httpx.HTTPStatusError as e:
@@ -160,6 +193,7 @@ class ApiProvider:
             "temperature": temperature,
             "top_p": top_p,
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
 
         if "top_k" in kwargs and kwargs["top_k"] > 0:
@@ -191,7 +225,15 @@ class ApiProvider:
 
                             try:
                                 data = json.loads(data_str)
-                                delta = data.get("choices", [{}])[0].get("delta", {})
+                                usage = data.get("usage")
+                                if isinstance(usage, dict):
+                                    self.last_usage = {
+                                        "prompt_tokens": int(usage.get("prompt_tokens", 0)),
+                                        "completion_tokens": int(usage.get("completion_tokens", 0)),
+                                        "total_tokens": int(usage.get("total_tokens", 0)),
+                                    }
+                                choices = data.get("choices") or []
+                                delta = choices[0].get("delta", {}) if choices else {}
                                 content = delta.get("content")
                                 if content:
                                     yield content

@@ -135,6 +135,36 @@ class TestChatDomain:
             )
             assert "timed out" in resp.text
 
+    @pytest.mark.asyncio
+    async def test_respond_surfaces_provider_usage(self):
+        domain = ChatDomain()
+        mock_provider = AsyncMock()
+        mock_provider.chat.return_value = "Hello there!"
+        mock_provider.last_usage = {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8}
+
+        with patch("domain.models._internal.provider.get_provider", return_value=mock_provider):
+            resp = await domain.respond(
+                messages=[{"role": "user", "content": "hi"}],
+            )
+            assert resp.usage_tokens == {
+                "prompt_tokens": 5,
+                "completion_tokens": 3,
+                "total_tokens": 8,
+            }
+
+    @pytest.mark.asyncio
+    async def test_respond_usage_none_when_provider_lacks_it(self):
+        domain = ChatDomain()
+        mock_provider = AsyncMock()
+        mock_provider.chat.return_value = "Hello there!"
+
+        with patch("domain.models._internal.provider.get_provider", return_value=mock_provider):
+            resp = await domain.respond(
+                messages=[{"role": "user", "content": "hi"}],
+            )
+            assert resp.usage_tokens is None
+            assert resp.tokens_generated > 0
+
     def test_get_stats_empty(self):
         domain = ChatDomain()
         with patch.object(domain, "get_recent_responses", return_value=[]):
