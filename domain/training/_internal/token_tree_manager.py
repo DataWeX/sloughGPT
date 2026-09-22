@@ -186,7 +186,11 @@ class TokenTreeManager:
 
     def stats(self) -> dict:
         """Return summary stats of the current tree."""
-        return self.get_tree().stats()
+
+        def compute(tree: TokenTree) -> dict:
+            return tree.stats()
+
+        return self._cached_result("stats", "summary", compute)
 
     def top_merges(self, top_n: int = 20) -> list:
         """Return the most frequent BPE merge rules as ranked dicts.
@@ -197,7 +201,11 @@ class TokenTreeManager:
         Returns:
             list of ``{"rank", "left", "right", "token", "count"}``.
         """
-        return self.get_tree().top_merges(top_n=top_n)
+
+        def compute(tree: TokenTree) -> dict:
+            return tree.top_merges(top_n=top_n)
+
+        return self._cached_result("merges", f"top:{top_n}", compute)
 
     def search_merges(self, query: str, limit: int = 20) -> list:
         """Return merge rules whose parts match a query, keeping global ranks.
@@ -209,7 +217,11 @@ class TokenTreeManager:
         Returns:
             list of ``{"rank", "left", "right", "token", "count"}``.
         """
-        return self.get_tree().search_merges(query=query, limit=limit)
+
+        def compute(tree: TokenTree) -> dict:
+            return tree.search_merges(query=query, limit=limit)
+
+        return self._cached_result("merges", f"search:{query}:{limit}", compute)
 
     def vocab_entries(self, offset: int = 0, limit: int = 50) -> dict:
         """Return a paged slice of the tree vocabulary.
@@ -223,7 +235,11 @@ class TokenTreeManager:
             ``{"total": int, "entries": [{"id", "token", "freq",
             "is_special", "is_merged"}]}``.
         """
-        return self.get_tree().vocab_entries(offset=offset, limit=limit)
+
+        def compute(tree: TokenTree) -> dict:
+            return tree.vocab_entries(offset=offset, limit=limit)
+
+        return self._cached_result("vocab", f"{offset}:{limit}", compute)
 
     def similar(self, token: str, top_k: int = 5) -> dict:
         """Rank nearest-neighbor tokens by generated-embedding cosine.

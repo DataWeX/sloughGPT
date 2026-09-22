@@ -5,6 +5,7 @@ import pytest
 import domain.training._internal.token_tree_manager as token_tree_manager_module
 from domain.training._internal.token_tree_manager import (
     DEFAULT_CORPUS,
+    TokenTree,
     TokenTreeManager,
     get_token_tree_manager,
 )
@@ -546,3 +547,78 @@ class TestCompare:
                 mgr.compare(bad, "plain")
             with pytest.raises(ValueError):
                 mgr.compare("plain", bad)
+
+
+class TestServerResponseCache:
+    """stats/top_merges/search_merges/vocab_entries must be memoized per tree
+    (like similar/embedding_info/matrix_summary already are). These four are the
+    heavy paths behind the WRN slow-request logs on /token-tree/stats (~3.1s)
+    and /token-tree/merges (~1.3s): they recomputed full-tree math every
+    request instead of routing through the manager's per-tree LRU.
+    """
+
+    def _wrap_tree(self, tree) -> None:
+        """Install recompute counters on a tree instance.
+
+        All spies share one ``self._calls`` dict so tests can wrap a post-adopt
+        tree and still reason about cumulative recomputes.
+        """
+        if not hasattr(self, "_calls"):
+            self._calls = {"stats": 0, "top_merges": 0, "search_merges": 0, "vocab_entries": 0}
+
+        for name in self._calls:
+            orig = getattr(tree, name)
+
+            def spy(*args, _n=name, _o=orig, **kwargs):
+                self._calls[_n] += 1
+                return _o(*args, **kwargs)
+
+            setattr(tree, name, spy)
+
+    def _fresh(self, vocab_size: int = 102):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=vocab_size, embed_dim=8)
+        self._wrap_tree(mgr.get_tree())
+        return mgr
+
+    def test_stats_cached_across_requests(self):
+        mgr = self._fresh()
+        a = mgr.stats()
+        b = mgr.stats()
+        assert a is b
+        assert self._calls["stats"] == 1
+
+    def test_top_merges_cached_across_requests(self):
+        mgr = self._fresh()
+        a = mgr.top_merges(top_n=10)
+        b = mgr.top_merges(top_n=10)
+        assert a is b
+        assert self._calls["top_merges"] == 1
+
+    def test_search_merges_cached_per_query(self):
+        mgr = self._fresh()
+        a = mgr.search_merges("quick", limit=10)
+        b = mgr.search_merges("quick", limit=10)
+        assert a is b
+        c = mgr.search_merges("fox", limit=8)
+        assert c is not a
+        assert self._calls["search_merges"] == 2
+
+    def test_vocab_entries_cached_per_page(self):
+        mgr = self._fresh()
+        a = mgr.vocab_entries(offset=0, limit=50)
+        b = mgr.vocab_entries(offset=0, limit=50)
+        assert a is b
+        c = mgr.vocab_entries(offset=50, limit=50)
+        assert c is not a
+        assert self._calls["vocab_entries"] == 2
+
+    def test_cache_invalidated_on_adopt(self):
+        mgr = self._fresh()
+        first = mgr.stats()
+        other = TokenTree().train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        mgr.adopt(other)
+        self._wrap_tree(mgr.get_tree())  # spy the *new* tree post-adopt
+        second = mgr.stats()
+        assert second is not first  # identity proves cache was dropped
+        assert self._calls["stats"] == 2  # ...and the new tree actually recomputed
