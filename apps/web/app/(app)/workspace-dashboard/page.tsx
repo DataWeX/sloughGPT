@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid, Skeleton, Button } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid, Skeleton, Button, StatusDot } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
@@ -181,11 +181,8 @@ export default function WorkspaceDashboardPage() {
           <CardContent className="py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
-                </span>
-                <span className="text-success dark:text-success font-medium">
+                <StatusDot tone="success" pulse />
+                <span className="text-success font-medium">
                   {stats?.active_training_jobs} training job{stats?.active_training_jobs !== 1 ? 's' : ''} running
                 </span>
               </div>
@@ -298,10 +295,10 @@ export default function WorkspaceDashboardPage() {
           <CardContent className="py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs">
-                <span className={`h-2 w-2 rounded-full ${
-                  healthStatus === 'healthy' ? 'bg-success' :
-                  healthStatus === 'warning' ? 'bg-warning' : 'bg-destructive'
-                }`} />
+                <StatusDot tone={
+                  healthStatus === 'healthy' ? 'success' :
+                  healthStatus === 'warning' ? 'warning' : 'destructive'
+                } />
                 <span className="font-medium capitalize">Workspace {healthStatus}</span>
                 {healthStatus === 'error' && (
                   <AlertTriangle className="h-3 w-3 text-warning" />

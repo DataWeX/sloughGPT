@@ -297,10 +297,7 @@ export default function HomePage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="relative flex h-2 w-2 shrink-0">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/40" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
-                      </span>
+                      <StatusDot tone="success" pulse />
                       <span className="text-xs font-medium text-success uppercase tracking-wider">
                         Active Model
                       </span>
