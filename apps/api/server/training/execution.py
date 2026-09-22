@@ -72,19 +72,50 @@ async def start_training(
 
     ManifestError = _eng().get_manifest_error()
 
-    try:
-        data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
-            request.dataset,
-            request.manifest_uri,
-            request.dataset_ref,
+    dataset_str = (request.dataset or "").strip()
+    from domain.training._internal.training_feed import is_feed_source
+
+    # Training feeds (feed:<source> or a feed URL) resolve directly — no corpus
+    # file on disk. The trainer (prepare_data -> load_feed_text) reads/forwards
+    # the feed at run time, so the usual pre-flight path checks are skipped.
+    is_feed = (
+        is_feed_source(dataset_str) and request.manifest_uri is None and request.dataset_ref is None
+    )
+    if is_feed:
+        try:
+            from urllib.parse import urlparse
+
+            if dataset_str.startswith(("http://", "https://")):
+                stem = str(urlparse(dataset_str).path.rstrip("/").split("/")[-1] or "feed")
+            else:
+                stem = dataset_str.split(":", 1)[1] or "feed"
+        except Exception:
+            stem = "feed"
+        data_path_str = dataset_str
+        out_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in stem)[:80]
+        manifest_meta = None
+        source_kind = "feed"
+        logger.info(
+            "Starting training from feed %s (stem=%s)",
+            data_path_str,
+            out_stem,
+            extra={"tag": "TRAIN"},
         )
-    except ManifestError as e:
-        raise_error(str(e), "E_BAD_REQUEST", status_code=400)
+    else:
+        try:
+            data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
+                request.dataset,
+                request.manifest_uri,
+                request.dataset_ref,
+            )
+        except ManifestError as e:
+            raise_error(str(e), "E_BAD_REQUEST", status_code=400)
 
-    # Pre-flight dataset validation
-    from pathlib import Path as _P
+    if not is_feed:
+        # Pre-flight dataset validation
+        from pathlib import Path as _P
 
-    _data_path = _P(data_path_str)
+        _data_path = _P(data_path_str)
     if not _data_path.exists():
         raise_error(f"Dataset not found: {data_path_str}", "E_BAD_REQUEST", status_code=400)
     if _data_path.is_file():

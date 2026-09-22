@@ -41,32 +41,33 @@ def list_feed_sources() -> list[dict[str, Any]]:
     sources: list[dict[str, Any]] = []
     for name in sorted(_SOURCES):
         path = _feed_path(name)
-        total = 0
-        last_updated = None
-        if path.is_file():
-            try:
-                total = sum(1 for _ in path.open(encoding="utf-8"))
-            except OSError as exc:
-                logger.debug("Feed %s unreadable: %s", name, exc)
-            last_updated = _iso_mtime(path)
+        try:
+            lines = _source_lines(name)
+            total = len(lines)
+        except OSError:
+            lines = []
+            total = 0
         sources.append(
             {
                 "name": name,
                 "source": name,
                 "total": total,
                 "path": str(path),
-                "last_updated": last_updated,
+                "last_updated": _iso_mtime(_source_paths(name)),
             }
         )
     return sources
 
 
-def _iso_mtime(path: Path) -> str | None:
-    """ISO-8601 modification time of a path, or None when unavailable."""
+def _iso_mtime(paths: list[Path]) -> str | None:
+    """ISO-8601 modification time of the newest path, or None when unavailable."""
     try:
         from datetime import UTC, datetime
 
-        return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).isoformat()
+        mtimes = [path.stat().st_mtime for path in paths if path.exists()]
+        if not mtimes:
+            return None
+        return datetime.fromtimestamp(max(mtimes), tz=UTC).isoformat()
     except OSError:
         return None
 
@@ -84,6 +85,29 @@ def _feed_path(name: str) -> Path:
     return find_repo_root(Path(__file__).resolve()) / path
 
 
+def _source_paths(name: str) -> list[Path]:
+    """Concrete files backing a feed source.
+
+    A source may be a single JSONL file (``api-conversations``) or a directory
+    of daily shards (``response-logs``). Directory shards are ordered by name so
+    offsets advance chronologically across shards.
+    """
+    path = _feed_path(name)
+    if path.is_dir():
+        return sorted(path.glob("*.jsonl"))
+    return [path]
+
+
+def _source_lines(name: str) -> list[str]:
+    """All raw corpus lines for a feed source (file or directory of shards)."""
+    lines: list[str] = []
+    for path in _source_paths(name):
+        if not path.exists():
+            continue
+        lines.extend(path.read_text(encoding="utf-8").splitlines())
+    return lines
+
+
 def _read_feed(name: str, offset: int, limit: int) -> dict[str, Any]:
     """Slice one feed page and return the response payload.
 
@@ -95,13 +119,10 @@ def _read_feed(name: str, offset: int, limit: int) -> dict[str, Any]:
     Returns:
         dict with name/source/offset/next_offset/total/records.
     """
-    path = _feed_path(name)
-    lines: list[str] = []
-    if path.is_file():
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except OSError as exc:
-            raise_error(f"Feed source unreadable: {exc}", "E_DOMAIN", status_code=500)
+    try:
+        lines = _source_lines(name)
+    except OSError as exc:
+        raise_error(f"Feed source unreadable: {exc}", "E_DOMAIN", status_code=500)
     total = len(lines)
     if limit and limit > 0:
         taken = lines[offset : offset + limit]

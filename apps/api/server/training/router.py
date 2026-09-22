@@ -24,6 +24,7 @@ from domain.training._internal.executor import get_training_executor
 from .control import router as control_router
 from .controller import get_training_controller
 from .execution import router as execution_router
+from .feeds import router as feeds_router
 from .helpers import _finish_job, _run_async, _sloughgpt_trainer_kwds
 from .job_store import get_job_store
 from .jobs import training_jobs
@@ -40,6 +41,12 @@ router = APIRouter(tags=["training"])
 router.include_router(execution_router)
 router.include_router(jobs_router)
 router.include_router(control_router)
+router.include_router(feeds_router)
+
+# Include training data feed endpoints (live corpus over HTTP)
+from .feeds import router as feeds_router
+
+router.include_router(feeds_router)
 
 
 def _finetuned_dir() -> Path:

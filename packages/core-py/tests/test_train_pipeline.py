@@ -1,5 +1,6 @@
 """Tests for domain.training._internal.train_pipeline.py (100% coverage target)."""
 
+import json
 import logging
 import math
 import os
@@ -170,6 +171,51 @@ class TestPrepareData:
         data, n_chars, stoi, itos = prepare_data(["a", "nope"], block_size=8)
         assert len(data) == 3
         assert any("not found" in r.message for r in caplog.records)
+
+    def test_feed_source_loads_live_corpus(self, tmp_path, monkeypatch):
+        from domain.training._internal import training_feed as tf
+
+        seed_pairs = [
+            {
+                "messages": [
+                    {"role": "user", "content": "can the model read from a live feed?"},
+                    {
+                        "role": "assistant",
+                        "content": "yes, the training flow accepts a feed url or feed:source",
+                    },
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "how does the offset cursor behave across pages?"},
+                    {
+                        "role": "assistant",
+                        "content": "each page reports next_offset so consumers resume where they stopped",
+                    },
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "what happens when the corpus grows mid training?"},
+                    {
+                        "role": "assistant",
+                        "content": "the sampler refreshes on a timer and ingests new records",
+                    },
+                ]
+            },
+        ]
+        corpus = tmp_path / "data" / "api_conversations" / "corpus.jsonl"
+        corpus.parent.mkdir(parents=True)
+        corpus.write_text("\n".join(json.dumps(r) for r in seed_pairs) + "\n", encoding="utf-8")
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+
+        data, n_chars, stoi, itos = prepare_data("feed:api-conversations", block_size=16)
+        expected_text = tf.load_feed_text("feed:api-conversations")
+        assert isinstance(data, np.ndarray)
+        assert data.dtype == np.int64
+        assert len(data) == len(expected_text)
+        assert n_chars == len(set(expected_text))
+        assert stoi == {c: i for i, c in enumerate(sorted(set(expected_text)))}
 
 
 # =============================================================================

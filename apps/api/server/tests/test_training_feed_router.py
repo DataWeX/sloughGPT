@@ -101,6 +101,31 @@ class TestTrainingFeedRead:
         assert resp.status_code == 200
         assert resp.json()["data"]["total"] == 0
 
+    def test_directory_source_aggregates_jsonl_shards(self, tmp_path, monkeypatch):
+        shard_dir = tmp_path / "response_shards"
+        shard_dir.mkdir()
+        (shard_dir / "responses_20260729.jsonl").write_text(
+            json.dumps(_corpus_record("older user query", "older assistant answer")) + "\n",
+            encoding="utf-8",
+        )
+        (shard_dir / "responses_20260730.jsonl").write_text(
+            json.dumps(_corpus_record("newer user query", "newer assistant answer")) + "\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(feeds, "_SOURCES", {"response-logs": str(shard_dir)})
+
+        data = client.get("/training/feed", params={"source": "response-logs"}).json()["data"]
+        assert data["total"] == 2
+        assert len(data["records"]) == 2
+        assert data["records"][0]["messages"][0]["content"] == "older user query"
+
+        page = client.get("/training/feed", params={"source": "response-logs", "offset": 1}).json()[
+            "data"
+        ]
+        assert page["next_offset"] == 2
+        assert len(page["records"]) == 1
+        assert page["records"][0]["messages"][0]["content"] == "newer user query"
+
     def test_unknown_source_is_400(self):
         resp = client.get("/training/feed", params={"source": "not-a-source"})
         assert resp.status_code == 400
@@ -128,3 +153,21 @@ class TestTrainingFeedsList:
         assert feeds_map["api-conversations"]["source"] == "api-conversations"
         # missing file still listed with total 0
         assert feeds_map["feedback"]["total"] == 0
+
+    def test_directory_source_lists_total_and_mtime(self, tmp_path, monkeypatch):
+        shard_dir = tmp_path / "response_shards"
+        shard_dir.mkdir()
+        (shard_dir / "responses_20260729.jsonl").write_text(
+            json.dumps(_corpus_record("older user query", "older assistant answer")) + "\n",
+            encoding="utf-8",
+        )
+        (shard_dir / "responses_20260730.jsonl").write_text(
+            json.dumps(_corpus_record("newer user query", "newer assistant answer")) + "\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(feeds, "_SOURCES", {"response-logs": str(shard_dir)})
+
+        resp = client.get("/training/feeds")
+        feeds_map = {f["name"]: f for f in resp.json()["data"]["feeds"]}
+        assert feeds_map["response-logs"]["total"] == 2
+        assert feeds_map["response-logs"]["last_updated"] is not None

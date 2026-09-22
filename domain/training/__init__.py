@@ -43,6 +43,12 @@ _LAZY_IMPORTS = {
     "list_video_checkpoints": ("._internal.video_trainer", "list_video_checkpoints"),
     "get_training_executor": ("._internal.executor", "get_training_executor"),
     "export_to_sou": ("._internal.slonet", "export_to_sou"),
+    "DistillConfig": ("._internal.distill_gpt2", "DistillConfig"),
+    "SloughGPTTrainer": ("._internal.train_pipeline", "SloughGPTTrainer"),
+    "TrainerConfig": ("._internal.train_pipeline", "TrainerConfig"),
+    "TokenTree": ("._internal.token_tree", "TokenTree"),
+    "TrainingFeedClient": ("._internal.training_feed", "TrainingFeedClient"),
+    "FeedBatchSampler": ("._internal.training_feed", "FeedBatchSampler"),
 }
 
 
@@ -84,4 +90,10 @@ __all__ = [
     "list_video_checkpoints",
     "get_training_executor",
     "export_to_sou",
+    "DistillConfig",
+    "SloughGPTTrainer",
+    "TrainerConfig",
+    "TokenTree",
+    "TrainingFeedClient",
+    "FeedBatchSampler",
 ]

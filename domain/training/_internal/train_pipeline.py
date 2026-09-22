@@ -48,6 +48,7 @@ from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
 from domain.training._internal.quality_scorer import compute_data_quality
 from domain.training._internal.slonet import load_checkpoint_npz
 from domain.training._internal.trainer_protocol import TrainResult
+from domain.training._internal.training_feed import is_feed_source, load_feed_text
 from domain.training._internal.training_handler import (
     clip_gradients,
     zero_grads,
@@ -195,12 +196,13 @@ def validate_conversation_data(path: str, max_errors: int = 10) -> dict:
 
 
 def prepare_data(data_path, block_size=128, tokenizer=None):
-    """Prepare training data from a text file or multiple datasets with ratios.
+    """Prepare training data from a text file, feed, or multiple datasets with ratios.
 
     Args:
         data_path: path to a text file, a dataset name (resolved against
-            ``datasets/<name>/input.txt``), a list of dataset names, or a list
-            of ``(name, ratio)`` tuples.
+            ``datasets/<name>/input.txt``), a list of dataset names, a list of
+            ``(name, ratio)`` tuples, or a training feed specification
+            (``feed:<source>`` / ``http(s)://...`` — see training_feed).
         block_size: context window (used for logging only).
         tokenizer: optional SloBPE-compatible tokenizer (e.g. a trained
             TokenTree). When provided, the corpus is tokenized with it and the
@@ -209,7 +211,9 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
     Returns:
         (data, vocab_size, stoi, itos) — ``data`` is ``np.int64`` token ids.
     """
-    if isinstance(data_path, list) and data_path and isinstance(data_path[0], tuple):
+    if isinstance(data_path, str) and is_feed_source(data_path):
+        text = load_feed_text(data_path)
+    elif isinstance(data_path, list) and data_path and isinstance(data_path[0], tuple):
         datasets_with_ratios = data_path
         all_texts = []
         total_len = 0
