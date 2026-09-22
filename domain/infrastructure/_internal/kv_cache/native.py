@@ -7,8 +7,8 @@ decoding. Two backends, one API:
   buffer per K/V, ``n_kv_heads * head_dim`` floats per token step, layers
   laid out contiguously. Driven through ``transformer_kv_cache_init`` /
   ``reset`` / ``free``.
-- numpy path: classic per-layer ``np.concatenate`` (the "numpy" half of the
-  native C + numpy stack).
+- numpy path: preallocated per-layer buffers with slice-write appends
+  (grown on demand) — O(T) copies over a decode where concat is O(T^2).
 
 When the C library is absent or unloadable (it ships as a macOS dylib next
 to ``domain.inference._internal.native.bindings``), the numpy backend serves
@@ -23,14 +23,24 @@ import numpy as np
 
 
 class _NumpyBackend:
-    """Internal numpy concatenating backend (batch-1) for NativeKVState."""
+    """Internal numpy append backend for NativeKVState — preallocated, no concat.
 
-    __slots__ = ("_n_layers", "_k", "_v")
+    Appending writes only the new tokens into a grown-on-demand capacity
+    buffer (slice write along the sequence axis), so a T-token decode costs
+    O(T) copies instead of ``np.concatenate``'s O(T^2). Rank-agnostic: the
+    sequence axis is 1 in both the 3D ``(heads, seq, head_dim)`` and 4D
+    ``(1, seq, heads, head_dim)`` conventions.
+    """
 
-    def __init__(self, n_layers: int):
+    __slots__ = ("_n_layers", "_max_cap", "_k", "_v", "_lens", "_cap")
+
+    def __init__(self, n_layers: int, cap: int = 0):
         self._n_layers = n_layers
+        self._max_cap = max(cap, 64)  # hard ceiling for geometric growth
         self._k: list[np.ndarray | None] = [None] * n_layers
         self._v: list[np.ndarray | None] = [None] * n_layers
+        self._lens = [0] * n_layers
+        self._cap = 0  # per-layer buffers grow to the same capacity
 
     @property
     def n_layers(self) -> int:
@@ -38,30 +48,52 @@ class _NumpyBackend:
 
     @property
     def seq_len(self) -> int:
-        for kv in self._k:
-            if kv is not None:
-                return kv.shape[1]
-        return 0
+        return max(self._lens)
+
+    def _grow(self, layer_idx: int, needed: int) -> None:
+        cap = self._cap
+        while cap < needed:
+            cap = min(max(cap * 2, 16), self._max_cap)
+            if cap < needed and cap == self._max_cap:
+                cap = needed  # bounded ceiling is only a hint — never drop data
+        if cap == self._cap:
+            return
+        old = self._k[layer_idx]
+        dl = self._lens[layer_idx]
+        new_k = np.empty((*old.shape[:1], cap, *old.shape[2:]), old.dtype)
+        new_v = np.empty((*old.shape[:1], cap, *old.shape[2:]), old.dtype)
+        new_k[:, :dl] = old[:, :dl]
+        new_v[:, :dl] = self._v[layer_idx][:, :dl]
+        self._k[layer_idx] = new_k
+        self._v[layer_idx] = new_v
+        self._cap = cap
 
     def update(self, layer_idx: int, k: np.ndarray, v: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Append new K, V for a layer; return the full concatenated (K, V)."""
-        prev = self._k[layer_idx]
-        if prev is None:
-            self._k[layer_idx] = k
-            self._v[layer_idx] = v
-        else:
-            self._k[layer_idx] = np.concatenate([prev, k], axis=1)
-            self._v[layer_idx] = np.concatenate([self._v[layer_idx], v], axis=1)
-        return self._k[layer_idx], self._v[layer_idx]
+        """Append new K, V for a layer; return the full (K, V) as views."""
+        if self._k[layer_idx] is None:
+            self._cap = min(self._max_cap, max(64, k.shape[1] * 2))
+            self._k[layer_idx] = np.empty((*k.shape[:1], self._cap, *k.shape[2:]), k.dtype)
+            self._v[layer_idx] = np.empty_like(self._k[layer_idx])
+
+        n = int(k.shape[1])
+        base = self._lens[layer_idx]
+        if base + n > self._cap:
+            self._grow(layer_idx, base + n)
+        self._k[layer_idx][:, base : base + n] = k
+        self._v[layer_idx][:, base : base + n] = v
+        self._lens[layer_idx] = base + n
+        return self._k[layer_idx][:, : base + n], self._v[layer_idx][:, : base + n]
 
     def get(self, layer_idx: int) -> tuple[np.ndarray, np.ndarray] | None:
         if self._k[layer_idx] is None:
             return None
-        return self._k[layer_idx], self._v[layer_idx]
+        n = self._lens[layer_idx]
+        if n == 0:
+            return None
+        return self._k[layer_idx][:, :n], self._v[layer_idx][:, :n]
 
     def reset(self) -> None:
-        self._k = [None] * self._n_layers
-        self._v = [None] * self._n_layers
+        self._lens = [0] * self._n_layers
 
 
 class NativeKVState:
@@ -91,7 +123,7 @@ class NativeKVState:
         self._lens = [0] * n_layers
         self._lib = None
         self._cache = None
-        self._fallback = _NumpyBackend(n_layers)
+        self._fallback = _NumpyBackend(n_layers, cap=seq_capacity)
 
         try:
             from domain.inference._internal.native.bindings import load_lib
