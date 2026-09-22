@@ -144,21 +144,38 @@ class TokenTreeRouter:
         self, req: TreeNameRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Save the current tree under a name in the save directory."""
-        return success_response(data=get_token_tree_manager().save(req.name))
+        try:
+            saved = get_token_tree_manager().save(req.name)
+        except ValueError as exc:
+            raise_error(
+                f"Invalid token tree name {req.name!r}: {exc}", "E_VALIDATION", status_code=422
+            )
+        return success_response(data=saved)
 
     @endpoint("token_tree.load")
     def load_tree(
         self, req: TreeNameRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Load a saved tree and make it the current tree."""
-        return success_response(data=get_token_tree_manager().load(req.name))
+        try:
+            loaded = get_token_tree_manager().load(req.name)
+        except FileNotFoundError:
+            raise_error(f"No saved token tree named {req.name!r}", "E_NOT_FOUND", status_code=404)
+        except ValueError as exc:
+            raise_error(
+                f"Invalid token tree name {req.name!r}: {exc}", "E_VALIDATION", status_code=422
+            )
+        return success_response(data=loaded)
 
     @endpoint("token_tree.delete")
     def delete_saved_tree(
         self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Delete a saved tree's sidecar files."""
-        deleted = get_token_tree_manager().delete_saved(name)
+        try:
+            deleted = get_token_tree_manager().delete_saved(name)
+        except ValueError as exc:
+            raise_error(f"Invalid token tree name {name!r}: {exc}", "E_VALIDATION", status_code=422)
         if not deleted:
             raise_error(f"No saved token tree named {name!r}", "E_NOT_FOUND", status_code=404)
         safe_audit_log("token_tree.delete", resource=name)
@@ -204,7 +221,10 @@ class TokenTreeRouter:
         self, req: EmbeddingRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Inspect a token's generated embedding vector."""
-        data = get_token_tree_manager().embedding_info(req.token, top_k=req.top_k)
+        try:
+            data = get_token_tree_manager().embedding_info(req.token, top_k=req.top_k)
+        except ValueError as exc:
+            raise_error(f"Token embeddings are not enabled: {exc}", "E_VALIDATION", status_code=422)
         return success_response(data=data)
 
     @endpoint("token_tree.encode")

@@ -118,6 +118,9 @@ def _make_mgr(**overrides):
 def _app():
     app = FastAPI()
     app.include_router(router)
+    from infrastructure.exception_handlers import register_all_handlers
+
+    register_all_handlers(app)
     return app
 
 
