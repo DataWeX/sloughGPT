@@ -30,6 +30,7 @@ Usage:
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -38,6 +39,8 @@ import httpx
 from domain.models._internal.provider import ModelCapabilities
 
 logger = logging.getLogger("slo.api_provider")
+
+_REASONING_MODEL_PREFIX = re.compile(r"^o\d+")
 
 
 class ApiProvider:
@@ -54,18 +57,51 @@ class ApiProvider:
         model: str = "gpt-4o-mini",
         timeout: float = 60.0,
         max_retries: int = 2,
+        token_param_override: str | None = None,
     ):
         self.api_key = api_key
-        self.api_url = api_url.rstrip("/")
+        self.api_url = self._normalize_base(api_url)
         self.model_name = model
         self.timeout = timeout
         self.max_retries = max_retries
+        self.token_param_override = token_param_override
         self.last_usage: dict[str, int] | None = None
 
         if not self.api_key:
             raise ValueError("API key required")
         if not self.api_url:
             raise ValueError("API URL required")
+
+    @staticmethod
+    def _normalize_base(api_url: str) -> str:
+        """Normalize a base URL to the OpenAI-compatible ``.../vN`` form.
+
+        - Strips a trailing ``/chat/completions`` (caller pasted the full path).
+        - Appends ``/v1`` when the base is version-less (e.g. ``localhost:11434``).
+        - Preserves an explicit version segment (``/v1``, ``/v2``, ...).
+        """
+        base = api_url.strip()
+        if not base:
+            return base
+        base = base.rstrip("/")
+        if base.endswith("/chat/completions"):
+            base = base[: -len("/chat/completions")]
+        if re.search(r"/v\d+(/|$)", base):
+            return base
+        return f"{base}/v1"
+
+    def _token_param(self) -> str:
+        """Return the max-token field name for this model.
+
+        OpenAI reasoning models (``o1``/``o3``/``o4``-*) require
+        ``max_completion_tokens``; classic models use ``max_tokens``. An
+        explicit ``token_param_override`` wins.
+        """
+        if self.token_param_override in ("max_tokens", "max_completion_tokens"):
+            return self.token_param_override
+        if _REASONING_MODEL_PREFIX.match(self.model_name):
+            return "max_completion_tokens"
+        return "max_tokens"
 
     def usage_tokens(
         self,
@@ -99,7 +135,7 @@ class ApiProvider:
             chat=True,
             embedding=False,
             streaming=True,
-            vision=True,
+            vision=False,
             functions=True,
         )
 
@@ -132,7 +168,7 @@ class ApiProvider:
         payload = {
             "model": self.model_name,
             "messages": messages,
-            "max_tokens": max_tokens,
+            self._token_param(): max_tokens,
             "temperature": temperature,
             "top_p": top_p,
             "stream": False,
@@ -189,7 +225,7 @@ class ApiProvider:
         payload = {
             "model": self.model_name,
             "messages": messages,
-            "max_tokens": max_tokens,
+            self._token_param(): max_tokens,
             "temperature": temperature,
             "top_p": top_p,
             "stream": True,
