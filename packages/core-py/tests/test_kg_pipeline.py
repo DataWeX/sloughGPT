@@ -37,6 +37,11 @@ def rag_svc(tmp_path, monkeypatch):
 
     monkeypatch.setattr(rag_service, "_DATA_DIR", tmp_path)
     monkeypatch.setattr(rag_service, "_DOCUMENTS_FILE", tmp_path / "docs.jsonl")
+    # Separate MogDB constant — without redirecting it the service reads the
+    # real store. Kept in a sibling dir so directory scans don't treat the
+    # DB journal as a document.
+    monkeypatch.setattr(rag_service, "_RAG_DB_PATH", str(tmp_path.parent / (tmp_path.name + "_db")))
+    monkeypatch.setattr(rag_service, "_rag_service", None)
     svc = RAGService()
     return svc
 

@@ -240,7 +240,10 @@ class TestHybridRetriever:
         np.testing.assert_array_equal(emb1, emb2)
 
     def test_different_queries(self):
-        retriever = HybridRetriever(use_rerank=True)
+        # Sparse-only: the default embedding_fn is a hash-seeded random
+        # projection, so dense scores are noise that min-max normalization
+        # can inflate to 1.0 (nondeterministic across processes).
+        retriever = HybridRetriever(use_rerank=True, use_dense=False)
         retriever.add_chunk(
             TextChunk(id="1", content="the quick brown fox jumps over the lazy dog", metadata={})
         )
