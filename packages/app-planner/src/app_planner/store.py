@@ -20,6 +20,8 @@ Usage::
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -145,6 +147,96 @@ class PlannerStore:
 
     # ── Board ───────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _card_line(card: Card) -> str:
+        """Canonical, byte-stable JSONL serialization of a card line."""
+        return json.dumps(card.to_dict(), sort_keys=True, ensure_ascii=False)
+
+    @staticmethod
+    def _schema_line(name: str, columns: list[dict[str, Any]]) -> str:
+        """Canonical serialization of the board header line."""
+        return json.dumps(
+            {"schema": "planner/1", "name": name, "columns": columns},
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+
+    def _atomic_write(self, text: str) -> None:
+        """Write the board atomically (temp file + rename) to avoid torn writes."""
+        fd, tmp = tempfile.mkstemp(dir=self._board_dir, prefix=".board-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(text)
+            os.replace(tmp, self._board_file)
+        except BaseException:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
+
+    @staticmethod
+    def _has_schema_header(lines: list[str]) -> bool:
+        for raw in lines:
+            try:
+                if json.loads(raw).get("schema") == "planner/1":
+                    return True
+            except json.JSONDecodeError:
+                continue
+        return False
+
+    def _surgical_rewrite(self, replacements: dict[str, str | None]) -> int:
+        """Rewrite only the JSONL lines for the given card ids.
+
+        *replacements* maps card id -> canonical next line (None deletes the
+        line). Every other line — header, unrelated/note-schema cards, even
+        unparsable lines — is preserved byte-for-byte. Writes happen only when
+        the file actually changed, atomically.
+
+        Returns:
+            Number of lines matched and replaced.
+        """
+        if not self._board_file.exists():
+            return 0
+        old_text = self._board_file.read_text()
+        out: list[str] = []
+        matched = 0
+        for raw in old_text.splitlines():
+            stripped = raw.strip()
+            if not stripped:
+                continue
+            try:
+                obj = json.loads(stripped)
+            except json.JSONDecodeError:
+                out.append(raw)
+                continue
+            if isinstance(obj, dict) and obj.get("id") in replacements:
+                new_line = replacements[obj["id"]]
+                matched += 1
+                if new_line is not None:
+                    out.append(new_line)
+                continue
+            out.append(raw)
+        new_text = "\n".join(out) + "\n" if out else ""
+        if new_text != old_text:
+            self._atomic_write(new_text)
+        return matched
+
+    def _append_card(self, card: Card) -> None:
+        """Append a single card line, adding the schema header only if missing.
+
+        Existing lines (including old note-schema cards) are preserved
+        byte-for-byte, so add operations produce a one-line diff.
+        """
+        existing = self._board_file.read_text().splitlines() if self._board_file.exists() else []
+        body = [raw for raw in existing if raw.strip()]
+        out = list(body)
+        if not self._has_schema_header(body):
+            board = self.load_board()
+            out.insert(0, self._schema_line(board.name, board.columns))
+        out.append(self._card_line(card))
+        self._atomic_write("\n".join(out) + "\n")
+
     def _read_board_lines(self) -> list[dict[str, Any]]:
         if not self._board_file.exists():
             return []
@@ -161,12 +253,10 @@ class PlannerStore:
 
     def _write_board(self, board: Board) -> None:
         lines: list[str] = []
-        lines.append(
-            json.dumps({"schema": "planner/1", "name": board.name, "columns": board.columns})
-        )
+        lines.append(self._schema_line(board.name, board.columns))
         for card in board.cards:
-            lines.append(json.dumps(card.to_dict(), ensure_ascii=False))
-        self._board_file.write_text("\n".join(lines) + "\n" if lines else "")
+            lines.append(self._card_line(card))
+        self._atomic_write("\n".join(lines) + "\n" if lines else "")
 
     def load_board(self) -> Board:
         lines = self._read_board_lines()
@@ -217,32 +307,23 @@ class PlannerStore:
             created_at=now,
             updated_at=now,
         )
-        board = self.load_board()
-        board.cards.append(card)
-        self._write_board(board)
+        self._append_card(card)
         return card
 
     def update_card(self, card_id: str, **kwargs: Any) -> Card | None:
         board = self.load_board()
-        for i, card in enumerate(board.cards):
+        for card in board.cards:
             if card.id == card_id:
                 for key, value in kwargs.items():
                     if hasattr(card, key):
                         setattr(card, key, value)
                 card.updated_at = datetime.now(UTC).isoformat()
-                board.cards[i] = card
-                self._write_board(board)
+                self._surgical_rewrite({card_id: self._card_line(card)})
                 return card
         return None
 
     def delete_card(self, card_id: str) -> bool:
-        board = self.load_board()
-        original_len = len(board.cards)
-        board.cards = [c for c in board.cards if c.id != card_id]
-        if len(board.cards) < original_len:
-            self._write_board(board)
-            return True
-        return False
+        return self._surgical_rewrite({card_id: None}) > 0
 
     def move_card(self, card_id: str, to_column: str) -> bool:
         board = self.load_board()
@@ -250,7 +331,7 @@ class PlannerStore:
             if card.id == card_id:
                 card.column = to_column
                 card.updated_at = datetime.now(UTC).isoformat()
-                self._write_board(board)
+                self._surgical_rewrite({card_id: self._card_line(card)})
                 return True
         return False
 
@@ -276,38 +357,33 @@ class PlannerStore:
     def archive_done(self) -> int:
         """Remove all cards in 'done' column. Returns count archived."""
         board = self.load_board()
-        before = len(board.cards)
-        board.cards = [c for c in board.cards if c.column != "done"]
-        archived = before - len(board.cards)
+        done_ids = [c.id for c in board.cards if c.column == "done"]
+        archived = len(done_ids)
         if archived:
-            self._write_board(board)
+            self._surgical_rewrite(dict.fromkeys(done_ids))
         return archived
 
     def block_card(self, card_id: str, blocker_id: str) -> Card | None:
-        card = self.get_card(card_id)
-        if card and blocker_id not in card.blocked_by:
-            card.blocked_by.append(blocker_id)
-            card.updated_at = datetime.now(UTC).isoformat()
-            board = self.load_board()
-            for i, c in enumerate(board.cards):
-                if c.id == card_id:
-                    board.cards[i] = card
-                    self._write_board(board)
-                    return card
-        return card
+        board = self.load_board()
+        for card in board.cards:
+            if card.id == card_id:
+                if blocker_id not in card.blocked_by:
+                    card.blocked_by.append(blocker_id)
+                    card.updated_at = datetime.now(UTC).isoformat()
+                    self._surgical_rewrite({card_id: self._card_line(card)})
+                return card
+        return None
 
     def unblock_card(self, card_id: str, blocker_id: str) -> Card | None:
-        card = self.get_card(card_id)
-        if card and blocker_id in card.blocked_by:
-            card.blocked_by.remove(blocker_id)
-            card.updated_at = datetime.now(UTC).isoformat()
-            board = self.load_board()
-            for i, c in enumerate(board.cards):
-                if c.id == card_id:
-                    board.cards[i] = card
-                    self._write_board(board)
-                    return card
-        return card
+        board = self.load_board()
+        for card in board.cards:
+            if card.id == card_id:
+                if blocker_id in card.blocked_by:
+                    card.blocked_by.remove(blocker_id)
+                    card.updated_at = datetime.now(UTC).isoformat()
+                    self._surgical_rewrite({card_id: self._card_line(card)})
+                return card
+        return None
 
     def is_blocked(self, card_id: str) -> bool:
         card = self.get_card(card_id)
